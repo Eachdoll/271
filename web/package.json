@@ -9,9 +9,11 @@
     "demo": "DEMO=1 tsx server.ts",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "tsx": "^4.19.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.0.0"
   }
 }
