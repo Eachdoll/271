@@ -1,0 +1,17 @@
+{
+  "name": "store-watch-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "store-watch-core 위에 얹은 화면 (네이버 스토어 디자인 차용)",
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "start": "tsx server.ts",
+    "demo": "DEMO=1 tsx server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.0.0"
+  }
+}

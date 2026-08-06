@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>신상 알림 — 스마트스토어 신상품 모아보기</title>
+    <meta name="color-scheme" content="light" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="gnb">
+      <div class="shell gnb__inner">
+        <a class="brand" href="/">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+            </svg>
+          </span>
+          <span class="brand__text">
+            <b>신상 알림</b>
+            <em>스마트스토어 신상품 모아보기</em>
+          </span>
+        </a>
+
+        <form class="search" id="add-form" autocomplete="off">
+          <input
+            class="search__input"
+            id="store-input"
+            type="text"
+            placeholder="스마트스토어 주소 또는 아이디"
+            aria-label="스토어 주소 또는 아이디"
+          />
+          <button class="search__submit" type="submit">추가</button>
+        </form>
+      </div>
+    </header>
+
+    <nav class="storebar" id="storebar" hidden>
+      <div class="shell storebar__inner">
+        <div class="chips" id="chips"></div>
+        <button class="refresh" id="refresh" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+            <path d="M21 3v6h-6" />
+          </svg>
+          새로고침
+        </button>
+      </div>
+    </nav>
+
+    <main class="shell main">
+      <div id="notices" class="notices"></div>
+
+      <section class="feed" id="feed-section" hidden>
+        <div class="feed__head">
+          <h1 class="feed__title">신상품 <span class="feed__count" id="feed-count">0</span></h1>
+          <div class="feed__meta">
+            <span class="sort">최신순</span>
+            <span class="dot" aria-hidden="true"></span>
+            <span id="fetched-at" class="fetched"></span>
+          </div>
+        </div>
+        <ul class="grid" id="grid"></ul>
+      </section>
+
+      <section class="empty" id="empty">
+        <div class="empty__art" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9h18l-1.5 10.5A2 2 0 0 1 17.5 21h-11a2 2 0 0 1-2-1.5z" />
+            <path d="M8 9V6a4 4 0 0 1 8 0v3" />
+          </svg>
+        </div>
+        <p class="empty__title">지켜볼 스토어를 추가해 주세요</p>
+        <p class="empty__desc">
+          스토어 주소를 붙여넣거나 아이디만 입력해도 됩니다.<br />
+          <code id="example"></code>
+        </p>
+      </section>
+
+      <div class="skeleton" id="skeleton" hidden>
+        <div class="skeleton__card"></div>
+        <div class="skeleton__card"></div>
+        <div class="skeleton__card"></div>
+        <div class="skeleton__card"></div>
+      </div>
+    </main>
+
+    <footer class="foot shell">
+      <p>추가한 스토어는 이 브라우저에만 저장됩니다. 서버에 남지 않습니다.</p>
+      <p class="foot__demo" id="demo-flag" hidden>데모 데이터로 표시 중입니다 — 실제 상품이 아닙니다.</p>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
