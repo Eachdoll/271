@@ -1,0 +1,19 @@
+{
+  "name": "store-watch-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "네이버 스마트스토어 최신상품 조회 핵심 로직 (프레임워크 무관)",
+  "type": "commonjs",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "jest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.0.0"
+  }
+}
