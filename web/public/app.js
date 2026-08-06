@@ -123,9 +123,11 @@ async function addPending(input) {
 
   const outcome = data.stores.find((entry) => entry.input === input);
   if (!outcome || !outcome.key) {
+    // 입력값은 지우지 않고 되돌려 둡니다 — 오타 한 글자 때문에 다시 치게 만들지 않으려고.
     el.search.classList.add("is-invalid");
     el.input.value = input;
-    renderNotices(outcome ? [outcome] : []);
+    // 거부됐어도 나머지 스토어의 목록은 그대로 그립니다. 여기서 멈추면 화면이 빈 채로 남습니다.
+    apply(data);
     return;
   }
 

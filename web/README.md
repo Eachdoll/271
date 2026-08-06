@@ -14,6 +14,25 @@ npm start        # 실제 네이버 조회
 
 `npm run demo`는 네이버를 부르지 않고 가상 데이터로 그립니다. 아래 "네이버 차단" 때문에 둔 장치입니다.
 
+## 스토어 추가
+
+상단 입력창에 붙여넣고 `추가`(또는 Enter). 받는 형태는 이렇습니다.
+
+| 입력 | 결과 |
+| --- | --- |
+| `mystore` | 아이디만 넣으면 스마트스토어로 봅니다 |
+| `https://smartstore.naver.com/mystore` | 스토어 주소 |
+| `https://smartstore.naver.com/mystore/products/123` | 상품 주소를 넣어도 스토어만 뽑아냅니다 |
+| `m.smartstore.naver.com/mystore?cp_id=x` | 모바일 주소·쿼리 붙어 있어도 됩니다 |
+| `https://brand.naver.com/somebrand` | 브랜드스토어 |
+
+거절하는 입력: 네이버가 아닌 도메인, `smartstore.naver.com.attacker.io` 같은 도메인 사칭, `https://smartstore.naver.com@attacker.io/` 같은 자격증명 URL, 예약 경로(`products`, `search` 등), 형식에 맞지 않는 아이디. 거절되면 입력값은 지우지 않고 그대로 두고 사유만 보여줍니다.
+
+- 추가한 스토어는 **이 브라우저의 localStorage에만** 남습니다(`smartstore:stores`). 서버에는 저장하지 않습니다. 브라우저를 바꾸면 다시 추가해야 합니다.
+- 삭제는 칩의 `×`, 스토어별로 보려면 칩을 클릭(다시 누르면 전체).
+- 네이버가 막혀 조회에 실패해도 스토어는 목록에 남습니다. 칩이 빨갛게 표시되고, 나중에 `새로고침`으로 다시 시도합니다.
+- 한 번에 조회하는 스토어는 20개까지입니다.
+
 ## 왜 서버가 있나
 
 브라우저에서 네이버를 직접 부르면 CORS로 막힙니다. 그래서 서버를 한 단계 둡니다.
