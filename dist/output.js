@@ -1,3 +1,4 @@
+import {exportAudioAssets,restoreAudioAssets,validateAudioBackup} from './audio-playback.js';
 import { sceneSVG, characterSVG } from './engine.js';
 import { getImageURL, getAsset, restoreImageAsset, hydrateImageAssets } from './image-generation/assets.js';
 
@@ -16,7 +17,7 @@ function options(settings = {}) {
 }
 
 function protagonist(book, characters) {
-  const list = Array.isArray(characters) ? characters : [];
+  const list = [...(book.generationSnapshot?.characterSheets||[]).map(sheet=>sheet.characterSnapshot).filter(Boolean),...(book.characterSnapshots||[]),...(Array.isArray(characters)?characters:[])];
   const ids = Array.isArray(book.characterIds) ? book.characterIds : [];
   return list.find(character => character.id === ids[0]) || list.find(character => character.role === '주인공') || list[0];
 }
@@ -24,7 +25,7 @@ function protagonist(book, characters) {
 function fallbackArtwork(book, page, characters, cover = false) {
   const scene = page?.scene || { theme: book.theme || 'dinosaur', beat: cover ? 'cover' : 'discover', index: 0 };
   // Generated artwork is embedded as an image. SVG scripts cannot execute in img context.
-  const cast=(book.characterIds||[]).map(id=>characters.find(c=>c.id===id)).filter(Boolean);
+  const cast=(book.characterIds||[]).map(id=>book.generationSnapshot?.characterSheets?.find(sheet=>sheet.characterId===id)?.characterSnapshot||book.characterSnapshots?.find(c=>c.id===id)||characters.find(c=>c.id===id)).filter(Boolean);
   return sceneSVG(scene, cast.length?cast:protagonist(book, characters), page?.artVariant || 0);
 }
 
@@ -290,6 +291,7 @@ function referencedAssets(state) {
   const ids = new Set();
   const visit = (value, key = '') => {
     if (typeof value === 'string') {
+      if(key==='assetId'&&value.startsWith('audio-'))return;
       if (value.startsWith('asset:') || /(?:image|sheet|character).*assetids?$/i.test(key) || key === 'assetId') {
         const id = normalId(value);
         if (!ASSET_ID.test(id)) throw new Error('그림 참조의 식별자를 확인해 주세요.');
@@ -345,17 +347,17 @@ function checkedInlineImage(url) {
   return url;
 }
 
-function checkInlineStateImages(state) {
+function checkInlineStateImages(state, {allowStoredAssets=false}={}) {
   if (!state || typeof state !== 'object') return;
-  if (Array.isArray(state)) { state.forEach(checkInlineStateImages); return; }
+  if (Array.isArray(state)) { state.forEach(item=>checkInlineStateImages(item,{allowStoredAssets})); return; }
   if (state.imageUrl) {
     if (typeof state.imageUrl !== 'string') throw new Error('백업 그림의 주소 형식을 확인해 주세요.');
-    if (!state.imageUrl.startsWith('asset:')) {
+    if (!state.imageUrl.startsWith('asset:') && !(allowStoredAssets && state.imageUrl.startsWith('/assets/'))) {
       if (!state.imageUrl.startsWith('data:image/')) throw new Error('복원할 그림은 파일 안에 담긴 데이터 또는 보관함 식별자여야 해요.');
       state.imageUrl = checkedInlineImage(state.imageUrl);
     }
   }
-  for (const item of Object.values(state)) if (item && typeof item === 'object') checkInlineStateImages(item);
+  for (const item of Object.values(state)) if (item && typeof item === 'object') checkInlineStateImages(item,{allowStoredAssets});
 }
 
 async function blobImage(blob) {
@@ -376,10 +378,33 @@ async function blobImage(blob) {
 }
 
 async function directImage(url) {
-  if (typeof url !== 'string' || !/^(data:image\/|blob:|https?:\/\/)/i.test(url)) throw new Error('백업할 생성 그림의 주소를 확인해 주세요.');
+  if (typeof url !== 'string' || !/^(data:image\/|blob:|https?:\/\/|\/assets\/)/i.test(url)) throw new Error('백업할 생성 그림의 주소를 확인해 주세요.');
   const response = await fetch(url);
   if (!response.ok) throw new Error('생성한 그림 원본을 읽지 못해 백업을 중단했어요.');
   return blobImage(await response.blob());
+}
+
+/** Store direct references once in the backup, without inflating localStorage on restore. */
+async function externalizeDirectImages(state, assets) {
+  const byUrl = new Map();
+  let bytes = [...assets.values()].reduce((total,image)=>total+image.bytes.length,0);
+  const visit = async value => {
+    if (Array.isArray(value)) { for (const item of value) await visit(item); return; }
+    if (!value || typeof value !== 'object') return;
+    if (value.imageUrl && !value.imageAssetId && !value.imageUrl.startsWith('asset:')) {
+      const url=value.imageUrl;
+      let id=byUrl.get(url);
+      if (!id) {
+        const image=await directImage(url);
+        bytes+=image.bytes.length;
+        if(bytes>150*1024*1024)throw new Error('그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.');
+        id='image-'+crypto.randomUUID();byUrl.set(url,id);assets.set(id,image);
+      }
+      value.imageAssetId=id;value.imageUrl='asset:'+id;
+    }
+    for (const item of Object.values(value)) if (item && typeof item === 'object') await visit(item);
+  };
+  await visit(state);
 }
 
 async function portableState(state, assets) {
@@ -423,11 +448,13 @@ export async function exportLibrary(state) {
     if (assetBytes > 150 * 1024 * 1024) throw new Error('그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.');
     assets.set(id, await blobImage(blob));
   }
+  await externalizeDirectImages(snapshot,assets);
   const portable = await portableState(snapshot, assets);
   retainPortableDirectImages(snapshot, portable);
   const exportedAt = new Date().toISOString();
   const imageAssets = [...assets].map(([id, image]) => ({ id, dataUrl: image.dataUrl }));
-  const library = JSON.stringify({ format: 'donghwa-workshop-library', version: 1, exportedAt, state: snapshot, imageAssets }, null, 2);
+  const audioAssets=await exportAudioAssets(snapshot);
+  const library = JSON.stringify({ audioAssets, format: 'donghwa-workshop-library', version: 1, exportedAt, state: snapshot, imageAssets }, null, 2);
   if (library.length > MAX_BACKUP_TEXT) throw new Error('복원 가능한 백업 크기 250MB를 넘었어요.');
   const files = [
     { name: 'library.json', data: library },
@@ -513,14 +540,17 @@ export function validateImport(text, {allowStoredAssets=false}={}) {
     assetIds.add(image.id);
   }
   if (!allowStoredAssets && referencedAssets(state).some(id => !assetIds.has(id))) throw new Error('참조하는 생성 그림이 빠진 백업이에요. 이미지가 포함된 library.json을 선택해 주세요.');
+  const audioAssets=validateAudioBackup(parsed?.format?parsed.audioAssets||[]:[]);
   const cleanState = withoutCredentials(state);
-  checkInlineStateImages(cleanState);
+  Object.defineProperty(cleanState,'_restoreAudioAssets',{value:audioAssets,enumerable:false,configurable:true});
+  checkInlineStateImages(cleanState,{allowStoredAssets});
   Object.defineProperty(cleanState, '_restoreAssets', { value: imageAssets, enumerable: false, configurable: true });
   return cleanState;
 }
 
 /** Call after import confirmation and before assigning/saving the imported state. */
 export async function restoreLibraryImages(state) {
+  await restoreAudioAssets(state?._restoreAudioAssets||[]);delete state._restoreAudioAssets;
   const images = state?._restoreAssets || [];
   for (const image of images) await restoreImageAsset(image.id, image.dataUrl);
   const status = await hydrateImageAssets(state);

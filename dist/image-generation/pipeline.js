@@ -1,14 +1,14 @@
 /* Explicit, cancellable generation. No provider retries or local-sample fallbacks. */
 import {generateImage} from './providers.js';
 import {getCredential} from './vault.js';
-import {saveImage} from './assets.js';
+import {saveImage,deleteImageAsset} from './assets.js';
 import {
   getActiveWorld, captureBookGenerationSnapshot,
   sceneGenerationRequest, commitSceneResult, createCharacterSheetRequest
 } from './world.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
-const ENGINE_NAMES={google:'Google',openai:'OpenAI',bfl:'BFL',fal:'Fal',local:'Local ComfyUI'};
+const ENGINE_NAMES={google:'Google',openai:'OpenAI',bfl:'BFL',fal:'Fal',local:'Local ComfyUI',sample:'무료 샘플'};
 
 export class ImageGenerationError extends Error {
   constructor(message,code='IMAGE_GENERATION_ERROR',cause) {
@@ -39,9 +39,9 @@ async function providerConfig(state,world,engine,signal) {
   delete config.key;
   delete config.token;
   if(!Object.hasOwn(ENGINE_NAMES,engine)) throw new ImageGenerationError('지원하지 않는 이미지 엔진이에요.','UNKNOWN_ENGINE');
-  const apiKey=await getCredential(engine);
+  const proxy=config.proxyEndpoint||config.transport==='proxy';const apiKey=engine==='sample'||proxy?null:await getCredential(engine);
   throwIfAborted(signal);
-  if(engine!=='local'&&!apiKey) throw new ImageGenerationError(`${ENGINE_NAMES[engine]} API 키가 필요해요. 부모 설정에서 키를 등록해 주세요.`,'MISSING_CREDENTIAL');
+  if(!['local','sample'].includes(engine)&&!apiKey&&!proxy) throw new ImageGenerationError(`${ENGINE_NAMES[engine]} API 키가 필요해요. 부모 설정에서 키를 등록해 주세요.`,'MISSING_CREDENTIAL');
   return {...config,apiKey:apiKey||undefined,signal};
 }
 
@@ -118,7 +118,7 @@ export async function generateScene(state,book,pageIndex,options={}) {
       requestedSeed:request.seed,size:request.size,quality:request.quality,
       capturedAt:new Date().toISOString()
     };
-    const config=await providerConfig(state,world,engine,signal);
+    const config=await providerConfig(state,world,engine,signal);if(engine==='google'){config.googlePro=false;config.modelVariant='flash';}
     throwIfAborted(signal);
     report(onProgress,{status:'generating',completed:0,total:1,pageIndex,engine});
     // The six required fields from the World helper are forwarded verbatim.
@@ -219,6 +219,7 @@ export async function generateCharacterSheet(state,characterOrId,options={}) {
     stylePresetId:world.stylePresetId,characterId:character.id,
     characterSnapshot:clone({...character,characterSheets:undefined})
   };
+  let savedAsset;
   try {
     report(onProgress,{status:'preparing',completed:0,total:1,pageIndex:null,characterId:character.id});
     const request=createCharacterSheetRequest(state,character,requestOptions(options));
@@ -230,13 +231,31 @@ export async function generateCharacterSheet(state,characterOrId,options={}) {
     throwIfAborted(signal);
     if(!result?.imageUrl) throw new ImageGenerationError('제공자가 캐릭터 시트를 반환하지 않았어요.','EMPTY_PROVIDER_RESULT');
     report(onProgress,{status:'saving',completed:0,total:1,pageIndex:null,characterId:character.id});
-    const asset=await saveImage(result.imageUrl,{signal});
+    const asset=await saveImage(result.imageUrl,{signal});savedAsset=asset;
     throwIfAborted(signal);
     const candidate={imageUrl:asset.imageUrl,imageAssetId:asset.assetId,seed:result.seed??null,meta:metadata(result,request,context)};
     report(onProgress,{status:'complete',completed:1,total:1,pageIndex:null,characterId:character.id,imageAssetId:asset.assetId});
     return candidate;
   } catch(error) {
+    if(savedAsset)await deleteImageAsset(savedAsset.assetId).catch(()=>{});
     report(onProgress,{status:error?.name==='AbortError'||signal?.aborted?'cancelled':'error',completed:0,total:1,pageIndex:null,characterId:character.id,message:error.message});
     throw annotate(error,{characterId:character.id});
   }
+}
+
+/** Separate cover artwork; shares the frozen cast, style and seed contract. */
+export async function generateCover(state,book,options={}){
+  const {signal}=options;throwIfAborted(signal);
+  const request=sceneGenerationRequest(state,book,0,{...requestOptions(options),quality:options.quality||'final'});
+  request.prompt=`Create a welcoming children's picture-book cover for this original story: ${book.topic||book.title}. Show the selected main character and companions together in the story's setting, with clear silhouettes and generous quiet space at the upper left for a title added separately. No text, letters, logos or watermark. ${request.prompt}`;
+  const snapshot=captureBookGenerationSnapshot(state,book),world=worldForSnapshot(state,snapshot),engine=snapshot.imageEngine;
+  const config=await providerConfig(state,world,engine,signal);
+  let asset;
+  try{
+    const result=await generateImage(request,{engine,config});throwIfAborted(signal);
+    asset=await saveImage(result.imageUrl,{signal});throwIfAborted(signal);
+    if(book.cover)book.coverHistory=[...(book.coverHistory||[]),clone(book.cover)];
+    book.cover={imageAssetId:asset.assetId,imageUrl:`asset:${asset.assetId}`,seed:result.seed??null,meta:metadata(result,request,{engine,worldId:snapshot.worldId,worldRevision:snapshot.worldRevision,stylePresetId:snapshot.stylePresetId})};
+    return book.cover;
+  }catch(error){if(asset)await deleteImageAsset(asset.assetId).catch(()=>{});throw error;}
 }

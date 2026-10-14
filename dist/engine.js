@@ -131,7 +131,7 @@ function storyContext(options, characters=[]) {
   const primary = selected[0] || characters.find(c=>c.id==='yuha') || DEFAULT_CHARACTERS[0];
   const theme = detectTheme(options.topic);
   const species = theme==='dinosaur'?'dinosaur':'rabbit';
-  const companion = selected.find(c => c.kind===species && c.id!==primary.id);
+  const companion = selected.find(c => c.kind===species && c.id!==primary.id)||selected.find(c=>c.id!==primary.id);
   return {theme,primary,selected,name:clean(primary.name,24)||'유하',nameEn:clean(primary.nameEn,30)||'Yuha',friend:companion?.name||(theme==='dinosaur'?'아기 공룡':themes[theme].friend),friendEn:companion?.nameEn||themes[theme].friendEn,topic:clean(options.topic,65)};
 }
 
@@ -163,6 +163,8 @@ export function makeOutline(options={}, characters=DEFAULT_CHARACTERS) {
     scene:{theme:context.theme,beat:row[2],index:i,sourceIndex,setting:options.backgroundIds?.[0]||context.theme,object:row[3]},
     artVariant:0
   }));
+  const supporting=context.selected.filter(character=>character.id!==context.primary.id);
+  if(supporting.length){pages[0].ko+=` 친구 ${supporting.map(character=>clean(character.name,24)).join(', ')}도 함께 떠나요.`;pages[0].en+=` ${supporting.map(character=>clean(character.nameEn||character.name,30)).join(' and ')} ${supporting.length===1?'comes':'come'} along.`;}
   const level=options.englishLevel||'repeat';
   if (/short|짧/.test(level)) pages.forEach((page,i)=>{if(i<pages.length-1)page.en+=' '+(i%3===0?'Come with me.':i%3===1?'Look over here.':'We are together.');});
   if (/chapter|챕터/.test(level)) pages.forEach((page,i)=>{page.en+=` ${context.nameEn} ${i%2===0?'looks around with a happy smile.':'takes a small step with a friend.'} There is so much to see today.`;});

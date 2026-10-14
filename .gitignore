@@ -2,3 +2,10 @@ node_modules/
 .DS_Store
 *.tar.gz
 *.zip
+__pycache__/
+*.pyc
+.venv/
+.nltk_data/
+
+.env*
+!.env.example

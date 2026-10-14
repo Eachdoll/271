@@ -116,6 +116,7 @@ export async function saveImage(imageUrl,options={}) {
   if(options.signal?.aborted) throw new DOMException('그림 저장이 취소됐어요.','AbortError');
   const assetId='image-'+(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,12)}`);
   await writeRecord({id:assetId,blob,createdAt:new Date().toISOString(),type:blob.type||'image/png'});
+  if(options.signal?.aborted){await deleteImageAsset(assetId);throw new DOMException('그림 저장이 취소됐어요.','AbortError');}
   return {assetId,imageUrl:cache(assetId,blob)};
 }
 
@@ -131,6 +132,22 @@ export async function restoreImageAsset(assetId,imageUrl) {
   return {assetId:id,imageUrl:cache(id,blob)};
 }
 
+/** Remove an unconfirmed candidate; original source photos are never stored here. */
+export async function deleteImageAsset(assetId) {
+  const id=normalizeId(assetId);
+  if(!id)return false;
+  const db=await database();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete=resolve;
+    tx.onabort=tx.onerror=()=>reject(new ImageAssetError('확정하지 않은 그림을 지우지 못했어요.','ASSET_DELETE_FAILED',tx.error));
+  });
+  const url=urls.get(id);if(url)URL.revokeObjectURL(url);
+  urls.delete(id);blobs.delete(id);
+  return true;
+}
+
 function assetIdsFromState(state) {
   const ids=new Set();
   const seen=new WeakSet();
@@ -138,7 +155,7 @@ function assetIdsFromState(state) {
     if(!value||typeof value!=='object'||seen.has(value)) return;
     seen.add(value);
     if(value.imageAssetId) ids.add(normalizeId(value.imageAssetId));
-    if(value.assetId) ids.add(normalizeId(value.assetId));
+    if(typeof value.assetId==='string'&&value.assetId.startsWith('image-')) ids.add(normalizeId(value.assetId));
     if(typeof value.imageUrl==='string'&&value.imageUrl.startsWith('asset:')) ids.add(normalizeId(value.imageUrl));
     for(const entry of Object.values(value)) if(entry&&typeof entry==='object') visit(entry);
   };

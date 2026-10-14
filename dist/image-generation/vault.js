@@ -1,7 +1,8 @@
 /**
  * Device-local credentials. Plaintext is used only in memory; library state and
- * exports never contain credentials. The nonextractable wrapping key lives in
- * IndexedDB, and localStorage contains only AES-GCM encrypted records.
+ * exports never contain credentials. New keys use nonextractable AES-GCM keys
+ * derived from the parent PIN with PBKDF2. Only salt/IV/ciphertext persist.
+ * Version 1 IndexedDB keys are migrated on the first parent PIN unlock.
  *
  * This protects stored data, not a compromised origin or an unlocked device.
  * Settings access is additionally gated by the application's parent PIN.
@@ -12,8 +13,14 @@ const PREFIX = 'donghwa-workshop-credential-v1:';
 const DATABASE = 'donghwa-workshop-key-vault';
 const STORE = 'keys';
 const KEY_ID = 'credential-aes-gcm-v1';
+const PIN_KEY_ID = 'credential-pin-aes-gcm-v2';
+const PIN_META_KEY = PREFIX + 'pin-lock-v2';
+const PIN_ITERATIONS = 210000;
+const PIN_CHECK_TEXT = 'donghwa-workshop-parent-vault-v2';
 const MAX_SECRET_BYTES = 16384;
 const encoder = new TextEncoder();
+let unlockedSession = null;
+let lockVersion = 0;
 
 export class VaultError extends Error {
   constructor(code, message, cause) {
@@ -54,8 +61,8 @@ function readRecord(engine) {
   if (raw === null) return null;
   try {
     const record = JSON.parse(raw);
-    if (!record || record.version !== 1 || record.algorithm !== 'AES-GCM' ||
-        record.keyId !== KEY_ID || record.engine !== engine ||
+    if (!record || ![1, 2].includes(record.version) || record.algorithm !== 'AES-GCM' ||
+        record.keyId !== (record.version === 2 ? PIN_KEY_ID : KEY_ID) || record.engine !== engine ||
         typeof record.iv !== 'string' || typeof record.ciphertext !== 'string') {
       throw new Error('Invalid encrypted credential record');
     }
@@ -64,7 +71,7 @@ function readRecord(engine) {
     if (iv.byteLength !== 12 || ciphertext.byteLength < 17 || ciphertext.byteLength > MAX_SECRET_BYTES + 16) {
       throw new Error('Invalid encrypted credential length');
     }
-    return {iv, ciphertext};
+    return {iv, ciphertext, version: record.version};
   } catch (error) {
     throw new VaultError('CREDENTIAL_CORRUPT', '저장된 API 키가 손상되었어요. 해당 키를 삭제하고 다시 입력해 주세요.', error);
   }
@@ -212,8 +219,109 @@ function fromBase64(value) {
   return bytes;
 }
 
-function authenticatedContext(engine) {
-  return encoder.encode(PREFIX + engine + ':' + KEY_ID);
+function authenticatedContext(engine, version = 1) {
+  return encoder.encode(PREFIX + engine + ':' + (version === 2 ? PIN_KEY_ID : KEY_ID));
+}
+
+function lockedError() { return new VaultError('VAULT_LOCKED', '부모 PIN으로 API 키 보관함의 잠금을 해제해 주세요.'); }
+function validatePin(pin) {
+  if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) throw new VaultError('INVALID_PIN', '부모 PIN은 숫자 4~12자리로 입력해 주세요.');
+  return pin;
+}
+function readPinMetadata() {
+  const raw = credentialStorage().getItem(PIN_META_KEY);
+  if (!raw) return null;
+  try {
+    const meta = JSON.parse(raw);
+    if (meta.version !== 2 || meta.kdf !== 'PBKDF2' || meta.hash !== 'SHA-256' || meta.iterations !== PIN_ITERATIONS || fromBase64(meta.salt).length !== 16 || fromBase64(meta.iv).length !== 12 || fromBase64(meta.check).length < 17) throw new Error('Invalid PIN metadata');
+    return meta;
+  } catch { throw new VaultError('CREDENTIAL_CORRUPT', 'PIN 암호화 설정이 손상되었어요. 기기의 사이트 저장소를 확인해 주세요.'); }
+}
+async function derivePinKey(pin, salt) {
+  const crypto = requireCrypto();
+  const bytes = encoder.encode(validatePin(pin));
+  try {
+    const material = await crypto.subtle.importKey('raw', bytes, 'PBKDF2', false, ['deriveKey']);
+    return await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PIN_ITERATIONS, hash: 'SHA-256' }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  } finally { bytes.fill(0); }
+}
+function pinSession() {
+  const meta = readPinMetadata();
+  if (!meta || !unlockedSession || unlockedSession.salt !== meta.salt) throw lockedError();
+  return unlockedSession;
+}
+export function isVaultUnlocked() { try { return !!pinSession(); } catch { return false; } }
+export function hasPinVault() { return readPinMetadata() !== null; }
+export function lockVault() { unlockedSession = null; lockVersion++; }
+
+async function encryptRecord(engine, value, key) {
+  const crypto = requireCrypto();
+  const bytes = encoder.encode(value);
+  try {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: authenticatedContext(engine, 2) }, key, bytes);
+    return { version: 2, algorithm: 'AES-GCM', keyId: PIN_KEY_ID, engine, iv: toBase64(iv), ciphertext: toBase64(new Uint8Array(ciphertext)), savedAt: new Date().toISOString() };
+  } finally { bytes.fill(0); }
+}
+async function buildPinBundle(pin, credentials) {
+  const crypto = requireCrypto();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await derivePinKey(pin, salt);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const check = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode(PIN_KEY_ID) }, key, encoder.encode(PIN_CHECK_TEXT));
+  const meta = { version: 2, kdf: 'PBKDF2', hash: 'SHA-256', iterations: PIN_ITERATIONS, salt: toBase64(salt), iv: toBase64(iv), check: toBase64(new Uint8Array(check)) };
+  const records = await Promise.all(Object.entries(credentials).map(async ([engine, value]) => [storageKey(engine), JSON.stringify(await encryptRecord(engine, value, key))]));
+  return { key, meta, records };
+}
+function commitPinBundle(bundle) {
+  const storage = credentialStorage();
+  const entries = [...bundle.records, [PIN_META_KEY, JSON.stringify(bundle.meta)]];
+  const previous = entries.map(([name]) => [name, storage.getItem(name)]);
+  try { for (const [name, value] of entries) storage.setItem(name, value); }
+  catch (error) {
+    for (const [name, value] of previous) { try { if (value === null) storage.removeItem(name); else storage.setItem(name, value); } catch {} }
+    throw new VaultError(error?.name === 'QuotaExceededError' ? 'STORAGE_FULL' : 'STORAGE_UNAVAILABLE', 'PIN 암호화 설정을 저장하지 못했어요. 저장 공간과 브라우저 권한을 확인해 주세요.');
+  }
+  unlockedSession = { key: bundle.key, salt: bundle.meta.salt, version: lockVersion };
+}
+
+/** Call only after the application has verified its parent PIN. */
+export async function unlockVault(pin) {
+  validatePin(pin);
+  lockVault();
+  const generation = lockVersion;
+  const meta = readPinMetadata();
+  if (!meta) {
+    const credentials = {};
+    for (const engine of CREDENTIAL_ENGINES) if (readRecord(engine)) credentials[engine] = await getCredential(engine);
+    const bundle = await buildPinBundle(pin, credentials);
+    if (generation !== lockVersion) throw lockedError();
+    commitPinBundle(bundle);
+    return true;
+  }
+  const key = await derivePinKey(pin, fromBase64(meta.salt));
+  let decoded;
+  try {
+    decoded = new Uint8Array(await requireCrypto().subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(meta.iv), additionalData: encoder.encode(PIN_KEY_ID) }, key, fromBase64(meta.check)));
+    if (new TextDecoder().decode(decoded) !== PIN_CHECK_TEXT) throw new Error('Invalid PIN');
+  } catch { throw new VaultError('INVALID_PIN', '부모 PIN이 맞지 않아 API 키 보관함을 열 수 없어요.'); }
+  finally { decoded?.fill(0); }
+  if (generation !== lockVersion) throw lockedError();
+  unlockedSession = { key, salt: meta.salt, version: generation };
+  return true;
+}
+
+/** Re-encrypt every saved credential; the application updates its PIN hash after success. */
+export async function setVaultPin(oldPin, newPin) {
+  validatePin(newPin);
+  await unlockVault(oldPin);
+  const generation = lockVersion;
+  const credentials = {};
+  for (const engine of CREDENTIAL_ENGINES) if (readRecord(engine)) credentials[engine] = await getCredential(engine);
+  const bundle = await buildPinBundle(newPin, credentials);
+  if (generation !== lockVersion) throw lockedError();
+  commitPinBundle(bundle);
+  return true;
 }
 
 /** Save a trimmed key. Empty input is rejected; use removeCredential to clear. */
@@ -230,11 +338,15 @@ export async function saveCredential(engine, value) {
   let record;
   try {
     const crypto = requireCrypto();
-    const key = await encryptionKey(true);
+    const pinMeta = readPinMetadata();
+    const session = pinMeta ? pinSession() : null;
+    const version = pinMeta ? 2 : 1;
+    const key = session ? session.key : await encryptionKey(true);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv, additionalData: authenticatedContext(engine)}, key, bytes);
+    const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv, additionalData: authenticatedContext(engine, version)}, key, bytes);
+    if (session && (unlockedSession !== session || session.version !== lockVersion)) throw lockedError();
     record = {
-      version: 1, algorithm: 'AES-GCM', keyId: KEY_ID, engine,
+      version, algorithm: 'AES-GCM', keyId: version === 2 ? PIN_KEY_ID : KEY_ID, engine,
       iv: toBase64(iv), ciphertext: toBase64(new Uint8Array(ciphertext)),
       savedAt: new Date().toISOString()
     };
@@ -261,14 +373,19 @@ export async function getCredential(engine) {
   validateEngine(engine);
   const record = readRecord(engine);
   if (!record) return null;
+  // A legacy record must never bypass the lock after PIN migration.
+  if (readPinMetadata()) pinSession();
   const crypto = requireCrypto();
-  const key = await encryptionKey(false);
+  const session = record.version === 2 ? pinSession() : null;
+  const key = session ? session.key : await encryptionKey(false);
   if (!key) throw missingKeyError();
   let plaintext;
   try {
-    plaintext = new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: record.iv, additionalData: authenticatedContext(engine)}, key, record.ciphertext));
+    plaintext = new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: record.iv, additionalData: authenticatedContext(engine, record.version)}, key, record.ciphertext));
+    if (session && (unlockedSession !== session || session.version !== lockVersion)) throw lockedError();
     return new TextDecoder('utf-8', {fatal: true}).decode(plaintext);
   } catch (error) {
+    if (error instanceof VaultError) throw error;
     throw new VaultError('DECRYPTION_FAILED', '저장된 API 키를 복호화할 수 없어요. 해당 키를 삭제하고 다시 입력해 주세요.', error);
   } finally {
     plaintext?.fill(0);

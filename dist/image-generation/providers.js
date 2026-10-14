@@ -5,13 +5,19 @@
  * generateImage({prompt, stylePreset, referenceImages, seed, size, quality},
  *               {engine, config}) -> {imageUrl, seed, meta}
  */
-export const ENGINE_IDS = Object.freeze(['google', 'openai', 'bfl', 'fal', 'local']);
+import { characterSVG, sceneSVG } from '../engine.js';
+import { ENGINE_MODELS, getEngineModel, estimateImageCost } from './models.js';
+import { renderImageRequest, StoryRendererError } from './story-renderer.js';
+import { forbiddenStyleMatches } from './styles.js';
+
+export const ENGINE_IDS = Object.freeze(['google', 'openai', 'bfl', 'fal', 'local', 'sample']);
 export const ENGINE_METADATA = Object.freeze({
-  google: Object.freeze({ id: 'google', name: 'Google', model: 'gemini-3.1-flash-image', requiresKey: true, seedSupported: false, referenceLimit: 14, docs: 'https://ai.google.dev/gemini-api/docs/image-generation' }),
-  openai: Object.freeze({ id: 'openai', name: 'OpenAI', model: 'gpt-image-2', requiresKey: true, seedSupported: false, referenceLimit: 16, docs: 'https://developers.openai.com/api/docs/guides/image-generation' }),
-  bfl: Object.freeze({ id: 'bfl', name: 'Black Forest Labs', model: 'flux-2-pro', requiresKey: true, seedSupported: true, referenceLimit: 8, docs: 'https://docs.bfl.ai/flux_2/flux2_image_editing' }),
-  fal: Object.freeze({ id: 'fal', name: 'fal', model: 'seedream-5', apiModel: 'bytedance/seedream/v5/flash', requiresKey: true, seedSupported: false, referenceLimit: 10, docs: 'https://fal.ai/models/bytedance/seedream/v5/flash/edit/api' }),
-  local: Object.freeze({ id: 'local', name: '로컬 ComfyUI', model: 'ComfyUI workflow', requiresKey: false, seedSupported: true, referenceLimit: null, docs: 'https://docs.comfy.org/development/comfyui-server/comms_routes' }),
+  sample: Object.freeze({ id: 'sample', name: '무료 샘플 · 기기 내', model: 'original-svg-template-v1', requiresKey: false, seedSupported: true, referenceLimit: null, photoToCharacter: false, cost: 'free', description: '기기 안에서 만드는 그림 템플릿 · AI 생성 아님', docs: null }),
+  google: Object.freeze({ id: 'google', name: 'Google · 나노바나나 2', model: ENGINE_MODELS.google.final, draftModel: ENGINE_MODELS.google.draft, proModel: ENGINE_MODELS.google.pro, requiresKey: true, seedSupported: false, referenceLimit: 14, supportsNegative: false, photoToCharacter: true, cost: 'paid', description: 'Gemini 앱의 무료 사용 한도와 별도인 유료 이미지 API · 초안 Lite / 확정 Nano Banana 2 / Pro 선택', pricingDocs: ENGINE_MODELS.google.pricingDocs, docs: 'https://ai.google.dev/gemini-api/docs/image-generation' }),
+  openai: Object.freeze({ id: 'openai', name: 'OpenAI', model: ENGINE_MODELS.openai.final, requiresKey: true, seedSupported: false, referenceLimit: 16, supportsNegative: false, docs: ENGINE_MODELS.openai.docs }),
+  bfl: Object.freeze({ id: 'bfl', name: 'Black Forest Labs', model: ENGINE_MODELS.bfl.final, requiresKey: true, seedSupported: true, referenceLimit: 8, supportsNegative: false, docs: ENGINE_MODELS.bfl.docs }),
+  fal: Object.freeze({ id: 'fal', name: 'fal · Seedream 5', model: 'seedream-5', apiModel: ENGINE_MODELS.fal.final, draftModel: ENGINE_MODELS.fal.draft, requiresKey: true, seedSupported: false, referenceLimit: 10, supportsNegative: false, description: '초안 Seedream 5 Lite / 확정 Seedream 5 Pro', docs: ENGINE_MODELS.fal.docs }),
+  local: Object.freeze({ id: 'local', name: '로컬 ComfyUI · API 요금 없음', model: 'ComfyUI workflow', requiresKey: false, seedSupported: true, referenceLimit: null, photoToCharacter: true, cost: 'local', description: '직접 설치한 모델로 생성 · 컴퓨터·전기 비용은 별도', docs: 'https://docs.comfy.org/development/comfyui-server/comms_routes' }),
 });
 
 export class ImageGenerationError extends Error {
@@ -48,21 +54,15 @@ function normalizeSize(size) {
 
 /** Preset descriptions use visual properties, never engine-specific style names. */
 export function composeImagePrompt(prompt, stylePreset = {}, referenceImages = []) {
-  const parts = [String(prompt).trim()];
-  if (stylePreset.stylePrompt) parts.push(`Visual style: ${String(stylePreset.stylePrompt).trim()}`);
-  if (stylePreset.palette?.length) parts.push(`Color palette: ${stylePreset.palette.join(', ')}.`);
-  if (stylePreset.negativePrompt) parts.push(`Avoid: ${String(stylePreset.negativePrompt).trim()}`);
-  if (referenceImages.length) parts.push('Use ALL attached reference images together. Preserve the character identities, proportions, clothing and distinctive details from the character sheets; follow the palette, materials and rendering of the style references. Render a new scene matching the prompt.');
-  return parts.filter(Boolean).join('\n\n');
+  return renderImageRequest({ prompt, stylePreset, referenceImages }, { supportsNegative: false }).composedPrompt;
 }
 
 function normalizeRequest(request, metadata) {
-  if (!request || typeof request.prompt !== 'string' || !request.prompt.trim()) fail('이미지 설명을 입력해 주세요.', 'invalid_prompt');
-  if (!Array.isArray(request.referenceImages ?? [])) fail('참조 이미지는 배열로 전달해 주세요.', 'invalid_references');
-  const referenceImages = request.referenceImages || [];
-  if (metadata.referenceLimit && referenceImages.length > metadata.referenceLimit) fail(`${metadata.name}는 참조 이미지를 최대 ${metadata.referenceLimit}개 받을 수 있어요. ${referenceImages.length}개 중 일부를 제외해 다시 요청해 주세요.`, 'reference_limit');
-  const stylePreset = request.stylePreset && typeof request.stylePreset === 'object' ? request.stylePreset : {};
-  return { ...request, prompt: request.prompt.trim(), stylePreset, referenceImages, seed: seedValue(request.seed), size: normalizeSize(request.size), quality: request.quality || 'medium', composedPrompt: composeImagePrompt(request.prompt, stylePreset, referenceImages) };
+  let rendered;
+  try { rendered = renderImageRequest(request, { maxReferenceImages: metadata.referenceLimit, supportsNegative: metadata.id === 'local' }); }
+  catch (error) { if (error instanceof StoryRendererError) fail(error.message, error.code); throw error; }
+  if (forbiddenStyleMatches([rendered.composedPrompt, rendered.negativePrompt, rendered.stylePreset.name || ''].join('\n')).length) fail('설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.', 'forbidden_style_name');
+  return { ...rendered, seed: seedValue(request.seed), size: normalizeSize(request.size), quality: request.quality || 'medium' };
 }
 
 function requestContext(config, signal) {
@@ -110,6 +110,10 @@ async function fetchJSON(url, options, context) {
   catch { fail('엔진이 올바른 JSON 응답을 반환하지 않았어요.', 'invalid_response'); }
 }
 function jsonOptions(body, headers = {}) { return { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }; }
+function billedCost(result) {
+  const cost = result?.cost_usd ?? result?.usage?.cost_usd ?? result?.billing?.cost_usd;
+  return typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 ? cost : undefined;
+}
 function apiKey(config) {
   const key = typeof config.apiKey === 'string' ? config.apiKey.trim() : '';
   if (!key) fail('부모 설정에서 이 엔진의 API 키를 입력하고 잠금을 해제해 주세요.', 'missing_key');
@@ -161,7 +165,7 @@ function dataURLBlob(dataURL) {
     return new Blob([bytes], { type: mimeType });
   } catch { fail('참조 이미지 데이터를 읽지 못했어요.', 'invalid_reference'); }
 }
-async function rasterizeSVG(blob, signal) {
+async function rasterizeSVG(blob, signal, outputSize = null) {
   if (typeof document === 'undefined' || typeof Image === 'undefined') fail('SVG 참조 이미지는 브라우저에서 PNG로 변환해야 해요. PNG 파일로 다시 업로드해 주세요.', 'svg_requires_browser');
   const objectURL = URL.createObjectURL(blob);
   try {
@@ -177,8 +181,8 @@ async function rasterizeSVG(blob, signal) {
     });
     const canvas = document.createElement('canvas');
     const factor = Math.min(1, 2048 / Math.max(img.naturalWidth || 512, img.naturalHeight || 512));
-    canvas.width = Math.max(1, Math.round((img.naturalWidth || 512) * factor));
-    canvas.height = Math.max(1, Math.round((img.naturalHeight || 512) * factor));
+    canvas.width = outputSize?.width || Math.max(1, Math.round((img.naturalWidth || 512) * factor));
+    canvas.height = outputSize?.height || Math.max(1, Math.round((img.naturalHeight || 512) * factor));
     canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
     const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     if (!png) fail('SVG 참조 이미지를 PNG로 변환하지 못했어요.', 'invalid_reference');
@@ -230,8 +234,62 @@ function aspectRatio(size) {
     return Math.abs(Math.log((w / h) / (size.width / size.height))) < Math.abs(Math.log((cw / ch) / (size.width / size.height))) ? ratio : closest;
   }, '1:1');
 }
+
+/**
+ * A fully offline option for trying the app without an API key. These original
+ * vector templates use saved character settings, not image-model inference.
+ * Photos and remote reference pixels are deliberately not fetched or analyzed.
+ */
+function sampleCharacter(source = {}, prompt = '') {
+  const kind = ['child', 'adult', 'dinosaur', 'rabbit'].includes(source.kind) ? source.kind
+    : /rabbit|토끼/i.test(prompt) ? 'rabbit' : /dinosaur|공룡/i.test(prompt) ? 'dinosaur'
+      : /adult|어른/i.test(prompt) ? 'adult' : 'child';
+  const pickColor = (value, label, fallback) => {
+    if (/^#[\da-f]{6}$/i.test(String(value))) return value;
+    return prompt.match(new RegExp(`${label}\\s+(#[\\da-f]{6})`, 'i'))?.[1] || fallback;
+  };
+  return {
+    id: String(source.id || 'sample-character'), name: String(source.name || '이야기 친구'), kind,
+    color: pickColor(source.color, 'body/clothing color', '#ddb07b'),
+    hairColor: pickColor(source.hairColor, 'hair color', '#60584d'),
+    skinColor: pickColor(source.skinColor, 'skin color', '#edc8a9'),
+  };
+}
+
+async function sampleAdapter(request, config, context) {
+  if (context.signal.aborted) throw abortError();
+  const sampleContext = request.sampleContext || {};
+  if (request.photoToCharacter || request.source === 'photo' || sampleContext.kind === 'photo') fail('무료 샘플은 사진을 캐릭터로 변환하지 않아요. 사진을 참조할 수 있는 AI 엔진을 선택해 주세요.', 'photo_not_supported');
+  const isSheet = sampleContext.kind === 'sheet' || /character (?:reference )?sheet/i.test(request.prompt);
+  const characters = (Array.isArray(sampleContext.characters) ? sampleContext.characters : [sampleContext.character || {}])
+    .map(character => sampleCharacter(character || {}, request.prompt));
+  if (!characters.length) characters.push(sampleCharacter({}, request.prompt));
+  const paper = /^#[\da-f]{6}$/i.test(request.stylePreset.palette?.[0]) ? request.stylePreset.palette[0] : '#f5eedc';
+  let svg;
+  if (isSheet) {
+    const panels = [0, 1, 2, 4].map((variation, index) => characterSVG(characters[0], request.seed + variation)
+      .replace(/^<svg\b[^>]*>/, `<svg x="${(index % 2) * 420}" y="${Math.floor(index / 2) * 420}" width="420" height="420" viewBox="0 0 420 420">`));
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 840" width="${request.size.width}" height="${request.size.height}"><rect width="840" height="840" fill="${paper}"/>${panels.join('')}</svg>`;
+  } else {
+    // The application supplies a saved scene. The public interface also works
+    // without application state, using a small theme selected from the prompt.
+    svg = sceneSVG(sampleContext.scene || request.prompt, characters, request.seed)
+      .replace(/\bwidth="800" height="580"/, `width="${request.size.width}" height="${request.size.height}"`)
+      .replace(/fill="#eae9d9"/g, `fill="${paper}"`);
+  }
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const imageUrl = typeof document !== 'undefined' && typeof Image !== 'undefined'
+    ? await blobDataURL(await rasterizeSVG(blob, context.signal, request.size), context.signal)
+    : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  return {
+    imageUrl, seed: request.seed, model: ENGINE_METADATA.sample.model, qualitySupported: false,
+    generationMode: 'offline-template', photoToCharacter: false, referenceImagesUsed: false,
+    sampleNote: '기기 안의 그림 템플릿과 저장된 캐릭터 설정을 사용했어요. AI 생성·사진 변환은 지원하지 않으며 참조 이미지의 픽셀과 자유로운 화풍 설명을 분석하지 않아요.',
+  };
+}
+
 async function googleAdapter(request, config, context, blobs) {
-  const model = ENGINE_METADATA.google.model;
+  const model = getEngineModel('google', request.quality, config);
   const base = endpoint(config, 'https://generativelanguage.googleapis.com/v1beta');
   const parts = [{ text: request.composedPrompt }];
   for (const blob of blobs) {
@@ -239,7 +297,7 @@ async function googleAdapter(request, config, context, blobs) {
     parts.push({ inlineData: { mimeType: blob.type, data: dataURL.slice(dataURL.indexOf(',') + 1) } });
   }
   const dimension = Math.max(request.size.width, request.size.height);
-  const imageSize = dimension > 2048 ? '4K' : dimension > 1024 ? '2K' : '1K';
+  const imageSize = model === ENGINE_MODELS.google.draft ? '1K' : dimension > 2048 ? '4K' : dimension > 1024 ? '2K' : '1K';
   // Gemini accepts a best-effort sampling seed, but does not expose the seed
   // actually used for generated pixels. Keep effective image seed unconfirmed.
   const body = { contents: [{ role: 'user', parts }], generationConfig: { seed: request.seed, responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: aspectRatio(request.size), imageSize } } };
@@ -247,12 +305,12 @@ async function googleAdapter(request, config, context, blobs) {
   const image = result.candidates?.flatMap(candidate => candidate.content?.parts || []).find(part => !part.thought && ((part.inlineData || part.inline_data)?.mimeType?.startsWith('image/') || (part.inlineData || part.inline_data)?.mime_type?.startsWith('image/')));
   const data = image?.inlineData || image?.inline_data;
   if (!data?.data) fail('Google이 이미지 결과를 반환하지 않았어요. 설명과 참조 이미지를 확인해 다시 시도해 주세요.', 'missing_image');
-  return { imageUrl: `data:${data.mimeType || data.mime_type};base64,${data.data}`, seed: null, model, providerSize: { aspectRatio: body.generationConfig.imageConfig.aspectRatio, imageSize }, qualitySupported: false };
+  return { imageUrl: `data:${data.mimeType || data.mime_type};base64,${data.data}`, seed: null, model, costUsd: billedCost(result), providerSize: { aspectRatio: body.generationConfig.imageConfig.aspectRatio, imageSize }, qualitySupported: false };
 }
 async function openaiAdapter(request, config, context, blobs) {
-  const model = ENGINE_METADATA.openai.model;
+  const model = getEngineModel('openai', request.quality, config);
   const base = endpoint(config, 'https://api.openai.com/v1');
-  const quality = ['low', 'medium', 'high', 'auto'].includes(request.quality) ? request.quality : 'medium';
+  const quality = request.quality === 'draft' ? 'low' : request.quality === 'final' ? 'high' : ['low', 'medium', 'high', 'auto'].includes(request.quality) ? request.quality : 'medium';
   const size = request.size.automatic ? 'auto' : `${request.size.width}x${request.size.height}`;
   if (!request.size.automatic && (request.size.width % 16 || request.size.height % 16 || request.size.width / request.size.height < 1 / 3 || request.size.width / request.size.height > 3)) fail('OpenAI 이미지 크기는 16의 배수여야 하며 가로·세로 비율은 1:3~3:1이어야 해요.', 'invalid_size');
   const headers = { Authorization: `Bearer ${apiKey(config)}` };
@@ -267,13 +325,16 @@ async function openaiAdapter(request, config, context, blobs) {
   const result = await fetchJSON(`${base}/images/${blobs.length ? 'edits' : 'generations'}`, options, context);
   const image = result.data?.[0];
   if (!image?.b64_json && !image?.url) fail('OpenAI 응답에 생성된 이미지가 없어요.', 'missing_image');
-  return { imageUrl: image.b64_json ? `data:image/${result.output_format || 'png'};base64,${image.b64_json}` : image.url, seed: null, model, providerSize: result.size || size, qualitySupported: true, effectiveQuality: result.quality || quality };
+  return { imageUrl: image.b64_json ? `data:image/${result.output_format || 'png'};base64,${image.b64_json}` : image.url, seed: null, model, costUsd: billedCost(result), providerSize: result.size || size, qualitySupported: true, effectiveQuality: result.quality || quality };
 }
 async function bflAdapter(request, config, context, blobs) {
-  const model = ENGINE_METADATA.bfl.model;
+  const model = getEngineModel('bfl', request.quality, config);
   const base = endpoint(config, 'https://api.bfl.ai/v1');
   const headers = { 'x-key': apiKey(config), accept: 'application/json' };
-  const body = { prompt: request.composedPrompt, seed: request.seed, width: request.size.width, height: request.size.height, output_format: 'png' };
+  const factor = request.quality === 'draft' ? Math.min(1, 1024 / Math.max(request.size.width, request.size.height)) : 1;
+  const width = Math.max(64, Math.round(request.size.width * factor / 16) * 16);
+  const height = Math.max(64, Math.round(request.size.height * factor / 16) * 16);
+  const body = { prompt: request.composedPrompt, seed: request.seed, width, height, output_format: 'png' };
   for (let index = 0; index < blobs.length; index++) {
     const dataURL = await blobDataURL(blobs[index], context.signal);
     body[index ? `input_image_${index + 1}` : 'input_image'] = dataURL.slice(dataURL.indexOf(',') + 1);
@@ -284,13 +345,13 @@ async function bflAdapter(request, config, context, blobs) {
   while (true) {
     await delay(context.interval, context.signal);
     const result = await fetchJSON(pollingURL, { headers }, context);
-    if (result.status === 'Ready') return { imageUrl: result.result?.sample, seed: Number.isSafeInteger(result.result?.seed) ? result.result.seed : request.seed, model, requestId: job.id, qualitySupported: false };
+    if (result.status === 'Ready') return { imageUrl: result.result?.sample, seed: Number.isSafeInteger(result.result?.seed) ? result.result.seed : request.seed, model, costUsd: billedCost(result), requestId: job.id, qualitySupported: false, providerSize: { width, height } };
     if (['Error', 'Failed', 'Request Moderated', 'Content Moderated', 'Task not found'].includes(result.status)) fail('BFL 이미지 생성이 완료되지 않았어요. 설명과 모델 사용량을 확인해 주세요.', 'generation_failed');
   }
 }
 async function falAdapter(request, config, context, blobs) {
   const base = endpoint(config, 'https://queue.fal.run');
-  const model = `${ENGINE_METADATA.fal.apiModel}/${blobs.length ? 'edit' : 'text-to-image'}`;
+  const model = `${getEngineModel('fal', request.quality, config)}/${blobs.length ? 'edit' : 'text-to-image'}`;
   const headers = { Authorization: `Key ${apiKey(config)}` };
   const body = { prompt: request.composedPrompt, image_size: request.size.automatic ? 'auto_2K' : { width: request.size.width, height: request.size.height }, num_images: 1, output_format: 'png' };
   if (blobs.length) body.image_urls = await Promise.all(blobs.map(blob => blobDataURL(blob, context.signal)));
@@ -303,7 +364,7 @@ async function falAdapter(request, config, context, blobs) {
     const status = await fetchJSON(statusURL, { headers }, context);
     if (status.status === 'COMPLETED') {
       const result = await fetchJSON(responseURL, { headers }, context);
-      return { imageUrl: result.images?.[0]?.url, seed: null, model, requestId: job.request_id, qualitySupported: false };
+      return { imageUrl: result.images?.[0]?.url, seed: Number.isSafeInteger(result.seed) ? result.seed : null, model, costUsd: billedCost(result), requestId: job.request_id, qualitySupported: false };
     }
     if (['FAILED', 'ERROR', 'CANCELLED'].includes(status.status)) fail('fal 이미지 생성이 완료되지 않았어요. 설명과 모델 사용량을 확인해 주세요.', 'generation_failed');
   }
@@ -414,7 +475,37 @@ async function localAdapter(request, config, context, blobs) {
   }
 }
 
-const adapters = { google: googleAdapter, openai: openaiAdapter, bfl: bflAdapter, fal: falAdapter, local: localAdapter };
+const adapters = { sample: sampleAdapter, google: googleAdapter, openai: openaiAdapter, bfl: bflAdapter, fal: falAdapter, local: localAdapter };
+
+/** A configured proxy receives pixels and rendering settings, never browser API keys. */
+async function proxyAdapter(engine, request, config, context, blobs) {
+  const base = endpoint({ endpoint: config.proxyEndpoint }, globalThis.location?.origin || 'http://127.0.0.1:8787');
+  const referenceImages = await Promise.all(blobs.map(async (blob, index) => ({ dataUrl: await blobDataURL(blob, context.signal), role: request.referenceImages[index]?.role || null, label: request.referenceImages[index]?.label || null })));
+  const body = { scenePrompt: request.scenePrompt, stylePrompt: request.stylePrompt, negativePrompt: request.negativePrompt, stylePreset: { id: request.stylePreset.id, name: request.stylePreset.name, palette: request.stylePreset.palette }, referenceImages, seed: request.seed, size: { width: request.size.width, height: request.size.height }, quality: request.quality, modelVariant: config.modelVariant, googlePro: config.googlePro === true };
+  const result = await fetchJSON(`${base}/api/image/${engine}`, jsonOptions(body), context);
+  if (!result.imageUrl || typeof result.model !== 'string') fail('이미지 프록시 응답 형식을 확인해 주세요.', 'invalid_response');
+  return { imageUrl: result.imageUrl, seed: Number.isSafeInteger(result.seed) ? result.seed : null, model: result.model, costUsd: billedCost(result), qualitySupported: !!result.meta?.qualitySupported, providerSize: result.meta?.providerSize, effectiveQuality: result.meta?.effectiveQuality, requestId: result.meta?.requestId };
+}
+
+export function imageEngineCapabilities(engine) {
+  const metadata = ENGINE_METADATA[engine];
+  if (!metadata) fail('지원하는 이미지 엔진을 선택해 주세요.', 'invalid_engine');
+  return { maxReferenceImages: metadata.referenceLimit || Infinity, supportsSeed: metadata.seedSupported, supportsNegative: engine === 'local' };
+}
+
+/** New Blob interface, backed by the same adapters as the original imageUrl API. */
+export function createImageEngine({ engine, config = {} } = {}) {
+  const generate = createImageGenerator({ engine, config });
+  return Object.freeze({
+    id: engine,
+    capabilities: () => imageEngineCapabilities(engine),
+    async generate(request) {
+      const result = await generate(request);
+      const imageBlob = result.imageUrl.startsWith('data:') ? dataURLBlob(result.imageUrl) : await (await (config.fetch || globalThis.fetch)(result.imageUrl)).blob();
+      return { imageBlob, seed: result.seed ?? result.meta.requestedSeed, engineId: engine, model: result.meta.model, ...(result.meta.costUsd !== undefined ? { costUsd: result.meta.costUsd } : {}), metadata: result.meta };
+    },
+  });
+}
 
 export function createImageGenerator({ engine, config = {} } = {}) {
   if (!ENGINE_IDS.includes(engine)) fail('지원하는 이미지 엔진을 선택해 주세요.', 'invalid_engine');
@@ -427,13 +518,16 @@ export async function generateImage(request, { engine, config = {} } = {}) {
   const metadata = ENGINE_METADATA[engine];
   if (!metadata) fail('지원하는 이미지 엔진을 선택해 주세요.', 'invalid_engine');
   const normalized = normalizeRequest(request, metadata);
-  if (metadata.requiresKey) apiKey(config);
+  const useProxy = config.transport === 'proxy' || !!config.proxyEndpoint;
+  if (metadata.requiresKey && !useProxy) apiKey(config);
   const context = requestContext(config, request.signal);
   const startedAt = Date.now();
   try {
-    const blobs = await Promise.all(normalized.referenceImages.map(reference => referenceBlob(reference, context)));
-    const result = await adapters[engine](normalized, config, context, blobs);
-    const imageUrl = await imageResultURL(result.imageUrl, context, config);
+    const blobs = engine === 'sample' ? [] : await Promise.all(normalized.referenceImages.map(reference => referenceBlob(reference, context)));
+    const result = useProxy && engine !== 'sample' ? await proxyAdapter(engine, normalized, config, context, blobs) : await adapters[engine](normalized, config, context, blobs);
+    // Only our own offline SVG can bypass provider result validation. In a
+    // browser it has already been rasterized to PNG before it reaches storage.
+    const imageUrl = engine === 'sample' ? result.imageUrl : await imageResultURL(result.imageUrl, context, config);
     return {
       imageUrl,
       seed: result.seed,
@@ -443,11 +537,19 @@ export async function generateImage(request, { engine, config = {} } = {}) {
         composedPrompt: normalized.composedPrompt,
         stylePreset: normalized.stylePreset.id || normalized.stylePreset.name || null,
         referenceCount: normalized.referenceImages.length,
+        referenceMetadata: normalized.referenceMetadata,
+        originalReferenceCount: normalized.originalReferenceCount,
+        droppedReferenceCount: normalized.droppedReferenceCount,
         size: { width: normalized.size.width, height: normalized.size.height },
         quality: normalized.quality, qualitySupported: result.qualitySupported,
+        costUsdEstimated: estimateImageCost({ engine, quality: normalized.quality, size: normalized.size, config }).costUsd,
+        costEstimate: estimateImageCost({ engine, quality: normalized.quality, size: normalized.size, config }),
+        ...(result.costUsd !== undefined ? { costUsd: result.costUsd, costSource: 'provider-response' } : {}),
+        transport: useProxy ? 'proxy' : 'direct',
         ...(result.providerSize ? { providerSize: result.providerSize } : {}),
         ...(result.effectiveQuality ? { effectiveQuality: result.effectiveQuality } : {}),
         ...(result.requestId ? { requestId: result.requestId } : {}),
+        ...(result.generationMode ? { generationMode: result.generationMode, photoToCharacter: result.photoToCharacter, referenceImagesUsed: result.referenceImagesUsed, sampleNote: result.sampleNote, cost: 'free' } : {}),
         createdAt: new Date().toISOString(), durationMs: Date.now() - startedAt,
         ...(!metadata.seedSupported ? { seedNote: '이 이미지 API는 실제 사용된 이미지 시드를 반환하지 않아 요청 시드만 기록합니다.' } : {}),
       },
