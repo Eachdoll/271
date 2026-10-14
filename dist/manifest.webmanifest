@@ -1,0 +1,10 @@
+{
+  "name": "동화공방 — 우리 가족의 작은 이야기",
+  "short_name": "동화공방",
+  "lang": "ko",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f8f7f3",
+  "theme_color": "#f0f2eb",
+  "icons": [{"src":"./assets/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}

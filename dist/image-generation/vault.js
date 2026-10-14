@@ -1,0 +1,298 @@
+/**
+ * Device-local credentials. Plaintext is used only in memory; library state and
+ * exports never contain credentials. The nonextractable wrapping key lives in
+ * IndexedDB, and localStorage contains only AES-GCM encrypted records.
+ *
+ * This protects stored data, not a compromised origin or an unlocked device.
+ * Settings access is additionally gated by the application's parent PIN.
+ */
+
+export const CREDENTIAL_ENGINES = Object.freeze(['google', 'openai', 'bfl', 'fal', 'local']);
+const PREFIX = 'donghwa-workshop-credential-v1:';
+const DATABASE = 'donghwa-workshop-key-vault';
+const STORE = 'keys';
+const KEY_ID = 'credential-aes-gcm-v1';
+const MAX_SECRET_BYTES = 16384;
+const encoder = new TextEncoder();
+
+export class VaultError extends Error {
+  constructor(code, message, cause) {
+    super(message);
+    this.name = 'VaultError';
+    this.code = code;
+    if (cause !== undefined) this.cause = cause;
+  }
+}
+
+function validateEngine(engine) {
+  if (!CREDENTIAL_ENGINES.includes(engine)) {
+    throw new VaultError('INVALID_ENGINE', '지원하지 않는 이미지 엔진이에요.');
+  }
+  return engine;
+}
+
+function storageKey(engine) {
+  return PREFIX + validateEngine(engine);
+}
+
+function credentialStorage() {
+  try {
+    return globalThis.localStorage;
+  } catch (error) {
+    throw new VaultError('STORAGE_UNAVAILABLE', 'API 키 저장소에 접근할 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.', error);
+  }
+}
+
+function readRecord(engine) {
+  let raw;
+  try {
+    raw = credentialStorage().getItem(storageKey(engine));
+  } catch (error) {
+    if (error instanceof VaultError) throw error;
+    throw new VaultError('STORAGE_UNAVAILABLE', 'API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.', error);
+  }
+  if (raw === null) return null;
+  try {
+    const record = JSON.parse(raw);
+    if (!record || record.version !== 1 || record.algorithm !== 'AES-GCM' ||
+        record.keyId !== KEY_ID || record.engine !== engine ||
+        typeof record.iv !== 'string' || typeof record.ciphertext !== 'string') {
+      throw new Error('Invalid encrypted credential record');
+    }
+    const iv = fromBase64(record.iv);
+    const ciphertext = fromBase64(record.ciphertext);
+    if (iv.byteLength !== 12 || ciphertext.byteLength < 17 || ciphertext.byteLength > MAX_SECRET_BYTES + 16) {
+      throw new Error('Invalid encrypted credential length');
+    }
+    return {iv, ciphertext};
+  } catch (error) {
+    throw new VaultError('CREDENTIAL_CORRUPT', '저장된 API 키가 손상되었어요. 해당 키를 삭제하고 다시 입력해 주세요.', error);
+  }
+}
+
+function requireCrypto() {
+  if (globalThis.isSecureContext === false) {
+    throw new VaultError('SECURE_CONTEXT_REQUIRED', 'API 키 암호화에는 HTTPS 또는 localhost 환경이 필요해요.');
+  }
+  if (!globalThis.crypto?.subtle || !globalThis.crypto?.getRandomValues) {
+    throw new VaultError('CRYPTO_UNAVAILABLE', '이 브라우저는 API 키 암호화를 지원하지 않아요. 최신 브라우저를 사용해 주세요.');
+  }
+  return globalThis.crypto;
+}
+
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let request;
+    const fail = (code, message, cause) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(new VaultError(code, message, cause));
+    };
+    const timeout = setTimeout(() => fail('KEY_STORE_TIMEOUT', '암호화 키 저장소가 응답하지 않아요. 다른 탭을 닫고 다시 시도해 주세요.'), 8000);
+    try {
+      if (!globalThis.indexedDB) {
+        fail('KEY_STORE_UNAVAILABLE', '이 브라우저에서는 암호화 키를 저장할 수 없어요. 사이트 저장 권한을 확인해 주세요.');
+        return;
+      }
+      request = globalThis.indexedDB.open(DATABASE, 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
+      };
+      request.onblocked = () => fail('KEY_STORE_BLOCKED', '다른 탭에서 암호화 키 저장소를 사용 중이에요. 다른 공방 탭을 닫고 다시 시도해 주세요.');
+      request.onerror = () => fail('KEY_STORE_UNAVAILABLE', '암호화 키 저장소를 열 수 없어요. 사이트 저장 권한을 확인해 주세요.', request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => db.close();
+        if (settled) {
+          db.close();
+          return;
+        }
+        settled = true;
+        clearTimeout(timeout);
+        resolve(db);
+      };
+    } catch (error) {
+      fail('KEY_STORE_UNAVAILABLE', '암호화 키 저장소를 열 수 없어요. 사이트 저장 권한을 확인해 주세요.', error);
+    }
+  });
+}
+
+function validEncryptionKey(key) {
+  return key && key.type === 'secret' && key.extractable === false &&
+    key.algorithm?.name === 'AES-GCM' && key.algorithm?.length === 256 &&
+    key.usages?.includes('encrypt') && key.usages?.includes('decrypt') &&
+    (typeof globalThis.CryptoKey === 'undefined' || key instanceof globalThis.CryptoKey);
+}
+
+/** The read/conditional put share a transaction so concurrent tabs use one key. */
+function keyTransaction(db, candidate = null) {
+  return new Promise((resolve, reject) => {
+    let key = null;
+    let transaction;
+    let localError;
+    try {
+      transaction = db.transaction(STORE, candidate ? 'readwrite' : 'readonly');
+      const store = transaction.objectStore(STORE);
+      const request = store.get(KEY_ID);
+      request.onsuccess = () => {
+        key = request.result || null;
+        if (key && !validEncryptionKey(key)) {
+          localError = new VaultError('KEY_STORE_CORRUPT', '이 기기의 암호화 키를 사용할 수 없어요. 저장된 API 키를 삭제하고 사이트 저장소를 초기화해 주세요.');
+          transaction.abort();
+          return;
+        }
+        if (!key && candidate) {
+          key = candidate;
+          store.put(candidate, KEY_ID);
+        }
+      };
+      transaction.oncomplete = () => resolve(key);
+      transaction.onabort = () => reject(localError || new VaultError('KEY_STORE_UNAVAILABLE', '암호화 키를 저장하거나 읽을 수 없어요. 브라우저 저장 권한과 여유 공간을 확인해 주세요.', transaction.error));
+      transaction.onerror = () => {};
+    } catch (error) {
+      reject(new VaultError('KEY_STORE_UNAVAILABLE', '암호화 키 저장소에 접근할 수 없어요. 브라우저 저장 권한을 확인해 주세요.', error));
+    }
+  });
+}
+
+async function encryptionKey(create) {
+  const crypto = requireCrypto();
+  const db = await openDatabase();
+  try {
+    const existing = await keyTransaction(db);
+    if (existing || !create) return existing;
+    // Clearing IndexedDB alone must not silently replace the key for remaining
+    // ciphertexts. The user can remove those credentials and enter them again.
+    let existingCiphertext;
+    try {
+      const storage = credentialStorage();
+      existingCiphertext = CREDENTIAL_ENGINES.some(engine => storage.getItem(PREFIX + engine) !== null);
+    } catch (error) {
+      if (error instanceof VaultError) throw error;
+      throw new VaultError('STORAGE_UNAVAILABLE', '저장된 API 키를 확인할 수 없어요. 사이트 저장 권한을 확인해 주세요.', error);
+    }
+    if (existingCiphertext) {
+      // Another tab may have created the shared key since our initial read.
+      const concurrentKey = await keyTransaction(db);
+      if (concurrentKey) return concurrentKey;
+      throw missingKeyError();
+    }
+    let candidate;
+    try {
+      candidate = await crypto.subtle.generateKey({name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt']);
+    } catch (error) {
+      throw new VaultError('ENCRYPTION_FAILED', 'API 키 암호화를 준비할 수 없어요. 최신 브라우저에서 다시 시도해 주세요.', error);
+    }
+    return await keyTransaction(db, candidate);
+  } finally {
+    db.close();
+  }
+}
+
+function missingKeyError() {
+  return new VaultError('KEY_MISSING', '이 기기의 암호화 키가 없어 저장된 API 키를 열 수 없어요. 저장된 API 키를 모두 삭제한 뒤 다시 입력해 주세요.');
+}
+
+function toBase64(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary);
+}
+
+function fromBase64(value) {
+  if (!value || value.length > 4 * Math.ceil((MAX_SECRET_BYTES + 16) / 3) ||
+      value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
+    throw new Error('Invalid encrypted credential encoding');
+  }
+  const binary = globalThis.atob(value);
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  if (toBase64(bytes) !== value) throw new Error('Noncanonical encrypted credential encoding');
+  return bytes;
+}
+
+function authenticatedContext(engine) {
+  return encoder.encode(PREFIX + engine + ':' + KEY_ID);
+}
+
+/** Save a trimmed key. Empty input is rejected; use removeCredential to clear. */
+export async function saveCredential(engine, value) {
+  validateEngine(engine);
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new VaultError('INVALID_CREDENTIAL', '저장할 API 키를 입력해 주세요. 키 삭제는 삭제 버튼을 사용해 주세요.');
+  }
+  const bytes = encoder.encode(value.trim());
+  if (bytes.byteLength > MAX_SECRET_BYTES) {
+    bytes.fill(0);
+    throw new VaultError('INVALID_CREDENTIAL', 'API 키가 너무 길어요. 올바른 키인지 확인해 주세요.');
+  }
+  let record;
+  try {
+    const crypto = requireCrypto();
+    const key = await encryptionKey(true);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv, additionalData: authenticatedContext(engine)}, key, bytes);
+    record = {
+      version: 1, algorithm: 'AES-GCM', keyId: KEY_ID, engine,
+      iv: toBase64(iv), ciphertext: toBase64(new Uint8Array(ciphertext)),
+      savedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    if (error instanceof VaultError) throw error;
+    throw new VaultError('ENCRYPTION_FAILED', 'API 키를 암호화할 수 없어요. 브라우저를 새로고침하고 다시 시도해 주세요.', error);
+  } finally {
+    bytes.fill(0);
+  }
+  try {
+    credentialStorage().setItem(storageKey(engine), JSON.stringify(record));
+    return true;
+  } catch (error) {
+    if (error instanceof VaultError) throw error;
+    const quota = error?.name === 'QuotaExceededError';
+    throw new VaultError(quota ? 'STORAGE_FULL' : 'STORAGE_UNAVAILABLE', quota
+      ? '저장 공간이 부족해 API 키를 저장하지 못했어요. 공간을 확보한 뒤 다시 시도해 주세요.'
+      : '암호화한 API 키를 저장할 수 없어요. 사이트 저장 권한을 확인해 주세요.', error);
+  }
+}
+
+/** Decrypt only when an adapter needs the credential; never log this result. */
+export async function getCredential(engine) {
+  validateEngine(engine);
+  const record = readRecord(engine);
+  if (!record) return null;
+  const crypto = requireCrypto();
+  const key = await encryptionKey(false);
+  if (!key) throw missingKeyError();
+  let plaintext;
+  try {
+    plaintext = new Uint8Array(await crypto.subtle.decrypt({name: 'AES-GCM', iv: record.iv, additionalData: authenticatedContext(engine)}, key, record.ciphertext));
+    return new TextDecoder('utf-8', {fatal: true}).decode(plaintext);
+  } catch (error) {
+    throw new VaultError('DECRYPTION_FAILED', '저장된 API 키를 복호화할 수 없어요. 해당 키를 삭제하고 다시 입력해 주세요.', error);
+  } finally {
+    plaintext?.fill(0);
+  }
+}
+
+export async function removeCredential(engine) {
+  validateEngine(engine);
+  try {
+    credentialStorage().removeItem(storageKey(engine));
+    return true;
+  } catch (error) {
+    if (error instanceof VaultError) throw error;
+    throw new VaultError('STORAGE_UNAVAILABLE', '저장된 API 키를 삭제할 수 없어요. 사이트 저장 권한을 확인해 주세요.', error);
+  }
+}
+
+/** Report saved status without loading the encryption key or decrypting. */
+export async function hasCredential(engine) {
+  validateEngine(engine);
+  return readRecord(engine) !== null;
+}
+
+export async function listCredentialStatus() {
+  const entries = await Promise.all(CREDENTIAL_ENGINES.map(async engine => [engine, await hasCredential(engine)]));
+  return Object.fromEntries(entries);
+}
