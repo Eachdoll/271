@@ -69,7 +69,9 @@ function metadata(result,request,context) {
     requestedSeed:request.seed,
     returnedSeed:result.seed??null,
     size:request.size,quality:request.quality,
-    referenceCount:request.referenceImages.length,
+    referenceCount:result.meta?.referenceCount??request.referenceImages.length,
+    placeKey:request.placeKey||null,
+    referenceImages:request.referenceImages.slice(0,result.meta?.referenceCount??request.referenceImages.length).map(ref=>({...clone(ref),imageUrl:ref.imageAssetId?`asset:${ref.imageAssetId}`:ref.imageUrl?.startsWith('blob:')?null:ref.imageUrl})),
     generatedAt:new Date().toISOString()
   };
 }
@@ -116,9 +118,10 @@ export async function generateScene(state,book,pageIndex,options={}) {
       imageEngine:engine,stylePresetId:snapshot.stylePresetId,
       characterSheetIds:snapshot.characterSheets.map(sheet=>sheet.id),
       requestedSeed:request.seed,size:request.size,quality:request.quality,
+      placeKey:request.placeKey||null,
       capturedAt:new Date().toISOString()
     };
-    const config=await providerConfig(state,world,engine,signal);if(engine==='google'){config.googlePro=false;config.modelVariant='flash';}
+    const config=await providerConfig(state,world,engine,signal);
     throwIfAborted(signal);
     report(onProgress,{status:'generating',completed:0,total:1,pageIndex,engine});
     // The six required fields from the World helper are forwarded verbatim.
@@ -152,7 +155,7 @@ export async function generateScene(state,book,pageIndex,options={}) {
   }
 }
 
-/** Two simultaneous requests at most. Stops scheduling immediately on error/cancel. */
+/** Ordered generation: the next page can reference the first and latest scene at its place. */
 export async function generateAllScenes(state,book,options={}) {
   const {signal,onProgress}=options;
   throwIfAborted(signal);
@@ -189,7 +192,7 @@ export async function generateAllScenes(state,book,options={}) {
   };
   try {
     // Await every in-flight worker so no page changes after the promise settles.
-    await Promise.allSettled(Array.from({length:Math.min(2,total)},worker));
+    await Promise.allSettled(Array.from({length:Math.min(1,total)},worker));
     results.sort((a,b)=>a.pageIndex-b.pageIndex);
     if(firstError) {
       report(onProgress,{status:'error',completed,total,pageIndex:firstError.pageIndex,message:firstError.message});

@@ -482,7 +482,7 @@ const adapters = { sample: sampleAdapter, google: googleAdapter, openai: openaiA
 /** A configured proxy receives pixels and rendering settings, never browser API keys. */
 async function proxyAdapter(engine, request, config, context, blobs) {
   const base = endpoint({ endpoint: config.proxyEndpoint }, globalThis.location?.origin || 'http://127.0.0.1:8787');
-  const referenceImages = await Promise.all(blobs.map(async (blob, index) => ({ dataUrl: await blobDataURL(blob, context.signal), role: request.referenceImages[index]?.role || null, label: request.referenceImages[index]?.label || null })));
+  const referenceImages = await Promise.all(blobs.map(async (blob, index) => ({ dataUrl: await blobDataURL(blob, context.signal), role: request.referenceImages[index]?.role || null, label: request.referenceImages[index]?.label || null, ...(request.referenceImages[index]?.required!==undefined?{required:request.referenceImages[index].required}:{}) })));
   const body = { scenePrompt: request.scenePrompt, stylePrompt: request.stylePrompt, negativePrompt: request.negativePrompt, stylePreset: { id: request.stylePreset.id, name: request.stylePreset.name, palette: request.stylePreset.palette }, referenceImages, seed: request.seed, size: { width: request.size.width, height: request.size.height }, quality: request.quality, modelVariant: config.modelVariant, googlePro: config.googlePro === true };
   const result = await fetchJSON(`${base}/api/image/${engine}`, jsonOptions(body), context);
   if (!result.imageUrl || typeof result.model !== 'string') fail('이미지 프록시 응답 형식을 확인해 주세요.', 'invalid_response');

@@ -27,8 +27,8 @@ export function renderImageRequest(request = {}, capabilities = {}) {
   const dropped = ordered.slice(limit);
   // Legacy callers promised ALL references. Typed requests may drop optional
   // background references, but never silently lose character or style sheets.
-  if (dropped.length && (!allTyped || dropped.some(ref => ref.required !== false && ref.role !== 'background'))) {
-    throw new StoryRendererError(`이 엔진의 참조 이미지 한도(${limit}개)에 캐릭터·스타일 시트를 모두 넣을 수 없어요. 등장인물을 줄이거나 참조 한도가 큰 엔진을 선택해 주세요.`, 'reference_limit');
+  if (dropped.length && (!allTyped || dropped.some(ref => ref.required === true || ref.required !== false && ref.role !== 'background'))) {
+    throw new StoryRendererError(`이 엔진의 참조 이미지 한도(${limit}개)에 캐릭터·스타일·고정 배경 참조를 모두 넣을 수 없어요. 배경 일관성을 위해 참조를 빼지 않습니다. 등장인물을 줄이거나 참조 한도가 큰 엔진을 선택해 주세요.`, 'reference_limit');
   }
   const parts = [stylePrompt ? `Visual style: ${stylePrompt}` : '', scenePrompt];
   if (stylePreset.palette?.length) parts.push(`Color palette: ${stylePreset.palette.join(', ')}.`);

@@ -99,3 +99,5 @@ test('expanding a demo to 16 or 24 pages preserves both approved prose word sequ
  const source=input(),outline=(await generateOutline(source,{engineId:'demo'})).data,prose=(await generateProse(outline,source,{engineId:'demo'})).data;
  for(const count of [16,24]){const result=await paginateStory(outline,prose,{...source,pageCount:count},{engineId:'demo'});assert.equal(result.data.pages.length,count);for(const language of ['Ko','En']){assert.ok(result.data.pages.every(page=>page['text'+language].trim()));assert.equal(result.data.pages.map(page=>page['text'+language]).join(' ').replace(/\s+/g,' ').trim(),prose[language.toLowerCase()].replace(/\s+/g,' ').trim());}}
 });
+
+ test('detailed prose obeys frozen numeric/range levels without a tiny whole-book character cap',async()=>{const {source,outline,prose}=fixture(),engine=fake([prose]);await generateProse(outline,source,{engine});assert.match(engine.calls[0].system,/DETAILED STORYTELLING/);assert.match(engine.calls[0].system,/Korean sentences in total/);assert.doesNotMatch(engine.calls[0].system,/NaN|150–250 characters|250–400 characters/);assert.match(engine.calls[0].system,/PLACE CANON/);});

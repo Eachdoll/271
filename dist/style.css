@@ -23,3 +23,7 @@
 
 .reader-top strong{min-width:0;flex:1;overflow-wrap:anywhere}
 .background-card,.character-card{min-width:0}.background-card .btn,.character-card .btn{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:center}@media(max-width:640px){.background-grid,.character-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.background-card>[data-background-sheet]{width:100%;justify-content:center;line-height:1.6}}
+
+.page-typeset-preview{background:#fffefb;padding:22px 24px;color:#34372f;text-align:left;font-size:19px;line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;border-top:1px solid #e8e8df}
+.page-typeset-preview p{margin:0}.page-typeset-preview p+p{margin-top:14px}.page-typeset-preview [lang=en]{font-family:Georgia,serif}
+.editor-tools{display:flex;gap:8px;flex-wrap:wrap}.editor-tools .btn{white-space:normal;max-width:100%}

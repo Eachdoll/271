@@ -73,8 +73,8 @@ function parsePages(selection, count) {
 }
 
 function pageText(page, language) {
-  const ko = `<p lang="ko" class="ko">${escapeHTML(page.ko)}</p>`;
-  const en = `<p lang="en" class="en">${escapeHTML(page.en)}</p>`;
+  const ko = `<p lang="ko" class="ko">${escapeHTML(page.ko ?? page.textKo ?? '')}</p>`;
+  const en = `<p lang="en" class="en">${escapeHTML(page.en ?? page.textEn ?? '')}</p>`;
   return language === 'ko' ? ko : language === 'en' ? en : en + ko;
 }
 
@@ -141,10 +141,12 @@ function printStyles(settings) {
     .spread .slot:first-child { border-right: 1px dashed #dadad0; }
     .leaf { width: 100%; height: 100%; padding: 7mm; display: flex; flex-direction: column; position: relative; overflow: hidden; }
     ${settings.margin === 'binding' ? '.one .leaf { padding-left: 16mm; } .spread .left .leaf { padding-right: 12mm; } .spread .right .leaf { padding-left: 12mm; }' : ''}
-    .illustration { width: 100%; height: 59%; object-fit: contain; display: block; flex: 0 0 auto; ${settings.color === 'grayscale' ? 'filter: grayscale(1);' : ''} }
-    .story { display: flex; flex-direction: column; justify-content: center; flex: 1; padding: 4mm 3mm 7mm; line-height: 1.65; font-size: ${settings.fontSize === 'large' ? '17pt' : '14pt'}; font-weight: 500; word-break: keep-all; overflow-wrap: break-word; }
+    .illustration { width: 100%; height: 52%; min-height: 0; object-fit: contain; display: block; flex: 0 0 auto; ${settings.color === 'grayscale' ? 'filter: grayscale(1);' : ''} }
+    .story { display: block; min-height: 0; flex: 1; padding: 3mm 3mm 7mm; line-height: 1.65; font-size: ${settings.fontSize === 'large' ? '17pt' : '14pt'}; font-weight: 500; word-break: keep-all; overflow-wrap: break-word; white-space: pre-line; }
     .one .story { font-size: ${settings.fontSize === 'large' ? '24pt' : '20pt'}; }
     .story p { margin: 0; }
+    .print-warning { padding: 12px; background: #fff1dd; color: #723b18; }
+    .print-warning[hidden] { display: none; }
     .story p + p { margin-top: 4mm; }
     .story .en { font-family: Georgia, "Times New Roman", serif; }
     .story .ko { letter-spacing: -.035em; }
@@ -166,6 +168,36 @@ function printStyles(settings) {
   `;
 }
 
+
+function printFitScript(){return `<script>
+(()=>{
+ const fit=()=>{
+  let overflow=0;
+  document.querySelectorAll('.story-page').forEach(leaf=>{
+   const body=leaf.querySelector('.story'),image=leaf.querySelector('.illustration');
+   if(!body||!image)return;
+   body.style.fontSize='';image.style.height='52%';
+   let font=parseFloat(getComputedStyle(body).fontSize),height=52;
+   const crowded=()=>body.scrollHeight>body.clientHeight+1;
+   while(crowded()&&height>22){height-=2;image.style.height=height+'%';}
+   while(crowded()&&font>12){font-=.5;body.style.fontSize=font+'px';}
+   if(crowded())overflow++;
+  });
+  const warning=document.getElementById('print-fit-warning');
+  warning.hidden=!overflow;
+  warning.textContent=overflow+'쪽의 본문이 인쇄 영역보다 깁니다. 한 면에 한 쪽으로 바꾸거나 본문을 나눈 뒤 인쇄해 주세요.';
+  document.getElementById('print-now').disabled=!!overflow;
+  document.documentElement.dataset.printReady=overflow?'overflow':'ready';
+ };
+ const ready=async()=>{
+  await Promise.all(Array.from(document.images,img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
+  if(document.fonts)await document.fonts.ready;
+  fit();
+ };
+ window.addEventListener('beforeprint',fit);ready();
+})();
+<\/script>`;}
+
 /** Standalone portable HTML, suitable for saving and opening without this app. */
 export function getPrintHTML(book, settings = {}, characters = []) {
   const normalized = options(settings);
@@ -177,7 +209,7 @@ export function getPrintHTML(book, settings = {}, characters = []) {
   const guidance = normalized.layout === 'booklet'
     ? `<p>총 ${sheets.count / 2}장의 양면 인쇄입니다. 표지·뒤표지를 포함하고, 4의 배수가 되도록 빈 쪽을 넣어 접었을 때 읽는 순서로 배치했어요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
     : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === 'two' ? ' 각 면에 두 쪽을 읽는 순서대로 놓았어요.' : ''}</p>`;
-  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main></body></html>`;
+  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래의 흰 영역에 실제 글자로 조판됩니다. 그림 파일에 글자를 그려 넣지 않으므로 한글·영어가 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
 }
 
 /** Opens synchronously so the user's click authorizes the print tab. */
