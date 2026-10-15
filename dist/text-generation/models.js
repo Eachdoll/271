@@ -28,13 +28,40 @@ export function listTextModels(engine){if(!Object.hasOwn(CATALOG,engine))throw n
 export function getTextModelInfo(engine,modelString){const models=listTextModels(engine);return models.find(item=>item.id===String(modelString||'').trim())||TEXT_MODELS[engine];}
 export function resolveTextModel(engine,modelString){listTextModels(engine);return engine==='local'?String(modelString||'').trim():getTextModelInfo(engine,modelString).id;}
 export function getTextModel(engine,config={}){return resolveTextModel(engine,config.model);}
+/** Story defaults are separate from legacy single-model provider preferences. */
+export const STORY_STAGE_MODELS=Object.freeze({
+  openai:Object.freeze({medium:'gpt-6.1-sol',upper:'gpt-6-astra'}),
+  anthropic:Object.freeze({medium:'claude-sonnet-5-5',upper:'claude-opus-5-5'}),
+  google:Object.freeze({medium:'gemini-2.5-flash',upper:'gemini-4-argon'}),
+  local:Object.freeze({medium:'',upper:''})
+});
+export function getStoryStageModels(engine,config={}){
+  listTextModels(engine);
+  if(engine==='local'){const model=resolveTextModel(engine,config.model);return {medium:model,upper:model};}
+  const selected=config.stageModels||{},defaults=STORY_STAGE_MODELS[engine],models=listTextModels(engine);
+  const resolve=level=>models.find(row=>row.id===String(selected[level]||'').trim())?.id||defaults[level];
+  return {medium:resolve('medium'),upper:resolve('upper')};
+}
+/** Resolve each request from an immutable draft settings snapshot, without mutating it. */
+export function resolveStoryStageSettings(settings={},stage){
+  if(!['outline','proseDraft','prose','pagination'].includes(stage))throw new Error('지원하는 이야기 생성 단계를 선택해 주세요.');
+  const selected=Object.hasOwn(CATALOG,settings.engine)?settings.engine:'openai',hybrid=settings.hybrid?.enabled===true;
+  const finalEngine=['openai','anthropic','google'].includes(settings.hybrid?.finalEngine)?settings.hybrid.finalEngine:'openai';
+  const engineId=hybrid?(stage==='outline'||stage==='proseDraft'?'local':finalEngine):selected;
+  const provider=settings.providers?.[engineId]||{},models=getStoryStageModels(engineId,provider),level=stage==='outline'||stage==='pagination'?'medium':'upper';
+  return {engineId,config:{...provider,...(provider.stageModels?{stageModels:{...provider.stageModels}}:{}),model:models[level]}};
+}
 export function estimateTextCost({engine,engineId=engine,input=0,output=0,model,config={},at=new Date()}={}){
   const info=getTextModelInfo(engineId,model??config.model),date=new Date(at),rates=info.pricingChange&&Number.isFinite(date.getTime())&&date>=new Date(info.pricingChange.effectiveAt+'T00:00:00Z')?info.pricingChange:info;
   return {costUsd:(Math.max(0,Number(input)||0)*rates.input+Math.max(0,Number(output)||0)*rates.output)/1e6,estimated:true,model:resolveTextModel(engineId,model??config.model),inputRate:rates.input,outputRate:rates.output,checkedAt:CHECKED_AT,note:'토큰 단가 기반 추정 · 실제 청구액 아님'};
 }
 export function estimateStoryTextCost({engine='openai',engineId=engine,pageCount=12,settings={},previousTextLength=0,at=new Date()}={}){
-  const selected=settings.engine||engineId,hybrid=settings.hybrid?.enabled,final=hybrid?settings.hybrid.finalEngine||selected:selected,config=settings.providers?.[final]||{};
-  const input=6000+Math.ceil(previousTextLength/2),baseOutput=2500+pageCount*150,reasoningFactor=getTextModelInfo(final,config.model).reasoning.profile==='none'?1:2,output=Math.ceil(baseOutput*reasoningFactor);
-  const stages=hybrid?2:3,cost=estimateTextCost({engineId:final,config,input:input*stages,output:output*stages,at});
-  return {...cost,inputTokensEstimated:input*3,outputTokensEstimated:output*stages+(hybrid?baseOutput*2:0),requestCount:hybrid?4:3,hybrid:!!hybrid,note:'줄거리·전문·쪽 나누기 추정 · 추론 토큰, 재작성과 긴 이전 원문 입력은 실제 사용량에 따라 달라져요'};
+  const snapshot={...settings,engine:settings.engine||engineId},hybrid=settings.hybrid?.enabled===true;
+  const input=6000+Math.ceil(Math.max(0,Number(previousTextLength)||0)/2),baseOutput=2500+Math.max(1,Number(pageCount)||12)*150;
+  const stages=(hybrid?['outline','proseDraft','prose','pagination']:['outline','prose','pagination']).map(stage=>{
+    const {engineId,config}=resolveStoryStageSettings(snapshot,stage),reasoningFactor=getTextModelInfo(engineId,config.model).reasoning.profile==='none'?1:2,output=Math.ceil(baseOutput*reasoningFactor);
+    return {stage,engineId,...estimateTextCost({engineId,config,input,output,at}),inputTokensEstimated:input,outputTokensEstimated:output};
+  });
+  const final=stages.find(row=>row.stage==='prose');
+  return {...final,costUsd:stages.reduce((sum,row)=>sum+row.costUsd,0),inputTokensEstimated:stages.reduce((sum,row)=>sum+row.inputTokensEstimated,0),outputTokensEstimated:stages.reduce((sum,row)=>sum+row.outputTokensEstimated,0),requestCount:stages.length,hybrid,stages,note:'단계별 모델 단가로 계산한 줄거리·전문·쪽 나누기 추정 · 추론 토큰, 재작성과 긴 이전 원문 입력은 실제 사용량에 따라 달라져요'};
 }

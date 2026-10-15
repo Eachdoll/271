@@ -45,6 +45,7 @@ const summaries={
 export function demoOutline(input){
   const count=({8:6,12:7,16:8,24:8})[input.pageCount],types=typesFor(count),cast=input.characters.map(c=>c.id),background=input.backgrounds?.[0]?.id;
   let attempt=0;const beats=types.map((type,i)=>({index:i+1,type,summary:type==='attempt'?count===6?`${summaries.first} ${summaries.second} ${summaries.third}`:attempt++===0?summaries.first:attempt===2?summaries.second:summaries.third:summaries[type],characters:cast,settingKey:background||'forest-path'}));
+  beats[0].summary=`${input.characters.map(c=>c.name).join(', ')}의 소풍날이에요. ${beats[0].summary}`;
   if(input.endingType==='open')beats.at(-1).summary+=' 잠들기 전에 “내일은 노래하는 나무를 찾아보자!”라고 말해요.';
   return {titleCandidates:['바람이 부는 도시락 통','노래하는 돌은 어디에?','숲길에서 찾은 작은 노래'],logline:'노래하는 돌을 찾던 두 친구가 바람을 담은 도시락 통으로 직접 노래를 만들어요.',want:'숲길에서 노래하는 돌을 찾고 싶어요.',problem:'돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.',beats,twist:'노래하는 돌 소리는 돌 틈에 낀 빈 도시락 통에 바람이 들어가는 소리였어요.',newWordsKo:['도시락','가장자리','바람'],newWordsEn:['stone','box','wind'],settings:beats.map(b=>({beatIndex:b.index,...(background?{backgroundId:background}:{newPlace:b.type==='close'?'집 안의 침실':'나무와 돌이 있는 숲길'})})),emotionArc:types.map(type=>({setup:'기대',want:'호기심',attempt:'궁금',turn:'놀람',resolution:'기쁨',close:'편안'})[type]),endingType:input.endingType};
 }
@@ -79,7 +80,8 @@ export function demoProse(outline,input){
   // template rewriting silently erases an edited event.
   outline.beats.forEach(beat=>{if(beat.summary!==baseline.beats.find(b=>b.index===beat.index)?.summary){const index=mapping.indexOf(beat.index);if(index>=0)units[index].ko=beat.summary;}});
   if(input.endingType==='open'){units.at(-1).ko+=' “내일은 노래하는 나무를 찾자!”';units.at(-1).en='What song can we find tomorrow?';}
-  return {ko:units.map(u=>u.ko).join('\n\n'),en:units.map(u=>u.en).join('\n\n'),usedRefrainAt:[]};
+  const beatIds=outline.beats.map(b=>b.index),labels=mapping.every(id=>beatIds.includes(id))?mapping:units.map((_,i)=>beatIds[Math.min(beatIds.length-1,Math.floor(i*beatIds.length/units.length))]);
+  return {ko:units.map(u=>u.ko).join('\n\n'),en:units.map(u=>u.en).join('\n\n'),usedRefrainAt:[],paragraphBeats:{ko:[...labels],en:[...labels]}};
 }
 function spreadProse(text,count){
   const blocks=splitParagraphs(text);if(blocks.length===count)return blocks;

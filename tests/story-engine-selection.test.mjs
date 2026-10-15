@@ -23,12 +23,12 @@ test('legacy drafts hydrate missing providers from configured settings without l
  const next=updateStoryDraftEngine(draft,{engine:'local'},defaults);assert.equal(next.textSettings.providers.local.baseUrl,'http://my-pc:1234/v1');assert.equal(next.textSettings.providers.local.model,'local-story-8b');
  assert.equal(next.textSettings.providers.google.proxyEndpoint,'https://old-proxy.example');assert.equal(next.prose,draft.prose);
  const restored=JSON.parse(JSON.stringify(next));assert.equal(updateStoryDraftEngine(restored,{engine:'google'}).textSettings.providers.google.model,'gemini-2.5-flash');
- const legacy={textSettings:{engineId:'anthropic',provider:'anthropic',configs:{anthropic:{model:'claude-opus-5-5'}}}},updated=updateStoryDraftEngine(legacy,{engine:'google'},defaults);assert.equal(updated.textSettings.engine,'google');assert.equal('engineId' in updated.textSettings,false);assert.equal('provider' in updated.textSettings,false);assert.match(renderStoryEngineSelector(updated),/value="google" selected/);
+ const legacy={textSettings:{engineId:'anthropic',provider:'anthropic',configs:{anthropic:{model:'claude-opus-5-5'}}}},updated=updateStoryDraftEngine(legacy,{engine:'google'},defaults);assert.equal(updated.textSettings.engine,'google');assert.equal('engineId' in updated.textSettings,false);assert.equal('provider' in updated.textSettings,false);assert.match(renderStoryEngineSelector(updated),/Google · Gemini/);
 });
 
 test('hybrid engine selection uses the selected API for final text while direct local selection explicitly leaves hybrid mode',()=>{
  let draft=fixture();draft.textSettings.engine='local';draft.textSettings.hybrid={enabled:true,finalEngine:'openai'};
- const html=renderStoryEngineSelector(draft);assert.match(html,/최종 글 엔진/);assert.match(html,/value="openai" selected/);assert.match(html,/줄거리·전문 초안은 로컬/);
+ const html=renderStoryEngineSelector(draft);assert.match(html,/하이브리드 켜짐/);assert.match(html,/local-story-8b/);assert.match(html,/GPT-6 Astra/);
  let next=updateStoryDraftEngine(draft,{engine:'google'});assert.equal(next.textSettings.engine,'google');assert.deepEqual(next.textSettings.hybrid,{enabled:true,finalEngine:'google'});
  next=updateStoryDraftEngine(next,{hybridEnabled:false});assert.equal(next.textSettings.engine,'google');assert.equal(next.textSettings.hybrid.enabled,false);
  next=updateStoryDraftEngine(next,{hybridEnabled:true});next=updateStoryDraftEngine(next,{engine:'local'});assert.equal(next.textSettings.hybrid.enabled,false);assert.equal(next.textSettings.providers.local.model,'local-story-8b');
@@ -38,11 +38,14 @@ test('hybrid engine selection uses the selected API for final text while direct 
 
 test('engine selection makes no request and keeps demo provenance until an explicit API generation action',()=>{
  const previousFetch=globalThis.fetch;let calls=0;globalThis.fetch=()=>{calls++;throw new Error('No network during selection');};
- try{const demo={...fixture(),demo:true},next=updateStoryDraftEngine(demo,{engine:'anthropic',model:'claude-fable-5-1'});assert.equal(next.demo,true);assert.equal(next.prose,demo.prose);const html=renderStoryEngineSelector(next);assert.match(html,/data-story-action="replace-demo-with-api"/);assert.match(html,/지금 글은 API를 호출하지 않는 데모/);assert.equal(calls,0);}finally{globalThis.fetch=previousFetch;}
+ try{const demo={...fixture(),demo:true},next=updateStoryDraftEngine(demo,{engine:'anthropic',model:'claude-fable-5-1'});assert.equal(next.demo,true);assert.equal(next.prose,demo.prose);const html=renderStoryEngineSelector(next);assert.match(html,/story-demo-label">데모/);assert.match(html,/data-story-action="open-text-settings"/);assert.equal(calls,0);}finally{globalThis.fetch=previousFetch;}
 });
 
-test('rendered selections expose configured models/pricing, escape local model content, and disable every control during generation',()=>{
- const draft=fixture(),normal=renderStoryEngineSelector(draft);assert.match(normal,/id="story-text-engine"/);assert.match(normal,/id="story-text-model"/);assert.match(normal,/id="story-text-hybrid"/);assert.match(normal,/value="gpt-6-astra" selected/);assert.match(normal,/입력 \$10 \/ 출력 \$50/);assert.match(normal,/이 초안에만 저장/);assert.match(normal,/API를 호출하지 않습니다/);
- assert.doesNotMatch(normal,/type="password"|apiKey|sk-/);const busy=renderStoryEngineSelector(draft,{busy:true});for(const tag of busy.match(/<(?:select|input)\b[^>]*>/g))assert.match(tag,/disabled/);assert.doesNotMatch(busy,/data-story-action=/);
- const local=updateStoryDraftEngine(draft,{engine:'local',model:'<img src=x onerror=oops>'}),html=renderStoryEngineSelector(local);assert.match(html,/id="story-local-model"/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);assert.match(html,/http:\/\/my-pc:1234\/v1/);
+test('wizard engine summary shows stage models and only a parent settings link, without prices or configuration fields',()=>{
+ const draft=fixture();draft.textSettings.providers.openai.stageModels={medium:'gpt-6.1-sol',upper:'gpt-6-astra'};
+ const normal=renderStoryEngineSelector(draft);assert.match(normal,/GPT-6.1 Sol/);assert.match(normal,/GPT-6 Astra/);assert.match(normal,/data-story-action="open-text-settings"/);
+ assert.doesNotMatch(normal,/<select|<input|type="password"|apiKey|sk-|입력 \$|출력 \$|story-text-hybrid/);
+ const busy=renderStoryEngineSelector(draft,{busy:true});assert.doesNotMatch(busy,/data-story-action=/);
+ const local=updateStoryDraftEngine(draft,{engine:'local',model:'<img src=x onerror=oops>'}),html=renderStoryEngineSelector(local);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);assert.doesNotMatch(html,/http:\/\/my-pc/);
+ const before=copy(draft);updateStoryDraftEngine(draft,{engine:'google'});assert.deepEqual(draft,before);assert.deepEqual(updateStoryDraftEngine(draft,{engine:'google'}).textSettings.providers.openai.stageModels,{medium:'gpt-6.1-sol',upper:'gpt-6-astra'});
 });

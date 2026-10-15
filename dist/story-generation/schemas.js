@@ -13,7 +13,7 @@ export const OUTLINE_SCHEMA={type:'object',additionalProperties:false,required:[
   twist:string(500),newWordsKo:{...strings(5),minItems:3},newWordsEn:strings(15),
   settings:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['beatIndex'],properties:{beatIndex:integer,backgroundId:string(300),newPlace:string(300)}}},
   emotionArc:{type:'array',items:string(50),minItems:6,maxItems:8},endingType:{type:'string',enum:['home_sleep','open']}}};
-export const PROSE_SCHEMA={type:'object',additionalProperties:false,required:['ko','en','usedRefrainAt'],properties:{ko:string(30000),en:string(50000),usedRefrainAt:{type:'array',items:integer,maxItems:3,uniqueItems:true}}};
+export const PROSE_SCHEMA={type:'object',additionalProperties:false,required:['ko','en','usedRefrainAt'],properties:{ko:string(30000),en:string(50000),usedRefrainAt:{type:'array',items:integer,maxItems:3,uniqueItems:true},paragraphBeats:{type:'object',additionalProperties:false,required:['ko','en'],properties:{ko:{type:'array',items:integer,minItems:1,maxItems:500},en:{type:'array',items:integer,minItems:1,maxItems:500}}}}};
 export const SCENE_SCHEMA={type:'object',additionalProperties:false,required:['who','where','action','emotion','timeOfDay','props'],properties:{who:strings(5),where:string(500),action:string(500),emotion:string(40),timeOfDay:{type:'string',enum:['morning','day','evening','night']},props:strings(12)}};
 export const PAGE_SCHEMA={type:'object',additionalProperties:false,required:['pageNo','beatIndex','textKo','textEn','scene','variantByCharacter','isRefrainPage'],properties:{pageNo:integer,beatIndex:integer,textKo:string(6000),textEn:string(8000),scene:SCENE_SCHEMA,variantByCharacter:{type:'object',additionalProperties:{anyOf:[string(300),{type:'null'}]}},isRefrainPage:{type:'boolean'}}};
 export const PAGINATION_SCHEMA={type:'object',additionalProperties:false,required:['cover','pages'],properties:{cover:{type:'object',additionalProperties:false,required:['title','sceneAction'],properties:{title:string(100),sceneAction:string(500)}},pages:{type:'array',items:PAGE_SCHEMA,minItems:8,maxItems:24}}};
@@ -61,6 +61,16 @@ export function validateProse(value,outline){
   if(!text(value.ko,30000)||!text(value.en,50000))errors.push('한글·영어 전문을 각각 작성해 주세요.');
   const allowed=new Set(outline?.refrain?.usedAtBeats||[]);
   if(!Array.isArray(value.usedRefrainAt)||value.usedRefrainAt.length>3||new Set(value.usedRefrainAt).size!==value.usedRefrainAt.length||value.usedRefrainAt.some(i=>!allowed.has(i)))errors.push('후렴 위치는 승인한 줄거리와 같아야 해요.');
+  // Older saved prose has no labels. New generation requests this metadata and
+  // validates it strictly without inserting labels into printable story text.
+  if(value.paragraphBeats!==undefined){
+    const beatIds=(outline?.beats||[]).map(b=>b.index);
+    if(!object(value.paragraphBeats))errors.push('전문 문단의 비트 표시를 확인해 주세요.');
+    else for(const language of ['ko','en']){const rows=String(value[language]||'').split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean),labels=value.paragraphBeats[language];
+      if(!Array.isArray(labels)||labels.length!==rows.length||labels.length>500||labels.some(id=>!Number.isInteger(id)||!beatIds.includes(id)))errors.push(`${language} 문단마다 승인한 비트 번호가 하나씩 필요해요.`);
+      else if(beatIds.some(id=>!labels.includes(id))||labels.some((id,i)=>i&&beatIds.indexOf(id)<beatIds.indexOf(labels[i-1])))errors.push(`${language} 문단은 모든 승인 비트를 순서대로 포함해야 해요.`);
+    }
+  }
   checkSafety(value,errors);return {valid:errors.length===0,errors};
 }
 function allowedVariants(input){

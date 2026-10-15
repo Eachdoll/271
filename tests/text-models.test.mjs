@@ -28,13 +28,14 @@ test('selected premium models use their own standard rates, with dated Google pr
   assert.equal(estimateTextCost({engine:'local',model:'my-running-model',input:1e6,output:1e6}).costUsd,0);
 });
 
-test('book estimates use the selected provider model, including hybrid API final stages',()=>{
+test('book estimates sum the medium and upper stage models, including hybrid API final stages',()=>{
   const settings={engine:'openai',providers:{openai:{model:'gpt-6-astra'},anthropic:{model:'claude-opus-5-5'}}};
   const normal=estimateStoryTextCost({settings,pageCount:12,at:'2026-10-15'});
   assert.equal(normal.model,'gpt-6-astra');
-  const expected=estimateTextCost({engine:'openai',model:'gpt-6-astra',input:6000*3,output:(2500+12*150)*2*3});
-  assert.equal(normal.costUsd,expected.costUsd);assert.equal(normal.requestCount,3);
+  const medium=estimateTextCost({engine:'openai',model:'gpt-6.1-sol',input:6000,output:(2500+12*150)*2}),upper=estimateTextCost({engine:'openai',model:'gpt-6-astra',input:6000,output:(2500+12*150)*2});
+  assert.equal(normal.costUsd,medium.costUsd+upper.costUsd+medium.costUsd);assert.equal(normal.requestCount,3);
   const hybrid=estimateStoryTextCost({settings:{...settings,engine:'local',hybrid:{enabled:true,finalEngine:'anthropic'}},pageCount:12});
   assert.equal(hybrid.model,'claude-opus-5-5');assert.equal(hybrid.requestCount,4);
-  assert.equal(hybrid.costUsd,estimateTextCost({engine:'anthropic',model:'claude-opus-5-5',input:6000*2,output:(2500+12*150)*2*2}).costUsd);
+  const finalProse=estimateTextCost({engine:'anthropic',model:'claude-opus-5-5',input:6000,output:(2500+12*150)*2}),finalPages=estimateTextCost({engine:'anthropic',model:'claude-sonnet-5-5',input:6000,output:(2500+12*150)*2});
+  assert.equal(hybrid.costUsd,finalProse.costUsd+finalPages.costUsd);
 });

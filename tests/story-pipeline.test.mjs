@@ -6,14 +6,15 @@ import {demoOutline} from '../dist/story-generation/demo.js';
 import {validateOutline,validatePagination,StoryValidationError} from '../dist/story-generation/schemas.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
-function input(){return {characters:[{id:'yuha',name:'유하',nameEn:'Yuha',role:'주인공',traits:['소리를 잘 들어요'],relationships:{green:'친구'},catchphrase:'어디서 나는 소리지?'},{id:'green',name:'초록이',role:'친구',kind:'dinosaur'}],backgrounds:[{id:'forest',name:'숲길',description:'나무와 돌이 있는 길'}],worldNotes:'친구들은 소풍 가방을 함께 써요.',topic:'노래하는 돌을 찾아요',pageCount:12,endingType:'home_sleep',specs:{ko:getLevelSpec('K1'),en:getLevelSpec('E0')},variants:[{id:'raincoat',characterId:'yuha',name:'우비'}],variantByCharacter:{yuha:null,green:null},variantPageRanges:{yuha:[{from:1,to:4,variantId:'raincoat'}]}};}
+function input(){return {characters:[{id:'yuha',name:'유하',nameEn:'Yuha',role:'주인공',traits:['소리를 잘 들어요'],relationships:{green:'친구'},catchphrase:'어디서 나는 소리지?'},{id:'green',name:'초록이',role:'친구',kind:'dinosaur'}],backgrounds:[{id:'forest',name:'숲길',description:'나무와 돌이 있는 길'},{id:'home',name:'유하의 방',type:'home'},{id:'garden',name:'바람 정원',type:'forest'}],worldNotes:'친구들은 소풍 가방을 함께 써요.',topic:'노래하는 돌을 찾아요',pageCount:12,endingType:'home_sleep',specs:{ko:getLevelSpec('K1'),en:getLevelSpec('E0')},variants:[{id:'raincoat',characterId:'yuha',name:'우비'}],variantByCharacter:{yuha:null,green:null},variantPageRanges:{yuha:[{from:1,to:4,variantId:'raincoat'}]}};}
 function fixture(){
   const source=input(),outline=demoOutline(source);
+  const places=['home','forest','forest','garden','garden','garden','home'];outline.beats.forEach((beat,i)=>beat.settingKey=places[i]);outline.settings=places.map((backgroundId,i)=>({beatIndex:i+1,backgroundId}));
   const ko=['유하가 빨간 가방을 메어요.','초록이가 숲길로 먼저 걸어요.','바위가 나무 밑에 보여요.','작은 손이 돌을 두드려요.','개미들이 도시락 속에서 나와요.','공룡이 바위 앞에서 재채기해요.','빈 통이 틈으로 굴러가요.','바람이 통을 후우 불어요.','유하가 소리를 듣고 웃어요.','둘이 나란히 노래를 만들어요.','집으로 돌아가는 발걸음이 가벼워요.','포근한 이불이 아이를 덮어요.'];
   const nouns=['ball','leaf','bird','tree','bag','moon','star','stone','shell','crab','flower','home'],mapping=[1,1,2,2,3,3,4,5,5,6,6,7];
   const pages=ko.map((textKo,i)=>({pageNo:i+1,beatIndex:mapping[i],textKo,textEn:`I see a ${nouns[i]} here.`,scene:{who:['yuha','green'],where:'forest',action:'Yuha carries a red bag beside a tall tree.',emotion:'curious',timeOfDay:i===11?'night':'day',props:['red bag','tree']},variantByCharacter:{yuha:i<4?'raincoat':null,green:null},isRefrainPage:false}));
   const pagination={cover:{title:'바람과 친구들',sceneAction:'Yuha holds a small box beside a forest stone.'},pages};
-  const prose={ko:pages.map(p=>p.textKo).join('\n\n'),en:pages.map(p=>p.textEn).join('\n\n'),usedRefrainAt:[]};return {source,outline,pagination,prose};
+  const prose={ko:pages.map(p=>p.textKo).join('\n\n'),en:pages.map(p=>p.textEn).join('\n\n'),usedRefrainAt:[],paragraphBeats:{ko:[...mapping],en:[...mapping]}};return {source,outline,pagination,prose};
 }
 function fake(outputs,{id='openai',actual=false}={}){
   const calls=[];return {id,calls,async complete(req){calls.push(clone({...req,signal:undefined}));const next=typeof outputs==='function'?await outputs(req,calls.length):outputs.shift();if(next instanceof Error)throw next;return {text:JSON.stringify(next),json:clone(next),usage:{input:100,output:50},costUsdEstimated:.002,...(actual?{costUsd:.003}:{}),meta:{modelId:'test-model',apiKey:'must-not-copy'}};}};

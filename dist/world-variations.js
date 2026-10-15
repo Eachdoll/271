@@ -1,7 +1,7 @@
 import {getActiveWorld,getCharacterSheet} from './image-generation/world.js';
 import {getStylePreset,listStylePresets,validateStylePreset} from './image-generation/styles.js';
 import {ENGINE_IDS,ENGINE_METADATA} from './image-generation/providers.js';
-import {TEXT_MODELS,getTextModelInfo} from './text-generation/models.js';
+import {TEXT_MODELS,getTextModelInfo,resolveStoryStageSettings} from './text-generation/models.js';
 import {getTextGenerationSettings} from './text-generation/settings-ui.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -92,7 +92,9 @@ export function renderWorldVariations(state){
   const active=getActiveWorld(state);
   return `<section class="panel" id="world-variations" style="margin:24px 0"><h3>World 배리에이션</h3><p class="section-sub">같은 친구와 장소로 새 세계를 저장해 보세요. 세계마다 그림·글 엔진, 화풍, 연결 설정과 메모를 따로 보관합니다.</p><div class="form-grid">${state.worlds.map(world=>{
     const settings=textForWorld(state,world),missing=(world.characterIds||[]).filter(id=>state.characters?.some(c=>c.id===id&&!c.archivedAt)&&!getCharacterSheet(state,id,world)).length;
-    return `<article class="panel" style="padding:18px;margin:0"><span class="role-tag">${world.id===active.id?'현재 World':'저장된 World'}</span><h4 style="margin:12px 0">${esc(world.name)}</h4><p class="small-label">그림 ${esc(ENGINE_METADATA[world.imageEngine]?.name||world.imageEngine)}<br>화풍 ${esc(getStylePreset(world.stylePresetId).name)}<br>글 ${esc(getTextModelInfo(settings.engine,settings.providers[settings.engine]?.model).name)}${settings.hybrid.enabled?' · 하이브리드':''}</p>${world.memo?`<p class="small-label">${esc(world.memo)}</p>`:''}${missing?`<p class="small-label">캐릭터 ${missing}명 · 시트 다시 생성 필요</p>`:''}<div class="material-add-actions">${world.id!==active.id?`<button type="button" class="btn btn-outline btn-small" data-world-variation="activate" data-id="${esc(world.id)}">이 World 선택</button>`:''}<button type="button" class="btn btn-outline btn-small" data-world-variation="create" data-id="${esc(world.id)}">배리에이션 추가</button></div></article>`;
+    const modelName=stage=>{const {engineId,config}=resolveStoryStageSettings(settings,stage);return engineId==='local'?(config.model||'로컬'):getTextModelInfo(engineId,config.model).name;};
+    const outline=modelName('outline'),prose=modelName('prose'),pagination=modelName('pagination'),stageSummary=outline===pagination?`줄거리·쪽 나누기 ${esc(outline)}<br>전문 ${esc(prose)}`:`줄거리 ${esc(outline)}<br>전문 ${esc(prose)} · 쪽 나누기 ${esc(pagination)}`;
+    return `<article class="panel" style="padding:18px;margin:0"><span class="role-tag">${world.id===active.id?'현재 World':'저장된 World'}</span><h4 style="margin:12px 0">${esc(world.name)}</h4><p class="small-label">그림 ${esc(ENGINE_METADATA[world.imageEngine]?.name||world.imageEngine)}<br>화풍 ${esc(getStylePreset(world.stylePresetId).name)}<br>${stageSummary}${settings.hybrid.enabled?' · 하이브리드':''}</p>${world.memo?`<p class="small-label">${esc(world.memo)}</p>`:''}${missing?`<p class="small-label">캐릭터 ${missing}명 · 시트 다시 생성 필요</p>`:''}<div class="material-add-actions">${world.id!==active.id?`<button type="button" class="btn btn-outline btn-small" data-world-variation="activate" data-id="${esc(world.id)}">이 World 선택</button>`:''}<button type="button" class="btn btn-outline btn-small" data-world-variation="create" data-id="${esc(world.id)}">배리에이션 추가</button></div></article>`;
   }).join('')}</div><p class="small-label" style="margin-top:18px">새 World의 캐릭터·배경 시트를 생성하고 확정해 주세요. 기존 책은 원래 그림과 설정을 보관합니다. API 비밀 키는 공급자별 암호화 저장소를 공유합니다.</p></section>`;
 }
 
