@@ -9,3 +9,12 @@ __pycache__/
 
 .env*
 !.env.example
+
+cloud-runtime/dist/
+cloud-runtime/public/
+cloud-runtime/.wrangler/
+cloud-runtime/.vinext/
+cloud-runtime/.sites-runtime/
+cloud-runtime/.next/
+cloud-runtime/*.tsbuildinfo
+cloud-runtime/.openai/
