@@ -2,13 +2,13 @@ import {exportAudioAssets,restoreAudioAssets,validateAudioBackup} from './audio-
 import { sceneSVG, characterSVG } from './engine.js';
 import { getImageURL, getAsset, restoreImageAsset, hydrateImageAssets } from './image-generation/assets.js';
 
-const DEFAULTS = { layout: 'single', textPosition: 'bottom', language: 'bilingual', color: 'color', pages: 'all', fontSize: 'large', margin: 'standard' };
+const DEFAULTS = { layout: 'single', textPosition: 'below', language: 'bilingual', color: 'color', pages: 'all', fontSize: 'large', margin: 'standard' };
 const encoder = new TextEncoder();
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
 function options(settings = {}) {
   const result = { ...DEFAULTS, ...settings };
-  if (!['bottom','top','below'].includes(result.textPosition)) result.textPosition='bottom';
+  if (!['bottom','top','below'].includes(result.textPosition)) result.textPosition='below';
   if (!['single', 'two', 'booklet'].includes(result.layout)) result.layout = DEFAULTS.layout;
   if (!['ko', 'en', 'bilingual'].includes(result.language)) result.language = result.language === 'dual' ? 'bilingual' : DEFAULTS.language;
   if (!['color', 'grayscale'].includes(result.color)) result.color = 'color';
@@ -172,7 +172,7 @@ function printStyles(settings) {
     .story .en { font-family: Georgia, "Times New Roman", serif; }
     .story .ko { letter-spacing: -.025em; }
     .text-below .picturebook-frame{aspect-ratio:auto;height:100%;display:flex;flex-direction:column;background:white}
-    .text-below .picturebook-frame>.illustration{height:52%;flex:0 0 auto}
+    .text-below .picturebook-frame>.illustration{height:70%;flex:0 0 auto}
     .text-below .story{position:static;max-height:none;min-height:0;flex:1;left:auto;right:auto;bottom:auto;border-radius:0;background:white;padding:3mm 3mm 7mm}
     .folio { position: absolute; bottom: 1mm; left: 0; right: 0; text-align: center; font-size: 8pt; color: #72756a; }
     .cover { align-items: center; text-align: center; }
@@ -199,7 +199,7 @@ function printFitScript(){return `<script>
    const body=leaf.querySelector('.story'),image=leaf.querySelector('.illustration');
    if(!body||!image)return;
    body.style.fontSize='';image.style.height='';
-   let font=parseFloat(getComputedStyle(body).fontSize),height=52;
+   let font=parseFloat(getComputedStyle(body).fontSize),height=70;
    const crowded=()=>body.scrollHeight>body.clientHeight+1;
    if(leaf.classList.contains('text-below'))while(crowded()&&height>22){height-=2;image.style.height=height+'%';}
    while(crowded()&&font>12){font-=.5;body.style.fontSize=font+'px';}
@@ -207,7 +207,7 @@ function printFitScript(){return `<script>
   });
   const warning=document.getElementById('print-fit-warning');
   warning.hidden=!overflow;
-  warning.textContent=overflow+'쪽의 본문이 그림 안의 글 영역보다 깁니다. 글 배치를 그림 아래로 바꾸거나 한 면에 한 쪽을 선택해 주세요.';
+  warning.textContent=overflow+'쪽의 본문이 출력 영역보다 깁니다. 한 면에 한 쪽을 선택하거나 본문을 나눠 주세요.';
   document.getElementById('print-now').disabled=!!overflow;
   document.documentElement.dataset.printReady=overflow?'overflow':'ready';
  };
@@ -231,7 +231,7 @@ export function getPrintHTML(book, settings = {}, characters = []) {
   const guidance = normalized.layout === 'booklet'
     ? `<p>제본용 배치입니다. 빈 쪽을 포함해 4의 배수로 맞추므로 1쪽 옆이나 2쪽 옆에 빈 쪽이 보일 수 있습니다. 빈 쪽 없이 1→2쪽 순서로 보려면 일반 인쇄를 선택하세요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
     : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === 'two' ? ' 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요.' : ''}</p>`;
-  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition==='below'?'본문은 그림 아래에 배치됩니다.':'본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다.'} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다. 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
+  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition==='below'?'본문은 그림 아래에 배치됩니다.':'본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다.'} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition==='below'?'':' 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다.'}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
 }
 
 /** Opens synchronously so the user's click authorizes the print tab. */

@@ -107,9 +107,11 @@ test('both story schemas produce escaped selectable language text inside the pic
   }
 });
 
-test('bottom overlay is the default and parents can choose top overlay or text below the picture',()=>{
+test('text below the picture is the default while top and bottom overlays remain explicit options',()=>{
   const input=book(1),defaultArticle=bodyArticles(getPrintHTML(input))[0];
-  assert.equal(hasClass(defaultArticle,'text-bottom'),true);
+  assert.equal(hasClass(defaultArticle,'text-below'),true);
+  assert.equal(hasClass(defaultArticle,'text-top'),false);
+  assert.equal(hasClass(defaultArticle,'text-bottom'),false);
   for(const textPosition of ['bottom','top','below']){
     const article=bodyArticles(getPrintHTML(input,{textPosition}))[0];
     assert.equal(hasClass(article,`text-${textPosition}`),true,textPosition);
@@ -120,15 +122,18 @@ test('bottom overlay is the default and parents can choose top overlay or text b
   assert.equal(bodyArticles(getPrintHTML(input,{textPosition:'unsupported'}))[0],defaultArticle);
 });
 
-test('per-page text placement survives default printing while explicit top or below applies to every page',()=>{
+test('old per-page overlays cannot override the below-picture default in any print layout',()=>{
   const input=book(3);
   input.pages[0].printTextPosition='top';
   input.pages[1].printTextPosition='bottom';
   input.pages[2].printTextPosition='unsupported';
-  const before=JSON.stringify(input),defaults=bodyArticles(getPrintHTML(input));
-  assert.equal(hasClass(defaults[0],'text-top'),true);
-  assert.equal(hasClass(defaults[1],'text-bottom'),true);
-  assert.equal(hasClass(defaults[2],'text-bottom'),true);
+  const before=JSON.stringify(input);
+  for(const layout of ['single','two','booklet']){
+    const defaults=bodyArticles(getPrintHTML(input,{layout}));
+    assert.equal(defaults.length,3,layout);
+    assert.ok(defaults.every(article=>hasClass(article,'text-below')),`${layout} defaults below even for saved top/bottom page settings`);
+    assert.ok(defaults.every(article=>!hasClass(article,'text-top')&&!hasClass(article,'text-bottom')),`${layout} does not retain an old overlay by default`);
+  }
   for(const textPosition of ['top','below']){
     assert.ok(bodyArticles(getPrintHTML(input,{textPosition})).every(article=>hasClass(article,`text-${textPosition}`)),`${textPosition} must override each saved page placement`);
   }
