@@ -27,3 +27,10 @@
 .page-typeset-preview{background:#fffefb;padding:22px 24px;color:#34372f;text-align:left;font-size:19px;line-height:1.8;white-space:pre-line;overflow-wrap:anywhere;border-top:1px solid #e8e8df}
 .page-typeset-preview p{margin:0}.page-typeset-preview p+p{margin-top:14px}.page-typeset-preview [lang=en]{font-family:Georgia,serif}
 .editor-tools{display:flex;gap:8px;flex-wrap:wrap}.editor-tools .btn{white-space:normal;max-width:100%}
+
+.editor-picturebook{position:relative;isolation:isolate;background:#f5f0e3}
+.editor-picturebook>img,.editor-picturebook>svg{display:block;width:100%;height:auto}
+.editor-picturebook .page-typeset-preview{position:absolute;left:4%;right:4%;bottom:4%;padding:3% 4%;border:0;border-radius:10px;background:rgba(255,253,246,.93);font-size:clamp(10px,1.2vw,17px);line-height:1.5;max-height:72%;overflow:auto}
+.editor-picturebook.text-top .page-typeset-preview{top:4%;bottom:auto}
+.editor-picturebook .page-typeset-preview p+p{margin-top:6px}
+@media(max-width:650px){.editor-picturebook .page-typeset-preview{font-size:14px}}

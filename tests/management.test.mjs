@@ -82,7 +82,7 @@ test('Background edit, deletion, and restoration preserve settings of every exis
 
 test('Preference reset changes only five defaults and keeps PIN, credentials, books, World and counts', () => {
   const state = freeze(fixture()), next = resetParentPreferences(state);
-  assert.deepEqual(Object.fromEntries(['defaultLanguage','defaultPages','defaultLayout','dailyLimit','rate'].map(k => [k,next.settings[k]])),{defaultLanguage:'dual',defaultPages:12,defaultLayout:'booklet',dailyLimit:3,rate:0.85});
+  assert.deepEqual(Object.fromEntries(['defaultLanguage','defaultPages','defaultLayout','dailyLimit','rate'].map(k => [k,next.settings[k]])),{defaultLanguage:'dual',defaultPages:12,defaultLayout:'single',dailyLimit:3,rate:0.85});
   assert.equal(next.settings.pinHash,'keep-pin');
   assert.deepEqual(next.settings.apiKeys,state.settings.apiKeys);
   assert.deepEqual(next.worlds,state.worlds);

@@ -2,12 +2,13 @@ import {exportAudioAssets,restoreAudioAssets,validateAudioBackup} from './audio-
 import { sceneSVG, characterSVG } from './engine.js';
 import { getImageURL, getAsset, restoreImageAsset, hydrateImageAssets } from './image-generation/assets.js';
 
-const DEFAULTS = { layout: 'booklet', language: 'bilingual', color: 'color', pages: 'all', fontSize: 'large', margin: 'standard' };
+const DEFAULTS = { layout: 'single', textPosition: 'bottom', language: 'bilingual', color: 'color', pages: 'all', fontSize: 'large', margin: 'standard' };
 const encoder = new TextEncoder();
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
 function options(settings = {}) {
   const result = { ...DEFAULTS, ...settings };
+  if (!['bottom','top','below'].includes(result.textPosition)) result.textPosition='bottom';
   if (!['single', 'two', 'booklet'].includes(result.layout)) result.layout = DEFAULTS.layout;
   if (!['ko', 'en', 'bilingual'].includes(result.language)) result.language = result.language === 'dual' ? 'bilingual' : DEFAULTS.language;
   if (!['color', 'grayscale'].includes(result.color)) result.color = 'color';
@@ -88,11 +89,11 @@ function logicalPages(book, settings, characters) {
     kind: 'back', label: '뒤표지', html: `<article class="leaf back" aria-label="뒤표지"><div class="back-mark" aria-hidden="true">✦</div><p class="back-title">오늘의 이야기가<br>내일의 추억이 돼요.</p><p lang="en">A little story.<br>A big memory.</p><span>동화공방</span></article>`
   };
   const selected = parsePages(settings.pages, book.pages.length);
-  if (settings.pages === 'cover' && settings.layout !== 'booklet') return [cover];
+  if (settings.pages === 'cover') return [cover];
   const pages = selected.map(index => ({
-    kind: 'page', label: `${index + 1}쪽`, html: `<article class="leaf story-page" aria-label="${index + 1}쪽">${imageMarkup(artwork(book, book.pages[index], characters), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div><span class="folio">${index + 1}</span></article>`
+    kind: 'page', label: `${index + 1}쪽`, html: `<article class="leaf story-page text-${settings.textPosition==='below'?'below':settings.textPosition==='top'?'top':book.pages[index].printTextPosition==='top'?'top':'bottom'}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${imageMarkup(artwork(book, book.pages[index], characters), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div></div><span class="folio">${index + 1}</span></article>`
   }));
-  if (settings.layout === 'booklet' || !settings.pages || settings.pages === 'all') return [cover, ...pages, back];
+  if (!settings.pages || settings.pages === 'all') return [cover, ...pages, back];
   return pages;
 }
 
@@ -113,19 +114,31 @@ export function imposeBooklet(pages) {
 
 function sheetMarkup(logical, settings) {
   let sides;
-  if (settings.layout === 'booklet') sides = imposeBooklet(logical);
+  if (settings.layout === 'booklet' && logical.length>1) sides = imposeBooklet(logical);
   else if (settings.layout === 'two') {
-    sides = [];
-    for (let index = 0; index < logical.length; index += 2) sides.push([logical[index], logical[index + 1] || blankPage()]);
+    sides=[];let pending=[];
+    for(const page of logical){
+      if(page.kind!=='page'){if(pending.length){sides.push(pending);pending=[];}sides.push([page]);}
+      else {pending.push(page);if(pending.length===2){sides.push(pending);pending=[];}}
+    }
+    if(pending.length)sides.push(pending);
   } else sides = logical.map(page => [page]);
   return {
     count: sides.length,
-    html: sides.map((side, index) => `<section class="sheet ${settings.layout === 'single' ? 'one' : 'spread'}" aria-label="출력 ${index + 1}면">${side.map((page, position) => `<div class="slot ${position === 0 ? 'left' : 'right'}">${page.html}</div>`).join('')}</section>`).join('')
+    html: sides.map((side, index) => `<section class="sheet ${side.length===1?'one':settings.layout==='booklet'?'spread':'stack'}" aria-label="출력 ${index + 1}면">${side.map((page, position) => `<div class="slot ${position === 0 ? 'left' : 'right'}">${page.html}</div>`).join('')}</section>`).join('')
   };
 }
 
+export function migratePrintSettings(settings={}){
+  if(settings.printLayoutVersion!==2){
+    if(!settings.defaultLayout||settings.defaultLayout==='booklet')settings.defaultLayout='single';
+    settings.printLayoutVersion=2;
+  }
+  return settings;
+}
+
 function printStyles(settings) {
-  const landscape = settings.layout !== 'single';
+  const landscape = settings.layout !== 'two';
   return `
     @page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: 10mm; }
     * { box-sizing: border-box; }
@@ -135,39 +148,48 @@ function printStyles(settings) {
     .print-tools h2 { margin: 0 0 10px; font-size: 21px; }
     .print-tools p { font-size: 14px; line-height: 1.7; margin: 7px 0; }
     .print-tools button { border: 0; border-radius: 9px; padding: 12px 22px; background: #426b4c; color: white; font-weight: 700; cursor: pointer; font-size: 16px; margin-top: 10px; }
-    .sheet { width: ${landscape ? '277mm' : '190mm'}; height: ${landscape ? '190mm' : '277mm'}; display: grid; grid-template-columns: ${landscape ? '1fr 1fr' : '1fr'}; overflow: hidden; background: white; margin: 0 auto 24px; box-shadow: 0 4px 28px #00000012; break-after: page; page-break-after: always; break-inside: avoid; page-break-inside: avoid; ${settings.color === 'grayscale' ? 'filter: grayscale(1);' : ''} }
+    .print-tools button:disabled{opacity:.5;cursor:not-allowed}
+    .print-warning { padding: 12px; background: #fff1dd; color: #723b18; }
+    .print-warning[hidden] { display: none; }
+    .sheet { width: ${landscape ? '277mm' : '190mm'}; height: ${landscape ? '190mm' : '277mm'}; display: grid; grid-template-columns: 1fr; grid-template-rows:minmax(0,1fr); overflow: hidden; background: white; margin: 0 auto 24px; box-shadow: 0 4px 28px #00000012; break-after: page; page-break-after: always; break-inside: avoid; page-break-inside: avoid; ${settings.color === 'grayscale' ? 'filter: grayscale(1);' : ''} }
+    .sheet.spread{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .sheet.stack{grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
     .sheet:last-child { break-after: auto; page-break-after: auto; }
     .slot { min-width: 0; min-height: 0; position: relative; }
     .spread .slot:first-child { border-right: 1px dashed #dadad0; }
-    .leaf { width: 100%; height: 100%; padding: 7mm; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-    ${settings.margin === 'binding' ? '.one .leaf { padding-left: 16mm; } .spread .left .leaf { padding-right: 12mm; } .spread .right .leaf { padding-left: 12mm; }' : ''}
-    .illustration { width: 100%; height: 52%; min-height: 0; object-fit: contain; display: block; flex: 0 0 auto; ${settings.color === 'grayscale' ? 'filter: grayscale(1);' : ''} }
-    .story { display: block; min-height: 0; flex: 1; padding: 3mm 3mm 7mm; line-height: 1.65; font-size: ${settings.fontSize === 'large' ? '17pt' : '14pt'}; font-weight: 500; word-break: keep-all; overflow-wrap: break-word; white-space: pre-line; }
-    .one .story { font-size: ${settings.fontSize === 'large' ? '24pt' : '20pt'}; }
+    .stack .slot:first-child { border-bottom: 1px dashed #dadad0; }
+    .leaf { width: 100%; height: 100%; padding: 4mm; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    .story-page{justify-content:center}
+    ${settings.margin === 'binding' ? '.one .leaf { padding-left: 12mm; } .spread .left .leaf { padding-right: 10mm; } .spread .right .leaf { padding-left: 10mm; }' : ''}
+    .illustration { width: 100%; min-height: 0; object-fit: contain; display: block; }
+    .picturebook-frame{position:relative;width:100%;aspect-ratio:3/2;max-height:100%;background:#f6f2e8;overflow:hidden;isolation:isolate}
+    .picturebook-frame>.illustration{width:100%;height:100%;display:block;object-fit:contain}
+    .story { position:absolute;left:4%;right:4%;bottom:4%;max-height:72%;padding:3% 4%;background:rgba(255,253,246,.93);border-radius:3mm;color:#292d26;line-height:1.55;font-size:${settings.fontSize === 'large' ? '19pt' : '15pt'};font-weight:500;word-break:keep-all;overflow-wrap:break-word;white-space:pre-line;z-index:1; }
+    .text-top .story{top:4%;bottom:auto}
+    .one .story { font-size: ${settings.fontSize === 'large' ? '25pt' : '20pt'}; }
     .story p { margin: 0; }
-    .print-warning { padding: 12px; background: #fff1dd; color: #723b18; }
-    .print-warning[hidden] { display: none; }
-    .story p + p { margin-top: 4mm; }
+    .story p + p { margin-top: 2.5mm; }
     .story .en { font-family: Georgia, "Times New Roman", serif; }
-    .story .ko { letter-spacing: -.035em; }
-    .folio { position: absolute; bottom: 4mm; left: 0; right: 0; text-align: center; font-size: 10pt; color: #8b8d81; }
+    .story .ko { letter-spacing: -.025em; }
+    .text-below .picturebook-frame{aspect-ratio:auto;height:100%;display:flex;flex-direction:column;background:white}
+    .text-below .picturebook-frame>.illustration{height:52%;flex:0 0 auto}
+    .text-below .story{position:static;max-height:none;min-height:0;flex:1;left:auto;right:auto;bottom:auto;border-radius:0;background:white;padding:3mm 3mm 7mm}
+    .folio { position: absolute; bottom: 1mm; left: 0; right: 0; text-align: center; font-size: 8pt; color: #72756a; }
     .cover { align-items: center; text-align: center; }
-    .cover-series { font-size: 10pt; color: #6e7c67; padding-top: 3mm; }
-    .cover h1 { font-size: 27pt; line-height: 1.3; margin: 7mm 0 2mm; word-break: keep-all; letter-spacing: -.04em; }
-    .one .cover h1 { font-size: 38pt; }
-    .cover-subtitle { font-family: Georgia, serif; margin: 1mm 0 3mm; font-size: 14pt; }
+    .cover-series { font-size: 10pt; color: #6e7c67; padding-top: 2mm; }
+    .cover h1 { font-size: 27pt; line-height: 1.3; margin: 3mm 0 2mm; word-break: keep-all; letter-spacing: -.04em; }
+    .cover-subtitle { font-family: Georgia, serif; margin: 1mm 0 2mm; font-size: 14pt; }
     .cover .illustration { flex: 1; min-height: 0; height: 54%; }
-    .cover-credit { font-size: 9pt; margin: 4mm 0; color: #798473; }
+    .cover-credit { font-size: 9pt; margin: 2mm 0; color: #798473; }
     .back { align-items: center; justify-content: center; text-align: center; color: #697b5d; gap: 4mm; }
     .back-mark { font-size: 48pt; color: #c7a461; }
     .back-title { font-size: 21pt; line-height: 1.6; font-weight: 700; margin: 0; }
     .back p[lang="en"] { font-family: Georgia, serif; line-height: 1.8; color: #859278; font-size: 15pt; }
     .back span { margin-top: 9mm; font-size: 11pt; }
     @media screen and (max-width: 1080px) { .sheet { transform-origin: top left; margin-left: 12px; } }
-    @media print { html { background: white; } .print-tools { display: none !important; } .sheet { margin: 0; box-shadow: none; } .spread .slot:first-child { border: 0; } img { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+    @media print { html { background: white; } .print-tools { display: none !important; } .sheet { margin: 0; box-shadow: none; } .spread .slot:first-child,.stack .slot:first-child { border: 0; } .story,img { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
   `;
 }
-
 
 function printFitScript(){return `<script>
 (()=>{
@@ -176,16 +198,16 @@ function printFitScript(){return `<script>
   document.querySelectorAll('.story-page').forEach(leaf=>{
    const body=leaf.querySelector('.story'),image=leaf.querySelector('.illustration');
    if(!body||!image)return;
-   body.style.fontSize='';image.style.height='52%';
+   body.style.fontSize='';image.style.height='';
    let font=parseFloat(getComputedStyle(body).fontSize),height=52;
    const crowded=()=>body.scrollHeight>body.clientHeight+1;
-   while(crowded()&&height>22){height-=2;image.style.height=height+'%';}
+   if(leaf.classList.contains('text-below'))while(crowded()&&height>22){height-=2;image.style.height=height+'%';}
    while(crowded()&&font>12){font-=.5;body.style.fontSize=font+'px';}
    if(crowded())overflow++;
   });
   const warning=document.getElementById('print-fit-warning');
   warning.hidden=!overflow;
-  warning.textContent=overflow+'쪽의 본문이 인쇄 영역보다 깁니다. 한 면에 한 쪽으로 바꾸거나 본문을 나눈 뒤 인쇄해 주세요.';
+  warning.textContent=overflow+'쪽의 본문이 그림 안의 글 영역보다 깁니다. 글 배치를 그림 아래로 바꾸거나 한 면에 한 쪽을 선택해 주세요.';
   document.getElementById('print-now').disabled=!!overflow;
   document.documentElement.dataset.printReady=overflow?'overflow':'ready';
  };
@@ -204,12 +226,12 @@ export function getPrintHTML(book, settings = {}, characters = []) {
   const logical = logicalPages(book, normalized, characters);
   const sheets = sheetMarkup(logical, normalized);
   const title = normalized.language === 'en' ? book.titleEn || book.title : book.title;
-  const layoutLabel = { single: '한 면에 한 쪽', two: '두 쪽 모아 찍기', booklet: '반 접는 A5 소책자' }[normalized.layout];
-  const orientation = normalized.layout === 'single' ? '세로' : '가로';
+  const layoutLabel = { single: '읽는 순서 · 한 면에 한 쪽', two: '읽는 순서 · 두 쪽씩', booklet: '제본용 소책자 · 쪽 재배치' }[normalized.layout];
+  const orientation = normalized.layout === 'two' ? '세로' : '가로';
   const guidance = normalized.layout === 'booklet'
-    ? `<p>총 ${sheets.count / 2}장의 양면 인쇄입니다. 표지·뒤표지를 포함하고, 4의 배수가 되도록 빈 쪽을 넣어 접었을 때 읽는 순서로 배치했어요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
-    : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === 'two' ? ' 각 면에 두 쪽을 읽는 순서대로 놓았어요.' : ''}</p>`;
-  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래의 흰 영역에 실제 글자로 조판됩니다. 그림 파일에 글자를 그려 넣지 않으므로 한글·영어가 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
+    ? `<p>제본용 배치입니다. 빈 쪽을 포함해 4의 배수로 맞추므로 1쪽 옆이나 2쪽 옆에 빈 쪽이 보일 수 있습니다. 빈 쪽 없이 1→2쪽 순서로 보려면 일반 인쇄를 선택하세요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
+    : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === 'two' ? ' 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요.' : ''}</p>`;
+  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition==='below'?'본문은 그림 아래에 배치됩니다.':'본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다.'} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다. 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
 }
 
 /** Opens synchronously so the user's click authorizes the print tab. */

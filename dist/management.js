@@ -4,7 +4,7 @@ const now = () => new Date().toISOString();
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const CHARACTER_FIELDS = new Set(['name','nameEn','role','kind','age','color','hairColor','skinColor','description','traits','catchphrase','relationships','speechHabit','appearance','clothes','variant','referenceImages','referencePhotoAssetIds']);
 const BACKGROUND_FIELDS = new Set(['name','type','description','layout','rules','kind','features','mood','color','referenceImages','referencePhotoAssetIds']);
-export const PARENT_PREFERENCE_DEFAULTS = Object.freeze({defaultLanguage:'dual',defaultPages:12,defaultLayout:'booklet',dailyLimit:3,rate:0.85,defaultKoreanLevel:'K1',defaultEnglishLevel:'E0',srLexile:null,readingFeedbackHistory:[],readingFeedback:[]});
+export const PARENT_PREFERENCE_DEFAULTS = Object.freeze({defaultLanguage:'dual',defaultPages:12,defaultLayout:'single',dailyLimit:3,rate:0.85,defaultKoreanLevel:'K1',defaultEnglishLevel:'E0',srLexile:null,readingFeedbackHistory:[],readingFeedback:[]});
 
 function record(state, collection, id) {
   const item = state[collection]?.find(item => item.id === id);
