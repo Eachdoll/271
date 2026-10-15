@@ -31,3 +31,8 @@
  .editor-picturebook{background:#fffefb}
 .editor-picturebook>img,.editor-picturebook>svg{display:block;width:100%;height:auto}
 .editor-picturebook .page-typeset-preview{position:static;max-height:none;overflow:visible;background:#fffefb;border-radius:0}
+
+.device-storage-notice{display:flex;align-items:center;gap:18px;justify-content:space-between;background:#edf1e7;border:1px solid #e1e6d9;border-radius:12px;padding:16px 20px;margin-bottom:22px;color:#53644b}
+.device-storage-notice p{font-size:12px;line-height:1.7;margin:5px 0 0}.device-storage-notice strong{font-size:14px}.device-storage-notice .btn{flex-shrink:0}.device-storage-notice.storage-error{background:#fff0df;border-color:#edc9a1;color:#7b4b26}
+.device-transfer-steps{font-size:14px;line-height:1.9;padding-left:22px}.device-file-label{cursor:pointer;display:inline-flex}#device-transfer-status{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:640px){.device-storage-notice{align-items:flex-start;flex-direction:column;padding:15px}.device-storage-notice .btn{width:100%;justify-content:center}.device-transfer-steps{font-size:13px}.device-file-label{white-space:normal}}
