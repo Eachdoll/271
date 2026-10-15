@@ -1,6 +1,8 @@
 import {BEAT_COUNTS, PAGE_COUNTS, OUTLINE_SCHEMA, BEAT_SCHEMA, PROSE_SCHEMA, PAGINATION_SCHEMA, PAGE_SCHEMA, PARAGRAPH_SCHEMA, SCENE_REWRITE_SCHEMA, StoryValidationError, assertValid, validatePagination} from './schemas.js';
 import {checkStory} from './checker.js';
 import {demoOutline, demoProse, demoPagination} from './demo.js';
+import {buildBeatPagePlan} from './pagination.js';
+export {buildBeatPagePlan} from './pagination.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const numeric=value=>Number.isFinite(value)&&value>=0;
@@ -146,7 +148,8 @@ function validateGeneratedPagination(value,input,outline){
 }
 async function paginateOnce(outline,prose,input,options,violations=[]){
   if(demo(options))return demoResult('pagination',demoPagination(outline,prose,input),input);
-  const result=await complete('pagination',input,{rules:`${paginationRules(input)}${violations.length?'\nRepair the listed structural violations while preserving this same ORIGINAL prose.':''}`,data:{approvedOutline:outline,approvedOriginalProse:prose,...(violations.length?{violations}: {})}},PAGINATION_SCHEMA,options);
+  const pagePlan=buildBeatPagePlan(outline,input.pageCount),schema=clone(PAGINATION_SCHEMA);schema.properties.pages.minItems=input.pageCount;schema.properties.pages.maxItems=input.pageCount;
+  const result=await complete('pagination',input,{rules:`${paginationRules(input)}\nThe ${outline.beats.length} outline beats are NOT pages. Expand them into exactly ${input.pageCount} pages by splitting events across pages. Never return one page per beat. Follow the supplied pagePlan (pageNo -> beatIndex); retain the approved prose and ending.${violations.length?'\nRepair the listed structural violations while preserving this same ORIGINAL prose.':''}`,data:{approvedOutline:outline,approvedOriginalProse:prose,pagePlan,...(violations.length?{violations}: {})}},schema,options);
   result.data=validateGeneratedPagination(result.data,input,outline);return result;
 }
 export function inspectStory(outline,pagination,input){
@@ -171,15 +174,18 @@ export async function rewriteStoryPage(pagination,pageNo,outline,prose,source,op
   }
   result.data=next;result.meta.checks=inspectStory(outline,next,input);return result;
 }
+async function checkpoint(options,pagination,checks,repairAttempts){
+  if(options.onCheckpoint)await options.onCheckpoint({pagination:clone(pagination),checks:clone(checks),repairAttempts});
+}
 export async function repairPagination(outline,prose,pagination,source,options={}){
   const input=normalizeStoryInput(source);abort(options.signal);let next=clone(pagination),report=inspectStory(outline,next,input),attempts=0;const requests=[];
   // Demo has no hidden API or content replacement; expose its genuine checks.
   if(demo(options))return {...demoResult('pagination',next,input),meta:{...demoResult('pagination',next,input).meta,checks:report,repairAttempts:0}};
   for(let pass=0;pass<2&&!report.passed;pass++){
     attempts++;notify(options,'pagination','repair',`이야기 검사 결과를 고치고 있어요 (${pass+1}/2).`,{attempt:pass+1,failedPageNos:report.failedPageNos});
-    if(report.needsRepagination){const result=await paginateOnce(outline,prose,input,options,report.violations);requests.push(result);next=result.data;}
+    if(report.needsRepagination){const result=await paginateOnce(outline,prose,input,options,report.violations);requests.push(result);next=result.data;await checkpoint(options,next,inspectStory(outline,next,input),attempts);}
     else for(const pageNo of report.failedPageNos){
-      abort(options.signal);const violations=report.violations.filter(v=>v.pageNo===pageNo);const result=await rewriteStoryPage(next,pageNo,outline,prose,input,{...options,violations});requests.push(result);next=result.data;
+      abort(options.signal);notify(options,'pagination','repair-page',`${pass+1}/2차 수정 · ${pageNo}쪽을 고치고 있어요.`,{attempt:pass+1,pageNo});const violations=report.violations.filter(v=>v.pageNo===pageNo);const result=await rewriteStoryPage(next,pageNo,outline,prose,input,{...options,violations});requests.push(result);next=result.data;await checkpoint(options,next,inspectStory(outline,next,input),attempts);
     }
     report=inspectStory(outline,next,input);
   }
@@ -188,6 +194,7 @@ export async function repairPagination(outline,prose,pagination,source,options={
 export async function paginateStory(outline,prose,source,options={}){
   const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});assertValid('prose',prose,input,outline);abort(options.signal);
   const initial=await paginateOnce(outline,prose,input,options);
+  await checkpoint(options,initial.data,inspectStory(outline,initial.data,input),0);
   if(options.repair===false){initial.meta.checks=inspectStory(outline,initial.data,input);initial.meta.repairAttempts=0;return initial;}
   const repaired=await repairPagination(outline,prose,initial.data,input,options);
   return {data:repaired.data,usage:mergeStoryUsage([initial,repaired]),meta:{...initial.meta,...repaired.meta,model:initial.meta.model,requests:initial.meta.demo?0:(Number(initial.meta.requests)||1)+(Number(repaired.meta.requests)||0)}};

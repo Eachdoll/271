@@ -46,3 +46,8 @@ test('same-style variants retain authoritative style references but no old cast 
 test('World cards escape user text and offer switching without changing main form selectors',()=>{
   const state=library();createWorldVariation(state,state.activeWorldId,{name:'<새 세계>',memo:'<script>bad</script>'});const html=renderWorldVariations(state);assert.match(html,/&lt;새 세계&gt;/);assert.match(html,/data-world-variation="activate"/);assert.match(html,/시트 다시 생성 필요/);assert.doesNotMatch(html,/<script>/);assert.doesNotMatch(html,/data-action="save-settings"/);
 });
+
+
+test('selected premium models survive World copy, switching and serialized reload',()=>{
+ const state=library();state.settings.textGeneration.providers.google.model='gemini-4-argon';const source=state.worlds[0];const copy=createWorldVariation(state,source.id,{name:'상위 모델 세상'});activateWorldVariation(state,copy.id);assert.equal(state.settings.textGeneration.providers.google.model,'gemini-4-argon');state.settings.textGeneration.engine='openai';state.settings.textGeneration.providers.openai.model='gpt-6-astra';activateWorldVariation(state,source.id);const loaded=JSON.parse(JSON.stringify(state));activateWorldVariation(loaded,copy.id);assert.equal(loaded.settings.textGeneration.providers.openai.model,'gpt-6-astra');assert.equal(loaded.settings.textGeneration.providers.google.model,'gemini-4-argon');
+});

@@ -28,7 +28,7 @@ function report(onProgress,value) {
 }
 
 function worldForSnapshot(state,snapshot) {
-  return state.worlds?.find(world=>world.id===snapshot?.worldId)||getActiveWorld(state);
+  const world=state.worlds?.find(world=>world.id===snapshot?.worldId)||getActiveWorld(state);return snapshot?.imageModelConfig?{...world,providerConfig:{...world.providerConfig,[snapshot.imageEngine]:{...world.providerConfig?.[snapshot.imageEngine],...snapshot.imageModelConfig}}}:world;
 }
 
 async function providerConfig(state,world,engine,signal) {

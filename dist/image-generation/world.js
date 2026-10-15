@@ -120,6 +120,7 @@ export function migrateWorldState(state) {
     world.id ||= uid('world');
     world.name ||= '우리 집 작은 세계';
     world.imageEngine = engineId(world.imageEngine);
+    world.imageModelVariant ||= world.imageEngine==='google'&&(world.providerConfig?.google?.googlePro||world.providerConfig?.google?.modelVariant==='pro')?'pro':'default';
     world.stylePresetId = getStylePreset(world.stylePresetId).id;
     world.characterIds = Array.isArray(world.characterIds) ? [...new Set(world.characterIds)] : state.characters.map(character => character.id);
     world.revision = Math.max(1, Math.floor(Number(world.revision) || 1));
@@ -184,7 +185,7 @@ export function getWorldBackgroundSnapshot(state, background, world = getActiveW
 }
 
 /** Settings are World-scoped; confirmed sheets remain as immutable history. */
-export function updateWorldGenerationSettings(state, {imageEngine, stylePresetId}) {
+export function updateWorldGenerationSettings(state, {imageEngine, stylePresetId, modelVariant}) {
   const world = getActiveWorld(state);
   const nextEngine = imageEngine === undefined ? world.imageEngine : imageEngine;
   if (!ENGINES.has(nextEngine)) throw new Error('지원하지 않는 이미지 엔진이에요.');
@@ -192,11 +193,14 @@ export function updateWorldGenerationSettings(state, {imageEngine, stylePresetId
   if (stylePresetId !== undefined && preset.id !== stylePresetId) throw new Error('지원하지 않는 화풍 프리셋이에요.');
   const validation = validateStylePreset(preset);
   if (!validation.valid) throw new Error(validation.errors.join(' '));
-  const changed = world.imageEngine !== nextEngine || world.stylePresetId !== preset.id;
+  const nextVariant=nextEngine==='google'&&(modelVariant==='pro'||modelVariant===undefined&&(world.providerConfig?.google?.googlePro||world.providerConfig?.google?.modelVariant==='pro'))?'pro':'default';
+  const priorVariant=world.imageModelVariant|| (world.imageEngine==='google'&&world.providerConfig?.google?.googlePro?'pro':'default');
+  const changed = world.imageEngine !== nextEngine || world.stylePresetId !== preset.id || priorVariant!==nextVariant;
   const hadConfirmedSheets = world.characterIds.some(id => state.characters.find(character => character.id === id)?.characterSheets?.some(sheet => sheet.worldId === world.id && sheet.confirmedAt));
   if (changed) {
     if(world.stylePresetId!==preset.id) world.styleSheetImageIds=[...(state.stylePresetSelections?.[world.id]?.[preset.id] || preset.styleRefImageIds || [])].slice(0,2);
     world.imageEngine = nextEngine;
+    world.imageModelVariant=nextVariant;
     world.stylePresetId = preset.id;
     world.stylePresetVersion = preset.version || 1;
     world.revision += 1;
@@ -260,6 +264,7 @@ export function captureBookGenerationSnapshot(state, book) {
   book.generationSnapshot = {
     worldId: world.id, worldRevision: world.revision, imageEngine: world.imageEngine,
     stylePresetId: world.stylePresetId, stylePreset: clone(preset), characterSheets: sheets,
+    imageModelConfig:{googlePro:world.imageModelVariant==='pro'||!world.imageModelVariant&&world.providerConfig?.google?.googlePro===true,modelVariant:world.imageModelVariant==='pro'?'pro':'default'},
     styleReferences: getWorldStyleReferenceRecords(state,world,preset).map(clone),
     ...freezeBookVariants(state,book,world,sheets),
     backgrounds: (book.backgroundIds||[]).map(id=>state.backgrounds?.find(b=>b.id===id)).filter(Boolean).map(background=>getWorldBackgroundSnapshot(state,background,world)),

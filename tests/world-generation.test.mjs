@@ -40,3 +40,10 @@ test('topic suggestions avoid duplicate names and chosen companions appear in st
   const state=seedState(),friend=suggestCompanions('바닷속 보물 찾기')[0];state.characters.push(friend);
   const outline=makeOutline({characterIds:['yuha',friend.id],topic:'바닷속 보물 찾기',pageCount:8},state.characters);assert.ok(outline.some(page=>page.ko.includes(friend.name)));
 });
+
+
+test('upgrading the Google image model invalidates future sheets and keeps the old book model frozen',()=>{
+ const state=seedState();migrateWorldState(state);updateWorldGenerationSettings(state,{imageEngine:'google'});const world=getActiveWorld(state);markCharacterSheetConfirmed(state,'yuha',{imageUrl:'data:image/png;base64,fixture',seed:null,meta:{requestedSeed:10}});
+ const book={characterIds:['yuha']};captureBookGenerationSnapshot(state,book);const before=structuredClone(book.generationSnapshot),revision=world.revision;world.providerConfig={google:{googlePro:true,modelVariant:'pro'}};const changed=updateWorldGenerationSettings(state,{imageEngine:'google',modelVariant:'pro'});
+ assert.equal(changed.requiresRegeneration,true);assert.equal(world.revision,revision+1);assert.equal(getCharacterSheet(state,'yuha'),null);assert.deepEqual(book.generationSnapshot,before);assert.equal(book.generationSnapshot.imageModelConfig.googlePro,false);assert.equal(book.generationSnapshot.imageModelConfig.modelVariant,'default');
+});

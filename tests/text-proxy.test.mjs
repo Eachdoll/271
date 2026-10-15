@@ -15,6 +15,7 @@ test('text proxy uses server credentials, excludes client credentials and keeps 
     const response=await send(request),data=await response.json();assert.equal(response.status,200);assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://story.example');assert.equal(data.usage.output,20);assert.equal(calls[0].context.config.apiKey,'server-fixture-secret');assert.ok(calls[0].request.signal);assert.equal(calls[0].request.maxTokens,1000);assert.doesNotMatch(JSON.stringify(data),/server-fixture-secret/);
     const credential=await send({...request,apiKey:'client-secret'});assert.equal(credential.status,400);assert.equal(calls.length,1);assert.doesNotMatch(await credential.text(),/client-secret/);
     const denied=await send(request,'https://untrusted.example');assert.equal(denied.status,403);assert.equal(calls.length,1);
+    const premium=await send({...request,model:'gpt-6-astra'});assert.equal(premium.status,200);assert.equal(calls.at(-1).context.config.model,'gpt-6-astra');assert.equal(calls.at(-1).request.model,'gpt-6-astra');
     const failure=await send({...request,user:'fail'});assert.equal(failure.status,500);assert.doesNotMatch(await failure.text(),/server-fixture-secret|upstream private body/);
   }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

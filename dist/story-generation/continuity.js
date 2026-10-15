@@ -224,7 +224,8 @@ export function applySeriesContinuity(state, book, previousBook, wizard = {}) {
     worldSettingsChanged: changed,
     reason: !useCurrentStyle && changed ? '부모 설정의 엔진·화풍이 바뀌었지만 이 시리즈는 이전 편의 확정 캐릭터·장소·화풍을 이어 사용해요.' : useCurrentStyle ? '부모가 이번 편부터 현재 엔진·화풍을 사용하도록 선택했어요.' : '이전 편의 확정 캐릭터·장소·화풍을 이어 사용해요.'
   };
-  const snapshot = {...world, worldId: world.id, worldRevision: world.revision, imageEngine, stylePresetId, stylePreset, styleReferences, characterSheets: sheets, backgrounds, ...variants,
+  const imageModelConfig=!useCurrentStyle?clone(previousSnapshot.imageModelConfig||{googlePro:previousSnapshot.characterSheets?.some(sheet=>sheet.meta?.model==='gemini-3-pro-image')||false,modelVariant:previousSnapshot.characterSheets?.some(sheet=>sheet.meta?.model==='gemini-3-pro-image')?'pro':'default'}):{googlePro:currentWorld.imageModelVariant==='pro'};
+  const snapshot = {imageModelConfig,...world, worldId: world.id, worldRevision: world.revision, imageEngine, stylePresetId, stylePreset, styleReferences, characterSheets: sheets, backgrounds, ...variants,
     backgroundReferenceByPage: bindSeriesBackgrounds(book, backgrounds), capturedAt: new Date().toISOString(), continuity: clone(continuity)};
   // Do not inherit generation seeds or prior rendered page images into a new page.
   book.worldId = snapshot.worldId;

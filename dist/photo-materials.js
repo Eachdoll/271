@@ -4,6 +4,7 @@ import {getCredential} from './image-generation/vault.js';
 import {getActiveWorld, markCharacterSheetConfirmed,getWorldStyleReferences} from './image-generation/world.js';
 import {getStylePreset, validateStylePreset} from './image-generation/styles.js';
 import {saveImage} from './image-generation/assets.js';
+import {backgroundSettingsKey} from './background-sheets.js';
 
 const MAX_PHOTOS = 3;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -82,8 +83,20 @@ export function createPhotoGenerationRequest({kind, fields, photos, stylePreset,
   const photoCount = photos.length;
   const prompt = kind === 'character'
     ? `Create an original illustrated children's storybook character reference sheet inspired by the person or animal in the first ${photoCount} reference photos. Parent-supplied character settings: ${JSON.stringify(fields)}. Retain broad recognizable illustrated features such as hairstyle, glasses, clothing and colors, with the parent's written appearance as the final guide. Transform into a clearly stylized drawn character with simplified facial details; do not recreate an actual photographic face or use photorealistic skin. Show the SAME character in a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving), on one clean neutral background. Keep the character's identity, proportions, clothes and colors consistent in every view. Only the first ${photoCount} images are identity photos; all later references define the visual style. No labels, captions, names, words, watermarks or logos.`
-    : `Create one representative original children's picture-book background illustration inspired by the layout and recognizable details of the place in the first ${photoCount} reference photos. Parent-supplied place settings: ${JSON.stringify(fields)}. Preserve the layout and important objects as a reusable illustrated setting in the selected visual style. Remove people, faces, addresses, license plates, private text, signs and logos. Clearly stylize the place into a drawing instead of reproducing a photograph. All references after the first ${photoCount} photos define the visual style. A readable wide daytime composition. No text, captions, watermarks or logos.`;
-  return {prompt, stylePreset:clone(stylePreset), referenceImages:[...photos.map((imageUrl,index)=>({...((imageUrl instanceof Blob)?{blob:imageUrl}:{imageUrl}),role:'character_front',label:`source ${kind==='character'?'identity':'place layout'} photo ${index+1}`})),...stylePreset.styleRefImages.map((imageUrl,index)=>({imageUrl,role:'style_sheet',label:'authoritative style '+(index+1)}))], seed, size:'1536x1024', quality:'draft'};
+    : `Create one reusable environment reference sheet of the photographed place for an original children's picture book. References labeled source place layout photo define the photographed place and its geometry, regardless of attachment order. Parent-supplied place facts and fixed layout: ${JSON.stringify(fields)}. Preserve the visible geometry, wall and floor colors, window and door positions, furniture arrangement, paths, trees, building shapes, materials, and recognizable fixed objects from these photos. Use a wide establishing view plus closer detail panels of the SAME exact photographed place and its visible objects. Do not invent unobserved rooms, hidden furniture, additional windows or doors, or an unrelated reverse view. If the photos do not establish a detail, omit that detail rather than guessing. The parent's written fixed layout clarifies the photos and explicitly requested changes. Empty environment: remove people, animals, faces, addresses, license plates, private text, signs and logos. Translate the photographed setting into the active World's illustrated visual style; do not reproduce a photograph. References labeled authoritative style define painting medium and palette only, never place geometry. Keep the same place, colors and layout in every panel for later story scenes. No words, captions, labels, arrows, watermarks or logos.`;
+  return {prompt, stylePreset:clone(stylePreset), referenceImages:[...photos.map((imageUrl,index)=>({...((imageUrl instanceof Blob)?{blob:imageUrl}:{imageUrl}),role:kind==='character'?'character_front':'background',label:`source ${kind==='character'?'identity':'place layout'} photo ${index+1}`})),...stylePreset.styleRefImages.map((imageUrl,index)=>({imageUrl,role:'style_sheet',label:'authoritative style '+(index+1)}))], seed, size:'1536x1024', quality:'draft'};
+}
+
+/** Store only an approved drawing; source-photo blobs and object URLs never enter the library. */
+export function createPhotoBackgroundMaterial({fields, candidate, world, mode='photo', confirmedAt=new Date().toISOString()}) {
+  if (!candidate?.imageAssetId) throw new Error('저장할 배경 그림이 없어요.');
+  if (mode !== 'import' && candidate.meta?.quality !== 'final') throw new Error('최종 화질 배경을 생성한 뒤 확정해 주세요.');
+  if (candidate.meta?.worldId !== world.id || candidate.meta.worldRevision !== world.revision || candidate.meta.engine !== world.imageEngine || candidate.meta.stylePresetId !== world.stylePresetId) throw new Error('현재 World와 같은 엔진·화풍으로 만든 배경을 확정해 주세요.');
+  const item={name:fields.name,nameEn:fields.nameEn||'',type:fields.type,description:fields.description||fields.features||'',features:fields.description||fields.features||'',layout:fields.layout||'',id:uid('background'),worldId:world.id,photoBased:mode==='photo',importedIllustration:mode==='import',imageAssetId:candidate.imageAssetId,imageUrl:`asset:${candidate.imageAssetId}`,imageSeed:candidate.meta.requestedSeed??null,effectiveImageSeed:candidate.seed??null,createdAt:confirmedAt};
+  const meta={...clone(candidate.meta),imageEngine:world.imageEngine,worldId:world.id,worldRevision:world.revision,stylePresetId:world.stylePresetId,quality:mode==='import'?'imported':candidate.meta.quality,kind:'background-sheet',returnedSeed:candidate.seed??null};
+  const settings=backgroundSettingsKey(item);
+  const sheet={id:candidate.imageAssetId,imageAssetId:candidate.imageAssetId,imageUrl:item.imageUrl,seed:candidate.seed??null,meta:clone(meta),settings,confirmedAt};
+  return {...item,imageMeta:clone(meta),backgroundSheets:[sheet],backgroundSheetMeta:clone(meta),backgroundSheetSettingsKey:settings,backgroundSheetSeed:sheet.seed,backgroundSheetConfirmedAt:confirmedAt};
 }
 
 function current(session) {
@@ -139,7 +152,7 @@ function characterFields() {
 }
 
 function backgroundFields() {
-  return `<div class="field"><label for="photo-name">장소 이름 · 한글</label><input id="photo-name" required maxlength="50" placeholder="예: 우리 집 놀이터"></div><div class="field"><label for="photo-name-en">장소 이름 · 영어</label><input id="photo-name-en" maxlength="70" placeholder="예: Our Playground"></div>${selectField('photo-type','장소 종류',[['home','집'],['school','유치원 · 학교'],['forest','숲 · 정원'],['space','우주'],['sea','바다']],'home')}<div class="field field-wide"><label for="photo-appearance">장소 특징 · 꼭 남길 것</label><textarea id="photo-appearance" required maxlength="500" placeholder="예: 창가에 작은 책장이 있고, 초록 소파 옆에 노란 쿠션이 있어요."></textarea><small>사진을 보며 장소의 특징을 직접 적어 주세요. 인물과 주소 등은 그림에서 제외하도록 요청합니다.</small></div>`;
+  return `<div class="field"><label for="photo-name">장소 이름 · 한글</label><input id="photo-name" required maxlength="50" placeholder="예: 우리 집 놀이터"></div><div class="field"><label for="photo-name-en">장소 이름 · 영어</label><input id="photo-name-en" maxlength="70" placeholder="예: Our Playground"></div>${selectField('photo-type','장소 종류',[['home','집'],['school','유치원 · 학교'],['forest','숲 · 정원'],['space','우주'],['sea','바다']],'home')}<div class="field field-wide"><label for="photo-appearance">장소 특징 · 꼭 남길 것</label><textarea id="photo-appearance" required maxlength="500" placeholder="예: 창가에 작은 책장이 있고, 초록 소파 옆에 노란 쿠션이 있어요."></textarea><small>사진을 보며 장소의 특징을 직접 적어 주세요. 인물과 주소 등은 그림에서 제외하도록 요청합니다.</small></div><div class="field field-wide"><label for="photo-layout">고정할 배치 · 선택</label><textarea id="photo-layout" maxlength="1000" placeholder="예: 왼쪽 벽에 창문 하나, 창 아래 침대, 오른쪽 문 옆에 책장"></textarea><small>문·창문 위치와 가구 배치를 적으면 이후 장면과 다음 편에서도 같은 장소를 참조해요. 사진에 없는 방이나 가구는 새로 만들지 않도록 요청합니다.</small></div>`;
 }
 
 function openPhotoFlow(kind, mode = 'photo') {
@@ -157,7 +170,7 @@ function openPhotoFlow(kind, mode = 'photo') {
     if (details) details.textContent = '가져오는 그림의 외모와 특징을 직접 적어 주세요. 이 설정을 함께 저장합니다.';
     return;
   }
-  showPhotoModal(session, `${api.modalHeader(kind === 'character' ? '사진으로 등장인물 만들기' : '사진으로 장소 만들기')}<p class="modal-intro">사진 1~3장을 참고해 우리 집 화풍의 ${kind === 'character' ? '닮은 그림 캐릭터' : '대표 배경 그림'}를 만들어요.<br>사진은 이 화면의 메모리에서만 사용하고, 확정하거나 닫으면 지웁니다.</p><form id="photo-material-form"><div class="field field-wide"><label for="photo-files">참고할 사진 · JPG, PNG, WebP · 한 장당 10MB 이하</label><input id="photo-files" type="file" accept="image/jpeg,image/png,image/webp" multiple><small id="photo-file-status" aria-live="polite">선택만 하면 서버에 보내지 않고 이 기기에서 미리 봅니다.</small></div><div id="photo-previews" class="photo-previews" aria-label="선택한 사진 미리보기" style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0"></div><fieldset id="photo-fields" style="border:0;padding:0;margin:0"><div class="form-grid">${kind === 'character' ? characterFields() : backgroundFields()}</div><div class="notice" style="margin-top:20px"><strong>생성할 엔진: ${escape(ENGINE_METADATA[world.imageEngine]?.name || world.imageEngine)}</strong> · ${escape(getStylePreset(world.stylePresetId).name)}<br>${PHOTO_ENGINES.has(world.imageEngine) ? '아래 생성 버튼을 누르면 처리한 사진과 화풍 참조가 이 엔진으로 전송됩니다. 제공자의 이용 요금과 보관 정책이 적용됩니다.' : '무료 샘플 엔진은 사진을 그림으로 바꾸지 못해요. 부모 설정에서 Google, OpenAI, BFL, fal 또는 참조 이미지를 연결한 ComfyUI를 선택해 주세요.'}</div>${!PHOTO_ENGINES.has(world.imageEngine) ? `<p style="margin-top:12px">${photoButton('완성된 그림을 무료로 가져오기', kind === 'character' ? 'import-character' : 'import-background', 'outline')}</p>` : ''}<label style="display:flex;gap:10px;align-items:flex-start;margin-top:18px"><input id="photo-consent" type="checkbox" required><span>사진을 사용할 권리가 있고, 사진 속 사람 또는 보호자의 동의를 받았습니다. 선택한 이미지 엔진에 사진을 보내는 데 동의합니다.</span></label><label id="photo-guardian-label" hidden style="gap:10px;align-items:flex-start;margin-top:12px"><input id="photo-guardian-consent" type="checkbox"><span>가족이 아닌 아이의 보호자에게 이 사진의 사용과 이미지 엔진 전송 동의를 따로 받았습니다.</span></label></fieldset><p id="photo-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions"><span id="photo-progress" class="small-label" aria-live="polite"></span>${photoButton('취소', 'cancel')}<button id="photo-generate" type="submit" class="btn btn-primary" ${PHOTO_ENGINES.has(world.imageEngine) ? '' : 'disabled'}>사진으로 그림 만들기</button></div></form>`);
+  showPhotoModal(session, `${api.modalHeader(kind === 'character' ? '사진으로 등장인물 만들기' : '사진으로 배경 시트 만들기')}<p class="modal-intro">사진 1~3장을 참고해 우리 집 화풍의 ${kind === 'character' ? '닮은 그림 캐릭터' : '고정 배경 시트'}를 만들어요.<br>사진은 이 화면의 메모리에서만 사용하고, 확정하거나 닫으면 지웁니다.</p><form id="photo-material-form"><div class="field field-wide"><label for="photo-files">참고할 사진 · JPG, PNG, WebP · 한 장당 10MB 이하</label><input id="photo-files" type="file" accept="image/jpeg,image/png,image/webp" multiple><small id="photo-file-status" aria-live="polite">선택만 하면 서버에 보내지 않고 이 기기에서 미리 봅니다.</small></div><div id="photo-previews" class="photo-previews" aria-label="선택한 사진 미리보기" style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0"></div><fieldset id="photo-fields" style="border:0;padding:0;margin:0"><div class="form-grid">${kind === 'character' ? characterFields() : backgroundFields()}</div><div class="notice" style="margin-top:20px"><strong>생성할 엔진: ${escape(ENGINE_METADATA[world.imageEngine]?.name || world.imageEngine)}</strong> · ${escape(getStylePreset(world.stylePresetId).name)}<br>${PHOTO_ENGINES.has(world.imageEngine) ? '아래 생성 버튼을 누르면 처리한 사진과 화풍 참조가 이 엔진으로 전송됩니다. 제공자의 이용 요금과 보관 정책이 적용됩니다.' : '무료 샘플 엔진은 사진을 그림으로 바꾸지 못해요. 부모 설정에서 Google, OpenAI, BFL, fal 또는 참조 이미지를 연결한 ComfyUI를 선택해 주세요.'}</div>${!PHOTO_ENGINES.has(world.imageEngine) ? `<p style="margin-top:12px">${photoButton('완성된 그림을 무료로 가져오기', kind === 'character' ? 'import-character' : 'import-background', 'outline')}</p>` : ''}<label style="display:flex;gap:10px;align-items:flex-start;margin-top:18px"><input id="photo-consent" type="checkbox" required><span>사진을 사용할 권리가 있고, 사진 속 사람 또는 보호자의 동의를 받았습니다. 선택한 이미지 엔진에 사진을 보내는 데 동의합니다.</span></label><label id="photo-guardian-label" hidden style="gap:10px;align-items:flex-start;margin-top:12px"><input id="photo-guardian-consent" type="checkbox"><span>가족이 아닌 아이의 보호자에게 이 사진의 사용과 이미지 엔진 전송 동의를 따로 받았습니다.</span></label></fieldset><p id="photo-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions"><span id="photo-progress" class="small-label" aria-live="polite"></span>${photoButton('취소', 'cancel')}<button id="photo-generate" type="submit" class="btn btn-primary" ${PHOTO_ENGINES.has(world.imageEngine) ? '' : 'disabled'}>${kind === 'character' ? '사진으로 그림 만들기' : '사진으로 배경 시트 미리 생성'}</button></div></form>`);
 }
 
 async function choosePhotos(input) {
@@ -200,7 +213,7 @@ function readFields(session) {
   const nameEn = value('photo-name-en');
   const description = value('photo-appearance');
   if (!name || !description || session.kind === 'character' && !nameEn) throw new Error('이름과 사진에서 남길 특징을 적어 주세요.');
-  if (session.kind === 'background') return {name, nameEn, type:value('photo-type'), description, features:description};
+  if (session.kind === 'background') return {name, nameEn, type:value('photo-type'), description, features:description, layout:value('photo-layout')};
   const age = Number(value('photo-age'));
   if (!Number.isInteger(age) || age < 1 || age > 99) throw new Error('나이는 1~99 사이 정수로 적어 주세요.');
   return {name, nameEn, role:value('photo-role'), kind:value('photo-kind'), age, color:value('photo-color'), hairColor:value('photo-hair'), skinColor:value('photo-skin'), description, appearance:description, traits:value('photo-traits').split(',').map(item => item.trim()).filter(Boolean)};
@@ -267,7 +280,7 @@ async function runPhotoGeneration(session) {
     assertCurrent(session);
     if (!result?.imageUrl) throw new Error('엔진이 그림을 반환하지 않았어요.');
     const asset = await saveImage(result.imageUrl, {signal:session.controller.signal});
-    candidate = {imageAssetId:asset.assetId, imageUrl:asset.imageUrl, seed:result.seed ?? null, meta:{...clone(result.meta || {}), ...worldContext, source:'photo-stylized', requestedSeed:seed, returnedSeed:result.seed ?? null, photoReferenceCount:session.photos.length, referenceCount:request.referenceImages.length, stylePreset:clone(stylePreset), generatedAt:new Date().toISOString()}};
+    candidate = {imageAssetId:asset.assetId, imageUrl:asset.imageUrl, seed:result.seed ?? null, meta:{...clone(result.meta || {}), ...worldContext, quality:'draft', source:'photo-stylized', requestedSeed:seed, returnedSeed:result.seed ?? null, photoReferenceCount:session.photos.length, referenceCount:request.referenceImages.length, stylePreset:clone(stylePreset), generatedAt:new Date().toISOString()}};
     assertCurrent(session);
     session.fields = fields;
     session.candidate = candidate;
@@ -284,7 +297,7 @@ async function runPhotoGeneration(session) {
 function showPhotoCandidate(session) {
   const result = session.candidate;
   const name = session.fields.name;
-  showPhotoModal(session, `${api.modalHeader(session.kind === 'character' ? `${escape(name)}의 시트를 확인해 주세요` : `${escape(name)}의 배경 그림을 확인해 주세요`)}<img class="ig-sheet-preview" src="${escape(result.imageUrl)}" alt="${escape(name)}의 후보 그림"><p class="modal-intro">${session.kind === 'character' ? '모든 모습에서 얼굴과 옷이 같은지 확인해 주세요.' : '장소의 구조와 중요한 특징이 잘 남았는지 확인해 주세요.'}<br>World v${result.meta.worldRevision} · ${escape(ENGINE_METADATA[result.meta.engine]?.name)} · ${session.mode === 'import' ? '완성된 그림 가져오기 · API 호출 없음 · 생성 시드 알 수 없음' : `요청 시드 ${result.meta.requestedSeed} · 결과 시드 ${result.seed ?? '미지원'}`}<br>확정하면 그림과 직접 적은 설정만 저장하고 ${session.mode === 'import' ? '이 화면의 입력 파일을 지웁니다.' : '참고 사진은 지웁니다.'}</p><p id="photo-error" class="pin-error" aria-live="polite"></p><div class="modal-actions">${photoButton('확정하지 않고 닫기', 'cancel')}${photoButton(session.mode==='photo'&&result.meta.quality==='draft'?'최종 화질 생성 · 추가 요청 요금 적용':session.kind === 'character' ? '이 캐릭터 시트로 확정' : '이 장소로 확정', 'confirm', 'primary')}</div>`);
+  showPhotoModal(session, `${api.modalHeader(session.kind === 'character' ? `${escape(name)}의 시트를 확인해 주세요` : `${escape(name)}의 배경 시트를 확인해 주세요`)}<img class="ig-sheet-preview" src="${escape(result.imageUrl)}" alt="${escape(name)}의 후보 그림"><p class="modal-intro">${session.kind === 'character' ? '모든 모습에서 얼굴과 옷이 같은지 확인해 주세요.' : '사진 속 장소의 문·창·가구 배치와 색상이 모든 칸에서 같은지 확인해 주세요. 확정한 시트는 이후 장면과 다음 편에서 같은 장소의 참조로 사용해요.'}<br>World v${result.meta.worldRevision} · ${escape(ENGINE_METADATA[result.meta.engine]?.name)} · ${session.mode === 'import' ? '완성된 그림 가져오기 · API 호출 없음 · 생성 시드 알 수 없음' : `요청 시드 ${result.meta.requestedSeed} · 결과 시드 ${result.seed ?? '미지원'}`}<br>확정하면 그림과 직접 적은 설정만 저장하고 ${session.mode === 'import' ? '이 화면의 입력 파일을 지웁니다.' : '참고 사진은 지웁니다.'}</p><p id="photo-error" class="pin-error" aria-live="polite"></p><div class="modal-actions">${photoButton('확정하지 않고 닫기', 'cancel')}${photoButton(session.mode==='photo'&&result.meta.quality==='draft'?'최종 화질 생성 · 추가 요청 요금 적용':session.kind === 'character' ? '이 캐릭터 시트로 확정' : '이 배경 시트로 확정', 'confirm', 'primary')}</div>`);
 }
 
 async function confirmPhotoCandidate(session) {
@@ -302,7 +315,7 @@ async function confirmPhotoCandidate(session) {
       const apiKey=config.proxyEndpoint||config.transport==='proxy'?null:await getCredential(world.imageEngine);
       const result=await generateImage({...session.generationRequest,quality:'final'},{engine:world.imageEngine,config:{...config,apiKey,signal:session.controller.signal}});assertCurrent(session);
       const asset=await saveImage(result.imageUrl,{signal:session.controller.signal});
-      const finalCandidate={imageAssetId:asset.assetId,imageUrl:asset.imageUrl,seed:result.seed,meta:{...candidate.meta,...result.meta,quality:'final',stylePreset:candidate.meta.stylePreset}};
+      const finalCandidate={imageAssetId:asset.assetId,imageUrl:asset.imageUrl,seed:result.seed??null,meta:{...candidate.meta,...result.meta,worldId:world.id,worldRevision:world.revision,engine:world.imageEngine,stylePresetId:world.stylePresetId,quality:'final',returnedSeed:result.seed??null,stylePreset:candidate.meta.stylePreset}};
       if(!current(session)){await discardCandidate(finalCandidate);return}session.candidate=finalCandidate;session.busy=false;await discardCandidate(candidate);showPhotoCandidate(session);return;
     }
     session.busy = true;
@@ -311,7 +324,7 @@ async function confirmPhotoCandidate(session) {
       state.characters.push(item);
       markCharacterSheetConfirmed(state, item.id, {...candidate, meta:{...candidate.meta, characterSnapshot:clone({...item, characterSheets:undefined})}});
     } else {
-      item = {...clone(session.fields), id:uid('background'), worldId:world.id, photoBased:session.mode === 'photo', importedIllustration:session.mode === 'import', imageAssetId:candidate.imageAssetId, imageUrl:`asset:${candidate.imageAssetId}`, imageSeed:candidate.meta.requestedSeed, effectiveImageSeed:candidate.seed, imageMeta:clone(candidate.meta), createdAt:new Date().toISOString()};
+      item = createPhotoBackgroundMaterial({fields:session.fields,candidate,world,mode:session.mode});
       state.backgrounds ||= [];
       state.backgrounds.push(item);
     }
@@ -320,7 +333,7 @@ async function confirmPhotoCandidate(session) {
     cleanupPhotoFlow();
     api.closeModal();
     api.render();
-    api.toast(`${item.name}${session.kind === 'character' ? '의 캐릭터 시트' : '의 배경 그림'}를 저장했어요.${session.mode === 'photo' ? ' 참고 사진을 지웠어요.' : ''}`);
+    api.toast(`${item.name}${session.kind === 'character' ? '의 캐릭터 시트' : '의 고정 배경 시트'}를 저장했어요.${session.mode === 'photo' ? ' 참고 사진을 지웠어요.' : ''}`);
   } catch (error) {
     if (item) {
       const list = session.kind === 'character' ? state.characters : state.backgrounds;

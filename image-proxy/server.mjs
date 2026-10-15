@@ -63,7 +63,7 @@ export function createImageProxyHandler({ env = process.env, generate = generate
         const base={openai:env.OPENAI_TEXT_ENDPOINT,google:env.GOOGLE_TEXT_ENDPOINT,anthropic:env.ANTHROPIC_TEXT_ENDPOINT,local:env.LOCAL_TEXT_BASE_URL||'http://127.0.0.1:1234/v1'};
         if(engine!=='local'&&!env[keys[engine]])throw proxyError(503,'서버 환경변수에 글 엔진의 API 키를 설정해 주세요.');
         const controller=new AbortController(),close=()=>{if(!response.writableEnded)controller.abort();};response.once('close',close);
-        try{const adapter=textEngineFactory({engine,config:{...(engine==='local'?{}:{apiKey:env[keys[engine]]}),...(base[engine]?{baseUrl:base[engine]}:{}),...(engine==='local'&&(env.LOCAL_TEXT_MODEL||payload.model)?{model:env.LOCAL_TEXT_MODEL||payload.model}:{})}});const result=await adapter.complete({...payload,signal:controller.signal});if(!response.destroyed)respond(response,200,result,origin);}finally{response.removeListener('close',close);}
+        try{const adapter=textEngineFactory({engine,config:{...(engine==='local'?{}:{apiKey:env[keys[engine]]}),...(base[engine]?{baseUrl:base[engine]}:{}),...((engine==='local'?env.LOCAL_TEXT_MODEL||payload.model:payload.model)?{model:engine==='local'?env.LOCAL_TEXT_MODEL||payload.model:payload.model}:{})}});const result=await adapter.complete({...payload,signal:controller.signal});if(!response.destroyed)respond(response,200,result,origin);}finally{response.removeListener('close',close);}
         return;
       }
       if (translation) {

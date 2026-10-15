@@ -22,3 +22,4 @@
 .reader .close-btn,.reader-options button,.reader-options select,.reader-options label{min-height:64px;min-width:64px}.reader .close-btn{flex:none}.reader-options button{padding:10px}.reader-options input[type=checkbox]{width:24px;height:24px}#toast{max-width:calc(100vw - 32px);white-space:normal;overflow-wrap:anywhere}@media(max-width:640px){#toast{left:50%;width:max-content}}
 
 .reader-top strong{min-width:0;flex:1;overflow-wrap:anywhere}
+.background-card,.character-card{min-width:0}.background-card .btn,.character-card .btn{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:center}@media(max-width:640px){.background-grid,.character-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.background-card>[data-background-sheet]{width:100%;justify-content:center;line-height:1.6}}
