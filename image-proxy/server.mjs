@@ -2,6 +2,7 @@ import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { generateImage } from '../dist/image-generation/providers.js';
 import { translateWardrobeWithGoogle } from '../dist/wardrobe-translation.js';
+import { createTextEngine } from '../dist/text-generation/providers.js';
 
 const KEY_ENV = Object.freeze({ google: 'GOOGLE_IMAGE_API_KEY', openai: 'OPENAI_API_KEY', bfl: 'BFL_API_KEY', fal: 'FAL_KEY', local: 'COMFYUI_API_KEY' });
 const ENDPOINT_ENV = Object.freeze({ google: 'GOOGLE_IMAGE_ENDPOINT', openai: 'OPENAI_IMAGE_ENDPOINT', bfl: 'BFL_IMAGE_ENDPOINT', fal: 'FAL_IMAGE_ENDPOINT', local: 'COMFYUI_BASE_URL' });
@@ -37,7 +38,7 @@ function respond(response, status, payload, origin) {
 }
 
 /** Loopback service. Credentials are read exclusively from its environment. */
-export function createImageProxyHandler({ env = process.env, generate = generateImage, translate = translateWardrobeWithGoogle, maxBodyBytes = 70 * 1024 * 1024 } = {}) {
+export function createImageProxyHandler({ env = process.env, generate = generateImage, translate = translateWardrobeWithGoogle, textEngineFactory=createTextEngine, maxBodyBytes = 70 * 1024 * 1024 } = {}) {
   const allowedOrigins = originsFromEnv(env);
   return async (request, response) => {
     let origin;
@@ -48,13 +49,23 @@ export function createImageProxyHandler({ env = process.env, generate = generate
       const path = new URL(request.url, 'http://localhost').pathname;
       const match = path.match(/^\/api\/image\/(google|openai|bfl|fal|local)$/);
       const translation = path === '/api/translate/wardrobe/google';
-      if (!match && !translation) throw proxyError(404, '이미지 엔진 주소를 확인해 주세요.');
+      const textMatch=path.match(/^\/api\/text\/(openai|google|anthropic|local)$/);
+      if (!match && !translation && !textMatch) throw proxyError(404, '엔진 주소를 확인해 주세요.');
       if (request.method === 'OPTIONS') { respond(response, 204, null, origin); return; }
       if (request.method !== 'POST') throw proxyError(405, 'POST 이미지 요청만 받을 수 있어요.');
-      const engine = translation ? 'google' : match[1];
-      const payload = await readBody(request, translation ? 4096 : maxBodyBytes);
+      const engine = textMatch?textMatch[1]:translation ? 'google' : match[1];
+      const payload = await readBody(request, textMatch?1024*1024:translation ? 4096 : maxBodyBytes);
       rejectCredentials(payload);
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw proxyError(400, '이미지 요청 형식이 올바르지 않아요.');
+      if(textMatch){
+        if(Object.keys(payload).some(key=>!['system','user','jsonSchema','temperature','maxTokens','model'].includes(key))||typeof payload.system!=='string'||typeof payload.user!=='string'||payload.system.length+payload.user.length>300000)throw proxyError(400,'글 생성 입력 형식을 확인해 주세요.');
+        const keys={openai:'OPENAI_API_KEY',google:'GOOGLE_IMAGE_API_KEY',anthropic:'ANTHROPIC_API_KEY'};
+        const base={openai:env.OPENAI_TEXT_ENDPOINT,google:env.GOOGLE_TEXT_ENDPOINT,anthropic:env.ANTHROPIC_TEXT_ENDPOINT,local:env.LOCAL_TEXT_BASE_URL||'http://127.0.0.1:1234/v1'};
+        if(engine!=='local'&&!env[keys[engine]])throw proxyError(503,'서버 환경변수에 글 엔진의 API 키를 설정해 주세요.');
+        const controller=new AbortController(),close=()=>{if(!response.writableEnded)controller.abort();};response.once('close',close);
+        try{const adapter=textEngineFactory({engine,config:{...(engine==='local'?{}:{apiKey:env[keys[engine]]}),...(base[engine]?{baseUrl:base[engine]}:{}),...(engine==='local'&&(env.LOCAL_TEXT_MODEL||payload.model)?{model:env.LOCAL_TEXT_MODEL||payload.model}:{})}});const result=await adapter.complete({...payload,signal:controller.signal});if(!response.destroyed)respond(response,200,result,origin);}finally{response.removeListener('close',close);}
+        return;
+      }
       if (translation) {
         if (Object.keys(payload).some(key=>key!=='description') || typeof payload.description!=='string' || !payload.description.trim() || payload.description.length>500) throw proxyError(400,'옷·소품·머리 설명을 500자 이하로 보내 주세요.');
         if (!env.GOOGLE_IMAGE_API_KEY) throw proxyError(503,'서버 환경변수에 Google API 키를 설정해 주세요.');
@@ -90,7 +101,7 @@ export function createImageProxyHandler({ env = process.env, generate = generate
     } catch (error) {
       if (response.destroyed || response.writableEnded) return;
       // Never include provider response bodies, URLs, stack traces or keys.
-      const status = error.status || (error.name === 'ImageGenerationError' ? 502 : 500);
+      const status = error.status || (['ImageGenerationError','TextEngineError'].includes(error.name) ? 502 : 500);
       const message = error.status ? error.message : '이미지 요청을 처리하지 못했어요. 서버의 엔진 설정과 사용량을 확인해 주세요.';
       respond(response, status, { error: message }, origin);
     }

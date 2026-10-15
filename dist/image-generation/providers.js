@@ -9,6 +9,7 @@ import { characterSVG, sceneSVG } from '../engine.js';
 import { ENGINE_MODELS, getEngineModel, estimateImageCost } from './models.js';
 import { renderImageRequest, StoryRendererError } from './story-renderer.js';
 import { forbiddenStyleMatches } from './styles.js';
+import { validateCredentialInput } from './credential-validation.js';
 
 export const ENGINE_IDS = Object.freeze(['google', 'openai', 'bfl', 'fal', 'local', 'sample']);
 export const ENGINE_METADATA = Object.freeze({
@@ -95,7 +96,8 @@ async function fetchResponse(url, options, context) {
   }
   if (!response.ok) {
     const status = response.status;
-    const message = status === 401 || status === 403 ? 'API 키와 모델 사용 권한을 확인해 주세요.'
+    const message = status === 401 && context.engine === 'openai' && !context.useProxy ? 'OpenAI 인증에 실패했어요. 추적 ID 대신 비밀 키 전체를 저장했는지, 키가 삭제되거나 만료되지 않았는지 확인해 주세요.'
+      : status === 401 || status === 403 ? 'API 키와 모델 사용 권한을 확인해 주세요.'
       : status === 429 ? '엔진의 사용량 또는 요청 한도를 초과했어요. 잠시 뒤 다시 시도해 주세요.'
         : status === 400 || status === 422 ? '엔진이 요청을 받지 못했어요. 이미지 크기·참조 파일 형식과 모델 설정을 확인해 주세요.'
           : status === 404 ? '엔진 주소 또는 모델을 찾지 못했어요. 엔드포인트를 확인해 주세요.'
@@ -519,8 +521,14 @@ export async function generateImage(request, { engine, config = {} } = {}) {
   if (!metadata) fail('지원하는 이미지 엔진을 선택해 주세요.', 'invalid_engine');
   const normalized = normalizeRequest(request, metadata);
   const useProxy = config.transport === 'proxy' || !!config.proxyEndpoint;
-  if (metadata.requiresKey && !useProxy) apiKey(config);
+  if (metadata.requiresKey && !useProxy) {
+    const credential=apiKey(config);
+    try { validateCredentialInput(engine,credential); }
+    catch(error) { fail(error.message,'invalid_key_input'); }
+  }
   const context = requestContext(config, request.signal);
+  context.engine=engine;
+  context.useProxy=useProxy;
   const startedAt = Date.now();
   try {
     const blobs = engine === 'sample' ? [] : await Promise.all(normalized.referenceImages.map(reference => referenceBlob(reference, context)));

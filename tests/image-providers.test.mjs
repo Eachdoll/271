@@ -137,6 +137,18 @@ test('Provider error bodies and network errors never expose credentials', async 
   }
 });
 
+test('OpenAI tracking IDs and masked secrets fail before fetching references or making an API request', async () => {
+  let requests=0;
+  for(const key of ['key_example_tracking_identifier','sk-...masked','sk-…masked','sk-****masked']) {
+    await assert.rejects(generateImage({...request,referenceImages:['https://images.example.test/reference.png']},{engine:'openai',config:{apiKey:key,fetch:async()=>{requests++;assert.fail('Invalid credential must not reach network');}}}),error=>error.code==='invalid_key_input'&&!error.message.includes(key));
+  }
+  assert.equal(requests,0);
+});
+
+test('OpenAI 401 explains the secret key without echoing an upstream body', async () => {
+  await assert.rejects(generateImage({...request,referenceImages:[]},{engine:'openai',config:{apiKey:'fixture-secret',fetch:async()=>new Response('fixture-secret was rejected',{status:401})}}),error=>error.status===401&&error.message.includes('비밀 키 전체')&&!error.message.includes('fixture-secret'));
+});
+
 test('Polling URLs outside provider origins are refused before authenticated fetch', async () => {
   let called = 0;
   await assert.rejects(generateImage(request, { engine: 'bfl', config: { apiKey: 'secret-key', fetch: async () => {

@@ -11,3 +11,5 @@ Node 22 이상에서 `node image-proxy/server.mjs`로 실행합니다. 기본 �
 `POST /api/translate/wardrobe/google`은 `{description}`만 받아 옷장 설명을 영어로 번역합니다. 부모가 ‘AI로 영어 번역 · API 사용’을 눌렀을 때만 요청하며, Google 초안 모델에 TEXT 응답을 요청합니다. 사진과 참조 이미지는 보내지 않습니다. 텍스트 토큰 요금은 이미지 생성 비용과 별도이며 `GOOGLE_IMAGE_API_KEY` 환경변수를 사용합니다.
 
 Google 초안은 `gemini-3.1-flash-lite-image`(1K만), 확정은 `gemini-3.1-flash-image`, 선택적인 Pro는 `gemini-3-pro-image`입니다. fal 초안은 `bytedance/seedream/v5/lite`, 확정은 `bytedance/seedream/v5/pro`의 edit 또는 text-to-image 엔드포인트입니다. 모델 ID와 문서 주소는 `dist/image-generation/models.js`에 모았습니다. 2026-10-14에 공식 문서를 확인했습니다. 비용은 참고 단가 기반 추정이며 공급사가 달러 청구액을 반환한 경우만 실제 금액으로 기록합니다.
+
+글 엔진은 `POST /api/text/:engine`이며 OpenAI·Google·Anthropic·로컬을 별도로 선택합니다. 환경변수 키는 `OPENAI_API_KEY`, `GOOGLE_IMAGE_API_KEY`, `ANTHROPIC_API_KEY`이고 로컬 주소·모델은 `LOCAL_TEXT_BASE_URL`, `LOCAL_TEXT_MODEL`입니다. 공급자 기본 주소를 바꾸려면 `OPENAI_TEXT_ENDPOINT`, `GOOGLE_TEXT_ENDPOINT`, `ANTHROPIC_TEXT_ENDPOINT`를 사용합니다. 브라우저 요청에 API 키와 접속 설정을 넣지 않습니다. 자세한 내용은 `TEXT_GENERATION.md`를 참고하세요.

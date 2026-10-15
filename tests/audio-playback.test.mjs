@@ -45,6 +45,11 @@ test('alignment failure preserves usable audio and labels approximate highlighti
 test('failed provider responses never echo secret response bodies',async()=>{
   await assert.rejects(synthesizeSpeech('I see a cat.','en',{credential:'very-secret',fetchImpl:async()=>({ok:false,status:401,text:async()=>'very-secret'})}),error=>error.message.includes('HTTP 401')&&!error.message.includes('very-secret'));
 });
+test('tracking IDs and masked OpenAI secrets never start speech requests',async()=>{
+  let requests=0;
+  for(const credential of ['key_example_tracking_identifier','sk-…masked'])await assert.rejects(synthesizeSpeech('I see a cat.','en',{credential,fetchImpl:async()=>{requests++;assert.fail('Invalid credential must not reach speech API');}}),error=>error.code==='invalid_credential'&&!error.message.includes(credential));
+  assert.equal(requests,0);
+});
 test('aborted or invalid speech requests never touch network',async()=>{
   let requests=0;const fetchImpl=async()=>{requests++;};const controller=new AbortController();controller.abort();
   await assert.rejects(synthesizeSpeech('I see','en',{credential:'fixture',signal:controller.signal,fetchImpl}),{name:'AbortError'});

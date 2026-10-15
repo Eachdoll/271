@@ -201,7 +201,7 @@ export async function generateAllScenes(state,book,options={}) {
       throw annotate(error,{completed,total,partialResults:results});
     }
     report(onProgress,{status:'finished',completed,total,pageIndex:null});
-    return {book,results,completed,total};
+    if(book.prose)book.stage='illustrated';return {book,results,completed,total};
   } finally {
     signal?.removeEventListener('abort',externalAbort);
   }
@@ -247,7 +247,7 @@ export async function generateCharacterSheet(state,characterOrId,options={}) {
 export async function generateCover(state,book,options={}){
   const {signal}=options;throwIfAborted(signal);
   const request=sceneGenerationRequest(state,book,0,{...requestOptions(options),quality:options.quality||'final'});
-  request.prompt=`Create a welcoming children's picture-book cover for this original story: ${book.topic||book.title}. Show the selected main character and companions together in the story's setting, with clear silhouettes and generous quiet space at the upper left for a title added separately. No text, letters, logos or watermark. ${request.prompt}`;
+  request.prompt=`Create a welcoming children's picture-book cover for this original story: ${book.topic||book.title}. ${book.pagination?.cover?.sceneAction?'Cover scene: '+book.pagination.cover.sceneAction+'. ':''}Show the selected main character and companions together in the story's setting, with clear silhouettes and generous quiet space at the upper left for a title added separately. No text, letters, logos or watermark. ${request.prompt}`;
   const snapshot=captureBookGenerationSnapshot(state,book),world=worldForSnapshot(state,snapshot),engine=snapshot.imageEngine;
   const config=await providerConfig(state,world,engine,signal);
   let asset;

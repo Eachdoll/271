@@ -85,7 +85,8 @@ export function sceneReferenceRecords(snapshot, pageIndex) {
     else bodies.push({imageAssetId:sheet.fullImageAssetId || sheet.imageAssetId || null,imageUrl:sheet.fullImageUrl || sheet.imageUrl,role:'character_full',label:`${label} original full body and clothes`});
   }
   const style=(snapshot.styleReferences || (snapshot.stylePreset?.styleRefImages || []).map(imageUrl=>({imageUrl}))).map((record,index)=>({...clone(record),role:'style_sheet',label:`authoritative rendering style ${index+1}`}));
-  const backgrounds=(snapshot.backgrounds || []).filter(background=>background.imageAssetId || background.imageUrl).map(background=>({...clone(background),role:'background',label:`background layout: ${background.nameEn || background.name || 'original place'}`}));
+  const pagePlaces=snapshot.backgroundReferenceByPage?.[pageIndex];
+  const backgrounds=(snapshot.backgrounds || []).filter(background=>(!Array.isArray(pagePlaces)||pagePlaces.includes(background.id))&&(background.imageAssetId || background.imageUrl)).map(background=>({...clone(background),role:'background',label:`background layout: ${background.nameEn || background.name || 'original place'}`}));
   return [...fronts,...bodies,...style,...backgrounds];
 }
 
@@ -164,6 +165,24 @@ export function getActiveWorld(state) {
   return state.worlds.find(world => world.id === state.activeWorldId) || state.worlds[0];
 }
 
+/** A shared place has a separately approved rendering in each World. */
+export function getWorldBackgroundSnapshot(state, background, world = getActiveWorld(state)) {
+  const result = clone(background);
+  delete result.backgroundHistory;
+  delete result.backgroundSheets;
+  const facts = JSON.stringify({name:background.name,type:background.type,description:background.description||background.features||'',layout:background.layout||''});
+  const matching = sheet => sheet.confirmedAt && sheet.meta?.worldId === world.id && sheet.meta?.worldRevision === world.revision && sheet.meta?.imageEngine === world.imageEngine && sheet.meta?.stylePresetId === world.stylePresetId && sheet.settings === facts;
+  const sheet = [...(background.backgroundSheets || [])].reverse().find(matching);
+  if (sheet) return {...result, imageAssetId:sheet.imageAssetId, imageUrl:sheet.imageUrl, backgroundSheetMeta:clone(sheet.meta), backgroundSheetSeed:sheet.seed, backgroundSheetConfirmedAt:sheet.confirmedAt, backgroundSheetStale:false};
+  const importedMeta = background.imageMeta;
+  const importedChanged = importedMeta?.worldId && (importedMeta.worldId !== world.id || importedMeta.worldRevision !== world.revision || importedMeta.engine !== world.imageEngine || importedMeta.stylePresetId !== world.stylePresetId || Number(background.version||1)>1);
+  if (background.backgroundSheetMeta || importedChanged) {
+    delete result.imageAssetId; delete result.imageUrl;
+    result.backgroundSheetStale = true;
+  }
+  return result;
+}
+
 /** Settings are World-scoped; confirmed sheets remain as immutable history. */
 export function updateWorldGenerationSettings(state, {imageEngine, stylePresetId}) {
   const world = getActiveWorld(state);
@@ -224,7 +243,7 @@ export function markCharacterSheetConfirmed(state, characterId, sheetResult) {
 /** One book locks one World revision, all cast sheets and the exact style row. */
 export function captureBookGenerationSnapshot(state, book) {
   if (book.generationSnapshot) return book.generationSnapshot;
-  const world = state.worlds?.find(item => item.id === book.worldId) || getActiveWorld(state);
+  const world = book.worldSettingsSnapshot || state.worlds?.find(item => item.id === book.worldId) || getActiveWorld(state);
   const ids = [...new Set(book.characterIds || [])];
   if (!ids.length) throw new Error('이야기에 등장할 캐릭터를 먼저 골라 주세요.');
   const sheets = ids.map(id => {
@@ -243,7 +262,7 @@ export function captureBookGenerationSnapshot(state, book) {
     stylePresetId: world.stylePresetId, stylePreset: clone(preset), characterSheets: sheets,
     styleReferences: getWorldStyleReferenceRecords(state,world,preset).map(clone),
     ...freezeBookVariants(state,book,world,sheets),
-    backgrounds: (book.backgroundIds||[]).map(id=>state.backgrounds?.find(b=>b.id===id)).filter(Boolean).map(clone),
+    backgrounds: (book.backgroundIds||[]).map(id=>state.backgrounds?.find(b=>b.id===id)).filter(Boolean).map(background=>getWorldBackgroundSnapshot(state,background,world)),
     capturedAt: now()
   };
   return book.generationSnapshot;
@@ -277,13 +296,14 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   const sheets = snapshot.characterSheets;
   if (!Array.isArray(sheets) || !sheets.length || sheets.some(sheet => !sheet.confirmedAt || !sheet.imageUrl)) throw new Error('확정된 캐릭터 시트가 모두 필요해요.');
   const cast = sheets.map((sheet, index) => `${index + 1}: ${sheet.characterSnapshot?.name || sheet.characterSnapshot?.nameEn || sheet.characterId} (${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || 'original storybook character'})`).join('; ');
-  const scene = page.imagePrompt || page.scene?.prompt || page.ko || page.en || book.topic || '';
+  const scene = page.imagePrompt || page.scene?.action || page.scene?.prompt || page.ko || page.en || book.topic || '';
   page.imageSeed = seedValue(options.seed ?? page.imageSeed);
   const references=sceneReferenceRecords(snapshot,pageIndex);
   const roleDescriptions=references.map((reference,index)=>`Image ${index+1}: ${reference.role}, ${reference.label}`).join('; ');
+  const placeFacts=references.filter(reference=>reference.role==='background').map(background=>({name:background.name,description:background.description||background.features,layout:background.layout,rules:background.rules}));
   const selectedVariants=sheets.map(sheet=>variantForPage(snapshot,sheet.characterId,pageIndex+1)).filter(Boolean);
   return {
-    prompt: `Illustrate page ${pageIndex + 1} of an original children's picture book. Scene: ${scene}. Scene context: ${JSON.stringify(page.scene || {})}. Selected original cast: ${cast}. Reference roles in transmission order: ${roleDescriptions}. Keep the exact face, age and body proportions from each character_front reference. Use character_variant clothes, accessories or hair for this page when present, replacing that character's original full-body clothing; otherwise retain original clothes. ${selectedVariants.length?`This page's requested variants: ${selectedVariants.map(v=>`${v.characterId}: ${v.description}`).join('; ')}.`:''} Style references define rendering only; background references define place layout only. Show only the selected cast required by the scene. Character images define appearance, not an instruction to copy an old flat drawing medium. One readable composition with space for separately typeset story text. No words, captions, watermark or logos.`,
+    prompt: `Illustrate page ${pageIndex + 1} of an original children's picture book. Scene: ${scene}. Scene context: ${JSON.stringify(page.scene || {})}. Selected original cast: ${cast}. Reference roles in transmission order: ${roleDescriptions}. Keep the exact face, age and body proportions from each character_front reference. Use character_variant clothes, accessories or hair for this page when present, replacing that character's original full-body clothing; otherwise retain original clothes. ${selectedVariants.length?`This page's requested variants: ${selectedVariants.map(v=>`${v.characterId}: ${v.description}`).join('; ')}.`:''} Style references define rendering only; background references define place layout only. Established place facts: ${JSON.stringify(placeFacts)}. Preserve fixed wall colors, window and door positions, furniture, and recurring objects from the matched place reference. Reference-sheet panels are not part of the story illustration: render one continuous scene, never reproduce grids, borders, or multiple-view panels. Show only the selected cast required by the scene, each visible character once. Character images define appearance, not an instruction to copy an old flat drawing medium. One readable composition with space for separately typeset story text. No words, captions, watermark or logos.`,
     stylePreset: preset,
     referenceImages: references.map(reference=>({imageUrl:referenceURL(reference),role:reference.role,label:reference.label})),
     seed: page.imageSeed, size: options.size || page.imageSize || '1536x1024', quality: options.quality || page.imageQuality || 'high',

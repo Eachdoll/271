@@ -8,7 +8,8 @@
  * Settings access is additionally gated by the application's parent PIN.
  */
 
-export const CREDENTIAL_ENGINES = Object.freeze(['google', 'openai', 'bfl', 'fal', 'local']);
+import {validateCredentialInput} from './credential-validation.js';
+export const CREDENTIAL_ENGINES = Object.freeze(['google', 'openai', 'anthropic', 'bfl', 'fal', 'local']);
 const PREFIX = 'donghwa-workshop-credential-v1:';
 const DATABASE = 'donghwa-workshop-key-vault';
 const STORE = 'keys';
@@ -330,6 +331,8 @@ export async function saveCredential(engine, value) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new VaultError('INVALID_CREDENTIAL', '저장할 API 키를 입력해 주세요. 키 삭제는 삭제 버튼을 사용해 주세요.');
   }
+  try { value=validateCredentialInput(engine,value); }
+  catch(error) { throw new VaultError('INVALID_CREDENTIAL',error.message); }
   const bytes = encoder.encode(value.trim());
   if (bytes.byteLength > MAX_SECRET_BYTES) {
     bytes.fill(0);

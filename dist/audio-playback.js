@@ -1,4 +1,5 @@
 import {getCredential, hasCredential} from './image-generation/vault.js';
+import {validateCredentialInput} from './image-generation/credential-validation.js';
 
 // Audio blobs stay in IndexedDB. Book JSON contains only asset IDs and timings.
 const DATABASE = 'donghwa-workshop-audio-v1';
@@ -155,6 +156,7 @@ async function fetchAudioDuration(blob) {
 export async function synthesizeSpeech(text,lang,{credential,signal,baseUrl,fetchImpl=globalThis.fetch,wordTimings=true}={}) {
   if (!LANGUAGES.includes(lang) || !String(text||'').trim())throw new Error('읽을 본문과 언어가 필요해요.');
   if (!credential)throw new Error('부모 설정에 OpenAI API 키를 먼저 저장해 주세요.');
+  credential=validateCredentialInput('openai',credential);
   if (String(text).length>4000)throw new Error('한 쪽의 본문이 너무 길어요. 4,000자 이하로 나눠 주세요.');
   throwIfAborted(signal);const base=endpoint(baseUrl);
   let response;
