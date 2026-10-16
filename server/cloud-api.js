@@ -232,6 +232,18 @@ async function putLibrary(request,env,user) {
   return json({ok:true,revision:body.expectedRevision+1,updatedAt});
 }
 
+// Stop controls are independent of large library revisions and never contain API keys.
+async function autoJobControl(request,env,user,id){
+ if(!/^auto-[a-zA-Z0-9-]{8,100}$/.test(id))fail(400,'invalid_job_id','자동 제작 식별자를 확인해 주세요.');
+ if(request.method==='GET'){const row=await env.DB.prepare('SELECT stop_nonce, requested_at FROM auto_job_controls WHERE owner_id = ? AND job_id = ?').bind(user.id,id).first();return json({jobId:id,stop:row?{nonce:row.stop_nonce,requestedAt:row.requested_at}:null});}
+ if(request.method!=='POST')return json({error:{code:'method_not_allowed',message:'GET 또는 POST 요청을 사용해 주세요.'}},405,{Allow:'GET, POST'});
+ if(request.headers.get('Content-Type')?.split(';')[0].trim()!=='application/json')fail(415,'json_required','JSON 중지 요청이 필요해요.');
+ let body;try{body=JSON.parse(new TextDecoder().decode(await boundedBody(request,2048)));}catch(error){if(error instanceof CloudError)throw error;fail(400,'invalid_json','중지 요청 JSON을 확인해 주세요.');}
+ if(!/^[a-zA-Z0-9-]{8,100}$/.test(body?.nonce||''))fail(400,'invalid_stop_nonce','중지 요청 식별자를 확인해 주세요.');
+ const requestedAt=new Date().toISOString();await env.DB.prepare('INSERT INTO auto_job_controls (owner_id, job_id, stop_nonce, requested_at) VALUES (?, ?, ?, ?) ON CONFLICT(owner_id, job_id) DO UPDATE SET stop_nonce = excluded.stop_nonce, requested_at = excluded.requested_at').bind(user.id,id,body.nonce,requestedAt).run();
+ return json({jobId:id,stop:{nonce:body.nonce,requestedAt}});
+}
+
 /** Returns null for all routes outside /api/cloud. No client secrets are used. */
 export async function handleCloudRequest(request,env) {
   const url=new URL(request.url);
@@ -243,6 +255,8 @@ export async function handleCloudRequest(request,env) {
     const mutation=!['GET','HEAD','OPTIONS'].includes(request.method);
     checkAccount(request,user,{required:mutation});
     if(mutation)checkMutationOrigin(request,url);
+    const control=/^\/api\/cloud\/jobs\/(auto-[^/]+)\/control$/.exec(url.pathname);
+    if(control){storage(env,{bucket:false});return await autoJobControl(request,env,user,control[1]);}
     storage(env);
     if(url.pathname==='/api/cloud/library') {
       if(request.method==='GET')return await getLibrary(env,user);

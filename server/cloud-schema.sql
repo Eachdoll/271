@@ -19,3 +19,7 @@ CREATE TABLE IF NOT EXISTS cloud_assets (
   created_at TEXT NOT NULL,
   PRIMARY KEY (owner_id, asset_id)
 );
+
+CREATE TABLE IF NOT EXISTS auto_job_controls (
+ owner_id TEXT NOT NULL, job_id TEXT NOT NULL, stop_nonce TEXT NOT NULL, requested_at TEXT NOT NULL, PRIMARY KEY (owner_id, job_id)
+);
