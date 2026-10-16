@@ -111,7 +111,7 @@ function error(s,message){if(session!==s)return;const el=document.querySelector(
 function note(){return '<p id="story-error" class="story-error" aria-live="polite"></p>';}
 function drawerBackgrounds(state,existing=[]){const fields=['id','name','nameEn','kind','type','description','features','layout','rules','mood','color','storyNotes','aliases','home','isHome','category'];return [...clone(existing),...(state.backgrounds||[]).filter(background=>!existing.some(item=>item.id===background.id)).map(background=>clone(Object.fromEntries(fields.filter(key=>background[key]!==undefined).map(key=>[key,background[key]]))))];}
 
-function inputFromWizard(state,wizard){
+export function inputFromWizard(state,wizard){
   const choices=validateWardrobeSelections(state,wizard),previous=state.books.find(book=>book.id===wizard.previousBookId),world=clone(getActiveWorld(state));
   const inherited=buildSeriesStorySelections(state,wizard,previous),characters=inherited.characters;
   if(!characters.length)throw new Error('이야기의 주인공을 먼저 골라 주세요.');
