@@ -18,6 +18,8 @@ export async function runOutlineStage(input) {
         rngSeed: hashString(input.bookId),
         ban,
         preferObstacleIds: preferObstaclesForTopic(input.topic),
+        world: input.world,
+        variantChance: input.variantChance,
     });
     const charactersCompact = [input.protagonist, ...input.supporting]
         .map((c) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${c.catchphrase ? ` "${c.catchphrase}"` : ''}`)
@@ -84,7 +86,7 @@ export async function runOutlineStage(input) {
             seed,
             inventories: input.inventories,
             ban,
-            approvedBooks: input.approvedBooks,
+            approvedBooks: [...input.approvedBooks, ...(input.referenceBooks ?? [])],
             endingType: input.endingType,
             rules: input.rules,
             banExamples: input.banExamples,

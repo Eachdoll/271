@@ -39,17 +39,31 @@ function fakeBook(id, topic, planted, creature, patternId, daysAgo, extra = {}) 
   };
 }
 
-test('data files load and have expected sizes', () => {
-  assert.equal(inv.plantedObjects.length, 50);
-  assert.equal(inv.obstacleTypes.length, 12);
-  assert.equal(inv.twistTypes.length, 8);
-  assert.equal(inv.creatures.length, 30);
-  assert.equal(inv.humorBeats.length, 15);
-  assert.equal(gestures.emotions.length, 12);
+test('data files load and have expected sizes (10× set)', () => {
+  assert.ok(inv.plantedObjects.length >= 300, String(inv.plantedObjects.length));
+  assert.ok(inv.obstacleTypes.length >= 60, String(inv.obstacleTypes.length));
+  assert.ok(inv.twistTypes.length >= 30, String(inv.twistTypes.length));
+  assert.ok(inv.creatures.length >= 250, String(inv.creatures.length));
+  assert.ok(inv.humorBeats.length >= 100, String(inv.humorBeats.length));
+  assert.equal(inv.failureReasons.length, 3);
+  assert.ok(inv.refrainTemplates.length >= 20);
+  assert.ok(inv.variantRules.objectColors.length >= 10 && inv.variantRules.creatureTraits.length >= 10);
+  assert.ok(gestures.emotions.length >= 30, String(gestures.emotions.length));
   assert.equal(patterns.length, 6);
+  // 중복 없음
+  for (const [k, arr] of [['plantedObjects', inv.plantedObjects], ['creatures', inv.creatures], ['humorBeats', inv.humorBeats]]) {
+    assert.equal(new Set(arr.map((x) => x.ko)).size, arr.length, `duplicate ko in ${k}`);
+  }
+  assert.equal(new Set(inv.obstacleTypes.map((o) => o.id)).size, inv.obstacleTypes.length);
+  assert.equal(new Set(inv.twistTypes.map((o) => o.id)).size, inv.twistTypes.length);
+  // 장애물 감각 8종 이상
+  assert.ok(new Set(inv.obstacleTypes.map((o) => o.sense)).size >= 8);
+  // 금지 키워드는 두 음절 이상(한 글자 키워드는 '피리' 같은 오탐을 낸다)
+  for (const k of inv.forbiddenKeywords) assert.ok(k.length >= 2, k);
   for (const e of gestures.emotions) {
     assert.ok(e.gestures_ko.length >= 5 && e.gestures_en.length >= 5, e.id);
   }
+  assert.ok(!/디즈니|지브리|픽사|disney|ghibli|pixar/i.test(JSON.stringify(inv) + JSON.stringify(gestures)));
 });
 
 test('banList: recent books ban planted objects, creatures, patterns (shorter window)', () => {
@@ -67,9 +81,12 @@ test('banList: recent books ban planted objects, creatures, patterns (shorter wi
   assert.match(txt, /물건: /);
   assert.match(txt, /반전 유형: 정체는 친숙한 물건/);
   const filtered = filterBanned(inv.plantedObjects, ban.plantedObjects);
-  assert.equal(filtered.length, 46);
+  // 같은 항목 + 같은 머리 명사("빨간 장화" 금지 → "장화"도)
+  assert.ok(filtered.length < inv.plantedObjects.length && filtered.length >= inv.plantedObjects.length - 12, String(filtered.length));
+  assert.ok(!filtered.some((p) => ['빨간 장화', '장화', '풍선', '열쇠', '손전등'].includes(p.ko)));
+  assert.deepEqual(filterBanned([{ ko: '우산' }, { ko: '파란 우산' }, { ko: '피리' }], ['빨간 우산']).map((p) => p.ko), ['피리']);
   // 전부 금지되면 원본 반환
-  assert.equal(filterBanned(inv.plantedObjects, inv.plantedObjects.map((p) => p.ko)).length, 50);
+  assert.equal(filterBanned(inv.plantedObjects, inv.plantedObjects.map((p) => p.ko)).length, inv.plantedObjects.length);
 });
 
 test('retrieval ranks the closest approved outline first and renders with the no-reuse label', () => {

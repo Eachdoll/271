@@ -145,3 +145,29 @@ export function includesAny(text, needles) {
 export function unique(xs) {
     return [...new Set(xs)];
 }
+/** 카드 설명용 괄호 주석만 제거한다. 이야기 본문에는 적용하지 않는다. */
+export function cleanKoLabel(value) {
+    let result = String(value ?? '').normalize('NFKC');
+    for (let pass = 0; pass < 8; pass++) {
+        const next = result.replace(/\([^()]*\)|\[[^\[\]]*\]|【[^【】]*】/g, '');
+        if (next === result)
+            break;
+        result = next;
+    }
+    return result.replace(/\s+/g, ' ').trim();
+}
+/** 한국어 조사 선택: 받침 유무로 와/과, 을/를, 이/가, 은/는, 로/으로. */
+export function josa(word, pair) {
+    const last = cleanKoLabel(word).slice(-1);
+    const code = last.charCodeAt(0);
+    const isHangul = code >= 0xac00 && code <= 0xd7a3;
+    const jong = isHangul ? (code - 0xac00) % 28 : 0;
+    const hasBatchim = isHangul ? jong !== 0 : /[bcdfghjklmnpqrstvwxz]$/i.test(last);
+    switch (pair) {
+        case '와': return hasBatchim ? '과' : '와';
+        case '을': return hasBatchim ? '을' : '를';
+        case '이': return hasBatchim ? '이' : '가';
+        case '은': return hasBatchim ? '은' : '는';
+        case '로': return hasBatchim && jong !== 8 ? '으로' : '로'; // ㄹ받침(8)은 '로'
+    }
+}

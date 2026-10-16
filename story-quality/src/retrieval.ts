@@ -44,7 +44,7 @@ export function retrieveExamples(records: BookRecord[], q: RetrievalQuery, k = 2
  * 프롬프트용 렌더. 비트는 한 줄 요약(첫 문장)만 넣어 길이를 줄인다.
  * 라벨은 고정: 구조·리듬만 참고, 재사용 금지.
  */
-export function renderExamplesForPrompt(examples: ScoredRecord[], maxCharsEach = 500): string {
+export function renderExamplesForPrompt(examples: ScoredRecord[], maxCharsEach = 420): string {
   if (examples.length === 0) return '';
   const lines: string[] = ['[참고 예시 — 구조·리듬만 참고. 인물·물건·사건·장소 재사용 금지]'];
   examples.forEach(({ record }, i) => {

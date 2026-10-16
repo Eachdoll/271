@@ -9,7 +9,8 @@ import * as qualityModule from '../story-quality/dist/pipeline.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const read=async file=>JSON.parse(await readFile(new URL(`../story-quality/data/${file}.json`,import.meta.url),'utf8'));
-const data={inventories:await read('inventories'),gestureDictionary:await read('gesture_dictionary'),plotPatterns:await read('plot_patterns')};
+const goldPart=async part=>JSON.parse(await readFile(new URL(`../story-quality/gold/gold_outlines_part${part}.json`,import.meta.url),'utf8'));
+const data={inventories:await read('inventories'),gestureDictionary:await read('gesture_dictionary'),plotPatterns:await read('plot_patterns'),worldLibrary:await read('worlds'),goldBooks:[...await goldPart(1),...await goldPart(2)]};
 function fixture(){return {bookId:'quality-book-test',qualitySeedOffset:0,topic:'비 오는 날',characters:[{id:'yuha',name:'유하',nameEn:'Yuha',traits:['관찰하는 아이']},{id:'green',name:'그린이',nameEn:'Green',traits:['느긋한 친구']}],backgrounds:[{id:'home',type:'home',name:'유하의 집'},{id:'garden',name:'꽃 정원'},{id:'pond',name:'연못 길'}],pageCount:12,endingType:'home_sleep',worldNotes:'문은 둥근 초록색 문 하나예요.',moral:'함께 기다리기',specs:{ko:getLevelSpec('K1'),en:getLevelSpec('E0')},storyQuality:{enabled:true,useBeamSearch:false,twoPass:true,patternId:'journey_repeat',approvedBooks:[]}};}
 function schema(){const value=clone(OUTLINE_SCHEMA);value.required.push('plotContract');return value;}
 const services=engine=>({engineFor:async options=>options.engine||engine,qualityData:data,qualityModule:async()=>qualityModule,outlineRequestSchema:schema,baseSystem:'APP_BASE_RULES',levelRules:input=>`FROZEN_LEVEL_SPECS:${JSON.stringify(input.specs)}`,assertValid,inspectOutlineRules:()=>({valid:true,violations:[]})});
@@ -35,19 +36,28 @@ function fakeOutlineEngine(input,modify){
 }
 function labeled(outline,lang,tell=false){return outline.beats.map(beat=>`${lang==='ko'?'[비트':'[Beat'} ${beat.index} · ${beat.type}] ${lang==='ko'?`유하가 작은 잎을 만져요. 그린이가 “나는 바람을 들어요.”라고 말해요.${tell?' 유하가 행복했어요.':''}`:'Yuha sees a small leaf. Green says, “I hear the wind.”'}`).join('\n\n');}
 
-test('data loader rejects one-letter bans, retries, then caches all three immutable data files',async()=>{
-  const fetcher=bad=>async url=>({ok:true,json:async()=>url.pathname.endsWith('inventories.json')?{...clone(data.inventories),...(bad?{forbiddenKeywords:['피']}:{} )}:url.pathname.endsWith('gesture_dictionary.json')?clone(data.gestureDictionary):clone(data.plotPatterns)});
+test('data loader rejects one-letter bans, retries, then caches all six immutable package data files',async()=>{
+  const files={'inventories.json':data.inventories,'gesture_dictionary.json':data.gestureDictionary,'plot_patterns.json':data.plotPatterns,'worlds.json':data.worldLibrary,'gold_outlines_part1.json':await goldPart(1),'gold_outlines_part2.json':await goldPart(2)};
+  const fetcher=bad=>async url=>({ok:true,json:async()=>{const name=url.pathname.split('/').at(-1);assert.ok(Object.hasOwn(files,name),name);return name==='inventories.json'&&bad?{...clone(data.inventories),forbiddenKeywords:['피']}:clone(files[name]);}});
   await assert.rejects(loadStoryQualityData(fetcher(true)),/두 글자/);
   let calls=0;const good=fetcher(false),loaded=await loadStoryQualityData(async(...args)=>{calls++;return good(...args);});
-  assert.equal(calls,3);assert.equal(await loadStoryQualityData(()=>{throw new Error('must use cache');}),loaded);assert.ok(Object.isFrozen(loaded.inventories.plantedObjects));
+  assert.equal(calls,6);assert.equal(await loadStoryQualityData(()=>{throw new Error('must use cache');}),loaded);assert.ok(Object.isFrozen(loaded.inventories.plantedObjects));assert.equal(loaded.worldLibrary.worlds.length,100);assert.equal(loaded.goldBooks.length,24);assert.ok(Object.isFrozen(loaded.worldLibrary.worlds));assert.ok(Object.isFrozen(loaded.goldBooks));
 });
 
 test('real package outline pipeline preserves app contract, seed metadata and exact billed model calls',async()=>{
-  const input=fixture(),engine=fakeOutlineEngine(input),saved=[],options={engine,config:{apiKey:'not-to-be-serialized'},onCheckpoint:checkpoint=>saved.push(checkpoint)};
+  const input=fixture(),before=clone(input),engine=fakeOutlineEngine(input),saved=[],options={engine,config:{apiKey:'not-to-be-serialized'},onCheckpoint:checkpoint=>saved.push(checkpoint)};
   const result=await generateQualityOutline(input,options,services(engine));
-  assert.equal(result.meta.requests,1);assert.deepEqual(result.usage,{input:100,output:50,costUsd:.01});assert.equal(result.meta.quality.check.ok,true);assert.ok(result.data.plotContract);assert.equal(result.meta.quality.seed.twist.id.length>0,true);assert.equal(result.meta.quality.patternId,'journey_repeat');
+  assert.equal(result.meta.requests,1);assert.deepEqual(result.usage,{input:100,output:50,costUsd:.01});assert.equal(result.meta.quality.check.ok,true);assert.ok(result.data.plotContract);assert.equal(result.meta.quality.seed.twist.id.length>0,true);assert.equal(result.meta.quality.patternId,'journey_repeat');assert.deepEqual(input,before);
   const request=engine.calls[0];assert.equal(request.jsonSchema.properties.beats.items.required.includes('newElement'),true);assert.equal(request.jsonSchema.required.includes('settings'),true);assert.equal(request.maxTokens,16000);assert.match(request.system,/APP_BASE_RULES/);assert.match(request.system,/FROZEN_LEVEL_SPECS/);assert.match(request.system,/exact selected background IDs/);assert.doesNotMatch(JSON.stringify(saved),/not-to-be-serialized/);assert.equal(saved.length,1);
   const rerun=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},services(engine));assert.equal(engine.calls.length,1);assert.equal(rerun.meta.requests,0);assert.equal(rerun.meta.resumedCalls,1);assert.deepEqual(rerun.usage,{input:0,output:0});assert.equal(rerun.meta.quality.seedSummary,result.meta.quality.seedSummary);
+});
+
+test('a selected world freezes the creation-date season and reuses the same paid checkpoint without mutating caller input',async()=>{
+  const input={...fixture(),storyDate:'2026-10-17T02:00:00.000Z'};input.storyQuality={...input.storyQuality,worldId:'kyoto_lane',season:'auto',timeOfDay:'night'};
+  const before=clone(input),engine=fakeOutlineEngine(input),first=await generateQualityOutline(input,{engine},services(engine));assert.equal(first.meta.quality.worldMood.worldId,'kyoto_lane');assert.equal(first.meta.quality.worldMood.season,'autumn');assert.equal(first.meta.quality.worldMood.timeOfDay,'night');assert.equal(first.meta.quality.variantChance,.35);assert.deepEqual(input,before);
+  const restoredInput=clone(input),resumed=await generateQualityOutline(restoredInput,{engine,qualityCheckpoint:clone(first.meta.qualityCheckpoint)},services(engine));assert.equal(engine.calls.length,1);assert.equal(resumed.meta.requests,0);assert.equal(resumed.meta.resumedCalls,1);assert.deepEqual(resumed.meta.quality.worldMood,first.meta.quality.worldMood);assert.deepEqual(restoredInput,before);
+  const outlines={...first.data,quality:first.meta.quality},plain={id:'openai',calls:0,async complete(request){this.calls++;return {text:labeled(outlines,/return English plain/u.test(request.system)?'en':'ko'),usage:{input:1,output:1}};}};
+  await generateQualityProse(outlines,input,{engine:plain},services(plain));assert.equal(plain.calls,4);assert.deepEqual(input,before);
 });
 
 test('pattern slots adapt to exact app beat counts and seeded inventory changes only when book/offset changes',async()=>{
@@ -63,7 +73,7 @@ test('one package fix changes only the flagged beat and rejects unrelated edits 
 });
 
 test('missing topic causes exactly one auxiliary-pattern regeneration, then stops with both calls accounted',async()=>{
-  const input=fixture(),engine=fakeOutlineEngine(input,outline=>{outline.beats.forEach(beat=>{beat.summary=beat.summary.replaceAll(input.topic,'');});return outline;});
+  const input={...fixture(),topic:'우산과 빗방울'},engine=fakeOutlineEngine(input,outline=>{outline.beats.forEach((beat,index)=>{beat.summary=`유하와 그린이가 ${index+1}번째 곳에서 주제와 무관한 놀이를 해요. 두 친구가 조용히 손을 흔들어요.`;});return outline;});
   await assert.rejects(generateQualityOutline(input,{engine},services(engine)),error=>error.meta.requests===2&&error.usage.input===200&&/주제 키워드/.test(error.message));assert.equal(engine.calls.length,2);assert.notEqual(engine.calls[0].jsonSchema.properties.plan.properties.pattern.enum[0],engine.calls[1].jsonSchema.properties.plan.properties.pattern.enum[0]);
 });
 
@@ -147,9 +157,12 @@ test('rich drafting binds the upper rich level and only simplify/fix bind the fi
 });
 
 test('exhausting all planted inventory fails before a model request and preserves the chosen ban window',async()=>{
-  const input=fixture();input.storyQuality.banWindow=50;input.storyQuality.approvedBooks=data.inventories.plantedObjects.map((item,index)=>({bookId:`used-item-${index}`,approved:true,createdAt:new Date(Date.UTC(2026,0,index+1)).toISOString(),usedElements:{planted:item.ko,creatures:[],places:[],patternId:'journey_repeat'}}));
+  assert.equal(data.inventories.plantedObjects.length,323,'the shipped base pool is expanded, independent of the smaller exhaustion fixture');
+  // The parent can retain at most 50 recent books. A finite, explicitly scoped
+  // inventory exercises exhaustion without pretending all 323 items fit there.
+  const scopedData={...data,inventories:{...data.inventories,plantedObjects:data.inventories.plantedObjects.slice(0,50)}},input=fixture();input.storyQuality.banWindow=50;input.storyQuality.approvedBooks=scopedData.inventories.plantedObjects.map((item,index)=>({bookId:`used-item-${index}`,approved:true,createdAt:new Date(Date.UTC(2026,0,index+1)).toISOString(),usedElements:{planted:item.ko,creatures:[],places:[],patternId:'journey_repeat'}}));
   let calls=0;const engine={id:'openai',async complete(){calls++;throw new Error('must not call');}};
-  await assert.rejects(generateQualityOutline(input,{engine},services(engine)),error=>error.meta.requests===0&&error.usage.input===0&&error.usage.output===0&&/반복 제한 범위를 줄여/.test(error.message)&&/심을 물건/.test(error.message));assert.equal(calls,0);assert.equal(input.storyQuality.banWindow,50);
+  await assert.rejects(generateQualityOutline(input,{engine},{...services(engine),qualityData:scopedData}),error=>error.meta.requests===0&&error.usage.input===0&&error.usage.output===0&&/반복 제한 범위를 줄여/.test(error.message)&&/심을 물건/.test(error.message));assert.equal(calls,0);assert.equal(input.storyQuality.banWindow,50);
 });
 
 test('exhausting all background creatures also fails before a model request',async()=>{

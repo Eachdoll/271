@@ -5,6 +5,7 @@
  */
 import type { Bi, FailureReason, Inventories, PlotPatternCard } from './types.js';
 import type { BanList } from './banList.js';
+import type { WorldCard } from './worlds.js';
 export type BackgroundType = 'home' | 'kindergarten' | 'forest' | 'sea' | 'dino_land' | 'sky' | (string & {});
 export interface StorySeed {
     patternId: string;
@@ -37,7 +38,13 @@ export interface ComposeOptions {
     ban?: BanList;
     /** 주제에 어울리는 장애물/장소를 우선하고 싶을 때 (예: 비 → puddle, mud). */
     preferObstacleIds?: string[];
+    /** 세계 카드가 있으면 세부 장소·생물·심을 물건을 그 세계에서 우선 뽑는다. */
+    world?: WorldCard;
+    /** 심을 물건·생물에 색/크기/성격 변형을 붙일 확률(0~1). 기본 0.35. inventories.variantRules 가 있을 때만. */
+    variantChance?: number;
 }
+/** 물건에 색(색 붙일 수 있는 물건이면) 또는 크기 변형을, 생물에 성격 변형을 붙인다. 이미 붙어 있으면 그대로. */
+export declare function applyVariant(rng: () => number, item: Bi, kind: 'object' | 'creature', rules: NonNullable<Inventories['variantRules']>): Bi;
 export declare function composeSeed(opts: ComposeOptions): StorySeed;
 /** 프롬프트의 [정해진 재료] 블록. outline.v3.md의 {{seed.*}} 자리에 그대로 들어간다. */
 export declare function renderSeedForPrompt(seed: StorySeed, inv: Inventories, pattern: PlotPatternCard): string;

@@ -4,7 +4,7 @@
 import type { Inventories, StoryOutline } from './types.js';
 import type { StorySeed } from './composeSeed.js';
 import type { BanList } from './banList.js';
-import { violatesBanList } from './banList.js';
+import { containsMaterial, violatesBanList } from './banList.js';
 import { splitSentences } from './util.js';
 
 export interface PlotCheckResult {
@@ -26,6 +26,29 @@ export interface PlotCheckInput {
 
 const MORAL_TAIL = /(좋은 거예요|소중해요|마음이 참|따뜻해요|행복했어요|고마운 일이에요|함께라서 좋아요)[.!]?\s*$/;
 
+/** 한국어 조사·어미를 떼고 내용어만 남긴다. "사바나에서" → "사바나", "누가 더 멋진지" → ["멋진지"]. */
+const PARTICLES = /(에서는|에서|으로|에게|한테|까지|부터|처럼|보다|이랑|랑|와|과|의|을|를|이|가|은|는|도|에|로)$/;
+const STOPWORDS = new Set(['누가', '더', '어디', '것', '날', '때', '어떤', '무슨', '우리', '오늘', '내', '나', '그', '이', '저', '함께', '같이']);
+
+export function topicKeywords(topic: string): string[] {
+  return topic
+    .split(/[\s,·/()]+/)
+    .map((w) => w.replace(PARTICLES, ''))
+    .filter((w) => w.length >= 2 && !STOPWORDS.has(w));
+}
+
+/** 키워드가 글에 있는지. 3자 이상 키워드는 앞 2자 접두 일치도 인정한다("멋진지" → "멋진"). */
+export function topicMentioned(text: string, topic: string): boolean {
+  const kws = topicKeywords(topic);
+  if (kws.length === 0) return true;
+  return kws.some((k) => text.includes(k) || (k.length >= 3 && text.includes(k.slice(0, 2))));
+}
+
+/** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. */
+export function containsPlanted(text: string, planted: string): boolean {
+  return containsMaterial(text, planted);
+}
+
 export function plotCheck(input: PlotCheckInput): PlotCheckResult {
   const { outline: o, topic, protagonistName } = input;
   const fix: string[] = [];
@@ -38,8 +61,8 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
   const turn = beats.find((b) => b.type === 'turn');
   if (!planted) fix.push('plan.planted가 비어 있음');
   else {
-    const early = summaries.slice(0, 2).some((s) => s.includes(planted));
-    const recovered = !!turn && turn.summary.includes(planted);
+    const early = summaries.slice(0, 2).some((s) => containsPlanted(s, planted));
+    const recovered = !!turn && containsPlanted(turn.summary, planted);
     if (!early) fix.push(`심은 물건 "${planted}"이(가) 비트 1~2에 없음`);
     if (!recovered) fix.push(`심은 물건 "${planted}"이(가) 반전 비트에서 회수되지 않음`);
   }
@@ -61,8 +84,7 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
 
   // 4 주제·이름 → 재생성
   const all = summaries.join(' ');
-  const topicWords = topic.split(/[\s,·/]+/).filter((w) => w.length >= 2);
-  if (topicWords.length && !topicWords.some((w) => all.includes(w))) regenerate.push(`주제 키워드(${topicWords.join('/')})가 비트에 없음`);
+  if (!topicMentioned(all, topic)) regenerate.push(`주제 키워드(${topicKeywords(topic).join('/')})가 비트에 없음`);
   const nameCount = summaries.filter((s) => s.includes(protagonistName)).length;
   if (nameCount < 3) regenerate.push(`주인공 이름 "${protagonistName}"이(가) ${nameCount}개 비트에만 등장(3개 이상 필요)`);
 
@@ -89,15 +111,22 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
 
   // 8 금지 소재 → 재생성
   const forbidden = input.inventories?.forbiddenKeywords ?? ['괴물', '귀신', '때리', '놀리'];
-  for (const k of forbidden) if (all.includes(k)) regenerate.push(`금지 소재: ${k}`);
+  for (const k of forbidden) if (k.trim().length >= 2 && all.includes(k)) regenerate.push(`금지 소재: ${k}`);
 
   // 9 장소 규칙: 시작·끝은 집, 중간 2곳 이상
   const keys = beats.map((b) => (b.settingKey ?? '').toLowerCase());
   const mid = new Set(keys.slice(1, -1).filter(Boolean));
   if (mid.size < 2 && beats.length >= 5) fix.push('중간 비트의 장소가 2곳 미만');
 
-  // 10 금지 목록
-  if (input.ban) for (const v of violatesBanList(o, input.ban)) fix.push(v);
+  // 10 금지 목록 — 주제가 직접 언급한 물건·생물은 부모가 요청한 것이므로 반복으로 치지 않는다
+  if (input.ban) {
+    const effBan = {
+      ...input.ban,
+      plantedObjects: input.ban.plantedObjects.filter((p) => !containsMaterial(topic, p)),
+      creatures: input.ban.creatures.filter((c) => !containsMaterial(topic, c)),
+    };
+    for (const v of violatesBanList(o, effBan)) fix.push(v);
+  }
 
   // 11 조합 재료 준수(생물·반전)
   if (input.seed) {

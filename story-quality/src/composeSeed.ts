@@ -5,7 +5,8 @@
  */
 import type { Bi, FailureReason, Inventories, PlotPatternCard } from './types.js';
 import type { BanList } from './banList.js';
-import { filterBanned, filterBannedById } from './banList.js';
+import type { WorldCard } from './worlds.js';
+import { filterBanned, filterBannedById, headNoun } from './banList.js';
 import { makeRng, pick, pickDistinct, shuffle } from './util.js';
 
 export type BackgroundType = 'home' | 'kindergarten' | 'forest' | 'sea' | 'dino_land' | 'sky' | (string & {});
@@ -31,17 +32,59 @@ export interface ComposeOptions {
   ban?: BanList;
   /** 주제에 어울리는 장애물/장소를 우선하고 싶을 때 (예: 비 → puddle, mud). */
   preferObstacleIds?: string[];
+  /** 세계 카드가 있으면 세부 장소·생물·심을 물건을 그 세계에서 우선 뽑는다. */
+  world?: WorldCard;
+  /** 심을 물건·생물에 색/크기/성격 변형을 붙일 확률(0~1). 기본 0.35. inventories.variantRules 가 있을 때만. */
+  variantChance?: number;
+}
+
+/** 물건에 색(색 붙일 수 있는 물건이면) 또는 크기 변형을, 생물에 성격 변형을 붙인다. 이미 붙어 있으면 그대로. */
+export function applyVariant(rng: () => number, item: Bi, kind: 'object' | 'creature', rules: NonNullable<Inventories['variantRules']>): Bi {
+  if (kind === 'creature') {
+    if (rules.creatureTraits.some((t) => item.ko.startsWith(t.ko))) return item;
+    const t = pick(rng, rules.creatureTraits);
+    return { ko: `${t.ko} ${item.ko}`, en: withArticle(`${t.en} ${stripArticle(item.en)}`) };
+  }
+  const colorable = rules.colorableSuffixes.some((s) => item.ko.endsWith(s)) && !rules.objectColors.some((c) => item.ko.startsWith(c.ko));
+  const sized = rules.objectSizes.some((s) => item.ko.startsWith(s.ko));
+  if (colorable && rng() < 0.7) {
+    const c = pick(rng, rules.objectColors);
+    return { ko: `${c.ko} ${item.ko}`, en: withArticle(`${c.en} ${stripArticle(item.en)}`) };
+  }
+  if (sized) return item;
+  const s = pick(rng, rules.objectSizes);
+  return { ko: `${s.ko} ${item.ko}`, en: `${s.en} ${stripArticle(item.en)}` };
+}
+
+function stripArticle(en: string): string {
+  return en.replace(/^(a|an|the|some)\s+/i, '');
+}
+function withArticle(en: string): string {
+  if (/^(a|an|the|some)\s/i.test(en)) return en;
+  return (/^[aeiou]/i.test(en) ? 'an ' : 'a ') + en;
 }
 
 export function composeSeed(opts: ComposeOptions): StorySeed {
-  const { pattern, inventories: inv, rngSeed } = opts;
+  const { pattern, inventories: inv, rngSeed, world } = opts;
   const ban: BanList = opts.ban ?? { plantedObjects: [], creatures: [], twistTypes: [], patterns: [], places: [] };
   const rng = makeRng(rngSeed);
 
   const attemptCount = Math.max(1, pattern.beats.filter((b) => b.type === 'attempt').length);
 
-  const planted = pick(rng, filterBanned(inv.plantedObjects, ban.plantedObjects));
-  const creature = pick(rng, filterBanned(inv.creatures, ban.creatures));
+  // 심을 물건: 세계 소품은 두 번 넣어 가중치를 주고 공용 인벤토리와 함께 뽑는다. 동일 비율을 보장하지는 않는다.
+  const plantedPool = world ? [...world.props, ...world.props, ...inv.plantedObjects] : inv.plantedObjects;
+  let planted = pick(rng, filterBanned(plantedPool, ban.plantedObjects));
+  // 생물: 세계 생물 우선, 없거나 전부 금지면 공용.
+  const bannedCreatureHeads = new Set(ban.creatures.map(headNoun));
+  const worldCreatures = (world?.creatures ?? []).filter((item) => !bannedCreatureHeads.has(headNoun(item.ko)));
+  const creaturePool = worldCreatures.length ? worldCreatures : inv.creatures;
+  let creature = pick(rng, filterBanned(creaturePool, ban.creatures));
+  // 변형: 색·크기·성격을 확률로 붙인다 → 같은 물건도 "빨간 우산", "아주 작은 우산", "아기 두더지"처럼 달라진다.
+  const vc = opts.variantChance ?? 0.35;
+  if (inv.variantRules && vc > 0) {
+    if (rng() < vc) planted = applyVariant(rng, planted, 'object', inv.variantRules);
+    if (rng() < vc) creature = applyVariant(rng, creature, 'creature', inv.variantRules);
+  }
   const twist = pick(rng, filterBannedById(inv.twistTypes, ban.twistTypes));
   const humor = pick(rng, inv.humorBeats);
 
@@ -62,7 +105,7 @@ export function composeSeed(opts: ComposeOptions): StorySeed {
     if (!chosen.includes(o)) chosen.push(o);
   }
 
-  const locPool = inv.subLocations[opts.backgroundType] ?? inv.subLocations['forest'] ?? [];
+  const locPool = world?.subLocations?.length ? world.subLocations : inv.subLocations[opts.backgroundType] ?? inv.subLocations['forest'] ?? [];
   const subLocations = pickDistinct(rng, filterBanned(locPool, ban.places), Math.min(3, locPool.length), (b) => b.ko);
 
   const reasons = shuffle(rng, inv.failureReasons.map((r) => r.id)).slice(0, attemptCount);

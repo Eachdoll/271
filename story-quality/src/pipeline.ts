@@ -4,6 +4,7 @@
  */
 import type { BookRecord, GestureDictionary, Inventories, LevelSpecEn, LevelSpecKo, PlotPatternCard, StoryOutline, TextEngine } from './types.js';
 import { buildBanList, renderBanListForPrompt } from './banList.js';
+import type { WorldCard } from './worlds.js';
 import { composeSeed, preferObstaclesForTopic, type BackgroundType, type StorySeed } from './composeSeed.js';
 import { buildOutlinePrompt, roughTokenCount, type Character } from './outlinePrompt.js';
 import { plotCheck, renderFixInstructions } from './plotCheck.js';
@@ -42,6 +43,9 @@ export interface OutlineStageInput {
   banWindow?: number;
   patternBanWindow?: number;
   excludeBookIds?: string[];
+  referenceBooks?: BookRecord[];
+  world?: WorldCard;
+  variantChance?: number;
 }
 
 export interface OutlineStageResult {
@@ -65,6 +69,8 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     rngSeed: hashString(input.bookId),
     ban,
     preferObstacleIds: preferObstaclesForTopic(input.topic),
+    world: input.world,
+    variantChance: input.variantChance,
   });
   const charactersCompact = [input.protagonist, ...input.supporting]
     .map((c) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${c.catchphrase ? ` "${c.catchphrase}"` : ''}`)
@@ -132,7 +138,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
       seed,
       inventories: input.inventories,
       ban,
-      approvedBooks: input.approvedBooks,
+      approvedBooks: [...input.approvedBooks, ...(input.referenceBooks ?? [])],
       endingType: input.endingType,
       rules: input.rules,
       banExamples: input.banExamples,

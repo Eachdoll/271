@@ -19,9 +19,20 @@ export interface BanListOptions {
     sameSeriesOnly?: string;
 }
 export declare function buildBanList(records: BookRecord[], opts?: BanListOptions): BanList;
-/** 프롬프트의 [이번에 쓰지 않는 것] 한 줄. 비어 있으면 빈 문자열(코드가 줄을 지운다). */
-export declare function renderBanListForPrompt(ban: BanList, inventories?: Inventories): string;
-/** 인벤토리에서 금지 항목을 뺀다. 다 빠지면(금지가 전부면) 원본을 돌려줘 생성이 멈추지 않게 한다. */
+/**
+ * 프롬프트의 [이번에 쓰지 않는 것] 한 줄. 비어 있으면 빈 문자열(코드가 줄을 지운다).
+ * 조합 재료(seed)가 이미 금지 항목을 피해 뽑히므로, 프롬프트에는 짧은 상기용으로만 넣는다(기본 물건 6·생물 5·반전 3, 장소는 생략).
+ */
+export declare function renderBanListForPrompt(ban: BanList, inventories?: Inventories, max?: {
+    planted: number;
+    creatures: number;
+    twists: number;
+    places: number;
+}): string;
+export declare function headNoun(ko: string): string;
+/** 두 글자 이상 머리 명사를 조사와 함께 찾되 긴 고유명사의 일부는 잡지 않는다. */
+export declare function containsMaterial(text: string, material: string): boolean;
+/** 금지 목록과 같은 항목 또는 같은 머리 명사("빨간 우산"이 금지면 "우산"·"파란 우산"도)를 뺀다. 전부 빠지면 원본을 돌려준다. */
 export declare function filterBanned<T extends {
     ko: string;
 }>(items: readonly T[], banned: readonly string[]): T[];

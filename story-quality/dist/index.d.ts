@@ -12,3 +12,8 @@ export * from './richThenSimplify.js';
 export * from './childSimulator.js';
 export * from './weeklyCoach.js';
 export * from './pipeline.js';
+export * from './worlds.js';
+export * from './engines/anthropic.js';
+export * from './engines/openaiCompat.js';
+export * from './eval/rubricJudge.js';
+export * from './expand.js';

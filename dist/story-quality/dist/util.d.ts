@@ -18,3 +18,7 @@ export declare function jaccard(a: Set<string>, b: Set<string>): number;
 export declare function splitSentences(text: string): string[];
 export declare function includesAny(text: string, needles: string[]): string | null;
 export declare function unique<T>(xs: T[]): T[];
+/** 카드 설명용 괄호 주석만 제거한다. 이야기 본문에는 적용하지 않는다. */
+export declare function cleanKoLabel(value: string): string;
+/** 한국어 조사 선택: 받침 유무로 와/과, 을/를, 이/가, 은/는, 로/으로. */
+export declare function josa(word: string, pair: '와' | '을' | '이' | '은' | '로'): string;

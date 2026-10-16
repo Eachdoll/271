@@ -103,6 +103,10 @@ export interface Inventories {
   humorBeats: Bi[];
   failureReasons: { id: FailureReason; ko: string; hint: string }[];
   forbiddenKeywords: string[];
+  /** 후렴 틀 20개(frame/question/count/sound). 프롬프트의 후렴 예시와 아이 시뮬레이터가 쓴다. */
+  refrainTemplates?: { type: 'frame' | 'question' | 'count' | 'sound'; text: string }[];
+  /** 색·크기·성격 변형 규칙. composeSeed(variantChance)와 expand.expandInventory 가 쓴다. */
+  variantRules?: { objectColors: Bi[]; colorableSuffixes: string[]; objectSizes: Bi[]; creatureTraits: Bi[] };
 }
 
 export interface GestureEntry {

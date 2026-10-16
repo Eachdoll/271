@@ -3,6 +3,7 @@
  * Codex는 이 파일을 참고해 기존 StoryOutline/StoryProse 생성 코드를 교체하면 된다.
  */
 import type { BookRecord, GestureDictionary, Inventories, LevelSpecEn, LevelSpecKo, PlotPatternCard, StoryOutline, TextEngine } from './types.js';
+import type { WorldCard } from './worlds.js';
 import { type BackgroundType, type StorySeed } from './composeSeed.js';
 import { type Character } from './outlinePrompt.js';
 import { plotCheck } from './plotCheck.js';
@@ -36,6 +37,9 @@ export interface OutlineStageInput {
     banWindow?: number;
     patternBanWindow?: number;
     excludeBookIds?: string[];
+    referenceBooks?: BookRecord[];
+    world?: WorldCard;
+    variantChance?: number;
 }
 export interface OutlineStageResult {
     outline: StoryOutline;

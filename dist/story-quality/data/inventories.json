@@ -1,180 +1,3739 @@
 {
-  "version": "2026-10-16",
+  "version": "2026-10-17c",
   "description": "조합형 생성용 인벤토리. 코드가 무작위로 뽑아 비트 슬롯을 채우고, 모델은 문장만 쓴다. 모든 항목은 3~7세가 아는 것, 무서운 것 없음.",
   "plantedObjects": [
-    {"ko": "빨간 장화", "en": "red rain boots"},
-    {"ko": "노란 우산", "en": "a yellow umbrella"},
-    {"ko": "도시락 통", "en": "a lunch box"},
-    {"ko": "호루라기", "en": "a whistle"},
-    {"ko": "손전등", "en": "a small flashlight"},
-    {"ko": "줄넘기", "en": "a jump rope"},
-    {"ko": "종이배", "en": "a paper boat"},
-    {"ko": "색연필", "en": "a colored pencil"},
-    {"ko": "작은 거울", "en": "a small mirror"},
-    {"ko": "조약돌", "en": "a smooth pebble"},
-    {"ko": "솔방울", "en": "a pine cone"},
-    {"ko": "단추", "en": "a big button"},
-    {"ko": "리본", "en": "a ribbon"},
-    {"ko": "빈 병", "en": "an empty bottle"},
-    {"ko": "깃털", "en": "a feather"},
-    {"ko": "열쇠", "en": "an old key"},
-    {"ko": "비눗방울 통", "en": "a bubble bottle"},
-    {"ko": "나무 숟가락", "en": "a wooden spoon"},
-    {"ko": "밀짚모자", "en": "a straw hat"},
-    {"ko": "양말 한 짝", "en": "one striped sock"},
-    {"ko": "풍선", "en": "a balloon"},
-    {"ko": "고무공", "en": "a rubber ball"},
-    {"ko": "작은 종", "en": "a little bell"},
-    {"ko": "돋보기", "en": "a magnifying glass"},
-    {"ko": "긴 끈", "en": "a long string"},
-    {"ko": "바구니", "en": "a basket"},
-    {"ko": "담요", "en": "a soft blanket"},
-    {"ko": "손수건", "en": "a handkerchief"},
-    {"ko": "연필", "en": "a pencil"},
-    {"ko": "스티커", "en": "a sticker"},
-    {"ko": "조개껍데기", "en": "a seashell"},
-    {"ko": "딸랑이", "en": "a rattle"},
-    {"ko": "큰 나뭇잎", "en": "a big leaf"},
-    {"ko": "밤톨", "en": "a chestnut"},
-    {"ko": "당근", "en": "a carrot"},
-    {"ko": "사과", "en": "an apple"},
-    {"ko": "우유 컵", "en": "a cup of milk"},
-    {"ko": "피리", "en": "a small flute"},
-    {"ko": "작은 북", "en": "a little drum"},
-    {"ko": "장난감 자동차", "en": "a toy car"},
-    {"ko": "나무 블록", "en": "a wooden block"},
-    {"ko": "헝겊 인형", "en": "a rag doll"},
-    {"ko": "크레파스", "en": "a crayon"},
-    {"ko": "물뿌리개", "en": "a watering can"},
-    {"ko": "모래 삽", "en": "a sand shovel"},
-    {"ko": "양동이", "en": "a bucket"},
-    {"ko": "수건", "en": "a towel"},
-    {"ko": "머리띠", "en": "a headband"},
-    {"ko": "돌돌 만 지도", "en": "a rolled-up map"},
-    {"ko": "손목시계", "en": "a wristwatch"}
+    {
+      "ko": "빨간 장화",
+      "en": "red rain boots"
+    },
+    {
+      "ko": "노란 우산",
+      "en": "a yellow umbrella"
+    },
+    {
+      "ko": "도시락 통",
+      "en": "a lunch box"
+    },
+    {
+      "ko": "호루라기",
+      "en": "a whistle"
+    },
+    {
+      "ko": "손전등",
+      "en": "a small flashlight"
+    },
+    {
+      "ko": "줄넘기",
+      "en": "a jump rope"
+    },
+    {
+      "ko": "종이배",
+      "en": "a paper boat"
+    },
+    {
+      "ko": "색연필",
+      "en": "a colored pencil"
+    },
+    {
+      "ko": "작은 거울",
+      "en": "a small mirror"
+    },
+    {
+      "ko": "조약돌",
+      "en": "a smooth pebble"
+    },
+    {
+      "ko": "솔방울",
+      "en": "a pine cone"
+    },
+    {
+      "ko": "단추",
+      "en": "a big button"
+    },
+    {
+      "ko": "리본",
+      "en": "a ribbon"
+    },
+    {
+      "ko": "빈 병",
+      "en": "an empty bottle"
+    },
+    {
+      "ko": "깃털",
+      "en": "a feather"
+    },
+    {
+      "ko": "열쇠",
+      "en": "an old key"
+    },
+    {
+      "ko": "비눗방울 통",
+      "en": "a bubble bottle"
+    },
+    {
+      "ko": "나무 숟가락",
+      "en": "a wooden spoon"
+    },
+    {
+      "ko": "밀짚모자",
+      "en": "a straw hat"
+    },
+    {
+      "ko": "양말 한 짝",
+      "en": "one striped sock"
+    },
+    {
+      "ko": "풍선",
+      "en": "a balloon"
+    },
+    {
+      "ko": "고무공",
+      "en": "a rubber ball"
+    },
+    {
+      "ko": "작은 종",
+      "en": "a little bell"
+    },
+    {
+      "ko": "돋보기",
+      "en": "a magnifying glass"
+    },
+    {
+      "ko": "긴 끈",
+      "en": "a long string"
+    },
+    {
+      "ko": "바구니",
+      "en": "a basket"
+    },
+    {
+      "ko": "담요",
+      "en": "a soft blanket"
+    },
+    {
+      "ko": "손수건",
+      "en": "a handkerchief"
+    },
+    {
+      "ko": "연필",
+      "en": "a pencil"
+    },
+    {
+      "ko": "스티커",
+      "en": "a sticker"
+    },
+    {
+      "ko": "조개껍데기",
+      "en": "a seashell"
+    },
+    {
+      "ko": "딸랑이",
+      "en": "a rattle"
+    },
+    {
+      "ko": "큰 나뭇잎",
+      "en": "a big leaf"
+    },
+    {
+      "ko": "밤톨",
+      "en": "a chestnut"
+    },
+    {
+      "ko": "당근",
+      "en": "a carrot"
+    },
+    {
+      "ko": "사과",
+      "en": "an apple"
+    },
+    {
+      "ko": "우유 컵",
+      "en": "a cup of milk"
+    },
+    {
+      "ko": "피리",
+      "en": "a small flute"
+    },
+    {
+      "ko": "작은 북",
+      "en": "a little drum"
+    },
+    {
+      "ko": "장난감 자동차",
+      "en": "a toy car"
+    },
+    {
+      "ko": "나무 블록",
+      "en": "a wooden block"
+    },
+    {
+      "ko": "헝겊 인형",
+      "en": "a rag doll"
+    },
+    {
+      "ko": "크레파스",
+      "en": "a crayon"
+    },
+    {
+      "ko": "물뿌리개",
+      "en": "a watering can"
+    },
+    {
+      "ko": "모래 삽",
+      "en": "a sand shovel"
+    },
+    {
+      "ko": "양동이",
+      "en": "a bucket"
+    },
+    {
+      "ko": "수건",
+      "en": "a towel"
+    },
+    {
+      "ko": "머리띠",
+      "en": "a headband"
+    },
+    {
+      "ko": "돌돌 만 지도",
+      "en": "a rolled-up map"
+    },
+    {
+      "ko": "손목시계",
+      "en": "a wristwatch"
+    },
+    {
+      "ko": "장난감 기차",
+      "en": "a toy train"
+    },
+    {
+      "ko": "노란 비옷",
+      "en": "a yellow raincoat"
+    },
+    {
+      "ko": "물안경",
+      "en": "swim goggles"
+    },
+    {
+      "ko": "바람개비",
+      "en": "a pinwheel"
+    },
+    {
+      "ko": "종이비행기",
+      "en": "a paper airplane"
+    },
+    {
+      "ko": "알록달록 구슬",
+      "en": "a colorful marble"
+    },
+    {
+      "ko": "털장갑",
+      "en": "wool mittens"
+    },
+    {
+      "ko": "귀마개",
+      "en": "fluffy earmuffs"
+    },
+    {
+      "ko": "토끼 인형",
+      "en": "a rabbit doll"
+    },
+    {
+      "ko": "곰 인형",
+      "en": "a teddy bear"
+    },
+    {
+      "ko": "색종이",
+      "en": "colored paper"
+    },
+    {
+      "ko": "딱풀",
+      "en": "a glue stick"
+    },
+    {
+      "ko": "도장",
+      "en": "a rubber stamp"
+    },
+    {
+      "ko": "지우개",
+      "en": "an eraser"
+    },
+    {
+      "ko": "작은 수첩",
+      "en": "a little notebook"
+    },
+    {
+      "ko": "동전 하나",
+      "en": "one coin"
+    },
+    {
+      "ko": "엽서",
+      "en": "a postcard"
+    },
+    {
+      "ko": "열쇠고리",
+      "en": "a keychain"
+    },
+    {
+      "ko": "자석",
+      "en": "a magnet"
+    },
+    {
+      "ko": "나침반",
+      "en": "a compass"
+    },
+    {
+      "ko": "작은 깃발",
+      "en": "a small flag"
+    },
+    {
+      "ko": "하모니카",
+      "en": "a harmonica"
+    },
+    {
+      "ko": "탬버린",
+      "en": "a tambourine"
+    },
+    {
+      "ko": "캐스터네츠",
+      "en": "castanets"
+    },
+    {
+      "ko": "트라이앵글",
+      "en": "a triangle"
+    },
+    {
+      "ko": "머리핀",
+      "en": "a hairpin"
+    },
+    {
+      "ko": "머리끈",
+      "en": "a hair tie"
+    },
+    {
+      "ko": "털실 뭉치",
+      "en": "a ball of yarn"
+    },
+    {
+      "ko": "비누",
+      "en": "a bar of soap"
+    },
+    {
+      "ko": "칫솔",
+      "en": "a toothbrush"
+    },
+    {
+      "ko": "빗",
+      "en": "a comb"
+    },
+    {
+      "ko": "물총",
+      "en": "a water gun"
+    },
+    {
+      "ko": "비치볼",
+      "en": "a beach ball"
+    },
+    {
+      "ko": "수영 튜브",
+      "en": "a swim ring"
+    },
+    {
+      "ko": "모래 틀",
+      "en": "a sand mold"
+    },
+    {
+      "ko": "도토리",
+      "en": "an acorn"
+    },
+    {
+      "ko": "은행잎",
+      "en": "a ginkgo leaf"
+    },
+    {
+      "ko": "네잎클로버",
+      "en": "a four-leaf clover"
+    },
+    {
+      "ko": "민들레 홀씨",
+      "en": "a dandelion puff"
+    },
+    {
+      "ko": "나뭇가지",
+      "en": "a stick"
+    },
+    {
+      "ko": "알사탕",
+      "en": "a round candy"
+    },
+    {
+      "ko": "초콜릿",
+      "en": "a chocolate"
+    },
+    {
+      "ko": "바나나",
+      "en": "a banana"
+    },
+    {
+      "ko": "귤",
+      "en": "a tangerine"
+    },
+    {
+      "ko": "딸기",
+      "en": "a strawberry"
+    },
+    {
+      "ko": "포도 한 송이",
+      "en": "a bunch of grapes"
+    },
+    {
+      "ko": "옥수수",
+      "en": "an ear of corn"
+    },
+    {
+      "ko": "감자",
+      "en": "a potato"
+    },
+    {
+      "ko": "달걀",
+      "en": "an egg"
+    },
+    {
+      "ko": "식빵 한 조각",
+      "en": "a slice of bread"
+    },
+    {
+      "ko": "주먹밥",
+      "en": "a rice ball"
+    },
+    {
+      "ko": "김밥",
+      "en": "a roll of gimbap"
+    },
+    {
+      "ko": "물병",
+      "en": "a water bottle"
+    },
+    {
+      "ko": "보온병",
+      "en": "a thermos"
+    },
+    {
+      "ko": "종이컵",
+      "en": "a paper cup"
+    },
+    {
+      "ko": "젓가락",
+      "en": "chopsticks"
+    },
+    {
+      "ko": "포크",
+      "en": "a fork"
+    },
+    {
+      "ko": "작은 냄비",
+      "en": "a little pot"
+    },
+    {
+      "ko": "국자",
+      "en": "a ladle"
+    },
+    {
+      "ko": "앞치마",
+      "en": "an apron"
+    },
+    {
+      "ko": "리모컨",
+      "en": "a remote control"
+    },
+    {
+      "ko": "장난감 전화기",
+      "en": "a toy phone"
+    },
+    {
+      "ko": "장난감 카메라",
+      "en": "a toy camera"
+    },
+    {
+      "ko": "생일 카드",
+      "en": "a birthday card"
+    },
+    {
+      "ko": "편지 봉투",
+      "en": "an envelope"
+    },
+    {
+      "ko": "샌들",
+      "en": "sandals"
+    },
+    {
+      "ko": "운동화 한 짝",
+      "en": "one sneaker"
+    },
+    {
+      "ko": "선글라스",
+      "en": "sunglasses"
+    },
+    {
+      "ko": "배낭",
+      "en": "a backpack"
+    },
+    {
+      "ko": "방석",
+      "en": "a cushion"
+    },
+    {
+      "ko": "베개",
+      "en": "a pillow"
+    },
+    {
+      "ko": "화분",
+      "en": "a flowerpot"
+    },
+    {
+      "ko": "씨앗 봉지",
+      "en": "a packet of seeds"
+    },
+    {
+      "ko": "분필",
+      "en": "a piece of chalk"
+    },
+    {
+      "ko": "스케치북",
+      "en": "a sketchbook"
+    },
+    {
+      "ko": "물감 붓",
+      "en": "a paintbrush"
+    },
+    {
+      "ko": "종이 왕관",
+      "en": "a paper crown"
+    },
+    {
+      "ko": "가면",
+      "en": "a mask"
+    },
+    {
+      "ko": "망토",
+      "en": "a cape"
+    },
+    {
+      "ko": "요술봉",
+      "en": "a toy magic wand"
+    },
+    {
+      "ko": "팽이",
+      "en": "a spinning top"
+    },
+    {
+      "ko": "요요",
+      "en": "a yo-yo"
+    },
+    {
+      "ko": "딱지",
+      "en": "a paper ddakji"
+    },
+    {
+      "ko": "공깃돌",
+      "en": "gonggi pebbles"
+    },
+    {
+      "ko": "주사위",
+      "en": "a die"
+    },
+    {
+      "ko": "퍼즐 조각",
+      "en": "a puzzle piece"
+    },
+    {
+      "ko": "연",
+      "en": "a kite"
+    },
+    {
+      "ko": "조개 목걸이",
+      "en": "a shell necklace"
+    },
+    {
+      "ko": "팔찌",
+      "en": "a bracelet"
+    },
+    {
+      "ko": "공룡 인형",
+      "en": "a plush dinosaur"
+    },
+    {
+      "ko": "그림책",
+      "en": "a picture book"
+    },
+    {
+      "ko": "공룡 가방",
+      "en": "a dinosaur backpack"
+    },
+    {
+      "ko": "이름표",
+      "en": "a name tag"
+    },
+    {
+      "ko": "수박",
+      "en": "a watermelon"
+    },
+    {
+      "ko": "부채",
+      "en": "a paper fan"
+    },
+    {
+      "ko": "돌하르방 모양 돌",
+      "en": "a round black stone"
+    },
+    {
+      "ko": "풍경",
+      "en": "a wind chime"
+    },
+    {
+      "ko": "종이우산",
+      "en": "a paper umbrella"
+    },
+    {
+      "ko": "경단",
+      "en": "rice dumplings on a stick"
+    },
+    {
+      "ko": "나막신",
+      "en": "wooden sandals"
+    },
+    {
+      "ko": "긴 빵",
+      "en": "a long loaf of bread"
+    },
+    {
+      "ko": "크루아상",
+      "en": "a croissant"
+    },
+    {
+      "ko": "종이 봉투",
+      "en": "a paper bag"
+    },
+    {
+      "ko": "베레모",
+      "en": "a beret"
+    },
+    {
+      "ko": "자전거 종",
+      "en": "a bicycle bell"
+    },
+    {
+      "ko": "치즈 조각",
+      "en": "a wedge of cheese"
+    },
+    {
+      "ko": "줄무늬 셔츠",
+      "en": "a striped shirt"
+    },
+    {
+      "ko": "젤라토",
+      "en": "a gelato"
+    },
+    {
+      "ko": "노",
+      "en": "an oar"
+    },
+    {
+      "ko": "빈 물통",
+      "en": "an empty water bottle"
+    },
+    {
+      "ko": "챙 넓은 모자",
+      "en": "a wide-brimmed hat"
+    },
+    {
+      "ko": "망원경",
+      "en": "binoculars"
+    },
+    {
+      "ko": "구슬 팔찌",
+      "en": "a beaded bracelet"
+    },
+    {
+      "ko": "지도",
+      "en": "a rolled-up map"
+    },
+    {
+      "ko": "빨간 리본",
+      "en": "a red ribbon"
+    },
+    {
+      "ko": "무늬 모자",
+      "en": "a patterned knit hat"
+    },
+    {
+      "ko": "알록달록 담요",
+      "en": "a colorful woven blanket"
+    },
+    {
+      "ko": "팬파이프",
+      "en": "a panpipe"
+    },
+    {
+      "ko": "털모자",
+      "en": "a wool hat"
+    },
+    {
+      "ko": "목도리",
+      "en": "a scarf"
+    },
+    {
+      "ko": "말 인형",
+      "en": "a toy horse"
+    },
+    {
+      "ko": "우유 그릇",
+      "en": "a bowl of milk"
+    },
+    {
+      "ko": "긴 밧줄",
+      "en": "a long rope"
+    },
+    {
+      "ko": "코코넛",
+      "en": "a coconut"
+    },
+    {
+      "ko": "삿갓",
+      "en": "a conical hat"
+    },
+    {
+      "ko": "빨대",
+      "en": "a straw"
+    },
+    {
+      "ko": "오리발",
+      "en": "flippers"
+    },
+    {
+      "ko": "챙 모자",
+      "en": "a sun hat"
+    },
+    {
+      "ko": "머리 수건",
+      "en": "a head scarf"
+    },
+    {
+      "ko": "대추야자",
+      "en": "dates"
+    },
+    {
+      "ko": "파피루스 종이",
+      "en": "a sheet of papyrus"
+    },
+    {
+      "ko": "보자기",
+      "en": "a wrapping cloth"
+    },
+    {
+      "ko": "짚신",
+      "en": "straw sandals"
+    },
+    {
+      "ko": "엿",
+      "en": "a stick of taffy"
+    },
+    {
+      "ko": "갓",
+      "en": "a horsehair hat"
+    },
+    {
+      "ko": "빨간 흙",
+      "en": "red ochre"
+    },
+    {
+      "ko": "털가죽 망토",
+      "en": "a fur cloak"
+    },
+    {
+      "ko": "나무 방패",
+      "en": "a wooden toy shield"
+    },
+    {
+      "ko": "깃발",
+      "en": "a flag"
+    },
+    {
+      "ko": "촛대",
+      "en": "a candlestick"
+    },
+    {
+      "ko": "안대",
+      "en": "an eye patch"
+    },
+    {
+      "ko": "나무 삽",
+      "en": "a wooden shovel"
+    },
+    {
+      "ko": "금색 단추",
+      "en": "a gold button"
+    },
+    {
+      "ko": "비단 천",
+      "en": "a piece of silk"
+    },
+    {
+      "ko": "말린 살구",
+      "en": "dried apricots"
+    },
+    {
+      "ko": "물주머니",
+      "en": "a water skin"
+    },
+    {
+      "ko": "등불",
+      "en": "a lantern"
+    },
+    {
+      "ko": "공룡 알 모양 돌",
+      "en": "an egg-shaped stone"
+    },
+    {
+      "ko": "헬멧",
+      "en": "a bubble helmet"
+    },
+    {
+      "ko": "분홍 돌",
+      "en": "a pink stone"
+    },
+    {
+      "ko": "무전기",
+      "en": "a walkie-talkie"
+    },
+    {
+      "ko": "물방울",
+      "en": "a floating water bubble"
+    },
+    {
+      "ko": "자석 숟가락",
+      "en": "a magnetic spoon"
+    },
+    {
+      "ko": "별 지도",
+      "en": "a star map"
+    },
+    {
+      "ko": "벨크로 장갑",
+      "en": "velcro gloves"
+    },
+    {
+      "ko": "충전 케이블",
+      "en": "a charging cable"
+    },
+    {
+      "ko": "빛나는 단추",
+      "en": "a glowing button"
+    },
+    {
+      "ko": "말하는 지도",
+      "en": "a talking map"
+    },
+    {
+      "ko": "기름 통",
+      "en": "an oil can"
+    },
+    {
+      "ko": "진주",
+      "en": "a pearl"
+    },
+    {
+      "ko": "공기 방울 통",
+      "en": "a bubble jar"
+    },
+    {
+      "ko": "딸기 바구니",
+      "en": "a basket of strawberries"
+    },
+    {
+      "ko": "솜사탕",
+      "en": "cotton candy"
+    },
+    {
+      "ko": "별 모양 스티커",
+      "en": "a star sticker"
+    },
+    {
+      "ko": "사탕",
+      "en": "a candy"
+    },
+    {
+      "ko": "초",
+      "en": "a birthday candle"
+    },
+    {
+      "ko": "물감 튜브",
+      "en": "a paint tube"
+    },
+    {
+      "ko": "돗자리",
+      "en": "a picnic mat"
+    },
+    {
+      "ko": "카누 노",
+      "en": "a canoe paddle"
+    },
+    {
+      "ko": "해먹",
+      "en": "a hammock"
+    },
+    {
+      "ko": "방울",
+      "en": "a little bell"
+    },
+    {
+      "ko": "꽃 목걸이",
+      "en": "a flower garland"
+    },
+    {
+      "ko": "망고",
+      "en": "a mango"
+    },
+    {
+      "ko": "알록달록 천 조각",
+      "en": "a scrap of colorful cloth"
+    },
+    {
+      "ko": "작은 카펫",
+      "en": "a little carpet"
+    },
+    {
+      "ko": "민트 찻잔",
+      "en": "a glass of mint tea"
+    },
+    {
+      "ko": "올리브 한 알",
+      "en": "an olive"
+    },
+    {
+      "ko": "파란 단추",
+      "en": "a blue button"
+    },
+    {
+      "ko": "작은 배 모형",
+      "en": "a tiny model boat"
+    },
+    {
+      "ko": "소 방울",
+      "en": "a cowbell"
+    },
+    {
+      "ko": "작은 썰매",
+      "en": "a little sled"
+    },
+    {
+      "ko": "단풍잎",
+      "en": "a maple leaf"
+    },
+    {
+      "ko": "메이플 시럽 병",
+      "en": "a bottle of maple syrup"
+    },
+    {
+      "ko": "종이 깃발",
+      "en": "a paper flag"
+    },
+    {
+      "ko": "마라카스",
+      "en": "maracas"
+    },
+    {
+      "ko": "종이 피냐타 조각",
+      "en": "a piece of a paper piñata"
+    },
+    {
+      "ko": "작은 열기구 모형",
+      "en": "a tiny balloon model"
+    },
+    {
+      "ko": "살구",
+      "en": "an apricot"
+    },
+    {
+      "ko": "눈사람 코 당근",
+      "en": "a carrot for a snowman nose"
+    },
+    {
+      "ko": "양털 뭉치",
+      "en": "a tuft of wool"
+    },
+    {
+      "ko": "장화",
+      "en": "gumboots"
+    },
+    {
+      "ko": "키위 과일",
+      "en": "a kiwi fruit"
+    },
+    {
+      "ko": "대나무 한 줄기",
+      "en": "a bamboo stalk"
+    },
+    {
+      "ko": "종이 등",
+      "en": "a paper lantern"
+    },
+    {
+      "ko": "만두",
+      "en": "a dumpling"
+    },
+    {
+      "ko": "붓",
+      "en": "a brush"
+    },
+    {
+      "ko": "작은 노",
+      "en": "a little oar"
+    },
+    {
+      "ko": "생선 모양 빵",
+      "en": "a fish-shaped bread"
+    },
+    {
+      "ko": "꽃 팔찌",
+      "en": "a flower bracelet"
+    },
+    {
+      "ko": "납작한 빵",
+      "en": "a flat loaf of bread"
+    },
+    {
+      "ko": "작은 동전",
+      "en": "a small coin"
+    },
+    {
+      "ko": "도자기 컵",
+      "en": "a clay cup"
+    },
+    {
+      "ko": "월계수 잎",
+      "en": "a laurel leaf"
+    },
+    {
+      "ko": "나무 방패(장난감)",
+      "en": "a wooden toy shield"
+    },
+    {
+      "ko": "털 망토",
+      "en": "a fur cloak"
+    },
+    {
+      "ko": "금빛 왕관 모양 종이",
+      "en": "a paper golden crown"
+    },
+    {
+      "ko": "옥 구슬",
+      "en": "a jade bead"
+    },
+    {
+      "ko": "연잎",
+      "en": "a lotus leaf"
+    },
+    {
+      "ko": "대나무 피리",
+      "en": "a bamboo flute"
+    },
+    {
+      "ko": "진흙 덩이",
+      "en": "a lump of clay"
+    },
+    {
+      "ko": "작은 청자 잔",
+      "en": "a small celadon cup"
+    },
+    {
+      "ko": "나무 주걱",
+      "en": "a wooden paddle"
+    },
+    {
+      "ko": "물 바가지",
+      "en": "a water gourd"
+    },
+    {
+      "ko": "기차표",
+      "en": "a train ticket"
+    },
+    {
+      "ko": "작은 가방",
+      "en": "a small suitcase"
+    },
+    {
+      "ko": "모자",
+      "en": "a cap"
+    },
+    {
+      "ko": "색동 주머니",
+      "en": "a colorful silk pouch"
+    },
+    {
+      "ko": "큰 조개껍데기",
+      "en": "a big seashell"
+    },
+    {
+      "ko": "월계수 잎 관",
+      "en": "a laurel wreath"
+    },
+    {
+      "ko": "작은 공",
+      "en": "a small ball"
+    },
+    {
+      "ko": "나무 썰매",
+      "en": "a wooden sled"
+    },
+    {
+      "ko": "뼈 피리(장난감)",
+      "en": "a toy bone flute"
+    },
+    {
+      "ko": "불씨 통(어른이 듦)",
+      "en": "an ember pot (carried by an adult)"
+    },
+    {
+      "ko": "달 돌",
+      "en": "a moon rock"
+    },
+    {
+      "ko": "비치볼(달에서는 높이 뜸)",
+      "en": "a beach ball (bounces high on the Moon)"
+    },
+    {
+      "ko": "열차표 팔찌",
+      "en": "a ticket bracelet"
+    },
+    {
+      "ko": "거울 조각(장난감)",
+      "en": "a toy mirror tile"
+    },
+    {
+      "ko": "태엽 열쇠",
+      "en": "a wind-up key"
+    },
+    {
+      "ko": "책갈피",
+      "en": "a bookmark"
+    },
+    {
+      "ko": "거꾸로 우산",
+      "en": "an upside-down umbrella"
+    },
+    {
+      "ko": "거울",
+      "en": "a small mirror"
+    },
+    {
+      "ko": "종이 인형",
+      "en": "a paper puppet"
+    },
+    {
+      "ko": "막대기",
+      "en": "a stick"
+    },
+    {
+      "ko": "하얀 손수건",
+      "en": "a white handkerchief"
+    },
+    {
+      "ko": "각설탕",
+      "en": "a sugar cube"
+    },
+    {
+      "ko": "포도 한 알",
+      "en": "a grape"
+    },
+    {
+      "ko": "코코아 컵",
+      "en": "a cup of cocoa"
+    },
+    {
+      "ko": "어묵 꼬치",
+      "en": "a fish-cake skewer"
+    },
+    {
+      "ko": "군고구마",
+      "en": "a roasted sweet potato"
+    },
+    {
+      "ko": "오렌지",
+      "en": "an orange"
+    },
+    {
+      "ko": "타일 조각",
+      "en": "a painted tile"
+    },
+    {
+      "ko": "빵 한 조각",
+      "en": "a piece of bread"
+    },
+    {
+      "ko": "바오밥 열매",
+      "en": "a baobab fruit"
+    },
+    {
+      "ko": "얼음 조각",
+      "en": "a chunk of ice"
+    },
+    {
+      "ko": "작은 양탄자",
+      "en": "a little rug"
+    },
+    {
+      "ko": "금빛 단추",
+      "en": "a gold button"
+    },
+    {
+      "ko": "우쿨렐레",
+      "en": "a ukulele"
+    },
+    {
+      "ko": "파인애플",
+      "en": "a pineapple"
+    },
+    {
+      "ko": "체크 담요",
+      "en": "a tartan blanket"
+    },
+    {
+      "ko": "비스킷",
+      "en": "a biscuit"
+    },
+    {
+      "ko": "보라 꽃 한 송이",
+      "en": "a sprig of heather"
+    },
+    {
+      "ko": "튤립 한 송이",
+      "en": "a tulip"
+    },
+    {
+      "ko": "종이 연",
+      "en": "a paper kite"
+    },
+    {
+      "ko": "장난감 활",
+      "en": "a toy bow"
+    },
+    {
+      "ko": "군밤",
+      "en": "roasted chestnuts"
+    },
+    {
+      "ko": "털 조끼",
+      "en": "a fur vest"
+    },
+    {
+      "ko": "진흙 벽돌 한 장",
+      "en": "a mud brick"
+    },
+    {
+      "ko": "갈대 피리",
+      "en": "a reed flute"
+    },
+    {
+      "ko": "빵",
+      "en": "a round bread"
+    },
+    {
+      "ko": "카우보이 모자",
+      "en": "a cowboy hat"
+    },
+    {
+      "ko": "물통",
+      "en": "a canteen"
+    },
+    {
+      "ko": "모래시계",
+      "en": "an hourglass"
+    },
+    {
+      "ko": "달력 한 장",
+      "en": "a calendar page"
+    },
+    {
+      "ko": "장갑",
+      "en": "gloves"
+    },
+    {
+      "ko": "빨래집게",
+      "en": "a clothespin"
+    },
+    {
+      "ko": "씨앗 하나",
+      "en": "a single seed"
+    },
+    {
+      "ko": "풀잎 배",
+      "en": "a grass-blade boat"
+    },
+    {
+      "ko": "이슬방울",
+      "en": "a dewdrop"
+    },
+    {
+      "ko": "꽃잎 우산",
+      "en": "a petal umbrella"
+    },
+    {
+      "ko": "도토리 모자",
+      "en": "an acorn-cap hat"
+    },
+    {
+      "ko": "쿠키 한 조각",
+      "en": "a piece of cookie"
+    },
+    {
+      "ko": "사탕 지팡이",
+      "en": "a candy cane"
+    },
+    {
+      "ko": "풀",
+      "en": "a glue stick"
+    }
   ],
   "obstacleTypes": [
-    {"id": "puddle", "ko": "커다란 물웅덩이", "en": "a big puddle", "sense": "touch", "sound": "첨벙"},
-    {"id": "log_bridge", "ko": "좁은 통나무 다리", "en": "a narrow log bridge", "sense": "balance", "sound": "삐걱"},
-    {"id": "tall_grass", "ko": "간질간질한 풀숲", "en": "tickly tall grass", "sense": "touch", "sound": "사각사각"},
-    {"id": "big_rock", "ko": "커다란 바위", "en": "a huge round rock", "sense": "effort", "sound": "끙차"},
-    {"id": "bright_tunnel", "ko": "반딧불이 터널", "en": "a tunnel lit by fireflies", "sense": "sight", "sound": "반짝"},
-    {"id": "mud", "ko": "미끌미끌 진흙길", "en": "slippery mud", "sense": "touch", "sound": "질퍽"},
-    {"id": "bees", "ko": "윙윙 꿀벌 꽃밭", "en": "a flower field buzzing with bees", "sense": "sound", "sound": "윙윙"},
-    {"id": "stream", "ko": "졸졸 개울", "en": "a babbling stream", "sense": "sound", "sound": "졸졸"},
-    {"id": "windy_hill", "ko": "바람 부는 언덕", "en": "a windy hill", "sense": "sound", "sound": "휘잉"},
-    {"id": "spider_silk", "ko": "끈적끈적 거미줄", "en": "a sticky spider web", "sense": "touch", "sound": "찌익"},
-    {"id": "steep_steps", "ko": "가파른 돌계단", "en": "steep stone steps", "sense": "effort", "sound": "헉헉"},
-    {"id": "fog", "ko": "뽀얀 안개 들판", "en": "a field of soft fog", "sense": "sight", "sound": "쉿"}
+    {
+      "id": "puddle",
+      "ko": "커다란 물웅덩이",
+      "en": "a big puddle",
+      "sense": "touch",
+      "sound": "첨벙"
+    },
+    {
+      "id": "log_bridge",
+      "ko": "좁은 통나무 다리",
+      "en": "a narrow log bridge",
+      "sense": "balance",
+      "sound": "삐걱"
+    },
+    {
+      "id": "tall_grass",
+      "ko": "간질간질한 풀숲",
+      "en": "tickly tall grass",
+      "sense": "touch",
+      "sound": "사각사각"
+    },
+    {
+      "id": "big_rock",
+      "ko": "커다란 바위",
+      "en": "a huge round rock",
+      "sense": "effort",
+      "sound": "끙차"
+    },
+    {
+      "id": "bright_tunnel",
+      "ko": "반딧불이 터널",
+      "en": "a tunnel lit by fireflies",
+      "sense": "sight",
+      "sound": "반짝"
+    },
+    {
+      "id": "mud",
+      "ko": "미끌미끌 진흙길",
+      "en": "slippery mud",
+      "sense": "touch",
+      "sound": "질퍽"
+    },
+    {
+      "id": "bees",
+      "ko": "윙윙 꿀벌 꽃밭",
+      "en": "a flower field buzzing with bees",
+      "sense": "sound",
+      "sound": "윙윙"
+    },
+    {
+      "id": "stream",
+      "ko": "졸졸 개울",
+      "en": "a babbling stream",
+      "sense": "sound",
+      "sound": "졸졸"
+    },
+    {
+      "id": "windy_hill",
+      "ko": "바람 부는 언덕",
+      "en": "a windy hill",
+      "sense": "sound",
+      "sound": "휘잉"
+    },
+    {
+      "id": "spider_silk",
+      "ko": "끈적끈적 거미줄",
+      "en": "a sticky spider web",
+      "sense": "touch",
+      "sound": "찌익"
+    },
+    {
+      "id": "steep_steps",
+      "ko": "가파른 돌계단",
+      "en": "steep stone steps",
+      "sense": "effort",
+      "sound": "헉헉"
+    },
+    {
+      "id": "fog",
+      "ko": "뽀얀 안개 들판",
+      "en": "a field of soft fog",
+      "sense": "sight",
+      "sound": "쉿"
+    },
+    {
+      "id": "stepping_stones",
+      "ko": "흔들리는 징검다리",
+      "en": "wobbly stepping stones",
+      "sense": "balance",
+      "sound": "흔들"
+    },
+    {
+      "id": "soft_dune",
+      "ko": "푹푹 빠지는 모래 언덕",
+      "en": "a dune where feet sink",
+      "sense": "effort",
+      "sound": "푹푹"
+    },
+    {
+      "id": "echo_canyon",
+      "ko": "메아리 골짜기",
+      "en": "an echoing canyon",
+      "sense": "sound",
+      "sound": "야호"
+    },
+    {
+      "id": "snow_field",
+      "ko": "뽀드득 눈밭",
+      "en": "a crunchy snowfield",
+      "sense": "touch",
+      "sound": "뽀드득"
+    },
+    {
+      "id": "rain_curtain",
+      "ko": "쏟아지는 빗줄기",
+      "en": "a curtain of rain",
+      "sense": "touch",
+      "sound": "주룩주룩"
+    },
+    {
+      "id": "waterfall_spray",
+      "ko": "폭포 물보라",
+      "en": "waterfall spray",
+      "sense": "touch",
+      "sound": "쏴아"
+    },
+    {
+      "id": "low_branches",
+      "ko": "낮게 늘어진 나뭇가지",
+      "en": "low-hanging branches",
+      "sense": "sight",
+      "sound": "휙"
+    },
+    {
+      "id": "sleeping_giant",
+      "ko": "잠든 큰 동물 옆",
+      "en": "past a big sleeping animal",
+      "sense": "sound",
+      "sound": "쉿"
+    },
+    {
+      "id": "butterfly_cloud",
+      "ko": "나비 떼",
+      "en": "a cloud of butterflies",
+      "sense": "sight",
+      "sound": "팔랑팔랑"
+    },
+    {
+      "id": "rolling_fruit",
+      "ko": "데굴데굴 굴러오는 과일",
+      "en": "fruit rolling downhill",
+      "sense": "effort",
+      "sound": "데굴데굴"
+    },
+    {
+      "id": "bubble_path",
+      "ko": "비눗방울 길",
+      "en": "a path of soap bubbles",
+      "sense": "sight",
+      "sound": "퐁"
+    },
+    {
+      "id": "ice_puddle",
+      "ko": "미끄러운 얼음 웅덩이",
+      "en": "a slippery frozen puddle",
+      "sense": "balance",
+      "sound": "쭈욱"
+    },
+    {
+      "id": "noisy_market",
+      "ko": "북적북적 시장",
+      "en": "a bustling market",
+      "sense": "sound",
+      "sound": "왁자지껄"
+    },
+    {
+      "id": "rope_bridge",
+      "ko": "출렁다리",
+      "en": "a swaying rope bridge",
+      "sense": "balance",
+      "sound": "출렁"
+    },
+    {
+      "id": "flower_scent",
+      "ko": "향기 진한 꽃밭",
+      "en": "a field of strong-scented flowers",
+      "sense": "smell",
+      "sound": "킁킁"
+    },
+    {
+      "id": "bakery_smell",
+      "ko": "빵 굽는 냄새 유혹",
+      "en": "the tempting smell of baking bread",
+      "sense": "smell",
+      "sound": "킁킁"
+    },
+    {
+      "id": "sticky_honey",
+      "ko": "끈적끈적 꿀길",
+      "en": "a sticky honey path",
+      "sense": "touch",
+      "sound": "쩍쩍"
+    },
+    {
+      "id": "mirror_hall",
+      "ko": "거울 방",
+      "en": "a hall of mirrors",
+      "sense": "sight",
+      "sound": "반짝"
+    },
+    {
+      "id": "narrow_burrow",
+      "ko": "좁은 굴",
+      "en": "a narrow burrow",
+      "sense": "effort",
+      "sound": "끙"
+    },
+    {
+      "id": "counting_gate",
+      "ko": "숫자를 세어야 열리는 문",
+      "en": "a gate that opens when you count",
+      "sense": "puzzle",
+      "sound": "하나둘셋"
+    },
+    {
+      "id": "sun_glare",
+      "ko": "눈부신 햇빛",
+      "en": "dazzling sunlight",
+      "sense": "sight",
+      "sound": "반짝"
+    },
+    {
+      "id": "tickly_feathers",
+      "ko": "간질간질 깃털 더미",
+      "en": "a tickly pile of feathers",
+      "sense": "touch",
+      "sound": "킥킥"
+    },
+    {
+      "id": "hot_sand",
+      "ko": "앗 뜨거운 모래",
+      "en": "hot sand underfoot",
+      "sense": "touch",
+      "sound": "앗 뜨거"
+    },
+    {
+      "id": "thorny_bush",
+      "ko": "따끔 가시덤불",
+      "en": "a prickly bush",
+      "sense": "touch",
+      "sound": "따끔"
+    },
+    {
+      "id": "cold_stream",
+      "ko": "앗 차가운 개울",
+      "en": "a cold stream to wade",
+      "sense": "touch",
+      "sound": "앗 차가"
+    },
+    {
+      "id": "deep_grass_seeds",
+      "ko": "씨앗 달라붙는 풀밭",
+      "en": "seed-sticky grass",
+      "sense": "touch",
+      "sound": "착착"
+    },
+    {
+      "id": "fizzy_pond",
+      "ko": "보글보글 거품 연못",
+      "en": "a fizzing bubbly pond",
+      "sense": "sound",
+      "sound": "보글보글"
+    },
+    {
+      "id": "whispering_reeds",
+      "ko": "속닥속닥 갈대밭",
+      "en": "whispering reeds",
+      "sense": "sound",
+      "sound": "속닥속닥"
+    },
+    {
+      "id": "drum_bridge",
+      "ko": "쿵쿵 울리는 나무 다리",
+      "en": "a booming wooden bridge",
+      "sense": "sound",
+      "sound": "쿵쿵"
+    },
+    {
+      "id": "squeaky_floor",
+      "ko": "삐걱삐걱 마룻바닥",
+      "en": "a squeaky wooden floor",
+      "sense": "sound",
+      "sound": "삐걱"
+    },
+    {
+      "id": "onion_stall",
+      "ko": "눈이 매운 양파 가게",
+      "en": "a stall of eye-stinging onions",
+      "sense": "smell",
+      "sound": "흑흑"
+    },
+    {
+      "id": "fish_market_smell",
+      "ko": "비린내 어시장",
+      "en": "a fishy-smelling market",
+      "sense": "smell",
+      "sound": "으으"
+    },
+    {
+      "id": "honey_bees_hive",
+      "ko": "달콤한 벌집 나무",
+      "en": "a honey-scented hive tree",
+      "sense": "smell",
+      "sound": "윙윙"
+    },
+    {
+      "id": "spice_cloud",
+      "ko": "재채기 향신료 구름",
+      "en": "a sneezy cloud of spice",
+      "sense": "smell",
+      "sound": "에취"
+    },
+    {
+      "id": "sour_lemon_grove",
+      "ko": "신 레몬 밭",
+      "en": "a sour lemon grove",
+      "sense": "taste",
+      "sound": "시다"
+    },
+    {
+      "id": "salty_spray",
+      "ko": "짭짤한 바다 물보라",
+      "en": "salty sea spray",
+      "sense": "taste",
+      "sound": "짭짤"
+    },
+    {
+      "id": "glitter_snow",
+      "ko": "눈부신 반짝 눈밭",
+      "en": "a dazzling glittering snowfield",
+      "sense": "sight",
+      "sound": "반짝반짝"
+    },
+    {
+      "id": "moving_shadows",
+      "ko": "흔들리는 그림자 숲",
+      "en": "a forest of moving shadows",
+      "sense": "sight",
+      "sound": "흔들"
+    },
+    {
+      "id": "lookalike_doors",
+      "ko": "똑같이 생긴 문 세 개",
+      "en": "three identical doors",
+      "sense": "puzzle",
+      "sound": "어느 거지"
+    },
+    {
+      "id": "rhyme_gate",
+      "ko": "노래로만 열리는 문",
+      "en": "a gate that opens only to a song",
+      "sense": "puzzle",
+      "sound": "라라"
+    },
+    {
+      "id": "color_stones",
+      "ko": "색깔 순서 징검돌",
+      "en": "stepping stones in a color order",
+      "sense": "puzzle",
+      "sound": "빨강 노랑"
+    },
+    {
+      "id": "heavy_door",
+      "ko": "끙 무거운 문",
+      "en": "a heavy door to push",
+      "sense": "effort",
+      "sound": "끙"
+    },
+    {
+      "id": "long_ladder",
+      "ko": "높은 사다리",
+      "en": "a tall ladder",
+      "sense": "effort",
+      "sound": "한 칸 두 칸"
+    },
+    {
+      "id": "windy_bridge",
+      "ko": "휘청 바람 다리",
+      "en": "a bridge in a gusty wind",
+      "sense": "balance",
+      "sound": "휘청"
+    },
+    {
+      "id": "log_roll",
+      "ko": "데굴데굴 굴러가는 통나무",
+      "en": "a rolling log to cross",
+      "sense": "balance",
+      "sound": "데굴데굴"
+    },
+    {
+      "id": "tired_legs",
+      "ko": "다리 아픈 긴 오르막",
+      "en": "a long tiring uphill",
+      "sense": "effort",
+      "sound": "헉헉"
+    },
+    {
+      "id": "sleepy_meadow",
+      "ko": "하품 나는 졸린 풀밭",
+      "en": "a drowsy meadow",
+      "sense": "sight",
+      "sound": "하암"
+    },
+    {
+      "id": "giggle_bridge",
+      "ko": "간지러운 깃털 다리",
+      "en": "a tickly feather bridge",
+      "sense": "touch",
+      "sound": "킥킥"
+    }
   ],
   "twistTypes": [
-    {"id": "familiar_thing", "ko": "정체는 친숙한 물건", "en": "the mystery turns out to be a familiar object", "hint": "처음에 심은 물건이 소리·그림자·움직임의 주인이었다"},
-    {"id": "role_swap", "ko": "역할 뒤바뀜", "en": "the helper and the helped swap roles", "hint": "도움을 받으러 갔는데 오히려 도와주게 된다"},
-    {"id": "small_saves", "ko": "가장 작은 것이 해결", "en": "the smallest creature solves it", "hint": "힘센 것들이 다 실패한 일을 개미·달팽이가 해낸다"},
-    {"id": "sound_owner", "ko": "소리의 주인", "en": "the sound has an unexpected owner", "hint": "무서운 줄 알았던 소리의 주인이 작고 귀여운 존재"},
-    {"id": "closest_place", "ko": "찾던 것이 가장 가까이", "en": "it was right here all along", "hint": "주머니·모자 위·등 뒤에 있었다"},
-    {"id": "mistake_wins", "ko": "실수가 해결", "en": "a mistake becomes the solution", "hint": "넘어지거나 떨어뜨린 것이 문제를 풀어 준다"},
-    {"id": "same_wish", "ko": "상대도 같은 걸 원했다", "en": "the other one wanted the same thing", "hint": "경쟁하던 둘이 같은 목표였음을 안다"},
-    {"id": "secret_watcher", "ko": "몰래 지켜보던 친구", "en": "a friend was quietly watching", "hint": "내내 따라오던 작은 생물이 마지막에 나타난다"}
+    {
+      "id": "familiar_thing",
+      "ko": "정체는 친숙한 물건",
+      "en": "the mystery turns out to be a familiar object",
+      "hint": "처음에 심은 물건이 소리·그림자·움직임의 주인이었다"
+    },
+    {
+      "id": "role_swap",
+      "ko": "역할 뒤바뀜",
+      "en": "the helper and the helped swap roles",
+      "hint": "도움을 받으러 갔는데 오히려 도와주게 된다"
+    },
+    {
+      "id": "small_saves",
+      "ko": "가장 작은 것이 해결",
+      "en": "the smallest creature solves it",
+      "hint": "힘센 것들이 다 실패한 일을 개미·달팽이가 해낸다"
+    },
+    {
+      "id": "sound_owner",
+      "ko": "소리의 주인",
+      "en": "the sound has an unexpected owner",
+      "hint": "무서운 줄 알았던 소리의 주인이 작고 귀여운 존재"
+    },
+    {
+      "id": "closest_place",
+      "ko": "찾던 것이 가장 가까이",
+      "en": "it was right here all along",
+      "hint": "주머니·모자 위·등 뒤에 있었다"
+    },
+    {
+      "id": "mistake_wins",
+      "ko": "실수가 해결",
+      "en": "a mistake becomes the solution",
+      "hint": "넘어지거나 떨어뜨린 것이 문제를 풀어 준다"
+    },
+    {
+      "id": "same_wish",
+      "ko": "상대도 같은 걸 원했다",
+      "en": "the other one wanted the same thing",
+      "hint": "경쟁하던 둘이 같은 목표였음을 안다"
+    },
+    {
+      "id": "secret_watcher",
+      "ko": "몰래 지켜보던 친구",
+      "en": "a friend was quietly watching",
+      "hint": "내내 따라오던 작은 생물이 마지막에 나타난다"
+    },
+    {
+      "id": "shadow_was_it",
+      "ko": "무서워 보인 건 그림자",
+      "en": "the big scary shape was a small thing's shadow",
+      "hint": "큰 것인 줄 알았던 게 작은 친구의 그림자였다"
+    },
+    {
+      "id": "echo_was_me",
+      "ko": "대답한 건 메아리",
+      "en": "the answering voice was an echo",
+      "hint": "대답하던 목소리는 유하 자신의 메아리였다"
+    },
+    {
+      "id": "mirror_twin",
+      "ko": "거울 속 자기 모습",
+      "en": "it was a reflection in a mirror or water",
+      "hint": "따라 하던 아이는 거울·물에 비친 유하였다"
+    },
+    {
+      "id": "helper_while_asleep",
+      "ko": "잠든 사이 작은 친구들이",
+      "en": "small friends did it while everyone slept",
+      "hint": "밤새 개미·새들이 조금씩 해 두었다"
+    },
+    {
+      "id": "wrong_direction",
+      "ko": "반대로 가야 했다",
+      "en": "it was in the opposite direction all along",
+      "hint": "앞으로만 갔는데 뒤돌아보니 바로 뒤에 있었다"
+    },
+    {
+      "id": "it_grew",
+      "ko": "자라 있었다",
+      "en": "the lost thing had grown",
+      "hint": "심은 씨앗·작은 것이 자라서 몰라봤다"
+    },
+    {
+      "id": "miscount",
+      "ko": "하나는 유하 자신",
+      "en": "the missing one was Yuha",
+      "hint": "숫자가 모자란 줄 알았는데 세는 사람을 빼먹었다"
+    },
+    {
+      "id": "weather_moved_it",
+      "ko": "바람·비가 옮겨 놓았다",
+      "en": "the weather moved it",
+      "hint": "바람이 날리거나 물에 떠내려가 옆 장소에 있었다"
+    },
+    {
+      "id": "two_of_them",
+      "ko": "두 개였다",
+      "en": "there were two all along",
+      "hint": "하나인 줄 알았던 것이 쌍둥이·두 개였다"
+    },
+    {
+      "id": "asking_for_help",
+      "ko": "도움을 구하러 온 것",
+      "en": "it came to ask for help",
+      "hint": "무서워 보이던 존재가 사실 도움을 청하러 왔다"
+    },
+    {
+      "id": "it_was_following",
+      "ko": "따라오던 건 내 소리",
+      "en": "the follower was Yuha's own sound",
+      "hint": "발소리가 따라오는 줄 알았는데 유하 가방 소리였다"
+    },
+    {
+      "id": "gift_not_lost",
+      "ko": "잃어버린 게 아니라 선물",
+      "en": "it wasn't lost, it was a gift",
+      "hint": "없어진 물건은 친구가 꾸며서 돌려주려던 것"
+    },
+    {
+      "id": "upside_down_view",
+      "ko": "거꾸로 보면 보인다",
+      "en": "it appears when you look upside down",
+      "hint": "물구나무·거울·물에 비춰 보니 그제야 보였다"
+    },
+    {
+      "id": "counting_wrong_way",
+      "ko": "반대로 세야 했다",
+      "en": "count the other way",
+      "hint": "앞에서 세면 없는데 뒤에서 세면 있었다"
+    },
+    {
+      "id": "too_close_to_see",
+      "ko": "너무 가까워서 못 봄",
+      "en": "too close to notice",
+      "hint": "머리 위·등 뒤·손 안처럼 너무 가까이 있었다"
+    },
+    {
+      "id": "sound_is_music",
+      "ko": "소리는 노래였다",
+      "en": "the noise was music",
+      "hint": "괴상한 소리는 친구가 연습하던 노래였다"
+    },
+    {
+      "id": "waiting_for_me",
+      "ko": "나를 기다리고 있었다",
+      "en": "it was waiting for Yuha",
+      "hint": "찾아다닌 것이 처음 자리에서 유하를 기다리고 있었다"
+    },
+    {
+      "id": "smaller_is_key",
+      "ko": "작아져야 들어간다",
+      "en": "only something small can fit",
+      "hint": "큰 친구들은 못 들어가고 가장 작은 친구가 해결"
+    },
+    {
+      "id": "wind_carried_song",
+      "ko": "바람이 소리를 옮겼다",
+      "en": "the wind carried the sound",
+      "hint": "소리의 주인은 멀리 있었고 바람이 가까이 들리게 했다"
+    },
+    {
+      "id": "sleep_made_it",
+      "ko": "자는 동안 자랐다",
+      "en": "it grew while everyone slept",
+      "hint": "밤새 씨앗·눈·빵이 자라거나 부풀었다"
+    },
+    {
+      "id": "mixed_up_shoes",
+      "ko": "바뀐 건 신발",
+      "en": "the swapped thing was a shoe",
+      "hint": "이상한 발자국은 친구와 신발이 바뀐 탓이었다"
+    },
+    {
+      "id": "helper_was_tiny",
+      "ko": "도와준 건 개미",
+      "en": "the helper was tiny",
+      "hint": "큰 도움을 준 건 개미·달팽이 같은 작은 친구"
+    }
   ],
   "creatures": [
-    {"ko": "달팽이", "en": "a small snail"},
-    {"ko": "참새", "en": "a sparrow"},
-    {"ko": "개미 줄", "en": "a line of ants"},
-    {"ko": "무당벌레", "en": "a ladybug"},
-    {"ko": "노랑나비", "en": "a yellow butterfly"},
-    {"ko": "청개구리", "en": "a tiny green frog"},
-    {"ko": "다람쥐", "en": "a squirrel"},
-    {"ko": "하얀 토끼", "en": "a white rabbit"},
-    {"ko": "거북이", "en": "a slow turtle"},
-    {"ko": "고양이", "en": "a cat"},
-    {"ko": "강아지", "en": "a puppy"},
-    {"ko": "오리 가족", "en": "a duck family"},
-    {"ko": "꿀벌", "en": "a honeybee"},
-    {"ko": "잠자리", "en": "a dragonfly"},
-    {"ko": "지렁이", "en": "an earthworm"},
-    {"ko": "메뚜기", "en": "a grasshopper"},
-    {"ko": "까치", "en": "a magpie"},
-    {"ko": "비둘기", "en": "a pigeon"},
-    {"ko": "소라게", "en": "a hermit crab"},
-    {"ko": "물고기 떼", "en": "a school of little fish"},
-    {"ko": "올챙이", "en": "tadpoles"},
-    {"ko": "두더지", "en": "a mole"},
-    {"ko": "고슴도치", "en": "a hedgehog"},
-    {"ko": "송아지", "en": "a calf"},
-    {"ko": "아기 염소", "en": "a baby goat"},
-    {"ko": "병아리", "en": "a chick"},
-    {"ko": "반딧불이", "en": "fireflies"},
-    {"ko": "붕어", "en": "a goldfish"},
-    {"ko": "작은 게", "en": "a small crab"},
-    {"ko": "아기 공룡", "en": "a baby dinosaur"}
+    {
+      "ko": "달팽이",
+      "en": "a small snail"
+    },
+    {
+      "ko": "참새",
+      "en": "a sparrow"
+    },
+    {
+      "ko": "개미 줄",
+      "en": "a line of ants"
+    },
+    {
+      "ko": "무당벌레",
+      "en": "a ladybug"
+    },
+    {
+      "ko": "노랑나비",
+      "en": "a yellow butterfly"
+    },
+    {
+      "ko": "청개구리",
+      "en": "a tiny green frog"
+    },
+    {
+      "ko": "다람쥐",
+      "en": "a squirrel"
+    },
+    {
+      "ko": "하얀 토끼",
+      "en": "a white rabbit"
+    },
+    {
+      "ko": "거북이",
+      "en": "a slow turtle"
+    },
+    {
+      "ko": "고양이",
+      "en": "a cat"
+    },
+    {
+      "ko": "강아지",
+      "en": "a puppy"
+    },
+    {
+      "ko": "오리 가족",
+      "en": "a duck family"
+    },
+    {
+      "ko": "꿀벌",
+      "en": "a honeybee"
+    },
+    {
+      "ko": "잠자리",
+      "en": "a dragonfly"
+    },
+    {
+      "ko": "지렁이",
+      "en": "an earthworm"
+    },
+    {
+      "ko": "메뚜기",
+      "en": "a grasshopper"
+    },
+    {
+      "ko": "까치",
+      "en": "a magpie"
+    },
+    {
+      "ko": "비둘기",
+      "en": "a pigeon"
+    },
+    {
+      "ko": "소라게",
+      "en": "a hermit crab"
+    },
+    {
+      "ko": "물고기 떼",
+      "en": "a school of little fish"
+    },
+    {
+      "ko": "올챙이",
+      "en": "tadpoles"
+    },
+    {
+      "ko": "두더지",
+      "en": "a mole"
+    },
+    {
+      "ko": "고슴도치",
+      "en": "a hedgehog"
+    },
+    {
+      "ko": "송아지",
+      "en": "a calf"
+    },
+    {
+      "ko": "아기 염소",
+      "en": "a baby goat"
+    },
+    {
+      "ko": "병아리",
+      "en": "a chick"
+    },
+    {
+      "ko": "반딧불이",
+      "en": "fireflies"
+    },
+    {
+      "ko": "붕어",
+      "en": "a goldfish"
+    },
+    {
+      "ko": "작은 게",
+      "en": "a small crab"
+    },
+    {
+      "ko": "아기 공룡",
+      "en": "a baby dinosaur"
+    },
+    {
+      "ko": "두루미",
+      "en": "a crane"
+    },
+    {
+      "ko": "펭귄",
+      "en": "a penguin"
+    },
+    {
+      "ko": "물개",
+      "en": "a seal"
+    },
+    {
+      "ko": "수달",
+      "en": "an otter"
+    },
+    {
+      "ko": "사슴",
+      "en": "a deer"
+    },
+    {
+      "ko": "노루",
+      "en": "a roe deer"
+    },
+    {
+      "ko": "여우",
+      "en": "a fox"
+    },
+    {
+      "ko": "너구리",
+      "en": "a raccoon dog"
+    },
+    {
+      "ko": "아기 곰",
+      "en": "a bear cub"
+    },
+    {
+      "ko": "판다",
+      "en": "a panda"
+    },
+    {
+      "ko": "캥거루",
+      "en": "a kangaroo"
+    },
+    {
+      "ko": "원숭이",
+      "en": "a monkey"
+    },
+    {
+      "ko": "앵무새",
+      "en": "a parrot"
+    },
+    {
+      "ko": "공작",
+      "en": "a peacock"
+    },
+    {
+      "ko": "플라밍고",
+      "en": "a flamingo"
+    },
+    {
+      "ko": "타조",
+      "en": "an ostrich"
+    },
+    {
+      "ko": "당나귀",
+      "en": "a donkey"
+    },
+    {
+      "ko": "아기 돼지",
+      "en": "a piglet"
+    },
+    {
+      "ko": "젖소",
+      "en": "a cow"
+    },
+    {
+      "ko": "닭",
+      "en": "a hen"
+    },
+    {
+      "ko": "백조",
+      "en": "a swan"
+    },
+    {
+      "ko": "해파리",
+      "en": "a see-through jellyfish"
+    },
+    {
+      "ko": "불가사리",
+      "en": "a starfish"
+    },
+    {
+      "ko": "고래",
+      "en": "a whale"
+    },
+    {
+      "ko": "가오리",
+      "en": "a ray"
+    },
+    {
+      "ko": "귀뚜라미",
+      "en": "a cricket"
+    },
+    {
+      "ko": "방울벌레",
+      "en": "a bell cricket"
+    },
+    {
+      "ko": "사마귀",
+      "en": "a praying mantis"
+    },
+    {
+      "ko": "작은 거미",
+      "en": "a tiny spider"
+    },
+    {
+      "ko": "호랑나비",
+      "en": "a swallowtail butterfly"
+    },
+    {
+      "ko": "딱따구리",
+      "en": "a woodpecker"
+    },
+    {
+      "ko": "올빼미",
+      "en": "an owl"
+    },
+    {
+      "ko": "다람쥐 가족",
+      "en": "a squirrel family"
+    },
+    {
+      "ko": "낙타",
+      "en": "a camel"
+    },
+    {
+      "ko": "창가 참새",
+      "en": "a sparrow at the window"
+    },
+    {
+      "ko": "어항 금붕어",
+      "en": "a goldfish in the bowl"
+    },
+    {
+      "ko": "베란다 달팽이",
+      "en": "a snail on the balcony"
+    },
+    {
+      "ko": "텃밭 무당벌레",
+      "en": "a ladybug in the garden"
+    },
+    {
+      "ko": "수돗가 개미 줄",
+      "en": "ants by the tap"
+    },
+    {
+      "ko": "교실 토끼",
+      "en": "the class rabbit"
+    },
+    {
+      "ko": "누렁이",
+      "en": "a yellow farm dog"
+    },
+    {
+      "ko": "논 개구리",
+      "en": "a paddy frog"
+    },
+    {
+      "ko": "갈매기",
+      "en": "a seagull"
+    },
+    {
+      "ko": "골목 고양이",
+      "en": "a lane cat"
+    },
+    {
+      "ko": "연못 잉어",
+      "en": "koi in a pond"
+    },
+    {
+      "ko": "공원 오리",
+      "en": "a park duck"
+    },
+    {
+      "ko": "빵집 고양이",
+      "en": "the bakery cat"
+    },
+    {
+      "ko": "운하 오리",
+      "en": "a canal duck"
+    },
+    {
+      "ko": "양",
+      "en": "a sheep"
+    },
+    {
+      "ko": "물가 고양이",
+      "en": "a cat by the water"
+    },
+    {
+      "ko": "기린",
+      "en": "a giraffe"
+    },
+    {
+      "ko": "아기 코끼리",
+      "en": "a baby elephant"
+    },
+    {
+      "ko": "미어캣",
+      "en": "a meerkat"
+    },
+    {
+      "ko": "알파카",
+      "en": "an alpaca"
+    },
+    {
+      "ko": "콘도르",
+      "en": "a condor far above"
+    },
+    {
+      "ko": "기니피그",
+      "en": "a guinea pig"
+    },
+    {
+      "ko": "털북숭이 조랑말",
+      "en": "a shaggy pony"
+    },
+    {
+      "ko": "퍼핀 새",
+      "en": "a puffin"
+    },
+    {
+      "ko": "북극여우",
+      "en": "an arctic fox"
+    },
+    {
+      "ko": "망아지",
+      "en": "a foal"
+    },
+    {
+      "ko": "마멋",
+      "en": "a marmot"
+    },
+    {
+      "ko": "강 물고기",
+      "en": "a river fish"
+    },
+    {
+      "ko": "물총새",
+      "en": "a kingfisher"
+    },
+    {
+      "ko": "뱃머리 고양이",
+      "en": "a cat on the bow"
+    },
+    {
+      "ko": "광대물고기",
+      "en": "a clownfish"
+    },
+    {
+      "ko": "바다거북",
+      "en": "a sea turtle"
+    },
+    {
+      "ko": "코알라",
+      "en": "a koala"
+    },
+    {
+      "ko": "따오기",
+      "en": "an ibis"
+    },
+    {
+      "ko": "쇠똥구리",
+      "en": "a scarab beetle"
+    },
+    {
+      "ko": "황소",
+      "en": "a brown ox"
+    },
+    {
+      "ko": "아기 매머드",
+      "en": "a baby mammoth"
+    },
+    {
+      "ko": "거위",
+      "en": "a goose"
+    },
+    {
+      "ko": "탑 비둘기",
+      "en": "a tower pigeon"
+    },
+    {
+      "ko": "조랑말",
+      "en": "a pony"
+    },
+    {
+      "ko": "돌고래",
+      "en": "a dolphin"
+    },
+    {
+      "ko": "아기 낙타",
+      "en": "a baby camel"
+    },
+    {
+      "ko": "사막 여우",
+      "en": "a desert fox"
+    },
+    {
+      "ko": "도마뱀",
+      "en": "a little lizard"
+    },
+    {
+      "ko": "온실 무당벌레",
+      "en": "a greenhouse ladybug"
+    },
+    {
+      "ko": "돌보는 로봇 강아지",
+      "en": "a robot puppy"
+    },
+    {
+      "ko": "온실 달팽이",
+      "en": "a greenhouse snail"
+    },
+    {
+      "ko": "실험실 금붕어",
+      "en": "a lab goldfish"
+    },
+    {
+      "ko": "온실 나비",
+      "en": "a greenhouse butterfly"
+    },
+    {
+      "ko": "작은 청소 로봇",
+      "en": "a tiny cleaning robot"
+    },
+    {
+      "ko": "로봇 강아지",
+      "en": "a robot puppy"
+    },
+    {
+      "ko": "드론 벌",
+      "en": "a drone bee"
+    },
+    {
+      "ko": "옥상 정원 참새",
+      "en": "a sparrow in the rooftop garden"
+    },
+    {
+      "ko": "해마",
+      "en": "a seahorse"
+    },
+    {
+      "ko": "문어",
+      "en": "a friendly octopus"
+    },
+    {
+      "ko": "구름 양",
+      "en": "a cloud sheep"
+    },
+    {
+      "ko": "제비",
+      "en": "a swallow"
+    },
+    {
+      "ko": "별 물고기",
+      "en": "a star fish that swims in air"
+    },
+    {
+      "ko": "졸린 올빼미",
+      "en": "a sleepy owl"
+    },
+    {
+      "ko": "젤리 개구리",
+      "en": "a jelly frog"
+    },
+    {
+      "ko": "마시멜로 토끼",
+      "en": "a marshmallow rabbit"
+    },
+    {
+      "ko": "설탕 나비",
+      "en": "a sugar butterfly"
+    },
+    {
+      "ko": "개미",
+      "en": "an ant as big as a dog"
+    },
+    {
+      "ko": "점 하나로 그린 새",
+      "en": "a bird painted with one dot"
+    },
+    {
+      "ko": "물감 물고기",
+      "en": "a paint fish"
+    },
+    {
+      "ko": "선으로만 그린 고양이",
+      "en": "a cat drawn in one line"
+    },
+    {
+      "ko": "강가 오리",
+      "en": "a river duck"
+    },
+    {
+      "ko": "잔디밭 메뚜기",
+      "en": "a grasshopper in the grass"
+    },
+    {
+      "ko": "분홍 돌고래",
+      "en": "a pink river dolphin"
+    },
+    {
+      "ko": "나무늘보",
+      "en": "a sloth"
+    },
+    {
+      "ko": "큰부리새",
+      "en": "a toucan"
+    },
+    {
+      "ko": "소",
+      "en": "a gentle cow"
+    },
+    {
+      "ko": "하얀 고양이",
+      "en": "a white cat"
+    },
+    {
+      "ko": "방울 단 소",
+      "en": "a cow with a bell"
+    },
+    {
+      "ko": "산양",
+      "en": "a mountain goat"
+    },
+    {
+      "ko": "비버",
+      "en": "a beaver"
+    },
+    {
+      "ko": "무스",
+      "en": "a moose"
+    },
+    {
+      "ko": "아비새",
+      "en": "a loon"
+    },
+    {
+      "ko": "벌새",
+      "en": "a hummingbird"
+    },
+    {
+      "ko": "이구아나",
+      "en": "a lazy iguana"
+    },
+    {
+      "ko": "작은 도마뱀",
+      "en": "a little lizard"
+    },
+    {
+      "ko": "말",
+      "en": "a horse"
+    },
+    {
+      "ko": "순록",
+      "en": "a reindeer"
+    },
+    {
+      "ko": "눈토끼",
+      "en": "a snow hare"
+    },
+    {
+      "ko": "아기 양",
+      "en": "a lamb"
+    },
+    {
+      "ko": "양치기 개",
+      "en": "a sheepdog"
+    },
+    {
+      "ko": "키위새",
+      "en": "a kiwi bird"
+    },
+    {
+      "ko": "아기 판다",
+      "en": "a baby panda"
+    },
+    {
+      "ko": "레서판다",
+      "en": "a red panda"
+    },
+    {
+      "ko": "바다표범",
+      "en": "a seal"
+    },
+    {
+      "ko": "도마뱀붙이",
+      "en": "a gecko"
+    },
+    {
+      "ko": "시장 고양이",
+      "en": "a market cat"
+    },
+    {
+      "ko": "염소",
+      "en": "a goat"
+    },
+    {
+      "ko": "까마귀",
+      "en": "a raven"
+    },
+    {
+      "ko": "연못 개구리",
+      "en": "a pond frog"
+    },
+    {
+      "ko": "개울 물고기",
+      "en": "a stream fish"
+    },
+    {
+      "ko": "역 고양이",
+      "en": "the station cat"
+    },
+    {
+      "ko": "짐수레 말",
+      "en": "a cart horse"
+    },
+    {
+      "ko": "궁궐 고양이",
+      "en": "a palace cat"
+    },
+    {
+      "ko": "아기 바다 공룡",
+      "en": "a baby sea reptile"
+    },
+    {
+      "ko": "암모나이트",
+      "en": "an ammonite"
+    },
+    {
+      "ko": "익룡",
+      "en": "a pterosaur gliding"
+    },
+    {
+      "ko": "큰뿔 사슴",
+      "en": "a giant deer"
+    },
+    {
+      "ko": "돔 온실 나비",
+      "en": "a greenhouse butterfly"
+    },
+    {
+      "ko": "로봇 거북이",
+      "en": "a robot turtle"
+    },
+    {
+      "ko": "돔 금붕어",
+      "en": "a goldfish in the dome"
+    },
+    {
+      "ko": "수족관 물고기",
+      "en": "aquarium fish"
+    },
+    {
+      "ko": "농장 강아지",
+      "en": "the farm dog"
+    },
+    {
+      "ko": "빛 정원 나비",
+      "en": "a butterfly in the light garden"
+    },
+    {
+      "ko": "광장 오리",
+      "en": "a plaza duck"
+    },
+    {
+      "ko": "유리 수족관 거북이",
+      "en": "a turtle in the glass aquarium"
+    },
+    {
+      "ko": "비행선 고양이",
+      "en": "the airship cat"
+    },
+    {
+      "ko": "구름 사이 제비",
+      "en": "a swallow among the clouds"
+    },
+    {
+      "ko": "나무 올빼미",
+      "en": "an owl in the great tree"
+    },
+    {
+      "ko": "청소 로봇",
+      "en": "a tiny cleaning robot"
+    },
+    {
+      "ko": "태엽 강아지",
+      "en": "a wind-up puppy"
+    },
+    {
+      "ko": "헝겊 토끼",
+      "en": "a rag-doll rabbit"
+    },
+    {
+      "ko": "나무 기차 '칙칙'",
+      "en": "a little wooden train called Chik-chik"
+    },
+    {
+      "ko": "글자 새",
+      "en": "a letter-bird"
+    },
+    {
+      "ko": "책벌레(귀여운)",
+      "en": "a cute bookworm"
+    },
+    {
+      "ko": "종이 고양이",
+      "en": "a paper cat"
+    },
+    {
+      "ko": "거꾸로 걷는 거북이",
+      "en": "a turtle walking upside down"
+    },
+    {
+      "ko": "물고기 새",
+      "en": "a fish that flies"
+    },
+    {
+      "ko": "뒤로 뛰는 토끼",
+      "en": "a rabbit that hops backwards"
+    },
+    {
+      "ko": "방울 물고기",
+      "en": "a bubble fish"
+    },
+    {
+      "ko": "거품 양",
+      "en": "a foam sheep"
+    },
+    {
+      "ko": "반짝 잠자리",
+      "en": "a shimmering dragonfly"
+    },
+    {
+      "ko": "노래하는 개구리",
+      "en": "a singing frog"
+    },
+    {
+      "ko": "딱따구리 드러머",
+      "en": "a woodpecker drummer"
+    },
+    {
+      "ko": "색을 바꾸는 카멜레온",
+      "en": "a color-changing chameleon"
+    },
+    {
+      "ko": "파랑새",
+      "en": "a bluebird"
+    },
+    {
+      "ko": "빨강 무당벌레",
+      "en": "a red ladybug"
+    },
+    {
+      "ko": "그림자 토끼",
+      "en": "a shadow rabbit"
+    },
+    {
+      "ko": "그림자 새",
+      "en": "a shadow bird"
+    },
+    {
+      "ko": "그림자 강아지",
+      "en": "a shadow puppy"
+    },
+    {
+      "ko": "눈사람 친구",
+      "en": "a snowman friend"
+    },
+    {
+      "ko": "작은 순록",
+      "en": "a tiny reindeer"
+    },
+    {
+      "ko": "개미 탐험대",
+      "en": "an ant expedition"
+    },
+    {
+      "ko": "부엌 파리(친절한)",
+      "en": "a friendly kitchen fly"
+    },
+    {
+      "ko": "치즈 생쥐",
+      "en": "a cheese mouse"
+    },
+    {
+      "ko": "잠옷 입은 곰",
+      "en": "a bear in pajamas"
+    },
+    {
+      "ko": "졸린 올빼미 차장",
+      "en": "a sleepy owl conductor"
+    },
+    {
+      "ko": "수조 문어",
+      "en": "an octopus in a tank"
+    },
+    {
+      "ko": "항구 고양이",
+      "en": "a harbor cat"
+    },
+    {
+      "ko": "눈 속 참새",
+      "en": "a sparrow in the snow"
+    },
+    {
+      "ko": "동네 강아지",
+      "en": "the village dog"
+    },
+    {
+      "ko": "호수 물고기",
+      "en": "a lake fish"
+    },
+    {
+      "ko": "광장 고양이",
+      "en": "a square cat"
+    },
+    {
+      "ko": "여우원숭이",
+      "en": "a lemur"
+    },
+    {
+      "ko": "카멜레온",
+      "en": "a chameleon"
+    },
+    {
+      "ko": "흰머리 독수리",
+      "en": "a bald eagle"
+    },
+    {
+      "ko": "매",
+      "en": "a falcon"
+    },
+    {
+      "ko": "흰 도마뱀붙이",
+      "en": "a white gecko"
+    },
+    {
+      "ko": "긴 털 소",
+      "en": "a shaggy highland cow"
+    },
+    {
+      "ko": "호수 수달",
+      "en": "a loch otter"
+    },
+    {
+      "ko": "얼룩말",
+      "en": "a zebra"
+    },
+    {
+      "ko": "혹멧돼지 새끼",
+      "en": "a warthog piglet"
+    },
+    {
+      "ko": "창가 고양이",
+      "en": "a window cat"
+    },
+    {
+      "ko": "해자 잉어",
+      "en": "a moat carp"
+    },
+    {
+      "ko": "독수리(훈련된)",
+      "en": "a trained eagle"
+    },
+    {
+      "ko": "양 떼",
+      "en": "a flock of sheep"
+    },
+    {
+      "ko": "외양간 황소",
+      "en": "the ox in the barn"
+    },
+    {
+      "ko": "강가 개구리",
+      "en": "a river frog"
+    },
+    {
+      "ko": "프레리도그",
+      "en": "a prairie dog"
+    },
+    {
+      "ko": "빛나는 물고기",
+      "en": "a glowing fish"
+    },
+    {
+      "ko": "게",
+      "en": "a crab"
+    },
+    {
+      "ko": "번개 고양이(장난꾸러기)",
+      "en": "a mischievous lightning cat"
+    },
+    {
+      "ko": "비 개구리",
+      "en": "a rain frog"
+    },
+    {
+      "ko": "시계 비둘기",
+      "en": "a clock pigeon"
+    },
+    {
+      "ko": "톱니 생쥐",
+      "en": "a gear mouse"
+    },
+    {
+      "ko": "시간 올빼미",
+      "en": "the time owl"
+    },
+    {
+      "ko": "돔 꿀벌",
+      "en": "a dome bee"
+    },
+    {
+      "ko": "색깔 개구리",
+      "en": "a color frog"
+    },
+    {
+      "ko": "무지개 물고기",
+      "en": "a rainbow fish"
+    },
+    {
+      "ko": "물방울 요정 새",
+      "en": "a droplet bird"
+    },
+    {
+      "ko": "공룡 인형 초록이",
+      "en": "Chorok the plush dinosaur"
+    },
+    {
+      "ko": "양말 뱀(착한)",
+      "en": "a friendly sock snake"
+    },
+    {
+      "ko": "곰 인형 경비병",
+      "en": "the teddy-bear guard"
+    },
+    {
+      "ko": "개미 버스 기사",
+      "en": "the ant bus driver"
+    },
+    {
+      "ko": "무당벌레 우체부",
+      "en": "the ladybug mail carrier"
+    },
+    {
+      "ko": "반딧불이 등불지기",
+      "en": "the firefly lamplighter"
+    },
+    {
+      "ko": "아기 구름 고래",
+      "en": "a baby cloud whale"
+    },
+    {
+      "ko": "바람 제비",
+      "en": "a wind swallow"
+    },
+    {
+      "ko": "솜사탕 양",
+      "en": "a cotton-candy sheep"
+    },
+    {
+      "ko": "거울 물고기",
+      "en": "a mirror fish"
+    },
+    {
+      "ko": "물결 개구리",
+      "en": "a ripple frog"
+    },
+    {
+      "ko": "생강빵 강아지",
+      "en": "a gingerbread puppy"
+    },
+    {
+      "ko": "설탕 새",
+      "en": "a sugar bird"
+    },
+    {
+      "ko": "크레파스 앵무새",
+      "en": "a crayon parrot"
+    },
+    {
+      "ko": "선으로 그린 원숭이",
+      "en": "a line-drawn monkey"
+    },
+    {
+      "ko": "점 개구리",
+      "en": "a dot frog"
+    },
+    {
+      "ko": "달빛 나방(예쁜)",
+      "en": "a pretty moon moth"
+    },
+    {
+      "ko": "줄무늬 양말 뱀",
+      "en": "a striped sock snake"
+    },
+    {
+      "ko": "벙어리장갑 토끼",
+      "en": "a mitten rabbit"
+    },
+    {
+      "ko": "단추 눈 올빼미",
+      "en": "a button-eyed owl"
+    },
+    {
+      "ko": "풍선 물고기",
+      "en": "a balloon fish"
+    }
   ],
   "subLocations": {
     "home": [
-      {"ko": "거실 소파 뒤", "en": "behind the living room sofa"},
-      {"ko": "부엌 식탁 아래", "en": "under the kitchen table"},
-      {"ko": "현관 신발장 옆", "en": "next to the shoe cabinet by the door"},
-      {"ko": "햇살 드는 창가", "en": "by the sunny window"},
-      {"ko": "침대 옆 작은 탁자", "en": "the little table beside the bed"}
+      {
+        "ko": "거실 소파 뒤",
+        "en": "behind the living room sofa"
+      },
+      {
+        "ko": "부엌 식탁 아래",
+        "en": "under the kitchen table"
+      },
+      {
+        "ko": "현관 신발장 옆",
+        "en": "next to the shoe cabinet by the door"
+      },
+      {
+        "ko": "햇살 드는 창가",
+        "en": "by the sunny window"
+      },
+      {
+        "ko": "침대 옆 작은 탁자",
+        "en": "the little table beside the bed"
+      }
     ],
     "kindergarten": [
-      {"ko": "놀이방 매트 위", "en": "on the playroom mat"},
-      {"ko": "모래 놀이터", "en": "the sandbox"},
-      {"ko": "미끄럼틀 아래", "en": "under the slide"},
-      {"ko": "작은 텃밭", "en": "the little vegetable garden"},
-      {"ko": "신발장 앞 복도", "en": "the hallway by the cubbies"}
+      {
+        "ko": "놀이방 매트 위",
+        "en": "on the playroom mat"
+      },
+      {
+        "ko": "모래 놀이터",
+        "en": "the sandbox"
+      },
+      {
+        "ko": "미끄럼틀 아래",
+        "en": "under the slide"
+      },
+      {
+        "ko": "작은 텃밭",
+        "en": "the little vegetable garden"
+      },
+      {
+        "ko": "신발장 앞 복도",
+        "en": "the hallway by the cubbies"
+      }
     ],
     "forest": [
-      {"ko": "큰 바위 앞", "en": "in front of the big mossy rock"},
-      {"ko": "개울가 징검다리", "en": "the stepping stones across the stream"},
-      {"ko": "쓰러진 통나무", "en": "a fallen log"},
-      {"ko": "고사리 덤불", "en": "a fern thicket"},
-      {"ko": "언덕 꼭대기", "en": "the top of the hill"}
+      {
+        "ko": "큰 바위 앞",
+        "en": "in front of the big mossy rock"
+      },
+      {
+        "ko": "개울가 징검다리",
+        "en": "the stepping stones across the stream"
+      },
+      {
+        "ko": "쓰러진 통나무",
+        "en": "a fallen log"
+      },
+      {
+        "ko": "고사리 덤불",
+        "en": "a fern thicket"
+      },
+      {
+        "ko": "언덕 꼭대기",
+        "en": "the top of the hill"
+      }
     ],
     "sea": [
-      {"ko": "모래성 옆", "en": "next to a sandcastle"},
-      {"ko": "바위 웅덩이", "en": "a rock pool"},
-      {"ko": "파도가 닿는 자리", "en": "where the waves reach"},
-      {"ko": "조개가 줄지어 있는 곳", "en": "a line of shells on the sand"},
-      {"ko": "방파제 계단", "en": "the steps of the sea wall"}
+      {
+        "ko": "모래성 옆",
+        "en": "next to a sandcastle"
+      },
+      {
+        "ko": "바위 웅덩이",
+        "en": "a rock pool"
+      },
+      {
+        "ko": "파도가 닿는 자리",
+        "en": "where the waves reach"
+      },
+      {
+        "ko": "조개가 줄지어 있는 곳",
+        "en": "a line of shells on the sand"
+      },
+      {
+        "ko": "방파제 계단",
+        "en": "the steps of the sea wall"
+      }
     ],
     "dino_land": [
-      {"ko": "쌍봉 화산 발치", "en": "at the foot of the twin-peaked volcano"},
-      {"ko": "거대 고사리 숲", "en": "the giant fern forest"},
-      {"ko": "터키석 호수 징검다리", "en": "stepping stones on the turquoise lake"},
-      {"ko": "알 바위 언덕", "en": "the hill of egg-shaped boulders"},
-      {"ko": "큰 나무 전망대", "en": "the lookout in the enormous tree"}
+      {
+        "ko": "쌍봉 화산 발치",
+        "en": "at the foot of the twin-peaked volcano"
+      },
+      {
+        "ko": "거대 고사리 숲",
+        "en": "the giant fern forest"
+      },
+      {
+        "ko": "터키석 호수 징검다리",
+        "en": "stepping stones on the turquoise lake"
+      },
+      {
+        "ko": "알 바위 언덕",
+        "en": "the hill of egg-shaped boulders"
+      },
+      {
+        "ko": "큰 나무 전망대",
+        "en": "the lookout in the enormous tree"
+      }
     ],
     "sky": [
-      {"ko": "달 언덕", "en": "a hill on the moon"},
-      {"ko": "별 사다리", "en": "a ladder of stars"},
-      {"ko": "구름 다리", "en": "a cloud bridge"},
-      {"ko": "무지개 미끄럼틀", "en": "a rainbow slide"},
-      {"ko": "솜사탕 들판", "en": "a field of cotton-candy clouds"}
+      {
+        "ko": "달 언덕",
+        "en": "a hill on the moon"
+      },
+      {
+        "ko": "별 사다리",
+        "en": "a ladder of stars"
+      },
+      {
+        "ko": "구름 다리",
+        "en": "a cloud bridge"
+      },
+      {
+        "ko": "무지개 미끄럼틀",
+        "en": "a rainbow slide"
+      },
+      {
+        "ko": "솜사탕 들판",
+        "en": "a field of cotton-candy clouds"
+      }
     ]
   },
   "humorBeats": [
-    {"ko": "재채기를 해서 모자가 날아간다", "en": "a sneeze blows the hat off"},
-    {"ko": "꼬리에 물건이 걸려 끌려온다", "en": "something gets stuck on a tail and drags along"},
-    {"ko": "모자를 거꾸로 쓴다", "en": "the hat goes on upside down"},
-    {"ko": "물웅덩이에 한 발이 쏙 빠진다", "en": "one foot plops into a puddle"},
-    {"ko": "메아리가 대답을 한다", "en": "an echo answers back"},
-    {"ko": "풀잎이 코를 간질여 킥킥 웃는다", "en": "a blade of grass tickles a nose"},
-    {"ko": "장화를 짝짝이로 신었다", "en": "the boots are on the wrong feet"},
-    {"ko": "뿡 하고 방귀 소리가 난다", "en": "a little toot escapes"},
-    {"ko": "자기 그림자에게 인사한다", "en": "says hello to his own shadow"},
-    {"ko": "딸꾹질이 멈추지 않는다", "en": "the hiccups will not stop"},
-    {"ko": "비눗방울이 코에 앉는다", "en": "a bubble lands on a nose"},
-    {"ko": "바람에 모자가 데굴데굴 굴러간다", "en": "the hat rolls away in the wind"},
-    {"ko": "뒤로 걷다가 엉덩방아를 찧는다", "en": "walks backward and plops down"},
-    {"ko": "친구 동작을 똑같이 따라 한다", "en": "copies every move the friend makes"},
-    {"ko": "숨었는데 꼬리가 다 보인다", "en": "hides, but the tail sticks out"}
+    {
+      "ko": "재채기를 해서 모자가 날아간다",
+      "en": "a sneeze blows the hat off"
+    },
+    {
+      "ko": "꼬리에 물건이 걸려 끌려온다",
+      "en": "something gets stuck on a tail and drags along"
+    },
+    {
+      "ko": "모자를 거꾸로 쓴다",
+      "en": "the hat goes on upside down"
+    },
+    {
+      "ko": "물웅덩이에 한 발이 쏙 빠진다",
+      "en": "one foot plops into a puddle"
+    },
+    {
+      "ko": "메아리가 대답을 한다",
+      "en": "an echo answers back"
+    },
+    {
+      "ko": "풀잎이 코를 간질여 킥킥 웃는다",
+      "en": "a blade of grass tickles a nose"
+    },
+    {
+      "ko": "장화를 짝짝이로 신었다",
+      "en": "the boots are on the wrong feet"
+    },
+    {
+      "ko": "뿡 하고 방귀 소리가 난다",
+      "en": "a little toot escapes"
+    },
+    {
+      "ko": "자기 그림자에게 인사한다",
+      "en": "says hello to his own shadow"
+    },
+    {
+      "ko": "딸꾹질이 멈추지 않는다",
+      "en": "the hiccups will not stop"
+    },
+    {
+      "ko": "비눗방울이 코에 앉는다",
+      "en": "a bubble lands on a nose"
+    },
+    {
+      "ko": "바람에 모자가 데굴데굴 굴러간다",
+      "en": "the hat rolls away in the wind"
+    },
+    {
+      "ko": "뒤로 걷다가 엉덩방아를 찧는다",
+      "en": "walks backward and plops down"
+    },
+    {
+      "ko": "친구 동작을 똑같이 따라 한다",
+      "en": "copies every move the friend makes"
+    },
+    {
+      "ko": "숨었는데 꼬리가 다 보인다",
+      "en": "hides, but the tail sticks out"
+    },
+    {
+      "ko": "신발이 벗겨져 양말만 남는다",
+      "en": "a shoe comes off and only the sock is left"
+    },
+    {
+      "ko": "하품하다 턱이 안 다물어지는 척한다",
+      "en": "pretends the yawn got stuck open"
+    },
+    {
+      "ko": "메아리에게 이름을 묻는다",
+      "en": "asks the echo its name"
+    },
+    {
+      "ko": "거울 속 자신에게 손을 흔든다",
+      "en": "waves at the reflection"
+    },
+    {
+      "ko": "모자 속에서 나비가 나온다",
+      "en": "a butterfly flies out of the hat"
+    },
+    {
+      "ko": "딸꾹질이 노래 박자가 된다",
+      "en": "the hiccups keep the beat of a song"
+    },
+    {
+      "ko": "물구나무를 서자 주머니에서 조약돌이 쏟아진다",
+      "en": "a handstand spills pebbles from a pocket"
+    },
+    {
+      "ko": "동물 친구가 유하 춤을 똑같이 따라 춘다",
+      "en": "the animal copies Yuha's dance exactly"
+    },
+    {
+      "ko": "우산을 거꾸로 펴서 바구니로 쓴다",
+      "en": "the umbrella opens upside down and becomes a basket"
+    },
+    {
+      "ko": "바람에 머리카락이 위로 솟는다",
+      "en": "the wind stands the hair straight up"
+    },
+    {
+      "ko": "발자국이 뒤로 찍혀 있다",
+      "en": "the footprints go backwards"
+    },
+    {
+      "ko": "과일 씨가 튀어 친구 코에 맞는다",
+      "en": "a fruit seed pops onto a friend's nose"
+    },
+    {
+      "ko": "재채기에 민들레 홀씨가 다 날아간다",
+      "en": "a sneeze blows away all the dandelion fluff"
+    },
+    {
+      "ko": "꽃 냄새를 맡다 벌과 눈이 마주친다",
+      "en": "sniffs a flower and meets a bee eye to eye"
+    },
+    {
+      "ko": "큰 잎을 우산으로 썼는데 구멍이 있다",
+      "en": "the leaf umbrella has a hole in it"
+    },
+    {
+      "ko": "장갑을 발에 신는다",
+      "en": "puts the mittens on the feet"
+    },
+    {
+      "ko": "동물 울음을 흉내 냈는데 다른 동물이 대답한다",
+      "en": "imitates one animal and a different one answers"
+    },
+    {
+      "ko": "그림자를 밟으려다 제자리에서 빙글 돈다",
+      "en": "tries to step on a shadow and spins in place"
+    },
+    {
+      "ko": "조개껍데기를 귀에 대니 친구 목소리가 난다",
+      "en": "a seashell seems to talk — the friend is whispering behind"
+    },
+    {
+      "ko": "눈사람에게 목도리를 둘러 주고 자기가 춥다고 한다",
+      "en": "gives the snowman the scarf, then shivers"
+    },
+    {
+      "ko": "배를 두드리자 북소리가 난다",
+      "en": "pats the tummy and it sounds like a drum"
+    },
+    {
+      "ko": "나비가 코에 앉아 사팔눈이 된다",
+      "en": "a butterfly lands on the nose and the eyes cross"
+    },
+    {
+      "ko": "잠든 척하다 진짜 코를 곤다",
+      "en": "pretends to sleep and really snores"
+    },
+    {
+      "ko": "물수제비 돌이 한 번도 안 튀고 퐁 빠진다",
+      "en": "the skipping stone just goes plop"
+    },
+    {
+      "ko": "친구 흉내를 내다 둘이 똑같은 자세로 멈춘다",
+      "en": "both freeze in the same silly pose"
+    },
+    {
+      "ko": "모자를 쓴 줄 알았는데 양동이다",
+      "en": "the 'hat' turns out to be a bucket"
+    },
+    {
+      "ko": "박수를 치자 새들이 똑같이 날개를 친다",
+      "en": "claps, and the birds clap their wings"
+    },
+    {
+      "ko": "친구 이름을 불렀는데 메아리가 먼저 대답한다",
+      "en": "calls a name and the echo answers first"
+    },
+    {
+      "ko": "그림자가 자기보다 먼저 집에 간다",
+      "en": "the shadow heads home first"
+    },
+    {
+      "ko": "신발 속에서 도토리가 굴러 나온다",
+      "en": "an acorn rolls out of a shoe"
+    },
+    {
+      "ko": "재채기에 촛불 대신 민들레가 꺼진다",
+      "en": "a sneeze blows out a dandelion instead of a candle"
+    },
+    {
+      "ko": "우산을 썼는데 비가 우산 안에서만 온다",
+      "en": "it rains only inside the umbrella"
+    },
+    {
+      "ko": "물고기한테 손을 흔들자 물고기가 꼬리를 흔든다",
+      "en": "waves at a fish and it waves its tail"
+    },
+    {
+      "ko": "바지 주머니에서 어제 간식이 나온다",
+      "en": "yesterday's snack turns up in a pocket"
+    },
+    {
+      "ko": "동물이 유하 모자를 쓰고 유하는 동물 흉내를 낸다",
+      "en": "the animal wears the hat, Yuha plays the animal"
+    },
+    {
+      "ko": "뒤로 걷다가 거울 속 자신과 부딪힌다",
+      "en": "walks backward into the mirror"
+    },
+    {
+      "ko": "비눗방울 안에서 트림이 나온다",
+      "en": "burps inside a bubble"
+    },
+    {
+      "ko": "장갑 한 짝을 꼬리에 끼운다",
+      "en": "puts one mitten on a tail"
+    },
+    {
+      "ko": "노래를 부르다 음이 올라가서 끼익 한다",
+      "en": "the song squeaks on the high note"
+    },
+    {
+      "ko": "빗방울을 혀로 받다 코에 맞는다",
+      "en": "catches raindrops on the tongue and gets one on the nose"
+    },
+    {
+      "ko": "꼬르륵 소리를 천둥으로 착각한다",
+      "en": "mistakes a tummy rumble for thunder"
+    },
+    {
+      "ko": "손전등으로 자기 얼굴을 비추고 놀란다",
+      "en": "shines the flashlight on his own face and jumps"
+    },
+    {
+      "ko": "새가 머리 위에 앉아 둥지인 줄 안다",
+      "en": "a bird sits on his head thinking it's a nest"
+    },
+    {
+      "ko": "양말을 머리띠로 쓴다",
+      "en": "wears a sock as a headband"
+    },
+    {
+      "ko": "똑같이 생긴 돌 두 개를 서로 바꿔 놓고 다르다고 우긴다",
+      "en": "swaps two identical stones and insists they're different"
+    },
+    {
+      "ko": "친구가 잠꼬대로 간식 이름을 말한다",
+      "en": "the friend sleep-talks about snacks"
+    },
+    {
+      "ko": "개미 줄을 따라가다 자기 신발로 돌아온다",
+      "en": "follows the ant line back to his own shoe"
+    },
+    {
+      "ko": "바람에 모자가 날아가 염소 머리에 앉는다",
+      "en": "the hat blows onto a goat"
+    },
+    {
+      "ko": "동물이 하품하자 유하도 따라 하품한다",
+      "en": "the animal yawns and Yuha yawns too"
+    },
+    {
+      "ko": "물웅덩이 속 하늘을 보고 떨어질까 봐 조심조심 걷는다",
+      "en": "walks carefully around the sky in a puddle"
+    },
+    {
+      "ko": "휘파람을 불려다 침이 튀어 친구가 비 오는 줄 안다",
+      "en": "tries to whistle, sprays spit, the friend thinks it's raining"
+    },
+    {
+      "ko": "너무 조용히 하려다 배에서 꼬르륵",
+      "en": "tries to be silent and the tummy rumbles"
+    },
+    {
+      "ko": "달팽이와 달리기 시합을 하고 진다",
+      "en": "races a snail and loses"
+    },
+    {
+      "ko": "보자기를 망토로 둘렀는데 뒤로 끌려 넘어진다",
+      "en": "wears a cloth as a cape and trips on it"
+    },
+    {
+      "ko": "숟가락으로 코를 받친 채 걷는다",
+      "en": "balances a spoon on his nose while walking"
+    },
+    {
+      "ko": "거울에 대고 혀를 내밀었는데 거울도 혀를 내민다",
+      "en": "sticks out a tongue and the mirror does too"
+    },
+    {
+      "ko": "구름을 솜사탕으로 알고 입을 벌린다",
+      "en": "opens wide for a cloud thinking it's cotton candy"
+    },
+    {
+      "ko": "곰 인형에게 먼저 잘 자라고 인사한다",
+      "en": "says goodnight to the teddy first"
+    },
+    {
+      "ko": "딸꾹질 할 때마다 비눗방울이 하나씩 나온다",
+      "en": "a bubble comes out with every hiccup"
+    },
+    {
+      "ko": "뛰다가 신발 두 짝이 서로 바뀐다",
+      "en": "the shoes end up on the wrong feet mid-run"
+    },
+    {
+      "ko": "눈 감고 숫자 세다 열에서 다시 하나로 간다",
+      "en": "counts to ten with eyes shut and starts over"
+    },
+    {
+      "ko": "친구가 숨은 곳에서 코 고는 소리가 난다",
+      "en": "snoring gives away the hiding spot"
+    },
+    {
+      "ko": "모자 속에 아까 먹던 딸기가 있다",
+      "en": "a half-eaten strawberry is in the hat"
+    },
+    {
+      "ko": "오리가 유하 줄을 서서 같이 기다린다",
+      "en": "a duck joins the line behind Yuha"
+    },
+    {
+      "ko": "그림자에게 간식을 나눠 주려 한다",
+      "en": "offers a snack to a shadow"
+    },
+    {
+      "ko": "풍선을 놓쳐서 풍선이 먼저 집에 도착한다",
+      "en": "the balloon gets home first"
+    },
+    {
+      "ko": "귀에 조개를 대고 바다 소리인 줄 알았는데 친구 방귀 소리",
+      "en": "the 'sea' in the shell was a toot"
+    },
+    {
+      "ko": "눈사람 코 당근을 토끼가 먹는다",
+      "en": "the rabbit eats the snowman's nose"
+    },
+    {
+      "ko": "뒤돌아 '누구야?' 했는데 자기 가방 끈이었다",
+      "en": "asks 'who's there?' and it's the backpack strap"
+    },
+    {
+      "ko": "강아지가 유하 대신 대답한다(멍)",
+      "en": "the dog answers for Yuha"
+    },
+    {
+      "ko": "우유 콧수염을 자랑한다",
+      "en": "shows off a milk mustache"
+    },
+    {
+      "ko": "낙엽 더미에 뛰어들었는데 낙엽이 전부 날아가 버린다",
+      "en": "jumps into the leaf pile and all the leaves fly away"
+    },
+    {
+      "ko": "호루라기를 거꾸로 불어 '푸' 소리만 난다",
+      "en": "blows the whistle backwards and gets a pfft"
+    },
+    {
+      "ko": "동물 등에 올라탔는데 동물이 그대로 눕는다",
+      "en": "climbs on the animal's back and it lies down"
+    },
+    {
+      "ko": "'하나, 둘, 셋'에 모두 다른 방향으로 뛴다",
+      "en": "on 'three' everyone runs a different way"
+    },
+    {
+      "ko": "손을 흔들었는데 바람개비가 대신 돈다",
+      "en": "waves, and a pinwheel spins instead"
+    },
+    {
+      "ko": "숨바꼭질에서 술래가 먼저 잠든다",
+      "en": "the seeker falls asleep first"
+    },
+    {
+      "ko": "씨앗을 심고 1분 뒤에 꽃이 안 핀다고 묻는다",
+      "en": "plants a seed and asks why no flower after one minute"
+    },
+    {
+      "ko": "물수제비를 던졌는데 개구리가 받아 다시 던진다",
+      "en": "a frog catches the skipping stone and throws it back"
+    },
+    {
+      "ko": "종이배에 올라타려다 종이배가 납작해진다",
+      "en": "tries to board a paper boat and flattens it"
+    },
+    {
+      "ko": "털모자가 너무 커서 눈까지 내려온다",
+      "en": "the wool hat slides over the eyes"
+    },
+    {
+      "ko": "동물 발자국을 따라갔더니 유하 발자국이다",
+      "en": "follows tracks that turn out to be his own"
+    },
+    {
+      "ko": "놀라서 '엄마!' 했는데 염소가 '음메!'",
+      "en": "shouts 'Mom!' and a goat answers 'Maa!'"
+    },
+    {
+      "ko": "까치발을 들었더니 모두 까치발을 든다",
+      "en": "stands on tiptoe and so does everyone"
+    },
+    {
+      "ko": "종을 흔들자 양 떼가 전부 돌아본다",
+      "en": "rings a bell and the whole flock turns"
+    }
   ],
   "failureReasons": [
-    {"id": "wrong_place", "ko": "잘못된 장소", "hint": "거기엔 없었다. 다른 것만 나온다"},
-    {"id": "wrong_method", "ko": "잘못된 방법", "hint": "방법이 틀려서 엉뚱한 결과가 난다"},
-    {"id": "interrupted", "ko": "거의 됐는데 방해", "hint": "성공 직전에 작은 일이 끼어든다"}
+    {
+      "id": "wrong_place",
+      "ko": "잘못된 장소",
+      "hint": "거기엔 없었다. 다른 것만 나온다"
+    },
+    {
+      "id": "wrong_method",
+      "ko": "잘못된 방법",
+      "hint": "방법이 틀려서 엉뚱한 결과가 난다"
+    },
+    {
+      "id": "interrupted",
+      "ko": "거의 됐는데 방해",
+      "hint": "성공 직전에 작은 일이 끼어든다"
+    }
   ],
-  "forbiddenKeywords": ["괴물", "귀신", "피가 나", "피를 흘", "죽어", "죽였", "죽이", "칼을", "칼로", "총을", "총으로", "때리", "벌을 받", "벌을 주", "놀리", "바보", "못생", "무서운 어둠", "쫓아와", "잡아먹"],
-  "forbiddenKeywordsNote": "한 음절 키워드는 쓰지 않는다(예: '피'는 '피리'에, '죽'은 '죽순'에 걸린다). 반드시 두 음절 이상 또는 조사 포함 형태로."
+  "forbiddenKeywords": [
+    "괴물",
+    "귀신",
+    "피가 나",
+    "피를 흘",
+    "죽어",
+    "죽였",
+    "죽이",
+    "칼을",
+    "칼로",
+    "총을",
+    "총으로",
+    "때리",
+    "벌을 받",
+    "벌을 주",
+    "놀리",
+    "바보",
+    "못생",
+    "무서운 어둠",
+    "쫓아와",
+    "잡아먹"
+  ],
+  "forbiddenKeywordsNote": "한 음절 키워드는 쓰지 않는다(예: '피'는 '피리'에, '죽'은 '죽순'에 걸린다). 반드시 두 음절 이상 또는 조사 포함 형태로.",
+  "refrainTemplates": [
+    {
+      "type": "frame",
+      "text": "○○은 넘어갈 수 없어. 지나가야 해!"
+    },
+    {
+      "type": "frame",
+      "text": "○○아, 같이 가자!"
+    },
+    {
+      "type": "frame",
+      "text": "조금만 더, 조금만 더."
+    },
+    {
+      "type": "frame",
+      "text": "오늘은 ○○ 하는 날."
+    },
+    {
+      "type": "frame",
+      "text": "괜찮아, 다시 해 보자."
+    },
+    {
+      "type": "frame",
+      "text": "○○이 보이면 거의 다 온 거야."
+    },
+    {
+      "type": "question",
+      "text": "○○ 안에 있을까? 아니, ○○이네!"
+    },
+    {
+      "type": "question",
+      "text": "누가 올까? 누가 올까?"
+    },
+    {
+      "type": "question",
+      "text": "이게 뭘까? 들어 봐."
+    },
+    {
+      "type": "question",
+      "text": "○○는 어디 갔을까?"
+    },
+    {
+      "type": "question",
+      "text": "다음엔 뭐가 나올까?"
+    },
+    {
+      "type": "count",
+      "text": "하나, 둘, 셋, 또 하나."
+    },
+    {
+      "type": "count",
+      "text": "한 걸음, 두 걸음, 세 걸음."
+    },
+    {
+      "type": "count",
+      "text": "하나 더, 하나 더, 하나 더."
+    },
+    {
+      "type": "count",
+      "text": "첫째는 ○○, 둘째는 ○○."
+    },
+    {
+      "type": "sound",
+      "text": "쿵, 쿵, 쿵. 누가 올까?"
+    },
+    {
+      "type": "sound",
+      "text": "토독토독, 비가 와요."
+    },
+    {
+      "type": "sound",
+      "text": "휘이잉, 바람이 불어요."
+    },
+    {
+      "type": "sound",
+      "text": "딸랑딸랑, 소리가 나요."
+    },
+    {
+      "type": "sound",
+      "text": "첨벙, 첨벙, 또 첨벙."
+    }
+  ],
+  "variantRules": {
+    "description": "코드가 조합해 물건·생물을 늘린다. objectColors×colorable 물건, objectSizes×모든 물건, creatureTraits×모든 생물. expandInventory()가 적용.",
+    "objectColors": [
+      {
+        "ko": "빨간",
+        "en": "red"
+      },
+      {
+        "ko": "노란",
+        "en": "yellow"
+      },
+      {
+        "ko": "파란",
+        "en": "blue"
+      },
+      {
+        "ko": "초록",
+        "en": "green"
+      },
+      {
+        "ko": "보라",
+        "en": "purple"
+      },
+      {
+        "ko": "분홍",
+        "en": "pink"
+      },
+      {
+        "ko": "하얀",
+        "en": "white"
+      },
+      {
+        "ko": "줄무늬",
+        "en": "striped"
+      },
+      {
+        "ko": "물방울무늬",
+        "en": "polka-dot"
+      },
+      {
+        "ko": "반짝이",
+        "en": "glittery"
+      }
+    ],
+    "colorableSuffixes": [
+      "우산",
+      "장화",
+      "리본",
+      "풍선",
+      "모자",
+      "목도리",
+      "담요",
+      "바구니",
+      "양말",
+      "가방",
+      "단추",
+      "공",
+      "컵",
+      "연",
+      "상자",
+      "수건",
+      "장갑",
+      "방석",
+      "베개",
+      "깃발",
+      "머리띠",
+      "신발",
+      "비옷",
+      "배낭",
+      "구슬",
+      "종이배",
+      "썰매",
+      "우비",
+      "방울",
+      "스티커",
+      "손수건",
+      "빗",
+      "칫솔",
+      "물병",
+      "앞치마",
+      "망토",
+      "가면",
+      "왕관"
+    ],
+    "objectSizes": [
+      {
+        "ko": "아주 작은",
+        "en": "a tiny"
+      },
+      {
+        "ko": "커다란",
+        "en": "a huge"
+      }
+    ],
+    "creatureTraits": [
+      {
+        "ko": "아기",
+        "en": "baby"
+      },
+      {
+        "ko": "엄마",
+        "en": "mother"
+      },
+      {
+        "ko": "할아버지",
+        "en": "grandpa"
+      },
+      {
+        "ko": "쌍둥이",
+        "en": "twin"
+      },
+      {
+        "ko": "느림보",
+        "en": "slowpoke"
+      },
+      {
+        "ko": "수다쟁이",
+        "en": "chatterbox"
+      },
+      {
+        "ko": "졸린",
+        "en": "sleepy"
+      },
+      {
+        "ko": "장난꾸러기",
+        "en": "mischievous"
+      },
+      {
+        "ko": "겁 많은",
+        "en": "timid"
+      },
+      {
+        "ko": "노래하는",
+        "en": "singing"
+      }
+    ]
+  }
 }

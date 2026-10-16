@@ -1,0 +1,10968 @@
+{
+ "version": "2026-10-17b",
+ "description": "세계 카드 라이브러리. 거실 소파 뒤 모험터널이 그날의 세계로 열린다(needsPortal=true). 일상 세계는 터널 없이 간다. 실제 지명·문화는 랜드마크·자연·음식·일상 수준에서만 쓰고, 종교·역사적 비극·고정관념은 쓰지 않는다. 그림 프롬프트용 styleHint는 영어.",
+ "portal": {
+  "ko": "거실 소파 뒤 담요 터널이 모험터널이다. 유하가 '○○로 출발!' 하고 기어 들어가면 터널 끝이 그날의 세계로 열린다. 저녁밥 냄새가 나면 터널로 돌아와 거실에서 끝난다. 돌아오면 그 세계의 작은 기념품(잎·조약돌·깃털·단추)이 하나 남는다.",
+  "en": "A blanket tunnel behind the living-room sofa opens into that day's world."
+ },
+ "worlds": [
+  {
+   "id": "home",
+   "name": {
+    "ko": "유하네 집",
+    "en": "Yuha's home"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "햇살 드는 거실, 소파 뒤 담요 터널",
+   "landmarks": [
+    {
+     "ko": "거실 큰 창",
+     "en": "the big living-room window"
+    },
+    {
+     "ko": "노란 대문",
+     "en": "the yellow front door"
+    },
+    {
+     "ko": "담요 터널",
+     "en": "the blanket tunnel"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "거실 소파 뒤",
+     "en": "behind the sofa"
+    },
+    {
+     "ko": "부엌 식탁 아래",
+     "en": "under the kitchen table"
+    },
+    {
+     "ko": "현관 신발장 옆",
+     "en": "by the shoe cabinet"
+    },
+    {
+     "ko": "햇살 드는 창가",
+     "en": "by the sunny window"
+    },
+    {
+     "ko": "침대 옆 작은 탁자",
+     "en": "the little table beside the bed"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "창가 참새",
+     "en": "a sparrow at the window"
+    },
+    {
+     "ko": "어항 금붕어",
+     "en": "a goldfish in the bowl"
+    },
+    {
+     "ko": "베란다 달팽이",
+     "en": "a snail on the balcony"
+    }
+   ],
+   "props": [
+    {
+     "ko": "담요",
+     "en": "a soft blanket"
+    },
+    {
+     "ko": "공룡 인형",
+     "en": "a plush dinosaur"
+    },
+    {
+     "ko": "그림책",
+     "en": "a picture book"
+    },
+    {
+     "ko": "우유 컵",
+     "en": "a cup of milk"
+    },
+    {
+     "ko": "빨간 장화",
+     "en": "red rain boots"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "토독토독",
+     "en": "pitter-patter on the window"
+    },
+    {
+     "ko": "보글보글",
+     "en": "a pot bubbling"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#E8C87A",
+    "#A8C3A0",
+    "#D9A08C",
+    "#6E7F6A"
+   ],
+   "styleHint": "cozy Korean apartment living room, warm afternoon window light, wooden floor, patterned blanket",
+   "rules": [
+    "집 안은 늘 안전하고 따뜻하다",
+    "밤 이야기는 스탠드 불빛 아래"
+   ],
+   "avoid": [
+    "혼자 불·칼·창문 다루기"
+   ],
+   "returnCue": "엄마가 부르는 소리"
+  },
+  {
+   "id": "kindergarten",
+   "name": {
+    "ko": "유치원",
+    "en": "kindergarten"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "신발장 앞 복도, 친구들 소리",
+   "landmarks": [
+    {
+     "ko": "모래 놀이터",
+     "en": "the sandbox"
+    },
+    {
+     "ko": "빨간 미끄럼틀",
+     "en": "the red slide"
+    },
+    {
+     "ko": "작은 텃밭",
+     "en": "the little vegetable garden"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "놀이방 매트 위",
+     "en": "on the playroom mat"
+    },
+    {
+     "ko": "모래 놀이터",
+     "en": "the sandbox"
+    },
+    {
+     "ko": "미끄럼틀 아래",
+     "en": "under the slide"
+    },
+    {
+     "ko": "텃밭 옆 수돗가",
+     "en": "the tap by the garden"
+    },
+    {
+     "ko": "신발장 앞 복도",
+     "en": "the hallway by the cubbies"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "텃밭 무당벌레",
+     "en": "a ladybug in the garden"
+    },
+    {
+     "ko": "수돗가 개미 줄",
+     "en": "ants by the tap"
+    },
+    {
+     "ko": "교실 토끼",
+     "en": "the class rabbit"
+    }
+   ],
+   "props": [
+    {
+     "ko": "공룡 가방",
+     "en": "a dinosaur backpack"
+    },
+    {
+     "ko": "양말 한 짝",
+     "en": "one striped sock"
+    },
+    {
+     "ko": "크레파스",
+     "en": "a crayon"
+    },
+    {
+     "ko": "모래 삽",
+     "en": "a sand shovel"
+    },
+    {
+     "ko": "이름표",
+     "en": "a name tag"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "까르르",
+     "en": "children giggling"
+    },
+    {
+     "ko": "사각사각",
+     "en": "sand scraping"
+    }
+   ],
+   "palette": [
+    "#FFF3C4",
+    "#F28C6B",
+    "#8FBF9F",
+    "#7FB3D5",
+    "#5B5B5B"
+   ],
+   "styleHint": "bright Korean kindergarten, sandbox and red slide, colorful cubbies",
+   "rules": [
+    "선생님은 늘 가까이 있다",
+    "친구와는 번갈아 한다"
+   ],
+   "avoid": [
+    "놀림, 따돌림"
+   ],
+   "returnCue": "하원 종소리"
+  },
+  {
+   "id": "grandma_village",
+   "name": {
+    "ko": "할머니 시골집",
+    "en": "Grandma's countryside house"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "마당의 감나무, 멍멍 짖는 누렁이",
+   "landmarks": [
+    {
+     "ko": "감나무",
+     "en": "a persimmon tree"
+    },
+    {
+     "ko": "툇마루",
+     "en": "the wooden porch"
+    },
+    {
+     "ko": "논두렁",
+     "en": "the rice paddy path"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "툇마루",
+     "en": "on the wooden porch"
+    },
+    {
+     "ko": "감나무 아래 평상",
+     "en": "the bench under the persimmon tree"
+    },
+    {
+     "ko": "닭장 옆",
+     "en": "beside the chicken coop"
+    },
+    {
+     "ko": "논두렁",
+     "en": "the path between rice paddies"
+    },
+    {
+     "ko": "개울가 빨래터",
+     "en": "the washing stones by the stream"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "누렁이",
+     "en": "a yellow farm dog"
+    },
+    {
+     "ko": "병아리",
+     "en": "chicks"
+    },
+    {
+     "ko": "논 개구리",
+     "en": "a paddy frog"
+    }
+   ],
+   "props": [
+    {
+     "ko": "호루라기",
+     "en": "a whistle"
+    },
+    {
+     "ko": "밀짚모자",
+     "en": "a straw hat"
+    },
+    {
+     "ko": "수박",
+     "en": "a watermelon"
+    },
+    {
+     "ko": "바구니",
+     "en": "a basket"
+    },
+    {
+     "ko": "부채",
+     "en": "a paper fan"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "맴맴",
+     "en": "cicadas"
+    },
+    {
+     "ko": "삐약삐약",
+     "en": "chicks peeping"
+    }
+   ],
+   "palette": [
+    "#F4E7C5",
+    "#9DBF6A",
+    "#D97B4C",
+    "#7A5C3B",
+    "#A9D3E6"
+   ],
+   "styleHint": "Korean countryside house with a persimmon tree and wooden porch, summer afternoon",
+   "rules": [
+    "할머니는 이야기를 많이 안다"
+   ],
+   "avoid": [],
+   "returnCue": "저녁 밥 짓는 냄새"
+  },
+  {
+   "id": "jeju_sea",
+   "name": {
+    "ko": "제주 바다",
+    "en": "Jeju seaside"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "검은 돌담과 파란 바다",
+   "landmarks": [
+    {
+     "ko": "검은 돌담",
+     "en": "black stone walls"
+    },
+    {
+     "ko": "하얀 등대",
+     "en": "a white lighthouse"
+    },
+    {
+     "ko": "귤밭",
+     "en": "a tangerine orchard"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돌담 옆 귤밭",
+     "en": "the tangerine orchard by the stone wall"
+    },
+    {
+     "ko": "바위 웅덩이",
+     "en": "a rock pool"
+    },
+    {
+     "ko": "등대 아래 계단",
+     "en": "the steps under the lighthouse"
+    },
+    {
+     "ko": "모래사장 조개 줄",
+     "en": "a line of shells on the sand"
+    },
+    {
+     "ko": "해녀 쉼터 앞",
+     "en": "in front of the divers' hut"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "작은 게",
+     "en": "a small crab"
+    },
+    {
+     "ko": "소라게",
+     "en": "a hermit crab"
+    },
+    {
+     "ko": "갈매기",
+     "en": "a seagull"
+    }
+   ],
+   "props": [
+    {
+     "ko": "귤",
+     "en": "a tangerine"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    },
+    {
+     "ko": "양동이",
+     "en": "a bucket"
+    },
+    {
+     "ko": "돌하르방 모양 돌",
+     "en": "a round black stone"
+    },
+    {
+     "ko": "모래 삽",
+     "en": "a sand shovel"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves washing in"
+    },
+    {
+     "ko": "끼룩",
+     "en": "gulls calling"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#2F6F8F",
+    "#F2D27A",
+    "#3B3B3B",
+    "#F7F0E3"
+   ],
+   "styleHint": "Jeju island coast, black volcanic stone walls, turquoise water, tangerine trees",
+   "rules": [
+    "바닷물에는 어른과 함께"
+   ],
+   "avoid": [],
+   "returnCue": "등대 불이 켜지면"
+  },
+  {
+   "id": "kyoto_lane",
+   "name": {
+    "ko": "교토의 골목",
+    "en": "a lane in Kyoto"
+   },
+   "era": "present",
+   "region": "일본",
+   "needsPortal": true,
+   "arrival": "나무 집들 사이 좁은 골목, 딸랑 풍경 소리",
+   "landmarks": [
+    {
+     "ko": "빨간 다리",
+     "en": "a small red bridge"
+    },
+    {
+     "ko": "대나무 숲길",
+     "en": "a bamboo grove path"
+    },
+    {
+     "ko": "돌 등불",
+     "en": "stone lanterns"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "풍경 달린 처마 밑",
+     "en": "under eaves with a wind chime"
+    },
+    {
+     "ko": "대나무 숲길",
+     "en": "the bamboo grove path"
+    },
+    {
+     "ko": "빨간 다리 위",
+     "en": "on the little red bridge"
+    },
+    {
+     "ko": "이끼 정원 징검돌",
+     "en": "stepping stones in a moss garden"
+    },
+    {
+     "ko": "찻집 앞 평상",
+     "en": "the bench outside a tea house"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "골목 고양이",
+     "en": "a lane cat"
+    },
+    {
+     "ko": "연못 잉어",
+     "en": "koi in a pond"
+    },
+    {
+     "ko": "사슴",
+     "en": "a gentle deer"
+    }
+   ],
+   "props": [
+    {
+     "ko": "풍경",
+     "en": "a wind chime"
+    },
+    {
+     "ko": "종이우산",
+     "en": "a paper umbrella"
+    },
+    {
+     "ko": "경단",
+     "en": "rice dumplings on a stick"
+    },
+    {
+     "ko": "나막신",
+     "en": "wooden sandals"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딸랑",
+     "en": "a wind chime tinkling"
+    },
+    {
+     "ko": "사각사각",
+     "en": "bamboo leaves rustling"
+    }
+   ],
+   "palette": [
+    "#E8DCC8",
+    "#7A9E7E",
+    "#B23A3A",
+    "#4A4A4A",
+    "#F2E6C9"
+   ],
+   "styleHint": "quiet Kyoto lane, wooden townhouses, moss garden, bamboo grove, soft diffused light",
+   "rules": [
+    "골목에서는 조용히 걷는다",
+    "신발을 벗고 올라가는 집이 있다"
+   ],
+   "avoid": [
+    "종교 시설 내부 묘사"
+   ],
+   "returnCue": "풍경이 세 번 울리면"
+  },
+  {
+   "id": "paris_bakery",
+   "name": {
+    "ko": "파리 빵집 골목",
+    "en": "a Paris bakery street"
+   },
+   "era": "present",
+   "region": "프랑스",
+   "needsPortal": true,
+   "arrival": "고소한 빵 냄새, 돌길과 작은 철탑이 보이는 골목",
+   "landmarks": [
+    {
+     "ko": "멀리 보이는 철탑",
+     "en": "the iron tower far away"
+    },
+    {
+     "ko": "강 위 다리",
+     "en": "a bridge over the river"
+    },
+    {
+     "ko": "회전목마",
+     "en": "a carousel"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "빵집 앞 돌길",
+     "en": "the cobbled street outside the bakery"
+    },
+    {
+     "ko": "공원 회전목마 옆",
+     "en": "beside the park carousel"
+    },
+    {
+     "ko": "강가 계단",
+     "en": "the steps down to the river"
+    },
+    {
+     "ko": "꽃 가게 앞",
+     "en": "in front of the flower shop"
+    },
+    {
+     "ko": "카페 바깥 의자",
+     "en": "a chair outside a café"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    },
+    {
+     "ko": "공원 오리",
+     "en": "a park duck"
+    },
+    {
+     "ko": "빵집 고양이",
+     "en": "the bakery cat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "긴 빵",
+     "en": "a long loaf of bread"
+    },
+    {
+     "ko": "크루아상",
+     "en": "a croissant"
+    },
+    {
+     "ko": "종이 봉투",
+     "en": "a paper bag"
+    },
+    {
+     "ko": "베레모",
+     "en": "a beret"
+    },
+    {
+     "ko": "바구니",
+     "en": "a basket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "바삭",
+     "en": "crust crackling"
+    },
+    {
+     "ko": "구구",
+     "en": "pigeons cooing"
+    }
+   ],
+   "palette": [
+    "#F3E9D2",
+    "#C9A66B",
+    "#6B8E9E",
+    "#B5543C",
+    "#2E2E2E"
+   ],
+   "styleHint": "Paris street with a bakery, cobblestones, cream-colored buildings, soft morning light",
+   "rules": [
+    "빵은 아침에 제일 맛있다"
+   ],
+   "avoid": [],
+   "returnCue": "교회 종이 아니라 빵집 오븐 타이머가 울리면"
+  },
+  {
+   "id": "netherlands_tulips",
+   "name": {
+    "ko": "네덜란드 튤립 밭",
+    "en": "Dutch tulip fields"
+   },
+   "era": "present",
+   "region": "네덜란드",
+   "needsPortal": true,
+   "arrival": "줄무늬처럼 펼쳐진 색색 튤립 밭과 풍차",
+   "landmarks": [
+    {
+     "ko": "풍차",
+     "en": "a windmill"
+    },
+    {
+     "ko": "운하",
+     "en": "a canal"
+    },
+    {
+     "ko": "나무 다리",
+     "en": "a wooden drawbridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "빨간 튤립 줄",
+     "en": "a row of red tulips"
+    },
+    {
+     "ko": "풍차 아래",
+     "en": "under the windmill"
+    },
+    {
+     "ko": "운하 옆 자전거 길",
+     "en": "the bike path along the canal"
+    },
+    {
+     "ko": "나무 다리 위",
+     "en": "on the wooden bridge"
+    },
+    {
+     "ko": "치즈 가게 앞",
+     "en": "outside the cheese shop"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "운하 오리",
+     "en": "a canal duck"
+    },
+    {
+     "ko": "꿀벌",
+     "en": "a honeybee"
+    },
+    {
+     "ko": "양",
+     "en": "a sheep"
+    }
+   ],
+   "props": [
+    {
+     "ko": "리본",
+     "en": "a ribbon"
+    },
+    {
+     "ko": "나막신",
+     "en": "wooden clogs"
+    },
+    {
+     "ko": "자전거 종",
+     "en": "a bicycle bell"
+    },
+    {
+     "ko": "치즈 조각",
+     "en": "a wedge of cheese"
+    },
+    {
+     "ko": "바구니",
+     "en": "a basket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "삐걱삐걱",
+     "en": "windmill sails creaking"
+    },
+    {
+     "ko": "따르릉",
+     "en": "a bicycle bell"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#8FBF9F",
+    "#6FA8DC",
+    "#F7F0E3"
+   ],
+   "styleHint": "Dutch tulip fields in stripes of color, a windmill, canal, big sky",
+   "rules": [
+    "튤립은 꺾지 않고 밭 주인이 준 것만"
+   ],
+   "avoid": [],
+   "returnCue": "풍차 날개가 멈추면"
+  },
+  {
+   "id": "venice_canals",
+   "name": {
+    "ko": "베네치아 물길",
+    "en": "the canals of Venice"
+   },
+   "era": "present",
+   "region": "이탈리아",
+   "needsPortal": true,
+   "arrival": "길 대신 물이 흐르는 골목, 흔들리는 배",
+   "landmarks": [
+    {
+     "ko": "작은 돌다리",
+     "en": "a little stone bridge"
+    },
+    {
+     "ko": "줄무늬 기둥",
+     "en": "striped mooring poles"
+    },
+    {
+     "ko": "비둘기 광장",
+     "en": "a square full of pigeons"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돌다리 아래",
+     "en": "under the stone bridge"
+    },
+    {
+     "ko": "곤돌라 안",
+     "en": "inside a gondola"
+    },
+    {
+     "ko": "물가 계단",
+     "en": "the steps at the water's edge"
+    },
+    {
+     "ko": "광장 분수 옆",
+     "en": "beside the fountain in the square"
+    },
+    {
+     "ko": "가면 가게 창가",
+     "en": "the window of a mask shop"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    },
+    {
+     "ko": "갈매기",
+     "en": "a seagull"
+    },
+    {
+     "ko": "물가 고양이",
+     "en": "a cat by the water"
+    }
+   ],
+   "props": [
+    {
+     "ko": "종이배",
+     "en": "a paper boat"
+    },
+    {
+     "ko": "줄무늬 셔츠",
+     "en": "a striped shirt"
+    },
+    {
+     "ko": "밀짚모자",
+     "en": "a straw hat"
+    },
+    {
+     "ko": "젤라토",
+     "en": "a gelato"
+    },
+    {
+     "ko": "노",
+     "en": "an oar"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "찰랑찰랑",
+     "en": "water lapping"
+    },
+    {
+     "ko": "구구",
+     "en": "pigeons cooing"
+    }
+   ],
+   "palette": [
+    "#7FB3D5",
+    "#D9A08C",
+    "#C9A66B",
+    "#3B3B3B",
+    "#F2E6C9"
+   ],
+   "styleHint": "Venice canals, small stone bridges, pastel buildings, gondolas, sparkling water",
+   "rules": [
+    "배에서는 앉아서"
+   ],
+   "avoid": [],
+   "returnCue": "뱃사공 노래가 끝나면"
+  },
+  {
+   "id": "kenya_savanna",
+   "name": {
+    "ko": "케냐 사바나",
+    "en": "the Kenyan savanna"
+   },
+   "era": "present",
+   "region": "케냐",
+   "needsPortal": true,
+   "arrival": "노란 풀밭과 우산 모양 나무, 멀리 기린",
+   "landmarks": [
+    {
+     "ko": "우산 모양 아카시아",
+     "en": "an umbrella-shaped acacia tree"
+    },
+    {
+     "ko": "큰 물웅덩이",
+     "en": "a big watering hole"
+    },
+    {
+     "ko": "눈 덮인 먼 산",
+     "en": "a far snow-capped mountain"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "아카시아 그늘",
+     "en": "in the shade of the acacia"
+    },
+    {
+     "ko": "물웅덩이 가장자리",
+     "en": "the edge of the watering hole"
+    },
+    {
+     "ko": "흰개미 탑 옆",
+     "en": "beside a termite mound"
+    },
+    {
+     "ko": "바오밥 나무 아래",
+     "en": "under a baobab tree"
+    },
+    {
+     "ko": "마른 강바닥",
+     "en": "a dry riverbed"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "기린",
+     "en": "a giraffe"
+    },
+    {
+     "ko": "아기 코끼리",
+     "en": "a baby elephant"
+    },
+    {
+     "ko": "미어캣",
+     "en": "a meerkat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "빈 물통",
+     "en": "an empty water bottle"
+    },
+    {
+     "ko": "챙 넓은 모자",
+     "en": "a wide-brimmed hat"
+    },
+    {
+     "ko": "망원경",
+     "en": "binoculars"
+    },
+    {
+     "ko": "구슬 팔찌",
+     "en": "a beaded bracelet"
+    },
+    {
+     "ko": "지도",
+     "en": "a rolled-up map"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쿵쿵",
+     "en": "elephant footsteps"
+    },
+    {
+     "ko": "사삭",
+     "en": "dry grass rustling"
+    }
+   ],
+   "palette": [
+    "#E8C87A",
+    "#C9743F",
+    "#8A6B3F",
+    "#A8C3A0",
+    "#F7E7C2"
+   ],
+   "styleHint": "golden savanna grassland, acacia trees, warm dusty light, distant giraffes",
+   "rules": [
+    "동물은 멀리서 본다",
+    "물은 모두가 나눈다"
+   ],
+   "avoid": [
+    "사냥, 포식 장면"
+   ],
+   "returnCue": "해가 아카시아 뒤로 넘어가면"
+  },
+  {
+   "id": "peru_andes",
+   "name": {
+    "ko": "페루 안데스 마을",
+    "en": "an Andean village in Peru"
+   },
+   "era": "present",
+   "region": "페루",
+   "needsPortal": true,
+   "arrival": "계단처럼 층층이 쌓인 밭과 알파카",
+   "landmarks": [
+    {
+     "ko": "계단밭",
+     "en": "terraced fields"
+    },
+    {
+     "ko": "돌담 길",
+     "en": "stone-walled paths"
+    },
+    {
+     "ko": "구름 걸린 봉우리",
+     "en": "a peak wrapped in cloud"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "계단밭 맨 위",
+     "en": "the top terrace"
+    },
+    {
+     "ko": "돌담 옆",
+     "en": "beside the stone wall"
+    },
+    {
+     "ko": "시장 천막 아래",
+     "en": "under a market awning"
+    },
+    {
+     "ko": "흔들다리",
+     "en": "a swaying rope bridge"
+    },
+    {
+     "ko": "알파카 우리",
+     "en": "the alpaca pen"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "알파카",
+     "en": "an alpaca"
+    },
+    {
+     "ko": "콘도르",
+     "en": "a condor far above"
+    },
+    {
+     "ko": "기니피그",
+     "en": "a guinea pig"
+    }
+   ],
+   "props": [
+    {
+     "ko": "빨간 리본",
+     "en": "a red ribbon"
+    },
+    {
+     "ko": "무늬 모자",
+     "en": "a patterned knit hat"
+    },
+    {
+     "ko": "알록달록 담요",
+     "en": "a colorful woven blanket"
+    },
+    {
+     "ko": "옥수수",
+     "en": "an ear of corn"
+    },
+    {
+     "ko": "팬파이프",
+     "en": "a panpipe"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "휘잉",
+     "en": "mountain wind"
+    },
+    {
+     "ko": "음메",
+     "en": "an alpaca humming"
+    }
+   ],
+   "palette": [
+    "#C9743F",
+    "#8FBF9F",
+    "#F4D35E",
+    "#6B4E71",
+    "#E8DCC8"
+   ],
+   "styleHint": "Andean terraced hillsides, colorful woven textiles, alpacas, high clear sky",
+   "rules": [
+    "높은 곳에서는 천천히 걷는다"
+   ],
+   "avoid": [
+    "유적을 밟거나 만지는 장면"
+   ],
+   "returnCue": "팬파이프 소리가 들리면"
+  },
+  {
+   "id": "iceland_aurora",
+   "name": {
+    "ko": "아이슬란드 오로라 들판",
+    "en": "an Icelandic aurora field"
+   },
+   "era": "present",
+   "region": "아이슬란드",
+   "needsPortal": true,
+   "arrival": "검은 모래와 김이 나는 온천, 보랏빛 저녁 하늘",
+   "landmarks": [
+    {
+     "ko": "검은 모래 해변",
+     "en": "a black sand beach"
+    },
+    {
+     "ko": "김 나는 온천",
+     "en": "a steaming hot spring"
+    },
+    {
+     "ko": "이끼 덮인 용암 들판",
+     "en": "moss-covered lava fields"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "검은 모래 위",
+     "en": "on the black sand"
+    },
+    {
+     "ko": "온천 김 속",
+     "en": "in the hot-spring steam"
+    },
+    {
+     "ko": "이끼 언덕 꼭대기",
+     "en": "the top of the mossy hill"
+    },
+    {
+     "ko": "폭포 뒤 바위",
+     "en": "the rock behind the waterfall"
+    },
+    {
+     "ko": "빨간 지붕 오두막 앞",
+     "en": "outside the red-roofed cabin"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "털북숭이 조랑말",
+     "en": "a shaggy pony"
+    },
+    {
+     "ko": "퍼핀 새",
+     "en": "a puffin"
+    },
+    {
+     "ko": "북극여우",
+     "en": "an arctic fox"
+    }
+   ],
+   "props": [
+    {
+     "ko": "손전등",
+     "en": "a small flashlight"
+    },
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "목도리",
+     "en": "a scarf"
+    },
+    {
+     "ko": "보온병",
+     "en": "a thermos"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쉬이익",
+     "en": "steam hissing"
+    },
+    {
+     "ko": "휘잉",
+     "en": "cold wind"
+    }
+   ],
+   "palette": [
+    "#2B3A67",
+    "#6FCF97",
+    "#B38CD9",
+    "#3B3B3B",
+    "#E8DCC8"
+   ],
+   "styleHint": "Icelandic lava field at dusk, black sand, steam, green and purple aurora overhead",
+   "rules": [
+    "오로라는 불을 끄고 기다려야 보인다"
+   ],
+   "avoid": [
+    "무서운 어둠 묘사"
+   ],
+   "returnCue": "오로라가 사라지면"
+  },
+  {
+   "id": "mongolia_steppe",
+   "name": {
+    "ko": "몽골 초원",
+    "en": "the Mongolian steppe"
+   },
+   "era": "present",
+   "region": "몽골",
+   "needsPortal": true,
+   "arrival": "끝없는 초록 풀밭과 하얀 둥근 집",
+   "landmarks": [
+    {
+     "ko": "하얀 둥근 집 게르",
+     "en": "a round white ger"
+    },
+    {
+     "ko": "말 떼",
+     "en": "a herd of horses"
+    },
+    {
+     "ko": "돌무더기 언덕",
+     "en": "a cairn on the hill"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "게르 문 앞",
+     "en": "at the ger door"
+    },
+    {
+     "ko": "말 우리 옆",
+     "en": "beside the horse pen"
+    },
+    {
+     "ko": "언덕 돌무더기",
+     "en": "the cairn on the hill"
+    },
+    {
+     "ko": "개울가",
+     "en": "by the stream"
+    },
+    {
+     "ko": "양 떼 사이",
+     "en": "among the sheep"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "망아지",
+     "en": "a foal"
+    },
+    {
+     "ko": "양",
+     "en": "a sheep"
+    },
+    {
+     "ko": "마멋",
+     "en": "a marmot"
+    }
+   ],
+   "props": [
+    {
+     "ko": "담요",
+     "en": "a felt blanket"
+    },
+    {
+     "ko": "말 인형",
+     "en": "a toy horse"
+    },
+    {
+     "ko": "우유 그릇",
+     "en": "a bowl of milk"
+    },
+    {
+     "ko": "긴 밧줄",
+     "en": "a long rope"
+    },
+    {
+     "ko": "털모자",
+     "en": "a fur-trimmed hat"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "다그닥",
+     "en": "hooves"
+    },
+    {
+     "ko": "휘이",
+     "en": "wind over grass"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#BFE3F5",
+    "#F7F0E3",
+    "#C9743F",
+    "#5B5B5B"
+   ],
+   "styleHint": "wide green Mongolian steppe, white ger tents, horses, enormous sky",
+   "rules": [
+    "말은 뒤에서 다가가지 않는다"
+   ],
+   "avoid": [],
+   "returnCue": "게르 굴뚝에서 연기가 오르면"
+  },
+  {
+   "id": "vietnam_floating_market",
+   "name": {
+    "ko": "베트남 수상시장",
+    "en": "a Vietnamese floating market"
+   },
+   "era": "present",
+   "region": "베트남",
+   "needsPortal": true,
+   "arrival": "강 위에 둥둥 뜬 배들, 과일 냄새",
+   "landmarks": [
+    {
+     "ko": "과일 가득 배",
+     "en": "boats piled with fruit"
+    },
+    {
+     "ko": "삿갓 모자",
+     "en": "conical hats"
+    },
+    {
+     "ko": "강가 야자나무",
+     "en": "palm trees on the bank"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "과일 배 위",
+     "en": "on a fruit boat"
+    },
+    {
+     "ko": "국수 배 옆",
+     "en": "beside the noodle boat"
+    },
+    {
+     "ko": "강가 나무 다리",
+     "en": "the wooden pier"
+    },
+    {
+     "ko": "야자나무 그늘",
+     "en": "in the shade of a palm"
+    },
+    {
+     "ko": "작은 노 젓는 배",
+     "en": "a little rowing boat"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "강 물고기",
+     "en": "a river fish"
+    },
+    {
+     "ko": "물총새",
+     "en": "a kingfisher"
+    },
+    {
+     "ko": "뱃머리 고양이",
+     "en": "a cat on the bow"
+    }
+   ],
+   "props": [
+    {
+     "ko": "바구니",
+     "en": "a basket"
+    },
+    {
+     "ko": "코코넛",
+     "en": "a coconut"
+    },
+    {
+     "ko": "삿갓",
+     "en": "a conical hat"
+    },
+    {
+     "ko": "노",
+     "en": "an oar"
+    },
+    {
+     "ko": "빨대",
+     "en": "a straw"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "통통통",
+     "en": "a boat engine putt-putting"
+    },
+    {
+     "ko": "첨벙",
+     "en": "an oar splashing"
+    }
+   ],
+   "palette": [
+    "#F4D35E",
+    "#8FBF9F",
+    "#C9743F",
+    "#6FA8DC",
+    "#5B5B5B"
+   ],
+   "styleHint": "floating market on a wide brown river, wooden boats heaped with fruit, conical hats, morning haze",
+   "rules": [
+    "배 위에서는 구명조끼"
+   ],
+   "avoid": [],
+   "returnCue": "국수 배 아줌마가 손을 흔들면"
+  },
+  {
+   "id": "australia_reef",
+   "name": {
+    "ko": "호주 산호초 바다",
+    "en": "an Australian coral reef"
+   },
+   "era": "present",
+   "region": "호주",
+   "needsPortal": true,
+   "arrival": "유리처럼 맑은 물 아래 알록달록 산호",
+   "landmarks": [
+    {
+     "ko": "알록달록 산호",
+     "en": "colorful coral"
+    },
+    {
+     "ko": "하얀 모래섬",
+     "en": "a white sand cay"
+    },
+    {
+     "ko": "빨간 바위 사막",
+     "en": "red rock desert inland"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "산호 사이 모래 바닥",
+     "en": "the sandy floor between corals"
+    },
+    {
+     "ko": "모래섬 위",
+     "en": "on the sand cay"
+    },
+    {
+     "ko": "바위 웅덩이",
+     "en": "a rock pool"
+    },
+    {
+     "ko": "유리 바닥 배 안",
+     "en": "inside the glass-bottom boat"
+    },
+    {
+     "ko": "유칼립투스 나무 아래",
+     "en": "under a eucalyptus tree"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "광대물고기",
+     "en": "a clownfish"
+    },
+    {
+     "ko": "바다거북",
+     "en": "a sea turtle"
+    },
+    {
+     "ko": "코알라",
+     "en": "a koala"
+    }
+   ],
+   "props": [
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "오리발",
+     "en": "flippers"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    },
+    {
+     "ko": "수건",
+     "en": "a towel"
+    },
+    {
+     "ko": "챙 모자",
+     "en": "a sun hat"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "보글보글",
+     "en": "bubbles"
+    },
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    }
+   ],
+   "palette": [
+    "#7FD1D1",
+    "#F28C6B",
+    "#F4D35E",
+    "#2F6F8F",
+    "#F7F0E3"
+   ],
+   "styleHint": "clear turquoise reef water, bright corals, white sand, sunny sky",
+   "rules": [
+    "산호는 만지지 않고 본다"
+   ],
+   "avoid": [
+    "상어 추격 장면"
+   ],
+   "returnCue": "배 뿔고동이 울리면"
+  },
+  {
+   "id": "egypt_nile",
+   "name": {
+    "ko": "이집트 나일강",
+    "en": "the Nile in Egypt"
+   },
+   "era": "present",
+   "region": "이집트",
+   "needsPortal": true,
+   "arrival": "넓은 강과 돛단배, 멀리 세모 피라미드",
+   "landmarks": [
+    {
+     "ko": "세모 피라미드",
+     "en": "the pyramids"
+    },
+    {
+     "ko": "흰 돛단배",
+     "en": "a white-sailed felucca"
+    },
+    {
+     "ko": "야자나무 강변",
+     "en": "palm-lined riverbank"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돛단배 갑판",
+     "en": "the deck of the felucca"
+    },
+    {
+     "ko": "야자나무 그늘",
+     "en": "the shade of a palm tree"
+    },
+    {
+     "ko": "모래 언덕 위",
+     "en": "on top of a sand dune"
+    },
+    {
+     "ko": "시장 천막 아래",
+     "en": "under a market awning"
+    },
+    {
+     "ko": "강가 갈대밭",
+     "en": "the reeds by the river"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "낙타",
+     "en": "a camel"
+    },
+    {
+     "ko": "따오기",
+     "en": "an ibis"
+    },
+    {
+     "ko": "쇠똥구리",
+     "en": "a scarab beetle"
+    }
+   ],
+   "props": [
+    {
+     "ko": "돋보기",
+     "en": "a magnifying glass"
+    },
+    {
+     "ko": "머리 수건",
+     "en": "a head scarf"
+    },
+    {
+     "ko": "대추야자",
+     "en": "dates"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "파피루스 종이",
+     "en": "a sheet of papyrus"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "펄럭",
+     "en": "a sail flapping"
+    },
+    {
+     "ko": "사각사각",
+     "en": "sand shifting"
+    }
+   ],
+   "palette": [
+    "#E8C87A",
+    "#C9743F",
+    "#6FA8DC",
+    "#F7E7C2",
+    "#3B3B3B"
+   ],
+   "styleHint": "the Nile with white sailboats, palm trees, golden sand, pyramids on the horizon",
+   "rules": [
+    "사막에서는 물을 자주 마신다"
+   ],
+   "avoid": [
+    "미라·무덤 내부"
+   ],
+   "returnCue": "돛이 내려가면"
+  },
+  {
+   "id": "joseon_village",
+   "name": {
+    "ko": "조선시대 한옥 마을",
+    "en": "a Joseon-era hanok village"
+   },
+   "era": "past",
+   "region": "한국",
+   "needsPortal": true,
+   "arrival": "기와지붕과 흙담, 장터의 엿장수 가위 소리",
+   "landmarks": [
+    {
+     "ko": "기와집 마당",
+     "en": "a tiled-roof courtyard"
+    },
+    {
+     "ko": "장터",
+     "en": "the market"
+    },
+    {
+     "ko": "마을 정자",
+     "en": "the village pavilion"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "장터 엿장수 앞",
+     "en": "in front of the taffy seller"
+    },
+    {
+     "ko": "기와집 대청마루",
+     "en": "the wooden main hall"
+    },
+    {
+     "ko": "마을 우물가",
+     "en": "by the village well"
+    },
+    {
+     "ko": "정자 아래 연못",
+     "en": "the pond below the pavilion"
+    },
+    {
+     "ko": "서당 마당",
+     "en": "the schoolhouse yard"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "황소",
+     "en": "a brown ox"
+    },
+    {
+     "ko": "까치",
+     "en": "a magpie"
+    },
+    {
+     "ko": "연못 잉어",
+     "en": "a pond carp"
+    }
+   ],
+   "props": [
+    {
+     "ko": "보자기",
+     "en": "a wrapping cloth"
+    },
+    {
+     "ko": "짚신",
+     "en": "straw sandals"
+    },
+    {
+     "ko": "엿",
+     "en": "a stick of taffy"
+    },
+    {
+     "ko": "갓",
+     "en": "a horsehair hat"
+    },
+    {
+     "ko": "부채",
+     "en": "a folding fan"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "철컥철컥",
+     "en": "the taffy seller's shears"
+    },
+    {
+     "ko": "음매",
+     "en": "an ox lowing"
+    }
+   ],
+   "palette": [
+    "#C9A66B",
+    "#8A6B3F",
+    "#A8C3A0",
+    "#B23A3A",
+    "#F2E6C9"
+   ],
+   "styleHint": "Joseon-era Korean village, tiled roofs, earthen walls, a lively market, hanbok in soft colors",
+   "rules": [
+    "어른에게는 두 손으로 드린다"
+   ],
+   "avoid": [
+    "신분 차별, 벌"
+   ],
+   "returnCue": "서당에서 글 읽는 소리가 끝나면"
+  },
+  {
+   "id": "stone_age_cave",
+   "name": {
+    "ko": "석기시대 동굴",
+    "en": "a Stone Age cave"
+   },
+   "era": "past",
+   "region": "아주 옛날",
+   "needsPortal": true,
+   "arrival": "벽에 손바닥 그림이 가득한 넓은 동굴, 밖은 풀밭",
+   "landmarks": [
+    {
+     "ko": "손바닥 그림 벽",
+     "en": "a wall of painted handprints"
+    },
+    {
+     "ko": "모닥불 자리",
+     "en": "the campfire circle"
+    },
+    {
+     "ko": "털북숭이 매머드 들판",
+     "en": "the plain where woolly mammoths graze"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "그림 벽 앞",
+     "en": "in front of the painted wall"
+    },
+    {
+     "ko": "모닥불 옆 돌 의자",
+     "en": "the stone seat by the fire"
+    },
+    {
+     "ko": "동굴 입구 풀밭",
+     "en": "the grass outside the cave mouth"
+    },
+    {
+     "ko": "강가 자갈밭",
+     "en": "the pebble bank of the river"
+    },
+    {
+     "ko": "매머드 들판 바위",
+     "en": "a boulder on the mammoth plain"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 매머드",
+     "en": "a baby mammoth"
+    },
+    {
+     "ko": "두더지",
+     "en": "a mole"
+    },
+    {
+     "ko": "강 물고기",
+     "en": "a river fish"
+    }
+   ],
+   "props": [
+    {
+     "ko": "조약돌",
+     "en": "a smooth pebble"
+    },
+    {
+     "ko": "빨간 흙",
+     "en": "red ochre"
+    },
+    {
+     "ko": "털가죽 망토",
+     "en": "a fur cloak"
+    },
+    {
+     "ko": "나무 숟가락",
+     "en": "a wooden spoon"
+    },
+    {
+     "ko": "조개 목걸이",
+     "en": "a shell necklace"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쿵쿵",
+     "en": "mammoth footsteps"
+    },
+    {
+     "ko": "타닥타닥",
+     "en": "a campfire crackling"
+    }
+   ],
+   "palette": [
+    "#8A6B3F",
+    "#C9743F",
+    "#5B5B5B",
+    "#A8C3A0",
+    "#F2E6C9"
+   ],
+   "styleHint": "a warm cave with ochre handprints, a campfire glow, grassy plain outside, friendly mammoths",
+   "rules": [
+    "불은 어른이 지킨다",
+    "동굴은 모닥불로 늘 밝다"
+   ],
+   "avoid": [
+    "사냥, 맹수"
+   ],
+   "returnCue": "모닥불이 작아지면"
+  },
+  {
+   "id": "medieval_castle",
+   "name": {
+    "ko": "중세 성",
+    "en": "a medieval castle"
+   },
+   "era": "past",
+   "region": "유럽",
+   "needsPortal": true,
+   "arrival": "도개교와 높은 탑, 깃발이 펄럭이는 성",
+   "landmarks": [
+    {
+     "ko": "도개교",
+     "en": "a drawbridge"
+    },
+    {
+     "ko": "높은 탑",
+     "en": "a tall tower"
+    },
+    {
+     "ko": "성 안 마당 우물",
+     "en": "the courtyard well"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "탑 나선 계단",
+     "en": "the spiral tower stairs"
+    },
+    {
+     "ko": "마당 우물 옆",
+     "en": "beside the courtyard well"
+    },
+    {
+     "ko": "부엌 큰 솥 앞",
+     "en": "in front of the kitchen cauldron"
+    },
+    {
+     "ko": "성벽 위 길",
+     "en": "the walkway on the wall"
+    },
+    {
+     "ko": "마구간",
+     "en": "the stables"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "거위",
+     "en": "a goose"
+    },
+    {
+     "ko": "탑 비둘기",
+     "en": "a tower pigeon"
+    },
+    {
+     "ko": "조랑말",
+     "en": "a pony"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    },
+    {
+     "ko": "나무 방패",
+     "en": "a wooden toy shield"
+    },
+    {
+     "ko": "깃발",
+     "en": "a flag"
+    },
+    {
+     "ko": "열쇠",
+     "en": "an old key"
+    },
+    {
+     "ko": "촛대",
+     "en": "a candlestick"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "뚜벅뚜벅",
+     "en": "footsteps on stone"
+    },
+    {
+     "ko": "펄럭",
+     "en": "flags snapping"
+    }
+   ],
+   "palette": [
+    "#7A7A7A",
+    "#B23A3A",
+    "#C9A66B",
+    "#8FBF9F",
+    "#F2E6C9"
+   ],
+   "styleHint": "a friendly storybook castle, grey stone, bright flags, sunny courtyard",
+   "rules": [
+    "기사는 친절하다",
+    "칼·창 대신 북과 깃발"
+   ],
+   "avoid": [
+    "전투, 감옥, 용의 불"
+   ],
+   "returnCue": "탑 종이 저녁을 알리면"
+  },
+  {
+   "id": "pirate_island",
+   "name": {
+    "ko": "해적 보물섬",
+    "en": "a pirate treasure island"
+   },
+   "era": "past",
+   "region": "카리브 바다",
+   "needsPortal": true,
+   "arrival": "앵무새가 떠드는 야자나무 섬, 닻 내린 돛배",
+   "landmarks": [
+    {
+     "ko": "닻 내린 돛배",
+     "en": "an anchored sailing ship"
+    },
+    {
+     "ko": "야자나무 해변",
+     "en": "a palm beach"
+    },
+    {
+     "ko": "X 표시 바위",
+     "en": "a rock marked with an X"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돛배 갑판",
+     "en": "the ship's deck"
+    },
+    {
+     "ko": "야자나무 아래",
+     "en": "under a palm tree"
+    },
+    {
+     "ko": "X 바위 옆 모래",
+     "en": "the sand beside the X rock"
+    },
+    {
+     "ko": "조개 동굴",
+     "en": "a shell cave"
+    },
+    {
+     "ko": "망루 위",
+     "en": "up in the crow's nest"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "앵무새",
+     "en": "a parrot"
+    },
+    {
+     "ko": "소라게",
+     "en": "a hermit crab"
+    },
+    {
+     "ko": "돌고래",
+     "en": "a dolphin"
+    }
+   ],
+   "props": [
+    {
+     "ko": "지도",
+     "en": "a rolled-up map"
+    },
+    {
+     "ko": "안대",
+     "en": "an eye patch"
+    },
+    {
+     "ko": "나무 삽",
+     "en": "a wooden shovel"
+    },
+    {
+     "ko": "망원경",
+     "en": "a spyglass"
+    },
+    {
+     "ko": "금색 단추",
+     "en": "a gold button"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    },
+    {
+     "ko": "꽥꽥",
+     "en": "a parrot squawking"
+    }
+   ],
+   "palette": [
+    "#2F6F8F",
+    "#F4D35E",
+    "#C9743F",
+    "#8FBF9F",
+    "#3B3B3B"
+   ],
+   "styleHint": "sunny pirate island, palm beach, a cheerful wooden ship, treasure map colors",
+   "rules": [
+    "해적들은 노래하고 나눠 먹는 착한 해적"
+   ],
+   "avoid": [
+    "칼싸움, 무서운 선장"
+   ],
+   "returnCue": "배 종이 세 번 울리면"
+  },
+  {
+   "id": "silk_road_caravan",
+   "name": {
+    "ko": "실크로드 낙타 대상",
+    "en": "a Silk Road caravan"
+   },
+   "era": "past",
+   "region": "사막길",
+   "needsPortal": true,
+   "arrival": "줄지어 걷는 낙타들, 방울 소리, 노란 모래 언덕",
+   "landmarks": [
+    {
+     "ko": "모래 언덕",
+     "en": "sand dunes"
+    },
+    {
+     "ko": "오아시스 야자나무",
+     "en": "oasis palms"
+    },
+    {
+     "ko": "흙벽 쉼터",
+     "en": "a mud-walled caravanserai"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "낙타 등 위",
+     "en": "on a camel's back"
+    },
+    {
+     "ko": "오아시스 물가",
+     "en": "at the oasis pool"
+    },
+    {
+     "ko": "모래 언덕 꼭대기",
+     "en": "the crest of a dune"
+    },
+    {
+     "ko": "쉼터 마당 카펫 위",
+     "en": "on a carpet in the courtyard"
+    },
+    {
+     "ko": "향신료 가판 앞",
+     "en": "in front of the spice stall"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 낙타",
+     "en": "a baby camel"
+    },
+    {
+     "ko": "사막 여우",
+     "en": "a desert fox"
+    },
+    {
+     "ko": "도마뱀",
+     "en": "a little lizard"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 종",
+     "en": "a little camel bell"
+    },
+    {
+     "ko": "비단 천",
+     "en": "a piece of silk"
+    },
+    {
+     "ko": "말린 살구",
+     "en": "dried apricots"
+    },
+    {
+     "ko": "물주머니",
+     "en": "a water skin"
+    },
+    {
+     "ko": "등불",
+     "en": "a lantern"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딸랑딸랑",
+     "en": "camel bells"
+    },
+    {
+     "ko": "사각사각",
+     "en": "sand under hooves"
+    }
+   ],
+   "palette": [
+    "#E8C87A",
+    "#C9743F",
+    "#6B4E71",
+    "#B23A3A",
+    "#F7E7C2"
+   ],
+   "styleHint": "a caravan of camels over golden dunes, silk and spice colors, warm evening light",
+   "rules": [
+    "물은 아껴 나눈다"
+   ],
+   "avoid": [
+    "모래 폭풍에 길 잃는 공포"
+   ],
+   "returnCue": "쉼터 등불이 켜지면"
+  },
+  {
+   "id": "dino_land",
+   "name": {
+    "ko": "공룡나라",
+    "en": "Dinosaur Land"
+   },
+   "era": "past",
+   "region": "아주아주 옛날",
+   "needsPortal": true,
+   "arrival": "쌍봉 화산과 거대 고사리, 터키석 호수",
+   "landmarks": [
+    {
+     "ko": "쌍봉 화산",
+     "en": "a twin-peaked volcano"
+    },
+    {
+     "ko": "거대 고사리 숲",
+     "en": "the giant fern forest"
+    },
+    {
+     "ko": "터키석 호수",
+     "en": "a turquoise lake"
+    },
+    {
+     "ko": "알 바위 언덕",
+     "en": "the hill of egg-shaped boulders"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "쌍봉 화산 발치",
+     "en": "at the foot of the twin volcano"
+    },
+    {
+     "ko": "거대 고사리 숲",
+     "en": "the giant fern forest"
+    },
+    {
+     "ko": "터키석 호수 징검다리",
+     "en": "stepping stones on the turquoise lake"
+    },
+    {
+     "ko": "알 바위 언덕",
+     "en": "the hill of egg boulders"
+    },
+    {
+     "ko": "큰 나무 전망대",
+     "en": "the lookout in the enormous tree"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 공룡",
+     "en": "a baby dinosaur"
+    },
+    {
+     "ko": "잠자리",
+     "en": "a giant dragonfly"
+    },
+    {
+     "ko": "거북이",
+     "en": "a slow turtle"
+    }
+   ],
+   "props": [
+    {
+     "ko": "노란 우산",
+     "en": "a yellow umbrella"
+    },
+    {
+     "ko": "도시락 통",
+     "en": "a lunch box"
+    },
+    {
+     "ko": "큰 나뭇잎",
+     "en": "a big leaf"
+    },
+    {
+     "ko": "조약돌",
+     "en": "a smooth pebble"
+    },
+    {
+     "ko": "공룡 알 모양 돌",
+     "en": "an egg-shaped stone"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쿵, 쿵",
+     "en": "heavy friendly footsteps"
+    },
+    {
+     "ko": "후우",
+     "en": "a volcano puffing"
+    }
+   ],
+   "palette": [
+    "#6FA66B",
+    "#A8D08D",
+    "#7FD1D1",
+    "#E8D5A3",
+    "#E79A8E"
+   ],
+   "styleHint": "bright friendly prehistoric valley, twin-peaked volcano with pink smoke, giant ferns, turquoise lake",
+   "rules": [
+    "공룡은 말을 하고 풀·과일만 먹는다",
+    "화산은 터지지 않고 연기만 낸다",
+    "초록이가 안내자"
+   ],
+   "avoid": [
+    "잡아먹기, 쫓기기, 울부짖음"
+   ],
+   "returnCue": "저녁밥 냄새"
+  },
+  {
+   "id": "mars_base",
+   "name": {
+    "ko": "화성 기지",
+    "en": "a Mars base"
+   },
+   "era": "future",
+   "region": "화성",
+   "needsPortal": true,
+   "arrival": "붉은 모래와 둥근 유리 돔, 하늘에 작은 해",
+   "landmarks": [
+    {
+     "ko": "유리 돔 온실",
+     "en": "a glass dome greenhouse"
+    },
+    {
+     "ko": "붉은 모래 언덕",
+     "en": "red sand dunes"
+    },
+    {
+     "ko": "여섯 바퀴 탐사차",
+     "en": "a six-wheeled rover"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돔 온실 토마토 밭",
+     "en": "the tomato beds in the dome"
+    },
+    {
+     "ko": "탐사차 운전석",
+     "en": "the rover's driver seat"
+    },
+    {
+     "ko": "붉은 모래 언덕 꼭대기",
+     "en": "the top of a red dune"
+    },
+    {
+     "ko": "기지 창가 침대",
+     "en": "the bunk by the base window"
+    },
+    {
+     "ko": "분홍 바위 골짜기",
+     "en": "a valley of pink rocks"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "온실 무당벌레",
+     "en": "a greenhouse ladybug"
+    },
+    {
+     "ko": "돌보는 로봇 강아지",
+     "en": "a robot puppy"
+    },
+    {
+     "ko": "온실 달팽이",
+     "en": "a greenhouse snail"
+    }
+   ],
+   "props": [
+    {
+     "ko": "돋보기",
+     "en": "a magnifying glass"
+    },
+    {
+     "ko": "헬멧",
+     "en": "a bubble helmet"
+    },
+    {
+     "ko": "물뿌리개",
+     "en": "a watering can"
+    },
+    {
+     "ko": "분홍 돌",
+     "en": "a pink stone"
+    },
+    {
+     "ko": "무전기",
+     "en": "a walkie-talkie"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "삐빅",
+     "en": "a beep"
+    },
+    {
+     "ko": "사각사각",
+     "en": "wheels on sand"
+    }
+   ],
+   "palette": [
+    "#C9743F",
+    "#E79A8E",
+    "#7FB3D5",
+    "#F7F0E3",
+    "#3B3B3B"
+   ],
+   "styleHint": "friendly Mars base, red dunes, glass dome greenhouse full of green plants, small pale sun",
+   "rules": [
+    "밖에서는 헬멧",
+    "돔 안은 늘 따뜻하고 초록"
+   ],
+   "avoid": [
+    "산소 부족, 조난"
+   ],
+   "returnCue": "무전기에서 엄마 목소리"
+  },
+  {
+   "id": "space_station",
+   "name": {
+    "ko": "우주정거장",
+    "en": "a space station"
+   },
+   "era": "future",
+   "region": "지구 궤도",
+   "needsPortal": true,
+   "arrival": "둥둥 뜨는 복도, 창밖에 파란 지구",
+   "landmarks": [
+    {
+     "ko": "둥근 창의 파란 지구",
+     "en": "the blue Earth in a round window"
+    },
+    {
+     "ko": "둥둥 복도",
+     "en": "the floating corridor"
+    },
+    {
+     "ko": "별 관측 돔",
+     "en": "the star-watching dome"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "둥근 창 앞",
+     "en": "at the round window"
+    },
+    {
+     "ko": "둥둥 복도",
+     "en": "in the floating corridor"
+    },
+    {
+     "ko": "식당 자석 식탁",
+     "en": "the magnetic dining table"
+    },
+    {
+     "ko": "별 관측 돔",
+     "en": "the star dome"
+    },
+    {
+     "ko": "벽에 붙인 침낭",
+     "en": "the sleeping bag strapped to the wall"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "실험실 금붕어",
+     "en": "a lab goldfish"
+    },
+    {
+     "ko": "온실 나비",
+     "en": "a greenhouse butterfly"
+    },
+    {
+     "ko": "작은 청소 로봇",
+     "en": "a tiny cleaning robot"
+    }
+   ],
+   "props": [
+    {
+     "ko": "빨대",
+     "en": "a straw"
+    },
+    {
+     "ko": "물방울",
+     "en": "a floating water bubble"
+    },
+    {
+     "ko": "자석 숟가락",
+     "en": "a magnetic spoon"
+    },
+    {
+     "ko": "별 지도",
+     "en": "a star map"
+    },
+    {
+     "ko": "벨크로 장갑",
+     "en": "velcro gloves"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "웅웅",
+     "en": "a soft hum"
+    },
+    {
+     "ko": "퐁",
+     "en": "a bubble popping"
+    }
+   ],
+   "palette": [
+    "#2B3A67",
+    "#7FB3D5",
+    "#F7F0E3",
+    "#F4D35E",
+    "#5B5B5B"
+   ],
+   "styleHint": "a cheerful space station interior, round windows showing Earth, floating objects, soft white light",
+   "rules": [
+    "모든 물건은 둥둥 뜬다",
+    "먹을 것은 빨대로"
+   ],
+   "avoid": [
+    "우주 미아"
+   ],
+   "returnCue": "지구가 창에 꽉 차면"
+  },
+  {
+   "id": "robot_city",
+   "name": {
+    "ko": "로봇 도시",
+    "en": "Robot City"
+   },
+   "era": "future",
+   "region": "미래",
+   "needsPortal": true,
+   "arrival": "반짝이는 길과 둥근 로봇들, 하늘을 나는 버스",
+   "landmarks": [
+    {
+     "ko": "하늘 버스 정류장",
+     "en": "the sky-bus stop"
+    },
+    {
+     "ko": "충전 광장",
+     "en": "the charging plaza"
+    },
+    {
+     "ko": "무지개 다리",
+     "en": "a rainbow bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "충전 광장 벤치",
+     "en": "a bench in the charging plaza"
+    },
+    {
+     "ko": "하늘 버스 안",
+     "en": "inside the sky bus"
+    },
+    {
+     "ko": "무지개 다리 위",
+     "en": "on the rainbow bridge"
+    },
+    {
+     "ko": "로봇 빵집 앞",
+     "en": "outside the robot bakery"
+    },
+    {
+     "ko": "옥상 정원",
+     "en": "the rooftop garden"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "로봇 강아지",
+     "en": "a robot puppy"
+    },
+    {
+     "ko": "드론 벌",
+     "en": "a drone bee"
+    },
+    {
+     "ko": "옥상 정원 참새",
+     "en": "a sparrow in the rooftop garden"
+    }
+   ],
+   "props": [
+    {
+     "ko": "스티커",
+     "en": "a sticker"
+    },
+    {
+     "ko": "충전 케이블",
+     "en": "a charging cable"
+    },
+    {
+     "ko": "빛나는 단추",
+     "en": "a glowing button"
+    },
+    {
+     "ko": "말하는 지도",
+     "en": "a talking map"
+    },
+    {
+     "ko": "기름 통",
+     "en": "an oil can"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "삐빅",
+     "en": "beep-boop"
+    },
+    {
+     "ko": "위이잉",
+     "en": "a gentle whir"
+    }
+   ],
+   "palette": [
+    "#7FB3D5",
+    "#F4D35E",
+    "#F28C6B",
+    "#5B5B5B",
+    "#F7F0E3"
+   ],
+   "styleHint": "a friendly future city with rounded robots, glowing paths, sky buses, clean bright colors",
+   "rules": [
+    "로봇은 충전하면 기운이 난다",
+    "로봇도 잠을 잔다"
+   ],
+   "avoid": [
+    "고장으로 멈춰 버리는 공포"
+   ],
+   "returnCue": "도시 불이 하나씩 켜지면"
+  },
+  {
+   "id": "undersea_city",
+   "name": {
+    "ko": "바닷속 돔 도시",
+    "en": "an undersea dome city"
+   },
+   "era": "future",
+   "region": "바다 밑",
+   "needsPortal": true,
+   "arrival": "유리 돔 너머로 물고기 떼가 지나가는 도시",
+   "landmarks": [
+    {
+     "ko": "큰 유리 돔",
+     "en": "the great glass dome"
+    },
+    {
+     "ko": "해초 숲",
+     "en": "a kelp forest"
+    },
+    {
+     "ko": "진주 등대",
+     "en": "a pearl lighthouse"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돔 유리 벽 앞",
+     "en": "at the dome's glass wall"
+    },
+    {
+     "ko": "해초 숲 길",
+     "en": "the path through the kelp forest"
+    },
+    {
+     "ko": "진주 등대 계단",
+     "en": "the pearl lighthouse stairs"
+    },
+    {
+     "ko": "문어 정원",
+     "en": "the octopus's garden"
+    },
+    {
+     "ko": "조개 침대 방",
+     "en": "the room with the shell bed"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "해마",
+     "en": "a seahorse"
+    },
+    {
+     "ko": "문어",
+     "en": "a friendly octopus"
+    },
+    {
+     "ko": "물고기 떼",
+     "en": "a school of little fish"
+    }
+   ],
+   "props": [
+    {
+     "ko": "열쇠",
+     "en": "an old key"
+    },
+    {
+     "ko": "진주",
+     "en": "a pearl"
+    },
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    },
+    {
+     "ko": "공기 방울 통",
+     "en": "a bubble jar"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "보글보글",
+     "en": "bubbles"
+    },
+    {
+     "ko": "웅웅",
+     "en": "a deep hum"
+    }
+   ],
+   "palette": [
+    "#2F6F8F",
+    "#7FD1D1",
+    "#F7F0E3",
+    "#E79A8E",
+    "#F4D35E"
+   ],
+   "styleHint": "an undersea city inside a glass dome, kelp forest, glowing pearl lights, fish swimming past",
+   "rules": [
+    "돔 안은 공기가 있고 밖은 잠수복"
+   ],
+   "avoid": [
+    "상어, 물 새는 공포"
+   ],
+   "returnCue": "진주 등대가 깜빡이면"
+  },
+  {
+   "id": "sky_farm",
+   "name": {
+    "ko": "하늘 농장 도시",
+    "en": "a city of sky farms"
+   },
+   "era": "future",
+   "region": "구름 위",
+   "needsPortal": true,
+   "arrival": "구름 위에 떠 있는 밭과 바람개비 탑",
+   "landmarks": [
+    {
+     "ko": "바람개비 탑",
+     "en": "pinwheel towers"
+    },
+    {
+     "ko": "떠 있는 밭",
+     "en": "floating fields"
+    },
+    {
+     "ko": "구름 다리",
+     "en": "cloud bridges"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "바람개비 탑 꼭대기",
+     "en": "the top of a pinwheel tower"
+    },
+    {
+     "ko": "딸기 밭 위",
+     "en": "the floating strawberry field"
+    },
+    {
+     "ko": "구름 다리 한가운데",
+     "en": "the middle of a cloud bridge"
+    },
+    {
+     "ko": "바람 파이프 옆",
+     "en": "beside the wind pipes"
+    },
+    {
+     "ko": "물탱크 아래 그늘",
+     "en": "the shade under the water tank"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "구름 양",
+     "en": "a cloud sheep"
+    },
+    {
+     "ko": "꿀벌",
+     "en": "a honeybee"
+    },
+    {
+     "ko": "제비",
+     "en": "a swallow"
+    }
+   ],
+   "props": [
+    {
+     "ko": "종이배",
+     "en": "a paper boat"
+    },
+    {
+     "ko": "바람개비",
+     "en": "a pinwheel"
+    },
+    {
+     "ko": "딸기 바구니",
+     "en": "a basket of strawberries"
+    },
+    {
+     "ko": "물뿌리개",
+     "en": "a watering can"
+    },
+    {
+     "ko": "연",
+     "en": "a kite"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "휘잉",
+     "en": "wind"
+    },
+    {
+     "ko": "쉭",
+     "en": "a whistle of air"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#F7F0E3",
+    "#8FBF9F",
+    "#E63946",
+    "#F4D35E"
+   ],
+   "styleHint": "farms floating on clouds, spinning pinwheel towers, bright sky, soft white and green",
+   "rules": [
+    "구름 다리는 손잡이를 잡고"
+   ],
+   "avoid": [
+    "떨어지는 공포"
+   ],
+   "returnCue": "바람개비가 멈추면"
+  },
+  {
+   "id": "cloud_kingdom",
+   "name": {
+    "ko": "구름 왕국",
+    "en": "the Cloud Kingdom"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "폭신폭신 구름 바닥, 솜사탕 나무",
+   "landmarks": [
+    {
+     "ko": "솜사탕 나무",
+     "en": "cotton-candy trees"
+    },
+    {
+     "ko": "무지개 미끄럼틀",
+     "en": "a rainbow slide"
+    },
+    {
+     "ko": "베개 성",
+     "en": "a pillow castle"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "베개 성 안",
+     "en": "inside the pillow castle"
+    },
+    {
+     "ko": "무지개 미끄럼틀 끝",
+     "en": "the bottom of the rainbow slide"
+    },
+    {
+     "ko": "솜사탕 나무 아래",
+     "en": "under a cotton-candy tree"
+    },
+    {
+     "ko": "구름 연못",
+     "en": "a cloud pond"
+    },
+    {
+     "ko": "별 사다리 발치",
+     "en": "the foot of the star ladder"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "구름 양",
+     "en": "a cloud sheep"
+    },
+    {
+     "ko": "별 물고기",
+     "en": "a star fish that swims in air"
+    },
+    {
+     "ko": "졸린 올빼미",
+     "en": "a sleepy owl"
+    }
+   ],
+   "props": [
+    {
+     "ko": "베개",
+     "en": "a pillow"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    },
+    {
+     "ko": "솜사탕",
+     "en": "cotton candy"
+    },
+    {
+     "ko": "별 모양 스티커",
+     "en": "a star sticker"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "폭신",
+     "en": "a soft poof"
+    },
+    {
+     "ko": "쌔근쌔근",
+     "en": "sleepy breathing"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#F2C6DE",
+    "#BFE3F5",
+    "#F4D35E",
+    "#B38CD9"
+   ],
+   "styleHint": "a dreamy kingdom on clouds, pastel pinks and blues, pillow castle, cotton-candy trees",
+   "rules": [
+    "여기선 넘어져도 폭신"
+   ],
+   "avoid": [],
+   "returnCue": "올빼미가 하품하면"
+  },
+  {
+   "id": "candy_land",
+   "name": {
+    "ko": "과자 나라",
+    "en": "Candy Land"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "비스킷 길과 초콜릿 강, 사탕 가로등",
+   "landmarks": [
+    {
+     "ko": "초콜릿 강",
+     "en": "a chocolate river"
+    },
+    {
+     "ko": "비스킷 길",
+     "en": "a biscuit road"
+    },
+    {
+     "ko": "케이크 산",
+     "en": "Cake Mountain"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "비스킷 길 위",
+     "en": "on the biscuit road"
+    },
+    {
+     "ko": "초콜릿 강가",
+     "en": "by the chocolate river"
+    },
+    {
+     "ko": "케이크 산 중턱",
+     "en": "halfway up Cake Mountain"
+    },
+    {
+     "ko": "젤리 다리",
+     "en": "the jelly bridge"
+    },
+    {
+     "ko": "사탕 가로등 아래",
+     "en": "under a candy streetlamp"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "젤리 개구리",
+     "en": "a jelly frog"
+    },
+    {
+     "ko": "마시멜로 토끼",
+     "en": "a marshmallow rabbit"
+    },
+    {
+     "ko": "설탕 나비",
+     "en": "a sugar butterfly"
+    }
+   ],
+   "props": [
+    {
+     "ko": "나무 숟가락",
+     "en": "a wooden spoon"
+    },
+    {
+     "ko": "딸기",
+     "en": "a strawberry"
+    },
+    {
+     "ko": "사탕",
+     "en": "a candy"
+    },
+    {
+     "ko": "바구니",
+     "en": "a basket"
+    },
+    {
+     "ko": "초",
+     "en": "a birthday candle"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "바삭",
+     "en": "a crunch"
+    },
+    {
+     "ko": "쫀득",
+     "en": "a chewy squish"
+    }
+   ],
+   "palette": [
+    "#F2C6DE",
+    "#8A6B3F",
+    "#F4D35E",
+    "#8FBF9F",
+    "#E63946"
+   ],
+   "styleHint": "a sweet fantasy land of biscuit roads and a chocolate river, candy-colored, playful",
+   "rules": [
+    "많이 먹으면 배가 아프다"
+   ],
+   "avoid": [],
+   "returnCue": "사탕 가로등이 켜지면"
+  },
+  {
+   "id": "giant_garden",
+   "name": {
+    "ko": "거인의 정원",
+    "en": "the Giant's Garden"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "풀잎이 나무만 하고 이슬방울이 공만 한 정원",
+   "landmarks": [
+    {
+     "ko": "집채만 한 민들레",
+     "en": "a dandelion as big as a house"
+    },
+    {
+     "ko": "물뿌리개 폭포",
+     "en": "a watering-can waterfall"
+    },
+    {
+     "ko": "거인의 장화",
+     "en": "the giant's boot"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "민들레 꼭대기",
+     "en": "the top of the giant dandelion"
+    },
+    {
+     "ko": "이슬방울 옆",
+     "en": "beside a dewdrop as big as a ball"
+    },
+    {
+     "ko": "거인 장화 속",
+     "en": "inside the giant's boot"
+    },
+    {
+     "ko": "클로버 잎 그늘",
+     "en": "the shade of a clover leaf"
+    },
+    {
+     "ko": "화분 가장자리",
+     "en": "the rim of a flowerpot"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "개미",
+     "en": "an ant as big as a dog"
+    },
+    {
+     "ko": "달팽이",
+     "en": "a snail"
+    },
+    {
+     "ko": "무당벌레",
+     "en": "a ladybug"
+    }
+   ],
+   "props": [
+    {
+     "ko": "단추",
+     "en": "a big button"
+    },
+    {
+     "ko": "긴 끈",
+     "en": "a long string"
+    },
+    {
+     "ko": "솔방울",
+     "en": "a pine cone"
+    },
+    {
+     "ko": "큰 나뭇잎",
+     "en": "a big leaf"
+    },
+    {
+     "ko": "연필",
+     "en": "a pencil"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쿵, 쿵",
+     "en": "distant giant footsteps"
+    },
+    {
+     "ko": "똑",
+     "en": "a dewdrop falling"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#F4D35E",
+    "#7FB3D5",
+    "#C9743F",
+    "#F7F0E3"
+   ],
+   "styleHint": "a garden seen from an ant's height, giant dandelions, dewdrops, warm sunlight through leaves",
+   "rules": [
+    "거인은 상냥하고 정원을 가꾼다"
+   ],
+   "avoid": [
+    "밟힐까 무서운 장면"
+   ],
+   "returnCue": "거인이 물뿌리개를 내려놓으면"
+  },
+  {
+   "id": "painting_world",
+   "name": {
+    "ko": "그림 속 세상",
+    "en": "inside a painting"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "붓 자국이 보이는 하늘, 덜 칠해진 들판",
+   "landmarks": [
+    {
+     "ko": "덜 칠해진 들판",
+     "en": "a half-painted meadow"
+    },
+    {
+     "ko": "물감 강",
+     "en": "a river of paint"
+    },
+    {
+     "ko": "붓 다리",
+     "en": "a paintbrush bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "덜 칠해진 하얀 자리",
+     "en": "the unpainted white patch"
+    },
+    {
+     "ko": "물감 강가",
+     "en": "the bank of the paint river"
+    },
+    {
+     "ko": "붓 다리 위",
+     "en": "on the paintbrush bridge"
+    },
+    {
+     "ko": "팔레트 언덕",
+     "en": "Palette Hill"
+    },
+    {
+     "ko": "액자 가장자리",
+     "en": "the edge of the frame"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "점 하나로 그린 새",
+     "en": "a bird painted with one dot"
+    },
+    {
+     "ko": "물감 물고기",
+     "en": "a paint fish"
+    },
+    {
+     "ko": "선으로만 그린 고양이",
+     "en": "a cat drawn in one line"
+    }
+   ],
+   "props": [
+    {
+     "ko": "색연필",
+     "en": "a colored pencil"
+    },
+    {
+     "ko": "크레파스",
+     "en": "a crayon"
+    },
+    {
+     "ko": "지우개",
+     "en": "an eraser"
+    },
+    {
+     "ko": "물감 튜브",
+     "en": "a paint tube"
+    },
+    {
+     "ko": "스티커",
+     "en": "a sticker"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쓱쓱",
+     "en": "brush strokes"
+    },
+    {
+     "ko": "톡",
+     "en": "a dot of paint"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#6FA8DC",
+    "#8FBF9F",
+    "#F7F0E3"
+   ],
+   "styleHint": "a world made of visible brush strokes and crayon, half-finished areas left white",
+   "rules": [
+    "유하가 그리면 생긴다"
+   ],
+   "avoid": [],
+   "returnCue": "액자 밖에서 엄마가 그림을 보면"
+  },
+  {
+   "id": "seoul_hangang",
+   "name": {
+    "ko": "서울 한강 공원",
+    "en": "Hangang Park in Seoul"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "넓은 강과 자전거 길, 돗자리와 연",
+   "landmarks": [
+    {
+     "ko": "큰 다리",
+     "en": "a big bridge over the river"
+    },
+    {
+     "ko": "잔디밭 돗자리",
+     "en": "picnic mats on the grass"
+    },
+    {
+     "ko": "오리배",
+     "en": "duck-shaped pedal boats"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "잔디밭 돗자리 위",
+     "en": "on a picnic mat on the grass"
+    },
+    {
+     "ko": "자전거 길 옆",
+     "en": "beside the bike path"
+    },
+    {
+     "ko": "오리배 선착장",
+     "en": "the duck-boat dock"
+    },
+    {
+     "ko": "다리 아래 그늘",
+     "en": "the shade under the bridge"
+    },
+    {
+     "ko": "분수 광장",
+     "en": "the fountain plaza"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    },
+    {
+     "ko": "강가 오리",
+     "en": "a river duck"
+    },
+    {
+     "ko": "잔디밭 메뚜기",
+     "en": "a grasshopper in the grass"
+    }
+   ],
+   "props": [
+    {
+     "ko": "연",
+     "en": "a kite"
+    },
+    {
+     "ko": "돗자리",
+     "en": "a picnic mat"
+    },
+    {
+     "ko": "김밥",
+     "en": "a roll of gimbap"
+    },
+    {
+     "ko": "자전거 종",
+     "en": "a bicycle bell"
+    },
+    {
+     "ko": "비눗방울 통",
+     "en": "a bubble bottle"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "따르릉",
+     "en": "bicycle bells"
+    },
+    {
+     "ko": "펄럭",
+     "en": "a kite flapping"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#7FB3D5",
+    "#F4D35E",
+    "#F7F0E3",
+    "#5B5B5B"
+   ],
+   "styleHint": "a wide river park in Seoul, green lawns, bike paths, a big bridge, kites in a bright sky",
+   "rules": [
+    "강가에서는 손을 잡는다"
+   ],
+   "avoid": [],
+   "returnCue": "다리 불이 켜지면"
+  },
+  {
+   "id": "korea_mountain_autumn",
+   "name": {
+    "ko": "가을 단풍 산길",
+    "en": "an autumn mountain trail in Korea"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "빨갛고 노란 단풍잎이 깔린 산길, 다람쥐 소리",
+   "landmarks": [
+    {
+     "ko": "단풍 터널",
+     "en": "a tunnel of maple trees"
+    },
+    {
+     "ko": "돌탑",
+     "en": "a stack of wishing stones"
+    },
+    {
+     "ko": "산꼭대기 바위",
+     "en": "the summit rock"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "단풍 터널 안",
+     "en": "inside the maple tunnel"
+    },
+    {
+     "ko": "돌탑 옆",
+     "en": "beside the stone stack"
+    },
+    {
+     "ko": "계곡 징검다리",
+     "en": "stepping stones in the valley stream"
+    },
+    {
+     "ko": "산꼭대기 바위",
+     "en": "on the summit rock"
+    },
+    {
+     "ko": "도토리 떨어진 자리",
+     "en": "where the acorns fall"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "다람쥐 가족",
+     "en": "a squirrel family"
+    },
+    {
+     "ko": "딱따구리",
+     "en": "a woodpecker"
+    },
+    {
+     "ko": "노루",
+     "en": "a roe deer"
+    }
+   ],
+   "props": [
+    {
+     "ko": "도토리",
+     "en": "an acorn"
+    },
+    {
+     "ko": "은행잎",
+     "en": "a ginkgo leaf"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "배낭",
+     "en": "a backpack"
+    },
+    {
+     "ko": "나뭇가지",
+     "en": "a walking stick"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "바스락",
+     "en": "leaves crunching"
+    },
+    {
+     "ko": "딱딱딱",
+     "en": "a woodpecker tapping"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4A261",
+    "#F4D35E",
+    "#8A6B3F",
+    "#A8C3A0"
+   ],
+   "styleHint": "Korean mountain trail in autumn, red and gold maples, a small stream, soft slanting light",
+   "rules": [
+    "산에서는 쓰레기를 가져온다"
+   ],
+   "avoid": [],
+   "returnCue": "해가 산 뒤로 넘어가면"
+  },
+  {
+   "id": "brazil_amazon",
+   "name": {
+    "ko": "아마존 강 마을",
+    "en": "a village on the Amazon river"
+   },
+   "era": "present",
+   "region": "브라질",
+   "needsPortal": true,
+   "arrival": "넓은 갈색 강과 초록 숲, 앵무새 소리",
+   "landmarks": [
+    {
+     "ko": "강 위 나무 집",
+     "en": "stilt houses over the river"
+    },
+    {
+     "ko": "커다란 연잎",
+     "en": "giant lily pads"
+    },
+    {
+     "ko": "줄기 늘어진 큰 나무",
+     "en": "a huge tree with hanging vines"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "나무 집 발코니",
+     "en": "the balcony of a stilt house"
+    },
+    {
+     "ko": "커다란 연잎 위",
+     "en": "on a giant lily pad"
+    },
+    {
+     "ko": "카누 안",
+     "en": "inside a canoe"
+    },
+    {
+     "ko": "줄기 늘어진 나무 아래",
+     "en": "under the vine tree"
+    },
+    {
+     "ko": "강가 모래톱",
+     "en": "a sandbank by the river"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "분홍 돌고래",
+     "en": "a pink river dolphin"
+    },
+    {
+     "ko": "나무늘보",
+     "en": "a sloth"
+    },
+    {
+     "ko": "큰부리새",
+     "en": "a toucan"
+    }
+   ],
+   "props": [
+    {
+     "ko": "카누 노",
+     "en": "a canoe paddle"
+    },
+    {
+     "ko": "바나나",
+     "en": "a banana"
+    },
+    {
+     "ko": "깃털",
+     "en": "a feather"
+    },
+    {
+     "ko": "해먹",
+     "en": "a hammock"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "끼룩끼룩",
+     "en": "birds calling"
+    },
+    {
+     "ko": "첨벙",
+     "en": "a paddle splashing"
+    }
+   ],
+   "palette": [
+    "#2E7D32",
+    "#8A6B3F",
+    "#F4D35E",
+    "#F28C6B",
+    "#7FB3D5"
+   ],
+   "styleHint": "the Amazon river with stilt houses, giant lily pads, lush green jungle, warm humid light",
+   "rules": [
+    "배에서는 앉아서, 손은 안쪽에"
+   ],
+   "avoid": [
+    "악어·피라냐 추격"
+   ],
+   "returnCue": "큰부리새가 세 번 울면"
+  },
+  {
+   "id": "india_bazaar",
+   "name": {
+    "ko": "인도 시장 골목",
+    "en": "a bazaar lane in India"
+   },
+   "era": "present",
+   "region": "인도",
+   "needsPortal": true,
+   "arrival": "알록달록 천과 향신료 냄새, 방울 소리",
+   "landmarks": [
+    {
+     "ko": "알록달록 천 가게",
+     "en": "stalls of colorful cloth"
+    },
+    {
+     "ko": "향신료 산",
+     "en": "mountains of spice"
+    },
+    {
+     "ko": "큰 보리수 나무",
+     "en": "a big banyan tree"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "천 가게 앞",
+     "en": "in front of the cloth stall"
+    },
+    {
+     "ko": "향신료 가판 옆",
+     "en": "beside the spice stall"
+    },
+    {
+     "ko": "보리수 그늘",
+     "en": "the shade of the banyan tree"
+    },
+    {
+     "ko": "릭샤 뒷자리",
+     "en": "the back of a rickshaw"
+    },
+    {
+     "ko": "꽃 목걸이 가게",
+     "en": "the flower-garland stall"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "소",
+     "en": "a gentle cow"
+    },
+    {
+     "ko": "원숭이",
+     "en": "a monkey"
+    },
+    {
+     "ko": "공작",
+     "en": "a peacock"
+    }
+   ],
+   "props": [
+    {
+     "ko": "방울",
+     "en": "a little bell"
+    },
+    {
+     "ko": "꽃 목걸이",
+     "en": "a flower garland"
+    },
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    },
+    {
+     "ko": "망고",
+     "en": "a mango"
+    },
+    {
+     "ko": "알록달록 천 조각",
+     "en": "a scrap of colorful cloth"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딸랑딸랑",
+     "en": "bells"
+    },
+    {
+     "ko": "왁자지껄",
+     "en": "market chatter"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4A261",
+    "#F4D35E",
+    "#6B4E71",
+    "#2E7D32"
+   ],
+   "styleHint": "a bustling Indian bazaar, bright cloth, spice pyramids, a banyan tree, warm golden light",
+   "rules": [
+    "시장에서는 손을 잡고 걷는다"
+   ],
+   "avoid": [
+    "종교 의식 묘사"
+   ],
+   "returnCue": "향신료 가게 아저씨가 등불을 켜면"
+  },
+  {
+   "id": "morocco_souk",
+   "name": {
+    "ko": "모로코 시장과 사막 문",
+    "en": "a Moroccan souk and the desert gate"
+   },
+   "era": "present",
+   "region": "모로코",
+   "needsPortal": true,
+   "arrival": "미로 같은 골목, 램프 가게의 반짝이는 불빛",
+   "landmarks": [
+    {
+     "ko": "램프 가게 골목",
+     "en": "the lantern alley"
+    },
+    {
+     "ko": "분홍 성벽",
+     "en": "pink city walls"
+    },
+    {
+     "ko": "사막으로 나가는 문",
+     "en": "the gate to the desert"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "램프 가게 안",
+     "en": "inside the lantern shop"
+    },
+    {
+     "ko": "카펫 가게 앞",
+     "en": "in front of the carpet shop"
+    },
+    {
+     "ko": "분홍 성벽 위",
+     "en": "on the pink city wall"
+    },
+    {
+     "ko": "민트 차 찻집 평상",
+     "en": "the bench at the mint-tea house"
+    },
+    {
+     "ko": "사막 문 밖 모래",
+     "en": "the sand outside the desert gate"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "고양이",
+     "en": "a souk cat"
+    },
+    {
+     "ko": "당나귀",
+     "en": "a donkey"
+    },
+    {
+     "ko": "아기 낙타",
+     "en": "a baby camel"
+    }
+   ],
+   "props": [
+    {
+     "ko": "등불",
+     "en": "a lantern"
+    },
+    {
+     "ko": "작은 카펫",
+     "en": "a little carpet"
+    },
+    {
+     "ko": "민트 찻잔",
+     "en": "a glass of mint tea"
+    },
+    {
+     "ko": "구슬 팔찌",
+     "en": "a beaded bracelet"
+    },
+    {
+     "ko": "대추야자",
+     "en": "dates"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "짤랑",
+     "en": "lanterns clinking"
+    },
+    {
+     "ko": "또각또각",
+     "en": "donkey hooves on stone"
+    }
+   ],
+   "palette": [
+    "#E79A8E",
+    "#C9743F",
+    "#F4D35E",
+    "#2F6F8F",
+    "#F7E7C2"
+   ],
+   "styleHint": "a Moroccan souk, lantern-lit alleys, pink walls, patterned carpets, warm dusk light",
+   "rules": [
+    "골목에서는 길을 외우며 걷는다"
+   ],
+   "avoid": [],
+   "returnCue": "성벽 위 등불이 켜지면"
+  },
+  {
+   "id": "greece_island",
+   "name": {
+    "ko": "그리스 하얀 섬",
+    "en": "a white island in Greece"
+   },
+   "era": "present",
+   "region": "그리스",
+   "needsPortal": true,
+   "arrival": "하얀 집과 파란 지붕, 반짝이는 바다",
+   "landmarks": [
+    {
+     "ko": "파란 지붕 집",
+     "en": "blue-domed white houses"
+    },
+    {
+     "ko": "풍차",
+     "en": "a stone windmill"
+    },
+    {
+     "ko": "올리브 나무",
+     "en": "olive trees"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "하얀 계단 골목",
+     "en": "the white stair alley"
+    },
+    {
+     "ko": "풍차 옆 언덕",
+     "en": "the hill beside the windmill"
+    },
+    {
+     "ko": "올리브 나무 그늘",
+     "en": "the shade of an olive tree"
+    },
+    {
+     "ko": "작은 항구 돌담",
+     "en": "the stone wall of the little harbor"
+    },
+    {
+     "ko": "파란 문 앞 계단",
+     "en": "the steps by the blue door"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "하얀 고양이",
+     "en": "a white cat"
+    },
+    {
+     "ko": "당나귀",
+     "en": "a donkey"
+    },
+    {
+     "ko": "갈매기",
+     "en": "a seagull"
+    }
+   ],
+   "props": [
+    {
+     "ko": "올리브 한 알",
+     "en": "an olive"
+    },
+    {
+     "ko": "파란 단추",
+     "en": "a blue button"
+    },
+    {
+     "ko": "밀짚모자",
+     "en": "a straw hat"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    },
+    {
+     "ko": "작은 배 모형",
+     "en": "a tiny model boat"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    },
+    {
+     "ko": "딸랑",
+     "en": "a goat bell"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#2F6F8F",
+    "#7FB3D5",
+    "#8FBF9F",
+    "#F4D35E"
+   ],
+   "styleHint": "a Greek island village, whitewashed houses, blue domes, bright sea, strong sunlight",
+   "rules": [
+    "계단 골목은 천천히"
+   ],
+   "avoid": [],
+   "returnCue": "풍차 날개가 멈추면"
+  },
+  {
+   "id": "swiss_alps",
+   "name": {
+    "ko": "알프스 산골 마을",
+    "en": "an Alpine village"
+   },
+   "era": "present",
+   "region": "스위스",
+   "needsPortal": true,
+   "arrival": "눈 덮인 봉우리와 초록 풀밭, 소 방울 소리",
+   "landmarks": [
+    {
+     "ko": "눈 덮인 봉우리",
+     "en": "snow-capped peaks"
+    },
+    {
+     "ko": "나무 오두막",
+     "en": "a wooden chalet"
+    },
+    {
+     "ko": "산악 열차",
+     "en": "a little mountain train"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "오두막 발코니",
+     "en": "the chalet balcony"
+    },
+    {
+     "ko": "꽃 핀 풀밭",
+     "en": "a meadow full of flowers"
+    },
+    {
+     "ko": "산악 열차 창가",
+     "en": "the window seat of the mountain train"
+    },
+    {
+     "ko": "호수 나무 다리",
+     "en": "the wooden pier on the lake"
+    },
+    {
+     "ko": "치즈 창고 앞",
+     "en": "outside the cheese cellar"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "방울 단 소",
+     "en": "a cow with a bell"
+    },
+    {
+     "ko": "마멋",
+     "en": "a marmot"
+    },
+    {
+     "ko": "산양",
+     "en": "a mountain goat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "소 방울",
+     "en": "a cowbell"
+    },
+    {
+     "ko": "치즈 조각",
+     "en": "a wedge of cheese"
+    },
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "작은 썰매",
+     "en": "a little sled"
+    },
+    {
+     "ko": "초콜릿",
+     "en": "a chocolate"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "댕그랑",
+     "en": "cowbells"
+    },
+    {
+     "ko": "칙칙폭폭",
+     "en": "the mountain train"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#8FBF9F",
+    "#7FB3D5",
+    "#8A6B3F",
+    "#E63946"
+   ],
+   "styleHint": "Swiss Alps village, green meadows, wooden chalets, snowy peaks, crisp bright air",
+   "rules": [
+    "산에서는 소를 놀라게 하지 않는다"
+   ],
+   "avoid": [],
+   "returnCue": "열차 기적이 울리면"
+  },
+  {
+   "id": "canada_maple",
+   "name": {
+    "ko": "캐나다 단풍 호수",
+    "en": "a maple lake in Canada"
+   },
+   "era": "present",
+   "region": "캐나다",
+   "needsPortal": true,
+   "arrival": "빨간 단풍과 거울 같은 호수, 카누",
+   "landmarks": [
+    {
+     "ko": "거울 같은 호수",
+     "en": "a mirror-still lake"
+    },
+    {
+     "ko": "통나무집",
+     "en": "a log cabin"
+    },
+    {
+     "ko": "단풍 숲",
+     "en": "a maple forest"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "카누 안",
+     "en": "inside a canoe"
+    },
+    {
+     "ko": "통나무집 현관",
+     "en": "the log cabin porch"
+    },
+    {
+     "ko": "단풍 숲 오솔길",
+     "en": "a path through the maples"
+    },
+    {
+     "ko": "호숫가 나무 다리",
+     "en": "the dock on the lake"
+    },
+    {
+     "ko": "비버 댐 옆",
+     "en": "beside the beaver dam"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "비버",
+     "en": "a beaver"
+    },
+    {
+     "ko": "무스",
+     "en": "a moose"
+    },
+    {
+     "ko": "아비새",
+     "en": "a loon"
+    }
+   ],
+   "props": [
+    {
+     "ko": "단풍잎",
+     "en": "a maple leaf"
+    },
+    {
+     "ko": "메이플 시럽 병",
+     "en": "a bottle of maple syrup"
+    },
+    {
+     "ko": "카누 노",
+     "en": "a canoe paddle"
+    },
+    {
+     "ko": "담요",
+     "en": "a plaid blanket"
+    },
+    {
+     "ko": "보온병",
+     "en": "a thermos"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "첨벙",
+     "en": "a paddle dipping"
+    },
+    {
+     "ko": "우우",
+     "en": "a loon calling"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4A261",
+    "#2F6F8F",
+    "#8A6B3F",
+    "#F7F0E3"
+   ],
+   "styleHint": "a Canadian lake in autumn, red maples reflected in still water, a log cabin, canoe",
+   "rules": [
+    "호수에서는 구명조끼"
+   ],
+   "avoid": [
+    "곰 추격"
+   ],
+   "returnCue": "통나무집 굴뚝에 연기가 오르면"
+  },
+  {
+   "id": "mexico_plaza",
+   "name": {
+    "ko": "멕시코 마을 광장",
+    "en": "a village plaza in Mexico"
+   },
+   "era": "present",
+   "region": "멕시코",
+   "needsPortal": true,
+   "arrival": "알록달록 깃발과 분수, 기타 소리",
+   "landmarks": [
+    {
+     "ko": "알록달록 종이 깃발",
+     "en": "strings of colorful paper flags"
+    },
+    {
+     "ko": "광장 분수",
+     "en": "the plaza fountain"
+    },
+    {
+     "ko": "선인장 정원",
+     "en": "a cactus garden"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "분수 가장자리",
+     "en": "the edge of the fountain"
+    },
+    {
+     "ko": "깃발 아래 벤치",
+     "en": "a bench under the paper flags"
+    },
+    {
+     "ko": "선인장 정원 길",
+     "en": "the path through the cactus garden"
+    },
+    {
+     "ko": "타코 가판 앞",
+     "en": "in front of the taco stand"
+    },
+    {
+     "ko": "기타 아저씨 옆",
+     "en": "next to the guitar player"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "벌새",
+     "en": "a hummingbird"
+    },
+    {
+     "ko": "이구아나",
+     "en": "a lazy iguana"
+    },
+    {
+     "ko": "강아지",
+     "en": "a plaza puppy"
+    }
+   ],
+   "props": [
+    {
+     "ko": "종이 깃발",
+     "en": "a paper flag"
+    },
+    {
+     "ko": "마라카스",
+     "en": "maracas"
+    },
+    {
+     "ko": "챙 넓은 모자",
+     "en": "a wide-brimmed hat"
+    },
+    {
+     "ko": "옥수수",
+     "en": "an ear of corn"
+    },
+    {
+     "ko": "종이 피냐타 조각",
+     "en": "a piece of a paper piñata"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "차카차카",
+     "en": "maracas"
+    },
+    {
+     "ko": "퐁퐁",
+     "en": "the fountain"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#2E7D32",
+    "#F28C6B",
+    "#6B4E71"
+   ],
+   "styleHint": "a sunny Mexican plaza, colorful paper flags, a fountain, cactus, bright painted walls",
+   "rules": [
+    "선인장은 눈으로만"
+   ],
+   "avoid": [],
+   "returnCue": "기타 노래가 끝나면"
+  },
+  {
+   "id": "cappadocia_balloons",
+   "name": {
+    "ko": "열기구 바위 마을",
+    "en": "the balloon valley of Cappadocia"
+   },
+   "era": "present",
+   "region": "튀르키예",
+   "needsPortal": true,
+   "arrival": "버섯 모양 바위와 하늘 가득 열기구",
+   "landmarks": [
+    {
+     "ko": "버섯 모양 바위",
+     "en": "mushroom-shaped rock towers"
+    },
+    {
+     "ko": "하늘 가득 열기구",
+     "en": "a sky full of hot-air balloons"
+    },
+    {
+     "ko": "바위 속 집",
+     "en": "houses carved into rock"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "열기구 바구니 안",
+     "en": "inside a balloon basket"
+    },
+    {
+     "ko": "버섯 바위 꼭대기",
+     "en": "the top of a mushroom rock"
+    },
+    {
+     "ko": "바위 집 창가",
+     "en": "the window of a cave house"
+    },
+    {
+     "ko": "비둘기 골짜기",
+     "en": "the pigeon valley"
+    },
+    {
+     "ko": "카펫 깔린 테라스",
+     "en": "a carpeted terrace"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    },
+    {
+     "ko": "작은 도마뱀",
+     "en": "a little lizard"
+    },
+    {
+     "ko": "말",
+     "en": "a horse"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 열기구 모형",
+     "en": "a tiny balloon model"
+    },
+    {
+     "ko": "망원경",
+     "en": "binoculars"
+    },
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "살구",
+     "en": "an apricot"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "후욱",
+     "en": "a balloon burner"
+    },
+    {
+     "ko": "구구",
+     "en": "pigeons"
+    }
+   ],
+   "palette": [
+    "#E79A8E",
+    "#F4A261",
+    "#7FB3D5",
+    "#F7E7C2",
+    "#C9743F"
+   ],
+   "styleHint": "Cappadocia at sunrise, dozens of hot-air balloons over mushroom-shaped rocks, pink and gold light",
+   "rules": [
+    "바구니 안에서는 손잡이를 잡는다"
+   ],
+   "avoid": [
+    "추락 공포"
+   ],
+   "returnCue": "열기구가 모두 내려앉으면"
+  },
+  {
+   "id": "finland_snow",
+   "name": {
+    "ko": "핀란드 눈 숲",
+    "en": "a snowy forest in Finland"
+   },
+   "era": "present",
+   "region": "핀란드",
+   "needsPortal": true,
+   "arrival": "하얀 눈이 쌓인 소나무 숲, 순록 방울 소리",
+   "landmarks": [
+    {
+     "ko": "눈 덮인 소나무 숲",
+     "en": "a snow-covered pine forest"
+    },
+    {
+     "ko": "얼어붙은 호수",
+     "en": "a frozen lake"
+    },
+    {
+     "ko": "빨간 통나무 오두막",
+     "en": "a red log cabin"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "눈 쌓인 오솔길",
+     "en": "a snowy trail"
+    },
+    {
+     "ko": "얼어붙은 호수 위",
+     "en": "on the frozen lake"
+    },
+    {
+     "ko": "오두막 난로 앞",
+     "en": "in front of the cabin stove"
+    },
+    {
+     "ko": "눈 썰매 언덕",
+     "en": "the sledding hill"
+    },
+    {
+     "ko": "순록 우리 옆",
+     "en": "beside the reindeer pen"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "순록",
+     "en": "a reindeer"
+    },
+    {
+     "ko": "북극여우",
+     "en": "an arctic fox"
+    },
+    {
+     "ko": "눈토끼",
+     "en": "a snow hare"
+    }
+   ],
+   "props": [
+    {
+     "ko": "털장갑",
+     "en": "wool mittens"
+    },
+    {
+     "ko": "작은 썰매",
+     "en": "a little sled"
+    },
+    {
+     "ko": "눈사람 코 당근",
+     "en": "a carrot for a snowman nose"
+    },
+    {
+     "ko": "보온병",
+     "en": "a thermos"
+    },
+    {
+     "ko": "목도리",
+     "en": "a scarf"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "뽀드득",
+     "en": "snow crunching"
+    },
+    {
+     "ko": "딸랑딸랑",
+     "en": "reindeer bells"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#BFE3F5",
+    "#2B3A67",
+    "#B23A3A",
+    "#2E7D32"
+   ],
+   "styleHint": "a Finnish winter forest, deep snow on pines, a red cabin, soft blue twilight",
+   "rules": [
+    "눈밭에서는 장갑을 낀다"
+   ],
+   "avoid": [
+    "무서운 어둠"
+   ],
+   "returnCue": "오두막 창에 불이 켜지면"
+  },
+  {
+   "id": "nz_sheep_farm",
+   "name": {
+    "ko": "뉴질랜드 양 농장",
+    "en": "a sheep farm in New Zealand"
+   },
+   "era": "present",
+   "region": "뉴질랜드",
+   "needsPortal": true,
+   "arrival": "초록 언덕마다 하얀 양, 바람 소리",
+   "landmarks": [
+    {
+     "ko": "초록 언덕",
+     "en": "rolling green hills"
+    },
+    {
+     "ko": "양털 깎는 헛간",
+     "en": "the shearing shed"
+    },
+    {
+     "ko": "키위새 숲",
+     "en": "the kiwi bird forest"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "초록 언덕 꼭대기",
+     "en": "the top of a green hill"
+    },
+    {
+     "ko": "헛간 안 양털 더미",
+     "en": "the pile of wool in the shed"
+    },
+    {
+     "ko": "나무 울타리 옆",
+     "en": "beside the wooden fence"
+    },
+    {
+     "ko": "키위새 숲 길",
+     "en": "the path through the kiwi forest"
+    },
+    {
+     "ko": "농장 트럭 짐칸",
+     "en": "the back of the farm truck"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 양",
+     "en": "a lamb"
+    },
+    {
+     "ko": "양치기 개",
+     "en": "a sheepdog"
+    },
+    {
+     "ko": "키위새",
+     "en": "a kiwi bird"
+    }
+   ],
+   "props": [
+    {
+     "ko": "양털 뭉치",
+     "en": "a tuft of wool"
+    },
+    {
+     "ko": "장화",
+     "en": "gumboots"
+    },
+    {
+     "ko": "호루라기",
+     "en": "a whistle"
+    },
+    {
+     "ko": "키위 과일",
+     "en": "a kiwi fruit"
+    },
+    {
+     "ko": "긴 밧줄",
+     "en": "a long rope"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "메에",
+     "en": "sheep bleating"
+    },
+    {
+     "ko": "휘익",
+     "en": "the shepherd's whistle"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#F7F0E3",
+    "#7FB3D5",
+    "#8A6B3F",
+    "#F4D35E"
+   ],
+   "styleHint": "New Zealand farmland, bright green hills dotted with sheep, wooden fences, huge sky",
+   "rules": [
+    "양은 뒤에서 몰지 않는다"
+   ],
+   "avoid": [],
+   "returnCue": "양치기 개가 양을 다 모으면"
+  },
+  {
+   "id": "china_panda",
+   "name": {
+    "ko": "판다 대나무 숲",
+    "en": "a panda bamboo forest"
+   },
+   "era": "present",
+   "region": "중국 쓰촨",
+   "needsPortal": true,
+   "arrival": "안개 낀 대나무 숲, 우적우적 소리",
+   "landmarks": [
+    {
+     "ko": "안개 낀 대나무 숲",
+     "en": "a misty bamboo forest"
+    },
+    {
+     "ko": "판다 놀이터 나무",
+     "en": "the pandas' climbing tree"
+    },
+    {
+     "ko": "둥근 돌다리",
+     "en": "a round stone bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "대나무 숲 깊은 곳",
+     "en": "deep in the bamboo"
+    },
+    {
+     "ko": "판다 놀이터 나무 아래",
+     "en": "under the pandas' tree"
+    },
+    {
+     "ko": "둥근 돌다리 위",
+     "en": "on the round stone bridge"
+    },
+    {
+     "ko": "연못 정자",
+     "en": "the pavilion by the pond"
+    },
+    {
+     "ko": "찻집 마당",
+     "en": "the tea house yard"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 판다",
+     "en": "a baby panda"
+    },
+    {
+     "ko": "레서판다",
+     "en": "a red panda"
+    },
+    {
+     "ko": "연못 잉어",
+     "en": "a koi"
+    }
+   ],
+   "props": [
+    {
+     "ko": "대나무 한 줄기",
+     "en": "a bamboo stalk"
+    },
+    {
+     "ko": "종이 등",
+     "en": "a paper lantern"
+    },
+    {
+     "ko": "만두",
+     "en": "a dumpling"
+    },
+    {
+     "ko": "붓",
+     "en": "a brush"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "우적우적",
+     "en": "panda munching"
+    },
+    {
+     "ko": "사각사각",
+     "en": "bamboo rustling"
+    }
+   ],
+   "palette": [
+    "#2E7D32",
+    "#A8C3A0",
+    "#F7F0E3",
+    "#3B3B3B",
+    "#B23A3A"
+   ],
+   "styleHint": "a misty bamboo forest with pandas, a round stone bridge, paper lanterns, soft green light",
+   "rules": [
+    "판다는 멀리서 본다"
+   ],
+   "avoid": [],
+   "returnCue": "종이 등이 켜지면"
+  },
+  {
+   "id": "norway_fjord",
+   "name": {
+    "ko": "노르웨이 피오르",
+    "en": "a Norwegian fjord"
+   },
+   "era": "present",
+   "region": "노르웨이",
+   "needsPortal": true,
+   "arrival": "높은 절벽 사이 좁고 깊은 바다, 작은 배",
+   "landmarks": [
+    {
+     "ko": "높은 절벽",
+     "en": "towering cliffs"
+    },
+    {
+     "ko": "절벽 폭포",
+     "en": "a cliffside waterfall"
+    },
+    {
+     "ko": "빨간 나무 집 항구",
+     "en": "a harbor of red wooden houses"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "작은 배 갑판",
+     "en": "the deck of a little boat"
+    },
+    {
+     "ko": "절벽 폭포 아래",
+     "en": "below the cliff waterfall"
+    },
+    {
+     "ko": "빨간 집 선착장",
+     "en": "the red-house dock"
+    },
+    {
+     "ko": "절벽 위 풀밭",
+     "en": "the meadow on top of the cliff"
+    },
+    {
+     "ko": "염소 우리 옆",
+     "en": "beside the goat pen"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "퍼핀 새",
+     "en": "a puffin"
+    },
+    {
+     "ko": "산양",
+     "en": "a mountain goat"
+    },
+    {
+     "ko": "바다표범",
+     "en": "a seal"
+    }
+   ],
+   "props": [
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "작은 노",
+     "en": "a little oar"
+    },
+    {
+     "ko": "생선 모양 빵",
+     "en": "a fish-shaped bread"
+    },
+    {
+     "ko": "망원경",
+     "en": "binoculars"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "the waterfall"
+    },
+    {
+     "ko": "끼룩",
+     "en": "gulls"
+    }
+   ],
+   "palette": [
+    "#2F6F8F",
+    "#8FBF9F",
+    "#B23A3A",
+    "#7A7A7A",
+    "#F7F0E3"
+   ],
+   "styleHint": "a deep Norwegian fjord, sheer cliffs, a waterfall, red wooden houses, cool clear light",
+   "rules": [
+    "배에서는 구명조끼"
+   ],
+   "avoid": [],
+   "returnCue": "항구 등대가 깜빡이면"
+  },
+  {
+   "id": "thailand_night_market",
+   "name": {
+    "ko": "태국 야시장 등불 거리",
+    "en": "a night-market street in Thailand"
+   },
+   "era": "present",
+   "region": "태국",
+   "needsPortal": true,
+   "arrival": "알록달록 등불과 과일 냄새, 툭툭 소리",
+   "landmarks": [
+    {
+     "ko": "등불 거리",
+     "en": "the lantern street"
+    },
+    {
+     "ko": "강 위 나무 다리",
+     "en": "a wooden bridge over the river"
+    },
+    {
+     "ko": "코끼리 분수",
+     "en": "an elephant fountain"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "등불 아래 가판",
+     "en": "a stall under the lanterns"
+    },
+    {
+     "ko": "강 위 나무 다리",
+     "en": "on the wooden bridge"
+    },
+    {
+     "ko": "코끼리 분수 옆",
+     "en": "beside the elephant fountain"
+    },
+    {
+     "ko": "툭툭 뒷자리",
+     "en": "the back of a tuk-tuk"
+    },
+    {
+     "ko": "망고 가게 앞",
+     "en": "in front of the mango stall"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "도마뱀붙이",
+     "en": "a gecko"
+    },
+    {
+     "ko": "강 물고기",
+     "en": "a river fish"
+    },
+    {
+     "ko": "시장 고양이",
+     "en": "a market cat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "종이 등",
+     "en": "a paper lantern"
+    },
+    {
+     "ko": "망고",
+     "en": "a mango"
+    },
+    {
+     "ko": "코코넛",
+     "en": "a coconut"
+    },
+    {
+     "ko": "부채",
+     "en": "a fan"
+    },
+    {
+     "ko": "꽃 팔찌",
+     "en": "a flower bracelet"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "툭툭툭",
+     "en": "a tuk-tuk engine"
+    },
+    {
+     "ko": "지글지글",
+     "en": "food sizzling"
+    }
+   ],
+   "palette": [
+    "#F4D35E",
+    "#E63946",
+    "#6B4E71",
+    "#2E7D32",
+    "#F28C6B"
+   ],
+   "styleHint": "a Thai night market, strings of lanterns, fruit stalls, warm glowing colors",
+   "rules": [
+    "시장에서는 손을 잡는다"
+   ],
+   "avoid": [
+    "종교 시설"
+   ],
+   "returnCue": "등불이 하나씩 꺼지면"
+  },
+  {
+   "id": "ancient_rome_market",
+   "name": {
+    "ko": "고대 로마 시장",
+    "en": "a market in ancient Rome"
+   },
+   "era": "past",
+   "region": "고대 로마",
+   "needsPortal": true,
+   "arrival": "돌기둥과 분수, 긴 옷을 입은 사람들",
+   "landmarks": [
+    {
+     "ko": "돌기둥 광장",
+     "en": "a square of stone columns"
+    },
+    {
+     "ko": "둥근 경기장",
+     "en": "a round arena (empty, for games)"
+    },
+    {
+     "ko": "물이 흐르는 수도교",
+     "en": "an aqueduct carrying water"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돌기둥 그늘",
+     "en": "the shade of a column"
+    },
+    {
+     "ko": "빵 가게 화덕 앞",
+     "en": "in front of the bakery oven"
+    },
+    {
+     "ko": "분수 가장자리",
+     "en": "the edge of the fountain"
+    },
+    {
+     "ko": "수도교 아래",
+     "en": "under the aqueduct"
+    },
+    {
+     "ko": "모자이크 바닥 위",
+     "en": "on a mosaic floor"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "거위",
+     "en": "a goose"
+    },
+    {
+     "ko": "고양이",
+     "en": "a cat"
+    },
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    }
+   ],
+   "props": [
+    {
+     "ko": "납작한 빵",
+     "en": "a flat loaf of bread"
+    },
+    {
+     "ko": "작은 동전",
+     "en": "a small coin"
+    },
+    {
+     "ko": "샌들",
+     "en": "sandals"
+    },
+    {
+     "ko": "도자기 컵",
+     "en": "a clay cup"
+    },
+    {
+     "ko": "월계수 잎",
+     "en": "a laurel leaf"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "졸졸",
+     "en": "water in the aqueduct"
+    },
+    {
+     "ko": "왁자지껄",
+     "en": "market voices"
+    }
+   ],
+   "palette": [
+    "#F7E7C2",
+    "#C9A66B",
+    "#B23A3A",
+    "#7A7A7A",
+    "#8FBF9F"
+   ],
+   "styleHint": "a sunny ancient Roman market, stone columns, a fountain, mosaics, people in simple tunics",
+   "rules": [
+    "경기장은 달리기 놀이터"
+   ],
+   "avoid": [
+    "검투, 전쟁"
+   ],
+   "returnCue": "분수 물이 멈추면"
+  },
+  {
+   "id": "viking_harbor",
+   "name": {
+    "ko": "바이킹 항구 마을",
+    "en": "a Viking harbor village"
+   },
+   "era": "past",
+   "region": "북쪽 바다",
+   "needsPortal": true,
+   "arrival": "긴 나무 배와 풀 지붕 집, 바다 바람",
+   "landmarks": [
+    {
+     "ko": "용머리 긴 배",
+     "en": "a longship with a dragon prow"
+    },
+    {
+     "ko": "풀 지붕 집",
+     "en": "turf-roofed houses"
+    },
+    {
+     "ko": "모닥불 광장",
+     "en": "the bonfire square"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "긴 배 갑판",
+     "en": "the deck of the longship"
+    },
+    {
+     "ko": "풀 지붕 위",
+     "en": "on a turf roof"
+    },
+    {
+     "ko": "모닥불 옆 통나무 의자",
+     "en": "a log seat by the bonfire"
+    },
+    {
+     "ko": "항구 나무 다리",
+     "en": "the wooden pier"
+    },
+    {
+     "ko": "대장간 앞(연장만)",
+     "en": "outside the smithy (tools only)"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "바다표범",
+     "en": "a seal"
+    },
+    {
+     "ko": "염소",
+     "en": "a goat"
+    },
+    {
+     "ko": "까마귀",
+     "en": "a raven"
+    }
+   ],
+   "props": [
+    {
+     "ko": "나무 방패(장난감)",
+     "en": "a wooden toy shield"
+    },
+    {
+     "ko": "털 망토",
+     "en": "a fur cloak"
+    },
+    {
+     "ko": "나무 숟가락",
+     "en": "a wooden spoon"
+    },
+    {
+     "ko": "조개 목걸이",
+     "en": "a shell necklace"
+    },
+    {
+     "ko": "긴 밧줄",
+     "en": "a long rope"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    },
+    {
+     "ko": "쿵쿵",
+     "en": "oars thumping"
+    }
+   ],
+   "palette": [
+    "#2F6F8F",
+    "#8A6B3F",
+    "#8FBF9F",
+    "#7A7A7A",
+    "#F7F0E3"
+   ],
+   "styleHint": "a friendly Viking village by the sea, turf-roofed houses, a longship, grey-blue northern light",
+   "rules": [
+    "바이킹은 배를 타고 노래하는 상인들"
+   ],
+   "avoid": [
+    "약탈, 칼싸움"
+   ],
+   "returnCue": "모닥불이 커지면"
+  },
+  {
+   "id": "silla_gyeongju",
+   "name": {
+    "ko": "신라 황금 마을",
+    "en": "a golden village of Silla"
+   },
+   "era": "past",
+   "region": "한국(경주)",
+   "needsPortal": true,
+   "arrival": "둥근 언덕 무덤 대신 둥근 초록 언덕들, 황금 왕관을 쓴 아이",
+   "landmarks": [
+    {
+     "ko": "둥근 초록 언덕들",
+     "en": "round green mounds"
+    },
+    {
+     "ko": "별 보는 돌탑",
+     "en": "the star-watching stone tower"
+    },
+    {
+     "ko": "연꽃 연못",
+     "en": "a lotus pond"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "둥근 언덕 꼭대기",
+     "en": "the top of a round mound"
+    },
+    {
+     "ko": "별 보는 돌탑 아래",
+     "en": "at the foot of the stone tower"
+    },
+    {
+     "ko": "연꽃 연못 다리",
+     "en": "the bridge over the lotus pond"
+    },
+    {
+     "ko": "기와지붕 마당",
+     "en": "a tiled-roof courtyard"
+    },
+    {
+     "ko": "장터 종 앞",
+     "en": "in front of the market bell"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "까치",
+     "en": "a magpie"
+    },
+    {
+     "ko": "연못 개구리",
+     "en": "a pond frog"
+    },
+    {
+     "ko": "황소",
+     "en": "an ox"
+    }
+   ],
+   "props": [
+    {
+     "ko": "금빛 왕관 모양 종이",
+     "en": "a paper golden crown"
+    },
+    {
+     "ko": "옥 구슬",
+     "en": "a jade bead"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    },
+    {
+     "ko": "연잎",
+     "en": "a lotus leaf"
+    },
+    {
+     "ko": "대나무 피리",
+     "en": "a bamboo flute"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "댕",
+     "en": "the bell"
+    },
+    {
+     "ko": "개굴",
+     "en": "frogs"
+    }
+   ],
+   "palette": [
+    "#F4D35E",
+    "#8FBF9F",
+    "#C9A66B",
+    "#2F6F8F",
+    "#F7E7C2"
+   ],
+   "styleHint": "ancient Silla-era Korea, round green mounds, a stone observatory tower, lotus pond, gold accents",
+   "rules": [
+    "언덕은 올라가 노는 곳이 아니라 보는 곳"
+   ],
+   "avoid": [
+    "무덤 내부"
+   ],
+   "returnCue": "종이 댕 하고 울리면"
+  },
+  {
+   "id": "goryeo_kiln",
+   "name": {
+    "ko": "고려 청자 가마 마을",
+    "en": "a Goryeo celadon kiln village"
+   },
+   "era": "past",
+   "region": "한국(고려)",
+   "needsPortal": true,
+   "arrival": "언덕에 긴 가마, 비취색 그릇이 줄지어",
+   "landmarks": [
+    {
+     "ko": "언덕 가마",
+     "en": "a kiln climbing the hill"
+    },
+    {
+     "ko": "비취색 그릇 선반",
+     "en": "shelves of jade-green pottery"
+    },
+    {
+     "ko": "물레 방앗간",
+     "en": "the potter's wheel shed"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "물레 앞",
+     "en": "at the potter's wheel"
+    },
+    {
+     "ko": "가마 입구 옆",
+     "en": "beside the kiln mouth"
+    },
+    {
+     "ko": "그릇 말리는 마당",
+     "en": "the yard where pots dry"
+    },
+    {
+     "ko": "흙 파는 개울가",
+     "en": "the stream where clay is dug"
+    },
+    {
+     "ko": "대나무 숲 길",
+     "en": "the bamboo path"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "강아지",
+     "en": "a puppy"
+    },
+    {
+     "ko": "까치",
+     "en": "a magpie"
+    },
+    {
+     "ko": "개울 물고기",
+     "en": "a stream fish"
+    }
+   ],
+   "props": [
+    {
+     "ko": "진흙 덩이",
+     "en": "a lump of clay"
+    },
+    {
+     "ko": "작은 청자 잔",
+     "en": "a small celadon cup"
+    },
+    {
+     "ko": "나무 주걱",
+     "en": "a wooden paddle"
+    },
+    {
+     "ko": "물 바가지",
+     "en": "a water gourd"
+    },
+    {
+     "ko": "앞치마",
+     "en": "an apron"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "윙윙",
+     "en": "the wheel spinning"
+    },
+    {
+     "ko": "타닥",
+     "en": "the kiln fire"
+    }
+   ],
+   "palette": [
+    "#7FB3D5",
+    "#8FBF9F",
+    "#8A6B3F",
+    "#F7E7C2",
+    "#5B5B5B"
+   ],
+   "styleHint": "a Goryeo pottery village, a long hillside kiln, jade-green celadon, clay and bamboo, soft daylight",
+   "rules": [
+    "가마 불은 어른이 본다"
+   ],
+   "avoid": [],
+   "returnCue": "가마 연기가 하얗게 되면"
+  },
+  {
+   "id": "steam_train_station",
+   "name": {
+    "ko": "옛날 증기 기차역",
+    "en": "an old steam train station"
+   },
+   "era": "past",
+   "region": "옛날",
+   "needsPortal": true,
+   "arrival": "칙칙폭폭 김을 뿜는 기차, 큰 시계",
+   "landmarks": [
+    {
+     "ko": "검은 증기 기관차",
+     "en": "a black steam locomotive"
+    },
+    {
+     "ko": "큰 역 시계",
+     "en": "the big station clock"
+    },
+    {
+     "ko": "나무 플랫폼",
+     "en": "a wooden platform"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "나무 플랫폼 끝",
+     "en": "the end of the wooden platform"
+    },
+    {
+     "ko": "기관차 운전석",
+     "en": "the locomotive cab"
+    },
+    {
+     "ko": "짐 싣는 수레 옆",
+     "en": "beside the luggage cart"
+    },
+    {
+     "ko": "역 시계 아래 벤치",
+     "en": "the bench under the clock"
+    },
+    {
+     "ko": "객차 창가 자리",
+     "en": "a window seat in the carriage"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "역 고양이",
+     "en": "the station cat"
+    },
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    },
+    {
+     "ko": "짐수레 말",
+     "en": "a cart horse"
+    }
+   ],
+   "props": [
+    {
+     "ko": "기차표",
+     "en": "a train ticket"
+    },
+    {
+     "ko": "호루라기",
+     "en": "a whistle"
+    },
+    {
+     "ko": "작은 가방",
+     "en": "a small suitcase"
+    },
+    {
+     "ko": "손목시계",
+     "en": "a wristwatch"
+    },
+    {
+     "ko": "모자",
+     "en": "a cap"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "칙칙폭폭",
+     "en": "the steam engine"
+    },
+    {
+     "ko": "뿌우",
+     "en": "the train whistle"
+    }
+   ],
+   "palette": [
+    "#3B3B3B",
+    "#8A6B3F",
+    "#B23A3A",
+    "#F7E7C2",
+    "#7A7A7A"
+   ],
+   "styleHint": "a vintage steam railway station, a black locomotive puffing white steam, wooden platform, big clock",
+   "rules": [
+    "노란 선 안쪽에서 기다린다"
+   ],
+   "avoid": [],
+   "returnCue": "역 시계가 여섯 시를 치면"
+  },
+  {
+   "id": "joseon_palace",
+   "name": {
+    "ko": "조선 궁궐 마당",
+    "en": "a Joseon palace courtyard"
+   },
+   "era": "past",
+   "region": "한국(조선)",
+   "needsPortal": true,
+   "arrival": "넓은 돌 마당과 단청 기둥, 연못 정자",
+   "landmarks": [
+    {
+     "ko": "단청 기둥 전각",
+     "en": "a hall with painted columns"
+    },
+    {
+     "ko": "연못 가운데 정자",
+     "en": "a pavilion in the middle of the pond"
+    },
+    {
+     "ko": "해시계",
+     "en": "a sundial"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돌 마당 한가운데",
+     "en": "the middle of the stone courtyard"
+    },
+    {
+     "ko": "연못 정자 마루",
+     "en": "the pavilion floor"
+    },
+    {
+     "ko": "해시계 옆",
+     "en": "beside the sundial"
+    },
+    {
+     "ko": "궁궐 뒤뜰 꽃밭",
+     "en": "the flower garden behind the palace"
+    },
+    {
+     "ko": "큰 대문 문턱",
+     "en": "the threshold of the great gate"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "연못 잉어",
+     "en": "a pond carp"
+    },
+    {
+     "ko": "까치",
+     "en": "a magpie"
+    },
+    {
+     "ko": "궁궐 고양이",
+     "en": "a palace cat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "부채",
+     "en": "a folding fan"
+    },
+    {
+     "ko": "색동 주머니",
+     "en": "a colorful silk pouch"
+    },
+    {
+     "ko": "종이 왕관",
+     "en": "a paper crown"
+    },
+    {
+     "ko": "연잎",
+     "en": "a lotus leaf"
+    },
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "둥둥",
+     "en": "a drum"
+    },
+    {
+     "ko": "또각또각",
+     "en": "wooden shoes on stone"
+    }
+   ],
+   "palette": [
+    "#B23A3A",
+    "#2E7D32",
+    "#F4D35E",
+    "#2F6F8F",
+    "#F7E7C2"
+   ],
+   "styleHint": "a Joseon royal palace courtyard, painted dancheong columns, a pond pavilion, soft daylight",
+   "rules": [
+    "마당에서는 뛰어도 되지만 전각 안에서는 걷는다"
+   ],
+   "avoid": [
+    "신분 차별, 벌"
+   ],
+   "returnCue": "큰 북이 저녁을 알리면"
+  },
+  {
+   "id": "dino_sea",
+   "name": {
+    "ko": "공룡 바다",
+    "en": "the Dinosaur Sea"
+   },
+   "era": "past",
+   "region": "아주아주 옛날",
+   "needsPortal": true,
+   "arrival": "긴 목 바다 공룡이 헤엄치는 파란 바다, 조개 해변",
+   "landmarks": [
+    {
+     "ko": "긴 목 바다 공룡",
+     "en": "a long-necked sea reptile (friendly)"
+    },
+    {
+     "ko": "조개 해변",
+     "en": "the shell beach"
+    },
+    {
+     "ko": "암모나이트 바위",
+     "en": "ammonite rocks"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "조개 해변 모래",
+     "en": "the sand of the shell beach"
+    },
+    {
+     "ko": "바다 공룡 등 위",
+     "en": "on the sea reptile's back"
+    },
+    {
+     "ko": "암모나이트 바위 틈",
+     "en": "a gap in the ammonite rocks"
+    },
+    {
+     "ko": "얕은 바다 산호",
+     "en": "the shallow coral"
+    },
+    {
+     "ko": "해변 야자 그늘",
+     "en": "the shade of a beach palm"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 바다 공룡",
+     "en": "a baby sea reptile"
+    },
+    {
+     "ko": "암모나이트",
+     "en": "an ammonite"
+    },
+    {
+     "ko": "익룡",
+     "en": "a pterosaur gliding"
+    }
+   ],
+   "props": [
+    {
+     "ko": "큰 조개껍데기",
+     "en": "a big seashell"
+    },
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "양동이",
+     "en": "a bucket"
+    },
+    {
+     "ko": "노란 우산",
+     "en": "a yellow umbrella"
+    },
+    {
+     "ko": "도시락 통",
+     "en": "a lunch box"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    },
+    {
+     "ko": "푸우",
+     "en": "a sea reptile blowing"
+    }
+   ],
+   "palette": [
+    "#7FD1D1",
+    "#2F6F8F",
+    "#E8D5A3",
+    "#6FA66B",
+    "#E79A8E"
+   ],
+   "styleHint": "a bright prehistoric sea, a friendly long-necked sea reptile, shell beach, pterosaurs in a sunny sky",
+   "rules": [
+    "바다 공룡은 느리고 상냥하다",
+    "초록이의 사촌 '파랑이'가 안내자"
+   ],
+   "avoid": [
+    "잡아먹기, 상어"
+   ],
+   "returnCue": "익룡이 노을 쪽으로 날아가면"
+  },
+  {
+   "id": "ancient_greece_games",
+   "name": {
+    "ko": "고대 그리스 달리기 경기장",
+    "en": "the running field of ancient Greece"
+   },
+   "era": "past",
+   "region": "고대 그리스",
+   "needsPortal": true,
+   "arrival": "흰 돌기둥과 올리브 나무, 달리기 트랙",
+   "landmarks": [
+    {
+     "ko": "돌기둥 경기장",
+     "en": "a stone-columned stadium"
+    },
+    {
+     "ko": "올리브 나무 숲",
+     "en": "an olive grove"
+    },
+    {
+     "ko": "언덕 위 흰 신전(멀리서만)",
+     "en": "a white temple on the hill (seen from afar)"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "달리기 트랙 출발선",
+     "en": "the starting line of the track"
+    },
+    {
+     "ko": "올리브 나무 그늘",
+     "en": "the shade of an olive tree"
+    },
+    {
+     "ko": "돌 계단 관중석",
+     "en": "the stone seats"
+    },
+    {
+     "ko": "분수 옆",
+     "en": "beside the fountain"
+    },
+    {
+     "ko": "도자기 가게 앞",
+     "en": "in front of the pottery shop"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "염소",
+     "en": "a goat"
+    },
+    {
+     "ko": "올빼미",
+     "en": "an owl"
+    },
+    {
+     "ko": "도마뱀",
+     "en": "a lizard"
+    }
+   ],
+   "props": [
+    {
+     "ko": "월계수 잎 관",
+     "en": "a laurel wreath"
+    },
+    {
+     "ko": "올리브 한 알",
+     "en": "an olive"
+    },
+    {
+     "ko": "도자기 컵",
+     "en": "a clay cup"
+    },
+    {
+     "ko": "샌들",
+     "en": "sandals"
+    },
+    {
+     "ko": "작은 공",
+     "en": "a small ball"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "후욱후욱",
+     "en": "runners breathing"
+    },
+    {
+     "ko": "와아",
+     "en": "cheering"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#2F6F8F",
+    "#8FBF9F",
+    "#C9A66B",
+    "#F4D35E"
+   ],
+   "styleHint": "ancient Greek games, white stone columns, olive trees, a dusty running track, bright sun",
+   "rules": [
+    "경기는 즐겁게, 꼴찌도 박수"
+   ],
+   "avoid": [
+    "종교 의식"
+   ],
+   "returnCue": "월계수 관을 씌워 주면"
+  },
+  {
+   "id": "ice_age_plain",
+   "name": {
+    "ko": "빙하기 눈 들판",
+    "en": "the Ice Age snow plain"
+   },
+   "era": "past",
+   "region": "아주 옛날",
+   "needsPortal": true,
+   "arrival": "끝없는 눈 들판과 털북숭이 매머드 떼",
+   "landmarks": [
+    {
+     "ko": "매머드 떼",
+     "en": "a herd of woolly mammoths"
+    },
+    {
+     "ko": "얼음 동굴",
+     "en": "an ice cave that glows blue"
+    },
+    {
+     "ko": "뿔 사슴 언덕",
+     "en": "the hill of giant deer"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "매머드 등 위",
+     "en": "on a mammoth's back"
+    },
+    {
+     "ko": "얼음 동굴 안",
+     "en": "inside the blue ice cave"
+    },
+    {
+     "ko": "눈 들판 한가운데",
+     "en": "the middle of the snow plain"
+    },
+    {
+     "ko": "모닥불 자리",
+     "en": "the campfire circle"
+    },
+    {
+     "ko": "얼어붙은 강 위",
+     "en": "on the frozen river"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 매머드",
+     "en": "a baby mammoth"
+    },
+    {
+     "ko": "눈토끼",
+     "en": "a snow hare"
+    },
+    {
+     "ko": "큰뿔 사슴",
+     "en": "a giant deer"
+    }
+   ],
+   "props": [
+    {
+     "ko": "털가죽 망토",
+     "en": "a fur cloak"
+    },
+    {
+     "ko": "조약돌",
+     "en": "a smooth pebble"
+    },
+    {
+     "ko": "나무 썰매",
+     "en": "a wooden sled"
+    },
+    {
+     "ko": "뼈 피리(장난감)",
+     "en": "a toy bone flute"
+    },
+    {
+     "ko": "불씨 통(어른이 듦)",
+     "en": "an ember pot (carried by an adult)"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쿵쿵",
+     "en": "mammoth steps"
+    },
+    {
+     "ko": "뽀드득",
+     "en": "snow crunching"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#BFE3F5",
+    "#8A6B3F",
+    "#2B3A67",
+    "#7A7A7A"
+   ],
+   "styleHint": "an Ice Age plain, woolly mammoths, blue ice cave, pale winter sun",
+   "rules": [
+    "매머드는 느리고 온순하다"
+   ],
+   "avoid": [
+    "사냥, 맹수"
+   ],
+   "returnCue": "모닥불 연기가 오르면"
+  },
+  {
+   "id": "moon_base",
+   "name": {
+    "ko": "달 기지",
+    "en": "a Moon base"
+   },
+   "era": "future",
+   "region": "달",
+   "needsPortal": true,
+   "arrival": "회색 모래와 둥근 돔, 하늘에 파란 지구",
+   "landmarks": [
+    {
+     "ko": "둥근 돔 기지",
+     "en": "the round dome base"
+    },
+    {
+     "ko": "크레이터",
+     "en": "a wide crater"
+    },
+    {
+     "ko": "지구가 뜨는 언덕",
+     "en": "the hill where Earth rises"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "돔 안 놀이방",
+     "en": "the playroom inside the dome"
+    },
+    {
+     "ko": "크레이터 바닥",
+     "en": "the floor of the crater"
+    },
+    {
+     "ko": "달 버기 좌석",
+     "en": "the seat of the moon buggy"
+    },
+    {
+     "ko": "지구가 뜨는 언덕 위",
+     "en": "on the Earthrise hill"
+    },
+    {
+     "ko": "깃발 옆",
+     "en": "beside the flag"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "돔 온실 나비",
+     "en": "a greenhouse butterfly"
+    },
+    {
+     "ko": "로봇 거북이",
+     "en": "a robot turtle"
+    },
+    {
+     "ko": "돔 금붕어",
+     "en": "a goldfish in the dome"
+    }
+   ],
+   "props": [
+    {
+     "ko": "헬멧",
+     "en": "a bubble helmet"
+    },
+    {
+     "ko": "달 돌",
+     "en": "a moon rock"
+    },
+    {
+     "ko": "깃발",
+     "en": "a small flag"
+    },
+    {
+     "ko": "무전기",
+     "en": "a walkie-talkie"
+    },
+    {
+     "ko": "비치볼(달에서는 높이 뜸)",
+     "en": "a beach ball (bounces high on the Moon)"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "삐빅",
+     "en": "a beep"
+    },
+    {
+     "ko": "사각",
+     "en": "boots on moon dust"
+    }
+   ],
+   "palette": [
+    "#7A7A7A",
+    "#F7F0E3",
+    "#2B3A67",
+    "#7FB3D5",
+    "#F4D35E"
+   ],
+   "styleHint": "a cheerful Moon base, grey dust, a round dome, blue Earth in a black sky",
+   "rules": [
+    "달에서는 높이 뛸 수 있다",
+    "밖에서는 헬멧"
+   ],
+   "avoid": [
+    "산소 부족"
+   ],
+   "returnCue": "지구가 언덕 위로 떠오르면"
+  },
+  {
+   "id": "sky_train_city",
+   "name": {
+    "ko": "하늘 열차 도시",
+    "en": "the city of sky trains"
+   },
+   "era": "future",
+   "region": "미래",
+   "needsPortal": true,
+   "arrival": "건물 사이를 달리는 유리 열차, 옥상 정원",
+   "landmarks": [
+    {
+     "ko": "유리 하늘 열차",
+     "en": "glass sky trains"
+    },
+    {
+     "ko": "옥상 정원 탑",
+     "en": "rooftop-garden towers"
+    },
+    {
+     "ko": "구름 정류장",
+     "en": "the cloud-level station"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "하늘 열차 맨 앞자리",
+     "en": "the front seat of the sky train"
+    },
+    {
+     "ko": "옥상 정원 벤치",
+     "en": "a bench in the rooftop garden"
+    },
+    {
+     "ko": "구름 정류장 플랫폼",
+     "en": "the platform at cloud level"
+    },
+    {
+     "ko": "유리 다리 위",
+     "en": "on the glass bridge"
+    },
+    {
+     "ko": "물고기 수족관 벽 앞",
+     "en": "in front of the aquarium wall"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "옥상 정원 참새",
+     "en": "a rooftop sparrow"
+    },
+    {
+     "ko": "드론 벌",
+     "en": "a drone bee"
+    },
+    {
+     "ko": "수족관 물고기",
+     "en": "aquarium fish"
+    }
+   ],
+   "props": [
+    {
+     "ko": "열차표 팔찌",
+     "en": "a ticket bracelet"
+    },
+    {
+     "ko": "말하는 지도",
+     "en": "a talking map"
+    },
+    {
+     "ko": "딸기 바구니",
+     "en": "a basket of strawberries"
+    },
+    {
+     "ko": "빛나는 단추",
+     "en": "a glowing button"
+    },
+    {
+     "ko": "바람개비",
+     "en": "a pinwheel"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "슈웅",
+     "en": "the sky train gliding"
+    },
+    {
+     "ko": "삐빅",
+     "en": "a door chime"
+    }
+   ],
+   "palette": [
+    "#7FB3D5",
+    "#8FBF9F",
+    "#F7F0E3",
+    "#F4D35E",
+    "#5B5B5B"
+   ],
+   "styleHint": "a clean future city, glass trains gliding between towers, rooftop gardens, bright sky",
+   "rules": [
+    "열차 문이 닫히면 기다린다"
+   ],
+   "avoid": [],
+   "returnCue": "열차 안내 방송이 '집'이라고 하면"
+  },
+  {
+   "id": "robot_farm",
+   "name": {
+    "ko": "로봇 농장",
+    "en": "the robot farm"
+   },
+   "era": "future",
+   "region": "미래",
+   "needsPortal": true,
+   "arrival": "줄 맞춰 자라는 채소밭과 둥근 농부 로봇들",
+   "landmarks": [
+    {
+     "ko": "둥근 농부 로봇",
+     "en": "round farmer robots"
+    },
+    {
+     "ko": "자동 물뿌리개 탑",
+     "en": "the sprinkler tower"
+    },
+    {
+     "ko": "무지개 비닐하우스",
+     "en": "the rainbow greenhouse"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "토마토 줄 사이",
+     "en": "between the tomato rows"
+    },
+    {
+     "ko": "물뿌리개 탑 아래",
+     "en": "under the sprinkler tower"
+    },
+    {
+     "ko": "무지개 비닐하우스 안",
+     "en": "inside the rainbow greenhouse"
+    },
+    {
+     "ko": "수확 바구니 수레",
+     "en": "the harvest-basket cart"
+    },
+    {
+     "ko": "로봇 충전 헛간",
+     "en": "the robot charging barn"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "무당벌레",
+     "en": "a ladybug"
+    },
+    {
+     "ko": "농장 강아지",
+     "en": "the farm dog"
+    },
+    {
+     "ko": "드론 벌",
+     "en": "a drone bee"
+    }
+   ],
+   "props": [
+    {
+     "ko": "물뿌리개",
+     "en": "a watering can"
+    },
+    {
+     "ko": "당근",
+     "en": "a carrot"
+    },
+    {
+     "ko": "씨앗 봉지",
+     "en": "a packet of seeds"
+    },
+    {
+     "ko": "장화",
+     "en": "gumboots"
+    },
+    {
+     "ko": "스티커",
+     "en": "a sticker"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "치익",
+     "en": "sprinklers"
+    },
+    {
+     "ko": "위이잉",
+     "en": "robots whirring"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#E63946",
+    "#F4D35E",
+    "#7FB3D5",
+    "#F7F0E3"
+   ],
+   "styleHint": "a future farm with friendly round robots, neat vegetable rows, a rainbow greenhouse",
+   "rules": [
+    "로봇은 채소를 아끼고 아이를 돕는다"
+   ],
+   "avoid": [],
+   "returnCue": "로봇들이 충전 헛간으로 들어가면"
+  },
+  {
+   "id": "solar_glass_city",
+   "name": {
+    "ko": "햇빛 유리 도시",
+    "en": "the sunlight glass city"
+   },
+   "era": "future",
+   "region": "미래",
+   "needsPortal": true,
+   "arrival": "반짝이는 유리 건물과 햇빛 꽃 지붕",
+   "landmarks": [
+    {
+     "ko": "햇빛 꽃 지붕",
+     "en": "sunflower-shaped solar roofs"
+    },
+    {
+     "ko": "유리 미끄럼틀 탑",
+     "en": "the glass slide tower"
+    },
+    {
+     "ko": "물 위 광장",
+     "en": "a plaza floating on water"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "유리 미끄럼틀 꼭대기",
+     "en": "the top of the glass slide"
+    },
+    {
+     "ko": "햇빛 꽃 지붕 위",
+     "en": "on a sunflower roof"
+    },
+    {
+     "ko": "물 위 광장 가운데",
+     "en": "the middle of the floating plaza"
+    },
+    {
+     "ko": "빛 정원",
+     "en": "the light garden"
+    },
+    {
+     "ko": "투명 엘리베이터 안",
+     "en": "inside the clear elevator"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "빛 정원 나비",
+     "en": "a butterfly in the light garden"
+    },
+    {
+     "ko": "광장 오리",
+     "en": "a plaza duck"
+    },
+    {
+     "ko": "유리 수족관 거북이",
+     "en": "a turtle in the glass aquarium"
+    }
+   ],
+   "props": [
+    {
+     "ko": "선글라스",
+     "en": "sunglasses"
+    },
+    {
+     "ko": "빛나는 단추",
+     "en": "a glowing button"
+    },
+    {
+     "ko": "바람개비",
+     "en": "a pinwheel"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "거울 조각(장난감)",
+     "en": "a toy mirror tile"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "반짝",
+     "en": "a glint of light"
+    },
+    {
+     "ko": "퐁퐁",
+     "en": "fountain water"
+    }
+   ],
+   "palette": [
+    "#F4D35E",
+    "#7FB3D5",
+    "#F7F0E3",
+    "#8FBF9F",
+    "#F28C6B"
+   ],
+   "styleHint": "a sparkling future city of glass, sunflower-shaped solar roofs, floating plaza, bright clean light",
+   "rules": [
+    "햇빛이 셀 땐 모자와 선글라스"
+   ],
+   "avoid": [],
+   "returnCue": "유리 건물이 노을빛으로 물들면"
+  },
+  {
+   "id": "airship_cloudliner",
+   "name": {
+    "ko": "구름 비행선",
+    "en": "the cloud airship"
+   },
+   "era": "future",
+   "region": "하늘",
+   "needsPortal": true,
+   "arrival": "거대한 풍선 아래 매달린 나무 갑판, 구름 사이",
+   "landmarks": [
+    {
+     "ko": "거대한 풍선",
+     "en": "the great balloon"
+    },
+    {
+     "ko": "나무 갑판",
+     "en": "the wooden deck"
+    },
+    {
+     "ko": "유리 바닥 전망실",
+     "en": "the glass-floored lookout"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "나무 갑판 난간 옆",
+     "en": "by the deck railing"
+    },
+    {
+     "ko": "유리 바닥 전망실",
+     "en": "in the glass-floored lookout"
+    },
+    {
+     "ko": "조종실 큰 키 앞",
+     "en": "in front of the big wheel in the cockpit"
+    },
+    {
+     "ko": "구름 위 그물 침대",
+     "en": "a net hammock above the clouds"
+    },
+    {
+     "ko": "식당 둥근 창가",
+     "en": "the round window of the dining room"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "갈매기",
+     "en": "a seagull"
+    },
+    {
+     "ko": "비행선 고양이",
+     "en": "the airship cat"
+    },
+    {
+     "ko": "구름 사이 제비",
+     "en": "a swallow among the clouds"
+    }
+   ],
+   "props": [
+    {
+     "ko": "망원경",
+     "en": "a spyglass"
+    },
+    {
+     "ko": "종이비행기",
+     "en": "a paper airplane"
+    },
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "지도",
+     "en": "a rolled-up map"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "휘잉",
+     "en": "wind over the deck"
+    },
+    {
+     "ko": "윙윙",
+     "en": "the propellers"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#F7F0E3",
+    "#8A6B3F",
+    "#B23A3A",
+    "#F4D35E"
+   ],
+   "styleHint": "a wooden-decked airship under a giant balloon, drifting between fluffy clouds, golden light",
+   "rules": [
+    "난간 안쪽에서"
+   ],
+   "avoid": [
+    "떨어지는 공포"
+   ],
+   "returnCue": "비행선이 구름 아래로 내려오면"
+  },
+  {
+   "id": "star_cruiser_garden",
+   "name": {
+    "ko": "별 여행선 정원",
+    "en": "the garden ship between the stars"
+   },
+   "era": "future",
+   "region": "우주",
+   "needsPortal": true,
+   "arrival": "창밖에 별이 흐르는 긴 복도, 가운데 나무 한 그루",
+   "landmarks": [
+    {
+     "ko": "배 한가운데 큰 나무",
+     "en": "the great tree at the heart of the ship"
+    },
+    {
+     "ko": "별이 흐르는 창",
+     "en": "windows where stars stream past"
+    },
+    {
+     "ko": "둥둥 물방울 연못",
+     "en": "the floating-droplet pond"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "큰 나무 아래",
+     "en": "under the great tree"
+    },
+    {
+     "ko": "별 창가 침대",
+     "en": "the bunk by the star window"
+    },
+    {
+     "ko": "둥둥 연못 옆",
+     "en": "beside the floating pond"
+    },
+    {
+     "ko": "조종실 별 지도 앞",
+     "en": "in front of the star map"
+    },
+    {
+     "ko": "딸기 온실 칸",
+     "en": "the strawberry greenhouse bay"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "나무 올빼미",
+     "en": "an owl in the great tree"
+    },
+    {
+     "ko": "온실 달팽이",
+     "en": "a greenhouse snail"
+    },
+    {
+     "ko": "청소 로봇",
+     "en": "a tiny cleaning robot"
+    }
+   ],
+   "props": [
+    {
+     "ko": "별 지도",
+     "en": "a star map"
+    },
+    {
+     "ko": "빨대",
+     "en": "a straw"
+    },
+    {
+     "ko": "딸기",
+     "en": "a strawberry"
+    },
+    {
+     "ko": "자석 숟가락",
+     "en": "a magnetic spoon"
+    },
+    {
+     "ko": "별 모양 스티커",
+     "en": "a star sticker"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "웅웅",
+     "en": "the ship humming"
+    },
+    {
+     "ko": "퐁",
+     "en": "a droplet"
+    }
+   ],
+   "palette": [
+    "#2B3A67",
+    "#8FBF9F",
+    "#F7F0E3",
+    "#F4D35E",
+    "#B38CD9"
+   ],
+   "styleHint": "a cozy starship with a living tree at its center, star-streaked windows, soft lamp light",
+   "rules": [
+    "물건은 둥둥 뜬다, 나무는 뿌리로 붙어 있다"
+   ],
+   "avoid": [
+    "우주 미아"
+   ],
+   "returnCue": "창밖에 파란 별(지구)이 보이면"
+  },
+  {
+   "id": "toy_drawer_town",
+   "name": {
+    "ko": "장난감 서랍 마을",
+    "en": "the town inside the toy drawer"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "블록 집과 구슬 길, 태엽 소리",
+   "landmarks": [
+    {
+     "ko": "나무 블록 집들",
+     "en": "houses made of wooden blocks"
+    },
+    {
+     "ko": "구슬 굴러가는 길",
+     "en": "the marble-run road"
+    },
+    {
+     "ko": "태엽 시계탑",
+     "en": "the wind-up clock tower"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "블록 집 지붕 위",
+     "en": "on a block-house roof"
+    },
+    {
+     "ko": "구슬 길 커브",
+     "en": "the bend in the marble run"
+    },
+    {
+     "ko": "태엽 시계탑 아래",
+     "en": "under the wind-up clock tower"
+    },
+    {
+     "ko": "크레파스 숲",
+     "en": "the crayon forest"
+    },
+    {
+     "ko": "퍼즐 조각 광장",
+     "en": "the puzzle-piece plaza"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "태엽 강아지",
+     "en": "a wind-up puppy"
+    },
+    {
+     "ko": "헝겊 토끼",
+     "en": "a rag-doll rabbit"
+    },
+    {
+     "ko": "나무 기차 '칙칙'",
+     "en": "a little wooden train called Chik-chik"
+    }
+   ],
+   "props": [
+    {
+     "ko": "나무 블록",
+     "en": "a wooden block"
+    },
+    {
+     "ko": "알록달록 구슬",
+     "en": "a colorful marble"
+    },
+    {
+     "ko": "태엽 열쇠",
+     "en": "a wind-up key"
+    },
+    {
+     "ko": "퍼즐 조각",
+     "en": "a puzzle piece"
+    },
+    {
+     "ko": "크레파스",
+     "en": "a crayon"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "찰칵찰칵",
+     "en": "a wind-up ticking"
+    },
+    {
+     "ko": "데굴데굴",
+     "en": "marbles rolling"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#7FB3D5",
+    "#8FBF9F",
+    "#F7F0E3"
+   ],
+   "styleHint": "a toy town of wooden blocks and marble runs, wind-up toys, bright primary colors, soft toy textures",
+   "rules": [
+    "서랍이 닫히면 모두 잠든다"
+   ],
+   "avoid": [],
+   "returnCue": "서랍 밖에서 엄마가 부르면"
+  },
+  {
+   "id": "book_kingdom",
+   "name": {
+    "ko": "책 속 나라",
+    "en": "the kingdom inside the books"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "책장이 성벽인 나라, 글자가 새처럼 날아다님",
+   "landmarks": [
+    {
+     "ko": "책장 성벽",
+     "en": "walls made of bookshelves"
+    },
+    {
+     "ko": "글자 새 떼",
+     "en": "flocks of letter-birds"
+    },
+    {
+     "ko": "책갈피 다리",
+     "en": "a bookmark bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "책장 성벽 꼭대기",
+     "en": "the top of the bookshelf wall"
+    },
+    {
+     "ko": "책갈피 다리 위",
+     "en": "on the bookmark bridge"
+    },
+    {
+     "ko": "펼쳐진 큰 책 위",
+     "en": "on an open giant book"
+    },
+    {
+     "ko": "도서관 사다리 꼭대기",
+     "en": "the top of the library ladder"
+    },
+    {
+     "ko": "종이 접기 마을",
+     "en": "the origami village"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "글자 새",
+     "en": "a letter-bird"
+    },
+    {
+     "ko": "책벌레(귀여운)",
+     "en": "a cute bookworm"
+    },
+    {
+     "ko": "종이 고양이",
+     "en": "a paper cat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "책갈피",
+     "en": "a bookmark"
+    },
+    {
+     "ko": "돋보기",
+     "en": "a magnifying glass"
+    },
+    {
+     "ko": "연필",
+     "en": "a pencil"
+    },
+    {
+     "ko": "도장",
+     "en": "a rubber stamp"
+    },
+    {
+     "ko": "종이 왕관",
+     "en": "a paper crown"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "사락사락",
+     "en": "pages turning"
+    },
+    {
+     "ko": "짹짹",
+     "en": "letter-birds chirping"
+    }
+   ],
+   "palette": [
+    "#F7E7C2",
+    "#8A6B3F",
+    "#B23A3A",
+    "#2F6F8F",
+    "#F4D35E"
+   ],
+   "styleHint": "a kingdom built of books, bookshelf walls, paper bridges, letters flying like birds, warm paper tones",
+   "rules": [
+    "책 속에서는 글자가 말한다"
+   ],
+   "avoid": [],
+   "returnCue": "책이 덮이기 시작하면"
+  },
+  {
+   "id": "upside_down_land",
+   "name": {
+    "ko": "거꾸로 나라",
+    "en": "Upside-Down Land"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "하늘에 풀밭, 땅에 구름, 거꾸로 걷는 사람들",
+   "landmarks": [
+    {
+     "ko": "하늘에 붙은 풀밭",
+     "en": "a meadow stuck to the sky"
+    },
+    {
+     "ko": "거꾸로 흐르는 폭포",
+     "en": "a waterfall that flows up"
+    },
+    {
+     "ko": "뿌리가 위로 난 나무",
+     "en": "trees with roots in the air"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "하늘 풀밭 위(아래?)",
+     "en": "on the sky meadow"
+    },
+    {
+     "ko": "거꾸로 폭포 꼭대기",
+     "en": "the top of the upward waterfall"
+    },
+    {
+     "ko": "뿌리 그네",
+     "en": "a swing made of roots"
+    },
+    {
+     "ko": "거꾸로 집 천장 식탁",
+     "en": "the dining table on the ceiling"
+    },
+    {
+     "ko": "구름 바닥 길",
+     "en": "the cloud-floor road"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "거꾸로 걷는 거북이",
+     "en": "a turtle walking upside down"
+    },
+    {
+     "ko": "물고기 새",
+     "en": "a fish that flies"
+    },
+    {
+     "ko": "뒤로 뛰는 토끼",
+     "en": "a rabbit that hops backwards"
+    }
+   ],
+   "props": [
+    {
+     "ko": "거꾸로 우산",
+     "en": "an upside-down umbrella"
+    },
+    {
+     "ko": "거울",
+     "en": "a small mirror"
+    },
+    {
+     "ko": "나침반",
+     "en": "a compass"
+    },
+    {
+     "ko": "모자",
+     "en": "a hat"
+    },
+    {
+     "ko": "풍선",
+     "en": "a balloon"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아(위로)",
+     "en": "water rushing upward"
+    },
+    {
+     "ko": "까르르",
+     "en": "giggling"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#8FBF9F",
+    "#F4D35E",
+    "#F2C6DE",
+    "#5B5B5B"
+   ],
+   "styleHint": "a whimsical upside-down world, meadows in the sky, clouds underfoot, trees with roots up",
+   "rules": [
+    "여기선 뒤로 걸어야 앞으로 간다"
+   ],
+   "avoid": [
+    "떨어지는 공포"
+   ],
+   "returnCue": "세상이 천천히 똑바로 돌아오면"
+  },
+  {
+   "id": "bubble_land",
+   "name": {
+    "ko": "비눗방울 나라",
+    "en": "Bubble Land"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "무지개빛 방울 집과 둥둥 뜨는 길",
+   "landmarks": [
+    {
+     "ko": "방울 집",
+     "en": "bubble houses"
+    },
+    {
+     "ko": "방울 다리",
+     "en": "a bridge of bubbles"
+    },
+    {
+     "ko": "무지개 연못",
+     "en": "a rainbow pond"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "방울 집 안",
+     "en": "inside a bubble house"
+    },
+    {
+     "ko": "방울 다리 가운데",
+     "en": "the middle of the bubble bridge"
+    },
+    {
+     "ko": "무지개 연못 가",
+     "en": "the edge of the rainbow pond"
+    },
+    {
+     "ko": "큰 방울 안 둥둥",
+     "en": "floating inside a giant bubble"
+    },
+    {
+     "ko": "거품 언덕",
+     "en": "the foam hill"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "방울 물고기",
+     "en": "a bubble fish"
+    },
+    {
+     "ko": "거품 양",
+     "en": "a foam sheep"
+    },
+    {
+     "ko": "반짝 잠자리",
+     "en": "a shimmering dragonfly"
+    }
+   ],
+   "props": [
+    {
+     "ko": "비눗방울 통",
+     "en": "a bubble bottle"
+    },
+    {
+     "ko": "빨대",
+     "en": "a straw"
+    },
+    {
+     "ko": "작은 거울",
+     "en": "a small mirror"
+    },
+    {
+     "ko": "리본",
+     "en": "a ribbon"
+    },
+    {
+     "ko": "깃털",
+     "en": "a feather"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "퐁",
+     "en": "a bubble popping"
+    },
+    {
+     "ko": "보글보글",
+     "en": "foam bubbling"
+    }
+   ],
+   "palette": [
+    "#F2C6DE",
+    "#BFE3F5",
+    "#F7F0E3",
+    "#B38CD9",
+    "#F4D35E"
+   ],
+   "styleHint": "a dreamy land of iridescent bubbles, floating paths, rainbow sheen, pastel light",
+   "rules": [
+    "살살 만져야 안 터진다"
+   ],
+   "avoid": [],
+   "returnCue": "가장 큰 방울이 퐁 하고 터지면"
+  },
+  {
+   "id": "music_forest",
+   "name": {
+    "ko": "악기 숲",
+    "en": "the Music Forest"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "나뭇잎이 종처럼 울리고 개울이 노래하는 숲",
+   "landmarks": [
+    {
+     "ko": "종 나뭇잎 나무",
+     "en": "trees with bell leaves"
+    },
+    {
+     "ko": "북 바위",
+     "en": "the drum rock"
+    },
+    {
+     "ko": "노래하는 개울",
+     "en": "the singing stream"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "종 나무 아래",
+     "en": "under the bell tree"
+    },
+    {
+     "ko": "북 바위 위",
+     "en": "on the drum rock"
+    },
+    {
+     "ko": "노래하는 개울가",
+     "en": "by the singing stream"
+    },
+    {
+     "ko": "피리 갈대밭",
+     "en": "the flute reed field"
+    },
+    {
+     "ko": "메아리 언덕",
+     "en": "the echo hill"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "노래하는 개구리",
+     "en": "a singing frog"
+    },
+    {
+     "ko": "딱따구리 드러머",
+     "en": "a woodpecker drummer"
+    },
+    {
+     "ko": "방울벌레",
+     "en": "a bell cricket"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    },
+    {
+     "ko": "피리",
+     "en": "a flute"
+    },
+    {
+     "ko": "탬버린",
+     "en": "a tambourine"
+    },
+    {
+     "ko": "트라이앵글",
+     "en": "a triangle"
+    },
+    {
+     "ko": "하모니카",
+     "en": "a harmonica"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딸랑",
+     "en": "bell leaves"
+    },
+    {
+     "ko": "둥둥",
+     "en": "the drum rock"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#F4D35E",
+    "#B38CD9",
+    "#F28C6B",
+    "#F7F0E3"
+   ],
+   "styleHint": "an enchanted forest where leaves ring like bells and streams sing, warm playful colors",
+   "rules": [
+    "조용히 하면 숲이 노래를 시작한다"
+   ],
+   "avoid": [],
+   "returnCue": "숲이 자장가를 부르면"
+  },
+  {
+   "id": "color_land",
+   "name": {
+    "ko": "색깔 나라",
+    "en": "Color Land"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "마을마다 색이 하나씩, 무지개 다리로 이어진 나라",
+   "landmarks": [
+    {
+     "ko": "빨강 마을",
+     "en": "Red Town"
+    },
+    {
+     "ko": "파랑 호수",
+     "en": "Blue Lake"
+    },
+    {
+     "ko": "무지개 다리",
+     "en": "the rainbow bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "빨강 마을 광장",
+     "en": "the square of Red Town"
+    },
+    {
+     "ko": "노랑 들판",
+     "en": "the yellow field"
+    },
+    {
+     "ko": "파랑 호수 배 위",
+     "en": "on a boat on Blue Lake"
+    },
+    {
+     "ko": "초록 언덕",
+     "en": "the green hill"
+    },
+    {
+     "ko": "무지개 다리 한가운데",
+     "en": "the middle of the rainbow bridge"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "색을 바꾸는 카멜레온",
+     "en": "a color-changing chameleon"
+    },
+    {
+     "ko": "파랑새",
+     "en": "a bluebird"
+    },
+    {
+     "ko": "빨강 무당벌레",
+     "en": "a red ladybug"
+    }
+   ],
+   "props": [
+    {
+     "ko": "크레파스",
+     "en": "a crayon"
+    },
+    {
+     "ko": "물감 붓",
+     "en": "a paintbrush"
+    },
+    {
+     "ko": "색종이",
+     "en": "colored paper"
+    },
+    {
+     "ko": "풍선",
+     "en": "a balloon"
+    },
+    {
+     "ko": "알록달록 구슬",
+     "en": "a colorful marble"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쓱쓱",
+     "en": "painting strokes"
+    },
+    {
+     "ko": "퐁",
+     "en": "a drop of paint"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#2F6F8F",
+    "#2E7D32",
+    "#B38CD9"
+   ],
+   "styleHint": "a land where each village is one color, joined by a rainbow bridge, bold flat colors",
+   "rules": [
+    "색을 섞으면 새 길이 생긴다"
+   ],
+   "avoid": [],
+   "returnCue": "해가 지며 모든 색이 보라로 물들면"
+  },
+  {
+   "id": "shadow_puppet_land",
+   "name": {
+    "ko": "그림자 인형 나라",
+    "en": "the shadow-puppet land"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "하얀 천 뒤에서 그림자들이 춤추는 나라, 따뜻한 등불",
+   "landmarks": [
+    {
+     "ko": "하얀 천 무대",
+     "en": "the white cloth stage"
+    },
+    {
+     "ko": "큰 등불",
+     "en": "the great lantern"
+    },
+    {
+     "ko": "손 그림자 언덕",
+     "en": "the hand-shadow hill"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "하얀 천 뒤",
+     "en": "behind the white cloth"
+    },
+    {
+     "ko": "큰 등불 앞",
+     "en": "in front of the great lantern"
+    },
+    {
+     "ko": "손 그림자 언덕 위",
+     "en": "on the hand-shadow hill"
+    },
+    {
+     "ko": "종이 인형 상자 안",
+     "en": "inside the puppet box"
+    },
+    {
+     "ko": "관객석 방석 위",
+     "en": "on the audience cushions"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "그림자 토끼",
+     "en": "a shadow rabbit"
+    },
+    {
+     "ko": "그림자 새",
+     "en": "a shadow bird"
+    },
+    {
+     "ko": "그림자 강아지",
+     "en": "a shadow puppy"
+    }
+   ],
+   "props": [
+    {
+     "ko": "손전등",
+     "en": "a small flashlight"
+    },
+    {
+     "ko": "종이 인형",
+     "en": "a paper puppet"
+    },
+    {
+     "ko": "막대기",
+     "en": "a stick"
+    },
+    {
+     "ko": "하얀 손수건",
+     "en": "a white handkerchief"
+    },
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "사락",
+     "en": "cloth rustling"
+    },
+    {
+     "ko": "둥둥",
+     "en": "a drum"
+    }
+   ],
+   "palette": [
+    "#3B3B3B",
+    "#F7E7C2",
+    "#F4D35E",
+    "#B23A3A",
+    "#2F6F8F"
+   ],
+   "styleHint": "a shadow-puppet theater world, warm lantern glow on white cloth, black silhouettes, cozy",
+   "rules": [
+    "그림자는 빛이 있어야 산다"
+   ],
+   "avoid": [
+    "무서운 그림자"
+   ],
+   "returnCue": "큰 등불이 꺼지면"
+  },
+  {
+   "id": "snow_globe_village",
+   "name": {
+    "ko": "눈 구슬 마을",
+    "en": "the snow-globe village"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "유리 구슬 안 작은 마을, 흔들면 눈이 내림",
+   "landmarks": [
+    {
+     "ko": "유리 돔 하늘",
+     "en": "the glass dome sky"
+    },
+    {
+     "ko": "작은 빨간 집들",
+     "en": "tiny red houses"
+    },
+    {
+     "ko": "가운데 큰 전나무",
+     "en": "the big fir tree in the middle"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "전나무 아래",
+     "en": "under the big fir"
+    },
+    {
+     "ko": "빨간 집 굴뚝 옆",
+     "en": "beside a red chimney"
+    },
+    {
+     "ko": "얼어붙은 연못",
+     "en": "the frozen pond"
+    },
+    {
+     "ko": "유리 벽 가장자리",
+     "en": "the edge of the glass wall"
+    },
+    {
+     "ko": "눈 쌓인 다리",
+     "en": "the snowy bridge"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "눈사람 친구",
+     "en": "a snowman friend"
+    },
+    {
+     "ko": "작은 순록",
+     "en": "a tiny reindeer"
+    },
+    {
+     "ko": "눈토끼",
+     "en": "a snow hare"
+    }
+   ],
+   "props": [
+    {
+     "ko": "목도리",
+     "en": "a scarf"
+    },
+    {
+     "ko": "털장갑",
+     "en": "wool mittens"
+    },
+    {
+     "ko": "작은 썰매",
+     "en": "a little sled"
+    },
+    {
+     "ko": "당근",
+     "en": "a carrot"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "사르륵",
+     "en": "snow falling"
+    },
+    {
+     "ko": "딸랑",
+     "en": "a bell"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#BFE3F5",
+    "#B23A3A",
+    "#2E7D32",
+    "#7FB3D5"
+   ],
+   "styleHint": "a tiny village inside a snow globe, glass sky, red cottages, gentle falling snow, warm windows",
+   "rules": [
+    "누가 구슬을 흔들면 눈이 온다"
+   ],
+   "avoid": [],
+   "returnCue": "눈이 그치고 유리에 김이 서리면"
+  },
+  {
+   "id": "kitchen_giant_land",
+   "name": {
+    "ko": "부엌 거인 나라",
+    "en": "the giant kitchen land"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "식탁이 들판, 숟가락이 다리, 설탕 눈이 내림",
+   "landmarks": [
+    {
+     "ko": "식탁 들판",
+     "en": "the tabletop plain"
+    },
+    {
+     "ko": "숟가락 다리",
+     "en": "the spoon bridge"
+    },
+    {
+     "ko": "설탕 산",
+     "en": "Sugar Mountain"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "접시 호수 가",
+     "en": "the edge of the plate lake"
+    },
+    {
+     "ko": "숟가락 다리 위",
+     "en": "on the spoon bridge"
+    },
+    {
+     "ko": "설탕 산 중턱",
+     "en": "halfway up Sugar Mountain"
+    },
+    {
+     "ko": "컵 탑 꼭대기",
+     "en": "the top of the cup tower"
+    },
+    {
+     "ko": "식빵 언덕",
+     "en": "the bread hill"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "개미 탐험대",
+     "en": "an ant expedition"
+    },
+    {
+     "ko": "부엌 파리(친절한)",
+     "en": "a friendly kitchen fly"
+    },
+    {
+     "ko": "치즈 생쥐",
+     "en": "a cheese mouse"
+    }
+   ],
+   "props": [
+    {
+     "ko": "나무 숟가락",
+     "en": "a wooden spoon"
+    },
+    {
+     "ko": "빨대",
+     "en": "a straw"
+    },
+    {
+     "ko": "각설탕",
+     "en": "a sugar cube"
+    },
+    {
+     "ko": "포도 한 알",
+     "en": "a grape"
+    },
+    {
+     "ko": "종이컵",
+     "en": "a paper cup"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "달그락",
+     "en": "dishes clinking"
+    },
+    {
+     "ko": "보글보글",
+     "en": "a pot bubbling"
+    }
+   ],
+   "palette": [
+    "#F7E7C2",
+    "#F4D35E",
+    "#E63946",
+    "#8A6B3F",
+    "#7FB3D5"
+   ],
+   "styleHint": "a kitchen seen from a thumb-sized visitor, spoon bridges, sugar mountains, warm homey colors",
+   "rules": [
+    "뜨거운 냄비 근처엔 안 간다"
+   ],
+   "avoid": [],
+   "returnCue": "거인(엄마)이 식탁을 치우기 시작하면"
+  },
+  {
+   "id": "dream_train",
+   "name": {
+    "ko": "꿈 기차",
+    "en": "the Dream Train"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "별 사이를 달리는 기차, 칸마다 다른 꿈",
+   "landmarks": [
+    {
+     "ko": "별 철길",
+     "en": "rails of starlight"
+    },
+    {
+     "ko": "구름 역",
+     "en": "the cloud station"
+    },
+    {
+     "ko": "잠옷 칸",
+     "en": "the pajama carriage"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "잠옷 칸 침대",
+     "en": "a bunk in the pajama carriage"
+    },
+    {
+     "ko": "구름 역 플랫폼",
+     "en": "the cloud station platform"
+    },
+    {
+     "ko": "별 철길 위 전망대",
+     "en": "the lookout over the star rails"
+    },
+    {
+     "ko": "식당 칸 코코아 테이블",
+     "en": "the cocoa table in the dining car"
+    },
+    {
+     "ko": "맨 뒤 칸 난간",
+     "en": "the railing of the last car"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "잠옷 입은 곰",
+     "en": "a bear in pajamas"
+    },
+    {
+     "ko": "별 물고기",
+     "en": "a starfish that swims in the sky"
+    },
+    {
+     "ko": "졸린 올빼미 차장",
+     "en": "a sleepy owl conductor"
+    }
+   ],
+   "props": [
+    {
+     "ko": "기차표",
+     "en": "a train ticket"
+    },
+    {
+     "ko": "베개",
+     "en": "a pillow"
+    },
+    {
+     "ko": "코코아 컵",
+     "en": "a cup of cocoa"
+    },
+    {
+     "ko": "별 모양 스티커",
+     "en": "a star sticker"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "칙칙폭폭",
+     "en": "the train"
+    },
+    {
+     "ko": "쌔근쌔근",
+     "en": "sleepy breathing"
+    }
+   ],
+   "palette": [
+    "#2B3A67",
+    "#F4D35E",
+    "#B38CD9",
+    "#F7F0E3",
+    "#B23A3A"
+   ],
+   "styleHint": "a cozy night train running on rails of starlight, pajama-clad passengers, warm lamp glow",
+   "rules": [
+    "꿈 기차는 잠들 때만 탄다"
+   ],
+   "avoid": [
+    "악몽"
+   ],
+   "returnCue": "기차가 '유하네 집' 역에 서면"
+  },
+  {
+   "id": "busan_harbor",
+   "name": {
+    "ko": "부산 항구 마을",
+    "en": "a harbor village in Busan"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "알록달록 언덕 집과 큰 배, 갈매기",
+   "landmarks": [
+    {
+     "ko": "알록달록 언덕 집들",
+     "en": "colorful hillside houses"
+    },
+    {
+     "ko": "큰 배가 드나드는 항구",
+     "en": "the harbor with big ships"
+    },
+    {
+     "ko": "긴 바다 다리",
+     "en": "the long sea bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "언덕 집 계단",
+     "en": "the stairs between hillside houses"
+    },
+    {
+     "ko": "어시장 수조 앞",
+     "en": "in front of the fish-market tanks"
+    },
+    {
+     "ko": "방파제 끝",
+     "en": "the end of the breakwater"
+    },
+    {
+     "ko": "모래 해변",
+     "en": "the sandy beach"
+    },
+    {
+     "ko": "바다 다리 위 산책로",
+     "en": "the walkway on the sea bridge"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "갈매기",
+     "en": "a seagull"
+    },
+    {
+     "ko": "수조 문어",
+     "en": "an octopus in a tank"
+    },
+    {
+     "ko": "항구 고양이",
+     "en": "a harbor cat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "어묵 꼬치",
+     "en": "a fish-cake skewer"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    },
+    {
+     "ko": "모래 삽",
+     "en": "a sand shovel"
+    },
+    {
+     "ko": "밀짚모자",
+     "en": "a straw hat"
+    },
+    {
+     "ko": "작은 배 모형",
+     "en": "a tiny model boat"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "뿌우",
+     "en": "a ship horn"
+    },
+    {
+     "ko": "끼룩",
+     "en": "gulls"
+    }
+   ],
+   "palette": [
+    "#7FB3D5",
+    "#F28C6B",
+    "#F4D35E",
+    "#2F6F8F",
+    "#F7F0E3"
+   ],
+   "styleHint": "Busan harbor, colorful hillside houses, big ships, a long bridge, bright sea air",
+   "rules": [
+    "방파제에서는 손을 잡는다"
+   ],
+   "avoid": [],
+   "returnCue": "큰 배가 뿌우 하고 떠나면"
+  },
+  {
+   "id": "korea_snow_village",
+   "name": {
+    "ko": "강원도 눈 마을",
+    "en": "a snowy village in Gangwon"
+   },
+   "era": "present",
+   "region": "한국",
+   "needsPortal": false,
+   "arrival": "지붕까지 쌓인 눈, 고드름, 눈썰매장",
+   "landmarks": [
+    {
+     "ko": "눈 쌓인 지붕",
+     "en": "snow-piled roofs"
+    },
+    {
+     "ko": "눈썰매 언덕",
+     "en": "the sledding hill"
+    },
+    {
+     "ko": "얼음 낚시 호수",
+     "en": "the ice-fishing lake"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "눈썰매 언덕 꼭대기",
+     "en": "the top of the sledding hill"
+    },
+    {
+     "ko": "고드름 달린 처마 밑",
+     "en": "under the icicle eaves"
+    },
+    {
+     "ko": "얼음 호수 구멍 옆",
+     "en": "beside the ice-fishing hole"
+    },
+    {
+     "ko": "군고구마 난로 앞",
+     "en": "in front of the sweet-potato stove"
+    },
+    {
+     "ko": "눈사람 마당",
+     "en": "the snowman yard"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "눈 속 참새",
+     "en": "a sparrow in the snow"
+    },
+    {
+     "ko": "동네 강아지",
+     "en": "the village dog"
+    },
+    {
+     "ko": "호수 물고기",
+     "en": "a lake fish"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 썰매",
+     "en": "a little sled"
+    },
+    {
+     "ko": "털장갑",
+     "en": "wool mittens"
+    },
+    {
+     "ko": "군고구마",
+     "en": "a roasted sweet potato"
+    },
+    {
+     "ko": "당근",
+     "en": "a carrot"
+    },
+    {
+     "ko": "목도리",
+     "en": "a scarf"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "뽀드득",
+     "en": "snow crunching"
+    },
+    {
+     "ko": "쌩",
+     "en": "a sled whooshing"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#BFE3F5",
+    "#8A6B3F",
+    "#E63946",
+    "#2B3A67"
+   ],
+   "styleHint": "a Korean mountain village in deep snow, icicles, a sledding hill, warm stove light",
+   "rules": [
+    "얼음 호수는 어른과 함께"
+   ],
+   "avoid": [],
+   "returnCue": "군고구마 냄새가 나면"
+  },
+  {
+   "id": "spain_flamenco_square",
+   "name": {
+    "ko": "스페인 오렌지 나무 광장",
+    "en": "an orange-tree square in Spain"
+   },
+   "era": "present",
+   "region": "스페인",
+   "needsPortal": true,
+   "arrival": "오렌지 나무가 줄지은 광장, 기타와 박수 소리",
+   "landmarks": [
+    {
+     "ko": "오렌지 나무 줄",
+     "en": "rows of orange trees"
+    },
+    {
+     "ko": "타일 분수",
+     "en": "a tiled fountain"
+    },
+    {
+     "ko": "둥근 아치 회랑",
+     "en": "an arched walkway"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "오렌지 나무 아래",
+     "en": "under an orange tree"
+    },
+    {
+     "ko": "타일 분수 가장자리",
+     "en": "the edge of the tiled fountain"
+    },
+    {
+     "ko": "아치 회랑 그늘",
+     "en": "the shade of the arches"
+    },
+    {
+     "ko": "기타 아저씨 옆 계단",
+     "en": "the steps by the guitar player"
+    },
+    {
+     "ko": "빵집 창가",
+     "en": "the bakery window"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "비둘기",
+     "en": "a pigeon"
+    },
+    {
+     "ko": "광장 고양이",
+     "en": "a square cat"
+    },
+    {
+     "ko": "도마뱀",
+     "en": "a lizard on the wall"
+    }
+   ],
+   "props": [
+    {
+     "ko": "오렌지",
+     "en": "an orange"
+    },
+    {
+     "ko": "캐스터네츠",
+     "en": "castanets"
+    },
+    {
+     "ko": "부채",
+     "en": "a fan"
+    },
+    {
+     "ko": "타일 조각",
+     "en": "a painted tile"
+    },
+    {
+     "ko": "빵 한 조각",
+     "en": "a piece of bread"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딱딱",
+     "en": "castanets"
+    },
+    {
+     "ko": "짝짝",
+     "en": "clapping"
+    }
+   ],
+   "palette": [
+    "#F4A261",
+    "#F4D35E",
+    "#2F6F8F",
+    "#F7F0E3",
+    "#B23A3A"
+   ],
+   "styleHint": "a sunny Spanish square with orange trees, painted tiles, arches, warm afternoon light",
+   "rules": [
+    "오렌지는 떨어진 것만"
+   ],
+   "avoid": [],
+   "returnCue": "기타 연주가 끝나고 박수가 나면"
+  },
+  {
+   "id": "madagascar_baobab",
+   "name": {
+    "ko": "마다가스카르 바오밥 길",
+    "en": "the baobab avenue of Madagascar"
+   },
+   "era": "present",
+   "region": "마다가스카르",
+   "needsPortal": true,
+   "arrival": "거꾸로 심은 것 같은 거대한 바오밥 나무 길",
+   "landmarks": [
+    {
+     "ko": "바오밥 나무 길",
+     "en": "the avenue of baobabs"
+    },
+    {
+     "ko": "붉은 흙길",
+     "en": "the red dirt road"
+    },
+    {
+     "ko": "작은 마을 우물",
+     "en": "the village well"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "바오밥 그늘",
+     "en": "the shade of a baobab"
+    },
+    {
+     "ko": "붉은 흙길 가운데",
+     "en": "the middle of the red road"
+    },
+    {
+     "ko": "우물 옆",
+     "en": "beside the well"
+    },
+    {
+     "ko": "바오밥 속 빈 공간",
+     "en": "the hollow inside a baobab"
+    },
+    {
+     "ko": "저녁 해 보는 언덕",
+     "en": "the sunset hill"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "여우원숭이",
+     "en": "a lemur"
+    },
+    {
+     "ko": "카멜레온",
+     "en": "a chameleon"
+    },
+    {
+     "ko": "거북이",
+     "en": "a tortoise"
+    }
+   ],
+   "props": [
+    {
+     "ko": "바오밥 열매",
+     "en": "a baobab fruit"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "챙 모자",
+     "en": "a sun hat"
+    },
+    {
+     "ko": "구슬 팔찌",
+     "en": "a beaded bracelet"
+    },
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "우우",
+     "en": "lemurs calling"
+    },
+    {
+     "ko": "사각",
+     "en": "feet on red dust"
+    }
+   ],
+   "palette": [
+    "#C9743F",
+    "#F4A261",
+    "#8FBF9F",
+    "#F7E7C2",
+    "#6B4E71"
+   ],
+   "styleHint": "the baobab avenue at sunset, giant bottle-shaped trees, red earth, golden-purple sky",
+   "rules": [
+    "여우원숭이는 먹이를 주지 않는다"
+   ],
+   "avoid": [],
+   "returnCue": "해가 바오밥 사이로 지면"
+  },
+  {
+   "id": "alaska_glacier",
+   "name": {
+    "ko": "알래스카 빙하 바다",
+    "en": "a glacier bay in Alaska"
+   },
+   "era": "present",
+   "region": "미국 알래스카",
+   "needsPortal": true,
+   "arrival": "파란 얼음 절벽과 떠다니는 얼음 조각, 고래 숨소리",
+   "landmarks": [
+    {
+     "ko": "파란 빙하 절벽",
+     "en": "blue glacier cliffs"
+    },
+    {
+     "ko": "떠다니는 얼음 조각",
+     "en": "floating ice chunks"
+    },
+    {
+     "ko": "고래 나오는 바다",
+     "en": "the whale bay"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "작은 배 갑판",
+     "en": "the deck of a small boat"
+    },
+    {
+     "ko": "얼음 조각 위",
+     "en": "on a floating ice chunk"
+    },
+    {
+     "ko": "빙하 절벽 앞 바다",
+     "en": "the water before the glacier"
+    },
+    {
+     "ko": "바위 해안 물개 자리",
+     "en": "the seal rocks"
+    },
+    {
+     "ko": "통나무집 창가",
+     "en": "the cabin window"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "고래",
+     "en": "a whale"
+    },
+    {
+     "ko": "물개",
+     "en": "a seal"
+    },
+    {
+     "ko": "흰머리 독수리",
+     "en": "a bald eagle"
+    }
+   ],
+   "props": [
+    {
+     "ko": "망원경",
+     "en": "binoculars"
+    },
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "보온병",
+     "en": "a thermos"
+    },
+    {
+     "ko": "얼음 조각",
+     "en": "a chunk of ice"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "푸우",
+     "en": "a whale blowing"
+    },
+    {
+     "ko": "우르릉",
+     "en": "ice cracking far away"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#2F6F8F",
+    "#F7F0E3",
+    "#7A7A7A",
+    "#2B3A67"
+   ],
+   "styleHint": "an Alaskan glacier bay, blue ice cliffs, floating ice, a whale surfacing, cold clear light",
+   "rules": [
+    "배에서는 구명조끼"
+   ],
+   "avoid": [
+    "얼음이 깨져 빠지는 공포"
+   ],
+   "returnCue": "고래가 꼬리를 보이고 잠수하면"
+  },
+  {
+   "id": "dubai_desert_city",
+   "name": {
+    "ko": "사막 유리 도시",
+    "en": "the glass city in the desert"
+   },
+   "era": "present",
+   "region": "아랍에미리트",
+   "needsPortal": true,
+   "arrival": "하늘 끝까지 솟은 유리 탑과 금빛 모래, 낙타 방울",
+   "landmarks": [
+    {
+     "ko": "하늘 끝 유리 탑",
+     "en": "a glass tower that touches the sky"
+    },
+    {
+     "ko": "금빛 모래 언덕",
+     "en": "golden dunes"
+    },
+    {
+     "ko": "분수 쇼 호수",
+     "en": "the fountain-show lake"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "유리 탑 전망대",
+     "en": "the tower's observation deck"
+    },
+    {
+     "ko": "모래 언덕 꼭대기",
+     "en": "the top of a dune"
+    },
+    {
+     "ko": "분수 호수 가",
+     "en": "the edge of the fountain lake"
+    },
+    {
+     "ko": "향신료 시장 골목",
+     "en": "the spice market lane"
+    },
+    {
+     "ko": "낙타 등 위",
+     "en": "on a camel's back"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "낙타",
+     "en": "a camel"
+    },
+    {
+     "ko": "사막 여우",
+     "en": "a desert fox"
+    },
+    {
+     "ko": "매",
+     "en": "a falcon"
+    }
+   ],
+   "props": [
+    {
+     "ko": "대추야자",
+     "en": "dates"
+    },
+    {
+     "ko": "선글라스",
+     "en": "sunglasses"
+    },
+    {
+     "ko": "작은 양탄자",
+     "en": "a little rug"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "금빛 단추",
+     "en": "a gold button"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딸랑",
+     "en": "camel bells"
+    },
+    {
+     "ko": "쏴아",
+     "en": "fountains"
+    }
+   ],
+   "palette": [
+    "#F4D35E",
+    "#C9743F",
+    "#7FB3D5",
+    "#F7F0E3",
+    "#2F6F8F"
+   ],
+   "styleHint": "a futuristic glass city rising from golden desert, fountains, camels, bright hot light",
+   "rules": [
+    "사막에서는 물을 자주"
+   ],
+   "avoid": [],
+   "returnCue": "분수 쇼 음악이 끝나면"
+  },
+  {
+   "id": "hawaii_volcano_beach",
+   "name": {
+    "ko": "하와이 화산 해변",
+    "en": "a volcano beach in Hawaii"
+   },
+   "era": "present",
+   "region": "미국 하와이",
+   "needsPortal": true,
+   "arrival": "검은 모래와 야자나무, 멀리 연기 나는 화산",
+   "landmarks": [
+    {
+     "ko": "검은 모래 해변",
+     "en": "a black sand beach"
+    },
+    {
+     "ko": "연기 나는 화산",
+     "en": "a gently smoking volcano"
+    },
+    {
+     "ko": "무지개 폭포",
+     "en": "a rainbow waterfall"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "검은 모래 위",
+     "en": "on the black sand"
+    },
+    {
+     "ko": "무지개 폭포 아래",
+     "en": "below the rainbow waterfall"
+    },
+    {
+     "ko": "야자나무 그늘",
+     "en": "the shade of a palm"
+    },
+    {
+     "ko": "바위 웅덩이",
+     "en": "a rock pool"
+    },
+    {
+     "ko": "서핑 보드 옆",
+     "en": "beside a surfboard"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "바다거북",
+     "en": "a sea turtle"
+    },
+    {
+     "ko": "흰 도마뱀붙이",
+     "en": "a white gecko"
+    },
+    {
+     "ko": "돌고래",
+     "en": "a dolphin"
+    }
+   ],
+   "props": [
+    {
+     "ko": "꽃 목걸이",
+     "en": "a flower garland"
+    },
+    {
+     "ko": "우쿨렐레",
+     "en": "a ukulele"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    },
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "파인애플",
+     "en": "a pineapple"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    },
+    {
+     "ko": "팅팅",
+     "en": "a ukulele"
+    }
+   ],
+   "palette": [
+    "#3B3B3B",
+    "#7FD1D1",
+    "#2E7D32",
+    "#F4D35E",
+    "#E79A8E"
+   ],
+   "styleHint": "a Hawaiian black-sand beach, palms, a rainbow waterfall, a distant smoking volcano, bright tropical light",
+   "rules": [
+    "화산은 멀리서 본다"
+   ],
+   "avoid": [
+    "용암 추격"
+   ],
+   "returnCue": "우쿨렐레 노래가 끝나면"
+  },
+  {
+   "id": "scotland_castle_lake",
+   "name": {
+    "ko": "스코틀랜드 호수 성",
+    "en": "a castle on a Scottish loch"
+   },
+   "era": "present",
+   "region": "스코틀랜드",
+   "needsPortal": true,
+   "arrival": "안개 낀 호수와 돌 성, 보라색 들꽃",
+   "landmarks": [
+    {
+     "ko": "호숫가 돌 성",
+     "en": "a stone castle by the loch"
+    },
+    {
+     "ko": "보라 들꽃 언덕",
+     "en": "purple heather hills"
+    },
+    {
+     "ko": "긴 털 소 목장",
+     "en": "the shaggy-cow pasture"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "성 돌계단",
+     "en": "the castle's stone steps"
+    },
+    {
+     "ko": "보라 언덕 꼭대기",
+     "en": "the top of the heather hill"
+    },
+    {
+     "ko": "호숫가 조약돌밭",
+     "en": "the pebble shore"
+    },
+    {
+     "ko": "긴 털 소 옆",
+     "en": "beside a shaggy cow"
+    },
+    {
+     "ko": "안개 낀 나무 다리",
+     "en": "the foggy wooden bridge"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "긴 털 소",
+     "en": "a shaggy highland cow"
+    },
+    {
+     "ko": "호수 수달",
+     "en": "a loch otter"
+    },
+    {
+     "ko": "양",
+     "en": "a sheep"
+    }
+   ],
+   "props": [
+    {
+     "ko": "체크 담요",
+     "en": "a tartan blanket"
+    },
+    {
+     "ko": "털모자",
+     "en": "a wool hat"
+    },
+    {
+     "ko": "조약돌",
+     "en": "a pebble"
+    },
+    {
+     "ko": "비스킷",
+     "en": "a biscuit"
+    },
+    {
+     "ko": "보라 꽃 한 송이",
+     "en": "a sprig of heather"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "음메",
+     "en": "a cow lowing"
+    },
+    {
+     "ko": "쏴아",
+     "en": "wind over the loch"
+    }
+   ],
+   "palette": [
+    "#6B4E71",
+    "#8FBF9F",
+    "#7A7A7A",
+    "#2F6F8F",
+    "#F7F0E3"
+   ],
+   "styleHint": "a misty Scottish loch with a stone castle, purple heather, shaggy cows, soft grey-green light",
+   "rules": [
+    "안개 속에서는 손을 잡는다"
+   ],
+   "avoid": [
+    "호수 괴물 공포"
+   ],
+   "returnCue": "안개가 걷히고 성에 불이 켜지면"
+  },
+  {
+   "id": "tanzania_crater",
+   "name": {
+    "ko": "탄자니아 큰 분화구 초원",
+    "en": "the great crater grassland of Tanzania"
+   },
+   "era": "present",
+   "region": "탄자니아",
+   "needsPortal": true,
+   "arrival": "거대한 그릇 모양 초원, 얼룩말 떼",
+   "landmarks": [
+    {
+     "ko": "그릇 모양 분화구",
+     "en": "the bowl-shaped crater"
+    },
+    {
+     "ko": "분홍 플라밍고 호수",
+     "en": "the pink flamingo lake"
+    },
+    {
+     "ko": "아카시아 숲",
+     "en": "an acacia wood"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "분화구 가장자리 전망대",
+     "en": "the crater rim lookout"
+    },
+    {
+     "ko": "플라밍고 호수 가",
+     "en": "the edge of the flamingo lake"
+    },
+    {
+     "ko": "아카시아 숲 그늘",
+     "en": "the shade of the acacias"
+    },
+    {
+     "ko": "지프 지붕 위",
+     "en": "on the roof of the jeep"
+    },
+    {
+     "ko": "얼룩말 떼 옆 풀밭",
+     "en": "the grass beside the zebras"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "얼룩말",
+     "en": "a zebra"
+    },
+    {
+     "ko": "플라밍고",
+     "en": "a flamingo"
+    },
+    {
+     "ko": "혹멧돼지 새끼",
+     "en": "a warthog piglet"
+    }
+   ],
+   "props": [
+    {
+     "ko": "망원경",
+     "en": "binoculars"
+    },
+    {
+     "ko": "챙 넓은 모자",
+     "en": "a wide-brimmed hat"
+    },
+    {
+     "ko": "물병",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "지도",
+     "en": "a rolled-up map"
+    },
+    {
+     "ko": "구슬 팔찌",
+     "en": "a beaded bracelet"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "히힝",
+     "en": "zebras"
+    },
+    {
+     "ko": "푸드덕",
+     "en": "flamingos taking off"
+    }
+   ],
+   "palette": [
+    "#E8C87A",
+    "#F2C6DE",
+    "#8FBF9F",
+    "#C9743F",
+    "#7FB3D5"
+   ],
+   "styleHint": "a vast crater grassland, zebras, a pink flamingo lake, acacias, warm bright light",
+   "rules": [
+    "동물은 지프 안에서 본다"
+   ],
+   "avoid": [
+    "사냥, 포식"
+   ],
+   "returnCue": "플라밍고가 일제히 날아오르면"
+  },
+  {
+   "id": "netherlands_canal_town",
+   "name": {
+    "ko": "운하 자전거 마을",
+    "en": "a canal town of bicycles"
+   },
+   "era": "present",
+   "region": "네덜란드",
+   "needsPortal": true,
+   "arrival": "좁고 높은 집들과 운하, 자전거 종소리",
+   "landmarks": [
+    {
+     "ko": "좁고 높은 집들",
+     "en": "tall narrow canal houses"
+    },
+    {
+     "ko": "들어 올리는 다리",
+     "en": "a lifting bridge"
+    },
+    {
+     "ko": "배 위 집",
+     "en": "a houseboat"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "배 위 집 갑판",
+     "en": "the deck of a houseboat"
+    },
+    {
+     "ko": "들어 올리는 다리 앞",
+     "en": "in front of the lifting bridge"
+    },
+    {
+     "ko": "자전거 주차장",
+     "en": "the bicycle parking rows"
+    },
+    {
+     "ko": "운하 계단",
+     "en": "the canal steps"
+    },
+    {
+     "ko": "치즈 가게 앞",
+     "en": "outside the cheese shop"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "운하 오리",
+     "en": "a canal duck"
+    },
+    {
+     "ko": "백조",
+     "en": "a swan"
+    },
+    {
+     "ko": "창가 고양이",
+     "en": "a window cat"
+    }
+   ],
+   "props": [
+    {
+     "ko": "자전거 종",
+     "en": "a bicycle bell"
+    },
+    {
+     "ko": "치즈 조각",
+     "en": "a wedge of cheese"
+    },
+    {
+     "ko": "나막신",
+     "en": "wooden clogs"
+    },
+    {
+     "ko": "튤립 한 송이",
+     "en": "a tulip"
+    },
+    {
+     "ko": "작은 배 모형",
+     "en": "a tiny model boat"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "따르릉",
+     "en": "bicycle bells"
+    },
+    {
+     "ko": "찰랑",
+     "en": "canal water"
+    }
+   ],
+   "palette": [
+    "#8A6B3F",
+    "#7FB3D5",
+    "#F4D35E",
+    "#E63946",
+    "#F7F0E3"
+   ],
+   "styleHint": "a Dutch canal town, tall narrow houses, lifting bridges, bicycles everywhere, soft light",
+   "rules": [
+    "자전거 길은 건너기 전에 좌우 본다"
+   ],
+   "avoid": [],
+   "returnCue": "다리가 다시 내려오면"
+  },
+  {
+   "id": "edo_castle_town",
+   "name": {
+    "ko": "옛 일본 성 아랫마을",
+    "en": "an old castle town in Japan"
+   },
+   "era": "past",
+   "region": "옛 일본",
+   "needsPortal": true,
+   "arrival": "하얀 성과 벚꽃, 종이 등불 골목",
+   "landmarks": [
+    {
+     "ko": "하얀 성",
+     "en": "a white castle"
+    },
+    {
+     "ko": "벚꽃 길",
+     "en": "a cherry-blossom lane"
+    },
+    {
+     "ko": "종이 등불 골목",
+     "en": "a lantern alley"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "벚꽃 나무 아래",
+     "en": "under a cherry tree"
+    },
+    {
+     "ko": "성 해자 다리",
+     "en": "the bridge over the castle moat"
+    },
+    {
+     "ko": "종이 등불 가게 앞",
+     "en": "in front of the lantern shop"
+    },
+    {
+     "ko": "찻집 다다미 방",
+     "en": "the tatami room of the tea house"
+    },
+    {
+     "ko": "종이 연 날리는 들판",
+     "en": "the kite field"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "해자 잉어",
+     "en": "a moat carp"
+    },
+    {
+     "ko": "사슴",
+     "en": "a deer"
+    },
+    {
+     "ko": "참새",
+     "en": "a sparrow"
+    }
+   ],
+   "props": [
+    {
+     "ko": "종이 연",
+     "en": "a paper kite"
+    },
+    {
+     "ko": "나막신",
+     "en": "wooden sandals"
+    },
+    {
+     "ko": "종이 등",
+     "en": "a paper lantern"
+    },
+    {
+     "ko": "경단",
+     "en": "rice dumplings on a stick"
+    },
+    {
+     "ko": "부채",
+     "en": "a fan"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "딸랑",
+     "en": "a wind chime"
+    },
+    {
+     "ko": "또각또각",
+     "en": "wooden sandals"
+    }
+   ],
+   "palette": [
+    "#F2C6DE",
+    "#F7F0E3",
+    "#B23A3A",
+    "#3B3B3B",
+    "#8FBF9F"
+   ],
+   "styleHint": "an old Japanese castle town in cherry-blossom season, white castle, paper lanterns, soft pink light",
+   "rules": [
+    "성 안에서는 조용히"
+   ],
+   "avoid": [
+    "사무라이 칼싸움"
+   ],
+   "returnCue": "등불 골목이 켜지면"
+  },
+  {
+   "id": "mongol_empire_camp",
+   "name": {
+    "ko": "옛 초원 말 축제",
+    "en": "an old steppe horse festival"
+   },
+   "era": "past",
+   "region": "옛 몽골 초원",
+   "needsPortal": true,
+   "arrival": "깃발 꽂힌 게르들과 달리는 말 떼, 북소리",
+   "landmarks": [
+    {
+     "ko": "깃발 꽂힌 큰 게르",
+     "en": "a great ger with flags"
+    },
+    {
+     "ko": "말 경주 들판",
+     "en": "the horse-race field"
+    },
+    {
+     "ko": "활쏘기 과녁(장난감 활)",
+     "en": "the archery targets (toy bows)"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "큰 게르 안 카펫",
+     "en": "the carpet inside the great ger"
+    },
+    {
+     "ko": "경주 들판 출발선",
+     "en": "the start line of the race field"
+    },
+    {
+     "ko": "과녁 옆",
+     "en": "beside the targets"
+    },
+    {
+     "ko": "우유 차 끓이는 솥 옆",
+     "en": "beside the milk-tea pot"
+    },
+    {
+     "ko": "언덕 깃발 아래",
+     "en": "under the hilltop flag"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "망아지",
+     "en": "a foal"
+    },
+    {
+     "ko": "독수리(훈련된)",
+     "en": "a trained eagle"
+    },
+    {
+     "ko": "양 떼",
+     "en": "a flock of sheep"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 북",
+     "en": "a little drum"
+    },
+    {
+     "ko": "장난감 활",
+     "en": "a toy bow"
+    },
+    {
+     "ko": "털모자",
+     "en": "a fur-trimmed hat"
+    },
+    {
+     "ko": "우유 그릇",
+     "en": "a bowl of milk"
+    },
+    {
+     "ko": "긴 밧줄",
+     "en": "a long rope"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "다그닥",
+     "en": "hooves"
+    },
+    {
+     "ko": "둥둥",
+     "en": "drums"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#B23A3A",
+    "#F4D35E",
+    "#2F6F8F",
+    "#F7F0E3"
+   ],
+   "styleHint": "a festive steppe camp, flags on gers, racing horses, big open sky",
+   "rules": [
+    "말 경주는 멀리서 응원"
+   ],
+   "avoid": [
+    "전쟁, 정복"
+   ],
+   "returnCue": "큰 북이 세 번 울리면"
+  },
+  {
+   "id": "old_korean_village_winter",
+   "name": {
+    "ko": "옛 겨울 초가 마을",
+    "en": "an old thatched village in winter"
+   },
+   "era": "past",
+   "region": "한국(옛날)",
+   "needsPortal": true,
+   "arrival": "초가지붕에 눈, 굴뚝 연기, 연 날리는 아이들",
+   "landmarks": [
+    {
+     "ko": "눈 쌓인 초가지붕",
+     "en": "snow-covered thatched roofs"
+    },
+    {
+     "ko": "연 날리는 언덕",
+     "en": "the kite hill"
+    },
+    {
+     "ko": "장독대",
+     "en": "rows of clay jars"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "아궁이 앞",
+     "en": "in front of the hearth"
+    },
+    {
+     "ko": "연 날리는 언덕 꼭대기",
+     "en": "the top of the kite hill"
+    },
+    {
+     "ko": "장독대 옆",
+     "en": "beside the clay jars"
+    },
+    {
+     "ko": "얼어붙은 논 썰매장",
+     "en": "the frozen paddy for sledding"
+    },
+    {
+     "ko": "사랑방 문턱",
+     "en": "the threshold of the guest room"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "누렁이",
+     "en": "a yellow dog"
+    },
+    {
+     "ko": "까치",
+     "en": "a magpie"
+    },
+    {
+     "ko": "외양간 황소",
+     "en": "the ox in the barn"
+    }
+   ],
+   "props": [
+    {
+     "ko": "연",
+     "en": "a kite"
+    },
+    {
+     "ko": "팽이",
+     "en": "a spinning top"
+    },
+    {
+     "ko": "군밤",
+     "en": "roasted chestnuts"
+    },
+    {
+     "ko": "짚신",
+     "en": "straw sandals"
+    },
+    {
+     "ko": "털 조끼",
+     "en": "a fur vest"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "타닥",
+     "en": "the hearth fire"
+    },
+    {
+     "ko": "휘익",
+     "en": "a kite in the wind"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#8A6B3F",
+    "#B23A3A",
+    "#5B5B5B",
+    "#A8C3A0"
+   ],
+   "styleHint": "an old Korean thatched-roof village in snow, chimney smoke, kites, warm hearth glow",
+   "rules": [
+    "아궁이 불은 어른이"
+   ],
+   "avoid": [],
+   "returnCue": "굴뚝 연기가 저녁밥 냄새로 바뀌면"
+  },
+  {
+   "id": "pyramid_builders_river",
+   "name": {
+    "ko": "옛 강가 벽돌 마을",
+    "en": "an old riverside brick village"
+   },
+   "era": "past",
+   "region": "옛 나일강",
+   "needsPortal": true,
+   "arrival": "갈대 배와 진흙 벽돌 집, 멀리 세모 산",
+   "landmarks": [
+    {
+     "ko": "갈대 배",
+     "en": "reed boats"
+    },
+    {
+     "ko": "진흙 벽돌 집",
+     "en": "mud-brick houses"
+    },
+    {
+     "ko": "멀리 보이는 세모 산(피라미드)",
+     "en": "the triangle mountain far away"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "갈대 배 위",
+     "en": "on a reed boat"
+    },
+    {
+     "ko": "벽돌 말리는 마당",
+     "en": "the yard where bricks dry"
+    },
+    {
+     "ko": "강가 빨래터",
+     "en": "the washing place by the river"
+    },
+    {
+     "ko": "야자나무 그늘",
+     "en": "the shade of a palm"
+    },
+    {
+     "ko": "곡식 창고 앞",
+     "en": "in front of the grain store"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "따오기",
+     "en": "an ibis"
+    },
+    {
+     "ko": "고양이",
+     "en": "a cat"
+    },
+    {
+     "ko": "강가 개구리",
+     "en": "a river frog"
+    }
+   ],
+   "props": [
+    {
+     "ko": "진흙 벽돌 한 장",
+     "en": "a mud brick"
+    },
+    {
+     "ko": "갈대 피리",
+     "en": "a reed flute"
+    },
+    {
+     "ko": "물병",
+     "en": "a water jar"
+    },
+    {
+     "ko": "빵",
+     "en": "a round bread"
+    },
+    {
+     "ko": "파피루스 종이",
+     "en": "a sheet of papyrus"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "찰랑",
+     "en": "the river"
+    },
+    {
+     "ko": "탁탁",
+     "en": "bricks being stacked"
+    }
+   ],
+   "palette": [
+    "#E8C87A",
+    "#C9743F",
+    "#6FA8DC",
+    "#F7E7C2",
+    "#2E7D32"
+   ],
+   "styleHint": "an ancient riverside village, reed boats, mud-brick houses, palms, pyramids on the horizon",
+   "rules": [
+    "강에서는 어른과"
+   ],
+   "avoid": [
+    "무덤, 미라"
+   ],
+   "returnCue": "갈대 배가 돌아오면"
+  },
+  {
+   "id": "wild_west_station",
+   "name": {
+    "ko": "옛 서부 기차역 마을",
+    "en": "an old frontier railway town"
+   },
+   "era": "past",
+   "region": "옛 미국 서부",
+   "needsPortal": true,
+   "arrival": "나무 간판 거리와 물탱크, 멀리 기차 연기",
+   "landmarks": [
+    {
+     "ko": "나무 간판 거리",
+     "en": "the wooden-sign street"
+    },
+    {
+     "ko": "물탱크 탑",
+     "en": "the water tower"
+    },
+    {
+     "ko": "빨간 바위 협곡",
+     "en": "red rock canyon"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "기차역 나무 벤치",
+     "en": "the wooden bench at the station"
+    },
+    {
+     "ko": "물탱크 탑 아래",
+     "en": "under the water tower"
+    },
+    {
+     "ko": "마구간 옆",
+     "en": "beside the stable"
+    },
+    {
+     "ko": "빨간 바위 그늘",
+     "en": "the shade of a red rock"
+    },
+    {
+     "ko": "잡화점 앞 계단",
+     "en": "the steps of the general store"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "조랑말",
+     "en": "a pony"
+    },
+    {
+     "ko": "프레리도그",
+     "en": "a prairie dog"
+    },
+    {
+     "ko": "까마귀",
+     "en": "a crow"
+    }
+   ],
+   "props": [
+    {
+     "ko": "카우보이 모자",
+     "en": "a cowboy hat"
+    },
+    {
+     "ko": "긴 밧줄",
+     "en": "a lasso rope"
+    },
+    {
+     "ko": "하모니카",
+     "en": "a harmonica"
+    },
+    {
+     "ko": "물통",
+     "en": "a canteen"
+    },
+    {
+     "ko": "기차표",
+     "en": "a train ticket"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "칙칙폭폭",
+     "en": "a distant train"
+    },
+    {
+     "ko": "휘잉",
+     "en": "wind through the street"
+    }
+   ],
+   "palette": [
+    "#C9743F",
+    "#8A6B3F",
+    "#F4D35E",
+    "#7FB3D5",
+    "#F7E7C2"
+   ],
+   "styleHint": "an old western railway town, wooden storefronts, a water tower, red canyon, dusty gold light",
+   "rules": [
+    "밧줄은 기둥에만 던진다"
+   ],
+   "avoid": [
+    "총, 결투"
+   ],
+   "returnCue": "기차가 물탱크 앞에 서면"
+  },
+  {
+   "id": "underwater_volcano_lab",
+   "name": {
+    "ko": "바닷속 화산 연구소",
+    "en": "the undersea volcano lab"
+   },
+   "era": "future",
+   "region": "바다 밑",
+   "needsPortal": true,
+   "arrival": "유리 복도 밖으로 보글보글 김 오르는 바닷속 화산",
+   "landmarks": [
+    {
+     "ko": "보글거리는 바닷속 화산",
+     "en": "a bubbling undersea volcano"
+    },
+    {
+     "ko": "유리 복도",
+     "en": "the glass corridor"
+    },
+    {
+     "ko": "잠수정 격납고",
+     "en": "the submarine bay"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "유리 복도 끝",
+     "en": "the end of the glass corridor"
+    },
+    {
+     "ko": "잠수정 조종석",
+     "en": "the submarine's pilot seat"
+    },
+    {
+     "ko": "뜨거운 물 연구실",
+     "en": "the hot-water lab"
+    },
+    {
+     "ko": "해초 정원 돔",
+     "en": "the kelp garden dome"
+    },
+    {
+     "ko": "조개 침대 방",
+     "en": "the shell-bed room"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "빛나는 물고기",
+     "en": "a glowing fish"
+    },
+    {
+     "ko": "게",
+     "en": "a crab"
+    },
+    {
+     "ko": "문어",
+     "en": "a friendly octopus"
+    }
+   ],
+   "props": [
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "돋보기",
+     "en": "a magnifying glass"
+    },
+    {
+     "ko": "공기 방울 통",
+     "en": "a bubble jar"
+    },
+    {
+     "ko": "진주",
+     "en": "a pearl"
+    },
+    {
+     "ko": "무전기",
+     "en": "a walkie-talkie"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "보글보글",
+     "en": "bubbles"
+    },
+    {
+     "ko": "웅웅",
+     "en": "a deep hum"
+    }
+   ],
+   "palette": [
+    "#2F6F8F",
+    "#F28C6B",
+    "#7FD1D1",
+    "#F7F0E3",
+    "#3B3B3B"
+   ],
+   "styleHint": "a deep-sea research dome beside a gently bubbling undersea volcano, glowing fish, warm orange glow",
+   "rules": [
+    "화산은 유리 너머로만"
+   ],
+   "avoid": [
+    "폭발, 물 새는 공포"
+   ],
+   "returnCue": "잠수정이 위로 떠오르기 시작하면"
+  },
+  {
+   "id": "weather_station_sky",
+   "name": {
+    "ko": "구름 만드는 날씨 공장",
+    "en": "the weather factory in the sky"
+   },
+   "era": "future",
+   "region": "하늘",
+   "needsPortal": true,
+   "arrival": "구름을 만드는 큰 굴뚝과 무지개 수도꼭지",
+   "landmarks": [
+    {
+     "ko": "구름 굴뚝",
+     "en": "the cloud chimneys"
+    },
+    {
+     "ko": "무지개 수도꼭지",
+     "en": "the rainbow taps"
+    },
+    {
+     "ko": "비 저장 호수",
+     "en": "the rain reservoir"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "구름 굴뚝 꼭대기",
+     "en": "the top of a cloud chimney"
+    },
+    {
+     "ko": "무지개 수도꼭지 앞",
+     "en": "in front of the rainbow taps"
+    },
+    {
+     "ko": "비 저장 호수 다리",
+     "en": "the bridge over the rain reservoir"
+    },
+    {
+     "ko": "바람 풍선 창고",
+     "en": "the wind-balloon store"
+    },
+    {
+     "ko": "눈 만드는 방",
+     "en": "the snow-making room"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "구름 양",
+     "en": "a cloud sheep"
+    },
+    {
+     "ko": "번개 고양이(장난꾸러기)",
+     "en": "a mischievous lightning cat"
+    },
+    {
+     "ko": "비 개구리",
+     "en": "a rain frog"
+    }
+   ],
+   "props": [
+    {
+     "ko": "노란 우산",
+     "en": "a yellow umbrella"
+    },
+    {
+     "ko": "장화",
+     "en": "rain boots"
+    },
+    {
+     "ko": "물뿌리개",
+     "en": "a watering can"
+    },
+    {
+     "ko": "풍선",
+     "en": "a balloon"
+    },
+    {
+     "ko": "바람개비",
+     "en": "a pinwheel"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "푸쉬익",
+     "en": "cloud steam"
+    },
+    {
+     "ko": "토독토독",
+     "en": "test rain"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#F7F0E3",
+    "#F4D35E",
+    "#B38CD9",
+    "#7FB3D5"
+   ],
+   "styleHint": "a whimsical factory on the clouds that makes weather, chimneys puffing clouds, rainbow taps",
+   "rules": [
+    "수도꼭지는 조금만 튼다"
+   ],
+   "avoid": [
+    "태풍, 번개 공포"
+   ],
+   "returnCue": "저녁 노을 수도꼭지를 틀면"
+  },
+  {
+   "id": "time_clock_tower",
+   "name": {
+    "ko": "시간 시계탑",
+    "en": "the clock tower of time"
+   },
+   "era": "future",
+   "region": "시간 사이",
+   "needsPortal": true,
+   "arrival": "톱니바퀴가 도는 거대한 시계탑, 문마다 다른 시간",
+   "landmarks": [
+    {
+     "ko": "거대한 톱니바퀴",
+     "en": "the giant gears"
+    },
+    {
+     "ko": "시간 문 복도",
+     "en": "the corridor of time doors"
+    },
+    {
+     "ko": "시계 추 그네",
+     "en": "the pendulum swing"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "톱니바퀴 위",
+     "en": "on a giant gear"
+    },
+    {
+     "ko": "시간 문 앞",
+     "en": "in front of a time door"
+    },
+    {
+     "ko": "시계 추 그네 위",
+     "en": "on the pendulum swing"
+    },
+    {
+     "ko": "종 치는 꼭대기",
+     "en": "the bell at the top"
+    },
+    {
+     "ko": "시계 문자판 뒤",
+     "en": "behind the clock face"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "시계 비둘기",
+     "en": "a clock pigeon"
+    },
+    {
+     "ko": "톱니 생쥐",
+     "en": "a gear mouse"
+    },
+    {
+     "ko": "시간 올빼미",
+     "en": "the time owl"
+    }
+   ],
+   "props": [
+    {
+     "ko": "손목시계",
+     "en": "a wristwatch"
+    },
+    {
+     "ko": "태엽 열쇠",
+     "en": "a wind-up key"
+    },
+    {
+     "ko": "모래시계",
+     "en": "an hourglass"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    },
+    {
+     "ko": "달력 한 장",
+     "en": "a calendar page"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "째깍째깍",
+     "en": "ticking"
+    },
+    {
+     "ko": "댕",
+     "en": "the bell"
+    }
+   ],
+   "palette": [
+    "#C9A66B",
+    "#8A6B3F",
+    "#2B3A67",
+    "#F4D35E",
+    "#F7F0E3"
+   ],
+   "styleHint": "a giant clock tower interior, brass gears, a swinging pendulum, doors to different times, warm brass light",
+   "rules": [
+    "문을 열면 그 시간의 세계로 간다(돌아올 땐 같은 문)"
+   ],
+   "avoid": [],
+   "returnCue": "종이 저녁 여섯 시를 치면"
+  },
+  {
+   "id": "ocean_cleanup_ship",
+   "name": {
+    "ko": "바다 청소 배",
+    "en": "the ocean clean-up ship"
+   },
+   "era": "future",
+   "region": "바다",
+   "needsPortal": true,
+   "arrival": "큰 그물과 로봇 팔이 달린 하얀 배, 돌고래들",
+   "landmarks": [
+    {
+     "ko": "로봇 팔 하얀 배",
+     "en": "a white ship with robot arms"
+    },
+    {
+     "ko": "큰 청소 그물",
+     "en": "the big clean-up net"
+    },
+    {
+     "ko": "돌고래 호위대",
+     "en": "the dolphin escort"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "뱃머리 전망대",
+     "en": "the bow lookout"
+    },
+    {
+     "ko": "로봇 팔 조종석",
+     "en": "the robot-arm cockpit"
+    },
+    {
+     "ko": "분류 작업대",
+     "en": "the sorting table"
+    },
+    {
+     "ko": "갑판 수영장",
+     "en": "the deck pool"
+    },
+    {
+     "ko": "돌고래 보는 난간",
+     "en": "the railing where the dolphins play"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "돌고래",
+     "en": "a dolphin"
+    },
+    {
+     "ko": "바다거북",
+     "en": "a sea turtle"
+    },
+    {
+     "ko": "갈매기",
+     "en": "a seagull"
+    }
+   ],
+   "props": [
+    {
+     "ko": "양동이",
+     "en": "a bucket"
+    },
+    {
+     "ko": "장갑",
+     "en": "gloves"
+    },
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "망원경",
+     "en": "binoculars"
+    },
+    {
+     "ko": "조개껍데기",
+     "en": "a seashell"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "waves"
+    },
+    {
+     "ko": "위이잉",
+     "en": "the robot arm"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#2F6F8F",
+    "#7FD1D1",
+    "#F4D35E",
+    "#8FBF9F"
+   ],
+   "styleHint": "a friendly white clean-up ship on a bright sea, robot arms lifting nets, dolphins alongside",
+   "rules": [
+    "주운 것은 분류함에"
+   ],
+   "avoid": [],
+   "returnCue": "그물이 다 올라오면"
+  },
+  {
+   "id": "mars_greenhouse_town",
+   "name": {
+    "ko": "화성 초록 마을",
+    "en": "the green town on Mars"
+   },
+   "era": "future",
+   "region": "화성",
+   "needsPortal": true,
+   "arrival": "붉은 땅 위 유리 돔이 줄지어, 돔마다 다른 정원",
+   "landmarks": [
+    {
+     "ko": "줄지은 유리 돔",
+     "en": "a row of glass domes"
+    },
+    {
+     "ko": "돔 사이 터널 길",
+     "en": "tunnels between domes"
+    },
+    {
+     "ko": "붉은 언덕 전망대",
+     "en": "the red-hill lookout"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "딸기 돔 안",
+     "en": "inside the strawberry dome"
+    },
+    {
+     "ko": "나무 돔 그네",
+     "en": "the swing in the tree dome"
+    },
+    {
+     "ko": "돔 사이 터널",
+     "en": "the tunnel between domes"
+    },
+    {
+     "ko": "물 재활용 연못",
+     "en": "the water-recycling pond"
+    },
+    {
+     "ko": "붉은 언덕 전망대 위",
+     "en": "on the red-hill lookout"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "돔 꿀벌",
+     "en": "a dome bee"
+    },
+    {
+     "ko": "로봇 강아지",
+     "en": "a robot puppy"
+    },
+    {
+     "ko": "연못 개구리",
+     "en": "a pond frog"
+    }
+   ],
+   "props": [
+    {
+     "ko": "헬멧",
+     "en": "a bubble helmet"
+    },
+    {
+     "ko": "딸기",
+     "en": "a strawberry"
+    },
+    {
+     "ko": "물뿌리개",
+     "en": "a watering can"
+    },
+    {
+     "ko": "씨앗 봉지",
+     "en": "a packet of seeds"
+    },
+    {
+     "ko": "분홍 돌",
+     "en": "a pink stone"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "삐빅",
+     "en": "a beep"
+    },
+    {
+     "ko": "윙",
+     "en": "bees"
+    }
+   ],
+   "palette": [
+    "#C9743F",
+    "#8FBF9F",
+    "#7FB3D5",
+    "#F7F0E3",
+    "#E63946"
+   ],
+   "styleHint": "a Martian town of connected glass domes full of green gardens, red hills outside",
+   "rules": [
+    "돔 밖에서는 헬멧"
+   ],
+   "avoid": [
+    "산소 부족"
+   ],
+   "returnCue": "무전기에서 저녁밥 소리가 나면"
+  },
+  {
+   "id": "rainbow_waterfall_valley",
+   "name": {
+    "ko": "무지개 폭포 골짜기",
+    "en": "Rainbow Waterfall Valley"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "일곱 색 폭포가 쏟아지는 골짜기, 물방울마다 무지개",
+   "landmarks": [
+    {
+     "ko": "일곱 색 폭포",
+     "en": "the seven-color waterfall"
+    },
+    {
+     "ko": "무지개 물웅덩이",
+     "en": "rainbow pools"
+    },
+    {
+     "ko": "안개 다리",
+     "en": "the mist bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "폭포 뒤 동굴",
+     "en": "the cave behind the waterfall"
+    },
+    {
+     "ko": "무지개 웅덩이 가",
+     "en": "the edge of a rainbow pool"
+    },
+    {
+     "ko": "안개 다리 위",
+     "en": "on the mist bridge"
+    },
+    {
+     "ko": "빨강 물 개울",
+     "en": "the red-water stream"
+    },
+    {
+     "ko": "골짜기 꽃밭",
+     "en": "the valley flower field"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "색깔 개구리",
+     "en": "a color frog"
+    },
+    {
+     "ko": "무지개 물고기",
+     "en": "a rainbow fish"
+    },
+    {
+     "ko": "물방울 요정 새",
+     "en": "a droplet bird"
+    }
+   ],
+   "props": [
+    {
+     "ko": "노란 우산",
+     "en": "a yellow umbrella"
+    },
+    {
+     "ko": "물통",
+     "en": "a water bottle"
+    },
+    {
+     "ko": "작은 거울",
+     "en": "a small mirror"
+    },
+    {
+     "ko": "물안경",
+     "en": "swim goggles"
+    },
+    {
+     "ko": "리본",
+     "en": "a ribbon"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쏴아",
+     "en": "the waterfall"
+    },
+    {
+     "ko": "퐁",
+     "en": "a drop"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4A261",
+    "#F4D35E",
+    "#2E7D32",
+    "#B38CD9"
+   ],
+   "styleHint": "a valley of seven-colored waterfalls, rainbow mist, pools of colored water, sparkling light",
+   "rules": [
+    "물은 색이 있어도 깨끗하다"
+   ],
+   "avoid": [],
+   "returnCue": "폭포가 하나씩 색을 잃고 투명해지면"
+  },
+  {
+   "id": "pillow_fort_kingdom",
+   "name": {
+    "ko": "베개 요새 왕국",
+    "en": "the Pillow Fort Kingdom"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": false,
+   "arrival": "거실 소파와 담요로 지은 거대한 요새, 안은 왕국",
+   "landmarks": [
+    {
+     "ko": "담요 지붕 큰 방",
+     "en": "the great hall with a blanket roof"
+    },
+    {
+     "ko": "쿠션 탑",
+     "en": "the cushion tower"
+    },
+    {
+     "ko": "빨래집게 다리",
+     "en": "the clothespin bridge"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "큰 방 한가운데",
+     "en": "the middle of the great hall"
+    },
+    {
+     "ko": "쿠션 탑 꼭대기",
+     "en": "the top of the cushion tower"
+    },
+    {
+     "ko": "빨래집게 다리 위",
+     "en": "on the clothespin bridge"
+    },
+    {
+     "ko": "손전등 등대",
+     "en": "the flashlight lighthouse"
+    },
+    {
+     "ko": "비밀 통로(소파 밑)",
+     "en": "the secret passage under the sofa"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "공룡 인형 초록이",
+     "en": "Chorok the plush dinosaur"
+    },
+    {
+     "ko": "양말 뱀(착한)",
+     "en": "a friendly sock snake"
+    },
+    {
+     "ko": "곰 인형 경비병",
+     "en": "the teddy-bear guard"
+    }
+   ],
+   "props": [
+    {
+     "ko": "베개",
+     "en": "a pillow"
+    },
+    {
+     "ko": "손전등",
+     "en": "a small flashlight"
+    },
+    {
+     "ko": "빨래집게",
+     "en": "a clothespin"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    },
+    {
+     "ko": "종이 왕관",
+     "en": "a paper crown"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "폭신",
+     "en": "a soft thump"
+    },
+    {
+     "ko": "사락",
+     "en": "a blanket rustling"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#F2C6DE",
+    "#7FB3D5",
+    "#F4D35E",
+    "#8A6B3F"
+   ],
+   "styleHint": "a living-room blanket fort imagined as a kingdom, cushion towers, flashlight glow, cozy",
+   "rules": [
+    "요새는 저녁밥 전에 무너진다"
+   ],
+   "avoid": [],
+   "returnCue": "엄마가 담요를 걷으면"
+  },
+  {
+   "id": "backyard_bug_city",
+   "name": {
+    "ko": "풀밭 벌레 도시",
+    "en": "Bug City in the grass"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "풀잎 사이 작은 도시, 개미 버스와 달팽이 집",
+   "landmarks": [
+    {
+     "ko": "개미 고속도로",
+     "en": "the ant highway"
+    },
+    {
+     "ko": "달팽이 집 아파트",
+     "en": "the snail-shell apartments"
+    },
+    {
+     "ko": "민들레 가로등",
+     "en": "dandelion streetlamps"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "개미 고속도로 옆",
+     "en": "beside the ant highway"
+    },
+    {
+     "ko": "달팽이 아파트 발코니",
+     "en": "a snail-shell balcony"
+    },
+    {
+     "ko": "민들레 가로등 아래",
+     "en": "under a dandelion lamp"
+    },
+    {
+     "ko": "이슬방울 분수",
+     "en": "the dewdrop fountain"
+    },
+    {
+     "ko": "클로버 잎 지붕 위",
+     "en": "on a clover-leaf roof"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "개미 버스 기사",
+     "en": "the ant bus driver"
+    },
+    {
+     "ko": "무당벌레 우체부",
+     "en": "the ladybug mail carrier"
+    },
+    {
+     "ko": "반딧불이 등불지기",
+     "en": "the firefly lamplighter"
+    }
+   ],
+   "props": [
+    {
+     "ko": "씨앗 하나",
+     "en": "a single seed"
+    },
+    {
+     "ko": "풀잎 배",
+     "en": "a grass-blade boat"
+    },
+    {
+     "ko": "이슬방울",
+     "en": "a dewdrop"
+    },
+    {
+     "ko": "꽃잎 우산",
+     "en": "a petal umbrella"
+    },
+    {
+     "ko": "도토리 모자",
+     "en": "an acorn-cap hat"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "사각사각",
+     "en": "grass rustling"
+    },
+    {
+     "ko": "윙",
+     "en": "wings"
+    }
+   ],
+   "palette": [
+    "#8FBF9F",
+    "#F4D35E",
+    "#E63946",
+    "#7FB3D5",
+    "#F7F0E3"
+   ],
+   "styleHint": "a tiny city among grass blades, ant buses, snail-shell homes, dandelion lamps, sunlit green",
+   "rules": [
+    "작은 친구들은 살살"
+   ],
+   "avoid": [],
+   "returnCue": "반딧불이 등불이 켜지면"
+  },
+  {
+   "id": "cloud_whale_sky",
+   "name": {
+    "ko": "구름 고래 하늘",
+    "en": "the sky of cloud whales"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "구름 고래가 느릿느릿 헤엄치는 하늘, 등 위에 마을",
+   "landmarks": [
+    {
+     "ko": "구름 고래 등 마을",
+     "en": "the village on the cloud whale's back"
+    },
+    {
+     "ko": "고래 분수 구멍",
+     "en": "the whale's spout"
+    },
+    {
+     "ko": "별 그물 침대",
+     "en": "star-net hammocks"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "고래 등 마을 광장",
+     "en": "the square on the whale's back"
+    },
+    {
+     "ko": "분수 구멍 옆",
+     "en": "beside the spout"
+    },
+    {
+     "ko": "고래 꼬리 미끄럼틀",
+     "en": "the tail slide"
+    },
+    {
+     "ko": "별 그물 침대 위",
+     "en": "in a star-net hammock"
+    },
+    {
+     "ko": "고래 눈 옆 전망대",
+     "en": "the lookout by the whale's eye"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "아기 구름 고래",
+     "en": "a baby cloud whale"
+    },
+    {
+     "ko": "바람 제비",
+     "en": "a wind swallow"
+    },
+    {
+     "ko": "솜사탕 양",
+     "en": "a cotton-candy sheep"
+    }
+   ],
+   "props": [
+    {
+     "ko": "종이비행기",
+     "en": "a paper airplane"
+    },
+    {
+     "ko": "망원경",
+     "en": "a spyglass"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    },
+    {
+     "ko": "바람개비",
+     "en": "a pinwheel"
+    },
+    {
+     "ko": "별 모양 스티커",
+     "en": "a star sticker"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "우우웅",
+     "en": "the whale's song"
+    },
+    {
+     "ko": "휘잉",
+     "en": "wind"
+    }
+   ],
+   "palette": [
+    "#BFE3F5",
+    "#F7F0E3",
+    "#B38CD9",
+    "#F4D35E",
+    "#2F6F8F"
+   ],
+   "styleHint": "gentle giant whales made of cloud drifting through a pastel sky, a tiny village on one's back",
+   "rules": [
+    "고래가 노래하면 모두 조용히 듣는다"
+   ],
+   "avoid": [
+    "떨어지는 공포"
+   ],
+   "returnCue": "고래가 노을 속으로 내려가면"
+  },
+  {
+   "id": "mirror_lake_kingdom",
+   "name": {
+    "ko": "거울 호수 나라",
+    "en": "the Mirror Lake kingdom"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "호수 속에 거꾸로 또 하나의 마을이 비치는 나라",
+   "landmarks": [
+    {
+     "ko": "거울 호수",
+     "en": "the mirror lake"
+    },
+    {
+     "ko": "거꾸로 비친 마을",
+     "en": "the upside-down reflected village"
+    },
+    {
+     "ko": "물결 계단",
+     "en": "the ripple stairs"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "호숫가 조약돌밭",
+     "en": "the pebble shore"
+    },
+    {
+     "ko": "물결 계단 위",
+     "en": "on the ripple stairs"
+    },
+    {
+     "ko": "비친 마을 지붕(물속)",
+     "en": "a reflected rooftop (underwater)"
+    },
+    {
+     "ko": "연잎 배 위",
+     "en": "on a lily-pad boat"
+    },
+    {
+     "ko": "호수 가운데 섬",
+     "en": "the island in the middle"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "거울 물고기",
+     "en": "a mirror fish"
+    },
+    {
+     "ko": "백조",
+     "en": "a swan"
+    },
+    {
+     "ko": "물결 개구리",
+     "en": "a ripple frog"
+    }
+   ],
+   "props": [
+    {
+     "ko": "작은 거울",
+     "en": "a small mirror"
+    },
+    {
+     "ko": "조약돌",
+     "en": "a pebble"
+    },
+    {
+     "ko": "연잎",
+     "en": "a lily pad"
+    },
+    {
+     "ko": "종이배",
+     "en": "a paper boat"
+    },
+    {
+     "ko": "리본",
+     "en": "a ribbon"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "찰랑",
+     "en": "ripples"
+    },
+    {
+     "ko": "퐁",
+     "en": "a pebble dropping"
+    }
+   ],
+   "palette": [
+    "#7FB3D5",
+    "#F7F0E3",
+    "#8FBF9F",
+    "#B38CD9",
+    "#2F6F8F"
+   ],
+   "styleHint": "a still lake reflecting a second village upside down, soft symmetrical light, dreamy blues",
+   "rules": [
+    "물에 비친 친구는 똑같이 따라 한다"
+   ],
+   "avoid": [],
+   "returnCue": "바람이 불어 거울이 흐려지면"
+  },
+  {
+   "id": "gingerbread_winter_town",
+   "name": {
+    "ko": "생강빵 겨울 마을",
+    "en": "the gingerbread winter town"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "생강빵 집과 설탕 눈, 사탕 지팡이 가로등",
+   "landmarks": [
+    {
+     "ko": "생강빵 집들",
+     "en": "gingerbread houses"
+    },
+    {
+     "ko": "사탕 지팡이 가로등",
+     "en": "candy-cane lampposts"
+    },
+    {
+     "ko": "코코아 호수",
+     "en": "the cocoa lake"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "생강빵 집 현관",
+     "en": "the gingerbread doorstep"
+    },
+    {
+     "ko": "사탕 지팡이 가로등 아래",
+     "en": "under a candy-cane lamp"
+    },
+    {
+     "ko": "코코아 호수 가",
+     "en": "the edge of the cocoa lake"
+    },
+    {
+     "ko": "설탕 눈 언덕",
+     "en": "the sugar-snow hill"
+    },
+    {
+     "ko": "쿠키 다리 위",
+     "en": "on the cookie bridge"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "마시멜로 토끼",
+     "en": "a marshmallow rabbit"
+    },
+    {
+     "ko": "생강빵 강아지",
+     "en": "a gingerbread puppy"
+    },
+    {
+     "ko": "설탕 새",
+     "en": "a sugar bird"
+    }
+   ],
+   "props": [
+    {
+     "ko": "쿠키 한 조각",
+     "en": "a piece of cookie"
+    },
+    {
+     "ko": "작은 썰매",
+     "en": "a little sled"
+    },
+    {
+     "ko": "목도리",
+     "en": "a scarf"
+    },
+    {
+     "ko": "코코아 컵",
+     "en": "a cup of cocoa"
+    },
+    {
+     "ko": "사탕 지팡이",
+     "en": "a candy cane"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "바삭",
+     "en": "a crunch"
+    },
+    {
+     "ko": "사르륵",
+     "en": "sugar snow"
+    }
+   ],
+   "palette": [
+    "#8A6B3F",
+    "#F7F0E3",
+    "#E63946",
+    "#2E7D32",
+    "#F2C6DE"
+   ],
+   "styleHint": "a cozy gingerbread town in sugar snow, candy-cane lamps, warm window glow",
+   "rules": [
+    "집을 먹으면 안 된다(장식만)"
+   ],
+   "avoid": [],
+   "returnCue": "코코아 호수에서 김이 오르면"
+  },
+  {
+   "id": "crayon_jungle",
+   "name": {
+    "ko": "크레파스 정글",
+    "en": "the Crayon Jungle"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "크레파스로 그린 듯 굵은 선의 정글, 색이 뚝뚝",
+   "landmarks": [
+    {
+     "ko": "굵은 선 야자나무",
+     "en": "thick-lined palm trees"
+    },
+    {
+     "ko": "색이 흐르는 강",
+     "en": "a river of flowing color"
+    },
+    {
+     "ko": "지우개 바위",
+     "en": "the eraser rock"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "야자나무 아래",
+     "en": "under a crayon palm"
+    },
+    {
+     "ko": "색 강 다리",
+     "en": "the bridge over the color river"
+    },
+    {
+     "ko": "지우개 바위 위",
+     "en": "on the eraser rock"
+    },
+    {
+     "ko": "덜 칠한 하얀 들판",
+     "en": "the half-colored white field"
+    },
+    {
+     "ko": "종이 산 꼭대기",
+     "en": "the top of the paper mountain"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "크레파스 앵무새",
+     "en": "a crayon parrot"
+    },
+    {
+     "ko": "선으로 그린 원숭이",
+     "en": "a line-drawn monkey"
+    },
+    {
+     "ko": "점 개구리",
+     "en": "a dot frog"
+    }
+   ],
+   "props": [
+    {
+     "ko": "크레파스",
+     "en": "a crayon"
+    },
+    {
+     "ko": "지우개",
+     "en": "an eraser"
+    },
+    {
+     "ko": "스케치북",
+     "en": "a sketchbook"
+    },
+    {
+     "ko": "색종이",
+     "en": "colored paper"
+    },
+    {
+     "ko": "풀",
+     "en": "a glue stick"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "쓱쓱",
+     "en": "crayon strokes"
+    },
+    {
+     "ko": "북북",
+     "en": "paper tearing"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#2E7D32",
+    "#7FB3D5",
+    "#F7F0E3"
+   ],
+   "styleHint": "a jungle drawn in thick crayon strokes, visible waxy texture, bold colors, white unfinished patches",
+   "rules": [
+    "유하가 그리면 생긴다, 지우면 사라진다"
+   ],
+   "avoid": [],
+   "returnCue": "엄마가 스케치북을 덮으면"
+  },
+  {
+   "id": "moonlight_garden",
+   "name": {
+    "ko": "달빛 정원",
+    "en": "the Moonlight Garden"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "밤에만 피는 꽃과 은빛 연못, 반딧불이",
+   "landmarks": [
+    {
+     "ko": "밤에 피는 하얀 꽃밭",
+     "en": "the night-blooming white flowers"
+    },
+    {
+     "ko": "은빛 연못",
+     "en": "the silver pond"
+    },
+    {
+     "ko": "달빛 미끄럼틀",
+     "en": "the moonbeam slide"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "하얀 꽃밭 가운데",
+     "en": "the middle of the white flowers"
+    },
+    {
+     "ko": "은빛 연못 돌다리",
+     "en": "the stone bridge over the silver pond"
+    },
+    {
+     "ko": "달빛 미끄럼틀 끝",
+     "en": "the bottom of the moonbeam slide"
+    },
+    {
+     "ko": "올빼미 나무 아래",
+     "en": "under the owl tree"
+    },
+    {
+     "ko": "이슬 그네",
+     "en": "the dew swing"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "반딧불이",
+     "en": "fireflies"
+    },
+    {
+     "ko": "올빼미",
+     "en": "an owl"
+    },
+    {
+     "ko": "달빛 나방(예쁜)",
+     "en": "a pretty moon moth"
+    }
+   ],
+   "props": [
+    {
+     "ko": "손전등",
+     "en": "a small flashlight"
+    },
+    {
+     "ko": "담요",
+     "en": "a blanket"
+    },
+    {
+     "ko": "작은 종",
+     "en": "a little bell"
+    },
+    {
+     "ko": "별 모양 스티커",
+     "en": "a star sticker"
+    },
+    {
+     "ko": "이슬방울",
+     "en": "a dewdrop"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "부엉",
+     "en": "an owl"
+    },
+    {
+     "ko": "찌르르",
+     "en": "crickets"
+    }
+   ],
+   "palette": [
+    "#2B3A67",
+    "#F7F0E3",
+    "#B38CD9",
+    "#7FB3D5",
+    "#8FBF9F"
+   ],
+   "styleHint": "a garden at night, white flowers glowing under the moon, fireflies, silver pond, soft safe darkness",
+   "rules": [
+    "밤이지만 달빛으로 늘 밝다"
+   ],
+   "avoid": [
+    "무서운 어둠"
+   ],
+   "returnCue": "첫 새가 울고 하늘이 밝아지면"
+  },
+  {
+   "id": "sock_puppet_theater",
+   "name": {
+    "ko": "양말 인형 극장",
+    "en": "the Sock Puppet Theater"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": false,
+   "arrival": "빨래 바구니 뒤 작은 무대, 양말 인형들이 인사",
+   "landmarks": [
+    {
+     "ko": "빨래 바구니 무대",
+     "en": "the laundry-basket stage"
+    },
+    {
+     "ko": "빨랫줄 커튼",
+     "en": "the clothesline curtain"
+    },
+    {
+     "ko": "단추 눈 객석",
+     "en": "the button-eyed audience"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "무대 한가운데",
+     "en": "center stage"
+    },
+    {
+     "ko": "빨랫줄 커튼 뒤",
+     "en": "behind the clothesline curtain"
+    },
+    {
+     "ko": "객석 맨 앞",
+     "en": "the front row"
+    },
+    {
+     "ko": "소품 바구니 안",
+     "en": "inside the prop basket"
+    },
+    {
+     "ko": "세탁기 창문 조명 앞",
+     "en": "in front of the washing-machine spotlight"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "줄무늬 양말 뱀",
+     "en": "a striped sock snake"
+    },
+    {
+     "ko": "벙어리장갑 토끼",
+     "en": "a mitten rabbit"
+    },
+    {
+     "ko": "단추 눈 올빼미",
+     "en": "a button-eyed owl"
+    }
+   ],
+   "props": [
+    {
+     "ko": "양말 한 짝",
+     "en": "one sock"
+    },
+    {
+     "ko": "단추",
+     "en": "a button"
+    },
+    {
+     "ko": "빨래집게",
+     "en": "a clothespin"
+    },
+    {
+     "ko": "손수건",
+     "en": "a handkerchief"
+    },
+    {
+     "ko": "털실 뭉치",
+     "en": "a ball of yarn"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "짝짝",
+     "en": "applause"
+    },
+    {
+     "ko": "사락",
+     "en": "the curtain"
+    }
+   ],
+   "palette": [
+    "#F7F0E3",
+    "#E63946",
+    "#7FB3D5",
+    "#F4D35E",
+    "#8A6B3F"
+   ],
+   "styleHint": "a homemade sock-puppet theater behind a laundry basket, soft fabrics, warm lamp light",
+   "rules": [
+    "공연이 끝나면 인사한다"
+   ],
+   "avoid": [],
+   "returnCue": "세탁기가 삐 하고 끝나면"
+  },
+  {
+   "id": "balloon_island_sky",
+   "name": {
+    "ko": "풍선 섬 하늘",
+    "en": "the sky of balloon islands"
+   },
+   "era": "fantasy",
+   "region": "상상",
+   "needsPortal": true,
+   "arrival": "풍선에 매달려 떠 있는 작은 섬들, 밧줄 다리",
+   "landmarks": [
+    {
+     "ko": "풍선에 매달린 섬들",
+     "en": "islands hanging from balloons"
+    },
+    {
+     "ko": "밧줄 다리",
+     "en": "rope bridges between islands"
+    },
+    {
+     "ko": "바람 풍차 섬",
+     "en": "the windmill island"
+    }
+   ],
+   "subLocations": [
+    {
+     "ko": "풍선 줄 아래 그네",
+     "en": "the swing under the balloon strings"
+    },
+    {
+     "ko": "밧줄 다리 한가운데",
+     "en": "the middle of a rope bridge"
+    },
+    {
+     "ko": "풍차 섬 날개 옆",
+     "en": "beside the windmill sails"
+    },
+    {
+     "ko": "가장 작은 섬 꼭대기",
+     "en": "the top of the smallest island"
+    },
+    {
+     "ko": "구름 낚시터",
+     "en": "the cloud fishing spot"
+    }
+   ],
+   "creatures": [
+    {
+     "ko": "바람 제비",
+     "en": "a wind swallow"
+    },
+    {
+     "ko": "풍선 물고기",
+     "en": "a balloon fish"
+    },
+    {
+     "ko": "구름 양",
+     "en": "a cloud sheep"
+    }
+   ],
+   "props": [
+    {
+     "ko": "풍선",
+     "en": "a balloon"
+    },
+    {
+     "ko": "긴 끈",
+     "en": "a long string"
+    },
+    {
+     "ko": "바람개비",
+     "en": "a pinwheel"
+    },
+    {
+     "ko": "망원경",
+     "en": "a spyglass"
+    },
+    {
+     "ko": "종이비행기",
+     "en": "a paper airplane"
+    }
+   ],
+   "sounds": [
+    {
+     "ko": "펄럭",
+     "en": "balloons flapping"
+    },
+    {
+     "ko": "삐걱",
+     "en": "a rope bridge"
+    }
+   ],
+   "palette": [
+    "#E63946",
+    "#F4D35E",
+    "#7FB3D5",
+    "#8FBF9F",
+    "#F7F0E3"
+   ],
+   "styleHint": "small islands floating under bunches of balloons, rope bridges, bright blue sky",
+   "rules": [
+    "밧줄 다리는 한 명씩"
+   ],
+   "avoid": [
+    "떨어지는 공포"
+   ],
+   "returnCue": "풍선들이 천천히 땅으로 내려오면"
+  }
+ ],
+ "overlays": {
+  "description": "세계 카드 위에 얹는 계절·시간 오버레이. applyOverlay(world, season, timeOfDay)가 소품·생물·소리·날씨·팔레트·그림 힌트를 덧붙인다. 상상·우주 세계는 계절 대신 '날씨 없음'으로 두되 시간은 적용.",
+  "seasons": {
+   "spring": {
+    "ko": "봄",
+    "weather": {
+     "ko": "따뜻한 바람, 가끔 보슬비",
+     "en": "warm breeze, light drizzle"
+    },
+    "props": [
+     {
+      "ko": "꽃잎",
+      "en": "flower petals"
+     },
+     {
+      "ko": "민들레 홀씨",
+      "en": "a dandelion puff"
+     },
+     {
+      "ko": "새싹 화분",
+      "en": "a sprouting pot"
+     }
+    ],
+    "creatures": [
+     {
+      "ko": "호랑나비",
+      "en": "a swallowtail butterfly"
+     },
+     {
+      "ko": "제비",
+      "en": "a swallow"
+     }
+    ],
+    "sounds": [
+     {
+      "ko": "팔랑팔랑",
+      "en": "petals fluttering"
+     }
+    ],
+    "styleHint": "fresh spring greens, blossoms, soft pink and yellow accents",
+    "paletteShift": [
+     "#F2C6DE",
+     "#A8D08D"
+    ]
+   },
+   "summer": {
+    "ko": "여름",
+    "weather": {
+     "ko": "쨍한 햇빛, 소나기",
+     "en": "bright sun, a sudden shower"
+    },
+    "props": [
+     {
+      "ko": "물총",
+      "en": "a water gun"
+     },
+     {
+      "ko": "수박",
+      "en": "a watermelon"
+     },
+     {
+      "ko": "밀짚모자",
+      "en": "a straw hat"
+     }
+    ],
+    "creatures": [
+     {
+      "ko": "매미",
+      "en": "a cicada"
+     },
+     {
+      "ko": "잠자리",
+      "en": "a dragonfly"
+     }
+    ],
+    "sounds": [
+     {
+      "ko": "맴맴",
+      "en": "cicadas"
+     }
+    ],
+    "styleHint": "strong summer sunlight, deep greens, bright blue sky",
+    "paletteShift": [
+     "#7FD1D1",
+     "#F4D35E"
+    ]
+   },
+   "autumn": {
+    "ko": "가을",
+    "weather": {
+     "ko": "선선한 바람, 높은 하늘",
+     "en": "cool wind, high clear sky"
+    },
+    "props": [
+     {
+      "ko": "도토리",
+      "en": "an acorn"
+     },
+     {
+      "ko": "단풍잎",
+      "en": "a maple leaf"
+     },
+     {
+      "ko": "군밤",
+      "en": "roasted chestnuts"
+     }
+    ],
+    "creatures": [
+     {
+      "ko": "다람쥐",
+      "en": "a squirrel"
+     },
+     {
+      "ko": "기러기 떼",
+      "en": "a flock of geese"
+     }
+    ],
+    "sounds": [
+     {
+      "ko": "바스락",
+      "en": "leaves crunching"
+     }
+    ],
+    "styleHint": "warm autumn golds and reds, long soft shadows",
+    "paletteShift": [
+     "#F4A261",
+     "#E63946"
+    ]
+   },
+   "winter": {
+    "ko": "겨울",
+    "weather": {
+     "ko": "하얀 눈, 입김",
+     "en": "white snow, visible breath"
+    },
+    "props": [
+     {
+      "ko": "목도리",
+      "en": "a scarf"
+     },
+     {
+      "ko": "털장갑",
+      "en": "wool mittens"
+     },
+     {
+      "ko": "작은 썰매",
+      "en": "a little sled"
+     }
+    ],
+    "creatures": [
+     {
+      "ko": "눈토끼",
+      "en": "a snow hare"
+     },
+     {
+      "ko": "참새",
+      "en": "a puffed-up sparrow"
+     }
+    ],
+    "sounds": [
+     {
+      "ko": "뽀드득",
+      "en": "snow crunching"
+     }
+    ],
+    "styleHint": "snow-covered, cool blues and whites, warm window light",
+    "paletteShift": [
+     "#BFE3F5",
+     "#F7F0E3"
+    ]
+   }
+  },
+  "times": {
+   "day": {
+    "ko": "낮",
+    "light": {
+     "ko": "환한 햇빛",
+     "en": "bright daylight"
+    },
+    "styleHint": "clear daylight"
+   },
+   "night": {
+    "ko": "밤",
+    "light": {
+     "ko": "달빛과 등불",
+     "en": "moonlight and lamps"
+    },
+    "props": [
+     {
+      "ko": "손전등",
+      "en": "a small flashlight"
+     },
+     {
+      "ko": "담요",
+      "en": "a blanket"
+     }
+    ],
+    "creatures": [
+     {
+      "ko": "반딧불이",
+      "en": "fireflies"
+     },
+     {
+      "ko": "올빼미",
+      "en": "an owl"
+     }
+    ],
+    "sounds": [
+     {
+      "ko": "찌르르",
+      "en": "crickets"
+     }
+    ],
+    "styleHint": "night with a big moon, warm lamp glow, soft safe darkness",
+    "paletteShift": [
+     "#2B3A67",
+     "#F4D35E"
+    ]
+   }
+  },
+  "noSeasonEras": [
+   "fantasy"
+  ],
+  "noSeasonWorldIds": [
+   "mars_base",
+   "space_station",
+   "moon_base",
+   "star_cruiser_garden",
+   "undersea_city",
+   "underwater_volcano_lab",
+   "mars_greenhouse_town",
+   "dino_land",
+   "dino_sea"
+  ]
+ }
+}

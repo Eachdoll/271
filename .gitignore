@@ -17,4 +17,9 @@ cloud-runtime/.vinext/
 cloud-runtime/.sites-runtime/
 cloud-runtime/.next/
 cloud-runtime/*.tsbuildinfo
+
+# Generated model datasets/evaluations stay separate from source and bundled gold fixtures.
+story-quality/distill/out/
+story-quality/eval/results/
+story-quality/finetune/data/
 cloud-runtime/.openai/

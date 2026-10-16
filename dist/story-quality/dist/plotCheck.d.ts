@@ -19,6 +19,11 @@ export interface PlotCheckInput {
     ban?: BanList;
     inventories?: Inventories;
 }
+export declare function topicKeywords(topic: string): string[];
+/** 키워드가 글에 있는지. 3자 이상 키워드는 앞 2자 접두 일치도 인정한다("멋진지" → "멋진"). */
+export declare function topicMentioned(text: string, topic: string): boolean;
+/** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. */
+export declare function containsPlanted(text: string, planted: string): boolean;
 export declare function plotCheck(input: PlotCheckInput): PlotCheckResult;
 /** 수정 패스에 넣을 지시문. 지적된 항목만 고치게 한다. */
 export declare function renderFixInstructions(result: PlotCheckResult): string;

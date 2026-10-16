@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveStoryStageSettings,resolveQualityStageSettings,getStoryStageModels,estimateStoryTextCost,estimateTextCost} from '../dist/text-generation/models.js';
-import {getTextGenerationSettings,renderTextSettings} from '../dist/text-generation/settings-ui.js';
+import {getTextGenerationSettings,renderTextSettings,normalizeStoryQualitySettings} from '../dist/text-generation/settings-ui.js';
 
 test('new stories default to medium outline and pagination, and upper prose for every API provider',()=>{
  for(const [engine,medium,upper] of [['openai','gpt-6.1-sol','gpt-6-astra'],['anthropic','claude-sonnet-5-5','claude-opus-5-5'],['google','gemini-2.5-flash','gemini-4-argon']]){
@@ -155,4 +155,22 @@ test('new text snapshots freeze separate parent quality settings without credent
  assert.equal(getTextGenerationSettings({settings:{storyQuality:{enabled:false}}}).storyQuality.enabled,false);
  assert.equal(estimateStoryTextCost({settings:getTextGenerationSettings({settings:{}})}).requestCount,11);
  assert.equal(estimateStoryTextCost({settings:{engine:'openai'}}).quality,false);
+});
+
+test('quality snapshots preserve typed world and atmosphere choices, including disabled variants, at no extra model cost',()=>{
+ const source={worldId:'world_yuha-123',season:'winter',timeOfDay:'night',variantChance:0,apiKey:'must-not-copy'},before=structuredClone(source);
+ const actual=normalizeStoryQualitySettings(source);
+ assert.deepEqual({worldId:actual.worldId,season:actual.season,timeOfDay:actual.timeOfDay,variantChance:actual.variantChance},{worldId:'world_yuha-123',season:'winter',timeOfDay:'night',variantChance:0});
+ assert.deepEqual(source,before);assert.equal(actual.apiKey,undefined);
+ const snapshot=getTextGenerationSettings({settings:{storyQuality:source}});assert.equal(snapshot.storyQuality.variantChance,0);assert.equal(snapshot.storyQuality.worldId,source.worldId);
+ const defaults=normalizeStoryQualitySettings();
+ assert.deepEqual({worldId:defaults.worldId,season:defaults.season,timeOfDay:defaults.timeOfDay,variantChance:defaults.variantChance},{worldId:'drawer',season:'auto',timeOfDay:'auto',variantChance:.35});
+ for(const worldId of ['bad/world','이야기','x'.repeat(101),'',100,{},null])assert.equal(normalizeStoryQualitySettings({worldId}).worldId,'drawer');
+ for(const season of ['summer','spring','autumn','winter','none','auto'])assert.equal(normalizeStoryQualitySettings({season}).season,season);
+ for(const value of [{season:'WINTER'},{timeOfDay:'afternoon'},{variantChance:'0'},{variantChance:-1},{variantChance:1.01},{variantChance:NaN},{variantChance:Infinity}]){
+   const invalid=normalizeStoryQualitySettings(value);if('season'in value)assert.equal(invalid.season,'auto');if('timeOfDay'in value)assert.equal(invalid.timeOfDay,'auto');if('variantChance'in value)assert.equal(invalid.variantChance,.35);
+ }
+ assert.equal(normalizeStoryQualitySettings({variantChance:1}).variantChance,1);
+ const originalEstimate=estimateStoryTextCost({settings:{engine:'openai',storyQuality:defaults}}),changedEstimate=estimateStoryTextCost({settings:snapshot});
+ assert.equal(changedEstimate.requestCount,originalEstimate.requestCount);assert.equal(changedEstimate.costUsd,originalEstimate.costUsd);assert.deepEqual(changedEstimate.stages,originalEstimate.stages);
 });
