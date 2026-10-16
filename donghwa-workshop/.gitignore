@@ -1,0 +1,25 @@
+node_modules/
+.DS_Store
+*.tar.gz
+*.zip
+__pycache__/
+*.pyc
+.venv/
+.nltk_data/
+
+.env*
+!.env.example
+
+cloud-runtime/dist/
+cloud-runtime/public/
+cloud-runtime/.wrangler/
+cloud-runtime/.vinext/
+cloud-runtime/.sites-runtime/
+cloud-runtime/.next/
+cloud-runtime/*.tsbuildinfo
+
+# Generated model datasets/evaluations stay separate from source and bundled gold fixtures.
+story-quality/distill/out/
+story-quality/eval/results/
+story-quality/finetune/data/
+cloud-runtime/.openai/

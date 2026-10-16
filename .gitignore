@@ -5,3 +5,7 @@ coverage/
 dist/
 .env
 .env.local
+
+# donghwa-workshop: dist/ is the hand-edited frontend source, not a build output
+!donghwa-workshop/dist/
+!donghwa-workshop/story-quality/dist/

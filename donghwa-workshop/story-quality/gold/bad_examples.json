@@ -1,0 +1,56 @@
+[
+  {
+    "bookId": "bad-01", "label": "템플릿 반복 (실제 앱 스크린샷 재현)", "expectedRubricMax": 3, "expectedPlotCheckOk": false,
+    "topic": "비 오는 날의 모험", "patternId": "journey_repeat",
+    "outline": {
+      "plan": {"pattern": "journey_repeat", "planted": "", "twistReveal": "", "funnyMoment": "", "failureReasons": []},
+      "titleCandidates": ["유하와 초록빛 공룡"], "logline": "유하와 초록이가 함께 있어요.", "want": "함께 있고 싶어요.", "problem": "없어요.",
+      "beats": [
+        {"index": 1, "type": "setup", "summary": "유하가 초록이와 함께 작은 길을 걸어요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하", "초록이"], "settingKey": "forest-path", "newElement": ""},
+        {"index": 2, "type": "want", "summary": "유하가 작은 꼬리를 가까이에서 천천히 보아요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하"], "settingKey": "forest-path", "newElement": ""},
+        {"index": 3, "type": "attempt", "summary": "유하가 초록이에게 손을 흔들며 반갑게 웃어요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하"], "settingKey": "forest-path", "newElement": ""},
+        {"index": 4, "type": "attempt", "summary": "유하가 초록이에게 손을 흔들며 반갑게 웃어요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하"], "settingKey": "forest-path", "newElement": ""},
+        {"index": 5, "type": "turn", "summary": "유하가 초록이와 함께 작은 잎을 찾아요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하"], "settingKey": "forest-path", "newElement": ""},
+        {"index": 6, "type": "resolution", "summary": "유하가 친구에게 작은 선물을 다정하게 줘요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하"], "settingKey": "forest-path", "newElement": ""},
+        {"index": 7, "type": "close", "summary": "유하가 포근한 집에서 편하게 눈을 감아요. 서로 도우며 함께 있으니 마음이 참 따뜻해요.", "characters": ["유하"], "settingKey": "home", "newElement": ""}
+      ],
+      "newWordsKo": [], "newWordsEn": [], "endingType": "home_sleep"
+    }
+  },
+  {
+    "bookId": "bad-02", "label": "사건은 있으나 인과·반전 없음 (순서 바꿔도 말이 됨)", "expectedRubricMax": 5, "expectedPlotCheckOk": false,
+    "topic": "공원에서 노는 날", "patternId": "journey_repeat",
+    "outline": {
+      "plan": {"pattern": "journey_repeat", "planted": "공", "twistReveal": "없음", "funnyMoment": "없음", "failureReasons": ["wrong_place", "wrong_place", "wrong_place"]},
+      "titleCandidates": ["공원에서"], "logline": "유하가 공원에서 이것저것 해요.", "want": "재미있게 놀고 싶어요.", "problem": "없어요.",
+      "beats": [
+        {"index": 1, "type": "setup", "summary": "유하가 공원에 갔어요. 공을 가져갔어요.", "characters": ["유하"], "settingKey": "park", "newElement": "공", "failureReason": null},
+        {"index": 2, "type": "want", "summary": "유하는 재미있게 놀고 싶어요.", "characters": ["유하"], "settingKey": "park", "newElement": "놀이", "failureReason": null},
+        {"index": 3, "type": "attempt", "summary": "유하가 그네를 탔어요. 재미있었어요.", "characters": ["유하"], "settingKey": "swing", "newElement": "그네", "failureReason": "wrong_place"},
+        {"index": 4, "type": "attempt", "summary": "유하가 미끄럼틀을 탔어요. 재미있었어요.", "characters": ["유하"], "settingKey": "slide", "newElement": "미끄럼틀", "failureReason": "wrong_place"},
+        {"index": 5, "type": "attempt", "summary": "유하가 모래놀이를 했어요. 재미있었어요.", "characters": ["유하"], "settingKey": "sandbox", "newElement": "모래", "failureReason": "wrong_place"},
+        {"index": 6, "type": "turn", "summary": "유하가 공을 찼어요.", "characters": ["유하"], "settingKey": "park", "newElement": "공차기", "failureReason": null},
+        {"index": 7, "type": "close", "summary": "유하가 집에 가서 잤어요.", "characters": ["유하"], "settingKey": "home", "newElement": "집", "failureReason": null}
+      ],
+      "newWordsKo": ["그네"], "newWordsEn": ["swing"], "endingType": "home_sleep"
+    }
+  },
+  {
+    "bookId": "bad-03", "label": "교훈을 말로 하는 이야기 + 추상어", "expectedRubricMax": 5, "expectedPlotCheckOk": false,
+    "topic": "나눔의 기쁨", "patternId": "accumulate",
+    "outline": {
+      "plan": {"pattern": "accumulate", "planted": "마음", "twistReveal": "나눔은 좋은 것임을 깨닫는다", "funnyMoment": "없음", "failureReasons": ["wrong_method", "interrupted"]},
+      "titleCandidates": ["나눔은 좋은 거예요"], "logline": "유하가 나눔의 소중함을 배워요.", "want": "착한 아이가 되고 싶어요.", "problem": "욕심이 생겨요.",
+      "beats": [
+        {"index": 1, "type": "setup", "summary": "유하는 착한 마음을 가진 아이예요. 오늘은 나눔을 배우는 날이에요.", "characters": ["유하"], "settingKey": "home", "newElement": "마음", "failureReason": null},
+        {"index": 2, "type": "want", "summary": "유하는 친구들과 사이좋게 지내고 싶어요. 우정은 소중해요.", "characters": ["유하"], "settingKey": "kindergarten", "newElement": "우정", "failureReason": null},
+        {"index": 3, "type": "attempt", "summary": "유하가 간식을 혼자 먹으려 했어요. 그건 좋지 않은 행동이에요.", "characters": ["유하"], "settingKey": "kindergarten", "newElement": "간식", "failureReason": "wrong_method"},
+        {"index": 4, "type": "attempt", "summary": "선생님이 유하에게 나눔의 중요성을 설명해 주셨어요. 유하는 반성했어요.", "characters": ["유하", "선생님"], "settingKey": "kindergarten", "newElement": "설명", "failureReason": "interrupted"},
+        {"index": 5, "type": "turn", "summary": "유하는 나눔은 좋은 거예요 하고 깨달았어요. 마음이 따뜻해졌어요.", "characters": ["유하"], "settingKey": "kindergarten", "newElement": "깨달음", "failureReason": null},
+        {"index": 6, "type": "resolution", "summary": "유하가 친구들에게 간식을 나눠 줬어요. 모두 행복했어요.", "characters": ["유하"], "settingKey": "kindergarten", "newElement": "행복", "failureReason": null},
+        {"index": 7, "type": "close", "summary": "유하는 나눔이 소중하다는 것을 알게 되었어요. 참 좋았어요.", "characters": ["유하"], "settingKey": "home", "newElement": "소중함", "failureReason": null}
+      ],
+      "newWordsKo": ["나눔"], "newWordsEn": ["share"], "endingType": "home_sleep"
+    }
+  }
+]

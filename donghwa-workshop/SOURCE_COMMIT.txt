@@ -1,0 +1,5 @@
+Source commit: c4a37543b2c84a724d5fd8c201fdf3c701638a15
+Exported UTC: 2026-10-16T23:32:56.036099+00:00
+Source: complete tracked repository snapshot
+Start: CLAUDE_CODE_START_HERE.md and CLAUDE.md
+Excluded: Git credentials/history, installed dependencies, user library/media, local databases, temporary logs

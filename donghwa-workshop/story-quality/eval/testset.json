@@ -1,0 +1,27 @@
+{
+  "version": "2026-10-17",
+  "description": "고정 평가 세트 20주제. 증류 주제(distill/topics.json)·골드 세트와 겹치지 않는다. 프롬프트·모델 버전이 바뀔 때마다 같은 20개를 돌려 루브릭 평균·plotCheck 통과율·비용을 기록한다. 세계는 현재 8·과거 5·미래 4·상상 3.",
+  "topics": [
+    {"id": "e01", "topic": "유치원 텃밭 방울토마토 첫 수확", "worldId": "kindergarten", "patternId": "accumulate", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e02", "topic": "거실 담요 터널이 안 열리는 날", "worldId": "home", "patternId": "search_wrong_answers", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e03", "topic": "할머니 집 누렁이 목욕시키기", "worldId": "grandma_village", "patternId": "journey_repeat", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e04", "topic": "제주 등대 불 켜지는 저녁", "worldId": "jeju_sea", "patternId": "waiting", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e05", "topic": "교토 연못 잉어에게 밥 주기", "worldId": "kyoto_lane", "patternId": "accumulate", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e06", "topic": "파리 공원 오리가 가져간 베레모", "worldId": "paris_bakery", "patternId": "search_wrong_answers", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e07", "topic": "케냐 바오밥 나무 그늘 쉼터", "worldId": "kenya_savanna", "patternId": "waiting", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e08", "topic": "호주 코알라 깨우기", "worldId": "australia_reef", "patternId": "escalation", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e09", "topic": "안데스 팬파이프 소리의 주인", "worldId": "peru_andes", "patternId": "mystery_sound", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e10", "topic": "조선 기와집 마당 연날리기", "worldId": "joseon_village", "patternId": "journey_repeat", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e11", "topic": "석기시대 모닥불 옆 그림자 춤", "worldId": "stone_age_cave", "patternId": "escalation", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e12", "topic": "중세 성 탑 꼭대기 비둘기 편지", "worldId": "medieval_castle", "patternId": "journey_repeat", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e13", "topic": "해적섬 소라게 경주", "worldId": "pirate_island", "patternId": "escalation", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e14", "topic": "실크로드 오아시스 별 헤는 밤", "worldId": "silk_road_caravan", "patternId": "accumulate", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e15", "topic": "공룡나라 쌍봉 화산 연기 색깔", "worldId": "dino_land", "patternId": "mystery_sound", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e16", "topic": "화성 기지 로봇 강아지 산책", "worldId": "mars_base", "patternId": "journey_repeat", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e17", "topic": "우주정거장 자석 숟가락 찾기", "worldId": "space_station", "patternId": "search_wrong_answers", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e18", "topic": "하늘 농장 연 날리기", "worldId": "sky_farm", "patternId": "escalation", "levelKo": "K1", "levelEn": "E0"},
+    {"id": "e19", "topic": "거인의 정원 단추 굴리기", "worldId": "giant_garden", "patternId": "journey_repeat", "levelKo": "K2", "levelEn": "E1"},
+    {"id": "e20", "topic": "그림 속 세상 지우개 소리", "worldId": "painting_world", "patternId": "mystery_sound", "levelKo": "K1", "levelEn": "E0"}
+  ],
+  "pages": 12
+}
