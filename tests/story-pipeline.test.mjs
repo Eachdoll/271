@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {getLevelSpec} from '../dist/reading-levels.js';
 import {generateOutline,generateProse,paginateStory,rewriteBeat,rewriteParagraph,rewriteStoryPage,repairPagination,mergeStoryUsage,normalizeStoryInput,toLegacyPages,summarizeStory} from '../dist/story-generation/pipeline.js';
 import {demoOutline} from '../dist/story-generation/demo.js';
+import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 import {validateOutline,validatePagination,StoryValidationError} from '../dist/story-generation/schemas.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -17,13 +18,13 @@ function fixture(){
   const prose={ko:pages.map(p=>p.textKo).join('\n\n'),en:pages.map(p=>p.textEn).join('\n\n'),usedRefrainAt:[],paragraphBeats:{ko:[...mapping],en:[...mapping]}};return {source,outline,pagination,prose};
 }
 function fake(outputs,{id='openai',actual=false}={}){
-  const calls=[];return {id,calls,async complete(req){calls.push(clone({...req,signal:undefined}));const next=typeof outputs==='function'?await outputs(req,calls.length):outputs.shift();if(next instanceof Error)throw next;return {text:JSON.stringify(next),json:clone(next),usage:{input:100,output:50},costUsdEstimated:.002,...(actual?{costUsd:.003}:{}),meta:{modelId:'test-model',apiKey:'must-not-copy'}};}};
+  const calls=[];return {id,calls,async complete(req){calls.push(clone({...req,signal:undefined}));const review=req.jsonSchema?.properties?.passed&&req.jsonSchema?.properties?.issues,next=review?{passed:true,issues:[]}:typeof outputs==='function'?await outputs(req,calls.length):outputs.shift();if(next instanceof Error)throw next;const json=clone(next);if(req.jsonSchema.required?.includes('plotContract')&&!json.plotContract)json.plotContract=demoPlotContract(json,JSON.parse(req.user).input);return {text:JSON.stringify(json),json,usage:{input:100,output:50},costUsdEstimated:.002,...(actual?{costUsd:.003}:{}),meta:{modelId:'test-model',apiKey:'must-not-copy'}};}};
 }
 
-test('three separate calls use stage temperatures, complete prior original prose and no private media/credentials',async()=>{
+test('separate writing and coherence calls use stage temperatures, prior original prose and no private media/credentials',async()=>{
   const {source,outline,prose,pagination}=fixture();source.previousStory={id:'prior-book',title:'빨간 가방',prose:{ko:'유하는 초록이에게 가방을 맡겼어요. “내일도 같이 쓰자!”',en:'The red bag belongs to both friends now.'},characters:[{id:'yuha',name:'유하',relationships:{green:'가방을 함께 쓰는 친구'},imageUrl:'data:secret-image',apiKey:'forbidden'}],pages:[{scene:{action:'Yuha gives the red bag to Green.',who:['yuha','green']},imageBlob:'private-image'}]};source.characters[0].imageUrl='data:private-photo';source.characters[0].generationSnapshot={apiKey:'hidden-key'};source.apiKey='parent-private';source.config={apiKey:'config-private'};
   const before=clone(source),engine=fake([outline,prose,pagination]);const a=await generateOutline(source,{engine}),b=await generateProse(a.data,source,{engine}),c=await paginateStory(a.data,b.data,source,{engine,repair:false});
-  assert.equal(engine.calls.length,3);assert.deepEqual(engine.calls.map(c=>c.temperature),[.9,.8,.3]);assert.ok(engine.calls.every(c=>c.jsonSchema));
+  assert.equal(engine.calls.length,5);assert.deepEqual(engine.calls.filter(c=>!c.jsonSchema.properties.passed).map(c=>c.temperature),[.8,.8,.3]);assert.ok(engine.calls.every(c=>c.jsonSchema));
   for(const call of engine.calls){assert.match(call.user,/내일도 같이 쓰자/);assert.match(call.user,/가방을 함께 쓰는 친구/);assert.match(call.system,/ORIGINAL prose/);assert.doesNotMatch(call.user,/private-photo|private-image|parent-private|config-private|hidden-key|forbidden|secret-image/);}
   assert.equal(c.data.pages.length,12);assert.equal(c.meta.checks.passed,true);assert.equal(a.meta.previousBookId,'prior-book');assert.equal(a.meta.usedOriginalPreviousStory,true);assert.doesNotMatch(JSON.stringify(a.meta),/must-not-copy/);assert.deepEqual(source,before);
 });

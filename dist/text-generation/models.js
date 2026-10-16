@@ -44,12 +44,26 @@ export function getStoryStageModels(engine,config={}){
 }
 /** Resolve each request from an immutable draft settings snapshot, without mutating it. */
 export function resolveStoryStageSettings(settings={},stage){
-  if(!['outline','sceneBriefs','proseDraft','prose','enrichment','pagination'].includes(stage))throw new Error('지원하는 이야기 생성 단계를 선택해 주세요.');
+  if(!['outline','plotContract','sceneBriefs','proseDraft','prose','enrichment','pagination','coherence','coherenceRepair'].includes(stage))throw new Error('지원하는 이야기 생성 단계를 선택해 주세요.');
   const selected=Object.hasOwn(CATALOG,settings.engine)?settings.engine:'openai',hybrid=settings.hybrid?.enabled===true;
   const finalEngine=['openai','anthropic','google'].includes(settings.hybrid?.finalEngine)?settings.hybrid.finalEngine:'openai';
-  const engineId=hybrid?(stage==='outline'||stage==='proseDraft'?'local':finalEngine):selected;
-  const provider=settings.providers?.[engineId]||{},models=getStoryStageModels(engineId,provider),level=['outline','sceneBriefs','pagination'].includes(stage)?'medium':'upper';
+  const engineId=hybrid?(['outline','plotContract','proseDraft'].includes(stage)?'local':finalEngine):selected;
+  const provider=settings.providers?.[engineId]||{},models=getStoryStageModels(engineId,provider),level=['outline','plotContract','sceneBriefs','pagination'].includes(stage)?'medium':'upper';
   return {engineId,config:{...provider,...(provider.stageModels?{stageModels:{...provider.stageModels}}:{}),model:models[level]}};
+}
+/** Quality passes can use separate providers without losing their saved endpoints.
+ * Explicit role selections win; otherwise the existing hybrid routing is retained. */
+export function resolveQualityStageSettings(settings={},role,qualitySettings={}){
+  if(!['outline','prose','cheap','coach'].includes(role))throw new Error('지원하는 글 품질 엔진 역할을 선택해 주세요.');
+  const selected=Object.hasOwn(CATALOG,settings.engine)?settings.engine:'openai',hybrid=settings.hybrid?.enabled===true;
+  const finalEngine=['openai','anthropic','google'].includes(settings.hybrid?.finalEngine)?settings.hybrid.finalEngine:'openai';
+  const source=qualitySettings?.engines?.[role],override=source&&typeof source==='object'?source:{};
+  const chosen=override.engine??override.engineId;
+  const engineId=Object.hasOwn(CATALOG,chosen)?chosen:hybrid?(role==='outline'?'local':finalEngine):selected;
+  const provider=settings.providers?.[engineId]||{},models=getStoryStageModels(engineId,provider);
+  const fallback=role==='cheap'?(engineId==='local'?models.medium:TEXT_MODELS[engineId].id):models[role==='prose'?'medium':'upper'];
+  const requested=String(override.model||'').trim(),model=engineId==='local'?(requested||fallback):listTextModels(engineId).find(row=>row.id===requested)?.id||fallback;
+  return {engineId,config:{...provider,...(provider.stageModels?{stageModels:{...provider.stageModels}}:{}),model}};
 }
 export function estimateTextCost({engine,engineId=engine,input=0,output=0,model,config={},at=new Date()}={}){
   const info=getTextModelInfo(engineId,model??config.model),date=new Date(at),rates=info.pricingChange&&Number.isFinite(date.getTime())&&date>=new Date(info.pricingChange.effectiveAt+'T00:00:00Z')?info.pricingChange:info;
@@ -57,20 +71,33 @@ export function estimateTextCost({engine,engineId=engine,input=0,output=0,model,
 }
 export function estimateStoryTextCost({engine='openai',engineId=engine,pageCount=12,beatCount,paragraphCount,settings={},previousTextLength=0,at=new Date()}={}){
   const snapshot={...settings,engine:settings.engine||engineId},hybrid=settings.hybrid?.enabled===true;
-  const pages=Math.max(1,Math.round(Number(pageCount)||12)),beats=Math.min(24,Math.max(1,Math.round(Number(beatCount)||Math.min(8,Math.max(6,Math.ceil(pages/2)+1))))),enrichment=settings.storyEnrichment!==false;
+  const qualitySettings=settings.storyQuality||{},quality=qualitySettings.enabled===true,twoPass=quality&&qualitySettings.twoPass!==false,beam=quality&&qualitySettings.useBeamSearch===true,childSimulator=quality&&qualitySettings.childSimulator!==false;
+  const pages=Math.max(1,Math.round(Number(pageCount)||12)),beats=Math.min(24,Math.max(1,Math.round(Number(beatCount)||Math.min(8,Math.max(6,Math.ceil(pages/2)+1))))),enrichment=settings.storyEnrichment!==false&&!quality;
   const input=6000+Math.ceil(Math.max(0,Number(previousTextLength)||0)/2),baseOutput=2500+pages*150;
+  // New outlines include a causal contract and before/after state ledger. Rebuilding an
+  // edited outline is conditional, while reviewing prose and final pages is mandatory.
+  const outlineOutput=Math.max(baseOutput,beats*1100),reviewInput=input+outlineOutput+baseOutput;
   const count=value=>Math.min(100,Math.max(0,Math.round(Number.isFinite(Number(value))?Number(value):beats)));
   const paragraphs=paragraphCount&&typeof paragraphCount==='object'?{ko:count(paragraphCount.ko),en:count(paragraphCount.en)}:{ko:count(paragraphCount??beats),en:count(paragraphCount??beats)};
-  const stageEstimate=(stage,inputPerRequest,outputPerRequest,requestCount=1)=>{
-    const {engineId,config}=resolveStoryStageSettings(snapshot,stage),reasoningFactor=getTextModelInfo(engineId,config.model).reasoning.profile==='none'?1:2,output=Math.ceil(outputPerRequest*reasoningFactor);
+  const stageEstimate=(stage,inputPerRequest,outputPerRequest,requestCount=1,qualityRole)=>{
+    const {engineId,config}=qualityRole?resolveQualityStageSettings(snapshot,qualityRole,qualitySettings):resolveStoryStageSettings(snapshot,stage),reasoningFactor=getTextModelInfo(engineId,config.model).reasoning.profile==='none'?1:2,output=Math.ceil(outputPerRequest*reasoningFactor);
     const price=estimateTextCost({engineId,config,input:inputPerRequest,output,at});
-    return {stage,engineId,...price,costUsd:price.costUsd*requestCount,requestCount,inputTokensEstimated:inputPerRequest*requestCount,outputTokensEstimated:output*requestCount};
+    return {stage,...(qualityRole?{qualityRole}:{}),engineId,...price,costUsd:price.costUsd*requestCount,requestCount,inputTokensEstimated:inputPerRequest*requestCount,outputTokensEstimated:output*requestCount};
   };
-  const stages=[stageEstimate('outline',input,baseOutput),stageEstimate('sceneBriefs',input,beats*500)];
-  if(hybrid)stages.push(stageEstimate('proseDraft',input,baseOutput));
-  stages.push(stageEstimate('prose',input,baseOutput));
+  const stages=[];
+  if(beam){stages.push(stageEstimate('beatCandidates',3500,900,beats,'outline'),stageEstimate('beatJudge',2000,250,beats,'cheap'));}
+  stages.push(stageEstimate('outline',input+(beam?beats*300:0),outlineOutput,1,quality?(beam?'cheap':'outline'):undefined),stageEstimate('sceneBriefs',input,beats*500));
+  if(quality){
+    stages.push(stageEstimate('prose',input+outlineOutput,Math.ceil(baseOutput/2),2,'prose'));
+    if(twoPass)stages.push(stageEstimate('simplification',input+outlineOutput+Math.ceil(baseOutput/2),Math.ceil(baseOutput/2),2,'cheap'));
+  }else{
+    if(hybrid)stages.push(stageEstimate('proseDraft',input,baseOutput));
+    stages.push(stageEstimate('prose',input,baseOutput));
+  }
   if(enrichment&&paragraphs.ko+paragraphs.en)stages.push(stageEstimate('enrichment',3000,800,paragraphs.ko+paragraphs.en));
   stages.push(stageEstimate('pagination',input,baseOutput));
+  stages.push(stageEstimate('coherence',reviewInput,1600,2));
+  if(childSimulator)stages.push(stageEstimate('childSimulator',reviewInput,1000,2,'cheap'));
   const final=stages.find(row=>row.stage==='prose');
-  return {...final,costUsd:stages.reduce((sum,row)=>sum+row.costUsd,0),inputTokensEstimated:stages.reduce((sum,row)=>sum+row.inputTokensEstimated,0),outputTokensEstimated:stages.reduce((sum,row)=>sum+row.outputTokensEstimated,0),requestCount:stages.reduce((sum,row)=>sum+row.requestCount,0),hybrid,enrichment,beatCount:beats,paragraphCount:paragraphs,stages,note:`장면 브리프 1회${enrichment?'와 한글·영어 문단별 풍부화':''}를 포함한 단계별 모델 단가 추정 · 실패한 장면·쪽의 최대 2회 재작성, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`};
+  return {...final,costUsd:stages.reduce((sum,row)=>sum+row.costUsd,0),inputTokensEstimated:stages.reduce((sum,row)=>sum+row.inputTokensEstimated,0),outputTokensEstimated:stages.reduce((sum,row)=>sum+row.outputTokensEstimated,0),requestCount:stages.reduce((sum,row)=>sum+row.requestCount,0),hybrid,quality,twoPass,beam,childSimulator,enrichment,beatCount:beats,paragraphCount:paragraphs,stages,note:`인과·상태표가 포함된 줄거리${beam?`(비트 후보 생성·심사 ${beats*2}회 + 마무리 1회)`:''}, 장면 브리프 1회${twoPass?', 한글·영어 풍부화·단순화 각 2회':quality?', 한글·영어 목표 수준 전문 각 1회':enrichment?'와 한글·영어 문단별 풍부화':''}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator?', 아이 시뮬레이터 2회':''}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`};
 }

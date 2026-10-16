@@ -1,4 +1,5 @@
 import {STAGING_SCHEMA} from './staging.js';
+import {PLOT_CONTRACT_SCHEMA,inspectPlotContract} from './plot-contract.js';
 /* Story stage schemas and structural validation. Content checks live in checker.js. */
 export const STORY_STAGES=Object.freeze(['outline_draft','outline_ok','prose_draft','prose_ok','paged','illustrated','final']);
 export const PAGE_COUNTS=Object.freeze([8,12,16,24]);
@@ -7,13 +8,14 @@ const string=(maxLength=2000)=>({type:'string',minLength:1,maxLength});
 const strings=(maxItems=30)=>({type:'array',items:string(500),maxItems});
 const integer={type:'integer',minimum:1};
 export const BEAT_SCHEMA={type:'object',additionalProperties:false,required:['index','type','summary','characters','settingKey'],properties:{
-  index:integer,type:{type:'string',enum:['setup','want','attempt','turn','resolution','close']},summary:string(2000),characters:strings(5),settingKey:string(300)}};
+  index:integer,type:{type:'string',enum:['setup','want','attempt','turn','resolution','close']},summary:string(2000),characters:strings(5),settingKey:string(300),newElement:string(300),failureReason:{anyOf:[{type:'string',enum:['wrong_place','wrong_method','interrupted']},{type:'null'}]}}};
 export const OUTLINE_SCHEMA={type:'object',additionalProperties:false,required:['titleCandidates','logline','want','problem','beats','twist','newWordsKo','newWordsEn','settings','emotionArc','endingType'],properties:{
   titleCandidates:{type:'array',items:string(100),minItems:3,maxItems:3},logline:string(500),want:string(500),problem:string(500),
-  beats:{type:'array',items:BEAT_SCHEMA,minItems:6,maxItems:8},refrain:{type:'object',additionalProperties:false,required:['text','usedAtBeats'],properties:{text:string(150),usedAtBeats:{type:'array',items:integer,maxItems:3,uniqueItems:true}}},
+  beats:{type:'array',items:BEAT_SCHEMA,minItems:6,maxItems:8},refrain:{type:'object',additionalProperties:false,required:['text','usedAtBeats'],properties:{text:string(150),usedAtBeats:{type:'array',items:integer,maxItems:3,uniqueItems:true},variation:string(300)}},
   twist:string(500),newWordsKo:{...strings(5),minItems:3},newWordsEn:strings(15),
   settings:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['beatIndex'],properties:{beatIndex:integer,backgroundId:string(300),newPlace:string(300)}}},
-  emotionArc:{type:'array',items:string(50),minItems:6,maxItems:8},endingType:{type:'string',enum:['home_sleep','open']}}};
+  emotionArc:{type:'array',items:string(50),minItems:6,maxItems:8},endingType:{type:'string',enum:['home_sleep','open']},plotContract:PLOT_CONTRACT_SCHEMA,
+  plan:{type:'object',additionalProperties:false,required:['pattern','planted','twistReveal','funnyMoment','failureReasons'],properties:{pattern:string(100),planted:string(300),twistReveal:string(500),funnyMoment:string(500),failureReasons:{type:'array',maxItems:3,items:{type:'string',enum:['wrong_place','wrong_method','interrupted']}}}}}};
 export const PROSE_SCHEMA={type:'object',additionalProperties:false,required:['ko','en','usedRefrainAt'],properties:{ko:string(30000),en:string(50000),usedRefrainAt:{type:'array',items:integer,maxItems:3,uniqueItems:true},paragraphBeats:{type:'object',additionalProperties:false,required:['ko','en'],properties:{ko:{type:'array',items:integer,minItems:1,maxItems:500},en:{type:'array',items:integer,minItems:1,maxItems:500}}}}};
 export const SCENE_SCHEMA={type:'object',additionalProperties:false,required:['who','where','action','emotion','timeOfDay','props'],properties:{who:strings(5),where:string(500),action:string(500),emotion:string(40),timeOfDay:{type:'string',enum:['morning','day','afternoon','evening','night']},props:strings(12)}};
 export const PAGE_SCHEMA={type:'object',additionalProperties:false,required:['pageNo','beatIndex','textKo','textEn','scene','variantByCharacter','isRefrainPage'],properties:{pageNo:integer,beatIndex:integer,textKo:string(6000),textEn:string(8000),scene:SCENE_SCHEMA,staging:STAGING_SCHEMA,variantByCharacter:{type:'object',additionalProperties:{anyOf:[string(300),{type:'null'}]}},isRefrainPage:{type:'boolean'}}};
@@ -55,6 +57,7 @@ export function validateOutline(value,input={}){
   if(!Array.isArray(value.settings)||value.settings.length!==beats?.length)errors.push('비트마다 배경 설정이 필요해요.');
   else {const seen=new Set();value.settings.forEach(s=>{if(!object(s)){errors.push('배경 비트 설정이 잘못됐어요.');return;}if(!indices.has(s.beatIndex)||seen.has(s.beatIndex))errors.push('배경 비트 번호가 잘못됐어요.');else seen.add(s.beatIndex);if(s.backgroundId&&backgroundIds.size&&!backgroundIds.has(s.backgroundId))errors.push('선택하지 않은 배경 ID가 있어요.');if(s.newPlace!==undefined&&!text(s.newPlace,300))errors.push('새 장소 설명을 확인해 주세요.');});}
   if(value.refrain!==undefined&&value.refrain!==null){const r=value.refrain;if(!object(r)||!text(r.text,150)||!Array.isArray(r.usedAtBeats)||r.usedAtBeats.length>3||new Set(r.usedAtBeats).size!==r.usedAtBeats.length||r.usedAtBeats.some(i=>!indices.has(i)))errors.push('후렴은 계획한 비트에서 최대 3회 사용할 수 있어요.');}
+  if(value.plotContract!==undefined){errors.push(...inspectPlotContract(value.plotContract,value,input).errors);if(value.plotContractDirty)errors.push('수정한 줄거리의 사건·상태표를 다시 구성해 주세요.');}
   checkSafety(value,errors);return {valid:errors.length===0,errors};
 }
 export function validateProse(value,outline){

@@ -32,12 +32,14 @@ test('book estimates sum the medium and upper stage models, including hybrid API
   const settings={engine:'openai',providers:{openai:{model:'gpt-6-astra'},anthropic:{model:'claude-opus-5-5'}}};
   const normal=estimateStoryTextCost({settings,pageCount:12,at:'2026-10-15'});
   assert.equal(normal.model,'gpt-6-astra');
-  const medium=estimateTextCost({engine:'openai',model:'gpt-6.1-sol',input:6000,output:(2500+12*150)*2}),upper=estimateTextCost({engine:'openai',model:'gpt-6-astra',input:6000,output:(2500+12*150)*2});
+  const outline=estimateTextCost({engine:'openai',model:'gpt-6.1-sol',input:6000,output:7700*2}),medium=estimateTextCost({engine:'openai',model:'gpt-6.1-sol',input:6000,output:(2500+12*150)*2}),upper=estimateTextCost({engine:'openai',model:'gpt-6-astra',input:6000,output:(2500+12*150)*2});
   const brief=estimateTextCost({engine:'openai',model:'gpt-6.1-sol',input:6000,output:3500*2}),enrichment=estimateTextCost({engine:'openai',model:'gpt-6-astra',input:3000,output:800*2});
-  assert.equal(normal.costUsd,medium.costUsd+brief.costUsd+upper.costUsd+enrichment.costUsd*14+medium.costUsd);assert.equal(normal.requestCount,18);
+  const review=estimateTextCost({engine:'openai',model:'gpt-6-astra',input:18000,output:1600*2});
+  assert.equal(normal.costUsd,outline.costUsd+brief.costUsd+upper.costUsd+enrichment.costUsd*14+medium.costUsd+review.costUsd*2);assert.equal(normal.requestCount,20);
   const hybrid=estimateStoryTextCost({settings:{...settings,engine:'local',hybrid:{enabled:true,finalEngine:'anthropic'}},pageCount:12});
-  assert.equal(hybrid.model,'claude-opus-5-5');assert.equal(hybrid.requestCount,19);
+  assert.equal(hybrid.model,'claude-opus-5-5');assert.equal(hybrid.requestCount,21);
   const finalProse=estimateTextCost({engine:'anthropic',model:'claude-opus-5-5',input:6000,output:(2500+12*150)*2}),finalPages=estimateTextCost({engine:'anthropic',model:'claude-sonnet-5-5',input:6000,output:(2500+12*150)*2});
   const finalBrief=estimateTextCost({engine:'anthropic',model:'claude-sonnet-5-5',input:6000,output:3500*2}),finalEnrichment=estimateTextCost({engine:'anthropic',model:'claude-opus-5-5',input:3000,output:800*2});
-  assert.equal(hybrid.costUsd,finalBrief.costUsd+finalProse.costUsd+finalEnrichment.costUsd*14+finalPages.costUsd);
+  const finalReview=estimateTextCost({engine:'anthropic',model:'claude-opus-5-5',input:18000,output:1600*2});
+  assert.equal(hybrid.costUsd,finalBrief.costUsd+finalProse.costUsd+finalEnrichment.costUsd*14+finalPages.costUsd+finalReview.costUsd*2);
 });

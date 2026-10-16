@@ -1,0 +1,91 @@
+{
+  "version": "2026-10-16",
+  "description": "감정 직설어(tell)를 몸짓(show)으로 바꾸기 위한 사전. tells는 금지할 표현 패턴, gestures는 치환 후보. 모델이 지어내지 않고 고르게 한다.",
+  "emotions": [
+    {
+      "id": "fear",
+      "ko": "무서움",
+      "tells": ["무서웠어요", "무서워요", "겁이 났어요", "겁이 나요", "두려웠어요"],
+      "gestures_ko": ["초록이 꼬리를 꼭 잡았어요", "발끝을 들고 살금살금 걸었어요", "눈을 꼭 감았어요", "엄마 뒤로 숨었어요", "숨을 참았어요"],
+      "gestures_en": ["held the dinosaur's tail tight", "tiptoed with tiny steps", "squeezed both eyes shut", "hid behind Mom", "held his breath"]
+    },
+    {
+      "id": "joy",
+      "ko": "기쁨",
+      "tells": ["기뻤어요", "기뻐요", "행복했어요", "행복해요", "좋았어요"],
+      "gestures_ko": ["폴짝폴짝 뛰었어요", "두 손을 번쩍 들었어요", "빙글 돌았어요", "활짝 웃었어요", "손뼉을 짝짝 쳤어요"],
+      "gestures_en": ["jumped up and down", "threw both hands in the air", "spun around", "grinned wide", "clapped his hands"]
+    },
+    {
+      "id": "sadness",
+      "ko": "슬픔",
+      "tells": ["슬펐어요", "슬퍼요", "속상했어요", "속상해요", "우울했어요"],
+      "gestures_ko": ["입을 삐죽 내밀었어요", "고개를 푹 숙였어요", "무릎을 안고 앉았어요", "눈물이 또르르 떨어졌어요", "소매로 눈을 문질렀어요"],
+      "gestures_en": ["pushed out his lower lip", "hung his head low", "sat hugging his knees", "a tear rolled down", "rubbed his eyes with a sleeve"]
+    },
+    {
+      "id": "surprise",
+      "ko": "놀람",
+      "tells": ["놀랐어요", "깜짝 놀랐어요", "놀라요", "충격이었어요"],
+      "gestures_ko": ["눈이 동그래졌어요", "입이 떡 벌어졌어요", "뒤로 한 발 물러섰어요", "손에 든 것을 떨어뜨렸어요", "\"어?\" 하고 멈췄어요"],
+      "gestures_en": ["his eyes went round", "his mouth fell open", "took one step back", "dropped what he was holding", "stopped with an \"Oh?\""]
+    },
+    {
+      "id": "curiosity",
+      "ko": "궁금함",
+      "tells": ["궁금했어요", "궁금해요", "알고 싶었어요"],
+      "gestures_ko": ["고개를 갸웃했어요", "가까이 다가가 들여다봤어요", "귀를 쫑긋 세웠어요", "손가락으로 가리켰어요", "발끝을 들고 넘어다봤어요"],
+      "gestures_en": ["tilted his head", "leaned in to peek", "pricked up his ears", "pointed with one finger", "stood on tiptoe to look over"]
+    },
+    {
+      "id": "anger",
+      "ko": "화남",
+      "tells": ["화가 났어요", "화났어요", "화나요", "짜증이 났어요"],
+      "gestures_ko": ["볼을 빵빵하게 부풀렸어요", "발을 쿵 굴렀어요", "팔짱을 꼈어요", "입을 꾹 다물었어요", "등을 돌렸어요"],
+      "gestures_en": ["puffed up his cheeks", "stomped one foot", "crossed his arms", "pressed his lips tight", "turned his back"]
+    },
+    {
+      "id": "shyness",
+      "ko": "부끄러움",
+      "tells": ["부끄러웠어요", "부끄러워요", "창피했어요", "쑥스러웠어요"],
+      "gestures_ko": ["볼이 빨개졌어요", "손으로 얼굴을 가렸어요", "발로 땅을 콩콩 찼어요", "엄마 다리 뒤로 숨었어요", "작은 소리로 말했어요"],
+      "gestures_en": ["his cheeks turned pink", "covered his face with both hands", "kicked at the ground", "hid behind Mom's leg", "spoke in a tiny voice"]
+    },
+    {
+      "id": "excitement",
+      "ko": "신남",
+      "tells": ["신났어요", "신나요", "즐거웠어요", "즐거워요", "재미있었어요"],
+      "gestures_ko": ["콩콩 뛰며 달려갔어요", "노래를 흥얼거렸어요", "두 팔을 벌리고 빙 돌았어요", "앞장서서 달렸어요", "\"와!\" 하고 소리쳤어요"],
+      "gestures_en": ["ran off bouncing", "hummed a little tune", "spread his arms and twirled", "ran ahead of everyone", "shouted \"Wow!\""]
+    },
+    {
+      "id": "calm",
+      "ko": "편안함",
+      "tells": ["편안했어요", "편안해요", "포근했어요", "따뜻했어요", "마음이 참 따뜻해요"],
+      "gestures_ko": ["하품을 크게 했어요", "베개를 꼭 안았어요", "눈을 천천히 감았어요", "이불 속으로 쏙 들어갔어요", "쌔근쌔근 숨을 쉬었어요"],
+      "gestures_en": ["gave a big yawn", "hugged his pillow", "closed his eyes slowly", "slipped under the blanket", "breathed soft and slow"]
+    },
+    {
+      "id": "worry",
+      "ko": "걱정",
+      "tells": ["걱정했어요", "걱정돼요", "걱정이 됐어요", "불안했어요"],
+      "gestures_ko": ["손톱을 만지작거렸어요", "문 쪽을 자꾸 돌아봤어요", "옷자락을 꼭 쥐었어요", "발을 동동 굴렀어요", "작은 목소리로 물었어요"],
+      "gestures_en": ["fiddled with his fingers", "kept looking back at the door", "gripped the hem of his shirt", "hopped from foot to foot", "asked in a small voice"]
+    },
+    {
+      "id": "pride",
+      "ko": "자랑스러움",
+      "tells": ["뿌듯했어요", "자랑스러웠어요", "자랑스러워요"],
+      "gestures_ko": ["가슴을 쭉 폈어요", "턱을 살짝 들었어요", "\"내가 했어!\" 하고 외쳤어요", "엄마에게 달려가 보여 줬어요", "씩 웃었어요"],
+      "gestures_en": ["puffed out his chest", "lifted his chin a little", "shouted \"I did it!\"", "ran to show Mom", "gave a big grin"]
+    },
+    {
+      "id": "boredom",
+      "ko": "심심함",
+      "tells": ["심심했어요", "심심해요", "지루했어요"],
+      "gestures_ko": ["턱을 괴고 앉았어요", "발을 흔들흔들했어요", "천장을 쳐다봤어요", "한숨을 폭 쉬었어요", "장난감을 굴렸다 멈췄어요"],
+      "gestures_en": ["sat with his chin in his hands", "swung his feet back and forth", "stared at the ceiling", "let out a long sigh", "rolled a toy and stopped"]
+    }
+  ],
+  "moral_tails_ko": ["마음이 참 따뜻해요", "참 좋았어요", "행복했어요", "소중해요", "좋은 거예요", "고마운 일이에요", "함께라서 좋아요"]
+}

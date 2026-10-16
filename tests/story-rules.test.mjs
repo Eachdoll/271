@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {getLevelSpec} from '../dist/reading-levels.js';
 import {generateOutline,generateProse,inspectOutlineRules,preflightOutlineLocations,isHomeBackground,storyTopicKeywords,normalizeStoryInput,paragraphBeatLabels} from '../dist/story-generation/pipeline.js';
 import {OUTLINE_SCHEMA,validateOutline,validateProse,StoryValidationError} from '../dist/story-generation/schemas.js';
+import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 function fixture(){
@@ -13,7 +14,7 @@ function fixture(){
   const prose={ko:summaries.join('\n\n'),en:['Yuha opens an umbrella at home. Green hears soft rain.','Yuha says, “I want rain for our flowers.” Green feels a cool drop.','Green says, “I can hold this leaf.” The drops splash past the leaf.','Yuha feels cold water at the pond. Green holds a wider leaf.','Yuha says, “I can tilt our umbrella.” The bright drops run onto the leaf.','Green pours the water in the garden. Yuha smells the wet flowers.','Yuha and Green return home. Their dry blanket feels soft.'].join('\n\n'),usedRefrainAt:[],paragraphBeats:{ko:[1,2,3,4,5,6,7],en:[1,2,3,4,5,6,7]}};
   return {input,outline,prose};
 }
-function engine(responses){const calls=[];return {id:'openai',calls,async complete(request){calls.push(request);const next=responses.shift();if(next instanceof Error)throw next;return {json:clone(next),usage:{input:100,output:50},costUsdEstimated:.01,meta:{modelId:'mock-story'}};}};}
+function engine(responses){const calls=[];return {id:'openai',calls,async complete(request){calls.push(request);const next=responses.shift();if(next instanceof Error)throw next;const json=clone(next);if(request.jsonSchema.required?.includes('plotContract')&&!json.plotContract)json.plotContract=demoPlotContract(json,JSON.parse(request.user).input);return {json,usage:{input:100,output:50},costUsdEstimated:.01,meta:{modelId:'mock-story'}};}};}
 
 test('new outline prompt contains structure and actual input, without an example story or new-place field',async()=>{
   const {input,outline}=fixture(),mock=engine([outline]);await generateOutline(input,{engine:mock});
@@ -29,7 +30,7 @@ test('unrelated story and single-location beats automatically regenerate with bo
   unrelated.beats.forEach(b=>b.summary='친구들이 공원에서 공을 굴려요. 나무가 바람에 흔들려요.');
   onePlace.beats.slice(1,-1).forEach(b=>{b.settingKey='garden';onePlace.settings.find(s=>s.beatIndex===b.index).backgroundId='garden';});
   const mock=engine([unrelated,onePlace,outline]),result=await generateOutline(input,{engine:mock});
-  assert.equal(mock.calls.length,3);assert.equal(result.meta.repairAttempts,2);assert.equal(result.meta.requests,3);assert.equal(result.usage.input,300);assert.equal(result.usage.output,150);assert.equal(result.usage.costUsdEstimated,.03);assert.equal(result.meta.demo,false);assert.deepEqual(result.data,outline);assert.deepEqual(input,before);
+  assert.equal(mock.calls.length,3);assert.equal(result.meta.repairAttempts,2);assert.equal(result.meta.requests,3);assert.equal(result.usage.input,300);assert.equal(result.usage.output,150);assert.equal(result.usage.costUsdEstimated,.03);assert.equal(result.meta.demo,false);assert.deepEqual(result.data,{...outline,plotContract:demoPlotContract(outline,input)});assert.deepEqual(input,before);
   const firstRepair=JSON.parse(mock.calls[1].user).violations;assert.ok(firstRepair.some(v=>v.code==='topic_keyword_missing'));assert.ok(firstRepair.some(v=>v.code==='character_name_missing'));assert.ok(JSON.parse(mock.calls[2].user).violations.some(v=>v.code==='middle_locations'));
 });
 
@@ -39,7 +40,7 @@ test('persistent unrelated output fails after two repairs without substituting a
 });
 
 test('malformed JSON also repairs and retains usage for every response',async()=>{
-  const {input,outline}=fixture();let calls=0;const mock={id:'openai',async complete(){calls++;return calls===1?{text:'invalid json',usage:{input:7,output:3}}:{json:outline,usage:{input:11,output:5}};}};
+  const {input,outline}=fixture();let calls=0;const mock={id:'openai',async complete(request){calls++;return calls===1?{text:'invalid json',usage:{input:7,output:3}}:{json:{...outline,...(request.jsonSchema.required?.includes('plotContract')?{plotContract:demoPlotContract(outline,input)}:{})},usage:{input:11,output:5}};}};
   const result=await generateOutline(input,{engine:mock});assert.equal(calls,2);assert.deepEqual(result.usage,{input:18,output:8});assert.equal(result.meta.repairAttempts,1);
 });
 

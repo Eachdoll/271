@@ -3,6 +3,7 @@ import {generateImage} from './providers.js';
 import {getCredential} from './vault.js';
 import {analyzeImage,compareImageFingerprints,timeProgressWarning} from './image-diversity.js';
 import {nextShot,seedForPage} from '../story-generation/staging.js';
+import {ensureBookStoryCoherence} from '../story-generation/book-coherence.js';
 import {saveImage,getImageURL,deleteImageAsset} from './assets.js';
 import {
   getActiveWorld, captureBookGenerationSnapshot,
@@ -171,6 +172,7 @@ async function pageFingerprint(page,options){
 }
 /** dHash is a heuristic; each invocation can regenerate a similar page only once. */
 export async function generateScene(state,book,pageIndex,options={}){
+ await ensureBookStoryCoherence(state,book,options);
  if(options.changeComposition)changePageComposition(book,pageIndex);
  const page=await generateSceneOnce(state,book,pageIndex,options);delete page.imageFingerprint;
  if(!diversityEnabled(state,book,options))return page;
@@ -285,6 +287,7 @@ export async function generateCharacterSheet(state,characterOrId,options={}) {
 /** Separate cover artwork; shares the frozen cast, style and seed contract. */
 export async function generateCover(state,book,options={}){
   const {signal}=options;throwIfAborted(signal);
+  await ensureBookStoryCoherence(state,book,options);
   const request=sceneGenerationRequest(state,book,0,{...requestOptions(options),quality:options.quality||'final',cover:true});
 
   const snapshot=captureBookGenerationSnapshot(state,book),world=worldForSnapshot(state,snapshot),engine=snapshot.imageEngine;

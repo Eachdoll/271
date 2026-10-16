@@ -13,7 +13,10 @@ export function buildBeatPagePlan(outline,pageCount){
   const turn=beats.findIndex(beat=>beat.type==='turn');let mapping;
   if(turn>0&&turn<beats.length){
     const before=Math.max(turn,Math.min(Math.floor(count*2/3)-1,count-(beats.length-turn)));
-    mapping=[...distribute(beats.slice(0,turn),before),...distribute(beats.slice(turn),count-before)];
+    if(outline.plotContract&&turn>=3&&beats.at(-1)?.type==='close'&&count-before>=beats.length-turn){
+      const opening=Math.max(2,Math.min(Math.round(count/6),before-(turn-2))),closing=Math.max(1,Math.min(Math.round(count/6),count-before-(beats.length-turn-1)));
+      mapping=[...distribute(beats.slice(0,2),opening),...distribute(beats.slice(2,turn),before-opening),...distribute(beats.slice(turn,-1),count-before-closing),...Array(closing).fill(beats.at(-1).index)];
+    }else mapping=[...distribute(beats.slice(0,turn),before),...distribute(beats.slice(turn),count-before)];
   }else mapping=distribute(beats,count);
   return mapping.map((beatIndex,index)=>({pageNo:index+1,beatIndex}));
 }

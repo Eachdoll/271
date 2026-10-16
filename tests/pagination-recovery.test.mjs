@@ -9,6 +9,9 @@ const words=value=>String(value).trim().split(/\s+/u);
 async function fixture(){
  const input={characters:[{id:'yuha',name:'유하',nameEn:'Yuha'},{id:'green',name:'그린이',nameEn:'Green'}],backgrounds:[{id:'forest',name:'숲길'}],pageCount:12,endingType:'home_sleep',specs:{ko:getLevelSpec('K1'),en:getLevelSpec('E0')}};
  const outline=(await generateOutline(input,{engineId:'demo'})).data,prose=(await generateProse(outline,input,{engineId:'demo'})).data,pagination=demoPagination(outline,prose,input);
+ // Saved books from before causal contracts still recover page counts without
+ // paying for a new story review. New contracted books have separate gate tests.
+ delete outline.plotContract;
  const seven={...clone(pagination),pages:outline.beats.map((beat,index)=>{
    const matching=pagination.pages.filter(page=>page.beatIndex===beat.index),first=matching[0];
    return {...clone(first),pageNo:index+1,textKo:matching.map(page=>page.textKo).join(' '),textEn:matching.map(page=>page.textEn).join(' '),originPage:index+1};

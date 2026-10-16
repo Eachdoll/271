@@ -5,6 +5,8 @@
   "scripts": {
     "build": "node scripts/build-cloud.mjs",
     "db:generate": "npm --prefix cloud-runtime run db:generate",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:quality": "node --test story-quality/test/*.test.mjs",
+    "build:quality": "node cloud-runtime/node_modules/typescript/bin/tsc -p story-quality/tsconfig.json"
   }
 }

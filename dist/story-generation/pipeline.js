@@ -6,13 +6,17 @@ import {buildBeatPagePlan} from './pagination.js';
 import {SCENE_BRIEF_SCHEMA,SCENE_BRIEFS_SCHEMA,sceneBriefRows,inspectSceneBriefs,sceneBriefRules,demoSceneBriefs} from './scene-briefs.js';
 import {stagePagination} from './staging.js';
 import {checkRichness,richnessPromptRules} from './richness.js';
+import {PLOT_CONTRACT_SCHEMA,plotContractRules,inspectPlotContract,plotContractForBeat,demoPlotContract,resolveStructurePreset} from './plot-contract.js';
+import {COHERENCE_REVIEW_SCHEMA,validateCoherenceReview,coherenceReviewRules,coherenceFingerprint,isCoherenceCurrent,attachPagePlotContext} from './coherence.js';
+import {generateQualityOutline,generateQualityProse} from './quality-adapter.js';
+import {inspectChildStory} from './quality-gates.js';
 export {buildBeatPagePlan} from './pagination.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const numeric=value=>Number.isFinite(value)&&value>=0;
 const paragraphs=text=>String(text||'').split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
-const tokenBudget={outline:5000,beat:1300,prose:12000,pagination:14000,page:2000,paragraph:3000,scene:500,materials:7000,sceneBriefs:14000,sceneBrief:2000,enrichment:3000};
-const temperature={outline:.9,beat:.9,prose:.8,paragraph:.8,pagination:.3,page:.3,scene:.3,materials:.7,sceneBriefs:.8,sceneBrief:.8,enrichment:.5};
+const tokenBudget={outline:16000,plotContract:12000,coherence:5000,coherenceRepair:16000,beat:1300,prose:12000,pagination:14000,page:2000,paragraph:3000,scene:500,materials:7000,sceneBriefs:14000,sceneBrief:2000,enrichment:3000};
+const temperature={outline:.8,plotContract:.4,coherence:.1,coherenceRepair:.3,beat:.8,prose:.8,paragraph:.8,pagination:.3,page:.3,scene:.3,materials:.7,sceneBriefs:.8,sceneBrief:.8,enrichment:.5};
 const SECRET_FIELD=/^(?:apiKey|api_key|authorization|credential|credentials|secret|password|pin|pinHash|ciphertext|salt|iv|accessToken|refreshToken|token|config)$/i;
 const MEDIA_FIELD=/(?:image|photo|asset|blob|dataUrl|imageUrl|endpoint|baseUrl|proxyUrl)/i;
 function cleanReference(value,depth=0){
@@ -45,7 +49,7 @@ export function normalizeStoryInput(input={}){
     endingType:input.endingType==='open'?'open':'home_sleep',moral:String(input.moral||(input.value==='custom'?input.valueCustom:input.value)||'').slice(0,500),
     endingNote:String(input.endingNote||(input.ending==='custom'?input.endingCustom:'')||'').slice(0,1000),
     previousSummary:String(input.previousSummary||input.previousStory?.summaryForNext||'').slice(0,10000),previousStory:safePreviousStory(input.previousStory),
-    title:String(input.title||'').slice(0,100),specs:clone(input.specs),variants:cleanReference(input.variants||[]),
+    title:String(input.title||'').slice(0,100),bookId:String(input.bookId||'').slice(0,150),qualitySeedOffset:Math.min(999,Math.max(0,Math.floor(Number(input.qualitySeedOffset)||0))),language:['ko','en','bilingual','dual'].includes(input.language)?input.language:'bilingual',storyQuality:cleanReference(input.storyQuality||{}),storyStructurePresetId:['auto','attempt_chain','discovery','relationship'].includes(input.storyStructurePresetId)?input.storyStructurePresetId:'auto',specs:clone(input.specs),variants:cleanReference(input.variants||[]),
     variantByCharacter:cleanReference(input.variantByCharacter||input.characterVariants||{}),variantPageRanges:cleanReference(input.variantPageRanges||{}),
     ...(input.draftProse?{draftProse:cleanReference(input.draftProse)}:{})};
 }
@@ -89,7 +93,7 @@ function continuityMeta(input){return input.previousStory?{previousBookId:input.
 async function complete(stage,input,payload,schema,options={}){
   abort(options.signal);notify(options,stage,'request','이야기 글을 생성하고 있어요.');
   const engine=await engineFor(options);abort(options.signal);
-  const response=await engine.complete({system:`${baseSystem}\n${levelRules(input)}\n${payload.rules}`,
+  const response=await engine.complete({system:`${baseSystem}\n${levelRules(input)}\n${payload.rules}\n${payload.data?.approvedOutline?.plotContract?'FROZEN EVENT CONTRACT: the approvedOutline.plotContract is authoritative. Preserve every causal event, setup/payoff and character/prop state change. Brief details are optional rendering details, not new actions. For one page depict only its current event; beat stateAfter may occur on a later page.':''}`,
     user:JSON.stringify({input,...payload.data}),jsonSchema:schema,temperature:temperature[stage],maxTokens:tokenBudget[stage],signal:options.signal});
   const meta={stage,engineId:engine.id||options.engineId||'unknown',model:response.meta?.model||null,requests:response.meta?.requests||1,demo:false,...continuityMeta(input)};
   const modelId=response.meta?.modelId||response.meta?.model;if(typeof modelId==='string')meta.modelId=modelId.slice(0,200);
@@ -99,13 +103,79 @@ async function complete(stage,input,payload,schema,options={}){
 }
 function demoResult(stage,data,input){return {data,usage:{input:0,output:0,costUsd:0,costUsdEstimated:0},meta:{stage,engineId:'demo',demo:true,demoNotice:'고정된 바람 피리 줄거리의 데모예요. AI 생성이 아닙니다.',...continuityMeta(input)}};}
 const demo=options=>options.engineId==='demo'||options.engine?.id==='demo';
+const qualityServices=()=>({engineFor,complete,outlineRequestSchema,baseSystem,levelRules,assertValid,inspectOutlineRules,normalizeStoryInput});
 
 function requestCount(results){return results.reduce((sum,r)=>sum+(r?.meta?.demo||r?.meta?.requests===0?0:Number(r?.meta?.requests)||1),0);}
 function paidError(error,results,meta={}){error.usage=mergeStoryUsage([...results,...(error.usage?[{usage:error.usage}]:[])]);error.meta={...(error.meta||{}),...meta,requests:requestCount(results)+(Number(error.meta?.requests)||0)};return error;}
+
+function assertPlot(outline,input){
+  if(!outline?.plotContract)return; // Previously approved books keep their existing events.
+  const report=inspectPlotContract(outline.plotContract,outline,input);
+  if(outline.plotContractDirty||!report.valid)throw new StoryValidationError('plotContract',outline.plotContractDirty?['수정한 줄거리의 사건·상태표를 다시 구성해 주세요.']:report.errors);
+}
+/** Rebuild only the ledger after a parent edits a beat; the approved summaries stay fixed. */
+export async function ensurePlotContract(outline,source,options={}){
+  const input=normalizeStoryInput(source);abort(options.signal);
+  if(!outline.plotContractDirty&&(!outline.plotContract||inspectPlotContract(outline.plotContract,outline,input).valid))return {data:clone(outline),usage:mergeStoryUsage([]),meta:{stage:'plotContract',requests:0,skipped:true}};
+  const next=clone(outline);delete next.plotContract;delete next.plotContractDirty;
+  if(demo(options)){next.plotContract=demoPlotContract(next,input);return demoResult('plotContract',next,input);}
+  const requests=[];let violations=[];
+  try{for(let attempt=0;attempt<3;attempt++){
+    const result=await complete('plotContract',input,{rules:`${plotContractRules(input)}\nReturn only the causal/state contract for this APPROVED outline. Do not alter its summaries, cast, setting IDs, goal or ending. Align the ledger with the parent's edits; never invent an event to make state tracking easier. Fix all listed violations.`,data:{approvedOutline:next,previousContract:outline.plotContract,violations}},PLOT_CONTRACT_SCHEMA,options);requests.push(result);
+    const report=inspectPlotContract(result.data,next,input);violations=report.errors;
+    if(report.valid){next.plotContract=result.data;return {data:next,usage:mergeStoryUsage(requests),meta:{stage:'plotContract',requests:requestCount(requests),repairAttempts:attempt}};}
+  }throw new StoryValidationError('plotContract',violations);}catch(error){throw paidError(error,requests,{stage:'plotContract'});}
+}
+
+const proseRepairSchema={type:'object',additionalProperties:false,required:['paragraphs'],properties:{paragraphs:{type:'array',minItems:1,maxItems:100,items:{type:'object',additionalProperties:false,required:['language','paragraphIndex','beatIndex','text'],properties:{language:{type:'string',enum:['ko','en']},paragraphIndex:{type:'integer',minimum:0,maximum:499},beatIndex:{type:'integer',minimum:1,maximum:8},text:{type:'string',minLength:1,maxLength:8000}}}}}};
+const pageRepairSchema={type:'object',additionalProperties:false,required:['pages'],properties:{pages:{type:'array',minItems:1,maxItems:24,items:PAGE_SCHEMA}}};
+function repairTargets(issues,outline,prose,pagination){
+  const errors=issues.filter(issue=>issue.severity==='error');
+  if(pagination)return pagination.pages.filter(page=>errors.some(issue=>issue.pageNo?issue.pageNo===page.pageNo:issue.beatIndex===page.beatIndex)).map(page=>({pageNo:page.pageNo,beatIndex:page.beatIndex}));
+  return ['ko','en'].flatMap(language=>paragraphs(prose[language]).flatMap((text,paragraphIndex)=>{const beatIndex=paragraphBeatLabels(prose,language,outline)[paragraphIndex];return errors.some(issue=>issue.beatIndex===beatIndex&&(issue.language==='both'||issue.language===language))?[{language,paragraphIndex,beatIndex,text}]:[];}));
+}
+/** Whole-text review is content-bound; only evidenced failing beats/pages may be repaired. */
+export async function reviewStoryCoherence(outline,prose,pagination,source,options={}){
+  const input=normalizeStoryInput(source),stage=pagination?'pages':'prose';abort(options.signal);assertPlot(outline,input);
+  if(!outline.plotContract||demo(options))return {data:{prose:clone(prose),pagination:pagination?attachPagePlotContext(pagination,outline):null},usage:mergeStoryUsage([]),meta:{stage:'coherence',requests:0,skipped:true,coherence:null}};
+  let nextProse=clone(prose),nextPages=pagination?attachPagePlotContext(pagination,outline):null;
+  const requests=[],reviewOptions={...options,...options.coherenceOptions,signal:options.signal,onProgress:options.onProgress};
+  let report=stage==='pages'?options.pageCoherence:options.proseCoherence;
+  let lastCheckpointReport=report||null;
+  let attempts=report?.contentFingerprint===coherenceFingerprint({outline,prose:nextProse,pagination:nextPages,stage})?Math.min(2,Math.max(0,Number(report.repairAttempts)||0)):0;
+  if(!isCoherenceCurrent(report,{outline,prose:nextProse,pagination:nextPages,stage}))report=null;
+  const save=async()=>{lastCheckpointReport=report;if(options.onCheckpoint)await options.onCheckpoint({stage:'coherence',prose:clone(nextProse),pagination:nextPages?clone(nextPages):null,coherence:clone(report),usage:mergeStoryUsage(requests),meta:{stage:'coherence',requests:requestCount(requests)}});abort(options.signal);};
+  try{for(;;){
+    if(!report){
+      notify(options,'coherence','review',stage==='pages'?'그림을 만들기 전 전체 쪽의 사건·상태를 검사하고 있어요.':'전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.');
+      const result=await complete('coherence',input,{rules:coherenceReviewRules(stage),data:{approvedOutline:outline,approvedOriginalProse:nextProse,...(nextPages?{pagination:nextPages}:{}),sceneBriefs:sceneBriefRows(options.sceneBriefs)}},COHERENCE_REVIEW_SCHEMA,reviewOptions);requests.push(result);
+      const checked=validateCoherenceReview(result.data,{outline,prose:nextProse,pagination:nextPages});
+      if(!checked.valid)throw new StoryValidationError('coherence',checked.errors);
+      report={version:1,stage,contentFingerprint:coherenceFingerprint({outline,prose:nextProse,pagination:nextPages,stage}),passed:checked.passed,issues:clone(checked.issues),repairAttempts:attempts};
+      await save();
+    }
+    if(report.passed)return {data:{prose:nextProse,pagination:nextPages},usage:mergeStoryUsage(requests),meta:{stage:'coherence',requests:requestCount(requests),coherence:report,repairAttempts:attempts}};
+    if(options.repair===false||attempts>=2)throw new StoryValidationError('coherence',['이야기 사건의 모순이 남아 그림 생성을 멈췄어요. 표시된 비트·문장을 수정한 뒤 다시 검사해 주세요.',...report.issues.filter(i=>i.severity==='error').map(i=>i.suggestion)]);
+    const targets=repairTargets(report.issues,outline,nextProse,nextPages);if(!targets.length)throw new StoryValidationError('coherence',['수정할 비트·쪽의 근거를 확인할 수 없어요.']);
+    attempts++;report={...report,repairAttempts:attempts};await save();notify(options,'coherence','repair',`모순이 확인된 ${stage==='pages'?'쪽':'비트의 문단'}만 수정하고 있어요 (${attempts}/2).`,{attempt:attempts});
+    const result=await complete('coherenceRepair',input,{rules:`Repair ONLY the supplied repairTargets to resolve evidenced hard contradictions. Keep the approved plotContract, every other paragraph/page, causal event order, selected reading levels, cast, setting IDs, wardrobe and ending fixed. Do not introduce new events, props, architecture or lessons. Preserve each language's independent writing patterns while keeping the same event facts. ${stage==='pages'?'Return {pages:[StoryPage,...]} with unchanged pageNo/beatIndex for target pages only.':'Return {paragraphs:[{language,paragraphIndex,beatIndex,text},...]} for target paragraphs only, each text one paragraph. Indices are zero-based; do not change paragraph count or beat labels.'}`,data:{approvedOutline:outline,approvedOriginalProse:nextProse,pagination:nextPages,repairTargets:targets,violations:report.issues.filter(i=>i.severity==='error')}},stage==='pages'?pageRepairSchema:proseRepairSchema,reviewOptions);requests.push(result);
+    if(stage==='pages'){
+      const changed=result.data?.pages;if(!Array.isArray(changed)||!changed.length||new Set(changed.map(p=>p?.pageNo)).size!==changed.length)throw new StoryValidationError('coherence',['수정할 쪽을 중복 없이 반환해야 해요.']);
+      for(const page of changed){const target=targets.find(t=>t.pageNo===page?.pageNo&&t.beatIndex===page?.beatIndex);if(!target)throw new StoryValidationError('coherence',['검사에서 지적하지 않은 쪽은 바꿀 수 없어요.']);const index=nextPages.pages.findIndex(p=>p.pageNo===page.pageNo),original=nextPages.pages[index];const valid=assertValid('page',page,input,outline),languages=new Set(report.issues.filter(i=>i.severity==='error'&&(i.pageNo?i.pageNo===page.pageNo:i.beatIndex===page.beatIndex)).map(i=>i.language));if(languages.size===1&&languages.has('ko'))valid.textEn=original.textEn;if(languages.size===1&&languages.has('en'))valid.textKo=original.textKo;nextPages.pages[index]={...original,...valid,variantByCharacter:clone(original.variantByCharacter),...(original.staging?{staging:clone(original.staging)}:{})};}
+      nextPages=attachPagePlotContext(nextPages,outline);
+    }else{
+      const changed=result.data?.paragraphs;if(!Array.isArray(changed)||!changed.length||new Set(changed.map(p=>`${p?.language}:${p?.paragraphIndex}`)).size!==changed.length)throw new StoryValidationError('coherence',['수정할 문단을 중복 없이 반환해야 해요.']);
+      const rows={ko:paragraphs(nextProse.ko),en:paragraphs(nextProse.en)};
+      for(const item of changed){if(!targets.some(t=>t.language===item?.language&&t.paragraphIndex===item?.paragraphIndex&&t.beatIndex===item?.beatIndex)||typeof item.text!=='string'||!item.text.trim()||item.text.length>8000||paragraphs(item.text).length!==1)throw new StoryValidationError('coherence',['검사에서 지적한 비트의 한 문단만 수정할 수 있어요.']);rows[item.language][item.paragraphIndex]=item.text.trim();}
+      nextProse={...nextProse,ko:rows.ko.join('\n\n'),en:rows.en.join('\n\n')};assertValid('prose',nextProse,input,outline);
+    }
+    report={version:1,stage,contentFingerprint:coherenceFingerprint({outline,prose:nextProse,pagination:nextPages,stage}),passed:false,issues:[],pending:true,repairAttempts:attempts};await save();report=null;
+  }}catch(error){error.prose=clone(nextProse);if(nextPages)error.pagination=clone(nextPages);error.coherence=report||lastCheckpointReport;throw paidError(error,requests,{stage:'coherence'});}
+}
 async function briefCheckpoint(options,briefs,requests,report){if(options.onCheckpoint)await options.onCheckpoint({stage:'sceneBriefs',sceneBriefs:clone(briefs),briefChecks:clone(report),usage:mergeStoryUsage(requests),meta:{stage:'sceneBriefs',requests:requestCount(requests)}});}
 /** One initial request, then only offending beats, at most two repairs per beat. */
 export async function generateSceneBriefs(outline,source,options={}){
-  const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});abort(options.signal);
+  const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});assertPlot(outline,input);abort(options.signal);
   if(demo(options))return {...demoResult('sceneBriefs',demoSceneBriefs(outline,input),input),meta:{...demoResult('sceneBriefs',[],input).meta,checks:inspectSceneBriefs(demoSceneBriefs(outline,input),outline,input)}};
   const requests=[],allowed=new Set(outline.beats.map(b=>b.index));let briefs=[];
   try{
@@ -150,7 +220,7 @@ const fingerprint=value=>{let hash=2166136261;for(const char of JSON.stringify(v
 /** Per-paragraph checkpoints preserve completed paid calls across cancellation. */
 export async function enrichProse(prose,outline,source,options={}){
   const input=normalizeStoryInput(source);assertValid('prose',prose,input,outline);abort(options.signal);
-  if(demo(options)||options.storyEnrichment===false||options.enrichment===false)return {...demoResult('enrichment',clone(prose),input),meta:{stage:'enrichment',requests:0,demo:demo(options),skipped:!demo(options)}};
+  if(demo(options)||input.storyQuality?.enabled||options.storyEnrichment===false||options.enrichment===false)return {...demoResult('enrichment',clone(prose),input),meta:{stage:'enrichment',requests:0,demo:demo(options),skipped:!demo(options)}};
   const briefs=sceneBriefRows(options.sceneBriefs),contextFingerprint=fingerprint({outline,briefs,specs:input.specs,characters:input.characters});
   const prior=options.enrichmentCheckpoint,checkpoint=prior?.version===1&&prior.contextFingerprint===contextFingerprint?clone(prior):{version:1,contextFingerprint,completed:{}};
   checkpoint.completed ||= {};const next=clone(prose),requests=[];let resumed=0;
@@ -232,6 +302,7 @@ export function inspectOutlineRules(outline,source={}){
     if(!places.homeBackgroundIds.includes(first)||last!==first)add('home_start_end','시작과 마무리 비트는 같은 집·방 배경을 골라 주세요.');
     if(middle.size<2)add('middle_locations','중간 비트에는 집·방 외에 서로 다른 배경을 2곳 이상 골라 주세요.');
   }
+  if(outline?.plotContract)for(const issue of inspectPlotContract(outline.plotContract,outline,source).issues)add('plot_contract',issue.message||String(issue),issue);
   return {valid:!violations.length,errors:violations.map(v=>v.message),violations,topicKeywords,homeBackgroundIds:places.homeBackgroundIds};
 }
 /** Labels are UI metadata, never part of the printable Korean/English text. */
@@ -243,14 +314,15 @@ export function paragraphBeatLabels(prose,language,outline){
 function outlineRequestSchema(input){
   const schema=clone(OUTLINE_SCHEMA),ids=input.backgrounds.map(b=>b.id),setting=schema.properties.settings.items;
   setting.required=['beatIndex','backgroundId'];delete setting.properties.newPlace;setting.properties.backgroundId.enum=ids;
-  schema.properties.beats.items.properties.settingKey.enum=ids;return schema;
+  schema.properties.beats.items.properties.settingKey.enum=ids;schema.required.push('plotContract');return schema;
 }
 export async function generateOutline(source,options={}){
   const input=normalizeStoryInput(source);abort(options.signal);
-  if(demo(options))return demoResult('outline',assertValid('outline',demoOutline(input),input),input);
+  if(demo(options)){const outline=demoOutline(input);outline.plotContract=demoPlotContract(outline,input);return demoResult('outline',assertValid('outline',outline,input),input);}
   const places=preflightOutlineLocations(input);if(!places.valid)throw new StoryValidationError('outline',places.errors);
+  if(input.storyQuality?.enabled){const result=await generateQualityOutline(input,options,qualityServices());result.data.quality=clone(result.meta.quality||{});result.data=assertValid('outline',result.data,input);return result;}
   const count=BEAT_COUNTS[input.pageCount],attempts=count-5;
-  const rules=`Design the complete StoryOutline, not page text. Exactly ${count} beats for ${input.pageCount} pages, with indexes 1..${count}.
+  const rules=`${plotContractRules(input)}\nDesign the complete StoryOutline, not page text. Exactly ${count} beats for ${input.pageCount} pages, with indexes 1..${count}.
 Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> close. Pack the three-attempt pattern into these available attempt beats: two small funny failures, with the last attempt leading to the turn. Every beat changes the situation; summaries have 2–3 concrete sentences.
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
 Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. The first and final beat use the SAME supplied home background ID from homeBackgroundIds. Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
@@ -261,7 +333,7 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
     if(pass)notify(options,'outline','repair',`주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (${pass}/2).`,{attempt:pass,violations});
     let result;try{result=await complete('outline',input,{rules:`${rules}${pass?'\nThe previous response failed the supplied validation. Create a corrected original outline using the actual input and repair every listed violation.':''}`,data:{topicKeywords:storyTopicKeywords(input.topic),homeBackgroundIds:places.homeBackgroundIds,locationBackgroundIds:places.locationBackgroundIds,...(violations.length?{violations}:{})}},outlineRequestSchema(input),options);}
     catch(error){if(!(error instanceof StoryValidationError)){if(results.length)error.usage=mergeStoryUsage([...results,error]);throw error;}results.push({usage:error.usage||{},meta:error.meta||{requests:1}});violations=error.violations.map(message=>({code:'structure',message}));continue;}
-    results.push(result);const report=inspectOutlineRules(result.data,input);
+    results.push(result);const report=inspectOutlineRules(result.data,input);if(!result.data?.plotContract){report.valid=false;report.violations.push({code:'plot_contract_missing',message:'줄거리의 원인·결과와 상태 기록이 필요해요.'});}
     if(report.valid){result.data=assertValid('outline',result.data,input);result.usage=mergeStoryUsage(results);result.meta={...result.meta,requests:results.reduce((sum,r)=>sum+(Number(r.meta.requests)||1),0),repairAttempts:pass,checks:report};return result;}
     violations=report.violations;
   }
@@ -275,11 +347,12 @@ export async function rewriteBeat(outline,index,source,options={}){
   }
   result=await complete('beat',input,{rules:`Rewrite only beat index ${original.index}, preserving its index, type, settingKey, character IDs and causal connections to adjacent beats. Do not change any other beat or its place. Retain relevant topic keywords and explicitly name the selected characters taking part. Return one Beat JSON object. Keep the approved want/problem/twist, except a turn edit may concretely refine that same surprise.`,data:{approvedOutline:outline,targetBeat:original}},BEAT_SCHEMA,options);
   if(result.data?.index!==original.index||result.data?.type!==original.type||result.data?.settingKey!==original.settingKey)throw new StoryValidationError('beat',['이 비트의 번호·역할·장소를 유지해 주세요.']);
-  const next=clone(outline);next.beats[index]=result.data;result.data=assertValid('outline',next,{...input,pageCount:undefined});return result;
+  const next=clone(outline);next.beats[index]=result.data;if(next.plotContract)next.plotContractDirty=true;const validated=clone(next);delete validated.plotContract;delete validated.plotContractDirty;assertValid('outline',validated,{...input,pageCount:undefined});result.data=next;return result;
 }
 export async function generateProse(outline,source,options={}){
-  const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});abort(options.signal);
+  const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});assertPlot(outline,input);abort(options.signal);
   if(demo(options))return demoResult('prose',assertValid('prose',demoProse(outline,input),input,outline),input);
+  if(input.storyQuality?.enabled)return generateQualityProse(outline,input,options,qualityServices());
   const koSpec=input.specs.ko,sentenceRange=koSpec.sentencesPerPageRange||{min:koSpec.sentencesPerPage,max:koSpec.sentencesPerPage},wordRange=koSpec.wordsPerSentence||{min:3,max:7};
   const range=Array.isArray(sentenceRange)?sentenceRange:[sentenceRange.min,sentenceRange.max],words=koSpec.eojeolPerSentence||[wordRange.min,wordRange.max];
   const guidance=`${range[0]*input.pageCount}–${range[1]*input.pageCount} Korean sentences in total, each ${words[0]}–${words[1]} eojeol`;
@@ -306,7 +379,7 @@ export async function rewriteParagraph(prose,language,index,outline,source,optio
   const input=normalizeStoryInput(source);if(!['ko','en'].includes(language))throw new Error('한글 또는 영어를 골라 주세요.');
   const rows=paragraphs(prose?.[language]);if(!Number.isInteger(index)||!rows[index])throw new Error('다시 쓸 문단을 골라 주세요.');abort(options.signal);
   if(demo(options))throw new Error('데모는 고정된 예시예요. 문단을 직접 수정하거나 실제 이야기 엔진으로 다시 써 주세요.');
-  const result=await complete('paragraph',input,{rules:`Rewrite only ${language} paragraph ${index+1} as ONE paragraph, without blank lines. Preserve the paragraph's events, approved beat, concrete twist and neighboring continuity. Every sentence needs an explicit subject, including quoted dialogue, with an explicit named speaker. Preserve or add the beat's sensory detail and retain dialogue turns. Return {paragraph:string}. Do not write or translate the other language; do not change adjacent paragraphs or add beat labels to the text. Keep the selected ${language} level constraints and no moral tails.`,data:{approvedOutline:outline,fullProse:prose,language,targetParagraph:rows[index],paragraphIndex:index,beatIndex:paragraphBeatLabels(prose,language,outline)[index]}},PARAGRAPH_SCHEMA,options);
+  const result=await complete('paragraph',input,{rules:`Rewrite only ${language} paragraph ${index+1} as ONE paragraph, without blank lines. Preserve the paragraph's events, approved beat, concrete twist and neighboring continuity. Every sentence needs an explicit subject, including quoted dialogue, with an explicit named speaker. Preserve or add the beat's sensory detail and retain dialogue turns. Return {paragraph:string}. Do not write or translate the other language; do not change adjacent paragraphs or add beat labels to the text. ${options.qualityInstruction||''} Keep the selected ${language} level constraints and no moral tails.`,data:{approvedOutline:outline,fullProse:prose,language,targetParagraph:rows[index],paragraphIndex:index,beatIndex:paragraphBeatLabels(prose,language,outline)[index]}},PARAGRAPH_SCHEMA,options);
   if(typeof result.data?.paragraph!=='string'||!result.data.paragraph.trim()||result.data.paragraph.length>8000||paragraphs(result.data.paragraph).length!==1)throw new StoryValidationError('paragraph',['한 문단의 텍스트를 작성해 주세요.']);
   const next=clone(prose);rows[index]=result.data.paragraph.trim();next[language]=rows.join('\n\n');result.data=assertValid('prose',next,input,outline);return result;
 }
@@ -317,6 +390,7 @@ For every page scene.where MUST equal its approved beat's settingKey/backgroundI
 scene.who contains selected character IDs; scene.where is a supplied background ID or concrete location description. scene.action is one drawable English sentence of 8–30 words with a physical verb, position and visible props. Abstract feelings alone are not actions. scene.emotion is one English word; timeOfDay is morning/day/afternoon/evening/night; props is an English list.
 Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs to an allowed variant or null. Honor per-book defaults and page ranges. Set isRefrainPage true only where the approved refrain actually appears. cover.sceneAction is a concrete English cover scene without text/logo instructions.`;}
 function applyStaging(pagination,outline,input,options){
+  pagination=attachPagePlotContext(pagination,outline);
   if(!options.sceneBriefs&&!options.staging)return pagination;
   const briefs=sceneBriefRows(options.sceneBriefs),next=stagePagination(pagination,{outline,sceneBriefs:briefs,bookId:options.bookId||input.bookId||'story',stylePreset:options.stylePreset,backgrounds:input.backgrounds});
   next.sceneBriefs=clone(briefs);for(const page of next.pages||[]){const brief=briefs.find(b=>b.beatIndex===page.beatIndex);if(brief)page.sceneBrief=clone(brief);}return next;
@@ -345,7 +419,7 @@ export async function rewriteStoryPage(pagination,pageNo,outline,prose,source,op
   if(demo(options)){const next=clone(pagination),base=demoPagination(outline,prose,input);if(sceneOnly)next.pages[index].scene.action=base.pages[index]?.scene.action||original.scene.action;return {...demoResult('page',next,input),meta:{...demoResult('page',next,input).meta,checks:inspectStory(outline,next,input)}};}
   const rules=sceneOnly?`Rewrite ONLY the drawable English scene.action for page ${pageNo}, 8–30 words containing a visible verb, location and props. Do not change any text, cast, wardrobe, beat or other scene fields. Return {action:string}.`:
     `Rewrite only story page ${pageNo}, preserving pageNo=${pageNo}, beatIndex=${original.beatIndex}, cast and allowed wardrobe IDs. Preserve its concrete event and all ORIGINAL prose facts, adjacent continuity and the approved twist. Repair the listed violations only. Other pages must stay unchanged. If a violation names only one language, keep the other language byte-for-byte unchanged. Return one StoryPage. Do not invent a new event or lesson. ${options.richness?richnessPromptRules():''}`;
-  const result=await complete(sceneOnly?'scene':'page',input,{rules:`${rules}\n${paginationRules(input)}`,data:{approvedOutline:outline,approvedOriginalProse:prose,sceneBrief:sceneBriefRows(options.sceneBriefs).find(b=>b.beatIndex===original.beatIndex)||null,targetPage:original,previousPage:pagination.pages[index-1]||null,nextPage:pagination.pages[index+1]||null,violations}},sceneOnly?SCENE_REWRITE_SCHEMA:PAGE_SCHEMA,options);
+  const result=await complete(sceneOnly?'scene':'page',input,{rules:`${rules}\n${paginationRules(input)}\n${options.qualityInstruction||''}${options.keepEndingOnly?' Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar.':''}`,data:{approvedOutline:outline,approvedOriginalProse:prose,sceneBrief:sceneBriefRows(options.sceneBriefs).find(b=>b.beatIndex===original.beatIndex)||null,targetPage:original,previousPage:pagination.pages[index-1]||null,nextPage:pagination.pages[index+1]||null,violations}},sceneOnly?SCENE_REWRITE_SCHEMA:PAGE_SCHEMA,options);
   const next=clone(pagination);
   if(sceneOnly){if(typeof result.data?.action!=='string'||!result.data.action.trim()||result.data.action.length>500)throw new StoryValidationError('scene',['구체적인 영어 장면 설명이 필요해요.']);next.pages[index].scene.action=result.data.action;}
   else {
@@ -362,7 +436,7 @@ async function checkpoint(options,pagination,checks,repairAttempts,requests=[]){
 }
 async function finishPaginationRichness(result,outline,prose,input,options){
   result.data=applyStaging(result.data,outline,input,options);
-  if(!options.richness)return result;
+  if(!options.richness)return finishPaginationCoherence(result,outline,prose,input,options);
   const requests=[],briefs=sceneBriefRows(options.sceneBriefs),repairCounts=options.pageRepairCounts||{};let next=result.data,report=checkRichness(next,input,outline,briefs),attempts=0;
   try{
     for(let pass=0;pass<2&&!report.passed&&options.repair!==false&&!demo(options);pass++){
@@ -377,7 +451,22 @@ async function finishPaginationRichness(result,outline,prose,input,options){
     }
   }catch(error){error.pagination=next;throw paidError(error,[result,...requests],{stage:'pagination'});}
   for(const page of next.pages||[]){const pageReport=report.pages?.find(row=>row.pageNo===page.pageNo);if(pageReport)page.richnessCheck=clone(pageReport);}
-  return {data:next,usage:mergeStoryUsage([result,...requests]),meta:{...result.meta,checks:inspectStory(outline,next,input),richnessChecks:report,richnessRepairAttempts:attempts,requests:requestCount([result,...requests])}};
+  return finishPaginationCoherence({data:next,usage:mergeStoryUsage([result,...requests]),meta:{...result.meta,checks:inspectStory(outline,next,input),richnessChecks:report,richnessRepairAttempts:attempts,requests:requestCount([result,...requests])}},outline,prose,input,options);
+}
+async function finishPaginationCoherence(result,outline,prose,input,options){
+  try{
+    if(input.storyQuality?.enabled&&input.storyQuality.childSimulator!==false&&!options.skipChildGate&&!demo(options)){
+      const child=await inspectChildStory(outline,prose,result.data,input,options,{engineFor,rewriteStoryPage,rewriteParagraph,repaginate:paginateStory});
+      prose=child.data.prose;result={data:child.data.pagination,usage:mergeStoryUsage([result,child]),meta:{...result.meta,childGate:child.meta.childGate,childGateCheckpoint:child.meta.childGateCheckpoint,requests:requestCount([result,child])}};
+    }
+    const reviewed=await reviewStoryCoherence(outline,prose,result.data,input,{...options,repair:options.coherenceRepair!==false,onCheckpoint:options.onCheckpoint?cp=>options.onCheckpoint({...cp,usage:mergeStoryUsage([result,{usage:cp.usage||{}}]),meta:{...cp.meta,requests:requestCount([result])+(Number(cp.meta?.requests)||0)}}):undefined});
+    const next=reviewed.data.pagination;return {data:next,usage:mergeStoryUsage([result,reviewed]),meta:{...result.meta,coherence:reviewed.meta.coherence,approvedProse:reviewed.data.prose,checks:inspectStory(outline,next,input),...(options.richness?{richnessChecks:checkRichness(next,input,outline,sceneBriefRows(options.sceneBriefs))}:{}),requests:requestCount([result,reviewed])}};
+  }catch(error){throw paidError(error,[result],{stage:'pagination'});}
+}
+/** Resume post-pagination quality checks without repeating writing or readability repairs. */
+export async function finalizeStoryPagination(outline,prose,pagination,source,options={}){
+  const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});assertValid('prose',prose,input,outline);assertValid('pagination',pagination,input,outline);abort(options.signal);
+  return finishPaginationCoherence({data:clone(pagination),usage:mergeStoryUsage([]),meta:{stage:'pagination',requests:0,checks:inspectStory(outline,pagination,input)}},outline,prose,input,options);
 }
 export async function repairPagination(outline,prose,pagination,source,options={}){
   options={...options,pageRepairCounts:options.pageRepairCounts||{}};
@@ -397,7 +486,9 @@ export async function repairPagination(outline,prose,pagination,source,options={
 }
 export async function paginateStory(outline,prose,source,options={}){
   const input=normalizeStoryInput(source);assertValid('outline',outline,{...input,pageCount:undefined});assertValid('prose',prose,input,outline);abort(options.signal);
-  const initial=await paginateOnce(outline,prose,input,options);
+  const checkedProse=await reviewStoryCoherence(outline,prose,null,input,{...options,repair:options.coherenceRepair!==false});prose=checkedProse.data.prose;
+  let initial;try{initial=await paginateOnce(outline,prose,input,options);}catch(error){throw paidError(error,[checkedProse],{stage:'pagination'});}
+  initial.usage=mergeStoryUsage([checkedProse,initial]);initial.meta.requests=requestCount([checkedProse,initial]);initial.meta.proseCoherence=checkedProse.meta.coherence;
   await checkpoint(options,initial.data,inspectStory(outline,initial.data,input),0,[initial]);
   if(options.repair===false){initial.meta.checks=inspectStory(outline,initial.data,input);initial.meta.repairAttempts=0;return finishPaginationRichness(initial,outline,prose,input,options);}
   let repaired;try{repaired=await repairPagination(outline,prose,initial.data,input,{...options,onCheckpoint:options.onCheckpoint?cp=>options.onCheckpoint({...cp,usage:mergeStoryUsage([initial,{usage:cp.usage||{}}]),meta:{...cp.meta,stage:'pagination',requests:requestCount([initial])+(Number(cp.meta?.requests)||0)}}):undefined});}catch(error){throw paidError(error,[initial],{stage:'pagination'});}
