@@ -121,6 +121,7 @@ export function buildPreviousStoryReference(previousBook, state = {}) {
   const reference = {
     id: previousBook.id, title: previousBook.title, titleEn: previousBook.titleEn, series: previousBook.series, episode: previousBook.episode,
     outline: safeTextData(previousBook.outline || null),
+    sceneBriefs: safeTextData(previousBook.sceneBriefs || []),
     prose: {ko: previousBook.prose?.ko || previousBook.pages?.map(page => page.textKo ?? page.ko ?? '').join('\n\n') || '', en: previousBook.prose?.en || previousBook.pages?.map(page => page.textEn ?? page.en ?? '').join('\n\n') || ''},
     pages: (previousBook.pages || []).map((page, index) => ({pageNo: index + 1, textKo: page.ko ?? page.textKo ?? '', textEn: page.en ?? page.textEn ?? '', scene: safeTextData(page.scene || {}), beatIndex: page.beatIndex ?? page.scene?.beatIndex})),
     ending: previousBook.outline?.endingType || previousBook.ending,

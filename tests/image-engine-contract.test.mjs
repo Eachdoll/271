@@ -16,7 +16,7 @@ const json = data => new Response(JSON.stringify(data), { headers: { 'Content-Ty
 test('StoryRenderer orders references and composes visual style, scene, roles and no-text instructions', () => {
   const r = renderImageRequest(req, { maxReferenceImages: 16, supportsNegative: false });
   assert.deepEqual(r.referenceImages.map(ref => ref.role), ['character_front', 'style_sheet']);
-  assert.match(r.composedPrompt, /^Visual style: soft watercolor paper/);
+  assert.match(r.composedPrompt, /^soft watercolor paper/);
   assert.match(r.composedPrompt, /Image 1 is Yuha face/);
   assert.match(r.composedPrompt, /Image 2 is warm watercolor/);
   assert.match(r.composedPrompt, /No text.*no logos/i);

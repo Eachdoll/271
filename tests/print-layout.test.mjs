@@ -154,6 +154,21 @@ test('legacy booklet preference migrates once to sequential printing and preserv
   }
 });
 
+test('staging is an explicit print option and falls back below for legacy pages',()=>{
+  const input=book(5),before=JSON.stringify(input);
+  input.pages[0].staging={textSide:'left'};
+  input.pages[1].staging={textSide:'right'};
+  input.pages[2].staging={textSide:'top'};
+  input.pages[3].staging={textSide:'<script>'};
+  const saved=JSON.stringify(input);
+  const staged=bodyArticles(getPrintHTML(input,{textPosition:'staged',pages:'all'}));
+  for(const [index,side] of ['left','right','top','below','below'].entries())assert.ok(hasClass(staged[index],`text-${side}`));
+  assert.ok(bodyArticles(getPrintHTML(input)).every(article=>hasClass(article,'text-below')));
+  assert.equal(JSON.stringify(input),saved,'printing does not mutate staging');
+  assert.notEqual(saved,before);
+  assert.ok(staged.every(article=>frameContent(article).includes('lang="ko"')));
+});
+
 test('an explicit booklet choice after migration survives repeated startup and saved-settings reload',()=>{
   const settings={defaultLayout:'booklet'};
   migratePrintSettings(settings);

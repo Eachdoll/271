@@ -6,8 +6,8 @@ import {getTextGenerationSettings,renderTextSettings} from '../dist/text-generat
 test('new stories default to medium outline and pagination, and upper prose for every API provider',()=>{
  for(const [engine,medium,upper] of [['openai','gpt-6.1-sol','gpt-6-astra'],['anthropic','claude-sonnet-5-5','claude-opus-5-5'],['google','gemini-2.5-flash','gemini-4-argon']]){
    const settings={engine,providers:{[engine]:{model:'old-single-model-setting'}}};
-   for(const stage of ['outline','pagination'])assert.deepEqual(resolveStoryStageSettings(settings,stage),{engineId:engine,config:{model:medium}});
-   for(const stage of ['prose','proseDraft'])assert.equal(resolveStoryStageSettings(settings,stage).config.model,upper);
+   for(const stage of ['outline','sceneBriefs','pagination'])assert.deepEqual(resolveStoryStageSettings(settings,stage),{engineId:engine,config:{model:medium}});
+   for(const stage of ['prose','proseDraft','enrichment'])assert.equal(resolveStoryStageSettings(settings,stage).config.model,upper);
  }
  assert.throws(()=>resolveStoryStageSettings({},'unrecognized'),/단계/);
 });
@@ -34,23 +34,26 @@ test('hybrid is off by default and only an explicit enabled flag routes outline 
  }
  assert.deepEqual([resolveStoryStageSettings(settings,'prose').engineId,resolveStoryStageSettings(settings,'prose').config.model],['google','gemini-4-argon']);
  assert.equal(resolveStoryStageSettings(settings,'pagination').config.model,'gemini-2.5-flash');
+ assert.deepEqual([resolveStoryStageSettings(settings,'sceneBriefs').engineId,resolveStoryStageSettings(settings,'sceneBriefs').config.model],['google','gemini-2.5-flash']);
+ assert.deepEqual([resolveStoryStageSettings(settings,'enrichment').engineId,resolveStoryStageSettings(settings,'enrichment').config.model],['google','gemini-4-argon']);
 });
 
 test('local uses the saved user model for all stages, and invalid paid IDs fall back to stage defaults',()=>{
  const settings={engine:'local',providers:{local:{model:'my-local-model',baseUrl:'http://localhost:1234/v1'}}};
- for(const stage of ['outline','proseDraft','prose','pagination'])assert.equal(resolveStoryStageSettings(settings,stage).config.model,'my-local-model');
+ for(const stage of ['outline','sceneBriefs','proseDraft','prose','enrichment','pagination'])assert.equal(resolveStoryStageSettings(settings,stage).config.model,'my-local-model');
  assert.deepEqual(getStoryStageModels('openai',{model:'gpt-4.1-mini',stageModels:{medium:'gemini-4-argon',upper:'invented-model'}}),{medium:'gpt-6.1-sol',upper:'gpt-6-astra'});
 });
 
 test('cost estimate totals actual mixed stage rates and retains final-prose model fields',()=>{
  const settings={engine:'google',providers:{google:{stageModels:{medium:'gemini-2.5-flash',upper:'gemini-4-argon'}}}},estimate=estimateStoryTextCost({settings,pageCount:12,previousTextLength:1000,at:'2026-12-01'});
  const expectedMedium=estimateTextCost({engine:'google',model:'gemini-2.5-flash',input:6500,output:4300,at:'2026-12-01'}),expectedUpper=estimateTextCost({engine:'google',model:'gemini-4-argon',input:6500,output:8600,at:'2026-12-01'});
- assert.equal(estimate.costUsd,expectedMedium.costUsd+expectedUpper.costUsd+expectedMedium.costUsd);
+ const expectedBrief=estimateTextCost({engine:'google',model:'gemini-2.5-flash',input:6500,output:3500,at:'2026-12-01'}),expectedEnrichment=estimateTextCost({engine:'google',model:'gemini-4-argon',input:3000,output:1600,at:'2026-12-01'});
+ assert.equal(estimate.costUsd,expectedMedium.costUsd+expectedBrief.costUsd+expectedUpper.costUsd+expectedEnrichment.costUsd*14+expectedMedium.costUsd);
  assert.equal(estimate.model,'gemini-4-argon');assert.equal(estimate.inputRate,4);assert.equal(estimate.outputRate,20);
- assert.equal(estimate.requestCount,3);assert.equal(estimate.inputTokensEstimated,19500);assert.equal(estimate.outputTokensEstimated,17200);
- assert.deepEqual(estimate.stages.map(row=>[row.stage,row.model]),[['outline','gemini-2.5-flash'],['prose','gemini-4-argon'],['pagination','gemini-2.5-flash']]);
+ assert.equal(estimate.requestCount,18);assert.equal(estimate.inputTokensEstimated,68000);assert.equal(estimate.outputTokensEstimated,43100);
+ assert.deepEqual(estimate.stages.map(row=>[row.stage,row.model]),[['outline','gemini-2.5-flash'],['sceneBriefs','gemini-2.5-flash'],['prose','gemini-4-argon'],['enrichment','gemini-4-argon'],['pagination','gemini-2.5-flash']]);
  const hybrid=estimateStoryTextCost({settings:{...settings,hybrid:{enabled:true,finalEngine:'google'}}});
- assert.equal(hybrid.requestCount,4);assert.equal(hybrid.stages[0].costUsd,0);assert.equal(hybrid.stages[1].costUsd,0);assert.equal(hybrid.stages[2].engineId,'google');
+ assert.equal(hybrid.requestCount,19);assert.equal(hybrid.stages[0].costUsd,0);assert.equal(hybrid.stages[2].costUsd,0);assert.equal(hybrid.stages[1].engineId,'google');assert.equal(hybrid.stages[3].engineId,'google');
 });
 
 test('parent form exposes stage selectors, API pricing, hybrid configuration, and escaped stored values',()=>{
@@ -62,4 +65,30 @@ test('parent form exposes stage selectors, API pricing, hybrid configuration, an
  assert.match(html,/100만 토큰당 참고 단가/);assert.match(html,/12쪽 이야기 글 예상/);assert.match(html,/실제 청구액은 공급자/);
  assert.doesNotMatch(html,/<input id="tg-hybrid"[^>]* checked/);
  assert.equal(state.settings.textGeneration.providers.openai.model,'gpt-4.1-mini');assert.equal(state.settings.textGeneration.providers.openai.stageModels,undefined);
+});
+
+
+test('scene options default on, persist through normalized snapshots, and can be independently disabled',()=>{
+ const defaults=getTextGenerationSettings({settings:{}});
+ assert.equal(defaults.storyEnrichment,true);assert.equal(defaults.imageDiversity,true);
+ for(const options of [{storyEnrichment:false,imageDiversity:true},{storyEnrichment:true,imageDiversity:false},{storyEnrichment:false,imageDiversity:false}]){
+   const state={settings:{textGeneration:{...defaults,...options}}};
+   assert.deepEqual(getTextGenerationSettings(JSON.parse(JSON.stringify(state))),state.settings.textGeneration);
+   const html=renderTextSettings(state);
+   for(const [id,enabled] of [['tg-story-enrichment',options.storyEnrichment],['tg-image-diversity',options.imageDiversity]]){
+     const control=html.match(new RegExp('<input id="'+id+'"[^>]*>'))?.[0];assert.ok(control);assert.equal(control.includes('checked'),enabled);
+   }
+ }
+});
+
+test('estimates count per-language paragraphs, mandatory brief, and additional requests without claiming a fixed bill',()=>{
+ const estimate=estimateStoryTextCost({settings:{engine:'openai'},beatCount:6,paragraphCount:{ko:4,en:7}});
+ assert.equal(estimate.requestCount,15);assert.equal(estimate.beatCount,6);assert.deepEqual(estimate.paragraphCount,{ko:4,en:7});
+ assert.equal(estimate.stages.find(stage=>stage.stage==='enrichment').requestCount,11);
+ assert.equal(estimate.requestCount,estimate.stages.reduce((total,stage)=>total+stage.requestCount,0));
+ const disabled=estimateStoryTextCost({settings:{storyEnrichment:false},paragraphCount:7});
+ assert.equal(disabled.requestCount,4);assert.equal(disabled.enrichment,false);assert.ok(disabled.stages.some(stage=>stage.stage==='sceneBriefs'));assert.ok(!disabled.stages.some(stage=>stage.stage==='enrichment'));
+ assert.ok(disabled.costUsd<estimateStoryTextCost().costUsd);
+ const local=estimateStoryTextCost({settings:{engine:'local'}});assert.equal(local.costUsd,0);assert.equal(local.requestCount,18);
+ const html=renderTextSettings({settings:{}});assert.match(html,/장면 브리프 1회/);assert.match(html,/문단 풍부화 14회 포함/);assert.match(html,/최대 2회 재작성/);assert.match(html,/이미지 요금이 별도/);
 });

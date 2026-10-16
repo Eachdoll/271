@@ -1,3 +1,4 @@
+import {STAGING_SCHEMA} from './staging.js';
 /* Story stage schemas and structural validation. Content checks live in checker.js. */
 export const STORY_STAGES=Object.freeze(['outline_draft','outline_ok','prose_draft','prose_ok','paged','illustrated','final']);
 export const PAGE_COUNTS=Object.freeze([8,12,16,24]);
@@ -14,8 +15,8 @@ export const OUTLINE_SCHEMA={type:'object',additionalProperties:false,required:[
   settings:{type:'array',maxItems:8,items:{type:'object',additionalProperties:false,required:['beatIndex'],properties:{beatIndex:integer,backgroundId:string(300),newPlace:string(300)}}},
   emotionArc:{type:'array',items:string(50),minItems:6,maxItems:8},endingType:{type:'string',enum:['home_sleep','open']}}};
 export const PROSE_SCHEMA={type:'object',additionalProperties:false,required:['ko','en','usedRefrainAt'],properties:{ko:string(30000),en:string(50000),usedRefrainAt:{type:'array',items:integer,maxItems:3,uniqueItems:true},paragraphBeats:{type:'object',additionalProperties:false,required:['ko','en'],properties:{ko:{type:'array',items:integer,minItems:1,maxItems:500},en:{type:'array',items:integer,minItems:1,maxItems:500}}}}};
-export const SCENE_SCHEMA={type:'object',additionalProperties:false,required:['who','where','action','emotion','timeOfDay','props'],properties:{who:strings(5),where:string(500),action:string(500),emotion:string(40),timeOfDay:{type:'string',enum:['morning','day','evening','night']},props:strings(12)}};
-export const PAGE_SCHEMA={type:'object',additionalProperties:false,required:['pageNo','beatIndex','textKo','textEn','scene','variantByCharacter','isRefrainPage'],properties:{pageNo:integer,beatIndex:integer,textKo:string(6000),textEn:string(8000),scene:SCENE_SCHEMA,variantByCharacter:{type:'object',additionalProperties:{anyOf:[string(300),{type:'null'}]}},isRefrainPage:{type:'boolean'}}};
+export const SCENE_SCHEMA={type:'object',additionalProperties:false,required:['who','where','action','emotion','timeOfDay','props'],properties:{who:strings(5),where:string(500),action:string(500),emotion:string(40),timeOfDay:{type:'string',enum:['morning','day','afternoon','evening','night']},props:strings(12)}};
+export const PAGE_SCHEMA={type:'object',additionalProperties:false,required:['pageNo','beatIndex','textKo','textEn','scene','variantByCharacter','isRefrainPage'],properties:{pageNo:integer,beatIndex:integer,textKo:string(6000),textEn:string(8000),scene:SCENE_SCHEMA,staging:STAGING_SCHEMA,variantByCharacter:{type:'object',additionalProperties:{anyOf:[string(300),{type:'null'}]}},isRefrainPage:{type:'boolean'}}};
 export const PAGINATION_SCHEMA={type:'object',additionalProperties:false,required:['cover','pages'],properties:{cover:{type:'object',additionalProperties:false,required:['title','sceneAction'],properties:{title:string(100),sceneAction:string(500)}},pages:{type:'array',items:PAGE_SCHEMA,minItems:8,maxItems:24}}};
 export const PARAGRAPH_SCHEMA={type:'object',additionalProperties:false,required:['paragraph'],properties:{paragraph:string(8000)}};
 export const SCENE_REWRITE_SCHEMA={type:'object',additionalProperties:false,required:['action'],properties:{action:string(500)}};
@@ -89,7 +90,7 @@ export function validateStoryPage(page,input={},outline){
   if(!text(page.textKo,6000)||!text(page.textEn,8000))errors.push('쪽에 한글·영어 글이 모두 필요해요.');
   const scene=page.scene,cast=new Set((input.characters||[]).map(c=>c.id));
   if(!object(scene))errors.push('장면 정보가 필요해요.');
-  else {if(!stringArray(scene.who,5,1)||(cast.size&&scene.who.some(c=>!cast.has(c))))errors.push('장면에는 선택한 등장인물 ID만 사용할 수 있어요.');for(const [k,max]of [['where',500],['action',500],['emotion',40]])if(!text(scene[k],max))errors.push(`장면 ${k} 필드를 확인해 주세요.`);if(typeof scene.emotion==='string'&&!/^[A-Za-z]+(?:-[A-Za-z]+)?$/.test(scene.emotion))errors.push('장면 감정은 영어 한 단어여야 해요.');if(!['morning','day','evening','night'].includes(scene.timeOfDay))errors.push('장면 시간을 확인해 주세요.');if(!stringArray(scene.props,12))errors.push('장면 소품 목록을 확인해 주세요.');}
+  else {if(!stringArray(scene.who,5,1)||(cast.size&&scene.who.some(c=>!cast.has(c))))errors.push('장면에는 선택한 등장인물 ID만 사용할 수 있어요.');for(const [k,max]of [['where',500],['action',500],['emotion',40]])if(!text(scene[k],max))errors.push(`장면 ${k} 필드를 확인해 주세요.`);if(typeof scene.emotion==='string'&&!/^[A-Za-z]+(?:-[A-Za-z]+)?$/.test(scene.emotion))errors.push('장면 감정은 영어 한 단어여야 해요.');if(!['morning','day','afternoon','evening','night'].includes(scene.timeOfDay))errors.push('장면 시간을 확인해 주세요.');if(!stringArray(scene.props,12))errors.push('장면 소품 목록을 확인해 주세요.');}
   if(!object(page.variantByCharacter))errors.push('쪽별 옷장 모습을 확인해 주세요.');
   else {const variants=allowedVariants(input);for(const [c,id]of Object.entries(page.variantByCharacter)){if(cast.size&&!cast.has(c))errors.push('선택하지 않은 등장인물의 옷장 정보가 있어요.');if(id!==null&&(!text(id,300)||!variants.get(c)?.has(id)))errors.push('선택하지 않은 옷장 모습 ID가 있어요.');}}
   if(typeof page.isRefrainPage!=='boolean')errors.push('후렴 쪽 여부가 필요해요.');

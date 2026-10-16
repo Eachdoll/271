@@ -8,7 +8,7 @@ const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '
 
 function options(settings = {}) {
   const result = { ...DEFAULTS, ...settings };
-  if (!['bottom','top','below'].includes(result.textPosition)) result.textPosition='below';
+  if (!['bottom','top','below','staged'].includes(result.textPosition)) result.textPosition='below';
   if (!['single', 'two', 'booklet'].includes(result.layout)) result.layout = DEFAULTS.layout;
   if (!['ko', 'en', 'bilingual'].includes(result.language)) result.language = result.language === 'dual' ? 'bilingual' : DEFAULTS.language;
   if (!['color', 'grayscale'].includes(result.color)) result.color = 'color';
@@ -79,6 +79,15 @@ function pageText(page, language) {
   return language === 'ko' ? ko : language === 'en' ? en : en + ko;
 }
 
+function textPlacement(page, settings) {
+  if (settings.textPosition === 'staged') {
+    const side = page.staging?.textSide;
+    return ['left','right','top','bottom'].includes(side) ? `text-${side} text-staged` : 'text-below';
+  }
+  if (settings.textPosition === 'below') return 'text-below';
+  return settings.textPosition === 'top' || page.printTextPosition === 'top' ? 'text-top' : 'text-bottom';
+}
+
 function logicalPages(book, settings, characters) {
   if (!book || !Array.isArray(book.pages) || !book.pages.length) throw new Error('출력할 책의 본문이 없어요.');
   const title = settings.language === 'en' ? book.titleEn || book.title : book.title;
@@ -91,7 +100,7 @@ function logicalPages(book, settings, characters) {
   const selected = parsePages(settings.pages, book.pages.length);
   if (settings.pages === 'cover') return [cover];
   const pages = selected.map(index => ({
-    kind: 'page', label: `${index + 1}쪽`, html: `<article class="leaf story-page text-${settings.textPosition==='below'?'below':settings.textPosition==='top'?'top':book.pages[index].printTextPosition==='top'?'top':'bottom'}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${imageMarkup(artwork(book, book.pages[index], characters), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div></div><span class="folio">${index + 1}</span></article>`
+    kind: 'page', label: `${index + 1}쪽`, html: `<article class="leaf story-page ${textPlacement(book.pages[index],settings)}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${imageMarkup(artwork(book, book.pages[index], characters), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div></div><span class="folio">${index + 1}</span></article>`
   }));
   if (!settings.pages || settings.pages === 'all') return [cover, ...pages, back];
   return pages;
@@ -166,6 +175,10 @@ function printStyles(settings) {
     .picturebook-frame>.illustration{width:100%;height:100%;display:block;object-fit:contain}
     .story { position:absolute;left:4%;right:4%;bottom:4%;max-height:72%;padding:3% 4%;background:rgba(255,253,246,.93);border-radius:3mm;color:#292d26;line-height:1.55;font-size:${settings.fontSize === 'large' ? '19pt' : '15pt'};font-weight:500;word-break:keep-all;overflow-wrap:break-word;white-space:pre-line;z-index:1; }
     .text-top .story{top:4%;bottom:auto}
+    .text-staged .story{border-radius:0;background:rgba(255,253,246,.88)}
+    .text-left .story,.text-right .story{top:6%;bottom:auto;width:41%;max-height:88%;padding:3%}
+    .text-left .story{left:3%;right:auto}
+    .text-right .story{right:3%;left:auto}
     .one .story { font-size: ${settings.fontSize === 'large' ? '25pt' : '20pt'}; }
     .story p { margin: 0; }
     .story p + p { margin-top: 2.5mm; }
@@ -231,7 +244,7 @@ export function getPrintHTML(book, settings = {}, characters = []) {
   const guidance = normalized.layout === 'booklet'
     ? `<p>제본용 배치입니다. 빈 쪽을 포함해 4의 배수로 맞추므로 1쪽 옆이나 2쪽 옆에 빈 쪽이 보일 수 있습니다. 빈 쪽 없이 1→2쪽 순서로 보려면 일반 인쇄를 선택하세요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
     : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === 'two' ? ' 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요.' : ''}</p>`;
-  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition==='below'?'본문은 그림 아래에 배치됩니다.':'본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다.'} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition==='below'?'':' 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다.'}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
+  return `<!doctype html><html lang="${normalized.language === 'en' ? 'en' : 'ko'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || '동화공방')} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || '우리의 동화책')}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === 'grayscale' ? '흑백' : '컬러'} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition==='below'?'본문은 그림 아래에 배치됩니다.':normalized.textPosition==='staged'?'장면별로 정한 빈 공간에 본문을 배치합니다. 구도 정보가 없는 쪽은 그림 아래에 배치합니다.':'본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다.'} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition==='below'?'':' 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다.'}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
 }
 
 /** Opens synchronously so the user's click authorizes the print tab. */

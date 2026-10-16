@@ -1,7 +1,9 @@
 /* Explicit, cancellable generation. No provider retries or local-sample fallbacks. */
 import {generateImage} from './providers.js';
 import {getCredential} from './vault.js';
-import {saveImage,deleteImageAsset} from './assets.js';
+import {analyzeImage,compareImageFingerprints,timeProgressWarning} from './image-diversity.js';
+import {nextShot,seedForPage} from '../story-generation/staging.js';
+import {saveImage,getImageURL,deleteImageAsset} from './assets.js';
 import {
   getActiveWorld, captureBookGenerationSnapshot,
   sceneGenerationRequest, commitSceneResult, createCharacterSheetRequest
@@ -99,7 +101,7 @@ function archiveCurrentPageImage(page) {
 }
 
 /** Regenerate exactly one selected page, preserving the rest of the book. */
-export async function generateScene(state,book,pageIndex,options={}) {
+async function generateSceneOnce(state,book,pageIndex,options={}) {
   const {signal,onProgress}=options;
   const page=book.pages?.[pageIndex];
   if(!page) throw new ImageGenerationError('이야기 쪽을 찾을 수 없어요.','PAGE_NOT_FOUND');
@@ -113,7 +115,7 @@ export async function generateScene(state,book,pageIndex,options={}) {
     const world=worldForSnapshot(state,snapshot);
     const engine=snapshot.imageEngine;
     const sceneSnapshot={
-      scene:clone(page.scene||{}),ko:page.ko||'',en:page.en||'',
+      scene:clone(page.scene||{}),staging:clone(page.staging||{}),sceneBrief:clone(book.sceneBriefs?.find(brief=>brief.beatIndex===page.beatIndex)||null),ko:page.ko||'',en:page.en||'',
       worldId:snapshot.worldId,worldRevision:snapshot.worldRevision,
       imageEngine:engine,stylePresetId:snapshot.stylePresetId,
       characterSheetIds:snapshot.characterSheets.map(sheet=>sheet.id),
@@ -155,6 +157,40 @@ export async function generateScene(state,book,pageIndex,options={}) {
   }
 }
 
+function diversityEnabled(state,book,options){return options.imageDiversity??book.textGenerationSettings?.imageDiversity??state.settings?.textGeneration?.imageDiversity??true;}
+export function changePageComposition(book,pageIndex){
+ const page=book.pages?.[pageIndex];if(!page)throw new ImageGenerationError('이야기 쪽을 찾을 수 없어요.','PAGE_NOT_FOUND');
+ page.stagingRegeneration=(Number(page.stagingRegeneration)||0)+1;
+ page.staging={...(page.staging||{}),shot:nextShot(page.staging?.shot||'wide',{previousShot:book.pages[pageIndex-1]?.staging?.shot,nextShot:book.pages[pageIndex+1]?.staging?.shot}),seed:seedForPage(book.id,page.pageNo||pageIndex+1,page.stagingRegeneration)};
+ page.stagingManual={...(page.stagingManual||{}),shot:true};return page;
+}
+async function pageFingerprint(page,options){
+ if(page.imageFingerprint?.hash)return page.imageFingerprint;
+ const url=page.imageAssetId?getImageURL(page.imageAssetId):page.imageUrl;if(!url)return {supported:false,reason:'no-image'};
+ const result=await (options.analyzeImage||analyzeImage)(url,{signal:options.signal});if(result.supported)page.imageFingerprint=result;return result;
+}
+/** dHash is a heuristic; each invocation can regenerate a similar page only once. */
+export async function generateScene(state,book,pageIndex,options={}){
+ if(options.changeComposition)changePageComposition(book,pageIndex);
+ const page=await generateSceneOnce(state,book,pageIndex,options);delete page.imageFingerprint;
+ if(!diversityEnabled(state,book,options))return page;
+ try{
+  let current=await pageFingerprint(page,options);const previous=pageIndex?await pageFingerprint(book.pages[pageIndex-1],options):null;
+  page.imageDiversity={supported:current.supported,reason:current.reason||null,estimated:true,regenerated:false,warning:current.supported?null:'브라우저에서 그림을 비교할 수 없어 구도를 직접 확인해 주세요.'};
+  if(previous?.supported&&current.supported){
+   let comparison=compareImageFingerprints(previous,current);page.imageDiversity={...page.imageDiversity,...comparison};
+   if(comparison.tooSimilar){
+    changePageComposition(book,pageIndex);report(options.onProgress,{status:'diversity-retry',completed:0,total:1,pageIndex,message:'앞쪽 그림과 비슷해 구도를 한 번 바꾸고 있어요.'});
+    await generateSceneOnce(state,book,pageIndex,{...options,seed:page.staging.seed});delete page.imageFingerprint;current=await pageFingerprint(page,options);
+    comparison=current.supported?compareImageFingerprints(previous,current):{supported:false,reason:current.reason};
+    page.imageDiversity={...comparison,estimated:true,regenerated:true,warning:comparison.tooSimilar?'앞쪽 그림과 여전히 비슷해요. 구도를 직접 확인해 주세요.':!comparison.supported?'그림 비교를 완료하지 못했어요. 구도를 직접 확인해 주세요.':null};
+   }
+  }
+  if(pageIndex===book.pages.length-1&&pageIndex>0){const first=await pageFingerprint(book.pages[0],options);book.imageTimeWarning=timeProgressWarning(first,current);}
+ }catch(error){if(error.name==='AbortError')throw error;page.imageDiversity={supported:false,estimated:true,reason:'analysis-unavailable',warning:'그림 비교를 완료하지 못했어요. 구도를 직접 확인해 주세요.'};}
+ return page;
+}
+
 /** Ordered generation: the next page can reference the first and latest scene at its place. */
 export async function generateAllScenes(state,book,options={}) {
   const {signal,onProgress}=options;
@@ -175,7 +211,7 @@ export async function generateAllScenes(state,book,options={}) {
       if(pageIndex>=total) return;
       try {
         const page=await generateScene(state,book,pageIndex,{
-          ...requestOptions(options),signal:controller.signal,
+          ...options,...requestOptions(options),signal:controller.signal,
           onProgress:progress=>{
             if(progress.status!=='complete'&&progress.status!=='error'&&progress.status!=='cancelled') report(onProgress,{...progress,completed,total});
           }
@@ -249,8 +285,8 @@ export async function generateCharacterSheet(state,characterOrId,options={}) {
 /** Separate cover artwork; shares the frozen cast, style and seed contract. */
 export async function generateCover(state,book,options={}){
   const {signal}=options;throwIfAborted(signal);
-  const request=sceneGenerationRequest(state,book,0,{...requestOptions(options),quality:options.quality||'final'});
-  request.prompt=`Create a welcoming children's picture-book cover for this original story: ${book.topic||book.title}. ${book.pagination?.cover?.sceneAction?'Cover scene: '+book.pagination.cover.sceneAction+'. ':''}Show the selected main character and companions together in the story's setting, with clear silhouettes and generous quiet space at the upper left for a title added separately. No text, letters, logos or watermark. ${request.prompt}`;
+  const request=sceneGenerationRequest(state,book,0,{...requestOptions(options),quality:options.quality||'final',cover:true});
+
   const snapshot=captureBookGenerationSnapshot(state,book),world=worldForSnapshot(state,snapshot),engine=snapshot.imageEngine;
   const config=await providerConfig(state,world,engine,signal);
   let asset;

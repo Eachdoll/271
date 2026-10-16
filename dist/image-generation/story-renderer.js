@@ -16,7 +16,7 @@ export function renderImageRequest(request = {}, capabilities = {}) {
   const scenePrompt = String(request.scenePrompt ?? request.prompt ?? '').trim();
   if (!scenePrompt) throw new StoryRendererError('이미지 설명을 입력해 주세요.', 'invalid_prompt');
   const stylePreset = request.stylePreset && typeof request.stylePreset === 'object' ? request.stylePreset : {};
-  const stylePrompt = String(request.stylePrompt ?? stylePreset.stylePrompt ?? '').trim();
+  const stylePrompt = String(request.stylePrompt ?? stylePreset.stylePrompt ?? '');
   const negativePrompt = String(request.negativePrompt ?? stylePreset.negativePrompt ?? '').trim();
   if (!Array.isArray(request.referenceImages ?? [])) throw new StoryRendererError('참조 이미지는 배열로 전달해 주세요.', 'invalid_references');
   const input = request.referenceImages || [];
@@ -30,7 +30,7 @@ export function renderImageRequest(request = {}, capabilities = {}) {
   if (dropped.length && (!allTyped || dropped.some(ref => ref.required === true || ref.required !== false && ref.role !== 'background'))) {
     throw new StoryRendererError(`이 엔진의 참조 이미지 한도(${limit}개)에 캐릭터·스타일·고정 배경 참조를 모두 넣을 수 없어요. 배경 일관성을 위해 참조를 빼지 않습니다. 등장인물을 줄이거나 참조 한도가 큰 엔진을 선택해 주세요.`, 'reference_limit');
   }
-  const parts = [stylePrompt ? `Visual style: ${stylePrompt}` : '', scenePrompt];
+  const parts = [stylePrompt, scenePrompt];
   if (stylePreset.palette?.length) parts.push(`Color palette: ${stylePreset.palette.join(', ')}.`);
   if (allTyped) parts.push(referenceImages.map((ref, index) => `Image ${index + 1} is ${String(ref.label || ref.role).replace(/[\r\n]/g, ' ').slice(0, 180)}: ${ROLE_DESCRIPTION[ref.role]}.`).join('\n'));
   else if (referenceImages.length) parts.push('Use ALL attached reference images together. Preserve character identities, proportions, clothing and distinctive details from character sheets. Follow the palette, materials and rendering of style references. Render a new scene matching the prompt.');

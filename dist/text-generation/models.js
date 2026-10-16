@@ -44,24 +44,33 @@ export function getStoryStageModels(engine,config={}){
 }
 /** Resolve each request from an immutable draft settings snapshot, without mutating it. */
 export function resolveStoryStageSettings(settings={},stage){
-  if(!['outline','proseDraft','prose','pagination'].includes(stage))throw new Error('지원하는 이야기 생성 단계를 선택해 주세요.');
+  if(!['outline','sceneBriefs','proseDraft','prose','enrichment','pagination'].includes(stage))throw new Error('지원하는 이야기 생성 단계를 선택해 주세요.');
   const selected=Object.hasOwn(CATALOG,settings.engine)?settings.engine:'openai',hybrid=settings.hybrid?.enabled===true;
   const finalEngine=['openai','anthropic','google'].includes(settings.hybrid?.finalEngine)?settings.hybrid.finalEngine:'openai';
   const engineId=hybrid?(stage==='outline'||stage==='proseDraft'?'local':finalEngine):selected;
-  const provider=settings.providers?.[engineId]||{},models=getStoryStageModels(engineId,provider),level=stage==='outline'||stage==='pagination'?'medium':'upper';
+  const provider=settings.providers?.[engineId]||{},models=getStoryStageModels(engineId,provider),level=['outline','sceneBriefs','pagination'].includes(stage)?'medium':'upper';
   return {engineId,config:{...provider,...(provider.stageModels?{stageModels:{...provider.stageModels}}:{}),model:models[level]}};
 }
 export function estimateTextCost({engine,engineId=engine,input=0,output=0,model,config={},at=new Date()}={}){
   const info=getTextModelInfo(engineId,model??config.model),date=new Date(at),rates=info.pricingChange&&Number.isFinite(date.getTime())&&date>=new Date(info.pricingChange.effectiveAt+'T00:00:00Z')?info.pricingChange:info;
   return {costUsd:(Math.max(0,Number(input)||0)*rates.input+Math.max(0,Number(output)||0)*rates.output)/1e6,estimated:true,model:resolveTextModel(engineId,model??config.model),inputRate:rates.input,outputRate:rates.output,checkedAt:CHECKED_AT,note:'토큰 단가 기반 추정 · 실제 청구액 아님'};
 }
-export function estimateStoryTextCost({engine='openai',engineId=engine,pageCount=12,settings={},previousTextLength=0,at=new Date()}={}){
+export function estimateStoryTextCost({engine='openai',engineId=engine,pageCount=12,beatCount,paragraphCount,settings={},previousTextLength=0,at=new Date()}={}){
   const snapshot={...settings,engine:settings.engine||engineId},hybrid=settings.hybrid?.enabled===true;
-  const input=6000+Math.ceil(Math.max(0,Number(previousTextLength)||0)/2),baseOutput=2500+Math.max(1,Number(pageCount)||12)*150;
-  const stages=(hybrid?['outline','proseDraft','prose','pagination']:['outline','prose','pagination']).map(stage=>{
-    const {engineId,config}=resolveStoryStageSettings(snapshot,stage),reasoningFactor=getTextModelInfo(engineId,config.model).reasoning.profile==='none'?1:2,output=Math.ceil(baseOutput*reasoningFactor);
-    return {stage,engineId,...estimateTextCost({engineId,config,input,output,at}),inputTokensEstimated:input,outputTokensEstimated:output};
-  });
+  const pages=Math.max(1,Math.round(Number(pageCount)||12)),beats=Math.min(24,Math.max(1,Math.round(Number(beatCount)||Math.min(8,Math.max(6,Math.ceil(pages/2)+1))))),enrichment=settings.storyEnrichment!==false;
+  const input=6000+Math.ceil(Math.max(0,Number(previousTextLength)||0)/2),baseOutput=2500+pages*150;
+  const count=value=>Math.min(100,Math.max(0,Math.round(Number.isFinite(Number(value))?Number(value):beats)));
+  const paragraphs=paragraphCount&&typeof paragraphCount==='object'?{ko:count(paragraphCount.ko),en:count(paragraphCount.en)}:{ko:count(paragraphCount??beats),en:count(paragraphCount??beats)};
+  const stageEstimate=(stage,inputPerRequest,outputPerRequest,requestCount=1)=>{
+    const {engineId,config}=resolveStoryStageSettings(snapshot,stage),reasoningFactor=getTextModelInfo(engineId,config.model).reasoning.profile==='none'?1:2,output=Math.ceil(outputPerRequest*reasoningFactor);
+    const price=estimateTextCost({engineId,config,input:inputPerRequest,output,at});
+    return {stage,engineId,...price,costUsd:price.costUsd*requestCount,requestCount,inputTokensEstimated:inputPerRequest*requestCount,outputTokensEstimated:output*requestCount};
+  };
+  const stages=[stageEstimate('outline',input,baseOutput),stageEstimate('sceneBriefs',input,beats*500)];
+  if(hybrid)stages.push(stageEstimate('proseDraft',input,baseOutput));
+  stages.push(stageEstimate('prose',input,baseOutput));
+  if(enrichment&&paragraphs.ko+paragraphs.en)stages.push(stageEstimate('enrichment',3000,800,paragraphs.ko+paragraphs.en));
+  stages.push(stageEstimate('pagination',input,baseOutput));
   const final=stages.find(row=>row.stage==='prose');
-  return {...final,costUsd:stages.reduce((sum,row)=>sum+row.costUsd,0),inputTokensEstimated:stages.reduce((sum,row)=>sum+row.inputTokensEstimated,0),outputTokensEstimated:stages.reduce((sum,row)=>sum+row.outputTokensEstimated,0),requestCount:stages.length,hybrid,stages,note:'단계별 모델 단가로 계산한 줄거리·전문·쪽 나누기 추정 · 추론 토큰, 재작성과 긴 이전 원문 입력은 실제 사용량에 따라 달라져요'};
+  return {...final,costUsd:stages.reduce((sum,row)=>sum+row.costUsd,0),inputTokensEstimated:stages.reduce((sum,row)=>sum+row.inputTokensEstimated,0),outputTokensEstimated:stages.reduce((sum,row)=>sum+row.outputTokensEstimated,0),requestCount:stages.reduce((sum,row)=>sum+row.requestCount,0),hybrid,enrichment,beatCount:beats,paragraphCount:paragraphs,stages,note:`장면 브리프 1회${enrichment?'와 한글·영어 문단별 풍부화':''}를 포함한 단계별 모델 단가 추정 · 실패한 장면·쪽의 최대 2회 재작성, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`};
 }
