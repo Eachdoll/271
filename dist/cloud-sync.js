@@ -922,8 +922,10 @@ export function createCloudSync(context) {
       return Promise.reject(
         new CloudSyncError("클라우드 연결을 먼저 시작해 주세요.", "STOPPED"),
       );
-    if (operation && kind !== "refresh" && operationKind === "refresh")
-      return operation.then(() => execute(kind, action, { swallow }));
+    if (operation && kind !== "refresh" && operationKind === "refresh") {
+      const run = () => execute(kind, action, { swallow });
+      return operation.then(run, run);
+    }
     if (operation)
       return kind === "refresh"
         ? operation
