@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 const source = fs.readFileSync(path.join(dist, 'sw.js'), 'utf8');
-const files = JSON.parse(source.match(/const FILES=(\[[^\]]*\])/)[1].replace(/'/g, '"'));
+const files = JSON.parse(source.match(/const FILES\s*=\s*(\[[^\]]*\])/)[1].replace(/'/g, '"').replace(/,\s*\]/g, ']'));
 
 function walk(dir) {
   return fs.readdirSync(dir, {withFileTypes: true}).flatMap(entry => {
@@ -30,7 +30,7 @@ test('every runtime module and stylesheet in dist is precached for offline use',
 });
 
 test('service worker cache name changes with shell contents', () => {
-  const cache = source.match(/const CACHE='([^']+)'/)[1];
+  const cache = source.match(/const CACHE\s*=\s*["']([^"']+)["']/)[1];
   assert.match(cache, /^donghwa-shell-v\d+$/);
   assert.ok(source.includes('Promise.allSettled'), '개별 파일 실패가 전체 설치를 막지 않아야 합니다');
 });

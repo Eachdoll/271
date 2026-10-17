@@ -1,98 +1,716 @@
 /* Style sheets are generated here; this panel never accepts uploaded film images. */
-import {generateImage, ENGINE_METADATA} from './image-generation/providers.js';
-import {getCredential} from './image-generation/vault.js';
-import * as World from './image-generation/world.js';
-import {getImageURL, saveImage, deleteImageAsset} from './image-generation/assets.js';
-import {STYLE_PRESETS, listStylePresets, getStylePreset, setCustomStylePresets, validateStylePreset, DEFAULT_FORBIDDEN_STYLE_WORDS, forbiddenStyleMatches} from './image-generation/styles.js';
+import {
+  generateImage,
+  ENGINE_METADATA,
+} from "./image-generation/providers.js";
+import { getCredential } from "./image-generation/vault.js";
+import * as World from "./image-generation/world.js";
+import {
+  getImageURL,
+  saveImage,
+  deleteImageAsset,
+} from "./image-generation/assets.js";
+import {
+  STYLE_PRESETS,
+  listStylePresets,
+  getStylePreset,
+  setCustomStylePresets,
+  validateStylePreset,
+  DEFAULT_FORBIDDEN_STYLE_WORDS,
+  forbiddenStyleMatches,
+} from "./image-generation/styles.js";
 
-const clone=value=>JSON.parse(JSON.stringify(value));
-const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const uid=prefix=>`${prefix}-${globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,12)}`}`;
-const seed=()=>globalThis.crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]&0x7fffffff:Math.floor(Math.random()*2147483647);
-const button=(label,action,css='outline',attributes='')=>`<button type="button" class="btn btn-${css}" data-style-action="${action}" ${attributes}>${label}</button>`;
-let api,configured=false,flow=null;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const escape = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        char
+      ],
+  );
+const uid = (prefix) =>
+  `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`}`;
+const seed = () =>
+  globalThis.crypto?.getRandomValues
+    ? crypto.getRandomValues(new Uint32Array(1))[0] & 0x7fffffff
+    : Math.floor(Math.random() * 2147483647);
+const button = (label, action, css = "outline", attributes = "") =>
+  `<button type="button" class="btn btn-${css}" data-style-action="${action}" ${attributes}>${label}</button>`;
+let api,
+  configured = false,
+  flow = null;
 
-export const STYLE_TEST_SCENES=Object.freeze([
-  Object.freeze({id:'yard',label:'집 앞 마당',prompt:'The child stands in a welcoming front yard outside a small home, with a few flowers and soft morning sunlight. One clear full-body picture-book scene.'}),
-  Object.freeze({id:'forest',label:'숲길 산책',prompt:'The same child walks on a gentle woodland path among leafy trees and small flowers in soft afternoon sunlight. One clear picture-book scene.'}),
-  Object.freeze({id:'bedtime',label:'밤의 책 읽기',prompt:'The same child sits safely in bed reading a picture book by a warm bedside lamp at night, with a soft moon outside the window. A cozy calm picture-book scene.'})
+export const STYLE_TEST_SCENES = Object.freeze([
+  Object.freeze({
+    id: "yard",
+    label: "집 앞 마당",
+    prompt:
+      "The child stands in a welcoming front yard outside a small home, with a few flowers and soft morning sunlight. One clear full-body picture-book scene.",
+  }),
+  Object.freeze({
+    id: "forest",
+    label: "숲길 산책",
+    prompt:
+      "The same child walks on a gentle woodland path among leafy trees and small flowers in soft afternoon sunlight. One clear picture-book scene.",
+  }),
+  Object.freeze({
+    id: "bedtime",
+    label: "밤의 책 읽기",
+    prompt:
+      "The same child sits safely in bed reading a picture book by a warm bedside lamp at night, with a soft moon outside the window. A cozy calm picture-book scene.",
+  }),
 ]);
 
 /** Generated selections are World-scoped; legacy presets retain their own originals. */
-export function resolveWorldStyleReferences(state,world=World.getActiveWorld(state),preset=getStylePreset(world.stylePresetId,state)) {
-  if(World.getWorldStyleReferences)return World.getWorldStyleReferences(state,world,preset);
-  const ids=world.styleSheetImageIds?.length?world.styleSheetImageIds:preset.styleRefImageIds||[];
-  if(ids.length)return ids.slice(0,2).map((id,index)=>{
-    const record=state.styleSheetImages?.find(item=>item.imageAssetId===id||item.id===id);
-    const imageUrl=getImageURL(record?.imageAssetId||id)||(record?.imageUrl&&!record.imageUrl.startsWith('asset:')?record.imageUrl:null);
-    if(!imageUrl)throw new Error('스타일 시트를 불러오는 중이에요. 잠시 후 다시 시도해 주세요.');
-    return {imageUrl,role:'style_sheet',label:`authoritative visual style sheet ${index+1}`};
-  });
-  return (preset.styleRefImages||[]).map((imageUrl,index)=>({imageUrl,role:'style_sheet',label:`authoritative visual style reference ${index+1}`}));
+export function resolveWorldStyleReferences(
+  state,
+  world = World.getActiveWorld(state),
+  preset = getStylePreset(world.stylePresetId, state),
+) {
+  if (World.getWorldStyleReferences)
+    return World.getWorldStyleReferences(state, world, preset);
+  const ids = world.styleSheetImageIds?.length
+    ? world.styleSheetImageIds
+    : preset.styleRefImageIds || [];
+  if (ids.length)
+    return ids.slice(0, 2).map((id, index) => {
+      const record = state.styleSheetImages?.find(
+        (item) => item.imageAssetId === id || item.id === id,
+      );
+      const imageUrl =
+        getImageURL(record?.imageAssetId || id) ||
+        (record?.imageUrl && !record.imageUrl.startsWith("asset:")
+          ? record.imageUrl
+          : null);
+      if (!imageUrl)
+        throw new Error(
+          "스타일 시트를 불러오는 중이에요. 잠시 후 다시 시도해 주세요.",
+        );
+      return {
+        imageUrl,
+        role: "style_sheet",
+        label: `authoritative visual style sheet ${index + 1}`,
+      };
+    });
+  return (preset.styleRefImages || []).map((imageUrl, index) => ({
+    imageUrl,
+    role: "style_sheet",
+    label: `authoritative visual style reference ${index + 1}`,
+  }));
 }
 
-export function createCustomStylePreset({name,stylePrompt,negativePrompt,palette},state={}) {
-  const preset={id:uid('style'),name:String(name||'').trim(),stylePrompt:String(stylePrompt||'').trim(),negativePrompt:String(negativePrompt||STYLE_PRESETS[2].negativePrompt).trim(),palette:palette||[...STYLE_PRESETS[0].palette],styleRefImageIds:[],styleRefImages:[],isBuiltIn:false,version:1,createdAt:new Date().toISOString()};
-  const validation=validateStylePreset(preset,{forbiddenWords:state.settings?.forbiddenStyleWords||[]});
-  if(!validation.valid)throw new Error(validation.errors.join(' '));
+export function createCustomStylePreset(
+  { name, stylePrompt, negativePrompt, palette },
+  state = {},
+) {
+  const preset = {
+    id: uid("style"),
+    name: String(name || "").trim(),
+    stylePrompt: String(stylePrompt || "").trim(),
+    negativePrompt: String(
+      negativePrompt || STYLE_PRESETS[2].negativePrompt,
+    ).trim(),
+    palette: palette || [...STYLE_PRESETS[0].palette],
+    styleRefImageIds: [],
+    styleRefImages: [],
+    isBuiltIn: false,
+    version: 1,
+    createdAt: new Date().toISOString(),
+  };
+  const validation = validateStylePreset(preset, {
+    forbiddenWords: state.settings?.forbiddenStyleWords || [],
+  });
+  if (!validation.valid) throw new Error(validation.errors.join(" "));
   return preset;
 }
 
 /** A parent-approved selection changes future requests and marks all current sheets stale. */
-export function commitStyleSheetSelection(state,{worldId,worldRevision,presetId,candidates,selectedIds}) {
-  const world=state.worlds?.find(item=>item.id===worldId);
-  if(!world||world.id!==state.activeWorldId||world.revision!==worldRevision)throw new Error('World 설정이 바뀌었어요. 스타일 시트를 다시 생성해 주세요.');
-  if(!Array.isArray(selectedIds)||selectedIds.length<1||selectedIds.length>2||new Set(selectedIds).size!==selectedIds.length)throw new Error('스타일 시트는 1~2장을 골라 주세요.');
-  const chosen=selectedIds.map(id=>candidates.find(item=>item.imageAssetId===id));
-  if(chosen.some(item=>!item||item.meta?.source!=='app-style-generation'||!item.meta.generatedByApp||item.meta.worldId!==world.id||item.meta.worldRevision!==world.revision||item.meta.stylePresetId!==presetId))throw new Error('이 화면에서 앱이 생성한 그림만 스타일 시트로 고정할 수 있어요.');
-  const preset=getStylePreset(presetId,state);
-  if(preset.id!==presetId)throw new Error('화풍 프리셋을 찾을 수 없어요.');
-  const validation=validateStylePreset(preset,{forbiddenWords:state.settings?.forbiddenStyleWords||[]});
-  if(!validation.valid)throw new Error(validation.errors.join(' '));
-  const hadConfirmed=world.characterIds?.some(id=>state.characters?.find(c=>c.id===id)?.characterSheets?.some(sheet=>sheet.worldId===world.id&&sheet.confirmedAt));
-  state.styleSheetImages||=[];
-  for(const record of chosen)if(!state.styleSheetImages.some(item=>item.imageAssetId===record.imageAssetId))state.styleSheetImages.push({...clone(record),imageUrl:`asset:${record.imageAssetId}`,confirmedAt:new Date().toISOString()});
-  state.stylePresetSelections||={};
-  state.stylePresetSelections[world.id]||={};
-  state.stylePresetSelections[world.id][presetId]=[...selectedIds];
-  world.stylePresetId=presetId;
-  world.stylePresetVersion=preset.version||1;
-  world.styleSheetImageIds=[...selectedIds];
+export function commitStyleSheetSelection(
+  state,
+  { worldId, worldRevision, presetId, candidates, selectedIds },
+) {
+  const world = state.worlds?.find((item) => item.id === worldId);
+  if (
+    !world ||
+    world.id !== state.activeWorldId ||
+    world.revision !== worldRevision
+  )
+    throw new Error(
+      "World 설정이 바뀌었어요. 스타일 시트를 다시 생성해 주세요.",
+    );
+  if (
+    !Array.isArray(selectedIds) ||
+    selectedIds.length < 1 ||
+    selectedIds.length > 2 ||
+    new Set(selectedIds).size !== selectedIds.length
+  )
+    throw new Error("스타일 시트는 1~2장을 골라 주세요.");
+  const chosen = selectedIds.map((id) =>
+    candidates.find((item) => item.imageAssetId === id),
+  );
+  if (
+    chosen.some(
+      (item) =>
+        !item ||
+        item.meta?.source !== "app-style-generation" ||
+        !item.meta.generatedByApp ||
+        item.meta.worldId !== world.id ||
+        item.meta.worldRevision !== world.revision ||
+        item.meta.stylePresetId !== presetId,
+    )
+  )
+    throw new Error(
+      "이 화면에서 앱이 생성한 그림만 스타일 시트로 고정할 수 있어요.",
+    );
+  const preset = getStylePreset(presetId, state);
+  if (preset.id !== presetId) throw new Error("화풍 프리셋을 찾을 수 없어요.");
+  const validation = validateStylePreset(preset, {
+    forbiddenWords: state.settings?.forbiddenStyleWords || [],
+  });
+  if (!validation.valid) throw new Error(validation.errors.join(" "));
+  const hadConfirmed = world.characterIds?.some((id) =>
+    state.characters
+      ?.find((c) => c.id === id)
+      ?.characterSheets?.some(
+        (sheet) => sheet.worldId === world.id && sheet.confirmedAt,
+      ),
+  );
+  state.styleSheetImages ||= [];
+  for (const record of chosen)
+    if (
+      !state.styleSheetImages.some(
+        (item) => item.imageAssetId === record.imageAssetId,
+      )
+    )
+      state.styleSheetImages.push({
+        ...clone(record),
+        imageUrl: `asset:${record.imageAssetId}`,
+        confirmedAt: new Date().toISOString(),
+      });
+  state.stylePresetSelections ||= {};
+  state.stylePresetSelections[world.id] ||= {};
+  state.stylePresetSelections[world.id][presetId] = [...selectedIds];
+  world.stylePresetId = presetId;
+  world.stylePresetVersion = preset.version || 1;
+  world.styleSheetImageIds = [...selectedIds];
   world.revision++;
-  world.updatedAt=new Date().toISOString();
-  world.characterSheetsStale=!!hadConfirmed;
-  const custom=state.stylePresets?.find(item=>item.id===presetId&&!item.isBuiltIn);
-  if(custom)custom.styleRefImageIds=[...selectedIds];
+  world.updatedAt = new Date().toISOString();
+  world.characterSheetsStale = !!hadConfirmed;
+  const custom = state.stylePresets?.find(
+    (item) => item.id === presetId && !item.isBuiltIn,
+  );
+  if (custom) custom.styleRefImageIds = [...selectedIds];
   setCustomStylePresets(state);
-  return {world,selectedImages:chosen,requiresRegeneration:!!hadConfirmed};
+  return {
+    world,
+    selectedImages: chosen,
+    requiresRegeneration: !!hadConfirmed,
+  };
 }
 
 export function renderStyleStudioSettings(state) {
-  const world=World.getActiveWorld(state),presets=listStylePresets(state),current=getStylePreset(world.stylePresetId),count=world.styleSheetImageIds?.length||0;
-  return `<section class="panel style-studio-settings"><div class="section-header"><h3>화풍 작업실 · 스타일 시트</h3><span class="role-tag">고정 참조 ${count}장</span></div><p class="section-sub">같은 친구로 마당·숲길·밤의 장면을 시험하고, 마음에 드는 1~2장을 앞으로의 그림 기준으로 고정해요.</p><div class="notice">현재 화풍: <strong>${escape(current.name)}</strong>${world.imageEngine==='sample'?'<br>무료 샘플은 기기 내 고정 그림 템플릿입니다. 선택한 화풍을 AI로 그리거나 커버의 질감을 재현하지 않아요. 실제 화풍 시험에는 참조 이미지를 지원하는 AI 엔진 또는 ComfyUI가 필요합니다.':''}<br>스타일 시트를 바꾸면 캐릭터 시트도 다시 생성해야 합니다. 기존 책의 화풍은 보존합니다.</div><div class="form-grid" style="margin-top:18px"><div class="field field-wide"><label for="style-studio-preset">시험할 화풍</label><select id="style-studio-preset">${presets.map(preset=>`<option value="${escape(preset.id)}" ${preset.id===current.id?'selected':''}>${escape(preset.name)}${preset.isBuiltIn?'':' · 사용자'}</option>`).join('')}</select></div></div><div class="material-add-actions" style="margin-top:16px">${button('고정 장면 3개 시험하기','generate','green')}${button('사용자 화풍 추가','new-preset')}</div>${presets.filter(preset=>!preset.isBuiltIn).map(preset=>`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px"><strong>${escape(preset.name)}</strong>${button('수정','edit-preset','outline',`data-id="${escape(preset.id)}"`)}${button('삭제','delete-preset','outline',`data-id="${escape(preset.id)}"`)}</div>`).join('')}<p class="small-label" style="margin-top:14px">미리보기는 draft로 생성합니다. 스타일 레퍼런스는 앱이 생성한 그림만 쓸 수 있어요. 영화·애니메이션 장면 캡처를 올리는 기능은 제공하지 않습니다.</p><details style="margin-top:24px"><summary>화풍 금칙어 관리</summary><p class="small-label">스튜디오·작가·작품·알려진 캐릭터 이름을 쓸 수 없어요. 설명형 시각 요소로 적어 주세요.</p><p class="small-label">기본 금칙어: ${DEFAULT_FORBIDDEN_STYLE_WORDS.map(escape).join(', ')}</p><form id="style-forbidden-form"><div class="field"><label for="style-forbidden-words">추가 금칙어 · 쉼표 또는 줄바꿈으로 구분</label><textarea id="style-forbidden-words" rows="3" maxlength="2000">${escape((state.settings?.forbiddenStyleWords||[]).join(', '))}</textarea></div><p id="style-forbidden-error" class="pin-error" aria-live="polite"></p><button class="btn btn-outline" type="submit">추가 금칙어 저장</button></form></details></section>`;
+  const world = World.getActiveWorld(state),
+    presets = listStylePresets(state),
+    current = getStylePreset(world.stylePresetId),
+    count = world.styleSheetImageIds?.length || 0;
+  return `<section class="panel style-studio-settings"><div class="section-header"><h3>화풍 작업실 · 스타일 시트</h3><span class="role-tag">고정 참조 ${count}장</span></div><p class="section-sub">같은 친구로 마당·숲길·밤의 장면을 시험하고, 마음에 드는 1~2장을 앞으로의 그림 기준으로 고정해요.</p><div class="notice">현재 화풍: <strong>${escape(current.name)}</strong>${world.imageEngine === "sample" ? "<br>무료 샘플은 기기 내 고정 그림 템플릿입니다. 선택한 화풍을 AI로 그리거나 커버의 질감을 재현하지 않아요. 실제 화풍 시험에는 참조 이미지를 지원하는 AI 엔진 또는 ComfyUI가 필요합니다." : ""}<br>스타일 시트를 바꾸면 캐릭터 시트도 다시 생성해야 합니다. 기존 책의 화풍은 보존합니다.</div><div class="form-grid" style="margin-top:18px"><div class="field field-wide"><label for="style-studio-preset">시험할 화풍</label><select id="style-studio-preset">${presets.map((preset) => `<option value="${escape(preset.id)}" ${preset.id === current.id ? "selected" : ""}>${escape(preset.name)}${preset.isBuiltIn ? "" : " · 사용자"}</option>`).join("")}</select></div></div><div class="material-add-actions" style="margin-top:16px">${button("고정 장면 3개 시험하기", "generate", "green")}${button("사용자 화풍 추가", "new-preset")}</div>${presets
+    .filter((preset) => !preset.isBuiltIn)
+    .map(
+      (preset) =>
+        `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px"><strong>${escape(preset.name)}</strong>${button("수정", "edit-preset", "outline", `data-id="${escape(preset.id)}"`)}${button("삭제", "delete-preset", "outline", `data-id="${escape(preset.id)}"`)}</div>`,
+    )
+    .join(
+      "",
+    )}<p class="small-label" style="margin-top:14px">미리보기는 draft로 생성합니다. 스타일 레퍼런스는 앱이 생성한 그림만 쓸 수 있어요. 영화·애니메이션 장면 캡처를 올리는 기능은 제공하지 않습니다.</p><details style="margin-top:24px"><summary>화풍 금칙어 관리</summary><p class="small-label">스튜디오·작가·작품·알려진 캐릭터 이름을 쓸 수 없어요. 설명형 시각 요소로 적어 주세요.</p><p class="small-label">기본 금칙어: ${DEFAULT_FORBIDDEN_STYLE_WORDS.map(escape).join(", ")}</p><form id="style-forbidden-form"><div class="field"><label for="style-forbidden-words">추가 금칙어 · 쉼표 또는 줄바꿈으로 구분</label><textarea id="style-forbidden-words" rows="3" maxlength="2000">${escape((state.settings?.forbiddenStyleWords || []).join(", "))}</textarea></div><p id="style-forbidden-error" class="pin-error" aria-live="polite"></p><button class="btn btn-outline" type="submit">추가 금칙어 저장</button></form></details></section>`;
 }
 
-function current(session){return flow===session&&!session.controller.signal.aborted&&api.isParent()&&api.getState()===session.state&&!!document.querySelector(`[data-style-flow="${session.id}"]`);}
-function assertCurrent(session){if(!current(session))throw new DOMException('스타일 만들기를 취소했어요.','AbortError');const world=World.getActiveWorld(session.state);if(world.id!==session.worldId||world.revision!==session.worldRevision||world.imageEngine!==session.engine)throw new Error('World 설정이 바뀌었어요. 스타일 시험을 다시 시작해 주세요.');}
-function showFlow(session,html){api.showModal(`<div data-style-flow="${session.id}">${html}</div>`,'wide');}
-function closeFlow(){cleanupStyleStudio();api.closeModal();}
-export function cleanupStyleStudio(){const session=flow;if(!session)return;flow=null;session.controller.abort();for(const record of session.candidates)if(!session.keptIds.has(record.imageAssetId))void deleteImageAsset(record.imageAssetId).catch(()=>{});session.candidates.length=0;}
+function current(session) {
+  return (
+    flow === session &&
+    !session.controller.signal.aborted &&
+    api.isParent() &&
+    api.getState() === session.state &&
+    !!document.querySelector(`[data-style-flow="${session.id}"]`)
+  );
+}
+function assertCurrent(session) {
+  if (!current(session))
+    throw new DOMException("스타일 만들기를 취소했어요.", "AbortError");
+  const world = World.getActiveWorld(session.state);
+  if (
+    world.id !== session.worldId ||
+    world.revision !== session.worldRevision ||
+    world.imageEngine !== session.engine
+  )
+    throw new Error(
+      "World 설정이 바뀌었어요. 스타일 시험을 다시 시작해 주세요.",
+    );
+}
+function showFlow(session, html) {
+  api.showModal(`<div data-style-flow="${session.id}">${html}</div>`, "wide");
+}
+function closeFlow() {
+  cleanupStyleStudio();
+  api.closeModal();
+}
+export function cleanupStyleStudio() {
+  const session = flow;
+  if (!session) return;
+  flow = null;
+  session.controller.abort();
+  for (const record of session.candidates)
+    if (!session.keptIds.has(record.imageAssetId))
+      void deleteImageAsset(record.imageAssetId).catch(() => {});
+  session.candidates.length = 0;
+}
 
-function openCustomPreset(editId){cleanupStyleStudio();const state=api.getState(),existing=editId?state.stylePresets?.find(preset=>preset.id===editId&&!preset.isBuiltIn):null;if(editId&&!existing){api.toast('사용자 화풍을 찾을 수 없어요.');return;}const session={id:uid('style-flow'),state,controller:new AbortController(),candidates:[],keptIds:new Set(),mode:'custom',editId:existing?.id};flow=session;showFlow(session,`${api.modalHeader(existing?'우리 집 화풍 수정':'우리 집 화풍 추가')}<p class="modal-intro">이름은 자유롭게, 설명은 재료·선·색·질감·조명·구도로 적어 주세요. 스튜디오·작가·작품 이름은 저장할 수 없어요.</p><form id="style-custom-form"><div class="form-grid"><div class="field field-wide"><label for="style-custom-name">화풍 이름</label><input id="style-custom-name" maxlength="80" value="${escape(existing?.name||'')}" required placeholder="예: 달빛 연필"></div><div class="field field-wide"><label for="style-custom-prompt">stylePrompt · 화풍을 이루는 시각 요소</label><textarea id="style-custom-prompt" rows="5" maxlength="5000" required placeholder="soft colored pencil on ivory paper, gentle warm light, rounded expressive characters, muted earthy palette">${escape(existing?.stylePrompt||'')}</textarea></div><div class="field field-wide"><label for="style-custom-negative">negativePrompt · 피할 요소</label><textarea id="style-custom-negative" rows="3" required>${escape(existing?.negativePrompt||STYLE_PRESETS[2].negativePrompt)}</textarea></div><div class="field field-wide"><label for="style-custom-palette">palette · 색상 코드 5~6개</label><input id="style-custom-palette" value="${(existing?.palette||STYLE_PRESETS[0].palette).join(', ')}" required></div></div><p id="style-custom-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions">${button('취소','cancel')}<button type="submit" class="btn btn-primary">화풍 저장</button></div></form>`);}
+function openCustomPreset(editId) {
+  cleanupStyleStudio();
+  const state = api.getState(),
+    existing = editId
+      ? state.stylePresets?.find(
+          (preset) => preset.id === editId && !preset.isBuiltIn,
+        )
+      : null;
+  if (editId && !existing) {
+    api.toast("사용자 화풍을 찾을 수 없어요.");
+    return;
+  }
+  const session = {
+    id: uid("style-flow"),
+    state,
+    controller: new AbortController(),
+    candidates: [],
+    keptIds: new Set(),
+    mode: "custom",
+    editId: existing?.id,
+  };
+  flow = session;
+  showFlow(
+    session,
+    `${api.modalHeader(existing ? "우리 집 화풍 수정" : "우리 집 화풍 추가")}<p class="modal-intro">이름은 자유롭게, 설명은 재료·선·색·질감·조명·구도로 적어 주세요. 스튜디오·작가·작품 이름은 저장할 수 없어요.</p><form id="style-custom-form"><div class="form-grid"><div class="field field-wide"><label for="style-custom-name">화풍 이름</label><input id="style-custom-name" maxlength="80" value="${escape(existing?.name || "")}" required placeholder="예: 달빛 연필"></div><div class="field field-wide"><label for="style-custom-prompt">stylePrompt · 화풍을 이루는 시각 요소</label><textarea id="style-custom-prompt" rows="5" maxlength="5000" required placeholder="soft colored pencil on ivory paper, gentle warm light, rounded expressive characters, muted earthy palette">${escape(existing?.stylePrompt || "")}</textarea></div><div class="field field-wide"><label for="style-custom-negative">negativePrompt · 피할 요소</label><textarea id="style-custom-negative" rows="3" required>${escape(existing?.negativePrompt || STYLE_PRESETS[2].negativePrompt)}</textarea></div><div class="field field-wide"><label for="style-custom-palette">palette · 색상 코드 5~6개</label><input id="style-custom-palette" value="${(existing?.palette || STYLE_PRESETS[0].palette).join(", ")}" required></div></div><p id="style-custom-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions">${button("취소", "cancel")}<button type="submit" class="btn btn-primary">화풍 저장</button></div></form>`,
+  );
+}
 
-function startStyleTrial(){cleanupStyleStudio();const state=api.getState(),world=World.getActiveWorld(state),presetId=document.querySelector('#style-studio-preset')?.value||world.stylePresetId,preset=getStylePreset(presetId,state);const session={id:uid('style-flow'),state,worldId:world.id,worldRevision:world.revision,engine:world.imageEngine,preset:clone(preset),controller:new AbortController(),candidates:[],keptIds:new Set(),errors:[],busy:true};flow=session;showFlow(session,`${api.modalHeader('같은 친구로 화풍 3장 시험하기')}<div class="ig-operation-progress"><div class="spinner"></div><p id="style-trial-progress">마당 · 숲길 · 밤의 책 읽기 · 0 / 3</p><small>draft · ${escape(ENGINE_METADATA[session.engine]?.name||session.engine)} · ${escape(preset.name)}</small></div><div class="modal-actions">${button('생성 취소','cancel')}</div>`);void runStyleTrial(session);}
+function startStyleTrial() {
+  cleanupStyleStudio();
+  const state = api.getState(),
+    world = World.getActiveWorld(state),
+    presetId =
+      document.querySelector("#style-studio-preset")?.value ||
+      world.stylePresetId,
+    preset = getStylePreset(presetId, state);
+  const session = {
+    id: uid("style-flow"),
+    state,
+    worldId: world.id,
+    worldRevision: world.revision,
+    engine: world.imageEngine,
+    preset: clone(preset),
+    controller: new AbortController(),
+    candidates: [],
+    keptIds: new Set(),
+    errors: [],
+    busy: true,
+  };
+  flow = session;
+  showFlow(
+    session,
+    `${api.modalHeader("같은 친구로 화풍 3장 시험하기")}<div class="ig-operation-progress"><div class="spinner"></div><p id="style-trial-progress">마당 · 숲길 · 밤의 책 읽기 · 0 / 3</p><small>draft · ${escape(ENGINE_METADATA[session.engine]?.name || session.engine)} · ${escape(preset.name)}</small></div><div class="modal-actions">${button("생성 취소", "cancel")}</div>`,
+  );
+  void runStyleTrial(session);
+}
 
-async function runStyleTrial(session){try{assertCurrent(session);const preset=session.preset,validation=validateStylePreset(preset,{forbiddenWords:session.state.settings?.forbiddenStyleWords||[]});if(!validation.valid)throw new Error(validation.errors.join(' '));const world=World.getActiveWorld(session.state),config={...(session.state.settings?.imageProviderConfig?.[session.engine]||{}),...(world.providerConfig?.[session.engine]||{})};delete config.apiKey;delete config.key;delete config.token;const proxy=config.proxyEndpoint||config.transport==='proxy';const apiKey=session.engine==='sample'||proxy?null:await getCredential(session.engine);assertCurrent(session);if(ENGINE_METADATA[session.engine]?.requiresKey&&!apiKey&&!proxy)throw new Error('선택한 엔진의 API 키를 부모 설정에 먼저 저장해 주세요.');const sheets=(world.characterIds||[]).map(id=>World.getCharacterSheet(session.state,id,world)).filter(Boolean).filter(sheet=>sheet.meta?.source!=='local-svg').slice(0,1);const characterRefs=sheets.map(sheet=>({imageUrl:sheet.imageAssetId?getImageURL(sheet.imageAssetId):sheet.imageUrl,role:'character_front',label:'the same child in all three scenes; identity and clothing only'})).filter(ref=>ref.imageUrl);const testWorld={...world,styleSheetImageIds:session.preset.id===world.stylePresetId?world.styleSheetImageIds:(session.state.stylePresetSelections?.[world.id]?.[preset.id]||[])};const styleRefs=resolveWorldStyleReferences(session.state,testWorld,preset);let completed=0;await Promise.allSettled(STYLE_TEST_SCENES.map(async(scene,index)=>{let record;try{assertCurrent(session);const requestedSeed=seed();const result=await generateImage({prompt:`${scene.prompt} ${sheets.length?'Use the supplied character sheet for the exact same face, hairstyle and clothes. Character reference defines identity only; repaint it in the selected visual style.':'An original friendly child, with short soft brown hair and a simple warm-yellow outfit; keep face, hairstyle and outfit consistent.'} No text, no words, no captions, no logos.`,stylePreset:preset,referenceImages:[...characterRefs,...styleRefs],seed:requestedSeed,size:{width:1024,height:1024},quality:'draft',sampleContext:{kind:'scene',scene:{theme:scene.id==='forest'?'forest':scene.id==='bedtime'?'sleep':'friendship',beat:scene.id==='forest'?'walk':'start'},characters:sheets.map(sheet=>sheet.characterSnapshot)}},{engine:session.engine,config:{...config,apiKey:apiKey||undefined,signal:session.controller.signal}});assertCurrent(session);const asset=await saveImage(result.imageUrl,{signal:session.controller.signal});record={id:asset.assetId,imageAssetId:asset.assetId,imageUrl:asset.imageUrl,seed:result.seed??null,sceneId:scene.id,label:scene.label,meta:{...clone(result.meta||{}),source:'app-style-generation',generatedByApp:true,worldId:session.worldId,worldRevision:session.worldRevision,engine:session.engine,stylePresetId:preset.id,requestedSeed,quality:'draft',characterSheetIds:sheets.map(sheet=>sheet.id),generatedAt:new Date().toISOString()}};assertCurrent(session);session.candidates.push(record);}catch(error){if(record&&!session.candidates.includes(record))await deleteImageAsset(record.imageAssetId).catch(()=>{});if(error.name!=='AbortError')session.errors.push({label:scene.label,message:error.message});}finally{completed++;const progress=document.querySelector('#style-trial-progress');if(current(session)&&progress)progress.textContent=`마당 · 숲길 · 밤의 책 읽기 · ${completed} / 3`;}}));assertCurrent(session);session.busy=false;showStyleResults(session);}catch(error){if(!current(session))return;session.busy=false;session.errors.push({label:'스타일 생성',message:error.message});showStyleResults(session);}}
+async function runStyleTrial(session) {
+  try {
+    assertCurrent(session);
+    const preset = session.preset,
+      validation = validateStylePreset(preset, {
+        forbiddenWords: session.state.settings?.forbiddenStyleWords || [],
+      });
+    if (!validation.valid) throw new Error(validation.errors.join(" "));
+    const world = World.getActiveWorld(session.state),
+      config = {
+        ...(session.state.settings?.imageProviderConfig?.[session.engine] ||
+          {}),
+        ...(world.providerConfig?.[session.engine] || {}),
+      };
+    delete config.apiKey;
+    delete config.key;
+    delete config.token;
+    const proxy = config.proxyEndpoint || config.transport === "proxy";
+    const apiKey =
+      session.engine === "sample" || proxy
+        ? null
+        : await getCredential(session.engine);
+    assertCurrent(session);
+    if (ENGINE_METADATA[session.engine]?.requiresKey && !apiKey && !proxy)
+      throw new Error("선택한 엔진의 API 키를 부모 설정에 먼저 저장해 주세요.");
+    const sheets = (world.characterIds || [])
+      .map((id) => World.getCharacterSheet(session.state, id, world))
+      .filter(Boolean)
+      .filter((sheet) => sheet.meta?.source !== "local-svg")
+      .slice(0, 1);
+    const characterRefs = sheets
+      .map((sheet) => ({
+        imageUrl: sheet.imageAssetId
+          ? getImageURL(sheet.imageAssetId)
+          : sheet.imageUrl,
+        role: "character_front",
+        label: "the same child in all three scenes; identity and clothing only",
+      }))
+      .filter((ref) => ref.imageUrl);
+    const testWorld = {
+      ...world,
+      styleSheetImageIds:
+        session.preset.id === world.stylePresetId
+          ? world.styleSheetImageIds
+          : session.state.stylePresetSelections?.[world.id]?.[preset.id] || [],
+    };
+    const styleRefs = resolveWorldStyleReferences(
+      session.state,
+      testWorld,
+      preset,
+    );
+    let completed = 0;
+    await Promise.allSettled(
+      STYLE_TEST_SCENES.map(async (scene, index) => {
+        let record;
+        try {
+          assertCurrent(session);
+          const requestedSeed = seed();
+          const result = await generateImage(
+            {
+              prompt: `${scene.prompt} ${sheets.length ? "Use the supplied character sheet for the exact same face, hairstyle and clothes. Character reference defines identity only; repaint it in the selected visual style." : "An original friendly child, with short soft brown hair and a simple warm-yellow outfit; keep face, hairstyle and outfit consistent."} No text, no words, no captions, no logos.`,
+              stylePreset: preset,
+              referenceImages: [...characterRefs, ...styleRefs],
+              seed: requestedSeed,
+              size: { width: 1024, height: 1024 },
+              quality: "draft",
+              sampleContext: {
+                kind: "scene",
+                scene: {
+                  theme:
+                    scene.id === "forest"
+                      ? "forest"
+                      : scene.id === "bedtime"
+                        ? "sleep"
+                        : "friendship",
+                  beat: scene.id === "forest" ? "walk" : "start",
+                },
+                characters: sheets.map((sheet) => sheet.characterSnapshot),
+              },
+            },
+            {
+              engine: session.engine,
+              config: {
+                ...config,
+                apiKey: apiKey || undefined,
+                signal: session.controller.signal,
+              },
+            },
+          );
+          assertCurrent(session);
+          const asset = await saveImage(result.imageUrl, {
+            signal: session.controller.signal,
+          });
+          record = {
+            id: asset.assetId,
+            imageAssetId: asset.assetId,
+            imageUrl: asset.imageUrl,
+            seed: result.seed ?? null,
+            sceneId: scene.id,
+            label: scene.label,
+            meta: {
+              ...clone(result.meta || {}),
+              source: "app-style-generation",
+              generatedByApp: true,
+              worldId: session.worldId,
+              worldRevision: session.worldRevision,
+              engine: session.engine,
+              stylePresetId: preset.id,
+              requestedSeed,
+              quality: "draft",
+              characterSheetIds: sheets.map((sheet) => sheet.id),
+              generatedAt: new Date().toISOString(),
+            },
+          };
+          assertCurrent(session);
+          session.candidates.push(record);
+        } catch (error) {
+          if (record && !session.candidates.includes(record))
+            await deleteImageAsset(record.imageAssetId).catch(() => {});
+          if (error.name !== "AbortError")
+            session.errors.push({ label: scene.label, message: error.message });
+        } finally {
+          completed++;
+          const progress = document.querySelector("#style-trial-progress");
+          if (current(session) && progress)
+            progress.textContent = `마당 · 숲길 · 밤의 책 읽기 · ${completed} / 3`;
+        }
+      }),
+    );
+    assertCurrent(session);
+    session.busy = false;
+    showStyleResults(session);
+  } catch (error) {
+    if (!current(session)) return;
+    session.busy = false;
+    session.errors.push({ label: "스타일 생성", message: error.message });
+    showStyleResults(session);
+  }
+}
 
-function showStyleResults(session){session.candidates.sort((a,b)=>STYLE_TEST_SCENES.findIndex(scene=>scene.id===a.sceneId)-STYLE_TEST_SCENES.findIndex(scene=>scene.id===b.sceneId));showFlow(session,`${api.modalHeader('스타일 시트로 1~2장을 골라 주세요')}<p class="modal-intro">${escape(session.preset.name)} · ${escape(ENGINE_METADATA[session.engine]?.name||session.engine)} · draft<br>고정한 그림은 모든 장면의 화풍 참조로 함께 전송합니다.</p>${session.engine==='sample'?'<div class="notice">무료 샘플 템플릿 결과입니다. AI 화풍 시험 결과가 아니며 커버의 수채화 질감을 재현하지 않습니다.</div>':''}<div class="form-grid" style="gap:18px;margin-top:18px">${session.candidates.map((record,index)=>`<label class="panel" style="padding:12px;cursor:pointer"><img src="${escape(record.imageUrl)}" alt="${escape(record.label)} 스타일 후보" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:12px"><span style="display:block;margin-top:10px"><input type="checkbox" name="style-sheet-selected" value="${escape(record.imageAssetId)}" ${index===0?'checked':''}> ${escape(record.label)}</span><small class="small-label">요청 시드 ${record.meta.requestedSeed} · 결과 ${record.seed??'미지원'}</small></label>`).join('')}</div>${session.errors.map(error=>`<p class="pin-error">${escape(error.label)}: ${escape(error.message)}</p>`).join('')}<div class="notice" style="margin-top:18px">${session.state.characters.some(c=>c.characterSheets?.some(sheet=>sheet.worldId===session.worldId&&sheet.confirmedAt))?'그림체가 달라집니다. 캐릭터 시트를 다시 만들어야 합니다. 고정 후 새 화풍의 캐릭터 시트를 생성하고 부모가 다시 확정해 주세요.':'스타일 시트를 고정한 뒤 이 화풍으로 캐릭터 시트를 만들어 주세요.'}<br>이전에 만든 책의 그림과 참조는 보존합니다.</div><p id="style-selection-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions">${button('취소','cancel')}${button('스타일 시트로 고정 · 시트 다시 만들기','confirm','primary',session.candidates.length?'':'disabled')}</div>`);}
+function showStyleResults(session) {
+  session.candidates.sort(
+    (a, b) =>
+      STYLE_TEST_SCENES.findIndex((scene) => scene.id === a.sceneId) -
+      STYLE_TEST_SCENES.findIndex((scene) => scene.id === b.sceneId),
+  );
+  showFlow(
+    session,
+    `${api.modalHeader("스타일 시트로 1~2장을 골라 주세요")}<p class="modal-intro">${escape(session.preset.name)} · ${escape(ENGINE_METADATA[session.engine]?.name || session.engine)} · draft<br>고정한 그림은 모든 장면의 화풍 참조로 함께 전송합니다.</p>${session.engine === "sample" ? '<div class="notice">무료 샘플 템플릿 결과입니다. AI 화풍 시험 결과가 아니며 커버의 수채화 질감을 재현하지 않습니다.</div>' : ""}<div class="form-grid" style="gap:18px;margin-top:18px">${session.candidates.map((record, index) => `<label class="panel" style="padding:12px;cursor:pointer"><img src="${escape(record.imageUrl)}" alt="${escape(record.label)} 스타일 후보" style="width:100%;aspect-ratio:1;object-fit:contain;border-radius:12px"><span style="display:block;margin-top:10px"><input type="checkbox" name="style-sheet-selected" value="${escape(record.imageAssetId)}" ${index === 0 ? "checked" : ""}> ${escape(record.label)}</span><small class="small-label">요청 시드 ${record.meta.requestedSeed} · 결과 ${record.seed ?? "미지원"}</small></label>`).join("")}</div>${session.errors.map((error) => `<p class="pin-error">${escape(error.label)}: ${escape(error.message)}</p>`).join("")}<div class="notice" style="margin-top:18px">${session.state.characters.some((c) => c.characterSheets?.some((sheet) => sheet.worldId === session.worldId && sheet.confirmedAt)) ? "그림체가 달라집니다. 캐릭터 시트를 다시 만들어야 합니다. 고정 후 새 화풍의 캐릭터 시트를 생성하고 부모가 다시 확정해 주세요." : "스타일 시트를 고정한 뒤 이 화풍으로 캐릭터 시트를 만들어 주세요."}<br>이전에 만든 책의 그림과 참조는 보존합니다.</div><p id="style-selection-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions">${button("취소", "cancel")}${button("스타일 시트로 고정 · 시트 다시 만들기", "confirm", "primary", session.candidates.length ? "" : "disabled")}</div>`,
+  );
+}
 
-function confirmSelection(){const session=flow;if(!session||session.busy||!current(session))return;const selectedIds=[...document.querySelectorAll('[name="style-sheet-selected"]:checked')].map(input=>input.value);const original=clone(session.state);try{assertCurrent(session);const result=commitStyleSheetSelection(session.state,{worldId:session.worldId,worldRevision:session.worldRevision,presetId:session.preset.id,candidates:session.candidates,selectedIds});if(api.save()===false)throw new Error('스타일 시트를 저장하지 못했어요. 저장 공간을 확인해 주세요.');session.keptIds=new Set(selectedIds);closeFlow();api.render();api.toast(result.requiresRegeneration?'스타일 시트를 고정했어요. 캐릭터 시트를 다시 생성하고 확정해 주세요.':'스타일 시트를 고정했어요.');}catch(error){for(const key of ['worlds','styleSheetImages','stylePresetSelections','stylePresets']){if(Object.hasOwn(original,key))session.state[key]=original[key];else delete session.state[key];}setCustomStylePresets(session.state);const panel=document.querySelector('#style-selection-error');if(panel)panel.textContent=error.message;}}
+function confirmSelection() {
+  const session = flow;
+  if (!session || session.busy || !current(session)) return;
+  const selectedIds = [
+    ...document.querySelectorAll('[name="style-sheet-selected"]:checked'),
+  ].map((input) => input.value);
+  const original = clone(session.state);
+  try {
+    assertCurrent(session);
+    const result = commitStyleSheetSelection(session.state, {
+      worldId: session.worldId,
+      worldRevision: session.worldRevision,
+      presetId: session.preset.id,
+      candidates: session.candidates,
+      selectedIds,
+    });
+    if (api.save() === false)
+      throw new Error(
+        "스타일 시트를 저장하지 못했어요. 저장 공간을 확인해 주세요.",
+      );
+    session.keptIds = new Set(selectedIds);
+    closeFlow();
+    api.render();
+    api.toast(
+      result.requiresRegeneration
+        ? "스타일 시트를 고정했어요. 캐릭터 시트를 다시 생성하고 확정해 주세요."
+        : "스타일 시트를 고정했어요.",
+    );
+  } catch (error) {
+    for (const key of [
+      "worlds",
+      "styleSheetImages",
+      "stylePresetSelections",
+      "stylePresets",
+    ]) {
+      if (Object.hasOwn(original, key)) session.state[key] = original[key];
+      else delete session.state[key];
+    }
+    setCustomStylePresets(session.state);
+    const panel = document.querySelector("#style-selection-error");
+    if (panel) panel.textContent = error.message;
+  }
+}
 
-function saveCustomPreset(form){const session=flow;if(!session||session.mode!=='custom'||!current(session))return;const original=clone(session.state);try{const preset=createCustomStylePreset({name:form.querySelector('#style-custom-name').value,stylePrompt:form.querySelector('#style-custom-prompt').value,negativePrompt:form.querySelector('#style-custom-negative').value,palette:form.querySelector('#style-custom-palette').value.split(/[\s,]+/).filter(Boolean)},session.state);session.state.stylePresets||=[];let descriptionChanged=false;if(session.editId){const previous=session.state.stylePresets.find(item=>item.id===session.editId);if(!previous)throw new Error('사용자 화풍을 찾을 수 없어요.');descriptionChanged=previous.stylePrompt!==preset.stylePrompt||previous.negativePrompt!==preset.negativePrompt||JSON.stringify(previous.palette)!==JSON.stringify(preset.palette);Object.assign(preset,{id:previous.id,createdAt:previous.createdAt,updatedAt:new Date().toISOString(),version:(previous.version||1)+(descriptionChanged?1:0),styleRefImageIds:descriptionChanged?[]:[...(previous.styleRefImageIds||[])]});session.state.stylePresets[session.state.stylePresets.indexOf(previous)]=preset;if(descriptionChanged)for(const world of session.state.worlds||[])if(world.stylePresetId===preset.id){world.revision++;world.stylePresetVersion=preset.version;world.styleSheetImageIds=[];world.characterSheetsStale=world.characterIds?.some(id=>session.state.characters.find(c=>c.id===id)?.characterSheets?.some(sheet=>sheet.worldId===world.id&&sheet.confirmedAt))||false;if(session.state.stylePresetSelections?.[world.id])delete session.state.stylePresetSelections[world.id][preset.id];}}else session.state.stylePresets.push(preset);if(api.save()===false)throw new Error('화풍을 저장하지 못했어요.');setCustomStylePresets(session.state);closeFlow();api.render();api.toast(descriptionChanged?'화풍을 수정했어요. 스타일 시트와 캐릭터 시트를 다시 생성해 주세요.':'사용자 화풍을 저장했어요.');}catch(error){for(const key of ['stylePresets','worlds','stylePresetSelections']){if(Object.hasOwn(original,key))session.state[key]=original[key];else delete session.state[key];}setCustomStylePresets(session.state);document.querySelector('#style-custom-error').textContent=error.message;}}
+function saveCustomPreset(form) {
+  const session = flow;
+  if (!session || session.mode !== "custom" || !current(session)) return;
+  const original = clone(session.state);
+  try {
+    const preset = createCustomStylePreset(
+      {
+        name: form.querySelector("#style-custom-name").value,
+        stylePrompt: form.querySelector("#style-custom-prompt").value,
+        negativePrompt: form.querySelector("#style-custom-negative").value,
+        palette: form
+          .querySelector("#style-custom-palette")
+          .value.split(/[\s,]+/)
+          .filter(Boolean),
+      },
+      session.state,
+    );
+    session.state.stylePresets ||= [];
+    let descriptionChanged = false;
+    if (session.editId) {
+      const previous = session.state.stylePresets.find(
+        (item) => item.id === session.editId,
+      );
+      if (!previous) throw new Error("사용자 화풍을 찾을 수 없어요.");
+      descriptionChanged =
+        previous.stylePrompt !== preset.stylePrompt ||
+        previous.negativePrompt !== preset.negativePrompt ||
+        JSON.stringify(previous.palette) !== JSON.stringify(preset.palette);
+      Object.assign(preset, {
+        id: previous.id,
+        createdAt: previous.createdAt,
+        updatedAt: new Date().toISOString(),
+        version: (previous.version || 1) + (descriptionChanged ? 1 : 0),
+        styleRefImageIds: descriptionChanged
+          ? []
+          : [...(previous.styleRefImageIds || [])],
+      });
+      session.state.stylePresets[session.state.stylePresets.indexOf(previous)] =
+        preset;
+      if (descriptionChanged)
+        for (const world of session.state.worlds || [])
+          if (world.stylePresetId === preset.id) {
+            world.revision++;
+            world.stylePresetVersion = preset.version;
+            world.styleSheetImageIds = [];
+            world.characterSheetsStale =
+              world.characterIds?.some((id) =>
+                session.state.characters
+                  .find((c) => c.id === id)
+                  ?.characterSheets?.some(
+                    (sheet) => sheet.worldId === world.id && sheet.confirmedAt,
+                  ),
+              ) || false;
+            if (session.state.stylePresetSelections?.[world.id])
+              delete session.state.stylePresetSelections[world.id][preset.id];
+          }
+    } else session.state.stylePresets.push(preset);
+    if (api.save() === false) throw new Error("화풍을 저장하지 못했어요.");
+    setCustomStylePresets(session.state);
+    closeFlow();
+    api.render();
+    api.toast(
+      descriptionChanged
+        ? "화풍을 수정했어요. 스타일 시트와 캐릭터 시트를 다시 생성해 주세요."
+        : "사용자 화풍을 저장했어요.",
+    );
+  } catch (error) {
+    for (const key of ["stylePresets", "worlds", "stylePresetSelections"]) {
+      if (Object.hasOwn(original, key)) session.state[key] = original[key];
+      else delete session.state[key];
+    }
+    setCustomStylePresets(session.state);
+    document.querySelector("#style-custom-error").textContent = error.message;
+  }
+}
 
-function deleteCustomPreset(id){const state=api.getState(),preset=state.stylePresets?.find(item=>item.id===id&&!item.isBuiltIn);if(!preset)return;if(state.worlds?.some(world=>world.stylePresetId===id)){api.toast('이 화풍을 사용하는 World가 있어요. World에서 다른 화풍을 선택한 뒤 삭제해 주세요.');return;}api.showModal(`${api.modalHeader('사용자 화풍 삭제')}<p class="modal-intro"><strong>${escape(preset.name)}</strong> 화풍을 선택 목록에서 지울까요?<br>기존 책의 고정된 화풍과 이미지 참조는 보존합니다.</p><div class="modal-actions"><button type="button" id="style-delete-cancel" class="btn btn-outline">취소</button><button type="button" id="style-delete-confirm" class="btn btn-primary">삭제</button></div>`);document.querySelector('#style-delete-cancel').onclick=api.closeModal;document.querySelector('#style-delete-confirm').onclick=()=>{if(!api.isParent()||api.getState()!==state)return;const index=state.stylePresets.indexOf(preset);state.stylePresets.splice(index,1);if(api.save()===false){state.stylePresets.splice(index,0,preset);return;}setCustomStylePresets(state);api.closeModal();api.render();api.toast('사용자 화풍을 삭제했어요.');};}
+function deleteCustomPreset(id) {
+  const state = api.getState(),
+    preset = state.stylePresets?.find(
+      (item) => item.id === id && !item.isBuiltIn,
+    );
+  if (!preset) return;
+  if (state.worlds?.some((world) => world.stylePresetId === id)) {
+    api.toast(
+      "이 화풍을 사용하는 World가 있어요. World에서 다른 화풍을 선택한 뒤 삭제해 주세요.",
+    );
+    return;
+  }
+  api.showModal(
+    `${api.modalHeader("사용자 화풍 삭제")}<p class="modal-intro"><strong>${escape(preset.name)}</strong> 화풍을 선택 목록에서 지울까요?<br>기존 책의 고정된 화풍과 이미지 참조는 보존합니다.</p><div class="modal-actions"><button type="button" id="style-delete-cancel" class="btn btn-outline">취소</button><button type="button" id="style-delete-confirm" class="btn btn-primary">삭제</button></div>`,
+  );
+  document.querySelector("#style-delete-cancel").onclick = api.closeModal;
+  document.querySelector("#style-delete-confirm").onclick = () => {
+    if (!api.isParent() || api.getState() !== state) return;
+    const index = state.stylePresets.indexOf(preset);
+    state.stylePresets.splice(index, 1);
+    if (api.save() === false) {
+      state.stylePresets.splice(index, 0, preset);
+      return;
+    }
+    setCustomStylePresets(state);
+    api.closeModal();
+    api.render();
+    api.toast("사용자 화풍을 삭제했어요.");
+  };
+}
 
+function saveForbiddenWords(form) {
+  try {
+    if (!api.isParent()) return;
+    const state = api.getState(),
+      words = [
+        ...new Set(
+          form
+            .querySelector("#style-forbidden-words")
+            .value.split(/[\n,]+/)
+            .map((word) => word.trim())
+            .filter(Boolean),
+        ),
+      ];
+    if (
+      words.length > 100 ||
+      words.some((word) => word.length < 2 || word.length > 80)
+    )
+      throw new Error("추가 금칙어는 2~80자, 최대 100개로 적어 주세요.");
+    const conflicts = (state.stylePresets || []).filter(
+      (preset) =>
+        forbiddenStyleMatches(
+          [preset.name, preset.stylePrompt, preset.negativePrompt].join(" "),
+          words,
+        ).length,
+    );
+    if (conflicts.length)
+      throw new Error(
+        `저장된 사용자 화풍에 새 금칙어가 들어 있어요: ${conflicts.map((preset) => preset.name).join(", ")}. 먼저 해당 화풍을 수정하거나 다른 금칙어를 입력해 주세요.`,
+      );
+    state.settings ||= {};
+    const previous = state.settings.forbiddenStyleWords;
+    state.settings.forbiddenStyleWords = words;
+    if (api.save() === false) {
+      state.settings.forbiddenStyleWords = previous;
+      throw new Error("금칙어를 저장하지 못했어요.");
+    }
+    setCustomStylePresets(state);
+    api.render();
+    api.toast("추가 금칙어를 저장했어요.");
+  } catch (error) {
+    const panel = document.querySelector("#style-forbidden-error");
+    if (panel) panel.textContent = error.message;
+    else api.toast(error.message);
+  }
+}
 
-function saveForbiddenWords(form){try{if(!api.isParent())return;const state=api.getState(),words=[...new Set(form.querySelector('#style-forbidden-words').value.split(/[\n,]+/).map(word=>word.trim()).filter(Boolean))];if(words.length>100||words.some(word=>word.length<2||word.length>80))throw new Error('추가 금칙어는 2~80자, 최대 100개로 적어 주세요.');const conflicts=(state.stylePresets||[]).filter(preset=>forbiddenStyleMatches([preset.name,preset.stylePrompt,preset.negativePrompt].join(' '),words).length);if(conflicts.length)throw new Error(`저장된 사용자 화풍에 새 금칙어가 들어 있어요: ${conflicts.map(preset=>preset.name).join(', ')}. 먼저 해당 화풍을 수정하거나 다른 금칙어를 입력해 주세요.`);state.settings||={};const previous=state.settings.forbiddenStyleWords;state.settings.forbiddenStyleWords=words;if(api.save()===false){state.settings.forbiddenStyleWords=previous;throw new Error('금칙어를 저장하지 못했어요.');}setCustomStylePresets(state);api.render();api.toast('추가 금칙어를 저장했어요.');}catch(error){const panel=document.querySelector('#style-forbidden-error');if(panel)panel.textContent=error.message;else api.toast(error.message);}}
-
-export function configureStyleStudioUI(context){api=context;if(configured)return;configured=true;document.addEventListener('click',event=>{const element=event.target.closest?.('[data-style-action]');if(!element)return;event.preventDefault();const action=element.dataset.styleAction;if(action==='cancel'){closeFlow();return;}api.protectedAction(()=>{if(action==='new-preset')openCustomPreset();else if(action==='edit-preset')openCustomPreset(element.dataset.id);else if(action==='delete-preset')deleteCustomPreset(element.dataset.id);else if(action==='generate')startStyleTrial();else if(action==='confirm')confirmSelection();});});document.addEventListener('submit',event=>{if(event.target.id==='style-custom-form'){event.preventDefault();api.protectedAction(()=>saveCustomPreset(event.target));}else if(event.target.id==='style-forbidden-form'){event.preventDefault();api.protectedAction(()=>saveForbiddenWords(event.target));}});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&flow)cleanupStyleStudio();});const observer=new MutationObserver(()=>{if(flow&&!current(flow))cleanupStyleStudio();});observer.observe(document.querySelector('#modal-root')||document.body,{childList:true,subtree:true});window.addEventListener('pagehide',cleanupStyleStudio);}
+export function configureStyleStudioUI(context) {
+  api = context;
+  if (configured) return;
+  configured = true;
+  document.addEventListener("click", (event) => {
+    const element = event.target.closest?.("[data-style-action]");
+    if (!element) return;
+    event.preventDefault();
+    const action = element.dataset.styleAction;
+    if (action === "cancel") {
+      closeFlow();
+      return;
+    }
+    api.protectedAction(() => {
+      if (action === "new-preset") openCustomPreset();
+      else if (action === "edit-preset") openCustomPreset(element.dataset.id);
+      else if (action === "delete-preset")
+        deleteCustomPreset(element.dataset.id);
+      else if (action === "generate") startStyleTrial();
+      else if (action === "confirm") confirmSelection();
+    });
+  });
+  document.addEventListener("submit", (event) => {
+    if (event.target.id === "style-custom-form") {
+      event.preventDefault();
+      api.protectedAction(() => saveCustomPreset(event.target));
+    } else if (event.target.id === "style-forbidden-form") {
+      event.preventDefault();
+      api.protectedAction(() => saveForbiddenWords(event.target));
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && flow) cleanupStyleStudio();
+  });
+  const observer = new MutationObserver(() => {
+    if (flow && !current(flow)) cleanupStyleStudio();
+  });
+  observer.observe(document.querySelector("#modal-root") || document.body, {
+    childList: true,
+    subtree: true,
+  });
+  window.addEventListener("pagehide", cleanupStyleStudio);
+}

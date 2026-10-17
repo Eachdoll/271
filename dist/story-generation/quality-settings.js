@@ -1,109 +1,765 @@
 /* Parent-owned structure settings. Reference cards contain abstract structure only. */
-import {getTextGenerationSettings,normalizeStoryQualitySettings} from '../text-generation/settings-ui.js';
-import {listTextModels,resolveQualityStageSettings} from '../text-generation/models.js';
-import {loadStoryQualityData} from './quality-adapter.js';
-import {approvedBookRecord,qualityWeeklyCoachDue,runQualityWeeklyCoach,applyCoachProposals,rollbackQualityRules} from './quality-gates.js';
-import {buildBanList} from '../story-quality/dist/banList.js';
+import {
+  getTextGenerationSettings,
+  normalizeStoryQualitySettings,
+} from "../text-generation/settings-ui.js";
+import {
+  listTextModels,
+  resolveQualityStageSettings,
+} from "../text-generation/models.js";
+import { loadStoryQualityData } from "./quality-adapter.js";
+import {
+  approvedBookRecord,
+  qualityWeeklyCoachDue,
+  runQualityWeeklyCoach,
+  applyCoachProposals,
+  rollbackQualityRules,
+} from "./quality-gates.js";
+import { buildBanList } from "../story-quality/dist/banList.js";
 
-const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const clone=value=>JSON.parse(JSON.stringify(value)),list=value=>Array.isArray(value)?value:[];
-const ENGINES={openai:'OpenAI',google:'Google · Gemini',anthropic:'Anthropic · Claude',local:'로컬'};
-const TYPES={setup:'시작',want:'바람',attempt:'시도',turn:'반전',resolution:'해결',close:'마무리'};
-const ERAS={present:'현재',past:'과거',future:'미래',fantasy:'상상'},SEASONS={auto:'자동 · 현재 계절',none:'계절 없이',spring:'봄',summer:'여름',autumn:'가을',winter:'겨울'},TIMES={auto:'자동 · 낮',day:'낮',night:'밤'};
-const ROLE_NAMES={outline:'줄거리 · 상위',prose:'전문 · 보급형 중',cheap:'심사·단순화·아이 시뮬레이터 · 보급형 하',coach:'주간 코치 · 상위'};
-let api,configured=false,qualityData,coachController;
-const quality=state=>normalizeStoryQualitySettings(state.settings?.storyQuality);
-function patternsFor(state){const custom=quality(state).patterns;return list(custom).length?custom:list(qualityData?.plotPatterns);}
-export function storyQualityBookRecords(state){
- const records=new Map(list(state.settings?.storyQuality?.approvedBooks).filter(record=>record?.approved&&record.outline?.beats).map(record=>[record.bookId,record]));
- for(const book of list(state.books)){const record=approvedBookRecord(book);if(record)records.set(record.bookId,record);}
- return [...records.values()].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,50);
+const esc = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        char
+      ],
+  );
+const clone = (value) => JSON.parse(JSON.stringify(value)),
+  list = (value) => (Array.isArray(value) ? value : []);
+const ENGINES = {
+  openai: "OpenAI",
+  google: "Google · Gemini",
+  anthropic: "Anthropic · Claude",
+  local: "로컬",
+};
+const TYPES = {
+  setup: "시작",
+  want: "바람",
+  attempt: "시도",
+  turn: "반전",
+  resolution: "해결",
+  close: "마무리",
+};
+const ERAS = { present: "현재", past: "과거", future: "미래", fantasy: "상상" },
+  SEASONS = {
+    auto: "자동 · 현재 계절",
+    none: "계절 없이",
+    spring: "봄",
+    summer: "여름",
+    autumn: "가을",
+    winter: "겨울",
+  },
+  TIMES = { auto: "자동 · 낮", day: "낮", night: "밤" };
+const ROLE_NAMES = {
+  outline: "줄거리 · 상위",
+  prose: "전문 · 보급형 중",
+  cheap: "심사·단순화·아이 시뮬레이터 · 보급형 하",
+  coach: "주간 코치 · 상위",
+};
+let api,
+  configured = false,
+  qualityData,
+  coachController;
+const quality = (state) =>
+  normalizeStoryQualitySettings(state.settings?.storyQuality);
+function patternsFor(state) {
+  const custom = quality(state).patterns;
+  return list(custom).length ? custom : list(qualityData?.plotPatterns);
 }
-export function renderQualityPatternSelector(input={}, {id='storyQualityPatternId',state,disabled=false}={}){
- const selected=input.storyQualityPatternId||input.storyQuality?.patternId||(state?quality(state).patternId:'auto')||'auto',patterns=state?patternsFor(state):list(qualityData?.plotPatterns);
- return `<div class="field story-structure-choice"><label class="story-label" for="${esc(id)}">이야기 구성 패턴</label><select id="${esc(id)}" data-quality-pattern-choice ${disabled?'disabled':''}><option value="auto" ${selected==='auto'?'selected':''}>주제·최근 사용 패턴을 보고 자동 선택</option>${patterns.map(pattern=>`<option value="${esc(pattern.id)}" ${selected===pattern.id?'selected':''}>${esc(pattern.name)}</option>`).join('')}</select><p class="story-note">반복 여정·누적·찾기·기다림·확장·소리 찾기의 구성 원리를 참고합니다. 사건과 문장은 새로 만들어요.</p></div>`;
+export function storyQualityBookRecords(state) {
+  const records = new Map(
+    list(state.settings?.storyQuality?.approvedBooks)
+      .filter((record) => record?.approved && record.outline?.beats)
+      .map((record) => [record.bookId, record]),
+  );
+  for (const book of list(state.books)) {
+    const record = approvedBookRecord(book);
+    if (record) records.set(record.bookId, record);
+  }
+  return [...records.values()]
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, 50);
 }
-function worldChoices(input={},state){
- const defaults=state?quality(state):normalizeStoryQualitySettings(),snapshot=input.storyQuality||{};
- return {worldId:input.storyWorldId||snapshot.worldId||defaults.worldId||'drawer',season:input.storySeason||snapshot.season||defaults.season||'auto',timeOfDay:input.storyTimeOfDay||snapshot.timeOfDay||defaults.timeOfDay||'auto'};
+export function renderQualityPatternSelector(
+  input = {},
+  { id = "storyQualityPatternId", state, disabled = false } = {},
+) {
+  const selected =
+      input.storyQualityPatternId ||
+      input.storyQuality?.patternId ||
+      (state ? quality(state).patternId : "auto") ||
+      "auto",
+    patterns = state ? patternsFor(state) : list(qualityData?.plotPatterns);
+  return `<div class="field story-structure-choice"><label class="story-label" for="${esc(id)}">이야기 구성 패턴</label><select id="${esc(id)}" data-quality-pattern-choice ${disabled ? "disabled" : ""}><option value="auto" ${selected === "auto" ? "selected" : ""}>주제·최근 사용 패턴을 보고 자동 선택</option>${patterns.map((pattern) => `<option value="${esc(pattern.id)}" ${selected === pattern.id ? "selected" : ""}>${esc(pattern.name)}</option>`).join("")}</select><p class="story-note">반복 여정·누적·찾기·기다림·확장·소리 찾기의 구성 원리를 참고합니다. 사건과 문장은 새로 만들어요.</p></div>`;
 }
-function worldHint(id){
- const world=list(qualityData?.worldLibrary?.worlds).find(world=>world.id===id);
- if(!world)return '재료 서랍에서 고른 배경으로 이어갑니다. 기존 인물·집·출입구 구조를 유지해요.';
- const noSeason=list(qualityData?.worldLibrary?.overlays?.noSeasonEras).includes(world.era)||list(qualityData?.worldLibrary?.overlays?.noSeasonWorldIds).includes(world.id);
- return `${world.name?.ko||world.name} · ${world.arrival||world.region||''}${noSeason?' · 계절이 없는 무대예요.':''} 기존 재료의 인물·집·출입구 구조를 유지하고 무대의 분위기를 더해요.`;
+function worldChoices(input = {}, state) {
+  const defaults = state ? quality(state) : normalizeStoryQualitySettings(),
+    snapshot = input.storyQuality || {};
+  return {
+    worldId:
+      input.storyWorldId || snapshot.worldId || defaults.worldId || "drawer",
+    season: input.storySeason || snapshot.season || defaults.season || "auto",
+    timeOfDay:
+      input.storyTimeOfDay ||
+      snapshot.timeOfDay ||
+      defaults.timeOfDay ||
+      "auto",
+  };
 }
-export function renderQualityWorldSelectors(input={}, {state,prefix='',topicButton=true,disabled=false}={}){
- const selected=worldChoices(input,state),worlds=list(qualityData?.worldLibrary?.worlds),select=(field,label,values,value)=>`<label class="field"><span>${label}</span><select id="${esc(prefix+field)}" data-quality-world-field="${field}" ${disabled?'disabled':''}>${Object.entries(values).map(([id,name])=>`<option value="${id}" ${value===id?'selected':''}>${name}</option>`).join('')}</select></label>`;
- return `<section class="quality-world-selectors" data-quality-world-prefix="${esc(prefix)}"><div class="quality-world-grid"><label class="field quality-world-pick"><span>모험 무대</span><select id="${esc(prefix+'storyWorldId')}" data-quality-world-field="storyWorldId" ${disabled?'disabled':''}><option value="drawer" ${selected.worldId==='drawer'?'selected':''}>기존 배경 서랍 사용</option>${Object.entries(ERAS).map(([era,label])=>`<optgroup label="${label}">${worlds.filter(world=>world.era===era).map(world=>`<option value="${esc(world.id)}" ${selected.worldId===world.id?'selected':''}>${esc(world.name?.ko||world.name||world.id)}</option>`).join('')}</optgroup>`).join('')}</select></label>${select('storySeason','계절',SEASONS,selected.season)}${select('storyTimeOfDay','시간',TIMES,selected.timeOfDay)}</div><p class="story-note" data-quality-world-hint>${esc(worldHint(selected.worldId))}</p><p class="story-note">엔진과 화풍은 현재 월드 설정을 사용합니다.</p>${topicButton?`<button type="button" class="btn btn-outline btn-small" data-quality-action="world-topic" ${disabled||selected.worldId==='drawer'?'disabled':''}>주제 아이디어 뽑기</button><span class="story-note" data-quality-topic-status role="status" aria-live="polite">${selected.worldId==='drawer'?'모험 무대를 고르면 주제 아이디어를 뽑을 수 있어요.':''}</span>`:''}</section>`;
+function worldHint(id) {
+  const world = list(qualityData?.worldLibrary?.worlds).find(
+    (world) => world.id === id,
+  );
+  if (!world)
+    return "재료 서랍에서 고른 배경으로 이어갑니다. 기존 인물·집·출입구 구조를 유지해요.";
+  const noSeason =
+    list(qualityData?.worldLibrary?.overlays?.noSeasonEras).includes(
+      world.era,
+    ) ||
+    list(qualityData?.worldLibrary?.overlays?.noSeasonWorldIds).includes(
+      world.id,
+    );
+  return `${world.name?.ko || world.name} · ${world.arrival || world.region || ""}${noSeason ? " · 계절이 없는 무대예요." : ""} 기존 재료의 인물·집·출입구 구조를 유지하고 무대의 분위기를 더해요.`;
+}
+export function renderQualityWorldSelectors(
+  input = {},
+  { state, prefix = "", topicButton = true, disabled = false } = {},
+) {
+  const selected = worldChoices(input, state),
+    worlds = list(qualityData?.worldLibrary?.worlds),
+    select = (field, label, values, value) =>
+      `<label class="field"><span>${label}</span><select id="${esc(prefix + field)}" data-quality-world-field="${field}" ${disabled ? "disabled" : ""}>${Object.entries(
+        values,
+      )
+        .map(
+          ([id, name]) =>
+            `<option value="${id}" ${value === id ? "selected" : ""}>${name}</option>`,
+        )
+        .join("")}</select></label>`;
+  return `<section class="quality-world-selectors" data-quality-world-prefix="${esc(prefix)}"><div class="quality-world-grid"><label class="field quality-world-pick"><span>모험 무대</span><select id="${esc(prefix + "storyWorldId")}" data-quality-world-field="storyWorldId" ${disabled ? "disabled" : ""}><option value="drawer" ${selected.worldId === "drawer" ? "selected" : ""}>기존 배경 서랍 사용</option>${Object.entries(
+    ERAS,
+  )
+    .map(
+      ([era, label]) =>
+        `<optgroup label="${label}">${worlds
+          .filter((world) => world.era === era)
+          .map(
+            (world) =>
+              `<option value="${esc(world.id)}" ${selected.worldId === world.id ? "selected" : ""}>${esc(world.name?.ko || world.name || world.id)}</option>`,
+          )
+          .join("")}</optgroup>`,
+    )
+    .join(
+      "",
+    )}</select></label>${select("storySeason", "계절", SEASONS, selected.season)}${select("storyTimeOfDay", "시간", TIMES, selected.timeOfDay)}</div><p class="story-note" data-quality-world-hint>${esc(worldHint(selected.worldId))}</p><p class="story-note">엔진과 화풍은 현재 월드 설정을 사용합니다.</p>${topicButton ? `<button type="button" class="btn btn-outline btn-small" data-quality-action="world-topic" ${disabled || selected.worldId === "drawer" ? "disabled" : ""}>주제 아이디어 뽑기</button><span class="story-note" data-quality-topic-status role="status" aria-live="polite">${selected.worldId === "drawer" ? "모험 무대를 고르면 주제 아이디어를 뽑을 수 있어요." : ""}</span>` : ""}</section>`;
 }
 /** Explicit theme requests only. Rendering/changing a world never edits a written topic. */
-export async function storyWorldTopic(worldId,{offset=0,season='auto',timeOfDay='auto',data=qualityData}={}){
- const lib=data?.worldLibrary,world=list(lib?.worlds).find(item=>item.id===worldId);if(!world)throw Error('주제 아이디어를 만들 모험 무대를 골라 주세요.');
- const {generateTopics,applyOverlay}=await import('../story-quality/dist/expand.js');
- const effectiveSeason=season==='auto'?['winter','winter','spring','spring','spring','summer','summer','summer','autumn','autumn','autumn','winter'][new Date().getMonth()]:season==='none'?null:season,effectiveTime=timeOfDay==='night'?'night':'day';
- const current=applyOverlay(lib,world,effectiveSeason,effectiveTime),rows=generateTopics({...lib,worlds:[current]},{perWorld:33,seed:1,exclude:list(data.goldBooks).map(book=>book.topic).filter(Boolean)});
- if(!rows.length)throw Error('이 무대의 주제를 준비하지 못했어요. 직접 주제를 적어 주세요.');
- return clone(rows[((Math.max(0,Math.floor(Number(offset)||0)))%rows.length)]);
+export async function storyWorldTopic(
+  worldId,
+  { offset = 0, season = "auto", timeOfDay = "auto", data = qualityData } = {},
+) {
+  const lib = data?.worldLibrary,
+    world = list(lib?.worlds).find((item) => item.id === worldId);
+  if (!world) throw Error("주제 아이디어를 만들 모험 무대를 골라 주세요.");
+  const { generateTopics, applyOverlay } = await import(
+    "../story-quality/dist/expand.js"
+  );
+  const effectiveSeason =
+      season === "auto"
+        ? [
+            "winter",
+            "winter",
+            "spring",
+            "spring",
+            "spring",
+            "summer",
+            "summer",
+            "summer",
+            "autumn",
+            "autumn",
+            "autumn",
+            "winter",
+          ][new Date().getMonth()]
+        : season === "none"
+          ? null
+          : season,
+    effectiveTime = timeOfDay === "night" ? "night" : "day";
+  const current = applyOverlay(lib, world, effectiveSeason, effectiveTime),
+    rows = generateTopics(
+      { ...lib, worlds: [current] },
+      {
+        perWorld: 33,
+        seed: 1,
+        exclude: list(data.goldBooks)
+          .map((book) => book.topic)
+          .filter(Boolean),
+      },
+    );
+  if (!rows.length)
+    throw Error("이 무대의 주제를 준비하지 못했어요. 직접 주제를 적어 주세요.");
+  return clone(
+    rows[Math.max(0, Math.floor(Number(offset) || 0)) % rows.length],
+  );
 }
-async function selectWorldTopic(element){
- const container=element.closest('.quality-world-selectors');if(!container)return;
- const state=api.getState(),field=name=>container.querySelector(`[data-quality-world-field="${name}"]`)?.value,worldId=field('storyWorldId'),status=container.querySelector('[data-quality-topic-status]'),offset=element.dataset.qualityTopicWorld===worldId?Number(element.dataset.qualityTopicOffset)||0:0;
- element.disabled=true;try{const suggestion=await storyWorldTopic(worldId,{offset,season:field('storySeason'),timeOfDay:field('storyTimeOfDay')});if(!api.isParent()||api.getState()!==state)return;if(!api.setWizardTopic)throw Error('이 화면에서는 주제를 직접 적어 주세요.');api.setWizardTopic(suggestion.topic,{worldId:suggestion.worldId,patternId:suggestion.patternId});element.dataset.qualityTopicWorld=worldId;element.dataset.qualityTopicOffset=String(offset+1);if(status)status.textContent='주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.';}catch(error){if(status)status.textContent=error.message;api.toast?.(error.message);}finally{if(element.isConnected!==false)element.disabled=worldId==='drawer';}
+async function selectWorldTopic(element) {
+  const container = element.closest(".quality-world-selectors");
+  if (!container) return;
+  const state = api.getState(),
+    field = (name) =>
+      container.querySelector(`[data-quality-world-field="${name}"]`)?.value,
+    worldId = field("storyWorldId"),
+    status = container.querySelector("[data-quality-topic-status]"),
+    offset =
+      element.dataset.qualityTopicWorld === worldId
+        ? Number(element.dataset.qualityTopicOffset) || 0
+        : 0;
+  element.disabled = true;
+  try {
+    const suggestion = await storyWorldTopic(worldId, {
+      offset,
+      season: field("storySeason"),
+      timeOfDay: field("storyTimeOfDay"),
+    });
+    if (!api.isParent() || api.getState() !== state) return;
+    if (!api.setWizardTopic)
+      throw Error("이 화면에서는 주제를 직접 적어 주세요.");
+    api.setWizardTopic(suggestion.topic, {
+      worldId: suggestion.worldId,
+      patternId: suggestion.patternId,
+    });
+    element.dataset.qualityTopicWorld = worldId;
+    element.dataset.qualityTopicOffset = String(offset + 1);
+    if (status)
+      status.textContent =
+        "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.";
+  } catch (error) {
+    if (status) status.textContent = error.message;
+    api.toast?.(error.message);
+  } finally {
+    if (element.isConnected !== false) element.disabled = worldId === "drawer";
+  }
 }
 
-export function validateQualityPatternCards(cards){
- const errors=[],keys=['id','name','bestFor','emotions','beats','refrain','pageTurn','avoid'],text=(value,max)=>typeof value==='string'&&value.trim()&&value.length<=max,strings=value=>Array.isArray(value)&&value.length<=20&&value.every(item=>text(item,100));
- if(!Array.isArray(cards)||!cards.length||cards.length>20)return {valid:false,errors:['패턴 카드는 1~20개여야 해요.']};
- const ids=new Set();for(const [index,card] of cards.entries()){
-  const label=`${index+1}번 패턴`;if(!card||typeof card!=='object'||Array.isArray(card)||Object.keys(card).some(key=>!keys.includes(key))){errors.push(`${label}에는 구조 필드만 사용할 수 있어요. 책 제목·인물·본문은 넣지 마세요.`);continue;}
-  if(!text(card.id,100)||!/^[a-z][a-z0-9_-]*$/i.test(card.id)||ids.has(card.id))errors.push(`${label}의 ID가 잘못됐거나 중복됐어요.`);ids.add(card.id);
-  if(!text(card.name,100)||!strings(card.bestFor)||!strings(card.emotions))errors.push(`${label}의 이름·주제·감정을 확인해 주세요.`);
-  if(!Array.isArray(card.beats)||card.beats.length<6||card.beats.length>8||card.beats.some(beat=>!beat||Object.keys(beat).some(key=>!['type','slot'].includes(key))||!Object.hasOwn(TYPES,beat.type)||!text(beat.slot,1000)))errors.push(`${label}의 비트는 6~8개이며 각 비트에 유형과 구성 설명이 필요해요.`);
-  if(!card.refrain||Object.keys(card.refrain).some(key=>!['type','hint'].includes(key))||!['frame','count','question'].includes(card.refrain.type)||!text(card.refrain.hint,1000)||!text(card.pageTurn,1000)||!text(card.avoid,1000))errors.push(`${label}의 후렴·쪽 넘김·피할 구성을 확인해 주세요.`);
- }
- return {valid:errors.length===0,errors};
+export function validateQualityPatternCards(cards) {
+  const errors = [],
+    keys = [
+      "id",
+      "name",
+      "bestFor",
+      "emotions",
+      "beats",
+      "refrain",
+      "pageTurn",
+      "avoid",
+    ],
+    text = (value, max) =>
+      typeof value === "string" && value.trim() && value.length <= max,
+    strings = (value) =>
+      Array.isArray(value) &&
+      value.length <= 20 &&
+      value.every((item) => text(item, 100));
+  if (!Array.isArray(cards) || !cards.length || cards.length > 20)
+    return { valid: false, errors: ["패턴 카드는 1~20개여야 해요."] };
+  const ids = new Set();
+  for (const [index, card] of cards.entries()) {
+    const label = `${index + 1}번 패턴`;
+    if (
+      !card ||
+      typeof card !== "object" ||
+      Array.isArray(card) ||
+      Object.keys(card).some((key) => !keys.includes(key))
+    ) {
+      errors.push(
+        `${label}에는 구조 필드만 사용할 수 있어요. 책 제목·인물·본문은 넣지 마세요.`,
+      );
+      continue;
+    }
+    if (
+      !text(card.id, 100) ||
+      !/^[a-z][a-z0-9_-]*$/i.test(card.id) ||
+      ids.has(card.id)
+    )
+      errors.push(`${label}의 ID가 잘못됐거나 중복됐어요.`);
+    ids.add(card.id);
+    if (
+      !text(card.name, 100) ||
+      !strings(card.bestFor) ||
+      !strings(card.emotions)
+    )
+      errors.push(`${label}의 이름·주제·감정을 확인해 주세요.`);
+    if (
+      !Array.isArray(card.beats) ||
+      card.beats.length < 6 ||
+      card.beats.length > 8 ||
+      card.beats.some(
+        (beat) =>
+          !beat ||
+          Object.keys(beat).some((key) => !["type", "slot"].includes(key)) ||
+          !Object.hasOwn(TYPES, beat.type) ||
+          !text(beat.slot, 1000),
+      )
+    )
+      errors.push(
+        `${label}의 비트는 6~8개이며 각 비트에 유형과 구성 설명이 필요해요.`,
+      );
+    if (
+      !card.refrain ||
+      Object.keys(card.refrain).some(
+        (key) => !["type", "hint"].includes(key),
+      ) ||
+      !["frame", "count", "question"].includes(card.refrain.type) ||
+      !text(card.refrain.hint, 1000) ||
+      !text(card.pageTurn, 1000) ||
+      !text(card.avoid, 1000)
+    )
+      errors.push(`${label}의 후렴·쪽 넘김·피할 구성을 확인해 주세요.`);
+  }
+  return { valid: errors.length === 0, errors };
 }
-function renderPatternEditor(state){
- const cards=patternsFor(state),input=(index,path,label,value,max=1000)=>`<label class="field"><span>${label}</span><input data-quality-pattern-index="${index}" data-quality-pattern-field="${path}" maxlength="${max}" value="${esc(value)}"></label>`;
- return `<details class="story-card quality-patterns"><summary>패턴 카드 편집 · ${cards.length}종</summary><p class="story-note">구성 설명만 편집하세요. 책 제목·캐릭터 이름·본문을 입력하는 칸은 없습니다.</p>${cards.map((card,index)=>`<details class="quality-pattern-card"><summary>${esc(card.name)}</summary>${input(index,'name','패턴 이름',card.name,100)}${input(index,'bestFor','어울리는 주제 · 쉼표 구분',card.bestFor.join(', '))}${input(index,'emotions','감정 흐름 · 쉼표 구분',card.emotions.join(', '))}${card.beats.map((beat,beatIndex)=>`<div class="quality-pattern-beat"><label class="field"><span>비트 ${beatIndex+1} 유형</span><select data-quality-pattern-index="${index}" data-quality-pattern-field="beats.${beatIndex}.type">${Object.entries(TYPES).map(([value,label])=>`<option value="${value}" ${beat.type===value?'selected':''}>${label}</option>`).join('')}</select></label>${input(index,`beats.${beatIndex}.slot`,'구성 설명',beat.slot)}</div>`).join('')}<label class="field"><span>후렴 방식</span><select data-quality-pattern-index="${index}" data-quality-pattern-field="refrain.type">${Object.entries({frame:'문장 틀',count:'누적·숫자',question:'질문·답'}).map(([value,label])=>`<option value="${value}" ${card.refrain.type===value?'selected':''}>${label}</option>`).join('')}</select></label>${input(index,'refrain.hint','후렴 구성',card.refrain.hint)}${input(index,'pageTurn','쪽 넘김 구성',card.pageTurn)}${input(index,'avoid','피할 구성',card.avoid)}</details>`).join('')}</details>`;
+function renderPatternEditor(state) {
+  const cards = patternsFor(state),
+    input = (index, path, label, value, max = 1000) =>
+      `<label class="field"><span>${label}</span><input data-quality-pattern-index="${index}" data-quality-pattern-field="${path}" maxlength="${max}" value="${esc(value)}"></label>`;
+  return `<details class="story-card quality-patterns"><summary>패턴 카드 편집 · ${cards.length}종</summary><p class="story-note">구성 설명만 편집하세요. 책 제목·캐릭터 이름·본문을 입력하는 칸은 없습니다.</p>${cards
+    .map(
+      (card, index) =>
+        `<details class="quality-pattern-card"><summary>${esc(card.name)}</summary>${input(index, "name", "패턴 이름", card.name, 100)}${input(index, "bestFor", "어울리는 주제 · 쉼표 구분", card.bestFor.join(", "))}${input(index, "emotions", "감정 흐름 · 쉼표 구분", card.emotions.join(", "))}${card.beats
+          .map(
+            (beat, beatIndex) =>
+              `<div class="quality-pattern-beat"><label class="field"><span>비트 ${beatIndex + 1} 유형</span><select data-quality-pattern-index="${index}" data-quality-pattern-field="beats.${beatIndex}.type">${Object.entries(
+                TYPES,
+              )
+                .map(
+                  ([value, label]) =>
+                    `<option value="${value}" ${beat.type === value ? "selected" : ""}>${label}</option>`,
+                )
+                .join(
+                  "",
+                )}</select></label>${input(index, `beats.${beatIndex}.slot`, "구성 설명", beat.slot)}</div>`,
+          )
+          .join(
+            "",
+          )}<label class="field"><span>후렴 방식</span><select data-quality-pattern-index="${index}" data-quality-pattern-field="refrain.type">${Object.entries(
+          { frame: "문장 틀", count: "누적·숫자", question: "질문·답" },
+        )
+          .map(
+            ([value, label]) =>
+              `<option value="${value}" ${card.refrain.type === value ? "selected" : ""}>${label}</option>`,
+          )
+          .join(
+            "",
+          )}</select></label>${input(index, "refrain.hint", "후렴 구성", card.refrain.hint)}${input(index, "pageTurn", "쪽 넘김 구성", card.pageTurn)}${input(index, "avoid", "피할 구성", card.avoid)}</details>`,
+    )
+    .join("")}</details>`;
 }
-function roleFields(state,role){
- const q=quality(state),resolved=resolveQualityStageSettings(getTextGenerationSettings(state),role,q),explicit=q.engines?.[role]||{},selected=explicit.engine||'',engine=selected||resolved.engineId;
- return `<fieldset class="quality-role"><legend>${ROLE_NAMES[role]}</legend><label class="field"><span>엔진</span><select data-quality-role-engine="${role}"><option value="" ${!selected?'selected':''}>부모 글 엔진에서 자동</option>${Object.entries(ENGINES).map(([id,name])=>`<option value="${id}" ${selected===id?'selected':''}>${name}</option>`).join('')}</select></label><label class="field"><span>모델 · 비우면 단계 기본값</span><input data-quality-role-model="${role}" list="quality-models-${role}" maxlength="200" value="${esc(explicit.model||'')}" placeholder="${esc(resolved.config.model||'로컬 기본 모델')}"><datalist id="quality-models-${role}">${listTextModels(engine).map(model=>`<option value="${esc(model.id)}">${esc(model.name||model.label||model.id)}</option>`).join('')}</datalist></label></fieldset>`;
+function roleFields(state, role) {
+  const q = quality(state),
+    resolved = resolveQualityStageSettings(
+      getTextGenerationSettings(state),
+      role,
+      q,
+    ),
+    explicit = q.engines?.[role] || {},
+    selected = explicit.engine || "",
+    engine = selected || resolved.engineId;
+  return `<fieldset class="quality-role"><legend>${ROLE_NAMES[role]}</legend><label class="field"><span>엔진</span><select data-quality-role-engine="${role}"><option value="" ${!selected ? "selected" : ""}>부모 글 엔진에서 자동</option>${Object.entries(
+    ENGINES,
+  )
+    .map(
+      ([id, name]) =>
+        `<option value="${id}" ${selected === id ? "selected" : ""}>${name}</option>`,
+    )
+    .join(
+      "",
+    )}</select></label><label class="field"><span>모델 · 비우면 단계 기본값</span><input data-quality-role-model="${role}" list="quality-models-${role}" maxlength="200" value="${esc(explicit.model || "")}" placeholder="${esc(resolved.config.model || "로컬 기본 모델")}"><datalist id="quality-models-${role}">${listTextModels(
+    engine,
+  )
+    .map(
+      (model) =>
+        `<option value="${esc(model.id)}">${esc(model.name || model.label || model.id)}</option>`,
+    )
+    .join("")}</datalist></label></fieldset>`;
 }
-function renderBans(state){
- const q=quality(state),bans=buildBanList(storyQualityBookRecords(state),{recentBooks:q.banWindow,recentBooksForPattern:q.patternBanWindow}),names=new Map(patternsFor(state).map(pattern=>[pattern.id,pattern.name])),twists=new Map(list(qualityData?.inventories?.twistTypes).map(row=>[row.id,row.ko]));
- return `<details class="story-card"><summary>반복 소재 확인 · 최근 ${q.banWindow}권 / 패턴 ${q.patternBanWindow}권</summary>${Object.entries({plantedObjects:'심은 물건',creatures:'생물',twistTypes:'반전',places:'세부 장소',patterns:'최근 패턴'}).map(([key,label])=>`<p class="story-note"><strong>${label}</strong> · ${bans[key].map(value=>esc(names.get(value)||twists.get(value)||value)).join(' · ')||'아직 사용 기록이 없어요.'}</p>`).join('')}<p class="story-note">기존 등장인물과 집·배경의 고정된 구조는 유지합니다. 반복 제한은 새 사건에 쓰는 소재를 다양하게 골라요.</p></details>`;
+function renderBans(state) {
+  const q = quality(state),
+    bans = buildBanList(storyQualityBookRecords(state), {
+      recentBooks: q.banWindow,
+      recentBooksForPattern: q.patternBanWindow,
+    }),
+    names = new Map(
+      patternsFor(state).map((pattern) => [pattern.id, pattern.name]),
+    ),
+    twists = new Map(
+      list(qualityData?.inventories?.twistTypes).map((row) => [row.id, row.ko]),
+    );
+  return `<details class="story-card"><summary>반복 소재 확인 · 최근 ${q.banWindow}권 / 패턴 ${q.patternBanWindow}권</summary>${Object.entries(
+    {
+      plantedObjects: "심은 물건",
+      creatures: "생물",
+      twistTypes: "반전",
+      places: "세부 장소",
+      patterns: "최근 패턴",
+    },
+  )
+    .map(
+      ([key, label]) =>
+        `<p class="story-note"><strong>${label}</strong> · ${bans[key].map((value) => esc(names.get(value) || twists.get(value) || value)).join(" · ") || "아직 사용 기록이 없어요."}</p>`,
+    )
+    .join(
+      "",
+    )}<p class="story-note">기존 등장인물과 집·배경의 고정된 구조는 유지합니다. 반복 제한은 새 사건에 쓰는 소재를 다양하게 골라요.</p></details>`;
 }
-function renderCoach(state){
- const q=state.settings?.storyQuality||{},proposal=q.coachProposal,versions=list(q.ruleVersions),active=versions.at(-1),row=(item,index,type)=>`<label class="quality-coach-option"><input type="checkbox" data-quality-coach-${type}="${index}"><span>${esc(item.text)}${item.why?`<small>${esc(item.why)}</small>`:''}${item.replaces?`<small>현재 ${item.replaces}번 항목 교체</small>`:''}</span></label>`;
- return `<section class="story-card quality-coach"><h4>주간 코치 제안</h4><p class="story-note">최근 7일 승인한 책이 3권 이상이면 주 1회 부모 화면 접속 시 검사합니다. 창을 닫은 동안에는 실행하지 않으며 API 요금이 들어요. 제안은 선택해 승인한 항목만 적용합니다.</p>${q.coachLastResult?.skipped?`<p class="story-note">${esc(q.coachLastResult.skipped)}</p>`:''}${q.coachLastError?`<p class="story-error">${esc(q.coachLastError)}</p>`:''}${proposal&&!proposal.appliedAt?`${list(proposal.recurringWeaknesses).map(item=>`<details class="quality-coach-evidence"><summary>${esc(item.pattern)}</summary><blockquote>${esc(item.evidence)}</blockquote></details>`).join('')}<fieldset><legend>규칙 제안 · 최대 7개</legend>${list(proposal.proposedRules).map((item,index)=>row(item,index,'rule')).join('')||'<p class="story-note">새 규칙 제안 없음</p>'}</fieldset><fieldset><legend>금지 예시 제안 · 최대 4개</legend>${list(proposal.proposedBanExamples).map((item,index)=>row(item,index,'ban')).join('')||'<p class="story-note">새 금지 예시 제안 없음</p>'}</fieldset><button type="button" class="btn btn-green btn-small" data-quality-action="approve-coach">선택한 제안 승인</button>`:'<p class="story-note">승인할 새 제안이 아직 없어요.</p>'}<div class="story-inline-actions"><button type="button" class="btn btn-outline btn-small" data-quality-action="run-coach" ${coachController?'disabled':''}>${coachController?'코치 검사 중':'지금 코치 검사'}</button>${coachController?'<button type="button" class="btn btn-outline btn-small" data-quality-action="stop-coach">검사 중지</button>':''}</div><details><summary>적용 중인 규칙·되돌리기</summary><ol>${list(q.rules).map(item=>`<li>${esc(typeof item==='string'?item:item.text)}</li>`).join('')}</ol><ul>${list(q.banExamples).map(item=>`<li>${esc(typeof item==='string'?item:item.text)}</li>`).join('')}</ul>${q.rollbackSuggested?'<p class="story-error">최근 평가가 낮아져 이전 규칙으로 되돌리기를 권합니다.</p>':''}${versions.length>1?`<label class="field"><span>이전 버전 선택 · 현재 ${Number(active.version)}번</span><select id="quality-rollback-version">${versions.slice(0,-1).reverse().map(version=>`<option value="${Number(version.version)}">${Number(version.version)}번 · ${esc(version.appliedAt?.slice(0,10)||'')}</option>`).join('')}</select></label><button type="button" class="btn btn-outline btn-small" data-quality-action="rollback">선택한 규칙 버전으로 되돌리기</button>`:'<p class="story-note">제안을 승인하면 이전 규칙을 버전으로 보관합니다.</p>'}</details><p id="quality-coach-status" class="story-note" role="status" aria-live="polite"></p></section>`;
+function renderCoach(state) {
+  const q = state.settings?.storyQuality || {},
+    proposal = q.coachProposal,
+    versions = list(q.ruleVersions),
+    active = versions.at(-1),
+    row = (item, index, type) =>
+      `<label class="quality-coach-option"><input type="checkbox" data-quality-coach-${type}="${index}"><span>${esc(item.text)}${item.why ? `<small>${esc(item.why)}</small>` : ""}${item.replaces ? `<small>현재 ${item.replaces}번 항목 교체</small>` : ""}</span></label>`;
+  return `<section class="story-card quality-coach"><h4>주간 코치 제안</h4><p class="story-note">최근 7일 승인한 책이 3권 이상이면 주 1회 부모 화면 접속 시 검사합니다. 창을 닫은 동안에는 실행하지 않으며 API 요금이 들어요. 제안은 선택해 승인한 항목만 적용합니다.</p>${q.coachLastResult?.skipped ? `<p class="story-note">${esc(q.coachLastResult.skipped)}</p>` : ""}${q.coachLastError ? `<p class="story-error">${esc(q.coachLastError)}</p>` : ""}${
+    proposal && !proposal.appliedAt
+      ? `${list(proposal.recurringWeaknesses)
+          .map(
+            (item) =>
+              `<details class="quality-coach-evidence"><summary>${esc(item.pattern)}</summary><blockquote>${esc(item.evidence)}</blockquote></details>`,
+          )
+          .join("")}<fieldset><legend>규칙 제안 · 최대 7개</legend>${
+          list(proposal.proposedRules)
+            .map((item, index) => row(item, index, "rule"))
+            .join("") || '<p class="story-note">새 규칙 제안 없음</p>'
+        }</fieldset><fieldset><legend>금지 예시 제안 · 최대 4개</legend>${
+          list(proposal.proposedBanExamples)
+            .map((item, index) => row(item, index, "ban"))
+            .join("") || '<p class="story-note">새 금지 예시 제안 없음</p>'
+        }</fieldset><button type="button" class="btn btn-green btn-small" data-quality-action="approve-coach">선택한 제안 승인</button>`
+      : '<p class="story-note">승인할 새 제안이 아직 없어요.</p>'
+  }<div class="story-inline-actions"><button type="button" class="btn btn-outline btn-small" data-quality-action="run-coach" ${coachController ? "disabled" : ""}>${coachController ? "코치 검사 중" : "지금 코치 검사"}</button>${coachController ? '<button type="button" class="btn btn-outline btn-small" data-quality-action="stop-coach">검사 중지</button>' : ""}</div><details><summary>적용 중인 규칙·되돌리기</summary><ol>${list(
+    q.rules,
+  )
+    .map(
+      (item) => `<li>${esc(typeof item === "string" ? item : item.text)}</li>`,
+    )
+    .join("")}</ol><ul>${list(q.banExamples)
+    .map(
+      (item) => `<li>${esc(typeof item === "string" ? item : item.text)}</li>`,
+    )
+    .join(
+      "",
+    )}</ul>${q.rollbackSuggested ? '<p class="story-error">최근 평가가 낮아져 이전 규칙으로 되돌리기를 권합니다.</p>' : ""}${
+    versions.length > 1
+      ? `<label class="field"><span>이전 버전 선택 · 현재 ${Number(active.version)}번</span><select id="quality-rollback-version">${versions
+          .slice(0, -1)
+          .reverse()
+          .map(
+            (version) =>
+              `<option value="${Number(version.version)}">${Number(version.version)}번 · ${esc(version.appliedAt?.slice(0, 10) || "")}</option>`,
+          )
+          .join(
+            "",
+          )}</select></label><button type="button" class="btn btn-outline btn-small" data-quality-action="rollback">선택한 규칙 버전으로 되돌리기</button>`
+      : '<p class="story-note">제안을 승인하면 이전 규칙을 버전으로 보관합니다.</p>'
+  }</details><p id="quality-coach-status" class="story-note" role="status" aria-live="polite"></p></section>`;
 }
-export function renderStoryQualitySettings(state){
- const q=quality(state),toggle=(field,label,help)=>`<label class="quality-toggle"><input type="checkbox" data-quality-flag="${field}" ${q[field]?'checked':''}><span>${label}<small>${help}</small></span></label>`;
- return `<section class="panel" id="story-quality-settings"><h3>이야기 구성·글 품질</h3><form id="story-quality-form">${toggle('enabled','구성 재료·패턴으로 이야기 만들기','일관된 기승전결과 새로운 시도를 구성합니다.')}${toggle('useBeamSearch','비트 탐색','기본 꺼짐 · 비트마다 후보 3개를 만들고 심사해 요청과 요금이 늘어요.')}${toggle('twoPass','풍부화 2패스','풍부하게 쓴 뒤 목표 읽기 수준으로 다듬습니다.')}${toggle('childSimulator','아이 시뮬레이터','다음 쪽에 대한 궁금증과 목표·반전·해결의 되말하기를 검사합니다.')}${toggle('weeklyCoach','주간 코치','최근 승인 책을 살펴 제안하며 자동으로 규칙을 바꾸지 않습니다.')}<details class="story-card"><summary>단계별 엔진</summary><div class="quality-role-grid">${Object.keys(ROLE_NAMES).map(role=>roleFields(state,role)).join('')}</div><p class="story-note">API 키는 위의 글 엔진 설정에서 공급자별로 저장하세요. 단계 선택에는 저장된 키를 공유합니다.</p></details>${renderQualityPatternSelector({storyQualityPatternId:q.patternId},{id:'quality-default-pattern',state})}<details class="story-card"><summary>기본 모험 무대·계절·시간</summary>${renderQualityWorldSelectors({storyQuality:q},{state,prefix:'quality-default-',topicButton:false})}<label class="field"><span>소품·생물 변형 확률 · %</span><input id="quality-variant-chance" type="number" min="0" max="100" step="1" value="${Math.round((q.variantChance??.35)*100)}"><small>기본 35% · 색·크기·특징 변형으로 사건 재료를 다양하게 골라요.</small></label></details>${renderPatternEditor(state)}<p id="quality-settings-error" class="story-error" role="status" aria-live="polite"></p><button type="submit" class="btn btn-green">글 품질 설정 저장</button></form>${renderBans(state)}${renderCoach(state)}</section>`;
+export function renderStoryQualitySettings(state) {
+  const q = quality(state),
+    toggle = (field, label, help) =>
+      `<label class="quality-toggle"><input type="checkbox" data-quality-flag="${field}" ${q[field] ? "checked" : ""}><span>${label}<small>${help}</small></span></label>`;
+  return `<section class="panel" id="story-quality-settings"><h3>이야기 구성·글 품질</h3><form id="story-quality-form">${toggle("enabled", "구성 재료·패턴으로 이야기 만들기", "일관된 기승전결과 새로운 시도를 구성합니다.")}${toggle("useBeamSearch", "비트 탐색", "기본 꺼짐 · 비트마다 후보 3개를 만들고 심사해 요청과 요금이 늘어요.")}${toggle("twoPass", "풍부화 2패스", "풍부하게 쓴 뒤 목표 읽기 수준으로 다듬습니다.")}${toggle("childSimulator", "아이 시뮬레이터", "다음 쪽에 대한 궁금증과 목표·반전·해결의 되말하기를 검사합니다.")}${toggle("weeklyCoach", "주간 코치", "최근 승인 책을 살펴 제안하며 자동으로 규칙을 바꾸지 않습니다.")}<details class="story-card"><summary>단계별 엔진</summary><div class="quality-role-grid">${Object.keys(
+    ROLE_NAMES,
+  )
+    .map((role) => roleFields(state, role))
+    .join(
+      "",
+    )}</div><p class="story-note">API 키는 위의 글 엔진 설정에서 공급자별로 저장하세요. 단계 선택에는 저장된 키를 공유합니다.</p></details>${renderQualityPatternSelector({ storyQualityPatternId: q.patternId }, { id: "quality-default-pattern", state })}<details class="story-card"><summary>기본 모험 무대·계절·시간</summary>${renderQualityWorldSelectors({ storyQuality: q }, { state, prefix: "quality-default-", topicButton: false })}<label class="field"><span>소품·생물 변형 확률 · %</span><input id="quality-variant-chance" type="number" min="0" max="100" step="1" value="${Math.round((q.variantChance ?? 0.35) * 100)}"><small>기본 35% · 색·크기·특징 변형으로 사건 재료를 다양하게 골라요.</small></label></details>${renderPatternEditor(state)}<p id="quality-settings-error" class="story-error" role="status" aria-live="polite"></p><button type="submit" class="btn btn-green">글 품질 설정 저장</button></form>${renderBans(state)}${renderCoach(state)}</section>`;
 }
-function readSettings(form,state){
- const q=quality(state),settings=getTextGenerationSettings(state);for(const element of form.querySelectorAll('[data-quality-flag]'))q[element.dataset.qualityFlag]=element.checked;
- for(const role of Object.keys(ROLE_NAMES)){const engine=form.querySelector(`[data-quality-role-engine="${role}"]`)?.value,model=form.querySelector(`[data-quality-role-model="${role}"]`)?.value.trim()||'';if(!engine&&!model){delete q.engines[role];continue;}const resolved=resolveQualityStageSettings(settings,role,{...q,engines:{...q.engines,[role]:engine?{engine}:{}}}),id=engine||resolved.engineId;if(model&&id!=='local'&&!listTextModels(id).some(row=>row.id===model))throw Error(`${ROLE_NAMES[role]}에 사용할 모델을 골라 주세요.`);q.engines[role]={engine:id,...(model?{model}:{})};}
- q.patternId=form.querySelector('#quality-default-pattern')?.value||'auto';q.worldId=form.querySelector('#quality-default-storyWorldId')?.value||q.worldId||'drawer';q.season=form.querySelector('#quality-default-storySeason')?.value||q.season||'auto';q.timeOfDay=form.querySelector('#quality-default-storyTimeOfDay')?.value||q.timeOfDay||'auto';const variantField=form.querySelector('#quality-variant-chance');if(variantField){const raw=variantField.value.trim(),percent=Number(raw);if(!raw||!Number.isFinite(percent)||percent<0||percent>100)throw Error('변형 확률은 0~100%로 적어 주세요.');q.variantChance=percent/100;}const cards=clone(patternsFor(state));for(const element of form.querySelectorAll('[data-quality-pattern-field]')){const card=cards[Number(element.dataset.qualityPatternIndex)],path=element.dataset.qualityPatternField.split('.');if(!card)continue;let target=card;for(const key of path.slice(0,-1))target=target[key];target[path.at(-1)]=['bestFor','emotions'].includes(path[0])?element.value.split(',').map(value=>value.trim()).filter(Boolean):element.value.trim();}
- if(cards.length){const report=validateQualityPatternCards(cards);if(!report.valid)throw Error(report.errors.join('\n'));q.patterns=cards;}return normalizeStoryQualitySettings(q);
+function readSettings(form, state) {
+  const q = quality(state),
+    settings = getTextGenerationSettings(state);
+  for (const element of form.querySelectorAll("[data-quality-flag]"))
+    q[element.dataset.qualityFlag] = element.checked;
+  for (const role of Object.keys(ROLE_NAMES)) {
+    const engine = form.querySelector(
+        `[data-quality-role-engine="${role}"]`,
+      )?.value,
+      model =
+        form
+          .querySelector(`[data-quality-role-model="${role}"]`)
+          ?.value.trim() || "";
+    if (!engine && !model) {
+      delete q.engines[role];
+      continue;
+    }
+    const resolved = resolveQualityStageSettings(settings, role, {
+        ...q,
+        engines: { ...q.engines, [role]: engine ? { engine } : {} },
+      }),
+      id = engine || resolved.engineId;
+    if (
+      model &&
+      id !== "local" &&
+      !listTextModels(id).some((row) => row.id === model)
+    )
+      throw Error(`${ROLE_NAMES[role]}에 사용할 모델을 골라 주세요.`);
+    q.engines[role] = { engine: id, ...(model ? { model } : {}) };
+  }
+  q.patternId = form.querySelector("#quality-default-pattern")?.value || "auto";
+  q.worldId =
+    form.querySelector("#quality-default-storyWorldId")?.value ||
+    q.worldId ||
+    "drawer";
+  q.season =
+    form.querySelector("#quality-default-storySeason")?.value ||
+    q.season ||
+    "auto";
+  q.timeOfDay =
+    form.querySelector("#quality-default-storyTimeOfDay")?.value ||
+    q.timeOfDay ||
+    "auto";
+  const variantField = form.querySelector("#quality-variant-chance");
+  if (variantField) {
+    const raw = variantField.value.trim(),
+      percent = Number(raw);
+    if (!raw || !Number.isFinite(percent) || percent < 0 || percent > 100)
+      throw Error("변형 확률은 0~100%로 적어 주세요.");
+    q.variantChance = percent / 100;
+  }
+  const cards = clone(patternsFor(state));
+  for (const element of form.querySelectorAll("[data-quality-pattern-field]")) {
+    const card = cards[Number(element.dataset.qualityPatternIndex)],
+      path = element.dataset.qualityPatternField.split(".");
+    if (!card) continue;
+    let target = card;
+    for (const key of path.slice(0, -1)) target = target[key];
+    target[path.at(-1)] = ["bestFor", "emotions"].includes(path[0])
+      ? element.value
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : element.value.trim();
+  }
+  if (cards.length) {
+    const report = validateQualityPatternCards(cards);
+    if (!report.valid) throw Error(report.errors.join("\n"));
+    q.patterns = cards;
+  }
+  return normalizeStoryQualitySettings(q);
 }
-function displayError(error){const element=document.querySelector('#quality-settings-error')||document.querySelector('#quality-coach-status');if(element)element.textContent=error.message;api.toast?.(error.message);}
-export function cleanupStoryQualityUI(){coachController?.abort();coachController=null;}
-export async function maybeRunStoryQualityCoach({force=false}={}){
- if(!api?.isParent()||coachController)return;const state=api.getState();if(!force&&!qualityWeeklyCoachDue(state))return;
- const q=quality(state),recent=storyQualityBookRecords(state).filter(record=>Date.now()-Date.parse(record.createdAt)<=7*86400000);const controller=new AbortController();coachController=controller;const status=document.querySelector('#quality-coach-status');if(status)status.textContent='최근 승인한 이야기를 확인하고 있어요.';
- try{const engine=recent.length>=3?await api.getEngine?.('coach',q):undefined;if(!api.isParent()||api.getState()!==state)throw new DOMException('부모 화면이 바뀌었어요.','AbortError');const result=await runQualityWeeklyCoach(state,{engine,signal:controller.signal,force,onProgress:progress=>{const element=document.querySelector('#quality-coach-status');if(element)element.textContent=progress.message;}});if(api.isParent()&&api.getState()===state){state.settings.storyQuality.coachUsage=[...list(state.settings.storyQuality.coachUsage),{at:new Date().toISOString(),...result.usage,...result.meta}].slice(-50);api.save();if(force)api.toast(result.meta.skipped||'코치 제안을 받았어요. 적용할 항목을 골라 주세요.');}}
- catch(error){if(api.isParent()&&api.getState()===state){if(error.usage){state.settings||={};state.settings.storyQuality||={};state.settings.storyQuality.coachUsage=[...list(state.settings.storyQuality.coachUsage),{at:new Date().toISOString(),...error.usage,...error.meta,failed:true}].slice(-50);}api.save();}if(force&&error.name!=='AbortError')displayError(error);}
- finally{if(coachController===controller)coachController=null;if(api.isParent()&&api.getState()===state&&(api.isSettings?.()??!!document.querySelector('#story-quality-settings')))api.render();}
+function displayError(error) {
+  const element =
+    document.querySelector("#quality-settings-error") ||
+    document.querySelector("#quality-coach-status");
+  if (element) element.textContent = error.message;
+  api.toast?.(error.message);
 }
-export const checkDueQualityCoach=()=>maybeRunStoryQualityCoach();
-export function configureStoryQualityUI(context){
- api=context;if(context.qualityData)qualityData=context.qualityData;else loadStoryQualityData().then(data=>{qualityData=data;if(api.isParent()&&document.querySelector('#story-quality-settings'))api.render();}).catch(error=>api.toast?.(error.message));
- if(configured)return;configured=true;
- document.addEventListener('submit',event=>{if(event.target.id!=='story-quality-form')return;event.preventDefault();if(!api.isParent())return;try{const state=api.getState(),next=readSettings(event.target,state);state.settings||={};state.settings.storyQuality={...(state.settings.storyQuality||{}),...next};if(api.save()===false)throw Error('글 품질 설정을 저장하지 못했어요.');api.render();api.toast('새 이야기부터 글 품질 설정을 적용해요.');}catch(error){displayError(error);}});
- document.addEventListener('change',event=>{if(event.target.dataset?.qualityWorldField==='storyWorldId'&&api.isParent()){const container=event.target.closest('.quality-world-selectors');if(container){const hint=container.querySelector('[data-quality-world-hint]'),button=container.querySelector('[data-quality-action="world-topic"]'),status=container.querySelector('[data-quality-topic-status]');if(hint)hint.textContent=worldHint(event.target.value);if(button){button.disabled=event.target.value==='drawer';delete button.dataset.qualityTopicWorld;delete button.dataset.qualityTopicOffset;}if(status)status.textContent=event.target.value==='drawer'?'모험 무대를 고르면 주제 아이디어를 뽑을 수 있어요.':'';}}const role=event.target.dataset.qualityRoleEngine;if(!role||!api.isParent()||!event.target.closest('#story-quality-form'))return;const form=event.target.closest('form'),q=quality(api.getState()),selected=event.target.value,resolved=resolveQualityStageSettings(getTextGenerationSettings(api.getState()),role,{...q,engines:{...q.engines,[role]:selected?{engine:selected}:{}}}),model=form.querySelector(`[data-quality-role-model="${role}"]`),models=listTextModels(resolved.engineId);model.value='';model.placeholder=resolved.config.model||'로컬 기본 모델';form.querySelector(`#quality-models-${role}`).innerHTML=models.map(row=>`<option value="${esc(row.id)}">${esc(row.name||row.id)}</option>`).join('');});
- document.addEventListener('click',event=>{const element=event.target.closest('[data-quality-action]');if(!element)return;event.preventDefault();if(!api.isParent())return;const action=element.dataset.qualityAction;if(action==='world-topic'){void selectWorldTopic(element);return;}if(action==='run-coach'){void maybeRunStoryQualityCoach({force:true});return;}if(action==='stop-coach'){cleanupStoryQualityUI();return;}try{const state=api.getState();if(action==='approve-coach'){const ruleIndices=[...document.querySelectorAll('[data-quality-coach-rule]:checked')].map(item=>Number(item.dataset.qualityCoachRule)),banIndices=[...document.querySelectorAll('[data-quality-coach-ban]:checked')].map(item=>Number(item.dataset.qualityCoachBan));if(!ruleIndices.length&&!banIndices.length)throw Error('승인할 제안을 먼저 골라 주세요.');applyCoachProposals(state,{ruleIndices,banIndices});}else if(action==='rollback')rollbackQualityRules(state,{version:Number(document.querySelector('#quality-rollback-version')?.value)});else return;if(api.save()===false)throw Error('규칙 변경을 저장하지 못했어요.');api.render();api.toast(action==='rollback'?'이전 규칙으로 되돌렸어요.':'선택한 제안만 적용했어요.');}catch(error){displayError(error);}});
+export function cleanupStoryQualityUI() {
+  coachController?.abort();
+  coachController = null;
+}
+export async function maybeRunStoryQualityCoach({ force = false } = {}) {
+  if (!api?.isParent() || coachController) return;
+  const state = api.getState();
+  if (!force && !qualityWeeklyCoachDue(state)) return;
+  const q = quality(state),
+    recent = storyQualityBookRecords(state).filter(
+      (record) => Date.now() - Date.parse(record.createdAt) <= 7 * 86400000,
+    );
+  const controller = new AbortController();
+  coachController = controller;
+  const status = document.querySelector("#quality-coach-status");
+  if (status) status.textContent = "최근 승인한 이야기를 확인하고 있어요.";
+  try {
+    const engine =
+      recent.length >= 3 ? await api.getEngine?.("coach", q) : undefined;
+    if (!api.isParent() || api.getState() !== state)
+      throw new DOMException("부모 화면이 바뀌었어요.", "AbortError");
+    const result = await runQualityWeeklyCoach(state, {
+      engine,
+      signal: controller.signal,
+      force,
+      onProgress: (progress) => {
+        const element = document.querySelector("#quality-coach-status");
+        if (element) element.textContent = progress.message;
+      },
+    });
+    if (api.isParent() && api.getState() === state) {
+      state.settings.storyQuality.coachUsage = [
+        ...list(state.settings.storyQuality.coachUsage),
+        { at: new Date().toISOString(), ...result.usage, ...result.meta },
+      ].slice(-50);
+      api.save();
+      if (force)
+        api.toast(
+          result.meta.skipped ||
+            "코치 제안을 받았어요. 적용할 항목을 골라 주세요.",
+        );
+    }
+  } catch (error) {
+    if (api.isParent() && api.getState() === state) {
+      if (error.usage) {
+        state.settings ||= {};
+        state.settings.storyQuality ||= {};
+        state.settings.storyQuality.coachUsage = [
+          ...list(state.settings.storyQuality.coachUsage),
+          {
+            at: new Date().toISOString(),
+            ...error.usage,
+            ...error.meta,
+            failed: true,
+          },
+        ].slice(-50);
+      }
+      api.save();
+    }
+    if (force && error.name !== "AbortError") displayError(error);
+  } finally {
+    if (coachController === controller) coachController = null;
+    if (
+      api.isParent() &&
+      api.getState() === state &&
+      (api.isSettings?.() ??
+        !!document.querySelector("#story-quality-settings"))
+    )
+      api.render();
+  }
+}
+export const checkDueQualityCoach = () => maybeRunStoryQualityCoach();
+export function configureStoryQualityUI(context) {
+  api = context;
+  if (context.qualityData) qualityData = context.qualityData;
+  else
+    loadStoryQualityData()
+      .then((data) => {
+        qualityData = data;
+        if (api.isParent() && document.querySelector("#story-quality-settings"))
+          api.render();
+      })
+      .catch((error) => api.toast?.(error.message));
+  if (configured) return;
+  configured = true;
+  document.addEventListener("submit", (event) => {
+    if (event.target.id !== "story-quality-form") return;
+    event.preventDefault();
+    if (!api.isParent()) return;
+    try {
+      const state = api.getState(),
+        next = readSettings(event.target, state);
+      state.settings ||= {};
+      state.settings.storyQuality = {
+        ...(state.settings.storyQuality || {}),
+        ...next,
+      };
+      if (api.save() === false)
+        throw Error("글 품질 설정을 저장하지 못했어요.");
+      api.render();
+      api.toast("새 이야기부터 글 품질 설정을 적용해요.");
+    } catch (error) {
+      displayError(error);
+    }
+  });
+  document.addEventListener("change", (event) => {
+    if (
+      event.target.dataset?.qualityWorldField === "storyWorldId" &&
+      api.isParent()
+    ) {
+      const container = event.target.closest(".quality-world-selectors");
+      if (container) {
+        const hint = container.querySelector("[data-quality-world-hint]"),
+          button = container.querySelector(
+            '[data-quality-action="world-topic"]',
+          ),
+          status = container.querySelector("[data-quality-topic-status]");
+        if (hint) hint.textContent = worldHint(event.target.value);
+        if (button) {
+          button.disabled = event.target.value === "drawer";
+          delete button.dataset.qualityTopicWorld;
+          delete button.dataset.qualityTopicOffset;
+        }
+        if (status)
+          status.textContent =
+            event.target.value === "drawer"
+              ? "모험 무대를 고르면 주제 아이디어를 뽑을 수 있어요."
+              : "";
+      }
+    }
+    const role = event.target.dataset.qualityRoleEngine;
+    if (
+      !role ||
+      !api.isParent() ||
+      !event.target.closest("#story-quality-form")
+    )
+      return;
+    const form = event.target.closest("form"),
+      q = quality(api.getState()),
+      selected = event.target.value,
+      resolved = resolveQualityStageSettings(
+        getTextGenerationSettings(api.getState()),
+        role,
+        {
+          ...q,
+          engines: {
+            ...q.engines,
+            [role]: selected ? { engine: selected } : {},
+          },
+        },
+      ),
+      model = form.querySelector(`[data-quality-role-model="${role}"]`),
+      models = listTextModels(resolved.engineId);
+    model.value = "";
+    model.placeholder = resolved.config.model || "로컬 기본 모델";
+    form.querySelector(`#quality-models-${role}`).innerHTML = models
+      .map(
+        (row) =>
+          `<option value="${esc(row.id)}">${esc(row.name || row.id)}</option>`,
+      )
+      .join("");
+  });
+  document.addEventListener("click", (event) => {
+    const element = event.target.closest("[data-quality-action]");
+    if (!element) return;
+    event.preventDefault();
+    if (!api.isParent()) return;
+    const action = element.dataset.qualityAction;
+    if (action === "world-topic") {
+      void selectWorldTopic(element);
+      return;
+    }
+    if (action === "run-coach") {
+      void maybeRunStoryQualityCoach({ force: true });
+      return;
+    }
+    if (action === "stop-coach") {
+      cleanupStoryQualityUI();
+      return;
+    }
+    try {
+      const state = api.getState();
+      if (action === "approve-coach") {
+        const ruleIndices = [
+            ...document.querySelectorAll("[data-quality-coach-rule]:checked"),
+          ].map((item) => Number(item.dataset.qualityCoachRule)),
+          banIndices = [
+            ...document.querySelectorAll("[data-quality-coach-ban]:checked"),
+          ].map((item) => Number(item.dataset.qualityCoachBan));
+        if (!ruleIndices.length && !banIndices.length)
+          throw Error("승인할 제안을 먼저 골라 주세요.");
+        applyCoachProposals(state, { ruleIndices, banIndices });
+      } else if (action === "rollback")
+        rollbackQualityRules(state, {
+          version: Number(
+            document.querySelector("#quality-rollback-version")?.value,
+          ),
+        });
+      else return;
+      if (api.save() === false) throw Error("규칙 변경을 저장하지 못했어요.");
+      api.render();
+      api.toast(
+        action === "rollback"
+          ? "이전 규칙으로 되돌렸어요."
+          : "선택한 제안만 적용했어요.",
+      );
+    } catch (error) {
+      displayError(error);
+    }
+  });
 }
