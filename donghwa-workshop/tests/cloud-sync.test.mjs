@@ -25,6 +25,7 @@ function server({state=null,revision=state?1:0,manifest=[],assets=[]}={}) {
     if(path==='/session')return json(api.user?{authenticated:true,user:api.user}:{authenticated:false,signInPath:'/signin-with-chatgpt?return_to=%2F'});
     if(!api.user)return json({error:{code:'unauthenticated'}},401);
     assert.equal(headers.get('X-Cloud-Account-ID'),api.user.id,'all library/media requests are tied to the signed-in account');
+    if(path==='/library?meta=1')return json({exists:Boolean(api.state),revision:api.revision,updatedAt:api.state?'2026-10-15T01:00:00Z':null,summary:{bookCount:api.state?.books?.length||0,characterCount:api.state?.characters?.length||0,backgroundCount:api.state?.backgrounds?.length||0}});
     if(path==='/library' && method==='GET')return json({exists:Boolean(api.state),revision:api.revision,state:api.state,manifest:api.manifest,updatedAt:api.state?'2026-10-15T01:00:00Z':null});
     if(path==='/library' && method==='PUT') {
       const body=JSON.parse(options.body);
@@ -146,7 +147,7 @@ test('switching accounts even before a first upload blocks local data from the n
 });
 
 test('the nested account_changed 403 response is distinguished from sign-out and never uploads',async()=>{
-  const api=server();api.intercept=async call=>call.path==='/library'?json({error:{code:'account_changed',message:'account changed'}},403):null;
+  const api=server();api.intercept=async call=>call.path.startsWith('/library')?json({error:{code:'account_changed',message:'account changed'}},403):null;
   const {sync}=client(api);
   try {await sync.start();assert.equal(sync.getStatus().phase,'account-changed');assert.equal(sync.getStatus().authenticated,true);assert.equal(sync.getStatus().canPush,false);assert.equal(writes(api).length,0);}
   finally {sync.stop();}
@@ -155,7 +156,7 @@ test('the nested account_changed 403 response is distinguished from sign-out and
 test('signed-out, unavailable and network failures leave the local library usable',async()=>{
   for(const mode of ['signed-out','unavailable','offline']) {
     const api=server();if(mode==='signed-out')api.user=null;
-    if(mode==='unavailable')api.intercept=async call=>call.path==='/library'?json({error:{code:'storage_unavailable'}},503):null;
+    if(mode==='unavailable')api.intercept=async call=>call.path.startsWith('/library')?json({error:{code:'storage_unavailable'}},503):null;
     if(mode==='offline')api.intercept=async()=>{throw new Error('offline');};
     const {sync,local}=client(api);const before=JSON.stringify(local.state);
     try {await sync.start();assert.equal(sync.getStatus().phase,mode==='offline'?'error':mode);assert.equal(JSON.stringify(local.state),before);assert.equal(local.applies.length,0);assert.equal(writes(api).length,0);if(mode==='signed-out')assert.match(sync.getStatus().signInPath,/^\/signin-with-chatgpt/);}
@@ -224,4 +225,30 @@ test('stopping a pending cloud read prevents remote state application and baseli
   const api=server({state:library('원격')}),gate=deferred(),entered=deferred();api.intercept=async call=>{if(call.path==='/library'){entered.resolve();await gate.promise;}};
   const {sync,local,storage}=client(api,library(),{local:{available:false}}),opening=sync.start();await entered.promise;sync.stop();gate.resolve();await opening;
   assert.equal(sync.getStatus().phase,'stopped');assert.equal(local.applies.length,0);assert.equal(storage.getItem(CLOUD_SYNC_STORAGE_KEY),null);assert.equal(local.state.characters[0].name,'유하');
+});
+
+test('A-3 unchanged polling never requests full state or media',async()=>{
+  const state=library(),api=server({state}),{sync}=client(api,state,{storage:memoryStorage(await baseline(state))});
+  try {await sync.start();await sync.refresh();await sync.refresh();assert.equal(api.calls.filter(c=>c.path==='/library').length,0);assert.equal(api.calls.filter(c=>c.path==='/library?meta=1').length,3);}
+  finally {sync.stop();}
+});
+test('A-1 blocked autosave does no backup or upload then flushes exactly once after guard clears',async()=>{
+  const state=library(),api=server({state});let backups=0;
+  const {sync,local}=client(api,state,{storage:memoryStorage(await baseline(state)),makeBackup:async(state,options)=>{backups++;assert.equal(options.mode,'blobs');return {snapshot:copy(state),assets:new Map()};}});
+  try {await sync.start();local.state.characters[0].name='수정';local.canApply=false;sync.changed();await sync.refresh();await sync.refresh();assert.equal(backups,0);assert.equal(writes(api).length,0);assert.equal(sync.getStatus().dirty,true);local.canApply=true;await sync.refresh();await sync.refresh();assert.equal(backups,1);assert.equal(writes(api).length,1);}
+  finally {sync.stop();}
+});
+test('A-1 unchanged Blob bytes are read only once for digesting',async()=>{
+  const {hashMediaBlob}=await import('../dist/cloud-sync.js');const blob=new Blob(['bytes'],{type:'image/png'}),arrayBuffer=blob.arrayBuffer.bind(blob);let reads=0;blob.arrayBuffer=()=>{reads++;return arrayBuffer();};
+  assert.equal(await hashMediaBlob(blob),await hashMediaBlob(blob));assert.equal(reads,1);
+});
+test('A-11 a push waits for the refresh already in flight',async()=>{
+  const state=library(),api=server({state}),gate=deferred(),entered=deferred(),{sync}=client(api,state,{storage:memoryStorage(await baseline(state))});
+  try {await sync.start();api.intercept=async c=>{if(c.path==='/library?meta=1'){entered.resolve();await gate.promise;}};const refreshing=sync.refresh();await entered.promise;const pushing=sync.push();gate.resolve();await Promise.all([refreshing,pushing]);assert.equal(sync.getStatus().phase,'ready');assert.equal(writes(api).length,1);}
+  finally {sync.stop();}
+});
+test('A-11 identical remote state advances a stale baseline instead of claiming a conflict',async()=>{
+  const state=library(),api=server({state,revision:2}),{sync,storage}=client(api,state,{storage:memoryStorage(await baseline(state,1))});
+  try {await sync.start();assert.equal(sync.getStatus().phase,'ready');assert.equal(JSON.parse(storage.getItem(CLOUD_SYNC_STORAGE_KEY)).revision,2);assert.equal(writes(api).length,0);}
+  finally {sync.stop();}
 });

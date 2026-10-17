@@ -1,0 +1,52 @@
+
+> test:quality
+> node --test story-quality/test/*.test.mjs
+
+✔ worlds: 100 cards across 4 eras, every card complete (2.816919ms)
+✔ expand: variants, overlays, generated topics (10× by combination) (96.943086ms)
+✔ worldCoreLines gives 3 lines; suggestWorlds prefers topic match and avoids recent (1.348041ms)
+✔ composeSeed with a world card draws sub-locations and creatures from that world (0.743444ms)
+✔ plotCheck helpers: particles stripped, head-noun planted match (9.306578ms)
+✔ all 24 gold outlines pass plotCheck; all 3 bad examples fail (65.206814ms)
+✔ topic sets: 50 distill + 20 eval, disjoint, valid world/pattern ids (2.098008ms)
+✔ estimateDistillCost: 400 cells with Sonnet gen + Haiku judge ≈ $6 (0.248537ms)
+✔ distillation: generates, filters, resumes (skips existing), and grows the ban list (58.228952ms)
+✔ eval harness: runs fixed set with fake engines, writes rows + summary, compare table renders (33.572903ms)
+✔ calibrateJudge separates gold from bad examples with the fake judge (1.111646ms)
+✔ judgeOutline clamps and computes pass (0.299751ms)
+✔ finetune converter: gold → mlx chat jsonl, topic-level split, completions format (10.813596ms)
+✔ distill resume IDs distinguish English levels sharing one Korean level (13.772524ms)
+✔ dry-run rows do not suppress later real generation in the same output (6.828493ms)
+✔ estimate CLI labels unknown prices unavailable without creating samples or calling engines (229.339378ms)
+✔ estimate CLI retains numeric costs for registered Anthropic models without API keys (58.402796ms)
+✔ Korean label annotation cleanup preserves nouns and selects the correct particle (1.005875ms)
+✔ space and underwater worlds exclude outdoor rain and sunset waiting templates (18.697026ms)
+✔ head-noun bans agree before selection and after generation without name substring matches (9.075877ms)
+✔ one-letter forbidden keywords cannot falsely flag innocent compound words (1.106933ms)
+✔ browser index has no transitive Node development-tool dependency (1.341467ms)
+✔ app pipeline forwards world and variant choice while reference books remain retrieval-only (7.740237ms)
+✔ when every world creature head is banned, seed selection falls back to an eligible common creature (1.562902ms)
+✔ data files load and have expected sizes (10× set) (2.547911ms)
+✔ banList: recent books ban planted objects, creatures, patterns (shorter window) (4.258465ms)
+✔ retrieval ranks the closest approved outline first and renders with the no-reuse label (1.958802ms)
+✔ composeSeed is deterministic, respects ban list, picks distinct senses (5.357827ms)
+✔ composeSeed falls back to forest sub-locations for unknown background (1.235216ms)
+✔ gestures: finds emotion tells and moral tails, renders hints (1.278048ms)
+✔ extractJson handles fences, chatter, and nested braces (0.963427ms)
+✔ tokenize/jaccard treat Korean bigrams, rng/hash stable (0.359512ms)
+✔ outline prompt fills every slot, stays under the token budget, substitutes the protagonist name (2.556692ms)
+✔ fill removes empty labelled lines (1.030433ms)
+✔ plotCheck catches planted/recovery, failure reasons, moral tails, missing topic (7.103245ms)
+✔ mergeRules enforces the cap and supports replace (0.29755ms)
+✔ pipeline (single-shot outline) runs end to end with a fake engine and passes plotCheck (19.770521ms)
+✔ pipeline (beam search) chooses judged candidates and fills the rest with the cheap engine (5.087335ms)
+✔ prose stage: rich → simplify → tell-fix pass removes emotion tells (4.099809ms)
+✔ child gate aggregates curiosity + retell (2.655651ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 401.097528

@@ -100,3 +100,19 @@ test('legacy saved outlines remain readable without a fabricated semantic pass o
   const {input,outline,prose}=fixture();delete outline.plotContract;const unused=engine(()=>{throw Error('legacy review must be explicit');});
   const result=await reviewStoryCoherence(outline,prose,null,input,{engine:unused});assert.equal(unused.calls.length,0);assert.equal(result.meta.requests,0);assert.equal(result.meta.skipped,true);assert.equal(result.meta.coherence,null);assert.deepEqual(result.data.prose,prose);
 });
+
+test('A-4 child turn repair pays for exactly one final page coherence review',async()=>{
+ const {finalizeStoryPagination}=await import('../dist/story-generation/pipeline.js');
+ const {input,outline,prose,pagination}=fixture();input.storyQuality={enabled:true,childSimulator:true};let retells=0,semanticReviews=0,repaginations=0;
+ const mock=engine(request=>{
+  const schema=request.jsonSchema?.properties || {};
+  if(schema.passed){semanticReviews++;return {passed:true,issues:[]};}
+  if(schema.retell){retells++;return {retell:['유하가 바람의 노래를 찾아요.','유하가 빈 통을 불어요.','유하가 통을 가지고 집으로 돌아와요.'],coveredBeats:outline.beats.filter(b=>retells!==1 || b.type!=="turn").map(b=>b.index),missingCore:retells===1?['turn']:[],confusions:[],coherence:2};}
+  if(schema.paragraph){const data=JSON.parse(request.user);return {paragraph:data.targetParagraph};}
+  if(schema.pages && schema.overall)return {pages:pagination.pages.map(page=>({pageNo:page.pageNo,score:2,childQuestion:page.pageNo===12?null:'다음에는?',why:'다음 행동 기대'})),dropPages:[],overall:8};
+  if(schema.pages){repaginations++;return clone(pagination);}
+  throw new Error('Unexpected mocked schema: '+Object.keys(schema).join(','));
+ });
+ const result=await finalizeStoryPagination(outline,prose,pagination,input,{engine:mock,repair:false});
+ assert.equal(repaginations,1);assert.equal(retells,2);assert.equal(semanticReviews,1);assert.ok(isCoherenceCurrent(result.meta.coherence,{outline,prose:result.meta.approvedProse,pagination:result.data,stage:'pages'}));
+});
