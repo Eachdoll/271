@@ -1,6 +1,6 @@
 {
   "version": "2026-10-17",
-  "description": "고정 평가 세트 20주제. 증류 주제(distill/topics.json)·골드 세트와 겹치지 않는다. 프롬프트·모델 버전이 바뀔 때마다 같은 20개를 돌려 루브릭 평균·plotCheck 통과율·비용을 기록한다. 세계는 현재 8·과거 5·미래 4·상상 3.",
+  "description": "고정 평가 세트 20주제. 증류 주제(distill/topics.json)·골드 세트와 겹치지 않는다. 프롬프트·모델 버전이 바뀔 때마다 같은 20개를 돌려 루브릭 평균·plotCheck 통과율·비용을 기록한다. 세계는 현재 9·과거 6·미래 3·상상 2.",
   "topics": [
     {"id": "e01", "topic": "유치원 텃밭 방울토마토 첫 수확", "worldId": "kindergarten", "patternId": "accumulate", "levelKo": "K1", "levelEn": "E0"},
     {"id": "e02", "topic": "거실 담요 터널이 안 열리는 날", "worldId": "home", "patternId": "search_wrong_answers", "levelKo": "K1", "levelEn": "E0"},
