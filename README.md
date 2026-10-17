@@ -1,5 +1,7 @@
 # 동화공방
 
+r2 검토의 R2-1~10 수정은 [Codex r3 완료 보고](CODEX_R3_COMPLETION_2026-10-17.md)에 정리했습니다.
+
 Claude r1 이후 A-1~A-18 / B-1~B-12 작업 결과와 검증은 [Codex 완료 보고](CODEX_COMPLETION_2026-10-17.md)를 참고하세요.
 
 2026-10-17 안정성·효율·가독성 개선 내역은 [UPDATE_NOTES_2026-10-17.md](UPDATE_NOTES_2026-10-17.md)에 정리했습니다.
