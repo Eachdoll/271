@@ -203,6 +203,7 @@ export const CHILD_CURIOSITY_USER = `[이야기 쪽별 글]
 - 마지막 쪽은 '편안하게 끝나는가'로 판단한다(2점 = 조용하고 안전한 마무리).
 
 [출력] JSON만.
+overall은 0~10점이다(쪽 점수 평균 × 5).
 {"pages": [{"pageNo": 1, "score": 2, "childQuestion": "한마디 또는 null", "why": "10자 이내"}], "dropPages": [], "overall": 0}`;
 export const CHILD_RETELL_SYSTEM = `너는 방금 이 이야기를 다 들은 4세 아이다. 어른이 "무슨 이야기였어?" 하고 물었다. 아이답게 세 문장으로만 말한다. 들은 내용에 없는 것은 말하지 않는다. 그 다음, 평가자로 돌아와 아이의 되말하기가 원래 줄거리의 어느 비트를 담았는지 표시한다. JSON으로만.`;
 export const CHILD_RETELL_USER = `[이야기 전문]

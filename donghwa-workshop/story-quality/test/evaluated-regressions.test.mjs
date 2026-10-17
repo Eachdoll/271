@@ -75,3 +75,10 @@ test('prose simplify carries a whole-book sentence budget and limits question en
  assert.match(seen[1].user,/전체 12~24문장/);assert.match(seen[1].user,/질문으로 끝나는 비트는 책 전체에서 2개까지/);assert.match(seen[0].user,/질문으로 끝나는 비트는 책 전체에서 2개까지/);
  seen.length=0;await writeRichThenSimplify(base);assert.doesNotMatch(seen[1].user,/전체 분량/);
 });
+
+test('curiosity overall is derived from page scores on the 0-10 scale, not the model free-form number',async()=>{
+ const {curiosityCheck}=await import('../dist/childSimulator.js');
+ const engine={id:'mock',complete:async()=>({text:'{"pages":[{"pageNo":1,"score":2,"why":"a"},{"pageNo":2,"score":2,"why":"b"},{"pageNo":3,"score":1,"why":"c"}],"dropPages":[],"overall":1.7}',usage:{input:1,output:1},costUsd:0})};
+ const r=await curiosityCheck(engine,[{pageNo:1,text:'a'},{pageNo:2,text:'b'},{pageNo:3,text:'c'}]);
+ assert.equal(r.overall,8.3);assert.equal(r.pass,true);
+});

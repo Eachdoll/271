@@ -11,7 +11,8 @@ export async function curiosityCheck(engine, pages) {
         why: p.why ?? '',
     }));
     const drop = scored.filter((p) => p.score === 0).map((p) => p.pageNo);
-    const overall = typeof j.overall === 'number' ? j.overall : Math.round((scored.reduce((a, p) => a + p.score, 0) / Math.max(1, scored.length)) * 5);
+    // 모델이 쓰는 overall은 척도가 흔들린다(0~2 평균을 쓰는 경우가 많음). 쪽 점수가 있으면 항상 쪽 점수 평균×5(0~10)로 계산한다.
+    const overall = scored.length ? Math.round((scored.reduce((a, p) => a + p.score, 0) / scored.length) * 5 * 10) / 10 : typeof j.overall === 'number' ? clamp(j.overall, 0, 10) : 0;
     return { pages: scored, dropPages: drop.length ? drop : j.dropPages ?? [], overall, pass: drop.length === 0 && overall >= 6, costUsd: r.costUsd ?? 0 };
 }
 export async function retellCheck(engine, prose, beats) {
