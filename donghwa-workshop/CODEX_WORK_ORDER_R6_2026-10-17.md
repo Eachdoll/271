@@ -8,7 +8,7 @@
 | 브랜치 | `claude/cross-owner-repo-constraint-j20lhz` |
 | 앱 경로 | 저장소 안 `donghwa-workshop/` |
 | 기준 | Codex r5 (`SOURCE_COMMIT` `7156d53`)를 반입한 커밋 `6e7ff01` |
-| 이번에 반입할 범위 | `6e7ff01` 다음부터 이 지시서를 추가한 커밋까지 |
+| 이번에 반입할 범위 | `6e7ff01..브랜치 최신` (지시서 작성 시점 최신 `8402cdd`의 다음 커밋) |
 
 ```bash
 git clone https://github.com/Eachdoll/271.git
@@ -29,7 +29,7 @@ r4 때처럼 전체 트리를 덮어쓰지 말고 아래 커밋의 변경 파일
 | `4427f86` | 분량 초과 시 비트별 압축 단계 |
 | `89f32b9` | 증류 200편 결과와 승인본 `approved-books.json`, 예산 적용 전문 실측 결과 |
 | `744cddd` | 압축 단계를 선택 옵션(`condenseOverBudget`, 기본 끔)으로 변경, 되말하기 통과를 핵심 비트만으로 판정, 압축 실측 결과 |
-| 이 지시서 커밋 | `PROSE_EVAL_REPORT_2026-10-17.md`, 이 지시서 |
+| `8402cdd` 이후 이 지시서 커밋 | `PROSE_EVAL_REPORT_2026-10-17.md`, 이 지시서 (`8402cdd`에서 추가, 이 줄만 다음 커밋에서 갱신) |
 
 근거와 수치는 [전문 단계 실측 보고](PROSE_EVAL_REPORT_2026-10-17.md)에 있다. 반입 직후 검증 기준은 `npm test` 428개, `npm run test:quality` 50개 통과다. `story-quality/src`를 바꿨으므로 `npm run build`로 `story-quality/dist`와 `dist/story-quality/dist`를 다시 만들어, 반입한 컴파일본과 바이트가 같은지 확인한다. 이번 컴파일본은 TypeScript 6.0.2로 만들었고, 수정 전 소스를 같은 컴파일러로 빌드했을 때 기존 `dist`와 완전히 같았다.
 
