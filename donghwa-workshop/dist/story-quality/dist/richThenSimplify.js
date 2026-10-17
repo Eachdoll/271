@@ -36,7 +36,11 @@ export async function writeRichThenSimplify(input) {
     if (input.twoPass === false)
         return { rich, simplified: rich, tellHitsAfter: isKo ? findEmotionTells(rich, input.gestureDict).length : 0, calls, costUsd: cost };
     // 2패스: 목표 수준으로
-    const dialogueCount = Math.max(2, countDialogue(rich));
+    const budget = sentenceBudget(input.targetLevel, input.pageCount);
+    const richDialogue = countDialogue(rich);
+    // 예산이 있으면 대화 하한도 분량에 맞춘다(전체 문장의 1/4 이하, 최소 3).
+    const dialogueCount = budget ? Math.max(Math.min(3, Math.max(2, richDialogue)), Math.min(richDialogue, Math.floor(budget.max / 4))) : Math.max(2, richDialogue);
+    const lengthBudget = renderLengthBudget(budget, input.pageCount, isKo);
     const onoCount = Math.max(2, Math.min(4, Math.round(dialogueCount * 0.8)));
     const simpUser = fill(isKo ? PROSE_SIMPLIFY_USER_KO : PROSE_SIMPLIFY_USER_EN, {
         targetLevelLabel: input.targetLevel.label,
@@ -50,6 +54,7 @@ export async function writeRichThenSimplify(input) {
         refrainBeats,
         decodableRule: input.decodable ? '- Prefer CVC words (cat, sun, big) and the sight-word list.' : '',
         extraFixes: '',
+        lengthBudget,
         richText: rich,
     });
     const r2 = await simplifier.complete({ system: PROSE_SIMPLIFY_SYSTEM, user: simpUser, temperature: 0.4, maxTokens: 4000 });
@@ -72,6 +77,7 @@ export async function writeRichThenSimplify(input) {
             refrainBeats,
             decodableRule: '',
             extraFixes: renderTellFixInstructions(hits, input.gestureDict),
+            lengthBudget,
             richText: simplified,
         });
         const r3 = await simplifier.complete({ system: PROSE_SIMPLIFY_SYSTEM, user: fixUser, temperature: 0.3, maxTokens: 4000 });
@@ -82,6 +88,21 @@ export async function writeRichThenSimplify(input) {
         hits = findEmotionTells(simplified, input.gestureDict);
     }
     return { rich, simplified, tellHitsAfter: hits.length, calls, costUsd: cost };
+}
+/** 전체 문장 예산: 쪽 수 × 쪽당 문장 범위. 쪽 수가 없으면 null(기존 동작). */
+export function sentenceBudget(level, pageCount) {
+    const pages = Number(pageCount);
+    if (!Number.isInteger(pages) || pages < 1)
+        return null;
+    const [lo, hi] = level.sentencesPerPage;
+    return { min: lo * pages, max: hi * pages };
+}
+function renderLengthBudget(budget, pageCount, isKo) {
+    if (!budget)
+        return '';
+    return isKo
+        ? `[전체 분량] ${pageCount}쪽 그림책 → 전체 ${budget.min}~${budget.max}문장(대화 문장 포함). 이 범위를 반드시 지킨다. 비트마다 문장 수를 나눠 맞춘다.`
+        : `[Total length] ${pageCount}-page picture book → ${budget.min}-${budget.max} sentences in total, dialogue included. Stay inside this range; spread it across the beats.`;
 }
 function rangeOf(level, lang) {
     const r = lang === 'ko' ? level.eojeolPerSentence : level.wordsPerSentence;

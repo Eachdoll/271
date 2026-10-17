@@ -17,9 +17,33 @@ export function topicMentioned(text, topic) {
         return true;
     return kws.some((k) => text.includes(k) || (k.length >= 3 && text.includes(k.slice(0, 2))));
 }
-/** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. */
+const PLANTED_QUANTITY = /\s+(?:한|두|세|네|다섯|하나|둘|셋|\d+)(?:\s*(?:송이|개|마리|장|켤레|자루|권|알|쌍|그루|조각|병|봉지|짝|통))?$/u;
+const KO_PARTICLES = '(?:(?:에게|한테|께서|에서|부터|까지|처럼|보다|이랑|하고|으로|랑|와|과|의|을|를|이|가|은|는|도|만|에|로){1,3})?';
+/**
+ * 모델이 planted를 "커다란 등불: 거실에 있던 …"처럼 설명과 함께 쓰는 경우가 많다.
+ * 설명 구분자(: — ( . 줄바꿈) 앞의 명사구만 쓰고, 뒤의 수량("한 송이")은 뺀다.
+ */
+export function plantedPhrase(planted) {
+    const first = String(planted ?? '').split(/\s[—–-]\s|[—–:：(（\n]|\.(?:\s|$)/u)[0].trim();
+    return first.replace(PLANTED_QUANTITY, '').trim();
+}
+function containsNoun(text, noun) {
+    if (!noun)
+        return false;
+    const escaped = noun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}${KO_PARTICLES}(?=$|[^\\p{L}\\p{N}])`, 'u').test(text);
+}
+/** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. 한 글자 머리 명사("빵")도 조사 경계로만 찾는다. */
 export function containsPlanted(text, planted) {
-    return containsMaterial(text, planted);
+    if (containsMaterial(text, planted))
+        return true;
+    const phrase = plantedPhrase(planted);
+    if (!phrase)
+        return false;
+    if (phrase !== planted && containsMaterial(text, phrase))
+        return true;
+    const head = phrase.split(/\s+/).at(-1) ?? '';
+    return containsNoun(text, head);
 }
 /** 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")으로 쓰는 경우가 많아 ID로 정규화한다. */
 export function normalizeFailureReason(value) {

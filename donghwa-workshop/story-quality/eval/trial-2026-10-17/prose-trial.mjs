@@ -2,7 +2,8 @@
  * 전문 단계 실측: 기존 줄거리(JSONL)를 재사용해 풍부→단순화(ko K1·en E0) → 근사 쪽 나누기 → 읽기 검사 → 아이 시뮬레이터.
  * 앱 quality-adapter의 전문 호출 규칙(비트 라벨·대화 3회·감각·12,000토큰)을 그대로 덧붙인다. 쪽 나누기는 앱 단계 대신
  * 수준별 쪽당 최대 문장 수로 자른 근사치다.
- * 사용: node eval/trial-2026-10-17/prose-trial.mjs <outlineRunId> <outRunId> [--limit N] [--mock]
+ * 사용: node eval/trial-2026-10-17/prose-trial.mjs <outlineRunId> <outRunId> [--limit N] [--mock] [--budget]
+ *   --budget: 패키지 전문 단계에 pageCount(12)를 넘겨 전체 문장 예산을 건다(2026-10-17 r6 수정 검증용).
  */
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { runProseStage, runChildGate } from '../../dist/pipeline.js';
@@ -13,6 +14,7 @@ import { freezeReadingLevels, LEVEL_SEED } from '../../../dist/reading-levels.js
 const [inRun, outRun] = process.argv.slice(2);
 const limit = Number(process.argv[process.argv.indexOf('--limit') + 1]) || 20;
 const mock = process.argv.includes('--mock');
+const BUDGET = process.argv.includes('--budget');
 const CHILD_MAX = process.argv.includes('--package-child-budget') ? 0 : 4000;
 const here = new URL('./', import.meta.url), root = new URL('../../', import.meta.url);
 const gestureDict = JSON.parse(readFileSync(new URL('data/gesture_dictionary.json', root), 'utf8'));
@@ -84,7 +86,7 @@ for (const row of rows) {
     const outline = row.outline;
     for (const lang of ['ko', 'en']) {
       const target = lang === 'ko' ? 'K1' : 'E0';
-      const res = await runProseStage({ engines: { outline: wrap(sonnet, lang, outline, 'outline'), prose: wrap(sonnet, lang, outline, 'prose'), cheap: wrap(haiku, lang, outline, 'cheap') }, lang, outline, charactersCompact, briefsCompact: '[]', emotions: [], gestureDict, levels, targetLevelId: target, vocabLabel: lang === 'ko' ? 'frozen selected vocabulary' : 'dolch_preprimer+everyday_nouns', twoPass: true });
+      const res = await runProseStage({ engines: { outline: wrap(sonnet, lang, outline, 'outline'), prose: wrap(sonnet, lang, outline, 'prose'), cheap: wrap(haiku, lang, outline, 'cheap') }, lang, outline, charactersCompact, briefsCompact: '[]', emotions: [], gestureDict, levels, targetLevelId: target, vocabLabel: lang === 'ko' ? 'frozen selected vocabulary' : 'dolch_preprimer+everyday_nouns', twoPass: true, ...(BUDGET ? { pageCount: PAGE_COUNT } : {}) });
       const paras = parseLabeled(res.simplified), richParas = parseLabeled(res.rich);
       const spec = frozen.specs[lang], perPage = spec.sentencesPerPage?.max ?? (Array.isArray(spec.sentencesPerPage) ? spec.sentencesPerPage[1] : 2);
       const pages = paginate(paras, PAGE_COUNT);

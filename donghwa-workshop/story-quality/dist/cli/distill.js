@@ -1,6 +1,6 @@
 /**
  * CLI: 증류 데이터셋 생성
- *   ANTHROPIC_API_KEY=... node dist/cli/distill.js [--out distill/out/outlines.jsonl] [--gen claude-opus-5-5] [--judge claude-haiku-5-5] [--variants 1] [--limit 0] [--dry-run] [--estimate]
+ *   ANTHROPIC_API_KEY=... node dist/cli/distill.js [--out distill/out/outlines.jsonl] [--gen claude-opus-5-5] [--judge claude-haiku-5-5] [--variants 1] [--limit 0] [--concurrency 2] [--dry-run] [--estimate]
  * 재실행하면 이미 만든 sampleId는 건너뛴다(재개).
  */
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -42,6 +42,7 @@ async function main() {
     const judgeSpec = arg('judge', 'anthropic:claude-haiku-5-5');
     const variants = Number(arg('variants', '1'));
     const limit = Number(arg('limit', '0'));
+    const concurrency = Math.min(8, Math.max(1, Number(arg('concurrency', '2')) || 2));
     const dryRun = arg('dry-run') === 'true';
     const estimate = arg('estimate') === 'true';
     const topicsFile = readJson('distill/topics.json');
@@ -91,7 +92,7 @@ async function main() {
         outPath: out,
         variantsPerCell: variants,
         seedBooks: gold,
-        concurrency: 2,
+        concurrency,
         dryRun,
         onSample: (s) => {
             n++;

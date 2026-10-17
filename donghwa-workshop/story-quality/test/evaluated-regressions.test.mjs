@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createAnthropicEngine} from '../dist/engines/anthropic.js';
-import {normalizeFailureReason,plotCheck} from '../dist/plotCheck.js';
+import {normalizeFailureReason,plotCheck,containsPlanted,plantedPhrase} from '../dist/plotCheck.js';
 import {buildOutlinePrompt} from '../dist/outlinePrompt.js';
 import {composeSeed} from '../dist/composeSeed.js';
 import {buildBanList} from '../dist/banList.js';
@@ -52,4 +52,26 @@ test('R5-2 fixed test-set description matches the eras of its actual topic world
  for(const topic of set.topics){const world=worlds.find(item=>item.id===topic.worldId);assert.ok(world,topic.worldId);assert.ok(Object.hasOwn(counts,world.era),world.era);counts[world.era]++;}
  const match=set.description.match(/현재\s*(\d+)\s*·\s*과거\s*(\d+)\s*·\s*미래\s*(\d+)\s*·\s*상상\s*(\d+)/);assert.ok(match,'description must declare all four era counts');
  assert.deepEqual(counts,Object.fromEntries(['present','past','future','fantasy'].map((era,i)=>[era,Number(match[i+1])])));
+});
+
+test('planted descriptions match by their leading noun phrase without loosening unrelated words',()=>{
+ assert.equal(plantedPhrase('커다란 등불: 거실 소파 옆에 있던 불 꺼진 등불. 유하가 들고 간다.'),'커다란 등불');
+ assert.equal(plantedPhrase('커다란 보라 꽃 한 송이. 유하가 꽂는다.'),'커다란 보라 꽃');
+ assert.equal(plantedPhrase('아주 작은 팬파이프 — 주머니 끈에 건 피리'),'아주 작은 팬파이프');
+ assert.ok(containsPlanted('유하가 머리 위 빵을 내려요.','커다란 납작한 빵'));
+ assert.ok(containsPlanted('결승선에 꽂았던 보라 꽃 한 송이가 자랐어요.','커다란 보라 꽃 한 송이. 유하가 꽂는다.'));
+ assert.ok(!containsPlanted('빵빵 소리가 나요.','커다란 빵'));
+ assert.ok(!containsPlanted('모자 위에서 반짝임이 보여요.','빛나는 단추'));
+});
+
+test('prose simplify carries a whole-book sentence budget and limits question endings when pageCount is known',async()=>{
+ const {writeRichThenSimplify,sentenceBudget}=await import('../dist/richThenSimplify.js');
+ const level={label:'K1',sentencesPerPage:[1,2],eojeolPerSentence:[3,5]};
+ assert.deepEqual(sentenceBudget(level,12),{min:12,max:24});assert.equal(sentenceBudget(level,undefined),null);
+ const seen=[];const engine={id:'mock',complete:async req=>{seen.push(req);return {text:'[비트 1 · setup]\n유하가 "가자!" 하고 말해요. "응!" 초록이가 말해요. "좋아!" 유하가 웃어요. "와!" 초록이가 뛰어요.',usage:{input:1,output:1},costUsd:0};}};
+ const gestureDict={emotions:[],moral_tails_ko:[]};
+ const base={engine,lang:'ko',charactersCompact:'유하',beatsCompact:'1 [setup] 시작',briefsCompact:'[]',emotions:[],gestureDict,targetLevel:level,richLevel:{label:'K2',sentencesPerPage:[2,3],eojeolPerSentence:[5,7]}};
+ await writeRichThenSimplify({...base,pageCount:12});
+ assert.match(seen[1].user,/전체 12~24문장/);assert.match(seen[1].user,/질문으로 끝나는 비트는 책 전체에서 2개까지/);assert.match(seen[0].user,/질문으로 끝나는 비트는 책 전체에서 2개까지/);
+ seen.length=0;await writeRichThenSimplify(base);assert.doesNotMatch(seen[1].user,/전체 분량/);
 });

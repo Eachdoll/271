@@ -186,6 +186,8 @@ export interface ProseStageInput {
   styleSamples?: string[];
   vocabLabel?: string;
   twoPass?: boolean;
+  /** 책 쪽 수. 전체 문장 예산에 쓴다. */
+  pageCount?: number;
 }
 
 export async function runProseStage(input: ProseStageInput) {
@@ -208,6 +210,7 @@ export async function runProseStage(input: ProseStageInput) {
     vocabLabel: input.vocabLabel,
     twoPass: input.twoPass,
     decodable: input.targetLevelId === 'E1',
+    pageCount: input.pageCount,
   });
 }
 

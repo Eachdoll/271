@@ -134,7 +134,7 @@ export const PROSE_RICH_USER_KO = `[등장인물] {{characters}}
 3 비트마다 대화 1개 이상(따옴표), 브리프의 소리·소품·동작을 문장에 넣는다.
 4 감정 직설어(무서웠어요·기뻤어요·슬펐어요 등) 금지. 몸짓 사전의 표현이나 비슷한 행동으로 보여 준다.
 5 종결어미를 섞는다. 비트마다 감탄·질문·청유 중 1개 이상, 같은 종결어미 3연속 금지.
-6 비트 마지막 문장은 다음 비트가 궁금해지게 끝낸다(마무리 비트 제외).
+6 비트 마지막 문장은 다음 비트가 궁금해지게 끝낸다(마무리 비트 제외). 방법을 섞는다: 소리·실패·새로 나타난 것·질문. 질문으로 끝나는 비트는 책 전체에서 2개까지.
 7 후렴은 {{refrainText}}를 비트 {{refrainBeats}}에만, 매번 한 단어 변주.
 8 교훈·감상 꼬리말 금지. 같은 문장 두 번 금지.
 
@@ -155,19 +155,20 @@ export const PROSE_RICH_USER_EN = `[Characters] {{characters}}
 3 One line of dialogue per beat. Use the brief's sounds, props and pose.
 4 No emotion labels (scared, happy, sad). Show them with the gestures above.
 5 Mix sentence endings: at least one exclamation or question per beat.
-6 End each beat with a line that makes a child want to turn the page (except the last beat).
+6 End each beat with a line that makes a child want to turn the page (except the last beat). Vary the hook: a sound, a failure, something newly seen, or a question. At most TWO beats in the whole story may end with a question.
 7 Use picture-book devices: a repeating frame sentence ({{refrainText}}) at beats {{refrainBeats}}, rhyme or onomatopoeia where natural.
 8 Do not translate anything. This is an original English text for the same beats.
 
 [Output] Text only.`;
-export const PROSE_SIMPLIFY_SYSTEM = `너는 그림책 편집자다. 아래 글의 사건·대화·감각·반전은 하나도 빼지 말고, 문장만 어린아이 수준으로 짧게 다시 쓴다. 문장을 자르고 쉬운 말로 바꾸는 것이지 내용을 줄이는 것이 아니다.`;
+export const PROSE_SIMPLIFY_SYSTEM = `너는 그림책 편집자다. 아래 글의 사건·반전·후렴은 하나도 빼지 말고, 문장을 어린아이 수준으로 짧게 다시 쓴다. [전체 분량]이 주어지면 그 문장 수를 반드시 지킨다. 넘칠 때는 곁가지 묘사·같은 동작의 반복·덧붙인 대화를 줄이고 비트의 사건은 남긴다.`;
 export const PROSE_SIMPLIFY_USER_KO = `[목표 수준] {{targetLevelLabel}} — 문장당 {{targetEojeolRange}}어절, 비트당 {{targetSentencesRange}}문장, 허용 어휘 {{vocabLabel}}
+{{lengthBudget}}
 
 [반드시 지킬 것]
 - 모든 사건과 반전, 대화 {{dialogueCount}}개 이상, 의성어 {{onomatopoeiaCount}}개 이상을 남긴다.
 - 긴 문장은 둘로 자른다. 어려운 말은 쉬운 말로 바꾼다(예: "주변을 살펴보았어요" → "둘러봤어요").
 - 모든 문장에 주어(이름). 감정 직설어 금지는 그대로.
-- 종결어미 섞기(감탄·질문·청유 비트당 1개)와 비트 끝 궁금증은 유지한다.
+- 종결어미 섞기(감탄·질문·청유 비트당 1개)와 비트 끝 궁금증은 유지하되, 질문으로 끝나는 비트는 책 전체에서 2개까지. 나머지는 소리·실패·새로 보인 것으로 끝낸다.
 - 비트 라벨 "[비트 n · 유형]"은 그대로 둔다.
 - 후렴 {{refrainText}}는 비트 {{refrainBeats}}에만 그대로 둔다.
 {{extraFixes}}
@@ -177,12 +178,13 @@ export const PROSE_SIMPLIFY_USER_KO = `[목표 수준] {{targetLevelLabel}} — 
 
 [출력] 글만. 라벨 붙은 문단을 같은 수만큼.`;
 export const PROSE_SIMPLIFY_USER_EN = `[Target level] {{targetLevelLabel}} — {{targetWordsRange}} words per sentence, {{targetSentencesRange}} sentences per beat, vocabulary: {{vocabLabel}}
+{{lengthBudget}}
 
 [Keep]
-- Every event, the twist, all dialogue lines, and the onomatopoeia.
+- Every event, the twist, the repeating frame, at least {{dialogueCount}} dialogue lines, and the onomatopoeia.
 - Cut long sentences into two. Replace hard words with simple ones from the vocabulary list.
 - Keep the "[Beat n · type]" labels and the repeating frame sentence at beats {{refrainBeats}}.
-- Keep one exclamation or question per beat and the page-turn ending lines.
+- Keep one exclamation or question per beat and the page-turn ending lines, but at most TWO beats may end with a question. End the others with a sound, a failure, or something newly seen.
 {{decodableRule}}
 {{extraFixes}}
 
