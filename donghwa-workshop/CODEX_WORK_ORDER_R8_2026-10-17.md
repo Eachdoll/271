@@ -8,7 +8,7 @@
 | 브랜치 | `claude/cross-owner-repo-constraint-j20lhz` |
 | 앱 경로 | 저장소 안 `donghwa-workshop/` |
 | 기준 | Codex r7 (`SOURCE_COMMIT` `d7d5835`). 저장소 커밋 `06506a0`에 그대로 반입되어 있다. |
-| 이번 반입 범위 | `06506a0..` 이 지시서를 추가한 커밋. 앱 코드 변경은 없고, 실측 결과 파일·분석 스크립트·문서만 있다. |
+| 이번 반입 범위 | `06506a0..46a705f`. 앱 코드 변경은 없고, 실측 결과 파일·분석 스크립트·문서만 있다. 그 뒤 커밋은 이 줄 정정뿐이다. |
 
 ```bash
 git clone https://github.com/Eachdoll/271.git
