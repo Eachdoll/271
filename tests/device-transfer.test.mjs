@@ -183,7 +183,7 @@ test('A-13 historical images hydrate only when their history is opened',async()=
  const active='image-active-hydration-12345678',historical='image-history-hydration-12345678';
  await restoreImageAsset(active,image);await restoreImageAsset(historical,image);revokeImageURLs();
  const records=databases.get('donghwa-workshop-image-assets'),read=records.get.bind(records),reads=[];records.get=id=>{reads.push(id);return read(id);};
- const history=[{imageAssetId:historical}],library={books:[{pages:[{imageAssetId:active,imageHistory:history}]}]};
+ const history=[{imageAssetId:historical}],library={books:[{pages:[{imageAssetId:active,imageHistory:history}]}],characters:[{id:'c',name:'유하',wardrobe:[{archivedAt:'past',images:[{imageAssetId:historical}]}],characterSheets:[{imageAssetId:historical},{imageAssetId:active}]}]};
  try{await hydrateImageAssets(library);assert.deepEqual(reads,[active]);assert.equal(getImageURL(historical),null);await hydrateImageReferences(history);assert.deepEqual(reads,[active,historical]);assert.ok(getImageURL(historical));}
  finally{records.get=read;}
 });

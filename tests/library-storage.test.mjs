@@ -23,3 +23,8 @@ test('A-2 startup structure validation never decodes inline image bytes',async()
   try { const result=validateStoredLibrary(JSON.stringify({books:[{id:'b',title:'그림',pages:[{ko:'안녕',en:'Hi',imageUrl:'data:image/png;base64,unvalidated'}]}],characters:[],backgrounds:[],settings:{}}));assert.equal(result.state.books.length,1); }
   finally {globalThis.atob=original;}
 });
+test('A-2 the app World migration v2 reload keeps the real saved library instead of blocking it',async()=>{
+ const {validateStoredLibrary}=await import('../dist/library-storage.js');const {seedState}=await import('../dist/engine.js');const {migrateWorldState}=await import('../dist/image-generation/world.js');
+ const state=seedState();migrateWorldState(state);state.characters[0].name='저장한 유하';state.books[0].title='실제 만든 책';assert.equal(state.version,2);const s=storage(JSON.stringify(state)),result=readStoredLibrary(s,key,{validate:validateStoredLibrary,seed});assert.equal(result.kind,'ready');assert.equal(result.state.characters[0].name,'저장한 유하');assert.equal(result.state.books[0].title,'실제 만든 책');assert.equal(result.invalidRecords.length,0);
+ assert.throws(()=>validateStoredLibrary(JSON.stringify({...state,version:3})),/구조/);
+});

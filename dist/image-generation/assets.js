@@ -287,6 +287,9 @@ export async function deleteImageAsset(assetId) {
 
 function assetIdsFromState(state, { includeHistory = false } = {}) {
   const ids = new Set();
+  const activeWorld = state?.worlds?.find(
+    (world) => world.id === state.activeWorldId,
+  );
   const seen = new WeakSet();
   const visit = (value) => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
@@ -305,6 +308,30 @@ function assetIdsFromState(state, { includeHistory = false } = {}) {
         /(?:history|previousVersions|archivedVariants)$/i.test(key)
       )
         continue;
+      if (!includeHistory && key === "wardrobe" && Array.isArray(entry)) {
+        for (const variant of entry) if (!variant?.archivedAt) visit(variant);
+        continue;
+      }
+      if (
+        !includeHistory &&
+        ["characterSheets", "backgroundSheets"].includes(key) &&
+        typeof value.name === "string" &&
+        Array.isArray(entry)
+      ) {
+        const current =
+          activeWorld &&
+          [...entry].reverse().find((sheet) => {
+            const meta = key === "backgroundSheets" ? sheet.meta : sheet;
+            return (
+              sheet.confirmedAt &&
+              meta?.worldId === activeWorld.id &&
+              meta.worldRevision === activeWorld.revision
+            );
+          });
+        for (const sheet of new Set([current, entry.at(-1)].filter(Boolean)))
+          visit(sheet);
+        continue;
+      }
       if (entry && typeof entry === "object") visit(entry);
     }
   };

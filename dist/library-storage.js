@@ -19,7 +19,7 @@ export function validateStoredLibrary(text) {
     !state.settings ||
     typeof state.settings !== "object" ||
     Array.isArray(state.settings) ||
-    (state.version !== undefined && ![1].includes(state.version))
+    (state.version !== undefined && ![1, 2].includes(state.version))
   )
     throw new Error("책·재료·설정 구조를 확인해 주세요.");
   const invalidRecords = [];

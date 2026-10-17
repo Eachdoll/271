@@ -23,6 +23,8 @@ export function finalizeBookRecords(state, book) {
 export function cleanupOldWorkRecords(state) {
   let cleaned = 0;
   for (const book of state.books || []) {
+    if (book.approved === false || (book.stage && book.stage !== "final"))
+      continue;
     if (
       state.storyDrafts?.[book.storyDraftId]?.pictureBook ||
       state.fullAutoJobs?.[book.fullAutoRunId]
