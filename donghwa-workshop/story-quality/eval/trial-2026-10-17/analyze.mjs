@@ -14,7 +14,7 @@ for (const id of runs) {
   console.log(`\n## ${id}: ${r.length} rows, errors ${r.length - ok.length}`);
   const keys = ['event', 'causality', 'repetition', 'twist', 'concreteness'];
   const by = Object.fromEntries(keys.map((k) => [k, avg(ok.map((x) => (x.rubric?.scores?.[k] ?? x.rubric?.[k] ?? 0)))]));
-  console.log(`rubric mean ${avg(ok.map((x) => x.rubricTotal)).toFixed(2)}/10 · pass(>=8, no zero) ${ok.filter((x) => x.rubricPass).length}/${ok.length} · plotCheck ok ${ok.filter((x) => x.plotOk).length}/${ok.length} · fixed ${ok.filter((x) => x.fixed).length} · cost $${r.reduce((s, x) => s + (x.costUsd || 0), 0).toFixed(3)} · median latency ${Math.round(avg(ok.map((x) => x.latencyMs)) / 1000)}s`);
+  console.log(`rubric mean ${avg(ok.map((x) => x.rubricTotal)).toFixed(2)}/10 · pass(>=8, no zero) ${ok.filter((x) => x.rubricPass).length}/${ok.length} · plotCheck ok ${ok.filter((x) => x.plotOk).length}/${ok.length} · fixed ${ok.filter((x) => x.fixed).length} · cost $${r.reduce((s, x) => s + (x.costUsd || 0), 0).toFixed(3)} · mean latency ${Math.round(avg(ok.map((x) => x.latencyMs)) / 1000)}s`);
   console.log('per-criterion:', Object.entries(by).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(' · '));
   for (const x of r) console.log(`  ${x.topicId} ${x.rubricTotal.toString().padStart(2)} ${x.plotOk ? 'plot✓' : 'plot✗' + x.plotIssues} ${x.fixed ? 'fixed' : '     '} ${x.error ? 'ERR ' + x.error : ''} ${x.topic} ${x.rubric?.worst2?.length ? '· worst ' + x.rubric.worst2.join('/') : ''}`);
 }

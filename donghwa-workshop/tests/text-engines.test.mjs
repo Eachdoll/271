@@ -39,7 +39,7 @@ test('current Claude models preserve dynamic schema instructions without forced 
       calls++;const body=JSON.parse(options.body);
       assert.equal(body.model,model);assert.equal(body.temperature,undefined);assert.equal(body.max_tokens,32768);
       assert.equal(body.tools,undefined);assert.equal(body.tool_choice,undefined);assert.equal(body.output_config.format,undefined);
-      assert.deepEqual(body.thinking,{type:'adaptive'});assert.equal(body.output_config.effort,'medium');
+      assert.deepEqual(body.thinking,{type:model==='claude-sonnet-5-5'?'between_tools':'adaptive'});assert.equal(body.output_config.effort,'medium');
       assert.ok(body.system.includes(JSON.stringify(schema)));
       return json({stop_reason:'end_turn',content:[{type:'thinking',thinking:'private'},{type:'text',text:calls===1?'broken':'{"variantByCharacter":{"child-1":"coat"}}'}],usage:{input_tokens:10,output_tokens:20}});
     }}});
@@ -86,3 +86,5 @@ test('the response deadline applies to each JSON attempt, so a slow first reply 
   const result=await createTextEngine({engine:'openai',config:{model:'gpt-6-astra',apiKey:'fixture',timeoutMs:80,fetch:slow}}).complete(req);
   assert.equal(calls,2);assert.equal(result.json.story,'Second try.');assert.equal(result.meta.requests,2);
 });
+
+test('evaluated Haiku 5.5 disables thinking and preserves the small judgment budget',async()=>{let calls=0;const engine=createTextEngine({engine:'anthropic',config:{model:'claude-haiku-5-5',apiKey:'fixture',fetch:async(_url,options)=>{calls++;const body=JSON.parse(options.body);assert.equal(body.model,'claude-haiku-5-5');assert.equal(body.temperature,undefined);assert.equal(body.max_tokens,1500);assert.deepEqual(body.thinking,{type:'disabled'});return json({stop_reason:'end_turn',content:[{type:'text',text:'{"story":"okay"}'}],usage:{input_tokens:10,output_tokens:20}});}}});const result=await engine.complete({...req,maxTokens:1500});assert.equal(calls,1);assert.equal(result.meta.model,'claude-haiku-5-5');});

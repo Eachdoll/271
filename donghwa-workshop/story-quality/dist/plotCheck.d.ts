@@ -24,6 +24,8 @@ export declare function topicKeywords(topic: string): string[];
 export declare function topicMentioned(text: string, topic: string): boolean;
 /** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. */
 export declare function containsPlanted(text: string, planted: string): boolean;
+/** 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")으로 쓰는 경우가 많아 ID로 정규화한다. */
+export declare function normalizeFailureReason(value: unknown): string | null;
 export declare function plotCheck(input: PlotCheckInput): PlotCheckResult;
 /** 수정 패스에 넣을 지시문. 지적된 항목만 고치게 한다. */
 export declare function renderFixInstructions(result: PlotCheckResult): string;

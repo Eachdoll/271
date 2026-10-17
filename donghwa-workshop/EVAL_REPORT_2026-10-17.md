@@ -1,6 +1,6 @@
 # 실제 모델 줄거리 평가 보고 · 2026-10-17
 
-질문: "동화공방의 이야기는 많이 풍부해졌는가?"를 감이 아니라 숫자와 실제 결과물로 확인했다. 패키지의 고정 평가 세트(`story-quality/eval/testset.json`, 20주제: 현재 8·과거 5·미래 4·상상 3)를 Claude Sonnet 5.5와 Claude Opus 5.5로 각각 생성하고, Claude Haiku 5.5 루브릭 판정기와 규칙 검사기(`plotCheck`)로 채점했다. 결과 원본과 분석 스크립트는 `story-quality/eval/trial-2026-10-17/`에 있다.
+질문: "동화공방의 이야기는 많이 풍부해졌는가?"를 감이 아니라 숫자와 실제 결과물로 확인했다. 패키지의 고정 평가 세트(`story-quality/eval/testset.json`, 20주제: 현재 9·과거 6·미래 3·상상 2 — 세트 설명문의 "현재 8·과거 5·미래 4·상상 3"은 오래된 수치이며 worldId 기준 실제 집계로 정정함)를 Claude Sonnet 5.5와 Claude Opus 5.5로 각각 생성하고, Claude Haiku 5.5 루브릭 판정기와 규칙 검사기(`plotCheck`)로 채점했다. 결과 원본과 분석 스크립트는 `story-quality/eval/trial-2026-10-17/`에 있다.
 
 ## 0. 돌리기 전에 고쳐야 했던 것 (패키지 결함 4건)
 

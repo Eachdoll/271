@@ -799,7 +799,10 @@ export async function generateQualityOutline(
               ...request,
               system: `${canon}\n${request.system}\n${extra}`,
               jsonSchema,
-              maxTokens: candidate ? 1800 : judge ? 500 : 16000,
+              maxTokens: Math.max(
+                request.maxTokens || 0,
+                candidate ? 1800 : judge ? 1500 : 16000,
+              ),
             },
             services,
           );

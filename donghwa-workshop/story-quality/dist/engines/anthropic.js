@@ -55,7 +55,7 @@ export function createAnthropicEngine(opts) {
                     const data = (await res.json());
                     const text = data.content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
                     if (process.env.STORY_QUALITY_DEBUG)
-                        console.error('[anthropic]', JSON.stringify({ model: opts.model, stop: data.stop_reason, usage: data.usage, head: text.slice(0, 160), tail: text.slice(-120) }));
+                        console.error('[anthropic]', JSON.stringify({ model: opts.model, stop: data.stop_reason, usage: data.usage }));
                     const usage = { input: data.usage.input_tokens, output: data.usage.output_tokens };
                     const costUsd = price ? (usage.input * price.input + usage.output * price.output) / 1_000_000 : undefined;
                     const json = req.jsonSchema || /^\s*[\[{]/.test(text) ? (extractJson(text) ?? undefined) : undefined;

@@ -98,7 +98,7 @@ test('real beam package uses candidate and judge schemas, then preserves app fie
     else {json=makeOutline(input,request,seed);const chosen=JSON.parse(request.user.match(/APPROVED_BEAM_BEATS_JSON: (.+)/u)[1]);json.beats=chosen.map((beat,i)=>({...beat,characters:['yuha','green'],settingKey:json.beats[i].settingKey}));json.plotContract=demoPlotContract(json,input);}
     return {json,text:JSON.stringify(json),usage:{input:3,output:2},meta:{requests:1,model:'beam-model'}};
   }};
-  const result=await generateQualityOutline(input,{engine},services(engine));assert.equal(calls.length,15);assert.equal(result.meta.requests,15);assert.equal(result.usage.input,45);assert.ok(result.data.plotContract);assert.equal(result.data.settings.length,7);assert.equal(result.data.beats[0].characters[0],'yuha');assert.equal(result.meta.quality.check.ok,true);assert.equal(calls.filter(request=>request.jsonSchema.properties.candidates).length,7);assert.equal(calls.filter(request=>request.jsonSchema.properties.best).length,7);
+  const result=await generateQualityOutline(input,{engine},services(engine));assert.equal(calls.length,15);assert.equal(result.meta.requests,15);assert.equal(result.usage.input,45);assert.ok(result.data.plotContract);assert.equal(result.data.settings.length,7);assert.equal(result.data.beats[0].characters[0],'yuha');assert.equal(result.meta.quality.check.ok,true);assert.equal(calls.filter(request=>request.jsonSchema.properties.candidates).length,7);assert.equal(calls.filter(request=>request.jsonSchema.properties.best).length,7);assert.ok(calls.filter(request=>request.jsonSchema.properties.best).every(request=>request.maxTokens>=1500));
 });
 
 test('emotion tell repair is bounded to one extra Korean pass and every call is billed once',async()=>{
