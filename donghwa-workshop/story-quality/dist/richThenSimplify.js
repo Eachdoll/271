@@ -52,7 +52,7 @@ export async function writeRichThenSimplify(input) {
         extraFixes: '',
         richText: rich,
     });
-    const r2 = await simplifier.complete({ system: PROSE_SIMPLIFY_SYSTEM, user: simpUser, temperature: 0.4, maxTokens: 1800 });
+    const r2 = await simplifier.complete({ system: PROSE_SIMPLIFY_SYSTEM, user: simpUser, temperature: 0.4, maxTokens: 4000 });
     calls++;
     cost += r2.costUsd ?? 0;
     let simplified = r2.text.trim();
@@ -74,7 +74,7 @@ export async function writeRichThenSimplify(input) {
             extraFixes: renderTellFixInstructions(hits, input.gestureDict),
             richText: simplified,
         });
-        const r3 = await simplifier.complete({ system: PROSE_SIMPLIFY_SYSTEM, user: fixUser, temperature: 0.3, maxTokens: 1800 });
+        const r3 = await simplifier.complete({ system: PROSE_SIMPLIFY_SYSTEM, user: fixUser, temperature: 0.3, maxTokens: 4000 });
         calls++;
         cost += r3.costUsd ?? 0;
         simplified = r3.text.trim();
