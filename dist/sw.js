@@ -1,5 +1,7 @@
-const CACHE = "donghwa-shell-v25";
+const CACHE = "donghwa-shell-v26";
 const FILES = [
+  "./story-reading-context.js",
+  "./story-quality/dist/patterns.js",
   "./checks-panel.js",
   "./finalize-cleanup.js",
   "./story-quality/data/worlds.json",

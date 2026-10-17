@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {generateQualityOutline,generateQualityProse,loadStoryQualityData} from '../dist/story-generation/quality-adapter.js';
-import {OUTLINE_SCHEMA,BEAT_COUNTS,assertValid} from '../dist/story-generation/schemas.js';
+import {OUTLINE_SCHEMA,BEAT_COUNTS,frozenBeatCount,assertValid} from '../dist/story-generation/schemas.js';
 import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 import {getLevelSpec} from '../dist/reading-levels.js';
 import * as qualityModule from '../story-quality/dist/pipeline.js';
@@ -21,7 +21,7 @@ function seedFrom(request,prior={}){
   return {planted,creature,reasons:reasons.length?reasons:prior.reasons};
 }
 function makeOutline(input,request,seed){
-  const count=BEAT_COUNTS[input.pageCount],types=['setup','want',...Array.from({length:count-5},()=> 'attempt'),'turn','resolution','close'],locations=types.map((type,i)=>i===0||i===count-1?'home':i%2?'garden':'pond');
+  const count=frozenBeatCount(input),types=['setup','want',...Array.from({length:count-5},()=> 'attempt'),'turn','resolution','close'],locations=types.map((type,i)=>i===0||i===count-1?'home':i%2?'garden':'pond');
   let attempt=0;const summaries=types.map((type,i)=>`${i%2?'그린이가':'유하가'} ${['집에서','정원에서','연못에서','돌 옆에서','길에서','집 앞에서','방에서','창가에서'][i]} ${input.topic}의 흔적을 살펴요. 유하와 그린이가 ${type==='setup'||type==='turn'?seed.planted:'작은 잎'}을 보며 ${type==='turn'?seed.creature:'바람'}의 소리를 들어요.`);
   const outline={plan:{pattern:request.jsonSchema.properties.plan.properties.pattern.enum[0],planted:seed.planted,twistReveal:'앞에서 본 물건을 다시 이용해요.',funnyMoment:'바람에 잎이 코에 앉아요.',failureReasons:seed.reasons},titleCandidates:['바람을 듣는 날','작은 빗방울','잎에 담긴 소리'],logline:'유하와 그린이가 빗방울의 흔적을 찾아요.',want:'빗방울의 소리를 찾고 싶어요.',problem:'소리의 위치가 달라져요.',twist:'앞서 살펴본 물건이 소리를 냈어요.',beats:types.map((type,i)=>({index:i+1,type,summary:summaries[i],characters:['yuha','green'],settingKey:locations[i],newElement:`${i+1}번째 젖은 잎`,failureReason:type==='attempt'?seed.reasons[attempt++]:null})),settings:locations.map((backgroundId,i)=>({beatIndex:i+1,backgroundId})),emotionArc:types.map(()=> '궁금'),newWordsKo:['빗방울','흔적','바람'],newWordsEn:['rain','leaf','wind'],endingType:input.endingType};
   outline.plotContract=demoPlotContract(outline,input);return outline;
@@ -61,7 +61,7 @@ test('a selected world freezes the creation-date season and reuses the same paid
 });
 
 test('pattern slots adapt to exact app beat counts and seeded inventory changes only when book/offset changes',async()=>{
-  for(const pageCount of [8,16,24]){const input=fixture();input.pageCount=pageCount;const engine=fakeOutlineEngine(input),result=await generateQualityOutline(input,{engine},services(engine));assert.equal(result.data.beats.length,BEAT_COUNTS[pageCount]);assert.equal(result.data.beats.filter(beat=>beat.type==='attempt').length,BEAT_COUNTS[pageCount]-5);}
+  for(const pageCount of [8,16,24]){const input=fixture();input.pageCount=pageCount;const engine=fakeOutlineEngine(input),result=await generateQualityOutline(input,{engine},services(engine));assert.equal(result.data.beats.length,frozenBeatCount(input));assert.equal(result.data.beats.filter(beat=>beat.type==='attempt').length,frozenBeatCount(input)-5);}
   const input=fixture(),engine=fakeOutlineEngine(input),first=await generateQualityOutline(input,{engine},services(engine));input.qualitySeedOffset=1;const second=await generateQualityOutline(input,{engine},services(engine));assert.notEqual(first.meta.quality.seed.rngSeed,second.meta.quality.seed.rngSeed);assert.notEqual(first.meta.quality.seedSummary,second.meta.quality.seedSummary);
 });
 
@@ -175,6 +175,9 @@ test('R6-1 app prose forwards pageCount and leaves optional condensation disable
  const input=fixture(),engine=fakeOutlineEngine(input),outline=(await generateQualityOutline(input,{engine},services(engine))).data,captured=[];
  const service={...services(engine),qualityModule:async()=>({runProseStage:async args=>{captured.push(args);assert.equal(args.pageCount,12);assert.equal(Object.hasOwn(args,'condenseOverBudget'),false);return {simplified:labeled(outline,args.lang),rich:labeled(outline,args.lang),tellHitsAfter:0,calls:0,costUsd:0};}})};
  const result=await generateQualityProse(outline,input,{},service);assert.equal(captured.length,2);assert.ok(result.data.ko);assert.ok(result.data.en);
+ assert.match(captured.find(args=>args.lang==='en').vocabLabel,/all/);
+ assert.ok(captured.find(args=>args.lang==='en').vocabLabel.length>300);
+ assert.match(captured.find(args=>args.lang==='en').vocabLabel,/Story words:.*rain/);
 });
 test('R6-4 reference candidates default to gold, exclude the active topic when opted in and retain gold priority',async()=>{
  const {qualityReferenceBooks}=await import('../dist/story-generation/quality-adapter.js');

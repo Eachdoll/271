@@ -1,5 +1,9 @@
+import {
+  buildStoryWords,
+  englishVocabularyPrompt,
+} from "../story-reading-context.js";
 /* Bridge the supplied quality package to app engines, frozen worlds and resumable billing. */
-import { BEAT_COUNTS, StoryValidationError } from "./schemas.js";
+import { frozenBeatCount, StoryValidationError } from "./schemas.js";
 import { LEVEL_SEED } from "../reading-levels.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
@@ -525,7 +529,7 @@ function enrichedOutlineSchema(input, pattern, services) {
   if (!object(supplied)) throw new Error("앱 줄거리 스키마를 연결해 주세요.");
   const schema = clone(supplied),
     beat = schema.properties.beats.items,
-    attempts = (BEAT_COUNTS[input.pageCount] || 7) - 5;
+    attempts = (frozenBeatCount(input) || 7) - 5;
   schema.properties.plan = strict({
     pattern: { type: "string", enum: [pattern.id] },
     planted: string(300),
@@ -564,8 +568,8 @@ function enrichedOutlineSchema(input, pattern, services) {
   }
   return schema;
 }
-function adaptPattern(pattern, pageCount) {
-  const count = BEAT_COUNTS[pageCount] || 7,
+function adaptPattern(pattern, input) {
+  const count = frozenBeatCount(input) || 7,
     attemptSlots = asList(pattern.beats).filter(
       (beat) => beat.type === "attempt",
     );
@@ -682,7 +686,7 @@ function choosePatterns(input, data) {
       ranked.find((pattern) => pattern.id !== primary.id) ||
       patterns.find((pattern) => pattern.id !== primary.id);
   return [primary, ...(auxiliary ? [auxiliary] : [])].map((pattern) =>
-    adaptPattern(pattern, input.pageCount),
+    adaptPattern(pattern, input),
   );
 }
 function backgroundType(input) {
@@ -868,7 +872,7 @@ export async function generateQualityOutline(
           const extra =
             candidate || judge
               ? "Return only the requested candidate/judgment JSON; do not return a complete outline."
-              : `Return the COMPLETE app outline matching the supplied schema, including plan, newElement/failureReason, refrain.variation if present, twist, settings, emotionArc and plotContract. plan.pattern=${pattern.id}. Exactly ${BEAT_COUNTS[input.pageCount]} beats. ${request.user.includes("APPROVED_BEAM_BEATS_JSON:") ? "Preserve every chosen beam summary, index, type, newElement and failureReason exactly. Fill canonical character/background IDs and coherent full fields." : ""}`;
+              : `Return the COMPLETE app outline matching the supplied schema, including plan, newElement/failureReason, refrain.variation if present, twist, settings, emotionArc and plotContract. plan.pattern=${pattern.id}. Exactly ${frozenBeatCount(input)} beats. ${request.user.includes("APPROVED_BEAM_BEATS_JSON:") ? "Preserve every chosen beam summary, index, type, newElement and failureReason exactly. Fill canonical character/background IDs and coherent full fields." : ""}`;
           const response = await journal.call(
             role,
             {
@@ -968,6 +972,7 @@ export async function generateQualityOutline(
         check: clone(result.check),
         seed: clone(result.seed),
         worldMood: clone(mood),
+        worldSnapshot: clone(world),
         variantChance: Number.isFinite(quality.variantChance)
           ? quality.variantChance
           : 0.35,
@@ -1183,9 +1188,14 @@ export async function generateQualityProse(
           ? { styleSamples: quality.styleSamples.slice(0, 3) }
           : {}),
         vocabLabel:
-          input.specs[lang].vocabSource ||
-          input.specs[lang].vocab ||
-          "frozen selected vocabulary",
+          lang === "en"
+            ? englishVocabularyPrompt(
+                input.specs.en,
+                buildStoryWords(input, outline),
+              )
+            : input.specs[lang].vocabSource ||
+              input.specs[lang].vocab ||
+              "frozen selected vocabulary",
         twoPass: !targetOnly,
       });
       const parsed = parseLabeledProse(result.simplified, outline, lang);

@@ -1,3 +1,4 @@
+import { adaptPatternForBook } from '../patterns.js';
 /**
  * 증류 데이터셋 생성기 — 상위 모델로 주제 × 패턴 × 수준 교차 줄거리를 만들어 JSONL로 저장한다.
  * - 각 샘플은 앱이 실제로 쓰는 outline.v3 프롬프트 그대로 생성한다(학습 시 분포 차이 없음).
@@ -98,7 +99,7 @@ export async function runDistillation(cfg) {
     return { total, approved, costUsd: cost, skipped };
 }
 async function generateOne(cfg, t, lv, variant, sampleId, approvedBooks) {
-    const pattern = cfg.patterns.find((p) => p.id === t.patternId) ?? cfg.patterns[0];
+    const pattern = adaptPatternForBook(cfg.patterns.find((p) => p.id === t.patternId) ?? cfg.patterns[0], cfg.pages, lv.levelKo);
     const baseWorld = findWorld(cfg.worlds, t.worldId);
     // 계절·시간 오버레이: 셀마다 결정적으로 고른다(변형 0 = 낮, 1 = 밤, 계절은 해시로). 같은 주제의 변형이 다른 모습이 되게.
     const SEASONS = ['spring', 'summer', 'autumn', 'winter'];

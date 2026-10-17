@@ -9,7 +9,8 @@ import {
   applyReadingFeedback,
   acceptReadingSuggestion,
 } from "./reading-levels.js";
-export { describeReadingViolation } from "./reading-messages.js";
+import { describeReadingViolation } from "./reading-messages.js";
+export { describeReadingViolation };
 import { analyzeBook, estimateReadingScore } from "./reading-checker.js";
 
 const escape = (value) =>
@@ -21,11 +22,11 @@ const escape = (value) =>
       ],
   );
 const labels = {
-  K1: "K1 · 그림책 3~4세",
+  K1: "K1 · 그림책 3~4세 · 쪽당 2~3문장",
   K2: "K2 · 그림책 5~6세",
   K3: "K3 · 저학년 동화",
   K4: "K4 · 중학년 이야기",
-  E0: "E0 · 들려주기",
+  E0: "E0 · 쪽당 1~2문장, 부모가 읽어 주는 단계",
   E1: "E1 · 해독",
   E2: "E2 · 리더스",
   E3: "E3 · 얼리 챕터",
@@ -159,7 +160,17 @@ export function renderReadingBadge(book, { compact = false } = {}) {
 export function renderReadingCheck(book) {
   const check = book.readingCheck,
     levels = normalizeReadingLevels(book);
-  return `<div class="reading-check ${check?.passed === false ? "reading-warning" : ""}"><div><strong>${escape(levels.koreanLevel)} · ${escape(levels.englishLevel)} 읽기 규칙</strong><small>${check ? (check.error ? escape(check.error) : `${check.passed ? "선택 단계 검사 통과" : "선택 단계 범위 밖 · 직접 다듬어 주세요"} · 자동 재작성 ${check.rewrites ?? check.attempts ?? 0}회`) : "본문을 수정한 뒤 단계 검사를 실행해 주세요."}</small>${renderReadingBadge(book)}${check?.pages?.length ? `<details class="reading-check-details"><summary>쪽별 검사 보기</summary><div class="reading-check-table"><table><thead><tr><th>쪽</th><th>한글 어절 / 어미</th><th>영어 FK / Spache / DC</th><th>단계</th></tr></thead><tbody>${check.pages.map((page, index) => `<tr><td>${index + 1}</td><td>${page.ko?.metrics?.averageWordsPerSentence ?? "—"} / ${page.ko?.metrics?.connectiveEndings ?? "—"}${page.ko?.metrics?.vocabularySkipped ? " · 어휘 목록 없음" : ""}</td><td>${page.en?.metrics?.fkGrade ?? "—"} / ${page.en?.metrics?.spache ?? "—"} / ${page.en?.metrics?.daleChall ?? "—"}</td><td>${page.passed ? "범위 안" : "수준 범위 밖"}</td></tr>`).join("")}</tbody></table></div></details>` : ""}</div><button type="button" class="btn btn-outline btn-small" data-reading-action="check-draft">${book.prose ? "수준 검사 · 본문 유지" : "수준 검사 · 최대 2회 재작성"}</button></div>`;
+  return `<div class="reading-check ${check?.passed === false ? "reading-warning" : ""}"><div><strong>${escape(levels.koreanLevel)} · ${escape(levels.englishLevel)} 읽기 규칙</strong><small>${check ? (check.error ? escape(check.error) : `${check.passed ? "선택 단계 검사 통과" : "선택 단계 범위 밖 · 직접 다듬어 주세요"} · 자동 재작성 ${check.rewrites ?? check.attempts ?? 0}회`) : "본문을 수정한 뒤 단계 검사를 실행해 주세요."}</small>${renderReadingBadge(book)}${
+    check?.warnings?.length
+      ? `<details class="reading-vocabulary-notes"><summary>들려주기 단계라 어휘는 참고 정보예요 · 쪽별 비율 보기</summary><ul class="check-issues">${check.warnings
+          .filter((w) => w.code === "out-of-vocabulary")
+          .map(
+            (w) =>
+              `<li class="check-advisory">${(w.pageIndex ?? 0) + 1}쪽 · ${escape(describeReadingViolation(w))}</li>`,
+          )
+          .join("")}</ul></details>`
+      : ""
+  }${check?.pages?.length ? `<details class="reading-check-details"><summary>쪽별 검사 보기</summary><div class="reading-check-table"><table><thead><tr><th>쪽</th><th>한글 어절 / 어미</th><th>영어 FK / Spache / DC</th><th>단계</th></tr></thead><tbody>${check.pages.map((page, index) => `<tr><td>${index + 1}</td><td>${page.ko?.metrics?.averageWordsPerSentence ?? "—"} / ${page.ko?.metrics?.connectiveEndings ?? "—"}${page.ko?.metrics?.vocabularySkipped ? " · 어휘 목록 없음" : ""}</td><td>${page.en?.metrics?.fkGrade ?? "—"} / ${page.en?.metrics?.spache ?? "—"} / ${page.en?.metrics?.daleChall ?? "—"}</td><td>${page.passed ? "범위 안" : "수준 범위 밖"}</td></tr>`).join("")}</tbody></table></div></details>` : ""}</div><button type="button" class="btn btn-outline btn-small" data-reading-action="check-draft">${book.prose ? "수준 검사 · 본문 유지" : "수준 검사 · 최대 2회 재작성"}</button></div>`;
 }
 export function cleanupReadingOperation() {
   currentOperation?.abort();
@@ -189,6 +200,7 @@ export async function checkBookAtLevel(
       analyze: (candidate, context) =>
         analyzeBook(candidate, context.specs || specs, {
           allowedNames: context.allowedNames,
+          storyWords: context.storyWords,
           koVocabulary: context.specs.ko.vocabularyAvailable
             ? context.specs.ko.vocabList
             : null,

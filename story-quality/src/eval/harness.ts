@@ -1,3 +1,4 @@
+import { adaptPatternForBook } from '../patterns.js';
 /**
  * 평가 하네스 — 고정 20주제를 '구성(엔진 + 프롬프트 버전 + 옵션)'마다 돌려 루브릭 평균·plotCheck 통과율·비용·지연을 기록한다.
  * "강화됐다"를 감이 아니라 숫자로 안다. 결과는 eval/results/<runId>.jsonl + summary.json.
@@ -110,7 +111,7 @@ export async function runEval(cfg: EvalConfig): Promise<EvalSummary> {
 
 async function evalOne(cfg: EvalConfig, t: EvalTopic): Promise<EvalRow> {
   const t0 = Date.now();
-  const pattern = cfg.patterns.find((p) => p.id === t.patternId) ?? cfg.patterns[0];
+  const pattern = adaptPatternForBook(cfg.patterns.find((p) => p.id === t.patternId) ?? cfg.patterns[0], cfg.pages, t.levelKo);
   const world = findWorld(cfg.worlds, t.worldId);
   const ban = buildBanList(cfg.approvedBooks, { recentBooks: 8, recentBooksForPattern: 0 });
   const seed = composeSeed({ pattern, inventories: cfg.inventories, backgroundType: t.worldId, rngSeed: hashString(`eval-${t.id}`), ban, preferObstacleIds: preferObstaclesForTopic(t.topic), world });

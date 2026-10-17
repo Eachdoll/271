@@ -1,6 +1,7 @@
+import { buildStoryWords } from "./story-reading-context.js";
 import { ENGLISH_VOCABULARIES } from "./reading-vocab.js";
 /* Independent Korean/English reading rules and bounded, transparent rewrites. */
-export const READING_LEVEL_VERSION = 2;
+export const READING_LEVEL_VERSION = 3;
 export const KOREAN_LEVELS = Object.freeze(["K1", "K2", "K3", "K4"]);
 export const ENGLISH_LEVELS = Object.freeze(["E0", "E1", "E2", "E3", "E4"]);
 
@@ -54,7 +55,7 @@ export const LEVEL_SEED = deepFreeze({
   ko: {
     K1: {
       label: "그림책 3~4세",
-      sentencesPerPage: [1, 2],
+      sentencesPerPage: [2, 3],
       eojeolPerSentence: [3, 5],
       grammar: ["단문", "연결어미는 -고 정도"],
       vocabGrade: 1,
@@ -94,10 +95,10 @@ export const LEVEL_SEED = deepFreeze({
       label: "들려주기 (Step 0-A)",
       approxAR: [0.5, 1.5],
       approxLexile: "AD/BR-200L",
-      sentencesPerPage: [1, 1],
+      sentencesPerPage: [1, 2],
       wordsPerSentence: [4, 8],
       grammar: ["present tense only", "one repeating frame sentence"],
-      vocab: "dolch_preprimer+everyday_nouns",
+      vocab: "dolch_preprimer+primer+fry100+everyday_nouns",
       maxOutOfListRatio: 0.15,
       newWordsPerBook: [5, 8],
       devices: ["rhyme", "onomatopoeia", "repetition"],
@@ -170,6 +171,10 @@ function adaptLevel(id, source) {
   return {
     ...clone(source),
     id,
+    ruleVersion: READING_LEVEL_VERSION,
+    vocabularyPolicy: id === "E0" ? "warning" : "blocking",
+    storyWordsAllowed: id === "E0",
+    allowOnomatopoeia: id === "E0" || id === "E1",
     sentencesPerPage: target,
     sentencesPerPageRange: {
       min: source.sentencesPerPage[0],
@@ -1131,6 +1136,7 @@ export async function validateAndRewriteBook(
         levels,
         specs: clone(snapshot.specs),
         allowedNames: permittedNames(book, characters),
+        storyWords: buildStoryWords(book, book.outline, characters),
         signal,
       });
     } catch (error) {

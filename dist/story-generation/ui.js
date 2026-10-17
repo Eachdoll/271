@@ -1,3 +1,6 @@
+import { beatCountFor } from "./schemas.js";
+import { describeReadingViolation } from "../reading-messages.js";
+import { buildStoryWords } from "../story-reading-context.js";
 import {
   generateOutline,
   rewriteBeat,
@@ -746,6 +749,10 @@ export function inputFromWizard(state, wizard) {
         Math.max(0, Number(wizard.qualitySeedOffset) || 0),
       ),
       pageCount: Number(wizard.pageCount || 12),
+      outlineBeatCount: beatCountFor(
+        Number(wizard.pageCount || 12),
+        readingLevels.koreanLevel,
+      ),
       endingType: wizard.ending === "open" ? "open" : "home_sleep",
       moral:
         wizard.value === "custom"
@@ -1134,7 +1141,7 @@ function checkView(s) {
             id,
             ...(typeof value === "object" ? value : { passed: value }),
           }));
-  return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}</div>`;
+  return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${c.warnings?.length ? `<ul class="check-issues">${c.warnings.map((w) => `<li class="check-advisory">${w.pageNo ? `${w.pageNo}쪽 · ` : ""}${esc(describeReadingViolation(w))}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}</div>`;
 }
 function renderPages(s) {
   const p = s.draft.pagination,
@@ -1676,6 +1683,7 @@ async function approvePages(
   }
   const checked = checkStory(d.outline, d.pagination, {
     specs: d.input.specs,
+    storyWords: buildStoryWords(d.input, d.outline),
     allowedNames: d.input.characters
       .flatMap((c) => [c.name, c.nameEn])
       .filter(Boolean),
@@ -1931,6 +1939,7 @@ async function handleClick(event) {
       d.pagination = fitted;
       d.storyCheck = checkStory(d.outline, fitted, {
         specs: d.input.specs,
+        storyWords: buildStoryWords(d.input, d.outline),
         allowedNames: d.input.characters
           .flatMap((c) => [c.name, c.nameEn])
           .filter(Boolean),

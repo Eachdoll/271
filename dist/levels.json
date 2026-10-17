@@ -1,15 +1,98 @@
 {
   "ko": {
-    "K1": {"label":"그림책 3~4세","sentencesPerPage":[1,2],"eojeolPerSentence":[3,5],"grammar":["단문","연결어미는 -고 정도"],"vocabGrade":1,"maxOutOfListRatio":0.05,"newWordsPerBook":3,"devices":["반복","의성어","의태어"]},
-    "K2": {"label":"그림책 5~6세","sentencesPerPage":[2,3],"eojeolPerSentence":[5,7],"grammar":["연결어미 -서/-면/-는데","대화문","감정 어휘"],"vocabGrade":2,"maxOutOfListRatio":0.08,"newWordsPerBook":5},
-    "K3": {"label":"저학년 동화 7~8세","sentencesPerPage":[3,5],"eojeolPerSentence":[7,10],"grammar":["복문","시간 순서 접속어","한자어 조금"],"vocabGrade":3,"maxOutOfListRatio":0.10,"charsPerPage":[60,100]},
-    "K4": {"label":"중학년 9~10세","sentencesPerPage":[5,8],"eojeolPerSentence":[10,13],"grammar":["설명문","비문학","추상어"],"vocabGrade":4,"maxOutOfListRatio":0.12}
+    "K1": {
+      "label": "그림책 3~4세",
+      "sentencesPerPage": [2, 3],
+      "eojeolPerSentence": [3, 5],
+      "grammar": ["단문", "연결어미는 -고 정도"],
+      "vocabGrade": 1,
+      "maxOutOfListRatio": 0.05,
+      "newWordsPerBook": 3,
+      "devices": ["반복", "의성어", "의태어"]
+    },
+    "K2": {
+      "label": "그림책 5~6세",
+      "sentencesPerPage": [2, 3],
+      "eojeolPerSentence": [5, 7],
+      "grammar": ["연결어미 -서/-면/-는데", "대화문", "감정 어휘"],
+      "vocabGrade": 2,
+      "maxOutOfListRatio": 0.08,
+      "newWordsPerBook": 5
+    },
+    "K3": {
+      "label": "저학년 동화 7~8세",
+      "sentencesPerPage": [3, 5],
+      "eojeolPerSentence": [7, 10],
+      "grammar": ["복문", "시간 순서 접속어", "한자어 조금"],
+      "vocabGrade": 3,
+      "maxOutOfListRatio": 0.1,
+      "charsPerPage": [60, 100]
+    },
+    "K4": {
+      "label": "중학년 9~10세",
+      "sentencesPerPage": [5, 8],
+      "eojeolPerSentence": [10, 13],
+      "grammar": ["설명문", "비문학", "추상어"],
+      "vocabGrade": 4,
+      "maxOutOfListRatio": 0.12
+    }
   },
   "en": {
-    "E0": {"label":"들려주기 (Step 0-A)","approxAR":[0.5,1.5],"approxLexile":"AD/BR-200L","sentencesPerPage":[1,1],"wordsPerSentence":[4,8],"grammar":["present tense only","one repeating frame sentence"],"vocab":"dolch_preprimer+everyday_nouns","maxOutOfListRatio":0.15,"newWordsPerBook":[5,8],"devices":["rhyme","onomatopoeia","repetition"]},
-    "E1": {"label":"해독 (Step 0-B)","approxAR":[0.5,1.0],"approxLexile":"BR-250L","sentencesPerPage":[1,1],"wordsPerSentence":[3,6],"grammar":["present tense"],"vocab":"cvc_short_vowel+dolch_preprimer","maxOutOfListRatio":0.10,"decodable":true},
-    "E2": {"label":"리더스 (Step 1)","approxAR":[1.0,2.0],"approxLexile":"200-450L","sentencesPerPage":[1,2],"wordsPerSentence":[5,9],"grammar":["simple past","dialogue","and/but"],"vocab":"dolch_primer+first","maxOutOfListRatio":0.15,"newWordsPerBook":[8,10]},
-    "E3": {"label":"얼리 챕터 (Step 2)","approxAR":[2.0,3.0],"approxLexile":"400-600L","sentencesPerPage":[2,4],"wordsPerSentence":[8,12],"grammar":["compound sentences"],"vocab":"fry_1000","maxOutOfListRatio":0.15,"wordsPerPage":[40,80]},
-    "E4": {"label":"챕터 (Step 3)","approxAR":[3.0,4.5],"approxLexile":"550-800L","sentencesPerPage":[4,8],"wordsPerSentence":[10,14],"grammar":["subordinate clauses","nonfiction vocabulary"],"vocab":"fry_1000+topic","maxOutOfListRatio":0.20,"wordsPerPage":[80,150]}
+    "E0": {
+      "label": "들려주기 (Step 0-A)",
+      "approxAR": [0.5, 1.5],
+      "approxLexile": "AD/BR-200L",
+      "sentencesPerPage": [1, 2],
+      "wordsPerSentence": [4, 8],
+      "grammar": ["present tense only", "one repeating frame sentence"],
+      "vocab": "dolch_preprimer+primer+fry100+everyday_nouns",
+      "maxOutOfListRatio": 0.15,
+      "newWordsPerBook": [5, 8],
+      "devices": ["rhyme", "onomatopoeia", "repetition"]
+    },
+    "E1": {
+      "label": "해독 (Step 0-B)",
+      "approxAR": [0.5, 1.0],
+      "approxLexile": "BR-250L",
+      "sentencesPerPage": [1, 1],
+      "wordsPerSentence": [3, 6],
+      "grammar": ["present tense"],
+      "vocab": "cvc_short_vowel+dolch_preprimer",
+      "maxOutOfListRatio": 0.1,
+      "decodable": true
+    },
+    "E2": {
+      "label": "리더스 (Step 1)",
+      "approxAR": [1.0, 2.0],
+      "approxLexile": "200-450L",
+      "sentencesPerPage": [1, 2],
+      "wordsPerSentence": [5, 9],
+      "grammar": ["simple past", "dialogue", "and/but"],
+      "vocab": "dolch_primer+first",
+      "maxOutOfListRatio": 0.15,
+      "newWordsPerBook": [8, 10]
+    },
+    "E3": {
+      "label": "얼리 챕터 (Step 2)",
+      "approxAR": [2.0, 3.0],
+      "approxLexile": "400-600L",
+      "sentencesPerPage": [2, 4],
+      "wordsPerSentence": [8, 12],
+      "grammar": ["compound sentences"],
+      "vocab": "fry_1000",
+      "maxOutOfListRatio": 0.15,
+      "wordsPerPage": [40, 80]
+    },
+    "E4": {
+      "label": "챕터 (Step 3)",
+      "approxAR": [3.0, 4.5],
+      "approxLexile": "550-800L",
+      "sentencesPerPage": [4, 8],
+      "wordsPerSentence": [10, 14],
+      "grammar": ["subordinate clauses", "nonfiction vocabulary"],
+      "vocab": "fry_1000+topic",
+      "maxOutOfListRatio": 0.2,
+      "wordsPerPage": [80, 150]
+    }
   }
 }

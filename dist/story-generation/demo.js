@@ -1,3 +1,4 @@
+import { frozenBeatCount } from "./schemas.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -101,7 +102,7 @@ const summaries = {
     "두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
 };
 export function demoOutline(input) {
-  const count = { 8: 6, 12: 7, 16: 8, 24: 8 }[input.pageCount],
+  const count = frozenBeatCount(input),
     types = typesFor(count),
     cast = input.characters.map((c) => c.id),
     background = input.backgrounds?.[0]?.id;

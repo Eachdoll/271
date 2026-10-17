@@ -1,0 +1,170 @@
+{
+  "K1": {
+    "label": "그림책 3~4세",
+    "sentencesPerPage": 2,
+    "eojeolPerSentence": [
+      3,
+      5
+    ],
+    "grammar": [
+      "단문",
+      "연결어미는 -고 정도"
+    ],
+    "vocabGrade": 1,
+    "maxOutOfListRatio": 0.05,
+    "newWordsPerBook": 3,
+    "devices": [
+      "반복",
+      "의성어",
+      "의태어"
+    ],
+    "id": "K1",
+    "sentencesPerPageRange": {
+      "min": 1,
+      "max": 2
+    },
+    "wordsPerSentence": {
+      "min": 3,
+      "max": 5
+    },
+    "allowedGrammar": [
+      "단문",
+      "연결어미는 -고 정도"
+    ],
+    "vocabList": [],
+    "vocabularyAvailable": false,
+    "vocabSource": null,
+    "maxOutOfVocabRatio": 0.05,
+    "newWordsPerBookRange": null,
+    "repetitionPattern": "반복, 의성어, 의태어",
+    "approxAR": null,
+    "approxARRange": null,
+    "approxLexile": null,
+    "approxLexileRange": null,
+    "maxConnectiveEndingsPerSentence": 1
+  },
+  "E0": {
+    "label": "들려주기 (Step 0-A)",
+    "approxAR": 1,
+    "approxLexile": 100,
+    "sentencesPerPage": 1,
+    "wordsPerSentence": {
+      "min": 4,
+      "max": 8
+    },
+    "grammar": [
+      "present tense only",
+      "one repeating frame sentence"
+    ],
+    "vocab": "dolch_preprimer+everyday_nouns",
+    "maxOutOfListRatio": 0.15,
+    "newWordsPerBook": 8,
+    "devices": [
+      "rhyme",
+      "onomatopoeia",
+      "repetition"
+    ],
+    "id": "E0",
+    "sentencesPerPageRange": {
+      "min": 1,
+      "max": 1
+    },
+    "allowedGrammar": [
+      "present tense only",
+      "one repeating frame sentence"
+    ],
+    "vocabList": [
+      "a",
+      "and",
+      "away",
+      "big",
+      "blue",
+      "can",
+      "come",
+      "down",
+      "find",
+      "for",
+      "funny",
+      "go",
+      "help",
+      "here",
+      "I",
+      "in",
+      "is",
+      "it",
+      "jump",
+      "little",
+      "look",
+      "make",
+      "me",
+      "my",
+      "not",
+      "one",
+      "play",
+      "red",
+      "run",
+      "said",
+      "see",
+      "the",
+      "three",
+      "to",
+      "two",
+      "up",
+      "we",
+      "where",
+      "yellow",
+      "you",
+      "flower",
+      "tail",
+      "leaf",
+      "leaves",
+      "tree",
+      "stone",
+      "moon",
+      "star",
+      "rain",
+      "sea",
+      "sun",
+      "ball",
+      "bag",
+      "boots",
+      "glove",
+      "cloud",
+      "water",
+      "sand",
+      "wave",
+      "shell",
+      "crab",
+      "path",
+      "rocket",
+      "bird",
+      "marks",
+      "castle",
+      "picture",
+      "window",
+      "rainbow",
+      "woods",
+      "sky",
+      "gift",
+      "friend",
+      "home",
+      "dinosaur",
+      "rabbit",
+      "umbrella"
+    ],
+    "vocabularyAvailable": true,
+    "vocabSource": "dolch_preprimer+everyday_nouns",
+    "maxOutOfVocabRatio": 0.15,
+    "newWordsPerBookRange": [
+      5,
+      8
+    ],
+    "repetitionPattern": "rhyme, onomatopoeia, repetition",
+    "approxARRange": [
+      0.5,
+      1.5
+    ],
+    "approxLexileRange": "AD/BR-200L",
+    "maxConnectiveEndingsPerSentence": 0
+  }
+}

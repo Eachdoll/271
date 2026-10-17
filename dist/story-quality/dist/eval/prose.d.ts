@@ -1,4 +1,4 @@
-import type { TextEngine, GestureDictionary } from '../types.js';
+import type { TextEngine, GestureDictionary } from "../types.js";
 export interface ProseEvalConfig {
     from: string;
     out: string;
@@ -23,6 +23,7 @@ export declare function runProseEvaluation(config: ProseEvalConfig): Promise<{
     costUsd: any;
     curiosityPassCount: number;
     retellPassCount: number;
+    readingRuleVersion: any;
     stage: string;
     mock: boolean;
     budget: boolean;

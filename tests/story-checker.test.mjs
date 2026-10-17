@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkStory} from '../dist/story-generation/checker.js';
-import {getLevelSpec} from '../dist/reading-levels.js';
+// These authored one-sentence fixtures represent books frozen before r7.
+import {readFileSync} from 'node:fs';
+const legacySpecs=JSON.parse(readFileSync(new URL('./fixtures/reading-r6.json',import.meta.url),'utf8'));
+const getLevelSpec=id=>structuredClone(legacySpecs[id]);
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const specs = () => ({ko:getLevelSpec('K1'), en:getLevelSpec('E0')});

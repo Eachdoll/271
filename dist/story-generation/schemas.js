@@ -12,6 +12,21 @@ export const STORY_STAGES = Object.freeze([
 ]);
 export const PAGE_COUNTS = Object.freeze([8, 12, 16, 24]);
 export const BEAT_COUNTS = Object.freeze({ 8: 6, 12: 7, 16: 8, 24: 8 });
+export function beatCountFor(pageCount, koreanLevel) {
+  const count = BEAT_COUNTS[pageCount];
+  return koreanLevel === "K1" ? Math.min(count || 7, 7) : count;
+}
+/** Old frozen specs retain their original count, unless an explicit frozen count exists. */
+export function frozenBeatCount(input = {}) {
+  if (!BEAT_COUNTS[input.pageCount]) return null;
+  if ([6, 7, 8].includes(input.outlineBeatCount)) return input.outlineBeatCount;
+  const spec = input.specs?.ko || input.readingLevelSnapshot?.specs?.ko;
+  return beatCountFor(
+    input.pageCount,
+    spec?.ruleVersion >= 3 ? spec.id : undefined,
+  );
+}
+
 const string = (maxLength = 2000) => ({
   type: "string",
   minLength: 1,
@@ -302,7 +317,7 @@ export function validateOutline(value, input = {}) {
     value.titleCandidates.some((t) => t.length > 100)
   )
     errors.push("제목 후보는 100자 이내로 3개여야 해요.");
-  const count = BEAT_COUNTS[input.pageCount] || null,
+  const count = frozenBeatCount(input),
     beats = value.beats;
   if (
     !Array.isArray(beats) ||
