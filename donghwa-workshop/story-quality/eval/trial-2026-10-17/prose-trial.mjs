@@ -90,7 +90,7 @@ for (const row of rows) {
       const target = lang === 'ko' ? 'K1' : 'E0';
       const res = await runProseStage({ engines: { outline: wrap(sonnet, lang, outline, 'outline'), prose: wrap(sonnet, lang, outline, 'prose'), cheap: wrap(haiku, lang, outline, 'cheap') }, lang, outline, charactersCompact, briefsCompact: '[]', emotions: [], gestureDict, levels, targetLevelId: target, vocabLabel: lang === 'ko' ? 'frozen selected vocabulary' : 'dolch_preprimer+everyday_nouns', twoPass: true, ...(BUDGET ? { pageCount: PAGE_COUNT } : {}), ...(CONDENSE ? { condenseOverBudget: true } : {}) });
       const paras = parseLabeled(res.simplified), richParas = parseLabeled(res.rich);
-      const spec = frozen.specs[lang], perPage = spec.sentencesPerPage?.max ?? (Array.isArray(spec.sentencesPerPage) ? spec.sentencesPerPage[1] : 2);
+      const spec = frozen.specs[lang], perPage = spec.sentencesPerPageRange?.max ?? spec.sentencesPerPage?.max ?? (Array.isArray(spec.sentencesPerPage) ? spec.sentencesPerPage[1] : Number(spec.sentencesPerPage) || 2); // 2026-10-17 정정: 숫자형 sentencesPerPage(E0=1)를 읽지 못해 2로 기록하던 문제
       const pages = paginate(paras, PAGE_COUNT);
       const checks = pages.map((p) => analyzeEstimatedPage(p.text, spec, { language: lang, allowedNames: names }));
       const violations = {}; for (const c of checks) for (const v of c.violations) { const k = typeof v === 'string' ? v.split(/[:(]/)[0] : (v.code || v.type || JSON.stringify(v).slice(0, 40)); violations[k] = (violations[k] || 0) + 1; }
