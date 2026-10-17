@@ -1,0 +1,76 @@
+{
+  "runId": "sonnet55-trial",
+  "generatorId": "anthropic:claude-sonnet-5-5",
+  "judgeId": "anthropic:claude-haiku-5-5",
+  "n": 20,
+  "errors": 0,
+  "plotPassRate": 0,
+  "rubricPassRate": 1,
+  "rubricMean": 9.15,
+  "rubricByItem": {
+    "event": 2,
+    "causality": 1.85,
+    "repetition": 1.3,
+    "twist": 2,
+    "concreteness": 2
+  },
+  "byPattern": {
+    "accumulate": {
+      "n": 3,
+      "rubricMean": 9,
+      "plotPassRate": 0
+    },
+    "search_wrong_answers": {
+      "n": 3,
+      "rubricMean": 9.33,
+      "plotPassRate": 0
+    },
+    "journey_repeat": {
+      "n": 5,
+      "rubricMean": 9.6,
+      "plotPassRate": 0
+    },
+    "waiting": {
+      "n": 2,
+      "rubricMean": 9,
+      "plotPassRate": 0
+    },
+    "escalation": {
+      "n": 4,
+      "rubricMean": 9,
+      "plotPassRate": 0
+    },
+    "mystery_sound": {
+      "n": 3,
+      "rubricMean": 8.67,
+      "plotPassRate": 0
+    }
+  },
+  "byEra": {
+    "present": {
+      "n": 9,
+      "rubricMean": 9
+    },
+    "past": {
+      "n": 6,
+      "rubricMean": 9.5
+    },
+    "future": {
+      "n": 3,
+      "rubricMean": 9.33
+    },
+    "fantasy": {
+      "n": 2,
+      "rubricMean": 8.5
+    }
+  },
+  "costUsd": 0.7599,
+  "costPerBook": 0.038,
+  "latencyMsMedian": 33024,
+  "options": {
+    "useBeamSearch": false,
+    "useFixPass": true,
+    "exampleCount": 2
+  },
+  "createdAt": "2026-10-17T10:19:56.890Z"
+}
