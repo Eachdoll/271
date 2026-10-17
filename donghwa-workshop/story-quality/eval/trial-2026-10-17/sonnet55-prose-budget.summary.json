@@ -1,0 +1,68 @@
+{
+  "runId": "sonnet55-prose-budget",
+  "rows": 20,
+  "errors": [],
+  "costUsd": 1.128,
+  "costPerBookUsd": 0.0564,
+  "latencyMeanS": 40.4,
+  "latencyMedianS": 39.9,
+  "ko": {
+    "beatsAllCovered": 20,
+    "sentencesMean": 80.2,
+    "sentenceBudget": 24,
+    "overBudgetBooks": 20,
+    "richCharsMean": 1934,
+    "simplifiedCharsMean": 1663,
+    "simplifyRatio": 0.86,
+    "dialogueMean": 14.9,
+    "booksUnder3Dialogue": 0,
+    "condensedBooks": 0,
+    "tellHitsBooks": 0,
+    "extraFixCallBooks": 6,
+    "pagesPassed": "0/240",
+    "booksAllPagesPass": 0,
+    "avgWordsPerSentence": 4.34,
+    "outOfVocabRatio": null,
+    "violations": {
+      "sentence-count": 240,
+      "sentence-length": 709,
+      "connective-endings": 10
+    },
+    "questionTailParagraphs": "18/157"
+  },
+  "en": {
+    "beatsAllCovered": 20,
+    "sentencesMean": 44.1,
+    "sentenceBudget": 24,
+    "overBudgetBooks": 20,
+    "richCharsMean": 2888,
+    "simplifiedCharsMean": 1668,
+    "simplifyRatio": 0.58,
+    "dialogueMean": 9.7,
+    "booksUnder3Dialogue": 0,
+    "condensedBooks": 0,
+    "tellHitsBooks": 0,
+    "extraFixCallBooks": 0,
+    "pagesPassed": "0/240",
+    "booksAllPagesPass": 0,
+    "avgWordsPerSentence": 5.62,
+    "outOfVocabRatio": 0.618,
+    "violations": {
+      "sentence-count": 240,
+      "out-of-vocabulary": 240,
+      "sentence-length": 423
+    },
+    "questionTailParagraphs": "5/157"
+  },
+  "child": {
+    "pass": 3,
+    "curiosityPass": 3,
+    "curiosityMean": 3,
+    "booksWithZeroPage": 6,
+    "retellPass": 14,
+    "retellCoherenceMean": 1.8,
+    "turnRewrite": 2,
+    "childCallsOverPackageBudget": "0/40",
+    "childOutMax": 817
+  }
+}
