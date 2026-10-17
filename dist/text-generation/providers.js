@@ -264,22 +264,26 @@ async function requestOnce(engine, config, req, signal) {
       "https://api.anthropic.com/v1",
     );
     const adaptive = info.reasoning.profile === "anthropic-adaptive";
+    const betweenTools = info.reasoning.profile === "anthropic-between-tools";
+    const disabled = info.reasoning.profile === "anthropic-disabled";
     const body = {
       model,
       system: instruction,
       messages: [{ role: "user", content: req.user }],
       ...(info.supportsTemperature ? { temperature: req.temperature } : {}),
       max_tokens: maxTokens,
-      ...(adaptive
+      ...(adaptive || betweenTools
         ? {
-            thinking: { type: "adaptive" },
+            thinking: { type: betweenTools ? "between_tools" : "adaptive" },
             output_config: { effort: info.reasoning.effort },
           }
-        : {}),
+        : disabled
+          ? { thinking: { type: "disabled" } }
+          : {}),
     };
     // Current Claude models cannot force tools while thinking. Keep the full dynamic
     // story schema in the instruction and use our bounded JSON parse retry instead.
-    if (schema && !adaptive) {
+    if (schema && !adaptive && !betweenTools) {
       body.tools = [
         {
           name: "return_story_json",

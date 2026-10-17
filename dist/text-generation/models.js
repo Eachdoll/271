@@ -124,13 +124,28 @@ const CATALOG = Object.freeze({
   anthropic: Object.freeze([
     TEXT_MODELS.anthropic,
     row({
+      id: "claude-haiku-5-5",
+      name: "Anthropic · Claude Haiku 5.5 · 판정용 선택",
+      tier: "economy",
+      input: 0.1,
+      output: 0.5,
+      supportsTemperature: false,
+      reasoning: reasoning("anthropic-disabled"),
+      maxOutputTokens: 64000,
+      docs: "https://platform.claude.com/docs/en/models/haiku-5-5/overview",
+    }),
+    row({
       ...premium,
       id: "claude-sonnet-5-5",
       name: "Anthropic · Claude Sonnet 5.5 · 고급",
       tier: "advanced",
       input: 2,
       output: 10,
-      reasoning: CLAUDE_REASONING,
+      reasoning: reasoning("anthropic-between-tools", "medium", [
+        "low",
+        "medium",
+        "high",
+      ]),
       docs: "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
     }),
     row({
@@ -287,7 +302,11 @@ export function resolveQualityStageSettings(
       ? engineId === "local"
         ? models.medium
         : TEXT_MODELS[engineId].id
-      : models[role === "prose" ? "medium" : "upper"];
+      : models[
+          role === "prose" || (role === "outline" && engineId === "anthropic")
+            ? "medium"
+            : "upper"
+        ];
   const requested = String(override.model || "").trim(),
     model =
       engineId === "local"
