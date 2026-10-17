@@ -413,6 +413,6 @@ export async function hasCredential(engine) {
 }
 
 export async function listCredentialStatus() {
-  const entries = await Promise.all(CREDENTIAL_ENGINES.map(async engine => [engine, await hasCredential(engine)]));
+  const entries = await Promise.all(CREDENTIAL_ENGINES.map(async engine => { try { return [engine, await hasCredential(engine)]; } catch { return [engine, 'corrupt']; } }));
   return Object.fromEntries(entries);
 }

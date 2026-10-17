@@ -189,6 +189,8 @@ export function configureManagementUI(api) {
   let pending = null;
   const commit = (nextState, message, afterSave) => {
     const current = api.getState(), previous = {...current};
+    // 관리 기능은 자동 작업·이야기 초안을 바꾸지 않으므로, 실행 중인 작업이 참조하는 원본 객체를 복제본으로 바꾸지 않습니다.
+    for (const key of ['fullAutoJobs', 'storyDrafts']) if (key in nextState && current[key] && nextState[key] !== current[key]) nextState[key] = current[key];
     Object.assign(current, nextState);
     if (api.save() === false) { Object.assign(current, previous); return false; }
     pending = null;

@@ -226,10 +226,18 @@ async function putLibrary(request,env,user) {
     result=await env.DB.prepare('UPDATE cloud_libraries SET revision = revision + 1, state_json = ?, manifest_json = ?, updated_at = ? WHERE owner_id = ? AND revision = ?').bind(pointer,manifestPointer,updatedAt,user.id,body.expectedRevision).run();
   }
   if(!Number(result.meta?.changes)) {
+    await removeObject(env,objectKey);
     const latest=await libraryRow(env,user.id);
     fail(409,'revision_conflict','다른 기기에서 먼저 저장한 자료가 있어요. 기존 클라우드 자료를 덮어쓰지 않았어요.',{revision:Number(latest?.revision||0)});
   }
+  await removeSupersededSnapshot(env,current,objectKey);
   return json({ok:true,revision:body.expectedRevision+1,updatedAt});
+}
+async function removeObject(env,key){try{await env.BUCKET.delete?.(key);}catch{/* 정리 실패는 저장 결과에 영향을 주지 않습니다. */}}
+async function removeSupersededSnapshot(env,row,keep){
+  if(!row?.state_json)return;
+  let pointer=null;try{pointer=JSON.parse(row.state_json);}catch{return;}
+  if(pointer?.storage==='r2'&&typeof pointer.objectKey==='string'&&pointer.objectKey.startsWith('cloud-snapshots/')&&pointer.objectKey!==keep)await removeObject(env,pointer.objectKey);
 }
 
 // Stop controls are independent of large library revisions and never contain API keys.

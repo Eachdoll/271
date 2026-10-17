@@ -129,11 +129,10 @@ async function generateSceneOnce(state,book,pageIndex,options={}) {
     report(onProgress,{status:'generating',completed:0,total:1,pageIndex,engine});
     // The six required fields from the World helper are forwarded verbatim.
     const result=await generateImage(request,{engine,config});
-    throwIfAborted(signal);
-    if(!result?.imageUrl) throw new ImageGenerationError('제공자가 그림을 반환하지 않았어요.','EMPTY_PROVIDER_RESULT');
+    if(!result?.imageUrl){throwIfAborted(signal);throw new ImageGenerationError('제공자가 그림을 반환하지 않았어요.','EMPTY_PROVIDER_RESULT');}
+    // 유료 응답이 이미 도착했으므로 중지 요청이 있어도 그림을 저장·기록해 재개 때 다시 결제하지 않게 합니다. 중지는 이 쪽을 기록한 뒤 적용됩니다.
     report(onProgress,{status:'saving',completed:0,total:1,pageIndex,engine});
-    const asset=await saveImage(result.imageUrl,{signal});
-    throwIfAborted(signal);
+    const asset=await saveImage(result.imageUrl);
     // Archive the old seed rather than the seed just allocated for this request.
     const newSeed=page.imageSeed;
     if(previousSeed!==undefined) page.imageSeed=previousSeed;
@@ -150,6 +149,7 @@ async function generateSceneOnce(state,book,pageIndex,options={}) {
     page.imageSceneSnapshot=sceneSnapshot;
     book.approved=false;
     report(onProgress,{status:'complete',completed:1,total:1,pageIndex,engine,imageAssetId:asset.assetId});
+    throwIfAborted(signal);
     return page;
   } catch(error) {
     const cancelled=error?.name==='AbortError'||signal?.aborted;

@@ -76,3 +76,13 @@ test('long premium requests remain cancellable and timeout is distinct from an e
   controller.abort();await assert.rejects(pending,error=>error.name==='AbortError');
   await assert.rejects(createTextEngine({engine:'openai',config:{model:'gpt-6-astra',apiKey:'fixture',timeoutMs:5,fetch:abortable}}).complete(req),error=>error.code==='timeout');
 });
+
+test('the response deadline applies to each JSON attempt, so a slow first reply does not abort the paid retry',async()=>{
+  let calls=0;
+  const slow=(_url,options)=>new Promise((resolve,reject)=>{
+    calls++;const timer=setTimeout(()=>resolve(json({choices:[{message:{content:calls===1?'broken json':'{"story":"Second try."}'}}],usage:{prompt_tokens:10,completion_tokens:20}})),50);
+    options.signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});
+  });
+  const result=await createTextEngine({engine:'openai',config:{model:'gpt-6-astra',apiKey:'fixture',timeoutMs:80,fetch:slow}}).complete(req);
+  assert.equal(calls,2);assert.equal(result.json.story,'Second try.');assert.equal(result.meta.requests,2);
+});
