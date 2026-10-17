@@ -1,3 +1,4 @@
+import { describeReadingViolation } from "./reading-ui.js";
 const escape = (value) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -15,7 +16,7 @@ export function collectBookChecks(book) {
             pageNo: index + 1,
             message:
               [...(page.ko?.violations || []), ...(page.en?.violations || [])]
-                .map((v) => v.message || v)
+                .map(describeReadingViolation)
                 .join(" · ") || "선택한 읽기 단계 범위를 확인해 주세요.",
             severity: "warning",
           },
@@ -30,7 +31,8 @@ export function collectBookChecks(book) {
         : [{ message: check.label }]
       ).map((v) => ({
         ...v,
-        message: v.message || check.label,
+        message:
+          v.code || v.message ? describeReadingViolation(v) : check.label,
         severity: "warning",
       })),
     );
@@ -63,7 +65,7 @@ export function renderChecksPanel(
                 Math.max(0, Number.isFinite(pageNo) ? pageNo - 1 : 0),
                 (book.pages?.length || 1) - 1,
               );
-            return `<li class="${issue.severity === "error" ? "check-blocked" : "check-advisory"}"><span>${issue.severity === "error" ? "수정 필요" : "확인 권장"} · ${escape(issue.message || issue.suggestion || issue.code || "내용을 확인해 주세요.")}</span><button class="btn btn-outline btn-small" data-action="edit-page" data-page="${index}">${index + 1}쪽${issue.pageNo || issue.page ? "으로" : "부터 확인"}</button></li>`;
+            return `<li class="${issue.severity === "error" ? "check-blocked" : "check-advisory"}"><span>${issue.severity === "error" ? "수정 필요" : "확인 권장"} · ${escape(describeReadingViolation(issue))}</span><button class="btn btn-outline btn-small" data-action="edit-page" data-page="${index}">${index + 1}쪽${issue.pageNo || issue.page ? "으로" : "부터 확인"}</button></li>`;
           })
           .join("")}</ul>`
       : '<p class="small-label">표시할 경고가 없어요. 자세한 검사 상태도 확인해 주세요.</p>'

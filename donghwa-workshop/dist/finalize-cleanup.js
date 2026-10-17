@@ -35,6 +35,6 @@ export function cleanupOldWorkRecords(state) {
   }
   return cleaned;
 }
-export function estimateLibraryStorage(storage, key) {
-  return (storage.getItem(key)?.length || 0) * 2;
+export function estimateLibraryStorage(storage, key, state = {}) {
+  return (storage.getItem(key) ?? JSON.stringify(state)).length * 2;
 }

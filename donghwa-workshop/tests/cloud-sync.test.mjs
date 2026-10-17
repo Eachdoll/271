@@ -52,7 +52,7 @@ function client(api,initial=library(),options={}) {
   const storage=options.storage||memoryStorage();
   const sync=createCloudSync({getState:()=>local.state,hasLocalData:()=>local.available,isParent:()=>local.parent,canApplyRemote:()=>local.canApply,
     storage,fetchImpl:api.fetch,pollInterval:0,eventTarget:null,document:null,debounceMs:100000,
-    onChange:status=>local.changes.push(status),
+    onChange:status=>{local.changes.push(status);options.onChange?.(status);},
     applyRemote:async(candidate,meta)=>{local.applies.push({candidate,meta});if(options.applyRemote)return options.applyRemote(candidate,meta,local);local.state=candidate;local.available=true;},
     ...(options.makeBackup?{createLibraryBackup:options.makeBackup}:{})});
   return {sync,local,storage};
@@ -251,4 +251,23 @@ test('A-11 identical remote state advances a stale baseline instead of claiming 
   const state=library(),api=server({state,revision:2}),{sync,storage}=client(api,state,{storage:memoryStorage(await baseline(state,1))});
   try {await sync.start();assert.equal(sync.getStatus().phase,'ready');assert.equal(JSON.parse(storage.getItem(CLOUD_SYNC_STORAGE_KEY)).revision,2);assert.equal(writes(api).length,0);}
   finally {sync.stop();}
+});
+test('R2-8 an explicit push executes after the in-flight refresh encounters a network error',async()=>{
+ const api=server(),{sync}=client(api),gate=deferred(),entered=deferred();
+ try {
+  await sync.start();let failed=false;
+  api.intercept=async call=>{if(call.path==='/library?meta=1'&&!failed){failed=true;entered.resolve();await gate.promise;throw new TypeError('network offline');}};
+  const refreshing=sync.refresh();await entered.promise;const pushing=sync.push();gate.resolve();await refreshing;await pushing;
+  assert.equal(writes(api).length,1);assert.equal(sync.getStatus().phase,'ready');
+ } finally {sync.stop();}
+});
+test('R2-8 a rejected refresh promise cannot reject an explicitly queued push',async()=>{
+ const api=server(),gate=deferred(),entered=deferred();let reportFailure=true;
+ const {sync}=client(api,library(),{onChange:status=>{if(status.phase==='error'&&reportFailure){reportFailure=false;throw Object.assign(new Error('refresh error observer'),{code:'NETWORK_ERROR'});}}});
+ try {
+  await sync.start();let failed=false;
+  api.intercept=async call=>{if(call.path==='/library?meta=1'&&!failed){failed=true;entered.resolve();await gate.promise;throw new TypeError('network offline');}};
+  const refreshing=assert.rejects(sync.refresh(),{code:'NETWORK_ERROR'});await entered.promise;const pushing=sync.push();gate.resolve();await refreshing;await pushing;
+  assert.equal(writes(api).length,1);assert.equal(sync.getStatus().phase,'ready');
+ } finally {sync.stop();}
 });

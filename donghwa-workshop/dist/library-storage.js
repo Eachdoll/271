@@ -32,7 +32,7 @@ export function validateStoredLibrary(text) {
         key === "imageUrl" &&
         item != null &&
         (typeof item !== "string" ||
-          !/^(asset:|data:image\/|\/assets\/)/i.test(item))
+          !/^(asset:|data:image\/|https?:\/\/|\/assets\/)/i.test(item))
       )
         throw new Error("그림 주소를 확인해 주세요.");
       if (item && typeof item === "object") checkImages(item);
@@ -53,7 +53,6 @@ export function validateStoredLibrary(text) {
           collection === "books" &&
           (typeof record.title !== "string" ||
             !Array.isArray(record.pages) ||
-            !record.pages.length ||
             record.pages.length > 100 ||
             record.pages.some(
               (p) =>

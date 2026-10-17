@@ -9,6 +9,7 @@ import {
   applyReadingFeedback,
   acceptReadingSuggestion,
 } from "./reading-levels.js";
+export { describeReadingViolation } from "./reading-messages.js";
 import { analyzeBook, estimateReadingScore } from "./reading-checker.js";
 
 const escape = (value) =>
@@ -68,7 +69,7 @@ export function renderReadingSelectors(values, prefix = "") {
 }
 export function renderReadingSettings(settings) {
   const dictionaries = settings.koVocabularies || {};
-  return `<section class="panel reading-settings"><h3>한글 · 영어 읽기 수준</h3><p class="section-sub">두 언어를 따로 정하고, 부모가 확인할 때만 바꿔요. 영어는 번역 없이 같은 장면을 단계별 문형으로 새로 씁니다.</p><div class="form-grid">${renderReadingSelectors({ koreanLevel: settings.defaultKoreanLevel, englishLevel: settings.defaultEnglishLevel }, "default-")}<div class="field field-wide"><label for="sr-lexile">SR · 렉사일 점수 <span class="count">선택 · 숫자 L</span></label><input id="sr-lexile" type="number" min="0" max="2000" step="1" value="${escape(settings.srLexile ?? "")}" placeholder="예: 350"><small id="sr-level-note">미입력 E0 · 200L 미만 E1 · 200~449L E2 · 450~599L E3 · 600L 이상 E4. 추천을 확인한 뒤 적용해 주세요.</small><button type="button" class="btn btn-outline btn-small" data-reading-action="apply-sr">SR 추천 단계 적용</button></div><div class="field"><label for="ko-vocab-grade">한글 어휘 CSV · 등급</label><select id="ko-vocab-grade">${[1, 2, 3, 4].map((grade) => `<option value="${grade}">${grade}등급${dictionaries[grade]?.words?.length ? " · " + dictionaries[grade].words.length + "개" : ""}</option>`).join("")}</select></div><div class="field"><label for="ko-vocab-file">어휘 목록 넣기</label><input id="ko-vocab-file" type="file" accept=".csv,.txt,text/csv,text/plain"><button type="button" class="btn btn-plain btn-small" data-reading-action="remove-vocab">선택 등급 목록 삭제</button><small>한 줄에 한 어휘 또는 word/어휘 열의 CSV · 1MB 이하. 해당 등급의 목록이 없으면 한글 어휘 이탈률 검사를 건너뛰고 문장 길이와 연결어미를 검사해요.</small></div></div><p class="small-label" style="margin-top:16px">문장·어절, FK·Spache·Dale–Chall과 어휘를 기기에서 추정합니다. AR·렉사일·KReaD 공식 점수는 아닙니다. 읽은 뒤 같은 난이도 피드백이 두 번 쌓이면 다음 책에서 단계 변경을 제안해요.</p><details class="reading-specs"><summary>단계별 levelSpec JSON 보기</summary><pre>${escape(JSON.stringify(LEVEL_SPECS, null, 2))}</pre></details></section>`;
+  return `<section class="panel reading-settings"><h3>한글 · 영어 읽기 수준</h3><p class="section-sub">두 언어를 따로 정하고, 부모가 확인할 때만 바꿔요. 영어는 번역 없이 같은 장면을 단계별 문형으로 새로 씁니다.</p><div class="form-grid">${renderReadingSelectors({ koreanLevel: settings.defaultKoreanLevel, englishLevel: settings.defaultEnglishLevel }, "default-")}<div class="field field-wide" data-settings-form="own"><label for="sr-lexile">SR · 렉사일 점수 <span class="count">선택 · 숫자 L</span></label><input id="sr-lexile" type="number" min="0" max="2000" step="1" value="${escape(settings.srLexile ?? "")}" placeholder="예: 350"><small id="sr-level-note">미입력 E0 · 200L 미만 E1 · 200~449L E2 · 450~599L E3 · 600L 이상 E4. 추천을 확인한 뒤 적용해 주세요.</small><button type="button" class="btn btn-outline btn-small" data-reading-action="apply-sr">SR 추천 단계 적용</button></div><div class="field" data-settings-form="own"><label for="ko-vocab-grade">한글 어휘 CSV · 등급</label><select id="ko-vocab-grade">${[1, 2, 3, 4].map((grade) => `<option value="${grade}">${grade}등급${dictionaries[grade]?.words?.length ? " · " + dictionaries[grade].words.length + "개" : ""}</option>`).join("")}</select></div><div class="field" data-settings-form="own"><label for="ko-vocab-file">어휘 목록 넣기</label><input id="ko-vocab-file" type="file" accept=".csv,.txt,text/csv,text/plain"><button type="button" class="btn btn-plain btn-small" data-reading-action="remove-vocab">선택 등급 목록 삭제</button><small>한 줄에 한 어휘 또는 word/어휘 열의 CSV · 1MB 이하. 해당 등급의 목록이 없으면 한글 어휘 이탈률 검사를 건너뛰고 문장 길이와 연결어미를 검사해요.</small></div></div><p class="small-label" style="margin-top:16px">문장·어절, FK·Spache·Dale–Chall과 어휘를 기기에서 추정합니다. AR·렉사일·KReaD 공식 점수는 아닙니다. 읽은 뒤 같은 난이도 피드백이 두 번 쌓이면 다음 책에서 단계 변경을 제안해요.</p><details class="reading-specs"><summary>단계별 levelSpec JSON 보기</summary><pre>${escape(JSON.stringify(LEVEL_SPECS, null, 2))}</pre></details></section>`;
 }
 export function readReadingSettings(settings) {
   Object.assign(settings, {
@@ -305,6 +306,9 @@ export function configureReadingUI(context) {
           document.querySelector("#default-englishLevel").value =
             recommendEnglishLevel(document.querySelector("#sr-lexile").value)
               ?.englishLevel || "E0";
+          document
+            .querySelector("#default-englishLevel")
+            .dispatchEvent(new Event("change", { bubbles: true }));
           api.toast("추천 단계를 선택했어요. 설정 저장을 눌러 확정해 주세요.");
         }
         if (button.dataset.readingAction === "accept-suggestion") {

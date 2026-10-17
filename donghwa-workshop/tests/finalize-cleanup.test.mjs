@@ -13,3 +13,8 @@ test('A-5 cleanup never discards an unfinished book or its resumable work',()=>{
  const book={id:'unfinished',approved:false,stage:'paged',storyDraftId:'draft',fullAutoRunId:'auto'},state={books:[book],storyDrafts:{draft:{pictureBook:{pages:[{}]},prose:{ko:'이어서 쓸 글'}}},fullAutoJobs:{auto:{status:'paused',book}}};const before=structuredClone(state);
  assert.equal(cleanupOldWorkRecords(state),0);assert.deepEqual(state,before);
 });
+test('R2-7 a fresh library estimates its current state until the first stored snapshot exists',()=>{
+ const state={books:[{id:'b',title:'저장 전 책'}],settings:{}};
+ assert.equal(estimateLibraryStorage({getItem:()=>null},'library',state),JSON.stringify(state).length*2);
+ assert.equal(estimateLibraryStorage({getItem:()=> 'saved'},'library',state),10);
+});

@@ -164,7 +164,7 @@ async function execute(job) {
       api.toast(
         error.name === "AbortError"
           ? "제작을 중지하고 완료한 결과를 보관했어요."
-          : error.message,
+          : error,
       );
   } finally {
     watcher.close();
@@ -256,7 +256,7 @@ export function configureFullAutoUI(context) {
           await api.openReview(job);
         }
       } catch (error) {
-        api.toast(error.message);
+        api.toast(error);
       }
     });
   });

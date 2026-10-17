@@ -1,3 +1,4 @@
+import { missingCredentialError } from "../credential-errors.js";
 import {
   createImageGenerator,
   generateImage as generateWithProvider,
@@ -38,6 +39,17 @@ export function createWorldImagePlugin(getState) {
         config.proxyEndpoint
           ? null
           : await getCredential(engine);
+      if (
+        !["sample", "local"].includes(engine) &&
+        !apiKey &&
+        !config.proxyEndpoint &&
+        config.transport !== "proxy"
+      )
+        throw missingCredentialError(
+          "부모 설정에서 그림 엔진의 API 키를 등록해 주세요.",
+          engine,
+          "image",
+        );
       return generateWithProvider(request, {
         engine,
         config: { ...config, apiKey: apiKey || undefined },
