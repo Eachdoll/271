@@ -1,18 +1,10 @@
 const CACHE = "donghwa-shell-v20";
 const FILES = [
+  "./finalize-cleanup.js",
   "./story-quality/data/worlds.json",
-  "./story-quality/dist/cli/distill.js",
-  "./story-quality/dist/cli/eval.js",
-  "./story-quality/dist/cli/finetune.js",
-  "./story-quality/dist/cli/topics.js",
-  "./story-quality/dist/distill/generate.js",
   "./story-quality/dist/engines/anthropic.js",
   "./story-quality/dist/engines/openaiCompat.js",
-  "./story-quality/dist/eval/harness.js",
-  "./story-quality/dist/eval/rubricJudge.js",
   "./story-quality/dist/expand.js",
-  "./story-quality/dist/finetune/convert.js",
-  "./story-quality/dist/node.js",
   "./story-quality/dist/worlds.js",
   "./story-quality/gold/bad_examples.json",
   "./story-quality/gold/gold_outlines_part1.json",
@@ -98,13 +90,6 @@ const FILES = [
   "./reading-ui.js",
   "./levels.json",
   "./reading-vocab.js",
-  "./vocab/dolch_preprimer.txt",
-  "./vocab/dolch_primer.txt",
-  "./vocab/dolch_first.txt",
-  "./vocab/fry_1000.txt",
-  "./vocab/cvc_short_vowel.txt",
-  "./vocab/dale_chall.txt",
-  "./vocab/spache.txt",
   "./style-studio.js",
   "./wardrobe.js",
   "./wardrobe-translation.js",
@@ -152,7 +137,12 @@ self.addEventListener("fetch", (event) => {
       .then((response) => {
         if (response.ok && !response.redirected && response.type !== "opaque") {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+          event.waitUntil(
+            caches
+              .open(CACHE)
+              .then((cache) => cache.put(event.request, copy))
+              .catch(() => {}),
+          );
         }
         return response;
       })

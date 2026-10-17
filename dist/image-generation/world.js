@@ -729,7 +729,6 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
         ? seedForPage(book.id, 0)
         : (page.staging?.seed ?? page.imageSeed)),
   );
-  if (!options.cover) page.imageSeed = requestSeed;
   const place = pagePlace(book, snapshot, pageIndex);
   const references = [
     ...sceneReferenceRecords(

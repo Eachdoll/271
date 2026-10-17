@@ -678,6 +678,7 @@ export async function inspectChildStory(
           services.repaginate(outline, nextProse, input, {
             ...options,
             skipChildGate: true,
+            skipCoherence: true,
             repair: false,
           }),
         );

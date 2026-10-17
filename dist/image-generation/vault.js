@@ -703,3 +703,28 @@ export async function listCredentialStatus() {
   );
   return Object.fromEntries(entries);
 }
+
+/** Explicit recovery only after the app has verified its own parent PIN. */
+export async function resetVault(pin) {
+  validatePin(pin);
+  lockVault();
+  const version = lockVersion,
+    bundle = await buildPinBundle(pin, {});
+  if (version !== lockVersion) throw lockedError();
+  const storage = credentialStorage(),
+    names = [...CREDENTIAL_ENGINES.map(storageKey), PIN_META_KEY];
+  const previous = names.map((name) => [name, storage.getItem(name)]);
+  try {
+    for (const name of names) storage.removeItem(name);
+    commitPinBundle(bundle);
+  } catch (error) {
+    lockVault();
+    for (const [name, value] of previous)
+      try {
+        if (value === null) storage.removeItem(name);
+        else storage.setItem(name, value);
+      } catch {}
+    throw error;
+  }
+  return true;
+}

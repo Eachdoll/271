@@ -1,4 +1,5 @@
 import http from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { generateImage } from "../dist/image-generation/providers.js";
 import { translateWardrobeWithGoogle } from "../dist/wardrobe-translation.js";
@@ -35,7 +36,12 @@ function originsFromEnv(env) {
       .filter(Boolean),
   );
 }
-function rejectCredentials(value) {
+function rejectCredentials(value, depth = 0) {
+  if (depth > 32)
+    throw proxyError(
+      413,
+      "요청 구조가 너무 깊어요. 참조와 설정을 줄여 주세요.",
+    );
   if (!value || typeof value !== "object") return;
   for (const [key, child] of Object.entries(value)) {
     if (/^(apiKey|api_key|key|token|authorization|password|pin)$/i.test(key))
@@ -43,7 +49,7 @@ function rejectCredentials(value) {
         400,
         "프록시 요청에 인증 정보를 넣을 수 없어요. 서버 환경변수에만 설정해 주세요.",
       );
-    rejectCredentials(child);
+    rejectCredentials(child, depth + 1);
   }
 }
 async function readBody(request, limit) {
@@ -114,6 +120,20 @@ export function createImageProxyHandler({
       }
       if (request.method !== "POST")
         throw proxyError(405, "POST 이미지 요청만 받을 수 있어요.");
+      if (!claimedOrigin) {
+        const supplied = String(request.headers["x-image-proxy-token"] || ""),
+          expected = String(env.IMAGE_PROXY_TOKEN || "");
+        if (
+          !expected ||
+          supplied.length !== expected.length ||
+          supplied.length > 1024 ||
+          !timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))
+        )
+          throw proxyError(
+            403,
+            "Origin 헤더 또는 서버 프록시 토큰이 필요해요.",
+          );
+      }
       const engine = textMatch
         ? textMatch[1]
         : translation

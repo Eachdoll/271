@@ -120,7 +120,7 @@ export function renderGenerationControls(book) {
   const generated = book.pages.filter(
     (p) => p.imageAssetId || p.imageUrl,
   ).length;
-  return `<div class="ig-editor-bar"><div><strong>World 엔진으로 미리보기 만들기</strong><small>${generated} / ${book.pages.length}쪽 생성 · 캐릭터·옷장·스타일·고정 장소 참조 · 앞쪽부터 순서대로 생성 · 전체 draft 예상 $${estimated.costUsd.toFixed(2)} · 유사 그림은 최대 1회 추가 생성 요금</small>${book.pages[api.getEditPage?.() || 0]?.imageDiversity?.warning ? `<small role="status">${escape(book.pages[api.getEditPage?.() || 0].imageDiversity.warning)}</small>` : ""}${book.imageTimeWarning ? `<small role="status">${escape(book.imageTimeWarning.message)}</small>` : ""}</div><button type="button" class="btn btn-outline" data-ig-action="generate-page">이 쪽 draft 생성</button><button type="button" class="btn btn-outline" data-ig-action="change-composition">이 쪽 다른 구도로</button><button type="button" class="btn btn-green" data-ig-action="generate-book">${book.pages.length}쪽 draft 전체 생성</button></div>`;
+  return `<div class="ig-editor-bar"><div><strong>World 엔진으로 미리보기 만들기</strong><small>${generated} / ${book.pages.length}쪽 생성 · 캐릭터·옷장·스타일·고정 장소 참조 · 앞쪽부터 순서대로 생성 · 전체 draft 예상 $${estimated.costUsd.toFixed(2)} · 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성</small>${book.pages[api.getEditPage?.() || 0]?.imageDiversity?.warning ? `<small role="status">${escape(book.pages[api.getEditPage?.() || 0].imageDiversity.warning)}</small>` : ""}${book.imageTimeWarning ? `<small role="status">${escape(book.imageTimeWarning.message)}</small>` : ""}</div><button type="button" class="btn btn-outline" data-ig-action="generate-page">이 쪽 draft 생성</button><button type="button" class="btn btn-outline" data-ig-action="change-composition">이 쪽 다른 구도로</button><button type="button" class="btn btn-green" data-ig-action="generate-book">${book.pages.length}쪽 draft 전체 생성</button></div>`;
 }
 function renderComparisonResults() {
   return comparisonResults
@@ -138,11 +138,13 @@ async function refreshStatuses() {
       el.textContent =
         id === "sample"
           ? "무료 · 키 없음"
-          : credentialStatus[id]
-            ? "키 저장됨 · 암호화 보관"
-            : id === "local"
-              ? "인증 토큰 없음 · 선택"
-              : "키 필요";
+          : credentialStatus[id] === "corrupt"
+            ? "손상됨 · 삭제 후 다시 등록"
+            : credentialStatus[id]
+              ? "키 저장됨 · 암호화 보관"
+              : id === "local"
+                ? "인증 토큰 없음 · 선택"
+                : "키 필요";
     });
   } catch (error) {
     api?.toast(error.message);
@@ -388,8 +390,8 @@ async function comparisonConfig(state, engine) {
     );
   return { ...config, apiKey };
 }
-async function compareEngines() {
-  if (comparisonRunning) return;
+export async function compareEngines() {
+  if (comparisonRunning || currentOperation) return;
   const chosen = [
     ...document.querySelectorAll("[name=ig-compare-engine]:checked"),
   ].map((e) => e.value);
@@ -427,15 +429,19 @@ async function compareEngines() {
     api.toast("비교할 캐릭터 시트를 한 명 이상 확정해 주세요.");
     return;
   }
+  const operation = new AbortController();
+  currentOperation = operation;
   let configs;
   try {
     configs = await Promise.all(
       chosen.map((engine) => comparisonConfig(state, engine)),
     );
   } catch (error) {
-    api.toast(error.message);
+    if (currentOperation === operation) currentOperation = null;
+    if (!operation.signal.aborted) api.toast(error.message);
     return;
   }
+  if (operation.signal.aborted) return;
   comparisonRunning = true;
   comparisonResults = [];
   const submit = document.querySelector("#ig-compare-form button[type=submit]");
@@ -456,6 +462,7 @@ async function compareEngines() {
             seed,
             size,
             quality: "draft",
+            signal: operation.signal,
             sampleContext: {
               kind: "scene",
               scene: { theme: "dinosaur", beat: "walk" },
@@ -468,6 +475,7 @@ async function compareEngines() {
       } catch (error) {
         item = { engine, error: error.message, ms: performance.now() - start };
       }
+      if (operation.signal.aborted) return;
       comparisonResults.push(item);
       comparisonResults.sort(
         (a, b) => chosen.indexOf(a.engine) - chosen.indexOf(b.engine),
@@ -477,6 +485,8 @@ async function compareEngines() {
     }),
   );
   comparisonRunning = false;
+  if (currentOperation === operation) currentOperation = null;
+  if (operation.signal.aborted) return;
   const progress = document.querySelector("#ig-compare-progress");
   if (progress)
     progress.textContent = "비교 완료 · 결과는 라이브러리에 저장되지 않습니다.";
@@ -493,6 +503,7 @@ export async function previewNewCharacter(character) {
 export function cleanupImageUI() {
   currentOperation?.abort();
   currentOperation = null;
+  comparisonRunning = false;
   if (pendingSheetCandidate) {
     const candidate = pendingSheetCandidate;
     pendingSheetCandidate = null;
@@ -539,20 +550,23 @@ async function runSheetGeneration(input, { quality = "draft", seed } = {}) {
       "wide",
     );
     document.querySelector("#ig-sheet-cancel").onclick = api.closeModal;
-    document.querySelector("#ig-sheet-confirm").onclick = async () => {
-      if (
-        quality === "draft" &&
-        getActiveWorld(state).imageEngine !== "sample"
-      ) {
-        pendingSheetCandidate = null;
-        await deleteImageAsset(result.imageAssetId);
-        await runSheetGeneration(character, {
-          quality: "final",
-          seed: result.meta.requestedSeed,
-        });
-        return;
-      }
+    document.querySelector("#ig-sheet-confirm").onclick = async (event) => {
+      const button =
+        event?.currentTarget || document.querySelector("#ig-sheet-confirm");
+      button.disabled = true;
       try {
+        if (
+          quality === "draft" &&
+          getActiveWorld(state).imageEngine !== "sample"
+        ) {
+          await deleteImageAsset(result.imageAssetId);
+          pendingSheetCandidate = null;
+          await runSheetGeneration(character, {
+            quality: "final",
+            seed: result.meta.requestedSeed,
+          });
+          return;
+        }
         const previousCharacters = structuredClone(state.characters),
           previousWorlds = structuredClone(state.worlds);
         if (isNew) state.characters.push(structuredClone(character));
@@ -568,6 +582,8 @@ async function runSheetGeneration(input, { quality = "draft", seed } = {}) {
         api.toast(character.name + "의 World 시트를 확정했어요.");
       } catch (error) {
         api.toast(error.message);
+      } finally {
+        if (button.isConnected) button.disabled = false;
       }
     };
   } catch (error) {
@@ -586,6 +602,134 @@ async function runSheetGeneration(input, { quality = "draft", seed } = {}) {
       error.name === "AbortError" ? "시트 생성을 취소했어요." : error.message,
     );
   }
+}
+export function selectSimilarPages(book, { quality = "final", signal } = {}) {
+  const pages = (book.pages || []).flatMap((page, index) =>
+    page.imageDiversity?.tooSimilar ? [index] : [],
+  );
+  const state = api.getState(),
+    world = getActiveWorld(state),
+    engine = book.generationSnapshot?.imageEngine || world.imageEngine;
+  if (!pages.length || engine === "sample" || book.similarityReviewDismissed)
+    return Promise.resolve([]);
+  const unit = estimateImageCost({
+    engine,
+    quality,
+    size: "1536x1024",
+    config: {
+      ...world.providerConfig?.[engine],
+      ...book.generationSnapshot?.imageModelConfig,
+    },
+  }).costUsd;
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal?.removeEventListener("abort", abort);
+      reject(new DOMException("작업을 중지했어요.", "AbortError"));
+    };
+    const done = (selected) => {
+      signal?.removeEventListener("abort", abort);
+      book.similarityReviewDismissed = true;
+      resolve(selected);
+    };
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+    api.showModal(
+      `${api.modalHeader(`비슷한 구도 ${pages.length}쪽 · 다시 그릴까요?`)}<p>고른 쪽만 추가 생성해요. 쪽당 약 $${unit.toFixed(3)} · 모두 선택하면 약 $${(unit * pages.length).toFixed(3)}.</p>${pages.map((index) => `<label class="similar-page-choice"><input name="similar-final-page" type="checkbox" value="${index}">${index + 1}쪽</label>`).join("")}<p id="similar-final-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-final-keep">지금 그림 유지하고 확정</button><button class="btn btn-green" id="similar-final-retry">고른 쪽 다시 그리기</button></div>`,
+    );
+    document.querySelector("#similar-final-keep").onclick = () => done([]);
+    document.querySelector("#similar-final-retry").onclick = () => {
+      const selected = [
+        ...document.querySelectorAll('[name="similar-final-page"]:checked'),
+      ].map((input) => Number(input.value));
+      if (!selected.length) {
+        document.querySelector("#similar-final-error").textContent =
+          "다시 그릴 쪽을 골라 주세요.";
+        return;
+      }
+      done(selected);
+    };
+  });
+}
+
+/** A paid retry always requires this explicit, per-book selection. */
+export function showSimilarPagesReview(book, { quality = "draft" } = {}) {
+  const similarPages = (book.pages || []).flatMap((page, index) =>
+    page.imageDiversity?.tooSimilar ? [index] : [],
+  );
+  const state = api.getState(),
+    world = getActiveWorld(state),
+    engine = book.generationSnapshot?.imageEngine || world.imageEngine;
+  if (
+    !similarPages.length ||
+    engine === "sample" ||
+    book.similarityReviewDismissed
+  )
+    return;
+  const unit = estimateImageCost({
+    engine,
+    quality,
+    size: "1536x1024",
+    config: {
+      ...world.providerConfig?.[engine],
+      ...book.generationSnapshot?.imageModelConfig,
+    },
+  }).costUsd;
+  api.showModal(
+    `${api.modalHeader("비슷한 구도 " + similarPages.length + "쪽 · 다시 그릴까요?")}<p>선택한 쪽만 추가 생성해요. 쪽당 예상 $${unit.toFixed(3)} · 전체 선택 시 약 $${(unit * similarPages.length).toFixed(3)}. 실제 요금은 공급자에서 확인해 주세요.</p><div class="similar-pages-options">${similarPages.map((index) => `<label><input type="checkbox" name="similar-page" value="${index}">${index + 1}쪽</label>`).join("")}</div><p id="similar-retry-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-keep">지금 그림 유지</button><button class="btn btn-primary" id="similar-confirm">선택한 쪽만 다시 그리기</button></div>`,
+  );
+  document.querySelector("#similar-keep").onclick = () => {
+    book.similarityReviewDismissed = true;
+    api.syncDraft?.();
+    api.save();
+    api.closeModal();
+  };
+  document.querySelector("#similar-confirm").onclick = async () => {
+    const indexes = [
+      ...document.querySelectorAll('[name="similar-page"]:checked'),
+    ].map((input) => Number(input.value));
+    if (!indexes.length) {
+      document.querySelector("#similar-retry-error").textContent =
+        "다시 그릴 쪽을 선택해 주세요.";
+      return;
+    }
+    const operation = new AbortController();
+    currentOperation = operation;
+    operationModal(
+      "선택한 쪽의 구도를 바꾸고 있어요",
+      `추가 생성 ${indexes.length}쪽 · 예상 $${(unit * indexes.length).toFixed(3)}`,
+    );
+    try {
+      for (const index of indexes) {
+        await generateScene(state, book, index, {
+          quality,
+          changeComposition: true,
+          signal: operation.signal,
+        });
+        api.syncDraft?.();
+        api.save();
+      }
+      book.similarityReviewDismissed = true;
+      if (currentOperation === operation) currentOperation = null;
+      api.closeModal();
+      api.render();
+      api.toast("선택한 쪽의 새 그림을 저장했어요.");
+    } catch (error) {
+      if (currentOperation === operation) currentOperation = null;
+      api.closeModal();
+      api.render();
+      api.toast(
+        error.name === "AbortError"
+          ? "중지했어요. 완료한 그림은 보관합니다."
+          : error.message,
+      );
+    } finally {
+      api.syncDraft?.();
+      api.save();
+    }
+  };
 }
 async function runSceneGeneration(all, changeComposition = false) {
   if (currentOperation) return;
@@ -636,6 +780,7 @@ async function runSceneGeneration(all, changeComposition = false) {
         ? "모든 장면에 같은 시트와 화풍을 사용했어요. 내용을 확인하고 확정해 주세요."
         : "이 쪽의 생성 그림과 시드를 저장했어요.",
     );
+    if (all) showSimilarPagesReview(book);
   } catch (error) {
     if (currentOperation === operation) {
       currentOperation = null;

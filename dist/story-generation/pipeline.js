@@ -2277,6 +2277,8 @@ async function finishPaginationCoherence(
         },
       };
     }
+    if (options.skipCoherence)
+      return { ...result, meta: { ...result.meta, coherence: undefined } };
     const reviewed = await reviewStoryCoherence(
       outline,
       prose,

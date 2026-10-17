@@ -161,3 +161,9 @@ test('oversized, empty, invalid JSON and prototype-shaped files never become can
   await assert.rejects(readLibraryBackupFile(file('{"__proto__":{},"books":[],"characters":[]}')),/JSON 백업/);
   await assert.rejects(readLibraryBackupFile(file('not JSON')),/JSON 백업/);
 });
+
+test('A-1 Blob backup skips base64 encoding and text round trips',async()=>{
+ const original=globalThis.btoa;globalThis.btoa=()=>assert.fail('Blob backup must not encode bytes');
+ try {const library=state();delete library.stylePresets;const backup=await createLibraryBackup(library,{mode:'blobs'});assert.ok(backup.assets instanceof Map);assert.equal(backup.text,undefined);for(const value of backup.assets.values())assert.ok(value instanceof Blob);}
+ finally{globalThis.btoa=original;}
+});

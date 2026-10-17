@@ -118,3 +118,30 @@ test('Wardrobe translation proxy accepts only descriptions and uses the server k
   const missing=createImageProxyHandler({env:{IMAGE_PROXY_ALLOWED_ORIGINS:'https://app.example.test'},translate:async()=>{throw new Error('must not run');}});
   assert.equal((await callProxy(missing,payload,undefined,route)).status,503);
 });
+
+test('A-7 BFL reports the exact sorted eight references that were sent',async()=>{
+ const refs=Array.from({length:10},(_,index)=>({blob,role:index===8?'character_front':index===9?'style_sheet':'background',required:false,label:String(index)}));
+ let submitted;
+ const result=await generateImage({...req,referenceImages:refs},{engine:'bfl',config:{apiKey:'fixture',fetch:async(url,options)=>{
+  if(url.includes('get_result'))return json({status:'Ready',result:{sample:png}});
+  submitted=JSON.parse(options.body);return json({id:'fixture',polling_url:'https://api.bfl.ai/v1/get_result?id=fixture'});
+ }}});
+ assert.equal(Object.keys(submitted).filter(k=>/^input_image/.test(k)).length,8);
+ assert.deepEqual(result.keptReferences.map(r=>r.label),['8','9','0','1','2','3','4','5']);
+ assert.deepEqual(result.meta.referenceMetadata.map(r=>r.label),result.keptReferences.map(r=>r.label));
+});
+test('A-8 Google rejects oversized inline references before its API fetch',async()=>{
+ let calls=0;const oversized=new Blob([new Uint8Array(15*1024*1024)],{type:'image/png'});
+ await assert.rejects(generateImage({...req,referenceImages:[{blob:oversized,role:'style_sheet'}]},{engine:'google',config:{apiKey:'fixture',fetch:async()=>{calls++;throw Error('must not fetch');}}}),error=>error.code==='reference_limit_bytes');assert.equal(calls,0);
+});
+test('A-12 reference downloads and expired output URLs do not report key authentication errors',async()=>{
+ await assert.rejects(generateImage({...req,referenceImages:[{imageUrl:'https://images.example/sheet.png',role:'style_sheet'}]},{engine:'google',config:{apiKey:'fixture',fetch:async()=>new Response('',{status:403})}}),error=>error.code==='reference_download_failed' && /시트/.test(error.message));
+ await assert.rejects(generateImage({...req,referenceImages:[]},{engine:'openai',config:{apiKey:'fixture',fetch:async url=>String(url).includes('api.openai.com')?json({data:[{url:'https://images.example/expired.png'}]}):new Response('',{status:403})}}),error=>error.code==='result_download_expired' && /만료/.test(error.message));
+});
+test('A-15 the proxy refuses missing Origin without a matching server token and limits depth',async()=>{
+ let calls=0;const handler=createImageProxyHandler({env:{IMAGE_PROXY_TOKEN:'fixture-token'},generate:async()=>{calls++;return {imageUrl:png,seed:1,meta:{}};}});
+ assert.equal((await callProxy(handler,{...req,referenceImages:[]},null)).status,403);
+ let nested={};for(let index=0;index<34;index++)nested={next:nested};
+ const allowed=createImageProxyHandler({env:{IMAGE_PROXY_ALLOWED_ORIGINS:'https://app.example.test'}});
+ assert.equal((await callProxy(allowed,{nested})).status,413);assert.equal(calls,0);
+});

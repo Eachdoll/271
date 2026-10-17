@@ -1,4 +1,13 @@
 import {
+  showSimilarPagesReview,
+  selectSimilarPages,
+} from "./image-generation/settings-ui.js";
+import {
+  finalizeBookRecords,
+  cleanupOldWorkRecords,
+  estimateLibraryStorage,
+} from "./finalize-cleanup.js";
+import {
   ensureBookStoryCoherence,
   currentBookPagination,
 } from "./story-generation/book-coherence.js";
@@ -94,6 +103,7 @@ import {
 } from "./image-generation/models.js";
 import {
   generateAllScenes,
+  generateScene,
   generateCover,
 } from "./image-generation/pipeline.js";
 import { hydrateImageAssets, getImageURL } from "./image-generation/assets.js";
@@ -106,6 +116,7 @@ import { configurePhotoUI, cleanupPhotoFlow } from "./photo-materials.js";
 import { configureCompanionUI, cleanupCompanionFlow } from "./companions.js";
 import {
   unlockVault,
+  resetVault,
   lockVault,
   setVaultPin,
   getCredential,
@@ -454,6 +465,8 @@ function closeModal() {
     reader = null;
   }
   modalRoot.innerHTML = "";
+  if (cloudSync?.getStatus().dirty)
+    queueMicrotask(() => void cloudSync.refresh());
   modalFocus?.focus();
   pinCallback = null;
   if (storyOpen && view === "create") render();
@@ -848,7 +861,7 @@ function libraryPage() {
 const managementButton = (label, action, id, kind = "outline") =>
   `<button type="button" class="btn btn-${kind} btn-small" data-management-action="${action}" data-id="${esc(id)}">${label}</button>`;
 const photoButton = (label, action) =>
-  `<button type="button" class="btn btn-outline btn-small" data-photo-action="${action}">${label}</button>`;
+  `<button type="button" class="btn btn-outline btn-small" data-photo-action="${action}">${label}</button>${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY) / 1024 / 1024).toFixed(2)} MB · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
 function materialPortrait(c) {
   const sheet = getCharacterSheet(state, c.id) || c.characterSheets?.at(-1);
   const url = sheet?.imageAssetId ? getImageURL(sheet.imageAssetId) : null;
@@ -1689,6 +1702,26 @@ async function finalizeBook(
         signal: controller.signal,
       });
     }
+    const retryPages = await selectSimilarPages(book, {
+      quality: "final",
+      signal: controller.signal,
+    });
+    ensure();
+    if (retryPages.length) {
+      showModal(
+        `${modalHeader("선택한 쪽의 그림을 만들고 있어요")}<p id="book-final-progress" role="status"></p>${btn("작업 중지", "close-modal", "outline")}`,
+      );
+      for (const index of retryPages) {
+        await generateScene(state, book, index, {
+          quality: "final",
+          changeComposition: true,
+          signal: controller.signal,
+        });
+        syncStoryDraft(book, state);
+        save();
+        ensure();
+      }
+    }
     ensure();
     const prior = state.books
         .filter((other) => other.series === book.series)
@@ -1769,27 +1802,17 @@ async function finalizeBook(
         "책을 저장하지 못했어요. 저장 공간을 확보한 뒤 다시 확정해 주세요.",
       );
     }
-    if (book.storyDraftId && state.storyDrafts?.[book.storyDraftId]) {
-      state.storyDrafts[book.storyDraftId].stage = "final";
-      state.storyDrafts[book.storyDraftId].bookId = book.id;
-      save();
+    const autoPlan = state.fullAutoJobs?.[book.fullAutoRunId]?.plan;
+    for (const id of autoPlan?.characterIds || []) {
+      const c = char(id);
+      if (c) c.autoReviewPending = false;
     }
-    if (book.fullAutoRunId && state.fullAutoJobs?.[book.fullAutoRunId]) {
-      const auto = state.fullAutoJobs[book.fullAutoRunId];
-      for (const id of auto.plan?.characterIds || []) {
-        const c = state.characters.find((c) => c.id === id);
-        if (c) c.autoReviewPending = false;
-      }
-      for (const id of auto.plan?.backgroundIds || []) {
-        const b = state.backgrounds.find((b) => b.id === id);
-        if (b) b.autoReviewPending = false;
-      }
-      auto.status = "final";
-      auto.phase = "책장에 저장";
-      auto.updatedAt = new Date().toISOString();
-      delete auto.book;
-      save();
+    for (const id of autoPlan?.backgroundIds || []) {
+      const b = state.backgrounds.find((b) => b.id === id);
+      if (b) b.autoReviewPending = false;
     }
+    finalizeBookRecords(state, book);
+    save();
     activeBook = book;
     draft = null;
     wizard = null;
@@ -1912,6 +1935,16 @@ async function onAction(e) {
   if (a === "device-transfer") {
     if (storageBlocked) showDeviceTransfer();
     else protectedAction(showDeviceTransfer);
+    return;
+  }
+  if (a === "cleanup-work-records") {
+    protectedAction(() => {
+      const cleaned = cleanupOldWorkRecords(state);
+      if (save()) {
+        render();
+        toast(`완성된 책 ${cleaned}권의 중복 작업 기록을 정리했어요.`);
+      }
+    });
     return;
   }
   if (a === "show-invalid-records") {
@@ -2048,6 +2081,7 @@ async function onAction(e) {
         copy.updatedAt = new Date().toISOString();
         state.storyDrafts[copy.id] = copy;
         draft.storyDraftId = copy.id;
+        syncStoryDraft(draft, state);
         save();
       } else delete draft.storyDraftId;
       editPage = 0;
@@ -2456,6 +2490,34 @@ document.addEventListener("submit", async (e) => {
         submitButton.disabled = false;
         return;
       }
+      if (!f.dataset.allowLockedVault) {
+        error.textContent =
+          "부모 PIN은 맞지만 API 키 보관함을 열지 못했어요. 키를 초기화하면 공급자에서 다시 복사해 등록해야 해요.";
+        submitButton.disabled = false;
+        let recovery = f.querySelector(".vault-recovery");
+        if (!recovery) {
+          recovery = document.createElement("div");
+          recovery.className = "vault-recovery";
+          f.append(recovery);
+        }
+        recovery.innerHTML =
+          '<button type="button" class="btn btn-outline" id="vault-reset">저장된 API 키 초기화 · 다시 등록</button><button type="button" class="btn btn-plain" id="vault-skip">키 없이 부모 모드 열기</button>';
+        recovery.querySelector("#vault-reset").onclick = async (event) => {
+          event.currentTarget.disabled = true;
+          try {
+            await resetVault(pin);
+            f.requestSubmit();
+          } catch (problem) {
+            error.textContent = problem.message;
+            event.currentTarget.disabled = false;
+          }
+        };
+        recovery.querySelector("#vault-skip").onclick = () => {
+          f.dataset.allowLockedVault = "1";
+          f.requestSubmit();
+        };
+        return;
+      }
       vaultWarning =
         problem.message +
         " 부모 모드는 열리지만 저장된 API 키는 다시 등록해야 할 수 있어요.";
@@ -2770,6 +2832,7 @@ configureFullAutoUI({
     view = "edit";
     await checkBookAtLevel(draft, { rewrite: false });
     render();
+    showSimilarPagesReview(draft, { quality: "final" });
     window.scrollTo(0, 0);
   },
 });

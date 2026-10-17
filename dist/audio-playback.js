@@ -148,6 +148,7 @@ async function audioTransaction(mode, operation) {
     db.close();
   }
 }
+const audioAssetCache = new Map();
 export async function saveAudioAsset(blob, { id = uid() } = {}) {
   if (
     !(blob instanceof Blob) ||
@@ -166,14 +167,19 @@ export async function saveAudioAsset(blob, { id = uid() } = {}) {
       createdAt: new Date().toISOString(),
     }),
   );
+  audioAssetCache.delete(id);
   return id;
 }
 export async function getAudioAsset(id) {
-  return id
-    ? (await audioTransaction("readonly", (store) => store.get(id))) || null
-    : null;
+  if (!id) return null;
+  if (audioAssetCache.has(id)) return audioAssetCache.get(id);
+  const record =
+    (await audioTransaction("readonly", (store) => store.get(id))) || null;
+  if (record) audioAssetCache.set(id, record);
+  return record;
 }
 export async function deleteAudioAsset(id) {
+  audioAssetCache.delete(id);
   if (id) await audioTransaction("readwrite", (store) => store.delete(id));
 }
 

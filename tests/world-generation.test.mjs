@@ -47,3 +47,13 @@ test('upgrading the Google image model invalidates future sheets and keeps the o
  const book={characterIds:['yuha']};captureBookGenerationSnapshot(state,book);const before=structuredClone(book.generationSnapshot),revision=world.revision;world.providerConfig={google:{googlePro:true,modelVariant:'pro'}};const changed=updateWorldGenerationSettings(state,{imageEngine:'google',modelVariant:'pro'});
  assert.equal(changed.requiresRegeneration,true);assert.equal(world.revision,revision+1);assert.equal(getCharacterSheet(state,'yuha'),null);assert.deepEqual(book.generationSnapshot,before);assert.equal(book.generationSnapshot.imageModelConfig.googlePro,false);assert.equal(book.generationSnapshot.imageModelConfig.modelVariant,'default');
 });
+
+test('A-6 a failed provider preparation leaves the previous requested seed and metadata intact',async()=>{
+ const {sceneGenerationRequest,captureBookGenerationSnapshot}=await import('../dist/image-generation/world.js');
+ const {generateScene}=await import('../dist/image-generation/pipeline.js');
+ const state=seedState();migrateWorldState(state);const book={id:'seed-preservation',characterIds:['yuha'],pages:makeOutline({characterIds:['yuha'],topic:'바람',pageCount:8},state.characters)};
+ captureBookGenerationSnapshot(state,book);book.pages[0].imageSeed=123;book.pages[0].imageMeta={requestedSeed:123};
+ const request=sceneGenerationRequest(state,book,0,{seed:456});assert.equal(request.seed,456);assert.equal(book.pages[0].imageSeed,123);
+ book.generationSnapshot.imageEngine='google';book.generationSnapshot.imageModelConfig={};
+ await assert.rejects(generateScene(state,book,0,{seed:456}));assert.equal(book.pages[0].imageSeed,123);assert.equal(book.pages[0].imageMeta.requestedSeed,123);
+});

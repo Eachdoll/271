@@ -113,6 +113,7 @@ export function renderImageRequest(request = {}, capabilities = {}) {
     negativePrompt,
     stylePreset: { ...stylePreset, stylePrompt, negativePrompt },
     referenceImages,
+    keptReferences: referenceImages,
     composedPrompt: parts.filter(Boolean).join("\n\n"),
     referenceMetadata: referenceImages.map((ref, index) => ({
       index: index + 1,

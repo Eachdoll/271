@@ -5,6 +5,7 @@
  * generateImage({prompt, stylePreset, referenceImages, seed, size, quality},
  *               {engine, config}) -> {imageUrl, seed, meta}
  */
+import { getAsset } from "./assets.js";
 import { characterSVG, sceneSVG } from "../engine.js";
 import { ENGINE_MODELS, getEngineModel, estimateImageCost } from "./models.js";
 import { renderImageRequest, StoryRendererError } from "./story-renderer.js";
@@ -222,7 +223,7 @@ function requestContext(config, signal) {
   };
 }
 
-async function fetchResponse(url, options, context) {
+async function fetchResponse(url, options, context, { download = null } = {}) {
   if (context.signal.aborted) throw abortError();
   let response;
   try {
@@ -239,6 +240,16 @@ async function fetchResponse(url, options, context) {
   }
   if (!response.ok) {
     const status = response.status;
+    if (download)
+      fail(
+        download === "reference"
+          ? "참조 이미지를 다시 불러오지 못했어요. 시트를 다시 고정해 주세요."
+          : "결과 이미지 주소가 만료됐어요. 다시 생성해 주세요.",
+        download === "reference"
+          ? "reference_download_failed"
+          : "result_download_expired",
+        status,
+      );
     const message =
       status === 401 && context.engine === "openai" && !context.useProxy
         ? "OpenAI 인증에 실패했어요. 추적 ID 대신 비밀 키 전체를 저장했는지, 키가 삭제되거나 만료되지 않았는지 확인해 주세요."
@@ -359,15 +370,28 @@ function delay(ms, signal) {
   });
 }
 
-async function blobDataURL(blob, signal) {
-  if (signal?.aborted) throw abortError();
+const blobEncodingCache = new WeakMap();
+async function encodeBlobDataURL(blob) {
   // Reading through ArrayBuffer works in browsers, workers and Node test harnesses.
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const chunks = [];
   for (let offset = 0; offset < bytes.length; offset += 16384)
     chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 16384)));
-  if (signal?.aborted) throw abortError();
   return `data:${blob.type || "image/png"};base64,${btoa(chunks.join(""))}`;
+}
+async function blobDataURL(blob, signal) {
+  if (signal?.aborted) throw abortError();
+  if (!blobEncodingCache.has(blob))
+    blobEncodingCache.set(
+      blob,
+      encodeBlobDataURL(blob).catch((error) => {
+        blobEncodingCache.delete(blob);
+        throw error;
+      }),
+    );
+  const value = await blobEncodingCache.get(blob);
+  if (signal?.aborted) throw abortError();
+  return value;
 }
 function dataURLBlob(dataURL) {
   const match = dataURL.match(/^data:([^,]+),([\s\S]*)$/);
@@ -447,14 +471,18 @@ async function rasterizeSVG(blob, signal, outputSize = null) {
   }
 }
 async function referenceBlob(reference, context) {
+  const stored = reference?.imageAssetId
+    ? await getAsset(reference.imageAssetId)
+    : null;
   let source =
-    reference instanceof Blob
+    stored ||
+    (reference instanceof Blob
       ? reference
       : reference?.blob ||
         reference?.dataUrl ||
         reference?.imageUrl ||
         reference?.url ||
-        reference;
+        reference);
   let blob;
   if (source instanceof Blob) blob = source;
   else if (typeof source === "string" && source.startsWith("data:"))
@@ -472,7 +500,9 @@ async function referenceBlob(reference, context) {
       parsed.password
     )
       fail("참조 이미지 주소 형식을 확인해 주세요.", "invalid_reference");
-    blob = await (await fetchResponse(parsed.href, {}, context)).blob();
+    blob = await (
+      await fetchResponse(parsed.href, {}, context, { download: "reference" })
+    ).blob();
   } else fail("참조 이미지 파일이나 주소가 비어 있어요.", "invalid_reference");
   if (!blob.type.startsWith("image/"))
     fail(
@@ -512,7 +542,9 @@ async function imageResultURL(value, context, config) {
   // BFL output URLs expire after ten minutes. Save pixels immediately, not an
   // expiring remote URL. No provider credential is sent to image hosts.
   if (config.persistResults === false) return parsed.href;
-  const blob = await (await fetchResponse(parsed.href, {}, context)).blob();
+  const blob = await (
+    await fetchResponse(parsed.href, {}, context, { download: "result" })
+  ).blob();
   if (!blob.type.startsWith("image/") || blob.type === "image/svg+xml")
     fail("엔진의 이미지 파일을 읽지 못했어요.", "invalid_response");
   return blobDataURL(blob, context.signal);
@@ -645,7 +677,80 @@ async function sampleAdapter(request, config, context) {
   };
 }
 
+const googleReferenceCache = new WeakMap();
+async function googleReference(blob, signal) {
+  if (typeof document === "undefined" || typeof Image === "undefined")
+    return blob;
+  if (!googleReferenceCache.has(blob))
+    googleReferenceCache.set(
+      blob,
+      (async () => {
+        const url = URL.createObjectURL(blob);
+        try {
+          const img = new Image();
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = () =>
+              reject(
+                new ImageGenerationError(
+                  "참조 그림을 축소하지 못했어요.",
+                  "invalid_reference",
+                ),
+              );
+            img.src = url;
+          });
+          const canvas = document.createElement("canvas"),
+            factor = Math.min(
+              1,
+              1024 / Math.max(img.naturalWidth, img.naturalHeight),
+            );
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * factor));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * factor));
+          const context = canvas.getContext("2d");
+          if (!context)
+            throw new ImageGenerationError(
+              "참조 그림을 축소하지 못했어요.",
+              "invalid_reference",
+            );
+          context.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const resized = await new Promise((resolve) =>
+            canvas.toBlob(resolve, "image/webp", 0.85),
+          );
+          if (!resized)
+            throw new ImageGenerationError(
+              "참조 그림을 축소하지 못했어요.",
+              "invalid_reference",
+            );
+          return resized;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      })().catch((error) => {
+        googleReferenceCache.delete(blob);
+        throw error;
+      }),
+    );
+  const result = await googleReferenceCache.get(blob);
+  if (signal?.aborted) throw abortError();
+  return result;
+}
+export async function prepareGoogleReferences(blobs, signal) {
+  const prepared = await Promise.all(
+    blobs.map((blob) => googleReference(blob, signal)),
+  );
+  const inlineBytes = prepared.reduce(
+    (sum, blob) => sum + 4 * Math.ceil(blob.size / 3),
+    0,
+  );
+  if (inlineBytes > 18 * 1024 * 1024)
+    fail(
+      `참조 그림이 너무 커서 Google 직접 전송 한도를 넘어요(현재 ${(inlineBytes / 1024 / 1024).toFixed(1)} MB). 참조 수를 줄이거나 프록시를 사용해 주세요.`,
+      "reference_limit_bytes",
+    );
+  return prepared;
+}
 async function googleAdapter(request, config, context, blobs) {
+  blobs = await prepareGoogleReferences(blobs, context.signal);
   const model = getEngineModel("google", request.quality, config);
   const base = endpoint(
     config,
@@ -1356,6 +1461,7 @@ export async function generateImage(request, { engine, config = {} } = {}) {
         : await imageResultURL(result.imageUrl, context, config);
     return {
       imageUrl,
+      keptReferences: normalized.keptReferences,
       seed: result.seed,
       meta: {
         provider: engine,

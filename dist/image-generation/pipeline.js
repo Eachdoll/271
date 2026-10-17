@@ -139,16 +139,16 @@ function metadata(result, request, context) {
     referenceCount:
       result.meta?.referenceCount ?? request.referenceImages.length,
     placeKey: request.placeKey || null,
-    referenceImages: request.referenceImages
-      .slice(0, result.meta?.referenceCount ?? request.referenceImages.length)
-      .map((ref) => ({
+    referenceImages: (result.keptReferences || request.referenceImages).map(
+      (ref) => ({
         ...clone(ref),
         imageUrl: ref.imageAssetId
           ? `asset:${ref.imageAssetId}`
           : ref.imageUrl?.startsWith("blob:")
             ? null
             : ref.imageUrl,
-      })),
+      }),
+    ),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -192,7 +192,6 @@ async function generateSceneOnce(state, book, pageIndex, options = {}) {
       "PAGE_NOT_FOUND",
     );
   throwIfAborted(signal);
-  const previousSeed = page.imageSeed;
   try {
     report(onProgress, {
       status: "preparing",
@@ -257,11 +256,7 @@ async function generateSceneOnce(state, book, pageIndex, options = {}) {
       engine,
     });
     const asset = await saveImage(result.imageUrl);
-    // Archive the old seed rather than the seed just allocated for this request.
-    const newSeed = page.imageSeed;
-    if (previousSeed !== undefined) page.imageSeed = previousSeed;
     archiveCurrentPageImage(page);
-    page.imageSeed = newSeed;
     const persistedResult = {
       imageUrl: `asset:${asset.assetId}`,
       imageAssetId: asset.assetId,
@@ -368,7 +363,13 @@ export async function generateScene(state, book, pageIndex, options = {}) {
     if (previous?.supported && current.supported) {
       let comparison = compareImageFingerprints(previous, current);
       page.imageDiversity = { ...page.imageDiversity, ...comparison };
-      if (comparison.tooSimilar) {
+      const engine =
+        book.generationSnapshot?.imageEngine ||
+        getActiveWorld(state).imageEngine;
+      if (comparison.tooSimilar && engine !== "sample")
+        page.imageDiversity.warning =
+          "앞쪽과 비슷한 구도예요. 책 전체 생성 후 선택한 쪽만 다시 그릴 수 있어요.";
+      if (comparison.tooSimilar && engine === "sample") {
         changePageComposition(book, pageIndex);
         report(options.onProgress, {
           status: "diversity-retry",
@@ -416,6 +417,7 @@ export async function generateScene(state, book, pageIndex, options = {}) {
 
 /** Ordered generation: the next page can reference the first and latest scene at its place. */
 export async function generateAllScenes(state, book, options = {}) {
+  delete book.similarityReviewDismissed;
   const { signal, onProgress } = options;
   throwIfAborted(signal);
   const total = book.pages?.length || 0;
@@ -507,7 +509,15 @@ export async function generateAllScenes(state, book, options = {}) {
       pageIndex: null,
     });
     if (book.prose) book.stage = "illustrated";
-    return { book, results, completed, total };
+    return {
+      book,
+      results,
+      completed,
+      total,
+      similarPages: results
+        .filter(({ page }) => page.imageDiversity?.tooSimilar)
+        .map(({ pageIndex }) => pageIndex),
+    };
   } finally {
     signal?.removeEventListener("abort", externalAbort);
   }

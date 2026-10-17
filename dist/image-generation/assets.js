@@ -285,7 +285,7 @@ export async function deleteImageAsset(assetId) {
   return true;
 }
 
-function assetIdsFromState(state) {
+function assetIdsFromState(state, { includeHistory = false } = {}) {
   const ids = new Set();
   const seen = new WeakSet();
   const visit = (value) => {
@@ -299,16 +299,22 @@ function assetIdsFromState(state) {
       value.imageUrl.startsWith("asset:")
     )
       ids.add(normalizeId(value.imageUrl));
-    for (const entry of Object.values(value))
+    for (const [key, entry] of Object.entries(value)) {
+      if (
+        !includeHistory &&
+        /(?:history|previousVersions|archivedVariants)$/i.test(key)
+      )
+        continue;
       if (entry && typeof entry === "object") visit(entry);
+    }
   };
   visit(state);
   return [...ids].filter(Boolean);
 }
 
 /** Hydrate saved references/pages once at app startup; missing images are reported. */
-export async function hydrateImageAssets(state) {
-  const ids = assetIdsFromState(state);
+export async function hydrateImageAssets(state, options = {}) {
+  const ids = assetIdsFromState(state, options);
   const missing = [];
   let loaded = 0;
   // A small batch avoids opening hundreds of transactions at the same time.
@@ -328,4 +334,9 @@ export function revokeImageURLs() {
   for (const url of urls.values()) URL.revokeObjectURL(url);
   urls.clear();
   blobs.clear();
+}
+
+/** Load an opened history/wardrobe subtree on demand. */
+export function hydrateImageReferences(value) {
+  return hydrateImageAssets(value, { includeHistory: true });
 }
