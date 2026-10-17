@@ -1,0 +1,49 @@
+{
+ "runId": "sonnet55-r7-prose-sonnetsimp",
+ "n": 20,
+ "errors": 0,
+ "costUsd": 2.097,
+ "latencyMeanS": 38.8,
+ "ko": {
+  "sentencesMean": 62.3,
+  "packageSentenceCountMean": 46.4,
+  "booksInBudget": 0,
+  "beatsAllCovered": 20,
+  "pagesPassed": "10/240",
+  "booksAllPagesPass": 0,
+  "violations": {
+   "sentence-length": 457,
+   "sentence-count": 198,
+   "connective-endings": 3
+  },
+  "warnings": {},
+  "questionTailParagraphs": "2/140",
+  "dialogueMean": 15.7
+ },
+ "en": {
+  "sentencesMean": 50.5,
+  "packageSentenceCountMean": 36.7,
+  "booksInBudget": 0,
+  "beatsAllCovered": 20,
+  "pagesPassed": "2/240",
+  "booksAllPagesPass": 0,
+  "violations": {
+   "sentence-count": 225,
+   "sentence-length": 469,
+   "grammar": 226
+  },
+  "warnings": {
+   "out-of-vocabulary": 155
+  },
+  "questionTailParagraphs": "13/140",
+  "dialogueMean": 13.4,
+  "outOfVocabRatio": 0.198,
+  "grammarWordsTop": "said:198 went:61 came:45 was:37 ran:36 saw:24 had:17 ate:14 did:8 made:7 took:4 gave:3 jumped:3 found:2 pulled:1 tied:1 got:1 looked:1 pushed:1"
+ },
+ "child": {
+  "pass": 4,
+  "curiosityPass": 11,
+  "curiosityMean": 8.14,
+  "retellPass": 9
+ }
+}

@@ -1,3 +1,4 @@
+import { splitSentences as sharedSplitSentences } from "./story-quality/dist/util.js";
 import { VOCAB_DATA, ENGLISH_ONOMATOPOEIA } from "./reading-vocab.js";
 /* Browser-local FK, Revised Spache, Dale–Chall and Korean pattern estimates.
  * These are not certified AR, Lexile or KReaD scores. No Python dependency. */
@@ -10,10 +11,9 @@ const strip = (text) =>
     .normalize("NFC")
     .replace(/[“”‘’]/g, "'");
 export function splitSentences(text) {
-  return (strip(text).match(/[^.!?。！？\n]+(?:[.!?。！？]+|$)/gu) || [])
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return sharedSplitSentences(text);
 }
+
 const enWords = (text) =>
   (strip(text).match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) || []).map((w) =>
     w.toLowerCase(),
@@ -155,6 +155,132 @@ export function readabilityMetrics(text, names = []) {
     spacheFormula: "revised-1974",
   };
 }
+const KO_SOUND_WORDS = new Set([
+  "톡",
+  "딸꾹",
+  "똑",
+  "쿵",
+  "쾅",
+  "퐁",
+  "쏙",
+  "뚝",
+  "휙",
+  "후우",
+  "후",
+  "쉭",
+  "딱",
+  "짝",
+  "딩동",
+  "둥",
+  "팡",
+  "꼬르륵",
+  "반짝",
+  "살랑",
+  "데굴",
+  "두근",
+  "아야",
+  "와",
+  "우와",
+  "어",
+  "앗",
+  "응",
+  "쉿",
+  "오",
+  "야",
+  "아하",
+]);
+const EN_SOUND_WORDS = new Set([
+  ...ENGLISH_ONOMATOPOEIA,
+  "oh",
+  "wow",
+  "yay",
+  "hooray",
+  "hurray",
+  "ah",
+  "ooh",
+  "oops",
+  "ouch",
+  "shh",
+]);
+/** A transparent sound-word/repeated-syllable heuristic, not morphological analysis. */
+export function isSoundOnlySentence(text, levelId, language) {
+  if (language === "ko") {
+    if (!["K1", "K2"].includes(levelId)) return false;
+    const words = String(text).match(/[가-힣]+/gu) || [];
+    // Reject mixed English/numeric prose rather than ignoring its non-Korean content.
+    return (
+      words.length > 0 &&
+      !/[A-Za-z0-9]/u.test(text) &&
+      words.every(
+        (word) =>
+          KO_SOUND_WORDS.has(word) || /^(?:([가-힣]{1,3})\1{1,3})$/u.test(word),
+      )
+    );
+  }
+  const words = enWords(text);
+  return (
+    ["E0", "E1"].includes(levelId) &&
+    words.length > 0 &&
+    !/[가-힣0-9]/u.test(text) &&
+    words.every((word) => EN_SOUND_WORDS.has(word))
+  );
+}
+const PRESENT_NONPAST_WORDS = new Set([
+  "reed",
+  "weed",
+  "seed",
+  "need",
+  "feed",
+  "speed",
+  "bed",
+  "red",
+  "sled",
+  "shed",
+  "hundred",
+]);
+const PARTICIPLE_ADJECTIVES = new Set([
+  "tired",
+  "scared",
+  "excited",
+  "closed",
+  "stuck",
+  "curled",
+  "tangled",
+  "surprised",
+  "worried",
+  "pleased",
+  "amazed",
+  "confused",
+  "frightened",
+  "relaxed",
+  "interested",
+  "delighted",
+  "embarrassed",
+]);
+const COORDINATED_ADJECTIVES = new Set([
+  "slow",
+  "happy",
+  "quiet",
+  "safe",
+  "warm",
+  "cold",
+  "soft",
+  "sleepy",
+  "hungry",
+  "ready",
+]);
+const ADJECTIVE_CUES = new Set([
+  "is",
+  "are",
+  "am",
+  "looks",
+  "feels",
+  "seems",
+  "gets",
+  "so",
+  "very",
+  "too",
+]);
 function violations(metrics, spec, lang) {
   const out = [],
     expected =
@@ -173,7 +299,11 @@ function violations(metrics, spec, lang) {
       expected,
     });
   metrics.wordsPerSentence.forEach((count, index) => {
-    if (count < spec.wordsPerSentence.min || count > spec.wordsPerSentence.max)
+    if (
+      (count < spec.wordsPerSentence.min &&
+        !metrics.minimumLengthExemptSentenceIndices.includes(index)) ||
+      count > spec.wordsPerSentence.max
+    )
       out.push({
         code: "sentence-length",
         language: lang,
@@ -258,6 +388,9 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
     wordCount: count,
     characterCount: Array.from(String(text || "").normalize("NFC")).length,
     wordsPerSentence: lengths,
+    minimumLengthExemptSentenceIndices: sentences.flatMap((sentence, index) =>
+      isSoundOnlySentence(sentence, spec.id, lang) ? [index] : [],
+    ),
     averageWordsPerSentence: round(count / Math.max(1, sentences.length)),
     averageSyllablesPerEojeol:
       lang === "ko"
@@ -295,15 +428,33 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
     spec.ruleVersion >= 3 &&
     spec.allowedGrammar.some((rule) => /present tense/i.test(rule))
   ) {
-    const past = words.filter(
-      (word) =>
-        /^(?:was|were|went|saw|said|had|did|gave|found|made|took|felt|came|grew|knew|got|kept|thought|stood|ate|ran|shouted|whispered)$/.test(
-          word,
-        ) ||
-        (word.endsWith("ed") &&
-          !/^(?:red|bed|seed|need|feed|speed|hundred)$/.test(word) &&
-          !names.flatMap(enWords).includes(word)),
-    );
+    const namesSet = new Set(names.flatMap(enWords));
+    const past = sentences.flatMap((sentence) => {
+      const tokens = enWords(sentence);
+      return tokens.filter((word, index) => {
+        if (
+          /^(?:was|were|went|saw|said|had|did|gave|found|made|took|felt|came|grew|knew|got|kept|thought|stood|ate|ran|shouted|whispered)$/.test(
+            word,
+          )
+        )
+          return true;
+        if (
+          !word.endsWith("ed") ||
+          PRESENT_NONPAST_WORDS.has(word) ||
+          namesSet.has(word)
+        )
+          return false;
+        const previous = tokens[index - 1];
+        return !(
+          PARTICIPLE_ADJECTIVES.has(word) &&
+          (ADJECTIVE_CUES.has(previous) ||
+            (previous === "not" && ADJECTIVE_CUES.has(tokens[index - 2])) ||
+            (previous === "and" &&
+              (COORDINATED_ADJECTIVES.has(tokens[index - 2]) ||
+                PARTICIPLE_ADJECTIVES.has(tokens[index - 2]))))
+        );
+      });
+    });
     if (past.length)
       issues.push({
         code: "grammar",

@@ -1,0 +1,49 @@
+{
+ "runId": "sonnet55-r7-prose-condense",
+ "n": 20,
+ "errors": 0,
+ "costUsd": 1.061,
+ "latencyMeanS": 41.8,
+ "ko": {
+  "sentencesMean": 54.5,
+  "packageSentenceCountMean": 40.4,
+  "booksInBudget": 0,
+  "beatsAllCovered": 20,
+  "pagesPassed": "6/240",
+  "booksAllPagesPass": 0,
+  "violations": {
+   "sentence-length": 568,
+   "sentence-count": 173,
+   "connective-endings": 20
+  },
+  "warnings": {},
+  "questionTailParagraphs": "1/140",
+  "dialogueMean": 13.7
+ },
+ "en": {
+  "sentencesMean": 46.6,
+  "packageSentenceCountMean": 35.7,
+  "booksInBudget": 0,
+  "beatsAllCovered": 20,
+  "pagesPassed": "13/240",
+  "booksAllPagesPass": 0,
+  "violations": {
+   "sentence-length": 447,
+   "sentence-count": 204,
+   "grammar": 55
+  },
+  "warnings": {
+   "out-of-vocabulary": 227
+  },
+  "questionTailParagraphs": "2/140",
+  "dialogueMean": 10.7,
+  "outOfVocabRatio": 0.359,
+  "grammarWordsTop": "said:44 was:4 made:2 did:2 went:1 called:1 tired:1 rolled:1 laughed:1 asked:1 reed:1 gave:1 took:1 came:1 painted:1"
+ },
+ "child": {
+  "pass": 15,
+  "curiosityPass": 16,
+  "curiosityMean": 8.32,
+  "retellPass": 18
+ }
+}

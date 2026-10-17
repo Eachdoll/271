@@ -2,8 +2,8 @@
  * 풍부하게 쓰고 단순화 — 전문을 처음부터 K1으로 쓰지 않고 한 단계 위(K2~K3)로 넉넉히 쓴 뒤,
  * 보급형 모델에게 목표 수준으로 줄이게 한다. 작은 모델은 "단순하게 창작"보다 "있는 글을 단순화"를 훨씬 잘한다.
  */
-import type { GestureDictionary, LevelSpecEn, LevelSpecKo, TextEngine } from './types.js';
-export type Lang = 'ko' | 'en';
+import type { GestureDictionary, LevelSpecEn, LevelSpecKo, TextEngine } from "./types.js";
+export type Lang = "ko" | "en";
 export interface RichSimplifyInput {
     engine: TextEngine;
     simplifyEngine?: TextEngine;
@@ -20,12 +20,13 @@ export interface RichSimplifyInput {
     styleSamples?: string[];
     vocabLabel?: string;
     decodable?: boolean;
+    presentTenseOnly?: boolean;
     twoPass?: boolean;
     /** 책 쪽 수. 주어지면 단순화 단계에 전체 문장 수 예산(쪽 수 × 목표 수준의 쪽당 문장)을 건다. */
     pageCount?: number;
-    /** 예산을 20% 넘으면 비트별 압축 1회(기본 끔). 2026-10-17 실측: 분량은 맞지만 되말하기·호기심이 약간 떨어진다. */
+    /** 예산을 20% 넘으면 비트별 압축 1회(호출자가 선택). 앱 r8은 새 K1/E0 초안에서 언어별 기본 켬. */
     condenseOverBudget?: boolean;
-    onPass?: (pass: 'rich' | 'simplify' | 'fix' | 'condense', text: string) => void;
+    onPass?: (pass: "rich" | "simplify" | "fix" | "condense", text: string) => void;
 }
 export interface RichSimplifyResult {
     rich: string;

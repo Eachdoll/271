@@ -1,0 +1,21 @@
+{
+  "runId": "sonnet55-r7-prose-condense",
+  "readingRuleVersion": 3,
+  "stage": "prose",
+  "mock": false,
+  "budget": true,
+  "condense": true,
+  "pageCount": 12,
+  "generator": "anthropic:claude-sonnet-5-5",
+  "cheap": "anthropic:claude-haiku-5-5",
+  "pagination": {
+    "approximate": true,
+    "method": "app splitPaginationToCount"
+  },
+  "n": 20,
+  "skipped": 0,
+  "errors": 0,
+  "costUsd": 1.0614913000000001,
+  "curiosityPassCount": 16,
+  "retellPassCount": 18
+}

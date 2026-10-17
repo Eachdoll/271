@@ -130,11 +130,12 @@ export function jaccard(a, b) {
 }
 /** 문장 분리(한·영). 따옴표 안의 마침표는 대충 무시해도 검사 목적엔 충분하다. */
 export function splitSentences(text) {
-    return text
-        .replace(/\[[^\]]*\]/g, ' ') // 비트 라벨 제거
-        .split(/(?<=[.!?。])\s+|\n+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
+    // Closing quotes belong to the preceding punctuation; quote-only fragments are not sentences.
+    // This is punctuation segmentation, not a full dialogue/abbreviation parser.
+    const source = String(text || '').normalize('NFC').replace(/\[(?:비트|Beat)\s+\d+[^\]\n]*\]/giu, ' ');
+    return (source.match(/[^.!?。！？\n]+(?:[.!?。！？]+["”’']*|(?=\n|$))/gu) || [])
+        .map(sentence => sentence.trim())
+        .filter(sentence => /\p{L}/u.test(sentence));
 }
 export function includesAny(text, needles) {
     for (const n of needles)

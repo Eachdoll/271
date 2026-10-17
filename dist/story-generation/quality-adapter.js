@@ -1148,7 +1148,7 @@ export async function generateQualityProse(
         id: `quality-${role}`,
         async complete(request) {
           const labels = lang === "ko" ? "[비트 n · 유형]" : "[Beat n · type]",
-            rules = `OUTPUT FORMAT OVERRIDE: return ${lang === "ko" ? "Korean" : "English"} plain story text only, NOT JSON, with ${labels} at each beat paragraph start. Keep labels through rich, simplify and emotion fixes. The app strips them into metadata before printing. Follow every approved beat, all causal state changes, and its scene brief without introducing new events. EVERY sentence, including dialogue, has an explicit grammatical subject. Attribute dialogue to a selected named speaker. Include at least THREE quoted dialogue turns in this language and one concrete sensory detail per beat. English is original writing at its E level, never a Korean translation. The approved plotContract is frozen; stateAfter describes the endpoint, not the start of every paragraph. ${targetOnly ? "This is the only writing pass: write directly at the frozen target level." : "Rich draft may use the package rich level for syntax; simplify/fix must return to the frozen target level without removing causal events."}`;
+            rules = `OUTPUT FORMAT OVERRIDE: return ${lang === "ko" ? "Korean" : "English"} plain story text only, NOT JSON, with ${labels} at each beat paragraph start. Keep labels through rich, simplify and emotion fixes. The app strips them into metadata before printing. Follow every approved beat, all causal state changes, and its scene brief without introducing new events. EVERY sentence, including dialogue, has an explicit grammatical subject. Attribute dialogue to a selected named speaker. Include at least THREE quoted dialogue turns in this language and one concrete sensory detail per beat. ${lang === "en" && targetLevelId === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English is original writing at its E level, never a Korean translation. The approved plotContract is frozen; stateAfter describes the endpoint, not the start of every paragraph. ${targetOnly ? "This is the only writing pass: write directly at the frozen target level." : "Rich draft may use the package rich level for syntax; simplify/fix must return to the frozen target level without removing causal events."}`;
           const richDraft = role === "prose" && !targetOnly;
           return journal.call(
             role,
@@ -1171,6 +1171,8 @@ export async function generateQualityProse(
         lang,
         outline,
         pageCount: input.pageCount,
+        condenseOverBudget:
+          input.prosePolicy?.condenseOverBudget?.[lang] === true,
         charactersCompact: input.characters
           .map(
             (character) =>
@@ -1202,6 +1204,10 @@ export async function generateQualityProse(
       prose[lang] = parsed.text;
       prose.paragraphBeats[lang] = parsed.labels;
       results[lang] = {
+        condenseOverBudget:
+          input.prosePolicy?.condenseOverBudget?.[lang] === true,
+        condensed: result.condensed === true,
+        sentenceCount: result.sentenceCount ?? null,
         tellHitsAfter: result.tellHitsAfter,
         calls: result.calls,
         twoPass: !targetOnly,

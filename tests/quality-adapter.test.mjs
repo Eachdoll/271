@@ -171,9 +171,9 @@ test('exhausting all background creatures also fails before a model request',asy
   await assert.rejects(generateQualityOutline(input,{engine},services(engine)),error=>error.meta.requests===0&&/배경 생물/.test(error.message));assert.equal(calls,0);
 });
 
-test('R6-1 app prose forwards pageCount and leaves optional condensation disabled',async()=>{
+test('R8-1 legacy prose forwards pageCount and leaves condensation disabled',async()=>{
  const input=fixture(),engine=fakeOutlineEngine(input),outline=(await generateQualityOutline(input,{engine},services(engine))).data,captured=[];
- const service={...services(engine),qualityModule:async()=>({runProseStage:async args=>{captured.push(args);assert.equal(args.pageCount,12);assert.equal(Object.hasOwn(args,'condenseOverBudget'),false);return {simplified:labeled(outline,args.lang),rich:labeled(outline,args.lang),tellHitsAfter:0,calls:0,costUsd:0};}})};
+ const service={...services(engine),qualityModule:async()=>({runProseStage:async args=>{captured.push(args);assert.equal(args.pageCount,12);assert.equal(args.condenseOverBudget,false);return {simplified:labeled(outline,args.lang),rich:labeled(outline,args.lang),tellHitsAfter:0,calls:0,costUsd:0};}})};
  const result=await generateQualityProse(outline,input,{},service);assert.equal(captured.length,2);assert.ok(result.data.ko);assert.ok(result.data.en);
  assert.match(captured.find(args=>args.lang==='en').vocabLabel,/all/);
  assert.ok(captured.find(args=>args.lang==='en').vocabLabel.length>300);
@@ -193,4 +193,19 @@ test('R6-4 distilled examples load only on opt-in and a failed file falls back t
  const base=await loadStoryQualityData(optional);assert.equal(calls,0);assert.equal(base.distilledBooks,undefined);
  const loaded=await loadStoryQualityData(optional,{includeDistilled:true});assert.equal(calls,1);assert.equal(loaded.distilledBooks.length,1);await loadStoryQualityData(optional,{includeDistilled:true});assert.equal(calls,1);
  const fallback=await loadStoryQualityData(async()=>({ok:false}),{includeDistilled:true});assert.deepEqual(fallback.goldBooks,base.goldBooks);assert.deepEqual(fallback.distilledBooks,[]);
+});
+
+test('R8-1 frozen language policy is forwarded independently and survives checkpoint resume',async()=>{
+ for(const [ko,en] of [['K1','E0'],['K1','E2'],['K2','E0'],['K2','E2']]) {
+  const input=fixture();input.specs={ko:getLevelSpec(ko),en:getLevelSpec(en)};
+  input.prosePolicy={version:1,condenseOverBudget:{ko:ko==='K1',en:en==='E0'}};
+  const engine=fakeOutlineEngine(input),outline=(await generateQualityOutline(input,{engine},services(engine))).data,captured=[];
+  const service={...services(engine),qualityModule:async()=>({runProseStage:async args=>{captured.push(args);return {simplified:labeled(outline,args.lang),tellHitsAfter:0,calls:0};}})};
+  await generateQualityProse(outline,input,{},service);
+  assert.deepEqual(captured.map(args=>args.condenseOverBudget),[ko==='K1',en==='E0']);
+  const saved=JSON.parse(JSON.stringify(input));assert.deepEqual(saved.prosePolicy,input.prosePolicy);
+  const paid={id:'openai',calls:0,async complete(request){this.calls++;return {text:labeled(outline,/return English plain/u.test(request.system)?'en':'ko'),usage:{input:1,output:1}};}};
+  const result=await generateQualityProse(outline,saved,{engine:paid},services(paid)),calls=paid.calls;
+  await generateQualityProse(outline,saved,{engine:paid,qualityCheckpoint:result.meta.qualityCheckpoint},services(paid));assert.equal(paid.calls,calls);
+ }
 });
