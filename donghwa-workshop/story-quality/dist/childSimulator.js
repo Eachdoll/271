@@ -26,12 +26,20 @@ export async function retellCheck(engine, prose, beats) {
     const coreTypes = ['want', 'turn', 'resolution'];
     const coreIdx = beats.filter((b) => coreTypes.includes(b.type)).map((b) => b.index);
     const missingFromCovered = coreIdx.filter((i) => !covered.includes(i)).map((i) => beats.find((b) => b.index === i)?.type ?? String(i));
-    const missingCore = [...new Set([...(j.missingCore ?? []), ...missingFromCovered])];
+    // 모델이 적은 missingCore에는 핵심이 아닌 비트(마무리 등)나 서술문이 섞인다. 통과 판정은 핵심 유형(want·turn·resolution)만 본다.
+    const coreFromModel = (j.missingCore ?? []).map((m) => {
+        const n = Number(m);
+        const byIndex = Number.isInteger(n) ? beats.find((b) => b.index === n) : undefined;
+        return byIndex ? byIndex.type : String(m);
+    }).filter((t) => coreTypes.includes(t));
+    const missingCore = [...new Set([...coreFromModel, ...missingFromCovered])];
+    const notedMissing = (j.missingCore ?? []).map(String).filter((m) => !missingCore.includes(m));
     const coherence = clamp(Number(j.coherence ?? 0), 0, 2);
     return {
         retell: j.retell ?? [],
         coveredBeats: covered,
         missingCore,
+        notedMissing,
         confusions: j.confusions ?? [],
         coherence,
         pass: missingCore.length === 0 && coherence >= 1,

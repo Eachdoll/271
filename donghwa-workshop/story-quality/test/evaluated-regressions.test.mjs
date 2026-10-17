@@ -89,7 +89,15 @@ test('an over-budget simplification gets one per-beat condense pass and keeps la
  const outputs=['[비트 1 · setup]\n'+long(4)+'\n\n[비트 2 · want]\n'+long(4),'[비트 1 · setup]\n'+long(20)+'\n\n[비트 2 · want]\n'+long(20),'[비트 1 · setup]\n'+long(3)+'\n\n[비트 2 · want]\n'+long(3)];
  const seen=[];const engine={id:'mock',complete:async req=>{seen.push(req);return {text:outputs[seen.length-1],usage:{input:1,output:1},costUsd:0};}};
  const level={label:'K1',sentencesPerPage:[1,2],eojeolPerSentence:[3,5]};
- const r=await writeRichThenSimplify({engine,lang:'ko',charactersCompact:'유하',beatsCompact:'1 [setup] a\n2 [want] b',briefsCompact:'[]',emotions:[],gestureDict:{emotions:[],moral_tails_ko:[]},targetLevel:level,richLevel:{label:'K2',sentencesPerPage:[2,3],eojeolPerSentence:[5,7]},pageCount:6});
+ const r=await writeRichThenSimplify({engine,lang:'ko',charactersCompact:'유하',beatsCompact:'1 [setup] a\n2 [want] b',briefsCompact:'[]',emotions:[],gestureDict:{emotions:[],moral_tails_ko:[]},targetLevel:level,richLevel:{label:'K2',sentencesPerPage:[2,3],eojeolPerSentence:[5,7]},pageCount:6,condenseOverBudget:true});
  assert.equal(seen.length,3);assert.match(seen[2].user,/지금 40문장/);assert.match(seen[2].user,/\[비트 1 · setup\]: 지금 20문장 → 6문장 이하/);
  assert.equal(r.condensed,true);assert.equal(r.sentenceCount,6);assert.equal(r.calls,3);
+});
+
+test('retell passes on core beat types only; non-core beats the model lists are kept as notes',async()=>{
+ const {retellCheck}=await import('../dist/childSimulator.js');
+ const beats=[{index:1,type:'setup',summary:'a'},{index:2,type:'want',summary:'b'},{index:3,type:'turn',summary:'c'},{index:4,type:'resolution',summary:'d'},{index:5,type:'close',summary:'e'}];
+ const reply=missing=>({id:'m',complete:async()=>({text:JSON.stringify({retell:['a','b','c'],coveredBeats:[2,3,4],missingCore:missing,confusions:[],coherence:2}),usage:{input:1,output:1},costUsd:0})});
+ const ok=await retellCheck(reply([5,'마무리 장면']),'글',beats);assert.equal(ok.pass,true);assert.deepEqual(ok.notedMissing,['5','마무리 장면']);
+ const bad=await retellCheck(reply([3]),'글',beats);assert.equal(bad.pass,false);assert.deepEqual(bad.missingCore,['turn']);assert.equal(bad.recommendTurnRewrite,true);
 });

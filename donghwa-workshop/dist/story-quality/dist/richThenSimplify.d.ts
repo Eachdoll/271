@@ -23,6 +23,8 @@ export interface RichSimplifyInput {
     twoPass?: boolean;
     /** 책 쪽 수. 주어지면 단순화 단계에 전체 문장 수 예산(쪽 수 × 목표 수준의 쪽당 문장)을 건다. */
     pageCount?: number;
+    /** 예산을 20% 넘으면 비트별 압축 1회(기본 끔). 2026-10-17 실측: 분량은 맞지만 되말하기·호기심이 약간 떨어진다. */
+    condenseOverBudget?: boolean;
     onPass?: (pass: 'rich' | 'simplify' | 'fix' | 'condense', text: string) => void;
 }
 export interface RichSimplifyResult {

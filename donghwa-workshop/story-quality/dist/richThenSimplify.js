@@ -91,7 +91,7 @@ export async function writeRichThenSimplify(input) {
     // 분량 예산을 크게 넘으면(20% 초과) 비트별 목표 문장 수를 알려 주는 압축 1회. 작은 모델은 전체 예산보다 비트별 숫자를 더 잘 지킨다.
     let condensed = false;
     let sentenceCount = budget ? countSentences(simplified) : undefined;
-    if (budget && sentenceCount !== undefined && sentenceCount > Math.ceil(budget.max * 1.2)) {
+    if (input.condenseOverBudget && budget && sentenceCount !== undefined && sentenceCount > Math.ceil(budget.max * 1.2)) {
         const paras = beatParagraphs(simplified);
         const per = allocateBeats(paras.map((p) => p.count), budget.max);
         const perBeat = paras.map((p, i) => `${p.label}: 지금 ${p.count}문장 → ${per[i]}문장 이하`).join('\n');

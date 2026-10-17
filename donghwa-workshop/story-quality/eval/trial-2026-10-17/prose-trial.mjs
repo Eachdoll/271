@@ -4,6 +4,7 @@
  * 수준별 쪽당 최대 문장 수로 자른 근사치다.
  * 사용: node eval/trial-2026-10-17/prose-trial.mjs <outlineRunId> <outRunId> [--limit N] [--mock] [--budget]
  *   --budget: 패키지 전문 단계에 pageCount(12)를 넘겨 전체 문장 예산을 건다(2026-10-17 r6 수정 검증용).
+ *   --condense: 예산 초과 시 비트별 압축 1회(condenseOverBudget). sonnet55-prose-condense 실행은 압축이 기본 동작이던 커밋 4427f86으로 측정했다.
  */
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { runProseStage, runChildGate } from '../../dist/pipeline.js';
@@ -15,6 +16,7 @@ const [inRun, outRun] = process.argv.slice(2);
 const limit = Number(process.argv[process.argv.indexOf('--limit') + 1]) || 20;
 const mock = process.argv.includes('--mock');
 const BUDGET = process.argv.includes('--budget');
+const CONDENSE = process.argv.includes('--condense');
 const CHILD_MAX = process.argv.includes('--package-child-budget') ? 0 : 4000;
 const here = new URL('./', import.meta.url), root = new URL('../../', import.meta.url);
 const gestureDict = JSON.parse(readFileSync(new URL('data/gesture_dictionary.json', root), 'utf8'));
@@ -86,7 +88,7 @@ for (const row of rows) {
     const outline = row.outline;
     for (const lang of ['ko', 'en']) {
       const target = lang === 'ko' ? 'K1' : 'E0';
-      const res = await runProseStage({ engines: { outline: wrap(sonnet, lang, outline, 'outline'), prose: wrap(sonnet, lang, outline, 'prose'), cheap: wrap(haiku, lang, outline, 'cheap') }, lang, outline, charactersCompact, briefsCompact: '[]', emotions: [], gestureDict, levels, targetLevelId: target, vocabLabel: lang === 'ko' ? 'frozen selected vocabulary' : 'dolch_preprimer+everyday_nouns', twoPass: true, ...(BUDGET ? { pageCount: PAGE_COUNT } : {}) });
+      const res = await runProseStage({ engines: { outline: wrap(sonnet, lang, outline, 'outline'), prose: wrap(sonnet, lang, outline, 'prose'), cheap: wrap(haiku, lang, outline, 'cheap') }, lang, outline, charactersCompact, briefsCompact: '[]', emotions: [], gestureDict, levels, targetLevelId: target, vocabLabel: lang === 'ko' ? 'frozen selected vocabulary' : 'dolch_preprimer+everyday_nouns', twoPass: true, ...(BUDGET ? { pageCount: PAGE_COUNT } : {}), ...(CONDENSE ? { condenseOverBudget: true } : {}) });
       const paras = parseLabeled(res.simplified), richParas = parseLabeled(res.rich);
       const spec = frozen.specs[lang], perPage = spec.sentencesPerPage?.max ?? (Array.isArray(spec.sentencesPerPage) ? spec.sentencesPerPage[1] : 2);
       const pages = paginate(paras, PAGE_COUNT);
