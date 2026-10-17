@@ -3,3 +3,4 @@ export * from './index.js';
 export * from './distill/generate.js';
 export * from './eval/harness.js';
 export * from './finetune/convert.js';
+export * from './eval/prose.js';

@@ -66,9 +66,76 @@ const judgeSchema = strict({
   why: string(200),
 });
 let dataPromise;
+const distilledLoads = new WeakMap();
+async function loadDistilledBooks(fetchImpl) {
+  if (!distilledLoads.has(fetchImpl)) {
+    const pending = (async () => {
+      const response = await fetchImpl(
+        new URL(
+          "../story-quality/examples/approved-books.json",
+          import.meta.url,
+        ),
+        { cache: "no-cache", credentials: "same-origin" },
+      );
+      if (!response.ok) throw new Error("Optional examples unavailable");
+      const books = await response.json();
+      if (
+        !Array.isArray(books) ||
+        books.length > 5000 ||
+        books.some(
+          (book) =>
+            !book?.approved ||
+            !book.bookId ||
+            !book.topic ||
+            !Array.isArray(book.outline?.beats),
+        )
+      )
+        throw new Error("Optional examples invalid");
+      const freeze = (value) => {
+        if (value && typeof value === "object" && !Object.isFrozen(value)) {
+          Object.values(value).forEach(freeze);
+          Object.freeze(value);
+        }
+        return value;
+      };
+      return freeze(books);
+    })().catch(() => {
+      distilledLoads.delete(fetchImpl);
+      return [];
+    });
+    distilledLoads.set(fetchImpl, pending);
+  }
+  return distilledLoads.get(fetchImpl);
+}
+export function qualityReferenceBooks(data, topic, enabled = false) {
+  const gold = asList(data.goldBooks);
+  if (!enabled) return gold;
+  const normalized = (value) =>
+    String(value || "")
+      .normalize("NFC")
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]/gu, "");
+  const target = normalized(topic),
+    seen = new Set();
+  return [
+    ...gold.map((book) => ({ ...book, referenceSource: "gold" })),
+    ...asList(data.distilledBooks).map((book) => ({
+      ...book,
+      referenceSource: "distilled",
+    })),
+  ].filter((book) => {
+    if ((target && normalized(book.topic) === target) || seen.has(book.bookId))
+      return false;
+    seen.add(book.bookId);
+    return true;
+  });
+}
 
 /** One immutable in-memory copy; a failed load may be retried on the next visit. */
-export async function loadStoryQualityData(fetchImpl = globalThis.fetch) {
+export async function loadStoryQualityData(
+  fetchImpl = globalThis.fetch,
+  { includeDistilled = false } = {},
+) {
   if (!dataPromise)
     dataPromise = Promise.all(
       [
@@ -177,7 +244,12 @@ export async function loadStoryQualityData(fetchImpl = globalThis.fetch) {
         dataPromise = undefined;
         throw error;
       });
-  return dataPromise;
+  const base = await dataPromise;
+  if (!includeDistilled) return base;
+  return Object.freeze({
+    ...base,
+    distilledBooks: Object.freeze(await loadDistilledBooks(fetchImpl)),
+  });
 }
 
 /** A catalogue setting is separate from the image-engine World and its fixed drawer geometry. */
@@ -769,7 +841,11 @@ export async function generateQualityOutline(
     module = await (services.qualityModule?.() ||
       import("../story-quality/dist/pipeline.js"));
   try {
-    const data = services.qualityData || (await loadStoryQualityData()),
+    const data =
+        services.qualityData ||
+        (await loadStoryQualityData(globalThis.fetch, {
+          includeDistilled: quality.useDistilledExamples === true,
+        })),
       { world, mood } = resolveStoryWorld(input, data);
     input.storyWorldMood = mood;
     assertInventoryAvailable(input, data, world);
@@ -844,7 +920,11 @@ export async function generateQualityOutline(
           variantChance: Number.isFinite(quality.variantChance)
             ? quality.variantChance
             : 0.35,
-          referenceBooks: asList(data.goldBooks),
+          referenceBooks: qualityReferenceBooks(
+            data,
+            input.topic,
+            quality.useDistilledExamples === true,
+          ),
           approvedBooks: asList(quality.approvedBooks),
           endingType: input.endingType,
           ...(Array.isArray(quality.rules)
@@ -1085,6 +1165,7 @@ export async function generateQualityProse(
         },
         lang,
         outline,
+        pageCount: input.pageCount,
         charactersCompact: input.characters
           .map(
             (character) =>

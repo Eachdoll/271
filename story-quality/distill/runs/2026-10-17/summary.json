@@ -1,0 +1,21 @@
+{
+ "date": "2026-10-17",
+ "cells": 200,
+ "approved": 161,
+ "costUsd": 11.23,
+ "byGenerator": {
+  "anthropic:claude-opus-5-5": {
+   "cells": 39,
+   "approved": 31,
+   "costUsd": 5.267
+  },
+  "anthropic:claude-sonnet-5-5": {
+   "cells": 161,
+   "approved": 130,
+   "costUsd": 5.958
+  }
+ },
+ "judge": "anthropic:claude-haiku-5-5",
+ "topics": "distill/topics.json 앞 100개 × 수준 2(K1·E0, K2·E1)",
+ "note": "Opus 5.5로 39편 생성 뒤 실제 편당 비용($0.135)이 도구 추정($0.03)의 4.5배여서 중단, 나머지 161편은 Sonnet 5.5(편당 $0.037). 같은 Haiku 판정기. 승인=루브릭 8점 이상·0점 없음·plotCheck 통과."
+}

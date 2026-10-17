@@ -1,6 +1,6 @@
 /**
  * CLI: 증류 데이터셋 생성
- *   ANTHROPIC_API_KEY=... node dist/cli/distill.js [--out distill/out/outlines.jsonl] [--gen claude-opus-5-5] [--judge claude-haiku-5-5] [--variants 1] [--limit 0] [--dry-run] [--estimate]
+ *   ANTHROPIC_API_KEY=... node dist/cli/distill.js [--out distill/out/outlines.jsonl] [--gen claude-opus-5-5] [--judge claude-haiku-5-5] [--variants 1] [--limit 0] [--concurrency 2] [--dry-run] [--estimate]
  * 재실행하면 이미 만든 sampleId는 건너뛴다(재개).
  */
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -42,10 +42,11 @@ async function main() {
   const root = resolve(process.cwd());
   const out = resolve(root, arg('out', 'distill/out/outlines.jsonl')!);
   mkdirSync(dirname(out), { recursive: true });
-  const genSpec = arg('gen', 'anthropic:claude-opus-5-5')!;
+  const genSpec = arg('gen', 'anthropic:claude-sonnet-5-5')!;
   const judgeSpec = arg('judge', 'anthropic:claude-haiku-5-5')!;
   const variants = Number(arg('variants', '1'));
   const limit = Number(arg('limit', '0'));
+  const concurrency = Math.min(8, Math.max(1, Number(arg('concurrency', '2')) || 2));
   const dryRun = arg('dry-run') === 'true';
   const estimate = arg('estimate') === 'true';
 
@@ -57,7 +58,8 @@ async function main() {
   const topics = limit > 0 ? topicsFile.topics.slice(0, limit) : topicsFile.topics;
   const cells = topics.length * topicsFile.levels.length * variants;
 
-  if (estimate || dryRun) {
+  {
+    console.log(`generator=${genSpec}`);
     const knownPrice = (spec: string) => {
       const model = spec.replace(/^anthropic:/, '');
       return Object.prototype.hasOwnProperty.call(ANTHROPIC_MODELS, model)
@@ -67,7 +69,7 @@ async function main() {
     const gp = knownPrice(genSpec);
     const jp = knownPrice(judgeSpec);
     // 토큰 수는 가격과 무관하다. 미등록 단가를 무료로 표시하지 않는다.
-    const est = estimateDistillCost(cells, 1400, gp ?? { input: 0, output: 0 }, jp ?? { input: 0, output: 0 });
+    const est = estimateDistillCost(cells, 1400, gp ?? { input: 0, output: 0 }, jp ?? { input: 0, output: 0 }, genSpec);
     console.log(`cells=${cells} (topics ${topics.length} × levels ${topicsFile.levels.length} × variants ${variants})`);
     console.log(`tokens in≈${Math.round(est.tokensIn / 1000)}k out≈${Math.round(est.tokensOut / 1000)}k`);
     if (gp && jp) {
@@ -76,6 +78,7 @@ async function main() {
       const unpriced = [!gp ? `gen=${genSpec}` : '', !jp ? `judge=${judgeSpec}` : ''].filter(Boolean).join(', ');
       console.log(`est. cost unavailable (unpriced: ${unpriced}). 가격 정보가 없어 비용을 추정할 수 없습니다.`);
     }
+    if (genSpec.replace(/^anthropic:/, '') === 'claude-opus-5-5') console.warn(`Opus 5.5: 사고 토큰·수정 호출을 포함한 추정 $${gp && jp ? est.usd.toFixed(2) : '미등록'}. 줄거리 점수가 같은 Sonnet 5.5를 기본으로 권합니다.`);
     if (estimate) return;
   }
 
@@ -96,7 +99,7 @@ async function main() {
     outPath: out,
     variantsPerCell: variants,
     seedBooks: gold,
-    concurrency: 2,
+    concurrency,
     dryRun,
     onSample: (s) => {
       n++;

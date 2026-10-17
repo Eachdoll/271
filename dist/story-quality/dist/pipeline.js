@@ -140,6 +140,8 @@ export async function runProseStage(input) {
         vocabLabel: input.vocabLabel,
         twoPass: input.twoPass,
         decodable: input.targetLevelId === 'E1',
+        pageCount: input.pageCount,
+        condenseOverBudget: input.condenseOverBudget,
     });
 }
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */

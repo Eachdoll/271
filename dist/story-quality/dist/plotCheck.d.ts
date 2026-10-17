@@ -22,7 +22,12 @@ export interface PlotCheckInput {
 export declare function topicKeywords(topic: string): string[];
 /** 키워드가 글에 있는지. 3자 이상 키워드는 앞 2자 접두 일치도 인정한다("멋진지" → "멋진"). */
 export declare function topicMentioned(text: string, topic: string): boolean;
-/** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. */
+/**
+ * 모델이 planted를 "커다란 등불: 거실에 있던 …"처럼 설명과 함께 쓰는 경우가 많다.
+ * 설명 구분자(: — ( . 줄바꿈) 앞의 명사구만 쓰고, 뒤의 수량("한 송이")은 뺀다.
+ */
+export declare function plantedPhrase(planted: string): string;
+/** 전체 표기나 머리 명사를 조사 단위로 비교한다. 긴 이름의 일부는 재료로 보지 않는다. 한 글자 머리 명사("빵")도 조사 경계로만 찾는다. */
 export declare function containsPlanted(text: string, planted: string): boolean;
 /** 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")으로 쓰는 경우가 많아 ID로 정규화한다. */
 export declare function normalizeFailureReason(value: unknown): string | null;

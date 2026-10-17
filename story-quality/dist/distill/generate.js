@@ -190,16 +190,22 @@ async function generateOne(cfg, t, lv, variant, sampleId, approvedBooks) {
     }
     return base;
 }
-/** 비용·토큰 추정 (호출 전 표시용). 샘플당 입력≈프롬프트, 출력≈1,200토큰, 수정 30%, 판정 1회. */
-export function estimateDistillCost(cells, promptTokens, price, judgePrice) {
-    const genIn = cells * promptTokens;
-    const genOut = cells * 1200;
-    const fixIn = cells * 0.3 * 2500;
-    const fixOut = cells * 0.3 * 1200;
-    const judgeIn = cells * 1800;
-    const judgeOut = cells * 150;
+/** Generator-only usage means from distill/runs/2026-10-17/outlines.jsonl.
+ * Opus 39 rows; Sonnet 161 rows. Output includes billed thinking tokens.
+ * Fix/judge usage is estimated separately; original row.usage records the generator only.
+ */
+export const DISTILL_USAGE_PROFILES = {
+    'claude-opus-5-5': { input: 3111.051282051282, output: 6083.076923076923, fixRate: 12 / 39 },
+    'claude-sonnet-5-5': { input: 3354.795031055901, output: 2949.4658385093167, fixRate: 33 / 161 },
+};
+export function estimateDistillCost(cells, promptTokens, price, judgePrice, model) {
+    const id = model?.replace(/^anthropic:/, '') || (price.input === 4 && price.output === 20 ? 'claude-opus-5-5' : price.input === 2 && price.output === 10 ? 'claude-sonnet-5-5' : '');
+    const profile = DISTILL_USAGE_PROFILES[id] || { input: promptTokens, output: 3000, fixRate: 0.3 };
+    const genIn = cells * Math.max(promptTokens, profile.input), genOut = cells * profile.output;
+    const fixIn = cells * profile.fixRate * (profile.input + profile.output), fixOut = cells * profile.fixRate * profile.output;
+    const judgeIn = cells * (profile.input + profile.output), judgeOut = cells * 1500;
     const gen = (genIn * price.input + genOut * price.output) / 1e6;
     const fix = (fixIn * judgePrice.input + fixOut * judgePrice.output) / 1e6;
     const judge = (judgeIn * judgePrice.input + judgeOut * judgePrice.output) / 1e6;
-    return { tokensIn: genIn + fixIn + judgeIn, tokensOut: genOut + fixOut + judgeOut, usd: gen + fix + judge, breakdown: { gen, fix, judge } };
+    return { tokensIn: genIn + fixIn + judgeIn, tokensOut: genOut + fixOut + judgeOut, usd: gen + fix + judge, breakdown: { gen, fix, judge }, model: id || model, basis: DISTILL_USAGE_PROFILES[id] ? 'observed-2026-10-17' : 'generic-unmeasured' };
 }

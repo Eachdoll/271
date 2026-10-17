@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createAnthropicEngine} from '../dist/engines/anthropic.js';
-import {normalizeFailureReason,plotCheck} from '../dist/plotCheck.js';
+import {normalizeFailureReason,plotCheck,containsPlanted,plantedPhrase} from '../dist/plotCheck.js';
 import {buildOutlinePrompt} from '../dist/outlinePrompt.js';
 import {composeSeed} from '../dist/composeSeed.js';
 import {buildBanList} from '../dist/banList.js';
@@ -52,4 +52,61 @@ test('R5-2 fixed test-set description matches the eras of its actual topic world
  for(const topic of set.topics){const world=worlds.find(item=>item.id===topic.worldId);assert.ok(world,topic.worldId);assert.ok(Object.hasOwn(counts,world.era),world.era);counts[world.era]++;}
  const match=set.description.match(/현재\s*(\d+)\s*·\s*과거\s*(\d+)\s*·\s*미래\s*(\d+)\s*·\s*상상\s*(\d+)/);assert.ok(match,'description must declare all four era counts');
  assert.deepEqual(counts,Object.fromEntries(['present','past','future','fantasy'].map((era,i)=>[era,Number(match[i+1])])));
+});
+
+test('planted descriptions match by their leading noun phrase without loosening unrelated words',()=>{
+ assert.equal(plantedPhrase('커다란 등불: 거실 소파 옆에 있던 불 꺼진 등불. 유하가 들고 간다.'),'커다란 등불');
+ assert.equal(plantedPhrase('커다란 보라 꽃 한 송이. 유하가 꽂는다.'),'커다란 보라 꽃');
+ assert.equal(plantedPhrase('아주 작은 팬파이프 — 주머니 끈에 건 피리'),'아주 작은 팬파이프');
+ assert.ok(containsPlanted('유하가 머리 위 빵을 내려요.','커다란 납작한 빵'));
+ assert.ok(containsPlanted('결승선에 꽂았던 보라 꽃 한 송이가 자랐어요.','커다란 보라 꽃 한 송이. 유하가 꽂는다.'));
+ assert.ok(!containsPlanted('빵빵 소리가 나요.','커다란 빵'));
+ assert.ok(!containsPlanted('모자 위에서 반짝임이 보여요.','빛나는 단추'));
+});
+
+test('prose simplify carries a whole-book sentence budget and limits question endings when pageCount is known',async()=>{
+ const {writeRichThenSimplify,sentenceBudget}=await import('../dist/richThenSimplify.js');
+ const level={label:'K1',sentencesPerPage:[1,2],eojeolPerSentence:[3,5]};
+ assert.deepEqual(sentenceBudget(level,12),{min:12,max:24});assert.equal(sentenceBudget(level,undefined),null);
+ const seen=[];const engine={id:'mock',complete:async req=>{seen.push(req);return {text:'[비트 1 · setup]\n유하가 "가자!" 하고 말해요. "응!" 초록이가 말해요. "좋아!" 유하가 웃어요. "와!" 초록이가 뛰어요.',usage:{input:1,output:1},costUsd:0};}};
+ const gestureDict={emotions:[],moral_tails_ko:[]};
+ const base={engine,lang:'ko',charactersCompact:'유하',beatsCompact:'1 [setup] 시작',briefsCompact:'[]',emotions:[],gestureDict,targetLevel:level,richLevel:{label:'K2',sentencesPerPage:[2,3],eojeolPerSentence:[5,7]}};
+ await writeRichThenSimplify({...base,pageCount:12});
+ assert.match(seen[1].user,/전체 12~24문장/);assert.match(seen[1].user,/질문으로 끝나는 비트는 책 전체에서 2개까지/);assert.match(seen[0].user,/질문으로 끝나는 비트는 책 전체에서 2개까지/);
+ seen.length=0;await writeRichThenSimplify(base);assert.doesNotMatch(seen[1].user,/전체 분량/);
+});
+
+test('curiosity overall is derived from page scores on the 0-10 scale, not the model free-form number',async()=>{
+ const {curiosityCheck}=await import('../dist/childSimulator.js');
+ const engine={id:'mock',complete:async()=>({text:'{"pages":[{"pageNo":1,"score":2,"why":"a"},{"pageNo":2,"score":2,"why":"b"},{"pageNo":3,"score":1,"why":"c"}],"dropPages":[],"overall":1.7}',usage:{input:1,output:1},costUsd:0})};
+ const r=await curiosityCheck(engine,[{pageNo:1,text:'a'},{pageNo:2,text:'b'},{pageNo:3,text:'c'}]);
+ assert.equal(r.overall,8.3);assert.equal(r.pass,true);
+});
+
+test('an over-budget simplification gets one per-beat condense pass and keeps labels',async()=>{
+ const {writeRichThenSimplify}=await import('../dist/richThenSimplify.js');
+ const long=n=>Array.from({length:n},(_,i)=>`유하가 ${i}번 걸어요.`).join(' ');
+ const outputs=['[비트 1 · setup]\n'+long(4)+'\n\n[비트 2 · want]\n'+long(4),'[비트 1 · setup]\n'+long(20)+'\n\n[비트 2 · want]\n'+long(20),'[비트 1 · setup]\n'+long(3)+'\n\n[비트 2 · want]\n'+long(3)];
+ const seen=[];const engine={id:'mock',complete:async req=>{seen.push(req);return {text:outputs[seen.length-1],usage:{input:1,output:1},costUsd:0};}};
+ const level={label:'K1',sentencesPerPage:[1,2],eojeolPerSentence:[3,5]};
+ const r=await writeRichThenSimplify({engine,lang:'ko',charactersCompact:'유하',beatsCompact:'1 [setup] a\n2 [want] b',briefsCompact:'[]',emotions:[],gestureDict:{emotions:[],moral_tails_ko:[]},targetLevel:level,richLevel:{label:'K2',sentencesPerPage:[2,3],eojeolPerSentence:[5,7]},pageCount:6,condenseOverBudget:true});
+ assert.equal(seen.length,3);assert.match(seen[2].user,/지금 40문장/);assert.match(seen[2].user,/\[비트 1 · setup\]: 지금 20문장 → 6문장 이하/);
+ assert.equal(r.condensed,true);assert.equal(r.sentenceCount,6);assert.equal(r.calls,3);
+});
+
+test('retell passes on core beat types only; non-core beats the model lists are kept as notes',async()=>{
+ const {retellCheck}=await import('../dist/childSimulator.js');
+ const beats=[{index:1,type:'setup',summary:'a'},{index:2,type:'want',summary:'b'},{index:3,type:'turn',summary:'c'},{index:4,type:'resolution',summary:'d'},{index:5,type:'close',summary:'e'}];
+ const reply=missing=>({id:'m',complete:async()=>({text:JSON.stringify({retell:['a','b','c'],coveredBeats:[2,3,4],missingCore:missing,confusions:[],coherence:2}),usage:{input:1,output:1},costUsd:0})});
+ const ok=await retellCheck(reply([5,'마무리 장면']),'글',beats);assert.equal(ok.pass,true);assert.deepEqual(ok.notedMissing,['5','마무리 장면']);
+ const bad=await retellCheck(reply([3]),'글',beats);assert.equal(bad.pass,false);assert.deepEqual(bad.missingCore,['turn']);assert.equal(bad.recommendTurnRewrite,true);
+});
+
+test('R6-3 measured usage makes Opus distillation over three times Sonnet and matches the retained trial',async()=>{
+ const {estimateDistillCost,DISTILL_USAGE_PROFILES}=await import('../dist/distill/generate.js'),rows=readFileSync(new URL('../distill/runs/2026-10-17/outlines.jsonl',import.meta.url),'utf8').trim().split('\n').map(JSON.parse);
+ for(const model of ['claude-opus-5-5','claude-sonnet-5-5']){const group=rows.filter(r=>r.generatorId==='anthropic:'+model),mean=group.reduce((sum,r)=>sum+r.usage.output,0)/group.length;assert.ok(Math.abs(DISTILL_USAGE_PROFILES[model].output-mean)<1e-8);}
+ const judge={input:.1,output:.5},opus=estimateDistillCost(200,1400,{input:4,output:20},judge,'claude-opus-5-5'),sonnet=estimateDistillCost(200,1400,{input:2,output:10},judge,'claude-sonnet-5-5');assert.ok(opus.usd>=sonnet.usd*3);assert.equal(opus.basis,'observed-2026-10-17');
+});
+test('R6-4 opt-in retrieval keeps a gold anchor before a more similar distilled example',async()=>{
+ const {retrieveExamples}=await import('../dist/retrieval.js');const a={...structuredClone(gold[0]),bookId:'gold',topic:'다른 주제',referenceSource:'gold'},b={...structuredClone(gold[0]),bookId:'distilled',topic:'바람',referenceSource:'distilled'};const chosen=retrieveExamples([a,b],{topic:'바람'},2);assert.equal(chosen[0].record.bookId,'gold');assert.equal(chosen[1].record.bookId,'distilled');
 });

@@ -18,11 +18,13 @@ export function scoreRecord(record, q) {
 }
 export function retrieveExamples(records, q, k = 2) {
     const ex = new Set(q.excludeBookIds ?? []);
-    return records
+    const ranked = records
         .filter((r) => r.approved && !ex.has(r.bookId))
         .map((record) => ({ record, score: scoreRecord(record, q) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, k);
+        .sort((a, b) => b.score - a.score);
+    // When opt-in distilled candidates are present, retain a gold anchor first.
+    const gold = ranked.find(item => item.record.referenceSource === 'gold');
+    return (gold && k > 0 ? [gold, ...ranked.filter(item => item !== gold)] : ranked).slice(0, k);
 }
 /**
  * 프롬프트용 렌더. 비트는 한 줄 요약(첫 문장)만 넣어 길이를 줄인다.

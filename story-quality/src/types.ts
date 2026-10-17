@@ -62,6 +62,8 @@ export interface StoryOutline {
 
 /** 승인된 책 1권의 기록. 검색 few-shot과 금지 목록의 재료. */
 export interface BookRecord {
+  /** Optional provenance of opt-in retrieval candidates. */
+  referenceSource?: 'gold' | 'distilled';
   bookId: string;
   seriesId?: string;
   topic: string;

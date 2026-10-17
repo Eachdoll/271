@@ -78,6 +78,7 @@ export function normalizeStoryQualitySettings(value = {}) {
   const result = {
     enabled: source.enabled !== false,
     useBeamSearch: source.useBeamSearch === true,
+    useDistilledExamples: source.useDistilledExamples === true,
     twoPass: source.twoPass !== false,
     childSimulator: source.childSimulator !== false,
     weeklyCoach: source.weeklyCoach !== false,

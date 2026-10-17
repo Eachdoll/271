@@ -170,3 +170,24 @@ test('exhausting all background creatures also fails before a model request',asy
   let calls=0;const engine={id:'openai',async complete(){calls++;throw new Error('must not call');}};
   await assert.rejects(generateQualityOutline(input,{engine},services(engine)),error=>error.meta.requests===0&&/배경 생물/.test(error.message));assert.equal(calls,0);
 });
+
+test('R6-1 app prose forwards pageCount and leaves optional condensation disabled',async()=>{
+ const input=fixture(),engine=fakeOutlineEngine(input),outline=(await generateQualityOutline(input,{engine},services(engine))).data,captured=[];
+ const service={...services(engine),qualityModule:async()=>({runProseStage:async args=>{captured.push(args);assert.equal(args.pageCount,12);assert.equal(Object.hasOwn(args,'condenseOverBudget'),false);return {simplified:labeled(outline,args.lang),rich:labeled(outline,args.lang),tellHitsAfter:0,calls:0,costUsd:0};}})};
+ const result=await generateQualityProse(outline,input,{},service);assert.equal(captured.length,2);assert.ok(result.data.ko);assert.ok(result.data.en);
+});
+test('R6-4 reference candidates default to gold, exclude the active topic when opted in and retain gold priority',async()=>{
+ const {qualityReferenceBooks}=await import('../dist/story-generation/quality-adapter.js');
+ const input=fixture(),distilled=[{...clone(data.goldBooks[0]),bookId:'distilled-same',topic:input.topic},{...clone(data.goldBooks[0]),bookId:'distilled-new',topic:'새로운 다른 모험'}],extra={...data,distilledBooks:distilled};
+ assert.deepEqual(qualityReferenceBooks(extra,input.topic,false),data.goldBooks);
+ const enabled=qualityReferenceBooks(extra,input.topic,true);assert.ok(!enabled.some(b=>b.bookId==='distilled-same'));assert.equal(enabled.at(-1).bookId,'distilled-new');assert.equal(enabled[0].referenceSource,'gold');
+ input.storyQuality.useDistilledExamples=true;const engine=fakeOutlineEngine(input);let references;
+ await generateQualityOutline(input,{engine},{...services(engine),qualityData:extra,qualityModule:async()=>({...qualityModule,runOutlineStage:args=>{references=args.referenceBooks;return qualityModule.runOutlineStage(args);}})});
+ assert.deepEqual(references,enabled);
+});
+test('R6-4 distilled examples load only on opt-in and a failed file falls back to gold',async()=>{
+ let calls=0;const optional=async url=>{calls++;assert.match(url.pathname,/examples\/approved-books.json$/);return {ok:true,json:async()=>[clone(data.goldBooks[0])]};};
+ const base=await loadStoryQualityData(optional);assert.equal(calls,0);assert.equal(base.distilledBooks,undefined);
+ const loaded=await loadStoryQualityData(optional,{includeDistilled:true});assert.equal(calls,1);assert.equal(loaded.distilledBooks.length,1);await loadStoryQualityData(optional,{includeDistilled:true});assert.equal(calls,1);
+ const fallback=await loadStoryQualityData(async()=>({ok:false}),{includeDistilled:true});assert.deepEqual(fallback.goldBooks,base.goldBooks);assert.deepEqual(fallback.distilledBooks,[]);
+});

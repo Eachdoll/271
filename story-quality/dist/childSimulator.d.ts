@@ -25,6 +25,8 @@ export interface RetellResult {
     retell: string[];
     coveredBeats: number[];
     missingCore: string[];
+    /** 모델이 적었지만 핵심 유형이 아닌 누락(참고용) */
+    notedMissing: string[];
     confusions: string[];
     coherence: number;
     pass: boolean;

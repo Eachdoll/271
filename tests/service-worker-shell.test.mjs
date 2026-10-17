@@ -24,7 +24,7 @@ test('every runtime module and stylesheet in dist is precached for offline use',
   const listed = new Set(files.map(file => file.replace(/^\.\//, '')));
   const unlisted = walk(dist)
     .map(file => path.relative(dist, file).split(path.sep).join('/'))
-    .filter(file => /\.(js|css|json|webmanifest|html)$/.test(file) && file !== 'sw.js' && !file.endsWith('.d.ts') && !/^story-quality\/dist\/(?:cli\/|distill\/|eval\/|finetune\/|node\.js$)/.test(file))
+    .filter(file => /\.(js|css|json|webmanifest|html)$/.test(file) && file !== 'sw.js' && file !== 'story-quality/examples/approved-books.json' && !file.endsWith('.d.ts') && !/^story-quality\/dist\/(?:cli\/|distill\/|eval\/|finetune\/|node\.js$)/.test(file))
     .filter(file => !listed.has(file));
   assert.deepEqual(unlisted, []);
 });
@@ -36,6 +36,7 @@ test('service worker cache name changes with shell contents', () => {
 });
 
 test('A-16 offline cache excludes Node tooling and unused text lists and retains fetch writes',()=>{
+ assert.ok(!files.includes('./story-quality/examples/approved-books.json'));
  assert.ok(!files.some(f=>/story-quality\/dist\/(?:cli|distill|eval|finetune)\/|\/node\.js$|vocab\/.*\.txt$/.test(f)));
  assert.match(source,/event\.waitUntil\(\s*caches\s*\.open\(CACHE\)/);
 });

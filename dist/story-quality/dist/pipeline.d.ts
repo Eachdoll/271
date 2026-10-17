@@ -63,6 +63,9 @@ export interface ProseStageInput {
     styleSamples?: string[];
     vocabLabel?: string;
     twoPass?: boolean;
+    /** 책 쪽 수. 전체 문장 예산에 쓴다. */
+    pageCount?: number;
+    condenseOverBudget?: boolean;
 }
 export declare function runProseStage(input: ProseStageInput): Promise<import("./richThenSimplify.js").RichSimplifyResult>;
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */

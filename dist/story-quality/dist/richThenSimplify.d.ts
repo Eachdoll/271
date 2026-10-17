@@ -21,16 +21,30 @@ export interface RichSimplifyInput {
     vocabLabel?: string;
     decodable?: boolean;
     twoPass?: boolean;
-    onPass?: (pass: 'rich' | 'simplify' | 'fix', text: string) => void;
+    /** 책 쪽 수. 주어지면 단순화 단계에 전체 문장 수 예산(쪽 수 × 목표 수준의 쪽당 문장)을 건다. */
+    pageCount?: number;
+    /** 예산을 20% 넘으면 비트별 압축 1회(기본 끔). 2026-10-17 실측: 분량은 맞지만 되말하기·호기심이 약간 떨어진다. */
+    condenseOverBudget?: boolean;
+    onPass?: (pass: 'rich' | 'simplify' | 'fix' | 'condense', text: string) => void;
 }
 export interface RichSimplifyResult {
     rich: string;
     simplified: string;
     tellHitsAfter: number;
+    /** 예산이 있을 때 최종 문장 수와 압축 단계 실행 여부 */
+    sentenceCount?: number;
+    condensed?: boolean;
     calls: number;
     costUsd: number;
 }
 /** 한 단계 위 수준 라벨: K1→K2, K2→K3, K3→K4 / E0→E2, E1→E2, E2→E3, E3→E4 */
 export declare const RICH_LEVEL_OF: Record<string, string>;
 export declare function writeRichThenSimplify(input: RichSimplifyInput): Promise<RichSimplifyResult>;
+/** 라벨을 뺀 문장 수. 따옴표 대화도 한 문장으로 센다. */
+export declare function countSentences(text: string): number;
+/** 전체 문장 예산: 쪽 수 × 쪽당 문장 범위. 쪽 수가 없으면 null(기존 동작). */
+export declare function sentenceBudget(level: LevelSpecKo | LevelSpecEn, pageCount?: number): {
+    min: number;
+    max: number;
+} | null;
 export declare function countDialogue(text: string): number;
