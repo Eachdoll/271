@@ -1,3 +1,4 @@
+import { missingCredentialError } from "../credential-errors.js";
 import {
   BEAT_COUNTS,
   PAGE_COUNTS,
@@ -378,8 +379,10 @@ async function resolveEngine(options) {
     const { getCredential } = await import("../image-generation/vault.js");
     config.apiKey = await getCredential(options.engineId);
     if (!config.apiKey)
-      throw new Error(
+      throw missingCredentialError(
         "부모 설정에서 이야기 엔진의 API 비밀 키를 입력해 주세요.",
+        options.engineId,
+        "text",
       );
   }
   const { createTextEngine } = await import("../text-generation/providers.js");

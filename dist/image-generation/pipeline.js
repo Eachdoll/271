@@ -1,3 +1,4 @@
+import { missingCredentialError } from "../credential-errors.js";
 /* Explicit, cancellable generation. No provider retries or local-sample fallbacks. */
 import { generateImage } from "./providers.js";
 import { getCredential } from "./vault.js";
@@ -83,9 +84,10 @@ async function providerConfig(state, world, engine, signal) {
     engine === "sample" || proxy ? null : await getCredential(engine);
   throwIfAborted(signal);
   if (!["local", "sample"].includes(engine) && !apiKey && !proxy)
-    throw new ImageGenerationError(
+    throw missingCredentialError(
       `${ENGINE_NAMES[engine]} API 키가 필요해요. 부모 설정에서 키를 등록해 주세요.`,
-      "MISSING_CREDENTIAL",
+      engine,
+      "image",
     );
   return { ...config, apiKey: apiKey || undefined, signal };
 }

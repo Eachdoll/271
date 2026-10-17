@@ -1,3 +1,4 @@
+import { credentialToastAction } from "./credential-errors.js";
 import { renderChecksPanel } from "./checks-panel.js";
 import {
   showSimilarPagesReview,
@@ -37,7 +38,11 @@ import {
   readLibraryBackupFile,
   backupSummary,
 } from "./device-transfer.js";
-import { createLibraryBackup, downloadFile } from "./output.js";
+import {
+  createLibraryBackup,
+  clearDirectBlobCache,
+  downloadFile,
+} from "./output.js";
 import {
   readStoredLibrary,
   validateStoredLibrary,
@@ -368,39 +373,40 @@ function save() {
   }
 }
 let toastTimer;
+function openCredentialSettings(kind, engine) {
+  const text = kind === "text";
+  const link = document.querySelector(
+    '[data-story-action="open-text-settings"]',
+  );
+  if (text && link) link.click();
+  else if (text) openStoryTextSettings(draft?.storyDraftId || null);
+  else
+    protectedAction(() => {
+      closeModal();
+      view = "settings";
+      settingsTab = "image";
+      history.replaceState(null, "", "#settings=image");
+      render();
+    });
+  requestAnimationFrame(() => {
+    const selector = document.querySelector(text ? "#tg-engine" : "#ig-engine");
+    if (
+      selector &&
+      selector.value !== engine &&
+      [...selector.options].some((option) => option.value === engine)
+    ) {
+      selector.value = engine;
+      selector.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    document
+      .querySelector(text ? '[data-text-field="apiKey"]' : "#ig-api-key")
+      ?.focus();
+  });
+}
 function toast(message, { action } = {}) {
-  if (
-    !action &&
-    /키|인증/.test(message) &&
-    /없|필요|입력|확인|실패|잠금|비밀|추적/.test(message)
-  ) {
-    const text =
-      !!document.querySelector(".story-workspace") ||
-      view === "create" ||
-      /글 엔진/.test(message);
-    action = {
-      label: text ? "글 엔진 키 등록하기" : "그림 엔진 키 등록하기",
-      run: () => {
-        const link = document.querySelector(
-          '[data-story-action="open-text-settings"]',
-        );
-        if (text && link) link.click();
-        else if (text) openStoryTextSettings(draft?.storyDraftId || null);
-        else
-          protectedAction(() => {
-            closeModal();
-            view = "settings";
-            settingsTab = "image";
-            history.replaceState(null, "", "#settings=image");
-            render();
-          });
-        requestAnimationFrame(() =>
-          document
-            .querySelector(text ? '[data-text-field="apiKey"]' : "#ig-api-key")
-            ?.focus(),
-        );
-      },
-    };
+  if (message && typeof message === "object") {
+    action ||= credentialToastAction(message, openCredentialSettings);
+    message = message.message || "요청을 완료하지 못했어요.";
   }
   const t = document.querySelector("#toast");
   t.textContent = message;
@@ -419,7 +425,7 @@ function toast(message, { action } = {}) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(
     () => t.classList.remove("visible"),
-    action ? 12000 : 3800,
+    action ? 6000 : 3800,
   );
 }
 function illustration(book, i = 0) {
@@ -476,7 +482,7 @@ function refreshHydratedImages() {
   });
 }
 function bookCard(book) {
-  return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="open-book" data-id="${esc(book.id)}">${childMode ? icon("play") + "읽어줘" : esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${!childMode ? renderReadingBadge(book, { compact: true }) : ""}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span></div></div></article>`;
+  return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="${childMode ? "read-book" : "open-book"}" data-id="${esc(book.id)}">${childMode ? icon("play") + "읽어줘" : esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${!childMode ? renderReadingBadge(book, { compact: true }) : ""}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span></div></div></article>`;
 }
 function protectedAction(fn) {
   if (cloudPrivacyLocked) {
@@ -563,6 +569,7 @@ const cloudPhaseLabel = () =>
     stopped: "클라우드 연결 중지",
   })[cloudStatus.phase] || "클라우드 저장";
 function cloudStatusSummary() {
+  if (storageBlocked) return "기존 데이터 보호 중";
   return cloudStatus.connected
     ? cloudStatus.dirty
       ? "이 기기에 보관 · 클라우드 저장 대기"
@@ -571,9 +578,9 @@ function cloudStatusSummary() {
 }
 function renderStatusStrip() {
   if (childMode) return "";
-  const exceptional = ["conflict", "account-changed"].includes(
-    cloudStatus.phase,
-  );
+  const exceptional =
+    storageBlocked ||
+    ["conflict", "account-changed"].includes(cloudStatus.phase);
   if (
     !exceptional &&
     !(
@@ -583,7 +590,7 @@ function renderStatusStrip() {
     )
   )
     return "";
-  return `<div id="cloud-status-slot">${cloudStatusCard()}</div>${view === "library" ? deviceStorageNotice() : ""}`;
+  return `<div id="cloud-status-slot">${cloudStatusCard()}</div>${storageBlocked || view === "library" ? deviceStorageNotice() : ""}`;
 }
 function cloudStatusCard() {
   if (childMode) return "";
@@ -612,6 +619,7 @@ function updateCloudStatus(next) {
     if (cloudPrivacyLocked) {
       cleanupFullAuto();
       cleanupStoryQualityUI();
+      clearDirectBlobCache();
       lockVault();
       vaultSessionPin = null;
       settingsValues.clear();
@@ -734,6 +742,7 @@ async function applyCloudLibrary(candidate, meta) {
     migrateReadingSettings(state.settings);
     writeStoredLibrary(localStorage, KEY, state);
     storageBlocked = false;
+    clearDirectBlobCache();
     initialLibrary.invalidRecords = [];
     initialLibrary.kind = "ready";
     wizard = null;
@@ -819,6 +828,7 @@ async function showLibraryImport(file) {
         migrateReadingSettings(state.settings);
         writeStoredLibrary(localStorage, KEY, state);
         storageBlocked = false;
+        clearDirectBlobCache();
         initialLibrary.invalidRecords = [];
         initialLibrary.kind = "ready";
         closeModal();
@@ -849,7 +859,7 @@ async function showLibraryImport(file) {
       }
     };
   } catch (error) {
-    toast(error.message);
+    toast(error);
   }
 }
 let checksTab = "reading";
@@ -927,6 +937,18 @@ function settingsFieldSelector(field) {
       : "")
   );
 }
+const settingsFormIds = new Set([
+  "settings-form",
+  "text-engine-form",
+  "story-quality-form",
+  "ig-world-form",
+]);
+function isTrackedSettingsField(field) {
+  return (
+    settingsFormIds.has(field.closest("form")?.id) &&
+    !field.closest('[data-settings-form="own"]')
+  );
+}
 function snapshotSettingsInputs(tab = settingsTab) {
   if (view !== "settings" || tab !== settingsTab) return;
   const values = new Map();
@@ -935,6 +957,7 @@ function snapshotSettingsInputs(tab = settingsTab) {
       ".settings-tab-content input,.settings-tab-content select,.settings-tab-content textarea",
     )
     .forEach((field) => {
+      if (!isTrackedSettingsField(field) && field.id !== "sr-lexile") return;
       const selector = settingsFieldSelector(field);
       if (selector && !["password", "file"].includes(field.type))
         values.set(selector, { value: field.value, checked: field.checked });
@@ -986,7 +1009,8 @@ function rememberSettingsInputs(event) {
     restoringSettings ||
     view !== "settings" ||
     !event.target.closest(".settings-tab-content") ||
-    !/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName)
+    !/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName) ||
+    !isTrackedSettingsField(event.target)
   )
     return;
   const tab = settingsTab;
@@ -1056,7 +1080,7 @@ async function saveSettingsTab() {
     render();
     toast("현재 탭의 설정을 모두 저장했어요.");
   } catch (error) {
-    toast(error.message);
+    toast(error);
   } finally {
     settingsSaving = false;
     if (button?.isConnected) button.disabled = false;
@@ -1193,7 +1217,7 @@ function libraryPage() {
           (state.daily[localDay()] || 0) >= state.settings.dailyLimit
         ? '<aside class="notice paper-book-notice"><h3>이제 종이책으로 읽자</h3><p>오늘은 화면으로 충분히 만났어요. 종이책에서 다음 모험을 이어가요.</p></aside>'
         : ""
-  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY) / 1024 / 1024).toFixed(2)} MB · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
+  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY, state) / 1024 / 1024).toFixed(2)} MB${localStorage.getItem(KEY) === null ? " (저장 전 추정)" : ""} · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
 }
 const managementButton = (label, action, id, kind = "outline") =>
   `<button type="button" class="btn btn-${kind} btn-small" data-management-action="${action}" data-id="${esc(id)}">${label}</button>`;
@@ -2036,7 +2060,7 @@ async function speak(language) {
   } catch (error) {
     if (token === speechToken && error.name !== "AbortError") {
       r.speaking = false;
-      toast(error.message);
+      toast(error);
     }
   }
 }
@@ -2375,7 +2399,7 @@ async function onAction(e) {
         "application/json",
       );
     } catch (error) {
-      toast(error.message);
+      toast(error);
     }
     return;
   }
@@ -2411,6 +2435,7 @@ async function onAction(e) {
         cleanupFullAuto();
         cleanupStoryQualityUI();
         closeModal();
+        clearDirectBlobCache();
         lockVault();
         vaultSessionPin = null;
         childMode = true;
@@ -2512,7 +2537,6 @@ async function onAction(e) {
     }
     if (childMode) {
       startReading(activeBook);
-      if (reader?.book === activeBook) void speak(reader.lastLanguage);
       return;
     }
     view = "detail";
@@ -2611,7 +2635,7 @@ async function onAction(e) {
       try {
         validateWardrobeSelections(state, wizard);
       } catch (error) {
-        toast(error.message);
+        toast(error);
         return;
       }
       if (wizard.step === 4) {
@@ -2825,7 +2849,9 @@ async function onAction(e) {
     return;
   }
   if (a === "read-book") {
-    startReading(bookById(id));
+    const book = bookById(id);
+    startReading(book);
+    if (childMode && reader?.book === book) void speak(reader.lastLanguage);
     return;
   }
   if (a === "paper-read") {
@@ -2916,7 +2942,7 @@ async function onAction(e) {
         const r = await exportLibrary(state);
         toast(r.bookCount + "권과 이야기 재료를 ZIP으로 백업했어요.");
       } catch (err) {
-        toast(err.message);
+        toast(err);
       }
     });
     return;
@@ -2998,6 +3024,7 @@ document.addEventListener("submit", async (e) => {
         state.settings.pinHash = h;
         save();
       }
+      clearDirectBlobCache();
       lockVault();
       return;
     }
@@ -3021,7 +3048,7 @@ document.addEventListener("submit", async (e) => {
       readReadingSettings(state.settings);
     } catch (error) {
       e.settingsFailed = true;
-      toast(error.message);
+      toast(error);
       return;
     }
     for (const k of [
@@ -3143,7 +3170,7 @@ document.addEventListener("submit", async (e) => {
         toast("인쇄 창에서 프린터 또는 PDF 저장을 선택해 주세요.");
       } else toast("팝업을 허용한 뒤 인쇄 창을 다시 열어 주세요.");
     } catch (err) {
-      toast(err.message);
+      toast(err);
     }
     return;
   }
@@ -3437,7 +3464,7 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 const qualityData = await loadStoryQualityData().catch((error) => {
-  toast(error.message);
+  toast(error);
   return null;
 });
 configureStoryQualityUI({

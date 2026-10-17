@@ -615,8 +615,12 @@ function show(s, content) {
     for (const node of nodes) header.append(node);
   }
 }
-function error(s, message) {
+function error(s, cause) {
   if (session !== s) return;
+  const message =
+    typeof cause === "string"
+      ? cause
+      : cause?.message || "이야기 생성에 실패했어요.";
   const el = document.querySelector("#story-error");
   if (el) {
     el.textContent = message;
@@ -624,7 +628,7 @@ function error(s, message) {
       el.scrollIntoView({ block: "nearest" });
     } catch {}
   }
-  api.toast(message);
+  api.toast(cause);
 }
 function note() {
   return '<p id="story-error" class="story-error" aria-live="polite"></p>';
@@ -825,7 +829,7 @@ export function startStoryWorkflow(wizard) {
     saveDraft(session);
     renderLaunch(session);
   } catch (err) {
-    api.toast(err.message);
+    api.toast(err);
   }
 }
 export function resumeStoryDraft(id, { useCurrentTextSettings = false } = {}) {
@@ -886,10 +890,51 @@ export function resumeStoryDraft(id, { useCurrentTextSettings = false } = {}) {
   };
   renderSession(session);
 }
+/** Restore even r2's compact final header from the authoritative book snapshot. */
+export function rebuildStoryDraftFromBook(book, state, previous = {}) {
+  const copy = (value) => (value == null ? value : clone(value));
+  const input = copy(book.storyInput || previous.input);
+  if (!input) throw new Error("이 책의 이야기 제작 정보를 찾지 못했어요.");
+  const pagination = copy(book.pagination || previous.pagination || {});
+  pagination.cover = { ...(pagination.cover || {}), title: book.title };
+  pagination.pages ||= [];
+  const readingLevels = copy(
+    book.readingLevelSnapshot ||
+      previous.readingLevels ||
+      freezeReadingLevels(book, state.settings),
+  );
+  return {
+    ...copy(previous),
+    id: previous.id || `story-${crypto.randomUUID()}`,
+    bookId: book.id,
+    stage: "paged",
+    reviewMode: "pages",
+    input: { ...input, bookId: book.id },
+    worldId: book.worldId || previous.worldId,
+    worldSnapshot: copy(
+      book.worldSettingsSnapshot ||
+        previous.worldSnapshot ||
+        getActiveWorld(state),
+    ),
+    textSettings: copy(
+      book.textGenerationSettings ||
+        previous.textSettings ||
+        getTextGenerationSettings(state),
+    ),
+    readingLevels,
+    demo: book.textDemo ?? previous.demo ?? false,
+    titleIndex: previous.titleIndex || 0,
+    selectedTitle: book.title,
+    usage: copy(book.textUsage || previous.usage || { calls: [] }),
+    pagination,
+  };
+}
 /** Keep edits made in the existing picture editor when it reopens this workflow. */
 export function syncStoryDraft(book, state) {
-  const d = drafts(state)[book.storyDraftId];
-  if (!d) return false;
+  const existing = drafts(state)[book.storyDraftId];
+  if (!existing) return false;
+  const d = rebuildStoryDraftFromBook(book, state, existing);
+  drafts(state)[book.storyDraftId] = d;
   if (book.outline) d.outline = clone(book.outline);
   if (book.prose) d.prose = clone(book.prose);
   if (book.sceneBriefs) d.sceneBriefs = clone(book.sceneBriefs);
@@ -898,7 +943,7 @@ export function syncStoryDraft(book, state) {
     if (book[key]) d[key] = clone(book[key]);
   d.bookId = book.id;
   d.pictureBook = clone(book);
-  if (d.pagination && book.pages?.length)
+  if (Array.isArray(book.pages))
     d.pagination.pages = book.pages.map((page, index) => ({
       pageNo: index + 1,
       beatIndex: page.beatIndex ?? d.pagination.pages[index]?.beatIndex ?? 1,
@@ -1433,7 +1478,7 @@ async function run(s, label, fn, done) {
       s,
       err.name === "AbortError"
         ? "이번 요청을 중지했어요. 이전 단계와 부모 수정은 초안에 남아 있습니다."
-        : err.message || "이야기 생성에 실패했어요.",
+        : err,
     );
   }
 }
@@ -2223,7 +2268,7 @@ async function handleClick(event) {
     }
     if (action === "approve-pages") await approvePages(s);
   } catch (err) {
-    if (err.name !== "AbortError") error(s, err.message);
+    if (err.name !== "AbortError") error(s, err);
   }
 }
 function handleInput(event) {
@@ -2313,6 +2358,6 @@ function handleChange(event) {
     }
     saveDraft(s);
   } catch (err) {
-    error(s, err.message);
+    error(s, err);
   }
 }

@@ -78,3 +78,13 @@ test('exhausted paid outline retries retain one cumulative failed usage record i
 });
 
 test.after(()=>{cleanupStoryWorkflow();globalThis.document=originalDocument;});
+
+test('R2-1 a compact final header rebuilds the revision workflow from the saved book',async()=>{
+ const {syncStoryDraft}=await import('../dist/story-generation/ui.js');
+ const d=fixture(),original=structuredClone(d),header={id:d.id,stage:'final',input:d.input,wizard:{step:4},usage:d.usage};
+ currentState=state(header);
+ const book={id:'revision',storyDraftId:d.id,title:'바람의 길 (수정본)',outline:original.outline,prose:{ko:'유하가 걸어요.',en:'Yuha walks.'},storyInput:original.input,worldSettingsSnapshot:{id:'saved-world',imageEngine:'openai'},textGenerationSettings:original.textSettings,textDemo:true,readingLevelSnapshot:{koreanLevel:'K1',englishLevel:'E0',specs:original.input.specs},pagination:{cover:{title:'원본',sceneAction:'walking'},pages:[{pageNo:1,beatIndex:1,textKo:'옛 글',textEn:'Old.',scene:{settingKey:'home'}}]},sceneBriefs:[{beatIndex:1,pose:'walking'}],pages:[{ko:'유하가 새 길을 걸어요.',en:'Yuha walks.',beatIndex:1,scene:{settingKey:'forest'},staging:{shot:'wide'}}]};
+ assert.equal(syncStoryDraft(book,currentState),true);const rebuilt=currentState.storyDrafts[d.id];
+ assert.equal(rebuilt.worldSnapshot.id,'saved-world');assert.equal(rebuilt.pagination.pages[0].textKo,book.pages[0].ko);assert.equal(rebuilt.pagination.pages[0].scene.settingKey,'forest');assert.equal(rebuilt.pagination.cover.title,book.title);assert.equal(rebuilt.demo,true);assert.equal(rebuilt.textSettings.engine,'openai');assert.deepEqual(rebuilt.sceneBriefs,book.sceneBriefs);assert.equal(rebuilt.stage,'paged');assert.equal(rebuilt.reviewMode,'pages');
+ resumeStoryDraft(d.id);assert.match(html,/쪽 나누기/);assert.match(html,/data-story-page/);assert.doesNotMatch(html,/undefined/);cleanupStoryWorkflow();assert.equal(header.worldSnapshot,undefined,'the original compact header is not mutated');
+});

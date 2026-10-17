@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v20";
+const CACHE = "donghwa-shell-v21";
 const FILES = [
   "./checks-panel.js",
   "./finalize-cleanup.js",
@@ -89,6 +89,8 @@ const FILES = [
   "./reading-levels.js",
   "./reading-checker.js",
   "./reading-ui.js",
+  "./reading-messages.js",
+  "./credential-errors.js",
   "./levels.json",
   "./reading-vocab.js",
   "./style-studio.js",

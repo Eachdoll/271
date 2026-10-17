@@ -1,3 +1,4 @@
+import { describeReadingViolation } from "../reading-messages.js";
 import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
 import { getLevelSpec } from "../reading-levels.js";
 
@@ -132,22 +133,7 @@ function resolvedSpecs(pagination, supplied) {
   };
 }
 function levelMessage(language, violation) {
-  const prefix = language === "ko" ? "한글" : "영어";
-  const labels = {
-    "sentence-count": "문장 수",
-    "sentence-length": "문장 길이",
-    "out-of-vocabulary": "등급 외 어휘 비율",
-    "page-words": "쪽 단어 수",
-    "page-characters": "쪽 글자 수",
-    "connective-endings": "연결어미 수",
-  };
-  const expected = violation.expected;
-  const range = expected
-    ? ` (허용 ${expected.min}~${expected.max})`
-    : violation.max != null
-      ? ` (최대 ${violation.max})`
-      : "";
-  return `${prefix} ${labels[violation.code] || violation.code} ${violation.actual ?? ""}${range}: 저장된 읽기 규칙을 벗어났어요.`;
+  return describeReadingViolation({ ...violation, language });
 }
 
 /** Return all seven checks and targeted repair instructions, without mutation. */

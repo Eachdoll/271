@@ -1,3 +1,4 @@
+import { missingCredentialError } from "../credential-errors.js";
 import { ENGINE_IDS, ENGINE_METADATA, generateImage } from "./providers.js";
 import { STYLE_PRESETS, getStylePreset, listStylePresets } from "./styles.js";
 import {
@@ -147,7 +148,7 @@ async function refreshStatuses() {
                 : "키 필요";
     });
   } catch (error) {
-    api?.toast(error.message);
+    api?.toast(error);
   }
 }
 function engineConfig(state, engine) {
@@ -259,7 +260,7 @@ export function configureImageUI(context) {
             .querySelector("#ig-api-key")
             ?.setAttribute("aria-invalid", "true");
         }
-        api.toast(error.message);
+        api.toast(error);
       }
     });
   });
@@ -382,7 +383,7 @@ function saveWorldSettings() {
             apply();
             resolve(true);
           } catch (err) {
-            api.toast(err.message);
+            api.toast(err);
             resolve(false);
           }
         };
@@ -392,7 +393,7 @@ function saveWorldSettings() {
       return true;
     }
   } catch (error) {
-    api.toast(error.message);
+    api.toast(error);
     return false;
   }
 }
@@ -403,8 +404,10 @@ async function comparisonConfig(state, engine) {
   const apiKey =
     engine === "sample" || proxy ? null : await getCredential(engine);
   if (meta(engine).requiresKey && !apiKey && !proxy)
-    throw new Error(
+    throw missingCredentialError(
       meta(engine).name + "의 API 키를 먼저 암호화해 저장해 주세요.",
+      engine,
+      "image",
     );
   if (engine === "local" && !config.endpoint)
     throw new Error(
@@ -460,7 +463,7 @@ export async function compareEngines() {
     );
   } catch (error) {
     if (currentOperation === operation) currentOperation = null;
-    if (!operation.signal.aborted) api.toast(error.message);
+    if (!operation.signal.aborted) api.toast(error);
     return;
   }
   if (operation.signal.aborted) return;
@@ -603,7 +606,7 @@ async function runSheetGeneration(input, { quality = "draft", seed } = {}) {
         api.render();
         api.toast(character.name + "의 World 시트를 확정했어요.");
       } catch (error) {
-        api.toast(error.message);
+        api.toast(error);
       } finally {
         if (button.isConnected) button.disabled = false;
       }
