@@ -231,6 +231,15 @@ async function fetchResponse(url, options, context, { download = null } = {}) {
   } catch (error) {
     if (context.signal.aborted || error?.name === "AbortError")
       throw abortError();
+    if (download)
+      fail(
+        download === "reference"
+          ? "참조 이미지를 다시 불러오지 못했어요. 시트를 다시 고정해 주세요."
+          : "결과 이미지 주소가 만료됐어요. 다시 생성해 주세요.",
+        download === "reference"
+          ? "reference_download_failed"
+          : "result_download_expired",
+      );
     // Network errors and upstream bodies can contain request URLs or credentials.
     // Expose only a fixed, actionable message, never the raw exception/body.
     fail(

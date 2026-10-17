@@ -2481,10 +2481,18 @@ export async function paginateStory(outline, prose, source, options = {}) {
   assertValid("outline", outline, { ...input, pageCount: undefined });
   assertValid("prose", prose, input, outline);
   abort(options.signal);
-  const checkedProse = await reviewStoryCoherence(outline, prose, null, input, {
-    ...options,
-    repair: options.coherenceRepair !== false,
-  });
+  // A nested child-repair pagination is reviewed together with the final pages
+  // by its caller; do not buy a separate prose review for this intermediate form.
+  const checkedProse = options.skipCoherence
+    ? {
+        data: { prose: clone(prose) },
+        usage: mergeStoryUsage([]),
+        meta: { requests: 0 },
+      }
+    : await reviewStoryCoherence(outline, prose, null, input, {
+        ...options,
+        repair: options.coherenceRepair !== false,
+      });
   prose = checkedProse.data.prose;
   let initial;
   try {

@@ -639,12 +639,19 @@ export async function generateCover(state, book, options = {}) {
     world = worldForSnapshot(state, snapshot),
     engine = snapshot.imageEngine;
   const config = await providerConfig(state, world, engine, signal);
-  let asset;
+  let asset,
+    committed = false;
   try {
     const result = await generateImage(request, { engine, config });
-    throwIfAborted(signal);
-    asset = await saveImage(result.imageUrl, { signal });
-    throwIfAborted(signal);
+    // Preserve an already-paid successful response even if a stop just arrived.
+    if (!result?.imageUrl) {
+      throwIfAborted(signal);
+      throw new ImageGenerationError(
+        "제공자가 표지 그림을 반환하지 않았어요.",
+        "EMPTY_PROVIDER_RESULT",
+      );
+    }
+    asset = await saveImage(result.imageUrl);
     if (book.cover)
       book.coverHistory = [...(book.coverHistory || []), clone(book.cover)];
     book.cover = {
@@ -658,9 +665,12 @@ export async function generateCover(state, book, options = {}) {
         stylePresetId: snapshot.stylePresetId,
       }),
     };
+    committed = true;
+    throwIfAborted(signal);
     return book.cover;
   } catch (error) {
-    if (asset) await deleteImageAsset(asset.assetId).catch(() => {});
+    if (asset && !committed)
+      await deleteImageAsset(asset.assetId).catch(() => {});
     throw error;
   }
 }

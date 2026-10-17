@@ -167,3 +167,31 @@ test('A-1 Blob backup skips base64 encoding and text round trips',async()=>{
  try {const library=state();delete library.stylePresets;const backup=await createLibraryBackup(library,{mode:'blobs'});assert.ok(backup.assets instanceof Map);assert.equal(backup.text,undefined);for(const value of backup.assets.values())assert.ok(value instanceof Blob);}
  finally{globalThis.btoa=original;}
 });
+
+test('A-9 paid batches report similar pages without buying automatic retries',async()=>{
+ const {seedState}=await import('../dist/engine.js');const {migrateWorldState,getActiveWorld,captureBookGenerationSnapshot}=await import('../dist/image-generation/world.js');const {generateAllScenes}=await import('../dist/image-generation/pipeline.js');
+ const library=seedState();migrateWorldState(library);let calls=0;
+ const world=getActiveWorld(library);world.providerConfig={openai:{transport:'proxy',proxyEndpoint:'https://fixture.invalid',fetch:async(url,options)=>{if(String(url).includes('fixture.invalid')){calls++;return new Response(JSON.stringify({imageUrl:image,seed:1,model:'fixture'}),{headers:{'Content-Type':'application/json'}});}return fetch(url,options);}}};
+ const book={id:'similar-batch',characterIds:['yuha'],backgroundIds:[],pages:[0,1].map(index=>({ko:'유하가 문을 열어요.',en:'Yuha opens the door.',scene:{where:'home',action:'Yuha opens the door.',index}}))};
+ const snapshot=captureBookGenerationSnapshot(library,book);snapshot.imageEngine='openai';snapshot.imageModelConfig={};snapshot.characterSheets.forEach(sheet=>{sheet.imageAssetId=null;sheet.imageUrl=image;});snapshot.styleReferences.forEach(ref=>{ref.imageAssetId=null;ref.imageUrl=image;});
+ const result=await generateAllScenes(library,book,{quality:'draft',analyzeImage:async()=>({supported:true,hash:'0000000000000000',brightness:120,saturation:0,hue:0})});
+ assert.equal(calls,2);assert.deepEqual(result.similarPages,[1]);assert.equal(book.pages[1].imageHistory,undefined);assert.equal(book.pages[1].imageDiversity.regenerated,false);
+});
+
+test('A-13 historical images hydrate only when their history is opened',async()=>{
+ const {hydrateImageReferences}=await import('../dist/image-generation/assets.js');
+ const active='image-active-hydration-12345678',historical='image-history-hydration-12345678';
+ await restoreImageAsset(active,image);await restoreImageAsset(historical,image);revokeImageURLs();
+ const records=databases.get('donghwa-workshop-image-assets'),read=records.get.bind(records),reads=[];records.get=id=>{reads.push(id);return read(id);};
+ const history=[{imageAssetId:historical}],library={books:[{pages:[{imageAssetId:active,imageHistory:history}]}]};
+ try{await hydrateImageAssets(library);assert.deepEqual(reads,[active]);assert.equal(getImageURL(historical),null);await hydrateImageReferences(history);assert.deepEqual(reads,[active,historical]);assert.ok(getImageURL(historical));}
+ finally{records.get=read;}
+});
+test('A-6 a successful paid cover arriving at stop is kept for resume with its receipt',async()=>{
+ const {seedState}=await import('../dist/engine.js');const {migrateWorldState,getActiveWorld,captureBookGenerationSnapshot}=await import('../dist/image-generation/world.js');const {generateCover}=await import('../dist/image-generation/pipeline.js');
+ const library=seedState();migrateWorldState(library);const controller=new AbortController();let calls=0;
+ getActiveWorld(library).providerConfig={openai:{transport:'proxy',proxyEndpoint:'https://fixture.invalid',fetch:async(url,options)=>{if(String(url).includes('fixture.invalid')){calls++;controller.abort();return new Response(JSON.stringify({imageUrl:image,seed:7,model:'fixture'}),{headers:{'Content-Type':'application/json'}});}return fetch(url,options);}}};
+ const book={id:'paid-cover-stop',characterIds:['yuha'],backgroundIds:[],pages:[{ko:'유하가 문을 열어요.',en:'Yuha opens the door.',scene:{where:'home',action:'Yuha opens the door.'}}]};
+ const snapshot=captureBookGenerationSnapshot(library,book);snapshot.imageEngine='openai';snapshot.imageModelConfig={};snapshot.characterSheets.forEach(sheet=>{sheet.imageAssetId=null;sheet.imageUrl=image;});snapshot.styleReferences.forEach(ref=>{ref.imageAssetId=null;ref.imageUrl=image;});
+ await assert.rejects(generateCover(library,book,{quality:'final',signal:controller.signal}),{name:'AbortError'});assert.equal(calls,1);assert.ok(book.cover.imageAssetId);assert.equal(book.cover.meta.quality,'final');assert.ok(await getAsset(book.cover.imageAssetId));
+});
