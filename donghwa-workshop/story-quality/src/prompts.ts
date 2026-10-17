@@ -55,6 +55,7 @@ export const OUTLINE_USER = `[등장인물] {{protagonistName}}: {{protagonistTr
  "want": "...",
  "problem": "...",
  "beats": [{"index": 1, "type": "setup", "summary": "2~3문장", "characters": ["..."], "settingKey": "...", "newElement": "...", "failureReason": null}],
+ (attempt 비트의 failureReason은 설명이 아니라 ID 하나만 적는다: "wrong_place" | "wrong_method" | "interrupted". 그 외 비트는 null.)
  "refrain": {"text": "...", "usedAtBeats": [2, 4], "variation": "..."},
  "newWordsKo": ["...", "...", "..."],
  "newWordsEn": ["...", "...", "..."],
