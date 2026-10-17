@@ -4,6 +4,8 @@
 
 r4 외부 검토 결과(통과, 정리 요청 2건)는 [Codex r4 검토](CODEX_R4_REVIEW_2026-10-17.md)에 있습니다.
 
+전문 단계 실측·품질 개선·증류 200편 결과는 [전문 실측 보고](PROSE_EVAL_REPORT_2026-10-17.md), 다음 작업은 [Codex r6 지시서](CODEX_WORK_ORDER_R6_2026-10-17.md)에 있습니다.
+
 R4-1·R4-2를 반영한 r5는 [Codex r5 완료 보고](CODEX_R5_COMPLETION_2026-10-17.md)에 있으며 외부 검토를 통과했습니다(테스트 428+45, 원본 평가 자료 바이트 일치).
 
 r2 검토의 R2-1~10 수정은 [Codex r3 완료 보고](CODEX_R3_COMPLETION_2026-10-17.md)에 정리했습니다.
