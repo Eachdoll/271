@@ -741,6 +741,33 @@ async function directImage(url) {
 
 /** Store direct references once in the backup, without inflating localStorage on restore. */
 const directBlobCache = new Map();
+const DIRECT_BLOB_CACHE_LIMIT = 64 * 1024 * 1024;
+let directBlobCacheBytes = 0,
+  directBlobCacheEpoch = 0;
+export function clearDirectBlobCache() {
+  directBlobCacheEpoch++;
+  directBlobCache.clear();
+  directBlobCacheBytes = 0;
+}
+function cacheDirectBlob(url, blob, epoch) {
+  if (epoch !== directBlobCacheEpoch || blob.size > DIRECT_BLOB_CACHE_LIMIT)
+    return;
+  if (directBlobCache.has(url)) {
+    directBlobCacheBytes -= directBlobCache.get(url).size;
+    directBlobCache.delete(url);
+  }
+  while (
+    directBlobCache.size &&
+    (directBlobCacheBytes + blob.size > DIRECT_BLOB_CACHE_LIMIT ||
+      directBlobCache.size >= 1000)
+  ) {
+    const oldest = directBlobCache.keys().next().value;
+    directBlobCacheBytes -= directBlobCache.get(oldest).size;
+    directBlobCache.delete(oldest);
+  }
+  directBlobCache.set(url, blob);
+  directBlobCacheBytes += blob.size;
+}
 async function externalizeDirectImages(state, assets, { blobs = false } = {}) {
   const byUrl = new Map([...assets].map(([id, image]) => [image.dataUrl, id]));
   let bytes = [...assets.values()].reduce(
@@ -758,13 +785,15 @@ async function externalizeDirectImages(state, assets, { blobs = false } = {}) {
           throw new Error("백업할 그림 주소를 확인해 주세요.");
         image = directBlobCache.get(canonical);
         if (!image) {
+          const cacheEpoch = directBlobCacheEpoch;
           const response = await fetch(canonical);
           if (!response.ok) throw new Error("그림 원본을 읽지 못했어요.");
           image = await response.blob();
           if (!image.size || !/^image\//i.test(image.type))
             throw new Error("그림 원본 형식을 확인해 주세요.");
-          if (directBlobCache.size >= 1000)
-            directBlobCache.delete(directBlobCache.keys().next().value);
+          cacheDirectBlob(canonical, image, cacheEpoch);
+        } else {
+          directBlobCache.delete(canonical);
           directBlobCache.set(canonical, image);
         }
       } else image = await directImage(canonical);

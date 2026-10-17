@@ -195,3 +195,16 @@ test('A-6 a successful paid cover arriving at stop is kept for resume with its r
  const snapshot=captureBookGenerationSnapshot(library,book);snapshot.imageEngine='openai';snapshot.imageModelConfig={};snapshot.characterSheets.forEach(sheet=>{sheet.imageAssetId=null;sheet.imageUrl=image;});snapshot.styleReferences.forEach(ref=>{ref.imageAssetId=null;ref.imageUrl=image;});
  await assert.rejects(generateCover(library,book,{quality:'final',signal:controller.signal}),{name:'AbortError'});assert.equal(calls,1);assert.ok(book.cover.imageAssetId);assert.equal(book.cover.meta.quality,'final');assert.ok(await getAsset(book.cover.imageAssetId));
 });
+test('R2-9 direct Blob backup caching evicts by byte size using least-recent access and clears on replacement',async()=>{
+ const {clearDirectBlobCache}=await import('../dist/output.js');const originalFetch=globalThis.fetch,calls=[];
+ const snapshot=url=>({books:[{id:'lru',title:'그림',pages:[{ko:'안녕',en:'Hi',imageUrl:url}]}],characters:[],backgrounds:[],settings:{}});
+ const blob=new Blob(['fake sized image'],{type:'image/png'});Object.defineProperty(blob,'size',{value:30*1024*1024});
+ globalThis.fetch=async url=>{calls.push(url);return {ok:true,blob:async()=>blob};};clearDirectBlobCache();
+ const backup=url=>createLibraryBackup(snapshot('https://cache.invalid/'+url),{mode:'blobs'});
+ try {
+  await backup('a');await backup('b');await backup('a');assert.equal(calls.length,2,'cache hit retains Blob identity');
+  await backup('c');await backup('a');assert.equal(calls.length,3,'recently touched a survives the 64MB budget');
+  await backup('b');assert.equal(calls.length,4,'least-recent b was evicted');
+  clearDirectBlobCache();await backup('b');assert.equal(calls.length,5,'library replacement drops stale cached blobs');
+ } finally {clearDirectBlobCache();globalThis.fetch=originalFetch;}
+});
