@@ -13,7 +13,7 @@ const state=(name='우리 집')=>({books:[],characters:[],backgrounds:[{id:'home
 function environment() {
   const sqlite=new DatabaseSync(':memory:');
   sqlite.exec(readFileSync(new URL('../server/cloud-schema.sql',import.meta.url),'utf8'));
-  const objects=new Map(),reads=[],writes=[],statements=[];
+  const objects=new Map(),reads=[],writes=[],deletes=[],statements=[];
   const DB={prepare(sql){
     statements.push(sql);
     const statement=sqlite.prepare(sql);
@@ -25,9 +25,10 @@ function environment() {
   }};
   const BUCKET={
     async put(key,value,metadata){const bytes=value instanceof Uint8Array?value.slice():new TextEncoder().encode(value);objects.set(key,{bytes,metadata});writes.push(key);return {};},
-    async get(key){reads.push(key);const record=objects.get(key);if(!record)return null;return {body:new Blob([record.bytes]).stream(),arrayBuffer:async()=>record.bytes.slice().buffer};}
+    async get(key){reads.push(key);const record=objects.get(key);if(!record)return null;return {body:new Blob([record.bytes]).stream(),arrayBuffer:async()=>record.bytes.slice().buffer};},
+    async delete(key){deletes.push(key);objects.delete(key);}
   };
-  return {DB,BUCKET,sqlite,objects,reads,writes,statements};
+  return {DB,BUCKET,sqlite,objects,reads,writes,deletes,statements};
 }
 function request(path,{method='GET',owner='owner-A',account=owner,body,headers={},origin=ORIGIN}={}) {
   const values={...headers};
@@ -223,3 +224,15 @@ test('malformed identity, manifest, revision and prototype fields are rejected b
 
 test('auto stop controls persist per account without requiring an R2 bucket or changing library revisions',async()=>{const env=environment(),id='auto-control-fixture-0001';delete env.BUCKET;assert.equal((await call(env,`/api/cloud/jobs/${id}/control`)).data.stop,null);const stop=await call(env,`/api/cloud/jobs/${id}/control`,{method:'POST',body:{nonce:'nonce-stop-command-0001',apiKey:'must-not-store'}});assert.equal(stop.status,200);assert.equal((await call(env,`/api/cloud/jobs/${id}/control`)).data.stop.nonce,'nonce-stop-command-0001');assert.equal((await call(env,`/api/cloud/jobs/${id}/control`,{owner:'owner-B'})).data.stop,null);assert.equal(env.sqlite.prepare('SELECT count(*) as n FROM cloud_libraries').get().n,0);assert.doesNotMatch(JSON.stringify(env.sqlite.prepare('SELECT * FROM auto_job_controls').all()),/must-not-store/);});
 test('auto stop controls reject anonymous, cross-origin, account-switch and malformed requests',async()=>{const env=environment(),path='/api/cloud/jobs/auto-control-fixture-0001/control';assert.equal((await call(env,path,{owner:null})).status,401);assert.equal((await call(env,path,{method:'POST',origin:'https://evil.example',body:{nonce:'nonce-valid-0001'}})).status,403);assert.equal((await call(env,path,{method:'POST',account:'owner-B',body:{nonce:'nonce-valid-0001'}})).status,403);assert.equal((await call(env,path,{method:'POST',body:{nonce:'x'}})).status,400);assert.equal((await call(env,path,{method:'POST',body:{nonce:'valid-nonce-0001',tooMuch:'x'.repeat(2200)}})).status,413);assert.equal((await call(env,path,{method:'DELETE'})).status,405);assert.equal(env.sqlite.prepare('SELECT count(*) as n FROM auto_job_controls').get().n,0);});
+
+test('superseded library snapshots are removed from R2 and a CAS loss removes the object it wrote',async()=>{
+  const env=environment();
+  assert.equal((await save(env,{library:state('첫 집')})).status,200);
+  const snapshots=()=>[...env.objects.keys()].filter(key=>key.startsWith('cloud-snapshots/'));
+  assert.equal(snapshots().length,1);const first=snapshots()[0];
+  assert.equal((await save(env,{revision:1,library:state('둘째 집')})).status,200);
+  assert.equal(snapshots().length,1,'이전 스냅샷 객체는 정리됩니다');assert.notEqual(snapshots()[0],first);assert.deepEqual(env.deletes,[first]);
+  const stale=await save(env,{revision:1,library:state('옛 기기')});
+  assert.equal(stale.status,409);assert.equal(snapshots().length,1,'CAS에 진 저장은 자기가 쓴 객체를 남기지 않습니다');
+  const read=await call(env,'/api/cloud/library');assert.equal(read.data.revision,2);assert.equal(read.data.state.backgrounds[0].name,'둘째 집');
+});

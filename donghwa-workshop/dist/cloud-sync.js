@@ -1,4 +1,5 @@
 import {createLibraryBackup, validateImport} from './output.js';
+const REQUEST_TIMEOUT_MS=45000,REQUEST_TIMEOUT_UPLOAD=120000;
 
 /** Per-account library replication. Credentials and parent PINs never leave the device. */
 export const CLOUD_SYNC_STORAGE_KEY = 'donghwa-cloud-sync-v1';
@@ -143,8 +144,11 @@ export function createCloudSync(context) {
   async function request(path, op, options={}, user=null) {
     check(op);
     let response;
-    try{response=await fetchImpl(base+path,{credentials:'same-origin',cache:'no-store',redirect:'error',...options,headers:{Accept:'application/json',...(user?{'X-Cloud-Account-ID':user.id}:{}),...options.headers},signal:op.signal});}
-    catch(error){if(op.signal.aborted || stopped)throw aborted();throw new CloudSyncError('클라우드에 연결하지 못했어요. 현재 기기의 자료는 보관되어 있어요.','NETWORK_ERROR');}
+    const deadline=new AbortController(),onAbort=()=>deadline.abort(),timeoutMs=/^(PUT|POST)$/i.test(options.method||'GET')?REQUEST_TIMEOUT_UPLOAD:REQUEST_TIMEOUT_MS;
+    op.signal.addEventListener('abort',onAbort,{once:true});const timer=setTimeout(onAbort,timeoutMs);timer.unref?.();
+    try{response=await fetchImpl(base+path,{credentials:'same-origin',cache:'no-store',redirect:'error',...options,headers:{Accept:'application/json',...(user?{'X-Cloud-Account-ID':user.id}:{}),...options.headers},signal:deadline.signal});}
+    catch(error){if(op.signal.aborted || stopped)throw aborted();if(deadline.signal.aborted)throw new CloudSyncError('클라우드 응답이 늦어 연결을 멈췄어요. 현재 기기의 자료는 보관되어 있어요.','NETWORK_ERROR');throw new CloudSyncError('클라우드에 연결하지 못했어요. 현재 기기의 자료는 보관되어 있어요.','NETWORK_ERROR');}
+    finally{clearTimeout(timer);op.signal.removeEventListener('abort',onAbort);}
     check(op);
     if(!response.ok) {
       let body={};try{body=await response.json();}catch{}

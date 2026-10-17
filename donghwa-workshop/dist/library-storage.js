@@ -19,10 +19,11 @@ function database(){
     request.onerror=request.onblocked=()=>{clearTimeout(timer);reject(new Error('복구용 보관함을 열지 못했어요. 기존 데이터를 바꾸지 않았어요.'))};
   }).catch(error=>{pending=null;throw error;});return pending;
 }
+const RECOVERY_KEEP=3;
 export async function keepRecoveryPoint(text,{reason='before-import'}={}){
   if(typeof text!=='string'||!text)throw new Error('복구용 원본 데이터가 없어요.');
   const db=await database(),record={id:'recovery-'+crypto.randomUUID(),text,reason,createdAt:new Date().toISOString()};
-  await new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(record);tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(new Error('복구용 원본을 보관하지 못했어요. 공간을 확보한 뒤 다시 시도해 주세요.'))});return record;
+  await new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);store.put(record);const all=store.getAll();all.onsuccess=()=>{const extra=(all.result||[]).filter(item=>item.id!==record.id).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(RECOVERY_KEEP-1);for(const old of extra)store.delete(old.id);};tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(new Error('복구용 원본을 보관하지 못했어요. 공간을 확보한 뒤 다시 시도해 주세요.'))});return record;
 }
 export async function latestRecoveryPoint(){
   const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly'),r=tx.objectStore(STORE).getAll();r.onsuccess=()=>resolve(r.result.sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0]||null);r.onerror=()=>reject(new Error('복구용 보관본을 읽지 못했어요.'))});

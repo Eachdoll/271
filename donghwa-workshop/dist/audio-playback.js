@@ -1,5 +1,7 @@
 import {getCredential, hasCredential} from './image-generation/vault.js';
 import {validateCredentialInput} from './image-generation/credential-validation.js';
+// 데스크톱 Chromium은 약 15초가 넘는 발화를 onend 없이 끊습니다. 긴 문장은 주기적인 pause/resume으로 이어 줍니다.
+const needsSpeechKeepAlive=text=>typeof navigator!=='undefined'&&/Chrome\//.test(navigator.userAgent||'')&&!/Android|Mobile/.test(navigator.userAgent||'')&&String(text).length>120;
 
 // Audio blobs stay in IndexedDB. Book JSON contains only asset IDs and timings.
 const DATABASE = 'donghwa-workshop-audio-v1';
@@ -122,12 +124,14 @@ export async function playback(book,index,lang,{rate=1,onWord,onEnd,onError,sign
   utterance.lang=lang==='ko'?'ko-KR':'en-US';utterance.rate=Math.max(.5,Math.min(1.5,Number(rate)||1));
   utterance.voice=speechSynthesis.getVoices().find(voice=>voice.lang.toLowerCase().startsWith(lang==='ko'?'ko':'en'))||null;
   const abort=()=>{if(token===playToken)stopPlayback();};
-  const cleanup=()=>{signal?.removeEventListener('abort',abort);utterance.onend=null;utterance.onerror=null;utterance.onboundary=null;};
+  let keepAlive=null;
+  const cleanup=()=>{signal?.removeEventListener('abort',abort);utterance.onend=null;utterance.onerror=null;utterance.onboundary=null;if(keepAlive){clearInterval(keepAlive);keepAlive=null;}};
   currentPlayback={utterance,onWord,cleanup};signal?.addEventListener('abort',abort,{once:true});
   utterance.onboundary=event=>{if(token!==playToken)return;if(event.name==='word'||!event.name){const word=words.find(item=>event.charIndex>=item.startChar&&event.charIndex<item.endChar);emitWord(onWord,word);}};
   utterance.onend=()=>{if(token!==playToken)return;cleanup();currentPlayback=null;emitWord(onWord,null);onEnd?.();};
   utterance.onerror=event=>{if(token!==playToken||event.error==='canceled'||event.error==='interrupted')return;cleanup();currentPlayback=null;emitWord(onWord,null);onError?.(new Error('기기 음성을 사용할 수 없어요. 음성 설정을 확인해 주세요.'));};
   speechSynthesis.speak(utterance);
+  if(needsSpeechKeepAlive(text))keepAlive=setInterval(()=>{if(token!==playToken||!speechSynthesis.speaking||speechSynthesis.paused)return;speechSynthesis.pause();speechSynthesis.resume();},10000);
   return {source:'browser',cached:false,timingSource:'boundary'};
 }
 

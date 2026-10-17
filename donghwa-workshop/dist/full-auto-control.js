@@ -1,3 +1,5 @@
+const START_TIMEOUT_MS=5000;
+const withDeadline=(promise,ms)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('timeout')),ms);timer.unref?.();promise.then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});});
 /* Persist stop intent separately so another tab/device cannot overwrite a running job's progress. */
 export const AUTO_CONTROL_KEY='donghwa-full-auto-stop-v1';
 const validId=id=>/^auto-[a-zA-Z0-9-]{8,100}$/.test(id||'');
@@ -26,7 +28,7 @@ export function createAutoStopWatcher(id,{accountId,storage=storageDefault(),fet
  const local=()=>{const row=readAutoStop(id,storage);if(row&&row.nonce!==localBaseline)stop(row);};
  const listener=event=>{if(event.key===AUTO_CONTROL_KEY)local();};
  return {
-  async start(){eventTarget?.addEventListener('storage',listener);try{remoteBaseline=(await cloudControl(id,{accountId,fetchImpl,signal:pending.signal}))?.nonce||null;remoteInitialized=true;}catch{/* Local stop stays available if signed out or offline. */}if(stopped)return;ready=true;timer=setIntervalImpl(async()=>{local();if(!accountId||polling||stopped)return;polling=true;try{const row=await cloudControl(id,{accountId,fetchImpl,signal:pending.signal});if(!remoteInitialized){remoteBaseline=row?.nonce||null;remoteInitialized=true;}else if(row&&row.nonce!==remoteBaseline){storeStop(id,row,storage);stop(row);}}catch{/* Keep checkpoints and retry the control endpoint later. */}finally{polling=false;}},pollMs);timer?.unref?.();local();},
+  async start(){eventTarget?.addEventListener('storage',listener);try{remoteBaseline=(await withDeadline(cloudControl(id,{accountId,fetchImpl,signal:pending.signal}),START_TIMEOUT_MS))?.nonce||null;remoteInitialized=true;}catch{/* Local stop stays available if signed out or offline. */}if(stopped)return;ready=true;timer=setIntervalImpl(async()=>{local();if(!accountId||polling||stopped)return;polling=true;try{const row=await cloudControl(id,{accountId,fetchImpl,signal:pending.signal});if(!remoteInitialized){remoteBaseline=row?.nonce||null;remoteInitialized=true;}else if(row&&row.nonce!==remoteBaseline){storeStop(id,row,storage);stop(row);}}catch{/* Keep checkpoints and retry the control endpoint later. */}finally{polling=false;}},pollMs);timer?.unref?.();local();},
   check(){if(ready)local();},
   close(){stopped=true;pending.abort();if(timer!==null)clearIntervalImpl(timer);eventTarget?.removeEventListener('storage',listener);},
  };

@@ -60,9 +60,9 @@ export function createTextEngine({engine,config={}}={}){
     if(typeof req?.system!=='string'||typeof req?.user!=='string'||req.system.length+req.user.length>300000)failure('글 생성 입력을 확인해 주세요.','input');
     const info=getTextModelInfo(engine,getTextModel(engine,config)),temperature=Number(req.temperature??.8),maxTokens=Number(req.maxTokens);if(!Number.isFinite(temperature)||temperature<0||temperature>1||!Number.isInteger(maxTokens)||maxTokens<1||maxTokens>Math.max(32000,info.requestOutputTokens))failure('글 생성 온도·토큰 한도를 확인해 주세요.','input');
     if(req.signal?.aborted)throw new DOMException('글 생성을 중지했어요.','AbortError');
-    let timedOut=false;const controller=new AbortController(),abort=()=>controller.abort();req.signal?.addEventListener('abort',abort,{once:true});const timer=setTimeout(()=>{timedOut=true;abort();},Number(config.timeoutMs)||info.timeoutMs);
+    let timedOut=false;const controller=new AbortController(),abort=()=>controller.abort();req.signal?.addEventListener('abort',abort,{once:true});const timeoutMs=Number(config.timeoutMs)||info.timeoutMs;let timer=null;const arm=()=>{clearTimeout(timer);timer=setTimeout(()=>{timedOut=true;abort();},timeoutMs);};arm();
     let input=0,output=0,actual=0,actualKnown=true;
-    try{for(let attempt=0;attempt<2;attempt++){
+    try{for(let attempt=0;attempt<2;attempt++){if(attempt)arm();
       const result=await requestOnce(engine,config,{...req,temperature,maxTokens,user:attempt?req.user+'\nThe previous answer could not be parsed as JSON. Return valid JSON only.':req.user},controller.signal);input+=result.usage.input;output+=result.usage.output;if(Number.isFinite(result.costUsd))actual+=result.costUsd;else actualKnown=false;
       let json=result.json;try{if(req.jsonSchema)json=parseJson(json??result.text);}catch{if(attempt===0)continue;failure('JSON 형식으로 한 번 다시 요청했지만 결과를 읽을 수 없어요. 이 단계를 다시 생성해 주세요.','json');}
       const estimate=estimateTextCost({engine,config,input,output});return {text:result.text,...(json!==undefined?{json}:{}),usage:{input,output},...(actualKnown?{costUsd:actual}:{}),meta:{engine,model:result.model,requestedModel:getTextModel(engine,config),requests:attempt+1,costUsdEstimated:estimate.costUsd,pricingEstimated:true,transport:config.proxyEndpoint||config.transport==='proxy'?'proxy':'direct'}};

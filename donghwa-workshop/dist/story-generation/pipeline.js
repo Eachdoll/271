@@ -67,8 +67,19 @@ export function mergeStoryUsage(results=[]){
   if(rows.some(r=>numeric(r.costUsdEstimated)))usage.costUsdEstimated=rows.reduce((sum,r)=>sum+(numeric(r.costUsdEstimated)?r.costUsdEstimated:0),0);
   return usage;
 }
+const engineMemo=new WeakMap();
+const engineSignature=options=>[options.engineId,options.config?.model,options.config?.proxyEndpoint,options.config?.proxyUrl,options.config?.transport,options.config?.apiKey?'key':''].join('|');
 async function engineFor(options){
   if(options.engine?.complete)return options.engine;
+  if(options&&typeof options==='object'){
+    const memo=engineMemo.get(options),signature=engineSignature(options);
+    if(memo&&memo.signature===signature)return memo.promise;
+    const promise=resolveEngine(options);engineMemo.set(options,{signature,promise});
+    try{return await promise;}catch(error){if(engineMemo.get(options)?.promise===promise)engineMemo.delete(options);throw error;}
+  }
+  return resolveEngine(options);
+}
+async function resolveEngine(options){
   if(options.createTextEngine)return options.createTextEngine({engine:options.engineId,config:options.config||{}});
   if(!options.engineId||options.engineId==='demo')throw new Error('부모 설정에서 이야기 엔진을 골라 주세요.');
   const config={...(options.config||{})};

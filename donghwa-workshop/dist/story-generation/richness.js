@@ -29,10 +29,19 @@ function englishForms(term) {
   const irregular={leaf:['leaves'],foot:['feet'],child:['children'],mouse:['mice']};
   return unique([term,`${term}s`,`${term}es`,`${term}ed`,`${term}ing`,...(term.endsWith('e')?[`${term}d`,`${term.slice(0,-1)}ing`]:[]),...(term.endsWith('y')?[`${term.slice(0,-1)}ies`,`${term.slice(0,-1)}ied`]:[]),...(irregular[term]||[])]);
 }
+const termPatterns=new Map();
+function termPattern(value, language) {
+  const key=language+'\u0000'+value;
+  let pattern=termPatterns.get(key);
+  if(!pattern){
+    pattern=language==='ko'?new RegExp(`(?:^|[^가-힣a-z])${escape(value)}${KO_PARTICLES}(?=$|[^가-힣a-z])`,'u'):new RegExp(`(?:^|[^a-z])(?:${englishForms(value).map(escape).join('|')})(?=$|[^a-z])`,'i');
+    termPatterns.set(key,pattern);
+  }
+  return pattern;
+}
 function contains(text, term, language) {
   const value=normalized(term); if (!value) return false;
-  if(language==='ko') return new RegExp(`(?:^|[^가-힣a-z])${escape(value)}${KO_PARTICLES}(?=$|[^가-힣a-z])`,'u').test(normalized(text));
-  return new RegExp(`(?:^|[^a-z])(?:${englishForms(value).map(escape).join('|')})(?=$|[^a-z])`,'i').test(normalized(text));
+  return termPattern(value, language).test(normalized(text));
 }
 function sensoryMatches(text, language, brief) {
   const lexicon=[...flatten(RICHNESS_VOCAB[`onomatopoeia_${language}`]),...flatten(RICHNESS_VOCAB[`sensory_${language}`])];
