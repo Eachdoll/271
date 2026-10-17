@@ -48,6 +48,7 @@ export const OUTLINE_USER = `[등장인물] {{protagonistName}}: {{protagonistTr
 {{banExamples}}
 
 [출력] JSON만.
+attempt 비트의 failureReason은 설명이 아니라 ID 하나만 적는다: "wrong_place" | "wrong_method" | "interrupted". 그 외 비트는 null.
 {
  "plan": {"pattern": "{{patternId}}", "planted": "...", "twistReveal": "...", "funnyMoment": "...", "failureReasons": [...]},
  "titleCandidates": ["...", "...", "..."],
@@ -91,6 +92,7 @@ export const BEAT_CANDIDATES_USER = `[등장인물] {{characters}}
 {{extraRule}}
 
 [출력] JSON만.
+attempt 비트의 failureReason은 설명이 아니라 ID 하나만 적는다: "wrong_place" | "wrong_method" | "interrupted". 그 외 비트는 null.
 {"candidates": [
  {"summary": "2~3문장", "newElement": "...", "failureReason": {{failureReason}}},
  {"summary": "...", "newElement": "...", "failureReason": {{failureReason}}},
@@ -199,6 +201,7 @@ export const CHILD_CURIOSITY_USER = `[이야기 쪽별 글]
 - 마지막 쪽은 '편안하게 끝나는가'로 판단한다(2점 = 조용하고 안전한 마무리).
 
 [출력] JSON만.
+attempt 비트의 failureReason은 설명이 아니라 ID 하나만 적는다: "wrong_place" | "wrong_method" | "interrupted". 그 외 비트는 null.
 {"pages": [{"pageNo": 1, "score": 2, "childQuestion": "한마디 또는 null", "why": "10자 이내"}], "dropPages": [], "overall": 0}`;
 export const CHILD_RETELL_SYSTEM = `너는 방금 이 이야기를 다 들은 4세 아이다. 어른이 "무슨 이야기였어?" 하고 물었다. 아이답게 세 문장으로만 말한다. 들은 내용에 없는 것은 말하지 않는다. 그 다음, 평가자로 돌아와 아이의 되말하기가 원래 줄거리의 어느 비트를 담았는지 표시한다. JSON으로만.`;
 export const CHILD_RETELL_USER = `[이야기 전문]
@@ -208,6 +211,7 @@ export const CHILD_RETELL_USER = `[이야기 전문]
 {{beats}}
 
 [출력] JSON만.
+attempt 비트의 failureReason은 설명이 아니라 ID 하나만 적는다: "wrong_place" | "wrong_method" | "interrupted". 그 외 비트는 null.
 {"retell": ["...", "...", "..."], "coveredBeats": [1], "missingCore": [], "confusions": [], "coherence": 0}`;
 export const WEEKLY_COACH_SYSTEM = `너는 어린이책 편집장이다. 아래는 보급형 모델이 지난주에 만든 그림책 줄거리들과, 그 모델에게 주고 있는 규칙·금지 예시다. 반복되는 약점을 찾아 (1) 그 약점을 보여 주는 실제 실패 예시 문장, (2) 그것을 막는 규칙 한 줄을 제안한다. 규칙은 7개를 넘길 수 없으므로 새 규칙을 넣으려면 어떤 기존 규칙과 바꿀지 말한다. 추상적 조언은 금지, 모델에게 그대로 붙여 넣을 수 있는 문장만. JSON으로만.`;
 export const WEEKLY_COACH_USER = `[현재 규칙 7개]
@@ -223,6 +227,7 @@ export const WEEKLY_COACH_USER = `[현재 규칙 7개]
 {{feedback}}
 
 [출력] JSON만.
+attempt 비트의 failureReason은 설명이 아니라 ID 하나만 적는다: "wrong_place" | "wrong_method" | "interrupted". 그 외 비트는 null.
 {"recurringWeaknesses": [{"pattern": "...", "seenIn": ["bookId"], "evidence": "..."}],
  "proposedBanExamples": [{"text": "✗ ...", "replaces": null}],
  "proposedRules": [{"text": "...", "replaces": null, "why": "..."}],

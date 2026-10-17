@@ -42,7 +42,7 @@ export const RUBRIC_USER = `[줄거리 JSON]
 
 export async function judgeOutline(engine: TextEngine, outline: StoryOutline): Promise<RubricResult> {
   const user = RUBRIC_USER.replace('{{outline}}', JSON.stringify(compact(outline)));
-  const r = await engine.complete({ system: RUBRIC_SYSTEM, user, temperature: 0.1, maxTokens: 500 });
+  const r = await engine.complete({ system: RUBRIC_SYSTEM, user, temperature: 0.1, maxTokens: 1500 });
   const j = (r.json as Partial<RubricResult> | undefined) ?? extractJson<Partial<RubricResult>>(r.text) ?? {};
   const s = j.scores ?? ({} as Partial<RubricScores>);
   const scores: RubricScores = {

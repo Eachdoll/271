@@ -41,7 +41,7 @@ export function buildOutlinePrompt(input) {
         banExamples: banExamples.join('\n').replaceAll('유하', input.protagonist.name),
         endingType: input.endingType,
     });
-    return { system: OUTLINE_SYSTEM, user, temperature: 0.85, maxTokens: 1800 };
+    return { system: OUTLINE_SYSTEM, user, temperature: 0.85, maxTokens: 4000 };
 }
 /** 대략적인 토큰 수(한글 1자≈1토큰, 영어 4자≈1토큰). 1,800 넘으면 예시를 줄이라는 경고용. */
 export function roughTokenCount(text) {

@@ -49,6 +49,18 @@ export function containsPlanted(text: string, planted: string): boolean {
   return containsMaterial(text, planted);
 }
 
+/** 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")으로 쓰는 경우가 많아 ID로 정규화한다. */
+export function normalizeFailureReason(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (/^(wrong_place|wrong_method|interrupted)$/.test(lower)) return lower;
+  if (/wrong_place|잘못된 장소|엉뚱한 장소|다른 장소|거기엔 없/.test(text)) return 'wrong_place';
+  if (/wrong_method|잘못된 방법|방법이 틀|엉뚱한 방법/.test(text)) return 'wrong_method';
+  if (/interrupted|방해|끼어들|거의 됐는데|직전에/.test(text)) return 'interrupted';
+  return text;
+}
 export function plotCheck(input: PlotCheckInput): PlotCheckResult {
   const { outline: o, topic, protagonistName } = input;
   const fix: string[] = [];
@@ -69,7 +81,7 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
 
   // 2 실패 이유 서로 다름 (+ 조합 재료 순서 준수)
   const attempts = beats.filter((b) => b.type === 'attempt');
-  const reasons = attempts.map((b) => b.failureReason ?? null);
+  const reasons = attempts.map((b) => normalizeFailureReason(b.failureReason));
   if (reasons.some((r) => !r)) fix.push('attempt 비트에 failureReason이 비어 있음');
   if (new Set(reasons.filter(Boolean)).size < Math.min(3, reasons.length)) fix.push('attempt 비트의 실패 이유가 겹침');
   if (input.seed) {

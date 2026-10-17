@@ -16,7 +16,7 @@ export const RUBRIC_USER = `[줄거리 JSON]
  "fixes": ["비트 n: 고칠 내용 한 줄", "..."]}`;
 export async function judgeOutline(engine, outline) {
     const user = RUBRIC_USER.replace('{{outline}}', JSON.stringify(compact(outline)));
-    const r = await engine.complete({ system: RUBRIC_SYSTEM, user, temperature: 0.1, maxTokens: 500 });
+    const r = await engine.complete({ system: RUBRIC_SYSTEM, user, temperature: 0.1, maxTokens: 1500 });
     const j = r.json ?? extractJson(r.text) ?? {};
     const s = j.scores ?? {};
     const scores = {

@@ -235,7 +235,7 @@ async function generateOne(
     if (!check.ok && check.regenerate.length === 0 && check.fix.length > 0) {
       const fixer = cfg.fixer ?? cfg.judge;
       const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
-      const fr = await fixer.complete({ system: '너는 그림책 편집자다. JSON으로만 답한다.', user: fixUser, temperature: 0.3, maxTokens: 1800 });
+      const fr = await fixer.complete({ system: '너는 그림책 편집자다. JSON으로만 답한다.', user: fixUser, temperature: 0.3, maxTokens: 4000 });
       base.costUsd += fr.costUsd ?? 0;
       const fixed = (fr.json as StoryOutline | undefined) ?? extractJson<StoryOutline>(fr.text);
       if (fixed) {

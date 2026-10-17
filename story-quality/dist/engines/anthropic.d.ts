@@ -33,6 +33,7 @@ export interface AnthropicEngineOptions {
     baseUrl?: string;
     /** 'low' | 'medium' | 'high' — 짧은 구조화 작업은 low가 싸고 빠르다 */
     effort?: 'low' | 'medium' | 'high';
+    thinkingHeadroom?: number;
     /** 재시도 횟수 (429/5xx). 기본 3 */
     retries?: number;
     timeoutMs?: number;

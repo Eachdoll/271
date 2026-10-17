@@ -80,3 +80,5 @@
 ```
 
 - 온도 0.85, maxTokens 1,800. JSON 파싱 실패 시 "JSON만 다시 출력" 1회 재시도.
+
+추가 출력 규칙: attempt 비트의 failureReason은 설명 대신 wrong_place | wrong_method | interrupted 중 ID 하나만 쓴다. 그 외 비트는 null.
