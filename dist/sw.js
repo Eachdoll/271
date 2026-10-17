@@ -1,5 +1,6 @@
 const CACHE = "donghwa-shell-v20";
 const FILES = [
+  "./checks-panel.js",
   "./finalize-cleanup.js",
   "./story-quality/data/worlds.json",
   "./story-quality/dist/engines/anthropic.js",

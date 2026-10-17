@@ -314,7 +314,7 @@ async function cloudSnapshot(state, makeBackup) {
 
 /**
  * getState(), hasLocalData(), isParent(), canApplyRemote(), applyRemote(candidate,meta), onChange(status).
- * applyRemote MUST first back up current local media, then restoreLibraryImages(candidate),
+ * applyRemote MUST first retain raw local recovery data, then restoreLibraryImages(candidate),
  * preserve this device's PIN, assign and durably save. Return false to cancel; throw on failure.
  * No baseline is committed until that callback succeeds. API keys stay in the existing vault.
  */

@@ -266,7 +266,9 @@ export function configureImageUI(context) {
   document.addEventListener("submit", async (e) => {
     if (e.target.id === "ig-world-form") {
       e.preventDefault();
-      api.protectedAction(() => saveWorldSettings());
+      api.protectedAction(() => {
+        e.settingsCompletion = saveWorldSettings();
+      });
     }
     if (e.target.id === "ig-compare-form") {
       e.preventDefault();
@@ -348,7 +350,8 @@ function saveWorldSettings() {
       });
       world.name = name || world.name;
       state.settings.style = styleName(style);
-      api.save();
+      if (api.save() === false)
+        throw new Error("World 설정을 저장하지 못했어요.");
       api.closeModal();
       api.render();
       api.toast(
@@ -358,20 +361,39 @@ function saveWorldSettings() {
       );
     };
     if (changed && state.characters.some((c) => c.characterSheets?.length)) {
-      api.showModal(
-        `${api.modalHeader("시트 다시 생성 필요")}<p class="modal-intro">${escape(meta(world.imageEngine).name)} · ${escape(styleName(world.stylePresetId))}에서<br><strong>${escape(meta(engine).name)} · ${escape(styleName(style))}</strong>로 변경합니다.<br><br>새 장면에는 이 World 설정으로 다시 생성하고 확정한 캐릭터 시트가 필요합니다. 기존 책은 생성 당시의 시트와 화풍을 보관합니다.</p><div class="modal-actions"><button type="button" class="btn btn-outline" id="ig-world-cancel">취소</button><button type="button" class="btn btn-primary" id="ig-world-confirm">변경하고 시트 다시 생성</button></div>`,
-      );
-      document.querySelector("#ig-world-cancel").onclick = api.closeModal;
-      document.querySelector("#ig-world-confirm").onclick = () => {
-        try {
-          apply();
-        } catch (err) {
-          api.toast(err.message);
-        }
-      };
-    } else apply();
+      return new Promise((resolve) => {
+        const cancelled = () => {
+          document.removeEventListener("donghwa:modal-closed", cancelled);
+          resolve(false);
+        };
+        document.addEventListener("donghwa:modal-closed", cancelled, {
+          once: true,
+        });
+        api.showModal(
+          `${api.modalHeader("시트 다시 생성 필요")}<p class="modal-intro">${escape(meta(world.imageEngine).name)} · ${escape(styleName(world.stylePresetId))}에서<br><strong>${escape(meta(engine).name)} · ${escape(styleName(style))}</strong>로 변경합니다.<br><br>새 장면에는 이 World 설정으로 다시 생성하고 확정한 캐릭터 시트가 필요합니다. 기존 책은 생성 당시의 시트와 화풍을 보관합니다.</p><div class="modal-actions"><button type="button" class="btn btn-outline" id="ig-world-cancel">취소</button><button type="button" class="btn btn-primary" id="ig-world-confirm">변경하고 시트 다시 생성</button></div>`,
+        );
+        document.querySelector("#ig-world-cancel").onclick = () => {
+          cancelled();
+          api.closeModal();
+        };
+        document.querySelector("#ig-world-confirm").onclick = () => {
+          try {
+            document.removeEventListener("donghwa:modal-closed", cancelled);
+            apply();
+            resolve(true);
+          } catch (err) {
+            api.toast(err.message);
+            resolve(false);
+          }
+        };
+      });
+    } else {
+      apply();
+      return true;
+    }
   } catch (error) {
     api.toast(error.message);
+    return false;
   }
 }
 async function comparisonConfig(state, engine) {

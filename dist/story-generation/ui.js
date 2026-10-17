@@ -583,6 +583,37 @@ function header(s, title) {
 function show(s, content) {
   if (session !== s) return;
   api.showModal(content, "wide story-workspace");
+  const workspace = document.querySelector(".story-workspace");
+  if (
+    !workspace?.querySelectorAll ||
+    typeof document.createElement !== "function"
+  )
+    return;
+  const actions = [...workspace.querySelectorAll(":scope > .modal-actions")].at(
+    -1,
+  );
+  if (actions) {
+    const error = workspace.querySelector("#story-error"),
+      accept = workspace.querySelector("#story-accept-failures"),
+      elapsed = workspace.querySelector("#story-elapsed");
+    for (const node of [error, accept?.closest("label"), elapsed].filter(
+      Boolean,
+    )) {
+      node.classList.add("story-action-note");
+      actions.prepend(node);
+    }
+  }
+  const header = document.createElement("div");
+  header.className = "story-sticky-header";
+  const nodes = [
+    ...workspace.querySelectorAll(
+      ":scope > .modal-header,:scope > .story-steps,:scope > .story-stage-meta,:scope > .story-engine-summary",
+    ),
+  ];
+  if (nodes.length) {
+    nodes[0].before(header);
+    for (const node of nodes) header.append(node);
+  }
 }
 function error(s, message) {
   if (session !== s) return;
@@ -759,7 +790,8 @@ export function renderStoryDrafts(state) {
     .sort((a, b) =>
       String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
     );
-  if (!list.length) return "";
+  if (!list.length)
+    return '<section class="empty-state"><h3>보관된 초안이 아직 없어요</h3><p>이야기를 만들면 완료한 단계부터 이어갈 수 있어요.</p><button class="btn btn-outline" data-action="new-story">새 이야기 만들기</button></section>';
   return `<section class="panel"><h3>이어 만들 이야기</h3><p class="small-label">승인하기 전 줄거리와 전문도 기기에 저장돼 있어요.</p><div class="story-drafts">${list.map((d) => `<article class="story-draft-card"><strong>${d.demo ? '<span class="story-demo-label">데모</span>' : ""}${esc(d.selectedTitle || d.outline?.titleCandidates?.[0] || d.input?.topic || "새 이야기")}</strong><p>${esc(STAGE_NAMES[d.stage] || "생성 준비")} · 목표 ${d.input?.pageCount || 12}쪽${d.pagination?.pages ? ` · 현재 ${d.pagination.pages.length}쪽` : ""}</p><div class="story-inline-actions">${button("이어서 만들기", "resume", `data-id="${esc(d.id)}"`)}${button("초안 삭제", "delete-draft", `data-id="${esc(d.id)}"`)}</div></article>`).join("")}</div></section>`;
 }
 export function startStoryWorkflow(wizard) {

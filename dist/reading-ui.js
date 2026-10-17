@@ -145,10 +145,14 @@ export function renderReadingSuggestion(settings) {
     )
     .join("");
 }
-export function renderReadingBadge(book) {
+export function renderReadingBadge(book, { compact = false } = {}) {
   const score = book.readingScore || estimateReadingScore(book),
     ar = Number(score?.approxAR),
     lexile = Number(score?.approxLexile);
+  if (compact) {
+    const levels = normalizeReadingLevels(book);
+    return `<span class="reading-level-chip" title="${escape(Number.isFinite(ar) && Number.isFinite(lexile) ? `AR 약 ${ar.toFixed(1)} / 렉사일 약 ${Math.round(lexile)}L (추정) · 공식 점수 아님` : "본문 기반 추정 준비 중 · 공식 점수 아님")}">${escape(levels.koreanLevel)} · ${escape(levels.englishLevel)}</span>`;
+  }
   return `<div class="reading-badge" title="공식 점수가 아닌 본문 기반 간이 추정입니다."><span>${Number.isFinite(ar) && Number.isFinite(lexile) ? `AR 약 ${ar.toFixed(1)} / 렉사일 약 ${Math.round(lexile)}L (추정)` : "AR · 렉사일 추정 준비 중"}</span><small>공식 점수 아님${book.koreanLevel || book.englishLevel ? ` · ${escape(book.koreanLevel || "")} / ${escape(book.englishLevel || "")}` : ""}</small></div>`;
 }
 export function renderReadingCheck(book) {

@@ -1,3 +1,4 @@
+import { renderChecksPanel } from "./checks-panel.js";
 import {
   showSimilarPagesReview,
   selectSimilarPages,
@@ -367,12 +368,59 @@ function save() {
   }
 }
 let toastTimer;
-function toast(message) {
+function toast(message, { action } = {}) {
+  if (
+    !action &&
+    /키|인증/.test(message) &&
+    /없|필요|입력|확인|실패|잠금|비밀|추적/.test(message)
+  ) {
+    const text =
+      !!document.querySelector(".story-workspace") ||
+      view === "create" ||
+      /글 엔진/.test(message);
+    action = {
+      label: text ? "글 엔진 키 등록하기" : "그림 엔진 키 등록하기",
+      run: () => {
+        const link = document.querySelector(
+          '[data-story-action="open-text-settings"]',
+        );
+        if (text && link) link.click();
+        else if (text) openStoryTextSettings(draft?.storyDraftId || null);
+        else
+          protectedAction(() => {
+            closeModal();
+            view = "settings";
+            settingsTab = "image";
+            history.replaceState(null, "", "#settings=image");
+            render();
+          });
+        requestAnimationFrame(() =>
+          document
+            .querySelector(text ? '[data-text-field="apiKey"]' : "#ig-api-key")
+            ?.focus(),
+        );
+      },
+    };
+  }
   const t = document.querySelector("#toast");
   t.textContent = message;
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toast-action";
+    button.textContent = action.label;
+    button.onclick = () => {
+      t.classList.remove("visible");
+      action.run();
+    };
+    t.append(button);
+  }
   t.classList.add("visible");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("visible"), 3800);
+  toastTimer = setTimeout(
+    () => t.classList.remove("visible"),
+    action ? 12000 : 3800,
+  );
 }
 function illustration(book, i = 0) {
   const pages = Array.isArray(book.pages) ? book.pages : [];
@@ -385,7 +433,7 @@ function illustration(book, i = 0) {
       ? p.imageUrl
       : null;
   if (p.imageAssetId && !url)
-    return '<div class="image-missing">저장된 그림을 불러올 수 없어요.<br>백업에서 그림을 복원해 주세요.</div>';
+    return `<div class="asset-skeleton" data-image-asset="${esc(p.imageAssetId)}" role="status" aria-label="그림 불러오는 중"></div>`;
   if (url)
     return `<img class="generated-illustration" src="${esc(url)}" alt="${esc(book.title)} · ${i + 1}쪽 생성 그림">`;
   const cast = (book.characterIds || []).map((id) =>
@@ -408,10 +456,27 @@ function cover(book) {
     coverUrl = book.cover?.imageAssetId
       ? getImageURL(book.cover.imageAssetId)
       : book.cover?.imageUrl;
-  return `<div class="book-cover cover-${esc(theme)}"><div class="cover-art">${coverUrl ? `<img class="generated-illustration" src="${esc(coverUrl)}" alt="${esc(book.title)} 표지">` : illustration(book, Math.min(2, (book.pages?.length || 1) - 1))}</div><div class="cover-kicker">우리 아이의 작은 모험 · ${esc(book.episode || 1)}번째 이야기</div><div class="cover-title">${esc(book.title)}<span class="cover-subtitle">${esc(book.titleEn || "A little story, a big adventure")}</span></div><div class="cover-footer">DONGHWA WORKSHOP</div></div>`;
+  return `<div class="book-cover cover-${esc(theme)}"><div class="cover-art">${book.cover?.imageAssetId && !coverUrl ? `<div class="asset-skeleton" data-image-asset="${esc(book.cover.imageAssetId)}" role="status" aria-label="표지 불러오는 중"></div>` : coverUrl ? `<img class="generated-illustration" src="${esc(coverUrl)}" alt="${esc(book.title)} 표지">` : illustration(book, Math.min(2, (book.pages?.length || 1) - 1))}</div><div class="cover-kicker">우리 아이의 작은 모험 · ${esc(book.episode || 1)}번째 이야기</div><div class="cover-title">${esc(book.title)}<span class="cover-subtitle">${esc(book.titleEn || "A little story, a big adventure")}</span></div><div class="cover-footer">DONGHWA WORKSHOP</div></div>`;
+}
+function refreshHydratedImages() {
+  document.querySelectorAll("[data-image-asset]").forEach((node) => {
+    const url = getImageURL(node.dataset.imageAsset);
+    if (url) {
+      const img = document.createElement("img");
+      img.className = "generated-illustration";
+      img.src = url;
+      img.alt = "보관된 이야기 그림";
+      node.replaceWith(img);
+    } else {
+      node.classList.remove("asset-skeleton");
+      node.classList.add("image-missing");
+      node.textContent =
+        "그림 원본을 찾을 수 없어요. 클라우드 또는 백업에서 복원해 주세요.";
+    }
+  });
 }
 function bookCard(book) {
-  return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="open-book" data-id="${esc(book.id)}">${esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${renderReadingBadge(book)}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}${book.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}${!childMode ? renderFeedbackActions(book) : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span><span class="print-badge">${icon(book.printedAt ? "check" : "print")}${book.printedAt ? "인쇄 기록" : "인쇄 전"}</span></div></div></article>`;
+  return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="open-book" data-id="${esc(book.id)}">${childMode ? icon("play") + "읽어줘" : esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${!childMode ? renderReadingBadge(book, { compact: true }) : ""}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span></div></div></article>`;
 }
 function protectedAction(fn) {
   if (cloudPrivacyLocked) {
@@ -441,12 +506,14 @@ async function hashPin(pin) {
 }
 function showModal(content, cls = "") {
   modalFocus = document.activeElement;
-  modalRoot.innerHTML = `<div class="modal-overlay"><section class="modal ${cls}" role="dialog" aria-modal="true" aria-label="${cls.includes("pin") ? "부모 PIN" : "대화상자"}">${content}</section></div>`;
+  modalRoot.innerHTML = `<div class="modal-overlay"><section class="modal sheet ${cls}" role="dialog" aria-modal="true" aria-label="${cls.includes("pin") ? "부모 PIN" : "대화상자"}"><div class="sheet-handle" aria-hidden="true"></div>${content}</section></div>`;
+  if (initialHydrationDone) refreshHydratedImages();
   requestAnimationFrame(() =>
     modalRoot.querySelector("input,button,select")?.focus(),
   );
 }
 function closeModal() {
+  document.dispatchEvent(new Event("donghwa:modal-closed"));
   const storyOpen = !!modalRoot.querySelector(".story-workspace");
   cleanupFullAuto(true);
   cleanupStoryWorkflow();
@@ -495,6 +562,29 @@ const cloudPhaseLabel = () =>
     error: "클라우드 연결 확인 필요",
     stopped: "클라우드 연결 중지",
   })[cloudStatus.phase] || "클라우드 저장";
+function cloudStatusSummary() {
+  return cloudStatus.connected
+    ? cloudStatus.dirty
+      ? "이 기기에 보관 · 클라우드 저장 대기"
+      : "클라우드에 저장됨"
+    : `이 기기에 보관 · ${cloudPhaseLabel()}`;
+}
+function renderStatusStrip() {
+  if (childMode) return "";
+  const exceptional = ["conflict", "account-changed"].includes(
+    cloudStatus.phase,
+  );
+  if (
+    !exceptional &&
+    !(
+      view === "library" &&
+      (!cloudStatus.authenticated ||
+        ["error", "unavailable"].includes(cloudStatus.phase))
+    )
+  )
+    return "";
+  return `<div id="cloud-status-slot">${cloudStatusCard()}</div>${view === "library" ? deviceStorageNotice() : ""}`;
+}
 function cloudStatusCard() {
   if (childMode) return "";
   const c = cloudStatus,
@@ -524,14 +614,23 @@ function updateCloudStatus(next) {
       cleanupStoryQualityUI();
       lockVault();
       vaultSessionPin = null;
+      settingsValues.clear();
+      settingsDirty.clear();
+      settingsDirtyPanels.clear();
       parentUnlocked = false;
       textSettingsReturn = null;
       closeModal();
     }
     render();
   }
-  const slot = document.querySelector("#cloud-status-slot");
-  if (slot) slot.innerHTML = cloudStatusCard();
+  const slot = document.querySelector("#status-strip");
+  if (slot) slot.innerHTML = renderStatusStrip();
+  const chip = document.querySelector(".status-chip");
+  if (chip) {
+    chip.textContent = cloudStatusSummary();
+    chip.setAttribute("aria-label", cloudStatusSummary() + " · 보관 관리 열기");
+    chip.title = cloudStatusSummary();
+  }
   const panel = document.querySelector("#cloud-panel-status");
   if (panel)
     panel.textContent =
@@ -753,15 +852,225 @@ async function showLibraryImport(file) {
     toast(error.message);
   }
 }
+let checksTab = "reading";
+let initialHydrationDone = false;
+let lastRenderedView = null;
+let settingsTab =
+  new URLSearchParams(location.hash.replace(/^#/, "")).get("settings") ||
+  "home";
+if (!["home", "text", "image"].includes(settingsTab)) settingsTab = "home";
+let settingsSaving = false;
+const settingsDirty = new Set();
+const settingsValues = new Map();
+const settingsDirtyPanels = new Map();
+let restoringSettings = false;
 function render() {
+  if (settingsSaving) return;
+  const active = document.activeElement;
+  const focus =
+    lastRenderedView === view &&
+    root.contains(active) &&
+    active.id &&
+    /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)
+      ? {
+          id: active.id,
+          value: active.value,
+          checked: active.checked,
+          start: active.selectionStart,
+          end: active.selectionEnd,
+        }
+      : null;
+  document.body.classList.toggle("child-mode", childMode);
   setCustomStylePresets(state);
   migrateWorldState(state);
   const nav = (id, label, ic) =>
     `<button class="nav ${view === id ? "active" : ""} ${id === "create" ? "create-nav" : ""}" data-action="nav" data-view="${id}">${icon(ic)}<span>${label}</span>${!parentUnlocked && id !== "library" ? icon("lock", "lock") : ""}</button>`;
-  root.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M4 16q9-4 16 1q7-5 16-1v23q-9-4-16 1q-7-5-16-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 18v22 M20 9q5-7 13-5q-2 10-13 9 M20 14l8-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><div><h1>동화공방</h1><small>DONGHWA WORKSHOP</small></div></div><div class="family"><div class="family-avatar">${!cloudPrivacyLocked && state.characters[0] ? characterSVG(state.characters[0]) : ""}</div><div><strong>${cloudPrivacyLocked ? "개인 클라우드 책장" : esc(state.characters[0]?.name || "우리 아이") + "네 이야기 공방"}</strong><small>작은 이야기가 자라는 곳</small></div></div><nav><div class="nav-group">우리 가족의 공간</div>${nav("library", "우리 책장", "book")}${!childMode ? nav("materials", "이야기 재료", "characters") + nav("create", "이야기 만들기", "spark") : ""}${childMode ? `<button class="nav ${tab === "favorites" ? "active" : ""}" data-action="child-favorites">${icon("heart")}<span>좋아하는 책</span></button>` : ""}${!childMode ? `<div class="nav-group" style="margin-top:29px">공방 관리</div>${nav("settings", "부모 설정", "settings")}` : ""}</nav><div class="sidebar-bottom"><div class="sidebar-note">${icon("leaf")}화면보다 종이로,<br>우리 아이의 속도로 읽어요.</div><div class="sidebar-footer"><span>작은 이야기, 큰 상상</span><span>v0.1</span></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">${icon("home")}<span>우리 가족의 공간</span>${icon("chevron")}<span>${{ library: "우리 책장", materials: "이야기 재료", create: "이야기 만들기", settings: "부모 설정", detail: "책 이야기", edit: "이야기 다듬기" }[view] || "우리 책장"}</span></div><div class="mobile-brand">${icon("book")}동화공방</div><div class="top-actions"><span class="local-label">${icon("check")}${cloudStatus.connected && !cloudStatus.dirty ? "클라우드에 저장" : "이 기기에 보관"}</span><button class="mode-btn" data-action="toggle-mode">${icon(childMode ? "lock" : "child")}${childMode ? "부모 모드" : "아이 모드"}</button><div class="top-avatar">부모</div></div></header><div id="page-content">${childMode ? "" : `<div class="status-strip"><div id="cloud-status-slot">${cloudStatusCard()}</div>${deviceStorageNotice()}</div>`}${pageContent()}</div><footer class="page-footer"><span>${icon("leaf")}우리 가족만의 이야기가, 아이의 세상을 넓혀요.</span><span>글·그림 엔진 별도 선택 · 로그인하면 계정별 클라우드 저장</span></footer></main></div>`;
+  root.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M4 16q9-4 16 1q7-5 16-1v23q-9-4-16 1q-7-5-16-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 18v22 M20 9q5-7 13-5q-2 10-13 9 M20 14l8-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><div><h1>동화공방</h1><small>DONGHWA WORKSHOP</small></div></div><div class="family"><div class="family-avatar">${!cloudPrivacyLocked && state.characters[0] ? characterSVG(state.characters[0]) : ""}</div><div><strong>${cloudPrivacyLocked ? "개인 클라우드 책장" : esc(state.characters[0]?.name || "우리 아이") + "네 이야기 공방"}</strong><small>작은 이야기가 자라는 곳</small></div></div><nav><div class="nav-group">우리 가족의 공간</div>${nav("library", "우리 책장", "book")}${!childMode ? nav("materials", "이야기 재료", "characters") + nav("create", "이야기 만들기", "spark") : ""}${childMode ? `<button class="nav ${tab === "favorites" ? "active" : ""}" data-action="child-favorites">${icon("heart")}<span>좋아하는 책</span></button>` : ""}${!childMode ? `<div class="nav-group" style="margin-top:29px">공방 관리</div>${nav("settings", "부모 설정", "settings")}` : ""}</nav><div class="sidebar-bottom"><div class="sidebar-note">${icon("leaf")}화면보다 종이로,<br>우리 아이의 속도로 읽어요.</div><div class="sidebar-footer"><span>작은 이야기, 큰 상상</span><span>v0.1</span></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">${icon("home")}<span>우리 가족의 공간</span>${icon("chevron")}<span>${{ library: "우리 책장", materials: "이야기 재료", create: "이야기 만들기", settings: "부모 설정", detail: "책 이야기", edit: "이야기 다듬기" }[view] || "우리 책장"}</span></div><div class="mobile-brand">${icon("book")}동화공방</div><div class="top-actions"><button class="status-chip" data-action="cloud-open" aria-label="${esc(cloudStatusSummary())} · 보관 관리 열기" title="${esc(cloudStatusSummary())}">${esc(cloudStatusSummary())}</button><button class="mode-btn" data-action="toggle-mode">${icon(childMode ? "lock" : "child")}${childMode ? "부모 모드" : "아이 모드"}</button><div class="top-avatar">부모</div></div></header><div id="page-content"><div id="status-strip" class="status-strip">${renderStatusStrip()}</div>${pageContent()}</div><footer class="page-footer"><span>${icon("leaf")}우리 가족만의 이야기가, 아이의 세상을 넓혀요.</span><span>글·그림 엔진 별도 선택 · 로그인하면 계정별 클라우드 저장</span></footer></main></div>`;
   if (view === "settings" && !childMode && !cloudPrivacyLocked)
     renderSettingsJump();
+  if (view === "settings") restoreSettingsInputs();
+  if (focus) {
+    const field = document.getElementById(focus.id);
+    if (field) {
+      field.value = focus.value;
+      if (field.type === "checkbox") field.checked = focus.checked;
+      field.focus({ preventScroll: true });
+      if (field.setSelectionRange && focus.start !== null)
+        try {
+          field.setSelectionRange(focus.start, focus.end);
+        } catch {}
+    }
+  }
+  lastRenderedView = view;
+  if (initialHydrationDone) refreshHydratedImages();
+  if (cloudSync?.getStatus().phase === "paused")
+    queueMicrotask(() => void cloudSync.refresh());
 }
+function settingsFieldSelector(field) {
+  if (field.id) return "#" + CSS.escape(field.id);
+  const form = field.closest("form[id]");
+  const provider = field.closest("[data-text-provider]");
+  const attributes = [...field.attributes]
+    .filter((attr) => attr.name.startsWith("data-") || attr.name === "name")
+    .map((attr) => `[${attr.name}="${CSS.escape(attr.value)}"]`)
+    .join("");
+  if (!attributes) return null;
+  return (
+    (form ? "#" + CSS.escape(form.id) + " " : "") +
+    (provider
+      ? `[data-text-provider="${CSS.escape(provider.dataset.textProvider)}"] `
+      : "") +
+    field.tagName.toLowerCase() +
+    attributes +
+    (field.type === "checkbox" || field.type === "radio"
+      ? `[value="${CSS.escape(field.value)}"]`
+      : "")
+  );
+}
+function snapshotSettingsInputs(tab = settingsTab) {
+  if (view !== "settings" || tab !== settingsTab) return;
+  const values = new Map();
+  document
+    .querySelectorAll(
+      ".settings-tab-content input,.settings-tab-content select,.settings-tab-content textarea",
+    )
+    .forEach((field) => {
+      const selector = settingsFieldSelector(field);
+      if (selector && !["password", "file"].includes(field.type))
+        values.set(selector, { value: field.value, checked: field.checked });
+    });
+  settingsValues.set(tab, values);
+}
+function restoreSettingsInputs() {
+  const values = settingsValues.get(settingsTab);
+  restoringSettings = true;
+  try {
+    if (values) {
+      const order = (selector) =>
+        /^(#tg-engine|#tg-final-engine|#ig-engine|#tg-hybrid)$/.test(selector)
+          ? 0
+          : selector.includes("data-quality-role-engine")
+            ? 1
+            : 2;
+      for (const [selector, saved] of [...values].sort(
+        (a, b) => order(a[0]) - order(b[0]),
+      )) {
+        const field = document.querySelector(selector);
+        if (!field) continue;
+        const changed =
+          field.value !== saved.value ||
+          ((field.type === "checkbox" || field.type === "radio") &&
+            field.checked !== saved.checked);
+        field.value = saved.value;
+        if (field.type === "checkbox" || field.type === "radio")
+          field.checked = saved.checked;
+        if (changed && order(selector) < 2)
+          field.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  } finally {
+    restoringSettings = false;
+  }
+  for (const id of settingsDirtyPanels.get(settingsTab) || []) {
+    const panel = document.getElementById(id);
+    if (panel && !panel.querySelector(":scope>.panel-dirty")) {
+      const dot = document.createElement("small");
+      dot.className = "panel-dirty";
+      dot.textContent = "저장 안 됨";
+      panel.prepend(dot);
+    }
+  }
+}
+function rememberSettingsInputs(event) {
+  if (
+    restoringSettings ||
+    view !== "settings" ||
+    !event.target.closest(".settings-tab-content") ||
+    !/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName)
+  )
+    return;
+  const tab = settingsTab;
+  settingsDirty.add(tab);
+  const panel = event.target.closest(".panel");
+  if (panel) {
+    const panels = settingsDirtyPanels.get(tab) || new Set();
+    panels.add(panel.id);
+    settingsDirtyPanels.set(tab, panels);
+    if (!panel.querySelector(":scope>.panel-dirty")) {
+      const dot = document.createElement("small");
+      dot.className = "panel-dirty";
+      dot.textContent = "저장 안 됨";
+      panel.prepend(dot);
+    }
+  }
+  queueMicrotask(() => {
+    if (!restoringSettings) snapshotSettingsInputs(tab);
+  });
+  document
+    .querySelector('.settings-tabs [aria-selected="true"] .settings-dirty-dot')
+    ?.removeAttribute("hidden");
+  const status = document.getElementById("settings-save-status");
+  if (status) status.textContent = "저장하지 않은 변경이 있어요.";
+}
+document.addEventListener("input", rememberSettingsInputs);
+document.addEventListener("change", rememberSettingsInputs);
+async function saveSettingsTab() {
+  if (settingsSaving) return;
+  const forms = [
+    ...document.querySelectorAll(".settings-tab-content form"),
+  ].filter((form) =>
+    [
+      "settings-form",
+      "text-engine-form",
+      "story-quality-form",
+      "ig-world-form",
+    ].includes(form.id),
+  );
+  for (const form of forms) if (!form.reportValidity()) return;
+  settingsSaving = true;
+  const button = document.querySelector('[data-action="save-settings-tab"]');
+  if (button) button.disabled = true;
+  try {
+    for (const form of forms) {
+      form
+        .querySelectorAll(".pin-error,.story-error")
+        .forEach((field) => (field.textContent = ""));
+      const event = new Event("submit", { bubbles: true, cancelable: true });
+      form.dispatchEvent(event);
+      const result = await event.settingsCompletion;
+      if (
+        result === false ||
+        event.settingsFailed ||
+        [...form.querySelectorAll(".pin-error,.story-error")].some((field) =>
+          field.textContent.trim(),
+        )
+      )
+        throw new Error(
+          "입력 항목과 오류 안내를 확인한 뒤 다시 저장해 주세요.",
+        );
+    }
+    settingsDirty.delete(settingsTab);
+    settingsValues.delete(settingsTab);
+    settingsDirtyPanels.delete(settingsTab);
+    settingsSaving = false;
+    render();
+    toast("현재 탭의 설정을 모두 저장했어요.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    settingsSaving = false;
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+window.addEventListener("hashchange", () => {
+  const tab = new URLSearchParams(location.hash.replace(/^#/, "")).get(
+    "settings",
+  );
+  if (["home", "text", "image"].includes(tab) && tab !== settingsTab) {
+    settingsTab = tab;
+    if (view === "settings") render();
+  }
+});
 function renderSettingsJump() {
   const content = document.querySelector("#page-content");
   if (!content) return;
@@ -770,19 +1079,25 @@ function renderSettingsJump() {
       ".panel>h3:first-child, .panel>form>h3:first-child, section.panel>div>h3:first-child",
     ),
   ].filter((h) => h.textContent.trim());
-  if (headings.length < 3) return;
+  if (!headings.length) return;
   const links = headings.map((h, i) => {
-    const id = "settings-section-" + (i + 1);
-    h.id = id;
+    const section = h.closest("section.panel") || h;
+    const id =
+      section.id ||
+      (section.classList.contains("reading-settings")
+        ? "settings-reading"
+        : `settings-${settingsTab}-${i + 1}`);
+    section.id = id;
+    section.classList.add("settings-anchor");
     h.classList.add("settings-anchor");
     const label = h.textContent.replace(/\s+/g, " ").trim().slice(0, 22);
-    return `<a href="#${id}">${esc(label)}</a>`;
+    return `<a href="#settings=${settingsTab}" data-action="settings-jump" data-target="${id}">${esc(label)}</a>`;
   });
   const nav = document.createElement("nav");
   nav.className = "settings-jump";
   nav.setAttribute("aria-label", "설정 항목 바로가기");
   nav.innerHTML = links.join("");
-  const heading = content.querySelector(".page-heading");
+  const heading = content.querySelector(".settings-tabs");
   (heading || content).insertAdjacentElement(
     heading ? "afterend" : "afterbegin",
     nav,
@@ -827,6 +1142,25 @@ function filteredBooks() {
       : new Date(b.createdAt) - new Date(a.createdAt),
   );
 }
+function updateBookResults() {
+  if (!document.querySelector("#books-grid")) return;
+  const books = filteredBooks();
+  document.querySelector("#books-grid").innerHTML =
+    tab === "series"
+      ? [...groupBy(books, (b) => b.series || "")]
+          .map(
+            ([s, list]) =>
+              `<section class="series-group"><h3>${esc(s)} <span class="count">${list.length}권</span></h3><div class="books-grid">${list
+                .sort((a, b) => (a.episode || 0) - (b.episode || 0))
+                .map(bookCard)
+                .join("")}</div></section>`,
+          )
+          .join("")
+      : books.map(bookCard).join("") ||
+        '<div class="empty">찾는 이야기가 아직 없어요. 다른 검색어로 찾아보세요.</div>';
+  document.querySelector(".shelf-title .count").textContent =
+    books.length + "권의 이야기";
+}
 function libraryPage() {
   const books = filteredBooks();
   let cards = books.map(bookCard).join("");
@@ -855,13 +1189,16 @@ function libraryPage() {
           .join(
             "",
           )}</div><button class="strip-link" data-action="nav" data-view="materials">재료 둘러보기${icon("arrow")}</button></div>`
-      : ""
-  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div><div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div></div><div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div><div class="books-grid" id="books-grid">${cards || `<div class="empty">${icon("book")}<h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state) : ""}`;
+      : state.settings.dailyLimit > 0 &&
+          (state.daily[localDay()] || 0) >= state.settings.dailyLimit
+        ? '<aside class="notice paper-book-notice"><h3>이제 종이책으로 읽자</h3><p>오늘은 화면으로 충분히 만났어요. 종이책에서 다음 모험을 이어가요.</p></aside>'
+        : ""
+  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY) / 1024 / 1024).toFixed(2)} MB · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
 }
 const managementButton = (label, action, id, kind = "outline") =>
   `<button type="button" class="btn btn-${kind} btn-small" data-management-action="${action}" data-id="${esc(id)}">${label}</button>`;
 const photoButton = (label, action) =>
-  `<button type="button" class="btn btn-outline btn-small" data-photo-action="${action}">${label}</button>${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY) / 1024 / 1024).toFixed(2)} MB · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
+  `<button type="button" class="btn btn-outline btn-small" data-photo-action="${action}">${label}</button>`;
 function materialPortrait(c) {
   const sheet = getCharacterSheet(state, c.id) || c.characterSheets?.at(-1);
   const url = sheet?.imageAssetId ? getImageURL(sheet.imageAssetId) : null;
@@ -874,7 +1211,7 @@ function materialsPage() {
     backgrounds = activeBackgrounds(state),
     deletedCharacters = state.characters.filter((c) => c.archivedAt),
     deletedBackgrounds = state.backgrounds.filter((b) => b.archivedAt);
-  return `${heading("이야기 재료", "한 번 만든 친구와 장소를, 다음 이야기에도 그대로.", btn("설정으로 만들기", "new-character", "primary", "plus"))}<div class="material-add-actions"><button type="button" class="btn btn-outline btn-small" data-companion-action="open">조연 자동생성하여 추가하기</button>${photoButton("사진으로 캐릭터 만들기", "new-character")}${photoButton("완성된 캐릭터 그림 가져오기 · 무료", "import-character")}</div><div class="style-banner"><div><strong>${icon("leaf")} 우리 집 세계 · ${esc(state.settings.style)}</strong><small>${getActiveWorld(state).imageEngine === "sample" ? "무료 샘플은 고정 그림 템플릿이에요. 커버의 수채화는 AI 엔진 또는 완성 그림 가져오기를 사용해요." : "캐릭터의 외모는 유지하고, 그림의 질감은 선택한 실제 화풍 참조를 따라요."}</small></div>${btn("화풍 · 엔진 설정", "nav", "outline", "settings", 'data-view="settings"')}</div>${getActiveWorld(state).styleUpgradeNotice ? `<div class="notice" style="margin-top:15px">${esc(getActiveWorld(state).styleUpgradeNotice)}</div>` : ""}<div class="section-header"><h3>등장인물 서랍 <span class="count">${characters.length}명</span></h3><span class="small-label">설정 수정 · 삭제 · 시트 다시 생성</span></div><div class="character-grid">${characters.map((c) => `<article class="character-card"><div class="character-picture">${materialPortrait(c)}</div><span class="role-tag">${esc(c.role)}</span><h4>${esc(c.name)} <span class="count">${esc(c.nameEn)}</span></h4>${c.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${state.books.filter((b) => b.characterIds?.includes(c.id)).length}권에 등장 · ${esc(c.description || "우리 집 이야기 친구")}</p>${btn("캐릭터 시트 보기", "character-sheet", "outline", "characters", `data-id="${esc(c.id)}"`)}${renderCharacterImageControls(c, state)}${renderWardrobeCardActions(c)}<div class="material-card-actions">${managementButton("설정 수정", "edit-character", c.id)}${managementButton("삭제", "delete-character", c.id)}</div></article>`).join("") || '<div class="empty">새 친구를 만들어 이야기를 시작해 보세요.</div>'}</div><div class="section-header"><h3>배경 서랍 <span class="count">${backgrounds.length}곳</span></h3>${btn("설정으로 추가", "new-background", "outline", "plus")}</div><div class="material-add-actions">${photoButton("사진으로 배경 시트 만들기", "new-background")}${photoButton("완성된 배경 그림 가져오기 · 무료", "import-background")}</div><div class="background-grid">${backgrounds
+  return `${heading("이야기 재료", "한 번 만든 친구와 장소를, 다음 이야기에도 그대로.", btn("설정으로 만들기", "new-character", "primary", "plus"))}<div class="material-add-actions"><button type="button" class="btn btn-outline btn-small" data-companion-action="open">조연 자동생성하여 추가하기</button>${photoButton("사진으로 캐릭터 만들기", "new-character")}${photoButton("완성된 캐릭터 그림 가져오기 · 무료", "import-character")}</div><div class="style-banner"><div><strong>${icon("leaf")} 우리 집 세계 · ${esc(state.settings.style)}</strong><small>${getActiveWorld(state).imageEngine === "sample" ? "무료 샘플은 고정 그림 템플릿이에요. 커버의 수채화는 AI 엔진 또는 완성 그림 가져오기를 사용해요." : "캐릭터의 외모는 유지하고, 그림의 질감은 선택한 실제 화풍 참조를 따라요."}</small></div>${btn("화풍 · 엔진 설정", "nav", "outline", "settings", 'data-view="settings"')}</div>${getActiveWorld(state).styleUpgradeNotice ? `<div class="notice" style="margin-top:15px">${esc(getActiveWorld(state).styleUpgradeNotice)}</div>` : ""}<div class="section-header"><h3>등장인물 서랍 <span class="count">${characters.length}명</span></h3><span class="small-label">설정 수정 · 삭제 · 시트 다시 생성</span></div><div class="character-grid">${characters.map((c) => `<article class="character-card"><div class="character-picture">${materialPortrait(c)}</div><span class="role-tag">${esc(c.role)}</span><h4>${esc(c.name)} <span class="count">${esc(c.nameEn)}</span></h4>${c.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${state.books.filter((b) => b.characterIds?.includes(c.id)).length}권에 등장 · ${esc(c.description || "우리 집 이야기 친구")}</p>${btn("캐릭터 시트 보기", "character-sheet", "outline", "characters", `data-id="${esc(c.id)}"`)}${renderCharacterImageControls(c, state)}${renderWardrobeCardActions(c)}<div class="material-card-actions">${managementButton("설정 수정", "edit-character", c.id)}${managementButton("삭제", "delete-character", c.id)}</div></article>`).join("") || `<div class="empty-state"><h3>이야기 친구를 만나볼까요?</h3><p>한 번 만든 친구는 다음 책에도 함께해요.</p>${btn("친구 만들기", "new-character", "green")}</div>`}</div><div class="section-header"><h3>배경 서랍 <span class="count">${backgrounds.length}곳</span></h3>${btn("설정으로 추가", "new-background", "outline", "plus")}</div><div class="material-add-actions">${photoButton("사진으로 배경 시트 만들기", "new-background")}${photoButton("완성된 배경 그림 가져오기 · 무료", "import-background")}</div><div class="background-grid">${backgrounds
     .map((raw) => {
       const b = getWorldBackgroundSnapshot(state, raw);
       return `<article class="background-card">${b.imageAssetId && getImageURL(b.imageAssetId) ? `<img class="background-generated" src="${esc(getImageURL(b.imageAssetId))}" alt="${esc(b.name)} 배경">` : `<div class="background-emoji">${{ home: "🏡", school: "🏫", forest: "🌳", space: "🌙", sea: "🐚" }[b.type] || "🌿"}</div>`}<h4>${esc(b.name)}</h4>${raw.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${esc(b.description || b.features || "이야기가 시작되는 작은 장소")}</p><div class="material-card-actions">${managementButton("수정", "edit-background", b.id)}${managementButton("삭제", "delete-background", b.id)}</div>${renderBackgroundSheetActions(raw, state)}</article>`;
@@ -914,6 +1251,8 @@ function openStoryTextSettings(draftId = null) {
     wizard: wizard ? structuredClone(wizard) : null,
   };
   view = "settings";
+  settingsTab = "text";
+  history.replaceState(null, "", "#settings=text");
   render();
   requestAnimationFrame(() =>
     document
@@ -978,7 +1317,7 @@ function createPage() {
     };
   }
   const w = wizard;
-  const steps = ["재료 고르기", "이야기 설정"];
+  const steps = ["재료 고르기", "주제와 분위기", "읽기와 형식", "만들기"];
   let inner = "";
   if (w.step === 1)
     inner = `<h3>누구와 함께 떠날까요?</h3><p class="section-sub">첫 번째로 고른 친구가 주인공이에요. 조연은 최대 4명까지 함께할 수 있어요.</p><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">조연 자동생성하여 추가하기</button></div><div class="selection-grid">${activeCharacters(
@@ -1001,7 +1340,9 @@ function createPage() {
         "",
       )}</div>${w.previousBookId ? `<div class="notice" style="margin-top:24px">지난 이야기에서 이어집니다.<br>${esc(bookById(w.previousBookId)?.summary || bookById(w.previousBookId)?.title)}</div>` : ""}`;
   if (w.step === 2)
-    inner = `<h3>오늘은 어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 들려주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${["공룡 친구와 소풍", "달에 놀러 간 날", "비 오는 날의 모험", "바닷속 보물 찾기", "처음 유치원에 간 날", "친구의 생일 파티"].map((t) => `<button class="chip" data-action="topic-chip" data-topic="${t}">${t}</button>`).join("")}<button class="chip" data-action="child-pick">${icon("child")}아이가 고르기</button></div><div id="wardrobe-topic-suggestions">${renderTopicWardrobe(w)}</div><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">이 주제로 조연 자동생성</button></div><div class="form-grid" style="margin-top:26px">${selectField(
+    inner = `<h3>오늘은 어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 들려주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${["공룡 친구와 소풍", "달에 놀러 간 날", "비 오는 날의 모험", "바닷속 보물 찾기", "처음 유치원에 간 날", "친구의 생일 파티"].map((t) => `<button class="chip" data-action="topic-chip" data-topic="${t}">${t}</button>`).join("")}<button class="chip" data-action="child-pick">${icon("child")}아이가 고르기</button></div><div id="wardrobe-topic-suggestions">${renderTopicWardrobe(w)}</div><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">이 주제로 조연 자동생성</button></div>${renderQualityWorldSelectors(w, { state })}`;
+  if (w.step === 3)
+    inner = `<h3>읽기와 형식을 정해요</h3><p class="section-sub">한글과 영어 수준은 따로 적용해요.</p><div class="form-grid" style="margin-top:26px">${selectField(
       "language",
       "언어",
       [
@@ -1042,16 +1383,18 @@ function createPage() {
         ["custom", "직접 입력"],
       ],
       w.ending,
-    )}<div class="field" id="ending-custom-field" ${w.ending === "custom" ? "" : "hidden"}><label for="endingCustom">직접 적는 이야기의 끝</label><textarea id="endingCustom" maxlength="1000" placeholder="집에 돌아온 뒤 어떤 행동과 말로 마칠까요?">${esc(w.endingCustom || "")}</textarea></div><div class="field"><label for="series">시리즈 이름 <span class="count">비워두면 새 시리즈</span></label><input id="series" maxlength="60" value="${esc(w.series)}" placeholder="예: 유하의 작은 모험" ${w.previousBookId ? "readonly" : ""}></div></div><div class="field" style="margin-top:20px"><label for="worldMemo">세계관 메모 · 함께 지킬 설정</label><textarea id="worldMemo" maxlength="2000" placeholder="친구들의 관계, 장소의 특징, 다음 편에도 유지할 설정">${esc(w.worldMemo || "")}</textarea></div>${renderQualityWorldSelectors(w, { state })}${renderQualityPatternSelector(w, { state, id: "storyQualityPatternId" })}${renderWizardTextSummary()}${renderFullAutoLauncher(state, w)}`;
+    )}<div class="field" id="ending-custom-field" ${w.ending === "custom" ? "" : "hidden"}><label for="endingCustom">직접 적는 이야기의 끝</label><textarea id="endingCustom" maxlength="1000" placeholder="집에 돌아온 뒤 어떤 행동과 말로 마칠까요?">${esc(w.endingCustom || "")}</textarea></div><div class="field"><label for="series">시리즈 이름 <span class="count">비워두면 새 시리즈</span></label><input id="series" maxlength="60" value="${esc(w.series)}" placeholder="예: 유하의 작은 모험" ${w.previousBookId ? "readonly" : ""}></div></div>`;
+  if (w.step === 4)
+    inner = `<h3>어떤 방식으로 만들까요?</h3><details class="story-start-options"><summary>구성 패턴 · 세계관 메모</summary><div class="field" style="margin-top:20px"><label for="worldMemo">세계관 메모 · 함께 지킬 설정</label><textarea id="worldMemo" maxlength="2000" placeholder="친구들의 관계, 장소의 특징, 다음 편에도 유지할 설정">${esc(w.worldMemo || "")}</textarea></div>${renderQualityPatternSelector(w, { state, id: "storyQualityPatternId" })}</details>${renderWizardTextSummary()}${renderFullAutoLauncher(state, w)}`;
 
-  return `${heading(w.previousBookId ? "다음 이야기 이어 만들기" : "이야기 만들기", "익숙한 친구들과, 세상에 하나뿐인 새 이야기.", `<span class="role-tag">${esc(getActiveWorld(state).name)}</span>`)}<div class="wizard"><div class="steps">${steps.map((s, i) => `<div class="step ${i + 1 === w.step ? "active" : i + 1 < w.step ? "done" : ""}"><b>${i + 1 < w.step ? "✓" : i + 1}</b>${s}</div>`).join("")}</div><section class="panel">${w.step < 3 ? renderReadingSuggestion(state.settings) : ""}${inner}</section><div class="wizard-actions">${btn(w.step === 1 ? "책장으로" : "이전 단계", w.step === 1 ? "library" : "wizard-back", "outline", "back")}<span class="wizard-hint">${icon("lock")}부모가 확인하고 아이에게 전해요.</span>${btn(w.step === 2 ? "줄거리 · 전문 만들기" : "다음 단계", "wizard-next", "green", "arrow")}</div></div>${renderStoryDrafts(state)}${renderFullAutoJobs(state)}`;
+  return `${heading(w.previousBookId ? "다음 이야기 이어 만들기" : "이야기 만들기", "익숙한 친구들과, 세상에 하나뿐인 새 이야기.", `<span class="role-tag">${esc(getActiveWorld(state).name)}</span>`)}<div class="wizard"><div class="steps">${steps.map((s, i) => `<div class="step ${i + 1 === w.step ? "active" : i + 1 < w.step ? "done" : ""}"><b>${i + 1 < w.step ? "✓" : i + 1}</b>${s}</div>`).join("")}</div><section class="panel">${w.step < 3 ? renderReadingSuggestion(state.settings) : ""}${inner}</section><div class="wizard-actions">${btn(w.step === 1 ? "책장으로" : "이전 단계", w.step === 1 ? "library" : "wizard-back", "outline", "back")}<span class="wizard-hint">${icon("lock")}부모가 확인하고 아이에게 전해요.</span>${w.step < 4 ? btn("다음 단계", "wizard-next", "green", "arrow") : ""}</div></div>${renderStoryDrafts(state)}${renderFullAutoJobs(state)}`;
 }
 function selectField(id, label, options, value) {
   return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${options.map(([v, t]) => `<option value="${v}" ${String(v) === String(value) ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
 }
 function syncWizard() {
   if (wizard) syncWardrobeSelections(wizard);
-  if (wizard?.step === 2) {
+  if (wizard?.step >= 2) {
     for (const k of [
       "topic",
       "language",
@@ -1083,7 +1426,7 @@ function editorPage() {
     return libraryPage();
   }
   const p = draft.pages[editPage];
-  return `${heading("이야기 다듬기", "한 쪽씩 살펴보고, 우리 아이에게 어울리는 말로 바꿔 주세요.", `<span class="small-label">부모 미확정 · 초안</span>`)}${renderGenerationControls(draft)}${renderReadingCheck(draft)}${renderStoryQuality(draft)}${renderStoryCoherence(draft.pageCoherence, { dirty: !isCoherenceCurrent(draft.pageCoherence, { outline: draft.outline, prose: draft.prose, pagination: currentBookPagination(draft), stage: "pages" }) })}${renderRichnessQuality(draft)}<div class="editor-title"><input id="book-title" maxlength="80" aria-label="책 제목" value="${esc(draft.title)}"></div><div class="editor-layout"><div class="page-rail">${draft.pages.map((p, i) => `<button class="page-thumb ${i === editPage ? "active" : ""}" data-action="edit-page" data-page="${i}" aria-label="${i + 1}쪽 편집">${illustration(draft, i)}<span>${i + 1}쪽</span></button>`).join("")}</div><section class="panel"><div class="editor-main"><div class="editor-art"><div class="editor-picturebook text-below">${illustration(draft, editPage)}<div class="page-typeset-preview" aria-label="그림 아래 본문 미리보기">${draft.language !== "en" ? `<p lang="ko" data-typeset="ko">${esc(p.ko ?? p.textKo ?? "")}</p>` : ""}${draft.language !== "ko" ? `<p lang="en" data-typeset="en">${esc(p.en ?? p.textEn ?? "")}</p>` : ""}</div></div><div class="editor-tools">${btn("샘플 그림 변형", "regenerate-art", "outline", "refresh")}${btn("글 포함 인쇄 미리보기", "preview-draft-print", "outline", "print")}</div></div><div class="editor-text"><div class="field"><label for="page-ko">${editPage + 1}쪽 · 한글</label><textarea id="page-ko">${esc(p.ko)}</textarea></div><div class="field"><label for="page-en">English · ${editPage + 1}</label><textarea id="page-en">${esc(p.en)}</textarea></div>${btn("이야기 글 다시 다듬기", "regenerate-text", "outline", "refresh")}<span class="small-label">${p.imageAssetId ? "World 엔진으로 만든 그림입니다." : "현재 그림은 SVG 샘플입니다. 커버 화풍은 World 엔진으로 장면을 생성해 주세요."}</span></div></div><div class="editor-bottom"><span>${icon("check")}그림 아래에 본문이 인쇄됩니다. 확정 전에도 인쇄 미리보기를 볼 수 있어요.</span><label class="audio-cache-check"><input type="checkbox" id="cache-audio-approval" checked>확정 시 쪽별 음원 저장 · OpenAI 키가 있을 때만 · 예상 $${estimateBookAudio(draft).costUsd.toFixed(3)}</label>${btn("확정하고 책장에 저장", "approve-book", "primary", "check")}</div></section></div>`;
+  return `${heading("이야기 다듬기", "한 쪽씩 살펴보고, 우리 아이에게 어울리는 말로 바꿔 주세요.", `<span class="small-label">부모 미확정 · 초안</span>`)}${renderGenerationControls(draft)}${renderChecksPanel(draft, { tab: checksTab, details: { reading: renderReadingCheck(draft), events: renderStoryQuality(draft), richness: renderRichnessQuality(draft), coherence: renderStoryCoherence(draft.pageCoherence, { dirty: !isCoherenceCurrent(draft.pageCoherence, { outline: draft.outline, prose: draft.prose, pagination: currentBookPagination(draft), stage: "pages" }) }) } })}<div class="editor-title"><input id="book-title" maxlength="80" aria-label="책 제목" value="${esc(draft.title)}"></div><div class="editor-layout"><div class="page-rail">${draft.pages.map((p, i) => `<button class="page-thumb ${i === editPage ? "active" : ""}" data-action="edit-page" data-page="${i}" aria-label="${i + 1}쪽 편집">${illustration(draft, i)}<span>${i + 1}쪽</span></button>`).join("")}</div><section class="panel"><div class="editor-main"><div class="editor-art"><div class="editor-picturebook text-below">${illustration(draft, editPage)}<div class="page-typeset-preview" aria-label="그림 아래 본문 미리보기">${draft.language !== "en" ? `<p lang="ko" data-typeset="ko">${esc(p.ko ?? p.textKo ?? "")}</p>` : ""}${draft.language !== "ko" ? `<p lang="en" data-typeset="en">${esc(p.en ?? p.textEn ?? "")}</p>` : ""}</div></div><div class="editor-tools">${btn("샘플 그림 변형", "regenerate-art", "outline", "refresh")}${btn("글 포함 인쇄 미리보기", "preview-draft-print", "outline", "print")}</div></div><div class="editor-text"><div class="field"><label for="page-ko">${editPage + 1}쪽 · 한글</label><textarea id="page-ko">${esc(p.ko)}</textarea></div><div class="field"><label for="page-en">English · ${editPage + 1}</label><textarea id="page-en">${esc(p.en)}</textarea></div>${btn("이야기 글 다시 다듬기", "regenerate-text", "outline", "refresh")}<span class="small-label">${p.imageAssetId ? "World 엔진으로 만든 그림입니다." : "현재 그림은 SVG 샘플입니다. 커버 화풍은 World 엔진으로 장면을 생성해 주세요."}</span></div></div><div class="editor-bottom"><span>${icon("check")}그림 아래에 본문이 인쇄됩니다. 확정 전에도 인쇄 미리보기를 볼 수 있어요.</span><label class="audio-cache-check"><input type="checkbox" id="cache-audio-approval" checked>확정 시 쪽별 음원 저장 · OpenAI 키가 있을 때만 · 예상 $${estimateBookAudio(draft).costUsd.toFixed(3)}</label>${btn("확정하고 책장에 저장", "approve-book", "primary", "check")}</div></section></div>`;
 }
 function buildStoryResultBook(result) {
   const same =
@@ -1324,11 +1667,11 @@ function detailPage() {
     view = "library";
     return libraryPage();
   }
-  return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2><p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${b.pages.length}쪽</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : "추정 $" + b.imageCosts.estimatedUsd.toFixed(3) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : "추정 $" + b.textCosts.estimatedUsd.toFixed(3)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
+  return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2>${b.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}<p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${b.pages.length}쪽</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : "추정 $" + b.imageCosts.estimatedUsd.toFixed(3) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : "추정 $" + b.textCosts.estimatedUsd.toFixed(3)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
 }
 function settingsPage() {
   const s = state.settings;
-  return `${heading("부모 설정", "우리 가족의 속도와, 이야기를 읽는 방식을 정해요.")}${textSettingsReturn ? `<aside class="notice">이야기 입력과 초안은 보관되어 있어요. 설정을 저장한 뒤 돌아가세요. ${btn("저장한 설정으로 이야기 돌아가기", "return-story-settings", "outline")}</aside>` : ""}<form id="settings-form" class="settings"><div class="settings-layout"><div class="settings-stack"><section class="panel"><h3>우리 집 이야기 기본값</h3><div class="form-grid">${selectField(
+  const home = `<form id="settings-form" class="settings"><div class="settings-layout"><div class="settings-stack"><section class="panel"><h3>우리 집 이야기 기본값</h3><div class="form-grid">${selectField(
     "defaultLanguage",
     "기본 언어",
     [
@@ -1377,7 +1720,27 @@ function settingsPage() {
       [1.05, "조금 빠르게"],
     ],
     s.rate,
-  )}</div><div class="notice" style="margin-top:17px">오늘 앱으로 ${state.daily[localDay()] || 0}권을 열었어요. 제한에 도달하면 종이책을 권해요. 읽어주기 목소리는 기기에 설치된 음성에 따라 달라집니다.</div></section></div><div class="settings-stack"><section class="panel"><h3>부모 잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠깁니다.</p>${btn(state.settings.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}<p class="small-label" style="margin-top:17px">PIN은 이 브라우저의 화면 잠금입니다. 기기와 브라우저에 접근할 수 있는 사용자를 서버에서 인증하는 기능은 아닙니다.</p></section><section class="panel"><h3>이야기 보관과 백업</h3><p class="section-sub">책과 캐릭터는 이 브라우저에 보관됩니다. 가끔 백업해 우리 가족의 이야기를 남겨 주세요.</p>${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}<div style="margin-top:13px">${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}</div><div style="margin-top:13px">${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden><p class="small-label" style="margin-top:17px">같은 계정으로 클라우드에 연결하면 PC·모바일이 동기화됩니다. 이동용 JSON 또는 ZIP으로 이전 자료를 가져올 수도 있어요. API 키는 새 기기에서 다시 등록합니다.</p></section><section class="panel"><h3>현재 공방의 기능</h3><p class="small-label">장면 디테일·글 풍부화 · 별도 글·이미지 엔진 · 한영 음성 합성 · A4 인쇄 · 시리즈 · 기기 저장<br><br>이미지 생성은 아래 World 엔진과 API 키로 연결합니다. 글은 아래 글 엔진에서 별도로 선택합니다. 사진 변환과 완성 그림 가져오기는 이야기 재료에서 사용할 수 있습니다.</p></section></div></div><div class="settings-save"><button type="button" class="btn btn-outline" data-management-action="reset-parent-preferences">기본 설정 초기화</button><button type="submit" class="btn btn-primary">${icon("check")}설정 저장</button></div></form>${renderWorldVariations(state)}${renderTextSettings(state)}${renderStoryQualitySettings(state)}${renderImageSettings(state)}${renderStyleStudioSettings(state)}`;
+  )}</div><div class="notice" style="margin-top:17px">오늘 앱으로 ${state.daily[localDay()] || 0}권을 열었어요. 제한에 도달하면 종이책을 권해요. 읽어주기 목소리는 기기에 설치된 음성에 따라 달라집니다.</div></section></div><div class="settings-stack"><section class="panel"><h3>부모 잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠깁니다.</p>${btn(state.settings.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}<p class="small-label" style="margin-top:17px">PIN은 이 브라우저의 화면 잠금입니다. 기기와 브라우저에 접근할 수 있는 사용자를 서버에서 인증하는 기능은 아닙니다.</p></section><section class="panel"><h3>이야기 보관과 백업</h3><p class="section-sub">책과 캐릭터는 이 브라우저에 보관됩니다. 가끔 백업해 우리 가족의 이야기를 남겨 주세요.</p>${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}<div style="margin-top:13px">${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}</div><div style="margin-top:13px">${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden><p class="small-label" style="margin-top:17px">같은 계정으로 클라우드에 연결하면 PC·모바일이 동기화됩니다. 이동용 JSON 또는 ZIP으로 이전 자료를 가져올 수도 있어요. API 키는 새 기기에서 다시 등록합니다.</p></section><section class="panel"><h3>현재 공방의 기능</h3><p class="small-label">장면 디테일·글 풍부화 · 별도 글·이미지 엔진 · 한영 음성 합성 · A4 인쇄 · 시리즈 · 기기 저장<br><br>이미지 생성은 아래 World 엔진과 API 키로 연결합니다. 글은 아래 글 엔진에서 별도로 선택합니다. 사진 변환과 완성 그림 가져오기는 이야기 재료에서 사용할 수 있습니다.</p></section></div></div><div class="settings-save"><button type="button" class="btn btn-outline" data-management-action="reset-parent-preferences">기본 설정 초기화</button><button type="submit" class="btn btn-primary">${icon("check")}설정 저장</button></div></form>`;
+  const content =
+    settingsTab === "text"
+      ? renderTextSettings(state) + renderStoryQualitySettings(state)
+      : settingsTab === "image"
+        ? renderWorldVariations(state) +
+          renderImageSettings(state) +
+          renderStyleStudioSettings(state)
+        : home;
+  return `${heading("부모 설정", "우리 가족의 읽기와 만들기를 한곳에서 정해요.")}${textSettingsReturn ? `<aside class="notice">이야기 입력과 초안은 보관되어 있어요. ${btn("저장한 설정으로 이야기 돌아가기", "return-story-settings", "outline")}</aside>` : ""}<nav class="settings-tabs" role="tablist" aria-label="부모 설정">${[
+    ["home", "우리 집·읽기·잠금"],
+    ["text", "글 엔진·이야기 품질"],
+    ["image", "그림 World·화풍"],
+  ]
+    .map(
+      ([id, label]) =>
+        `<button role="tab" aria-selected="${id === settingsTab}" class="${id === settingsTab ? "active" : ""}" data-action="settings-tab" data-tab="${id}">${label}<span class="settings-dirty-dot" ${settingsDirty.has(id) ? "" : "hidden"}> · 저장 안 됨</span></button>`,
+    )
+    .join(
+      "",
+    )}</nav><div class="settings-tab-content" role="tabpanel">${content}</div><div class="settings-save-bar"><span id="settings-save-status" role="status">${settingsDirty.has(settingsTab) ? "저장하지 않은 변경이 있어요." : "저장된 설정을 보고 있어요."}</span><button class="btn btn-green" data-action="save-settings-tab">현재 탭 설정 모두 저장</button></div>`;
 }
 function openStudio() {
   studio = {
@@ -1556,14 +1919,27 @@ function startReading(b) {
   };
   renderReader();
 }
+let readerFontSize = (() => {
+  try {
+    return Math.min(
+      2,
+      Math.max(
+        0,
+        Number(localStorage.getItem("donghwa-reader-font-size")) || 0,
+      ),
+    );
+  } catch {
+    return 0;
+  }
+})();
 function renderReader() {
   const r = reader;
   if (!r) return;
   const b = r.book,
     p = b.pages[r.page];
   showModal(
-    `<div class="reader-top"><strong>${esc(b.title)}</strong><small>${r.page + 1} / ${b.pages.length}쪽</small><button class="close-btn" data-action="close-modal" aria-label="읽기 닫기">${icon("close")}</button></div><div class="reader-page"><div class="reader-picture">${illustration(b, r.page)}</div><div class="reader-body"><div class="audio-indicator">${icon("headphones")}종이책을 보며 들어요</div>${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}<div class="reader-lang-actions">${b.language !== "en" ? btn("한글", "speak-ko", "soft", "volume") : ""}${b.language !== "ko" ? btn("English", "speak-en", "outline", "volume") : ""}${btn("다시 듣기", "replay-speech", "outline", "refresh")}${btn("멈춤", "stop-speech", "outline", "pause")}</div></div></div><div class="reader-pagination"><button class="btn btn-outline" data-action="reader-prev" ${r.page === 0 ? "disabled" : ""} aria-label="이전 쪽">${icon("back")}</button><span>${r.page + 1} / ${b.pages.length}</span><button class="btn btn-outline" data-action="reader-next" ${r.page === b.pages.length - 1 ? "disabled" : ""} aria-label="다음 쪽">${icon("chevron")}</button></div><div class="reader-options"><label>속도 <select id="reader-rate"><option value="0.65" ${r.rate === 0.65 ? "selected" : ""}>천천히</option><option value="0.85" ${r.rate === 0.85 ? "selected" : ""}>보통</option><option value="1.05" ${r.rate === 1.05 ? "selected" : ""}>조금 빠르게</option></select></label><label><input type="checkbox" id="reader-continuous" ${r.continuous ? "checked" : ""}>이어 듣기</label><button data-action="audio-only">${r.audioOnly ? "그림과 글 보기" : "듣기 전용"}</button></div><div class="reader-status" id="reader-status">재생 버튼을 누르면 이 쪽을 읽어줘요.</div>${r.page === b.pages.length - 1 ? `<div class="reader-feedback"><button type="button" class="btn btn-green" data-reading-action="feedback" data-id="${esc(b.id)}">다 읽었어요 · 쉬움 / 딱 맞음 / 어려움</button></div>` : ""}`,
-    "reader " + (r.audioOnly ? "audio-only" : ""),
+    `<div class="reader-top"><strong>${esc(b.title)}</strong><small>${r.page + 1} / ${b.pages.length}쪽</small><button class="close-btn" data-action="close-modal" aria-label="읽기 닫기">${icon("close")}</button></div><div class="reader-page"><div class="reader-picture">${illustration(b, r.page)}</div><div class="reader-body"><div class="audio-indicator">${icon("headphones")}종이책을 보며 들어요</div>${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}</div></div><div class="reader-pagination"><button class="btn btn-outline" data-action="reader-prev" ${r.page === 0 ? "disabled" : ""} aria-label="이전 쪽">${icon("back")}</button><button class="btn btn-green" data-action="reader-toggle-play">${r.speaking ? "읽기 멈춤" : "읽어주기"}</button><span>${r.page + 1} / ${b.pages.length}</span><button class="btn btn-outline" data-action="reader-next" ${r.page === b.pages.length - 1 ? "disabled" : ""} aria-label="다음 쪽">${icon("chevron")}</button></div><details class="reader-play-options"><summary>재생 설정 · 글자 크기</summary><div class="reader-lang-actions">${b.language !== "en" ? btn("한글", "speak-ko", "soft", "volume") : ""}${b.language !== "ko" ? btn("English", "speak-en", "outline", "volume") : ""}${btn("다시 듣기", "replay-speech", "outline", "refresh")}${btn("멈춤", "stop-speech", "outline", "pause")}</div><div class="reader-size-controls" role="group" aria-label="글자 크기">${["기본", "크게", "아주 크게"].map((label, index) => `<button class="btn btn-outline" data-action="reader-font" data-size="${index}" aria-pressed="${readerFontSize === index}">${label}</button>`).join("")}</div><div class="reader-options"><label>속도 <select id="reader-rate"><option value="0.65" ${r.rate === 0.65 ? "selected" : ""}>천천히</option><option value="0.85" ${r.rate === 0.85 ? "selected" : ""}>보통</option><option value="1.05" ${r.rate === 1.05 ? "selected" : ""}>조금 빠르게</option></select></label><label><input type="checkbox" id="reader-continuous" ${r.continuous ? "checked" : ""}>이어 듣기</label><button data-action="audio-only">${r.audioOnly ? "그림과 글 보기" : "듣기 전용"}</button></div></details><div class="reader-status" id="reader-status">재생 버튼을 누르면 이 쪽을 읽어줘요.</div>${r.page === b.pages.length - 1 ? `<div class="reader-feedback"><button type="button" class="btn btn-green" data-reading-action="feedback" data-id="${esc(b.id)}">다 읽었어요 · 쉬움 / 딱 맞음 / 어려움</button></div>` : ""}`,
+    `reader reader-font-${readerFontSize} ` + (r.audioOnly ? "audio-only" : ""),
   );
 }
 function readerWords(text, language) {
@@ -1586,6 +1962,10 @@ function stopSpeech() {
   stopPlayback();
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   if (reader) reader.speaking = false;
+  const playButton = document.querySelector(
+    '[data-action="reader-toggle-play"]',
+  );
+  if (playButton) playButton.textContent = "읽어주기";
   document
     .querySelectorAll("[data-reader-word].is-speaking")
     .forEach((el) => el.classList.remove("is-speaking"));
@@ -1599,6 +1979,10 @@ async function speak(language) {
     r = reader;
   r.lastLanguage = language;
   r.speaking = true;
+  const playButton = document.querySelector(
+    '[data-action="reader-toggle-play"]',
+  );
+  if (playButton) playButton.textContent = "읽기 멈춤";
   const status = document.querySelector("#reader-status"),
     info = audioStatus(r.book, r.page, language);
   if (status)
@@ -1918,6 +2302,23 @@ async function onAction(e) {
     showCloudPanel();
     return;
   }
+  if (a === "settings-jump") {
+    e.preventDefault();
+    document
+      .getElementById(el.dataset.target)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  if (a === "settings-tab") {
+    settingsTab = el.dataset.tab;
+    history.replaceState(null, "", "#settings=" + settingsTab);
+    render();
+    return;
+  }
+  if (a === "save-settings-tab") {
+    await saveSettingsTab();
+    return;
+  }
   if (a === "cloud-refresh") {
     await cloudSync?.refresh();
     showCloudPanel();
@@ -2013,6 +2414,10 @@ async function onAction(e) {
         lockVault();
         vaultSessionPin = null;
         childMode = true;
+        query = "";
+        settingsValues.clear();
+        settingsDirty.clear();
+        settingsDirtyPanels.clear();
         parentUnlocked = false;
         view = "library";
         tab = "all";
@@ -2049,7 +2454,12 @@ async function onAction(e) {
   }
   if (a === "tab") {
     tab = el.dataset.tab;
-    render();
+    updateBookResults();
+    document
+      .querySelectorAll(".tab[data-tab]")
+      .forEach((button) =>
+        button.classList.toggle("active", button.dataset.tab === tab),
+      );
     return;
   }
   if (a === "revise-book-copy") {
@@ -2100,6 +2510,11 @@ async function onAction(e) {
       render();
       return;
     }
+    if (childMode) {
+      startReading(activeBook);
+      if (reader?.book === activeBook) void speak(reader.lastLanguage);
+      return;
+    }
     view = "detail";
     render();
     window.scrollTo(0, 0);
@@ -2110,8 +2525,17 @@ async function onAction(e) {
       const b = bookById(id);
       if (!b) return;
       b.favorite = !b.favorite;
-      save();
-      render();
+      if (!save()) return;
+      const card = el.closest(".book-card");
+      if (card) {
+        if (tab === "favorites" && !b.favorite) card.remove();
+        else card.outerHTML = bookCard(b);
+      } else {
+        el.innerHTML =
+          icon("heart") + (b.favorite ? "즐겨찾기 해제" : "즐겨찾기");
+      }
+      const count = document.querySelector(".shelf-title .count");
+      if (count) count.textContent = filteredBooks().length + "권의 이야기";
       toast(b.favorite ? "좋아하는 책에 담았어요." : "즐겨찾기에서 꺼냈어요.");
     });
     return;
@@ -2164,6 +2588,13 @@ async function onAction(e) {
       return;
     }
     if (wizard.step === 2) {
+      const check = safeTopic(wizard.topic);
+      if (!check.ok) {
+        toast(check.message || "이야기 주제를 입력해 주세요.");
+        return;
+      }
+    }
+    if (wizard.step >= 3) {
       if (wizard.value === "custom" && !wizard.valueCustom?.trim()) {
         toast("함께 생각할 가치를 직접 적어 주세요.");
         return;
@@ -2183,8 +2614,10 @@ async function onAction(e) {
         toast(error.message);
         return;
       }
-      startStoryWorkflow(wizard);
-      return;
+      if (wizard.step === 4) {
+        startStoryWorkflow(wizard);
+        return;
+      }
     }
     wizard.step++;
     render();
@@ -2225,10 +2658,17 @@ async function onAction(e) {
     startStoryWorkflow(wizard);
     return;
   }
+  if (a === "check-tab") {
+    syncDraft();
+    checksTab = el.dataset.tab;
+    render();
+    return;
+  }
   if (a === "edit-page") {
     syncDraft();
     editPage = Number(el.dataset.page);
     render();
+    document.querySelector("#page-ko")?.focus();
     return;
   }
   if (a === "regenerate-art") {
@@ -2395,9 +2835,39 @@ async function onAction(e) {
       b.paperReads = (b.paperReads || 0) + 1;
       b.paperReadAt = new Date().toISOString();
       save();
-      render();
+      el.textContent = `오늘 종이로 읽음 · ${b.paperReads}회`;
       toast("오늘 종이책으로 읽은 날을 기록했어요.");
     });
+    return;
+  }
+  if (a === "reader-font") {
+    readerFontSize = Number(el.dataset.size);
+    try {
+      localStorage.setItem("donghwa-reader-font-size", String(readerFontSize));
+    } catch {}
+    const modal = modalRoot.querySelector(".reader");
+    if (modal) {
+      modal.classList.remove("reader-font-0", "reader-font-1", "reader-font-2");
+      modal.classList.add("reader-font-" + readerFontSize);
+    }
+    document
+      .querySelectorAll('[data-action="reader-font"]')
+      .forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(Number(button.dataset.size) === readerFontSize),
+        ),
+      );
+    return;
+  }
+  if (a === "reader-toggle-play") {
+    if (reader?.speaking) {
+      stopSpeech();
+      el.textContent = "읽어주기";
+    } else if (reader) {
+      el.textContent = "읽기 멈춤";
+      void speak(reader.lastLanguage);
+    }
     return;
   }
   if (a === "speak-ko" || a === "speak-en") {
@@ -2503,13 +2973,14 @@ document.addEventListener("submit", async (e) => {
         recovery.innerHTML =
           '<button type="button" class="btn btn-outline" id="vault-reset">저장된 API 키 초기화 · 다시 등록</button><button type="button" class="btn btn-plain" id="vault-skip">키 없이 부모 모드 열기</button>';
         recovery.querySelector("#vault-reset").onclick = async (event) => {
-          event.currentTarget.disabled = true;
+          const resetButton = event.currentTarget;
+          resetButton.disabled = true;
           try {
             await resetVault(pin);
             f.requestSubmit();
           } catch (problem) {
             error.textContent = problem.message;
-            event.currentTarget.disabled = false;
+            resetButton.disabled = false;
           }
         };
         recovery.querySelector("#vault-skip").onclick = () => {
@@ -2549,6 +3020,7 @@ document.addEventListener("submit", async (e) => {
     try {
       readReadingSettings(state.settings);
     } catch (error) {
+      e.settingsFailed = true;
       toast(error.message);
       return;
     }
@@ -2563,6 +3035,7 @@ document.addEventListener("submit", async (e) => {
     for (const k of ["defaultPages", "dailyLimit", "rate"])
       state.settings[k] = Number(state.settings[k]);
     if (save()) toast("우리 가족의 기본 설정을 저장했어요.");
+    else e.settingsFailed = true;
     return;
   }
   if (f.id === "change-pin-form") {
@@ -2683,28 +3156,13 @@ document.addEventListener("input", (e) => {
   }
   if (e.target.id === "search-books") {
     query = e.target.value;
-    const books = filteredBooks();
-    document.querySelector("#books-grid").innerHTML =
-      tab === "series"
-        ? [...groupBy(books, (b) => b.series || "")]
-            .map(
-              ([s, list]) =>
-                `<section class="series-group"><h3>${esc(s)} <span class="count">${list.length}권</span></h3><div class="books-grid">${list
-                  .sort((a, b) => (a.episode || 0) - (b.episode || 0))
-                  .map(bookCard)
-                  .join("")}</div></section>`,
-            )
-            .join("")
-        : books.map(bookCard).join("") ||
-          '<div class="empty">찾는 이야기가 아직 없어요. 다른 검색어로 찾아보세요.</div>';
-    document.querySelector(".shelf-title .count").textContent =
-      books.length + "권의 이야기";
+    updateBookResults();
   }
 });
 document.addEventListener("change", async (e) => {
   if (
     view === "create" &&
-    wizard?.step === 2 &&
+    wizard?.step === 3 &&
     ["value", "ending"].includes(e.target.id)
   ) {
     syncWizard();
@@ -2715,7 +3173,7 @@ document.addEventListener("change", async (e) => {
   }
   if (e.target.id === "sort") {
     sort = e.target.value;
-    render();
+    updateBookResults();
   }
   if (e.target.id === "reader-rate" && reader) {
     reader.rate = Number(e.target.value);
@@ -2780,6 +3238,9 @@ configureWorldVariations({
   onSwitch: () => {
     wizard = null;
     draft = null;
+    settingsValues.clear();
+    settingsDirty.clear();
+    settingsDirtyPanels.clear();
   },
 });
 configureBackgroundSheets({
@@ -3021,7 +3482,8 @@ configureStoryQualityUI({
 render();
 hydrateImageAssets(state)
   .then((result) => {
-    render();
+    initialHydrationDone = true;
+    refreshHydratedImages();
     if (result.missing.length)
       toast(
         "저장된 그림 " +
@@ -3038,7 +3500,10 @@ hydrateImageAssets(state)
       canApplyRemote: () =>
         !isFullAutoRunning() &&
         !deviceTransferBusy &&
-        !(view === "settings" && textSettingsReturn) &&
+        !(
+          view === "settings" &&
+          (textSettingsReturn || settingsDirty.has(settingsTab))
+        ) &&
         !(view === "create" && wizard) &&
         !(view === "edit" && draft) &&
         !reader &&
@@ -3064,4 +3529,55 @@ document.addEventListener("input", (event) => {
     const preview = document.querySelector("[data-typeset=" + lang + "]");
     if (preview) preview.textContent = event.target.value;
   }
+});
+
+function updateViewportHeight() {
+  document.documentElement.style.setProperty(
+    "--viewport-height",
+    (window.visualViewport?.height || window.innerHeight) + "px",
+  );
+}
+window.visualViewport?.addEventListener("resize", updateViewportHeight);
+window.addEventListener("resize", updateViewportHeight);
+updateViewportHeight();
+
+document.addEventListener("submit", (event) => {
+  const form = event.target,
+    tab = settingsTab;
+  if (
+    settingsSaving ||
+    ![
+      "settings-form",
+      "text-engine-form",
+      "story-quality-form",
+      "ig-world-form",
+    ].includes(form.id)
+  )
+    return;
+  const panelId = form.closest(".panel")?.id;
+  const selectors = [...form.querySelectorAll("input,select,textarea")]
+    .map(settingsFieldSelector)
+    .filter(Boolean);
+  queueMicrotask(async () => {
+    const result = await event.settingsCompletion;
+    if (
+      result === false ||
+      event.settingsFailed ||
+      [...form.querySelectorAll(".pin-error,.story-error")].some((field) =>
+        field.textContent.trim(),
+      )
+    )
+      return;
+    const panels = settingsDirtyPanels.get(tab);
+    if (form.id === "settings-form") panels?.clear();
+    else panels?.delete(panelId);
+    if (!panels?.size) {
+      settingsDirty.delete(tab);
+      settingsValues.delete(tab);
+      settingsDirtyPanels.delete(tab);
+    } else
+      for (const selector of selectors)
+        settingsValues.get(tab)?.delete(selector);
+    if (view === "settings" && tab === settingsTab) render();
+  });
 });
