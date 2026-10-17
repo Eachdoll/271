@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v22";
+const CACHE = "donghwa-shell-v23";
 const FILES = [
   "./checks-panel.js",
   "./finalize-cleanup.js",

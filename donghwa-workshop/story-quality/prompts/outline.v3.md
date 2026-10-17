@@ -79,6 +79,6 @@
 예시 2 …
 ```
 
-- 온도 0.85, maxTokens 1,800. JSON 파싱 실패 시 "JSON만 다시 출력" 1회 재시도.
+- maxTokens 4,000. 온도 0.85는 OpenAI·Google 엔진에만 보내고 Anthropic 5.5 계열에는 보내지 않는다. JSON 파싱 실패 시 "JSON만 다시 출력" 1회 재시도.
 
 추가 출력 규칙: attempt 비트의 failureReason은 설명 대신 wrong_place | wrong_method | interrupted 중 ID 하나만 쓴다. 그 외 비트는 null.
