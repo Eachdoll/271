@@ -153,9 +153,9 @@ test('topic sets: 50 distill + 20 eval, disjoint, valid world/pattern ids', () =
   assert.equal(new Set(testset.topics.map((t) => t.worldId)).size, 20);
 });
 
-test('estimateDistillCost: 400 cells with Sonnet gen + Haiku judge ≈ $6', () => {
+test('estimateDistillCost: 400 cells with observed Sonnet gen + Haiku judge ≈ $15', () => {
   const est = estimateDistillCost(400, 1400, { input: 2, output: 10 }, { input: 0.1, output: 0.5 });
-  assert.ok(est.usd > 5 && est.usd < 8, String(est.usd));
+  assert.ok(est.usd > 13 && est.usd < 18, String(est.usd));
 });
 
 // 가짜 엔진: 프롬프트의 [정해진 재료]를 읽어 plotCheck를 통과하는 줄거리를 만든다 / 판정은 비트 수로

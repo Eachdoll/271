@@ -16,7 +16,13 @@ export function describeReadingViolation(violation) {
     return violation.message;
   if (typeof violation.suggestion === "string" && violation.suggestion)
     return violation.suggestion;
+  if (
+    violation.code === "out-of-vocabulary" &&
+    violation.severity === "warning"
+  )
+    return `들려주기 단계라 어휘는 참고 정보예요. 등급 외 단어 비율 ${Math.round(violation.actual * 1000) / 10}%`;
   const labels = {
+    grammar: "시제·문법",
     "sentence-count": "문장 수",
     "sentence-length": "문장 길이",
     "out-of-vocabulary": "등급 외 어휘 비율",

@@ -101,3 +101,12 @@ test('retell passes on core beat types only; non-core beats the model lists are 
  const ok=await retellCheck(reply([5,'마무리 장면']),'글',beats);assert.equal(ok.pass,true);assert.deepEqual(ok.notedMissing,['5','마무리 장면']);
  const bad=await retellCheck(reply([3]),'글',beats);assert.equal(bad.pass,false);assert.deepEqual(bad.missingCore,['turn']);assert.equal(bad.recommendTurnRewrite,true);
 });
+
+test('R6-3 measured usage makes Opus distillation over three times Sonnet and matches the retained trial',async()=>{
+ const {estimateDistillCost,DISTILL_USAGE_PROFILES}=await import('../dist/distill/generate.js'),rows=readFileSync(new URL('../distill/runs/2026-10-17/outlines.jsonl',import.meta.url),'utf8').trim().split('\n').map(JSON.parse);
+ for(const model of ['claude-opus-5-5','claude-sonnet-5-5']){const group=rows.filter(r=>r.generatorId==='anthropic:'+model),mean=group.reduce((sum,r)=>sum+r.usage.output,0)/group.length;assert.ok(Math.abs(DISTILL_USAGE_PROFILES[model].output-mean)<1e-8);}
+ const judge={input:.1,output:.5},opus=estimateDistillCost(200,1400,{input:4,output:20},judge,'claude-opus-5-5'),sonnet=estimateDistillCost(200,1400,{input:2,output:10},judge,'claude-sonnet-5-5');assert.ok(opus.usd>=sonnet.usd*3);assert.equal(opus.basis,'observed-2026-10-17');
+});
+test('R6-4 opt-in retrieval keeps a gold anchor before a more similar distilled example',async()=>{
+ const {retrieveExamples}=await import('../dist/retrieval.js');const a={...structuredClone(gold[0]),bookId:'gold',topic:'다른 주제',referenceSource:'gold'},b={...structuredClone(gold[0]),bookId:'distilled',topic:'바람',referenceSource:'distilled'};const chosen=retrieveExamples([a,b],{topic:'바람'},2);assert.equal(chosen[0].record.bookId,'gold');assert.equal(chosen[1].record.bookId,'distilled');
+});

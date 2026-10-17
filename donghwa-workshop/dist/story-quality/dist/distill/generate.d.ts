@@ -82,14 +82,22 @@ export declare function runDistillation(cfg: DistillConfig): Promise<{
     costUsd: number;
     skipped: number;
 }>;
-/** 비용·토큰 추정 (호출 전 표시용). 샘플당 입력≈프롬프트, 출력≈1,200토큰, 수정 30%, 판정 1회. */
+/** Generator-only usage means from distill/runs/2026-10-17/outlines.jsonl.
+ * Opus 39 rows; Sonnet 161 rows. Output includes billed thinking tokens.
+ * Fix/judge usage is estimated separately; original row.usage records the generator only.
+ */
+export declare const DISTILL_USAGE_PROFILES: Record<string, {
+    input: number;
+    output: number;
+    fixRate: number;
+}>;
 export declare function estimateDistillCost(cells: number, promptTokens: number, price: {
     input: number;
     output: number;
 }, judgePrice: {
     input: number;
     output: number;
-}): {
+}, model?: string): {
     tokensIn: number;
     tokensOut: number;
     usd: number;
@@ -98,4 +106,6 @@ export declare function estimateDistillCost(cells: number, promptTokens: number,
         fix: number;
         judge: number;
     };
+    model: string | undefined;
+    basis: string;
 };

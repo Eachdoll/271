@@ -19,7 +19,7 @@ test('Missing Korean vocabulary skips only vocabulary; uploaded words detect dep
  const checked=analyzeEstimatedPage(text,spec,{language:'ko',koVocabulary:['보다','봐요'],allowedNames:['유하']});assert.equal(checked.passed,false);assert.ok(checked.violations.some(issue=>issue.code==='out-of-vocabulary'));
 });
 test('Long sentences and book-wide new word budgets remain visible',async()=>{
- const spec={...LEVEL_SPECS.E0,newWordsPerBook:1,maxOutOfVocabRatio:1};const result=await analyzeBook([{ko:'아이가 공을 봐요.',en:'I see a zebra here.'},{ko:'아이가 공을 봐요.',en:'I see an elephant here.'}],{ko:LEVEL_SPECS.K1,en:spec});assert.ok(result.violations.some(issue=>issue.code==='new-word-budget'));
+ const spec={...LEVEL_SPECS.E1,newWordsPerBook:1,maxOutOfVocabRatio:1};const result=await analyzeBook([{ko:'아이가 공을 봐요.',en:'I see a zebra here.'},{ko:'아이가 공을 봐요.',en:'I see an elephant here.'}],{ko:LEVEL_SPECS.K1,en:spec});assert.ok(result.violations.some(issue=>issue.code==='new-word-budget'));
  const long=analyzeEstimatedPage('I unexpectedly encountered a spectacularly complicated predicament that required extraordinary concentration.',LEVEL_SPECS.E0);assert.equal(long.passed,false);assert.ok(long.violations.some(issue=>issue.code==='sentence-length'));
 });
 test('Scores are based on English text and nonofficial; abort stops analysis',async()=>{

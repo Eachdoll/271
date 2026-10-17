@@ -1,5 +1,9 @@
+import {
+  buildStoryWords,
+  englishVocabularyPrompt,
+} from "../story-reading-context.js";
 /* Bridge the supplied quality package to app engines, frozen worlds and resumable billing. */
-import { BEAT_COUNTS, StoryValidationError } from "./schemas.js";
+import { frozenBeatCount, StoryValidationError } from "./schemas.js";
 import { LEVEL_SEED } from "../reading-levels.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
@@ -66,9 +70,76 @@ const judgeSchema = strict({
   why: string(200),
 });
 let dataPromise;
+const distilledLoads = new WeakMap();
+async function loadDistilledBooks(fetchImpl) {
+  if (!distilledLoads.has(fetchImpl)) {
+    const pending = (async () => {
+      const response = await fetchImpl(
+        new URL(
+          "../story-quality/examples/approved-books.json",
+          import.meta.url,
+        ),
+        { cache: "no-cache", credentials: "same-origin" },
+      );
+      if (!response.ok) throw new Error("Optional examples unavailable");
+      const books = await response.json();
+      if (
+        !Array.isArray(books) ||
+        books.length > 5000 ||
+        books.some(
+          (book) =>
+            !book?.approved ||
+            !book.bookId ||
+            !book.topic ||
+            !Array.isArray(book.outline?.beats),
+        )
+      )
+        throw new Error("Optional examples invalid");
+      const freeze = (value) => {
+        if (value && typeof value === "object" && !Object.isFrozen(value)) {
+          Object.values(value).forEach(freeze);
+          Object.freeze(value);
+        }
+        return value;
+      };
+      return freeze(books);
+    })().catch(() => {
+      distilledLoads.delete(fetchImpl);
+      return [];
+    });
+    distilledLoads.set(fetchImpl, pending);
+  }
+  return distilledLoads.get(fetchImpl);
+}
+export function qualityReferenceBooks(data, topic, enabled = false) {
+  const gold = asList(data.goldBooks);
+  if (!enabled) return gold;
+  const normalized = (value) =>
+    String(value || "")
+      .normalize("NFC")
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]/gu, "");
+  const target = normalized(topic),
+    seen = new Set();
+  return [
+    ...gold.map((book) => ({ ...book, referenceSource: "gold" })),
+    ...asList(data.distilledBooks).map((book) => ({
+      ...book,
+      referenceSource: "distilled",
+    })),
+  ].filter((book) => {
+    if ((target && normalized(book.topic) === target) || seen.has(book.bookId))
+      return false;
+    seen.add(book.bookId);
+    return true;
+  });
+}
 
 /** One immutable in-memory copy; a failed load may be retried on the next visit. */
-export async function loadStoryQualityData(fetchImpl = globalThis.fetch) {
+export async function loadStoryQualityData(
+  fetchImpl = globalThis.fetch,
+  { includeDistilled = false } = {},
+) {
   if (!dataPromise)
     dataPromise = Promise.all(
       [
@@ -177,7 +248,12 @@ export async function loadStoryQualityData(fetchImpl = globalThis.fetch) {
         dataPromise = undefined;
         throw error;
       });
-  return dataPromise;
+  const base = await dataPromise;
+  if (!includeDistilled) return base;
+  return Object.freeze({
+    ...base,
+    distilledBooks: Object.freeze(await loadDistilledBooks(fetchImpl)),
+  });
 }
 
 /** A catalogue setting is separate from the image-engine World and its fixed drawer geometry. */
@@ -453,7 +529,7 @@ function enrichedOutlineSchema(input, pattern, services) {
   if (!object(supplied)) throw new Error("앱 줄거리 스키마를 연결해 주세요.");
   const schema = clone(supplied),
     beat = schema.properties.beats.items,
-    attempts = (BEAT_COUNTS[input.pageCount] || 7) - 5;
+    attempts = (frozenBeatCount(input) || 7) - 5;
   schema.properties.plan = strict({
     pattern: { type: "string", enum: [pattern.id] },
     planted: string(300),
@@ -492,8 +568,8 @@ function enrichedOutlineSchema(input, pattern, services) {
   }
   return schema;
 }
-function adaptPattern(pattern, pageCount) {
-  const count = BEAT_COUNTS[pageCount] || 7,
+function adaptPattern(pattern, input) {
+  const count = frozenBeatCount(input) || 7,
     attemptSlots = asList(pattern.beats).filter(
       (beat) => beat.type === "attempt",
     );
@@ -610,7 +686,7 @@ function choosePatterns(input, data) {
       ranked.find((pattern) => pattern.id !== primary.id) ||
       patterns.find((pattern) => pattern.id !== primary.id);
   return [primary, ...(auxiliary ? [auxiliary] : [])].map((pattern) =>
-    adaptPattern(pattern, input.pageCount),
+    adaptPattern(pattern, input),
   );
 }
 function backgroundType(input) {
@@ -769,7 +845,11 @@ export async function generateQualityOutline(
     module = await (services.qualityModule?.() ||
       import("../story-quality/dist/pipeline.js"));
   try {
-    const data = services.qualityData || (await loadStoryQualityData()),
+    const data =
+        services.qualityData ||
+        (await loadStoryQualityData(globalThis.fetch, {
+          includeDistilled: quality.useDistilledExamples === true,
+        })),
       { world, mood } = resolveStoryWorld(input, data);
     input.storyWorldMood = mood;
     assertInventoryAvailable(input, data, world);
@@ -792,7 +872,7 @@ export async function generateQualityOutline(
           const extra =
             candidate || judge
               ? "Return only the requested candidate/judgment JSON; do not return a complete outline."
-              : `Return the COMPLETE app outline matching the supplied schema, including plan, newElement/failureReason, refrain.variation if present, twist, settings, emotionArc and plotContract. plan.pattern=${pattern.id}. Exactly ${BEAT_COUNTS[input.pageCount]} beats. ${request.user.includes("APPROVED_BEAM_BEATS_JSON:") ? "Preserve every chosen beam summary, index, type, newElement and failureReason exactly. Fill canonical character/background IDs and coherent full fields." : ""}`;
+              : `Return the COMPLETE app outline matching the supplied schema, including plan, newElement/failureReason, refrain.variation if present, twist, settings, emotionArc and plotContract. plan.pattern=${pattern.id}. Exactly ${frozenBeatCount(input)} beats. ${request.user.includes("APPROVED_BEAM_BEATS_JSON:") ? "Preserve every chosen beam summary, index, type, newElement and failureReason exactly. Fill canonical character/background IDs and coherent full fields." : ""}`;
           const response = await journal.call(
             role,
             {
@@ -844,7 +924,11 @@ export async function generateQualityOutline(
           variantChance: Number.isFinite(quality.variantChance)
             ? quality.variantChance
             : 0.35,
-          referenceBooks: asList(data.goldBooks),
+          referenceBooks: qualityReferenceBooks(
+            data,
+            input.topic,
+            quality.useDistilledExamples === true,
+          ),
           approvedBooks: asList(quality.approvedBooks),
           endingType: input.endingType,
           ...(Array.isArray(quality.rules)
@@ -888,6 +972,7 @@ export async function generateQualityOutline(
         check: clone(result.check),
         seed: clone(result.seed),
         worldMood: clone(mood),
+        worldSnapshot: clone(world),
         variantChance: Number.isFinite(quality.variantChance)
           ? quality.variantChance
           : 0.35,
@@ -1085,6 +1170,7 @@ export async function generateQualityProse(
         },
         lang,
         outline,
+        pageCount: input.pageCount,
         charactersCompact: input.characters
           .map(
             (character) =>
@@ -1102,9 +1188,14 @@ export async function generateQualityProse(
           ? { styleSamples: quality.styleSamples.slice(0, 3) }
           : {}),
         vocabLabel:
-          input.specs[lang].vocabSource ||
-          input.specs[lang].vocab ||
-          "frozen selected vocabulary",
+          lang === "en"
+            ? englishVocabularyPrompt(
+                input.specs.en,
+                buildStoryWords(input, outline),
+              )
+            : input.specs[lang].vocabSource ||
+              input.specs[lang].vocab ||
+              "frozen selected vocabulary",
         twoPass: !targetOnly,
       });
       const parsed = parseLabeledProse(result.simplified, outline, lang);

@@ -17,3 +17,4 @@ export * from './engines/anthropic.js';
 export * from './engines/openaiCompat.js';
 export * from './eval/rubricJudge.js';
 export * from './expand.js';
+export * from './patterns.js';

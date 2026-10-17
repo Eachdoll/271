@@ -1,4 +1,4 @@
-import { VOCAB_DATA } from "./reading-vocab.js";
+import { VOCAB_DATA, ENGLISH_ONOMATOPOEIA } from "./reading-vocab.js";
 /* Browser-local FK, Revised Spache, Dale–Chall and Korean pattern estimates.
  * These are not certified AR, Lexile or KReaD scores. No Python dependency. */
 const round = (n) => Math.round(n * 100) / 100;
@@ -230,7 +230,19 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
   const sentences = splitSentences(text),
     tokenize = lang === "en" ? enWords : koWords,
     words = sentences.flatMap(tokenize),
-    allowed = allowedSet(spec, names, lang),
+    allowed = allowedSet(
+      spec,
+      [
+        ...names,
+        ...(lang === "en" && spec.storyWordsAllowed
+          ? options.storyWords || []
+          : []),
+        ...(lang === "en" && spec.allowOnomatopoeia
+          ? ENGLISH_ONOMATOPOEIA
+          : []),
+      ],
+      lang,
+    ),
     vocabularySkipped =
       lang === "ko" &&
       (spec.vocabularyAvailable === false || spec.vocabList.length === 0);
@@ -276,11 +288,44 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
       : { fkGrade: null, spache: null, daleChall: null }),
     fkEstimated: lang === "en",
   };
-  const issues = violations(metrics, spec, lang);
+  let issues = violations(metrics, spec, lang);
+  // Conservative present-tense detector: transparent heuristic, not a full grammar parser.
+  if (
+    lang === "en" &&
+    spec.ruleVersion >= 3 &&
+    spec.allowedGrammar.some((rule) => /present tense/i.test(rule))
+  ) {
+    const past = words.filter(
+      (word) =>
+        /^(?:was|were|went|saw|said|had|did|gave|found|made|took|felt|came|grew|knew|got|kept|thought|stood|ate|ran|shouted|whispered)$/.test(
+          word,
+        ) ||
+        (word.endsWith("ed") &&
+          !/^(?:red|bed|seed|need|feed|speed|hundred)$/.test(word) &&
+          !names.flatMap(enWords).includes(word)),
+    );
+    if (past.length)
+      issues.push({
+        code: "grammar",
+        language: lang,
+        actual: unique(past).join(", "),
+        expected: "현재형",
+      });
+  }
+  const warnings =
+    spec.vocabularyPolicy === "warning"
+      ? issues
+          .filter((issue) => issue.code === "out-of-vocabulary")
+          .map((issue) => ({ ...issue, severity: "warning" }))
+      : [];
+  issues = issues.filter(
+    (issue) => !warnings.some((warning) => warning.code === issue.code),
+  );
   return {
     language: lang,
     passed: issues.length === 0,
     violations: issues,
+    warnings,
     metrics,
     mode: "local",
     engine:
@@ -377,6 +422,12 @@ function bookResult(book, specs, options) {
       pageIndex: page.index,
     })),
   );
+  const warnings = pages.flatMap((page) =>
+    [...page.ko.warnings, ...page.en.warnings].map((warning) => ({
+      ...warning,
+      pageIndex: page.index,
+    })),
+  );
   const metrics = {};
   for (const lang of ["ko", "en"]) {
     const outside = unique(
@@ -403,7 +454,10 @@ function bookResult(book, specs, options) {
       specs[lang].newWordsPerBook != null &&
       outside.length > specs[lang].newWordsPerBook
     )
-      bookViolations.push({
+      (specs[lang].vocabularyPolicy === "warning"
+        ? warnings
+        : bookViolations
+      ).push({
         code: "new-word-budget",
         language: lang,
         actual: outside.length,
@@ -423,12 +477,14 @@ function bookResult(book, specs, options) {
     estimated: true,
     metrics,
     violations: bookViolations,
+    warnings,
     notes: [
       "이 기기에서 JS 공식과 어휘·문장 패턴으로 검사한 추정입니다. 공식 AR·Lexile·KReaD 점수가 아닙니다.",
     ],
   };
 }
 export async function analyzeBook(book, specs, options = {}) {
+  specs = book?.readingLevelSnapshot?.specs || specs;
   validSpec(specs?.ko);
   validSpec(specs?.en);
   if (options.signal?.aborted)

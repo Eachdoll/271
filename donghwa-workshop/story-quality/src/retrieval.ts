@@ -33,11 +33,13 @@ export function scoreRecord(record: BookRecord, q: RetrievalQuery): number {
 
 export function retrieveExamples(records: BookRecord[], q: RetrievalQuery, k = 2): ScoredRecord[] {
   const ex = new Set(q.excludeBookIds ?? []);
-  return records
+  const ranked = records
     .filter((r) => r.approved && !ex.has(r.bookId))
     .map((record) => ({ record, score: scoreRecord(record, q) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, k);
+    .sort((a, b) => b.score - a.score);
+  // When opt-in distilled candidates are present, retain a gold anchor first.
+  const gold = ranked.find(item => item.record.referenceSource === 'gold');
+  return (gold && k > 0 ? [gold, ...ranked.filter(item => item !== gold)] : ranked).slice(0, k);
 }
 
 /**

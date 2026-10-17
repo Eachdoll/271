@@ -1,3 +1,4 @@
+import { adaptPatternForBook } from '../patterns.js';
 /**
  * 증류 데이터셋 생성기 — 상위 모델로 주제 × 패턴 × 수준 교차 줄거리를 만들어 JSONL로 저장한다.
  * - 각 샘플은 앱이 실제로 쓰는 outline.v3 프롬프트 그대로 생성한다(학습 시 분포 차이 없음).
@@ -163,7 +164,7 @@ async function generateOne(
   sampleId: string,
   approvedBooks: BookRecord[],
 ): Promise<DistillSample> {
-  const pattern = cfg.patterns.find((p) => p.id === t.patternId) ?? cfg.patterns[0];
+  const pattern = adaptPatternForBook(cfg.patterns.find((p) => p.id === t.patternId) ?? cfg.patterns[0], cfg.pages, lv.levelKo);
   const baseWorld = findWorld(cfg.worlds, t.worldId);
   // 계절·시간 오버레이: 셀마다 결정적으로 고른다(변형 0 = 낮, 1 = 밤, 계절은 해시로). 같은 주제의 변형이 다른 모습이 되게.
   const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
@@ -256,16 +257,22 @@ async function generateOne(
   return base;
 }
 
-/** 비용·토큰 추정 (호출 전 표시용). 샘플당 입력≈프롬프트, 출력≈1,200토큰, 수정 30%, 판정 1회. */
-export function estimateDistillCost(cells: number, promptTokens: number, price: { input: number; output: number }, judgePrice: { input: number; output: number }) {
-  const genIn = cells * promptTokens;
-  const genOut = cells * 1200;
-  const fixIn = cells * 0.3 * 2500;
-  const fixOut = cells * 0.3 * 1200;
-  const judgeIn = cells * 1800;
-  const judgeOut = cells * 150;
+/** Generator-only usage means from distill/runs/2026-10-17/outlines.jsonl.
+ * Opus 39 rows; Sonnet 161 rows. Output includes billed thinking tokens.
+ * Fix/judge usage is estimated separately; original row.usage records the generator only.
+ */
+export const DISTILL_USAGE_PROFILES: Record<string, {input: number; output: number; fixRate: number}> = {
+  'claude-opus-5-5': {input: 3111.051282051282, output: 6083.076923076923, fixRate: 12 / 39},
+  'claude-sonnet-5-5': {input: 3354.795031055901, output: 2949.4658385093167, fixRate: 33 / 161},
+};
+export function estimateDistillCost(cells: number, promptTokens: number, price: {input: number; output: number}, judgePrice: {input: number; output: number}, model?: string) {
+  const id = model?.replace(/^anthropic:/, '') || (price.input === 4 && price.output === 20 ? 'claude-opus-5-5' : price.input === 2 && price.output === 10 ? 'claude-sonnet-5-5' : '');
+  const profile = DISTILL_USAGE_PROFILES[id] || {input: promptTokens, output: 3000, fixRate: 0.3};
+  const genIn = cells * Math.max(promptTokens, profile.input), genOut = cells * profile.output;
+  const fixIn = cells * profile.fixRate * (profile.input + profile.output), fixOut = cells * profile.fixRate * profile.output;
+  const judgeIn = cells * (profile.input + profile.output), judgeOut = cells * 1500;
   const gen = (genIn * price.input + genOut * price.output) / 1e6;
   const fix = (fixIn * judgePrice.input + fixOut * judgePrice.output) / 1e6;
   const judge = (judgeIn * judgePrice.input + judgeOut * judgePrice.output) / 1e6;
-  return { tokensIn: genIn + fixIn + judgeIn, tokensOut: genOut + fixOut + judgeOut, usd: gen + fix + judge, breakdown: { gen, fix, judge } };
+  return {tokensIn: genIn + fixIn + judgeIn, tokensOut: genOut + fixOut + judgeOut, usd: gen + fix + judge, breakdown: {gen, fix, judge}, model: id || model, basis: DISTILL_USAGE_PROFILES[id] ? 'observed-2026-10-17' : 'generic-unmeasured'};
 }

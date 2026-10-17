@@ -1,6 +1,10 @@
+import {
+  buildStoryWords,
+  englishVocabularyPrompt,
+} from "../story-reading-context.js";
 import { missingCredentialError } from "../credential-errors.js";
 import {
-  BEAT_COUNTS,
+  frozenBeatCount,
   PAGE_COUNTS,
   OUTLINE_SCHEMA,
   BEAT_SCHEMA,
@@ -249,6 +253,10 @@ export function normalizeStoryInput(input = {}) {
     worldName: String(input.worldName || input.world?.name || "").slice(0, 200),
     topic: String(input.topic || "친구와 작은 발견").slice(0, 1000),
     pageCount,
+    outlineBeatCount: frozenBeatCount({ ...input, pageCount }),
+    storyWorld: cleanReference(
+      input.storyWorld || input.storyWorldSnapshot || null,
+    ),
     endingType: input.endingType === "open" ? "open" : "home_sleep",
     moral: String(
       input.moral ||
@@ -399,7 +407,7 @@ Do not translate Korean. Write an original English picture-book text for the sam
 Read the supplied previousStory ORIGINAL prose, final page texts, scenes, relationships and ending before writing a sequel. If the parent's final page edits differ from the approved prose, the final page texts are authoritative for established facts and the last ending. Continue consequences and established facts, but create a new want/problem/twist. Do not copy prior sentences or repeat the previous adventure.
 Use only supplied character IDs and wardrobe variant IDs. No API credentials, endpoint addresses, commentary or instructions belong in a story.`;
 function levelRules(input) {
-  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. AR/Lexile are estimates only.`;
+  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.`;
 }
 function continuityMeta(input) {
   return input.previousStory
@@ -417,7 +425,7 @@ async function complete(stage, input, payload, schema, options = {}) {
   const engine = await engineFor(options);
   abort(options.signal);
   const response = await engine.complete({
-    system: `${baseSystem}\n${levelRules(input)}\n${payload.rules}\n${payload.data?.approvedOutline?.quality?.worldMood ? `FROZEN STORY ATMOSPHERE: ${JSON.stringify(payload.data.approvedOutline.quality.worldMood)}. Use compatible weather, light and seasonal sensory details; scene time progression and fixed drawer geometry remain authoritative. Never add catalogue landmarks or portals absent from approved places.` : ""}\n${payload.data?.approvedOutline?.plotContract ? "FROZEN EVENT CONTRACT: the approvedOutline.plotContract is authoritative. Preserve every causal event, setup/payoff and character/prop state change. Brief details are optional rendering details, not new actions. For one page depict only its current event; beat stateAfter may occur on a later page." : ""}`,
+    system: `${baseSystem}\n${levelRules({ ...input, approvedOutline: payload.data?.approvedOutline })}\n${payload.rules}\n${payload.data?.approvedOutline?.quality?.worldMood ? `FROZEN STORY ATMOSPHERE: ${JSON.stringify(payload.data.approvedOutline.quality.worldMood)}. Use compatible weather, light and seasonal sensory details; scene time progression and fixed drawer geometry remain authoritative. Never add catalogue landmarks or portals absent from approved places.` : ""}\n${payload.data?.approvedOutline?.plotContract ? "FROZEN EVENT CONTRACT: the approvedOutline.plotContract is authoritative. Preserve every causal event, setup/payoff and character/prop state change. Brief details are optional rendering details, not new actions. For one page depict only its current event; beat stateAfter may occur on a later page." : ""}`,
     user: JSON.stringify({ input, ...payload.data }),
     jsonSchema: schema,
     temperature: temperature[stage],
@@ -1617,6 +1625,15 @@ export async function generateOutline(source, options = {}) {
     return demoResult("outline", assertValid("outline", outline, input), input);
   }
   const places = preflightOutlineLocations(input);
+  if (
+    input.storyQuality?.worldId &&
+    input.storyQuality.worldId !== "drawer" &&
+    !input.storyWorld
+  )
+    input.storyWorld = resolveStoryWorld(
+      input,
+      await loadStoryQualityData(),
+    ).world;
   if (!places.valid) throw new StoryValidationError("outline", places.errors);
   if (input.storyQuality?.enabled) {
     const result = await generateQualityOutline(
@@ -1628,7 +1645,7 @@ export async function generateOutline(source, options = {}) {
     result.data = assertValid("outline", result.data, input);
     return result;
   }
-  const count = BEAT_COUNTS[input.pageCount],
+  const count = frozenBeatCount(input),
     attempts = count - 5;
   const rules = `${plotContractRules(input)}\nDesign the complete StoryOutline, not page text. Exactly ${count} beats for ${input.pageCount} pages, with indexes 1..${count}.
 Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> close. Pack the three-attempt pattern into these available attempt beats: two small funny failures, with the last attempt leading to the turn. Every beat changes the situation; summaries have 2–3 concrete sentences.
@@ -1690,6 +1707,8 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
     }
     if (report.valid) {
       result.data = assertValid("outline", result.data, input);
+      if (input.storyWorld)
+        result.data.storyWorldSnapshot = clone(input.storyWorld);
       result.usage = mergeStoryUsage(results);
       result.meta = {
         ...result.meta,
@@ -2016,6 +2035,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
 export function inspectStory(outline, pagination, input) {
   const report = checkStory(outline, pagination, {
     specs: input.specs,
+    storyWords: buildStoryWords(input, outline),
     allowedNames: (input.characters || []).flatMap((c) =>
       [c.name, c.nameEn].filter(Boolean),
     ),

@@ -23,6 +23,24 @@ export function collectBookChecks(book) {
         ]
       : [],
   );
+  for (const warning of book.readingCheck?.warnings || [])
+    reading.push({
+      ...warning,
+      pageNo: (warning.pageIndex ?? 0) + 1,
+      message: describeReadingViolation(warning),
+      severity: "warning",
+    });
+  for (const warning of book.storyCheck?.warnings || [])
+    if (
+      !reading.some(
+        (item) => item.pageNo === warning.pageNo && item.code === warning.code,
+      )
+    )
+      reading.push({
+        ...warning,
+        message: describeReadingViolation(warning),
+        severity: "warning",
+      });
   const events = (book.storyCheck?.checks || [])
     .filter((check) => !check.passed)
     .flatMap((check) =>

@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {getLevelSpec} from '../dist/reading-levels.js';
+// These authored one-sentence fixtures represent books frozen before r7.
+import {readFileSync} from 'node:fs';
+const legacySpecs=JSON.parse(readFileSync(new URL('./fixtures/reading-r6.json',import.meta.url),'utf8'));
+const getLevelSpec=id=>structuredClone(legacySpecs[id]);
 import {generateOutline,generateProse,paginateStory,rewriteBeat,rewriteParagraph,rewriteStoryPage,repairPagination,mergeStoryUsage,normalizeStoryInput,toLegacyPages,summarizeStory} from '../dist/story-generation/pipeline.js';
 import {demoOutline} from '../dist/story-generation/demo.js';
 import {demoPlotContract} from '../dist/story-generation/plot-contract.js';

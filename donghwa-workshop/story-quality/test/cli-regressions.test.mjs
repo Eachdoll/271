@@ -101,3 +101,15 @@ test('estimate CLI retains numeric costs for registered Anthropic models without
   assert.doesNotMatch(run.stdout, /unavailable|unpriced/);
   assert.ok(!existsSync(out));
 });
+
+test('R6-3 distill estimates default to Sonnet and warn when Opus is selected without API calls',()=>{
+ const defaults=spawnSync(process.execPath,['dist/cli/distill.js','--estimate','--limit','1'],{cwd:root,encoding:'utf8',env:{...process.env,ANTHROPIC_API_KEY:''}});assert.equal(defaults.status,0,defaults.stderr);assert.match(defaults.stdout,/generator=anthropic:claude-sonnet-5-5/);
+ const opus=spawnSync(process.execPath,['dist/cli/distill.js','--estimate','--limit','1','--gen','anthropic:claude-opus-5-5'],{cwd:root,encoding:'utf8',env:{...process.env,ANTHROPIC_API_KEY:''}});assert.equal(opus.status,0,opus.stderr);assert.match(opus.stderr,/Opus 5.5.*추정.*Sonnet/);
+});
+test('R6-6 prose CLI reuses one retained outline end-to-end with a mock engine and resumes without duplicates',t=>{
+ const dir=scratch(t),args=['dist/cli/eval.js','run','--stage','prose','--from','sonnet55-trial','--run-id','mock-prose','--mock','--budget','--limit','1','--out',dir];
+ const run=()=>spawnSync(process.execPath,args,{cwd:root,encoding:'utf8',env:{...process.env,ANTHROPIC_API_KEY:'',OPENAI_API_KEY:''}});
+ const first=run();assert.equal(first.status,0,first.stderr);const rows=readFileSync(join(dir,'mock-prose.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(rows.length,1);assert.equal(rows[0].error,undefined);assert.equal(rows[0].stage,'prose');assert.equal(rows[0].budget,true);assert.equal(rows[0].condense,false);assert.equal(rows[0].costUsd,0);assert.equal(rows[0].ko.pages,12);assert.equal(rows[0].en.pages,12);assert.equal(rows[0].child.pass,true);assert.equal(rows[0].pagination.approximate,true);assert.match(rows[0].pagination.note,/근사/);
+ const again=run();assert.equal(again.status,0,again.stderr);assert.equal(readFileSync(join(dir,'mock-prose.jsonl'),'utf8').trim().split('\n').length,1);assert.equal(read('eval/testset.json').pages,12);
+ const dryArgs=args.map(a=>a==='--mock'?'--dry-run':a==='mock-prose'?'mock-prose-dry':a);const dry=spawnSync(process.execPath,dryArgs,{cwd:root,encoding:'utf8',env:{...process.env,ANTHROPIC_API_KEY:'',OPENAI_API_KEY:''}});assert.equal(dry.status,0,dry.stderr);const dryRow=JSON.parse(readFileSync(join(dir,'mock-prose-dry.jsonl'),'utf8').trim());assert.equal(dryRow.mock,true);assert.equal(dryRow.costUsd,0);
+});

@@ -1,3 +1,4 @@
+import { buildStoryWords } from "./story-reading-context.js";
 import { credentialToastAction } from "./credential-errors.js";
 import { renderChecksPanel } from "./checks-panel.js";
 import {
@@ -1664,6 +1665,7 @@ function syncDraft() {
       if (p.staging) page.staging = structuredClone(p.staging);
       draft.storyCheck = checkStory(draft.outline, draft.pagination, {
         specs: draft.readingLevelSnapshot.specs,
+        storyWords: buildStoryWords(draft, draft.outline),
         allowedNames: draft.storyInput.characters.flatMap((c) => [
           c.name,
           c.nameEn,

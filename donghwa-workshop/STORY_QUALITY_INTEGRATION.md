@@ -42,3 +42,23 @@ Claude Code 인수 문서는 `CLAUDE.md`, `CLAUDE_CODE_START_HERE.md`에 있다.
 패키지 strict TypeScript 빌드와 원래 16개 테스트를 유지한다. 앱 통합 테스트는 실제 패키지 함수를 가짜 엔진으로 실행하여 시드·금지 창·비트 탐색·2패스·재개·사용량·최대 수정 횟수·검사 캐시·그림 전 차단을 검증한다. 모바일 브라우저에서는 설정·패턴 선택·입력 보존·자원 적재를 확인한다.
 
 사용자 API 키를 사용한 유료 생성이나 실제 아동의 이해도 검증은 실행하지 않았다. README의 보급형 실제 모델 5주제 품질 기준은 별도 실생성 평가가 필요하다.
+
+## r6 — 전문 예산·아이 점수·증류 예시·평가 CLI
+
+`runProseStage({pageCount})`는 목표 쪽 수에서 책 전체 문장 예산을 계산해 단순화에 전달합니다. 앱은 `input.pageCount`를 넘기며, 기존 대화 3회·비트별 감각 묘사 규칙은 유지합니다. `condenseOverBudget`은 분량 초과 시 한 번 더 압축하는 실험 옵션이고 기본 OFF입니다. 앱은 이 값을 전달하지 않습니다. K1 문장 수·시도 수, E0 어휘 목록과 검사 강도는 사용자 결정 전까지 바꾸지 않았습니다.
+
+호기심 `overall`은 모델의 자율 총점 대신 쪽별 0~2점 평균 × 5를 소수 첫째 자리로 계산합니다. 앱은 원래 값을 `modelOverall`로 보존하고 마지막 쪽의 0점은 재작성 대상에서 제외합니다. 앱 호기심 요청은 최소 2,000토큰입니다. 패키지 되말하기는 want·turn·resolution 누락으로 판정하며, 모델이 적은 나머지 누락은 `notedMissing`에 참고용으로 남깁니다. 앱의 기존 핵심 비트 판정은 유지합니다.
+
+부모 설정의 **증류 예시 함께 쓰기**(`useDistilledExamples`)는 기본 OFF입니다. 켜고 줄거리를 만들 때만 승인 161편을 지연 로드합니다. `scripts/build-cloud.mjs`가 보존 원본을 `dist/story-quality/examples/approved-books.json`으로 복사하며 서비스 워커 프리캐시에는 포함하지 않습니다. 파일을 읽지 못하면 골드 24편만 사용합니다. 같은 주제는 제외하고, 검색 예시는 골드 하나를 먼저 고른 뒤 나머지를 유사도순으로 채웁니다. 증류 예시는 자동 판정만 통과했으며 사람이 검토한 자료가 아닙니다. 최근 책의 소재 금지 목록에는 사용자 책만 들어갑니다.
+
+증류 비용은 `distill/runs/2026-10-17/outlines.jsonl`에서 모델별 평균 생성 입력/출력 토큰과 수정 비율을 집계한 상수로 추정합니다. Opus 출력에는 사고 토큰이 포함됩니다. 수정·판정 호출은 별도 추정하며 실제 청구액이 아닙니다. CLI 기본 생성 모델은 Sonnet 5.5이고 Opus 선택 시 추정액과 경고를 출력합니다.
+
+전문 평가는 기존 줄거리를 재사용합니다. 다음 명령은 `story-quality/`에서 실행하며 `--mock`/`--dry-run`은 네트워크를 금지하고 키 없이 완료됩니다.
+
+```bash
+npm run eval -- --stage prose --from sonnet55-trial --run-id prose-mock --mock --budget --limit 1 --out /tmp/donghwa-prose-mock
+# 압축 비교도 모의 실행 가능. --condense는 문장 예산을 함께 적용합니다.
+npm run eval -- --stage prose --from sonnet55-trial --run-id prose-condense-mock --mock --budget --condense --limit 1 --out /tmp/donghwa-prose-mock
+```
+
+입력은 `--out`의 기존 `<outlineRunId>.jsonl`, 보존된 평가 폴더, 또는 명시적 JSONL 경로에서 찾습니다. 생성·판정 모델이나 옵션이 다른 결과를 같은 run-id로 섞지 않으며, 같은 입력·옵션의 완료 기록은 재사용합니다. 결과의 쪽 나누기는 앱의 `splitPaginationToCount`를 공유하는 **근사**이며, 실제 AI 쪽 나누기·플롯 일관성 검사를 실행한 결과가 아닙니다. 일반 실행은 유료 모델을 호출하므로 별도 지시가 있을 때만 수행합니다. 이번 통합에서는 유료 재측정을 하지 않았습니다.

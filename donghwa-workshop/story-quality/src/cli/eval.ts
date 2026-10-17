@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { makeEngine } from './distill.js';
+import { runProseEvaluation } from '../eval/prose.js';
 import { calibrateJudge, compareSummaries, runEval, type EvalSummary, type EvalTopic } from '../eval/harness.js';
 import type { BookRecord, Inventories, PlotPatternCard, StoryOutline, TextEngine } from '../types.js';
 import type { WorldLibrary } from '../worlds.js';
@@ -34,6 +35,19 @@ async function main() {
     return;
   }
 
+  if (arg('stage') === 'prose') {
+    const from = arg('from');
+    if (!from || from === 'true') throw new Error('--from <outlineRunId or JSONL path> is required.');
+    const candidates = from.endsWith('.jsonl') ? [resolve(from)] : [resolve(outDir, from + '.jsonl'), resolve('eval/trial-2026-10-17', from + '.jsonl')];
+    const input = candidates.find(path => existsSync(path));
+    if (!input) throw new Error('Existing outline results not found. No outline generation was started.');
+    const mock = arg('mock') === 'true' || arg('dry-run') === 'true';
+    if (mock) globalThis.fetch = async () => {throw new Error('Mock evaluation prohibits network access.');};
+    const runId = arg('run-id', `${from.split(/[\\/]/).at(-1)!.replace(/\.jsonl$/, '')}-prose${arg('budget') === 'true' ? '-budget' : ''}${arg('condense') === 'true' ? '-condense' : ''}${mock ? '-mock' : ''}`)!;
+    if (!/^[a-zA-Z0-9._-]+$/.test(runId)) throw new Error('Invalid --run-id.');
+    const summary = await runProseEvaluation({from:input,out:resolve(outDir,runId+'.jsonl'),runId,pageCount:readJson<{pages:number}>('eval/testset.json').pages,mock,budget:arg('budget')==='true'||arg('condense')==='true',condense:arg('condense')==='true',limit:Number(arg('limit','0')),gestureDict:readJson('data/gesture_dictionary.json'),...(mock ? {} : {generator:makeEngine(arg('gen','anthropic:claude-sonnet-5-5')!),cheap:makeEngine(arg('judge','anthropic:claude-haiku-5-5')!)})});
+    console.log(JSON.stringify(summary,null,2));return;
+  }
   const dryRun = arg('dry-run') === 'true';
   const judge = dryRun ? dummy() : makeEngine(arg('judge', 'anthropic:claude-haiku-5-5')!);
 

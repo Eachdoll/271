@@ -188,3 +188,9 @@ test('rule performance uses the existing approved-book baseline and suggests res
   const later=book('b4','2026-10-17T12:00:00Z');later.feedback.rubricTotal=6;recordApprovedElements(state,later,{now:'2026-10-17T12:00:00Z'});
   assert.equal(state.settings.storyQuality.ruleVersions.at(-1).rubricAvgAfter,6);assert.equal(state.settings.storyQuality.rollbackSuggested,true);
 });
+
+test('R6-2 curiosity is the page-score mean times five and retains the raw model score',async()=>{
+ const source=fixture(),raw=curiosity({overall:1.7});raw.pages[2].score=1;const engine=childEngine({curiosityResults:[raw]});
+ const result=await child(source,{engine});assert.equal(result.meta.childGate.curiosity.overall,8.3);assert.equal(result.meta.childGate.curiosity.modelOverall,1.7);assert.equal(result.meta.childGate.curiosity.pass,true);assert.equal(result.meta.childGate.pass,true);assert.equal(result.meta.childGate.curiosity.quietFinalPageExempt,true);assert.ok(engine.calls.find(request=>request.system.includes('다음엔?')).maxTokens>=2000);
+ const cached=await child(source,{engine,childGateCheckpoint:result.meta.childGate});assert.equal(cached.meta.requests,0);assert.equal(cached.meta.childGate.curiosity.overall,8.3);assert.equal(cached.meta.childGate.curiosity.modelOverall,1.7);
+});

@@ -5384,27 +5384,44 @@ export const VOCAB_DATA = Object.freeze({
     "umbrella",
   ],
 });
+export const ENGLISH_ONOMATOPOEIA = Object.freeze([
+  "whoosh",
+  "thump",
+  "splash",
+  "hic",
+  "pop",
+  "tap",
+  "tick",
+  "tock",
+  "buzz",
+  "bang",
+  "boom",
+  "beep",
+  "pitter",
+  "patter",
+  "chirp",
+  "plop",
+  "swish",
+  "crunch",
+  "meow",
+  "woof",
+]);
+const union = (...lists) => [
+  ...new Set(lists.flat().map((word) => word.toLowerCase())),
+];
+const E0_WORDS = union(
+  VOCAB_DATA.dolch_preprimer,
+  VOCAB_DATA.dolch_primer,
+  VOCAB_DATA.fry_1000.slice(0, 100),
+  VOCAB_DATA.everyday_nouns,
+);
+const E1_WORDS = union(E0_WORDS, VOCAB_DATA.cvc_short_vowel);
+const E2_WORDS = union(E1_WORDS, VOCAB_DATA.dolch_first);
+const E3_WORDS = union(VOCAB_DATA.fry_1000, E2_WORDS);
 export const ENGLISH_VOCABULARIES = Object.freeze({
-  E0: [
-    ...new Set([...VOCAB_DATA.dolch_preprimer, ...VOCAB_DATA.everyday_nouns]),
-  ],
-  E1: [
-    ...new Set([...VOCAB_DATA.cvc_short_vowel, ...VOCAB_DATA.dolch_preprimer]),
-  ],
-  E2: [
-    ...new Set([
-      ...VOCAB_DATA.dolch_preprimer,
-      ...VOCAB_DATA.dolch_primer,
-      ...VOCAB_DATA.dolch_first,
-    ]),
-  ],
-  E3: VOCAB_DATA.fry_1000,
-  E4: [
-    ...new Set([
-      ...VOCAB_DATA.fry_1000,
-      ...VOCAB_DATA.everyday_nouns,
-      "adventure",
-      "kindness",
-    ]),
-  ],
+  E0: E0_WORDS,
+  E1: E1_WORDS,
+  E2: E2_WORDS,
+  E3: E3_WORDS,
+  E4: union(E3_WORDS, ["adventure", "kindness"]),
 });

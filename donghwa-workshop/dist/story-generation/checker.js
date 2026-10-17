@@ -122,7 +122,7 @@ function resolvedSpecs(pagination, supplied) {
   const snapshot =
     pagination?.readingLevelSnapshot || pagination?.readingLevels || {};
   const source =
-    supplied?.specs || supplied || snapshot.specs || pagination?.specs || {};
+    snapshot.specs || supplied?.specs || supplied || pagination?.specs || {};
   return {
     ko:
       source.ko ||
@@ -140,7 +140,7 @@ function levelMessage(language, violation) {
 export function checkStory(
   outline,
   pagination,
-  { specs, allowedNames = [] } = {},
+  { specs, allowedNames = [], storyWords = [] } = {},
 ) {
   const rawPages = Array.isArray(pagination)
     ? pagination
@@ -363,6 +363,7 @@ export function checkStory(
       }
   }
 
+  const warnings = [];
   const levelResults = { ko: [], en: [] };
   for (const { page, pageNo } of pages)
     for (const language of ["ko", "en"]) {
@@ -370,9 +371,12 @@ export function checkStory(
         const result = analyzeEstimatedPage(
           textOf(page, language),
           readingSpecs[language],
-          { language, allowedNames },
+          { language, allowedNames, storyWords },
         );
         levelResults[language].push({ pageNo, result });
+        warnings.push(
+          ...result.warnings.map((warning) => ({ ...warning, pageNo })),
+        );
         for (const violation of result.violations)
           add(
             "level",
@@ -398,7 +402,11 @@ export function checkStory(
       );
     const budget = readingSpecs[language]?.newWordsPerBook;
     const max = Array.isArray(budget) ? budget.at(-1) : budget;
-    if (max != null && outside.length > max)
+    if (
+      readingSpecs[language]?.vocabularyPolicy !== "warning" &&
+      max != null &&
+      outside.length > max
+    )
       for (const { pageNo, result } of results) {
         if (result.metrics.outOfVocabWords.length)
           add(
@@ -454,6 +462,7 @@ export function checkStory(
   return {
     passed: checks.every((check) => check.passed),
     checks,
+    warnings,
     violations,
     failedPageNos: unique(
       violations.filter((v) => v.pageNo != null).map((v) => v.pageNo),
