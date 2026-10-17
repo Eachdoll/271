@@ -82,3 +82,14 @@ test('curiosity overall is derived from page scores on the 0-10 scale, not the m
  const r=await curiosityCheck(engine,[{pageNo:1,text:'a'},{pageNo:2,text:'b'},{pageNo:3,text:'c'}]);
  assert.equal(r.overall,8.3);assert.equal(r.pass,true);
 });
+
+test('an over-budget simplification gets one per-beat condense pass and keeps labels',async()=>{
+ const {writeRichThenSimplify}=await import('../dist/richThenSimplify.js');
+ const long=n=>Array.from({length:n},(_,i)=>`유하가 ${i}번 걸어요.`).join(' ');
+ const outputs=['[비트 1 · setup]\n'+long(4)+'\n\n[비트 2 · want]\n'+long(4),'[비트 1 · setup]\n'+long(20)+'\n\n[비트 2 · want]\n'+long(20),'[비트 1 · setup]\n'+long(3)+'\n\n[비트 2 · want]\n'+long(3)];
+ const seen=[];const engine={id:'mock',complete:async req=>{seen.push(req);return {text:outputs[seen.length-1],usage:{input:1,output:1},costUsd:0};}};
+ const level={label:'K1',sentencesPerPage:[1,2],eojeolPerSentence:[3,5]};
+ const r=await writeRichThenSimplify({engine,lang:'ko',charactersCompact:'유하',beatsCompact:'1 [setup] a\n2 [want] b',briefsCompact:'[]',emotions:[],gestureDict:{emotions:[],moral_tails_ko:[]},targetLevel:level,richLevel:{label:'K2',sentencesPerPage:[2,3],eojeolPerSentence:[5,7]},pageCount:6});
+ assert.equal(seen.length,3);assert.match(seen[2].user,/지금 40문장/);assert.match(seen[2].user,/\[비트 1 · setup\]: 지금 20문장 → 6문장 이하/);
+ assert.equal(r.condensed,true);assert.equal(r.sentenceCount,6);assert.equal(r.calls,3);
+});

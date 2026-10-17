@@ -13,6 +13,7 @@ for (const lang of ['ko', 'en']) {
     sentencesMean: +avg(x.map((v) => v.sentences)).toFixed(1), sentenceBudget: x[0]?.sentenceBudget, overBudgetBooks: x.filter((v) => v.sentences > v.sentenceBudget).length,
     richCharsMean: Math.round(avg(x.map((v) => v.richChars))), simplifiedCharsMean: Math.round(avg(x.map((v) => v.simplifiedChars))), simplifyRatio: +(avg(x.map((v) => v.simplifiedChars / Math.max(1, v.richChars)))).toFixed(2),
     dialogueMean: +avg(x.map((v) => v.dialogue)).toFixed(1), booksUnder3Dialogue: x.filter((v) => v.dialogue < 3).length,
+    condensedBooks: x.filter((v) => v.condensed).length,
     tellHitsBooks: x.filter((v) => v.tellHitsAfter > 0).length, extraFixCallBooks: x.filter((v) => v.calls > 2).length,
     pagesPassed: `${x.reduce((s, v) => s + v.pagesPassed, 0)}/${x.reduce((s, v) => s + v.pages, 0)}`, booksAllPagesPass: x.filter((v) => v.pagesPassed === v.pages).length,
     avgWordsPerSentence: +avg(x.map((v) => v.avgWordsPerSentence)).toFixed(2), outOfVocabRatio: lang === 'en' ? +avg(x.map((v) => v.outOfVocabRatio)).toFixed(3) : null,

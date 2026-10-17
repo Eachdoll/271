@@ -93,7 +93,7 @@ for (const row of rows) {
       const checks = pages.map((p) => analyzeEstimatedPage(p.text, spec, { language: lang, allowedNames: names }));
       const violations = {}; for (const c of checks) for (const v of c.violations) { const k = typeof v === 'string' ? v.split(/[:(]/)[0] : (v.code || v.type || JSON.stringify(v).slice(0, 40)); violations[k] = (violations[k] || 0) + 1; }
       const beatsCovered = new Set(paras.map((p) => p.beat));
-      out[lang] = { rich: res.rich, simplified: res.simplified, calls: res.calls, tellHitsAfter: res.tellHitsAfter,
+      out[lang] = { rich: res.rich, simplified: res.simplified, calls: res.calls, tellHitsAfter: res.tellHitsAfter, condensed: res.condensed ?? null, packageSentenceCount: res.sentenceCount ?? null,
         labeledBeats: beatsCovered.size, outlineBeats: outline.beats.length, missingBeats: outline.beats.map((b) => b.index).filter((i) => !beatsCovered.has(i)),
         richChars: res.rich.length, simplifiedChars: res.simplified.length, sentences: pages.reduce((n, p) => n + sentencesOf(p.text).length, 0),
         dialogue: quoteCount(res.simplified), richDialogue: quoteCount(res.rich), richParagraphs: richParas.length,

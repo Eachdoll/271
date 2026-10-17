@@ -192,6 +192,20 @@ export const PROSE_SIMPLIFY_USER_EN = `[Target level] {{targetLevelLabel}} — {
 {{richText}}
 
 [Output] Text only.`;
+export const PROSE_CONDENSE_SYSTEM = `너는 그림책 편집자다. 아래 글은 정해진 분량보다 길다. 비트별 목표 문장 수에 맞게 줄인다. 비트의 사건·반전·후렴·심은 물건은 남기고, 곁가지 묘사·같은 동작의 반복·덧붙인 대화·말하는 사람만 알리는 문장("유하가 말해요.")을 줄인다. 대화는 따옴표 앞에 이름을 붙여 한 문장으로 쓴다(예: 유하가 "가자!" 하고 외쳐요.).`;
+export const PROSE_CONDENSE_USER = `[목표] 전체 {{budgetMin}}~{{budgetMax}}문장. 지금 {{currentCount}}문장.
+[비트별 목표]
+{{perBeat}}
+
+[규칙]
+- 비트 라벨 "[비트 n · 유형]"/"[Beat n · type]"과 문단 수는 그대로 둔다.
+- 후렴 {{refrainText}}는 비트 {{refrainBeats}}에 남긴다. 대화는 책 전체 {{dialogueMin}}개 이상 남긴다.
+- 문장 길이와 어휘 수준은 지금 그대로 쉽게 유지한다. 새 사건·새 인물을 더하지 않는다.
+
+[원문]
+{{text}}
+
+[출력] 글만. 라벨 붙은 문단을 같은 수만큼.`;
 export const CHILD_CURIOSITY_SYSTEM = `너는 그림책을 읽어 주는 어른이고, 동시에 듣고 있는 4세 아이의 반응을 예측한다. 아이는 글자를 못 읽고 소리로만 듣는다. 아이가 "다음엔?" 하고 묻고 싶어지는지, 아니면 딴 데를 보는지 판단한다. 평가는 짧고 솔직하게, JSON으로만.`;
 export const CHILD_CURIOSITY_USER = `[이야기 쪽별 글]
 {{pages}}

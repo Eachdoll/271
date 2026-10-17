@@ -3,7 +3,8 @@
  * 보급형 모델에게 목표 수준으로 줄이게 한다. 작은 모델은 "단순하게 창작"보다 "있는 글을 단순화"를 훨씬 잘한다.
  */
 import type { GestureDictionary, LevelSpecEn, LevelSpecKo, TextEngine } from './types.js';
-import { PROSE_RICH_SYSTEM, PROSE_RICH_USER_EN, PROSE_RICH_USER_KO, PROSE_SIMPLIFY_SYSTEM, PROSE_SIMPLIFY_USER_EN, PROSE_SIMPLIFY_USER_KO, fill } from './prompts.js';
+import { PROSE_CONDENSE_SYSTEM, PROSE_CONDENSE_USER, PROSE_RICH_SYSTEM, PROSE_RICH_USER_EN, PROSE_RICH_USER_KO, PROSE_SIMPLIFY_SYSTEM, PROSE_SIMPLIFY_USER_EN, PROSE_SIMPLIFY_USER_KO, fill } from './prompts.js';
+import { splitSentences } from './util.js';
 import { findEmotionTells, renderGestureHintForPrompt, renderTellFixInstructions } from './gestures.js';
 
 export type Lang = 'ko' | 'en';
@@ -27,13 +28,16 @@ export interface RichSimplifyInput {
   twoPass?: boolean;
   /** 책 쪽 수. 주어지면 단순화 단계에 전체 문장 수 예산(쪽 수 × 목표 수준의 쪽당 문장)을 건다. */
   pageCount?: number;
-  onPass?: (pass: 'rich' | 'simplify' | 'fix', text: string) => void;
+  onPass?: (pass: 'rich' | 'simplify' | 'fix' | 'condense', text: string) => void;
 }
 
 export interface RichSimplifyResult {
   rich: string;
   simplified: string;
   tellHitsAfter: number;
+  /** 예산이 있을 때 최종 문장 수와 압축 단계 실행 여부 */
+  sentenceCount?: number;
+  condensed?: boolean;
   calls: number;
   costUsd: number;
 }
@@ -129,7 +133,54 @@ export async function writeRichThenSimplify(input: RichSimplifyInput): Promise<R
     hits = findEmotionTells(simplified, input.gestureDict);
   }
 
-  return { rich, simplified, tellHitsAfter: hits.length, calls, costUsd: cost };
+  // 분량 예산을 크게 넘으면(20% 초과) 비트별 목표 문장 수를 알려 주는 압축 1회. 작은 모델은 전체 예산보다 비트별 숫자를 더 잘 지킨다.
+  let condensed = false;
+  let sentenceCount = budget ? countSentences(simplified) : undefined;
+  if (budget && sentenceCount !== undefined && sentenceCount > Math.ceil(budget.max * 1.2)) {
+    const paras = beatParagraphs(simplified);
+    const per = allocateBeats(paras.map((p) => p.count), budget.max);
+    const perBeat = paras.map((p, i) => `${p.label}: 지금 ${p.count}문장 → ${per[i]}문장 이하`).join('\n');
+    const r4 = await simplifier.complete({
+      system: PROSE_CONDENSE_SYSTEM,
+      user: fill(PROSE_CONDENSE_USER, { budgetMin: budget.min, budgetMax: budget.max, currentCount: sentenceCount, perBeat, refrainText, refrainBeats, dialogueMin: Math.min(dialogueCount, Math.max(3, Math.floor(budget.max / 4))), text: simplified }),
+      temperature: 0.3,
+      maxTokens: 4000,
+    });
+    calls++;
+    cost += r4.costUsd ?? 0;
+    const next = r4.text.trim();
+    // 라벨이 사라지거나 비트 수가 줄면 압축 결과를 버린다.
+    if (next && beatParagraphs(next).length === paras.length) {
+      simplified = next;
+      condensed = true;
+      input.onPass?.('condense', simplified);
+      sentenceCount = countSentences(simplified);
+      if (isKo) hits = findEmotionTells(simplified, input.gestureDict);
+    }
+  }
+
+  return { rich, simplified, tellHitsAfter: hits.length, ...(budget ? { sentenceCount, condensed } : {}), calls, costUsd: cost };
+}
+
+/** 라벨을 뺀 문장 수. 따옴표 대화도 한 문장으로 센다. */
+export function countSentences(text: string): number {
+  return splitSentences(text).length;
+}
+
+function beatParagraphs(text: string): { label: string; count: number }[] {
+  const parts = text.split(/^\s*(\[(?:비트|Beat)\s+\d+[^\]\n]*\])/gimu);
+  const out: { label: string; count: number }[] = [];
+  for (let i = 1; i < parts.length; i += 2) out.push({ label: parts[i], count: countSentences(parts[i + 1] ?? '') });
+  return out;
+}
+
+/** 전체 예산을 비트별로 나눈다: 지금 길이에 비례하되 비트마다 최소 1문장. */
+function allocateBeats(counts: number[], max: number): number[] {
+  const total = counts.reduce((a, b) => a + b, 0) || 1;
+  const raw = counts.map((c) => Math.max(1, Math.floor((c / total) * max)));
+  let over = raw.reduce((a, b) => a + b, 0) - max;
+  for (let i = raw.length - 1; over > 0 && i >= 0; i--) while (over > 0 && raw[i] > 1) { raw[i]--; over--; }
+  return raw;
 }
 
 /** 전체 문장 예산: 쪽 수 × 쪽당 문장 범위. 쪽 수가 없으면 null(기존 동작). */
