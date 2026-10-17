@@ -501,9 +501,19 @@ async function libraryRow(env, owner) {
     .bind(owner)
     .first();
 }
-async function getLibrary(env, user) {
+async function getLibrary(env, user, { meta = false } = {}) {
   const row = await libraryRow(env, user.id);
-  if (!row) return json({ exists: false, revision: 0 });
+  if (!row)
+    return json({
+      exists: false,
+      revision: 0,
+      ...(meta
+        ? {
+            updatedAt: null,
+            summary: { bookCount: 0, characterCount: 0, backgroundCount: 0 },
+          }
+        : {}),
+    });
   let pointer, snapshot;
   try {
     pointer = JSON.parse(row.state_json);
@@ -514,6 +524,17 @@ async function getLibrary(env, user) {
       "클라우드 라이브러리를 읽지 못했어요. 기기의 원본은 유지됩니다.",
     );
   }
+  if (meta)
+    return json({
+      exists: true,
+      revision: Number(row.revision),
+      updatedAt: row.updated_at,
+      summary: pointer.summary || {
+        bookCount: pointer.books?.length || 0,
+        characterCount: pointer.characters?.length || 0,
+        backgroundCount: pointer.backgrounds?.length || 0,
+      },
+    });
   if (pointer.storage === "r2") {
     const object = await env.BUCKET.get(pointer.objectKey);
     if (!object)
@@ -597,6 +618,11 @@ async function putLibrary(request, env, user) {
     objectKey,
     sha256,
     size: bytes.byteLength,
+    summary: {
+      bookCount: body.state.books.length,
+      characterCount: body.state.characters.length,
+      backgroundCount: body.state.backgrounds?.length || 0,
+    },
   });
   const manifestPointer = JSON.stringify({
     storage: "r2",
@@ -740,7 +766,10 @@ export async function handleCloudRequest(request, env) {
     }
     storage(env);
     if (url.pathname === "/api/cloud/library") {
-      if (request.method === "GET") return await getLibrary(env, user);
+      if (request.method === "GET")
+        return await getLibrary(env, user, {
+          meta: url.searchParams.get("meta") === "1",
+        });
       if (request.method === "PUT") return await putLibrary(request, env, user);
       return json(
         {

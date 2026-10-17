@@ -30,6 +30,7 @@ import {
 import { createLibraryBackup, downloadFile } from "./output.js";
 import {
   readStoredLibrary,
+  validateStoredLibrary,
   writeStoredLibrary,
   keepRecoveryPoint,
   latestRecoveryPoint,
@@ -207,7 +208,7 @@ const defaults = {
   rate: 0.85,
 };
 const initialLibrary = readStoredLibrary(localStorage, KEY, {
-  validate: (text) => validateImport(text, { allowStoredAssets: true }),
+  validate: validateStoredLibrary,
   seed: seedState,
 });
 let state = initialLibrary.state,
@@ -338,7 +339,10 @@ const languageLabel = (l) =>
 const appearance = (c) => ({ ...c, color: c.color || "#efc954" });
 function save() {
   try {
-    writeStoredLibrary(localStorage, KEY, state, { blocked: storageBlocked });
+    writeStoredLibrary(localStorage, KEY, state, {
+      blocked: storageBlocked,
+      invalidRecords: initialLibrary.invalidRecords || [],
+    });
     initialLibrary.kind = "ready";
     if (!applyingCloud) cloudSync?.changed();
     return true;
@@ -590,12 +594,11 @@ async function applyCloudLibrary(candidate, meta) {
     if (meta.signal?.aborted)
       throw new DOMException("불러오기를 중지했어요.", "AbortError");
     if (raw) {
-      try {
-        recovery = blocked ? raw : (await createLibraryBackup(prior)).text;
-      } catch {
-        recovery = raw;
-      }
-      await keepRecoveryPoint(recovery, { reason: "before-cloud-pull" });
+      recovery = raw;
+      await keepRecoveryPoint(recovery, {
+        reason: "before-cloud-pull",
+        mediaDeferred: true,
+      });
     }
     if (meta.signal?.aborted)
       throw new DOMException("불러오기를 중지했어요.", "AbortError");
@@ -619,6 +622,7 @@ async function applyCloudLibrary(candidate, meta) {
     migrateReadingSettings(state.settings);
     writeStoredLibrary(localStorage, KEY, state);
     storageBlocked = false;
+    initialLibrary.invalidRecords = [];
     initialLibrary.kind = "ready";
     wizard = null;
     draft = null;
@@ -676,10 +680,9 @@ async function showLibraryImport(file) {
         field.textContent = "현재 자료를 복구용 보관함에 남기고 있어요.";
         const raw = localStorage.getItem(KEY);
         if (raw) {
-          recoveryText = storageBlocked
-            ? raw
-            : (await createLibraryBackup(state)).text;
+          recoveryText = raw;
           await keepRecoveryPoint(recoveryText, {
+            mediaDeferred: true,
             reason: storageBlocked
               ? "unreadable-original"
               : "before-device-import",
@@ -704,6 +707,7 @@ async function showLibraryImport(file) {
         migrateReadingSettings(state.settings);
         writeStoredLibrary(localStorage, KEY, state);
         storageBlocked = false;
+        initialLibrary.invalidRecords = [];
         initialLibrary.kind = "ready";
         closeModal();
         view = "library";
@@ -719,7 +723,9 @@ async function showLibraryImport(file) {
         setCustomStylePresets(state);
         if (recoveryText && !previousBlocked) {
           try {
-            const rollback = validateImport(recoveryText);
+            const rollback = validateImport(recoveryText, {
+              allowStoredAssets: true,
+            });
             await restoreLibraryImages(rollback);
           } catch {}
         }
@@ -823,7 +829,7 @@ function libraryPage() {
       )
       .join("");
   }
-  return `${heading(childMode ? "우리 아이의 책장" : "우리 책장", childMode ? "좋아하는 책을 골라, 함께 듣고 읽어요." : "한 권 한 권, 우리 아이의 이야기가 쌓이는 곳.", `<div class="date-pill">${icon("calendar")}${new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })}</div>`)}${
+  return `${initialLibrary.invalidRecords?.length ? `<div class="notice">읽지 못한 항목 ${initialLibrary.invalidRecords.length}개 · <button class="btn btn-small btn-outline" data-action="show-invalid-records">보기</button></div>` : ""}${heading(childMode ? "우리 아이의 책장" : "우리 책장", childMode ? "좋아하는 책을 골라, 함께 듣고 읽어요." : "한 권 한 권, 우리 아이의 이야기가 쌓이는 곳.", `<div class="date-pill">${icon("calendar")}${new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })}</div>`)}${
     !childMode
       ? `<section class="hero"><div class="hero-content"><div class="eyebrow">${icon("spark")}A LITTLE STORY, A BIG ADVENTURE</div><h3>아이의 오늘이,<br>한 권의 동화로.</h3><p>익숙한 얼굴, 좋아하는 세상.<br>우리 아이가 주인공인 이야기를 만들어 보세요.</p>${btn("새 이야기 만들기", "new-story", "primary", "plus")}</div></section><div class="materials-strip"><span class="strip-label">${icon("characters")}우리 집 이야기 친구들</span><div class="strip-divider"></div><div class="strip-characters">${activeCharacters(
           state,
@@ -1908,6 +1914,12 @@ async function onAction(e) {
     else protectedAction(showDeviceTransfer);
     return;
   }
+  if (a === "show-invalid-records") {
+    showModal(
+      `${modalHeader("읽지 못한 항목")}<p>나머지 책과 재료는 계속 사용할 수 있어요. 아래 항목의 원본도 이 기기에 보존합니다.</p><ul>${(initialLibrary.invalidRecords || []).map((item) => `<li>${esc(item.record?.title || item.record?.name || item.record?.id || item.collection)} · ${esc(item.error)}</li>`).join("")}</ul>${btn("원본 파일 보관", "download-original", "outline", "download")}`,
+    );
+    return;
+  }
   if (a === "download-original") {
     if (initialLibrary.raw)
       downloadFile(
@@ -1922,7 +1934,9 @@ async function onAction(e) {
       const point = await latestRecoveryPoint();
       if (!point) return toast("보관된 복구 파일이 아직 없어요.");
       downloadFile(
-        point.text,
+        point.mediaDeferred
+          ? (await createLibraryBackup(JSON.parse(point.text))).text
+          : point.text,
         "donghwa-workshop-recovery.json",
         "application/json",
       );

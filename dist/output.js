@@ -740,20 +740,35 @@ async function directImage(url) {
 }
 
 /** Store direct references once in the backup, without inflating localStorage on restore. */
-async function externalizeDirectImages(state, assets) {
+const directBlobCache = new Map();
+async function externalizeDirectImages(state, assets, { blobs = false } = {}) {
   const byUrl = new Map([...assets].map(([id, image]) => [image.dataUrl, id]));
   let bytes = [...assets.values()].reduce(
-    (total, image) => total + image.bytes.length,
+    (total, image) => total + (blobs ? image.size : image.bytes.length),
     0,
   );
   const storeURL = async (url) => {
-    const canonical = url.startsWith("data:image/")
-      ? checkedInlineImage(url)
-      : url;
+    const canonical =
+      !blobs && url.startsWith("data:image/") ? checkedInlineImage(url) : url;
     let id = byUrl.get(canonical);
     if (!id) {
-      const image = await directImage(canonical);
-      bytes += image.bytes.length;
+      let image;
+      if (blobs) {
+        if (!/^(data:image\/|blob:|https?:\/\/|\/assets\/)/i.test(canonical))
+          throw new Error("백업할 그림 주소를 확인해 주세요.");
+        image = directBlobCache.get(canonical);
+        if (!image) {
+          const response = await fetch(canonical);
+          if (!response.ok) throw new Error("그림 원본을 읽지 못했어요.");
+          image = await response.blob();
+          if (!image.size || !/^image\//i.test(image.type))
+            throw new Error("그림 원본 형식을 확인해 주세요.");
+          if (directBlobCache.size >= 1000)
+            directBlobCache.delete(directBlobCache.keys().next().value);
+          directBlobCache.set(canonical, image);
+        }
+      } else image = await directImage(canonical);
+      bytes += blobs ? image.size : image.bytes.length;
       if (bytes > 150 * 1024 * 1024)
         throw new Error(
           "그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.",
@@ -923,7 +938,7 @@ async function completeAudioBackup(state) {
 }
 
 /** A complete, editable transfer file. This never generates images, text or audio. */
-export async function createLibraryBackup(state) {
+export async function createLibraryBackup(state, { mode = "text" } = {}) {
   if (!state || !Array.isArray(state.books) || !Array.isArray(state.characters))
     throw new Error("백업할 라이브러리를 찾을 수 없어요.");
   const snapshot = withoutCredentials(state, { excludePin: true });
@@ -940,9 +955,18 @@ export async function createLibraryBackup(state) {
       throw new Error(
         "그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.",
       );
-    assets.set(id, await blobImage(blob));
+    assets.set(id, mode === "blobs" ? blob : await blobImage(blob));
   }
-  await externalizeDirectImages(snapshot, assets);
+  await externalizeDirectImages(snapshot, assets, { blobs: mode === "blobs" });
+  if (mode === "blobs") {
+    for (const id of referencedAudioAssets(snapshot)) {
+      const asset = await getAudioAsset(id);
+      if (!asset?.blob?.size)
+        throw new Error("참조하는 음원 원본이 기기에 없어 저장을 중단했어요.");
+      assets.set(id, asset.blob);
+    }
+    return { snapshot, assets };
+  }
   const exportedAt = new Date().toISOString();
   const imageAssets = [...assets].map(([id, image]) => ({
     id,

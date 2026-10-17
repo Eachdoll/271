@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v19";
+const CACHE = "donghwa-shell-v20";
 const FILES = [
   "./story-quality/data/worlds.json",
   "./story-quality/dist/cli/distill.js",

@@ -248,35 +248,56 @@ function remapIds(value, mapping) {
 }
 
 /** Build through the existing complete backup path, then store binary media separately. */
+const digestCache = new WeakMap();
+export function hashMediaBlob(blob) {
+  if (!digestCache.has(blob))
+    digestCache.set(
+      blob,
+      blob
+        .arrayBuffer()
+        .then(sha256)
+        .catch((error) => {
+          digestCache.delete(blob);
+          throw error;
+        }),
+    );
+  return digestCache.get(blob);
+}
 async function cloudSnapshot(state, makeBackup) {
   const originalIds = referencedImageIds(state),
-    backup = await makeBackup(state),
+    backup = await makeBackup(state, { mode: "blobs" }),
     media = [],
     mapping = new Map();
-  for (const [kind, items] of [
-    ["image", backup.imageAssets || []],
-    ["audio", backup.audioAssets || []],
-  ]) {
-    for (const item of items) {
-      const blob = dataBlob(item.dataUrl, kind),
-        hash = await sha256(await blob.arrayBuffer());
-      // The backup externalizer allocates UUIDs for inline/default style images. Their
-      // cloud IDs must instead stay stable across autosaves, without editing live state.
-      const id =
-        kind === "image" && !originalIds.has(item.id)
-          ? "image-cloud-" + hash
-          : item.id;
-      if (id !== item.id) mapping.set(item.id, id);
-      if (!media.some((asset) => asset.id === id))
-        media.push({
-          id,
-          kind,
-          mimeType: blob.type,
-          size: blob.size,
-          sha256: hash,
-          blob,
-        });
-    }
+  const assets =
+    backup.assets instanceof Map
+      ? backup.assets
+      : new Map([
+          ...(backup.imageAssets || []).map((item) => [
+            item.id,
+            dataBlob(item.dataUrl, "image"),
+          ]),
+          ...(backup.audioAssets || []).map((item) => [
+            item.id,
+            dataBlob(item.dataUrl, "audio"),
+          ]),
+        ]);
+  for (const [assetId, blob] of assets) {
+    const kind = assetId.startsWith("audio-") ? "audio" : "image";
+    const hash = await hashMediaBlob(blob);
+    const id =
+      kind === "image" && !originalIds.has(assetId)
+        ? "image-cloud-" + hash
+        : assetId;
+    if (id !== assetId) mapping.set(assetId, id);
+    if (!media.some((asset) => asset.id === id))
+      media.push({
+        id,
+        kind,
+        mimeType: blob.type.split(";")[0].trim().toLowerCase(),
+        size: blob.size,
+        sha256: hash,
+        blob,
+      });
   }
   const compact = semanticValue(remapIds(backup.snapshot, mapping));
   if (encoder.encode(JSON.stringify(compact)).byteLength > 8 * 1024 * 1024)
@@ -358,6 +379,7 @@ export function createCloudSync(context) {
   };
   let stopped = true,
     operation = null,
+    operationKind = null,
     controller = null,
     epoch = 0,
     sequence = 0,
@@ -542,6 +564,28 @@ export function createCloudSync(context) {
     }
     return user;
   }
+  async function libraryMeta(op, user) {
+    const record = await (
+      await request("/library?meta=1", op, {}, user)
+    ).json();
+    check(op);
+    if (
+      typeof record?.exists !== "boolean" ||
+      !Number.isSafeInteger(record.revision) ||
+      record.revision < 0
+    )
+      throw new CloudSyncError(
+        "클라우드 버전 정보를 읽지 못했어요.",
+        "INVALID_LIBRARY",
+      );
+    emit({
+      remoteExists: record.exists,
+      revision: record.revision,
+      updatedAt: record.updatedAt || null,
+      remoteSummary: record.summary || summary(null),
+    });
+    return record;
+  }
   async function library(op, user) {
     const record = recordChecked(
       await (await request("/library", op, {}, user)).json(),
@@ -675,6 +719,7 @@ export function createCloudSync(context) {
     return getStatus();
   }
   async function upload(record, user, op, force = false) {
+    if (deferRemote(user, true)) return getStatus();
     if (!parent())
       throw new CloudSyncError(
         "부모 모드에서 클라우드에 저장할 수 있어요.",
@@ -701,8 +746,11 @@ export function createCloudSync(context) {
       stateHash = await hashCloudState(snapshot),
       prepared = await cloudSnapshot(snapshot, makeBackup);
     check(op);
+    if (deferRemote(user, true)) return getStatus();
     const remoteMedia = new Map(record.manifest.map((item) => [item.id, item]));
     await twoAtATime(prepared.media, async (item) => {
+      check(op);
+      if (!canApplyRemote()) return;
       const existing = remoteMedia.get(item.id);
       if (
         existing?.sha256 === item.sha256 &&
@@ -726,6 +774,7 @@ export function createCloudSync(context) {
       );
     });
     check(op);
+    if (deferRemote(user, true)) return getStatus();
     const result = await (
       await request(
         "/library",
@@ -776,6 +825,29 @@ export function createCloudSync(context) {
   async function reconcile(op) {
     const user = await session(op);
     if (!user) return getStatus();
+    const meta = await libraryMeta(op, user);
+    if (blocked === "account-changed") return getStatus();
+    const currentBaseline = metadata?.accountId === user.id ? metadata : null;
+    if (meta.exists && currentBaseline?.revision === meta.revision) {
+      const dirty =
+        (await hashCloudState(context.getState())) !==
+        currentBaseline.stateHash;
+      if (!dirty) {
+        blocked = null;
+        emit({
+          phase: "ready",
+          connected: true,
+          dirty: false,
+          reason: null,
+          error: null,
+        });
+        return getStatus();
+      }
+      if (!canApplyRemote()) {
+        deferRemote(user, true);
+        return getStatus();
+      }
+    }
     const record = await library(op, user);
     if (blocked === "account-changed") return getStatus();
     const baseline = metadata?.accountId === user.id ? metadata : null;
@@ -795,6 +867,28 @@ export function createCloudSync(context) {
     const dirty =
       (await hashCloudState(context.getState())) !== baseline.stateHash;
     check(op);
+    if (
+      record.exists &&
+      record.revision !== baseline.revision &&
+      (await hashCloudState(record.state)) ===
+        (await hashCloudState(context.getState()))
+    ) {
+      persist({
+        accountId: user.id,
+        revision: record.revision,
+        stateHash: await hashCloudState(context.getState()),
+        updatedAt: record.updatedAt || null,
+      });
+      blocked = null;
+      emit({
+        phase: "ready",
+        connected: true,
+        dirty: false,
+        reason: null,
+        error: null,
+      });
+      return getStatus();
+    }
     if (blocked === "conflict" || blocked === "choice") {
       emit({
         phase: blocked,
@@ -828,6 +922,8 @@ export function createCloudSync(context) {
       return Promise.reject(
         new CloudSyncError("클라우드 연결을 먼저 시작해 주세요.", "STOPPED"),
       );
+    if (operation && kind !== "refresh" && operationKind === "refresh")
+      return operation.then(() => execute(kind, action, { swallow }));
     if (operation)
       return kind === "refresh"
         ? operation
@@ -837,6 +933,7 @@ export function createCloudSync(context) {
               "BUSY",
             ),
           );
+    operationKind = kind;
     controller = new AbortController();
     const op = { epoch: ++epoch, signal: controller.signal };
     emit({
@@ -898,6 +995,7 @@ export function createCloudSync(context) {
       } finally {
         if (op.epoch === epoch) {
           operation = null;
+          operationKind = null;
           controller = null;
           emit({ busy: false });
           if (status.phase === "ready") schedule();

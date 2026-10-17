@@ -236,3 +236,12 @@ test('superseded library snapshots are removed from R2 and a CAS loss removes th
   assert.equal(stale.status,409);assert.equal(snapshots().length,1,'CAS에 진 저장은 자기가 쓴 객체를 남기지 않습니다');
   const read=await call(env,'/api/cloud/library');assert.equal(read.data.revision,2);assert.equal(read.data.state.backgrounds[0].name,'둘째 집');
 });
+
+test('A-3 metadata polls read only D1 and preserve account scoping',async()=>{
+  const env=environment();
+  assert.deepEqual((await call(env,'/api/cloud/library?meta=1')).data,{exists:false,revision:0,updatedAt:null,summary:{bookCount:0,characterCount:0,backgroundCount:0}});
+  await save(env);env.reads.length=0;
+  const meta=(await call(env,'/api/cloud/library?meta=1')).data;
+  assert.equal(meta.revision,1);assert.deepEqual(meta.summary,{bookCount:0,characterCount:0,backgroundCount:1});assert.equal(meta.state,undefined);assert.equal(meta.manifest,undefined);assert.deepEqual(env.reads,[]);
+  assert.equal((await call(env,'/api/cloud/library?meta=1',{owner:'owner-B'})).data.exists,false);
+});
