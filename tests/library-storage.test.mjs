@@ -28,3 +28,10 @@ test('A-2 the app World migration v2 reload keeps the real saved library instead
  const state=seedState();migrateWorldState(state);state.characters[0].name='저장한 유하';state.books[0].title='실제 만든 책';assert.equal(state.version,2);const s=storage(JSON.stringify(state)),result=readStoredLibrary(s,key,{validate:validateStoredLibrary,seed});assert.equal(result.kind,'ready');assert.equal(result.state.characters[0].name,'저장한 유하');assert.equal(result.state.books[0].title,'실제 만든 책');assert.equal(result.invalidRecords.length,0);
  assert.throws(()=>validateStoredLibrary(JSON.stringify({...state,version:3})),/구조/);
 });
+test('R2-10 legacy empty books and HTTP images remain visible while invalid records retain distinct reasons',async()=>{
+ const {validateStoredLibrary}=await import('../dist/library-storage.js');
+ const books=[{id:'empty',title:'쪽 없는 옛 책',pages:[]},{id:'remote',title:'옛 그림책',pages:[{ko:'안녕',en:'Hi',imageUrl:'https://example.test/image.png'}]},{id:'http',title:'이전 HTTP 그림',pages:[{ko:'안녕',en:'Hi',imageUrl:'http://example.test/image.png'}]},{id:'bad-image',title:'잘못된 그림',pages:[{ko:'안녕',en:'Hi',imageUrl:'javascript:bad'}]},{id:'bad-text',title:'잘못된 본문',pages:[{ko:3,en:'Hi'}]}];
+ const raw=JSON.stringify({books,characters:[],settings:{}}),result=validateStoredLibrary(raw);
+ assert.deepEqual(result.state.books.map(b=>b.id),['empty','remote','http']);assert.equal(result.invalidRecords.length,2);assert.match(result.invalidRecords[0].error,/그림 주소/);assert.match(result.invalidRecords[1].error,/본문 형식/);
+ const s=storage(raw);writeStoredLibrary(s,key,result.state,{invalidRecords:result.invalidRecords});assert.deepEqual(JSON.parse(s.raw()).books,books);
+});
