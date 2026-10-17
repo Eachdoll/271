@@ -21,6 +21,7 @@ export interface AnthropicEngineOptions {
   baseUrl?: string; // 기본 https://api.anthropic.com
   /** 'low' | 'medium' | 'high' — 짧은 구조화 작업은 low가 싸고 빠르다 */
   effort?: 'low' | 'medium' | 'high';
+  thinkingHeadroom?: number;
   /** 재시도 횟수 (429/5xx). 기본 3 */
   retries?: number;
   timeoutMs?: number;
@@ -41,8 +42,13 @@ export function createAnthropicEngine(opts: AnthropicEngineOptions): TextEngine 
         max_tokens: req.maxTokens,
         system: req.system,
         messages: [{ role: 'user', content: req.user }],
-        temperature: req.temperature,
+        // Claude 5.5 계열은 temperature를 거부하므로(400) 보내지 않습니다.
       };
+      // 5.5 계열은 사고(thinking)가 기본으로 켜져 있어 작은 max_tokens를 사고 토큰이 모두 소진합니다.
+      // 끌 수 있는 모델은 끄고, 끌 수 없는 모델(Opus 5.5 등)은 사고 여유분을 더해 본문이 잘리지 않게 합니다.
+      const thinkingOff: Record<string, unknown> = { 'claude-haiku-5-5': { type: 'disabled' }, 'claude-sonnet-5-5': { type: 'between_tools' } };
+      if (thinkingOff[opts.model]) body.thinking = thinkingOff[opts.model];
+      else body.max_tokens = req.maxTokens + (opts.thinkingHeadroom ?? 8000);
       if (opts.effort) body.output_config = { ...(body.output_config as object | undefined), effort: opts.effort };
       if (req.jsonSchema) body.output_config = { ...(body.output_config as object | undefined), format: { type: 'json_schema', schema: req.jsonSchema } };
 
