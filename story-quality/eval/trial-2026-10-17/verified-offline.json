@@ -1,0 +1,370 @@
+{
+  "mode": "offline only; zero API calls",
+  "importedSourceCommit": "836a905900bf64670501bd479bee42b3470f5796",
+  "topicCount": 20,
+  "eraCounts": {
+    "present": 9,
+    "past": 6,
+    "future": 3,
+    "fantasy": 2
+  },
+  "note": "Original summaries are retained. The Sonnet summary predates failure-reason normalization; rechecked values are separate. Time statistics use arithmetic mean and the average of the two middle observations.",
+  "runs": [
+    {
+      "runId": "sonnet55-trial",
+      "generatorId": "anthropic:claude-sonnet-5-5",
+      "judgeId": "anthropic:claude-haiku-5-5",
+      "rows": 20,
+      "errors": 0,
+      "scope": "outline only; prose/pagination/reading-level/child-review unmeasured",
+      "rubricMean": 9.15,
+      "rubricPassCount": 20,
+      "originalPlotPassCount": 0,
+      "recheckedPlotPassCount": 11,
+      "costUsd": 0.7599125000000001,
+      "costPerBookUsd": 0.037995625000000005,
+      "latencySecondsMean": 32.89415,
+      "latencySecondsMedian": 32.569,
+      "checks": [
+        {
+          "topicId": "e01",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e02",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e03",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e04",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e05",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "실패 이유 순서가 [정해진 재료]와 다름: interrupted,wrong_method 기대"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e06",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e07",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"빛나는 단추\"이(가) 반전 비트에서 회수되지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e08",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e09",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "생물 반복: 알파카"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e10",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e11",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e12",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e13",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"커다란 보라 꽃 한 송이\"이(가) 반전 비트에서 회수되지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e14",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e15",
+          "originalPlotOk": false,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e16",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "배경 생물 \"엄마 돌보는 로봇 강아지\"이(가) 등장하지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e17",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"아주 작은 팬파이프 — 유하가 거실에서 자석 숟가락과 함께 챙겨 와 주머니 끈에 걸어 둔 작은 피리. 둥둥 뜨는 복도에서 주머니 밖으로 살짝 떠올라 반짝이는 것을 모두가 본다.\"이(가) 비트 1~2에 없음",
+            "심은 물건 \"아주 작은 팬파이프 — 유하가 거실에서 자석 숟가락과 함께 챙겨 와 주머니 끈에 걸어 둔 작은 피리. 둥둥 뜨는 복도에서 주머니 밖으로 살짝 떠올라 반짝이는 것을 모두가 본다.\"이(가) 반전 비트에서 회수되지 않음",
+            "실패 이유 순서가 [정해진 재료]와 다름: interrupted,wrong_method,wrong_place 기대"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e18",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "실패 이유 순서가 [정해진 재료]와 다름: interrupted,wrong_place,wrong_method 기대"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e19",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"커다란 납작한 빵\"이(가) 반전 비트에서 회수되지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e20",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "실패 이유 순서가 [정해진 재료]와 다름: interrupted,wrong_method,wrong_place 기대"
+          ],
+          "regenerate": []
+        }
+      ]
+    },
+    {
+      "runId": "opus55-trial",
+      "generatorId": "anthropic:claude-opus-5-5",
+      "judgeId": "anthropic:claude-haiku-5-5",
+      "rows": 20,
+      "errors": 0,
+      "scope": "outline only; prose/pagination/reading-level/child-review unmeasured",
+      "rubricMean": 9.15,
+      "rubricPassCount": 20,
+      "originalPlotPassCount": 13,
+      "recheckedPlotPassCount": 13,
+      "costUsd": 2.6826961000000002,
+      "costPerBookUsd": 0.13413480500000002,
+      "latencySecondsMean": 74.54705,
+      "latencySecondsMedian": 61.7305,
+      "checks": [
+        {
+          "topicId": "e01",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "배경 생물 \"텃밭 무당벌레\"이(가) 등장하지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e02",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "배경 생물 \"베란다 달팽이\"이(가) 등장하지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e03",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e04",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e05",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e06",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e07",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e08",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e09",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e10",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e11",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e12",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e13",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"커다란 보라 꽃 한 송이. 유하가 집 꽃병에서 들고 와서 X 표시 바위 옆 모래에 꽂아 소라게 경주 결승선으로 삼는다.\"이(가) 비트 1~2에 없음",
+            "심은 물건 \"커다란 보라 꽃 한 송이. 유하가 집 꽃병에서 들고 와서 X 표시 바위 옆 모래에 꽂아 소라게 경주 결승선으로 삼는다.\"이(가) 반전 비트에서 회수되지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e14",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"커다란 등불: 거실 소파 옆에 있던 불 꺼진 등불. 유하가 실크로드까지 들고 간다.\"이(가) 비트 1~2에 없음",
+            "심은 물건 \"커다란 등불: 거실 소파 옆에 있던 불 꺼진 등불. 유하가 실크로드까지 들고 간다.\"이(가) 반전 비트에서 회수되지 않음",
+            "생물 반복: 낙타"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e15",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"유하가 작은 가방에 붙인 금색 별 모양 스티커. 한쪽 귀퉁이가 살짝 들떠 있다\"이(가) 비트 1~2에 없음",
+            "심은 물건 \"유하가 작은 가방에 붙인 금색 별 모양 스티커. 한쪽 귀퉁이가 살짝 들떠 있다\"이(가) 반전 비트에서 회수되지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e16",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "배경 생물 \"엄마 돌보는 로봇 강아지\"이(가) 등장하지 않음"
+          ],
+          "regenerate": []
+        },
+        {
+          "topicId": "e17",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e18",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        },
+        {
+          "topicId": "e19",
+          "originalPlotOk": false,
+          "recheckedPlotOk": false,
+          "fix": [
+            "심은 물건 \"커다란 납작한 빵 (엄마가 구워 준 동그란 빵)\"이(가) 반전 비트에서 회수되지 않음"
+          ],
+          "regenerate": [
+            "금지 소재: 때리"
+          ]
+        },
+        {
+          "topicId": "e20",
+          "originalPlotOk": true,
+          "recheckedPlotOk": true,
+          "fix": [],
+          "regenerate": []
+        }
+      ]
+    }
+  ]
+}

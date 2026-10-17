@@ -1,5 +1,7 @@
 # 동화공방
 
+실평가 커밋 반입·앱 어댑터 수정·재집계는 [평가 통합 보고 · r4](EVAL_INTEGRATION_2026-10-17.md)를 참고하세요.
+
 r2 검토의 R2-1~10 수정은 [Codex r3 완료 보고](CODEX_R3_COMPLETION_2026-10-17.md)에 정리했습니다.
 
 Claude r1 이후 A-1~A-18 / B-1~B-12 작업 결과와 검증은 [Codex 완료 보고](CODEX_COMPLETION_2026-10-17.md)를 참고하세요.
