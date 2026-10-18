@@ -19,6 +19,8 @@ export const CATCHPHRASE_MIN_CORE = 2;
 export const CATCHPHRASE_LIMIT = 1;
 /** 줄거리 프롬프트의 등장인물 줄에 붙는 제한 문구. */
 export const CATCHPHRASE_ONCE_KO = '책 전체에서 최대 1번, 꼭 쓰지 않아도 된다. 후렴으로 쓰지 않는다';
+/** 같은 프롬프트에서 두 번째 인물부터 붙는 짧은 제한 문구(긴 문장은 한 번만 쓴다). */
+export const CATCHPHRASE_SHORT_KO = '최대 1번';
 /** 최근 책에서 썼으므로 이번 책에서 뺄 때의 문구. */
 export const CATCHPHRASE_OMIT_KO = '이번 책에서는 말버릇을 쓰지 않는다';
 /** 전문 단계 규칙 한 줄(한글). */
@@ -28,6 +30,8 @@ export const CATCHPHRASE_RULE_EN = "Use each character's catchphrase at most onc
 const normalize = (value) => String(value ?? '').normalize('NFC').toLowerCase();
 const tokensOf = (value) => normalize(value).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 const escapeChar = (ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** 프롬프트·수정 항목에 넣을 때 줄바꿈·연속 공백을 한 칸으로 줄인다(한 줄 안에 머물게). */
+const oneLine = (value) => String(value ?? '').replace(/\s+/gu, ' ').trim();
 function coreShape(phrase) {
     const tokens = tokensOf(phrase);
     if (!tokens.length)
@@ -139,27 +143,41 @@ export function catchphraseRepeats(texts, phrases, minCount = CATCHPHRASE_LIMIT 
  * - 말버릇이 있으면: `, 말버릇 "X"(책 전체에서 최대 1번, 꼭 쓰지 않아도 된다. 후렴으로 쓰지 않는다)`
  * - 최근 책과 돌려 쓰느라 뺐으면: `, 이번 책에서는 말버릇을 쓰지 않는다`
  * - 둘 다 아니면 빈 문자열(빈 `말버릇 ""`을 남기지 않는다).
+ * - short=true면 긴 제한 문장 대신 `(최대 1번)`만 붙인다. 한 프롬프트에서 긴 문장은 한 번만 쓴다(catchphraseClauses).
  */
-export function catchphraseClause(phrase, omitted = false) {
+export function catchphraseClause(phrase, omitted = false, short = false) {
     if (omitted)
         return `, ${CATCHPHRASE_OMIT_KO}`;
-    const text = String(phrase ?? '').trim();
-    return text ? `, 말버릇 "${text}"(${CATCHPHRASE_ONCE_KO})` : '';
+    const text = oneLine(phrase);
+    return text ? `, 말버릇 "${text}"(${short ? CATCHPHRASE_SHORT_KO : CATCHPHRASE_ONCE_KO})` : '';
+}
+/**
+ * 한 프롬프트의 등장인물들(프롬프트에 나오는 순서) 말버릇 구절. 말버릇이 있는 첫 인물에게만 긴 제한 문장을 붙이고
+ * 나머지는 `(최대 1번)`만 붙인다. 인물이 많아도 줄거리 프롬프트가 길어져 참고 예시가 빠지지 않게 한다.
+ */
+export function catchphraseClauses(characters) {
+    let fullUsed = false;
+    return (characters ?? []).map((character) => {
+        const clause = catchphraseClause(character?.catchphrase, character?.catchphraseOmitted === true, fullUsed);
+        if (clause && character?.catchphraseOmitted !== true)
+            fullUsed = true;
+        return clause;
+    });
 }
 const beatLabels = (ids) => ids.map((n) => `비트 ${n}`).join('·');
 /**
  * plotCheck 수정 항목: 말버릇이 책 전체에서 2회 이상. 앱의 부분 수정(fixedBeatIds)이 고칠 비트를 알 수 있게
- * 비트 번호마다 "비트 N"을 붙인다.
+ * 비트 번호마다 "비트 N"을 붙인다. 말버릇의 줄바꿈은 한 칸으로 줄여 항목이 항상 한 줄이다.
  */
 export function catchphraseRepeatFix(phrase, count, beatIds, inRefrain = false) {
-    return `말버릇 "${phrase}" ${count}회(책 전체 최대 ${CATCHPHRASE_LIMIT}회${inRefrain ? ', 후렴 포함' : ''})${beatIds.length ? `: ${beatLabels(beatIds)}` : ''} — 한 곳만 남기고 나머지는 다른 말로 바꾼다`;
+    return `말버릇 "${oneLine(phrase)}" ${count}회(책 전체 최대 ${CATCHPHRASE_LIMIT}회${inRefrain ? ', 후렴 포함' : ''})${beatIds.length ? `: ${beatLabels(beatIds)}` : ''} — 한 곳만 남기고 나머지는 다른 말로 바꾼다`;
 }
-/** plotCheck 수정 항목: 후렴이 말버릇과 같은 핵심 구절을 쓴다. */
+/** plotCheck 수정 항목: 후렴이 말버릇과 같은 핵심 구절을 쓴다. 후렴·말버릇의 줄바꿈은 한 칸으로 줄인다. */
 export function refrainOverlapFix(refrain, phrase, beatIds) {
-    return `후렴 "${refrain}"이(가) 말버릇 "${phrase}"과(와) 같은 구절을 씀 — 후렴을 다른 말로 바꾼다${beatIds.length ? `: ${beatLabels(beatIds)}` : ''}`;
+    return `후렴 "${oneLine(refrain)}"이(가) 말버릇 "${oneLine(phrase)}"과(와) 같은 구절을 씀 — 후렴을 다른 말로 바꾼다${beatIds.length ? `: ${beatLabels(beatIds)}` : ''}`;
 }
-/** 말버릇 검사에서 나온 수정 항목인지. 앱은 수정 패스 뒤에도 남은 말버릇 항목을 차단 사유가 아닌 권고로 다룬다. */
+/** 말버릇 검사에서 나온 수정 항목인지. 앱은 이 항목을 차단 사유가 아닌 권고로 다룬다. 줄바꿈이 섞여도 알아본다. */
 export function isCatchphraseFix(message) {
     const text = String(message ?? '');
-    return /^말버릇 ".*" \d+회\(책 전체 최대 \d+회/u.test(text) || /^후렴 ".*"이\(가\) 말버릇 ".*"과\(와\) 같은 구절을 씀/u.test(text);
+    return /^말버릇 "[\s\S]*?" \d+회\(책 전체 최대 \d+회/u.test(text) || /^후렴 "[\s\S]*?"이\(가\) 말버릇 "[\s\S]*?"과\(와\) 같은 구절을 씀/u.test(text);
 }

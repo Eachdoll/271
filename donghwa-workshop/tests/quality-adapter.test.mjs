@@ -209,35 +209,99 @@ test('R8-1 frozen language policy is forwarded independently and survives checkp
   await generateQualityProse(outline,saved,{engine:paid,qualityCheckpoint:result.meta.qualityCheckpoint},services(paid));assert.equal(paid.calls,calls);
  }
 });
-test('R9-A a catchphrase repeat asks one targeted fix and, if it survives, stays advisory instead of discarding the paid outline',async()=>{
- const input=fixture();input.characters[0].catchphrase='같이 가자!';
- const inject=(json,request)=>{if(!request.user.startsWith('아래 줄거리 JSON에서'))for(const i of [1,3])json.beats[i].summary+=' 유하가 "같이 가자!" 해요.';return json;};
+const policy=(phrases={yuha:'같이 가자!'},omit=[])=>({version:1,limit:1,omit,phrases,recentBookIds:[]});
+const isFix=request=>request.user.startsWith('아래 줄거리 JSON에서');
+const sayTogether=' 유하가 "같이 가자!" 해요.';
+test('R9 fix: a catchphrase-only repeat buys no fix pass; the paid outline is accepted with the item kept as an advisory, also on resume',async()=>{
+ const input=fixture();input.characters[0].catchphrase='같이 가자!';input.catchphrasePolicy=policy();
+ const inject=(json,request)=>{if(!isFix(request))for(const i of [1,3])json.beats[i].summary+=sayTogether;return json;};
  const engine=fakeOutlineEngine(input,inject),result=await generateQualityOutline(input,{engine},services(engine));
+ assert.equal(engine.calls.length,1,'no paid fix pass for an advisory alone');assert.equal(result.meta.requests,1);
  assert.match(engine.calls[0].user,/^\[등장인물\] 유하: 관찰하는 아이, 말버릇 "같이 가자!"\(책 전체에서 최대 1번, 꼭 쓰지 않아도 된다\. 후렴으로 쓰지 않는다\)$/m);
  assert.match(engine.calls[0].system,/CATCHPHRASES: Use each character's catchphrase at most once in the whole book, or not at all\./);
- const fixes=engine.calls.filter(request=>request.user.startsWith('아래 줄거리 JSON에서'));
- assert.equal(fixes.length,1);assert.match(fixes[0].user,/^- 말버릇 "같이 가자!" 2회\(책 전체 최대 1회\): 비트 2·비트 4 — /m);
- assert.deepEqual(result.meta.quality.catchphraseAdvisories,[result.meta.quality.check.fix.find(message=>message.startsWith('말버릇'))]);
- assert.equal(result.data.beats.length,frozenBeatCount(input));
+ const advisory=result.meta.quality.check.fix.find(message=>message.startsWith('말버릇'));
+ assert.match(advisory,/^말버릇 "같이 가자!" 2회\(책 전체 최대 1회\): 비트 2·비트 4 — /);
+ assert.deepEqual(result.meta.quality.catchphraseAdvisories,[advisory]);assert.equal(result.meta.quality.catchphraseFixFallback,undefined);
+ assert.equal(result.data.beats.length,frozenBeatCount(input));assert.ok(result.data.beats[1].summary.endsWith(sayTogether));
+ const resumed=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},services(engine));
+ assert.equal(engine.calls.length,1);assert.equal(resumed.meta.requests,0);assert.deepEqual(resumed.data,result.data);
  // A clean outline is not touched by the new check.
- const clean=fixture();clean.characters[0].catchphrase='같이 가자!';const plain=fakeOutlineEngine(clean),ok=await generateQualityOutline(clean,{engine:plain},services(plain));
- assert.equal(plain.calls.filter(request=>request.user.startsWith('아래 줄거리 JSON에서')).length,0);assert.equal(ok.meta.quality.catchphraseAdvisories,undefined);
+ const clean=fixture();clean.characters[0].catchphrase='같이 가자!';clean.catchphrasePolicy=policy();const plain=fakeOutlineEngine(clean),ok=await generateQualityOutline(clean,{engine:plain},services(plain));
+ assert.equal(plain.calls.filter(isFix).length,0);assert.equal(ok.meta.quality.catchphraseAdvisories,undefined);
+});
+test('R9 fix: if a catchphrase-only fix pass still happens and breaks the targeted-fix rule, the original paid outline is kept and a resume makes 0 calls',async()=>{
+ // A package that still sends the catchphrase-only pass (the R9-A behaviour) must not cost the outline.
+ const input=fixture();input.characters[0].catchphrase='같이 가자!';input.catchphrasePolicy=policy();
+ const inject=(json,request)=>{if(isFix(request)){json.beats[1].summary=json.beats[1].summary.replace(sayTogether,'');json.beats[0].summary+=' 덧붙인 문장.';}else for(const i of [1,3])json.beats[i].summary+=sayTogether;return json;};
+ const always={...qualityModule,runOutlineStage:args=>qualityModule.runOutlineStage({...args,advisoryCatchphrases:false})};
+ const engine=fakeOutlineEngine(input,inject),svc={...services(engine),qualityModule:async()=>always};
+ const result=await generateQualityOutline(input,{engine},svc);
+ assert.equal(engine.calls.length,2);assert.equal(engine.calls.filter(isFix).length,1);assert.equal(result.meta.requests,2);
+ assert.ok(!result.data.beats[0].summary.includes('덧붙인'));assert.ok(result.data.beats[1].summary.endsWith(sayTogether));
+ assert.equal(result.meta.quality.catchphraseFixFallback.mode,'original');assert.match(result.meta.quality.catchphraseFixFallback.reason,/1번 비트는 검사에서 지적하지 않았으므로/);
+ assert.ok(result.meta.quality.catchphraseAdvisories.length>=1);
+ const resumed=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},svc);
+ assert.equal(engine.calls.length,2,'resume replays both cached calls');assert.equal(resumed.meta.requests,0);assert.equal(resumed.meta.resumedCalls,2);assert.deepEqual(resumed.data,result.data);
+});
+test('R9 fix: in a mixed fix pass an out-of-target catchphrase edit is put back from the original and the targeted fixes are kept',async()=>{
+ const input=fixture();input.characters[0].catchphrase='같이 가자!';input.catchphrasePolicy=policy();
+ const fixer=extra=>(json,request)=>{
+  if(isFix(request)){json.beats[2].newElement='고친 젖은 잎';for(const i of [1,3])json.beats[i].summary=json.beats[i].summary.replace(sayTogether,'');json.beats[0].summary+=extra;}
+  else{json.beats[2].newElement='';for(const i of [1,3])json.beats[i].summary+=sayTogether;}
+  return json;};
+ const engine=fakeOutlineEngine(input,fixer(sayTogether)),result=await generateQualityOutline(input,{engine},services(engine));
+ const fix=engine.calls.find(isFix);assert.match(fix.user,/^- 말버릇 "같이 가자!" 2회/m);assert.match(fix.user,/newElement/);
+ assert.equal(engine.calls.length,2);assert.equal(result.data.beats[2].newElement,'고친 젖은 잎');
+ assert.ok(!result.data.beats[0].summary.includes('같이 가자'),'the untargeted catchphrase edit is restored from the original');
+ assert.ok(!result.data.beats[1].summary.includes('같이 가자')&&!result.data.beats[3].summary.includes('같이 가자'));
+ assert.deepEqual({mode:result.meta.quality.catchphraseFixFallback.mode,restored:result.meta.quality.catchphraseFixFallback.restored},{mode:'restored',restored:['beat:1']});
+ assert.equal(result.meta.quality.check.ok,true);
+ const resumed=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},services(engine));
+ assert.equal(engine.calls.length,2);assert.equal(resumed.meta.requests,0);assert.deepEqual(resumed.data,result.data);
+ // An unrelated edit outside the targets is still rejected exactly as before (paid usage kept).
+ const bad=fakeOutlineEngine(input,fixer(' 아예 다른 사건이 생겨요.'));
+ await assert.rejects(generateQualityOutline(input,{engine:bad},services(bad)),error=>/1번 비트는 검사에서 지적하지 않았으므로/.test(error.message)&&error.meta.requests===2&&Object.keys(error.qualityCheckpoint.completed).length===2);
 });
 test('R9-A frozen rotation hides the omitted phrase from every quality prompt but still checks it',async()=>{
  const {normalizeStoryInput}=await import('../dist/story-generation/pipeline.js');
  const input=fixture();input.characters[0].catchphrase='같이 가자!';input.catchphrasePolicy={version:1,limit:1,omit:['yuha'],phrases:{yuha:'같이 가자!'},recentBookIds:['book-old']};
- const inject=(json,request)=>{if(!request.user.startsWith('아래 줄거리 JSON에서'))for(const i of [1,3])json.beats[i].summary+=' 유하가 "같이 가자!" 해요.';return json;};
+ const inject=(json,request)=>{if(!isFix(request))for(const i of [1,3])json.beats[i].summary+=sayTogether;return json;};
  const own=(bookId,phrase)=>{const book={...clone(data.goldBooks[1]),bookId,approved:true,topic:'비 오는 날 산책'};book.outline.beats[0].summary=`유하가 "${phrase}" 하고 웃어요. ${book.outline.beats[0].summary}`;return book;};
  input.storyQuality.approvedBooks=[own('own-omitted','같이 가자!'),own('own-other','사뿐사뿐!')];
  let excluded;const capture={...qualityModule,runOutlineStage:args=>{excluded=args.excludeBookIds;return qualityModule.runOutlineStage(args);}};
- const engine=fakeOutlineEngine(input,inject);await generateQualityOutline(input,{engine},{...services(engine),normalizeStoryInput,qualityModule:async()=>capture});
+ const engine=fakeOutlineEngine(input,inject),result=await generateQualityOutline(input,{engine},{...services(engine),normalizeStoryInput,qualityModule:async()=>capture});
  // A past book that used the omitted phrase is never offered as an example.
  assert.ok(excluded.includes('own-omitted'));assert.ok(!excluded.includes('own-other'));
  const first=engine.calls[0];
  assert.match(first.user,/^\[등장인물\] 유하: 관찰하는 아이, 이번 책에서는 말버릇을 쓰지 않는다$/m);
  assert.match(first.system,/CATCHPHRASE ROTATION: 유하 \(yuha\) used a catchphrase in a recent book, so they use no catchphrase in this book\./);
  assert.doesNotMatch(first.system+first.user,/같이 가자/);
- assert.ok(engine.calls.some(request=>request.user.startsWith('아래 줄거리 JSON에서')&&/- 말버릇 "같이 가자!" 2회/.test(request.user)));
+ // Still checked (the omitted phrase is in the frozen policy), but as an advisory without a paid fix pass.
+ assert.equal(engine.calls.length,1);
+ assert.ok(result.meta.quality.catchphraseAdvisories.some(message=>/^말버릇 "같이 가자!" 2회/.test(message)));
+});
+test('R9 fix: a draft frozen without a catchphrase policy keeps every pre-R9 outline/prose input (no new text, checks or example filters)',async()=>{
+ const input=fixture();input.characters[0].catchphrase='같이 가자!';input.storyQuality.useDistilledExamples=true;
+ const repeated={...clone(data.goldBooks[0]),bookId:'distilled-repeat',topic:'다른 주제'};repeated.outline.beats.slice(0,3).forEach(beat=>{beat.summary+=sayTogether;});
+ const own={...clone(data.goldBooks[1]),bookId:'own-repeat',approved:true,topic:'비 오는 날 산책'};own.outline.beats.slice(0,2).forEach(beat=>{beat.summary+=sayTogether;});
+ input.storyQuality.approvedBooks=[own];
+ let args;const capture={...qualityModule,runOutlineStage:value=>{args=value;return qualityModule.runOutlineStage(value);}};
+ const inject=(json,request)=>{if(!isFix(request))for(const i of [1,3])json.beats[i].summary+=sayTogether;return json;};
+ const engine=fakeOutlineEngine(input,inject),result=await generateQualityOutline(input,{engine},{...services(engine),qualityData:{...data,distilledBooks:[repeated]},qualityModule:async()=>capture});
+ assert.equal(args.legacyCatchphrasePrompt,true);assert.deepEqual(args.catchphrases,[]);
+ assert.deepEqual(args.excludeBookIds,['quality-book-test']);
+ assert.ok(args.referenceBooks.some(book=>book.bookId==='distilled-repeat'),'pre-R9 candidate list');
+ assert.match(engine.calls[0].user,/^\[등장인물\] 유하: 관찰하는 아이, 말버릇 "같이 가자!"$/m);
+ assert.doesNotMatch(engine.calls[0].system,/CATCHPHRASE/);assert.doesNotMatch(engine.calls[0].user,/최대 1번/);
+ assert.equal(result.meta.quality.catchphraseAdvisories,undefined);assert.ok(!result.meta.quality.check.fix.some(message=>message.startsWith('말버릇')));
+ const outline={...result.data,quality:result.meta.quality},prose={id:'openai',calls:[],async complete(request){this.calls.push(request);return {text:labeled(outline,/return English plain/u.test(request.system)?'en':'ko'),usage:{input:1,output:1}};}};
+ await generateQualityProse(outline,input,{engine:prose},services(prose));
+ for(const request of prose.calls)assert.doesNotMatch(request.system+request.user,/CATCHPHRASE|말버릇은 책 전체에서|catchphrase at most once/);
+ // The same draft with a policy gets the R9 prose rule.
+ const r9={...clone(input),catchphrasePolicy:policy()},prose9={id:'openai',calls:[],async complete(request){this.calls.push(request);return {text:labeled(outline,/return English plain/u.test(request.system)?'en':'ko'),usage:{input:1,output:1}};}};
+ await generateQualityProse(outline,r9,{engine:prose9},services(prose9));
+ assert.ok(prose9.calls.some(request=>request.user.includes('9 말버릇은 책 전체에서 최대 1번만 쓰고')));
+ assert.ok(prose9.calls.some(request=>request.user.includes("9 Use each character's catchphrase at most once")));
 });
 test('R9-A distilled examples that repeat "같이 가자" or a cast catchphrase are skipped; gold and the source file stay as they are',async()=>{
  const {qualityReferenceBooks,repeatsCatchphrase}=await import('../dist/story-generation/quality-adapter.js');

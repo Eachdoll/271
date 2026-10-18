@@ -6,7 +6,7 @@ import { generateBeatsWithBeam } from './beamSearch.js';
 import { writeRichThenSimplify, RICH_LEVEL_OF } from './richThenSimplify.js';
 import { curiosityCheck, retellCheck } from './childSimulator.js';
 import { extractJson, hashString } from './util.js';
-import { catchphraseClause } from './catchphrase.js';
+import { catchphraseClauses, isCatchphraseFix } from './catchphrase.js';
 export async function runOutlineStage(input) {
     const ban = buildBanList(input.approvedBooks, {
         recentBooks: Math.min(50, Math.max(1, Math.round(input.banWindow ?? 10))),
@@ -22,9 +22,9 @@ export async function runOutlineStage(input) {
         world: input.world,
         variantChance: input.variantChance,
     });
-    const charactersCompact = [input.protagonist, ...input.supporting]
-        .map((c) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${catchphraseClause(c.catchphrase, c.catchphraseOmitted === true)}`)
-        .join(' / ');
+    const cast = [input.protagonist, ...input.supporting];
+    const clauses = input.legacyCatchphrasePrompt ? cast.map((c) => (c.catchphrase ? ` "${c.catchphrase}"` : '')) : catchphraseClauses(cast);
+    const charactersCompact = cast.map((c, i) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${clauses[i]}`).join(' / ');
     let calls = 0;
     let cost = 0;
     let outline;
@@ -74,7 +74,7 @@ export async function runOutlineStage(input) {
         };
     }
     else {
-        const makePrompt = (exampleCount) => buildOutlinePrompt({
+        const makePrompt = (exampleCount, legacyCatchphrasePrompt = input.legacyCatchphrasePrompt) => buildOutlinePrompt({
             protagonist: input.protagonist,
             supporting: input.supporting,
             worldCore: input.worldCore,
@@ -93,11 +93,18 @@ export async function runOutlineStage(input) {
             banExamples: input.banExamples,
             exampleCount,
             excludeBookIds: input.excludeBookIds,
+            legacyCatchphrasePrompt,
         });
+        // R9: 말버릇 사용 한도 문구는 참고 예시 예산(1,800)에 세지 않는다. r8 문안 길이로 재므로 한도 문구 때문에
+        // 예시가 빠지지 않고, 예시 수는 r8과 같다(r8 문안이면 실제 프롬프트와 같은 길이).
+        const overBudget = (exampleCount) => {
+            const measured = makePrompt(exampleCount, true);
+            return roughTokenCount(measured.system + measured.user) > 1800;
+        };
         let exampleCount = 2;
-        let prompt = makePrompt(exampleCount);
-        while (exampleCount > 0 && roughTokenCount(prompt.system + prompt.user) > 1800)
-            prompt = makePrompt(--exampleCount);
+        while (exampleCount > 0 && overBudget(exampleCount))
+            exampleCount--;
+        const prompt = makePrompt(exampleCount);
         const r = await input.engines.outline.complete(prompt);
         calls++;
         cost += r.costUsd ?? 0;
@@ -107,9 +114,10 @@ export async function runOutlineStage(input) {
         outline = parsed;
     }
     // 코드 검사 → 지적된 비트만 고치는 수정 호출 1회
-    const catchphrases = input.catchphrases ?? [input.protagonist, ...input.supporting].map((c) => c.catchphrase ?? '');
+    const catchphrases = input.legacyCatchphrasePrompt ? [] : input.catchphrases ?? cast.map((c) => c.catchphrase ?? '');
     let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
-    if (check.fix.length > 0 && check.regenerate.length === 0) {
+    const onlyAdvisory = input.advisoryCatchphrases === true && check.fix.every((message) => isCatchphraseFix(message));
+    if (check.fix.length > 0 && check.regenerate.length === 0 && !onlyAdvisory) {
         const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
         const fr = await input.engines.cheap.complete({ system: '너는 그림책 편집자다. JSON으로만 답한다.', user: fixUser, temperature: 0.3, maxTokens: 4000 });
         calls++;
@@ -145,6 +153,7 @@ export async function runProseStage(input) {
         presentTenseOnly: input.lang === 'en' && input.targetLevelId === 'E0',
         pageCount: input.pageCount,
         condenseOverBudget: input.condenseOverBudget,
+        legacyCatchphrasePrompt: input.legacyCatchphrasePrompt,
     });
 }
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */

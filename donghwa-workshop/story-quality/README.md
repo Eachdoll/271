@@ -58,7 +58,7 @@ story-quality/
     prompts.ts          프롬프트 상수 + fill()
     outlinePrompt.ts    outline.v3 조립 (패턴 + 재료 + 예시 + 금지 + 규칙 7 + 금지 예시 4)
     plotCheck.ts        인과 검사기 (심기-회수, 실패 이유, 새 요소, 주제·이름, 후렴, 꼬리말, 문형 반복, 금지 소재, 장소, 금지 목록, 재료 준수, 말버릇 2회 이상·후렴 겹침)
-    catchphrase.ts      말버릇 비교(앱과 공유): catchphraseCore / countCatchphrase / sharesCore / catchphraseClause. 공백·문장부호·끝 어미 하나는 무시하고 단어 경계를 지킨다
+    catchphrase.ts      말버릇 비교(앱과 공유): catchphraseCore / countCatchphrase / sharesCore / catchphraseClause(s). 공백·문장부호·끝 어미 하나는 무시하고 단어 경계를 지킨다
     beamSearch.ts       비트 단위 탐색: 비트마다 후보 3 → 심사 1
     richThenSimplify.ts 전문 2패스: 한 단계 위 수준으로 풍부하게 → 목표 수준으로 단순화 → 직설어 남으면 1회 수정
     childSimulator.ts   아이 시뮬레이터: 쪽별 호기심 점수, 세 문장 되말하기

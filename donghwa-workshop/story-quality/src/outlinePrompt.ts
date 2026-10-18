@@ -9,7 +9,7 @@ import type { StorySeed } from './composeSeed.js';
 import { renderSeedForPrompt } from './composeSeed.js';
 import { renderExamplesForPrompt, retrieveExamples } from './retrieval.js';
 import { DEFAULT_BAN_EXAMPLES, DEFAULT_RULES, OUTLINE_SYSTEM, OUTLINE_USER, fill, renderNumbered } from './prompts.js';
-import { catchphraseClause } from './catchphrase.js';
+import { catchphraseClauses } from './catchphrase.js';
 
 export interface Character {
   name: string;
@@ -39,7 +39,16 @@ export interface OutlinePromptInput {
   banExamples?: string[];
   exampleCount?: number;
   excludeBookIds?: string[];
+  /**
+   * true면 R9 이전(r8) 등장인물 줄을 글자 그대로 쓴다: 말버릇 사용 한도 문구 없음, 주인공은 빈 말버릇도 `말버릇 ""`로.
+   * 말버릇 정책 없이 고정된 앱의 기존 초안이 같은 요청을 보내 완료한 유료 호출을 다시 결제하지 않게 한다.
+   */
+  legacyCatchphrasePrompt?: boolean;
 }
+
+/** r8 줄거리 프롬프트의 말버릇 구절(주인공, 조연). R9 이전과 글자 하나 다르지 않아야 한다. */
+const legacyProtagonistClause = (c: Character): string => `, 말버릇 "${c.catchphrase ?? ''}"`;
+const legacySupportingClause = (c: Character): string => (c.catchphrase ? `, 말버릇 "${c.catchphrase}"` : '');
 
 export const BEATS_FOR_PAGES: Record<number, number> = { 8: 6, 12: 7, 16: 8, 24: 8 };
 
@@ -50,8 +59,12 @@ export function beatCountForPages(pages: number): number {
 export function buildOutlinePrompt(input: OutlinePromptInput): { system: string; user: string; temperature: number; maxTokens: number } {
   const p = input.pattern;
   const slots = p.beats.map((b, i) => `${i + 1} ${b.type} — ${b.slot}`).join('\n');
+  // R9: 사용 한도 긴 문장은 말버릇이 있는 첫 인물에게만, 나머지는 "(최대 1번)"만(프롬프트 길이 → 참고 예시 수 유지).
+  const clauses = input.legacyCatchphrasePrompt
+    ? [legacyProtagonistClause(input.protagonist), ...input.supporting.map(legacySupportingClause)]
+    : catchphraseClauses([input.protagonist, ...input.supporting]);
   const supporting = input.supporting
-    .map((c) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${catchphraseClause(c.catchphrase, c.catchphraseOmitted === true)}`)
+    .map((c, i) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${clauses[i + 1]}`)
     .join(' / ');
   const examples = renderExamplesForPrompt(
     retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2),
@@ -62,7 +75,7 @@ export function buildOutlinePrompt(input: OutlinePromptInput): { system: string;
   const user = fill(OUTLINE_USER, {
     protagonistName: input.protagonist.name,
     protagonistTraits: input.protagonist.traits.slice(0, 3).join(', '),
-    protagonistCatchphraseClause: catchphraseClause(input.protagonist.catchphrase, input.protagonist.catchphraseOmitted === true),
+    protagonistCatchphraseClause: clauses[0],
     supportingCharacters: supporting ? `[조연] ${supporting}` : '',
     worldCore: input.worldCore.slice(0, 3).join(' / '),
     topic: input.topic,

@@ -1664,6 +1664,7 @@ function syncDraft() {
       page.scene = structuredClone(p.scene);
       if (p.staging) page.staging = structuredClone(p.staging);
       draft.storyCheck = checkStory(draft.outline, draft.pagination, {
+        storyInput: draft.storyInput,
         specs: draft.readingLevelSnapshot.specs,
         storyWords: buildStoryWords(draft, draft.outline),
         allowedNames: draft.storyInput.characters.flatMap((c) => [

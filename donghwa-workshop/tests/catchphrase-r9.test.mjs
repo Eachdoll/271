@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {readStoredLibrary,validateStoredLibrary} from '../dist/library-storage.js';
@@ -145,4 +147,116 @@ test('R9-A service worker precaches the shared catchphrase module under the v28 
  const sw=readFileSync(new URL('../dist/sw.js',import.meta.url),'utf8');
  assert.match(sw,/const CACHE = "donghwa-shell-v28";/);
  assert.ok(sw.includes('"./story-quality/dist/catchphrase.js"'));
+});
+
+// ---- R9 수정(FIX-A) ----
+
+test('R9 fix: new drafts always freeze a catchphrase policy, even with nothing to rotate or no catchphrase at all',()=>{
+ const state=legacyState();
+ for(const character of state.characters){delete character.catchphrase;delete character.speechHabit;delete character.vocalHabit;}
+ const prepared=inputFromWizard(state,wizard),{recentBookIds,...policy}=prepared.input.catchphrasePolicy;
+ assert.deepEqual(policy,{version:1,limit:1,omit:[],phrases:{}});assert.ok(Array.isArray(recentBookIds));
+ assert.deepEqual(normalizeStoryInput(prepared.input).catchphrasePolicy,prepared.input.catchphrasePolicy);
+});
+
+test('R9 fix: checkStory takes the frozen storyInput for the advisory, and the editor syncDraft passes it',()=>{
+ const input={characters:[{id:'yuha',name:'유하',catchphrase:'같이 가자!'}],catchphrasePolicy:{version:1,limit:1,omit:[],phrases:{yuha:'같이 가자!'},recentBookIds:[]}};
+ const pages=pagination(['같이 가자!','유하가 웃어요.','같이 가!']);
+ const viaInput=checkStory(outline,pages,{specs,storyInput:input}),viaList=checkStory(outline,pages,{specs,catchphrases:storyCatchphrases(input)});
+ assert.deepEqual(viaInput,viaList);assert.equal(viaInput.warnings.filter(w=>w.code==='catchphrase-repeat').length,1);
+ // The editor's page edit (syncDraft) rechecks with the frozen story input, so the advisory survives every edit.
+ const app=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
+ assert.match(app,/draft\.storyCheck = checkStory\(draft\.outline, draft\.pagination, \{\n\s+storyInput: draft\.storyInput,\n\s+specs: draft\.readingLevelSnapshot\.specs,/);
+});
+
+import {configureStoryUI,resumeStoryDraft,cleanupStoryWorkflow} from '../dist/story-generation/ui.js';
+import {demoOutline,demoProse,demoPagination} from '../dist/story-generation/demo.js';
+import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
+const storyUI={ready:[],error:{textContent:''},handlers:{}};
+function configureUI(state){
+ globalThis.document={addEventListener:(type,handler)=>{storyUI.handlers[type]=handler;},querySelectorAll:()=>[],querySelector:selector=>selector==='#story-accept-failures'?{checked:true}:selector==='#story-error'?storyUI.error:null};
+ configureStoryUI({getState:()=>state,isParent:()=>true,protectedAction:fn=>fn(),save:()=>true,render:()=>{},toast:()=>{},modalHeader:title=>`<h2>${title}</h2>`,showModal:()=>{},closeModal:()=>{},onReady:async payload=>{storyUI.ready.push(payload);}});
+}
+const clickStory=async action=>await storyUI.handlers.click({target:{closest:()=>({dataset:{storyAction:action}})},preventDefault:()=>{}});
+function wizardDraft(pageCount=12){
+ const input={characters:[{id:'yuha',name:'유하',nameEn:'Yuha',catchphrase:'같이 가자!'},{id:'green',name:'그린이',nameEn:'Green'}],backgrounds:[{id:'home',name:'유하의 집',type:'home'},{id:'forest',name:'숲길'},{id:'garden',name:'작은 정원'}],topic:'바람 피리',pageCount:12,endingType:'home_sleep',specs,variants:[],catchphrasePolicy:{version:1,limit:1,omit:[],phrases:{yuha:'같이 가자!'},recentBookIds:[]}};
+ const outline=demoOutline(input);outline.plotContract=demoPlotContract(outline,input);
+ const prose=demoProse(outline,input),pagination=demoPagination(outline,prose,input);
+ pagination.pages=pagination.pages.slice(0,pageCount);
+ for(const index of [0,2]){const page=pagination.pages[index];page.textKo=`${page.textKo} 유하가 "같이 가자!" 해요.`;}
+ const textSettings={engine:'openai',providers:{openai:{model:'gpt-6-astra',proxyEndpoint:'https://story-proxy.invalid',transport:'proxy'}},hybrid:{enabled:false},storyEnrichment:false};
+ const draft={id:'r9-wizard-draft',bookId:'r9-wizard-book',wizard:{},input,outline,prose,pagination,textSettings,worldSnapshot:{imageEngine:'openai'},readingLevels:{specs},usage:{calls:[]},stage:'paged',reviewMode:'pages',demo:true};
+ return {draft,state:{settings:{textGeneration:textSettings},backgrounds:input.backgrounds,storyDrafts:{[draft.id]:draft}}};
+}
+
+test('R9 fix: a wizard-approved draft keeps the catchphrase-repeat advisory in its storyCheck (approve-pages and fit-page-count)',async()=>{
+ const priorDocument=globalThis.document;
+ try{
+  const {draft,state}=wizardDraft();configureUI(state);storyUI.ready.length=0;
+  resumeStoryDraft(draft.id);await clickStory('approve-pages');
+  assert.equal(storyUI.ready.length,1,storyUI.error.textContent);
+  const payload=storyUI.ready[0],advisory=payload.storyCheck.warnings.filter(w=>w.code==='catchphrase-repeat');
+  assert.deepEqual(advisory.map(w=>[w.language,w.phrase,w.count,w.pages]),[['ko','같이 가자!',2,[1,3]]]);
+  assert.equal(payload.storyCheck.checks.length,7);
+  cleanupStoryWorkflow();
+
+  const short=wizardDraft(11);configureUI(short.state);
+  resumeStoryDraft(short.draft.id);await clickStory('fit-page-count');
+  const fitted=short.state.storyDrafts[short.draft.id];
+  assert.equal(fitted.pagination.pages.length,12);
+  assert.ok(fitted.storyCheck.warnings.some(w=>w.code==='catchphrase-repeat'&&w.phrase==='같이 가자!'),JSON.stringify(fitted.storyCheck.warnings));
+ }finally{cleanupStoryWorkflow();globalThis.document=priorDocument;}
+});
+
+/**
+ * Pre-R9 byte identity for drafts frozen without a catchphrase policy: the same
+ * legacy input goes through the real app pipeline (quality outline incl. its
+ * fix pass, scene briefs, two-pass quality prose, and the plain outline path)
+ * and every request sent to the engine is recorded. The pinned hash is this
+ * function run against commit 873bc2e. To compare directly with a checkout:
+ * PRE_R9_APP_ROOT=/abs/path/to/873bc2e/donghwa-workshop node --test tests/catchphrase-r9.test.mjs
+ */
+async function legacyAppRequests(rootUrl){
+ const load=path=>import(new URL(path,rootUrl).href);
+ const pipeline=await load('dist/story-generation/pipeline.js'),{getLevelSpec:level}=await load('dist/reading-levels.js'),{demoPlotContract:contract}=await load('dist/story-generation/plot-contract.js'),{BEAT_COUNTS}=await load('dist/story-generation/schemas.js'),{demoSceneBriefs}=await load('dist/story-generation/scene-briefs.js');
+ const input={bookId:'r8-legacy-draft',storyDate:'2026-10-17T02:00:00.000Z',topic:'바람 찾기',characters:[{id:'yuha',name:'유하',nameEn:'Yuha',traits:['씩씩함'],catchphrase:'같이 가자!'},{id:'green',name:'그린이',nameEn:'Green',catchphrase:'쿵쿵, 냠냠!'}],backgrounds:[{id:'home',type:'home',name:'유하의 집'},{id:'garden',name:'꽃 정원'},{id:'pond',name:'연못 길'}],pageCount:12,endingType:'home_sleep',specs:{ko:level('K1'),en:level('E0')},storyQuality:{enabled:true,useBeamSearch:false,twoPass:true,patternId:'journey_repeat',approvedBooks:[]}};
+ const requests=[],priorFetch=globalThis.fetch;let outline;
+ globalThis.fetch=async url=>new Response(readFileSync(url,'utf8'),{headers:{'Content-Type':'application/json'}});
+ const engine={id:'openai',async complete(request){
+  requests.push({system:request.system,user:request.user,jsonSchema:request.jsonSchema??null,temperature:request.temperature??null,maxTokens:request.maxTokens??null});
+  const schema=request.jsonSchema;let json;
+  if(request.user.startsWith('아래 줄거리 JSON에서')){json=JSON.parse(request.user.split('\n\n').at(-1));json.beats[2].newElement='고친 젖은 잎';}
+  else if(schema?.properties?.plan){
+   const planted=request.user.match(/- 심을 물건: (.*?) —/u)?.[1],creature=request.user.match(/- 배경 생물: (.*?) \(/u)?.[1],reasons=[...request.user.matchAll(/\d차 (잘못된 장소|잘못된 방법|거의 됐는데 방해)/gu)].map(match=>({'잘못된 장소':'wrong_place','잘못된 방법':'wrong_method','거의 됐는데 방해':'interrupted'})[match[1]]);
+   const count=BEAT_COUNTS[input.pageCount],types=['setup','want',...Array.from({length:count-5},()=>'attempt'),'turn','resolution','close'],places=types.map((_,index)=>index===0||index===count-1?'home':index%2?'garden':'pond');let attempt=0;
+   json={plan:{pattern:schema.properties.plan.properties.pattern.enum[0],planted,twistReveal:'앞에서 살펴본 물건을 다시 이용해요.',funnyMoment:'바람에 잎이 코에 앉아요.',failureReasons:reasons},titleCandidates:['빗방울의 흔적','바람을 듣는 날','작은 잎의 소리'],logline:'유하와 그린이가 비 오는 날 빗방울의 흔적을 찾아요.',want:'빗방울의 소리를 찾고 싶어요.',problem:'바람 때문에 소리의 위치가 달라져요.',twist:'앞에서 살펴본 물건이 바람을 받아 소리를 냈어요.',beats:types.map((type,index)=>({index:index+1,type,summary:`${index%2?'그린이가':'유하가'} ${['집에서','정원에서','연못에서','돌 옆에서','길에서','집 앞에서','방에서'][index]} ${input.topic}의 흔적을 살펴요. 유하와 그린이가 ${type==='setup'||type==='turn'?planted:'작은 잎'}을 보며 ${type==='turn'?creature:'바람'}의 소리를 들어요.${index===1||index===3?' 유하가 "같이 가자!" 해요.':''}`,characters:['yuha','green'],settingKey:places[index],newElement:index===2?'':`${index+1}번째 젖은 잎`,failureReason:type==='attempt'?reasons[attempt++]:null})),settings:places.map((backgroundId,index)=>({beatIndex:index+1,backgroundId})),emotionArc:types.map(()=>'궁금'),newWordsKo:['빗방울','흔적','바람'],newWordsEn:['rain','leaf','wind'],endingType:'home_sleep'};
+   json.plotContract=contract(json,input);
+  }else if(schema?.properties?.briefs)json={briefs:demoSceneBriefs(outline,input)};
+  else if(!schema){const lang=/return English plain/u.test(request.system)?'en':'ko';return {text:outline.beats.map(beat=>`${lang==='ko'?'[비트':'[Beat'} ${beat.index} · ${beat.type}] ${lang==='ko'?`유하가 ${beat.index}번째 작은 잎을 만져요. 그린이가 “나는 바람을 들어요.”라고 말해요.`:`Yuha sees a small leaf near tree ${beat.index}. Green says, “I hear the wind.”`}`).join('\n\n'),usage:{input:1,output:1},meta:{requests:1}};}
+  else throw new Error('unhandled legacy mock schema');
+  return {json,text:JSON.stringify(json),usage:{input:1,output:1},meta:{requests:1}};
+ }};
+ try{
+  const a=await pipeline.generateOutline(clone(input),{engine});outline=a.data;
+  const b=await pipeline.generateSceneBriefs(outline,clone(input),{engine});
+  await pipeline.generateProse(outline,clone(input),{engine,sceneBriefs:b.data});
+  const plain=clone(input);plain.storyQuality={enabled:false};
+  await pipeline.generateOutline(plain,{engine:{id:'openai',async complete(request){requests.push({system:request.system,user:request.user,jsonSchema:request.jsonSchema??null,temperature:request.temperature??null,maxTokens:request.maxTokens??null});return {text:'not json',usage:{input:0,output:0}};}}}).catch(()=>{});
+ }finally{globalThis.fetch=priorFetch;}
+ return requests;
+}
+const PRE_R9_APP_REQUESTS_SHA256='2c0b9c8c0508eb26b00c783187447cbf8a0914ec2d19d707bab52f0002d28f48';
+
+test('R9 fix: a draft without a catchphrase policy sends byte-identical pre-R9 requests through the real app pipeline',async()=>{
+ const requests=await legacyAppRequests(new URL('../',import.meta.url));
+ assert.ok(requests.some(request=>request.user.startsWith('아래 줄거리 JSON에서')),'the quality fix pass is part of the snapshot');
+ // quality outline + its fix pass, scene briefs, rich/simplify × ko/en, three plain outline attempts
+ assert.equal(requests.length,1+1+1+4+3);
+ for(const request of requests)assert.doesNotMatch(`${request.system}\n${request.user}`,/CATCHPHRASE|catchphrase at most once|최대 1번|말버릇은 책 전체|catchphrasePolicy/);
+ if(process.env.PRE_R9_APP_ROOT){
+  const expected=await legacyAppRequests(pathToFileURL(`${process.env.PRE_R9_APP_ROOT.replace(/\/$/,'')}/`));
+  console.log(`pre-R9 app requests sha256 ${createHash('sha256').update(JSON.stringify(expected)).digest('hex')} (${expected.length} requests)`);
+  assert.deepEqual(requests,expected);
+ }
+ assert.equal(createHash('sha256').update(JSON.stringify(requests)).digest('hex'),PRE_R9_APP_REQUESTS_SHA256);
 });

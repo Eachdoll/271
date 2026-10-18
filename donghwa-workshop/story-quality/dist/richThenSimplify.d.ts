@@ -26,6 +26,8 @@ export interface RichSimplifyInput {
     pageCount?: number;
     /** 예산을 20% 넘으면 비트별 압축 1회(호출자가 선택). 앱 r8은 새 K1/E0 초안에서 언어별 기본 켬. */
     condenseOverBudget?: boolean;
+    /** true면 규칙 9(말버릇 한도)가 없는 r8 문안. 말버릇 정책 없이 고정된 앱의 기존 초안용. */
+    legacyCatchphrasePrompt?: boolean;
     onPass?: (pass: "rich" | "simplify" | "fix" | "condense", text: string) => void;
 }
 export interface RichSimplifyResult {

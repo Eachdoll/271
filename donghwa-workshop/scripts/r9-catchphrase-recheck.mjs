@@ -43,6 +43,8 @@ const outlineRows = jsonl(bytes.outlines).map((row) => {
     repeatFix: fixes.some((message) => message.startsWith('말버릇')),
     refrainFix: fixes.some((message) => message.startsWith('후렴')),
     flagged: fixes.length > 0,
+    // R9 fix: with only catchphrase items (and nothing to regenerate) the app buys no fix pass.
+    catchphraseOnly: fixes.length > 0 && fixes.length === check.fix.length && check.regenerate.length === 0,
     fixes,
   };
 });
@@ -76,6 +78,7 @@ const summary = {
     repeatFix: count(outlineRows, (row) => row.repeatFix),
     refrainOverlap: count(outlineRows, (row) => row.refrainSharesCatchphrase),
     flagged: count(outlineRows, (row) => row.flagged),
+    catchphraseOnlyNoFixPass: count(outlineRows, (row) => row.catchphraseOnly),
     maxBeatOccurrences: Math.max(0, ...outlineRows.map((row) => row.beatOccurrences)),
     meanBeatOccurrences: Math.round((outlineRows.reduce((sum, row) => sum + row.beatOccurrences, 0) / outlineRows.length) * 100) / 100,
   },
@@ -98,6 +101,7 @@ const result = {
   sources: Object.fromEntries(Object.entries(sources).map(([key, path]) => [key, { path: path.slice(root.length), sha256: sha256(bytes[key]) }])),
   rules: {
     outline: 'plotCheck fix when a catchphrase occurs 2+ times across beat summaries + refrain, or when the refrain shares its core phrase. Messages list "비트 N" per beat.',
+    outlineAdvisory: 'App quality outline: catchphrase items are advisories. With only catchphrase items (catchphraseOnlyNoFixPass, rechecked without seed/ban data) no paid fix pass is made; mixed with other items they ride along in the one fix pass. Drafts frozen without a catchphrasePolicy keep the pre-R9 prompts and get no catchphrase plot check.',
     prose: 'checkStory advisory warning (never a violation) when a catchphrase occurs 2+ times across a language\'s page texts.',
     distilled: 'Opt-in distilled examples are skipped when "같이 가자" or a cast catchphrase occurs 2+ times in beats + refrain.',
   },

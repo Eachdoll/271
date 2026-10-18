@@ -67,3 +67,4 @@
 - `{{gesture_hints}}`: `renderGestureHintForPrompt(emotionsInBriefs)` — 브리프 감정에 해당하는 몸짓 2개씩.
 - `{{style_samples}}`: 문체 샘플이 있을 때만. 라벨 고정: "문체 예시 — 리듬·종결어미·구체성만 참고. 내용·인물·사건·소품 재사용 금지".
 - 온도 0.8, maxTokens 2,000.
+- 규칙 9(말버릇 한도)는 R9부터다. `legacyCatchphrasePrompt: true`(앱에서 말버릇 정책 없이 고정된 기존 초안)는 규칙 9가 없는 r8 문안(`PROSE_RICH_USER_KO_R8`/`_EN_R8`)을 그대로 보내 완료한 유료 호출을 재결제하지 않는다.

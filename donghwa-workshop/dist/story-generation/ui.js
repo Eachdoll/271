@@ -50,6 +50,7 @@ import {
   checkStory,
   catchphrasePolicyFor,
   omitCatchphrases,
+  storyCatchphrases,
 } from "./checker.js";
 import { checkRichness } from "./richness.js";
 import { getStylePreset } from "../image-generation/styles.js";
@@ -1701,6 +1702,7 @@ async function approvePages(
   }
   const checked = checkStory(d.outline, d.pagination, {
     specs: d.input.specs,
+    catchphrases: storyCatchphrases(d.input),
     storyWords: buildStoryWords(d.input, d.outline),
     allowedNames: d.input.characters
       .flatMap((c) => [c.name, c.nameEn])
@@ -1957,6 +1959,7 @@ async function handleClick(event) {
       d.pagination = fitted;
       d.storyCheck = checkStory(d.outline, fitted, {
         specs: d.input.specs,
+        catchphrases: storyCatchphrases(d.input),
         storyWords: buildStoryWords(d.input, d.outline),
         allowedNames: d.input.characters
           .flatMap((c) => [c.name, c.nameEn])

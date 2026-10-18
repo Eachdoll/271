@@ -32,6 +32,11 @@ export interface OutlinePromptInput {
     banExamples?: string[];
     exampleCount?: number;
     excludeBookIds?: string[];
+    /**
+     * true면 R9 이전(r8) 등장인물 줄을 글자 그대로 쓴다: 말버릇 사용 한도 문구 없음, 주인공은 빈 말버릇도 `말버릇 ""`로.
+     * 말버릇 정책 없이 고정된 앱의 기존 초안이 같은 요청을 보내 완료한 유료 호출을 다시 결제하지 않게 한다.
+     */
+    legacyCatchphrasePrompt?: boolean;
 }
 export declare const BEATS_FOR_PAGES: Record<number, number>;
 export declare function beatCountForPages(pages: number): number;

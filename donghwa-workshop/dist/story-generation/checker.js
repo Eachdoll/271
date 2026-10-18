@@ -224,11 +224,18 @@ function levelMessage(language, violation) {
 
 /** Return all seven checks and targeted repair instructions, without mutation.
  * Catchphrase repetition is advisory: it is reported in `warnings` only, so it
- * never fails a check or asks for a (paid) page rewrite. */
+ * never fails a check or asks for a (paid) page rewrite. Pass `catchphrases`,
+ * or the frozen `storyInput` to check storyCatchphrases(storyInput). */
 export function checkStory(
   outline,
   pagination,
-  { specs, allowedNames = [], storyWords = [], catchphrases = [] } = {},
+  {
+    specs,
+    allowedNames = [],
+    storyWords = [],
+    storyInput = null,
+    catchphrases = storyInput ? storyCatchphrases(storyInput) : [],
+  } = {},
 ) {
   const rawPages = Array.isArray(pagination)
     ? pagination

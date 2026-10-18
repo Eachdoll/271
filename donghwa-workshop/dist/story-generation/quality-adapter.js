@@ -12,6 +12,7 @@ import { headNoun } from "../story-quality/dist/banList.js";
 import {
   CATCHPHRASE_RULE_EN,
   catchphraseRepeats,
+  countCatchphrase,
   isCatchphraseFix,
 } from "../story-quality/dist/catchphrase.js";
 import { storyCatchphrases } from "./checker.js";
@@ -152,11 +153,17 @@ export function catchphraseExampleExclusions(books, input = {}) {
     )
     .map((book) => book.bookId);
 }
+/**
+ * `catchphraseFilter: false` keeps the pre-R9 candidate list (no distilled
+ * catchphrase filter) for a draft frozen without a catchphrase policy, so its
+ * outline request, and therefore its cached paid call, stays the same.
+ */
 export function qualityReferenceBooks(
   data,
   topic,
   enabled = false,
   catchphrases = [],
+  { catchphraseFilter = true } = {},
 ) {
   const gold = asList(data.goldBooks);
   if (!enabled) return gold;
@@ -177,6 +184,7 @@ export function qualityReferenceBooks(
     if ((target && normalized(book.topic) === target) || seen.has(book.bookId))
       return false;
     if (
+      catchphraseFilter &&
       book.referenceSource === "distilled" &&
       repeatsCatchphrase(book, catchphrases)
     )
@@ -569,8 +577,15 @@ function ledger(kind, input, options, extra = {}) {
   };
 }
 
+/**
+ * R9 prompt text applies only to drafts frozen with a catchphrase policy
+ * (inputFromWizard always sets one). A draft without it keeps the pre-R9
+ * requests byte for byte, so resuming it never re-bills a cached paid call.
+ */
+const r9Catchphrases = (input) => !!input?.catchphrasePolicy;
 /** R9: the catchphrase limit and this book's frozen rotation, stated next to APP CANON. */
 function catchphraseRules(input, services) {
+  if (!r9Catchphrases(input)) return "";
   const omitted = new Set(asList(input.catchphrasePolicy?.omit)),
     names = asList(input.characters)
       .filter((character) => omitted.has(character.id))
@@ -830,18 +845,80 @@ function fixedBeatIds(outline, messages) {
   }
   return targets;
 }
-function enforceTargetedFix(request, response) {
-  if (!request.user.startsWith("아래 줄거리 JSON에서 지적된 항목만 고쳐"))
-    return response;
-  const blocks = request.user.split("\n\n"),
-    original = JSON.parse(blocks.at(-1)),
-    messages = blocks
+const FIX_REQUEST_PREFIX = "아래 줄거리 JSON에서 지적된 항목만 고쳐";
+/** The package's one fix pass: the outline it fixes and its "- " items. */
+function fixRequestParts(request) {
+  if (!String(request?.user || "").startsWith(FIX_REQUEST_PREFIX)) return null;
+  const blocks = request.user.split("\n\n");
+  return {
+    original: JSON.parse(blocks.at(-1)),
+    messages: blocks
       .slice(1, -1)
       .join("\n")
       .split("\n")
       .filter((line) => line.startsWith("- "))
-      .map((line) => line.slice(2));
-  const fixed = response.json || parseJson(response.text),
+      .map((line) => line.slice(2)),
+  };
+}
+/**
+ * Every part a fix response changed although no check item targeted it, in
+ * the order the targeted-fix contract reports them: beats, settings, then the
+ * approved want/problem/ending. `restore` puts the original part back.
+ */
+function untargetedChanges(original, fixed, targets) {
+  const changes = [];
+  original.beats.forEach((beat, index) => {
+    if (
+      !targets.has(beat.index) &&
+      JSON.stringify(fixed.beats[index]) !== JSON.stringify(beat)
+    )
+      changes.push({
+        kind: "beat",
+        id: beat.index,
+        before: beat,
+        after: fixed.beats[index],
+        message: `${beat.index}번 비트는 검사에서 지적하지 않았으므로 수정할 수 없어요.`,
+        restore: (outline) => {
+          outline.beats[index] = clone(beat);
+        },
+      });
+  });
+  for (const setting of asList(original.settings)) {
+    const after = asList(fixed.settings).find(
+      (row) => row.beatIndex === setting.beatIndex,
+    );
+    if (
+      !targets.has(setting.beatIndex) &&
+      JSON.stringify(after) !== JSON.stringify(setting)
+    )
+      changes.push({
+        kind: "setting",
+        id: setting.beatIndex,
+        before: setting,
+        after,
+        message: `${setting.beatIndex}번 비트의 배경은 검사에서 지적하지 않았으므로 바꿀 수 없어요.`,
+        restore: null,
+      });
+  }
+  for (const field of ["want", "problem", "endingType"])
+    if (JSON.stringify(fixed[field]) !== JSON.stringify(original[field]))
+      changes.push({
+        kind: "field",
+        id: field,
+        before: original[field],
+        after: fixed[field],
+        message: "부분 수정에서 승인한 목표·문제·결말을 바꿀 수 없어요.",
+        restore: (outline) => {
+          outline[field] = clone(original[field]);
+        },
+      });
+  return changes;
+}
+function enforceTargetedFix(request, response) {
+  const parts = fixRequestParts(request);
+  if (!parts) return response;
+  const { original, messages } = parts,
+    fixed = response.json || parseJson(response.text),
     targets = fixedBeatIds(original, messages);
   if (!object(fixed) || !Array.isArray(fixed.beats))
     throw new StoryValidationError("outline", [
@@ -851,33 +928,89 @@ function enforceTargetedFix(request, response) {
     throw new StoryValidationError("outline", [
       "품질 수정은 줄거리 비트 개수를 바꿀 수 없어요.",
     ]);
-  for (let index = 0; index < original.beats.length; index++)
-    if (
-      !targets.has(original.beats[index].index) &&
-      JSON.stringify(fixed.beats[index]) !==
-        JSON.stringify(original.beats[index])
-    )
-      throw new StoryValidationError("outline", [
-        `${original.beats[index].index}번 비트는 검사에서 지적하지 않았으므로 수정할 수 없어요.`,
-      ]);
-  for (const setting of asList(original.settings))
-    if (
-      !targets.has(setting.beatIndex) &&
-      JSON.stringify(
-        asList(fixed.settings).find(
-          (row) => row.beatIndex === setting.beatIndex,
-        ),
-      ) !== JSON.stringify(setting)
-    )
-      throw new StoryValidationError("outline", [
-        `${setting.beatIndex}번 비트의 배경은 검사에서 지적하지 않았으므로 바꿀 수 없어요.`,
-      ]);
-  for (const field of ["want", "problem", "endingType"])
-    if (JSON.stringify(fixed[field]) !== JSON.stringify(original[field]))
-      throw new StoryValidationError("outline", [
-        "부분 수정에서 승인한 목표·문제·결말을 바꿀 수 없어요.",
-      ]);
+  const [first] = untargetedChanges(original, fixed, targets);
+  if (first) throw new StoryValidationError("outline", [first.message]);
   return { ...response, json: fixed, text: JSON.stringify(fixed) };
+}
+/** Every string inside a beat/field value (summary, newElement, nested text …). */
+function stringsOf(value, out = []) {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) value.forEach((item) => stringsOf(item, out));
+  else if (object(value))
+    Object.values(value).forEach((item) => stringsOf(item, out));
+  return out;
+}
+/** True when a change added, removed or moved a catchphrase use in that part. */
+function isCatchphraseEdit(change, catchphrases) {
+  const uses = (value, phrase) =>
+    stringsOf(value).reduce(
+      (sum, text) => sum + countCatchphrase(text, phrase),
+      0,
+    );
+  return (
+    !!change.restore &&
+    catchphrases.some(
+      (phrase) => uses(change.before, phrase) !== uses(change.after, phrase),
+    )
+  );
+}
+/**
+ * R9: a catchphrase item is advisory, so it must never cost the paid outline.
+ * When a fix pass that carried one breaks the targeted-fix contract:
+ * - every item in the pass was a catchphrase item: fall back to the original
+ *   outline (the recheck reports the items again and they stay advisories);
+ * - every out-of-target change is a catchphrase edit: fall back to the
+ *   original for exactly those parts and keep the fixes of the targeted beats.
+ * Anything else, and every pass without a catchphrase item, throws as before.
+ * The decision depends only on the request and the (checkpointed) response,
+ * so a resume replays it with no new call.
+ */
+function enforceTargetedFixKeepingOutline(
+  request,
+  response,
+  catchphrases,
+  onFallback,
+) {
+  try {
+    return enforceTargetedFix(request, response);
+  } catch (error) {
+    const parts =
+      error instanceof StoryValidationError ? fixRequestParts(request) : null;
+    const advisory = asList(parts?.messages).filter(isCatchphraseFix);
+    if (!parts || !advisory.length) throw error;
+    const { original, messages } = parts;
+    if (advisory.length === messages.length) {
+      onFallback({ mode: "original", reason: error.message });
+      return { ...response, json: original, text: JSON.stringify(original) };
+    }
+    const fixed = response.json || parseJson(response.text);
+    if (
+      !object(fixed) ||
+      !Array.isArray(fixed.beats) ||
+      fixed.beats.length !== original.beats.length
+    )
+      throw error;
+    const changes = untargetedChanges(
+      original,
+      fixed,
+      fixedBeatIds(original, messages),
+    );
+    if (
+      !changes.length ||
+      !changes.every((change) => isCatchphraseEdit(change, catchphrases))
+    )
+      throw error;
+    const kept = clone(fixed);
+    changes.forEach((change) => change.restore(kept));
+    onFallback({
+      mode: "restored",
+      reason: error.message,
+      restored: changes.map((change) =>
+        change.kind === "beat" ? `beat:${change.id}` : change.id,
+      ),
+    });
+    return { ...response, json: kept, text: JSON.stringify(kept) };
+  }
 }
 function parseJson(text) {
   try {
@@ -913,20 +1046,25 @@ export async function generateQualityOutline(
       { world, mood } = resolveStoryWorld(input, data);
     input.storyWorldMood = mood;
     assertInventoryAvailable(input, data, world);
-    const patterns = choosePatterns(input, data),
-      catchphrases = storyCatchphrases(input),
+    // R9 text, checks and example filters only for drafts frozen with a policy;
+    // a draft without one sends its pre-R9 requests unchanged (no re-billing).
+    const r9 = r9Catchphrases(input),
+      patterns = choosePatterns(input, data),
+      catchphrases = r9 ? storyCatchphrases(input) : [],
       omittedCatchphrases = new Set(asList(input.catchphrasePolicy?.omit)),
       referenceBooks = qualityReferenceBooks(
         data,
         input.topic,
         quality.useDistilledExamples === true,
         catchphrases,
+        { catchphraseFilter: r9 },
       );
     let last;
     for (let attempt = 0; attempt < Math.min(2, patterns.length); attempt++) {
       const pattern = patterns[attempt],
         schema = enrichedOutlineSchema(input, pattern, services),
         canon = canonicalWorldRules(input, services);
+      let fixFallback = null;
       const wrap = (role) => ({
         id: `quality-${role}`,
         async complete(request) {
@@ -954,7 +1092,14 @@ export async function generateQualityOutline(
             },
             services,
           );
-          return enforceTargetedFix(request, response);
+          return enforceTargetedFixKeepingOutline(
+            request,
+            response,
+            catchphrases,
+            (value) => {
+              fixFallback = value;
+            },
+          );
         },
       });
       const offset = Math.min(
@@ -985,6 +1130,9 @@ export async function generateQualityOutline(
               ),
             ),
           catchphrases,
+          // A catchphrase item alone never buys the fix pass (it stays an advisory).
+          advisoryCatchphrases: true,
+          legacyCatchphrasePrompt: !r9,
           worldCore: [
             ...(mood?.worldCore || []),
             ...String(input.worldNotes || input.worldName || "")
@@ -1025,10 +1173,12 @@ export async function generateQualityOutline(
           excludeBookIds: [
             input.bookId,
             input.previousStory?.id,
-            ...catchphraseExampleExclusions(
-              [...asList(quality.approvedBooks), ...referenceBooks],
-              input,
-            ),
+            ...(r9
+              ? catchphraseExampleExclusions(
+                  [...asList(quality.approvedBooks), ...referenceBooks],
+                  input,
+                )
+              : []),
           ].filter(Boolean),
         });
       last = result;
@@ -1058,8 +1208,9 @@ export async function generateQualityOutline(
           : 0.35,
         regenerationAttempts: attempt,
       };
-      // R9: a catchphrase repeat drives the one targeted fix pass. If it survives
-      // that pass it stays an advisory, never a reason to discard a paid outline.
+      // R9: a catchphrase repeat is an advisory. Alone it buys no fix pass; mixed
+      // with other items it rides along in the one pass. Whatever survives is
+      // recorded, never a reason to discard a paid outline.
       const blocking = result.check.fix.filter(
         (message) => !isCatchphraseFix(message),
       );
@@ -1067,6 +1218,7 @@ export async function generateQualityOutline(
         qualityMeta.catchphraseAdvisories = result.check.fix.filter(
           isCatchphraseFix,
         );
+      if (fixFallback) qualityMeta.catchphraseFixFallback = fixFallback;
       if (
         (result.check.ok ||
           (!result.check.regenerate.length && !blocking.length)) &&
@@ -1266,6 +1418,8 @@ export async function generateQualityProse(
         pageCount: input.pageCount,
         condenseOverBudget:
           input.prosePolicy?.condenseOverBudget?.[lang] === true,
+        // R9 rule 9 only for drafts frozen with a catchphrase policy.
+        legacyCatchphrasePrompt: !r9Catchphrases(input),
         charactersCompact: input.characters
           .map(
             (character) =>
