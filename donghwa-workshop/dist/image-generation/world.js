@@ -106,6 +106,15 @@ export function getWorldStyleReferences(
   );
 }
 
+/** Parent- and material-supplied request text, flattened for the forbidden-name check. */
+const suppliedText = (...values) =>
+  values
+    .flat(Infinity)
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .map((value) =>
+      typeof value === "string" ? value : JSON.stringify(value),
+    );
+
 function variantForPage(snapshot, characterId, pageNumber) {
   const range = (snapshot.variantPageRanges?.[characterId] || []).find(
     (row) => pageNumber >= row.from && pageNumber <= row.to,
@@ -653,6 +662,10 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
     .join("; ");
   const styleReferences = getWorldStyleReferences(state, world, preset);
   return {
+    forbiddenWordCheck: {
+      text: [identity],
+      names: suppliedText([character.name, character.nameEn]),
+    },
     prompt: `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
     stylePreset: clone(preset),
     referenceImages: [
@@ -778,7 +791,40 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   const selectedVariants = sheets
     .map((sheet) => variantForPage(snapshot, sheet.characterId, pageIndex + 1))
     .filter(Boolean);
+  const background = place.background || {};
+  // Forbidden names are checked in these parts only, never in the fixed instructions or the plot ledger.
+  const forbiddenWordCheck = {
+    text: suppliedText(
+      sheets.map((sheet) => [
+        sheet.characterSnapshot?.name,
+        sheet.characterSnapshot?.nameEn,
+        sheet.characterSnapshot?.description,
+      ]),
+      selectedVariants.map((variant) => [variant.name, variant.description]),
+      [
+        background.name,
+        background.nameEn,
+        background.description,
+        background.descriptionEn,
+        background.features,
+        background.featuresEn,
+        background.layout,
+        background.layoutEn,
+        background.rules,
+      ],
+      options.cover
+        ? book.pagination?.cover?.sceneAction || book.topic || book.title
+        : [scene, page.ko ?? page.textKo, page.en ?? page.textEn],
+    ),
+    names: suppliedText(
+      sheets.map((sheet) => [
+        sheet.characterSnapshot?.name,
+        sheet.characterSnapshot?.nameEn,
+      ]),
+    ),
+  };
   return {
+    forbiddenWordCheck,
     prompt:
       options.cover || page.staging || book.sceneBriefs?.length
         ? buildScenePrompt({

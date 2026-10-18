@@ -7,7 +7,7 @@ import {createFullAutoJob,runFullAuto} from '../dist/full-auto.js';
 import {demoOutline,demoProse,demoPagination} from '../dist/story-generation/demo.js';
 import {demoSceneBriefs} from '../dist/story-generation/scene-briefs.js';
 import {StoryValidationError} from '../dist/story-generation/schemas.js';
-import {rewriteBookPage,applyPageText,setPageReviewed,pagesNeedingImages,estimateSimpleCosts,generateBookPageImage} from '../dist/story-generation/page-tools.js';
+import {rewriteBookPage,applyPageText,setPageReviewed,pagesNeedingImages,estimateSimpleCosts,generateBookPageImage,isPageImageStale,isPageOperationBusy} from '../dist/story-generation/page-tools.js';
 
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
 const result=(data,stage)=>({data,usage:{input:10,output:20,costUsdEstimated:.01},meta:{stage,requests:1,model:'mock'}});
@@ -120,8 +120,62 @@ test('setPageReviewed persists the mark in the story draft',async()=>{
 });
 
 test('pagesNeedingImages lists missing, draft-quality and stale pages',()=>{
- const book={pages:[{imageAssetId:'a',imageMeta:{quality:'final'}},{},{imageAssetId:'b',imageMeta:{quality:'draft'}},{imageAssetId:'c',imageMeta:{quality:'final'},imageStale:true}]};
+ const redrawn={imageAssetId:'d2',imageMeta:{quality:'final'},imageStale:true,imageStaleAt:'2026-10-18T00:00:00Z',imageStaleAssetId:'d1'};
+ const book={pages:[{imageAssetId:'a',imageMeta:{quality:'final'}},{},{imageAssetId:'b',imageMeta:{quality:'draft'}},{imageAssetId:'c',imageMeta:{quality:'final'},imageStale:true,imageStaleAssetId:'c'},redrawn]};
  assert.deepEqual(pagesNeedingImages(book),[1,2,3]);assert.deepEqual(pagesNeedingImages(null),[]);
+ // The mark belonged to image d1; d2 was drawn since, so it is neither counted nor kept.
+ assert.deepEqual([redrawn.imageStale,redrawn.imageStaleAt,redrawn.imageStaleAssetId],[undefined,undefined,undefined]);
+ assert.equal(isPageImageStale(book.pages[3]),true);assert.equal(isPageImageStale({imageAssetId:'x',imageStale:true}),false,'a mark bound to no image is dropped');
+});
+
+test('a text edit binds the stale mark to the image it was set on',async()=>{
+ const {state,book,save}=await heldBook();
+ draw(book.pages[2],'image-page-0002');
+ await applyPageText(state,book,2,{ko:'유하가 달을 봐요.',save});
+ assert.deepEqual([book.pages[2].imageStale,book.pages[2].imageStaleAssetId],[true,'image-page-0002']);
+ await applyPageText(state,book,2,{ko:'유하가 달을 또 봐요.',save});
+ assert.equal(book.pages[2].imageStaleAssetId,'image-page-0002','a second edit keeps the original image');
+ draw(book.pages[2],'image-page-0002-pro');
+ assert.equal(isPageImageStale(book.pages[2]),false);assert.equal(book.pages[2].imageStale,undefined);
+});
+
+const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
+const rewritten=(pagination,index,ko)=>{const next=structuredClone(pagination);next.pages[index].textKo=ko;return {data:next,usage:{input:50,output:20,costUsdEstimated:.002},meta:{stage:'page',requests:1,engineId:'openai',model:'mock'}};};
+
+test('one page operation per book: busy while a paid rewrite is in flight, free again afterwards',async()=>{
+ const {state,book,save}=await heldBook({stopBefore:'pages'});
+ const gate=deferred();let started=0;
+ const pending=rewriteBookPage(state,book,3,{save,rewrite:async(pagination)=>{started++;await gate.promise;return rewritten(pagination,3,'유하가 별을 세어요.');}});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(started,1);assert.equal(isPageOperationBusy(book.id),true);assert.equal(isPageOperationBusy('book-other'),false);
+ await assert.rejects(applyPageText(state,book,1,{ko:'x'}),/다른 쪽 작업/);
+ await assert.rejects(rewriteBookPage(state,book,4,{rewrite:refuse('second rewrite')}),/다른 쪽 작업/);
+ await assert.rejects(generateBookPageImage(state,book,4,{generate:refuse('scene')}),/다른 쪽 작업/);
+ assert.notEqual(book.pages[1].ko,'x');
+ gate.resolve();
+ assert.equal((await pending).changed,true);assert.equal(isPageOperationBusy(book.id),false);
+ // A failed request also frees the book.
+ await assert.rejects(rewriteBookPage(state,book,4,{save,rewrite:async()=>{throw Error('offline');}}),/offline/);
+ assert.equal(isPageOperationBusy(book.id),false);
+});
+
+test('a FULL AUTO run that starts during a paid rewrite keeps the cost row but not the new text',async()=>{
+ const {state,job,book}=await heldBook({stopBefore:'pages'}),before=book.pages[3].ko,jobBook=job.book;let saves=0;
+ const out=rewriteBookPage(state,book,3,{save:()=>{saves++;return true;},rewrite:async(pagination)=>{job.status='running';return rewritten(pagination,3,'달리는 동안 바뀐 글');}});
+ await assert.rejects(out,/적용하지 않았어요/);
+ assert.equal(book.pages[3].ko,before);assert.equal(book.pagination.pages[3].textKo,before);
+ const row=book.textUsage.calls.at(-1);assert.deepEqual([row.action,row.input],['rewrite-page',50]);
+ assert.ok(job.usage.calls.some(c=>c.action==='rewrite-page'&&c.input===50));
+ assert.equal(saves,1);assert.equal(job.book,jobBook);assert.equal(isPageOperationBusy(book.id),false);
+});
+
+test('a paid page image that lands after a run started is still kept and recorded',async()=>{
+ const {state,job,book}=await heldBook({stopBefore:'pages'});
+ draw(book.pages[6],'image-old-6');Object.assign(book.pages[6],{imageStale:true,imageStaleAssetId:'image-old-6'});
+ let saves=0;
+ const page=await generateBookPageImage(state,book,6,{save:()=>{saves++;return true;},generate:async(s,b,i)=>{job.status='running';draw(b.pages[i],'image-new-6');return b.pages[i];}});
+ assert.equal(page.imageAssetId,'image-new-6');assert.equal(page.imageStale,undefined);assert.equal(page.imageStaleAssetId,undefined);
+ assert.ok(job.imageUsage['image-new-6']);assert.equal(saves,1);
 });
 
 test('estimateSimpleCosts follows the wizard before a book exists and the remaining work after',async()=>{

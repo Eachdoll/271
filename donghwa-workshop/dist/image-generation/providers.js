@@ -161,6 +161,37 @@ export function composeImagePrompt(
   ).composedPrompt;
 }
 
+const textList = (value) =>
+  (Array.isArray(value) ? value : [value])
+    .filter((item) => item !== undefined && item !== null)
+    .map(String);
+/**
+ * Forbidden names are checked only in text a parent or a style supplied: the
+ * style preset's name, description and negative prompt, plus the request's
+ * own description. App scaffolding (fixed instructions, the plot ledger,
+ * reference labels) is never checked. A request builder that mixes both
+ * names the supplied parts in `forbiddenWordCheck: {text, names}`; `names`
+ * are the cast's names, so "토토로" (토토 + particle) is not the film.
+ * Without it the whole scene prompt counts as supplied text.
+ */
+function forbiddenRequestText(request, rendered) {
+  const style = [
+      rendered.stylePreset.name,
+      rendered.stylePrompt,
+      rendered.negativePrompt,
+    ],
+    scope = request.forbiddenWordCheck,
+    text = scope ? textList(scope.text) : [rendered.scenePrompt],
+    names = scope ? textList(scope.names) : [];
+  return (
+    forbiddenStyleMatches(textList(style).join("\n")).length > 0 ||
+    forbiddenStyleMatches(text.join("\n"), [], {
+      names,
+      scope: "description",
+    }).length > 0
+  );
+}
+
 function normalizeRequest(request, metadata) {
   let rendered;
   try {
@@ -172,15 +203,7 @@ function normalizeRequest(request, metadata) {
     if (error instanceof StoryRendererError) fail(error.message, error.code);
     throw error;
   }
-  if (
-    forbiddenStyleMatches(
-      [
-        rendered.composedPrompt,
-        rendered.negativePrompt,
-        rendered.stylePreset.name || "",
-      ].join("\n"),
-    ).length
-  )
+  if (forbiddenRequestText(request, rendered))
     fail(
       "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
       "forbidden_style_name",
