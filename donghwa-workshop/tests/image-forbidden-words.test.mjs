@@ -153,3 +153,114 @@ test('demo FULL AUTO with the sample engine draws every page and the cover of a 
   assert.equal(paidFetches, 0);
   assert.ok(job.usage.calls.every(c => !c.costUsd && !c.costUsdEstimated));
 });
+
+// ---- FIX-IMG: whole-cast names on the cover, particle-only name exemption, joined brand spellings, "frozen" in parent-entered text ----
+async function demoBook() {
+  const {state, wizard} = setup();
+  const job = createFullAutoJob(state, wizard, {demo: true, planMode: 'selection', stopBefore: 'pages'});
+  await runFullAuto(state, job, {buildBook: appBuilder(state)});
+  assert.equal(job.status, 'pages-ready', job.error || '');
+  return {state, job, book: job.book};
+}
+const draw = (state, book, index, options = {}) => generateImage(sceneGenerationRequest(state, book, index, {quality: 'final', ...options}), {engine: 'sample'});
+
+test('the cover exempts every cast name, not only the lead it shows', async () => {
+  paidFetches = 0;
+  const {state, book} = await demoBook();
+  assert.deepEqual(book.characterIds.slice(0, 2), ['yuha', 'toto']);
+  book.pagination.cover = {...book.pagination.cover, sceneAction: '토토로 달려가요'};
+  const cover = sceneGenerationRequest(state, book, 0, {cover: true, quality: 'final'});
+  assert.ok(cover.forbiddenWordCheck.names.includes('토토'), 'a supporting character is part of the cast');
+  assert.equal(cover.referenceImages.filter(r => r.role === 'character_front').length, 1, 'the cover still draws only the lead');
+  assert.ok((await generateImage(cover, {engine: 'sample'})).imageUrl);
+  // The topic fallback when no cover action was planned.
+  delete book.pagination.cover.sceneAction; book.topic = '유하가 토토로 변신한 날';
+  assert.ok((await draw(state, book, 0, {cover: true})).imageUrl);
+  // The film itself is still refused on the cover.
+  book.pagination.cover.sceneAction = 'Yuha hugs a Totoro plush';
+  await assert.rejects(draw(state, book, 0, {cover: true}), forbidden);
+  assert.equal(paidFetches, 0);
+});
+
+test('a cast name exempts only the name plus a particle, never a longer forbidden word', async () => {
+  const check = (text, names, scope = 'description') => forbiddenStyleMatches(text, [], {scope, names});
+  for (const scope of ['description', 'material', 'style']) {
+    assert.deepEqual(check('미야자키풍 숲', ['미야'], scope), ['미야자키'], scope);
+    assert.deepEqual(check('겨울왕국처럼 반짝이는 성', ['겨울'], scope), ['겨울왕국'], scope);
+    assert.deepEqual(check('디즈니 공주 드레스', ['디즈'], scope), ['디즈니'], scope);
+  }
+  for (const text of ['토토로 달려가요', '유하와 토토로 달려가요', '토토로는 웃어요', '토토로도 가요', '토토로만 알아요', '토토로부터 온 편지'])
+    assert.deepEqual(check(text, ['토토']), [], text);
+  assert.deepEqual(check('토토로봇 장난감', ['토토']), ['토토로'], 'what follows the name is not a particle');
+  assert.deepEqual(check('미야는 미야자키풍 숲에 살아요', ['미야']), ['미야자키']);
+  // A character's own name never lets its description name the work it shares a prefix with.
+  const {state} = setup(), toto = state.characters.find(c => c.id === 'toto');
+  for (const [id, name, description] of [['miya', '미야', '미야자키풍 숲에 사는 고양이'], ['gyeoul', '겨울', '겨울왕국처럼 파란 드레스'], ['dizu', '디즈', '디즈니 공주 드레스']]) {
+    state.characters.push({...structuredClone(toto), id, name, nameEn: '', description});
+    await assert.rejects(generateImage(createCharacterSheetRequest(state, id), {engine: 'sample'}), forbidden, name);
+  }
+  state.characters.push({...structuredClone(toto), id: 'miya2', name: '미야', nameEn: 'Miya', description: '미야는 숲에 사는 고양이예요'});
+  assert.ok((await generateImage(createCharacterSheetRequest(state, 'miya2'), {engine: 'sample'})).imageUrl);
+});
+
+test('distinctive brand names count even joined to other words; ordinary English words stay whole-word', async () => {
+  for (const name of ['DisneyPixar look', 'studioghibli meadow', 'pixar3d render', 'mickeymouse ears', 'dreamworksstyle faces', 'MiyazakiForest'])
+    assert.equal(validateStylePreset(style({id: 'custom-x', isBuiltIn: false, name})).valid, false, name);
+  assert.deepEqual(forbiddenStyleMatches('DisneyPixar look'), ['disney', 'pixar']);
+  assert.deepEqual(forbiddenStyleMatches('studioghibli').sort(), ['ghibli', 'studio ghibli']);
+  assert.deepEqual(forbiddenStyleMatches('pixar3d'), ['pixar']);
+  assert.deepEqual(forbiddenStyleMatches('mickeymouse'), ['mickey']);
+  for (const scope of ['material', 'description']) {
+    assert.deepEqual(forbiddenStyleMatches('a DisneyPixar princess', [], {scope}), ['disney', 'pixar'], scope);
+    assert.deepEqual(forbiddenStyleMatches('a totoroish forest spirit', [], {scope}), ['totoro'], scope);
+  }
+  // Ordinary English keeps whole-word matching: Chelsea is not Elsa, unfrozen is not Frozen.
+  assert.deepEqual(forbiddenStyleMatches('unfrozen chelsea hotelsand'), []);
+  await assert.rejects(sample({prompt: 'a small cat', stylePreset: style({stylePrompt: 'soft DisneyPixar look'})}), forbidden);
+  await assert.rejects(sample({prompt: 'a calm cat', stylePreset: style(), forbiddenWordCheck: {text: ['a studioghibli meadow'], names: []}}), forbidden);
+  await assert.rejects(sample({prompt: 'a calm cat', stylePreset: style(), forbiddenWordCheck: {text: [], generated: ['a pixar3d hero'], names: []}}), forbidden);
+});
+
+test('"frozen" in parent-entered text is refused as a style reference; story text and scaffolding stay lenient', async () => {
+  const material = text => forbiddenStyleMatches(text, [], {scope: 'material'}), story = text => forbiddenStyleMatches(text, [], {scope: 'description'});
+  for (const text of ['a gown like Frozen', 'a castle inspired by Frozen', 'drawn in the style of Frozen', 'Frozen style ice palace', 'a Frozen-inspired cape', 'a dress like frozen', 'like Frozen 2', 'the movie Frozen'])
+    assert.deepEqual(material(text), ['frozen'], text);
+  for (const text of ['a frozen lake', 'the pond looked like frozen glass', 'icicles hang from frozen branches', 'Toto stood frozen like a statue, with a frozen look.']) {
+    assert.deepEqual(material(text), [], text); assert.deepEqual(story(text), [], text);
+  }
+  // Model-written story text counts only a cue after the word.
+  assert.deepEqual(story('a Frozen-style gown'), ['frozen']); assert.deepEqual(story('a frozen lake like glass'), []);
+  // Provider: declared parent text strictly, generated text leniently, scaffolding never.
+  await assert.rejects(sample({prompt: 'a calm cat', stylePreset: style(), forbiddenWordCheck: {text: ['a coat like Frozen'], generated: [], names: []}}), forbidden);
+  assert.ok((await sample({prompt: 'FROZEN LEDGER: inspired by Frozen', stylePreset: style(), forbiddenWordCheck: {text: ['a calm cat by the frozen lake'], generated: ['The frozen lake shines.'], names: []}})).imageUrl);
+  // A free prompt without declared parts is the parent's own text.
+  await assert.rejects(sample({prompt: 'a winter castle inspired by Frozen', stylePreset: style()}), forbidden);
+  assert.ok((await sample({prompt: 'a cat beside a frozen pond', stylePreset: style()})).imageUrl);
+  // Character sheet: the parent's description.
+  const {state: sheetState} = setup(), toto = sheetState.characters.find(c => c.id === 'toto');
+  toto.description = '파란 망토, a cape like Frozen';
+  await assert.rejects(generateImage(createCharacterSheetRequest(sheetState, 'toto'), {engine: 'sample'}), forbidden);
+  toto.description = '파란 망토, a cape the color of a frozen lake';
+  assert.ok((await generateImage(createCharacterSheetRequest(sheetState, 'toto'), {engine: 'sample'})).imageUrl);
+  // Scene: place descriptions and a page's own image prompt are strict, page text is lenient.
+  const {state, book} = await demoBook();
+  const place = book.generationSnapshot.backgrounds[0], kept = place.description;
+  const placed = book.pages.findIndex((p, i) => sceneGenerationRequest(state, book, i).forbiddenWordCheck.text.includes(kept));
+  assert.ok(placed >= 0);
+  place.description = 'a winter castle inspired by Frozen';
+  await assert.rejects(draw(state, book, placed), forbidden);
+  place.description = 'a castle beside a frozen lake';
+  assert.ok((await draw(state, book, placed)).imageUrl);
+  place.description = kept;
+  const page = book.pages[2];
+  page.imagePrompt = 'Yuha skates, in the style of Frozen';
+  const override = sceneGenerationRequest(state, book, 2);
+  assert.ok(override.forbiddenWordCheck.text.includes(page.imagePrompt)); assert.ok(!override.forbiddenWordCheck.generated.includes(page.imagePrompt));
+  await assert.rejects(draw(state, book, 2), forbidden);
+  page.imagePrompt = 'Yuha skates on the frozen lake';
+  assert.ok((await draw(state, book, 2)).imageUrl);
+  delete page.imagePrompt;
+  page.ko = '유하가 얼어붙은 호수를 봐요.'; page.en = 'The frozen lake shines.';
+  assert.ok(sceneGenerationRequest(state, book, 2).forbiddenWordCheck.generated.includes('The frozen lake shines.'));
+  assert.ok((await draw(state, book, 2)).imageUrl);
+});

@@ -662,8 +662,16 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
     .join("; ");
   const styleReferences = getWorldStyleReferences(state, world, preset);
   return {
+    // Parent-entered (or planned) character fields, each checked strictly on its own.
     forbiddenWordCheck: {
-      text: [identity],
+      text: suppliedText([
+        character.name,
+        character.nameEn,
+        character.kind,
+        character.description,
+        character.appearance,
+        character.clothes,
+      ]),
       names: suppliedText([character.name, character.nameEn]),
     },
     prompt: `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
@@ -793,6 +801,10 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     .filter(Boolean);
   const background = place.background || {};
   // Forbidden names are checked in these parts only, never in the fixed instructions or the plot ledger.
+  // Parent-entered material and a page's own image prompt are checked strictly ("like Frozen"),
+  // story text and the cover action leniently ("a frozen lake"). The whole cast's names count,
+  // also on the cover, which shows only the lead: "토토로 달려가요" is 토토 + particle.
+  const pageImagePrompt = options.cover ? null : page.imagePrompt || null;
   const forbiddenWordCheck = {
     text: suppliedText(
       sheets.map((sheet) => [
@@ -812,15 +824,29 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
         background.layoutEn,
         background.rules,
       ],
+      pageImagePrompt,
+    ),
+    generated: suppliedText(
       options.cover
         ? book.pagination?.cover?.sceneAction || book.topic || book.title
-        : [scene, page.ko ?? page.textKo, page.en ?? page.textEn],
+        : [
+            pageImagePrompt ? null : scene,
+            page.ko ?? page.textKo,
+            page.en ?? page.textEn,
+          ],
     ),
     names: suppliedText(
-      sheets.map((sheet) => [
+      (snapshot.characterSheets?.length
+        ? snapshot.characterSheets
+        : sheets
+      ).map((sheet) => [
         sheet.characterSnapshot?.name,
         sheet.characterSnapshot?.nameEn,
       ]),
+      (book.characterIds || []).map((id) => {
+        const character = (state?.characters || []).find((c) => c.id === id);
+        return [character?.name, character?.nameEn];
+      }),
     ),
   };
   return {

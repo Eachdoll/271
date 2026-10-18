@@ -166,13 +166,18 @@ const textList = (value) =>
     .filter((item) => item !== undefined && item !== null)
     .map(String);
 /**
- * Forbidden names are checked only in text a parent or a style supplied: the
- * style preset's name, description and negative prompt, plus the request's
- * own description. App scaffolding (fixed instructions, the plot ledger,
- * reference labels) is never checked. A request builder that mixes both
- * names the supplied parts in `forbiddenWordCheck: {text, names}`; `names`
- * are the cast's names, so "토토로" (토토 + particle) is not the film.
- * Without it the whole scene prompt counts as supplied text.
+ * Forbidden names are checked only in text a parent, a style or the story
+ * supplied: the style preset's name, description and negative prompt, plus
+ * the request's own description. App scaffolding (fixed instructions, the
+ * plot ledger, reference labels) is never checked. A request builder that
+ * mixes both names the supplied parts in
+ * `forbiddenWordCheck: {text, generated, names}`: `text` is parent-entered
+ * material (character, place and wardrobe descriptions, a page's own image
+ * prompt), checked strictly, so "like Frozen" is refused; `generated` is
+ * model-written story text and the cover action, where "frozen" counts only
+ * with a style cue after it; `names` are the whole cast's names, so "토토로"
+ * (토토 + particle) is not the film. Without it the whole scene prompt counts
+ * as parent-entered text. Each part is checked on its own.
  */
 function forbiddenRequestText(request, rendered) {
   const style = [
@@ -180,15 +185,18 @@ function forbiddenRequestText(request, rendered) {
       rendered.stylePrompt,
       rendered.negativePrompt,
     ],
-    scope = request.forbiddenWordCheck,
-    text = scope ? textList(scope.text) : [rendered.scenePrompt],
-    names = scope ? textList(scope.names) : [];
+    check = request.forbiddenWordCheck,
+    material = check ? textList(check.text) : [rendered.scenePrompt],
+    generated = check ? textList(check.generated) : [],
+    names = check ? textList(check.names) : [],
+    found = (parts, scope) =>
+      parts.some(
+        (part) => forbiddenStyleMatches(part, [], { names, scope }).length > 0,
+      );
   return (
     forbiddenStyleMatches(textList(style).join("\n")).length > 0 ||
-    forbiddenStyleMatches(text.join("\n"), [], {
-      names,
-      scope: "description",
-    }).length > 0
+    found(material, "material") ||
+    found(generated, "description")
   );
 }
 
