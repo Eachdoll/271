@@ -94,6 +94,13 @@ function runLockCheck(state, book) {
       if (held) throw Error(RUN_OWNS_MESSAGE);
     });
 }
+/** runLockCheck, then the same-tab check again after the wait. */
+async function otherTabRunCheck(state, book) {
+  const lockCheck = runLockCheck(state, book);
+  if (!lockCheck) return;
+  await lockCheck;
+  assertNotRunning(state, book);
+}
 /**
  * One page operation per book at a time: two paid requests on one book could
  * each buy the same coherence review, and a text edit landing during that
@@ -266,13 +273,12 @@ export async function rewriteBookPage(state, book, pageIndex, options = {}) {
   const index = pageIndexOf(book, pageIndex);
   assertNotRunning(state, book);
   if (book.textDemo) return { changed: false, demo: true };
-  const lockCheck = runLockCheck(state, book);
-  if (lockCheck) {
-    await lockCheck;
-    // Checked again after the wait; exclusive() then marks the book busy in this same tick.
-    assertNotRunning(state, book);
-  }
-  return exclusive(book, () => rewritePage(state, book, index, options));
+  // The book is busy from the call on, so its page buttons are disabled while
+  // the lock query is still pending.
+  return exclusive(book, async () => {
+    await otherTabRunCheck(state, book);
+    return rewritePage(state, book, index, options);
+  });
 }
 async function rewritePage(
   state,
@@ -580,13 +586,8 @@ export async function generateBookPageImage(
     throw Error(
       "그림 설정이 아직 준비되지 않았어요. 자동 작업을 '그림 준비' 단계(pages)까지 이어서 캐릭터·배경 시트를 먼저 준비해 주세요.",
     );
-  const lockCheck = runLockCheck(state, book);
-  if (lockCheck) {
-    await lockCheck;
-    // Checked again after the wait; exclusive() then marks the book busy in this same tick.
-    assertNotRunning(state, book);
-  }
   return exclusive(book, async () => {
+    await otherTabRunCheck(state, book);
     const before = book.pages[index].imageAssetId,
       reviewsBefore = book.textUsage?.calls?.length || 0;
     let failure = null;
