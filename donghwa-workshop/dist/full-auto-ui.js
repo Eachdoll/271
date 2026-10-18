@@ -8,7 +8,14 @@ import {
   createFullAutoJob,
   estimateFullAutoCost,
   runFullAuto,
+  FULL_AUTO_STOPS,
 } from "./full-auto.js";
+/** Jobs parked by a hold: nothing is running and nothing is bought until a caller releases them. */
+const HOLD_LABELS = {
+  "text-review": "글 검수 대기",
+  "pages-ready": "그림 준비 완료",
+};
+const isHeld = (job) => Object.hasOwn(HOLD_LABELS, job?.status);
 const esc = (value) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -44,12 +51,13 @@ export function renderFullAutoJobs(state) {
   return `<section class="panel full-auto-jobs" id="full-auto-jobs"><h3>제작 중인 이야기</h3><div class="story-drafts">${jobs
     .map((job) => {
       const live = currentJob?.id === job.id && !!controller,
+        held = isHeld(job) && !live,
         pending = readAutoStop(job.id),
         requested =
           pending?.nonce &&
           pending.nonce !== job.stopBaselineNonce &&
           job.status !== "paused";
-      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${job.input?.pageCount || 12}쪽 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !live ? button("완료된 부분 검토", "review", job.id) : ""}</div></article>`;
+      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${job.input?.pageCount || 12}쪽 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}</div></article>`;
     })
     .join("")}</div></section>`;
 }
@@ -68,7 +76,7 @@ function runScreen(job, busy) {
     ),
     imageCalls = Object.keys(job.imageUsage || {}).length;
   api.showModal(
-    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><p id="full-auto-count" class="small-label">그림 ${images} / ${job.input.pageCount}쪽 · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
+    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><p id="full-auto-count" class="small-label">그림 ${images} / ${job.input.pageCount}쪽 · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
       ["plan", "재료 선택"],
       ["input", "시트 준비"],
       ["outline", "줄거리"],
@@ -84,11 +92,28 @@ function runScreen(job, busy) {
       )
       .join(
         "",
-      )}</ol>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${job.notes.map((n) => `<p class="small-label">${esc(n)}</p>`).join("")}<p class="small-label">완료한 재료·문단·그림은 저장됩니다. 이 창을 닫아도 제작은 계속됩니다. 브라우저를 완전히 종료하면 다음 접속에서 이어 만들어요. 최종 검토 전에는 아이 책장에 공개되지 않습니다.</p><div class="modal-actions">${busy ? button("닫고 둘러보기", "close", job.id) + button("중지 · 결과 보관", "pause", job.id) : job.status === "review" ? button("완성 초안 검토", "review", job.id, "primary") : button("이어서 자동 생성", "resume", job.id, "primary")}${!busy ? button("닫기", "close", job.id) : ""}</div>`,
+      )}</ol>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${job.notes.map((n) => `<p class="small-label">${esc(n)}</p>`).join("")}<p class="small-label">완료한 재료·문단·그림은 저장됩니다. 이 창을 닫아도 제작은 계속됩니다. 브라우저를 완전히 종료하면 다음 접속에서 이어 만들어요. 최종 검토 전에는 아이 책장에 공개되지 않습니다.</p><div class="modal-actions">${busy ? button("닫고 둘러보기", "close", job.id) + button("중지 · 결과 보관", "pause", job.id) : job.status === "review" ? button("완성 초안 검토", "review", job.id, "primary") : isHeld(job) ? button("쪽마다 검수", "simple-review", job.id, "primary") : button("이어서 자동 생성", "resume", job.id, "primary")}${!busy ? button("닫기", "close", job.id) : ""}</div>`,
     "wide full-auto-workspace",
   );
 }
-async function execute(job) {
+/** Completion message for the status a run ended in; a hold is not a finished book. */
+function finishedToast(job, navigate) {
+  if (job.status === "text-review")
+    return "글이 완성됐어요. 쪽마다 글을 확인해 주세요.";
+  if (job.status === "pages-ready")
+    return "그림 만들 준비가 끝났어요. 쪽마다 그림을 만들어 주세요.";
+  if (job.status === "review")
+    return navigate
+      ? "이야기가 완성됐어요. 책장에서 완성 초안을 검토해 주세요."
+      : "그림과 표지까지 완성됐어요. 마지막으로 확인해 주세요.";
+  return null;
+}
+/**
+ * The only place a run starts: one live run per tab, a cross-tab lock, the
+ * local/cloud stop watcher and a save that aborts when the parent locks.
+ * navigate=false keeps the current view and forwards every progress event.
+ */
+async function execute(job, { navigate = true, onProgress } = {}) {
   if (controller) {
     api.toast(
       "이미 제작 중인 작업이 있어요. 책장에서 진행 상태를 확인해 주세요.",
@@ -123,7 +148,21 @@ async function execute(job) {
         return api.save();
       },
       buildBook: api.buildBook,
-      onProgress: ({ message }) => {
+      onProgress: (event) => {
+        const { message } = event;
+        if (typeof onProgress === "function")
+          try {
+            onProgress({
+              job,
+              message,
+              phase: event.phase,
+              done: event.done,
+              total: event.total,
+              fraction: event.fraction,
+            });
+          } catch {
+            /* A screen's progress renderer must never stop a paid run. */
+          }
         if (currentJob !== job || operation.signal.aborted) return;
         refreshCards();
         if (
@@ -139,10 +178,12 @@ async function execute(job) {
       },
     });
   };
-  api.onStarted?.(job);
-  api.toast(
-    "제작을 시작했어요. 책장의 제작 카드에서 진행 확인·중지를 할 수 있어요.",
-  );
+  if (navigate) {
+    api.onStarted?.(job);
+    api.toast(
+      "제작을 시작했어요. 책장의 제작 카드에서 진행 확인·중지를 할 수 있어요.",
+    );
+  }
   try {
     if (globalThis.navigator?.locks)
       await navigator.locks.request(
@@ -157,8 +198,8 @@ async function execute(job) {
         },
       );
     else await work();
-    if (api.getState() === state && api.isParent())
-      api.toast("이야기가 완성됐어요. 책장에서 완성 초안을 검토해 주세요.");
+    const done = finishedToast(job, navigate);
+    if (done && api.getState() === state && api.isParent()) api.toast(done);
   } catch (error) {
     if (api.getState() === state && api.isParent())
       api.toast(
@@ -188,7 +229,8 @@ async function stopJob(job) {
   const response = await requestAutoStop(job.id, {
     accountId: api.getCloudAccount?.(),
   });
-  if (!running && job.status !== "running") {
+  // A held job is already parked; keep its hold so the simple screen still knows where it stands.
+  if (!running && job.status !== "running" && !isHeld(job)) {
     job.status = "paused";
     job.phase = "중지 · 완료한 결과 보관";
     job.stopRequestedAt = response.requestedAt;
@@ -202,6 +244,89 @@ async function stopJob(job) {
         ? "중지 요청을 저장했어요. 실행 중인 기기에 전달됩니다."
         : "중지 요청을 보관했어요. 완료한 결과는 유지됩니다.",
   );
+}
+
+function connectedApi() {
+  if (!api) throw Error("FULL AUTO 화면 연결을 먼저 설정해 주세요.");
+  return api;
+}
+function jobById(jobId) {
+  const job = autoJobs(connectedApi().getState())[jobId];
+  if (!job) throw Error("자동 작업을 찾지 못했어요.");
+  return job;
+}
+function assertIdleRunner() {
+  if (controller) throw Error("현재 자동 작업이 실행 중이에요.");
+  if (!connectedApi().isParent())
+    throw Error("부모 잠금을 풀고 다시 시도해 주세요.");
+}
+/**
+ * Create and run a FULL AUTO job through the shared runner.
+ * Resolves with the job when the run ends: job.status is 'text-review' or
+ * 'pages-ready' at a hold, 'review' when complete, 'paused' after a stop and
+ * 'failed' (job.error) on an error. Progress events are
+ * {job, message, phase, done, total, fraction}.
+ */
+export async function startFullAutoJob(
+  wizard,
+  {
+    allowNew = true,
+    stopBefore = null,
+    demo = false,
+    planMode = "auto",
+    navigate = false,
+    onProgress,
+  } = {},
+) {
+  assertIdleRunner();
+  const state = api.getState(),
+    job = createFullAutoJob(state, wizard, {
+      allowNew,
+      stopBefore,
+      demo,
+      planMode,
+    });
+  if (api.save() === false) {
+    delete autoJobs(state)[job.id];
+    throw Error("자동 작업을 저장하지 못했어요.");
+  }
+  await execute(job, { navigate, onProgress });
+  return job;
+}
+/**
+ * Resume or release a job. Passing stopBefore ('text' | 'pages' | null) moves
+ * the hold first; completed steps are skipped, so nothing paid is bought twice.
+ */
+export async function runFullAutoJob(
+  jobId,
+  { stopBefore, navigate = false, onProgress } = {},
+) {
+  assertIdleRunner();
+  const job = jobById(jobId);
+  if (stopBefore !== undefined) {
+    if (!FULL_AUTO_STOPS.includes(stopBefore))
+      throw Error(
+        "자동 작업을 멈출 단계는 글(text)·그림 준비(pages) 중에서 골라 주세요.",
+      );
+    const previous = job.stopBefore ?? null;
+    job.stopBefore = stopBefore;
+    if (api.save() === false) {
+      job.stopBefore = previous;
+      throw Error("자동 작업을 저장하지 못했어요.");
+    }
+  }
+  await execute(job, { navigate, onProgress });
+  return job;
+}
+/** Explicit stop: aborts a live run here and leaves a stop request for other tabs and devices. */
+export async function stopFullAutoJob(jobId) {
+  connectedApi();
+  const job = jobById(jobId);
+  await stopJob(job);
+  return job;
+}
+export function getFullAutoJob(jobId) {
+  return autoJobs(connectedApi().getState())[jobId] || null;
 }
 
 export function configureFullAutoUI(context) {
@@ -245,6 +370,19 @@ export function configureFullAutoUI(context) {
         }
         if (action === "resume") {
           await execute(job);
+          return;
+        }
+        if (action === "simple-review") {
+          if (typeof api.openSimpleReview === "function") {
+            await api.openSimpleReview(job.id);
+            return;
+          }
+          if (controller) throw Error("실행 중인 작업을 먼저 중지해 주세요.");
+          if (!job.book)
+            throw Error(
+              "아직 그림 단계의 초안이 없어요. 자동 생성을 이어 주세요.",
+            );
+          await api.openReview(job);
           return;
         }
         if (action === "review") {

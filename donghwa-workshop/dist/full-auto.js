@@ -11,6 +11,7 @@ import {
   summarizeStory,
   inspectStory,
   preflightOutlineLocations,
+  isHomeBackground,
 } from "./story-generation/pipeline.js";
 import {
   inspectAutoMaterialPlan,
@@ -46,6 +47,10 @@ import {
 import { estimateImageCost } from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
+import {
+  applySeriesContinuity,
+  bindSeriesBackgrounds,
+} from "./story-generation/continuity.js";
 import { safeTopic } from "./engine.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -54,10 +59,94 @@ const abort = (signal) => {
   if (signal?.aborted)
     throw new DOMException("FULL AUTO를 중지했어요.", "AbortError");
 };
+/** Where a run holds: 'text' before any sheet or image, 'pages' before page images, null runs to the end. */
+export const FULL_AUTO_STOPS = Object.freeze(["text", "pages", null]);
+const PLAN_MODES = ["auto", "selection"];
+function checkStopBefore(value) {
+  if (value === undefined || value === null) return null;
+  if (!FULL_AUTO_STOPS.includes(value))
+    throw Error(
+      "자동 작업을 멈출 단계는 글(text)·그림 준비(pages) 중에서 골라 주세요.",
+    );
+  return value;
+}
 export function autoJobs(state) {
   return (state.fullAutoJobs ||= {});
 }
-export function createFullAutoJob(state, wizard, { allowNew = true } = {}) {
+/** The FULL AUTO job that built this book, if it still exists. Read-only lookup. */
+export function fullAutoJobForBook(state, book) {
+  const id = book?.fullAutoRunId;
+  return (id && state?.fullAutoJobs?.[id]) || null;
+}
+/**
+ * Free, deterministic material plan from the parent's own picks (no LLM call).
+ * Keeps every picked character and place; fills a missing home or a second
+ * non-home place from the drawer in drawer order. Throws a Korean error when
+ * the drawer cannot satisfy inspectAutoMaterialPlan.
+ */
+export function selectionMaterialPlan(state, wizard = {}) {
+  const characters = active(state.characters),
+    backgrounds = active(state.backgrounds),
+    pinned = [...new Set(wizard.characterIds || [])],
+    chosen = [...new Set(wizard.backgroundIds || [])]
+      .map((id) => backgrounds.find((b) => b.id === id))
+      .filter(Boolean),
+    filled = [],
+    places = () => chosen.filter((b) => !isHomeBackground(b)).length;
+  if (!chosen.some(isHomeBackground)) {
+    const home = backgrounds.find(isHomeBackground);
+    if (home) {
+      chosen.push(home);
+      filled.push(home);
+    }
+  }
+  for (const background of backgrounds) {
+    if (places() >= 2) break;
+    if (!isHomeBackground(background) && !chosen.includes(background)) {
+      chosen.push(background);
+      filled.push(background);
+    }
+  }
+  const errors = [];
+  if (!chosen.some(isHomeBackground))
+    errors.push(
+      "시작과 마무리에 사용할 집·방 배경을 배경 서랍에 추가해 주세요.",
+    );
+  if (places() < 2)
+    errors.push(
+      "집·방 외에 이야기 중간에 사용할 서로 다른 배경 2곳이 필요해요. 배경 서랍에 장소를 추가해 주세요.",
+    );
+  if (chosen.length > 5)
+    errors.push("장소는 집·방을 포함해 최대 5곳까지 골라 주세요.");
+  if (errors.length) throw Error(errors.join("\n"));
+  const plan = {
+      reuseCharacterIds: [],
+      newCharacters: [],
+      reuseBackgroundIds: chosen.map((b) => b.id),
+      newBackgrounds: [],
+      reason:
+        "고른 등장인물과 장소를 그대로 사용해요." +
+        (filled.length
+          ? ` 부족한 장소는 서랍에서 채웠어요: ${filled.map((b) => b.name).join(", ")}.`
+          : ""),
+    },
+    checked = inspectAutoMaterialPlan(plan, {
+      characters,
+      backgrounds,
+      pinnedCharacterIds: pinned,
+      allowNew: false,
+    });
+  if (!checked.valid) throw Error(checked.errors.join("\n"));
+  return { plan, filledBackgroundIds: filled.map((b) => b.id) };
+}
+export function createFullAutoJob(
+  state,
+  wizard,
+  { allowNew = true, stopBefore = null, demo = false, planMode = "auto" } = {},
+) {
+  const hold = checkStopBefore(stopBefore);
+  if (!PLAN_MODES.includes(planMode))
+    throw Error("재료 계획 방식은 auto 또는 selection이어야 해요.");
   const check = safeTopic(wizard.topic);
   if (!check.ok) throw Error(check.message || "주제를 적어 주세요.");
   const selected = [...new Set(wizard.characterIds || [])];
@@ -72,6 +161,11 @@ export function createFullAutoJob(state, wizard, { allowNew = true } = {}) {
     (wizard.ending === "custom" && !wizard.endingCustom?.trim())
   )
     throw Error("직접 선택한 가치와 결말을 채워 주세요.");
+  // Demo never asks a model to plan; the parent's picks become the plan.
+  const isDemo = demo === true,
+    mode = isDemo ? "selection" : planMode;
+  if (mode === "selection")
+    selectionMaterialPlan(state, { ...wizard, characterIds: selected });
   const prepared = inputFromWizard(state, {
       ...wizard,
       characterIds: selected,
@@ -109,6 +203,9 @@ export function createFullAutoJob(state, wizard, { allowNew = true } = {}) {
     ),
     textSettings: clone(getTextGenerationSettings(state)),
     allowNew,
+    stopBefore: hold,
+    demo: isDemo,
+    planMode: mode,
     completed: {},
     usage: { calls: [] },
     imageUsage: {},
@@ -121,7 +218,18 @@ export function createFullAutoJob(state, wizard, { allowNew = true } = {}) {
   autoJobs(state)[job.id] = job;
   return job;
 }
-export function estimateFullAutoCost(state, wizard) {
+/**
+ * Reference estimate. Extra fields for the simple flow: textUsd (all text,
+ * including the paid material plan unless planMode is 'selection' or demo),
+ * imageUnitUsd (one final page image), imagesUsd (every page + cover) and
+ * sheetsUpperUsd (at most 10 new sheets). Called with two arguments the
+ * original fields are unchanged.
+ */
+export function estimateFullAutoCost(
+  state,
+  wizard,
+  { planMode = "auto", demo = false, imageEngine } = {},
+) {
   const world = getActiveWorld(state),
     settings = getTextGenerationSettings(state),
     text = estimateStoryTextCost({
@@ -135,22 +243,29 @@ export function estimateFullAutoCost(state, wizard) {
       output: 5000,
       model: plan.config.model,
     }),
-    config = world.providerConfig?.[world.imageEngine] || {},
+    engine = imageEngine || world.imageEngine,
+    config = world.providerConfig?.[engine] || {},
     unit = estimateImageCost({
-      engine: world.imageEngine,
+      engine,
       quality: "final",
       size: "1536x1024",
       config,
     }).costUsd,
-    pages = Number(wizard.pageCount) || 12;
+    pages = Number(wizard.pageCount) || 12,
+    freePlan = demo === true || planMode === "selection",
+    textUsd =
+      demo === true ? 0 : text.costUsd + (freePlan ? 0 : planning.costUsd);
   return {
-    baseUsd: text.costUsd + planning.costUsd + (pages + 1) * unit,
-    withMaterialsAndRetryUsd:
-      text.costUsd + planning.costUsd + (pages * 2 + 11) * unit,
-    imageEngine: world.imageEngine,
+    baseUsd: textUsd + (pages + 1) * unit,
+    withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
+    imageEngine: engine,
     pageCount: pages,
-    requests: text.requestCount + 1,
+    requests: demo === true ? 0 : text.requestCount + (freePlan ? 0 : 1),
     note: "참고 단가 추정 · 새 시트 최대 10장과 유사 그림 1회 재생성 포함 상단 · 글 자동 수정·입력 참조 요금 별도",
+    textUsd,
+    imageUnitUsd: unit,
+    imagesUsd: (pages + 1) * unit,
+    sheetsUpperUsd: 10 * unit,
   };
 }
 export async function preflightFullAuto(state, job) {
@@ -161,19 +276,22 @@ export async function preflightFullAuto(state, job) {
     if (!places.valid) throw Error(places.errors.join("\n"));
   }
   const engines = new Map();
-  for (const stage of [
-    "outline",
-    "sceneBriefs",
-    "proseDraft",
-    "prose",
-    "enrichment",
-    "pagination",
-  ]) {
+  // Demo text needs no key; it is chosen explicitly and never replaces a failed engine.
+  for (const stage of job.demo
+    ? []
+    : [
+        "outline",
+        "sceneBriefs",
+        "proseDraft",
+        "prose",
+        "enrichment",
+        "pagination",
+      ]) {
     if (stage === "proseDraft" && !job.textSettings.hybrid?.enabled) continue;
     const selected = resolveStoryStageSettings(job.textSettings, stage);
     engines.set(selected.engineId, selected.config);
   }
-  if (job.input.storyQuality?.enabled)
+  if (job.input.storyQuality?.enabled && !job.demo)
     for (const role of ["outline", "prose", "cheap"]) {
       const selected = resolveQualityStageSettings(
         job.textSettings,
@@ -192,6 +310,8 @@ export async function preflightFullAuto(state, job) {
     if (!(await getCredential(engine)))
       throw Error(`${engine} 글 엔진의 API 키를 부모 설정에 저장해 주세요.`);
   }
+  // A text-only hold buys no sheet or image, so it needs no image key yet.
+  if (job.stopBefore === "text") return;
   const world = getActiveWorld(state),
     config = world.providerConfig?.[job.imageEngine] || {};
   if (
@@ -279,8 +399,8 @@ export function fullAutoPayload(job) {
     pagination: clone(job.pagination),
     richnessCheck: clone(job.richnessCheck || null),
     textSettings: clone(job.textSettings),
-    textEngineId: prose.engineId,
-    textModelId: prose.config.model,
+    textEngineId: job.demo ? "demo" : prose.engineId,
+    textModelId: job.demo ? "demo" : prose.config.model,
     summaryForNext: summarizeStory(job.outline, {
       ...job.input,
       prose: job.prose,
@@ -289,7 +409,7 @@ export function fullAutoPayload(job) {
     readingLevels: clone(job.readingLevels),
     usage: clone(job.usage),
     storyCheck: clone(job.storyCheck || {}),
-    demo: false,
+    demo: job.demo === true,
     worldId: job.worldId,
     worldSnapshot: clone(job.worldSnapshot),
   };
@@ -323,6 +443,68 @@ function recordImage(job, result) {
   for (const old of result.imageHistory || [])
     add(old.imageAssetId, old.imageMeta);
 }
+/** Keep a usage row for paid text work done on a FULL AUTO book outside runFullAuto (upsert by callId). */
+export function recordFullAutoBookUsage(state, book, row) {
+  const job = fullAutoJobForBook(state, book);
+  if (!job || !row) return false;
+  const calls = ((job.usage ||= { calls: [] }).calls ||= []),
+    index = row.callId ? calls.findIndex((c) => c.callId === row.callId) : -1;
+  if (index < 0) calls.push(clone(row));
+  else calls[index] = clone(row);
+  job.updatedAt = now();
+  return true;
+}
+/** Keep an image generated on a FULL AUTO book outside runFullAuto in the job's image usage. */
+export function recordFullAutoBookImage(state, book, result) {
+  const job = fullAutoJobForBook(state, book);
+  if (!job || !result) return false;
+  job.imageUsage ||= {};
+  recordImage(job, result);
+  job.updatedAt = now();
+  return true;
+}
+/** Text step keys a job will run, in order; used for the progress fraction. */
+function textStepKeys(job) {
+  const quality = !!job.input?.storyQuality?.enabled;
+  return [
+    "plan",
+    "input",
+    "outline",
+    "briefs",
+    ...(job.textSettings?.hybrid?.enabled && !quality ? ["proseDraft"] : []),
+    "prose",
+    ...(job.textSettings?.storyEnrichment !== false && !quality
+      ? ["enrichment"]
+      : []),
+    ...(job.outline && !job.outline.plotContract ? [] : ["proseCoherence"]),
+    "pagination",
+  ];
+}
+const finalImage = (page) =>
+  !!page?.imageAssetId &&
+  page.imageMeta?.quality === "final" &&
+  !page.imageStale;
+/**
+ * {done, total, fraction} for the part of the run the current hold covers:
+ * completed text step keys, then one step for sheets + the frozen snapshot,
+ * then every page image and the cover.
+ */
+export function fullAutoProgress(job) {
+  const keys = textStepKeys(job);
+  let done = keys.filter((key) => job.completed?.[key]).length,
+    total = keys.length;
+  if (job.stopBefore !== "text") {
+    total += 1;
+    if (job.book?.generationSnapshot) done += 1;
+  }
+  if (!job.stopBefore) {
+    const pages = job.book?.pages || [];
+    total += (pages.length || Number(job.input?.pageCount) || 12) + 1;
+    done +=
+      pages.filter(finalImage).length + (job.book?.cover?.imageAssetId ? 1 : 0);
+  }
+  return { done, total, fraction: total ? Math.min(1, done / total) : 0 };
+}
 function assertJobWorld(state, job) {
   const world = getActiveWorld(state);
   if (
@@ -348,6 +530,56 @@ function assertJobWorld(state, job) {
       );
   }
 }
+/**
+ * A text hold builds the book before any sheet exists. Series continuity needs
+ * the cast's confirmed sheets, so the book is built with the same series name
+ * and the continuity snapshot is applied when the hold is released.
+ */
+function textHoldPayload(state, job, payload) {
+  const previous = state.books.find(
+    (b) => b.id === payload.wizard?.previousBookId,
+  );
+  if (!previous) return payload;
+  job.seriesContinuityDeferred = true;
+  return {
+    ...payload,
+    wizard: {
+      ...payload.wizard,
+      previousBookId: null,
+      series: payload.wizard.series || previous.series,
+    },
+  };
+}
+/** Freeze the book's generation snapshot once, after the sheets it references exist. */
+function ensureJobSnapshot(state, job) {
+  const book = job.book;
+  if (book.generationSnapshot) return book.generationSnapshot;
+  const previous = job.seriesContinuityDeferred
+    ? state.books.find((b) => b.id === job.wizard.previousBookId)
+    : null;
+  if (previous)
+    applySeriesContinuity(state, book, previous, {
+      ...job.wizard,
+      pageCount: book.pages.length,
+      koreanLevel: job.readingLevels?.koreanLevel,
+      englishLevel: job.readingLevels?.englishLevel,
+      characterVariants: book.characterVariants,
+      variantPageRanges: book.variantPageRanges,
+    });
+  else {
+    if (job.seriesContinuityDeferred)
+      job.notes.push(
+        "이전 편을 찾지 못해 현재 World 설정으로 그림을 준비했어요.",
+      );
+    captureBookGenerationSnapshot(state, book);
+    book.generationSnapshot.backgroundReferenceByPage = bindSeriesBackgrounds(
+      book,
+      book.generationSnapshot.backgrounds || [],
+    );
+  }
+  delete job.seriesContinuityDeferred;
+  return book.generationSnapshot;
+}
 export async function runFullAuto(
   state,
   job,
@@ -362,12 +594,25 @@ export async function runFullAuto(
   const ops = { ...DEFAULT_OPS, ...operations };
   if (job.status === "running")
     throw Error("이 자동 작업이 이미 실행 중이에요.");
+  // An unknown hold must never fall through to buying images.
+  const hold = checkStopBefore(job.stopBefore);
   const persist = async () => {
     job.updatedAt = now();
     if ((await save()) === false)
       throw Error("자동 작업을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
   };
-  const report = (message) => onProgress({ job, message, phase: job.phase });
+  const report = (message) =>
+    onProgress({ job, message, phase: job.phase, ...fullAutoProgress(job) });
+  const holdAt = async (status, message) => {
+    job.status = status;
+    job.phase = message;
+    job.currentStep = null;
+    job.error = null;
+    await persist();
+    report(message);
+    return job.book;
+  };
+  const demoEngine = () => ({ engineId: "demo", config: {} });
   const step = async (key, label, operation, apply) => {
     if (job.completed[key]) return;
     abort(signal);
@@ -379,26 +624,29 @@ export async function runFullAuto(
     await persist();
     report(label);
     const textOptions = (stage) => ({
-      ...resolveStoryStageSettings(job.textSettings, stage),
+      ...(job.demo
+        ? demoEngine()
+        : resolveStoryStageSettings(job.textSettings, stage)),
       signal,
       qualityEngines: Object.fromEntries(
         ["outline", "prose", "cheap"].map((role) => [
           role,
-          resolveQualityStageSettings(
-            job.textSettings,
-            role,
-            job.input.storyQuality || {},
-          ),
+          job.demo
+            ? demoEngine()
+            : resolveQualityStageSettings(
+                job.textSettings,
+                role,
+                job.input.storyQuality || {},
+              ),
         ]),
       ),
       qualityCheckpoint: job.qualityCheckpoint,
       childGateCheckpoint: job.childGateCheckpoint,
       proseCoherence: job.proseCoherence,
       pageCoherence: job.pageCoherence,
-      coherenceOptions: resolveStoryStageSettings(
-        job.textSettings,
-        "coherence",
-      ),
+      coherenceOptions: job.demo
+        ? demoEngine()
+        : resolveStoryStageSettings(job.textSettings, "coherence"),
       sceneBriefs: job.sceneBriefs,
       bookId: job.bookId,
       stylePreset: getStylePreset(job.stylePresetId),
@@ -463,19 +711,28 @@ export async function runFullAuto(
     job.status = "running";
     job.error = null;
     await persist();
+    const selectionPlan = job.planMode === "selection" || job.demo;
     await step(
       "plan",
-      "주제에 맞는 등장인물·배경 고르기",
+      selectionPlan
+        ? "고른 등장인물·배경 확인"
+        : "주제에 맞는 등장인물·배경 고르기",
       (opts) =>
-        ops.plan(
-          job.input,
-          {
-            characters: active(state.characters),
-            backgrounds: active(state.backgrounds),
-            allowNew: job.allowNew,
-          },
-          opts("outline"),
-        ),
+        selectionPlan
+          ? {
+              data: selectionMaterialPlan(state, job.wizard).plan,
+              usage: { input: 0, output: 0, costUsd: 0, costUsdEstimated: 0 },
+              meta: { stage: "materials", requests: 0, selection: true },
+            }
+          : ops.plan(
+              job.input,
+              {
+                characters: active(state.characters),
+                backgrounds: active(state.backgrounds),
+                allowNew: job.allowNew,
+              },
+              opts("outline"),
+            ),
       (result) => {
         const catalog = {
             characters: active(state.characters),
@@ -498,7 +755,9 @@ export async function runFullAuto(
         state.backgrounds.push(clone(bg));
     }
     await persist();
-    for (const id of job.plan.characterIds) {
+    // A text hold buys no sheet; releasing it buys only the sheets still missing.
+    const buySheets = hold !== "text";
+    for (const id of buySheets ? job.plan.characterIds : []) {
       const character = state.characters.find((c) => c.id === id);
       if (!character || character.archivedAt)
         throw Error("선택한 캐릭터가 없어 작업을 중지했어요.");
@@ -518,7 +777,7 @@ export async function runFullAuto(
         },
       );
     }
-    for (const id of job.plan.backgroundIds) {
+    for (const id of buySheets ? job.plan.backgroundIds : []) {
       const background = state.backgrounds.find((b) => b.id === id);
       if (!background || background.archivedAt)
         throw Error("선택한 배경이 없어 작업을 중지했어요.");
@@ -712,27 +971,59 @@ export async function runFullAuto(
         createdAt: job.createdAt,
         fullAutoRunId: job.id,
       };
-      job.book = await buildBook(payload);
+      job.book = await buildBook(
+        hold === "text" ? textHoldPayload(state, job, payload) : payload,
+      );
       job.book.fullAutoRunId = job.id;
       job.book.autoReviewPending = true;
-      captureBookGenerationSnapshot(state, job.book);
+      if (hold === "text") {
+        // The snapshot must name sheets bought after the parent approves the text.
+        delete job.book.generationSnapshot;
+        delete job.book.sheetSetupNotice;
+      } else ensureJobSnapshot(state, job);
       state.storyDrafts[job.storyDraftId].pictureBook = job.book;
       await persist();
     }
+    if (hold === "text")
+      return await holdAt("text-review", "글 완성 · 쪽 검수");
+    if (!job.book.generationSnapshot) {
+      ensureJobSnapshot(state, job);
+      if (state.storyDrafts?.[job.storyDraftId])
+        state.storyDrafts[job.storyDraftId].pictureBook = job.book;
+      await persist();
+    }
+    if (hold === "pages") return await holdAt("pages-ready", "그림 준비 완료");
     for (let index = 0; index < job.book.pages.length; index++) {
       const page = job.book.pages[index];
-      if (page.imageAssetId && page.imageMeta?.quality === "final") continue;
+      if (finalImage(page)) continue;
+      // Text changed after this page was drawn: the old purchase no longer covers it.
+      if (page.imageStale) delete job.completed["page:" + index];
       await step(
         "page:" + index,
         `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
-        () =>
-          ops.scene(state, job.book, index, {
-            quality: "final",
-            signal,
-            onProgress: (p) =>
-              report(p.message || `${index + 1}쪽 그림 · ${p.status}`),
-          }),
-        (r) => recordImage(job, r),
+        async () => {
+          const before = job.book.pages[index]?.imageAssetId;
+          try {
+            return await ops.scene(state, job.book, index, {
+              quality: "final",
+              signal,
+              onProgress: (p) =>
+                report(p.message || `${index + 1}쪽 그림 · ${p.status}`),
+            });
+          } finally {
+            // A paid image saved before an abort is current; never redraw it on resume.
+            const current = job.book.pages[index];
+            if (current?.imageAssetId && current.imageAssetId !== before) {
+              delete current.imageStale;
+              delete current.imageStaleAt;
+            }
+          }
+        },
+        (r) => {
+          delete job.book.pages[index].imageStale;
+          delete job.book.pages[index].imageStaleAt;
+          recordImage(job, r);
+        },
       );
     }
     if (!job.book.cover?.imageAssetId)
@@ -748,7 +1039,9 @@ export async function runFullAuto(
     job.status = "review";
     job.phase = "완성 초안 · 부모 검토";
     job.currentStep = null;
-    state.storyDrafts[job.storyDraftId].stage = "illustrated";
+    // The parent may have deleted the auto-created draft from the draft list.
+    if (state.storyDrafts?.[job.storyDraftId])
+      state.storyDrafts[job.storyDraftId].stage = "illustrated";
     await persist();
     report("본문과 그림·표지 생성을 마쳤어요. 전체 내용을 확인해 주세요.");
     return job.book;

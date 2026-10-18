@@ -40,6 +40,7 @@ const FILES = [
   "./full-auto-control.js",
   "./full-auto.js",
   "./full-auto-ui.js",
+  "./story-generation/page-tools.js",
   "./story-generation/auto-materials.js",
   "./story-generation/scene-briefs.js",
   "./story-generation/richness.js",
