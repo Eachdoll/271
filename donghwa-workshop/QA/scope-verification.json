@@ -1,16 +1,17 @@
 {
-  "baseCommit": "5f76544ec122fba5b7e8243e6b4ed57cf6fb275f",
-  "r6Range": "6e7ff01..92a9930",
-  "r7Range": "f58ec2d..dd4607f",
-  "originalResultFilesUnchanged": 17,
-  "compiledMirrors": 60,
-  "readingRuleVersion": 3,
-  "serviceWorkerCache": "donghwa-shell-v26",
-  "appTests": 440,
-  "qualityTests": 56,
+  "baseCommit": "d7d583585fc51c35f00709ec94f155097e5e707c",
+  "importRange": "06506a0..46a705f",
+  "protectedFilesUnchanged": 36,
+  "compiledMirrorFiles": 60,
+  "unchangedRulesAndHosting": [
+    "dist/reading-levels.js",
+    "dist/reading-vocab.js",
+    "dist/levels.json",
+    ".openai/hosting.json",
+    "cloud-runtime/drizzle/0000_steep_zodiak.sql"
+  ],
+  "appTests": 446,
+  "qualityTests": 58,
   "paidCalls": 0,
-  "unchanged": [
-    "cloud-runtime/drizzle/0000_steep_zodiak.sql",
-    ".openai/hosting.json"
-  ]
+  "serviceWorkerCache": "donghwa-shell-v27"
 }

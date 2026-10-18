@@ -291,6 +291,17 @@ export function normalizeStoryInput(input = {}) {
     ].includes(input.storyStructurePresetId)
       ? input.storyStructurePresetId
       : "auto",
+    ...(input.prosePolicy
+      ? {
+          prosePolicy: {
+            version: 1,
+            condenseOverBudget: {
+              ko: input.prosePolicy.condenseOverBudget?.ko === true,
+              en: input.prosePolicy.condenseOverBudget?.en === true,
+            },
+          },
+        }
+      : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -407,7 +418,7 @@ Do not translate Korean. Write an original English picture-book text for the sam
 Read the supplied previousStory ORIGINAL prose, final page texts, scenes, relationships and ending before writing a sequel. If the parent's final page edits differ from the approved prose, the final page texts are authoritative for established facts and the last ending. Continue consequences and established facts, but create a new want/problem/twist. Do not copy prior sentences or repeat the previous adventure.
 Use only supplied character IDs and wardrobe variant IDs. No API credentials, endpoint addresses, commentary or instructions belong in a story.`;
 function levelRules(input) {
-  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.`;
+  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.`;
 }
 function continuityMeta(input) {
   return input.previousStory

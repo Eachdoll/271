@@ -190,7 +190,8 @@ export const PROSE_SIMPLIFY_USER_KO = `[목표 수준] {{targetLevelLabel}} — 
 
 [출력] 글만. 라벨 붙은 문단을 같은 수만큼.`;
 
-export const PROSE_SIMPLIFY_USER_EN = `[Target level] {{targetLevelLabel}} — {{targetWordsRange}} words per sentence, {{targetSentencesRange}} sentences per beat, vocabulary: {{vocabLabel}}
+export const PROSE_SIMPLIFY_USER_EN = `{{tenseRule}}
+[Target level] {{targetLevelLabel}} — {{targetWordsRange}} words per sentence, {{targetSentencesRange}} sentences per beat, vocabulary: {{vocabLabel}}
 {{lengthBudget}}
 
 [Keep]

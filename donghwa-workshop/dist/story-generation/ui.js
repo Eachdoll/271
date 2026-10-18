@@ -767,6 +767,13 @@ export function inputFromWizard(state, wizard) {
       previousSummary:
         previous?.summaryForNext || previous?.outline?.logline || "",
       previousStory: inherited.previousStory,
+      prosePolicy: {
+        version: 1,
+        condenseOverBudget: {
+          ko: readingLevels.koreanLevel === "K1",
+          en: readingLevels.englishLevel === "E0",
+        },
+      },
       specs: readingLevels.specs,
       variants,
       variantByCharacter: choices.characterVariants,

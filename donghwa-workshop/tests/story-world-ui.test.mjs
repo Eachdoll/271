@@ -47,3 +47,11 @@ test('explicit world-theme requests are deterministic, cycle to another idea and
 });
 
 test.after(()=>{cleanupStoryQualityUI();globalThis.document=originalDocument;});
+
+test('R8-1 only newly prepared drafts freeze language-specific compression policy',()=>{
+ const state=seedState();migrateWorldState(state);
+ for(const [koreanLevel,englishLevel] of [['K1','E0'],['K1','E2'],['K2','E0'],['K2','E2']]) {
+  const prepared=inputFromWizard(state,{characterIds:['yuha'],backgroundIds:[],topic:'작은 바람',pageCount:12,koreanLevel,englishLevel});
+  assert.deepEqual(prepared.input.prosePolicy,{version:1,condenseOverBudget:{ko:koreanLevel==='K1',en:englishLevel==='E0'}});
+ }
+});

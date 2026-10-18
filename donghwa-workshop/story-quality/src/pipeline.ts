@@ -211,6 +211,7 @@ export async function runProseStage(input: ProseStageInput) {
     vocabLabel: input.vocabLabel,
     twoPass: input.twoPass,
     decodable: input.targetLevelId === 'E1',
+    presentTenseOnly: input.lang === 'en' && input.targetLevelId === 'E0',
     pageCount: input.pageCount,
     condenseOverBudget: input.condenseOverBudget,
   });

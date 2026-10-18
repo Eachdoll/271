@@ -1,0 +1,12 @@
+[
+  {"text":"\"가자!\" 유하가 말해요.","sentences":["\"가자!\"","유하가 말해요."]},
+  {"text":"유하가 ‘같이 가자!’ 하고 외쳐요. 초록이가 웃어요.","sentences":["유하가 ‘같이 가자!’","하고 외쳐요.","초록이가 웃어요."]},
+  {"text":"“와!”\n\"\n’\n톡톡.","sentences":["“와!”","톡톡."]},
+  {"text":"Yuha says, \"Go!\" Greenie smiles.","sentences":["Yuha says, \"Go!\"","Greenie smiles."]},
+  {"text":"“I see it!” “We go home.”","sentences":["“I see it!”","“We go home.”"]},
+  {"text":"The door is closed.\nYuha is tired","sentences":["The door is closed.","Yuha is tired"]},
+  {"text":"[비트 1 · 시작] 유하가 봐요.\n[Beat 2 · want] I see a cat.","sentences":["유하가 봐요.","I see a cat."]},
+  {"text":"\"’” ...\n!?\n123.","sentences":[]},
+  {"text":"가요。와요！봐요？","sentences":["가요。","와요！","봐요？"]},
+  {"text":"I can't go. I'm here.","sentences":["I can't go.","I'm here."]}
+]

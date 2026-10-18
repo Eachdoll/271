@@ -1,18 +1,17 @@
 {
-  "sourceCommit": "d7d583585fc51c35f00709ec94f155097e5e707c",
-  "r6Range": "6e7ff01..92a9930",
-  "r7Range": "f58ec2d..dd4607f",
+  "sourceCommit": "785f9774b5315d8591402ff05cd8d8843a0ed914",
+  "sourceRange": "06506a0..46a705f",
   "version": {
-    "id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_3be4d5f1ee748191a7fe9249ff80859c",
+    "id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_0dd8d9e4020c8191827c5e90757e6a85",
     "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
-    "version_number": 21,
+    "version_number": 22,
     "source": {
-      "commit_sha": "d7d583585fc51c35f00709ec94f155097e5e707c"
+      "commit_sha": "785f9774b5315d8591402ff05cd8d8843a0ed914"
     },
     "archive_storage": {
       "archive_format": "tar",
-      "sediment_file_id": "file_000000009f848211be64c64786d47afe",
-      "content_hash": "sha256:9b7a101e899681fcac8fde82d9a80abe10e2c490a8ed8359a935883147e23365",
+      "sediment_file_id": "file_000000007a288206849de9206eda4ae3",
+      "content_hash": "sha256:1ec7d0a6bafc199eda2e7087262c3fd6e9875dd01b83389caa464aa43fc71359",
       "size_bytes": 7393280,
       "file_count": 215
     },
@@ -20,10 +19,10 @@
     "deployment_id": null
   },
   "deployment": {
-    "id": "appgdep_6ad3810958508191a9a7ed08198450de",
+    "id": "appgdep_6ad3f4bd17348191a6a49a9454051ec0",
     "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
     "title": "동화공방 · 우리 아이가 주인공인 이야기",
-    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_3be4d5f1ee748191a7fe9249ff80859c",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_0dd8d9e4020c8191827c5e90757e6a85",
     "type": "publish",
     "status": "succeeded",
     "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
@@ -32,6 +31,6 @@
     "provider_deployment_id": "site---6acf7d49d818819196c04d5ff8fa10cd",
     "failure_message": null,
     "env_set_revision": 0,
-    "updated_at": "2026-10-17T14:07:26.016537+00:00"
+    "updated_at": "2026-10-17T22:21:04.862775+00:00"
   }
 }
