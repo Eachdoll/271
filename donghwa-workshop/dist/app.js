@@ -32,6 +32,7 @@ import {
   renderFullAutoJobs,
   cleanupFullAuto,
   isFullAutoRunning,
+  openFullAutoReview,
 } from "./full-auto-ui.js";
 import {
   readUiMode,
@@ -44,6 +45,7 @@ import {
   pageTextProblemMessage,
   carryFullAutoFields,
   isSimpleBusy,
+  approvalImageWork,
 } from "./simple-create.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import { createCloudSync } from "./cloud-sync.js";
@@ -155,6 +157,7 @@ import {
   resumeStoryDraft,
   syncStoryDraft,
   renderStoryCoherence,
+  fullAutoJobOfDraft,
 } from "./story-generation/ui.js";
 import { toLegacyPages, summarizeStory } from "./story-generation/pipeline.js";
 import { checkStory } from "./story-generation/checker.js";
@@ -1687,7 +1690,46 @@ function buildStoryResultBook(result) {
   carryFullAutoFields(state, book, same);
   return book;
 }
+const FULL_AUTO_NOT_REBUILT =
+  "FULL AUTO로 만든 책은 이미 만든 그림을 지키려고 이야기에서 다시 엮지 않아요. 쪽 글은 검수 화면에서 고쳐 주세요.";
+/** The FULL AUTO job that owns the story draft `draftId` (it built and keeps the book), or null. */
+function fullAutoJobOfStory(draftId) {
+  return draftId
+    ? fullAutoJobOfDraft(state, state.storyDrafts?.[draftId] || { id: draftId })
+    : null;
+}
+/**
+ * '검수 열기' on a FULL AUTO story draft: the job's own review (simple ④ in
+ * simple mode, the library card's route in pro mode), never a rebuild.
+ * Refused while a simple action or a page operation owns the book.
+ */
+async function openAutoJobReview(jobId) {
+  const job = state.fullAutoJobs?.[jobId];
+  if (!job) return toast("자동 작업을 찾지 못했어요.");
+  if (
+    isSimpleBusy() ||
+    isPageOperationBusy(job.book?.id) ||
+    isPageOperationBusy(job.bookId)
+  ) {
+    toast("진행 중인 작업이 끝난 뒤 열어 주세요.");
+    return;
+  }
+  try {
+    if (uiMode === "simple") {
+      closeModal();
+      await openSimpleJob(simpleCtx, job.id);
+      return;
+    }
+    await openFullAutoReview(job.id);
+  } catch (error) {
+    toast(error);
+  }
+}
 async function acceptStoryResult(result) {
+  // Never rebuild a book a FULL AUTO job owns: the rebuilt pages would drop
+  // the pictures the job bought (and a draw in flight would land on the old
+  // object). The workflow shows this and keeps its draft.
+  if (fullAutoJobOfStory(result.id)) throw Error(FULL_AUTO_NOT_REBUILT);
   const book = buildStoryResultBook(result);
   closeModal();
   draft = book;
@@ -2182,9 +2224,19 @@ async function speak(language) {
     }
   }
 }
+/**
+ * Approve `book` into the shelf. With finalizeImages, only `pages` (indexes
+ * without a current final picture, from approvalImageWork) and the cover when
+ * `cover` is set are drawn at final quality; every other picture is kept.
+ */
 async function finalizeBook(
   book,
-  { finalizeImages = false, cacheAudio = false } = {},
+  {
+    finalizeImages = false,
+    pages = null,
+    cover = true,
+    cacheAudio = false,
+  } = {},
 ) {
   if (finalizeController) return;
   const originalState = state,
@@ -2207,26 +2259,50 @@ async function finalizeBook(
     await ensureBookStoryCoherence(state, book, { signal: controller.signal });
     ensure();
     if (finalizeImages) {
-      await generateAllScenes(state, book, {
-        quality: "final",
-        signal: controller.signal,
-        onProgress: (progress) => {
+      const redraw = pages || book.pages.map((_, index) => index),
+        progressText = (done) => {
           const field = document.querySelector("#book-final-progress");
           if (field)
-            field.textContent = `최종 본문 그림 ${progress.completed} / ${progress.total}쪽`;
-          if (progress.status === "complete") {
-            syncStoryDraft(book, state);
-            save();
-          }
-        },
-      });
+            field.textContent = `최종 본문 그림 ${done} / ${redraw.length}쪽`;
+        };
+      if (redraw.length === book.pages.length)
+        await generateAllScenes(state, book, {
+          quality: "final",
+          signal: controller.signal,
+          onProgress: (progress) => {
+            progressText(progress.completed);
+            if (progress.status === "complete") {
+              syncStoryDraft(book, state);
+              save();
+            }
+          },
+        });
+      else if (redraw.length) {
+        // Pages that already have a current final picture are never bought
+        // again: draw only the rest, in page order, saving after each.
+        delete book.similarityReviewDismissed;
+        for (const [done, index] of redraw.entries()) {
+          progressText(done);
+          await generateScene(state, book, index, {
+            quality: "final",
+            signal: controller.signal,
+          });
+          syncStoryDraft(book, state);
+          save();
+          ensure();
+        }
+        progressText(redraw.length);
+        if (book.prose) book.stage = "illustrated";
+      }
       ensure();
-      const field = document.querySelector("#book-final-progress");
-      if (field) field.textContent = "표지 그림을 만들고 있어요.";
-      await generateCover(state, book, {
-        quality: "final",
-        signal: controller.signal,
-      });
+      if (cover) {
+        const field = document.querySelector("#book-final-progress");
+        if (field) field.textContent = "표지 그림을 만들고 있어요.";
+        await generateCover(state, book, {
+          quality: "final",
+          signal: controller.signal,
+        });
+      }
     }
     const retryPages = await selectSimilarPages(book, {
       quality: "final",
@@ -2402,39 +2478,49 @@ async function approveDraft() {
     if (error.name === "AbortError") return;
     toast("읽기 검사: " + error.message);
   }
-  const autoImagesReady =
-    book.autoGenerationComplete &&
-    book.cover?.imageAssetId &&
-    book.pages.every(
-      (page) => page.imageAssetId && page.imageMeta?.quality === "final",
-    );
-  const finalizeImages =
-    !autoImagesReady &&
-    ((book.generationSnapshot?.imageEngine ||
-      getActiveWorld(state).imageEngine) !== "sample" ||
-      book.pages.some(
-        (p) => p.imageAssetId && p.imageMeta?.quality === "draft",
-      ));
+  // Only pages without a current final picture and a missing cover are drawn
+  // (and priced): pictures already bought are never bought again, also for a
+  // FULL AUTO book whose run never recorded its finish.
+  const world = getActiveWorld(state),
+    engine = book.generationSnapshot?.imageEngine || world.imageEngine,
+    work = approvalImageWork(book, engine),
+    finalizeImages = work.finalize && (work.pages.length > 0 || work.cover);
   if (finalizeImages) {
-    const world = getActiveWorld(state),
-      estimate = estimateBookCost({
-        engine: book.generationSnapshot?.imageEngine || world.imageEngine,
-        pageCount: book.pages.length,
+    const estimate = estimateBookCost({
+        engine,
+        pageCount: work.pages.length,
+        includeCover: work.cover,
         size: "1536x1024",
         quality: "final",
         config: {
-          ...world.providerConfig?.[
-            book.generationSnapshot?.imageEngine || world.imageEngine
-          ],
+          ...world.providerConfig?.[engine],
           ...book.generationSnapshot?.imageModelConfig,
         },
-      });
+      }),
+      kept = book.pages.length - work.pages.length,
+      what = [
+        work.cover ? "표지 1장" : "",
+        work.pages.length
+          ? `본문 ${work.pages.length}쪽${work.pages.length === book.pages.length ? "" : `(${pageList(work.pages)})`}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("과 ");
     showModal(
-      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">표지 1장과 본문 ${book.pages.length}쪽을 최종 품질로 생성합니다. 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
+      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장) · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
     );
     document.querySelector("#book-final-confirm").onclick = () =>
-      finalizeBook(book, { finalizeImages, cacheAudio });
+      finalizeBook(book, {
+        finalizeImages,
+        pages: work.pages,
+        cover: work.cover,
+        cacheAudio,
+      });
   } else await finalizeBook(book, { cacheAudio });
+}
+/** "3·5쪽" for page indexes. */
+function pageList(indexes) {
+  return indexes.map((i) => i + 1).join("·") + "쪽";
 }
 function discardDraft(next) {
   if (simpleDraftOpen()) {
@@ -2915,6 +3001,11 @@ async function onAction(e) {
   }
   if (a === "regenerate-text") {
     syncDraft();
+    // The story workflow would rebuild the book; a FULL AUTO job's book is never rebuilt.
+    if (fullAutoJobOfStory(draft.storyDraftId)) {
+      toast(FULL_AUTO_NOT_REBUILT);
+      return;
+    }
     if (draft.storyDraftId) {
       syncStoryDraft(draft, state);
       resumeStoryDraft(draft.storyDraftId);
@@ -3585,6 +3676,7 @@ configureStoryUI({
   protectedAction,
   isParent: () => parentUnlocked && !childMode,
   onReady: acceptStoryResult,
+  openAutoReview: openAutoJobReview,
   estimateStoryTextCost,
   openTextSettings: openStoryTextSettings,
 });

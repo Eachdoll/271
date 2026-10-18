@@ -9,6 +9,7 @@ import {
   missingPageText, pageTextProblemMessage, carryFullAutoFields,
   recommendPlaces, recommendFriends, preselectMaterials,
   simpleJobs, simpleStepForJob, jobWizardFrom, isSimpleJob,
+  topicStepButtonCount, approvalImageWork,
 } from '../dist/simple-create.js';
 import {setStoryQualityOption} from '../dist/story-generation/quality-settings.js';
 import {renderTextEngineQuick} from '../dist/text-generation/settings-ui.js';
@@ -99,6 +100,23 @@ test('each simple step shows at most 12 buttons (material cards and page arrows 
   for (const id of ['language', 'pageCount', 'koreanLevel', 'englishLevel']) assert.match(first, new RegExp(`id="${id}"`));
   assert.doesNotMatch(first, /id="value"|id="ending"|storyWorldId/);
   assert.equal((first.match(/simple-resume-card/g) || []).length, 2);
+  // FIX-UI-3: the forced screen's '프로 만들기 화면' takes one card's place at ①,
+  // and the cards left out are named (they stay in the library's job list).
+  const forcedWizard = ensureSimpleWizard(state, {...structuredClone(wizard), simpleForced: true, simpleFormatOpen: true});
+  assert.equal(topicStepButtonCount(forcedWizard), 11);
+  const forced = renderSimpleCreate(ctxFor(state, forcedWizard));
+  assert.match(forced, /data-simple-action="exit-forced"/);
+  assert.equal((forced.match(/simple-resume-card/g) || []).length, 1);
+  assert.match(forced, /나머지 2권은 책장의 ‘제작 중인 이야기’에서/);
+  assert.ok(stepButtons(forced).length <= 12, `forced ①: ${stepButtons(forced).length} buttons`);
+  assert.equal(stepButtons(forced).length, 12);
+  // However many simple stories are waiting, ① never passes the limit.
+  for (const id of ['auto-4', 'auto-5', 'auto-6']) state.fullAutoJobs[id] = {id, status: 'paused', stopBefore: 'text', wizard: {simpleFlow: true, topic: id}, input: {topic: id}, updatedAt: '2026-10-17T00:00:00Z'};
+  for (const simpleForced of [false, true]) {
+    const many = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleForced})));
+    assert.ok(stepButtons(many).length <= 12, `① with 6 waiting stories (forced: ${simpleForced}): ${stepButtons(many).length}`);
+  }
+  for (const id of ['auto-4', 'auto-5', 'auto-6']) delete state.fullAutoJobs[id];
   // ④ text is read-only until 글 고치기 and the page has the four page actions.
   const review = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 4, simpleJobId: job.id}), draft));
   assert.match(review, /id="page-ko" lang="ko" readonly/);
@@ -227,10 +245,10 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
   assert.equal(fresh.settings.storyQuality, undefined);
 });
 
-test('the v30 shell precaches the simple create screen', async () => {
+test('the v31 shell precaches the simple create screen', async () => {
   const {readFileSync} = await import('node:fs');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v30";/);
+  assert.match(sw, /const CACHE = "donghwa-shell-v31";/);
   assert.ok(sw.includes('"./simple-create.js"'));
 });
 
@@ -263,4 +281,82 @@ test('simple settings reuse the existing form ids so the existing handlers save 
   for (const id of ['ig-world-form', 'ig-world-name', 'ig-style', 'ig-engine', 'ig-provider-fields'])
     assert.match(image, new RegExp(`id="${id}"`), id);
   assert.match(image, /type="hidden" id="ig-style" value="watercolor"|type="hidden" id="ig-style" value="[a-z-]+"/);
+});
+
+// ---- FIX-UI-3 ----
+test('approving draws only pages without a current final picture, and prices only those', () => {
+  const finalPage = id => ({imageAssetId: id, imageUrl: 'asset:' + id, imageMeta: {quality: 'final'}});
+  const make = () => ({
+    pages: Array.from({length: 8}, (_, i) => ({pageNo: i + 1, ko: `${i + 1}쪽`, en: `p${i + 1}`, ...finalPage(`img-${i}`)})),
+    cover: {imageAssetId: 'cover-1', meta: {quality: 'final'}},
+    fullAutoRunId: 'auto-x',
+  });
+  // A finished FULL AUTO book: nothing to draw, as before.
+  const done = make();
+  done.autoGenerationComplete = true;
+  assert.deepEqual(approvalImageWork(done, 'openai'), {finalize: false, pages: [], cover: false, stale: []});
+  // Stopped after the last picture (the run never recorded its finish): every
+  // picture was bought, so approving buys none of them again.
+  const paused = make();
+  paused.autoGenerationComplete = false;
+  assert.deepEqual(approvalImageWork(paused, 'openai'), {finalize: true, pages: [], cover: false, stale: []});
+  // Only the missing page, the draft-quality page, the page with the runner's
+  // stale mark and the missing cover; a kept picture (parent's choice) is not redrawn.
+  const mixed = make();
+  delete mixed.pages[2].imageAssetId; delete mixed.pages[2].imageUrl; delete mixed.pages[2].imageMeta;
+  mixed.pages[4].imageMeta = {quality: 'draft'};
+  Object.assign(mixed.pages[5], {imageStale: true, imageStaleAt: 't', imageStaleAssetId: 'img-5'});
+  Object.assign(mixed.pages[6], {simpleTextEditedAssetId: 'img-6', simpleTextEditedAt: 't'});
+  delete mixed.cover;
+  assert.deepEqual(approvalImageWork(mixed, 'openai'), {finalize: true, pages: [2, 4, 5], cover: true, stale: [5]});
+  // A stale mark left on a picture redrawn since is obsolete: that page is current.
+  const redrawn = make();
+  Object.assign(redrawn.pages[1], {imageStale: true, imageStaleAssetId: 'old-image'});
+  assert.deepEqual(approvalImageWork(redrawn, 'openai').pages, []);
+  // A pro book drawn in draft quality is finalized whole, as before.
+  const pro = make();
+  delete pro.fullAutoRunId;
+  pro.pages.forEach(p => { p.imageMeta = {quality: 'draft'}; });
+  pro.cover = {imageAssetId: 'c', meta: {quality: 'draft'}};
+  assert.deepEqual(approvalImageWork(pro, 'openai'), {finalize: true, pages: [0, 1, 2, 3, 4, 5, 6, 7], cover: true, stale: []});
+  // The free sample engine with no draft pictures keeps its plain approval.
+  const sample = make();
+  sample.pages.forEach(p => { delete p.imageAssetId; delete p.imageMeta; });
+  assert.equal(approvalImageWork(sample, 'sample').finalize, false);
+  sample.pages[1] = {...sample.pages[1], ...finalPage('s1'), imageMeta: {quality: 'draft'}};
+  assert.ok(approvalImageWork(sample, 'sample').finalize);
+});
+
+test('approve-book and finalizeBook draw and price only the planned pages and cover', async () => {
+  const {readFileSync} = await import('node:fs');
+  const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
+  const approve = app.slice(app.indexOf('async function approveDraft() {'), app.indexOf('function discardDraft('));
+  assert.match(approve, /work = approvalImageWork\(book, engine\)/);
+  assert.match(approve, /finalizeImages = work\.finalize && \(work\.pages\.length > 0 \|\| work\.cover\)/);
+  assert.match(approve, /pageCount: work\.pages\.length,\s*includeCover: work\.cover,/);
+  assert.match(approve, /pages: work\.pages,\s*cover: work\.cover,/);
+  assert.doesNotMatch(approve, /pageCount: book\.pages\.length/, 'the confirm never prices every page');
+  assert.doesNotMatch(approve, /autoImagesReady/);
+  const finalize = app.slice(app.indexOf('async function finalizeBook('), app.indexOf('/** Approve the open draft'));
+  // Every page only when every page needs it; otherwise just the listed pages, one by one.
+  assert.match(finalize, /if \(redraw\.length === book\.pages\.length\)\s*await generateAllScenes\(/);
+  assert.match(finalize, /for \(const \[done, index\] of redraw\.entries\(\)\) \{[\s\S]*?await generateScene\(state, book, index, \{/);
+  assert.match(finalize, /if \(cover\) \{[\s\S]*?await generateCover\(/);
+});
+
+test('a FULL AUTO story draft is never rebuilt from the story workflow', async () => {
+  const {readFileSync} = await import('node:fs');
+  const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
+  const accept = app.slice(app.indexOf('async function acceptStoryResult(result) {'), app.indexOf('function renderStoryQuality('));
+  const guard = accept.indexOf('if (fullAutoJobOfStory(result.id)) throw Error(FULL_AUTO_NOT_REBUILT);');
+  assert.ok(guard > 0, accept);
+  assert.ok(accept.indexOf('buildStoryResultBook(result)') > guard, 'the guard runs before any rebuild');
+  const regenerate = app.slice(app.indexOf('if (a === "regenerate-text") {'), app.indexOf('if (a === "approve-book") {'));
+  assert.ok(regenerate.indexOf('fullAutoJobOfStory(draft.storyDraftId)') < regenerate.indexOf('resumeStoryDraft('), regenerate);
+  // '검수 열기' refuses while a simple action or a page operation owns the book, before anything opens.
+  const open = app.slice(app.indexOf('async function openAutoJobReview(jobId) {'), app.indexOf('async function acceptStoryResult('));
+  const busy = open.indexOf('isSimpleBusy() ||'), refuse = open.indexOf('toast("진행 중인 작업이 끝난 뒤 열어 주세요.");');
+  assert.ok(busy > 0 && refuse > busy, open);
+  for (const later of ['closeModal()', 'openSimpleJob(', 'openFullAutoReview(']) assert.ok(open.indexOf(later) > refuse, later);
+  assert.match(app, /onReady: acceptStoryResult,\s*openAutoReview: openAutoJobReview,/);
 });

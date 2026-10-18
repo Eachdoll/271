@@ -6,11 +6,13 @@ import assert from 'node:assert/strict';
 import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob} from '../dist/full-auto-ui.js';
+import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview} from '../dist/full-auto-ui.js';
+import {configureStoryUI, renderStoryDrafts} from '../dist/story-generation/ui.js';
 import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
 import {
   configureSimpleCreate, openSimpleJob, renderSimpleCreate, simpleJobs, imageWork, imageCountLabel,
   IDEA_TOPICS, pickIdeaTopic, isSimpleBusy, isPictureKeptAfterEdit, keepEditedPictures, coherenceCheckDue,
+  jobWizardFrom,
 } from '../dist/simple-create.js';
 
 /* ---------- stub DOM ---------- */
@@ -78,8 +80,9 @@ const state = seedState();
 migrateWorldState(state);
 migrateReadingSettings(state.settings);
 const toasts = [], approvals = [], drawn = [], credentialLinks = [];
-let wizard = null, draft = null, editPage = 0, lastAction = null, onSave = null;
-const save = () => { onSave?.(); return true; };
+let wizard = null, draft = null, editPage = 0, lastAction = null, onSave = null, saveFails = 0;
+// saveFails > 0 makes the next saves report a full storage (save() === false).
+const save = () => { onSave?.(); if (saveFails > 0) { saveFails--; return false; } return true; };
 const ctx = {
   getState: () => state, getWizard: () => wizard, setWizard: v => { wizard = v; }, getDraft: () => draft, setDraft: v => { draft = v; },
   getEditPage: () => editPage, setEditPage: v => { editPage = v; }, setView() {}, isSimpleMode: () => true, isSimpleView: () => true, isParent: () => true,
@@ -154,7 +157,7 @@ async function open(job, step = 4) {
   wizard.simpleStep = step;
   await tick();
 }
-function reset() { toasts.length = 0; approvals.length = 0; drawn.length = 0; credentialLinks.length = 0; onSave = null; modal = null; failWrites = 0; fields = {}; }
+function reset() { toasts.length = 0; approvals.length = 0; drawn.length = 0; credentialLinks.length = 0; onSave = null; modal = null; failWrites = 0; saveFails = 0; fields = {}; }
 /** A page the run has not drawn yet (no picture, no completed step). */
 const dropPicture = (job, index) => { delete job.book.pages[index].imageAssetId; delete job.book.pages[index].imageMeta; delete job.completed['page:' + index]; };
 /** A page whose text was edited after drawing and whose picture the parent kept. */
@@ -637,6 +640,269 @@ test('아이디어 뽑기 works without a story world and never repeats the curr
       assert.notEqual(wizard.topic, before);
     }
   } finally {
+    fields = {};
+  }
+});
+
+/* ---------- FIX-UI-3 ---------- */
+const NOTE = '주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.';
+const imageRecords = job => Object.keys(job.imageUsage || {}).length;
+const assets = book => ({pages: book.pages.map(p => p.imageAssetId || null), cover: book.cover?.imageAssetId || null});
+/** Click a [data-story-action] element (the story draft list); returns the action's promise. */
+function storyClick(action, data = {}) {
+  lastAction = null;
+  const target = {dataset: {storyAction: action, ...data}};
+  for (const fn of listeners.click) fn({target: {closest: s => (s.includes('data-story-action') ? target : null)}, preventDefault() {}});
+  return lastAction || Promise.resolve();
+}
+/** Give navigator a Web Locks stand-in for one test (Node has none). */
+function withLocks(locks, work) {
+  Object.defineProperty(globalThis.navigator, 'locks', {value: locks, configurable: true});
+  return Promise.resolve().then(work).finally(() => { delete globalThis.navigator.locks; });
+}
+
+test('이어 만들 이야기: a FULL AUTO draft opens its job review and is never rebuilt, so no paid picture is dropped', async () => {
+  reset();
+  const job = await finishedJob('도서관에서 길을 잃은 그림책'), story = state.storyDrafts[job.storyDraftId];
+  assert.equal(story.fullAutoRunId, job.id);
+  const book = job.book, before = assets(book), usage = imageRecords(job);
+  // The list names it as a review, not a resume of the story workflow.
+  const html = renderStoryDrafts(state);
+  assert.ok(html.includes(`data-story-action="open-auto-review" data-id="${story.id}" data-job-id="${job.id}"`), html);
+  assert.ok(!html.includes(`data-story-action="resume" data-id="${story.id}"`));
+  assert.match(html, />검수 열기</);
+  const opened = [], rebuilt = [], workflow = [];
+  configureStoryUI({
+    getState: () => state, save, render() {}, toast: m => toasts.push({message: String(m?.message || m), action: null}),
+    showModal: h => workflow.push(h), closeModal() {}, modalHeader: t => t, protectedAction: f => (lastAction = f()), isParent: () => true,
+    onReady: async payload => { rebuilt.push(payload.id); },
+    // The app's hook: the job's own review (simple ④ here), never the story workflow.
+    openAutoReview: async id => { opened.push(id); await openSimpleJob(ctx, id); },
+  });
+  wizard = null; draft = null;
+  // '검수 열기', and an old card's '이어서 만들기' for the same draft, both open the job's review.
+  await storyClick('open-auto-review', {id: story.id, jobId: job.id});
+  await storyClick('resume', {id: story.id});
+  assert.deepEqual(opened, [job.id, job.id]);
+  assert.deepEqual(workflow, [], 'the story workflow never opened');
+  assert.deepEqual(rebuilt, [], 'nothing was rebuilt');
+  assert.equal(job.book, book, 'the job keeps its own book object');
+  assert.equal(draft, book, '④ shows the job\'s book');
+  assert.equal(wizard.simpleStep, 4);
+  assert.deepEqual(assets(job.book), before, 'every paid picture is still on the book');
+  assert.equal(imageRecords(job), usage);
+  assert.ok(job.book.pages.every(p => p.imageMeta?.quality === 'final'));
+  // The pro route goes where the library card goes: the editor for a finished book.
+  const reviewed = [];
+  configureFullAutoUI({...fullAutoCtx, openReview: async j => { reviewed.push(j.id); }});
+  try {
+    await openFullAutoReview(job.id);
+  } finally {
+    configureFullAutoUI(fullAutoCtx);
+  }
+  assert.deepEqual(reviewed, [job.id]);
+  assert.equal(job.book, book);
+  assert.equal(networkCalls, 0);
+});
+
+test('a text save that fails keeps the picture unless the parent redraws it; a card resume does not buy it', async () => {
+  reset();
+  const job = await finishedJob('엄마 생일 깜짝 선물 준비');
+  for (const i of [5, 6]) dropPicture(job, i);
+  job.book.autoGenerationComplete = false;
+  job.status = 'paused';
+  await open(job);
+  editPage = 1;
+  const kept = job.book.pages[1].imageAssetId;
+  wizard.simpleEditing = true;
+  fields = {'#page-ko': job.book.pages[1].ko + ' 촛불이 반짝였어요.', '#page-en': job.book.pages[1].en};
+  saveFails = 1; // storage is full for the page tool's save
+  const saving = click('save-text');
+  const asked = await answer('simple-confirm-no');
+  await saving;
+  fields = {};
+  assert.ok(toasts.some(t => /변경을 저장하지 못했어요/.test(t.message)), toasts.map(t => t.message).join(' / '));
+  assert.match(asked, /이 쪽 그림도 다시 만들까요/);
+  const page = job.book.pages[1];
+  assert.match(page.ko, /촛불이 반짝였어요/, 'the edited text is on the open book');
+  assert.equal(page.imageStale, undefined, 'no runner-visible mark is left by the failed save');
+  assert.equal(page.simpleTextEditedAssetId, kept);
+  assert.equal(wizard.simpleEditing, false);
+  // Later, the library card resumes the paused job without asking.
+  const usage = imageRecords(job);
+  await cardClick('resume', job.id);
+  assert.equal(modal, null);
+  assert.equal(job.status, 'review', job.error || '');
+  assert.equal(page.imageAssetId, kept, 'the kept picture was not bought again');
+  assert.equal(imageRecords(job), usage + 2, 'only pages 6 and 7 were bought');
+  assert.equal(networkCalls, 0);
+});
+
+test('any resume keeps pictures with a leftover runner mark the parent never chose to redraw', async () => {
+  reset();
+  const job = await finishedJob('숨바꼭질하다 찾은 비밀 장소');
+  dropPicture(job, 3);
+  job.book.autoGenerationComplete = false;
+  job.status = 'paused';
+  // Left by an older build on a job never reopened on the simple screen.
+  const leftover = job.book.pages[1].imageAssetId;
+  markStale(job.book.pages[1]);
+  const usage = imageRecords(job);
+  await cardClick('resume', job.id);
+  assert.equal(modal, null);
+  assert.equal(job.status, 'review', job.error || '');
+  const page = job.book.pages[1];
+  assert.equal(page.imageAssetId, leftover, 'not redrawn');
+  assert.equal(page.imageStale, undefined);
+  assert.equal(page.simpleTextEditedAssetId, leftover, 'kept, and still shown as a page whose text changed');
+  assert.equal(imageRecords(job), usage + 1, 'only the missing page 4 was bought');
+  assert.deepEqual(pagesNeedingImages(job.book), []);
+  // A run the parent chose still redraws exactly the chosen page.
+  job.book.autoGenerationComplete = true;
+  await open(job, 5);
+  const saving = click('save-book');
+  await answer('simple-choice-redraw');
+  await saving;
+  assert.notEqual(job.book.pages[1].imageAssetId, leftover, 'the chosen page was redrawn');
+  assert.deepEqual(approvals, [job.book.id]);
+});
+
+test('an interrupted run with nothing left to buy finishes here without an image key, unless another tab holds it', async () => {
+  reset();
+  const job = await finishedJob('바닷가에서 모래성 쌓기'), world = getActiveWorld(state), engine = world.imageEngine;
+  const snapshotEngine = job.book.generationSnapshot.imageEngine, jobEngine = job.imageEngine;
+  const interrupt = () => { job.book.autoGenerationComplete = false; job.stopBefore = null; job.status = 'running'; };
+  world.imageEngine = job.imageEngine = job.book.generationSnapshot.imageEngine = 'openai';
+  const usage = JSON.stringify(job.imageUsage), completed = JSON.stringify(job.completed);
+  try {
+    // ④ 이어서 만들기
+    interrupt();
+    await open(job);
+    assert.match(renderSimpleCreate(ctx), /data-simple-action="resume-run"/);
+    await click('resume-run');
+    assert.equal(modal, null, 'nothing to confirm');
+    assert.ok(!toasts.some(t => /API 키/.test(t.message)), toasts.map(t => t.message).join(' / '));
+    assert.equal(job.status, 'review');
+    assert.equal(job.book.autoGenerationComplete, true);
+    assert.equal(job.book.stage, 'illustrated');
+    assert.equal(JSON.stringify(job.imageUsage), usage, 'no picture bought');
+    assert.equal(JSON.stringify(job.completed), completed, 'no runner step ran');
+    // The library card's 이어서 만들기: the same free finish.
+    reset();
+    interrupt();
+    await cardClick('resume', job.id);
+    assert.ok(!toasts.some(t => /API 키/.test(t.message)), toasts.map(t => t.message).join(' / '));
+    assert.equal(job.status, 'review');
+    assert.equal(JSON.stringify(job.imageUsage), usage);
+    // A held run with its hold already reached goes back to the hold, also without keys.
+    reset();
+    interrupt();
+    job.stopBefore = 'pages';
+    await cardClick('resume', job.id);
+    assert.equal(job.status, 'pages-ready');
+    assert.ok(!toasts.some(t => /API 키/.test(t.message)));
+    // Another tab holds the run lock: nothing is recorded here; the runner refuses.
+    reset();
+    interrupt();
+    await open(job);
+    await withLocks({request: async (name, options, callback) => callback(null)}, () => click('resume-run'));
+    assert.equal(job.status, 'running', 'left to the tab that runs it');
+    assert.ok(toasts.some(t => /다른 탭에서 이 자동 작업이 실행 중/.test(t.message)), toasts.map(t => t.message).join(' / '));
+    assert.equal(JSON.stringify(job.imageUsage), usage);
+    // Free again: the lock is granted and the finish is recorded inside it.
+    let held = null;
+    await withLocks({request: async (name, options, callback) => { held = name; try { return await callback({name}); } finally { held = `released:${name}`; } }}, () => click('resume-run'));
+    assert.equal(held, `released:donghwa-full-auto-${job.id}`);
+    assert.equal(job.status, 'review');
+    assert.equal(JSON.stringify(job.imageUsage), usage);
+  } finally {
+    world.imageEngine = engine;
+    job.imageEngine = jobEngine;
+    job.book.generationSnapshot.imageEngine = snapshotEngine;
+  }
+});
+
+test('resuming a chosen redraw cut off on a finished book offers keeping the picture as well as redrawing', async () => {
+  reset();
+  const job = await finishedJob('무지개 끝에서 찾은 것');
+  // '고친 1쪽 그림 다시 만들기' was running when the tab closed: the real mark is still on page 3.
+  const kept = job.book.pages[2].imageAssetId;
+  const cutOff = () => { markStale(job.book.pages[2]); job.status = 'running'; job.stopBefore = null; };
+  cutOff();
+  assert.equal(job.book.autoGenerationComplete, true);
+  const usage = imageRecords(job);
+  await open(job);
+  let pending = click('resume-run');
+  let html = await answer('simple-choice-missing');
+  await pending;
+  assert.match(html, /멈춘 그림 만들기를 이어 갈까요/);
+  assert.match(html, /id="simple-choice-missing">고친 쪽 그림 그대로 두고 마무리</);
+  assert.match(html, /id="simple-choice-all">고친 1쪽 그림 다시 만들기/);
+  assert.equal(job.status, 'review', job.error || '');
+  assert.equal(job.book.pages[2].imageAssetId, kept);
+  assert.equal(job.book.pages[2].imageStale, undefined);
+  assert.equal(job.book.pages[2].simpleTextEditedAssetId, kept);
+  assert.equal(imageRecords(job), usage, 'nothing bought');
+  // The redraw is still there for the parent who wants it.
+  cutOff();
+  await open(job);
+  pending = click('resume-run');
+  await answer('simple-choice-all');
+  await pending;
+  assert.equal(job.status, 'review', job.error || '');
+  assert.notEqual(job.book.pages[2].imageAssetId, kept);
+  assert.equal(imageRecords(job), usage + 1);
+  // Cut off after the chosen page was redrawn but before the run recorded its
+  // end: nothing is left to ask about, and 이어서 만들기 still ends the run.
+  job.status = 'running';
+  await open(job);
+  await click('resume-run');
+  assert.equal(modal, null);
+  assert.equal(job.status, 'review', 'not left marked running');
+  assert.equal(imageRecords(job), usage + 1, 'nothing more bought');
+});
+
+test('③ 다시 시도 names a missing text key with 키 입력 before the run', async () => {
+  reset();
+  const job = await demoJob('개미 마을의 이사하는 날');
+  // A real-engine story stopped before its text was built, on a device without the text key.
+  delete job.book;
+  job.demo = false;
+  job.status = 'paused';
+  await openSimpleJob(ctx, job.id);
+  assert.equal(wizard.simpleStep, 3);
+  const before = JSON.stringify({status: job.status, completed: job.completed, error: job.error});
+  await click('retry');
+  const toast = toasts.at(-1);
+  assert.match(toast?.message || '', /글 엔진의 API 키를 먼저 저장해 주세요/);
+  assert.equal(toast.action?.label, '키 입력');
+  toast.action.run();
+  assert.equal(credentialLinks.at(-1)[0], 'text');
+  assert.equal(JSON.stringify({status: job.status, completed: job.completed, error: job.error}), before, 'the runner never ran');
+  assert.equal(networkCalls, 0);
+});
+
+test('아이디어 뽑기 keeps its status line: no redraw wipes it, and ① renders it from the screen state', async () => {
+  reset();
+  wizard = {step: 1, simpleStep: 1, topic: IDEA_TOPICS[5], characterIds: ['yuha'], backgroundIds: []};
+  draft = null;
+  fields = {'#topic': IDEA_TOPICS[5]};
+  const render = ctx.render;
+  let renders = 0;
+  ctx.render = () => { renders++; return render(); };
+  try {
+    await click('idea');
+    assert.equal(renders, 0, 'the click does not redraw the screen');
+    assert.equal(wizard.simpleIdeaNote, wizard.topic);
+    assert.ok(renderSimpleCreate(ctx).includes(`aria-live="polite">${NOTE}</span>`));
+    // Choosing a topic chip clears it.
+    await click('topic', {topic: '달에 놀러 간 날'});
+    assert.ok(renderSimpleCreate(ctx).includes('aria-live="polite"></span>'));
+    // The note is screen state only: it is never frozen into a job's wizard.
+    await click('idea');
+    assert.equal(jobWizardFrom(wizard).simpleIdeaNote, undefined);
+  } finally {
+    ctx.render = render;
     fields = {};
   }
 });

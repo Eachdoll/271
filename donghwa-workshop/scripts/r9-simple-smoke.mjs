@@ -4,6 +4,8 @@
 // 글만 고친 쪽 '그림 그대로 저장'이 그림을 새로 만들지 않는지도 확인합니다.
 // FIX-UI-2: 그대로 둔 그림은 중지 뒤 책장 '이어서 만들기'에서도 다시 그리지 않고,
 // 쪽 그림을 만드는 동안 프로 모드 '완성 초안 검토'는 같은 책을 열지 않습니다.
+// FIX-UI-3: '이어 만들 이야기'의 FULL AUTO 초안은 '검수 열기'로만 열리고(그리는 중엔 거절),
+// 다시 엮지 않아 산 그림이 그대로 남으며, 아이디어 뽑기 안내가 화면에 남는지 확인합니다.
 // 사용: (cd dist && npx http-server -p 4180 -s .) & node scripts/r9-simple-smoke.mjs [기본주소] [출력폴더]
 // 환경변수: PLAYWRIGHT_MODULE(기본 playwright), CHROMIUM_PATH(선택, 브라우저 실행 파일)
 import fs from "node:fs";
@@ -220,6 +222,74 @@ async function run(width) {
     result.steps.ideas = ideas;
     if (!ideas[0] || !ideas[1] || ideas[0] === ideas[1])
       problem(`아이디어 뽑기가 새 주제를 넣지 않았어요: ${ideas.join(" / ")}`);
+    // FIX-UI-3: the status line is not wiped by a redraw after the click.
+    result.steps.ideaStatus = await page
+      .locator("#simple-idea-status")
+      .textContent();
+    if (!/주제 칸에 아이디어를 넣었어요/.test(result.steps.ideaStatus || ""))
+      problem(
+        `아이디어 뽑기 안내가 화면에 남지 않았어요: '${result.steps.ideaStatus}'`,
+      );
+    // FIX-UI-3 census: ① on the forced screen (opened from a pro job card),
+    // with three simple stories waiting, laid out with the real styles. The
+    // render uses a copy of the stored library; nothing is saved.
+    result.steps.forcedTopicCensus = await page.evaluate(async () => {
+      const m = await import("./simple-create.js");
+      const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
+      s.fullAutoJobs = { ...(s.fullAutoJobs || {}) };
+      for (const id of ["smoke-a", "smoke-b", "smoke-c"])
+        s.fullAutoJobs[id] = {
+          id,
+          status: "paused",
+          stopBefore: "text",
+          wizard: { simpleFlow: true, topic: id },
+          input: { topic: id },
+          updatedAt: "2099-01-01T00:00:00Z",
+        };
+      const w = { step: 1, simpleStep: 1, simpleForced: true, topic: "" },
+        ctx = {
+          getState: () => s,
+          getWizard: () => w,
+          getDraft: () => null,
+          setDraft() {},
+        },
+        slot = document.createElement("div");
+      slot.innerHTML = m.renderSimpleCreate(ctx);
+      document.querySelector("#page-content").append(slot);
+      const visible = (e) => {
+          const r = e.getBoundingClientRect(),
+            st = getComputedStyle(e);
+          return (
+            st.display !== "none" &&
+            st.visibility !== "hidden" &&
+            r.width > 0 &&
+            r.height > 0
+          );
+        },
+        buttons = [...slot.querySelectorAll("button")]
+          .filter(visible)
+          .filter(
+            (b) =>
+              !b.matches(
+                '.simple-card,[data-simple-nav],[data-action="toggle-ui-mode"]',
+              ),
+          );
+      const census = {
+        stepButtons: buttons.length,
+        resumeCards: slot.querySelectorAll(".simple-resume-card").length,
+        exitForced: slot.querySelectorAll('[data-simple-action="exit-forced"]')
+          .length,
+      };
+      slot.remove();
+      return census;
+    });
+    if (
+      result.steps.forcedTopicCensus.stepButtons > 12 ||
+      !result.steps.forcedTopicCensus.exitForced
+    )
+      problem(
+        `프로에서 연 ①이 버튼 12개를 넘어요: ${JSON.stringify(result.steps.forcedTopicCensus)}`,
+      );
     await page.fill("#topic", "공룡 친구와 숲으로 소풍 가는 날");
     await click('[data-simple-action="format"]');
     await page.selectOption("#pageCount", "8");
@@ -526,6 +596,33 @@ async function run(width) {
         guard.toast = await toastText();
         guard.editor = await page.locator(".ig-editor-bar").count();
       }
+      // FIX-UI-3: the '이어 만들 이야기' card of the same story is a review
+      // ('검수 열기', never the story workflow's 이어서 만들기), and it is
+      // refused the same way while the page is being drawn.
+      const draftCard = page.locator(
+        `[data-story-action="open-auto-review"][data-job-id="${jobId}"]`,
+      );
+      guard.draftCard = await draftCard.count();
+      guard.draftResume = await page.evaluate((id) => {
+        const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
+        const storyId = s.fullAutoJobs?.[id]?.storyDraftId;
+        return document.querySelectorAll(
+          `[data-story-action="resume"][data-id="${storyId}"]`,
+        ).length;
+      }, jobId);
+      if (guard.draftCard) {
+        await page.evaluate(() => {
+          const t = document.querySelector("#toast");
+          if (t) t.textContent = "";
+        });
+        await draftCard.first().click();
+        await page.waitForTimeout(300);
+        guard.draftToast = await toastText();
+        guard.draftEditor = await page.locator(".ig-editor-bar").count();
+        guard.draftWorkflow = await page
+          .locator("#modal-root .story-workspace")
+          .count();
+      }
       await page.evaluate(() => {
         window.__smokeImageDelay = 0;
       });
@@ -547,6 +644,103 @@ async function run(width) {
         problem(
           `쪽 그림 다시 만들기 뒤 ④가 이상해요: ${JSON.stringify(guard)}`,
         );
+      if (!guard.draftCard || guard.draftResume)
+        problem(
+          `‘이어 만들 이야기’에 FULL AUTO 초안이 ‘검수 열기’로 나오지 않아요: ${JSON.stringify(guard)}`,
+        );
+      else if (
+        !/진행 중인 작업이 끝난 뒤 열어 주세요/.test(guard.draftToast || "") ||
+        guard.draftEditor ||
+        guard.draftWorkflow
+      )
+        problem(
+          `그림을 만드는 중에 ‘이어 만들 이야기’가 같은 책을 열었어요: ${JSON.stringify(guard)}`,
+        );
+      // With nothing in flight, '검수 열기' opens the job's own book in the pro
+      // editor: no rebuild, so every paid picture stays (the R9 round-4 drop).
+      const stored = () =>
+        page.evaluate((id) => {
+          const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
+          const job = s.fullAutoJobs?.[id];
+          return {
+            bookId: job?.book?.id || null,
+            pages: (job?.book?.pages || []).map((p) => p.imageAssetId || null),
+            final: (job?.book?.pages || []).filter(
+              (p) => p.imageMeta?.quality === "final",
+            ).length,
+            cover: job?.book?.cover?.imageAssetId || null,
+            history: (job?.book?.pages || []).reduce(
+              (n, p) => n + (p.imageHistory?.length || 0),
+              0,
+            ),
+            usage: Object.keys(job?.imageUsage || {}).length,
+          };
+        }, jobId);
+      const beforeOpen = await stored();
+      await click('.top-actions [data-action="toggle-ui-mode"]');
+      const idleCard = page.locator(
+        `[data-story-action="open-auto-review"][data-job-id="${jobId}"]`,
+      );
+      const draftOpen = { card: await idleCard.count() };
+      if (draftOpen.card) {
+        await idleCard.first().click();
+        await page.waitForTimeout(800);
+        draftOpen.editor = await page.locator(".ig-editor-bar").count();
+        draftOpen.workflow = await page
+          .locator("#modal-root .story-workspace")
+          .count();
+        // The pro editor's 이야기 글 다시 다듬기 does not rebuild it either.
+        if (draftOpen.editor) {
+          await page.evaluate(() => {
+            const t = document.querySelector("#toast");
+            if (t) t.textContent = "";
+          });
+          await click('[data-action="regenerate-text"]');
+          draftOpen.regenerateToast = await toastText();
+          draftOpen.regenerateWorkflow = await page
+            .locator("#modal-root .story-workspace")
+            .count();
+        }
+      }
+      const afterOpen = await stored();
+      draftOpen.same = JSON.stringify(afterOpen) === JSON.stringify(beforeOpen);
+      draftOpen.before = beforeOpen;
+      draftOpen.after = afterOpen;
+      result.steps.storyDraftCard = draftOpen;
+      if (!draftOpen.card || !draftOpen.editor || draftOpen.workflow)
+        problem(
+          `‘검수 열기’가 프로 편집기에서 같은 책을 열지 않았어요: ${JSON.stringify(draftOpen)}`,
+        );
+      if (
+        !draftOpen.same ||
+        afterOpen.final !== afterOpen.pages.length ||
+        afterOpen.pages.some((id) => !id)
+      )
+        problem(
+          `‘이어 만들 이야기’로 연 책의 그림이 바뀌었어요: ${JSON.stringify(draftOpen)}`,
+        );
+      if (
+        !/다시 엮지 않아요/.test(draftOpen.regenerateToast || "") ||
+        draftOpen.regenerateWorkflow
+      )
+        problem(
+          `프로 편집기의 ‘이야기 글 다시 다듬기’가 FULL AUTO 책을 다시 엮으려 했어요: ${JSON.stringify(draftOpen)}`,
+        );
+      await shot("06d-story-draft-review");
+      // Back to ④ in the simple screen from the library card.
+      await click('.top-actions [data-action="toggle-ui-mode"]');
+      await click('button[data-action="nav"][data-view="library"]');
+      if (
+        await page
+          .locator("#discard-confirm")
+          .isVisible()
+          .catch(() => false)
+      )
+        await click("#discard-confirm");
+      await click(`[data-full-auto-action="review"][data-id="${jobId}"]`);
+      await page.waitForTimeout(500);
+      if ((await step()) !== 4)
+        problem("‘검수 열기’ 뒤 책장 카드로 ④에 돌아오지 못했어요.");
     }
     // ⑤ finish
     await click('[data-simple-action="to-finish"]');

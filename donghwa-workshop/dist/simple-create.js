@@ -10,6 +10,7 @@ import {
   stopFullAutoJob,
   getFullAutoJob,
   isFullAutoRunning,
+  keepEditedPictures,
 } from "./full-auto-ui.js";
 import { estimateFullAutoCost, fullAutoProgress } from "./full-auto.js";
 import { readAutoStop } from "./full-auto-control.js";
@@ -21,6 +22,7 @@ import {
   generateBookPageImage,
   isPageImageStale,
   isPageOperationBusy,
+  pagesNeedingImages,
 } from "./story-generation/page-tools.js";
 import { collectBookChecks } from "./checks-panel.js";
 import {
@@ -187,7 +189,10 @@ const HELD = ["text-review", "pages-ready", "review"];
 const RESUMABLE = ["ready", "running", "paused", "failed", ...HELD];
 const MAX_FRIENDS = 2,
   MAX_PLACES = 4,
-  MAX_RESUME_CARDS = 2;
+  MAX_RESUME_CARDS = 2,
+  /** R9-B2 rule 3: at most 12 visible buttons per simple step. */
+  MAX_STEP_BUTTONS = 12;
+const IDEA_NOTE = "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.";
 
 /* ---------- language-aware text check (approve-book) ---------- */
 const needsKo = (book) => book?.language !== "en";
@@ -209,6 +214,41 @@ export function pageTextProblemMessage(book) {
         ? "영어"
         : "한글·영어";
   return `제목과 각 쪽의 ${what} 글을 확인해 주세요.`;
+}
+
+/* ---------- final pictures approving still has to buy ---------- */
+/**
+ * What approving (확정, approve-book) must still draw at final quality, given
+ * the image engine the book draws with. Never a page that already has a
+ * current final picture: only pages without one (missing, a draft-quality
+ * picture, or the runner's stale mark after a text edit) and a missing or
+ * draft cover. A FULL AUTO book whose run never recorded its finish (stopped,
+ * failed or interrupted after buying pages) is therefore not bought again.
+ * {finalize:false} keeps the old free cases: a finished FULL AUTO book, or
+ * the sample engine with no draft pictures to replace.
+ */
+export function approvalImageWork(book, engine) {
+  const pages = book?.pages || [],
+    coverDone = !!book?.cover?.imageAssetId,
+    autoReady =
+      !!book?.autoGenerationComplete &&
+      coverDone &&
+      pages.every((p) => p?.imageAssetId && p.imageMeta?.quality === "final"),
+    finalize =
+      !autoReady &&
+      (engine !== "sample" ||
+        pages.some((p) => p?.imageAssetId && p.imageMeta?.quality === "draft"));
+  if (!finalize) return { finalize: false, pages: [], cover: false, stale: [] };
+  const redraw = pagesNeedingImages(book);
+  return {
+    finalize: true,
+    pages: redraw,
+    cover: !coverDone || book.cover?.meta?.quality === "draft",
+    // Pages with a final picture whose text changed since (the runner's mark).
+    stale: redraw.filter(
+      (i) => pages[i]?.imageAssetId && pages[i].imageMeta?.quality === "final",
+    ),
+  };
 }
 
 /* ---------- FULL AUTO bookkeeping kept on a rebuilt book ---------- */
@@ -391,6 +431,7 @@ const UI_FIELDS = [
   "simpleBadgeOpen",
   "simpleForced",
   "simpleIdeaOffset",
+  "simpleIdeaNote",
   "simplePickedFor",
   "simplePicksTouched",
   "simpleRunToken",
@@ -442,8 +483,10 @@ const canAbandon = (job) =>
  * editor) buy that page again without asking, so a kept page carries a
  * simple-only marker instead, bound to the picture it was kept with. Only a
  * run the parent chose with '고친 n쪽 … 다시 만들기' puts the real mark back,
- * for the pages it named and only for that run.
+ * for the pages it named and only for that run. keepEditedPictures lives in
+ * full-auto-ui.js, so every run start (any resume path) applies it too.
  */
+export { keepEditedPictures };
 const pictureOf = (page) => page?.imageAssetId || page?.imageUrl || null;
 /** True while the page still shows the picture the parent kept after editing its text; a redrawn page drops the marker. */
 export function isPictureKeptAfterEdit(page) {
@@ -460,26 +503,6 @@ export function isPageTextEdited(page) {
   const stale = isPageImageStale(page),
     kept = isPictureKeptAfterEdit(page);
   return stale || kept;
-}
-/**
- * The parent keeps these pictures (all pages when `indexes` is null): the
- * runner-visible stale marks become the simple-only marker. Returns how many
- * pages changed, so the caller saves only when something did.
- */
-export function keepEditedPictures(book, indexes = null) {
-  let changed = 0;
-  (book?.pages || []).forEach((page, index) => {
-    if (indexes && !indexes.includes(index)) return;
-    if (!isPageImageStale(page)) return;
-    page.simpleTextEditedAssetId = page.imageStaleAssetId;
-    if (page.imageStaleAt !== undefined)
-      page.simpleTextEditedAt = page.imageStaleAt;
-    delete page.imageStale;
-    delete page.imageStaleAt;
-    delete page.imageStaleAssetId;
-    changed++;
-  });
-  return changed;
 }
 /** For a run the parent chose to include these pages: the runner's stale mark goes back on them. */
 function markChosenRedraws(book, indexes) {
@@ -635,22 +658,34 @@ function resumeLabel(job) {
   if (runIsLive(job)) return job.book ? "그림 만드는 중" : "글 만드는 중";
   return "이어서 만들기";
 }
-function renderResumeCards(state) {
+/**
+ * ①'s own visible buttons: the topic chips, 아이디어 뽑기, 책 형식 바꾸기,
+ * 책장으로 and 다음, plus '프로 만들기 화면' in the heading on the forced
+ * screen. Resume cards fill only what is left of the 12-button limit.
+ */
+export function topicStepButtonCount(w = {}) {
+  return SIMPLE_TOPICS.length + 4 + (w.simpleForced ? 1 : 0);
+}
+function renderResumeCards(state, w) {
   const jobs = simpleJobs(state);
   if (!jobs.length) return "";
+  const shown = Math.max(
+    0,
+    Math.min(MAX_RESUME_CARDS, MAX_STEP_BUTTONS - topicStepButtonCount(w)),
+  );
   return `<section class="simple-resume" aria-label="이어서 만들기"><h3>이어서 만들기</h3><div class="simple-resume-list">${jobs
-    .slice(0, MAX_RESUME_CARDS)
+    .slice(0, shown)
     .map(
       (job) =>
         `<button type="button" class="simple-resume-card" data-simple-action="resume" data-id="${esc(job.id)}"><strong>${esc(job.book?.title || job.input?.topic || job.wizard?.topic || "이야기")}</strong><small>${esc(resumeLabel(job))} · ${simpleStepForJob(job) === 4 ? "④ 쪽마다 검수" : "③ 생성"}</small></button>`,
     )
     .join(
       "",
-    )}</div>${jobs.length > MAX_RESUME_CARDS ? `<p class="small-label">나머지 ${jobs.length - MAX_RESUME_CARDS}권은 책장의 ‘제작 중인 이야기’에서 이어 갈 수 있어요.</p>` : ""}</section>`;
+    )}</div>${jobs.length > shown ? `<p class="small-label">나머지 ${jobs.length - shown}권은 책장의 ‘제작 중인 이야기’에서 이어 갈 수 있어요.</p>` : ""}</section>`;
 }
 function renderTopicStep(ctx, w) {
   const state = ctx.getState();
-  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite"></span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w) : ""}<p class="small-label simple-defaults-note">교훈·마무리·분위기는 부모 설정의 기본값을 써요.</p></section>${renderResumeCards(state)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
+  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? IDEA_NOTE : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w) : ""}<p class="small-label simple-defaults-note">교훈·마무리·분위기는 부모 설정의 기본값을 써요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
   home: "🏡",
@@ -981,21 +1016,31 @@ async function refreshKeyStatus() {
     keyStatusLoading = false;
   }
 }
-/** Engines whose key the text run needs but the vault does not hold (no decryption). */
-async function missingTextKey(state) {
-  const settings = getTextGenerationSettings(state),
-    engines = new Map();
-  for (const stage of ["outline", "sceneBriefs", "prose", "pagination"]) {
+/**
+ * An engine whose key the text run needs but the vault does not hold (no
+ * decryption), or null. The same stages as the runner's preflight; a job's
+ * own frozen settings and story-quality input are passed for a resume.
+ */
+async function missingTextKey(
+  state,
+  settings = getTextGenerationSettings(state),
+  quality = settings.storyQuality,
+) {
+  const engines = new Map();
+  for (const stage of [
+    "outline",
+    "sceneBriefs",
+    ...(settings.hybrid?.enabled ? ["proseDraft"] : []),
+    "prose",
+    "enrichment",
+    "pagination",
+  ]) {
     const selected = resolveStoryStageSettings(settings, stage);
     engines.set(selected.engineId, selected.config || {});
   }
-  if (settings.storyQuality?.enabled)
+  if (quality?.enabled)
     for (const role of ["outline", "prose", "cheap"]) {
-      const selected = resolveQualityStageSettings(
-        settings,
-        role,
-        settings.storyQuality,
-      );
+      const selected = resolveQualityStageSettings(settings, role, quality);
       engines.set(selected.engineId, selected.config || {});
     }
   const status = await listCredentialStatus().catch(() => ({}));
@@ -1010,6 +1055,32 @@ async function missingTextKey(state) {
     if (status[engine] !== true) return engine;
   }
   return null;
+}
+/**
+ * Toast a missing text key with a button to the parent settings field; true
+ * on a miss (nothing started, the job unchanged). A job passes its own frozen
+ * text settings and story-quality input, as its runner preflight reads them.
+ */
+async function stopForTextKey(ctx, job = null) {
+  const engine = job
+    ? await missingTextKey(
+        ctx.getState(),
+        job.textSettings || getTextGenerationSettings(ctx.getState()),
+        job.input?.storyQuality,
+      )
+    : await missingTextKey(ctx.getState());
+  if (!engine) return false;
+  ctx.toast(
+    `${TEXT_ENGINE_NAMES[engine] || engine} 글 엔진의 API 키를 먼저 저장해 주세요.`,
+    {
+      action: {
+        label: "키 입력",
+        run: () => ctx.openCredentialSettings("text", engine),
+      },
+    },
+  );
+  ctx.render();
+  return true;
 }
 function onRunProgress(event) {
   const w = api?.getWizard?.();
@@ -1039,8 +1110,11 @@ function onRunProgress(event) {
     if (count.textContent !== label && !w.simpleEditing) api.render();
   }
 }
-/** Release or resume a job through the shared runner; errors are kept on the job. */
-async function runJob(ctx, jobId, stopBefore, kind) {
+/**
+ * Release or resume a job through the shared runner; errors are kept on the
+ * job. `redraw` names the pages the parent chose to redraw in this run.
+ */
+async function runJob(ctx, jobId, stopBefore, kind, { redraw = [] } = {}) {
   liveRun = { jobId, kind };
   lastProgress = null;
   ctx.render();
@@ -1049,8 +1123,8 @@ async function runJob(ctx, jobId, stopBefore, kind) {
     job = await runFullAutoJob(
       jobId,
       stopBefore === undefined
-        ? { navigate: false, onProgress: onRunProgress }
-        : { stopBefore, navigate: false, onProgress: onRunProgress },
+        ? { navigate: false, onProgress: onRunProgress, redraw }
+        : { stopBefore, navigate: false, onProgress: onRunProgress, redraw },
     );
   } catch (error) {
     ctx.toast(error);
@@ -1084,22 +1158,7 @@ async function startText(ctx, { demo = false, onCreated } = {}) {
     ctx.toast(check.message || "이야기 주제를 입력해 주세요.");
     return;
   }
-  if (!demo) {
-    const engine = await missingTextKey(state);
-    if (engine) {
-      ctx.toast(
-        `${TEXT_ENGINE_NAMES[engine] || engine} 글 엔진의 API 키를 먼저 저장해 주세요.`,
-        {
-          action: {
-            label: "키 입력",
-            run: () => ctx.openCredentialSettings("text", engine),
-          },
-        },
-      );
-      ctx.render();
-      return;
-    }
-  }
+  if (!demo && (await stopForTextKey(ctx))) return;
   const allowNew = w.allowNew !== false,
     token =
       globalThis.crypto?.randomUUID?.() ||
@@ -1313,6 +1372,23 @@ async function askRedraw(ctx, book, index) {
   );
   if (ok) await drawPage(ctx, book, index, { confirmed: true });
 }
+/**
+ * After a text change that could not be saved: if the page carries the
+ * runner's stale mark (the new text is on the open book), the parent decides
+ * as after a saved edit; the picture is kept first, whatever the answer.
+ */
+async function askRedrawIfMarked(ctx, book, index) {
+  if (isPageImageStale(book?.pages?.[index]))
+    await askRedraw(ctx, book, index);
+}
+/** One page's text in both languages, to tell whether an operation changed it. */
+const pageText = (book, index) => {
+  const page = book?.pages?.[index] || {};
+  return JSON.stringify([
+    page.ko ?? page.textKo ?? "",
+    page.en ?? page.textEn ?? "",
+  ]);
+};
 async function saveText(ctx) {
   const state = ctx.getState(),
     book = ctx.getDraft(),
@@ -1321,11 +1397,30 @@ async function saveText(ctx) {
   if (!book) return;
   const ko = document.querySelector("#page-ko")?.value,
     en = document.querySelector("#page-en")?.value;
-  const result = await applyPageText(state, book, index, {
-    ko,
-    en,
-    save: ctx.save,
-  });
+  let result = null;
+  try {
+    result = await applyPageText(state, book, index, {
+      ko,
+      en,
+      save: ctx.save,
+    });
+  } catch (error) {
+    // The page tool writes the text and the runner's stale mark before its
+    // save, so a failed save leaves both on the open book. Say what failed,
+    // then the picture is kept unless the parent chooses to redraw it. A
+    // refusal before anything was written (a run owns the book) keeps the
+    // editor open instead.
+    const page = book.pages?.[index],
+      landed =
+        !!page &&
+        (ko === undefined || (page.ko ?? page.textKo ?? "") === ko) &&
+        (en === undefined || (page.en ?? page.textEn ?? "") === en);
+    if (w && landed) w.simpleEditing = false;
+    ctx.render();
+    ctx.toast(error);
+    if (landed) await askRedrawIfMarked(ctx, book, index);
+    return;
+  }
   if (w) w.simpleEditing = false;
   ctx.render();
   if (!result.changed) return ctx.toast("바뀐 글이 없어요.");
@@ -1353,6 +1448,7 @@ async function rewriteText(ctx) {
   const controller = new AbortController();
   pageOp = { kind: "rewrite", index, controller, bookId: book.id };
   ctx.render();
+  const textBefore = pageText(book, index);
   let result = null;
   try {
     result = await rewriteBookPage(state, book, index, {
@@ -1367,7 +1463,13 @@ async function rewriteText(ctx) {
     pageOp = null;
     ctx.render();
   }
-  if (!result) return;
+  // New text may be on the page with the runner's mark although its save
+  // failed: as after a failed 저장, keep the picture unless the parent redraws.
+  if (!result) {
+    if (pageText(book, index) !== textBefore)
+      await askRedrawIfMarked(ctx, book, index);
+    return;
+  }
   ctx.toast(
     result.changed
       ? `${index + 1}쪽 글을 새로 썼어요.`
@@ -1461,7 +1563,13 @@ async function drawAll(
     return null;
   }
   const work = imageWork(book);
-  if (!work.needsRun && !(includeStale !== false && work.stale.length)) {
+  // A run a closed tab left 'running' still needs recording even when nothing
+  // is left to draw: it goes on below, to the run lock, with no question.
+  if (
+    !work.needsRun &&
+    !(includeStale !== false && work.stale.length) &&
+    !runInterrupted(job)
+  ) {
     if (!finishing) ctx.toast("모든 쪽과 표지 그림이 이미 있어요.");
     return job;
   }
@@ -1499,7 +1607,9 @@ async function drawAll(
         : "이미 만든 최종 그림은 다시 만들지 않아요.",
     );
     const choices = [];
-    if (work.needsRun)
+    // Resuming a cut-off run (even a chosen redraw on a finished book) can
+    // always keep the edited pages' pictures and just finish.
+    if (work.needsRun || resuming)
       choices.push({
         value: "missing",
         label: offerStale
@@ -1559,7 +1669,10 @@ async function drawAll(
     return done;
   }
   try {
-    return await runJob(ctx, job.id, null, "images");
+    // A run left 'running' by a closed tab is recovered inside the run lock;
+    // when it has nothing left to buy it is finished there without the runner
+    // (no image key), and while another tab holds the run the runner refuses.
+    return await runJob(ctx, job.id, null, "images", { redraw: chosen });
   } finally {
     // The chosen redraw belongs to this run: a page it did not reach (stopped,
     // failed) is kept again, so a later resume never buys it without asking.
@@ -1757,8 +1870,11 @@ async function handle(ctx, action, el) {
   if (!w) return;
   if (action === "topic") {
     w.topic = el.dataset.topic;
-    const field = document.querySelector("#topic");
+    delete w.simpleIdeaNote;
+    const field = document.querySelector("#topic"),
+      status = document.querySelector("#simple-idea-status");
     if (field) field.value = w.topic;
+    if (status) status.textContent = "";
     document
       .querySelectorAll('[data-simple-action="topic"]')
       .forEach((chip) =>
@@ -1769,7 +1885,6 @@ async function handle(ctx, action, el) {
   if (action === "idea") {
     const idea = ideaState(state),
       field = document.querySelector("#topic"),
-      status = document.querySelector("#simple-idea-status"),
       current = String(field ? field.value : w.topic || "").trim();
     let topic = "";
     if (idea.world)
@@ -1784,17 +1899,21 @@ async function handle(ctx, action, el) {
       } catch {
         /* The built-in list below still gives an idea. */
       }
+    // The parent moved on while the world idea loaded: leave the topic alone.
+    if (ctx.getWizard() !== w || w.simpleStep !== 1) return;
     if (!topic || topic === current) topic = pickIdeaTopic(current);
     w.topic = topic;
-    if (field) field.value = topic;
+    // Kept on the screen state, so a later redraw of ① still shows it.
+    w.simpleIdeaNote = topic;
+    const input = document.querySelector("#topic"),
+      status = document.querySelector("#simple-idea-status");
+    if (input) input.value = topic;
     document
       .querySelectorAll?.('[data-simple-action="topic"]')
       ?.forEach((chip) =>
         chip.classList.toggle("selected", chip.dataset.topic === topic),
       );
-    if (status)
-      status.textContent =
-        "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.";
+    if (status) status.textContent = IDEA_NOTE;
     return;
   }
   if (action === "format") {
@@ -1891,6 +2010,17 @@ async function handle(ctx, action, el) {
   if (action === "retry") {
     const job = jobOfWizard(state, w);
     if (!job) return;
+    // Like 글 만들기: a missing text key is named with a 키 입력 button
+    // before the runner's preflight would mark the job failed.
+    if (!job.demo && (await stopForTextKey(ctx, job))) return;
+    // A run not held at the text (a pro job opened here) also needs the image key.
+    if (
+      (job.stopBefore ?? null) !== "text" &&
+      (await stopForImageKey(ctx, {
+        generationSnapshot: { imageEngine: job.imageEngine },
+      }))
+    )
+      return;
     const done = await runJob(ctx, job.id, undefined, "text");
     if (
       done &&
@@ -2015,6 +2145,9 @@ async function handle(ctx, action, el) {
 /* Screen-only actions, and stop/resume, never wait behind a running action. */
 const QUIET = new Set([
   "topic",
+  // Screen-only too: it fills the topic field and its own status line, which a
+  // redraw right after the click would wipe before it is read.
+  "idea",
   "format",
   "badge",
   "page-prev",
