@@ -413,8 +413,10 @@ test('중지 during the sheet preparation for one page: that page is not drawn, 
     await click('draw-page');
     await stopping;
     assert.ok(pressed, via);
-    assert.equal(job.status, 'pages-ready', `${via}: the stop landed after the run's last abort check`);
-    assert.ok(job.book.generationSnapshot, via);
+    // full-auto.js now re-checks the abort right before the hold, so the stop usually ends the run 'paused';
+    // if it lands after that last check the run still reaches 'pages-ready'. Either way nothing may be drawn.
+    assert.ok(['pages-ready', 'paused'].includes(job.status), `${via}: unexpected status ${job.status}`);
+    if (job.status === 'pages-ready') assert.ok(job.book.generationSnapshot, via);
     assert.deepEqual(drawn, [], `${via}: nothing was drawn after 중지`);
     assert.equal(job.book.pages[2].imageAssetId, undefined, via);
     assert.ok(toasts.some(t => t.message === STOPPED_PAGE), `${via}: ${toasts.map(t => t.message).join(' / ')}`);
