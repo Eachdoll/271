@@ -12,6 +12,8 @@ import {
 } from "./full-auto.js";
 import {
   isPageOperationBusy,
+  isPageImageStale,
+  pagesNeedingImages,
   claimBookForRun,
   releaseBookForRun,
 } from "./story-generation/page-tools.js";
@@ -42,6 +44,110 @@ let api,
   inspectedId = null,
   configured = false;
 export const isFullAutoRunning = () => !!controller;
+
+/* ---------- pictures kept after a text edit ---------- */
+/*
+ * Keeping a picture after its text changed is the parent's lasting decision.
+ * The runner-visible stale mark (imageStale, imageStaleAt, imageStaleAssetId)
+ * would let any later run (the library card's 이어서 만들기, a resume, the pro
+ * editor) buy that page again without asking, so a kept page carries the
+ * simple screen's marker instead (simpleTextEditedAssetId), bound to the
+ * picture it was kept with. Only a run the parent chose to redraw named pages
+ * puts the real mark back, for those pages and only for that run.
+ */
+/**
+ * The parent keeps these pictures (all pages when `indexes` is null): the
+ * runner-visible stale marks become the kept-picture marker. Returns how many
+ * pages changed, so the caller saves only when something did.
+ */
+export function keepEditedPictures(book, indexes = null) {
+  let changed = 0;
+  (book?.pages || []).forEach((page, index) => {
+    if (indexes && !indexes.includes(index)) return;
+    if (!isPageImageStale(page)) return;
+    page.simpleTextEditedAssetId = page.imageStaleAssetId;
+    if (page.imageStaleAt !== undefined)
+      page.simpleTextEditedAt = page.imageStaleAt;
+    delete page.imageStale;
+    delete page.imageStaleAt;
+    delete page.imageStaleAssetId;
+    changed++;
+  });
+  return changed;
+}
+/** Every page index of `book` except the ones a run was asked to redraw. */
+const pagesExcept = (book, redraw = []) =>
+  (book?.pages || []).map((_, i) => i).filter((i) => !redraw.includes(i));
+/**
+ * Where a run would end without buying anything, as [status, phase], or null
+ * when only a run can get there: the hold it heads for is already reached
+ * (text built for 'text', drawing setup frozen for 'pages'), or, with no
+ * hold, every page has a current final picture and the cover exists.
+ */
+function endWithoutBuying(job) {
+  const book = job?.book,
+    hold = job?.stopBefore ?? null;
+  if (!book) return null;
+  if (hold === "text") return ["text-review", "글 완성 · 쪽 검수"];
+  if (hold === "pages")
+    return book.generationSnapshot ? ["pages-ready", "그림 준비 완료"] : null;
+  if (
+    hold === null &&
+    book.generationSnapshot &&
+    book.cover?.imageAssetId &&
+    !pagesNeedingImages(book).length
+  )
+    return ["review", "완성 초안 · 부모 검토"];
+  return null;
+}
+/**
+ * Record that end here, the way the runner's own last step does, without the
+ * runner: it would first ask for engine keys and check the World, which an
+ * end that buys nothing does not need. Rolled back when the save fails.
+ * Returns true when recorded.
+ */
+function settleWithoutRun(job, [status, phase]) {
+  const book = job.book,
+    draft = api.getState()?.storyDrafts?.[job.storyDraftId],
+    finish = status === "review",
+    before = {
+      stage: book.stage,
+      approved: book.approved,
+      autoGenerationComplete: book.autoGenerationComplete,
+      job: {
+        status: job.status,
+        phase: job.phase,
+        currentStep: job.currentStep,
+        error: job.error,
+        updatedAt: job.updatedAt,
+      },
+      draftStage: draft?.stage,
+    };
+  if (finish) {
+    book.stage = "illustrated";
+    book.approved = false;
+    book.autoGenerationComplete = true;
+    if (draft) draft.stage = "illustrated";
+  }
+  Object.assign(job, {
+    status,
+    phase,
+    currentStep: null,
+    error: null,
+    updatedAt: new Date().toISOString(),
+  });
+  if (api.save() !== false) return true;
+  if (finish) {
+    book.stage = before.stage;
+    book.approved = before.approved;
+    if (before.autoGenerationComplete === undefined)
+      delete book.autoGenerationComplete;
+    else book.autoGenerationComplete = before.autoGenerationComplete;
+    if (draft) draft.stage = before.draftStage;
+  }
+  Object.assign(job, before.job);
+  return false;
+}
 export function cleanupFullAuto(hide = false) {
   if (hide === true) {
     inspectedId = null;
@@ -122,8 +228,12 @@ function finishedToast(job, navigate) {
  * The only place a run starts: one live run per tab, a cross-tab lock, the
  * local/cloud stop watcher and a save that aborts when the parent locks.
  * navigate=false keeps the current view and forwards every progress event.
+ * `redraw` names the pages the parent chose to redraw in this run; every other
+ * page whose text changed after drawing keeps its picture (a leftover runner
+ * mark is never bought without that choice). A run that would buy nothing
+ * records its end here, with no key or World preflight.
  */
-async function execute(job, { navigate = true, onProgress } = {}) {
+async function execute(job, { navigate = true, onProgress, redraw = [] } = {}) {
   if (controller) {
     api.toast(
       "이미 제작 중인 작업이 있어요. 책장에서 진행 상태를 확인해 주세요.",
@@ -150,7 +260,21 @@ async function execute(job, { navigate = true, onProgress } = {}) {
     },
   });
   const work = async () => {
+    // Inside the run lock: no other tab is running this job now.
     if (job.status === "running") job.status = "paused";
+    // Runner marks the parent did not choose to redraw in this run (a failed
+    // save, an older copy of the simple screen, a chosen redraw cut off by a
+    // closed tab) become kept pictures before anything can be bought.
+    if (job.book && keepEditedPictures(job.book, pagesExcept(job.book, redraw)))
+      api.save();
+    const end = endWithoutBuying(job);
+    if (end) {
+      if (!settleWithoutRun(job, end))
+        throw Error(
+          "자동 작업을 저장하지 못했어요. 저장 공간을 확인해 주세요.",
+        );
+      return job.book;
+    }
     await watcher.start();
     return runFullAuto(state, job, {
       signal: operation.signal,
@@ -379,10 +503,12 @@ export async function startFullAutoJob(
 /**
  * Resume or release a job. Passing stopBefore ('text' | 'pages' | null) moves
  * the hold first; completed steps are skipped, so nothing paid is bought twice.
+ * `redraw` lists the page indexes the parent chose to redraw in this run (their
+ * runner marks stay); any other page whose text changed keeps its picture.
  */
 export async function runFullAutoJob(
   jobId,
-  { stopBefore, navigate = false, onProgress } = {},
+  { stopBefore, navigate = false, onProgress, redraw = [] } = {},
 ) {
   const job = jobById(jobId);
   assertIdleRunner(job);
@@ -398,7 +524,7 @@ export async function runFullAutoJob(
       throw Error("자동 작업을 저장하지 못했어요.");
     }
   }
-  await execute(job, { navigate, onProgress });
+  await execute(job, { navigate, onProgress, redraw });
   return job;
 }
 /**
@@ -415,6 +541,18 @@ export async function stopFullAutoJob(jobId) {
 }
 export function getFullAutoJob(jobId) {
   return autoJobs(connectedApi().getState())[jobId] || null;
+}
+/**
+ * Open a job's review the way its library card does: a held job in the simple
+ * review (④), any other job in the pro editor once its drawing setup is final.
+ * The caller refuses first while a simple action or page operation owns the book.
+ */
+export async function openFullAutoReview(jobId) {
+  const job = jobById(jobId);
+  if (isHeld(job) && typeof api.openSimpleReview === "function")
+    return api.openSimpleReview(job.id);
+  assertEditorReady(job);
+  return api.openReview(job);
 }
 
 export function configureFullAutoUI(context) {
