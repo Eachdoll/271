@@ -45,6 +45,7 @@ import {
   carryFullAutoFields,
   isSimpleBusy,
 } from "./simple-create.js";
+import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import { createCloudSync } from "./cloud-sync.js";
 import {
   downloadLibraryTransfer,
@@ -3514,9 +3515,16 @@ configureFullAutoUI({
     await openSimpleJob(simpleCtx, jobId);
   },
   openReview: async (job) => {
+    // A simple action or a page drawing/rewrite still in flight owns its book:
+    // opening it here (in either mode) would let the pro editor buy the same
+    // page again. Refuse before the dialog closes or the draft changes.
+    if (isSimpleBusy() || isPageOperationBusy(job.book?.id)) {
+      toast("진행 중인 작업이 끝난 뒤 열어 주세요.");
+      return;
+    }
     // Simple mode reviews a finished FULL AUTO book in step ④ as well.
     if (uiMode === "simple") {
-      if (!isSimpleBusy()) closeModal();
+      closeModal();
       await openSimpleJob(simpleCtx, job.id);
       return;
     }

@@ -2,6 +2,8 @@
 // 유료 요청은 모두 막고 셉니다. 페이지 오류·유료 요청·가로 넘침이 없어야 통과입니다.
 // FIX-UI: ③ 중지 뒤 '주제·엔진 바꾸기', ④ 알림이 아래 버튼 줄을 가리지 않는지,
 // 글만 고친 쪽 '그림 그대로 저장'이 그림을 새로 만들지 않는지도 확인합니다.
+// FIX-UI-2: 그대로 둔 그림은 중지 뒤 책장 '이어서 만들기'에서도 다시 그리지 않고,
+// 쪽 그림을 만드는 동안 프로 모드 '완성 초안 검토'는 같은 책을 열지 않습니다.
 // 사용: (cd dist && npx http-server -p 4180 -s .) & node scripts/r9-simple-smoke.mjs [기본주소] [출력폴더]
 // 환경변수: PLAYWRIGHT_MODULE(기본 playwright), CHROMIUM_PATH(선택, 브라우저 실행 파일)
 import fs from "node:fs";
@@ -41,6 +43,17 @@ async function run(width) {
   const page = await ctx.newPage();
   // Test-only: hold the FULL AUTO run lock while window.__smokeLockDelay is set,
   // so a demo run can be stopped before it finishes.
+  // Test-only: hold a sample picture's storage while window.__smokeImageDelay
+  // is set, so a page drawing is still in flight while the parent goes elsewhere.
+  await page.addInitScript(() => {
+    const fetchOriginal = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const delay = Number(window.__smokeImageDelay) || 0;
+      if (delay && String(input?.url || input).startsWith("data:image/"))
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchOriginal(input, init);
+    };
+  });
   await page.addInitScript(() => {
     const locks = navigator.locks;
     if (!locks?.request) return;
@@ -111,6 +124,30 @@ async function run(width) {
   };
   const library = () =>
     page.evaluate(() => localStorage.getItem("donghwa-workshop-v1"));
+  /** One page of a simple job's book as stored (the newest job with a book when jobId is null). */
+  const jobPage = (jobId, index) =>
+    page.evaluate(
+      ([id, i]) => {
+        const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
+        const job = id
+          ? s.fullAutoJobs?.[id]
+          : Object.values(s.fullAutoJobs || {})
+              .filter((j) => j.book?.pages?.length && !j.simpleAbandoned)
+              .sort((a, b) =>
+                String(b.updatedAt).localeCompare(String(a.updatedAt)),
+              )[0];
+        const p = job?.book?.pages?.[i] || {};
+        return {
+          jobId: job?.id || null,
+          status: job?.status || null,
+          error: job?.error || null,
+          asset: p.imageAssetId || null,
+          marker: p.simpleTextEditedAssetId || null,
+          stale: p.imageStale === true,
+        };
+      },
+      [jobId, index],
+    );
   /** Click without scrolling (Playwright's click scrolls the target into view). */
   const jsClick = (selector) =>
     page.evaluate((s) => document.querySelector(s)?.click(), selector);
@@ -341,10 +378,108 @@ async function run(width) {
     }
     await shot("05-one-image");
     let imagesOk = !!onePageImage;
+    let jobId = null,
+      keptAsset = null;
     if (imagesOk) {
+      // Text edited after drawing: the parent keeps the picture (취소). The
+      // keep is lasting: no runner-visible stale mark, only the kept marker.
+      await click('[data-simple-action="edit-text"]');
+      const drawnText = await page.locator("#page-ko").inputValue();
+      await page.fill("#page-ko", drawnText.trim() + " 바람이 살랑 불었어요.");
+      await click('[data-simple-action="save-text"]');
+      const keepNo = page.locator("#simple-confirm-no");
+      if (!(await keepNo.isVisible().catch(() => false)))
+        problem("그림 있는 쪽 글을 고쳤는데 다시 만들지 묻지 않았어요.");
+      else await keepNo.click();
+      await page.waitForTimeout(300);
+      result.steps.staleCount = await page
+        .locator("#simple-image-count")
+        .textContent();
+      if (!/그림 1 \/ 8 · 글 바뀐 쪽 1/.test(result.steps.staleCount))
+        problem(`글 바뀐 쪽 표시가 없어요: ${result.steps.staleCount}`);
+      const kept = await jobPage(null, 1);
+      jobId = kept.jobId;
+      keptAsset = kept.asset;
+      result.steps.keptAfterEdit = kept;
+      if (!kept.asset || kept.marker !== kept.asset || kept.stale)
+        problem(
+          `그림을 그대로 둔 결정이 남지 않았어요: ${JSON.stringify(kept)}`,
+        );
+      await shot("06a-kept");
+      // 모든 쪽 그림 만들기 → 빈 그림만 만들기, then 중지 before the run starts.
+      await page.evaluate(() => {
+        window.__smokeLockDelay = 4000;
+      });
       await click('[data-simple-action="draw-all"]');
-      await confirmIfAsked();
-      await idle(180000);
+      const onlyMissing = page.locator("#simple-choice-missing");
+      if (!(await onlyMissing.isVisible().catch(() => false))) {
+        problem("모든 쪽 그림 만들기가 고친 쪽을 묻지 않았어요.");
+        await confirmIfAsked();
+      } else {
+        result.steps.drawAllChoice = await page
+          .locator(".simple-choices")
+          .innerText();
+        await onlyMissing.click();
+      }
+      await page.waitForSelector('[data-simple-action="stop"]', {
+        timeout: 10000,
+      });
+      await click('[data-simple-action="stop"]');
+      await page.evaluate(() => {
+        window.__smokeLockDelay = 0;
+      });
+      await idle();
+      const stopped = await jobPage(jobId, 1);
+      result.steps.stoppedRun = stopped;
+      if (stopped.status !== "paused")
+        problem(`그림 만들기를 중지하지 못했어요: ${stopped.status}`);
+      // The library card resumes with no question: the kept page is not redrawn.
+      await click('button[data-action="nav"][data-view="library"]');
+      if (
+        await page
+          .locator("#discard-confirm")
+          .isVisible()
+          .catch(() => false)
+      )
+        await click("#discard-confirm");
+      const resume = page.locator(
+        `[data-full-auto-action="resume"][data-id="${jobId}"]`,
+      );
+      if (!(await resume.count()))
+        problem("책장에 멈춘 이야기의 ‘이어서 만들기’가 없어요.");
+      else {
+        await resume.first().click();
+        await page.waitForFunction(
+          (id) =>
+            ["review", "failed", "paused"].includes(
+              JSON.parse(localStorage.getItem("donghwa-workshop-v1"))
+                .fullAutoJobs?.[id]?.status,
+            ),
+          jobId,
+          { timeout: 180000 },
+        );
+        await page.waitForTimeout(400);
+        result.steps.resumeAsked = await page.locator(".modal-overlay").count();
+      }
+      const resumed = await jobPage(jobId, 1);
+      result.steps.resumedRun = resumed;
+      if (resumed.status !== "review")
+        problem(
+          `책장에서 이어 만들기가 끝나지 않았어요: ${resumed.error || resumed.status}`,
+        );
+      if (
+        resumed.asset !== keptAsset ||
+        resumed.marker !== keptAsset ||
+        resumed.stale
+      )
+        problem(
+          `그림을 그대로 둔 쪽을 이어 만들기가 다시 그렸어요: ${JSON.stringify(resumed)}`,
+        );
+      await shot("06b-resumed");
+      // Back to ④ from the card: every picture is there, page 2 still kept.
+      await click(`[data-full-auto-action="review"][data-id="${jobId}"]`);
+      await page.waitForTimeout(500);
+      if ((await step()) !== 4) problem("완성 초안 검토가 ④로 열리지 않아요.");
       result.steps.allImages = await page
         .locator("#simple-image-count")
         .textContent();
@@ -365,25 +500,53 @@ async function run(width) {
         if (KNOWN_IMAGE_BUG.test(message)) result.imageBug ||= message;
         else problem(`모든 쪽 그림을 만들지 못했어요: ${message}`);
       }
-      await shot("06-all-images");
+      if (!/그림 8 \/ 8 · 글 바뀐 쪽 1/.test(result.steps.allImages))
+        problem(`이어 만든 뒤 표시가 달라요: ${result.steps.allImages}`);
+      await shot("06c-all-images");
     }
     if (imagesOk) {
-      // Text edited after drawing: keep the picture (no redraw), the count says so.
-      await click('[data-simple-action="edit-text"]');
-      const drawnText = await page.locator("#page-ko").inputValue();
-      await page.fill("#page-ko", drawnText.trim() + " 바람이 살랑 불었어요.");
-      await click('[data-simple-action="save-text"]');
-      const keepNo = page.locator("#simple-confirm-no");
-      if (!(await keepNo.isVisible().catch(() => false)))
-        problem("그림 있는 쪽 글을 고쳤는데 다시 만들지 묻지 않았어요.");
-      else await keepNo.click();
-      await page.waitForTimeout(300);
-      result.steps.staleCount = await page
-        .locator("#simple-image-count")
-        .textContent();
-      if (!/그림 8 \/ 8 · 글 바뀐 쪽 1/.test(result.steps.staleCount))
-        problem(`글 바뀐 쪽 표시가 없어요: ${result.steps.staleCount}`);
-      await shot("06b-stale");
+      // While page 1 is being redrawn here, the pro library's 완성 초안 검토
+      // must not open the same book in the pro editor.
+      // Reopened from the card, ④ starts at page 1.
+      const firstBefore = (await jobPage(jobId, 0)).asset;
+      await page.evaluate(() => {
+        window.__smokeImageDelay = 4000;
+      });
+      await click('[data-simple-action="redraw-page"]');
+      await confirmIfAsked();
+      await page.waitForSelector(".simple-progress", { timeout: 10000 });
+      await click('.top-actions [data-action="toggle-ui-mode"]');
+      const proReview = page.locator(
+        `[data-full-auto-action="review"][data-id="${jobId}"]`,
+      );
+      const guard = { card: await proReview.count() };
+      if (guard.card) {
+        await proReview.first().click();
+        await page.waitForTimeout(300);
+        guard.toast = await toastText();
+        guard.editor = await page.locator(".ig-editor-bar").count();
+      }
+      await page.evaluate(() => {
+        window.__smokeImageDelay = 0;
+      });
+      await click('.top-actions [data-action="toggle-ui-mode"]');
+      await idle();
+      guard.step = await step();
+      guard.redrawn = (await jobPage(jobId, 0)).asset !== firstBefore;
+      guard.keptStill = (await jobPage(jobId, 1)).marker === keptAsset;
+      result.steps.proReviewWhileDrawing = guard;
+      if (!guard.card) problem("프로 모드에 ‘완성 초안 검토’ 카드가 없어요.");
+      else if (
+        !/진행 중인 작업이 끝난 뒤 열어 주세요/.test(guard.toast || "") ||
+        guard.editor
+      )
+        problem(
+          `그림을 만드는 중에 프로 편집기가 같은 책을 열었어요: ${JSON.stringify(guard)}`,
+        );
+      if (guard.step !== 4 || !guard.redrawn || !guard.keptStill)
+        problem(
+          `쪽 그림 다시 만들기 뒤 ④가 이상해요: ${JSON.stringify(guard)}`,
+        );
     }
     // ⑤ finish
     await click('[data-simple-action="to-finish"]');
@@ -400,7 +563,7 @@ async function run(width) {
     await shot("07-finish");
     if (imagesOk) {
       // Stale-only save: '그림 그대로 저장' approves without drawing anything.
-      // A redraw would give the page a new asset id and clear its stale mark.
+      // A redraw would give the page a new asset id and drop its kept marker.
       const pictures = (bookId) =>
         page.evaluate((id) => {
           const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
@@ -410,13 +573,18 @@ async function run(width) {
               : j.book?.pages?.length && !j.simpleAbandoned,
           );
           const saved = (s.books || []).find((b) => b.id === id),
-            book = saved || job?.book;
+            book = saved || job?.book,
+            pages = book?.pages || [];
           return {
             bookId: book?.id || null,
-            pages: (book?.pages || []).map((p) => p.imageAssetId || null),
+            pages: pages.map((p) => p.imageAssetId || null),
             cover: book?.cover?.imageAssetId || null,
-            stale: (book?.pages || []).filter((p) => p.imageStale === true)
-              .length,
+            stale: pages.filter((p) => p.imageStale === true).length,
+            kept: pages.filter(
+              (p) =>
+                p.simpleTextEditedAssetId &&
+                p.simpleTextEditedAssetId === p.imageAssetId,
+            ).length,
             usage: Object.keys(job?.imageUsage || {}).length,
             saved: !!saved,
           };
@@ -441,6 +609,8 @@ async function run(width) {
           JSON.stringify(afterSave.pages) ===
             JSON.stringify(beforeSave.pages) &&
           afterSave.cover === beforeSave.cover,
+        keptBefore: beforeSave.kept,
+        keptAfter: afterSave.kept,
         staleBefore: beforeSave.stale,
         staleAfter: afterSave.stale,
         imageRecordsBefore: beforeSave.usage,
@@ -448,10 +618,14 @@ async function run(width) {
       };
       if (
         !result.steps.keptPictures.same ||
-        beforeSave.stale !== 1 ||
-        afterSave.stale !== 1
+        beforeSave.kept !== 1 ||
+        afterSave.kept !== 1 ||
+        beforeSave.stale ||
+        afterSave.stale
       )
-        problem("‘그림 그대로 저장’이 그림을 새로 만들었어요.");
+        problem(
+          "‘그림 그대로 저장’이 그림을 새로 만들었거나 둔 그림 표시를 잃었어요.",
+        );
       if (!afterSave.saved) problem("책장에 저장되지 않았어요.");
       await shot("08-saved");
       // Reload, the shelf still has the book, and it opens.

@@ -7,10 +7,10 @@ import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob} from '../dist/full-auto-ui.js';
-import {generateBookPageImage} from '../dist/story-generation/page-tools.js';
+import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
 import {
   configureSimpleCreate, openSimpleJob, renderSimpleCreate, simpleJobs, imageWork, imageCountLabel,
-  IDEA_TOPICS, pickIdeaTopic, isSimpleBusy,
+  IDEA_TOPICS, pickIdeaTopic, isSimpleBusy, isPictureKeptAfterEdit, keepEditedPictures, coherenceCheckDue,
 } from '../dist/simple-create.js';
 
 /* ---------- stub DOM ---------- */
@@ -30,6 +30,47 @@ globalThis.document = {
 };
 const store = new Map();
 globalThis.localStorage = {getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k)};
+// In-memory IndexedDB so the real runner can store the free sample pictures.
+// failWrites > 0 makes the next picture writes fail (a run that stops with an error).
+const databases = new Map();
+let failWrites = 0;
+globalThis.indexedDB = {open(name) {
+  const request = {};
+  queueMicrotask(() => {
+    if (!databases.has(name)) databases.set(name, new Map());
+    const records = databases.get(name);
+    request.result = {objectStoreNames: {contains: () => true}, close() {}, transaction() {
+      const tx = {};
+      const perform = (fn, write = false) => {
+        const operation = {};
+        queueMicrotask(() => {
+          if (write && failWrites > 0) {
+            failWrites--;
+            tx.error = Error('test: picture storage is full');
+            (tx.onabort || tx.onerror)?.();
+            return;
+          }
+          operation.result = fn();
+          operation.onsuccess?.();
+          tx.oncomplete?.();
+        });
+        return operation;
+      };
+      tx.objectStore = () => ({get: id => perform(() => records.get(id)), put: record => perform(() => { records.set(record.id, record); return record.id; }, true), delete: id => perform(() => records.delete(id))});
+      return tx;
+    }};
+    request.onsuccess?.();
+  });
+  return request;
+}};
+// Nothing in these tests may reach the network (paid engines are never called).
+const realFetch = globalThis.fetch;
+let networkCalls = 0;
+globalThis.fetch = async (url, ...rest) => {
+  if (String(url?.url || url).startsWith('data:')) return realFetch(url, ...rest);
+  networkCalls++;
+  throw Error('network is not allowed in this test: ' + String(url).slice(0, 60));
+};
 
 /* ---------- app context ---------- */
 const buildBook = p => ({id: p.bookId, title: p.outline.titleCandidates[0], characterIds: p.wizard.characterIds, backgroundIds: p.wizard.backgroundIds, pages: p.pagination.pages.map(x => ({...x, ko: x.textKo, en: x.textEn})), sceneBriefs: p.sceneBriefs, worldId: p.worldId, storyDraftId: p.id, textGenerationSettings: p.textSettings, outline: p.outline, prose: p.prose, pagination: structuredClone(p.pagination), storyInput: p.input, textUsage: p.usage, textDemo: p.demo, readingLevelSnapshot: p.readingLevels, storyCheck: p.storyCheck, fullAutoRunId: p.id});
@@ -54,7 +95,8 @@ const ctx = {
     return book.pages[index];
   },
 };
-configureFullAutoUI({getState: () => state, save, render() {}, toast: m => toasts.push({message: String(m?.message || m), action: null}), isParent: () => true, protectedAction: f => f(), buildBook, openReview: async () => {}, showModal() {}, closeModal() {}, modalHeader: t => t});
+const fullAutoCtx = {getState: () => state, save, render() {}, toast: m => toasts.push({message: String(m?.message || m), action: null}), isParent: () => true, protectedAction: f => f(), buildBook, openReview: async () => {}, showModal() {}, closeModal() {}, modalHeader: t => t};
+configureFullAutoUI(fullAutoCtx);
 configureSimpleCreate(ctx);
 
 /* ---------- helpers ---------- */
@@ -70,6 +112,18 @@ function click(action, data = {}) {
   for (const fn of listeners.click) fn({target: {closest: s => (s.includes('data-simple-action') ? target : null)}, preventDefault() {}});
   return lastAction || Promise.resolve();
 }
+/** Click a library job card button ([data-full-auto-action]); resolves when its action is done. */
+async function cardClick(action, id) {
+  let done = null;
+  const target = {dataset: {fullAutoAction: action, id}};
+  configureFullAutoUI({...fullAutoCtx, protectedAction: f => (done = f())});
+  try {
+    for (const fn of listeners.click) fn({target: {closest: s => (s.includes('data-full-auto-action') ? target : null)}, preventDefault() {}});
+  } finally {
+    configureFullAutoUI(fullAutoCtx);
+  }
+  await done;
+}
 async function answer(id) {
   await until(() => modal, 'a confirm dialog');
   const html = modal.html;
@@ -83,14 +137,13 @@ async function demoJob(topic) {
   return job;
 }
 const finalImage = (page, id) => Object.assign(page, {imageAssetId: id, imageMeta: {quality: 'final'}});
+/** A demo book the real runner finished with the free sample engine (stored pictures, 'review'). */
 async function finishedJob(topic) {
   const job = await demoJob(topic);
-  await runFullAutoJob(job.id, {stopBefore: 'pages'});
-  assert.equal(job.status, 'pages-ready');
-  job.book.pages.forEach((page, i) => finalImage(page, `asset-${job.book.id}-${i}`));
-  job.book.cover = {imageAssetId: `asset-${job.book.id}-cover`};
-  job.book.autoGenerationComplete = true;
-  job.status = 'review';
+  await runFullAutoJob(job.id, {stopBefore: null});
+  assert.equal(job.status, 'review', job.error || '');
+  assert.ok(job.book.pages.every(page => page.imageAssetId && page.imageMeta?.quality === 'final'));
+  assert.ok(job.book.cover?.imageAssetId);
   return job;
 }
 const markStale = page => Object.assign(page, {imageStale: true, imageStaleAt: 'x', imageStaleAssetId: page.imageAssetId});
@@ -101,7 +154,13 @@ async function open(job, step = 4) {
   wizard.simpleStep = step;
   await tick();
 }
-function reset() { toasts.length = 0; approvals.length = 0; drawn.length = 0; credentialLinks.length = 0; onSave = null; modal = null; }
+function reset() { toasts.length = 0; approvals.length = 0; drawn.length = 0; credentialLinks.length = 0; onSave = null; modal = null; failWrites = 0; fields = {}; }
+/** A page the run has not drawn yet (no picture, no completed step). */
+const dropPicture = (job, index) => { delete job.book.pages[index].imageAssetId; delete job.book.pages[index].imageMeta; delete job.completed['page:' + index]; };
+/** A page whose text was edited after drawing and whose picture the parent kept. */
+const keptPage = (book, index) => { markStale(book.pages[index]); keepEditedPictures(book, [index]); return book.pages[index].imageAssetId; };
+const STOPPED_PAGE = '중지해서 이 쪽 그림은 만들지 않았어요.';
+const OTHER_BOOK_OPEN = '다른 책을 보고 있어 저장하지 않았어요. 이 책을 다시 열어 저장해 주세요.';
 
 /* ---------- tests ---------- */
 test('a page drawn after sheet preparation lands on its own book even if another book was opened meanwhile', async () => {
@@ -136,20 +195,27 @@ test('a page drawn after sheet preparation lands on its own book even if another
 test('saving approves only while the job\'s own book is still open', async () => {
   reset();
   const a = await finishedJob('할머니 댁 다락방'), b = await finishedJob('첫눈이 내린 아침');
-  a.book.autoGenerationComplete = false; // the run still has to finish (nothing left to buy)
+  dropPicture(a, 4); // the finishing run still has a page to draw
+  a.book.autoGenerationComplete = false;
   a.status = 'pages-ready';
   await open(a, 5);
   onSave = () => { if (a.status === 'running') draft = b.book; };
-  await click('save-book');
-  assert.equal(a.status, 'review', 'the run finished the book');
+  const saving = click('save-book');
+  const asked = await answer('simple-confirm-yes');
+  await saving;
+  assert.match(asked, /남은 그림을 만들고 저장할까요/);
+  assert.equal(a.status, 'review', a.error || 'the run finished the book');
+  assert.equal(a.book.pages[4].imageMeta?.quality, 'final', 'the runner drew the missing page');
   assert.deepEqual(approvals, [], 'book B was not approved in place of book A');
-  assert.ok(toasts.some(t => t.message === '다른 책을 보고 있어 저장하지 않았어요. 이 책을 다시 열어 저장해 주세요.'));
+  assert.ok(toasts.some(t => t.message === OTHER_BOOK_OPEN));
   assert.deepEqual(drawn, []);
   // Reopened, the same book saves normally.
   onSave = null;
   await open(a, 5);
   await click('save-book');
+  assert.equal(modal, null);
   assert.deepEqual(approvals, [a.book.id]);
+  assert.equal(networkCalls, 0);
 });
 
 test('stale-only pictures: 그림 그대로 저장 approves without any image work', async () => {
@@ -160,14 +226,26 @@ test('stale-only pictures: 그림 그대로 저장 approves without any image wo
   assert.deepEqual(imageWork(job.book), {missing: [], stale: [2], coverMissing: false, needsRun: false});
   assert.equal(imageCountLabel(job.book), '그림 8 / 8 · 글 바뀐 쪽 1');
   await open(job, 5);
+  // Opening the book turns a leftover runner mark into the kept-picture marker.
+  assert.equal(job.book.pages[2].imageStale, undefined);
+  assert.equal(job.book.pages[2].simpleTextEditedAssetId, assets[2]);
   assert.match(renderSimpleCreate(ctx), /그림 8 \/ 8 · 글 바뀐 쪽 1/);
+  // A second page edited on the open book, not answered yet.
+  markStale(job.book.pages[6]);
+  assert.match(renderSimpleCreate(ctx), /그림 8 \/ 8 · 글 바뀐 쪽 2/);
   const pending = click('save-book');
   const html = await answer('simple-choice-keep');
   await pending;
   assert.match(html, /그림 그대로 저장/);
-  assert.match(html, /고친 1쪽 그림 다시 만들고 저장/);
-  assert.match(html, /3쪽은 글을 고친 뒤에도/);
+  assert.match(html, /고친 2쪽 그림 다시 만들고 저장/);
+  assert.match(html, /3·7쪽은 글을 고친 뒤에도/);
+  assert.doesNotMatch(html, /이야기 연결 검사/, 'demo text: no check to name');
   assert.deepEqual(approvals, [job.book.id]);
+  for (const i of [2, 6]) {
+    assert.equal(job.book.pages[i].imageStale, undefined, `page ${i + 1}: no runner-visible mark after keeping`);
+    assert.equal(job.book.pages[i].simpleTextEditedAssetId, assets[i]);
+  }
+  assert.deepEqual(pagesNeedingImages(job.book), []);
   assert.deepEqual(drawn, [], 'no page was drawn');
   assert.deepEqual(job.book.pages.map(p => p.imageAssetId), assets);
   assert.equal(JSON.stringify(job.completed), completed, 'the runner never ran');
@@ -175,18 +253,18 @@ test('stale-only pictures: 그림 그대로 저장 approves without any image wo
   assert.equal(job.status, 'review');
 });
 
-test('모든 쪽 그림 만들기 names stale pages and lets the parent keep them', async () => {
+test('모든 쪽 그림 만들기 names stale pages; 빈 그림만 keeps those pictures for good', async () => {
   reset();
   const job = await finishedJob('반짝이는 조약돌 모으기');
-  markStale(job.book.pages[0]);
-  delete job.book.pages[3].imageAssetId;
-  delete job.book.pages[3].imageMeta;
+  dropPicture(job, 3);
   job.book.autoGenerationComplete = false;
   job.status = 'pages-ready';
-  const staleAsset = job.book.pages[0].imageAssetId;
+  const staleAsset = job.book.pages[0].imageAssetId, usage = Object.keys(job.imageUsage || {}).length;
   await open(job);
-  let hiddenDuringRun = null;
-  onSave = () => { if (job.status === 'running' && hiddenDuringRun === null) hiddenDuringRun = job.book.pages[0].imageStale !== true; };
+  // An undecided runner mark on the open book (text saved, no answer given yet).
+  markStale(job.book.pages[0]);
+  let markDuringRun = null;
+  onSave = () => { if (job.status === 'running' && markDuringRun === null) markDuringRun = job.book.pages[0].imageStale === true; };
   const pending = click('draw-all');
   const html = await answer('simple-choice-missing');
   await pending;
@@ -195,11 +273,245 @@ test('모든 쪽 그림 만들기 names stale pages and lets the parent keep the
   assert.match(html, /빈 그림만 만들기/);
   assert.match(html, /고친 1쪽도 다시 만들기/);
   assert.doesNotMatch(html, /이미 만든 최종 그림은 다시 만들지 않아요/, 'no blanket promise while stale pages are offered');
-  assert.equal(hiddenDuringRun, true, 'the kept page is hidden from the run');
-  // The run then reaches the missing page (the default image pipeline cannot store a picture under Node).
-  assert.equal(job.currentStep, 'page:3', 'the stale page 1 was skipped, page 4 was the first one drawn');
-  assert.equal(job.book.pages[0].imageAssetId, staleAsset);
-  assert.equal(job.book.pages[0].imageStale, true, 'the stale mark is back after the run');
+  assert.equal(markDuringRun, false, 'the run never sees a stale mark on the kept page');
+  assert.equal(job.status, 'review', job.error || '');
+  assert.equal(job.book.pages[3].imageMeta?.quality, 'final', 'the missing page was drawn');
+  assert.equal(Object.keys(job.imageUsage).length, usage + 1, 'one picture bought: page 4 only');
+  const page = job.book.pages[0];
+  assert.equal(page.imageAssetId, staleAsset);
+  assert.equal(page.imageStale, undefined, 'no runner-visible mark is left');
+  assert.equal(page.imageStaleAssetId, undefined);
+  assert.equal(page.simpleTextEditedAssetId, staleAsset, 'the kept marker is bound to the kept picture');
+  assert.equal(isPictureKeptAfterEdit(page), true);
+  assert.equal(isPageImageStale(page), false);
+  assert.deepEqual(pagesNeedingImages(job.book), [], 'pro paths see nothing to draw');
+  assert.equal(imageCountLabel(job.book), '그림 8 / 8 · 글 바뀐 쪽 1');
+});
+
+test('a kept picture survives a stopped run and a failed run resumed from the library card', async () => {
+  reset();
+  const job = await finishedJob('할아버지와 함께 낚시한 날');
+  for (const i of [4, 5, 6]) dropPicture(job, i);
+  job.book.autoGenerationComplete = false;
+  job.status = 'pages-ready';
+  await open(job);
+  // Page 2's text is edited after drawing; the parent answers 취소 (keep the picture).
+  editPage = 1;
+  const kept = job.book.pages[1].imageAssetId;
+  fields = {'#page-ko': job.book.pages[1].ko + ' 물고기가 퐁당 뛰었어요.', '#page-en': job.book.pages[1].en};
+  const editing = click('save-text');
+  const asked = await answer('simple-confirm-no');
+  await editing;
+  fields = {};
+  assert.match(asked, /이 쪽 그림도 다시 만들까요/);
+  const page = () => job.book.pages[1];
+  assert.equal(page().imageStale, undefined, 'the keep decision leaves no runner-visible mark');
+  assert.equal(page().simpleTextEditedAssetId, kept);
+  assert.equal(imageCountLabel(job.book), '그림 5 / 8 · 글 바뀐 쪽 1');
+  // 모든 쪽 그림 만들기 → 빈 그림만 만들기, then 중지 while page 5 is being drawn.
+  const usageStart = Object.keys(job.imageUsage).length;
+  let pressed = false;
+  onSave = () => {
+    if (!pressed && job.status === 'running' && job.currentStep === 'page:4') {
+      pressed = true;
+      click('stop');
+    }
+  };
+  const drawing = click('draw-all');
+  await answer('simple-choice-missing');
+  await drawing;
+  onSave = null;
+  assert.ok(pressed);
+  assert.equal(job.status, 'paused');
+  assert.equal(page().imageAssetId, kept);
+  // The library card resumes with no question at all; the kept page is not bought again.
+  await cardClick('resume', job.id);
+  assert.equal(modal, null, 'the card asked nothing');
+  assert.equal(job.status, 'review', job.error || '');
+  for (const i of [4, 5, 6]) assert.equal(job.book.pages[i].imageMeta?.quality, 'final', `page ${i + 1} drawn`);
+  assert.equal(page().imageAssetId, kept, 'the kept picture was not redrawn');
+  assert.equal(page().simpleTextEditedAssetId, kept);
+  assert.equal(page().imageStale, undefined);
+  assert.equal(Object.keys(job.imageUsage).length, usageStart + 3, 'pages 5–7 bought once each, page 2 never');
+  // A failed run, resumed from the card: same.
+  dropPicture(job, 7);
+  job.book.autoGenerationComplete = false;
+  job.status = 'pages-ready';
+  failWrites = 1;
+  await open(job);
+  const again = click('draw-all');
+  const offered = await answer('simple-choice-missing'); // the kept page is offered again, and kept again
+  await again;
+  assert.match(offered, /고친 1쪽도 다시 만들기/);
+  assert.equal(job.status, 'failed');
+  assert.match(job.error || '', /그림을 보관하지 못했어요/);
+  const before = Object.keys(job.imageUsage).length;
+  await cardClick('resume', job.id);
+  assert.equal(modal, null);
+  assert.equal(job.status, 'review', job.error || '');
+  assert.equal(Object.keys(job.imageUsage).length, before + 1, 'only page 8 was bought');
+  assert.equal(page().imageAssetId, kept);
+  assert.equal(isPictureKeptAfterEdit(page()), true);
+  assert.equal(networkCalls, 0);
+});
+
+test('고친 n쪽 그림 다시 만들고 저장 redraws only the chosen pages, and only in that run', async () => {
+  reset();
+  const job = await finishedJob('우산 속에 들어온 작은 손님');
+  const keptA = keptPage(job.book, 2), keptB = keptPage(job.book, 5);
+  await open(job, 5);
+  // First try: stopped right after the first chosen page was redrawn.
+  let pressed = false;
+  onSave = () => {
+    if (!pressed && job.status === 'running' && job.currentStep === 'page:5') {
+      pressed = true;
+      click('stop');
+    }
+  };
+  const saving = click('save-book');
+  const html = await answer('simple-choice-redraw');
+  await saving;
+  onSave = null;
+  assert.match(html, /3·6쪽은 글을 고친 뒤에도/);
+  assert.match(html, /고친 2쪽 그림 다시 만들고 저장/);
+  assert.ok(pressed);
+  assert.deepEqual(approvals, [], 'a stopped redraw saves nothing');
+  assert.notEqual(job.book.pages[2].imageAssetId, keptA, 'page 3 was redrawn as chosen');
+  assert.equal(isPictureKeptAfterEdit(job.book.pages[2]), false);
+  const pageSix = job.book.pages[5];
+  assert.equal(pageSix.imageStale, undefined, 'the unreached chosen page is kept again');
+  assert.equal(pageSix.simpleTextEditedAssetId, keptB);
+  // A resume from the card does not finish the cut-off redraw without asking.
+  const status = job.status;
+  if (status !== 'review') await cardClick('resume', job.id);
+  assert.equal(pageSix.imageAssetId, keptB, 'page 6 is not bought by a resume');
+  // Chosen again: page 6 is redrawn and the book is saved.
+  job.book.autoGenerationComplete = true;
+  job.status = 'review';
+  await open(job, 5);
+  const second = click('save-book');
+  await answer('simple-choice-redraw');
+  await second;
+  assert.notEqual(job.book.pages[5].imageAssetId, keptB);
+  assert.equal(imageWork(job.book).stale.length, 0);
+  assert.deepEqual(approvals, [job.book.id]);
+});
+
+test('중지 during the sheet preparation for one page: that page is not drawn, even when the run still reaches the hold', async () => {
+  for (const via of ['simple', 'card']) {
+    reset();
+    const job = await demoJob(via === 'simple' ? '사라진 소풍 도시락' : '고양이가 숨겨 둔 털실 뭉치');
+    await open(job);
+    editPage = 2;
+    let pressed = false, stopping = null;
+    onSave = () => {
+      if (pressed || job.status !== 'running') return;
+      pressed = true;
+      // The run is past every abort check it makes for a book whose sheets exist.
+      stopping = via === 'simple' ? click('stop') : cardClick('pause', job.id);
+    };
+    await click('draw-page');
+    await stopping;
+    assert.ok(pressed, via);
+    assert.equal(job.status, 'pages-ready', `${via}: the stop landed after the run's last abort check`);
+    assert.ok(job.book.generationSnapshot, via);
+    assert.deepEqual(drawn, [], `${via}: nothing was drawn after 중지`);
+    assert.equal(job.book.pages[2].imageAssetId, undefined, via);
+    assert.ok(toasts.some(t => t.message === STOPPED_PAGE), `${via}: ${toasts.map(t => t.message).join(' / ')}`);
+    assert.equal(isSimpleBusy(), false);
+    // Without a stop, the next click draws the page.
+    onSave = null;
+    await click('draw-page');
+    assert.deepEqual(drawn, [[job.book.id, 2]], via);
+  }
+});
+
+test('a finish that buys nothing goes ahead without an image key', async () => {
+  reset();
+  const job = await finishedJob('밤하늘에 새 별자리 그리기'), world = getActiveWorld(state), engine = world.imageEngine;
+  const snapshotEngine = job.book.generationSnapshot.imageEngine, jobEngine = job.imageEngine;
+  // Stopped after the last picture: every page and the cover are final, the finish was never recorded.
+  job.book.autoGenerationComplete = false;
+  job.status = 'paused';
+  world.imageEngine = job.imageEngine = job.book.generationSnapshot.imageEngine = 'openai';
+  const usage = JSON.stringify(job.imageUsage), completed = JSON.stringify(job.completed);
+  try {
+    await open(job, 5);
+    assert.match(renderSimpleCreate(ctx), /남은 그림이 없어요\. 저장하면 마무리해요/);
+    await click('save-book');
+    assert.equal(modal, null, 'nothing to confirm');
+    assert.ok(!toasts.some(t => /API 키/.test(t.message)), toasts.map(t => t.message).join(' / '));
+    assert.deepEqual(approvals, [job.book.id]);
+    assert.equal(job.status, 'review');
+    assert.equal(job.book.autoGenerationComplete, true);
+    assert.equal(job.book.stage, 'illustrated');
+    assert.equal(JSON.stringify(job.imageUsage), usage, 'no picture bought');
+    assert.equal(JSON.stringify(job.completed), completed, 'no runner step ran');
+    // With a page whose text changed: keeping it finishes without a key, redrawing it asks for one.
+    reset();
+    const kept = keptPage(job.book, 4);
+    job.book.autoGenerationComplete = false;
+    job.status = 'paused';
+    await open(job);
+    let pending = click('draw-all');
+    let html = await answer('simple-choice-all');
+    await pending;
+    assert.match(html, /고친 쪽 그림 그대로 두고 마무리/);
+    assert.match(toasts.at(-1)?.message || '', /그림 엔진의 API 키/);
+    assert.equal(toasts.at(-1).action?.label, '키 입력');
+    assert.equal(job.status, 'paused', 'nothing started without the key');
+    assert.equal(job.book.pages[4].imageStale, undefined, 'the page is still only kept, not marked for the runner');
+    assert.equal(job.book.pages[4].simpleTextEditedAssetId, kept);
+    pending = click('draw-all');
+    html = await answer('simple-choice-missing');
+    await pending;
+    assert.equal(job.status, 'review');
+    assert.equal(job.book.pages[4].imageAssetId, kept);
+    assert.equal(JSON.stringify(job.imageUsage), usage);
+    // At ⑤: '고친 1쪽 그림 다시 만들고 저장' needs the key; 그림 그대로 저장 does not.
+    reset();
+    await open(job, 5);
+    pending = click('save-book');
+    await answer('simple-choice-redraw');
+    await pending;
+    assert.match(toasts.at(-1)?.message || '', /그림 엔진의 API 키/);
+    assert.deepEqual(approvals, []);
+    assert.equal(job.book.pages[4].imageStale, undefined);
+    assert.equal(JSON.stringify(job.completed), completed);
+    pending = click('save-book');
+    await answer('simple-choice-keep');
+    await pending;
+    assert.deepEqual(approvals, [job.book.id]);
+    assert.equal(job.book.pages[4].imageAssetId, kept);
+    assert.equal(JSON.stringify(job.imageUsage), usage);
+  } finally {
+    world.imageEngine = engine;
+    job.imageEngine = jobEngine;
+    job.book.generationSnapshot.imageEngine = snapshotEngine;
+  }
+});
+
+test('그림 그대로 저장 names the story-connection check that saving may still buy', async () => {
+  reset();
+  const job = await finishedJob('텃밭에 처음 심은 방울토마토');
+  keptPage(job.book, 1);
+  assert.deepEqual(coherenceCheckDue(state, job.book), {due: false, usd: 0}, 'demo text: no check');
+  // As a real-engine book whose page check no longer matches the edited text.
+  job.book.textDemo = false;
+  job.book.outline.plotContract ||= {beats: []};
+  job.book.pageCoherence = null;
+  const check = coherenceCheckDue(state, job.book);
+  assert.equal(check.due, true);
+  assert.ok(check.usd >= 0);
+  await open(job, 5);
+  const pending = click('save-book');
+  const html = await answer('simple-confirm-no');
+  await pending;
+  assert.match(html, /이야기 연결 검사/);
+  assert.match(html, /그림을 그대로 두고 저장해도 이 검사는 해요/);
+  assert.match(html, /그림 그대로 저장 · 이야기 연결 검사/);
+  if (check.usd > 0) assert.ok(html.includes('약 $'), html);
+  assert.deepEqual(approvals, []);
 });
 
 test('a missing image key stops before any confirm or job change, with a 키 입력 action', async () => {

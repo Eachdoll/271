@@ -227,11 +227,28 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
   assert.equal(fresh.settings.storyQuality, undefined);
 });
 
-test('the v29 shell precaches the simple create screen', async () => {
+test('the v30 shell precaches the simple create screen', async () => {
   const {readFileSync} = await import('node:fs');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v29";/);
+  assert.match(sw, /const CACHE = "donghwa-shell-v30";/);
   assert.ok(sw.includes('"./simple-create.js"'));
+});
+
+test('the library review refuses, in both modes, while a simple action or a page operation owns the book', async () => {
+  const {readFileSync} = await import('node:fs');
+  const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
+  assert.match(app, /import \{ isPageOperationBusy \} from "\.\/story-generation\/page-tools\.js";/);
+  const start = app.indexOf('  openReview: async (job) => {');
+  assert.ok(start > 0);
+  const body = app.slice(start, app.indexOf('\n  },\n', start));
+  const guard = body.indexOf('if (isSimpleBusy() || isPageOperationBusy(job.book?.id)) {'),
+    refuse = body.indexOf('toast("진행 중인 작업이 끝난 뒤 열어 주세요.");'),
+    leave = body.indexOf('return;', refuse);
+  assert.ok(guard > 0 && refuse > guard && leave > refuse, body);
+  // Nothing closes, opens or changes before the refusal returns.
+  for (const later of ['closeModal()', 'draft = job.book', 'uiMode === "simple"', 'openSimpleJob(']) {
+    assert.ok(body.indexOf(later) > leave, later);
+  }
 });
 
 test('simple settings reuse the existing form ids so the existing handlers save them', () => {

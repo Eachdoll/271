@@ -12,6 +12,7 @@ import {
   isFullAutoRunning,
 } from "./full-auto-ui.js";
 import { estimateFullAutoCost, fullAutoProgress } from "./full-auto.js";
+import { readAutoStop } from "./full-auto-control.js";
 import {
   rewriteBookPage,
   applyPageText,
@@ -37,6 +38,7 @@ import {
   getTextModelInfo,
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  estimateStoryTextCost,
 } from "./text-generation/models.js";
 import { syncActiveWorldTextSettings } from "./world-variations.js";
 import {
@@ -432,6 +434,70 @@ const canAbandon = (job) =>
   !runIsLive(job) &&
   ["paused", "failed", "ready", "running"].includes(job.status);
 
+/* ---------- pictures kept after a text edit ---------- */
+/*
+ * Keeping a picture after its text changed is the parent's lasting decision.
+ * The runner-visible stale mark (imageStale, imageStaleAt, imageStaleAssetId)
+ * would let any later run (the library card's 이어서 만들기, a resume, the pro
+ * editor) buy that page again without asking, so a kept page carries a
+ * simple-only marker instead, bound to the picture it was kept with. Only a
+ * run the parent chose with '고친 n쪽 … 다시 만들기' puts the real mark back,
+ * for the pages it named and only for that run.
+ */
+const pictureOf = (page) => page?.imageAssetId || page?.imageUrl || null;
+/** True while the page still shows the picture the parent kept after editing its text; a redrawn page drops the marker. */
+export function isPictureKeptAfterEdit(page) {
+  if (!page || page.simpleTextEditedAssetId === undefined) return false;
+  const current = pictureOf(page);
+  if (current !== null && current === page.simpleTextEditedAssetId) return true;
+  delete page.simpleTextEditedAssetId;
+  delete page.simpleTextEditedAt;
+  return false;
+}
+/** '글 바뀐 쪽': text changed after drawing, still undecided (runner mark) or kept by the parent. */
+export function isPageTextEdited(page) {
+  // Both checks run: each drops its own marker once the page was redrawn.
+  const stale = isPageImageStale(page),
+    kept = isPictureKeptAfterEdit(page);
+  return stale || kept;
+}
+/**
+ * The parent keeps these pictures (all pages when `indexes` is null): the
+ * runner-visible stale marks become the simple-only marker. Returns how many
+ * pages changed, so the caller saves only when something did.
+ */
+export function keepEditedPictures(book, indexes = null) {
+  let changed = 0;
+  (book?.pages || []).forEach((page, index) => {
+    if (indexes && !indexes.includes(index)) return;
+    if (!isPageImageStale(page)) return;
+    page.simpleTextEditedAssetId = page.imageStaleAssetId;
+    if (page.imageStaleAt !== undefined)
+      page.simpleTextEditedAt = page.imageStaleAt;
+    delete page.imageStale;
+    delete page.imageStaleAt;
+    delete page.imageStaleAssetId;
+    changed++;
+  });
+  return changed;
+}
+/** For a run the parent chose to include these pages: the runner's stale mark goes back on them. */
+function markChosenRedraws(book, indexes) {
+  const marked = [];
+  for (const index of indexes) {
+    const page = book?.pages?.[index];
+    if (isPictureKeptAfterEdit(page)) {
+      page.imageStale = true;
+      page.imageStaleAt = page.simpleTextEditedAt || new Date().toISOString();
+      page.imageStaleAssetId = page.simpleTextEditedAssetId;
+      delete page.simpleTextEditedAssetId;
+      delete page.simpleTextEditedAt;
+    }
+    if (isPageImageStale(page)) marked.push(index);
+  }
+  return marked;
+}
+
 /* ---------- image work on a book ---------- */
 /**
  * What drawing would still have to do for a book:
@@ -445,7 +511,7 @@ export function imageWork(book) {
   (book?.pages || []).forEach((page, index) => {
     if (!page?.imageAssetId || page.imageMeta?.quality !== "final")
       missing.push(index);
-    else if (isPageImageStale(page)) stale.push(index);
+    else if (isPageTextEdited(page)) stale.push(index);
   });
   const coverMissing = !book?.cover?.imageAssetId;
   return {
@@ -460,37 +526,6 @@ export function imageWork(book) {
   };
 }
 const pageList = (indexes) => indexes.map((i) => i + 1).join("·") + "쪽";
-/** Hide stale marks while a run draws only missing pages; the run then keeps those pictures. */
-function hideStaleMarks(book, indexes) {
-  const kept = [];
-  for (const index of indexes) {
-    const page = book?.pages?.[index];
-    if (!page || !isPageImageStale(page)) continue;
-    kept.push({
-      index,
-      imageStaleAt: page.imageStaleAt,
-      imageStaleAssetId: page.imageStaleAssetId,
-    });
-    delete page.imageStale;
-    delete page.imageStaleAt;
-    delete page.imageStaleAssetId;
-  }
-  return kept;
-}
-/** Put the marks back on pages that still show the picture they were set on. */
-function restoreStaleMarks(book, kept) {
-  for (const mark of kept) {
-    const page = book?.pages?.[mark.index];
-    if (
-      !page ||
-      (page.imageAssetId || page.imageUrl) !== mark.imageStaleAssetId
-    )
-      continue;
-    page.imageStale = true;
-    page.imageStaleAt = mark.imageStaleAt;
-    page.imageStaleAssetId = mark.imageStaleAssetId;
-  }
-}
 /**
  * The image engine a book draws with, or null when it needs no saved key
  * (free sample, local ComfyUI or a proxy). Reads only the saved status.
@@ -539,6 +574,19 @@ let api = null,
   keyStatusLoading = false,
   readingQueued = false,
   lastProgress = null;
+/** 중지 presses on this screen, per job id (see stopMark). */
+const stopClicks = new Map();
+/**
+ * Changes whenever a stop is asked for this job: 중지 here, a stop request
+ * stored by the library card or another tab, or one a run acknowledged.
+ */
+function stopMark(state, jobId) {
+  return [
+    stopClicks.get(jobId) || 0,
+    readAutoStop(jobId)?.nonce || "",
+    state?.fullAutoJobs?.[jobId]?.stopRequestedAt || "",
+  ].join("|");
+}
 
 /* ---------- rendering ---------- */
 const fallbackHeading = (title, sub, action = "") =>
@@ -800,7 +848,7 @@ function renderReviewStep(ctx, w) {
     reviewed = book.pages.filter((p) => p.reviewed).length,
     illustration = ctx.illustration || (() => "");
   const art = image
-    ? `${illustration(book, index)}${isPageImageStale(page) ? '<p class="small-label simple-stale">글이 바뀌었어요. 그림을 다시 만들 수 있어요.</p>' : ""}`
+    ? `${illustration(book, index)}${isPageTextEdited(page) ? '<p class="small-label simple-stale">글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요.</p>' : ""}`
     : `<div class="image-missing simple-empty-art"><p>아직 그림이 없어요.</p>${sbtn("그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
   const text = (lang, label) =>
     `<div class="field"><label for="page-${lang}">${label}</label><textarea id="page-${lang}" lang="${lang}" ${editing ? "" : "readonly"}>${esc(page[lang] ?? page[lang === "ko" ? "textKo" : "textEn"] ?? "")}</textarea></div>`;
@@ -846,7 +894,9 @@ function renderFinishStep(ctx, w) {
     work = imageWork(book),
     coverReady = !work.coverMissing,
     saveNote = work.needsRun
-      ? " · 저장할 때 남은 그림을 묻고 만들어요."
+      ? work.missing.length || work.coverMissing
+        ? " · 저장할 때 남은 그림을 묻고 만들어요."
+        : " · 남은 그림이 없어요. 저장하면 마무리해요."
       : work.stale.length
         ? " · 글을 고친 쪽 그림은 저장할 때 그대로 둘지 물어요."
         : "";
@@ -1106,22 +1156,54 @@ async function refreshReading(ctx) {
   )
     ctx.render();
 }
-function imageNote(state, book) {
-  return book.outline?.plotContract &&
+/**
+ * {due, usd}: whether the book's story-connection check is out of date (a
+ * non-demo plotContract book whose text changed since), so drawing a picture
+ * or saving the book buys one check from the text engine first; usd is that
+ * one check's reference cost (0 when no estimate is available).
+ */
+export function coherenceCheckDue(state, book) {
+  const due =
+    !!book?.outline?.plotContract &&
     !book.textDemo &&
     !isCoherenceCurrent(book.pageCoherence, {
       outline: book.outline,
       prose: book.prose,
       pagination: currentBookPagination(book),
       stage: "pages",
-    })
-    ? "<br>글이 바뀐 뒤라 그림 전에 이야기 연결 검사(글 엔진 요금)가 한 번 더 들 수 있어요."
+    });
+  if (!due) return { due: false, usd: 0 };
+  let cost = 0;
+  try {
+    const row = estimateStoryTextCost({
+      settings: book.textGenerationSettings || getTextGenerationSettings(state),
+      pageCount: book.pages?.length || 12,
+    }).stages?.find((stage) => stage.stage === "coherence");
+    cost = row?.requestCount > 0 ? row.costUsd / row.requestCount : 0;
+  } catch {
+    cost = 0;
+  }
+  return { due: true, usd: Number.isFinite(cost) && cost > 0 ? cost : 0 };
+}
+const checkFee = (check) =>
+  `글 엔진 요금${check.usd > 0 ? ` 약 ${usd(check.usd)}` : ""}`;
+function imageNote(state, book) {
+  const check = coherenceCheckDue(state, book);
+  return check.due
+    ? `<br>글이 바뀐 뒤라 그림 전에 이야기 연결 검사(${checkFee(check)})가 한 번 더 들 수 있어요.`
+    : "";
+}
+/** The same check, worded for saving: keeping every picture does not skip it. */
+function saveCheckNote(check) {
+  return check.due
+    ? `<br>글이 바뀐 뒤라 그림을 만들거나 저장할 때 이야기 연결 검사(${checkFee(check)})가 한 번 들 수 있어요. 그림을 그대로 두고 저장해도 이 검사는 해요.`
     : "";
 }
 const OTHER_BOOK_OPEN =
   "다른 책을 보고 있어 저장하지 않았어요. 이 책을 다시 열어 저장해 주세요.";
 const INTERRUPTED_FIRST =
   "멈춘 그림 만들기를 먼저 ‘이어서 만들기’로 잇거나 중지해 주세요.";
+const STOPPED_PAGE = "중지해서 이 쪽 그림은 만들지 않았어요.";
 /** Options for one page picture; a test context may supply ctx.generateScene for the image pipeline. */
 const pageImageOptions = (ctx, extra) =>
   typeof ctx.generateScene === "function"
@@ -1141,6 +1223,8 @@ async function drawPage(
   const state = ctx.getState(),
     job = jobOfBook(state, book);
   if (!book || !job) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
+  // A stop asked for after this click (here, in the library or another tab) wins.
+  const stops = stopMark(state, job.id);
   if (runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
   if (await stopForImageKey(ctx, book)) return;
   const estimate = estimateSimpleCosts(state, book),
@@ -1158,13 +1242,24 @@ async function drawPage(
     if (!ok) return;
   }
   if (prepare) await runJob(ctx, job.id, "pages", "pages");
-  // The parent may have opened another book while the sheets were prepared.
-  const target = getFullAutoJob(job.id)?.book;
-  if (!target?.generationSnapshot || target.id !== book.id) {
+  // The parent may have opened another book while the sheets were prepared, or
+  // pressed 중지: a run that finds every sheet ready can still reach the hold
+  // after a stop, and that must not buy this page.
+  const after = getFullAutoJob(job.id),
+    target = after?.book,
+    stopped = stopMark(state, job.id) !== stops;
+  if (
+    stopped ||
+    (prepare && after?.status !== "pages-ready") ||
+    !target?.generationSnapshot ||
+    target.id !== book.id
+  ) {
     ctx.render();
     return ctx.toast(
-      getFullAutoJob(job.id)?.error ||
-        "그림 준비가 끝나지 않아 이 쪽 그림은 만들지 않았어요.",
+      stopped || (prepare && after?.status === "paused")
+        ? STOPPED_PAGE
+        : after?.error ||
+            "그림 준비가 끝나지 않아 이 쪽 그림은 만들지 않았어요.",
     );
   }
   const controller = new AbortController();
@@ -1193,13 +1288,18 @@ async function drawPage(
     ctx.render();
   }
 }
-/** After a text change on `book`: ask before redrawing; never for a book the parent has left. */
+/**
+ * After a text change on `book`: the picture is kept (durably, see
+ * keepEditedPictures) until the parent asks for a redraw that succeeds; the
+ * question is never asked for a book the parent has left.
+ */
 async function askRedraw(ctx, book, index) {
   const state = ctx.getState(),
     page = book?.pages?.[index];
+  if (!page) return;
+  if (keepEditedPictures(book, [index])) ctx.save();
   if (
-    !page ||
-    !isPageImageStale(page) ||
+    !isPictureKeptAfterEdit(page) ||
     !book.generationSnapshot ||
     ctx.getDraft() !== book
   )
@@ -1277,11 +1377,71 @@ async function rewriteText(ctx) {
   void refreshReading(ctx);
 }
 /**
+ * A book whose pages and cover are all final but whose run never recorded the
+ * finish (stopped or interrupted after the last picture, or finished in the
+ * pro editor). Nothing is left to buy, so the finish is recorded here the way
+ * the run's last step does: the runner would first ask for keys and check the
+ * World, which a purchase-free finish does not need. Returns the job, or null
+ * when only a run can finish this book.
+ */
+function finishWithoutDrawing(ctx, jobId) {
+  const job = getFullAutoJob(jobId),
+    book = job?.book;
+  if (
+    !book?.generationSnapshot ||
+    job.status === "running" ||
+    imageWork(book).missing.length ||
+    !book.cover?.imageAssetId
+  )
+    return null;
+  const draft = ctx.getState()?.storyDrafts?.[job.storyDraftId],
+    before = {
+      stage: book.stage,
+      approved: book.approved,
+      autoGenerationComplete: book.autoGenerationComplete,
+      job: {
+        status: job.status,
+        phase: job.phase,
+        currentStep: job.currentStep,
+        stopBefore: job.stopBefore,
+        error: job.error,
+        updatedAt: job.updatedAt,
+      },
+      draftStage: draft?.stage,
+    };
+  book.stage = "illustrated";
+  book.approved = false;
+  book.autoGenerationComplete = true;
+  Object.assign(job, {
+    status: "review",
+    phase: "완성 초안 · 부모 검토",
+    currentStep: null,
+    stopBefore: null,
+    error: null,
+    updatedAt: new Date().toISOString(),
+  });
+  if (draft) draft.stage = "illustrated";
+  if (ctx.save() === false) {
+    book.stage = before.stage;
+    book.approved = before.approved;
+    if (before.autoGenerationComplete === undefined)
+      delete book.autoGenerationComplete;
+    else book.autoGenerationComplete = before.autoGenerationComplete;
+    Object.assign(job, before.job);
+    if (draft) draft.stage = before.draftStage;
+    ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    return null;
+  }
+  return job;
+}
+/**
  * Release the book's hold to the end: sheets, missing pages and the cover.
- * Pages whose text changed after drawing (stale) are redrawn only when the
- * parent includes them; otherwise their marks are hidden from the run and put
- * back afterwards, so the run keeps those pictures. Returns the job after the
- * run, or null when nothing ran.
+ * Pages whose text changed after drawing are redrawn only when the parent
+ * includes them, and only by this run; otherwise the parent keeps those
+ * pictures for good (keepEditedPictures), so no later run (a resume, the
+ * library card, the pro editor) buys them again. The image key is asked for
+ * only when something will be drawn. Returns the job after the run, or null
+ * when nothing ran.
  */
 async function drawAll(
   ctx,
@@ -1305,7 +1465,6 @@ async function drawAll(
     if (!finishing) ctx.toast("모든 쪽과 표지 그림이 이미 있어요.");
     return job;
   }
-  if (await stopForImageKey(ctx, book)) return null;
   const estimate = estimateSimpleCosts(state, book),
     unit = estimate.imageUnitUsd,
     sheets = estimate.sheetsUpperUsd,
@@ -1314,10 +1473,13 @@ async function drawAll(
     newCount = work.missing.length + (work.coverMissing ? 1 : 0),
     newUsd = newCount * unit,
     staleUsd = work.stale.length * unit,
-    offerStale = work.stale.length > 0 && includeStale !== false;
+    offerStale = work.stale.length > 0 && includeStale !== false,
+    // Missing pictures, a missing cover or sheets still to prepare: the run draws.
+    drawsNew = newCount > 0 || sheets > 0 || !book.generationSnapshot;
   let withStale = includeStale === true;
+  if (drawsNew && (await stopForImageKey(ctx, book))) return null;
   // Finishing a book whose pictures are all there buys nothing: no question.
-  const drawsNothing = !newCount && !sheets && !offerStale;
+  const drawsNothing = !drawsNew && !offerStale;
   if (!confirmed && !drawsNothing) {
     const lines = [];
     if (newCount)
@@ -1368,22 +1530,41 @@ async function drawAll(
           : newCount
             ? "모든 쪽 그림을 만들까요?"
             : "고친 쪽 그림을 다시 만들까요?",
-      lines.join("<br>") + imageNote(state, book),
+      lines.join("<br>") +
+        (finishing
+          ? saveCheckNote(coherenceCheckDue(state, book))
+          : imageNote(state, book)),
       choices,
     );
     if (!choice) return null;
     withStale = choice === "all";
   }
-  // Run on this job's own book; pictures the parent keeps are hidden from the run.
-  const target = getFullAutoJob(job.id)?.book || book,
-    kept = withStale ? [] : hideStaleMarks(target, imageWork(target).stale);
+  // Redrawing pages whose text changed is drawing too: it needs the key.
+  if (withStale && !drawsNew && (await stopForImageKey(ctx, book))) return null;
+  // Work on this job's own book, never on whatever draft is open by now.
+  const target = getFullAutoJob(job.id)?.book || book;
+  let chosen = [];
+  if (withStale) chosen = markChosenRedraws(target, imageWork(target).stale);
+  else if (keepEditedPictures(target)) ctx.save();
+  // Nothing to draw: record the finish here. A run another tab may still own
+  // ('running') goes through the runner, which checks the run lock.
+  if (
+    !drawsNew &&
+    !chosen.length &&
+    getFullAutoJob(job.id)?.status !== "running"
+  ) {
+    const done = finishWithoutDrawing(ctx, job.id);
+    if (done && !finishing)
+      ctx.toast("그림과 표지까지 완성됐어요. 마지막으로 확인해 주세요.");
+    return done;
+  }
   try {
     return await runJob(ctx, job.id, null, "images");
   } finally {
-    if (kept.length) {
-      restoreStaleMarks(getFullAutoJob(job.id)?.book || target, kept);
-      ctx.save();
-    }
+    // The chosen redraw belongs to this run: a page it did not reach (stopped,
+    // failed) is kept again, so a later resume never buys it without asking.
+    const after = getFullAutoJob(job.id)?.book || target;
+    if (chosen.length && keepEditedPictures(after, chosen)) ctx.save();
   }
 }
 /** '이어서 만들기' for a run a closed tab left marked running: completed work is skipped. */
@@ -1465,13 +1646,19 @@ async function saveBook(ctx) {
       finished = await drawAll(ctx, { book, job, finishing: true });
       if (!finished) return;
     } else if (work.stale.length) {
+      // Keeping every picture still saves through the story-connection check
+      // when the text changed since it last passed: say so, with its fee.
       const unit = estimateSimpleCosts(state, book).imageUnitUsd,
+        check = coherenceCheckDue(state, book),
         choice = await choiceModal(
           ctx,
           "글을 고친 쪽 그림을 어떻게 할까요?",
-          `${pageList(work.stale)}은 글을 고친 뒤에도 예전 그림이 그대로 있어요.<br>그림을 그대로 두고 저장하거나, 고친 쪽 그림만 다시 만들고 저장할 수 있어요. 다른 쪽 그림은 다시 만들지 않아요.${imageNote(state, book)}`,
+          `${pageList(work.stale)}은 글을 고친 뒤에도 예전 그림이 그대로 있어요.<br>그림을 그대로 두고 저장하거나, 고친 쪽 그림만 다시 만들고 저장할 수 있어요. 다른 쪽 그림은 다시 만들지 않아요.${saveCheckNote(check)}`,
           [
-            { value: "keep", label: "그림 그대로 저장" },
+            {
+              value: "keep",
+              label: `그림 그대로 저장${check.due ? ` · 이야기 연결 검사${check.usd > 0 ? ` 약 ${usd(check.usd)}` : " 글 엔진 요금"}` : ""}`,
+            },
             {
               value: "redraw",
               label: `고친 ${work.stale.length}쪽 그림 다시 만들고 저장${unit > 0 ? ` (약 ${usd(work.stale.length * unit)})` : ""}`,
@@ -1488,7 +1675,11 @@ async function saveBook(ctx) {
           confirmed: true,
         });
         if (!finished) return;
-      } else if (ctx.getDraft() !== book) return ctx.toast(OTHER_BOOK_OPEN);
+      } else {
+        if (ctx.getDraft() !== book) return ctx.toast(OTHER_BOOK_OPEN);
+        // The parent keeps these pictures for good, saved or not in the end.
+        if (keepEditedPictures(book)) ctx.save();
+      }
     }
     if (finished) {
       const current = getFullAutoJob(job.id)?.book;
@@ -1519,11 +1710,23 @@ export async function openSimpleJob(ctx, jobId) {
     ctx.toast("진행 중인 작업이 끝난 뒤 다른 이야기를 열어 주세요.");
     return false;
   }
+  let changed = false;
   if (job.simpleAbandoned) {
     // Opened again on purpose: it is a simple story to resume once more.
     delete job.simpleAbandoned;
-    ctx.save();
+    changed = true;
   }
+  // A runner stale mark left on an idle book (an older copy of this screen, or
+  // a chosen redraw cut off by a closed tab) becomes the kept-picture marker:
+  // pictures are redrawn only on the parent's choice made here.
+  if (
+    job.book &&
+    job.status !== "running" &&
+    !runIsLive(job) &&
+    keepEditedPictures(job.book)
+  )
+    changed = true;
+  if (changed) ctx.save();
   const step = simpleStepForJob(job),
     w = wizardFromJob(job, step);
   if (!ctx.isSimpleMode()) w.simpleForced = true;
@@ -1738,7 +1941,11 @@ async function handle(ctx, action, el) {
       return;
     }
     const job = jobOfBook(state, ctx.getDraft()) || jobOfWizard(state, w);
-    if (job) await stopFullAutoJob(job.id).catch((error) => ctx.toast(error));
+    if (job) {
+      // Counted before any wait: a page draw waiting on this job's release sees it.
+      stopClicks.set(job.id, (stopClicks.get(job.id) || 0) + 1);
+      await stopFullAutoJob(job.id).catch((error) => ctx.toast(error));
+    }
     ctx.render();
     return;
   }
