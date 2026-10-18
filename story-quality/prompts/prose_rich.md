@@ -30,6 +30,7 @@
 6 비트 마지막 문장은 다음 비트가 궁금해지게 끝낸다(마무리 비트 제외).
 7 후렴은 {{refrain_text}}를 비트 {{refrain_beats}}에만, 매번 한 단어 변주.
 8 교훈·감상 꼬리말 금지. 같은 문장 두 번 금지.
+9 말버릇은 책 전체에서 최대 1번만 쓰고, 꼭 쓰지 않아도 된다. 후렴으로 쓰지 않는다.
 
 [출력] 글만. 라벨 붙은 문단을 비트 수만큼.
 ```
@@ -56,6 +57,7 @@
 6 End each beat with a line that makes a child want to turn the page (except the last beat).
 7 Use picture-book devices: a repeating frame sentence ({{refrain_text_en}}) at beats {{refrain_beats}}, rhyme or onomatopoeia where natural.
 8 Do not translate anything. This is an original English text for the same beats.
+9 Use each character's catchphrase at most once in the whole book, or not at all. Never use it as the repeating frame sentence.
 
 [Output] Text only.
 ```
@@ -65,3 +67,4 @@
 - `{{gesture_hints}}`: `renderGestureHintForPrompt(emotionsInBriefs)` — 브리프 감정에 해당하는 몸짓 2개씩.
 - `{{style_samples}}`: 문체 샘플이 있을 때만. 라벨 고정: "문체 예시 — 리듬·종결어미·구체성만 참고. 내용·인물·사건·소품 재사용 금지".
 - 온도 0.8, maxTokens 2,000.
+- 규칙 9(말버릇 한도)는 R9부터다. `legacyCatchphrasePrompt: true`(앱에서 말버릇 정책 없이 고정된 기존 초안)는 규칙 9가 없는 r8 문안(`PROSE_RICH_USER_KO_R8`/`_EN_R8`)을 그대로 보내 완료한 유료 호출을 재결제하지 않는다.

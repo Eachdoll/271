@@ -6,6 +6,7 @@ import type { StorySeed } from './composeSeed.js';
 import type { BanList } from './banList.js';
 import { containsMaterial, violatesBanList } from './banList.js';
 import { splitSentences } from './util.js';
+import { catchphraseRepeatFix, catchphraseRepeats, refrainOverlapFix, sharesCore, uniqueCatchphrases } from './catchphrase.js';
 
 export interface PlotCheckResult {
   ok: boolean;
@@ -22,6 +23,8 @@ export interface PlotCheckInput {
   seed?: StorySeed;
   ban?: BanList;
   inventories?: Inventories;
+  /** 등장인물 말버릇. 비트 요약+후렴에서 2회 이상이거나 후렴과 핵심 구절을 공유하면 수정 항목. */
+  catchphrases?: string[];
 }
 
 const MORAL_TAIL = /(좋은 거예요|소중해요|마음이 참|따뜻해요|행복했어요|고마운 일이에요|함께라서 좋아요)[.!]?\s*$/;
@@ -127,6 +130,23 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
   if (o.refrain) {
     if ((o.refrain.usedAtBeats ?? []).length > 3) fix.push('후렴이 3회를 넘음');
     if (!o.refrain.variation?.trim()) fix.push('refrain.variation이 비어 있음');
+  }
+
+  // 5-1 말버릇 — 책 전체 최대 1회, 후렴으로 쓰지 않는다. 앱의 부분 수정이 대상 비트를 알 수 있게 "비트 N"을 하나씩 적는다.
+  const phrases = uniqueCatchphrases(input.catchphrases ?? []);
+  if (phrases.length) {
+    const refrainText = String(o.refrain?.text ?? '');
+    const refrainBeats = [...new Set((o.refrain?.usedAtBeats ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b);
+    for (const hit of catchphraseRepeats([...summaries, refrainText], phrases)) {
+      const inRefrain = hit.at.includes(summaries.length);
+      const ids = [...new Set([
+        ...hit.at.filter((i) => i < summaries.length).map((i) => (Number.isInteger(beats[i]?.index) ? beats[i].index : i + 1)),
+        ...(inRefrain ? refrainBeats : []),
+      ])].sort((a, b) => a - b);
+      fix.push(catchphraseRepeatFix(hit.phrase, hit.count, ids, inRefrain));
+    }
+    if (refrainText.trim())
+      for (const phrase of phrases) if (sharesCore(refrainText, phrase)) fix.push(refrainOverlapFix(refrainText, phrase, refrainBeats));
   }
 
   // 6 교훈 서술 꼬리말

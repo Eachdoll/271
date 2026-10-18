@@ -1074,7 +1074,7 @@ const DEFAULT_CHARACTERS = [
     clothes: "노란 티셔츠 · 초록 반바지",
     traits: ["호기심 많음", "씩씩함", "다정함"],
     likes: "공룡, 별, 딸기",
-    catchphrase: "같이 가자!",
+    catchphrase: "내가 먼저 해 볼래!",
     wardrobe: [
       { id: "default", name: "기본 모습", color: "#e9bb4e" },
       { id: "raincoat", name: "노란 우비", color: "#e9bb4e" },
@@ -1095,7 +1095,7 @@ const DEFAULT_CHARACTERS = [
     clothes: "기본 모습",
     traits: ["순함", "다정함", "잎을 좋아함"],
     likes: "초록 잎, 산책",
-    catchphrase: "쿵쿵, 같이 가!",
+    catchphrase: "쿵쿵, 냠냠!",
     wardrobe: [{ id: "default", name: "기본 모습", color: "#8da984" }],
   },
   {
@@ -1132,7 +1132,7 @@ const DEFAULT_CHARACTERS = [
     clothes: "살구색 원피스",
     traits: ["다정함", "차분함", "잘 들어줌"],
     likes: "산책, 따뜻한 포옹",
-    catchphrase: "천천히, 함께 가자.",
+    catchphrase: "천천히 해도 괜찮아.",
     wardrobe: [{ id: "default", name: "기본 모습", color: "#b88372" }],
   },
 ];

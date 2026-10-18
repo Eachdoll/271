@@ -134,6 +134,12 @@ const groups = {
   ],
 };
 
+/* R9: suggested companions get different catchphrases so one phrase is not repeated across the cast. */
+const KIND_CATCHPHRASES = {
+  child: "내가 찾아볼게!",
+  rabbit: "깡충깡충, 여기야!",
+  dinosaur: "쿵, 이쪽이야!",
+};
 /** Local setting suggestions. Images are generated separately by the World engine. */
 export function suggestCompanions(topic, existing = [], count = 3) {
   const text = String(topic || "");
@@ -169,7 +175,7 @@ export function suggestCompanions(topic, existing = [], count = 3) {
         skinColor: kind === "child" ? "#edceb3" : color,
         traits: ["다정함", "호기심 많음"],
         likes: text.slice(0, 100),
-        catchphrase: "우리 함께 해 보자!",
+        catchphrase: KIND_CATCHPHRASES[kind] || "좋은 생각이 났어!",
         wardrobe: [{ id: "default", name: "기본 모습", color }],
         characterSheets: [],
         source: "topic-suggestion",

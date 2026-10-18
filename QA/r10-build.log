@@ -1,0 +1,46 @@
+
+> build
+> node scripts/build-cloud.mjs
+
+
+> sites-project@0.1.0 build
+> vinext build
+
+
+  vinext build  (Vite 8.0.13)
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[1/5] analyze client references...
+[2Ktransforming...✓ 225 modules transformed.
+rendering chunks...
+✓ built in 372ms
+[2/5] analyze server references...
+[2Ktransforming...✓ 78 modules transformed.
+rendering chunks...
+✓ built in 88ms
+[3/5] build rsc environment...
+[2Ktransforming...✓ 222 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 402ms
+[4/5] build client environment...
+[2Ktransforming...✓ 124 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 540ms
+[5/5] build ssr environment...
+[2Ktransforming...✓ 84 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 377ms
+[0m
+  Route (app)
+  ┌ ƒ /                
+  └ λ /api/cloud/:path*
+
+  λ API  ƒ Dynamic
+
+  Build complete. Run `vinext start` to start the production server.
+

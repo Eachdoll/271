@@ -32,6 +32,7 @@ export function collectBookChecks(book) {
     });
   for (const warning of book.storyCheck?.warnings || [])
     if (
+      warning?.code !== "catchphrase-repeat" &&
       !reading.some(
         (item) => item.pageNo === warning.pageNo && item.code === warning.code,
       )
@@ -54,6 +55,14 @@ export function collectBookChecks(book) {
         severity: "warning",
       })),
     );
+  // R9: catchphrase repetition is an advisory story item; it never blocks.
+  for (const warning of book.storyCheck?.warnings || [])
+    if (warning?.code === "catchphrase-repeat")
+      events.push({
+        ...warning,
+        message: describeReadingViolation(warning),
+        severity: "warning",
+      });
   const richness =
     book.richnessCheck?.issues || book.richnessCheck?.violations || [];
   const coherence = book.pageCoherence?.issues || [];

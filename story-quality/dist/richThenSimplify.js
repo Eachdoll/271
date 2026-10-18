@@ -1,4 +1,4 @@
-import { PROSE_CONDENSE_SYSTEM, PROSE_CONDENSE_USER, PROSE_RICH_SYSTEM, PROSE_RICH_USER_EN, PROSE_RICH_USER_KO, PROSE_SIMPLIFY_SYSTEM, PROSE_SIMPLIFY_USER_EN, PROSE_SIMPLIFY_USER_KO, fill, } from "./prompts.js";
+import { PROSE_CONDENSE_SYSTEM, PROSE_CONDENSE_USER, PROSE_RICH_SYSTEM, PROSE_RICH_USER_EN, PROSE_RICH_USER_EN_R8, PROSE_RICH_USER_KO, PROSE_RICH_USER_KO_R8, PROSE_SIMPLIFY_SYSTEM, PROSE_SIMPLIFY_USER_EN, PROSE_SIMPLIFY_USER_KO, fill, } from "./prompts.js";
 import { splitSentences } from "./util.js";
 import { findEmotionTells, renderGestureHintForPrompt, renderTellFixInstructions, } from "./gestures.js";
 /** 한 단계 위 수준 라벨: K1→K2, K2→K3, K3→K4 / E0→E2, E1→E2, E2→E3, E3→E4 */
@@ -35,7 +35,14 @@ export async function writeRichThenSimplify(input) {
         : "";
     const gestureHints = renderGestureHintForPrompt(input.gestureDict, input.emotions, input.lang);
     // 1패스: 풍부하게
-    const richUser = fill(isKo ? PROSE_RICH_USER_KO : PROSE_RICH_USER_EN, {
+    const richTemplate = input.legacyCatchphrasePrompt
+        ? isKo
+            ? PROSE_RICH_USER_KO_R8
+            : PROSE_RICH_USER_EN_R8
+        : isKo
+            ? PROSE_RICH_USER_KO
+            : PROSE_RICH_USER_EN;
+    const richUser = fill(richTemplate, {
         characters: input.charactersCompact,
         beats: input.beatsCompact,
         briefs: input.briefsCompact,

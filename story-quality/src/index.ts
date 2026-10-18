@@ -6,6 +6,7 @@ export * from './composeSeed.js';
 export * from './gestures.js';
 export * from './prompts.js';
 export * from './outlinePrompt.js';
+export * from './catchphrase.js';
 export * from './plotCheck.js';
 export * from './beamSearch.js';
 export * from './richThenSimplify.js';

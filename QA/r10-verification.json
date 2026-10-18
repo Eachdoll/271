@@ -1,0 +1,20 @@
+{
+  "sourceRange": "0c2b756..c490ba3",
+  "cleanPatch": true,
+  "initialImportFilesIdentical": 154,
+  "overwrittenForConflict": [],
+  "applicationCodeRewritten": false,
+  "testsEditedOrSkipped": false,
+  "node22AppTests": 570,
+  "node22QualityTests": 74,
+  "node24AppTests": {
+    "pass": 569,
+    "fail": 1,
+    "reason": "native navigator.locks causes an async preflight before the test asserts immediate UI busy state"
+  },
+  "compiledMirrorFiles": 62,
+  "touchedCompiledFilesMatchImport": 38,
+  "offlineReportByteIdentical": true,
+  "protectedResultFiles": 35,
+  "paidCalls": 0
+}

@@ -105,3 +105,24 @@ test('final approval resumes a pending child simulation before semantic approval
  try{resumeStoryDraft(draft.id);await click('approve-pages');assert.equal(readyCount,1,errorNode.textContent);assert.equal(calls.length,3);assert.equal(calls.filter(schema=>schema.properties.pages&&!schema.properties.overall).length,0);const saved=currentState.storyDrafts[draft.id];assert.equal(saved.childGatePending,false);assert.equal(saved.childGateCheckpoint.phase,'complete');assert.equal(saved.pageCoherence.passed,true);}
  finally{cleanupStoryWorkflow();globalThis.fetch=priorFetch;globalThis.document.querySelector=priorQuery;}
 });
+
+test('FIX-IMG-3: the first parent edit of the cover action keeps the planned one outside the reviewed content',()=>{
+ const {draft,state}=workflowFixture();currentState=state;
+ const planned=draft.pagination.cover.sceneAction,fingerprint=coherenceFingerprint({outline:draft.outline,prose:draft.prose,pagination:draft.pagination,stage:'pages'});
+ const originalQueryAll=globalThis.document.querySelectorAll;
+ const edit=value=>{globalThis.document.querySelectorAll=selector=>selector==='[data-cover-field]'?[{dataset:{coverField:'title'},value:currentState.storyDrafts[draft.id].pagination.cover.title},{dataset:{coverField:'sceneAction'},value}]:[];handlers.change({target:{closest:()=>true,matches:()=>false,id:''}});};
+ try{
+  resumeStoryDraft(draft.id);
+  // Re-reading the unchanged form records nothing.
+  edit(planned);let saved=currentState.storyDrafts[draft.id];
+  assert.equal(saved.pagination.coverSceneActionGenerated,undefined);
+  edit('A girl in a blue gown like Frozen');saved=currentState.storyDrafts[draft.id];
+  assert.equal(saved.pagination.cover.sceneAction,'A girl in a blue gown like Frozen');
+  assert.equal(saved.pagination.coverSceneActionGenerated,planned);
+  // A second edit keeps the planned original, and the record never changes the reviewed-content fingerprint.
+  edit('Yuha on the frozen lake');saved=currentState.storyDrafts[draft.id];
+  assert.equal(saved.pagination.coverSceneActionGenerated,planned);
+  edit(planned);saved=currentState.storyDrafts[draft.id];
+  assert.equal(coherenceFingerprint({outline:saved.outline,prose:saved.prose,pagination:saved.pagination,stage:'pages'}),fingerprint);
+ }finally{globalThis.document.querySelectorAll=originalQueryAll;cleanupStoryWorkflow();}
+});

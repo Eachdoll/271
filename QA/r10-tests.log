@@ -1,0 +1,2866 @@
+
+> test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: word offsets preserve Korean text and punctuation without inserting HTML
+ok 1 - word offsets preserve Korean text and punctuation without inserting HTML
+  ---
+  duration_ms: 2.73866
+  ...
+# Subtest: matching transcription has actual word times; mismatches are labelled approximate
+ok 2 - matching transcription has actual word times; mismatches are labelled approximate
+  ---
+  duration_ms: 1.625862
+  ...
+# Subtest: parent recording takes priority independently per language and stale text invalidates it
+ok 3 - parent recording takes priority independently per language and stale text invalidates it
+  ---
+  duration_ms: 0.646836
+  ...
+# Subtest: cache estimate includes only book languages and pending clips
+ok 4 - cache estimate includes only book languages and pending clips
+  ---
+  duration_ms: 0.848386
+  ...
+# Subtest: OpenAI speech and word alignment send exact official contracts and omit cookies
+ok 5 - OpenAI speech and word alignment send exact official contracts and omit cookies
+  ---
+  duration_ms: 26.302971
+  ...
+# Subtest: alignment failure preserves usable audio and labels approximate highlighting
+ok 6 - alignment failure preserves usable audio and labels approximate highlighting
+  ---
+  duration_ms: 1.017428
+  ...
+# Subtest: failed provider responses never echo secret response bodies
+ok 7 - failed provider responses never echo secret response bodies
+  ---
+  duration_ms: 0.689124
+  ...
+# Subtest: tracking IDs and masked OpenAI secrets never start speech requests
+ok 8 - tracking IDs and masked OpenAI secrets never start speech requests
+  ---
+  duration_ms: 0.528094
+  ...
+# Subtest: aborted or invalid speech requests never touch network
+ok 9 - aborted or invalid speech requests never touch network
+  ---
+  duration_ms: 0.946534
+  ...
+# Subtest: browser playback reads only the requested page, emits safe word offsets and stops explicitly
+ok 10 - browser playback reads only the requested page, emits safe word offsets and stops explicitly
+  ---
+  duration_ms: 1.497128
+  ...
+# Subtest: cached parent recording plays without network or browser speech
+ok 11 - cached parent recording plays without network or browser speech
+  ---
+  duration_ms: 1.61376
+  ...
+# Subtest: pre-generation cannot run outside parent authorization
+ok 12 - pre-generation cannot run outside parent authorization
+  ---
+  duration_ms: 0.50405
+  ...
+# Subtest: recording controls escape book IDs; backup rejects executable and excessive payloads
+ok 13 - recording controls escape book IDs; backup rejects executable and excessive payloads
+  ---
+  duration_ms: 0.929936
+  ...
+# Subtest: approval precedes vault access; no-key cache result is honest and close cancels key-loading stage
+ok 14 - approval precedes vault access; no-key cache result is honest and close cancels key-loading stage
+  ---
+  duration_ms: 0.891387
+  ...
+# Subtest: an environment sheet preserves place geometry and sends established place plus separate painting reference
+ok 15 - an environment sheet preserves place geometry and sends established place plus separate painting reference
+  ---
+  duration_ms: 12.509295
+  ...
+# Subtest: each World restores its own approved place rendering after serialized reload
+ok 16 - each World restores its own approved place rendering after serialized reload
+  ---
+  duration_ms: 7.141698
+  ...
+# Subtest: approvals require exact World, revision, image engine, style, and fixed-place facts
+ok 17 - approvals require exact World, revision, image engine, style, and fixed-place facts
+  ---
+  duration_ms: 2.857286
+  ...
+# Subtest: existing books and subsequent episodes keep the approved room sheet despite new place facts and World settings
+ok 18 - existing books and subsequent episodes keep the approved room sheet despite new place facts and World settings
+  ---
+  duration_ms: 5.116887
+  ...
+# Subtest: a new book freezes only the selected World background and a scene receives only its matching location
+ok 19 - a new book freezes only the selected World background and a scene receives only its matching location
+  ---
+  duration_ms: 3.072465
+  ...
+# Subtest: R9-A2 new installs get four different default catchphrases; suggested companions differ too
+ok 20 - R9-A2 new installs get four different default catchphrases; suggested companions differ too
+  ---
+  duration_ms: 31.78397
+  ...
+# Subtest: R9-A2 a saved library with 유하 "같이 가자!" loads unchanged (no migration of user characters)
+ok 21 - R9-A2 a saved library with 유하 "같이 가자!" loads unchanged (no migration of user characters)
+  ---
+  duration_ms: 16.999344
+  ...
+# Subtest: R9-A1 rotation omits a catchphrase used in one of the protagonist's two latest approved books and freezes it in the input
+ok 22 - R9-A1 rotation omits a catchphrase used in one of the protagonist's two latest approved books and freezes it in the input
+  ---
+  duration_ms: 22.145552
+  ...
+# Subtest: R9-A1 no recent use keeps the catchphrase in the prompt with the once-per-book limit
+ok 23 - R9-A1 no recent use keeps the catchphrase in the prompt with the once-per-book limit
+  ---
+  duration_ms: 4.451187
+  ...
+# Subtest: R9-A1 general path: the system prompt limits catchphrases and the model never sees an omitted phrase
+ok 24 - R9-A1 general path: the system prompt limits catchphrases and the model never sees an omitted phrase
+  ---
+  duration_ms: 17.401916
+  ...
+# Subtest: R9-A3 checkStory reports a repeated catchphrase as a non-blocking warning only
+ok 25 - R9-A3 checkStory reports a repeated catchphrase as a non-blocking warning only
+  ---
+  duration_ms: 24.753848
+  ...
+# Subtest: R9-A3 inspectStory uses the cast and frozen omitted phrases; the checks panel shows it as advisory
+ok 26 - R9-A3 inspectStory uses the cast and frozen omitted phrases; the checks panel shows it as advisory
+  ---
+  duration_ms: 2.812975
+  ...
+# Subtest: R9-A service worker precaches the shared catchphrase module under the v28 shell
+ok 27 - R9-A service worker precaches the shared catchphrase module under the v28 shell
+  ---
+  duration_ms: 0.365385
+  ...
+# Subtest: R9 fix: new drafts always freeze a catchphrase policy, even with nothing to rotate or no catchphrase at all
+ok 28 - R9 fix: new drafts always freeze a catchphrase policy, even with nothing to rotate or no catchphrase at all
+  ---
+  duration_ms: 3.988163
+  ...
+# Subtest: R9 fix: checkStory takes the frozen storyInput for the advisory, and the editor syncDraft passes it
+ok 29 - R9 fix: checkStory takes the frozen storyInput for the advisory, and the editor syncDraft passes it
+  ---
+  duration_ms: 3.648965
+  ...
+# Subtest: R9 fix: a wizard-approved draft keeps the catchphrase-repeat advisory in its storyCheck (approve-pages and fit-page-count)
+ok 30 - R9 fix: a wizard-approved draft keeps the catchphrase-repeat advisory in its storyCheck (approve-pages and fit-page-count)
+  ---
+  duration_ms: 37.123088
+  ...
+# Subtest: R9 fix: a draft without a catchphrase policy sends byte-identical pre-R9 requests through the real app pipeline
+ok 31 - R9 fix: a draft without a catchphrase policy sends byte-identical pre-R9 requests through the real app pipeline
+  ---
+  duration_ms: 74.233512
+  ...
+# Subtest: B-5 check groups retain distinct counts, severity and page anchors and escape generated text
+ok 32 - B-5 check groups retain distinct counts, severity and page anchors and escape generated text
+  ---
+  duration_ms: 1.81312
+  ...
+# Subtest: B-5 malformed page numbers cannot create NaN editor navigation
+ok 33 - B-5 malformed page numbers cannot create NaN editor navigation
+  ---
+  duration_ms: 0.21738
+  ...
+# Subtest: B-6 compact reading levels retain the estimated-score caveat in the tooltip
+ok 34 - B-6 compact reading levels retain the estimated-score caveat in the tooltip
+  ---
+  duration_ms: 0.353721
+  ...
+# Subtest: R2-2 structured reading violations use Korean descriptions and other checks share the fallback
+ok 35 - R2-2 structured reading violations use Korean descriptions and other checks share the fallback
+  ---
+  duration_ms: 0.568724
+  ...
+# (node:2000) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: cloud routes trust Sites identity only and keep anonymous session readable without storage
+ok 36 - cloud routes trust Sites identity only and keep anonymous session readable without storage
+  ---
+  duration_ms: 31.818849
+  ...
+# Subtest: library/media mutations require matching origin and account; owner metadata cannot switch accounts
+ok 37 - library/media mutations require matching origin and account; owner metadata cannot switch accounts
+  ---
+  duration_ms: 20.237445
+  ...
+# Subtest: binary media is owner scoped, immutable and verified with its digest and image content
+ok 38 - binary media is owner scoped, immutable and verified with its digest and image content
+  ---
+  duration_ms: 14.63925
+  ...
+# Subtest: mobile video/webm recordings and safe SVG previews retain media kind without executable SVG
+ok 39 - mobile video/webm recordings and safe SVG previews retain media kind without executable SVG
+  ---
+  duration_ms: 5.578675
+  ...
+# Subtest: library snapshots require complete own media and return exact state and manifest
+ok 40 - library snapshots require complete own media and return exact state and manifest
+  ---
+  duration_ms: 8.687251
+  ...
+# Subtest: compare-and-swap saves reject stale drafts and concurrent first saves without losing committed state
+ok 41 - compare-and-swap saves reject stale drafts and concurrent first saves without losing committed state
+  ---
+  duration_ms: 11.803361
+  ...
+# Subtest: nested credentials, PINs, ephemeral media and unlisted references never enter cloud snapshots
+ok 42 - nested credentials, PINs, ephemeral media and unlisted references never enter cloud snapshots
+  ---
+  duration_ms: 11.498727
+  ...
+# Subtest: streaming binary limits, malformed JSON and size limits fail before writes
+ok 43 - streaming binary limits, malformed JSON and size limits fail before writes
+  ---
+  duration_ms: 201.61126
+  ...
+# Subtest: large libraries use immutable R2 snapshots rather than oversized D1 values; storage failures preserve the previous revision
+ok 44 - large libraries use immutable R2 snapshots rather than oversized D1 values; storage failures preserve the previous revision
+  ---
+  duration_ms: 239.212842
+  ...
+# Subtest: concurrent edits of an existing revision commit exactly one whole library
+ok 45 - concurrent edits of an existing revision commit exactly one whole library
+  ---
+  duration_ms: 3.682567
+  ...
+# Subtest: concurrent media uploads reuse identical content and never replace a winning different upload
+ok 46 - concurrent media uploads reuse identical content and never replace a winning different upload
+  ---
+  duration_ms: 5.375518
+  ...
+# Subtest: missing or corrupted R2 snapshots fail closed without replacing the local or committed cloud library
+ok 47 - missing or corrupted R2 snapshots fail closed without replacing the local or committed cloud library
+  ---
+  duration_ms: 4.10878
+  ...
+# Subtest: database failures after immutable snapshot upload leave the preceding revision usable and hide internal details
+ok 48 - database failures after immutable snapshot upload leave the preceding revision usable and hide internal details
+  ---
+  duration_ms: 2.313667
+  ...
+# Subtest: malformed identity, manifest, revision and prototype fields are rejected before storing any snapshot
+ok 49 - malformed identity, manifest, revision and prototype fields are rejected before storing any snapshot
+  ---
+  duration_ms: 5.128982
+  ...
+# Subtest: auto stop controls persist per account without requiring an R2 bucket or changing library revisions
+ok 50 - auto stop controls persist per account without requiring an R2 bucket or changing library revisions
+  ---
+  duration_ms: 2.601604
+  ...
+# Subtest: auto stop controls reject anonymous, cross-origin, account-switch and malformed requests
+ok 51 - auto stop controls reject anonymous, cross-origin, account-switch and malformed requests
+  ---
+  duration_ms: 2.49636
+  ...
+# Subtest: superseded library snapshots are removed from R2 and a CAS loss removes the object it wrote
+ok 52 - superseded library snapshots are removed from R2 and a CAS loss removes the object it wrote
+  ---
+  duration_ms: 3.957688
+  ...
+# Subtest: A-3 metadata polls read only D1 and preserve account scoping
+ok 53 - A-3 metadata polls read only D1 and preserve account scoping
+  ---
+  duration_ms: 1.992097
+  ...
+# Subtest: state fingerprints ignore credentials, device PINs and image object URLs but retain prose changes
+ok 54 - state fingerprints ignore credentials, device PINs and image object URLs but retain prose changes
+  ---
+  duration_ms: 12.128078
+  ...
+# Subtest: a first local library waits for explicit upload and keeps PINs and credentials out of the cloud
+ok 55 - a first local library waits for explicit upload and keeps PINs and credentials out of the cloud
+  ---
+  duration_ms: 25.533164
+  ...
+# Subtest: a fresh second device downloads verified media and hands it to the atomic local apply callback
+ok 56 - a fresh second device downloads verified media and hands it to the atomic local apply callback
+  ---
+  duration_ms: 10.540337
+  ...
+# Subtest: unconnected local and cloud libraries require a deliberate source choice
+ok 57 - unconnected local and cloud libraries require a deliberate source choice
+  ---
+  duration_ms: 6.358316
+  ...
+# Subtest: a connected local edit uploads once, while a clean device automatically receives a newer revision
+ok 58 - a connected local edit uploads once, while a clean device automatically receives a newer revision
+  ---
+  duration_ms: 5.858793
+  ...
+# Subtest: simultaneous local and remote changes remain intact until the parent chooses a source
+ok 59 - simultaneous local and remote changes remain intact until the parent chooses a source
+  ---
+  duration_ms: 7.922158
+  ...
+# Subtest: corrupt media never reaches applyRemote or advances the saved revision
+ok 60 - corrupt media never reaches applyRemote or advances the saved revision
+  ---
+  duration_ms: 2.28357
+  ...
+# Subtest: an edit during a remote download cancels application without changing the existing local draft
+ok 61 - an edit during a remote download cancels application without changing the existing local draft
+  ---
+  duration_ms: 5.052875
+  ...
+# Subtest: a cancelled or failed local restore never commits a baseline
+ok 62 - a cancelled or failed local restore never commits a baseline
+  ---
+  duration_ms: 8.718267
+  ...
+# Subtest: switching accounts even before a first upload blocks local data from the new account
+ok 63 - switching accounts even before a first upload blocks local data from the new account
+  ---
+  duration_ms: 10.843275
+  ...
+# Subtest: the nested account_changed 403 response is distinguished from sign-out and never uploads
+ok 64 - the nested account_changed 403 response is distinguished from sign-out and never uploads
+  ---
+  duration_ms: 0.643887
+  ...
+# Subtest: signed-out, unavailable and network failures leave the local library usable
+ok 65 - signed-out, unavailable and network failures leave the local library usable
+  ---
+  duration_ms: 0.821778
+  ...
+# Subtest: an open in-memory editor defers automatic replacement until it can safely apply
+ok 66 - an open in-memory editor defers automatic replacement until it can safely apply
+  ---
+  duration_ms: 3.530656
+  ...
+# Subtest: the editor guard is checked again after slow media downloads
+ok 67 - the editor guard is checked again after slow media downloads
+  ---
+  duration_ms: 2.812242
+  ...
+# Subtest: newly externalized style images get stable content IDs while existing generated IDs stay unchanged
+ok 68 - newly externalized style images get stable content IDs while existing generated IDs stay unchanged
+  ---
+  duration_ms: 9.302687
+  ...
+# Subtest: mobile recording codec parameters normalize in the manifest without changing audio bytes
+ok 69 - mobile recording codec parameters normalize in the manifest without changing audio bytes
+  ---
+  duration_ms: 8.727024
+  ...
+# Subtest: an upload losing the revision race does not overwrite either library or advance the baseline
+ok 70 - an upload losing the revision race does not overwrite either library or advance the baseline
+  ---
+  duration_ms: 2.195143
+  ...
+# Subtest: edits made while uploading remain dirty and are saved in a following revision
+ok 71 - edits made while uploading remain dirty and are saved in a following revision
+  ---
+  duration_ms: 14.388603
+  ...
+# Subtest: stopping a pending cloud read prevents remote state application and baseline writes
+ok 72 - stopping a pending cloud read prevents remote state application and baseline writes
+  ---
+  duration_ms: 0.600801
+  ...
+# Subtest: A-3 unchanged polling never requests full state or media
+ok 73 - A-3 unchanged polling never requests full state or media
+  ---
+  duration_ms: 3.786772
+  ...
+# Subtest: A-1 blocked autosave does no backup or upload then flushes exactly once after guard clears
+ok 74 - A-1 blocked autosave does no backup or upload then flushes exactly once after guard clears
+  ---
+  duration_ms: 2.573559
+  ...
+# Subtest: A-1 unchanged Blob bytes are read only once for digesting
+ok 75 - A-1 unchanged Blob bytes are read only once for digesting
+  ---
+  duration_ms: 0.88348
+  ...
+# Subtest: A-11 a push waits for the refresh already in flight
+ok 76 - A-11 a push waits for the refresh already in flight
+  ---
+  duration_ms: 2.484997
+  ...
+# Subtest: A-11 identical remote state advances a stale baseline instead of claiming a conflict
+ok 77 - A-11 identical remote state advances a stale baseline instead of claiming a conflict
+  ---
+  duration_ms: 1.57847
+  ...
+# Subtest: R2-8 an explicit push executes after the in-flight refresh encounters a network error
+ok 78 - R2-8 an explicit push executes after the in-flight refresh encounters a network error
+  ---
+  duration_ms: 1.814254
+  ...
+# Subtest: R2-8 a rejected refresh promise cannot reject an explicitly queued push
+ok 79 - R2-8 a rejected refresh promise cannot reject an explicitly queued push
+  ---
+  duration_ms: 4.212054
+  ...
+# Subtest: R2-6 credential actions require an explicit error code and preserve the provider and key category
+ok 80 - R2-6 credential actions require an explicit error code and preserve the provider and key category
+  ---
+  duration_ms: 1.769467
+  ...
+# Subtest: recognizable OpenAI UI identifiers are rejected without altering the previous saved credential
+ok 81 - recognizable OpenAI UI identifiers are rejected without altering the previous saved credential
+  ---
+  duration_ms: 1.419565
+  ...
+# Subtest: provider-specific validation preserves opaque compatible and local tokens
+ok 82 - provider-specific validation preserves opaque compatible and local tokens
+  ---
+  duration_ms: 1.000907
+  ...
+# Subtest: a direct JSON roundtrip preserves worlds, materials, drafts, reading settings and IDs without PIN or credentials
+ok 83 - a direct JSON roundtrip preserves worlds, materials, drafts, reading settings and IDs without PIN or credentials
+  ---
+  duration_ms: 4.752065
+  ...
+# Subtest: media from nested sheets, style IDs and draft audio are included once and restore under their original IDs without generation calls
+ok 84 - media from nested sheets, style IDs and draft audio are included once and restore under their original IDs without generation calls
+  ---
+  duration_ms: 25.512629
+  ...
+# Subtest: repeated large frozen style references stay in one media asset and never inflate the restored local state
+ok 85 - repeated large frozen style references stay in one media asset and never inflate the restored local state
+  ---
+  duration_ms: 4822.976937
+  ...
+# Subtest: a missing referenced image or recording rejects the transfer rather than creating an incomplete backup
+ok 86 - a missing referenced image or recording rejects the transfer rather than creating an incomplete backup
+  ---
+  duration_ms: 2.376324
+  ...
+# Subtest: existing stored ZIP backups can be selected directly without unzipping
+ok 87 - existing stored ZIP backups can be selected directly without unzipping
+  ---
+  duration_ms: 3.025591
+  ...
+# Subtest: deflate ZIP library.json works through native bounded decompression
+ok 88 - deflate ZIP library.json works through native bounded decompression
+  ---
+  duration_ms: 24.861993
+  ...
+# Subtest: corrupt CRC, truncated archives, duplicate manifests and traversal paths are rejected before import
+ok 89 - corrupt CRC, truncated archives, duplicate manifests and traversal paths are rejected before import
+  ---
+  duration_ms: 4.087901
+  ...
+# Subtest: oversized, empty, invalid JSON and prototype-shaped files never become candidate state
+ok 90 - oversized, empty, invalid JSON and prototype-shaped files never become candidate state
+  ---
+  duration_ms: 1.246119
+  ...
+# Subtest: A-1 Blob backup skips base64 encoding and text round trips
+ok 91 - A-1 Blob backup skips base64 encoding and text round trips
+  ---
+  duration_ms: 0.864838
+  ...
+# Subtest: A-9 paid batches report similar pages without buying automatic retries
+ok 92 - A-9 paid batches report similar pages without buying automatic retries
+  ---
+  duration_ms: 23.674196
+  ...
+# Subtest: A-13 historical images hydrate only when their history is opened
+ok 93 - A-13 historical images hydrate only when their history is opened
+  ---
+  duration_ms: 1.800741
+  ...
+# Subtest: A-6 a successful paid cover arriving at stop is kept for resume with its receipt
+ok 94 - A-6 a successful paid cover arriving at stop is kept for resume with its receipt
+  ---
+  duration_ms: 5.326082
+  ...
+# Subtest: R2-9 direct Blob backup caching evicts by byte size using least-recent access and clears on replacement
+ok 95 - R2-9 direct Blob backup caching evicts by byte size using least-recent access and clears on replacement
+  ---
+  duration_ms: 0.986746
+  ...
+# Subtest: A-5 finalized books keep a small revision header and preserve auto usage while dropping duplicates
+ok 96 - A-5 finalized books keep a small revision header and preserve auto usage while dropping duplicates
+  ---
+  duration_ms: 2.151455
+  ...
+# Subtest: A-5 cleanup never discards an unfinished book or its resumable work
+ok 97 - A-5 cleanup never discards an unfinished book or its resumable work
+  ---
+  duration_ms: 0.438552
+  ...
+# Subtest: R2-7 a fresh library estimates its current state until the first stored snapshot exists
+ok 98 - R2-7 a fresh library estimates its current state until the first stored snapshot exists
+  ---
+  duration_ms: 0.194817
+  ...
+# Subtest: stop intent survives reconnect and a new explicit run ignores an older stop
+ok 99 - stop intent survives reconnect and a new explicit run ignores an older stop
+  ---
+  duration_ms: 5.765052
+  ...
+# Subtest: same-account cloud stop reaches a runner without rewriting its library snapshot
+ok 100 - same-account cloud stop reaches a runner without rewriting its library snapshot
+  ---
+  duration_ms: 33.153569
+  ...
+# Subtest: local stop remains available when cloud delivery fails, and malformed IDs never call a server
+ok 101 - local stop remains available when cloud delivery fails, and malformed IDs never call a server
+  ---
+  duration_ms: 1.045331
+  ...
+# Subtest: a page tool called right after a hold is released is refused, and the run draws each page once
+ok 102 - a page tool called right after a hold is released is refused, and the run draws each page once
+  ---
+  duration_ms: 514.113269
+  ...
+# Subtest: a run that fails before drawing releases its claim
+ok 103 - a run that fails before drawing releases its claim
+  ---
+  duration_ms: 76.369704
+  ...
+# Subtest: claims pair up: a book stays claimed until every claim is released
+ok 104 - claims pair up: a book stays claimed until every claim is released
+  ---
+  duration_ms: 0.173322
+  ...
+# Subtest: a stop pressed during the preflight of a release to pages ends paused, with no snapshot frozen
+ok 105 - a stop pressed during the preflight of a release to pages ends paused, with no snapshot frozen
+  ---
+  duration_ms: 72.429873
+  ...
+# Subtest: a stop pressed while the run saves is honoured before the snapshot and before the hold
+ok 106 - a stop pressed while the run saves is honoured before the snapshot and before the hold
+  ---
+  duration_ms: 252.636618
+  ...
+# Subtest: full auto creates only necessary new materials, keeps protagonist, and resumes after a partial image failure
+ok 107 - full auto creates only necessary new materials, keeps protagonist, and resumes after a partial image failure
+  ---
+  duration_ms: 48.371064
+  ...
+# Subtest: missing credentials stop before planning and before creating materials
+ok 108 - missing credentials stop before planning and before creating materials
+  ---
+  duration_ms: 2.557426
+  ...
+# Subtest: unsafe plans reject unknown IDs, duplicate names, excess cast and forbidden new material
+ok 109 - unsafe plans reject unknown IDs, duplicate names, excess cast and forbidden new material
+  ---
+  duration_ms: 3.135015
+  ...
+# Subtest: material planner sends only text records, retries invalid selection and accumulates usage
+ok 110 - material planner sends only text records, retries invalid selection and accumulates usage
+  ---
+  duration_ms: 5.392965
+  ...
+# Subtest: world or material changes stop a paused job before further paid requests
+ok 111 - world or material changes stop a paused job before further paid requests
+  ---
+  duration_ms: 6.710887
+  ...
+# Subtest: auto launcher communicates costs and sample limits, and job cards escape all text
+ok 112 - auto launcher communicates costs and sample limits, and job cards escape all text
+  ---
+  duration_ms: 3.21003
+  ...
+# Subtest: existing-only auto reuses drawer IDs and current sheets without creating new material
+ok 113 - existing-only auto reuses drawer IDs and current sheets without creating new material
+  ---
+  duration_ms: 5.138522
+  ...
+# Subtest: Full Auto resumes saved pagination checks without buying the initial pagination again
+ok 114 - Full Auto resumes saved pagination checks without buying the initial pagination again
+  ---
+  duration_ms: 6.316441
+  ...
+# Subtest: Full Auto blocks image work when full-prose causal review fails
+ok 115 - Full Auto blocks image work when full-prose causal review fails
+  ---
+  duration_ms: 4.419163
+  ...
+# Subtest: text hold buys no sheet or image, builds the book without a snapshot and needs no image key
+ok 116 - text hold buys no sheet or image, builds the book without a snapshot and needs no image key
+  ---
+  duration_ms: 6.385305
+  ...
+# Subtest: releasing the text hold to pages buys only the missing sheets once and freezes the snapshot
+ok 117 - releasing the text hold to pages buys only the missing sheets once and freezes the snapshot
+  ---
+  duration_ms: 6.152543
+  ...
+# Subtest: releasing to the end buys each page once, keeps single-page finals and redraws only stale pages
+ok 118 - releasing to the end buys each page once, keeps single-page finals and redraws only stale pages
+  ---
+  duration_ms: 146.930215
+  ...
+# Subtest: stopping during the text chain resumes without buying the finished text steps again
+ok 119 - stopping during the text chain resumes without buying the finished text steps again
+  ---
+  duration_ms: 9.614883
+  ...
+# Subtest: selection plan pins the picked cast and places without a model call
+ok 120 - selection plan pins the picked cast and places without a model call
+  ---
+  duration_ms: 15.141803
+  ...
+# Subtest: selection plan fills a missing home in drawer order and refuses more than five places
+ok 121 - selection plan fills a missing home in drawer order and refuses more than five places
+  ---
+  duration_ms: 1.659222
+  ...
+# Subtest: demo FULL AUTO is explicit, buys nothing and marks the book as a demo
+ok 122 - demo FULL AUTO is explicit, buys nothing and marks the book as a demo
+  ---
+  duration_ms: 66.434692
+  ...
+# Subtest: an unknown hold is refused instead of running on into images
+ok 123 - an unknown hold is refused instead of running on into images
+  ---
+  duration_ms: 2.007453
+  ...
+# Subtest: a series text hold keeps the series name and applies its continuity snapshot only once sheets exist
+ok 124 - a series text hold keeps the series name and applies its continuity snapshot only once sheets exist
+  ---
+  duration_ms: 14.069833
+  ...
+# Subtest: a deleted auto draft no longer fails the finished job
+ok 125 - a deleted auto draft no longer fails the finished job
+  ---
+  duration_ms: 3.927612
+  ...
+# Subtest: cost estimate keeps its fields and adds the simple-flow lines
+ok 126 - cost estimate keeps its fields and adds the simple-flow lines
+  ---
+  duration_ms: 1.753605
+  ...
+# Subtest: job cards name the holds and open the simple review instead of resuming
+ok 127 - job cards name the holds and open the simple review instead of resuming
+  ---
+  duration_ms: 2.622908
+  ...
+# Subtest: exported runner holds without navigating, reports numeric progress and releases the hold
+ok 128 - exported runner holds without navigating, reports numeric progress and releases the hold
+  ---
+  duration_ms: 52.104322
+  ...
+# Subtest: a page edited in simple mode and redrawn by another path is not bought again on release
+ok 129 - a page edited in simple mode and redrawn by another path is not bought again on release
+  ---
+  duration_ms: 25.970546
+  ...
+# Subtest: the page step keeps a coherence review bought before drawing on the job usage, once
+ok 130 - the page step keeps a coherence review bought before drawing on the job usage, once
+  ---
+  duration_ms: 7.280733
+  ...
+# Subtest: a held series book never opens in the pro editor before its hold is released to pages
+ok 131 - a held series book never opens in the pro editor before its hold is released to pages
+  ---
+  duration_ms: 10.097872
+  ...
+# Subtest: FULL AUTO refuses to run a book while a page tool is working on it
+ok 132 - FULL AUTO refuses to run a book while a page tool is working on it
+  ---
+  duration_ms: 65.501353
+  ...
+# Subtest: stopping a job a closed tab left running returns it to its hold once no tab holds the run
+ok 133 - stopping a job a closed tab left running returns it to its hold once no tab holds the run
+  ---
+  duration_ms: 18.71308
+  ...
+# Subtest: StoryRenderer orders references and composes visual style, scene, roles and no-text instructions
+ok 134 - StoryRenderer orders references and composes visual style, scene, roles and no-text instructions
+  ---
+  duration_ms: 1.622562
+  ...
+# Subtest: Only optional background tails can be trimmed, required identity and style images are retained
+ok 135 - Only optional background tails can be trimmed, required identity and style images are retained
+  ---
+  duration_ms: 0.391744
+  ...
+# Subtest: Google draft uses officially documented Lite image model, always at 1K
+ok 136 - Google draft uses officially documented Lite image model, always at 1K
+  ---
+  duration_ms: 6.44181
+  ...
+# Subtest: Final Google pro selection and OpenAI draft/final route to documented model and qualities
+ok 137 - Final Google pro selection and OpenAI draft/final route to documented model and qualities
+  ---
+  duration_ms: 2.69861
+  ...
+# Subtest: Cost estimate is distinct from actual provider-reported USD
+ok 138 - Cost estimate is distinct from actual provider-reported USD
+  ---
+  duration_ms: 0.889373
+  ...
+# Subtest: Proxy mode sends pixels and roles with no browser key or authentication headers
+ok 139 - Proxy mode sends pixels and roles with no browser key or authentication headers
+  ---
+  duration_ms: 2.36297
+  ...
+# Subtest: Local proxy accepts environment keys only, blocks other origins and redacts upstream failures
+ok 140 - Local proxy accepts environment keys only, blocks other origins and redacts upstream failures
+  ---
+  duration_ms: 3.882477
+  ...
+# Subtest: Wardrobe translation proxy accepts only descriptions and uses the server key
+ok 141 - Wardrobe translation proxy accepts only descriptions and uses the server key
+  ---
+  duration_ms: 2.080106
+  ...
+# Subtest: A-7 BFL reports the exact sorted eight references that were sent
+ok 142 - A-7 BFL reports the exact sorted eight references that were sent
+  ---
+  duration_ms: 1003.825141
+  ...
+# Subtest: A-8 Google rejects oversized inline references before its API fetch
+ok 143 - A-8 Google rejects oversized inline references before its API fetch
+  ---
+  duration_ms: 12.408106
+  ...
+# Subtest: A-12 reference downloads and expired output URLs do not report key authentication errors
+ok 144 - A-12 reference downloads and expired output URLs do not report key authentication errors
+  ---
+  duration_ms: 2.831595
+  ...
+# Subtest: A-15 the proxy refuses missing Origin without a matching server token and limits depth
+ok 145 - A-15 the proxy refuses missing Origin without a matching server token and limits depth
+  ---
+  duration_ms: 2.05265
+  ...
+# Subtest: style text keeps every default forbidden word and the parent-facing style checks
+ok 146 - style text keeps every default forbidden word and the parent-facing style checks
+  ---
+  duration_ms: 14.202257
+  ...
+# Subtest: lenient story text: brand and Korean names only, and a cast name plus particle is not 토토로
+ok 147 - lenient story text: brand and Korean names only, and a cast name plus particle is not 토토로
+  ---
+  duration_ms: 1.824428
+  ...
+# Subtest: provider check: supplied text only, style names still refused
+ok 148 - provider check: supplied text only, style names still refused
+  ---
+  duration_ms: 9.987771
+  ...
+# Subtest: character sheet requests still refuse forbidden names in the parent description
+ok 149 - character sheet requests still refuse forbidden names in the parent description
+  ---
+  duration_ms: 14.65607
+  ...
+# Subtest: demo FULL AUTO with the sample engine draws every page and the cover of a plotContract book
+ok 150 - demo FULL AUTO with the sample engine draws every page and the cover of a plotContract book
+  ---
+  duration_ms: 426.874517
+  ...
+# Subtest: the cover exempts every cast name, not only the lead it shows
+ok 151 - the cover exempts every cast name, not only the lead it shows
+  ---
+  duration_ms: 77.690442
+  ...
+# Subtest: a cast name exempts only the name plus a particle, never a longer forbidden word
+ok 152 - a cast name exempts only the name plus a particle, never a longer forbidden word
+  ---
+  duration_ms: 8.168245
+  ...
+# Subtest: distinctive brand names count even joined to other words; ordinary English words stay whole-word
+ok 153 - distinctive brand names count even joined to other words; ordinary English words stay whole-word
+  ---
+  duration_ms: 3.858955
+  ...
+# Subtest: "frozen" in parent-entered text is refused as a style reference; story text and scaffolding stay lenient
+ok 154 - "frozen" in parent-entered text is refused as a style reference; story text and scaffolding stay lenient
+  ---
+  duration_ms: 85.546801
+  ...
+# Subtest: Korean spellings of DreamWorks, Elsa and Mickey Mouse, and DreamWorks written split, are refused
+ok 155 - Korean spellings of DreamWorks, Elsa and Mickey Mouse, and DreamWorks written split, are refused
+  ---
+  duration_ms: 5.639852
+  ...
+# Subtest: a cast name may carry a chain of particles (토토로서, 토토로써는, 토토로의, 토토로는요) in story text, never another word
+ok 156 - a cast name may carry a chain of particles (토토로서, 토토로써는, 토토로의, 토토로는요) in story text, never another word
+  ---
+  duration_ms: 73.850807
+  ...
+# Subtest: pixel art ("Pixart") is not Pixar; Pixar joined or spaced still is
+ok 157 - pixel art ("Pixart") is not Pixar; Pixar joined or spaced still is
+  ---
+  duration_ms: 2.266055
+  ...
+# Subtest: "frozen" counts as the film when written as the title or tied to a style cue; ordinary ice stays free
+ok 158 - "frozen" counts as the film when written as the title or tied to a style cue; ordinary ice stays free
+  ---
+  duration_ms: 5.722806
+  ...
+# Subtest: zero-width and other format characters cannot hide a forbidden name
+ok 159 - zero-width and other format characters cannot hide a forbidden name
+  ---
+  duration_ms: 1.807253
+  ...
+# Subtest: FIX-IMG-3 policy table: strict parent text and lenient story text
+ok 160 - FIX-IMG-3 policy table: strict parent text and lenient story text
+  ---
+  duration_ms: 16.996811
+  ...
+# Subtest: FIX-IMG-3 strict scope: brand tokens anywhere, the written title anywhere, lowercase only with a style cue, Korean with spaces
+ok 161 - FIX-IMG-3 strict scope: brand tokens anywhere, the written title anywhere, lowercase only with a style cue, Korean with spaces
+  ---
+  duration_ms: 6.897871
+  ...
+# Subtest: FIX-IMG-3 lenient scope: no title-word checks, joined Korean names, the book's cast names exempt particles only
+ok 162 - FIX-IMG-3 lenient scope: no title-word checks, joined Korean names, the book's cast names exempt particles only
+  ---
+  duration_ms: 1.475156
+  ...
+# Subtest: FIX-IMG-3 normalisation: NFKC, \\p{Cf}, the grapheme joiner, Hangul fillers and variation selectors are removed first
+ok 163 - FIX-IMG-3 normalisation: NFKC, \\p{Cf}, the grapheme joiner, Hangul fillers and variation selectors are removed first
+  ---
+  duration_ms: 2.294295
+  ...
+# Subtest: FIX-IMG-3 refusals tell the parent what to change, and a cast name plus 로 suggests 토토에게서
+ok 164 - FIX-IMG-3 refusals tell the parent what to change, and a cast name plus 로 suggests 토토에게서
+  ---
+  duration_ms: 5.849376
+  ...
+# Subtest: FIX-IMG-3 consistency: sheet, wardrobe pre-check, wardrobe drawing and the scene that draws the text agree
+ok 165 - FIX-IMG-3 consistency: sheet, wardrobe pre-check, wardrobe drawing and the scene that draws the text agree
+  ---
+  duration_ms: 121.734102
+  ...
+# Subtest: FIX-IMG-3 the book's own cast exempts "토토로" in story text, the same for pages and the cover
+ok 166 - FIX-IMG-3 the book's own cast exempts "토토로" in story text, the same for pages and the cover
+  ---
+  duration_ms: 161.278332
+  ...
+# Subtest: FIX-IMG-3 a cover action the parent edited is strict; a planned one is lenient
+ok 167 - FIX-IMG-3 a cover action the parent edited is strict; a planned one is lenient
+  ---
+  duration_ms: 76.453583
+  ...
+# Subtest: FIX-IMG-3 scene briefs are lenient story text; app scaffolding is never checked
+ok 168 - FIX-IMG-3 scene briefs are lenient story text; app scaffolding is never checked
+  ---
+  duration_ms: 68.81993
+  ...
+# Subtest: a friend or place FULL AUTO wrote is story text until a parent edits it
+ok 169 - a friend or place FULL AUTO wrote is story text until a parent edits it
+  ---
+  duration_ms: 100.885141
+  ...
+# Subtest: earlier pages that ride along in a later prompt are checked as story text
+ok 170 - earlier pages that ride along in a later prompt are checked as story text
+  ---
+  duration_ms: 65.583248
+  ...
+# Subtest: Data URL references accept charset parameters used by the style and character SVG table
+ok 171 - Data URL references accept charset parameters used by the style and character SVG table
+  ---
+  duration_ms: 26.38565
+  ...
+# Subtest: Google sends every reference, exact model, style and best-effort seed; excludes thought image
+ok 172 - Google sends every reference, exact model, style and best-effort seed; excludes thought image
+  ---
+  duration_ms: 1.423371
+  ...
+# Subtest: OpenAI sends all images in multipart edit request and never invents a seed or unsupported input_fidelity
+ok 173 - OpenAI sends all images in multipart edit request and never invents a seed or unsupported input_fidelity
+  ---
+  duration_ms: 2.035569
+  ...
+# Subtest: BFL sends numbered reference fields, polls official URL, saves pixels before signed URL expires
+ok 174 - BFL sends numbered reference fields, polls official URL, saves pixels before signed URL expires
+  ---
+  duration_ms: 103.85932
+  ...
+# Subtest: fal routes references to Seedream 5 edit, uses returned queue URLs, and stores requested seed only
+ok 175 - fal routes references to Seedream 5 edit, uses returned queue URLs, and stores requested seed only
+  ---
+  duration_ms: 105.055415
+  ...
+# Subtest: ComfyUI uploads both references, binds uploaded names into connected workflow, submits seed and reads image output
+ok 176 - ComfyUI uploads both references, binds uploaded names into connected workflow, submits seed and reads image output
+  ---
+  duration_ms: 116.885808
+  ...
+# Subtest: ComfyUI refuses omitted or disconnected references before uploading
+ok 177 - ComfyUI refuses omitted or disconnected references before uploading
+  ---
+  duration_ms: 10.545177
+  ...
+# Subtest: Reference limits refuse dropped images, even when provider itself silently truncates
+ok 178 - Reference limits refuse dropped images, even when provider itself silently truncates
+  ---
+  duration_ms: 0.427165
+  ...
+# Subtest: Provider error bodies and network errors never expose credentials
+ok 179 - Provider error bodies and network errors never expose credentials
+  ---
+  duration_ms: 1.749414
+  ...
+# Subtest: OpenAI tracking IDs and masked secrets fail before fetching references or making an API request
+ok 180 - OpenAI tracking IDs and masked secrets fail before fetching references or making an API request
+  ---
+  duration_ms: 11.935595
+  ...
+# Subtest: OpenAI 401 explains the secret key without echoing an upstream body
+ok 181 - OpenAI 401 explains the secret key without echoing an upstream body
+  ---
+  duration_ms: 0.585757
+  ...
+# Subtest: Polling URLs outside provider origins are refused before authenticated fetch
+ok 182 - Polling URLs outside provider origins are refused before authenticated fetch
+  ---
+  duration_ms: 0.76689
+  ...
+# Subtest: Abort and timeout stop pending requests with safe errors
+ok 183 - Abort and timeout stop pending requests with safe errors
+  ---
+  duration_ms: 101.557791
+  ...
+# Subtest: Plugin factory validates engine and no-reference requests use generation endpoint
+ok 184 - Plugin factory validates engine and no-reference requests use generation endpoint
+  ---
+  duration_ms: 0.991995
+  ...
+# Subtest: fresh browser gets samples without writing a pretend existing library
+ok 185 - fresh browser gets samples without writing a pretend existing library
+  ---
+  duration_ms: 1.408404
+  ...
+# Subtest: an existing library and original raw bytes survive a read and validation
+ok 186 - an existing library and original raw bytes survive a read and validation
+  ---
+  duration_ms: 0.211615
+  ...
+# Subtest: invalid JSON and invalid schema block saves without replacing originals
+ok 187 - invalid JSON and invalid schema block saves without replacing originals
+  ---
+  duration_ms: 3.294009
+  ...
+# Subtest: storage access failures do not become an apparently empty fresh device
+ok 188 - storage access failures do not become an apparently empty fresh device
+  ---
+  duration_ms: 0.222634
+  ...
+# Subtest: only explicit restored state may unblock storage writes; quota errors propagate
+ok 189 - only explicit restored state may unblock storage writes; quota errors propagate
+  ---
+  duration_ms: 0.978968
+  ...
+# Subtest: A-2 one malformed book is quarantined while valid books remain readable and original records survive saves
+ok 190 - A-2 one malformed book is quarantined while valid books remain readable and original records survive saves
+  ---
+  duration_ms: 1.883272
+  ...
+# Subtest: A-2 startup structure validation never decodes inline image bytes
+ok 191 - A-2 startup structure validation never decodes inline image bytes
+  ---
+  duration_ms: 0.418658
+  ...
+# Subtest: A-2 the app World migration v2 reload keeps the real saved library instead of blocking it
+ok 192 - A-2 the app World migration v2 reload keeps the real saved library instead of blocking it
+  ---
+  duration_ms: 45.79444
+  ...
+# Subtest: R2-10 legacy empty books and HTTP images remain visible while invalid records retain distinct reasons
+ok 193 - R2-10 legacy empty books and HTTP images remain visible while invalid records retain distinct reasons
+  ---
+  duration_ms: 0.99624
+  ...
+# Subtest: Character edits keep input, prior sheets, old engine book snapshots, and old sample appearances immutable
+ok 194 - Character edits keep input, prior sheets, old engine book snapshots, and old sample appearances immutable
+  ---
+  duration_ms: 4.366705
+  ...
+# Subtest: Repeated name and description edits keep the first book appearance and version history
+ok 195 - Repeated name and description edits keep the first book appearance and version history
+  ---
+  duration_ms: 0.594097
+  ...
+# Subtest: Archiving and restoring characters removes future cast selection without breaking existing books
+ok 196 - Archiving and restoring characters removes future cast selection without breaking existing books
+  ---
+  duration_ms: 0.804375
+  ...
+# Subtest: Background edit, deletion, and restoration preserve settings of every existing book
+ok 197 - Background edit, deletion, and restoration preserve settings of every existing book
+  ---
+  duration_ms: 0.581764
+  ...
+# Subtest: Preference reset changes only five defaults and keeps PIN, credentials, books, World and counts
+ok 198 - Preference reset changes only five defaults and keeps PIN, credentials, books, World and counts
+  ---
+  duration_ms: 0.721131
+  ...
+# Subtest: World provider config reset clears custom local workflow while preserving credentials and engine settings
+ok 199 - World provider config reset clears custom local workflow while preserving credentials and engine settings
+  ---
+  duration_ms: 0.571669
+  ...
+# Subtest: World rename and book deletion leave other records and reading limit counts intact
+ok 200 - World rename and book deletion leave other records and reading limit counts intact
+  ---
+  duration_ms: 0.483068
+  ...
+# Subtest: Validation rejects invalid edits before changing the local library
+ok 201 - Validation rejects invalid edits before changing the local library
+  ---
+  duration_ms: 0.570779
+  ...
+# Subtest: rewriteBookPage copies back only the chosen page and records its usage on the book and the job
+ok 202 - rewriteBookPage copies back only the chosen page and records its usage on the book and the job
+  ---
+  duration_ms: 299.329675
+  ...
+# Subtest: rewriteBookPage keeps the cost row of a failed paid rewrite and leaves the text alone
+ok 203 - rewriteBookPage keeps the cost row of a failed paid rewrite and leaves the text alone
+  ---
+  duration_ms: 14.485418
+  ...
+# Subtest: rewriteBookPage runs the real page rewrite with the frozen settings and an injected engine
+ok 204 - rewriteBookPage runs the real page rewrite with the frozen settings and an injected engine
+  ---
+  duration_ms: 81.856797
+  ...
+# Subtest: demo books never request a rewrite
+ok 205 - demo books never request a rewrite
+  ---
+  duration_ms: 113.539606
+  ...
+# Subtest: applyPageText marks only a drawn page stale, clears its review mark and rechecks the story
+ok 206 - applyPageText marks only a drawn page stale, clears its review mark and rechecks the story
+  ---
+  duration_ms: 85.072144
+  ...
+# Subtest: setPageReviewed persists the mark in the story draft
+ok 207 - setPageReviewed persists the mark in the story draft
+  ---
+  duration_ms: 9.113114
+  ...
+# Subtest: pagesNeedingImages lists missing, draft-quality and stale pages
+ok 208 - pagesNeedingImages lists missing, draft-quality and stale pages
+  ---
+  duration_ms: 0.485443
+  ...
+# Subtest: a text edit binds the stale mark to the image it was set on
+ok 209 - a text edit binds the stale mark to the image it was set on
+  ---
+  duration_ms: 56.158446
+  ...
+# Subtest: one page operation per book: busy while a paid rewrite is in flight, free again afterwards
+ok 210 - one page operation per book: busy while a paid rewrite is in flight, free again afterwards
+  ---
+  duration_ms: 43.10234
+  ...
+# Subtest: a FULL AUTO run that starts during a paid rewrite keeps the cost row but not the new text
+ok 211 - a FULL AUTO run that starts during a paid rewrite keeps the cost row but not the new text
+  ---
+  duration_ms: 7.854286
+  ...
+# Subtest: a paid page image that lands after a run started is still kept and recorded
+ok 212 - a paid page image that lands after a run started is still kept and recorded
+  ---
+  duration_ms: 6.539376
+  ...
+# Subtest: estimateSimpleCosts follows the wizard before a book exists and the remaining work after
+ok 213 - estimateSimpleCosts follows the wizard before a book exists and the remaining work after
+  ---
+  duration_ms: 10.981326
+  ...
+# Subtest: generateBookPageImage needs the frozen snapshot, draws at final quality and records the image on the job
+ok 214 - generateBookPageImage needs the frozen snapshot, draws at final quality and records the image on the job
+  ---
+  duration_ms: 15.540225
+  ...
+# Subtest: page tools refuse to change a book while its FULL AUTO run is live
+ok 215 - page tools refuse to change a book while its FULL AUTO run is live
+  ---
+  duration_ms: 5.044302
+  ...
+# Subtest: page tools refuse a book a starting FULL AUTO run has claimed, before it is marked running
+ok 216 - page tools refuse a book a starting FULL AUTO run has claimed, before it is marked running
+  ---
+  duration_ms: 38.140416
+  ...
+# Subtest: page edits keep the catchphrase-repeat advisory from the frozen story input
+ok 217 - page edits keep the catchphrase-repeat advisory from the frozen story input
+  ---
+  duration_ms: 259.424283
+  ...
+# Subtest: a paid rewrite without a usable page keeps its cost row as failed and saves it before throwing
+ok 218 - a paid rewrite without a usable page keeps its cost row as failed and saves it before throwing
+  ---
+  duration_ms: 18.857173
+  ...
+# Subtest: a paid rewrite with a malformed page list or one blank language keeps the failed row and the page text
+ok 219 - a paid rewrite with a malformed page list or one blank language keeps the failed row and the page text
+  ---
+  duration_ms: 27.330376
+  ...
+# Subtest: a real page rewrite that fails validation after a paid response keeps its real tokens and cost
+ok 220 - a real page rewrite that fails validation after a paid response keeps its real tokens and cost
+  ---
+  duration_ms: 16.821823
+  ...
+# Subtest: page tools refuse to buy while another tab holds the job's FULL AUTO run lock
+ok 221 - page tools refuse to buy while another tab holds the job's FULL AUTO run lock
+  ---
+  duration_ms: 123.675392
+  ...
+# Subtest: seven beats receive a concrete 12-page plan with turn at two thirds and close last
+ok 222 - seven beats receive a concrete 12-page plan with turn at two thirds and close last
+  ---
+  duration_ms: 28.347987
+  ...
+# Subtest: parent-requested 7→12 split preserves edited word order, references and wardrobe without blank pages
+ok 223 - parent-requested 7→12 split preserves edited word order, references and wardrobe without blank pages
+  ---
+  duration_ms: 4.702527
+  ...
+# Subtest: manual splitting refuses insufficient text and never shrinks across beats
+ok 224 - manual splitting refuses insufficient text and never shrinks across beats
+  ---
+  duration_ms: 5.434846
+  ...
+# Subtest: pagination request enforces exact 12-page schema, distinguishes beats from pages and supplies the plan
+ok 225 - pagination request enforces exact 12-page schema, distinguishes beats from pages and supplies the plan
+  ---
+  duration_ms: 37.299669
+  ...
+# Subtest: an engine repeatedly returning seven pages stops after two repairs and remains visibly invalid
+ok 226 - an engine repeatedly returning seven pages stops after two repairs and remains visibly invalid
+  ---
+  duration_ms: 39.375226
+  ...
+# Subtest: a later API error retains the completed pagination checkpoint for parent recovery
+ok 227 - a later API error retains the completed pagination checkpoint for parent recovery
+  ---
+  duration_ms: 10.191911
+  ...
+# Subtest: each completed page repair is checkpointed before a later repair can fail
+ok 228 - each completed page repair is checkpointed before a later repair can fail
+  ---
+  duration_ms: 38.899848
+  ...
+# Subtest: place photos use background roles and keep separate authoritative painting references
+ok 229 - place photos use background roles and keep separate authoritative painting references
+  ---
+  duration_ms: 6.753381
+  ...
+# Subtest: character identity references retain their existing role and multi-view sheet instructions
+ok 230 - character identity references retain their existing role and multi-view sheet instructions
+  ---
+  duration_ms: 0.891717
+  ...
+# Subtest: an approved photo background registers a World-specific immutable sheet without keeping source files or preview URLs
+ok 231 - an approved photo background registers a World-specific immutable sheet without keeping source files or preview URLs
+  ---
+  duration_ms: 15.404925
+  ...
+# Subtest: photo-created background is selected in its World, frozen into books, and invalidated when fixed layout changes
+ok 232 - photo-created background is selected in its World, frozen into books, and invalidated when fixed layout changes
+  ---
+  duration_ms: 10.266247
+  ...
+# Subtest: finished illustration import registers a free reusable background with unknown generation seed
+ok 233 - finished illustration import registers a free reusable background with unknown generation seed
+  ---
+  duration_ms: 5.167303
+  ...
+# Subtest: draft approval, mismatched World approval, and invalid photo uploads stop before persistence
+ok 234 - draft approval, mismatched World approval, and invalid photo uploads stop before persistence
+  ---
+  duration_ms: 3.300657
+  ...
+# Subtest: contract schema is bounded and strict at every nested object, including nullable branches
+ok 235 - contract schema is bounded and strict at every nested object, including nullable branches
+  ---
+  duration_ms: 2.140208
+  ...
+# Subtest: structure presets select original principles by explicit ID or topic without copying a book plot
+ok 236 - structure presets select original principles by explicit ID or topic without copying a book plot
+  ---
+  duration_ms: 1.073912
+  ...
+# Subtest: a causal contract is valid and helper returns its exact scoped beat without mutation
+ok 237 - a causal contract is valid and helper returns its exact scoped beat without mutation
+  ---
+  duration_ms: 17.713799
+  ...
+# Subtest: state continuity compares unordered character, knowledge and promise arrays
+ok 238 - state continuity compares unordered character, knowledge and promise arrays
+  ---
+  duration_ms: 1.665863
+  ...
+# Subtest: causal numbering, teleports, missing offscene characters and unknown identities fail clearly
+ok 239 - causal numbering, teleports, missing offscene characters and unknown identities fail clearly
+  ---
+  duration_ms: 2.521069
+  ...
+# Subtest: prop identity, names and persistence survive ownership, condition and location changes
+ok 240 - prop identity, names and persistence survive ownership, condition and location changes
+  ---
+  duration_ms: 2.442262
+  ...
+# Subtest: duplicate character/prop IDs, ambiguous prop names and forgotten knowledge are rejected
+ok 241 - duplicate character/prop IDs, ambiguous prop names and forgotten knowledge are rejected
+  ---
+  duration_ms: 1.427023
+  ...
+# Subtest: payoffs require earlier setup, every setup closes and promise ledger matches transitions
+ok 242 - payoffs require earlier setup, every setup closes and promise ledger matches transitions
+  ---
+  duration_ms: 1.4439
+  ...
+# Subtest: malformed nested fields return errors without throwing or silently accepting unknown keys
+ok 243 - malformed nested fields return errors without throwing or silently accepting unknown keys
+  ---
+  duration_ms: 1.144658
+  ...
+# Subtest: explicit demo builds deterministic compatible ledgers for all supported lengths and legacy free places
+ok 244 - explicit demo builds deterministic compatible ledgers for all supported lengths and legacy free places
+  ---
+  duration_ms: 12.57632
+  ...
+# Subtest: every malformed model state collection fails without a runtime TypeError
+ok 245 - every malformed model state collection fails without a runtime TypeError
+  ---
+  duration_ms: 63.803615
+  ...
+# Subtest: default print is sequential single-page landscape with no inserted blank leaves
+ok 246 - default print is sequential single-page landscape with no inserted blank leaves
+  ---
+  duration_ms: 4.078735
+  ...
+# Subtest: two-up pairs body pages in reading order and gives each cover its own sheet
+ok 247 - two-up pairs body pages in reading order and gives each cover its own sheet
+  ---
+  duration_ms: 0.521874
+  ...
+# Subtest: an odd final body page is a solo sheet rather than a fabricated empty page
+ok 248 - an odd final body page is a solo sheet rather than a fabricated empty page
+  ---
+  duration_ms: 0.46336
+  ...
+# Subtest: explicit booklet retains duplex imposition and reports its two necessary blank leaves
+ok 249 - explicit booklet retains duplex imposition and reports its two necessary blank leaves
+  ---
+  duration_ms: 1.767335
+  ...
+# Subtest: page ranges contain only requested body pages in every layout
+ok 250 - page ranges contain only requested body pages in every layout
+  ---
+  duration_ms: 1.229278
+  ...
+# Subtest: cover-only printing produces exactly one cover with no back, body or padding in every layout
+ok 251 - cover-only printing produces exactly one cover with no back, body or padding in every layout
+  ---
+  duration_ms: 1.324416
+  ...
+# Subtest: both story schemas produce escaped selectable language text inside the picture frame
+ok 252 - both story schemas produce escaped selectable language text inside the picture frame
+  ---
+  duration_ms: 1.432684
+  ...
+# Subtest: text below the picture is the default while top and bottom overlays remain explicit options
+ok 253 - text below the picture is the default while top and bottom overlays remain explicit options
+  ---
+  duration_ms: 0.83738
+  ...
+# Subtest: old per-page overlays cannot override the below-picture default in any print layout
+ok 254 - old per-page overlays cannot override the below-picture default in any print layout
+  ---
+  duration_ms: 1.188316
+  ...
+# Subtest: legacy booklet preference migrates once to sequential printing and preserves other preferences
+ok 255 - legacy booklet preference migrates once to sequential printing and preserves other preferences
+  ---
+  duration_ms: 0.63014
+  ...
+# Subtest: staging is an explicit print option and falls back below for legacy pages
+ok 256 - staging is an explicit print option and falls back below for legacy pages
+  ---
+  duration_ms: 0.858907
+  ...
+# Subtest: an explicit booklet choice after migration survives repeated startup and saved-settings reload
+ok 257 - an explicit booklet choice after migration survives repeated startup and saved-settings reload
+  ---
+  duration_ms: 0.183517
+  ...
+# Subtest: invalid page selections fail before producing misleading print content
+ok 258 - invalid page selections fail before producing misleading print content
+  ---
+  duration_ms: 1.019774
+  ...
+# Subtest: data loader rejects one-letter bans, retries, then caches all six immutable package data files
+ok 259 - data loader rejects one-letter bans, retries, then caches all six immutable package data files
+  ---
+  duration_ms: 31.245039
+  ...
+# Subtest: real package outline pipeline preserves app contract, seed metadata and exact billed model calls
+ok 260 - real package outline pipeline preserves app contract, seed metadata and exact billed model calls
+  ---
+  duration_ms: 134.687508
+  ...
+# Subtest: a selected world freezes the creation-date season and reuses the same paid checkpoint without mutating caller input
+ok 261 - a selected world freezes the creation-date season and reuses the same paid checkpoint without mutating caller input
+  ---
+  duration_ms: 63.512295
+  ...
+# Subtest: pattern slots adapt to exact app beat counts and seeded inventory changes only when book/offset changes
+ok 262 - pattern slots adapt to exact app beat counts and seeded inventory changes only when book/offset changes
+  ---
+  duration_ms: 54.34901
+  ...
+# Subtest: one package fix changes only the flagged beat and rejects unrelated edits with paid usage retained
+ok 263 - one package fix changes only the flagged beat and rejects unrelated edits with paid usage retained
+  ---
+  duration_ms: 29.304844
+  ...
+# Subtest: missing topic causes exactly one auxiliary-pattern regeneration, then stops with both calls accounted
+ok 264 - missing topic causes exactly one auxiliary-pattern regeneration, then stops with both calls accounted
+  ---
+  duration_ms: 21.087181
+  ...
+# Subtest: two-pass per-language prose strips labels into metadata and resumes completed paid passes
+ok 265 - two-pass per-language prose strips labels into metadata and resumes completed paid passes
+  ---
+  duration_ms: 10.581473
+  ...
+# Subtest: single-pass option uses target levels and performs only one write per language
+ok 266 - single-pass option uses target levels and performs only one write per language
+  ---
+  duration_ms: 9.009637
+  ...
+# Subtest: real beam package uses candidate and judge schemas, then preserves app fields in its final wrap
+ok 267 - real beam package uses candidate and judge schemas, then preserves app fields in its final wrap
+  ---
+  duration_ms: 35.731009
+  ...
+# Subtest: emotion tell repair is bounded to one extra Korean pass and every call is billed once
+ok 268 - emotion tell repair is bounded to one extra Korean pass and every call is billed once
+  ---
+  duration_ms: 19.893497
+  ...
+# Subtest: missing prose labels fail with a resumable paid checkpoint instead of inventing beat metadata
+ok 269 - missing prose labels fail with a resumable paid checkpoint instead of inventing beat metadata
+  ---
+  duration_ms: 8.213028
+  ...
+# Subtest: quality role choices override a supplied main engine without leaking credential options
+ok 270 - quality role choices override a supplied main engine without leaking credential options
+  ---
+  duration_ms: 21.978266
+  ...
+# Subtest: approved-book ban retrieval keeps recently used inventory out of the next book
+ok 271 - approved-book ban retrieval keeps recently used inventory out of the next book
+  ---
+  duration_ms: 46.084717
+  ...
+# Subtest: configured material and pattern ban windows govern actual package seeds and auto selection
+ok 272 - configured material and pattern ban windows govern actual package seeds and auto selection
+  ---
+  duration_ms: 60.936477
+  ...
+# Subtest: oversized package prompts drop approved examples before adding any paid request
+ok 273 - oversized package prompts drop approved examples before adding any paid request
+  ---
+  duration_ms: 38.154142
+  ...
+# Subtest: failed engine attempts retain their exact request count without inventing billed token usage
+ok 274 - failed engine attempts retain their exact request count without inventing billed token usage
+  ---
+  duration_ms: 9.438836
+  ...
+# Subtest: rich drafting binds the upper rich level and only simplify/fix bind the final frozen target
+ok 275 - rich drafting binds the upper rich level and only simplify/fix bind the final frozen target
+  ---
+  duration_ms: 16.590501
+  ...
+# Subtest: exhausting all planted inventory fails before a model request and preserves the chosen ban window
+ok 276 - exhausting all planted inventory fails before a model request and preserves the chosen ban window
+  ---
+  duration_ms: 7.411066
+  ...
+# Subtest: exhausting all background creatures also fails before a model request
+ok 277 - exhausting all background creatures also fails before a model request
+  ---
+  duration_ms: 2.226492
+  ...
+# Subtest: R8-1 legacy prose forwards pageCount and leaves condensation disabled
+ok 278 - R8-1 legacy prose forwards pageCount and leaves condensation disabled
+  ---
+  duration_ms: 14.10381
+  ...
+# Subtest: R6-4 reference candidates default to gold, exclude the active topic when opted in and retain gold priority
+ok 279 - R6-4 reference candidates default to gold, exclude the active topic when opted in and retain gold priority
+  ---
+  duration_ms: 56.30847
+  ...
+# Subtest: R6-4 distilled examples load only on opt-in and a failed file falls back to gold
+ok 280 - R6-4 distilled examples load only on opt-in and a failed file falls back to gold
+  ---
+  duration_ms: 4.691898
+  ...
+# Subtest: R8-1 frozen language policy is forwarded independently and survives checkpoint resume
+ok 281 - R8-1 frozen language policy is forwarded independently and survives checkpoint resume
+  ---
+  duration_ms: 112.982754
+  ...
+# Subtest: R9 fix: a catchphrase-only repeat buys no fix pass; the paid outline is accepted with the item kept as an advisory, also on resume
+ok 282 - R9 fix: a catchphrase-only repeat buys no fix pass; the paid outline is accepted with the item kept as an advisory, also on resume
+  ---
+  duration_ms: 36.075204
+  ...
+# Subtest: R9 fix: if a catchphrase-only fix pass still happens and breaks the targeted-fix rule, the original paid outline is kept and a resume makes 0 calls
+ok 283 - R9 fix: if a catchphrase-only fix pass still happens and breaks the targeted-fix rule, the original paid outline is kept and a resume makes 0 calls
+  ---
+  duration_ms: 46.986077
+  ...
+# Subtest: R9 fix: in a mixed fix pass an out-of-target catchphrase edit is put back from the original and the targeted fixes are kept
+ok 284 - R9 fix: in a mixed fix pass an out-of-target catchphrase edit is put back from the original and the targeted fixes are kept
+  ---
+  duration_ms: 33.367955
+  ...
+# Subtest: R9-A frozen rotation hides the omitted phrase from every quality prompt but still checks it
+ok 285 - R9-A frozen rotation hides the omitted phrase from every quality prompt but still checks it
+  ---
+  duration_ms: 93.24032
+  ...
+# Subtest: R9 fix: a draft frozen without a catchphrase policy keeps every pre-R9 outline/prose input (no new text, checks or example filters)
+ok 286 - R9 fix: a draft frozen without a catchphrase policy keeps every pre-R9 outline/prose input (no new text, checks or example filters)
+  ---
+  duration_ms: 21.558706
+  ...
+# Subtest: R9-A distilled examples that repeat "같이 가자" or a cast catchphrase are skipped; gold and the source file stay as they are
+ok 287 - R9-A distilled examples that repeat "같이 가자" or a cast catchphrase are skipped; gold and the source file stay as they are
+  ---
+  duration_ms: 44.834941
+  ...
+# Subtest: actual app pipeline connects strict quality outline, briefs, two-pass prose, child checks and semantic gates
+ok 288 - actual app pipeline connects strict quality outline, briefs, two-pass prose, child checks and semantic gates
+  ---
+  duration_ms: 340.226405
+  ...
+# Subtest: JS FK, Revised Spache and Dale-Chall match independently calculated simple text
+ok 289 - JS FK, Revised Spache and Dale-Chall match independently calculated simple text
+  ---
+  duration_ms: 2.629369
+  ...
+# Subtest: All 20 level combinations pass a full 12-page story without network
+ok 290 - All 20 level combinations pass a full 12-page story without network
+  ---
+  duration_ms: 213.327911
+  ...
+# Subtest: Missing Korean vocabulary skips only vocabulary; uploaded words detect departures
+ok 291 - Missing Korean vocabulary skips only vocabulary; uploaded words detect departures
+  ---
+  duration_ms: 0.840223
+  ...
+# Subtest: Long sentences and book-wide new word budgets remain visible
+ok 292 - Long sentences and book-wide new word budgets remain visible
+  ---
+  duration_ms: 9.445133
+  ...
+# Subtest: Scores are based on English text and nonofficial; abort stops analysis
+ok 293 - Scores are based on English text and nonofficial; abort stops analysis
+  ---
+  duration_ms: 1.772758
+  ...
+# Subtest: Nine JSON level specs have independent rules, vocabulary, budgets and clearly estimated English scores
+ok 294 - Nine JSON level specs have independent rules, vocabulary, budgets and clearly estimated English scores
+  ---
+  duration_ms: 3.092568
+  ...
+# Subtest: Migration keeps Korean/English defaults separate and maps earlier repeat/short/chapter preferences
+ok 295 - Migration keeps Korean/English defaults separate and maps earlier repeat/short/chapter preferences
+  ---
+  duration_ms: 0.496682
+  ...
+# Subtest: SR thresholds produce suggestions without changing settings
+ok 296 - SR thresholds produce suggestions without changing settings
+  ---
+  duration_ms: 0.440685
+  ...
+# Subtest: Prompt carries both entire level specs and explicit independent English authorship
+ok 297 - Prompt carries both entire level specs and explicit independent English authorship
+  ---
+  duration_ms: 0.517052
+  ...
+# Subtest: Every scene beat and object stays within sentence and word ranges at all nine stages
+ok 298 - Every scene beat and object stays within sentence and word ranges at all nine stages
+  ---
+  duration_ms: 26.522421
+  ...
+# Subtest: Independent language stages preserve semantic action and never derive English from Korean input
+ok 299 - Independent language stages preserve semantic action and never derive English from Korean input
+  ---
+  duration_ms: 0.566697
+  ...
+# Subtest: Applying stages freezes book specs and keeps art, scenes, title and input unchanged
+ok 300 - Applying stages freezes book specs and keeps art, scenes, title and input unchanged
+  ---
+  duration_ms: 1.476967
+  ...
+# Subtest: Validation checks every page first, rewrites only failures, and passes on the second inspection
+ok 301 - Validation checks every page first, rewrites only failures, and passes on the second inspection
+  ---
+  duration_ms: 7.430013
+  ...
+# Subtest: Noncompliant results stop after exactly two retries and remain visibly failed
+ok 302 - Noncompliant results stop after exactly two retries and remain visibly failed
+  ---
+  duration_ms: 40.708826
+  ...
+# Subtest: Unavailable analyzer is recorded without useless retries; cancellation stops before analysis or mutation
+ok 303 - Unavailable analyzer is recorded without useless retries; cancellation stops before analysis or mutation
+  ---
+  duration_ms: 2.218933
+  ...
+# Subtest: A no-retry failure does not claim that two rewrites ran; vocabulary exceptions include only the cast
+ok 304 - A no-retry failure does not claim that two rewrites ran; vocabulary exceptions include only the cast
+  ---
+  duration_ms: 0.882435
+  ...
+# Subtest: Book frozen specs are reused during future validation, independent of changed parent defaults
+ok 305 - Book frozen specs are reused during future validation, independent of changed parent defaults
+  ---
+  duration_ms: 0.840282
+  ...
+# Subtest: A real vocabulary-guided retry uses the book CSV and preserves the passing English
+ok 306 - A real vocabulary-guided retry uses the book CSV and preserves the passing English
+  ---
+  duration_ms: 9.679526
+  ...
+# Subtest: Persistent failure makes two distinct metric-guided retries and keeps its failure visible
+ok 307 - Persistent failure makes two distinct metric-guided retries and keeps its failure visible
+  ---
+  duration_ms: 5.17352
+  ...
+# Subtest: Adaptive English uses its scene and own text, independent of Korean wording
+ok 308 - Adaptive English uses its scene and own text, independent of Korean wording
+  ---
+  duration_ms: 0.57372
+  ...
+# Subtest: An older book retains its frozen names when materials are renamed later
+ok 309 - An older book retains its frozen names when materials are renamed later
+  ---
+  duration_ms: 0.892341
+  ...
+# Subtest: Two matching feedback events only propose a change; parent confirmation changes one default
+ok 310 - Two matching feedback events only propose a change; parent confirmation changes one default
+  ---
+  duration_ms: 3.118812
+  ...
+# Subtest: R7-1/2 seed JSON agrees; only K1/E0 page sentence ranges change
+ok 311 - R7-1/2 seed JSON agrees; only K1/E0 page sentence ranges change
+  ---
+  duration_ms: 9.277101
+  ...
+# Subtest: R7-1/2 old books use frozen ranges and vocabulary policy, even when supplied new defaults
+ok 312 - R7-1/2 old books use frozen ranges and vocabulary policy, even when supplied new defaults
+  ---
+  duration_ms: 11.562966
+  ...
+# Subtest: R7-2/6 E0 allows two sentences; three, long sentences and past tense block independently of vocabulary warnings
+ok 313 - R7-2/6 E0 allows two sentences; three, long sentences and past tense block independently of vocabulary warnings
+  ---
+  duration_ms: 6.838376
+  ...
+# Subtest: R7-3 app count and page plan cap only new K1; old eight-beat drafts remain valid
+ok 314 - R7-3 app count and page plan cap only new K1; old eight-beat drafts remain valid
+  ---
+  duration_ms: 6.343355
+  ...
+# Subtest: R7-4 vocab expands without losing lower-level words; E1 retains strict limits
+ok 315 - R7-4 vocab expands without losing lower-level words; E1 retains strict limits
+  ---
+  duration_ms: 7.061788
+  ...
+# Subtest: R7-5 shared story words tokenize only canonical English fields and apply only to E0
+ok 316 - R7-5 shared story words tokenize only canonical English fields and apply only to E0
+  ---
+  duration_ms: 2.08435
+  ...
+# Subtest: R7-6 E0 warnings render and never trigger rewriting, including book-wide new word budget
+ok 317 - R7-6 E0 warnings render and never trigger rewriting, including book-wide new word budget
+  ---
+  duration_ms: 5.191579
+  ...
+# Subtest: R7-7 standard prose request includes actual vocabulary, story words and new total budget under request cap
+ok 318 - R7-7 standard prose request includes actual vocabulary, story words and new total budget under request cap
+  ---
+  duration_ms: 12.418672
+  ...
+# Subtest: R8-2 app uses shared quote-aware sentence cases and drops zero-word fragments for old snapshots too
+ok 319 - R8-2 app uses shared quote-aware sentence cases and drops zero-word fragments for old snapshots too
+  ---
+  duration_ms: 6.901209
+  ...
+# Subtest: R8-3 sound-only interjections skip only early-level minimum length, not page counts or maximums
+ok 320 - R8-3 sound-only interjections skip only early-level minimum length, not page counts or maximums
+  ---
+  duration_ms: 5.519695
+  ...
+# Subtest: R8-4 present adjectives and reed nouns avoid grammar false positives while active past remains blocked
+ok 321 - R8-4 present adjectives and reed nouns avoid grammar false positives while active past remains blocked
+  ---
+  duration_ms: 6.139675
+  ...
+# Subtest: R8-1 normalizing a legacy input does not infer or add a new compression policy
+ok 322 - R8-1 normalizing a legacy input does not infer or add a new compression policy
+  ---
+  duration_ms: 1.566357
+  ...
+# Subtest: returning to a place uses its first and latest earlier scene, never a different place or future page
+ok 323 - returning to a place uses its first and latest earlier scene, never a different place or future page
+  ---
+  duration_ms: 12.642455
+  ...
+# Subtest: new places retain stable keys without a manual background sheet
+ok 324 - new places retain stable keys without a manual background sheet
+  ---
+  duration_ms: 1.405528
+  ...
+# Subtest: changed scenes and stale images cannot become canonical references
+ok 325 - changed scenes and stale images cannot become canonical references
+  ---
+  duration_ms: 3.763472
+  ...
+# Subtest: scene request includes current prose, fixed geometry and same-place reference as required, without other backgrounds
+ok 326 - scene request includes current prose, fixed geometry and same-place reference as required, without other backgrounds
+  ---
+  duration_ms: 4.693462
+  ...
+# Subtest: actual durable continuity references remain in image receipt
+ok 327 - actual durable continuity references remain in image receipt
+  ---
+  duration_ms: 3.058262
+  ...
+# Subtest: print contains real escaped text from both page formats and each language selection
+ok 328 - print contains real escaped text from both page formats and each language selection
+  ---
+  duration_ms: 1.737147
+  ...
+# Subtest: malformed brief fields are reported, and only the offending beat is paid for again
+ok 329 - malformed brief fields are reported, and only the offending beat is paid for again
+  ---
+  duration_ms: 27.702225
+  ...
+# Subtest: completed enrichment survives cancellation and resumes without repeating a paid paragraph
+ok 330 - completed enrichment survives cancellation and resumes without repeating a paid paragraph
+  ---
+  duration_ms: 19.542766
+  ...
+# Subtest: page staging keeps prose and canon while repairing 12-page camera variety and time
+ok 331 - page staging keeps prose and canon while repairing 12-page camera variety and time
+  ---
+  duration_ms: 34.247122
+  ...
+# Subtest: richness reports unresolved shortcomings and accepts explicit weather/object subjects
+ok 332 - richness reports unresolved shortcomings and accepts explicit weather/object subjects
+  ---
+  duration_ms: 134.640427
+  ...
+# Subtest: editable brief and checkpoint persistence do not change unrelated fields
+ok 333 - editable brief and checkpoint persistence do not change unrelated fields
+  ---
+  duration_ms: 0.86153
+  ...
+# Subtest: dHash detects identical images and day/night comparison remains a warning
+ok 334 - dHash detects identical images and day/night comparison remains a warning
+  ---
+  duration_ms: 1.052235
+  ...
+# Subtest: image prompt shares brief and staging, preserves exact style and fixed geometry
+ok 335 - image prompt shares brief and staging, preserves exact style and fixed geometry
+  ---
+  duration_ms: 1.258818
+  ...
+# Subtest: shipped richness JSON dictionaries match the synchronous checker vocabulary
+ok 336 - shipped richness JSON dictionaries match the synchronous checker vocabulary
+  ---
+  duration_ms: 18.129823
+  ...
+# Subtest: Korean sensory adjectives retain their dictionary meaning when conjugated
+ok 337 - Korean sensory adjectives retain their dictionary meaning when conjugated
+  ---
+  duration_ms: 1.88474
+  ...
+# Subtest: page repair checkpoints keep paid usage on failure and share a two-rewrite budget with richness
+ok 338 - page repair checkpoints keep paid usage on failure and share a two-rewrite budget with richness
+  ---
+  duration_ms: 271.089006
+  ...
+# Subtest: A sequel reuses frozen faces, styles and approved house layout despite later drawer edits
+ok 339 - A sequel reuses frozen faces, styles and approved house layout despite later drawer edits
+  ---
+  duration_ms: 24.586562
+  ...
+# Subtest: Each page sees only its own place and text references contain original prose without pixels or secrets
+ok 340 - Each page sees only its own place and text references contain original prose without pixels or secrets
+  ---
+  duration_ms: 3.422183
+  ...
+# Subtest: service worker precache list only names files that exist in dist
+ok 341 - service worker precache list only names files that exist in dist
+  ---
+  duration_ms: 3.163016
+  ...
+# Subtest: every runtime module and stylesheet in dist is precached for offline use
+ok 342 - every runtime module and stylesheet in dist is precached for offline use
+  ---
+  duration_ms: 2.906704
+  ...
+# Subtest: service worker cache name changes with shell contents
+ok 343 - service worker cache name changes with shell contents
+  ---
+  duration_ms: 0.256818
+  ...
+# Subtest: A-16 offline cache excludes Node tooling and unused text lists and retains fetch writes
+ok 344 - A-16 offline cache excludes Node tooling and unused text lists and retains fetch writes
+  ---
+  duration_ms: 0.264731
+  ...
+# Subtest: a page drawn after sheet preparation lands on its own book even if another book was opened meanwhile
+ok 345 - a page drawn after sheet preparation lands on its own book even if another book was opened meanwhile
+  ---
+  duration_ms: 390.252822
+  ...
+# Subtest: saving approves only while the job's own book is still open
+ok 346 - saving approves only while the job's own book is still open
+  ---
+  duration_ms: 155.333247
+  ...
+# Subtest: stale-only pictures: 그림 그대로 저장 approves without any image work
+ok 347 - stale-only pictures: 그림 그대로 저장 approves without any image work
+  ---
+  duration_ms: 62.468598
+  ...
+# Subtest: 모든 쪽 그림 만들기 names stale pages; 빈 그림만 keeps those pictures for good
+ok 348 - 모든 쪽 그림 만들기 names stale pages; 빈 그림만 keeps those pictures for good
+  ---
+  duration_ms: 65.208149
+  ...
+# Subtest: a kept picture survives a stopped run and a failed run resumed from the library card
+ok 349 - a kept picture survives a stopped run and a failed run resumed from the library card
+  ---
+  duration_ms: 113.202837
+  ...
+# Subtest: 고친 n쪽 그림 다시 만들고 저장 redraws only the chosen pages, and only in that run
+ok 350 - 고친 n쪽 그림 다시 만들고 저장 redraws only the chosen pages, and only in that run
+  ---
+  duration_ms: 74.211615
+  ...
+# Subtest: 중지 during the sheet preparation for one page: that page is not drawn, even when the run still reaches the hold
+ok 351 - 중지 during the sheet preparation for one page: that page is not drawn, even when the run still reaches the hold
+  ---
+  duration_ms: 86.303185
+  ...
+# Subtest: a finish that buys nothing goes ahead without an image key
+ok 352 - a finish that buys nothing goes ahead without an image key
+  ---
+  duration_ms: 74.351033
+  ...
+# Subtest: 그림 그대로 저장 names the story-connection check that saving may still buy
+ok 353 - 그림 그대로 저장 names the story-connection check that saving may still buy
+  ---
+  duration_ms: 71.388272
+  ...
+# Subtest: a missing image key stops before any confirm or job change, with a 키 입력 action
+ok 354 - a missing image key stops before any confirm or job change, with a 키 입력 action
+  ---
+  duration_ms: 30.266971
+  ...
+# Subtest: ③ escape hatch: a stopped story is set aside and the picks stay for a new start
+ok 355 - ③ escape hatch: a stopped story is set aside and the picks stay for a new start
+  ---
+  duration_ms: 48.485956
+  ...
+# Subtest: an interrupted run disables the page tools and offers 이어서 만들기
+ok 356 - an interrupted run disables the page tools and offers 이어서 만들기
+  ---
+  duration_ms: 81.437125
+  ...
+# Subtest: page buttons are disabled while a page operation on the book is in flight
+ok 357 - page buttons are disabled while a page operation on the book is in flight
+  ---
+  duration_ms: 64.661682
+  ...
+# Subtest: 아이디어 뽑기 works without a story world and never repeats the current topic
+ok 358 - 아이디어 뽑기 works without a story world and never repeats the current topic
+  ---
+  duration_ms: 1.141738
+  ...
+# Subtest: 이어 만들 이야기: a FULL AUTO draft opens its job review and is never rebuilt, so no paid picture is dropped
+ok 359 - 이어 만들 이야기: a FULL AUTO draft opens its job review and is never rebuilt, so no paid picture is dropped
+  ---
+  duration_ms: 43.524246
+  ...
+# Subtest: a text save that fails keeps the picture unless the parent redraws it; a card resume does not buy it
+ok 360 - a text save that fails keeps the picture unless the parent redraws it; a card resume does not buy it
+  ---
+  duration_ms: 63.729466
+  ...
+# Subtest: any resume keeps pictures with a leftover runner mark the parent never chose to redraw
+ok 361 - any resume keeps pictures with a leftover runner mark the parent never chose to redraw
+  ---
+  duration_ms: 63.292647
+  ...
+# Subtest: an interrupted run with nothing left to buy finishes here without an image key, unless another tab holds it
+ok 362 - an interrupted run with nothing left to buy finishes here without an image key, unless another tab holds it
+  ---
+  duration_ms: 47.301409
+  ...
+# Subtest: resuming a chosen redraw cut off on a finished book offers keeping the picture as well as redrawing
+ok 363 - resuming a chosen redraw cut off on a finished book offers keeping the picture as well as redrawing
+  ---
+  duration_ms: 54.573429
+  ...
+# Subtest: ③ 다시 시도 names a missing text key with 키 입력 before the run
+ok 364 - ③ 다시 시도 names a missing text key with 키 입력 before the run
+  ---
+  duration_ms: 28.209179
+  ...
+# Subtest: 아이디어 뽑기 keeps its status line: no redraw wipes it, and ① renders it from the screen state
+ok 365 - 아이디어 뽑기 keeps its status line: no redraw wipes it, and ① renders it from the screen state
+  ---
+  duration_ms: 0.666536
+  ...
+# Subtest: ui mode is per device: simple by default, pro only when stored, unreadable storage is simple
+ok 366 - ui mode is per device: simple by default, pro only when stored, unreadable storage is simple
+  ---
+  duration_ms: 19.364695
+  ...
+# Subtest: each simple step shows at most 12 buttons (material cards and page arrows not counted)
+ok 367 - each simple step shows at most 12 buttons (material cards and page arrows not counted)
+  ---
+  duration_ms: 24.447965
+  ...
+# Subtest: ④ shows only the book language and ⑤ offers the outline title candidates
+ok 368 - ④ shows only the book language and ⑤ offers the outline title candidates
+  ---
+  duration_ms: 4.385596
+  ...
+# Subtest: approve check follows the book language (ko-only and en-only books need one language)
+ok 369 - approve check follows the book language (ko-only and en-only books need one language)
+  ---
+  duration_ms: 1.625408
+  ...
+# Subtest: a rebuilt book keeps its FULL AUTO link and the job points at the new book
+ok 370 - a rebuilt book keeps its FULL AUTO link and the job points at the new book
+  ---
+  duration_ms: 0.322077
+  ...
+# Subtest: places and friends are recommended from the topic and preselected once
+ok 371 - places and friends are recommended from the topic and preselected once
+  ---
+  duration_ms: 7.338908
+  ...
+# Subtest: simple jobs resume at ③ before the book exists and at ④ after; replaced stories are hidden
+ok 372 - simple jobs resume at ③ before the book exists and at ④ after; replaced stories are hidden
+  ---
+  duration_ms: 3.09822
+  ...
+# Subtest: the 승인 예시 switch spread-merges one key and stays off by default
+ok 373 - the 승인 예시 switch spread-merges one key and stays off by default
+  ---
+  duration_ms: 5.518052
+  ...
+# Subtest: the v31 shell precaches the simple create screen
+ok 374 - the v31 shell precaches the simple create screen
+  ---
+  duration_ms: 1.187914
+  ...
+# Subtest: the library review refuses, in both modes, while a simple action or a page operation owns the book
+ok 375 - the library review refuses, in both modes, while a simple action or a page operation owns the book
+  ---
+  duration_ms: 1.782733
+  ...
+# Subtest: the pro review keeps pictures a runner marked stale on an idle book, as simple ④ does
+ok 376 - the pro review keeps pictures a runner marked stale on an idle book, as simple ④ does
+  ---
+  duration_ms: 1.557155
+  ...
+# Subtest: simple settings reuse the existing form ids so the existing handlers save them
+ok 377 - simple settings reuse the existing form ids so the existing handlers save them
+  ---
+  duration_ms: 3.069546
+  ...
+# Subtest: approving draws only pages without a current final picture, and prices only those
+ok 378 - approving draws only pages without a current final picture, and prices only those
+  ---
+  duration_ms: 0.94834
+  ...
+# Subtest: approve-book and finalizeBook draw and price only the planned pages and cover
+ok 379 - approve-book and finalizeBook draw and price only the planned pages and cover
+  ---
+  duration_ms: 1.486442
+  ...
+# Subtest: a FULL AUTO story draft is never rebuilt from the story workflow
+ok 380 - a FULL AUTO story draft is never rebuilt from the story workflow
+  ---
+  duration_ms: 1.581854
+  ...
+# Subtest: causal twelve-page books reserve 2/5/3/2 pages for opening, escalating attempts, turn/resolution and close
+ok 381 - causal twelve-page books reserve 2/5/3/2 pages for opening, escalating attempts, turn/resolution and close
+  ---
+  duration_ms: 1.949018
+  ...
+# Subtest: causal act allocation always retains all beats in order for every supported length
+ok 382 - causal act allocation always retains all beats in order for every supported length
+  ---
+  duration_ms: 0.781613
+  ...
+# Subtest: All seven checks pass distinct K1/E0 pages with a legitimate recurring English frame
+ok 383 - All seven checks pass distinct K1/E0 pages with a legitimate recurring English frame
+  ---
+  duration_ms: 16.174196
+  ...
+# Subtest: Korean Jaccard threshold targets the later page; English E0 duplicate content is caught
+ok 384 - Korean Jaccard threshold targets the later page; English E0 duplicate content is caught
+  ---
+  duration_ms: 15.006206
+  ...
+# Subtest: A six-eojeol sentence suffix on three pages fails every affected page
+ok 385 - A six-eojeol sentence suffix on three pages fails every affected page
+  ---
+  duration_ms: 3.54778
+  ...
+# Subtest: Beat omissions, reversed mapping, early twist and an unfinished ending require repagination
+ok 386 - Beat omissions, reversed mapping, early twist and an unfinished ending require repagination
+  ---
+  duration_ms: 8.115057
+  ...
+# Subtest: Page numbering and unknown beat indices cannot silently become valid pagination
+ok 387 - Page numbering and unknown beat indices cannot silently become valid pagination
+  ---
+  duration_ms: 4.402363
+  ...
+# Subtest: Planned refrain is exempt from duplicate and suffix checks but extra and misplaced occurrences fail
+ok 388 - Planned refrain is exempt from duplicate and suffix checks but extra and misplaced occurrences fail
+  ---
+  duration_ms: 10.957793
+  ...
+# Subtest: Adjacent refrains count independently and a short refrain does not match inside a word
+ok 389 - Adjacent refrains count independently and a short refrain does not match inside a word
+  ---
+  duration_ms: 2.520137
+  ...
+# Subtest: Reading checks use frozen ranges and allow proper names rather than current default rules
+ok 390 - Reading checks use frozen ranges and allow proper names rather than current default rules
+  ---
+  duration_ms: 4.258069
+  ...
+# Subtest: Book-wide new-word budget identifies affected pages even with permissive per-page vocabulary ratio
+ok 391 - Book-wide new-word budget identifies affected pages even with permissive per-page vocabulary ratio
+  ---
+  duration_ms: 2.424544
+  ...
+# Subtest: Drawable scene requires 8–30 English words and an observable verb; failures target scenes only
+ok 392 - Drawable scene requires 8–30 English words and an observable verb; failures target scenes only
+  ---
+  duration_ms: 2.079057
+  ...
+# Subtest: Moral tails on two pages fail even when wording differs; one ending and an exact planned refrain are allowed
+ok 393 - Moral tails on two pages fail even when wording differs; one ending and an exact planned refrain are allowed
+  ---
+  duration_ms: 6.005394
+  ...
+# Subtest: Empty results expose all seven check badges and require repagination
+ok 394 - Empty results expose all seven check badges and require repagination
+  ---
+  duration_ms: 0.245962
+  ...
+# Subtest: whole-prose review repairs only the evidenced language and beat, then binds the passing report to the result
+ok 395 - whole-prose review repairs only the evidenced language and beat, then binds the passing report to the result
+  ---
+  duration_ms: 19.171609
+  ...
+# Subtest: persistent semantic contradictions stop after two targeted repairs and retain the latest prose and paid usage
+ok 396 - persistent semantic contradictions stop after two targeted repairs and retain the latest prose and paid usage
+  ---
+  duration_ms: 7.923434
+  ...
+# Subtest: cancellation after a paid semantic repair checkpoints the latest artifact and resumes with a fresh review
+ok 397 - cancellation after a paid semantic repair checkpoints the latest artifact and resumes with a fresh review
+  ---
+  duration_ms: 8.652247
+  ...
+# Subtest: a current report avoids duplicate review, while an edited prose invalidates it before another stage can use it
+ok 398 - a current report avoids duplicate review, while an edited prose invalidates it before another stage can use it
+  ---
+  duration_ms: 3.700793
+  ...
+# Subtest: resuming a stopped repair keeps the two-repair budget instead of restarting it
+ok 399 - resuming a stopped repair keeps the two-repair budget instead of restarting it
+  ---
+  duration_ms: 4.272743
+  ...
+# Subtest: a invalid-json repair spends its persisted attempt before the request and cannot reset the cap by resuming
+ok 400 - a invalid-json repair spends its persisted attempt before the request and cannot reset the cap by resuming
+  ---
+  duration_ms: 4.921018
+  ...
+# Subtest: a provider-failure repair spends its persisted attempt before the request and cannot reset the cap by resuming
+ok 401 - a provider-failure repair spends its persisted attempt before the request and cannot reset the cap by resuming
+  ---
+  duration_ms: 3.534895
+  ...
+# Subtest: pagination receives a final semantic review and repairs a changed event on only its target page
+ok 402 - pagination receives a final semantic review and repairs a changed event on only its target page
+  ---
+  duration_ms: 35.274733
+  ...
+# Subtest: legacy saved outlines remain readable without a fabricated semantic pass or paid migration
+ok 403 - legacy saved outlines remain readable without a fabricated semantic pass or paid migration
+  ---
+  duration_ms: 0.669513
+  ...
+# Subtest: A-4 child turn repair pays for exactly one final page coherence review
+ok 404 - A-4 child turn repair pays for exactly one final page coherence review
+  ---
+  duration_ms: 30.226817
+  ...
+# Subtest: structure choices expose automatic and generic patterns with accessible labels
+ok 405 - structure choices expose automatic and generic patterns with accessible labels
+  ---
+  duration_ms: 1.306158
+  ...
+# Subtest: linked plot ledger shows causal steps and named before/after states without editable ledger fields
+ok 406 - linked plot ledger shows causal steps and named before/after states without editable ledger fields
+  ---
+  duration_ms: 3.848857
+  ...
+# Subtest: actual location edits stale the linked contract; unchanged selections and legacy outlines do not
+ok 407 - actual location edits stale the linked contract; unchanged selections and legacy outlines do not
+  ---
+  duration_ms: 1.244474
+  ...
+# Subtest: coherence review distinguishes current and stale results, and safely quotes failure evidence
+ok 408 - coherence review distinguishes current and stale results, and safely quotes failure evidence
+  ---
+  duration_ms: 0.343489
+  ...
+# Subtest: editing an event summary preserves the old ledger but immediately changes the approval action to rebuilding it
+ok 409 - editing an event summary preserves the old ledger but immediately changes the approval action to rebuilding it
+  ---
+  duration_ms: 6.986542
+  ...
+# Subtest: final approval cannot bypass a persisted hard plot failure even with the warning checkbox selected
+ok 410 - final approval cannot bypass a persisted hard plot failure even with the warning checkbox selected
+  ---
+  duration_ms: 59.270773
+  ...
+# Subtest: semantic repair checkpoints keep the latest paid text and review outside the printable prose
+ok 411 - semantic repair checkpoints keep the latest paid text and review outside the printable prose
+  ---
+  duration_ms: 0.578179
+  ...
+# Subtest: final approval resumes a pending child simulation before semantic approval without rewriting pagination
+ok 412 - final approval resumes a pending child simulation before semantic approval without rewriting pagination
+  ---
+  duration_ms: 55.381383
+  ...
+# Subtest: FIX-IMG-3: the first parent edit of the cover action keeps the planned one outside the reviewed content
+ok 413 - FIX-IMG-3: the first parent edit of the cover action keeps the planned one outside the reviewed content
+  ---
+  duration_ms: 1.536083
+  ...
+# Subtest: semantic reviewer cannot mark an evidenced error passed or fail without an actual error
+ok 414 - semantic reviewer cannot mark an evidenced error passed or fail without an actual error
+  ---
+  duration_ms: 3.397543
+  ...
+# Subtest: review validation rejects fabricated locations, missing evidence, unsupported fields and oversized output
+ok 415 - review validation rejects fabricated locations, missing evidence, unsupported fields and oversized output
+  ---
+  duration_ms: 1.07547
+  ...
+# Subtest: prose, page scenes and contract quotes anchor evidence while omissions can point at a required setup
+ok 416 - prose, page scenes and contract quotes anchor evidence while omissions can point at a required setup
+  ---
+  duration_ms: 0.895832
+  ...
+# Subtest: evidence cannot target a different page, beat or narration language for repair
+ok 417 - evidence cannot target a different page, beat or narration language for repair
+  ---
+  duration_ms: 0.335146
+  ...
+# Subtest: malformed saved context structures fail safely without throwing or trusting stale snapshots
+ok 418 - malformed saved context structures fail safely without throwing or trusting stale snapshots
+  ---
+  duration_ms: 12.09774
+  ...
+# Subtest: a saved review is invalidated by edits to goal, events, states, prose, scenes or pagination
+ok 419 - a saved review is invalidated by edits to goal, events, states, prose, scenes or pagination
+  ---
+  duration_ms: 5.486278
+  ...
+# Subtest: fingerprints are stable across key order and media changes; prose and page approvals have separate scopes
+ok 420 - fingerprints are stable across key order and media changes; prose and page approvals have separate scopes
+  ---
+  duration_ms: 8.935944
+  ...
+# Subtest: page plot context is an independent beat-scoped snapshot and never invents page-specific state
+ok 421 - page plot context is an independent beat-scoped snapshot and never invents page-specific state
+  ---
+  duration_ms: 4.932114
+  ...
+# Subtest: legacy or unmatched pages receive no invented contract and stale derived context is removed
+ok 422 - legacy or unmatched pages receive no invented contract and stale derived context is removed
+  ---
+  duration_ms: 0.611181
+  ...
+# Subtest: draft-only provider/model selection preserves original prose, outline, pages, provider connections and parent defaults
+ok 423 - draft-only provider/model selection preserves original prose, outline, pages, provider connections and parent defaults
+  ---
+  duration_ms: 3.683693
+  ...
+# Subtest: legacy drafts hydrate missing providers from configured settings without losing frozen provider-specific config
+ok 424 - legacy drafts hydrate missing providers from configured settings without losing frozen provider-specific config
+  ---
+  duration_ms: 1.033978
+  ...
+# Subtest: hybrid engine selection uses the selected API for final text while direct local selection explicitly leaves hybrid mode
+ok 425 - hybrid engine selection uses the selected API for final text while direct local selection explicitly leaves hybrid mode
+  ---
+  duration_ms: 1.069847
+  ...
+# Subtest: engine selection makes no request and keeps demo provenance until an explicit API generation action
+ok 426 - engine selection makes no request and keeps demo provenance until an explicit API generation action
+  ---
+  duration_ms: 0.407076
+  ...
+# Subtest: wizard engine summary shows stage models and only a parent settings link, without prices or configuration fields
+ok 427 - wizard engine summary shows stage models and only a parent settings link, without prices or configuration fields
+  ---
+  duration_ms: 1.051072
+  ...
+# Subtest: a passing current book report survives the display-page aliases without an extra paid review
+ok 428 - a passing current book report survives the display-page aliases without an extra paid review
+  ---
+  duration_ms: 11.842962
+  ...
+# Subtest: a parent edit to displayed text triggers review and blocks scene and cover providers on failure
+ok 429 - a parent edit to displayed text triggers review and blocks scene and cover providers on failure
+  ---
+  duration_ms: 6.406644
+  ...
+# Subtest: a returned stale or failed review cannot authorize a paid image request
+ok 430 - a returned stale or failed review cannot authorize a paid image request
+  ---
+  duration_ms: 2.73792
+  ...
+# Subtest: a successful review is stored with its paid usage and reused on the next image preflight
+ok 431 - a successful review is stored with its paid usage and reused on the next image preflight
+  ---
+  duration_ms: 3.628592
+  ...
+# Subtest: previously saved legacy books and explicitly labelled demos do not acquire a fabricated semantic pass
+ok 432 - previously saved legacy books and explicitly labelled demos do not acquire a fabricated semantic pass
+  ---
+  duration_ms: 1.789516
+  ...
+# Subtest: separate writing and coherence calls use stage temperatures, prior original prose and no private media/credentials
+ok 433 - separate writing and coherence calls use stage temperatures, prior original prose and no private media/credentials
+  ---
+  duration_ms: 63.447418
+  ...
+# Subtest: editing/re-generating only a beat changes only that beat and the prose sees the edit
+ok 434 - editing/re-generating only a beat changes only that beat and the prose sees the edit
+  ---
+  duration_ms: 2.737759
+  ...
+# Subtest: rewriting one Korean paragraph preserves all other paragraphs and English byte for byte
+ok 435 - rewriting one Korean paragraph preserves all other paragraphs and English byte for byte
+  ---
+  duration_ms: 1.025197
+  ...
+# Subtest: 12 to 16 re-pagination calls only stage three and keeps the original prose
+ok 436 - 12 to 16 re-pagination calls only stage three and keeps the original prose
+  ---
+  duration_ms: 21.284302
+  ...
+# Subtest: scene-only repair changes only the action and never sends text through a template
+ok 437 - scene-only repair changes only the action and never sends text through a template
+  ---
+  duration_ms: 21.348861
+  ...
+# Subtest: targeted failed language repair preserves passing language, other pages and frozen level rules
+ok 438 - targeted failed language repair preserves passing language, other pages and frozen level rules
+  ---
+  duration_ms: 12.82506
+  ...
+# Subtest: automatic repair stops after two attempts and exposes remaining failure badges
+ok 439 - automatic repair stops after two attempts and exposes remaining failure badges
+  ---
+  duration_ms: 22.359104
+  ...
+# Subtest: structural repairs re-paginate from the original prose instead of rewriting page templates
+ok 440 - structural repairs re-paginate from the original prose instead of rewriting page templates
+  ---
+  duration_ms: 17.73306
+  ...
+# Subtest: API failure/cancellation never silently switches to demo
+ok 441 - API failure/cancellation never silently switches to demo
+  ---
+  duration_ms: 2.489913
+  ...
+# Subtest: schemas reject unsupported cast and wardrobe IDs, and allow object-shaped page range IDs
+ok 442 - schemas reject unsupported cast and wardrobe IDs, and allow object-shaped page range IDs
+  ---
+  duration_ms: 1.070733
+  ...
+# Subtest: actual costs exist only if reported, estimates remain separate, and legacy page aliases preserve scene data
+ok 443 - actual costs exist only if reported, estimates remain separate, and legacy page aliases preserve scene data
+  ---
+  duration_ms: 0.780084
+  ...
+# Subtest: explicit demo uses an authored causal plot and labels its honest checks, with no API invocation
+ok 444 - explicit demo uses an authored causal plot and labels its honest checks, with no API invocation
+  ---
+  duration_ms: 41.882249
+  ...
+# Subtest: bad engine stage responses fail validation and never become image-ready scene data
+ok 445 - bad engine stage responses fail validation and never become image-ready scene data
+  ---
+  duration_ms: 1.414497
+  ...
+# Subtest: expanding a demo to 16 or 24 pages preserves both approved prose word sequences without blank pages
+ok 446 - expanding a demo to 16 or 24 pages preserves both approved prose word sequences without blank pages
+  ---
+  duration_ms: 60.850399
+  ...
+# Subtest: detailed prose obeys frozen numeric/range levels without a tiny whole-book character cap
+ok 447 - detailed prose obeys frozen numeric/range levels without a tiny whole-book character cap
+  ---
+  duration_ms: 0.723489
+  ...
+# Subtest: disabled child simulator never resolves an engine; valid and cached checks make exactly two then zero calls
+ok 448 - disabled child simulator never resolves an engine; valid and cached checks make exactly two then zero calls
+  ---
+  duration_ms: 15.135113
+  ...
+# Subtest: malformed simulator output cannot exploit package defaults into a false pass and preserves both parallel-call usage
+ok 449 - malformed simulator output cannot exploit package defaults into a false pass and preserves both parallel-call usage
+  ---
+  duration_ms: 8.382696
+  ...
+# Subtest: only zero-score nonfinal endings change, other language and scene remain exact, and the gate reruns once
+ok 450 - only zero-score nonfinal endings change, other language and scene remain exact, and the gate reruns once
+  ---
+  duration_ms: 5.118414
+  ...
+# Subtest: persistent low curiosity stays an advisory after one repair, and reapproval does not buy another repair loop
+ok 451 - persistent low curiosity stays an advisory after one repair, and reapproval does not buy another repair loop
+  ---
+  duration_ms: 4.390932
+  ...
+# Subtest: missing turn rewrites only labeled turn paragraphs in both languages and re-paginates once before recheck
+ok 452 - missing turn rewrites only labeled turn paragraphs in both languages and re-paginates once before recheck
+  ---
+  duration_ms: 6.020863
+  ...
+# Subtest: cancellation before child gates makes no paid request
+ok 453 - cancellation before child gates makes no paid request
+  ---
+  duration_ms: 0.520607
+  ...
+# Subtest: a paid successful assessor is checkpointed when its sibling fails, and resume buys only the missing result
+ok 454 - a paid successful assessor is checkpointed when its sibling fails, and resume buys only the missing result
+  ---
+  duration_ms: 6.450601
+  ...
+# Subtest: cancellation after one paid assessor result retains it while its pending sibling can resume independently
+ok 455 - cancellation after one paid assessor result retains it while its pending sibling can resume independently
+  ---
+  duration_ms: 4.225421
+  ...
+# Subtest: cancellation between page targets resumes the remaining target and retains the one-pass repair budget
+ok 456 - cancellation between page targets resumes the remaining target and retains the one-pass repair budget
+  ---
+  duration_ms: 6.143384
+  ...
+# Subtest: a consumed page repair that failed after a paid request is never automatically retried on resume
+ok 457 - a consumed page repair that failed after a paid request is never automatically retried on resume
+  ---
+  duration_ms: 4.754379
+  ...
+# Subtest: turn repair resume preserves the finished Korean paragraph, rewrites English once and repaginates once
+ok 458 - turn repair resume preserves the finished Korean paragraph, rewrites English once and repaginates once
+  ---
+  duration_ms: 6.090087
+  ...
+# Subtest: partial final recheck resumes its missing assessor without replaying targets or the successful final result
+ok 459 - partial final recheck resumes its missing assessor without replaying targets or the successful final result
+  ---
+  duration_ms: 5.958183
+  ...
+# Subtest: approved elements come only from confirmed books, retain seed and brief facts, remove secrets, and update without duplicates
+ok 460 - approved elements come only from confirmed books, retain seed and brief facts, remove secrets, and update without duplicates
+  ---
+  duration_ms: 2.017084
+  ...
+# Subtest: weekly coach skips fewer than three recent approvals, runs when due, and never auto-applies proposals
+ok 461 - weekly coach skips fewer than three recent approvals, runs when due, and never auto-applies proposals
+  ---
+  duration_ms: 2.47661
+  ...
+# Subtest: weekly proposals reject empty defaults, fabricated evidence, unknown books, excessive rules and invalid replacement indices
+ok 462 - weekly proposals reject empty defaults, fabricated evidence, unknown books, excessive rules and invalid replacement indices
+  ---
+  duration_ms: 9.656738
+  ...
+# Subtest: only explicitly selected coach proposals apply with caps, version zero remains restorable, and stale basis is rejected
+ok 463 - only explicitly selected coach proposals apply with caps, version zero remains restorable, and stale basis is rejected
+  ---
+  duration_ms: 2.346935
+  ...
+# Subtest: simultaneous weekly due checks share one request and cancellation leaves no applied rules
+ok 464 - simultaneous weekly due checks share one request and cancellation leaves no applied rules
+  ---
+  duration_ms: 0.776708
+  ...
+# Subtest: rule performance uses the existing approved-book baseline and suggests restoring earlier rules after a drop
+ok 465 - rule performance uses the existing approved-book baseline and suggests restoring earlier rules after a drop
+  ---
+  duration_ms: 0.942581
+  ...
+# Subtest: R6-2 curiosity is the page-score mean times five and retains the raw model score
+ok 466 - R6-2 curiosity is the page-score mean times five and retains the raw model score
+  ---
+  duration_ms: 1.782329
+  ...
+# Subtest: parent quality panel exposes six structural cards, stage roles and safe default toggles
+ok 467 - parent quality panel exposes six structural cards, stage roles and safe default toggles
+  ---
+  duration_ms: 13.725525
+  ...
+# Subtest: reference card edits and coach evidence remain escaped and show only allowed structural fields
+ok 468 - reference card edits and coach evidence remain escaped and show only allowed structural fields
+  ---
+  duration_ms: 3.824421
+  ...
+# Subtest: repeat-material view uses configured book and pattern windows with approved records only
+ok 469 - repeat-material view uses configured book and pattern windows with approved records only
+  ---
+  duration_ms: 12.68718
+  ...
+# Subtest: weekly due check skips fewer than three books without resolving an engine or disrupting the current wizard
+ok 470 - weekly due check skips fewer than three books without resolving an engine or disrupting the current wizard
+  ---
+  duration_ms: 2.17438
+  ...
+# Subtest: no coach proposal is applied merely by viewing it or clicking approval without a selection
+ok 471 - no coach proposal is applied merely by viewing it or clicking approval without a selection
+  ---
+  duration_ms: 2.459522
+  ...
+# Subtest: seed chips and folded writer plan stay separate from printable prose; simulator is labelled as a model estimate
+ok 472 - seed chips and folded writer plan stay separate from printable prose; simulator is labelled as a model estimate
+  ---
+  duration_ms: 0.700963
+  ...
+# Subtest: drawer chips restrict home endpoints and the paired endpoint keeps the same home
+ok 473 - drawer chips restrict home endpoints and the paired endpoint keeps the same home
+  ---
+  duration_ms: 4.152467
+  ...
+# Subtest: beat reviews collapse, show one-line event and emotion, and use drawer chips without free place fields
+ok 474 - beat reviews collapse, show one-line event and emotion, and use drawer chips without free place fields
+  ---
+  duration_ms: 1.776258
+  ...
+# Subtest: editable prose labels follow explicit paragraph-to-beat metadata, with legacy fallback
+ok 475 - editable prose labels follow explicit paragraph-to-beat metadata, with legacy fallback
+  ---
+  duration_ms: 0.888464
+  ...
+# Subtest: settings link saves and exits the draft, then explicit settings adoption preserves all story work
+ok 476 - settings link saves and exits the draft, then explicit settings adoption preserves all story work
+  ---
+  duration_ms: 8.530729
+  ...
+# Subtest: manual approval rejects a missing topic or character before any generation request
+ok 477 - manual approval rejects a missing topic or character before any generation request
+  ---
+  duration_ms: 6.176513
+  ...
+# Subtest: exhausted paid outline retries retain one cumulative failed usage record in the draft
+ok 478 - exhausted paid outline retries retain one cumulative failed usage record in the draft
+  ---
+  duration_ms: 49.757659
+  ...
+# Subtest: R2-1 a compact final header rebuilds the revision workflow from the saved book
+ok 479 - R2-1 a compact final header rebuilds the revision workflow from the saved book
+  ---
+  duration_ms: 2.76997
+  ...
+# Subtest: new outline prompt contains structure and actual input, without an example story or new-place field
+ok 480 - new outline prompt contains structure and actual input, without an example story or new-place field
+  ---
+  duration_ms: 30.102449
+  ...
+# Subtest: unrelated story and single-location beats automatically regenerate with bounded cumulative usage
+ok 481 - unrelated story and single-location beats automatically regenerate with bounded cumulative usage
+  ---
+  duration_ms: 15.462558
+  ...
+# Subtest: persistent unrelated output fails after two repairs without substituting a demo
+ok 482 - persistent unrelated output fails after two repairs without substituting a demo
+  ---
+  duration_ms: 6.352493
+  ...
+# Subtest: malformed JSON also repairs and retains usage for every response
+ok 483 - malformed JSON also repairs and retains usage for every response
+  ---
+  duration_ms: 4.045253
+  ...
+# Subtest: generation preflight requires an actual home and two non-home drawer backgrounds before any call
+ok 484 - generation preflight requires an actual home and two non-home drawer backgrounds before any call
+  ---
+  duration_ms: 0.898814
+  ...
+# Subtest: manual approval inspector catches home, drawer, geometry-key and missing selected-name violations
+ok 485 - manual approval inspector catches home, drawer, geometry-key and missing selected-name violations
+  ---
+  duration_ms: 1.28079
+  ...
+# Subtest: meaningful Korean topic nouns match particles but not unrelated substrings
+ok 486 - meaningful Korean topic nouns match particles but not unrelated substrings
+  ---
+  duration_ms: 0.876969
+  ...
+# Subtest: custom moral and ending survive input normalization and prose prompts require explicit subjects and sensory dialogue rules
+ok 487 - custom moral and ending survive input normalization and prose prompts require explicit subjects and sensory dialogue rules
+  ---
+  duration_ms: 2.403501
+  ...
+# Subtest: new prose repairs missing or incorrect paragraph labels and legacy prose remains readable
+ok 488 - new prose repairs missing or incorrect paragraph labels and legacy prose remains readable
+  ---
+  duration_ms: 2.066169
+  ...
+# Subtest: new prose does not silently invent paragraph labels after repeated metadata failures
+ok 489 - new prose does not silently invent paragraph labels after repeated metadata failures
+  ---
+  duration_ms: 2.071586
+  ...
+# Subtest: new stories default to medium outline and pagination, and upper prose for every API provider
+ok 490 - new stories default to medium outline and pagination, and upper prose for every API provider
+  ---
+  duration_ms: 3.752021
+  ...
+# Subtest: stage selection preserves legacy preference, provider endpoints, and immutable draft snapshots
+ok 491 - stage selection preserves legacy preference, provider endpoints, and immutable draft snapshots
+  ---
+  duration_ms: 1.107716
+  ...
+# Subtest: hybrid is off by default and only an explicit enabled flag routes outline and draft to local
+ok 492 - hybrid is off by default and only an explicit enabled flag routes outline and draft to local
+  ---
+  duration_ms: 0.592419
+  ...
+# Subtest: local uses the saved user model for all stages, and invalid paid IDs fall back to stage defaults
+ok 493 - local uses the saved user model for all stages, and invalid paid IDs fall back to stage defaults
+  ---
+  duration_ms: 0.320217
+  ...
+# Subtest: cost estimate totals actual mixed stage rates and retains final-prose model fields
+ok 494 - cost estimate totals actual mixed stage rates and retains final-prose model fields
+  ---
+  duration_ms: 1.454002
+  ...
+# Subtest: parent form exposes stage selectors, API pricing, hybrid configuration, and escaped stored values
+ok 495 - parent form exposes stage selectors, API pricing, hybrid configuration, and escaped stored values
+  ---
+  duration_ms: 1.865841
+  ...
+# Subtest: scene options default on, persist through normalized snapshots, and can be independently disabled
+ok 496 - scene options default on, persist through normalized snapshots, and can be independently disabled
+  ---
+  duration_ms: 1.98087
+  ...
+# Subtest: estimates count per-language paragraphs, mandatory brief, and additional requests without claiming a fixed bill
+ok 497 - estimates count per-language paragraphs, mandatory brief, and additional requests without claiming a fixed bill
+  ---
+  duration_ms: 1.212232
+  ...
+# Subtest: base cost budgets two complete-story reviews and excludes conditional contract repairs
+ok 498 - base cost budgets two complete-story reviews and excludes conditional contract repairs
+  ---
+  duration_ms: 0.644327
+  ...
+# Subtest: quality engine roles use separate tiers, explicit providers, and immutable saved endpoints
+ok 499 - quality engine roles use separate tiers, explicit providers, and immutable saved endpoints
+  ---
+  duration_ms: 0.838811
+  ...
+# Subtest: quality costs count role-specific two-pass prose, optional beam and child reviews without duplicate enrichment
+ok 500 - quality costs count role-specific two-pass prose, optional beam and child reviews without duplicate enrichment
+  ---
+  duration_ms: 0.925683
+  ...
+# Subtest: new text snapshots freeze separate parent quality settings without credentials or mutating saved settings
+ok 501 - new text snapshots freeze separate parent quality settings without credentials or mutating saved settings
+  ---
+  duration_ms: 0.859533
+  ...
+# Subtest: quality snapshots preserve typed world and atmosphere choices, including disabled variants, at no extra model cost
+ok 502 - quality snapshots preserve typed world and atmosphere choices, including disabled variants, at no extra model cost
+  ---
+  duration_ms: 0.716974
+  ...
+# Subtest: evaluated Anthropic outline defaults to Sonnet while explicit Opus and other providers remain selected
+ok 503 - evaluated Anthropic outline defaults to Sonnet while explicit Opus and other providers remain selected
+  ---
+  duration_ms: 0.286839
+  ...
+# Subtest: adventure-stage selector lists the real 100 cards by era and preserves the existing-background default
+ok 504 - adventure-stage selector lists the real 100 cards by era and preserves the existing-background default
+  ---
+  duration_ms: 5.6358
+  ...
+# Subtest: world selection never replaces a typed topic, image engine, style or custom background drawer
+ok 505 - world selection never replaces a typed topic, image engine, style or custom background drawer
+  ---
+  duration_ms: 44.830569
+  ...
+# Subtest: world labels and hints are escaped, while disabled selectors stay read only
+ok 506 - world labels and hints are escaped, while disabled selectors stay read only
+  ---
+  duration_ms: 4.920668
+  ...
+# Subtest: explicit world-theme requests are deterministic, cycle to another idea and make no model calls
+ok 507 - explicit world-theme requests are deterministic, cycle to another idea and make no model calls
+  ---
+  duration_ms: 16.840139
+  ...
+# Subtest: R8-1 only newly prepared drafts freeze language-specific compression policy
+ok 508 - R8-1 only newly prepared drafts freeze language-specific compression policy
+  ---
+  duration_ms: 6.350931
+  ...
+# Subtest: four new builtins validate, retain real watercolor cover authority and legacy lookups
+ok 509 - four new builtins validate, retain real watercolor cover authority and legacy lookups
+  ---
+  duration_ms: 8.664542
+  ...
+# Subtest: free custom labels and visual descriptions are allowed with no generated refs yet
+ok 510 - free custom labels and visual descriptions are allowed with no generated refs yet
+  ---
+  duration_ms: 3.867488
+  ...
+# Subtest: all named prohibitions are case-insensitive and added parent words are enforced
+ok 511 - all named prohibitions are case-insensitive and added parent words are enforced
+  ---
+  duration_ms: 14.620431
+  ...
+# Subtest: specific artist imitation syntax is rejected with a reason
+ok 512 - specific artist imitation syntax is rejected with a reason
+  ---
+  duration_ms: 0.818091
+  ...
+# Subtest: custom registry stays separate from builtins and supports library replacement
+ok 513 - custom registry stays separate from builtins and supports library replacement
+  ---
+  duration_ms: 1.307034
+  ...
+# Subtest: fixed scene set contains only the three specified places
+ok 514 - fixed scene set contains only the three specified places
+  ---
+  duration_ms: 0.318541
+  ...
+# Subtest: parent selection persists generated assets and invalidates sheets without altering old books
+ok 515 - parent selection persists generated assets and invalidates sheets without altering old books
+  ---
+  duration_ms: 1.245639
+  ...
+# Subtest: selection refuses uploads, stale Worlds, zero or three sheets before mutation
+ok 516 - selection refuses uploads, stale Worlds, zero or three sheets before mutation
+  ---
+  duration_ms: 0.723502
+  ...
+# Subtest: custom style sheet selection stores preset IDs without mutating builtin preset records
+ok 517 - custom style sheet selection stores preset IDs without mutating builtin preset records
+  ---
+  duration_ms: 2.448467
+  ...
+# Subtest: OpenAI sends structured JSON, requested temperature and private header, retries JSON parsing only once
+ok 518 - OpenAI sends structured JSON, requested temperature and private header, retries JSON parsing only once
+  ---
+  duration_ms: 21.014888
+  ...
+# Subtest: Google uses JSON schema and Anthropic forces one JSON tool without executing it
+ok 519 - Google uses JSON schema and Anthropic forces one JSON tool without executing it
+  ---
+  duration_ms: 1.175705
+  ...
+# Subtest: Local model discovery accepts base URL only; proxy never forwards a browser secret
+ok 520 - Local model discovery accepts base URL only; proxy never forwards a browser secret
+  ---
+  duration_ms: 1.478305
+  ...
+# Subtest: Tracking ID and upstream authentication failure never expose input keys
+ok 521 - Tracking ID and upstream authentication failure never expose input keys
+  ---
+  duration_ms: 0.749701
+  ...
+# Subtest: GPT-6 premium requests omit unsupported sampling and price the selected model
+ok 522 - GPT-6 premium requests omit unsupported sampling and price the selected model
+  ---
+  duration_ms: 2.220227
+  ...
+# Subtest: Gemini Argon uses thinking levels and includes billed thinking tokens in estimates
+ok 523 - Gemini Argon uses thinking levels and includes billed thinking tokens in estimates
+  ---
+  duration_ms: 1.13433
+  ...
+# Subtest: current Claude models preserve dynamic schema instructions without forced tools and retry invalid JSON once
+ok 524 - current Claude models preserve dynamic schema instructions without forced tools and retry invalid JSON once
+  ---
+  duration_ms: 1.978807
+  ...
+# Subtest: truncation and continuation stop after one paid request instead of retrying JSON
+ok 525 - truncation and continuation stop after one paid request instead of retrying JSON
+  ---
+  duration_ms: 0.910483
+  ...
+# Subtest: premium proxy sends the chosen model and bounded token budget without a browser secret
+ok 526 - premium proxy sends the chosen model and bounded token budget without a browser secret
+  ---
+  duration_ms: 0.884614
+  ...
+# Subtest: long premium requests remain cancellable and timeout is distinct from an explicit cancel
+ok 527 - long premium requests remain cancellable and timeout is distinct from an explicit cancel
+  ---
+  duration_ms: 7.628941
+  ...
+# Subtest: the response deadline applies to each JSON attempt, so a slow first reply does not abort the paid retry
+ok 528 - the response deadline applies to each JSON attempt, so a slow first reply does not abort the paid retry
+  ---
+  duration_ms: 102.375246
+  ...
+# Subtest: evaluated Haiku 5.5 disables thinking and preserves the small judgment budget
+ok 529 - evaluated Haiku 5.5 disables thinking and preserves the small judgment budget
+  ---
+  duration_ms: 0.468798
+  ...
+# Subtest: model catalog preserves existing defaults and resolves only known paid model IDs
+ok 530 - model catalog preserves existing defaults and resolves only known paid model IDs
+  ---
+  duration_ms: 0.894968
+  ...
+# Subtest: selected premium models use their own standard rates, with dated Google pricing
+ok 531 - selected premium models use their own standard rates, with dated Google pricing
+  ---
+  duration_ms: 0.288289
+  ...
+# Subtest: book estimates sum the medium and upper stage models, including hybrid API final stages
+ok 532 - book estimates sum the medium and upper stage models, including hybrid API final stages
+  ---
+  duration_ms: 1.876244
+  ...
+# Subtest: text proxy uses server credentials, excludes client credentials and keeps provider failures private
+ok 533 - text proxy uses server credentials, excludes client credentials and keeps provider failures private
+  ---
+  duration_ms: 39.881189
+  ...
+# Subtest: A-14 explicit vault recovery replaces corrupt metadata and preserves unrelated library data
+ok 534 - A-14 explicit vault recovery replaces corrupt metadata and preserves unrelated library data
+  ---
+  duration_ms: 80.726089
+  ...
+# Subtest: translation requires explicit parent approval and does not read credentials or call an API before it
+ok 535 - translation requires explicit parent approval and does not read credentials or call an API before it
+  ---
+  duration_ms: 1.152404
+  ...
+# Subtest: arbitrary Korean uses the configured Google draft image model with TEXT output and quoted source data
+ok 536 - arbitrary Korean uses the configured Google draft image model with TEXT output and quoted source data
+  ---
+  duration_ms: 19.668183
+  ...
+# Subtest: proxy translation sends only description without browser credentials and never opens the vault
+ok 537 - proxy translation sends only description without browser credentials and never opens the vault
+  ---
+  duration_ms: 0.97504
+  ...
+# Subtest: missing keys fail before network, and authentication or quota errors never expose provider error bodies
+ok 538 - missing keys fail before network, and authentication or quota errors never expose provider error bodies
+  ---
+  duration_ms: 1.103014
+  ...
+# Subtest: source and result boundaries reject instructions, invalid or oversized content without accepting it as a description
+ok 539 - source and result boundaries reject instructions, invalid or oversized content without accepting it as a description
+  ---
+  duration_ms: 0.611899
+  ...
+# Subtest: aborting before vault completion prevents a request, and closing an in-flight translation aborts its fetch
+ok 540 - aborting before vault completion prevents a request, and closing an in-flight translation aborts its fetch
+  ---
+  duration_ms: 0.960242
+  ...
+# Subtest: unusable model responses and unexpected transport errors give readable failures without leaked request data
+ok 541 - unusable model responses and unexpected transport errors give readable failures without leaked request data
+  ---
+  duration_ms: 2.174796
+  ...
+# Subtest: local translations preserve exact known clothes and do not pretend unknown Korean is translated
+ok 542 - local translations preserve exact known clothes and do not pretend unknown Korean is translated
+  ---
+  duration_ms: 1.479326
+  ...
+# Subtest: topic suggestions require no provider call and cover scene-specific wardrobe choices
+ok 543 - topic suggestions require no provider call and cover scene-specific wardrobe choices
+  ---
+  duration_ms: 0.989147
+  ...
+# Subtest: wardrobe selections reject foreign, stale, overlapping and out-of-book ranges
+ok 544 - wardrobe selections reject foreign, stale, overlapping and out-of-book ranges
+  ---
+  duration_ms: 2.765153
+  ...
+# Subtest: book defaults and page-specific overrides are copied rather than shared
+ok 545 - book defaults and page-specific overrides are copied rather than shared
+  ---
+  duration_ms: 0.287208
+  ...
+# Subtest: approved book freezes original identity and variants even after live wardrobe deletion
+ok 546 - approved book freezes original identity and variants even after live wardrobe deletion
+  ---
+  duration_ms: 3.799428
+  ...
+# Subtest: only pages 1–4 send wardrobe references and original face remains first
+ok 547 - only pages 1–4 send wardrobe references and original face remains first
+  ---
+  duration_ms: 0.975537
+  ...
+# Subtest: an explicit default-look range overrides a whole-book variant without losing base identity
+ok 548 - an explicit default-look range overrides a whole-book variant without losing base identity
+  ---
+  duration_ms: 0.840219
+  ...
+# Subtest: new variants generate two views from the same original face and style and never change the base sheet
+ok 549 - new variants generate two views from the same original face and style and never change the base sheet
+  ---
+  duration_ms: 1.200942
+  ...
+# Subtest: rendered selectors retain chosen defaults and escape material names
+ok 550 - rendered selectors retain chosen defaults and escape material names
+  ---
+  duration_ms: 1.369188
+  ...
+# Subtest: the wardrobe pre-check reads parent text like a scene request does: strict, no cast-name exemption
+ok 551 - the wardrobe pre-check reads parent text like a scene request does: strict, no cast-name exemption
+  ---
+  duration_ms: 6.715842
+  ...
+# Subtest: cover watercolor uses the actual cover; old flat sheets do not anchor new AI sheets
+ok 552 - cover watercolor uses the actual cover; old flat sheets do not anchor new AI sheets
+  ---
+  duration_ms: 22.017513
+  ...
+# Subtest: old watercolor Worlds upgrade once and preserve frozen books
+ok 553 - old watercolor Worlds upgrade once and preserve frozen books
+  ---
+  duration_ms: 6.384652
+  ...
+# Subtest: editing one character invalidates only that character sheet
+ok 554 - editing one character invalidates only that character sheet
+  ---
+  duration_ms: 4.363962
+  ...
+# Subtest: free sample is deterministic, makes no requests, and rejects photo conversion
+ok 555 - free sample is deterministic, makes no requests, and rejects photo conversion
+  ---
+  duration_ms: 5.373659
+  ...
+# Subtest: topic suggestions avoid duplicate names and chosen companions appear in story text
+ok 556 - topic suggestions avoid duplicate names and chosen companions appear in story text
+  ---
+  duration_ms: 1.600866
+  ...
+# Subtest: upgrading the Google image model invalidates future sheets and keeps the old book model frozen
+ok 557 - upgrading the Google image model invalidates future sheets and keeps the old book model frozen
+  ---
+  duration_ms: 3.692532
+  ...
+# Subtest: A-6 a failed provider preparation leaves the previous requested seed and metadata intact
+ok 558 - A-6 a failed provider preparation leaves the previous requested seed and metadata intact
+  ---
+  duration_ms: 4.966757
+  ...
+# Subtest: expanded package has 100 unique world cards, 323 base props and disjoint training, eval and gold topics
+ok 559 - expanded package has 100 unique world cards, 323 base props and disjoint training, eval and gold topics
+  ---
+  duration_ms: 17.696931
+  ...
+# Subtest: season overlays are deterministic, leave fixed geometry untouched and respect nonseasonal worlds
+ok 560 - season overlays are deterministic, leave fixed geometry untouched and respect nonseasonal worlds
+  ---
+  duration_ms: 43.347165
+  ...
+# Subtest: app atmosphere uses the frozen Seoul creation date and adds no catalogue geometry or style override to artwork
+ok 561 - app atmosphere uses the frozen Seoul creation date and adds no catalogue geometry or style override to artwork
+  ---
+  duration_ms: 25.424092
+  ...
+# Subtest: distillation dry run selects stable cell seasons and alternating day/night without touching model engines
+ok 562 - distillation dry run selects stable cell seasons and alternating day/night without touching model engines
+  ---
+  duration_ms: 16.07104
+  ...
+# Subtest: the cost estimate CLI exits without credentials, provider calls or a generated dataset
+ok 563 - the cost estimate CLI exits without credentials, provider calls or a generated dataset
+  ---
+  duration_ms: 45.713165
+  ...
+# Subtest: a variation persists separate engines and membership without rewriting source or books
+ok 564 - a variation persists separate engines and membership without rewriting source or books
+  ---
+  duration_ms: 21.784874
+  ...
+# Subtest: switching stores outgoing text settings and restores each World after serialized reload
+ok 565 - switching stores outgoing text settings and restores each World after serialized reload
+  ---
+  duration_ms: 7.438111
+  ...
+# Subtest: World configuration never copies plaintext secrets or authentication-bearing URLs
+ok 566 - World configuration never copies plaintext secrets or authentication-bearing URLs
+  ---
+  duration_ms: 4.998808
+  ...
+# Subtest: rejected variation and missing switch leave all state untouched
+ok 567 - rejected variation and missing switch leave all state untouched
+  ---
+  duration_ms: 23.281446
+  ...
+# Subtest: same-style variants retain authoritative style references but no old cast approval
+ok 568 - same-style variants retain authoritative style references but no old cast approval
+  ---
+  duration_ms: 3.372213
+  ...
+# Subtest: World cards escape user text and offer switching without changing main form selectors
+ok 569 - World cards escape user text and offer switching without changing main form selectors
+  ---
+  duration_ms: 5.89577
+  ...
+# Subtest: selected premium models survive World copy, switching and serialized reload
+ok 570 - selected premium models survive World copy, switching and serialized reload
+  ---
+  duration_ms: 4.162737
+  ...
+1..570
+# tests 570
+# suites 0
+# pass 570
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8048.382011

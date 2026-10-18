@@ -12,6 +12,7 @@ import { generateBeatsWithBeam } from './beamSearch.js';
 import { writeRichThenSimplify, RICH_LEVEL_OF } from './richThenSimplify.js';
 import { curiosityCheck, retellCheck, type PageText } from './childSimulator.js';
 import { extractJson, hashString } from './util.js';
+import { catchphraseClauses, isCatchphraseFix } from './catchphrase.js';
 
 export interface Engines {
   outline: TextEngine; // 상위 권장(줄거리는 토큰이 적다)
@@ -46,6 +47,18 @@ export interface OutlineStageInput {
   referenceBooks?: BookRecord[];
   world?: WorldCard;
   variantChance?: number;
+  /** 반복 검사에 쓸 말버릇. 없으면 등장인물의 catchphrase(돌려 쓰느라 뺀 인물 포함)를 쓴다. */
+  catchphrases?: string[];
+  /**
+   * true면 말버릇 항목만으로는 유료 수정 호출을 하지 않는다. 항목은 check.fix에 남아 호출자가 권고로 다룬다.
+   * 다른 수정 항목과 함께 있으면 같은 수정 호출에 넣는다. 앱은 true, 평가 하네스·CLI는 기본(false).
+   */
+  advisoryCatchphrases?: boolean;
+  /**
+   * true면 R9 이전(r8) 요청을 글자 그대로 보낸다: 등장인물 줄에 사용 한도 문구가 없고, 말버릇 반복 검사를 하지 않아
+   * 수정 호출에도 말버릇 항목이 없다. 말버릇 정책 없이 고정된 앱의 기존 초안이 완료한 유료 호출을 재결제하지 않게 한다.
+   */
+  legacyCatchphrasePrompt?: boolean;
 }
 
 export interface OutlineStageResult {
@@ -72,9 +85,9 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     world: input.world,
     variantChance: input.variantChance,
   });
-  const charactersCompact = [input.protagonist, ...input.supporting]
-    .map((c) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${c.catchphrase ? ` "${c.catchphrase}"` : ''}`)
-    .join(' / ');
+  const cast = [input.protagonist, ...input.supporting];
+  const clauses = input.legacyCatchphrasePrompt ? cast.map((c) => (c.catchphrase ? ` "${c.catchphrase}"` : '')) : catchphraseClauses(cast);
+  const charactersCompact = cast.map((c, i) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${clauses[i]}`).join(' / ');
 
   let calls = 0;
   let cost = 0;
@@ -125,7 +138,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
       endingType: input.endingType,
     };
   } else {
-    const makePrompt = (exampleCount: number) => buildOutlinePrompt({
+    const makePrompt = (exampleCount: number, legacyCatchphrasePrompt = input.legacyCatchphrasePrompt) => buildOutlinePrompt({
       protagonist: input.protagonist,
       supporting: input.supporting,
       worldCore: input.worldCore,
@@ -144,10 +157,17 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
       banExamples: input.banExamples,
       exampleCount,
       excludeBookIds: input.excludeBookIds,
+      legacyCatchphrasePrompt,
     });
+    // R9: 말버릇 사용 한도 문구는 참고 예시 예산(1,800)에 세지 않는다. r8 문안 길이로 재므로 한도 문구 때문에
+    // 예시가 빠지지 않고, 예시 수는 r8과 같다(r8 문안이면 실제 프롬프트와 같은 길이).
+    const overBudget = (exampleCount: number) => {
+      const measured = makePrompt(exampleCount, true);
+      return roughTokenCount(measured.system + measured.user) > 1800;
+    };
     let exampleCount = 2;
-    let prompt = makePrompt(exampleCount);
-    while (exampleCount > 0 && roughTokenCount(prompt.system + prompt.user) > 1800) prompt = makePrompt(--exampleCount);
+    while (exampleCount > 0 && overBudget(exampleCount)) exampleCount--;
+    const prompt = makePrompt(exampleCount);
     const r = await input.engines.outline.complete(prompt);
     calls++;
     cost += r.costUsd ?? 0;
@@ -157,8 +177,10 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
   }
 
   // 코드 검사 → 지적된 비트만 고치는 수정 호출 1회
-  let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories });
-  if (check.fix.length > 0 && check.regenerate.length === 0) {
+  const catchphrases = input.legacyCatchphrasePrompt ? [] : input.catchphrases ?? cast.map((c) => c.catchphrase ?? '');
+  let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
+  const onlyAdvisory = input.advisoryCatchphrases === true && check.fix.every((message) => isCatchphraseFix(message));
+  if (check.fix.length > 0 && check.regenerate.length === 0 && !onlyAdvisory) {
     const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
     const fr = await input.engines.cheap.complete({ system: '너는 그림책 편집자다. JSON으로만 답한다.', user: fixUser, temperature: 0.3, maxTokens: 4000 });
     calls++;
@@ -166,7 +188,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     const fixed = (fr.json as StoryOutline | undefined) ?? extractJson<StoryOutline>(fr.text);
     if (fixed) {
       outline = fixed;
-      check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories });
+      check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
     }
   }
 
@@ -189,6 +211,8 @@ export interface ProseStageInput {
   /** 책 쪽 수. 전체 문장 예산에 쓴다. */
   pageCount?: number;
   condenseOverBudget?: boolean;
+  /** true면 규칙 9(말버릇 한도)가 없는 r8 풍부 쓰기 문안을 쓴다(앱의 기존 초안 재결제 방지). */
+  legacyCatchphrasePrompt?: boolean;
 }
 
 export async function runProseStage(input: ProseStageInput) {
@@ -214,6 +238,7 @@ export async function runProseStage(input: ProseStageInput) {
     presentTenseOnly: input.lang === 'en' && input.targetLevelId === 'E0',
     pageCount: input.pageCount,
     condenseOverBudget: input.condenseOverBudget,
+    legacyCatchphrasePrompt: input.legacyCatchphrasePrompt,
   });
 }
 

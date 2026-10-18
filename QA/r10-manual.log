@@ -1,0 +1,24 @@
+{
+  "baseCommit": "785f977",
+  "paidRequests": [],
+  "pageErrors": [],
+  "r8Restore": {
+    "charactersPreserved": 4,
+    "booksPreserved": 4,
+    "draftInputAndFrozenReadingPreserved": true,
+    "legacyCatchphrase": "같이 가자!",
+    "legacyPolicyAbsent": true
+  },
+  "imageWordRules": {
+    "parentDescriptionRejected": true,
+    "pageTextAllowed": true,
+    "generatedLocationAllowed": true
+  },
+  "settingsGroups": [
+    "우리 아이",
+    "엔진과 키",
+    "잠금",
+    "보관"
+  ],
+  "defaultMode": "simple"
+}

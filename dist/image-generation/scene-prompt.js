@@ -23,6 +23,25 @@ export function sceneBriefForPage(book, page) {
     ) || null
   );
 }
+/**
+ * The planned brief and staging words buildScenePrompt sends for this page
+ * (pose, weather, light, props, creature, drawable verb, sub-location):
+ * model-written story text, checked in the lenient forbidden-name scope. The
+ * app's own light-mood line is scaffolding and is not included.
+ */
+export function sceneBriefText(book, page) {
+  const brief = sceneBriefForPage(book, page || {}),
+    staging = page?.staging || {};
+  return [
+    en(brief?.pose),
+    en(brief?.weather),
+    en(brief?.light),
+    ...(Array.isArray(brief?.props) ? brief.props.map(en) : []),
+    en(brief?.creature),
+    text(staging.verb),
+    text(staging.subLocation),
+  ].filter(Boolean);
+}
 export function buildScenePrompt({
   book,
   page,
@@ -91,7 +110,7 @@ export function buildScenePrompt({
   const location = `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}ARCHITECTURE LOCK: the approved place sheet is authoritative; the CANONICAL first scene establishes previously unspecified visible geometry. Preserve the exact doorway silhouette (arch/rectangle), door count, frame color, handle, windows, wall materials, roof, paths and relative structural positions across every view. Camera angle may change; the physical building must not. Background references define layout only: relight the SAME geometry for ${time}; prior daytime lighting must not override the brief. Recent scenes are secondary continuity references and cannot override the canonical layout. Never invent an extra entrance, bridge, tower, staircase or decorative structure to fill the composition. A sub-location must already exist in the place facts/reference; otherwise change only the camera position. Draw only architecture and props established by the place references or current story. A new permanent structure requires explicit story content. Do not transfer buildings from a different place. Earlier page continuity: ${json(earlierPages)}. Preserve prior action consequences while depicting this page event. Previous poses and temporary props are not instructions to duplicate them. Style references define rendering only. No words, captions, watermark or logos.`;
   const plot = plotContextForPage(book.outline, page);
   const continuity = plot
-    ? `FROZEN EVENT AND STATE LEDGER (scope: entire beat, not every page): ${json(plot)}. Draw ONLY the moment narrated on this page. Use earlier page consequences and the current narrative to determine which intermediate state applies. Do not jump to the beat's final result early, duplicate the whole beat, reintroduce a discarded prop, change its owner, or invent a new solution/structure. Approved setup/payoff references explain continuity; they are not visible text.`
+    ? `LOCKED EVENT AND STATE LEDGER (scope: entire beat, not every page): ${json(plot)}. Draw ONLY the moment narrated on this page. Use earlier page consequences and the current narrative to determine which intermediate state applies. Do not jump to the beat's final result early, duplicate the whole beat, reintroduce a discarded prop, change its owner, or invent a new solution/structure. Approved setup/payoff references explain continuity; they are not visible text.`
     : "";
   return [
     composition,

@@ -3,6 +3,8 @@
  * 원문과 설명은 prompts/*.md에 있다. 두 곳이 어긋나면 md가 기준이니 여기를 고친다.
  */
 
+import { CATCHPHRASE_RULE_EN, CATCHPHRASE_RULE_KO } from './catchphrase.js';
+
 export function fill(template: string, vars: Record<string, string | number | null | undefined>): string {
   const PH = /\{\{\s*([\w.]+)\s*\}\}/g;
   const lines = template.split('\n').flatMap((line) => {
@@ -25,7 +27,7 @@ export function fill(template: string, vars: Record<string, string | number | nu
 export const OUTLINE_SYSTEM = `너는 3~7세 그림책 작가다. 아래 [정해진 재료]는 이미 결정된 것이므로 바꾸지 말고, 그 재료로 사건이 이어지는 이야기 설계를 JSON으로만 쓴다.
 [참고 예시]는 구조·리듬만 참고한다. 예시의 인물·물건·사건·장소를 가져오면 실패다.`;
 
-export const OUTLINE_USER = `[등장인물] {{protagonistName}}: {{protagonistTraits}}, 말버릇 "{{protagonistCatchphrase}}"
+export const OUTLINE_USER = `[등장인물] {{protagonistName}}: {{protagonistTraits}}{{protagonistCatchphraseClause}}
 {{supportingCharacters}}
 [세계관 핵심] {{worldCore}}
 [주제] {{topic}}   [가치] {{value}}   [수준] 한글 {{levelKo}}, 영어 {{levelEn}}   [쪽 수] {{pages}} → 비트 {{beatCount}}개
@@ -127,7 +129,7 @@ C: {{candC}}
 
 export const PROSE_RICH_SYSTEM = `너는 3~7세 그림책 작가다. 주어진 줄거리 비트와 장면 브리프를 따라 이야기 전문을 쓴다. 지금은 넉넉하게 쓰는 단계다. 길이 제한보다 사건의 짜임, 감각, 대화를 우선한다. 쪽 구분 없이 비트마다 문단 하나로 쓴다.`;
 
-export const PROSE_RICH_USER_KO = `[등장인물] {{characters}}
+const PROSE_RICH_USER_KO_HEAD = `[등장인물] {{characters}}
 [줄거리] {{beats}}
 [장면 브리프] {{briefs}}
 [이번 글의 수준] {{richLevelLabel}} — 문장당 {{richEojeolRange}}어절, 비트당 {{richSentencesRange}}문장
@@ -145,11 +147,17 @@ export const PROSE_RICH_USER_KO = `[등장인물] {{characters}}
 5 종결어미를 섞는다. 비트마다 감탄·질문·청유 중 1개 이상, 같은 종결어미 3연속 금지.
 6 비트 마지막 문장은 다음 비트가 궁금해지게 끝낸다(마무리 비트 제외). 방법을 섞는다: 소리·실패·새로 나타난 것·질문. 질문으로 끝나는 비트는 책 전체에서 2개까지.
 7 후렴은 {{refrainText}}를 비트 {{refrainBeats}}에만, 매번 한 단어 변주.
-8 교훈·감상 꼬리말 금지. 같은 문장 두 번 금지.
+8 교훈·감상 꼬리말 금지. 같은 문장 두 번 금지.`;
+const PROSE_RICH_USER_KO_TAIL = `
 
 [출력] 글만. 라벨 붙은 문단을 비트 수만큼.`;
+/** R9 규칙 9(한글 전문). */
+export const PROSE_RICH_RULE_9_KO = `9 ${CATCHPHRASE_RULE_KO}`;
+export const PROSE_RICH_USER_KO = `${PROSE_RICH_USER_KO_HEAD}\n${PROSE_RICH_RULE_9_KO}${PROSE_RICH_USER_KO_TAIL}`;
+/** 규칙 9가 없는 r8 문안. 말버릇 정책 없이 고정된 앱의 기존 초안이 같은 요청(=재결제 없음)을 보내도록 남긴다. */
+export const PROSE_RICH_USER_KO_R8 = `${PROSE_RICH_USER_KO_HEAD}${PROSE_RICH_USER_KO_TAIL}`;
 
-export const PROSE_RICH_USER_EN = `[Characters] {{characters}}
+const PROSE_RICH_USER_EN_HEAD = `[Characters] {{characters}}
 [Beats] {{beats}}
 [Scene briefs] {{briefs}}
 [Level for this draft] {{richLevelLabel}} — {{richWordsRange}} words per sentence, {{richSentencesRange}} sentences per beat
@@ -167,9 +175,15 @@ export const PROSE_RICH_USER_EN = `[Characters] {{characters}}
 5 Mix sentence endings: at least one exclamation or question per beat.
 6 End each beat with a line that makes a child want to turn the page (except the last beat). Vary the hook: a sound, a failure, something newly seen, or a question. At most TWO beats in the whole story may end with a question.
 7 Use picture-book devices: a repeating frame sentence ({{refrainText}}) at beats {{refrainBeats}}, rhyme or onomatopoeia where natural.
-8 Do not translate anything. This is an original English text for the same beats.
+8 Do not translate anything. This is an original English text for the same beats.`;
+const PROSE_RICH_USER_EN_TAIL = `
 
 [Output] Text only.`;
+/** R9 rule 9 (English prose). */
+export const PROSE_RICH_RULE_9_EN = `9 ${CATCHPHRASE_RULE_EN} Never use it as the repeating frame sentence.`;
+export const PROSE_RICH_USER_EN = `${PROSE_RICH_USER_EN_HEAD}\n${PROSE_RICH_RULE_9_EN}${PROSE_RICH_USER_EN_TAIL}`;
+/** r8 text without rule 9, for app drafts frozen without a catchphrase policy (same request, no re-billing). */
+export const PROSE_RICH_USER_EN_R8 = `${PROSE_RICH_USER_EN_HEAD}${PROSE_RICH_USER_EN_TAIL}`;
 
 export const PROSE_SIMPLIFY_SYSTEM = `너는 그림책 편집자다. 아래 글의 사건·반전·후렴은 하나도 빼지 말고, 문장을 어린아이 수준으로 짧게 다시 쓴다. [전체 분량]이 주어지면 그 문장 수를 반드시 지킨다. 넘칠 때는 곁가지 묘사·같은 동작의 반복·덧붙인 대화를 줄이고 비트의 사건은 남긴다.`;
 

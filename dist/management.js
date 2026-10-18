@@ -199,6 +199,8 @@ export function updateCharacter(state, id, patch) {
     ...previous,
     ...normalized,
     version: Math.max(1, Number(previous.version) || 1) + 1,
+    // A parent's edit makes a FULL AUTO friend parent text (strict image-word scope).
+    ...(previous.source === "full-auto" ? { parentEditedAt: updatedAt } : {}),
     characterHistory: [
       ...(previous.characterHistory || []),
       { ...materialSnapshot(previous), supersededAt: updatedAt },
@@ -283,6 +285,7 @@ export function updateBackground(state, id, patch) {
           ...item,
           ...normalized,
           version: Math.max(1, Number(item.version) || 1) + 1,
+          ...(item.source === "full-auto" ? { parentEditedAt: updatedAt } : {}),
           backgroundHistory: [
             ...(item.backgroundHistory || []),
             { ...materialSnapshot(previous), supersededAt: updatedAt },

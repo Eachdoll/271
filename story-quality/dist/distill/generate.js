@@ -166,7 +166,7 @@ async function generateOne(cfg, t, lv, variant, sampleId, approvedBooks) {
             base.error = 'JSON 파싱 실패';
             return base;
         }
-        let check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories });
+        let check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories, catchphrases: [cfg.protagonist, ...cfg.supporting].map((c) => c.catchphrase ?? '') });
         if (!check.ok && check.regenerate.length === 0 && check.fix.length > 0) {
             const fixer = cfg.fixer ?? cfg.judge;
             const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
@@ -176,7 +176,7 @@ async function generateOne(cfg, t, lv, variant, sampleId, approvedBooks) {
             if (fixed) {
                 outline = fixed;
                 base.fixed = true;
-                check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories });
+                check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories, catchphrases: [cfg.protagonist, ...cfg.supporting].map((c) => c.catchphrase ?? '') });
             }
         }
         base.outline = outline;

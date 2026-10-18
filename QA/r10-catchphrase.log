@@ -1,0 +1,39 @@
+{
+  "catchphrases": [
+    "같이 가자!"
+  ],
+  "core": [
+    "같이가"
+  ],
+  "outlines": {
+    "books": 20,
+    "beatsTwoOrMore": 15,
+    "repeatFix": 16,
+    "refrainOverlap": 3,
+    "flagged": 16,
+    "catchphraseOnlyNoFixPass": 12,
+    "maxBeatOccurrences": 4,
+    "meanBeatOccurrences": 1.9
+  },
+  "prose": {
+    "ko": {
+      "books": 20,
+      "twoOrMore": 15,
+      "advisoryWarnings": 15,
+      "anyUse": 20,
+      "maxOccurrences": 4
+    },
+    "en": {
+      "books": 20,
+      "twoOrMore": 0,
+      "advisoryWarnings": 0,
+      "anyUse": 0,
+      "maxOccurrences": 0
+    }
+  },
+  "distilledExamples": {
+    "books": 161,
+    "skippedWhenOptedIn": 98,
+    "kept": 63
+  }
+}

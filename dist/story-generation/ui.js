@@ -46,7 +46,12 @@ import {
   availableCharacterVariants,
   validateWardrobeSelections,
 } from "../wardrobe.js";
-import { checkStory } from "./checker.js";
+import {
+  checkStory,
+  catchphrasePolicyFor,
+  omitCatchphrases,
+  storyCatchphrases,
+} from "./checker.js";
 import { checkRichness } from "./richness.js";
 import { getStylePreset } from "../image-generation/styles.js";
 import { buildSeriesStorySelections } from "./continuity.js";
@@ -677,10 +682,16 @@ export function inputFromWizard(state, wizard) {
   const choices = validateWardrobeSelections(state, wizard),
     previous = state.books.find((book) => book.id === wizard.previousBookId),
     world = clone(getActiveWorld(state));
-  const inherited = buildSeriesStorySelections(state, wizard, previous),
-    characters = inherited.characters;
-  if (!characters.length)
+  const inherited = buildSeriesStorySelections(state, wizard, previous);
+  if (!inherited.characters.length)
     throw new Error("이야기의 주인공을 먼저 골라 주세요.");
+  // R9: decided once here and frozen in the draft/job input (never on resume).
+  // A catchphrase used in the protagonist's 2 latest approved books is left out.
+  const catchphrasePolicy = catchphrasePolicyFor(
+      state.books,
+      inherited.characters,
+    ),
+    characters = omitCatchphrases(inherited.characters, catchphrasePolicy);
   const readingLevels = freezeReadingLevels(
     {
       ...wizard,
@@ -778,6 +789,7 @@ export function inputFromWizard(state, wizard) {
       variants,
       variantByCharacter: choices.characterVariants,
       variantPageRanges: choices.variantPageRanges,
+      catchphrasePolicy,
     },
     readingLevels,
     world,
@@ -802,6 +814,20 @@ export function cleanupStoryWorkflow() {
   }
   session = null;
 }
+/**
+ * The FULL AUTO job that owns this story draft (its runner built the book and
+ * keeps it), or null. Resuming such a draft here would rebuild the book from
+ * the draft and drop the pictures the job bought, so it opens the job's review.
+ */
+export function fullAutoJobOfDraft(state, draft) {
+  if (!draft?.id) return null;
+  const jobs = state?.fullAutoJobs || {};
+  return (
+    (draft.fullAutoRunId && jobs[draft.fullAutoRunId]) ||
+    Object.values(jobs).find((job) => job?.storyDraftId === draft.id) ||
+    null
+  );
+}
 export function renderStoryDrafts(state) {
   const list = Object.values(state.storyDrafts || {})
     .filter((d) => d?.id && d.stage !== "final")
@@ -810,7 +836,12 @@ export function renderStoryDrafts(state) {
     );
   if (!list.length)
     return '<section class="empty-state"><h3>보관된 초안이 아직 없어요</h3><p>이야기를 만들면 완료한 단계부터 이어갈 수 있어요.</p><button class="btn btn-outline" data-action="new-story">새 이야기 만들기</button></section>';
-  return `<section class="panel"><h3>이어 만들 이야기</h3><p class="small-label">승인하기 전 줄거리와 전문도 기기에 저장돼 있어요.</p><div class="story-drafts">${list.map((d) => `<article class="story-draft-card"><strong>${d.demo ? '<span class="story-demo-label">데모</span>' : ""}${esc(d.selectedTitle || d.outline?.titleCandidates?.[0] || d.input?.topic || "새 이야기")}</strong><p>${esc(STAGE_NAMES[d.stage] || "생성 준비")} · 목표 ${d.input?.pageCount || 12}쪽${d.pagination?.pages ? ` · 현재 ${d.pagination.pages.length}쪽` : ""}</p><div class="story-inline-actions">${button("이어서 만들기", "resume", `data-id="${esc(d.id)}"`)}${button("초안 삭제", "delete-draft", `data-id="${esc(d.id)}"`)}</div></article>`).join("")}</div></section>`;
+  return `<section class="panel"><h3>이어 만들 이야기</h3><p class="small-label">승인하기 전 줄거리와 전문도 기기에 저장돼 있어요.</p><div class="story-drafts">${list
+    .map((d) => {
+      const job = fullAutoJobOfDraft(state, d);
+      return `<article class="story-draft-card"><strong>${d.demo ? '<span class="story-demo-label">데모</span>' : ""}${esc(d.selectedTitle || d.outline?.titleCandidates?.[0] || d.input?.topic || "새 이야기")}</strong><p>${job ? "FULL AUTO · " : ""}${esc(STAGE_NAMES[d.stage] || "생성 준비")} · 목표 ${d.input?.pageCount || 12}쪽${d.pagination?.pages ? ` · 현재 ${d.pagination.pages.length}쪽` : ""}</p><div class="story-inline-actions">${job ? button("검수 열기", "open-auto-review", `data-id="${esc(d.id)}" data-job-id="${esc(job.id)}"`) : button("이어서 만들기", "resume", `data-id="${esc(d.id)}"`)}${button("초안 삭제", "delete-draft", `data-id="${esc(d.id)}"`)}</div></article>`;
+    })
+    .join("")}</div></section>`;
 }
 export function startStoryWorkflow(wizard) {
   if (!api.isParent())
@@ -1348,9 +1379,20 @@ function captureEdits(s) {
     invalidateStoryDetails(d, { prose: true });
   }
   if (s.mode === "pages" && d.pagination) {
-    document
-      .querySelectorAll("[data-cover-field]")
-      .forEach((el) => (d.pagination.cover[el.dataset.coverField] = el.value));
+    document.querySelectorAll("[data-cover-field]").forEach((el) => {
+      const cover = d.pagination.cover,
+        field = el.dataset.coverField;
+      // The first parent edit of the cover action keeps the planned one beside the
+      // cover (outside the reviewed content), so the image check can tell parent
+      // text (strict) from model text (lenient).
+      if (
+        field === "sceneAction" &&
+        el.value !== (cover.sceneAction ?? "") &&
+        d.pagination.coverSceneActionGenerated === undefined
+      )
+        d.pagination.coverSceneActionGenerated = cover.sceneAction ?? "";
+      cover[field] = el.value;
+    });
     document
       .querySelectorAll("[data-page-field]")
       .forEach(
@@ -1690,6 +1732,7 @@ async function approvePages(
   }
   const checked = checkStory(d.outline, d.pagination, {
     specs: d.input.specs,
+    catchphrases: storyCatchphrases(d.input),
     storyWords: buildStoryWords(d.input, d.outline),
     allowedNames: d.input.characters
       .flatMap((c) => [c.name, c.nameEn])
@@ -1815,8 +1858,25 @@ async function handleClick(event) {
   if (!el) return;
   event.preventDefault();
   const action = el.dataset.storyAction;
-  if (action === "resume") {
-    api.protectedAction(() => resumeStoryDraft(el.dataset.id));
+  if (action === "resume" || action === "open-auto-review") {
+    api.protectedAction(() => {
+      // A FULL AUTO draft (also from an old card's 이어서 만들기) opens its
+      // job's review; it is never resumed and rebuilt here.
+      const state = api.getState(),
+        job =
+          fullAutoJobOfDraft(state, drafts(state)[el.dataset.id]) ||
+          (el.dataset.jobId && state.fullAutoJobs?.[el.dataset.jobId]) ||
+          null;
+      if (job) {
+        if (typeof api.openAutoReview === "function")
+          return api.openAutoReview(job.id);
+        return api.toast(
+          "FULL AUTO로 만든 이야기는 책장의 ‘제작 중인 이야기’에서 열어 주세요.",
+        );
+      }
+      if (action === "resume") return resumeStoryDraft(el.dataset.id);
+      api.toast("저장한 이야기 초안을 찾지 못했어요.");
+    });
     return;
   }
   if (action === "delete-draft") {
@@ -1946,6 +2006,7 @@ async function handleClick(event) {
       d.pagination = fitted;
       d.storyCheck = checkStory(d.outline, fitted, {
         specs: d.input.specs,
+        catchphrases: storyCatchphrases(d.input),
         storyWords: buildStoryWords(d.input, d.outline),
         allowedNames: d.input.characters
           .flatMap((c) => [c.name, c.nameEn])

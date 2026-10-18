@@ -1,0 +1,384 @@
+
+> test:quality
+> node --test story-quality/test/*.test.mjs
+
+TAP version 13
+# Subtest: worlds: 100 cards across 4 eras, every card complete
+ok 1 - worlds: 100 cards across 4 eras, every card complete
+  ---
+  duration_ms: 3.440249
+  ...
+# Subtest: expand: variants, overlays, generated topics (10× by combination)
+ok 2 - expand: variants, overlays, generated topics (10× by combination)
+  ---
+  duration_ms: 115.531888
+  ...
+# Subtest: worldCoreLines gives 3 lines; suggestWorlds prefers topic match and avoids recent
+ok 3 - worldCoreLines gives 3 lines; suggestWorlds prefers topic match and avoids recent
+  ---
+  duration_ms: 1.341485
+  ...
+# Subtest: composeSeed with a world card draws sub-locations and creatures from that world
+ok 4 - composeSeed with a world card draws sub-locations and creatures from that world
+  ---
+  duration_ms: 0.565508
+  ...
+# Subtest: plotCheck helpers: particles stripped, head-noun planted match
+ok 5 - plotCheck helpers: particles stripped, head-noun planted match
+  ---
+  duration_ms: 13.15249
+  ...
+# Subtest: all 24 gold outlines pass plotCheck; all 3 bad examples fail
+ok 6 - all 24 gold outlines pass plotCheck; all 3 bad examples fail
+  ---
+  duration_ms: 81.775648
+  ...
+# Subtest: topic sets: 50 distill + 20 eval, disjoint, valid world/pattern ids
+ok 7 - topic sets: 50 distill + 20 eval, disjoint, valid world/pattern ids
+  ---
+  duration_ms: 2.027879
+  ...
+# Subtest: estimateDistillCost: 400 cells with observed Sonnet gen + Haiku judge ≈ $15
+ok 8 - estimateDistillCost: 400 cells with observed Sonnet gen + Haiku judge ≈ $15
+  ---
+  duration_ms: 0.564134
+  ...
+# Subtest: distillation: generates, filters, resumes (skips existing), and grows the ban list
+ok 9 - distillation: generates, filters, resumes (skips existing), and grows the ban list
+  ---
+  duration_ms: 85.912631
+  ...
+# Subtest: eval harness: runs fixed set with fake engines, writes rows + summary, compare table renders
+ok 10 - eval harness: runs fixed set with fake engines, writes rows + summary, compare table renders
+  ---
+  duration_ms: 51.466111
+  ...
+# Subtest: calibrateJudge separates gold from bad examples with the fake judge
+ok 11 - calibrateJudge separates gold from bad examples with the fake judge
+  ---
+  duration_ms: 1.36342
+  ...
+# Subtest: judgeOutline clamps and computes pass
+ok 12 - judgeOutline clamps and computes pass
+  ---
+  duration_ms: 0.334973
+  ...
+# Subtest: finetune converter: gold → mlx chat jsonl, topic-level split, completions format
+ok 13 - finetune converter: gold → mlx chat jsonl, topic-level split, completions format
+  ---
+  duration_ms: 18.698931
+  ...
+# Subtest: R9-A catchphrase core ignores spacing, punctuation and one trailing Korean ending
+ok 14 - R9-A catchphrase core ignores spacing, punctuation and one trailing Korean ending
+  ---
+  duration_ms: 4.103956
+  ...
+# Subtest: R9-A countCatchphrase matches variants of the same phrase at token boundaries
+ok 15 - R9-A countCatchphrase matches variants of the same phrase at token boundaries
+  ---
+  duration_ms: 17.828165
+  ...
+# Subtest: R9-A countCatchphrase does not over-match longer words or synonyms
+ok 16 - R9-A countCatchphrase does not over-match longer words or synonyms
+  ---
+  duration_ms: 1.388494
+  ...
+# Subtest: R9-A sharesCore detects refrain/catchphrase overlap without false positives
+ok 17 - R9-A sharesCore detects refrain/catchphrase overlap without false positives
+  ---
+  duration_ms: 15.283441
+  ...
+# Subtest: R9-A uniqueCatchphrases and catchphraseRepeats count one core once across texts
+ok 18 - R9-A uniqueCatchphrases and catchphraseRepeats count one core once across texts
+  ---
+  duration_ms: 1.207577
+  ...
+# Subtest: R9-A outline prompts carry one fully conditional catchphrase clause
+ok 19 - R9-A outline prompts carry one fully conditional catchphrase clause
+  ---
+  duration_ms: 5.170554
+  ...
+# Subtest: R9-A prose prompts limit catchphrases to one use in KO and EN
+ok 20 - R9-A prose prompts limit catchphrases to one use in KO and EN
+  ---
+  duration_ms: 1.010965
+  ...
+# Subtest: R9-A3 plotCheck flags 2+ catchphrase uses with per-beat labels and passes a single use
+ok 21 - R9-A3 plotCheck flags 2+ catchphrase uses with per-beat labels and passes a single use
+  ---
+  duration_ms: 10.022367
+  ...
+# Subtest: R9-A3 plotCheck flags a refrain that shares the catchphrase core and counts the refrain
+ok 22 - R9-A3 plotCheck flags a refrain that shares the catchphrase core and counts the refrain
+  ---
+  duration_ms: 1.196023
+  ...
+# Subtest: R9-A runOutlineStage checks catchphrases and asks the cheap fix pass for the flagged beats only
+ok 23 - R9-A runOutlineStage checks catchphrases and asks the cheap fix pass for the flagged beats only
+  ---
+  duration_ms: 20.584757
+  ...
+# Subtest: R9-A2 refrain templates keep 20 entries and none repeats the old catchphrase
+ok 24 - R9-A2 refrain templates keep 20 entries and none repeats the old catchphrase
+  ---
+  duration_ms: 97.664691
+  ...
+# Subtest: R9-A2 CLI tools omit the catchphrase by default and accept --catchphrase
+ok 25 - R9-A2 CLI tools omit the catchphrase by default and accept --catchphrase
+  ---
+  duration_ms: 147.375365
+  ...
+# Subtest: R9 fix: a refrain or catchphrase with a newline stays one fix line and is still recognised
+ok 26 - R9 fix: a refrain or catchphrase with a newline stays one fix line and is still recognised
+  ---
+  duration_ms: 0.828035
+  ...
+# Subtest: R9 fix: advisoryCatchphrases never spends a fix call on catchphrase items alone, but keeps them in a mixed pass
+ok 27 - R9 fix: advisoryCatchphrases never spends a fix call on catchphrase items alone, but keeps them in a mixed pass
+  ---
+  duration_ms: 15.225717
+  ...
+# Subtest: R9 fix: a 3-character cast with catchphrases keeps the r8 retrieval example count for every pattern
+ok 28 - R9 fix: a 3-character cast with catchphrases keeps the r8 retrieval example count for every pattern
+  ---
+  duration_ms: 33.15477
+  ...
+# Subtest: R9 fix: legacyCatchphrasePrompt sends the pre-R9 requests byte for byte (outline, fix pass, beam, prose)
+ok 29 - R9 fix: legacyCatchphrasePrompt sends the pre-R9 requests byte for byte (outline, fix pass, beam, prose)
+  ---
+  duration_ms: 47.673507
+  ...
+# Subtest: distill resume IDs distinguish English levels sharing one Korean level
+ok 30 - distill resume IDs distinguish English levels sharing one Korean level
+  ---
+  duration_ms: 9.342894
+  ...
+# Subtest: dry-run rows do not suppress later real generation in the same output
+ok 31 - dry-run rows do not suppress later real generation in the same output
+  ---
+  duration_ms: 5.255785
+  ...
+# Subtest: estimate CLI labels unknown prices unavailable without creating samples or calling engines
+ok 32 - estimate CLI labels unknown prices unavailable without creating samples or calling engines
+  ---
+  duration_ms: 141.071342
+  ...
+# Subtest: estimate CLI retains numeric costs for registered Anthropic models without API keys
+ok 33 - estimate CLI retains numeric costs for registered Anthropic models without API keys
+  ---
+  duration_ms: 43.496108
+  ...
+# Subtest: R6-3 distill estimates default to Sonnet and warn when Opus is selected without API calls
+ok 34 - R6-3 distill estimates default to Sonnet and warn when Opus is selected without API calls
+  ---
+  duration_ms: 102.059636
+  ...
+# Subtest: R6-6 prose CLI reuses one retained outline end-to-end with a mock engine and resumes without duplicates
+ok 35 - R6-6 prose CLI reuses one retained outline end-to-end with a mock engine and resumes without duplicates
+  ---
+  duration_ms: 311.221399
+  ...
+# Subtest: real-evaluation Claude fixes preserve a text budget without sending rejected temperature
+ok 36 - real-evaluation Claude fixes preserve a text budget without sending rejected temperature
+  ---
+  duration_ms: 26.177641
+  ...
+# Subtest: outline and rubric requests carry the evaluated output budgets
+ok 37 - outline and rubric requests carry the evaluated output budgets
+  ---
+  duration_ms: 5.024443
+  ...
+# Subtest: Korean failure labels normalize to IDs before order and uniqueness checks
+ok 38 - Korean failure labels normalize to IDs before order and uniqueness checks
+  ---
+  duration_ms: 11.577184
+  ...
+# Subtest: R5-1 failure-reason instructions only accompany outputs that contain beat failure reasons
+ok 39 - R5-1 failure-reason instructions only accompany outputs that contain beat failure reasons
+  ---
+  duration_ms: 0.665695
+  ...
+# Subtest: R5-2 fixed test-set description matches the eras of its actual topic worlds
+ok 40 - R5-2 fixed test-set description matches the eras of its actual topic worlds
+  ---
+  duration_ms: 3.27147
+  ...
+# Subtest: planted descriptions match by their leading noun phrase without loosening unrelated words
+ok 41 - planted descriptions match by their leading noun phrase without loosening unrelated words
+  ---
+  duration_ms: 26.948793
+  ...
+# Subtest: prose simplify carries a whole-book sentence budget and limits question endings when pageCount is known
+ok 42 - prose simplify carries a whole-book sentence budget and limits question endings when pageCount is known
+  ---
+  duration_ms: 12.545669
+  ...
+# Subtest: curiosity overall is derived from page scores on the 0-10 scale, not the model free-form number
+ok 43 - curiosity overall is derived from page scores on the 0-10 scale, not the model free-form number
+  ---
+  duration_ms: 2.464812
+  ...
+# Subtest: an over-budget simplification gets one per-beat condense pass and keeps labels
+ok 44 - an over-budget simplification gets one per-beat condense pass and keeps labels
+  ---
+  duration_ms: 1.804218
+  ...
+# Subtest: retell passes on core beat types only; non-core beats the model lists are kept as notes
+ok 45 - retell passes on core beat types only; non-core beats the model lists are kept as notes
+  ---
+  duration_ms: 1.899081
+  ...
+# Subtest: R6-3 measured usage makes Opus distillation over three times Sonnet and matches the retained trial
+ok 46 - R6-3 measured usage makes Opus distillation over three times Sonnet and matches the retained trial
+  ---
+  duration_ms: 34.918194
+  ...
+# Subtest: R6-4 opt-in retrieval keeps a gold anchor before a more similar distilled example
+ok 47 - R6-4 opt-in retrieval keeps a gold anchor before a more similar distilled example
+  ---
+  duration_ms: 2.526422
+  ...
+# Subtest: Korean label annotation cleanup preserves nouns and selects the correct particle
+ok 48 - Korean label annotation cleanup preserves nouns and selects the correct particle
+  ---
+  duration_ms: 1.055561
+  ...
+# Subtest: space and underwater worlds exclude outdoor rain and sunset waiting templates
+ok 49 - space and underwater worlds exclude outdoor rain and sunset waiting templates
+  ---
+  duration_ms: 26.844005
+  ...
+# Subtest: head-noun bans agree before selection and after generation without name substring matches
+ok 50 - head-noun bans agree before selection and after generation without name substring matches
+  ---
+  duration_ms: 12.172795
+  ...
+# Subtest: one-letter forbidden keywords cannot falsely flag innocent compound words
+ok 51 - one-letter forbidden keywords cannot falsely flag innocent compound words
+  ---
+  duration_ms: 2.777521
+  ...
+# Subtest: browser index has no transitive Node development-tool dependency
+ok 52 - browser index has no transitive Node development-tool dependency
+  ---
+  duration_ms: 1.53142
+  ...
+# Subtest: app pipeline forwards world and variant choice while reference books remain retrieval-only
+ok 53 - app pipeline forwards world and variant choice while reference books remain retrieval-only
+  ---
+  duration_ms: 10.472461
+  ...
+# Subtest: when every world creature head is banned, seed selection falls back to an eligible common creature
+ok 54 - when every world creature head is banned, seed selection falls back to an eligible common creature
+  ---
+  duration_ms: 1.262897
+  ...
+# Subtest: R7-3 package pattern allocation agrees with app for every level/page count without mutating cards
+ok 55 - R7-3 package pattern allocation agrees with app for every level/page count without mutating cards
+  ---
+  duration_ms: 5.878172
+  ...
+# Subtest: R7-3 distill and evaluator actually send the adapted seven-beat K1 pattern, with no network
+ok 56 - R7-3 distill and evaluator actually send the adapted seven-beat K1 pattern, with no network
+  ---
+  duration_ms: 7.550723
+  ...
+# Subtest: R8-2 package uses the same sentence cases as app including closing quotes and labels
+ok 57 - R8-2 package uses the same sentence cases as app including closing quotes and labels
+  ---
+  duration_ms: 2.364884
+  ...
+# Subtest: R8-1/4 E0 compression is bounded to one call, preserves labels and explicitly requests says through both passes
+ok 58 - R8-1/4 E0 compression is bounded to one call, preserves labels and explicitly requests says through both passes
+  ---
+  duration_ms: 1.970076
+  ...
+# Subtest: data files load and have expected sizes (10× set)
+ok 59 - data files load and have expected sizes (10× set)
+  ---
+  duration_ms: 1.469933
+  ...
+# Subtest: banList: recent books ban planted objects, creatures, patterns (shorter window)
+ok 60 - banList: recent books ban planted objects, creatures, patterns (shorter window)
+  ---
+  duration_ms: 2.110905
+  ...
+# Subtest: retrieval ranks the closest approved outline first and renders with the no-reuse label
+ok 61 - retrieval ranks the closest approved outline first and renders with the no-reuse label
+  ---
+  duration_ms: 1.823231
+  ...
+# Subtest: composeSeed is deterministic, respects ban list, picks distinct senses
+ok 62 - composeSeed is deterministic, respects ban list, picks distinct senses
+  ---
+  duration_ms: 3.792419
+  ...
+# Subtest: composeSeed falls back to forest sub-locations for unknown background
+ok 63 - composeSeed falls back to forest sub-locations for unknown background
+  ---
+  duration_ms: 0.820974
+  ...
+# Subtest: gestures: finds emotion tells and moral tails, renders hints
+ok 64 - gestures: finds emotion tells and moral tails, renders hints
+  ---
+  duration_ms: 1.436372
+  ...
+# Subtest: extractJson handles fences, chatter, and nested braces
+ok 65 - extractJson handles fences, chatter, and nested braces
+  ---
+  duration_ms: 0.928417
+  ...
+# Subtest: tokenize/jaccard treat Korean bigrams, rng/hash stable
+ok 66 - tokenize/jaccard treat Korean bigrams, rng/hash stable
+  ---
+  duration_ms: 0.173966
+  ...
+# Subtest: outline prompt fills every slot, stays under the token budget, substitutes the protagonist name
+ok 67 - outline prompt fills every slot, stays under the token budget, substitutes the protagonist name
+  ---
+  duration_ms: 2.556406
+  ...
+# Subtest: fill removes empty labelled lines
+ok 68 - fill removes empty labelled lines
+  ---
+  duration_ms: 0.478628
+  ...
+# Subtest: plotCheck catches planted/recovery, failure reasons, moral tails, missing topic
+ok 69 - plotCheck catches planted/recovery, failure reasons, moral tails, missing topic
+  ---
+  duration_ms: 8.432857
+  ...
+# Subtest: mergeRules enforces the cap and supports replace
+ok 70 - mergeRules enforces the cap and supports replace
+  ---
+  duration_ms: 0.235246
+  ...
+# Subtest: pipeline (single-shot outline) runs end to end with a fake engine and passes plotCheck
+ok 71 - pipeline (single-shot outline) runs end to end with a fake engine and passes plotCheck
+  ---
+  duration_ms: 17.051745
+  ...
+# Subtest: pipeline (beam search) chooses judged candidates and fills the rest with the cheap engine
+ok 72 - pipeline (beam search) chooses judged candidates and fills the rest with the cheap engine
+  ---
+  duration_ms: 8.341533
+  ...
+# Subtest: prose stage: rich → simplify → tell-fix pass removes emotion tells
+ok 73 - prose stage: rich → simplify → tell-fix pass removes emotion tells
+  ---
+  duration_ms: 4.570878
+  ...
+# Subtest: child gate aggregates curiosity + retell
+ok 74 - child gate aggregates curiosity + retell
+  ---
+  duration_ms: 2.526781
+  ...
+1..74
+# tests 74
+# suites 0
+# pass 74
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 863.602266

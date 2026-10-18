@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState,getActiveWorld,getCharacterSheet} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {createFullAutoJob,runFullAuto,estimateFullAutoCost,fullAutoPayload} from '../dist/full-auto.js';
+import {createFullAutoJob,runFullAuto,estimateFullAutoCost,fullAutoPayload,preflightFullAuto,selectionMaterialPlan,fullAutoProgress} from '../dist/full-auto.js';
+import {applyPageText,pagesNeedingImages,generateBookPageImage,isPageOperationBusy} from '../dist/story-generation/page-tools.js';
+import {captureBookGenerationSnapshot} from '../dist/image-generation/world.js';
+import {applySeriesContinuity} from '../dist/story-generation/continuity.js';
 import {inspectAutoMaterialPlan,materializeAutoPlan} from '../dist/story-generation/auto-materials.js';
 import {generateMaterialPlan} from '../dist/story-generation/pipeline.js';
 import {demoOutline,demoProse,demoPagination} from '../dist/story-generation/demo.js';
 import {demoSceneBriefs} from '../dist/story-generation/scene-briefs.js';
-import {renderFullAutoLauncher,renderFullAutoJobs} from '../dist/full-auto-ui.js';
+import {renderFullAutoLauncher,renderFullAutoJobs,configureFullAutoUI,startFullAutoJob,runFullAutoJob,getFullAutoJob,stopFullAutoJob} from '../dist/full-auto-ui.js';
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
 function setup(){const state=seedState();migrateWorldState(state);migrateReadingSettings(state.settings);const wizard={characterIds:['yuha'],backgroundIds:[],topic:'유하와 달토끼의 별 찾기',pageCount:12,koreanLevel:'K1',englishLevel:'E0',value:'none',ending:'home',language:'bilingual'};return {state,wizard};}
 function planFor(state){return {reuseCharacterIds:[],newCharacters:[{name:'달토친구',nameEn:'Moon Rabbit',kind:'rabbit',description:'크림색 털과 긴 귀, 파란 조끼',traits:['호기심'],catchphrase:'나는 별을 볼래!',color:'#e0d4b0'}],reuseBackgroundIds:['home'],newBackgrounds:[{name:'달빛 언덕',nameEn:'Moon Hill',type:'space',description:'달의 낮은 언덕',layout:'둥근 돌 세 개와 낮은 길, 건물 없음'},{name:'별빛 정원',nameEn:'Star Garden',type:'garden',description:'별빛 아래 작은 정원',layout:'작은 둥근 화단과 곧은 흙길, 문과 건물 없음'}],reason:'기존 집과 주인공을 유지하고 달토끼와 두 장소를 더해요.'};}
@@ -37,4 +40,306 @@ test('Full Auto blocks image work when full-prose causal review fails',async()=>
  ops.outline=async input=>{const outline=demoOutline(input);outline.plotContract=demoPlotContract(outline,input);return result(outline,'outline');};
  ops.coherence=async(outline,prose)=>{const error=Error('사건 연결 수정 필요');error.coherence={stage:'prose',passed:false,issues:[]};error.prose=prose;throw error;};
  await assert.rejects(runFullAuto(state,job,{operations:ops,buildBook}),/사건 연결/);assert.equal(job.currentStep,'proseCoherence');assert.equal(job.book,undefined);assert.equal(calls.scene.length,0);assert.equal(calls.cover,0);assert.equal(job.proseCoherence.passed,false);
+});
+
+// ---- R9-B1: text-first holds, demo, free selection plan and the exported runner ----
+const emptyVault=()=>{const store=new Map();globalThis.localStorage={getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)};return store;};
+// Closer to the app's book builder: keeps the text products page tools need.
+const richBuildBook=p=>({...buildBook(p),outline:p.outline,prose:p.prose,pagination:structuredClone(p.pagination),storyInput:p.input,textUsage:p.usage,textDemo:p.demo,readingLevelSnapshot:p.readingLevels,storyCheck:p.storyCheck,worldSettingsSnapshot:structuredClone(p.worldSnapshot)});
+function countingOps(state,options){
+ const m=mocks(state,options),counts={outline:0,briefs:0,pagination:0};
+ for(const key of Object.keys(counts)){const inner=m.ops[key];m.ops[key]=async(...args)=>{counts[key]++;return inner(...args);};}
+ m.ops.backgroundSheet=async(s,b)=>{m.calls.bg++;return {imageAssetId:'image-auto-background-'+String(m.calls.bg).padStart(4,'0'),imageUrl:image,seed:1,meta:{quality:'final',costUsdEstimated:.02}};};
+ let drawn=0;const scene=m.ops.scene;
+ m.ops.scene=async(s,b,index,o)=>{const page=await scene(s,b,index,o);page.imageAssetId='image-auto-draw-'+String(++drawn).padStart(4,'0');return page;};
+ return {...m,counts};
+}
+
+test('text hold buys no sheet or image, builds the book without a snapshot and needs no image key',async()=>{
+ emptyVault();
+ const {state,wizard}=setup();getActiveWorld(state).imageEngine='openai';
+ const job=createFullAutoJob(state,wizard,{stopBefore:'text'});
+ job.textSettings.providers={...job.textSettings.providers,openai:{transport:'proxy'}};
+ const {ops,calls}=countingOps(state,{failPage:-1});ops.preflight=preflightFullAuto;
+ const capturing=p=>{const book=richBuildBook(p);try{captureBookGenerationSnapshot(state,book);}catch(error){book.sheetSetupNotice=error.message;}return book;};
+ const book=await runFullAuto(state,job,{operations:ops,buildBook:capturing});
+ assert.equal(job.status,'text-review');assert.equal(job.phase,'글 완성 · 쪽 검수');assert.equal(book,job.book);
+ assert.equal(book.generationSnapshot,undefined);assert.equal(book.sheetSetupNotice,undefined);
+ assert.deepEqual([calls.char,calls.bg,calls.scene.length,calls.cover],[0,0,0,0]);
+ assert.ok(Object.keys(job.completed).every(key=>!/^(?:character|background|page):|^cover$/.test(key)));
+ assert.equal(state.storyDrafts[job.storyDraftId].stage,'paged');
+ await assert.rejects(preflightFullAuto(state,{...job,stopBefore:null}),/이미지 엔진의 API 키/);
+});
+
+test('releasing the text hold to pages buys only the missing sheets once and freezes the snapshot',async()=>{
+ const {state,wizard}=setup();getActiveWorld(state).imageEngine='openai';
+ const job=createFullAutoJob(state,wizard,{stopBefore:'text'}),{ops,calls,counts}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});assert.equal(job.status,'text-review');
+ job.stopBefore='pages';
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(job.status,'pages-ready');assert.equal(job.phase,'그림 준비 완료');
+ assert.equal(calls.char,job.plan.characterIds.length,'sample sheets are stale for the new engine, the new companion has none');
+ const backgrounds=calls.bg;assert.ok(backgrounds>=2);
+ const snapshot=job.book.generationSnapshot;assert.ok(snapshot);
+ assert.equal(snapshot.characterSheets.length,job.plan.characterIds.length);assert.equal(snapshot.imageEngine,'openai');
+ assert.ok(snapshot.backgroundReferenceByPage,'pages are bound to their own places as the book builder does');
+ assert.deepEqual([calls.scene.length,calls.cover],[0,0]);
+ assert.deepEqual([calls.plan,counts.outline,counts.briefs,calls.prose,counts.pagination],[1,1,1,1,1],'no text step is bought again');
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.deepEqual([calls.char,calls.bg,job.status,job.book.generationSnapshot],[job.plan.characterIds.length,backgrounds,'pages-ready',snapshot]);
+});
+
+test('releasing to the end buys each page once, keeps single-page finals and redraws only stale pages',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'}),{ops,calls}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});assert.equal(job.status,'pages-ready');
+ Object.assign(job.book.pages[2],{imageAssetId:'image-single-page-0002',imageUrl:image,imageMeta:{quality:'final'}});
+ job.stopBefore=null;
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(job.status,'review');assert.equal(job.book.autoGenerationComplete,true);
+ assert.equal(calls.scene.length,11);assert.equal(new Set(calls.scene).size,11);assert.ok(!calls.scene.includes(2));assert.equal(calls.cover,1);
+ assert.equal(fullAutoProgress(job).fraction,1);
+ const edited=await applyPageText(state,job.book,4,{ko:job.book.pages[4].ko+' 다시 봐요.'});
+ assert.equal(edited.changed,true);assert.equal(job.book.pages[4].imageStale,true);
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.deepEqual(calls.scene.slice(11),[4]);assert.equal(calls.cover,1);
+ assert.equal(job.book.pages[4].imageStale,undefined);assert.equal(job.status,'review');
+});
+
+test('stopping during the text chain resumes without buying the finished text steps again',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'text'}),{ops,calls,counts}=countingOps(state,{failPage:-1}),controller=new AbortController(),briefs=ops.briefs;
+ let stopped=false;
+ ops.briefs=async(...args)=>{if(!stopped){stopped=true;controller.abort();throw new DOMException('stop','AbortError');}return briefs(...args);};
+ await assert.rejects(runFullAuto(state,job,{operations:ops,buildBook:richBuildBook,signal:controller.signal}),{name:'AbortError'});
+ assert.equal(job.status,'paused');assert.ok(job.completed.outline);assert.equal(job.completed.briefs,undefined);
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(job.status,'text-review');
+ assert.deepEqual([calls.plan,counts.outline,counts.briefs,calls.prose,counts.pagination],[1,1,1,1,1]);
+ assert.equal(job.usage.calls.filter(c=>c.stage==='materials').length,1);assert.equal(calls.char,0);
+});
+
+test('selection plan pins the picked cast and places without a model call',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,{...wizard,characterIds:['yuha','greenie'],backgroundIds:['moon','beach']},{planMode:'selection',stopBefore:'text'}),{ops,calls}=countingOps(state,{failPage:-1});
+ ops.plan=async()=>{calls.plan++;throw Error('selection must not ask a model');};
+ let captured=false;
+ const capturing=p=>{const book=richBuildBook(p);captureBookGenerationSnapshot(state,book);captured=!!book.generationSnapshot;return book;};
+ await runFullAuto(state,job,{operations:ops,buildBook:capturing});
+ assert.equal(calls.plan,0);assert.equal(job.status,'text-review');
+ assert.deepEqual(job.plan.characterIds,['yuha','greenie']);assert.deepEqual(job.plan.backgroundIds,['moon','beach','home']);
+ assert.deepEqual([job.plan.newCharacters,job.plan.newBackgrounds],[[],[]]);
+ assert.deepEqual(job.input.backgrounds.map(b=>b.id).sort(),['beach','home','moon']);
+ assert.match(job.plan.reason,/유하네 집/);assert.equal(job.usage.calls.some(c=>c.stage==='materials'),false);
+ assert.ok(captured,'the stub froze a snapshot as the real builder does');assert.equal(job.book.generationSnapshot,undefined);
+ const before=Object.keys(state.fullAutoJobs).length;
+ for(const b of state.backgrounds)if(!['home','forest'].includes(b.id))b.archivedAt=new Date().toISOString();
+ assert.throws(()=>createFullAutoJob(state,wizard,{planMode:'selection'}),/서로 다른 배경 2곳/);
+ assert.equal(Object.keys(state.fullAutoJobs).length,before,'refused before any job or paid call');
+});
+
+test('selection plan fills a missing home in drawer order and refuses more than five places',()=>{
+ const {state}=setup();
+ const filled=selectionMaterialPlan(state,{characterIds:['yuha'],backgroundIds:['moon']});
+ assert.deepEqual(filled.plan.reuseBackgroundIds,['moon','home','forest']);assert.deepEqual(filled.filledBackgroundIds,['home','forest']);
+ state.backgrounds.push({id:'cave',name:'반딧불 동굴',nameEn:'Firefly Cave',type:'cave',description:'작은 동굴',layout:'둥근 입구 하나'});
+ assert.throws(()=>selectionMaterialPlan(state,{characterIds:['yuha'],backgroundIds:['forest','moon','garden','beach','cave']}),/최대 5곳/);
+});
+
+test('demo FULL AUTO is explicit, buys nothing and marks the book as a demo',async()=>{
+ emptyVault();const realFetch=globalThis.fetch;let fetches=0;globalThis.fetch=async()=>{fetches++;throw Error('no network in demo');};
+ try{
+  const {state,wizard}=setup();getActiveWorld(state).imageEngine='openai';
+  const plain=createFullAutoJob(state,wizard);assert.deepEqual([plain.demo,plain.planMode,plain.stopBefore],[false,'auto',null]);
+  const job=createFullAutoJob(state,wizard,{demo:true,stopBefore:'text'});assert.equal(job.planMode,'selection');
+  const refuse=name=>async()=>{throw Error(name+' must not run in a text hold');};
+  const book=await runFullAuto(state,job,{buildBook:richBuildBook,operations:{characterSheet:refuse('sheet'),backgroundSheet:refuse('background'),scene:refuse('scene'),cover:refuse('cover')}});
+  assert.equal(job.status,'text-review');assert.equal(fetches,0);assert.equal(book.textDemo,true);
+  const payload=fullAutoPayload(job);assert.deepEqual([payload.demo,payload.textEngineId,payload.textModelId],[true,'demo','demo']);
+  assert.ok(job.usage.calls.length>0);assert.ok(job.usage.calls.every(c=>(c.demo===true||c.requests===0)&&!c.costUsd&&!c.costUsdEstimated));
+ }finally{globalThis.fetch=realFetch;}
+});
+
+test('an unknown hold is refused instead of running on into images',async()=>{
+ const {state,wizard}=setup();
+ assert.throws(()=>createFullAutoJob(state,wizard,{stopBefore:'texts'}),/멈출 단계/);
+ assert.throws(()=>createFullAutoJob(state,wizard,{planMode:'llm'}),/selection/);
+ const job=createFullAutoJob(state,wizard),{ops}=mocks(state);let preflights=0;ops.preflight=async()=>{preflights++;};
+ job.stopBefore='images';
+ await assert.rejects(runFullAuto(state,job,{operations:ops,buildBook}),/멈출 단계/);
+ assert.equal(preflights,0);assert.equal(job.status,'ready');
+});
+
+test('a series text hold keeps the series name and applies its continuity snapshot only once sheets exist',async()=>{
+ const {state,wizard}=setup(),seen=[];
+ // Like the app builder: a previous book means series continuity, which needs every cast sheet.
+ const seriesBuild=p=>{seen.push(structuredClone(p.wizard));const book={...richBuildBook(p),series:p.wizard.series||'새 시리즈'};const previous=state.books.find(b=>b.id===p.wizard.previousBookId);if(previous)applySeriesContinuity(state,book,previous,{...p.wizard});else{try{captureBookGenerationSnapshot(state,book);}catch(error){book.sheetSetupNotice=error.message;}}return book;};
+ const job=createFullAutoJob(state,{...wizard,characterIds:['yuha','toto'],previousBookId:'seed-moon'},{stopBefore:'text',planMode:'selection'}),{ops}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:seriesBuild});
+ assert.equal(job.status,'text-review');assert.deepEqual([seen[0].previousBookId,seen[0].series],[null,'유하의 작은 우주']);
+ assert.equal(job.book.series,'유하의 작은 우주');assert.equal(job.book.generationSnapshot,undefined);
+ assert.equal(job.book.previousBookId,'seed-moon','the held book names its series link before the continuity snapshot exists');assert.equal(job.seriesContinuityDeferred,true);
+ assert.equal(state.storyDrafts[job.storyDraftId].wizard.previousBookId,'seed-moon','the draft keeps the real series link');
+ job.stopBefore='pages';
+ await runFullAuto(state,job,{operations:ops,buildBook:seriesBuild});
+ assert.equal(job.status,'pages-ready');assert.equal(seen.length,1,'the book is never rebuilt');
+ assert.equal(job.book.previousBookId,'seed-moon');assert.equal(job.book.continuity.previousBookId,'seed-moon');
+ assert.equal(job.book.generationSnapshot.continuity.previousBookId,'seed-moon');assert.equal(job.seriesContinuityDeferred,undefined);
+});
+
+test('a deleted auto draft no longer fails the finished job',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'}),{ops}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ delete state.storyDrafts[job.storyDraftId];job.stopBefore=null;
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(job.status,'review');assert.equal(job.error,null);
+});
+
+test('cost estimate keeps its fields and adds the simple-flow lines',()=>{
+ const {state,wizard}=setup();getActiveWorld(state).imageEngine='openai';
+ const cost=estimateFullAutoCost(state,wizard);
+ assert.equal(cost.baseUsd,cost.textUsd+cost.imagesUsd);assert.equal(cost.imagesUsd,13*cost.imageUnitUsd);assert.equal(cost.sheetsUpperUsd,10*cost.imageUnitUsd);assert.ok(cost.imageUnitUsd>0);
+ const free=estimateFullAutoCost(state,wizard,{planMode:'selection'});assert.ok(free.textUsd<cost.textUsd);assert.equal(free.requests,cost.requests-1);
+ assert.equal(estimateFullAutoCost(state,wizard,{demo:true}).textUsd,0);assert.equal(estimateFullAutoCost(state,wizard,{imageEngine:'sample'}).imageEngine,'sample');
+});
+
+test('job cards name the holds and open the simple review instead of resuming',()=>{
+ const {state,wizard}=setup(),job=createFullAutoJob(state,wizard,{stopBefore:'text'});
+ job.status='text-review';let cards=renderFullAutoJobs(state);
+ assert.match(cards,/글 검수 대기/);assert.match(cards,/data-full-auto-action="simple-review"/);assert.doesNotMatch(cards,/data-full-auto-action="(?:pause|resume)"/);
+ job.status='pages-ready';cards=renderFullAutoJobs(state);
+ assert.match(cards,/그림 준비 완료/);assert.match(cards,/simple-review/);
+});
+
+test('exported runner holds without navigating, reports numeric progress and releases the hold',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),toasts=[],events=[];let started=0;
+ globalThis.document||={addEventListener(){},querySelector(){return null;}};
+ configureFullAutoUI({getState:()=>state,save:()=>true,toast:m=>toasts.push(String(m?.message||m)),isParent:()=>true,protectedAction:f=>f(),onStarted:()=>started++,buildBook:richBuildBook,openReview:async()=>{},showModal(){},closeModal(){},modalHeader:t=>t});
+ const job=await startFullAutoJob(wizard,{demo:true,stopBefore:'text',onProgress:e=>events.push(e)});
+ assert.equal(job.status,'text-review');assert.equal(started,0,'navigate=false keeps the current view');
+ assert.ok(toasts.some(t=>/글이 완성됐어요/.test(t)));
+ assert.ok(events.length>3&&events.every(e=>e.job===job&&Number.isFinite(e.done)&&Number.isFinite(e.total)&&e.fraction>=0&&e.fraction<=1));
+ assert.equal(events.at(-1).fraction,1);assert.equal(getFullAutoJob(job.id),job);
+ await runFullAutoJob(job.id,{stopBefore:'pages',onProgress:e=>events.push(e)});
+ assert.equal(job.status,'pages-ready');assert.equal(job.stopBefore,'pages');assert.ok(job.book.generationSnapshot);
+ assert.ok(toasts.some(t=>/그림 만들 준비/.test(t)));
+ await stopFullAutoJob(job.id);assert.equal(job.status,'pages-ready','a parked job keeps its hold');
+ await assert.rejects(runFullAutoJob(job.id,{stopBefore:'images'}),/멈출 단계/);assert.equal(job.stopBefore,'pages');
+});
+
+// ---- FIX-B1: stale marks bound to their image, series holds in the pro editor, page-tool busy, stop recovery, review usage ----
+test('a page edited in simple mode and redrawn by another path is not bought again on release',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'}),{ops,calls}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});job.stopBefore=null;
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});assert.equal(calls.scene.length,12);
+ const page=job.book.pages[4],old=page.imageAssetId;
+ await applyPageText(state,job.book,4,{ko:page.ko+' 다시 봐요.'});
+ assert.deepEqual([page.imageStale,page.imageStaleAssetId],[true,old]);
+ // The pro editor redraws page 4 in place and leaves the simple-mode mark behind.
+ Object.assign(page,{imageAssetId:'image-pro-redraw-0004',imageUrl:'asset:image-pro-redraw-0004',imageMeta:{quality:'final'}});
+ assert.deepEqual(pagesNeedingImages(job.book),[]);
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(calls.scene.length,12,'no page is bought again');assert.equal(job.status,'review');
+ assert.deepEqual([page.imageStale,page.imageStaleAt,page.imageStaleAssetId,page.imageAssetId],[undefined,undefined,undefined,'image-pro-redraw-0004']);
+ assert.ok(job.completed['page:4']);
+});
+
+test('the page step keeps a coherence review bought before drawing on the job usage, once',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'}),{ops}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});job.stopBefore=null;
+ const scene=ops.scene,review=(b,index,extra={})=>{b.textUsage.calls.push({input:300,output:40,stage:'coherence',requests:1,costUsdEstimated:.01,reviewFor:index,...extra});};
+ let failed=false;
+ ops.scene=async(s,b,index,o)=>{
+  if(index===0)review(b,0);
+  if(index===1&&!failed){failed=true;review(b,1,{failed:true});throw Object.assign(Error('검사 응답을 읽지 못했어요'),{usage:{input:300,output:40},meta:{stage:'coherence',requests:1}});}
+  return scene(s,b,index,o);
+ };
+ await assert.rejects(runFullAuto(state,job,{operations:ops,buildBook:richBuildBook}),/검사 응답/);
+ const rows=()=>job.usage.calls.filter(c=>c.stage==='coherence');
+ assert.deepEqual(rows().map(c=>c.reviewFor),[0,1],'the paid review on page 0 and the failed one on page 1, each once');
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(job.status,'review');assert.deepEqual(rows().map(c=>c.reviewFor),[0,1]);
+ assert.equal(job.usage.calls.filter(c=>c.input===300).length,2);
+});
+
+const clickListeners=[];
+globalThis.document||={addEventListener(type,listener){if(type==='click')clickListeners.push(listener);},querySelector(){return null;}};
+function uiContext(state,extra={}){
+ const ui={toasts:[],opened:[],simple:[],saves:0,pending:null};
+ configureFullAutoUI({getState:()=>state,save:()=>{ui.saves++;return true;},toast:m=>ui.toasts.push(String(m?.message||m)),isParent:()=>true,protectedAction:f=>(ui.pending=f()),onStarted(){},buildBook:richBuildBook,openReview:async job=>{ui.opened.push(job.id);},showModal(){},closeModal(){},modalHeader:t=>t,...extra});
+ ui.click=async(action,id)=>{const el={dataset:{fullAutoAction:action,id}};el.closest=()=>el;for(const listener of clickListeners)listener({target:el,preventDefault(){}});await ui.pending;};
+ return ui;
+}
+const seriesBuilder=state=>p=>{const book={...richBuildBook(p),series:p.wizard.series||'새 시리즈'};const previous=state.books.find(b=>b.id===p.wizard.previousBookId);if(previous)applySeriesContinuity(state,book,previous,{...p.wizard});else{try{captureBookGenerationSnapshot(state,book);}catch(error){book.sheetSetupNotice=error.message;}}return book;};
+
+test('a held series book never opens in the pro editor before its hold is released to pages',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),{ops}=countingOps(state,{failPage:-1});
+ const job=createFullAutoJob(state,{...wizard,characterIds:['yuha','toto'],previousBookId:'seed-moon'},{stopBefore:'text',planMode:'selection'});
+ await runFullAuto(state,job,{operations:ops,buildBook:seriesBuilder(state)});
+ assert.equal(job.status,'text-review');assert.equal(job.seriesContinuityDeferred,true);
+ const ui=uiContext(state);
+ for(const action of ['simple-review','review']){await ui.click(action,job.id);assert.match(ui.toasts.at(-1),/시리즈 편.*그림 준비/);}
+ assert.deepEqual(ui.opened,[],'refused, nothing opened');assert.equal(job.status,'text-review');
+ // The simple screen may open it: it releases the hold before any image work.
+ const simple=uiContext(state,{openSimpleReview:async id=>{simple.simple.push(id);}});
+ await simple.click('simple-review',job.id);assert.deepEqual(simple.simple,[job.id]);
+ // A plain (non-series) text hold still falls back to the pro editor.
+ const plain=createFullAutoJob(state,wizard,{stopBefore:'text',planMode:'selection'});
+ await runFullAuto(state,plain,{operations:ops,buildBook:richBuildBook});
+ const fallback=uiContext(state);await fallback.click('simple-review',plain.id);assert.deepEqual(fallback.opened,[plain.id]);
+ // After the release the series snapshot exists and the editor may open the book.
+ job.stopBefore='pages';await runFullAuto(state,job,{operations:ops,buildBook:seriesBuilder(state)});
+ assert.equal(job.book.generationSnapshot.continuity.previousBookId,'seed-moon');
+ const released=uiContext(state);await released.click('simple-review',job.id);assert.deepEqual(released.opened,[job.id]);
+});
+
+test('FULL AUTO refuses to run a book while a page tool is working on it',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),ui=uiContext(state);
+ const job=await startFullAutoJob(wizard,{demo:true,stopBefore:'pages'});
+ assert.equal(job.status,'pages-ready');
+ let finish;const gate=new Promise(resolve=>{finish=resolve;});
+ const drawing=generateBookPageImage(state,job.book,2,{save:()=>true,generate:async(s,b,i)=>{await gate;Object.assign(b.pages[i],{imageAssetId:'image-page-tool-0002',imageUrl:image,imageMeta:{quality:'final'}});return b.pages[i];}});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(isPageOperationBusy(job.bookId),true);
+ await assert.rejects(runFullAutoJob(job.id,{stopBefore:null}),/쪽 글·그림 작업이 진행 중/);
+ assert.equal(job.stopBefore,'pages','the hold is not moved');assert.equal(job.status,'pages-ready');
+ await ui.click('resume',job.id);assert.match(ui.toasts.at(-1),/쪽 글·그림 작업이 진행 중/);assert.equal(job.status,'pages-ready');
+ finish();await drawing;assert.equal(isPageOperationBusy(job.bookId),false);
+ await runFullAutoJob(job.id);assert.equal(job.status,'pages-ready');
+});
+
+test('stopping a job a closed tab left running returns it to its hold once no tab holds the run',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),ui=uiContext(state),{ops}=countingOps(state,{failPage:-1});
+ const text=createFullAutoJob(state,wizard,{stopBefore:'text',planMode:'selection'});
+ await runFullAuto(state,text,{operations:ops,buildBook:richBuildBook});
+ const pages=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'});
+ await runFullAuto(state,pages,{operations:ops,buildBook:richBuildBook});
+ const early=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'});
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'navigator'),held=new Set(),asked=[];
+ const useNavigator=value=>Object.defineProperty(globalThis,'navigator',{value,configurable:true,writable:true});
+ useNavigator({locks:{request:async(name,options,callback)=>{asked.push([name,options.ifAvailable]);return callback(held.has(name)?null:{name});}}});
+ try{
+  for(const job of [text,pages,early])Object.assign(job,{status:'running',currentStep:'pagination'});
+  // Another tab still runs it: nothing changes.
+  held.add('donghwa-full-auto-'+text.id);
+  await stopFullAutoJob(text.id);assert.equal(text.status,'running');
+  await assert.rejects(applyPageText(state,text.book,0,{ko:'x'}),/만드는 중/);
+  held.clear();const saves=ui.saves;
+  await stopFullAutoJob(text.id);
+  assert.deepEqual([text.status,text.phase,text.currentStep],['text-review','글 완성 · 쪽 검수',null]);assert.ok(ui.saves>saves);
+  assert.deepEqual(asked.at(-1),['donghwa-full-auto-'+text.id,true]);
+  assert.equal((await applyPageText(state,text.book,0,{ko:'유하가 다시 웃어요.'})).changed,true,'page tools work again');
+  await stopFullAutoJob(pages.id);assert.equal(pages.status,'pages-ready');
+  await stopFullAutoJob(early.id);assert.deepEqual([early.status,early.currentStep],['paused','pagination'],'never reached its hold');
+  // Without Web Locks, a tab with no live run of its own releases it too.
+  useNavigator({});text.status='running';
+  await stopFullAutoJob(text.id);assert.equal(text.status,'text-review');
+ }finally{if(descriptor)Object.defineProperty(globalThis,'navigator',descriptor);else delete globalThis.navigator;}
 });
