@@ -679,12 +679,16 @@ export async function runFullAuto(
   };
   const report = (message) =>
     onProgress({ job, message, phase: job.phase, ...fullAutoProgress(job) });
+  // A stop that lands during the preflight or a save is honoured here too, not
+  // only at the next step: the job ends 'paused', never in a hold a page tool may buy from.
   const holdAt = async (status, message) => {
+    abort(signal);
     job.status = status;
     job.phase = message;
     job.currentStep = null;
     job.error = null;
     await persist();
+    abort(signal);
     report(message);
     return job.book;
   };
@@ -784,6 +788,8 @@ export async function runFullAuto(
     assertJobWorld(state, job);
     abort(signal);
     await ops.preflight(state, job);
+    // A stop pressed during the preflight's key reads ends the run here, 'paused'.
+    abort(signal);
     job.status = "running";
     job.error = null;
     await persist();
@@ -1056,7 +1062,8 @@ export async function runFullAuto(
         // The snapshot must name sheets bought after the parent approves the text.
         delete job.book.generationSnapshot;
         delete job.book.sheetSetupNotice;
-      } else ensureJobSnapshot(state, job);
+      } else if (!signal?.aborted) ensureJobSnapshot(state, job);
+      // Stopped meanwhile: the book is kept and saved without a snapshot; the check below ends the run.
       state.storyDrafts[job.storyDraftId].pictureBook = job.book;
       await persist();
     }
@@ -1064,6 +1071,8 @@ export async function runFullAuto(
     if (hold === "text")
       return await holdAt("text-review", "글 완성 · 쪽 검수");
     if (!job.book.generationSnapshot) {
+      // No snapshot is frozen after a stop: page tools treat a snapshot as "ready to draw".
+      abort(signal);
       ensureJobSnapshot(state, job);
       if (state.storyDrafts?.[job.storyDraftId])
         state.storyDrafts[job.storyDraftId].pictureBook = job.book;

@@ -114,6 +114,18 @@ const suppliedText = (...values) =>
     .map((value) =>
       typeof value === "string" ? value : JSON.stringify(value),
     );
+/**
+ * Names (Korean and English) of every character in the drawer, for the
+ * forbidden-name check: a cast name followed only by particles ("토토로부터")
+ * is that character, not the film. Never exempts a longer forbidden word.
+ */
+export const castNames = (state) =>
+  suppliedText(
+    (state?.characters || []).map((character) => [
+      character?.name,
+      character?.nameEn,
+    ]),
+  );
 
 function variantForPage(snapshot, characterId, pageNumber) {
   const range = (snapshot.variantPageRanges?.[characterId] || []).find(
@@ -663,6 +675,7 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
   const styleReferences = getWorldStyleReferences(state, world, preset);
   return {
     // Parent-entered (or planned) character fields, each checked strictly on its own.
+    // Every known character's name counts: "토토로부터 받은 목도리" in 유하's description is 토토 + particles.
     forbiddenWordCheck: {
       text: suppliedText([
         character.name,
@@ -672,7 +685,7 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
         character.appearance,
         character.clothes,
       ]),
-      names: suppliedText([character.name, character.nameEn]),
+      names: castNames(state),
     },
     prompt: `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
     stylePreset: clone(preset),

@@ -134,10 +134,14 @@ export const DEFAULT_FORBIDDEN_STYLE_WORDS = Object.freeze([
   "elsa",
   "디즈니",
   "픽사",
+  "드림웍스",
   "지브리",
   "미야자키",
   "토토로",
   "겨울왕국",
+  "엘사",
+  "미키마우스",
+  "미키 마우스",
 ]);
 const aliases = {
   cartoon: "comic",
@@ -150,67 +154,103 @@ const aliases = {
 };
 let customPresets = [];
 let customForbiddenWords = [];
-const lower = (value) =>
+/** NFKC with zero-width and other format characters (\p{Cf}) removed, so "Dis\u200bney" is "Disney". */
+const visible = (value) =>
   String(value || "")
     .normalize("NFKC")
-    .toLowerCase();
+    .replace(/\p{Cf}/gu, "");
+const lower = (value) => visible(value).toLowerCase();
 /**
- * Distinctive studio, artist, film and character names. No ordinary English
+ * Distinctive studio, artist, film and character names, also written split
+ * or joined ("Dream Works", "dream-works", "DreamWorks"). No ordinary English
  * word contains them, so they count anywhere, also joined to other words
- * ("DisneyPixar", "studioghibli", "pixar3d").
+ * ("DisneyPixar", "studioghibli", "pixar3d"). "pixart" (pixel art) is another word.
  */
-const BRAND_WORDS = new Set([
-  "disney",
-  "pixar",
-  "dreamworks",
-  "ghibli",
-  "miyazaki",
-  "studio ghibli",
-  "totoro",
+const BRAND_WORDS = new Map([
+  ["disney", /disney/iu],
+  ["pixar", /pixar(?!t)/iu],
+  ["dreamworks", /dream[\s_-]*works/iu],
+  ["ghibli", /ghibli/iu],
+  ["miyazaki", /miyazaki/iu],
+  ["studio ghibli", /studio[\s_-]*ghibli/iu],
+  ["totoro", /totoro/iu],
+]);
+/**
+ * In model-written story text "her dream works" is English: there a brand
+ * split by a space counts only written as the name ("Dream Works").
+ */
+const STORY_BRAND_WORDS = new Map([
+  ["dreamworks", [/dream[_-]*works/iu, /Dream\s+Works|DREAM\s+WORKS/u]],
 ]);
 /** Ordinary English words that are also a film title ("the pond was frozen"). */
 const TITLE_WORDS = new Set(["frozen"]);
 const STYLE_SUFFIXES = new Set(["esque", "ish", "like", "style", "styled"]);
-// "frozen like a statue" and "a frozen look" are story English; "frozen-like" and "frozen style" are not.
-const STYLE_CUE =
-  /^(?:-like|[\s"'’)\]-]*(?:style|styled|movie|film|animation|animated|princess|aesthetic|inspired|themed|풍|스타일|처럼|같은|같이))/iu;
-// A style cue before the title: "like Frozen", "inspired by Frozen", "in the style of Frozen", "the movie Frozen".
+/** An optional sequel between the title and its cue: "Frozen 2 style", "Frozen II-inspired". */
+const SEQUEL = String.raw`(?:[\s-]*(?:\d{1,2}|ii|iii|two)(?![a-z0-9]))?`;
+// "frozen like a statue" and "a frozen look" are story English; "frozen-like", "frozen style" and "Frozen 2 style" are not.
+const STYLE_CUE = new RegExp(
+  String.raw`^${SEQUEL}(?:-like|[\s"'’)\]-]*(?:style|styled|movie|animation|animated|aesthetic|inspired|themed|풍|스타일|처럼|같은|같이|느낌))`,
+  "iu",
+);
+// Cues that are ordinary words after a lowercase "frozen" ("a thin frozen film", "the frozen princess",
+// "a frozen look") count only after the written title, Title-case or all caps: "Frozen princess dress",
+// "Frozen look", "FROZEN THEME".
+const TITLE_CUE = new RegExp(
+  String.raw`^${SEQUEL}[\s"'’)\]-]*(?:films?|princess(?:es)?|look(?:s|ing)?|theme[sd]?|vibes?)(?![a-z])`,
+  "iu",
+);
+// "Frozen 2", "Frozen II": the Title-case title with a sequel number names the film.
+const TITLE_SEQUEL = /^[\s-]*(?:\d{1,2}|ii|iii)(?![\p{L}\p{N}])/iu;
+// A style cue before the title: "like Frozen", "like in Frozen", "inspired by Frozen", "in the style of Frozen",
+// "the movie Frozen", "a dress from Frozen", "similar to Frozen", "as seen in Frozen".
 const STYLE_CUE_BEFORE =
-  /(?:^|[^\p{L}\p{N}])(?:like|inspired\s+by|style\s+of|as\s+in|based\s+on|movie|film|영화|애니메이션|애니)(?:\s+the)?[\s"'“‘(\[]*$/iu;
-// After such a cue, "like frozen glass" still describes ice; "like Frozen", "like frozen." and "like frozen 2" name the film.
-const NEXT_LATIN_WORD = /^[\s"'’”)\]-]*[a-z]/i;
+  /(?:^|[^\p{L}\p{N}])(?:like(?:\s+in)?|inspired\s+by|style\s+of|as\s+(?:seen\s+)?in|based\s+on|similar\s+to|from|movie|film|영화|애니메이션|애니)(?:\s+the)?[\s"'“‘(\[]*$/iu;
+// After such a cue, "like frozen glass" and "like frozen, he waited" still describe ice;
+// "like Frozen", "like FROZEN", "like frozen." and "like frozen 2" name the film.
+const NEXT_LATIN_WORD = /^[\s"'’”)\],;-]*[a-z]/i;
+const TITLE_CASE = /^\p{Lu}\p{Ll}/u,
+  ALL_CAPS = /^\p{Lu}{2,}$/u;
 /**
  * What may follow a cast name inside one Korean token for it to stay the name:
- * one particle ("토토로" is 토토 + 로), optionally followed by one more
- * ("토토로는", "토토로부터"). "미야자키풍" (미야) or "겨울왕국처럼" (겨울) is not.
+ * one particle ("토토로" is 토토 + 로, "토토로서" is 토토 + 로서), then up to two
+ * more and a polite 요 ("토토로써는", "토토로의", "토토로는요", "토토로부터").
+ * "미야자키풍" (미야), "겨울왕국처럼" (겨울) or "토토로봇" (토토) is not.
  */
 const NAME_PARTICLE =
-  /^(?:으로|로|에게|한테|에서|에|와|과|이랑|랑|처럼|부터|까지|는|은|가|이|를|을|의|도|만)(?:는|은|도|만|부터|까지|요)?$/u;
+  /^(?:(?:으로|로)(?:서|써)?|에게|한테|에서|에|와|과|이랑|랑|처럼|부터|까지|는|은|가|이|를|을|의|도|만)(?:의|는|은|도|만|부터|까지){0,2}요?$/u;
 const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/u;
 const ASCII_WORD = /[a-z0-9]/;
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** A title word ("frozen") counts outside style text only as a style reference. */
 function titleUsedAsStyle(text, match, scope) {
-  if (STYLE_SUFFIXES.has((match[1] || "").toLowerCase())) return true;
-  const after = text.slice(match.index + match[0].length);
+  const suffix = (match[1] || "").toLowerCase();
+  // "frozenesque", "Frozen2": a joined suffix or sequel number is never story English.
+  if (STYLE_SUFFIXES.has(suffix) || /^\d+$/.test(suffix)) return true;
+  const after = text.slice(match.index + match[0].length),
+    title = TITLE_CASE.test(match[0]),
+    caps = ALL_CAPS.test(match[0]);
   if (STYLE_CUE.test(after)) return true;
-  // Parent-entered material also counts a cue before the title.
+  if ((title || caps) && TITLE_CUE.test(after)) return true;
+  if (title && TITLE_SEQUEL.test(after)) return true;
+  // Parent-entered material also counts a cue before the title. Title-case
+  // "Frozen" is the title whatever follows; "frozen" and "FROZEN" only when no
+  // Latin word follows ("like FROZEN" is the title, "LIKE FROZEN SNOW" is ice).
   return (
     scope === "material" &&
     STYLE_CUE_BEFORE.test(text.slice(0, match.index)) &&
-    (/^\p{Lu}/u.test(match[0]) || !NEXT_LATIN_WORD.test(after))
+    (title || !NEXT_LATIN_WORD.test(after))
   );
 }
 function latinMatches(text, word, scope) {
-  const brand = BRAND_WORDS.has(word),
-    body = word
-      .split(/\s+/)
-      .map(escapeRegExp)
-      .join(brand ? "[\\s_-]*" : "[\\s_-]+");
-  if (brand) return new RegExp(body, "iu").test(text);
-  const left = ASCII_WORD.test(word[0]) ? "(?<![a-z0-9])" : "",
+  const brand = BRAND_WORDS.get(word);
+  if (brand)
+    return scope === "description" && STORY_BRAND_WORDS.has(word)
+      ? STORY_BRAND_WORDS.get(word).some((pattern) => pattern.test(text))
+      : brand.test(text);
+  const body = word.split(/\s+/).map(escapeRegExp).join("[\\s_-]+"),
+    left = ASCII_WORD.test(word[0]) ? "(?<![a-z0-9])" : "",
     right = ASCII_WORD.test(word.at(-1))
-      ? "('?s|es|esque|ish|like|land|mouse|style|styled)?(?![a-z0-9])"
+      ? "(\\d+|'?s|es|esque|ish|like|land|mouse|style|styled)?(?![a-z0-9])"
       : "()",
     pattern = new RegExp(left + body + right, "giu");
   for (const match of text.matchAll(pattern)) {
@@ -225,22 +265,29 @@ function latinMatches(text, word, scope) {
   return false;
 }
 function hangulMatches(text, word, names) {
+  // "미키 마우스" also matches "미키  마우스" and "미키-마우스".
+  const pattern = new RegExp(
+    word.split(/\s+/).map(escapeRegExp).join("[\\s_-]+"),
+    "gu",
+  );
   for (
-    let index = text.indexOf(word);
-    index >= 0;
-    index = text.indexOf(word, index + 1)
+    let match = pattern.exec(text);
+    match;
+    pattern.lastIndex = match.index + 1, match = pattern.exec(text)
   ) {
+    const index = match.index,
+      found = match[0];
     let start = index,
-      end = index + word.length;
+      end = index + found.length;
     while (start > 0 && HANGUL.test(text[start - 1])) start--;
     while (end < text.length && HANGUL.test(text[end])) end++;
-    // "토토로" right after a known name such as 토토 is the name plus a particle, not the film.
+    // "토토로" right after a known name such as 토토 is the name plus particles, not the film.
     const nameWithParticle =
       start === index &&
       names.some(
         (name) =>
-          name.length < word.length &&
-          word.startsWith(name) &&
+          name.length < found.length &&
+          found.startsWith(name) &&
           NAME_PARTICLE.test(text.slice(index + name.length, end)),
       );
     if (!nameWithParticle) return true;
@@ -249,16 +296,22 @@ function hangulMatches(text, word, names) {
 }
 /**
  * Forbidden studio, artist, work and character names found in `value`.
- * Distinctive names ("disney", "ghibli") match anywhere, also joined to other
- * words. Names that are ordinary English words ("frozen", "elsa", "mickey")
- * and the parent's extra words match whole words, plus a few suffixes such
- * as "frozenesque". Korean words match inside a token unless the token is a
- * known character name (`names`) followed only by a particle.
+ * Zero-width and other format characters are ignored ("Dis\u200bney").
+ * Distinctive names ("disney", "ghibli", "dreamworks") match anywhere, also
+ * joined to other words or split ("Dream Works"). Names that are ordinary
+ * English words ("frozen", "elsa", "mickey") and the parent's extra words
+ * match whole words, plus a few suffixes such as "frozenesque" or "Frozen2".
+ * Korean words match inside a token unless the token is a known character
+ * name (`names`) followed only by particles ("토토로서", "토토로는요").
  * Scopes: 'style' (the default) is for style text and counts every match.
  * 'material' is for parent-entered text (character, place and wardrobe
  * descriptions, a page's own image prompt): a title that is also an ordinary
  * word ("frozen") counts only with a style cue before or after it ("like
- * Frozen", "inspired by Frozen", "Frozen style"). 'description' is for
+ * Frozen", "a dress from Frozen", "Frozen 2 style", "Frozen 느낌"); weak cues
+ * after it ("film", "princess", "look", "theme", "vibe") count only after
+ * Title-case or all-caps "Frozen", a bare sequel number ("Frozen II") only
+ * after Title-case, and a cue before lowercase or all-caps "frozen" only when
+ * no Latin word follows ("LIKE FROZEN SNOW" is ice). 'description' is for
  * model-written story text and the cover action: only a cue after it counts,
  * so "the lake looked like frozen glass" passes.
  */
@@ -267,8 +320,8 @@ export function forbiddenStyleMatches(
   extras = [],
   { names = [], scope = "style" } = {},
 ) {
-  const source = String(value || "").normalize("NFKC"),
-    text = lower(value),
+  const source = visible(value),
+    text = source.toLowerCase(),
     known = [...new Set((names || []).map(lower).map((n) => n.trim()))].filter(
       Boolean,
     );

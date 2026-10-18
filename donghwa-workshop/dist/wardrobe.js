@@ -8,6 +8,7 @@ import {
   getActiveWorld,
   getCharacterSheet,
   getWorldStyleReferences,
+  castNames,
 } from "./image-generation/world.js";
 import {
   getStylePreset,
@@ -391,17 +392,28 @@ export function createVariantGenerationRequest(
     );
   if (!["front", "full"].includes(view))
     throw new Error("정면 또는 전신 참조를 생성해 주세요.");
+  // Same check as a scene request makes on wardrobe text: parent-entered material
+  // ("frozen-lake blue scarf" is a colour, "Frozen style dress" is not) with the
+  // whole cast's names, so "토토로부터 받은 목도리" is 토토 + particles.
+  const wardrobeText = [variant.name, variant.description].filter(
+      (part) => typeof part === "string" && part.trim(),
+    ),
+    names = castNames(state);
   if (
-    forbiddenStyleMatches(
-      `${variant.name || ""} ${variant.description || ""}`,
-      state.settings?.forbiddenStyleWords || [],
-    ).length
+    wardrobeText.some(
+      (part) =>
+        forbiddenStyleMatches(part, state.settings?.forbiddenStyleWords || [], {
+          scope: "material",
+          names,
+        }).length,
+    )
   )
     throw new Error(
       "옷장 설명에는 스튜디오·작가·작품·캐릭터 이름 대신 색, 소재, 모양을 적어 주세요.",
     );
   const preset = getStylePreset(world.stylePresetId);
   return {
+    forbiddenWordCheck: { text: wardrobeText, names },
     prompt: `Create one ${view === "front" ? "front-facing head-and-shoulders portrait" : "front-facing full-body view"} of the same original character as the FIRST reference image. Identical face, age, body proportions and recognizable identity. Change only ${variant.type === "hair" ? "the requested hair styling" : variant.type === "accessory" ? "the requested accessory" : "the requested clothing"}: ${variant.description}. Do not copy another character from the style images. Keep all unrequested facial, hair and clothing details unchanged. The FIRST reference is identity; all remaining images define style. A clean neutral background, one character only, no labels, no text, no logos.`,
     stylePreset: clone(preset),
     referenceImages: [

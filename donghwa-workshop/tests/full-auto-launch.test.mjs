@@ -7,6 +7,7 @@ import {toLegacyPages} from '../dist/story-generation/pipeline.js';
 import {bindSeriesBackgrounds} from '../dist/story-generation/continuity.js';
 import {revokeImageURLs} from '../dist/image-generation/assets.js';
 import {configureFullAutoUI, startFullAutoJob, runFullAutoJob} from '../dist/full-auto-ui.js';
+import {createFullAutoJob, runFullAuto} from '../dist/full-auto.js';
 import {generateBookPageImage, rewriteBookPage, applyPageText, isBookClaimedForRun, claimBookForRun, releaseBookForRun} from '../dist/story-generation/page-tools.js';
 
 // FIX-IMG 1: the exported runner claims the book before its first await, so a
@@ -133,4 +134,61 @@ test('claims pair up: a book stays claimed until every claim is released', () =>
   releaseBookForRun('book-a');assert.equal(isBookClaimedForRun('book-a'), true);
   releaseBookForRun('book-a');assert.equal(isBookClaimedForRun('book-a'), false);
   releaseBookForRun('book-a');assert.equal(isBookClaimedForRun('book-a'), false, 'an extra release is harmless');
+});
+
+// ---- FIX-IMG-2: a stop that lands during the preflight or a save ends the run 'paused', never in a hold ----
+async function textHeld() {
+  const {state, wizard} = setup();
+  const job = createFullAutoJob(state, wizard, {demo: true, planMode: 'selection', stopBefore: 'text'});
+  await runFullAuto(state, job, {buildBook: appBuilder(state)});
+  assert.equal(job.status, 'text-review', job.error || '');
+  assert.equal(job.book.generationSnapshot, undefined, 'a text hold freezes no snapshot');
+  return {state, job};
+}
+const noImages = {characterSheet: refuse('character sheet'), backgroundSheet: refuse('background sheet'), scene: refuse('scene'), cover: refuse('cover')};
+
+test('a stop pressed during the preflight of a release to pages ends paused, with no snapshot frozen', async () => {
+  const {state, job} = await textHeld(), controller = new AbortController(), statuses = [];
+  job.stopBefore = 'pages';
+  await assert.rejects(runFullAuto(state, job, {signal: controller.signal, buildBook: appBuilder(state), save: () => {statuses.push(job.status); return true;},
+    operations: {...noImages, preflight: async () => {controller.abort();}}}), {name: 'AbortError'});
+  assert.equal(job.status, 'paused');assert.equal(job.error, null);
+  assert.equal(job.book.generationSnapshot, undefined, 'page tools would read a snapshot as ready to draw');
+  assert.ok(!statuses.includes('pages-ready'), 'the hold was never saved');assert.equal(statuses.at(-1), 'paused');
+});
+
+test('a stop pressed while the run saves is honoured before the snapshot and before the hold', async () => {
+  // During the save that marks the job running: nothing is frozen and the job ends paused.
+  {
+    const {state, job} = await textHeld(), controller = new AbortController(), statuses = [];
+    job.stopBefore = 'pages';
+    await assert.rejects(runFullAuto(state, job, {signal: controller.signal, buildBook: appBuilder(state), operations: noImages,
+      save: () => {statuses.push(job.status); if (job.status === 'running') controller.abort(); return true;}}), {name: 'AbortError'});
+    assert.equal(job.status, 'paused');assert.equal(job.book.generationSnapshot, undefined);
+    assert.ok(!statuses.includes('pages-ready'));
+  }
+  // During the save of the hold itself: the stop wins and the saved status ends paused.
+  {
+    const {state, job} = await textHeld(), controller = new AbortController(), statuses = [];
+    job.stopBefore = 'pages';
+    let reports = 0;
+    await assert.rejects(runFullAuto(state, job, {signal: controller.signal, buildBook: appBuilder(state), operations: noImages, onProgress: p => {if (p.message === '그림 준비 완료') reports++;},
+      save: () => {statuses.push(job.status); if (job.status === 'pages-ready') controller.abort(); return true;}}), {name: 'AbortError'});
+    assert.equal(job.status, 'paused');assert.equal(statuses.at(-1), 'paused');assert.equal(reports, 0, 'the hold is never announced');
+  }
+  // Resuming a pages hold whose snapshot exists: a stop during the preflight also ends paused.
+  {
+    const {state, wizard} = setup(), controller = new AbortController();
+    const job = createFullAutoJob(state, wizard, {demo: true, planMode: 'selection', stopBefore: 'pages'});
+    await runFullAuto(state, job, {buildBook: appBuilder(state)});
+    assert.equal(job.status, 'pages-ready');assert.ok(job.book.generationSnapshot);
+    await assert.rejects(runFullAuto(state, job, {signal: controller.signal, buildBook: appBuilder(state), operations: {...noImages, preflight: async () => controller.abort()}}), {name: 'AbortError'});
+    assert.equal(job.status, 'paused');
+    assert.ok(job.book.pages.every(p => !p.imageAssetId), 'no page was drawn');
+  }
+  // Without a stop the same release still reaches its hold.
+  const {state, job} = await textHeld();
+  job.stopBefore = 'pages';
+  await runFullAuto(state, job, {buildBook: appBuilder(state), operations: noImages});
+  assert.equal(job.status, 'pages-ready');assert.ok(job.book.generationSnapshot);
 });

@@ -276,3 +276,80 @@ test('a paid rewrite without a usable page keeps its cost row as failed and save
  await assert.rejects(rewriteBookPage(state,book,5,{save,rewrite:async()=>({data:{pages:[]},meta:{requests:0}})}),/^Error: 다시 쓴 쪽을 받지 못했어요\.$/);
  assert.equal(book.textUsage.calls.length,count+2);assert.equal(saves(),2);
 });
+
+// ---- FIX-IMG-2: malformed or one-language rewrites, real usage on a failed validation, the cross-tab run lock ----
+test('a paid rewrite with a malformed page list or one blank language keeps the failed row and the page text',async()=>{
+ const {state,job,book,save,saves}=await heldBook(),before={ko:book.pages[5].ko,en:book.pages[5].en},count=book.textUsage.calls.length;
+ const billed=data=>async()=>({data,usage:{input:80,output:9,costUsdEstimated:.002},meta:{stage:'page',requests:1,engineId:'openai',model:'mock'}});
+ // data.pages that is not an array is a billed response without a usable page, not a TypeError.
+ for(const pages of ['oops',{6:{textKo:'가',textEn:'a'}},7])
+  await assert.rejects(rewriteBookPage(state,book,5,{save,rewrite:billed({pages})}),/받지 못했어요.*비용은 기록했어요/);
+ assert.equal(book.textUsage.calls.length,count+3);assert.ok(book.textUsage.calls.slice(count).every(c=>c.failed&&c.input===80));
+ assert.equal(job.usage.calls.filter(c=>c.failed&&c.input===80).length,3);assert.equal(saves(),3);
+ // Every page carries both languages: one blank language would wipe that side of the page.
+ for(const [ko,en] of [['','Yuha counts stars.'],['유하가 별을 세어요.','   '],['유하가 별을 세어요.',undefined]]){
+  const one=async pagination=>{const next=structuredClone(pagination);next.pages[5].textKo=ko;next.pages[5].textEn=en;return {data:next,usage:{input:81,output:9},meta:{stage:'page',requests:1}};};
+  await assert.rejects(rewriteBookPage(state,book,5,{save,rewrite:one}),/받지 못했어요/);
+  assert.deepEqual([book.textUsage.calls.at(-1).failed,book.textUsage.calls.at(-1).input],[true,81]);
+ }
+ assert.deepEqual({ko:book.pages[5].ko,en:book.pages[5].en},before);
+ assert.equal(book.pagination.pages[5].textKo,before.ko);assert.equal(book.pagination.pages[5].textEn,before.en);
+ assert.equal(isPageOperationBusy(book.id),false);
+});
+
+test('a real page rewrite that fails validation after a paid response keeps its real tokens and cost',async()=>{
+ const {state,job,book,save}=await heldBook(),before=book.pages[2].ko,usdBefore=book.textUsage.calls.reduce((n,c)=>n+(Number(c.costUsdEstimated)||0),0);
+ let calls=0;
+ const engine=patch=>({id:'openai',async complete(req){calls++;const target=JSON.parse(req.user).targetPage;return {json:{...target,...patch},usage:{input:4321,output:765,costUsdEstimated:.0123}};}});
+ // The engine answered for another page: StoryValidationError after the paid request.
+ await assert.rejects(rewriteBookPage(state,book,2,{save,engine:engine({pageNo:99})}),error=>error.name==='StoryValidationError'&&error.usage?.input===4321&&error.meta?.requests===1);
+ let row=book.textUsage.calls.at(-1);
+ assert.deepEqual([row.action,row.pageNo,row.failed,row.input,row.output,row.usageUnknown],['rewrite-page',3,true,4321,765,undefined]);
+ assert.equal(row.costUsdEstimated,.0123,'the billed cost is kept');
+ const estimated=book.textUsage.calls.reduce((n,c)=>n+(Number(c.costUsdEstimated)||0),0);
+ assert.ok(Math.abs(book.textCosts.estimatedUsd-estimated)<1e-9&&Math.abs(estimated-usdBefore-.0123)<1e-9,'the book cost includes the failed request');
+ assert.ok(job.usage.calls.some(c=>c.failed&&c.input===4321));
+ // A page that fails the page schema after the request is billed the same way.
+ await assert.rejects(rewriteBookPage(state,book,2,{save,engine:engine({textKo:''})}),{name:'StoryValidationError'});
+ row=book.textUsage.calls.at(-1);
+ assert.deepEqual([row.failed,row.input,row.usageUnknown],[true,4321,undefined]);
+ assert.equal(calls,2);assert.equal(book.pages[2].ko,before);
+});
+
+test('page tools refuse to buy while another tab holds the job\'s FULL AUTO run lock',async()=>{
+ const {state,job,book,save}=await heldBook({stopBefore:'pages'});
+ assert.equal(job.status,'pages-ready');
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'navigator');
+ const useLocks=locks=>Object.defineProperty(globalThis,'navigator',{value:{locks},configurable:true,writable:true});
+ let queries=0,rewrites=0,draws=0;
+ const rewrite=async pagination=>{rewrites++;return rewritten(pagination,3,'유하가 별을 세어요.');};
+ const generate=async(s,b,i)=>{draws++;draw(b.pages[i],'image-tab-'+draws);return b.pages[i];};
+ const held=names=>({query:async()=>{queries++;return {held:names.map(name=>({name,mode:'exclusive',clientId:'tab-b'})),pending:[]};}});
+ try{
+  // Another tab runs this job: no paid page tool starts, nothing is billed or saved.
+  useLocks(held(['donghwa-full-auto-'+job.id]));
+  const rows=book.textUsage.calls.length;
+  await assert.rejects(rewriteBookPage(state,book,3,{save,rewrite}),/FULL AUTO가 이 책을 만드는 중/);
+  await assert.rejects(generateBookPageImage(state,book,3,{save,generate}),/FULL AUTO가 이 책을 만드는 중/);
+  assert.deepEqual([rewrites,draws,queries],[0,0,2]);assert.equal(book.textUsage.calls.length,rows);
+  assert.equal(isPageOperationBusy(book.id),false);
+  // A run that starts in this tab while the query is pending is caught after it.
+  useLocks({query:async()=>{job.status='running';return {held:[],pending:[]};}});
+  await assert.rejects(generateBookPageImage(state,book,3,{save,generate}),/만드는 중/);
+  job.status='pages-ready';
+  // Another job's lock, an unavailable query or no query at all never block the parent.
+  useLocks(held(['donghwa-full-auto-other-job']));
+  assert.equal((await rewriteBookPage(state,book,3,{save,rewrite})).changed,true);
+  useLocks({query:async()=>{throw Error('locks unavailable');}});
+  assert.equal((await generateBookPageImage(state,book,3,{save,generate})).imageAssetId,'image-tab-1');
+  useLocks({request:async()=>{}});
+  assert.equal((await generateBookPageImage(state,book,4,{save,generate})).imageAssetId,'image-tab-2');
+  assert.deepEqual([rewrites,draws],[1,2]);
+  // A demo book never pays for a rewrite, so it needs no lock check.
+  useLocks(held(['donghwa-full-auto-'+job.id]));queries=0;
+  book.textDemo=true;
+  assert.deepEqual(await rewriteBookPage(state,book,3,{save,rewrite}),{changed:false,demo:true});assert.equal(queries,0);
+ }finally{
+  if(descriptor)Object.defineProperty(globalThis,'navigator',descriptor);else delete globalThis.navigator;
+ }
+});
