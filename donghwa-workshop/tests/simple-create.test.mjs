@@ -92,7 +92,9 @@ test('each simple step shows at most 12 buttons (material cards and page arrows 
   const first = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleFormatOpen: true})));
   assert.equal((first.match(/data-simple-action="topic"/g) || []).length, 6);
   assert.match(first, /id="topic"/);
-  assert.match(first, /data-simple-action="idea"[^>]*disabled/, 'no story world by default, so the idea button explains why it is off');
+  assert.match(first, /data-simple-action="idea"/);
+  assert.doesNotMatch(first, /data-simple-action="idea"[^>]*disabled/, 'ideas come from the built-in list without a story world');
+  assert.doesNotMatch(first, /프로 모드의 이야기 품질 설정|기본 무대를 골라/, 'no pro-mode explanation on the simple screen');
   assert.match(first, /K1 · E0 · 8쪽 · 한글판·영어판 두 권/);
   for (const id of ['language', 'pageCount', 'koreanLevel', 'englishLevel']) assert.match(first, new RegExp(`id="${id}"`));
   assert.doesNotMatch(first, /id="value"|id="ending"|storyWorldId/);

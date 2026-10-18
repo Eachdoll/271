@@ -3508,14 +3508,15 @@ configureFullAutoUI({
     return structuredClone(wizard);
   },
   buildBook: buildStoryResultBook,
+  // While a simple action is running, openSimpleJob refuses (and says why); keep the dialog open.
   openSimpleReview: async (jobId) => {
-    closeModal();
+    if (!isSimpleBusy()) closeModal();
     await openSimpleJob(simpleCtx, jobId);
   },
   openReview: async (job) => {
     // Simple mode reviews a finished FULL AUTO book in step ④ as well.
     if (uiMode === "simple") {
-      closeModal();
+      if (!isSimpleBusy()) closeModal();
       await openSimpleJob(simpleCtx, job.id);
       return;
     }

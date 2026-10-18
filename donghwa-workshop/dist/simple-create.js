@@ -16,9 +16,10 @@ import {
   rewriteBookPage,
   applyPageText,
   setPageReviewed,
-  pagesNeedingImages,
   estimateSimpleCosts,
   generateBookPageImage,
+  isPageImageStale,
+  isPageOperationBusy,
 } from "./story-generation/page-tools.js";
 import { collectBookChecks } from "./checks-panel.js";
 import {
@@ -102,6 +103,70 @@ export const SIMPLE_TOPICS = Object.freeze([
   "처음 유치원에 간 날",
   "친구의 생일 파티",
 ]);
+/**
+ * 아이디어 뽑기 without a story world: short, everyday topics for young children.
+ * Plain situations only (no catchphrase-like lines), so the story finds its own words.
+ */
+export const IDEA_TOPICS = Object.freeze([
+  "잃어버린 장갑 한 짝을 찾는 날",
+  "구름 위에서 열린 작은 음악회",
+  "텃밭에 처음 심은 방울토마토",
+  "이가 흔들리기 시작한 날",
+  "동생이 처음 집에 온 날",
+  "우산 속에 들어온 작은 손님",
+  "눈사람이 녹지 않게 지키는 방법",
+  "밤하늘에 새 별자리 그리기",
+  "할머니 댁 다락방의 오래된 상자",
+  "개미 마을의 이사하는 날",
+  "무지개 끝에서 찾은 것",
+  "혼자 신발 끈을 묶어 본 날",
+  "바람에 날아간 연을 찾아서",
+  "도서관에서 길을 잃은 그림책",
+  "시장에서 처음 해 본 심부름",
+  "고장 난 장난감 자동차 고치기",
+  "꿀벌이 꽃밭을 찾아가는 길",
+  "첫눈이 내린 아침",
+  "달팽이와 느릿느릿 산책",
+  "바닷가에서 모래성 쌓기",
+  "숨바꼭질하다 찾은 비밀 장소",
+  "아기 새가 처음 날아오른 날",
+  "엄마 생일 깜짝 선물 준비",
+  "무서운 꿈을 이겨 낸 밤",
+  "친구와 다툰 뒤 화해한 날",
+  "가을 낙엽으로 만든 왕관",
+  "잠이 오지 않는 아기 곰",
+  "물웅덩이에 비친 거꾸로 세상",
+  "기차를 타고 떠난 첫 여행",
+  "동물원에서 만난 키 큰 기린",
+  "반짝이는 조약돌 모으기",
+  "빵집에서 처음 구워 본 빵",
+  "바람개비가 멈춘 날",
+  "꼬마 소방관의 하루",
+  "겨울잠을 자지 않은 다람쥐",
+  "그림자와 술래잡기",
+  "새 친구에게 먼저 인사한 날",
+  "캠핑장에서 본 반딧불이",
+  "고양이가 숨겨 둔 털실 뭉치",
+  "해바라기가 쑥쑥 자라는 여름",
+  "냉장고 속 채소들의 회의",
+  "사라진 소풍 도시락",
+  "등대 할아버지와 밤바다",
+  "처음 두발자전거를 탄 날",
+  "공룡 화석을 발견한 날",
+  "우주 정거장에 보내는 편지",
+  "비 오는 날 열린 장화 행진",
+  "할아버지와 함께 낚시한 날",
+]);
+/** One built-in idea that is not the current topic. */
+export function pickIdeaTopic(current = "", random = Math.random) {
+  const now = String(current || "").trim(),
+    pool = IDEA_TOPICS.filter((topic) => topic !== now),
+    index = Math.min(
+      pool.length - 1,
+      Math.max(0, Math.floor(Number(random()) * pool.length) || 0),
+    );
+  return pool[index];
+}
 const LANGUAGE_LABELS = {
   dual: "한글판·영어판 두 권",
   bilingual: "한 쪽에 한글 + 영어",
@@ -302,6 +367,7 @@ export function simpleJobs(state) {
       (job) =>
         isSimpleJob(job) &&
         !job.simpleReplacedBy &&
+        !job.simpleAbandoned &&
         RESUMABLE.includes(job.status),
     )
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -338,6 +404,9 @@ export function jobWizardFrom(wizard, token) {
 function wizardFromJob(job, step) {
   const w = clone(job.wizard || {});
   for (const key of UI_FIELDS) delete w[key];
+  // The marker belongs to the frozen job copy only; a pro run started from this
+  // wizard must not be listed as a simple job (jobWizardFrom adds it back).
+  delete w.simpleFlow;
   return {
     ...w,
     step: 1,
@@ -354,6 +423,111 @@ const runIsLive = (job) =>
   !!job &&
   (liveRun?.jobId === job.id ||
     (job.status === "running" && isFullAutoRunning()));
+/** Marked running by a tab that closed or crashed: nothing is drawing it here. */
+const runInterrupted = (job) => job?.status === "running" && !runIsLive(job);
+/** Stopped, failed or never started before the text was built: ③ may start over. */
+const canAbandon = (job) =>
+  !!job &&
+  !job.book &&
+  !runIsLive(job) &&
+  ["paused", "failed", "ready", "running"].includes(job.status);
+
+/* ---------- image work on a book ---------- */
+/**
+ * What drawing would still have to do for a book:
+ * missing = pages without a final image (must be drawn before saving),
+ * stale = pages with a final image whose text changed since (the parent may keep them),
+ * needsRun = missing pages, a missing cover or an unfinished run (saving must run the drawer).
+ */
+export function imageWork(book) {
+  const missing = [],
+    stale = [];
+  (book?.pages || []).forEach((page, index) => {
+    if (!page?.imageAssetId || page.imageMeta?.quality !== "final")
+      missing.push(index);
+    else if (isPageImageStale(page)) stale.push(index);
+  });
+  const coverMissing = !book?.cover?.imageAssetId;
+  return {
+    missing,
+    stale,
+    coverMissing,
+    needsRun: !!(
+      missing.length ||
+      coverMissing ||
+      !book?.autoGenerationComplete
+    ),
+  };
+}
+const pageList = (indexes) => indexes.map((i) => i + 1).join("·") + "쪽";
+/** Hide stale marks while a run draws only missing pages; the run then keeps those pictures. */
+function hideStaleMarks(book, indexes) {
+  const kept = [];
+  for (const index of indexes) {
+    const page = book?.pages?.[index];
+    if (!page || !isPageImageStale(page)) continue;
+    kept.push({
+      index,
+      imageStaleAt: page.imageStaleAt,
+      imageStaleAssetId: page.imageStaleAssetId,
+    });
+    delete page.imageStale;
+    delete page.imageStaleAt;
+    delete page.imageStaleAssetId;
+  }
+  return kept;
+}
+/** Put the marks back on pages that still show the picture they were set on. */
+function restoreStaleMarks(book, kept) {
+  for (const mark of kept) {
+    const page = book?.pages?.[mark.index];
+    if (
+      !page ||
+      (page.imageAssetId || page.imageUrl) !== mark.imageStaleAssetId
+    )
+      continue;
+    page.imageStale = true;
+    page.imageStaleAt = mark.imageStaleAt;
+    page.imageStaleAssetId = mark.imageStaleAssetId;
+  }
+}
+/**
+ * The image engine a book draws with, or null when it needs no saved key
+ * (free sample, local ComfyUI or a proxy). Reads only the saved status.
+ */
+async function missingImageKey(state, book) {
+  const world = getActiveWorld(state),
+    engine = book?.generationSnapshot?.imageEngine || world.imageEngine,
+    config = {
+      ...(world.providerConfig?.[engine] || {}),
+      ...(book?.generationSnapshot?.imageModelConfig || {}),
+    };
+  if (
+    ["sample", "local", "demo"].includes(engine) ||
+    ENGINE_METADATA[engine]?.requiresKey === false ||
+    config.proxyEndpoint ||
+    config.transport === "proxy"
+  )
+    return null;
+  const status = await listCredentialStatus().catch(() => ({}));
+  keyStatus = status;
+  return status[engine] === true ? null : engine;
+}
+/** Toast the missing image key with a button to the parent settings field. Returns true on a miss. */
+async function stopForImageKey(ctx, book) {
+  const engine = await missingImageKey(ctx.getState(), book);
+  if (!engine) return false;
+  ctx.toast(
+    `${ENGINE_METADATA[engine]?.name || engine} 그림 엔진의 API 키를 먼저 저장해 주세요.`,
+    {
+      action: {
+        label: "키 입력",
+        run: () => ctx.openCredentialSettings("image", engine),
+      },
+    },
+  );
+  return true;
+}
 
 /* ---------- module state ---------- */
 let api = null,
@@ -398,15 +572,12 @@ function renderFormatPanel(w) {
     w.pageCount,
   )}${renderReadingSelectors(w)}</div>`;
 }
+/** A story world chosen in pro mode gives world ideas; otherwise the built-in list is used. */
 function ideaState(state) {
   const quality = normalizeStoryQualitySettings(state.settings?.storyQuality);
   return quality.worldId && quality.worldId !== "drawer"
-    ? { usable: true, worldId: quality.worldId, quality }
-    : {
-        usable: false,
-        reason:
-          "아이디어는 모험 무대가 정해져 있을 때 뽑을 수 있어요. 프로 모드의 이야기 품질 설정에서 기본 무대를 골라 주세요.",
-      };
+    ? { world: true, worldId: quality.worldId, quality }
+    : { world: false };
 }
 function resumeLabel(job) {
   if (job.status === "text-review") return "글 검수 대기";
@@ -430,9 +601,8 @@ function renderResumeCards(state) {
     )}</div>${jobs.length > MAX_RESUME_CARDS ? `<p class="small-label">나머지 ${jobs.length - MAX_RESUME_CARDS}권은 책장의 ‘제작 중인 이야기’에서 이어 갈 수 있어요.</p>` : ""}</section>`;
 }
 function renderTopicStep(ctx, w) {
-  const state = ctx.getState(),
-    idea = ideaState(state);
-  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", `${idea.usable ? "" : "disabled"} ${idea.usable ? "" : 'aria-describedby="simple-idea-status"'}`)}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${idea.usable ? "" : esc(idea.reason)}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w) : ""}<p class="small-label simple-defaults-note">교훈·마무리·분위기는 부모 설정의 기본값을 써요.</p></section>${renderResumeCards(state)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
+  const state = ctx.getState();
+  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite"></span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w) : ""}<p class="small-label simple-defaults-note">교훈·마무리·분위기는 부모 설정의 기본값을 써요.</p></section>${renderResumeCards(state)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
   home: "🏡",
@@ -567,7 +737,7 @@ function renderGenerateStep(ctx, w) {
   else if (HELD.includes(job.status) || job.book)
     status = `<div class="notice simple-done">글이 완성됐어요. 쪽마다 글을 확인해 주세요.</div><div class="simple-start">${sbtn("쪽마다 검수하기", "open-review", "primary")}</div>`;
   else
-    status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}</div>`;
+    status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}</div>${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
   return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${status}</section><div class="wizard-actions">${locked ? "<span></span>" : sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span><span></span></div>`;
 }
 const hasImage = (page) =>
@@ -602,10 +772,14 @@ function pageBadge(book, index) {
     state: "warn",
   };
 }
+/** "그림 8 / 8 · 글 바뀐 쪽 1": final pictures, then pages whose text changed after drawing. */
 export function imageCountLabel(book) {
-  const total = book?.pages?.length || 0;
-  return `그림 ${total - pagesNeedingImages(book).length} / ${total}`;
+  const total = book?.pages?.length || 0,
+    work = imageWork(book);
+  return `그림 ${total - work.missing.length} / ${total}${work.stale.length ? ` · 글 바뀐 쪽 ${work.stale.length}` : ""}`;
 }
+const INTERRUPTED_NOTE =
+  '<div class="notice simple-interrupted">그림 만들기가 중간에 멈췄어요(창이 닫혔거나 새로 열었어요). ‘이어서 만들기’를 누르면 남은 그림만 만들어요. 이미 만든 그림은 다시 만들지 않아요.</div>';
 function renderReviewStep(ctx, w) {
   const state = ctx.getState(),
     book = ctx.getDraft();
@@ -616,26 +790,42 @@ function renderReviewStep(ctx, w) {
     page = book.pages[index],
     job = jobOfBook(state, book),
     live = runIsLive(job),
-    busy = live || !!pageOp || actionBusy,
+    interrupted = runInterrupted(job),
+    pageBusy = !!pageOp || isPageOperationBusy(book.id),
+    busy = live || pageBusy || actionBusy,
     editing = !!w.simpleEditing,
-    off = busy ? "disabled" : "",
+    off = busy || interrupted ? "disabled" : "",
     image = hasImage(page),
     badge = pageBadge(book, index),
     reviewed = book.pages.filter((p) => p.reviewed).length,
     illustration = ctx.illustration || (() => "");
   const art = image
-    ? `${illustration(book, index)}${page.imageStale ? '<p class="small-label simple-stale">글이 바뀌었어요. 그림을 다시 만들 수 있어요.</p>' : ""}`
+    ? `${illustration(book, index)}${isPageImageStale(page) ? '<p class="small-label simple-stale">글이 바뀌었어요. 그림을 다시 만들 수 있어요.</p>' : ""}`
     : `<div class="image-missing simple-empty-art"><p>아직 그림이 없어요.</p>${sbtn("그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
   const text = (lang, label) =>
     `<div class="field"><label for="page-${lang}">${label}</label><textarea id="page-${lang}" lang="${lang}" ${editing ? "" : "readonly"}>${esc(page[lang] ?? page[lang === "ko" ? "textKo" : "textEn"] ?? "")}</textarea></div>`;
   const pageActions = editing
     ? `${sbtn("저장", "save-text", "green")}${sbtn("취소", "cancel-text")}`
     : `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("글 다시 만들기", "rewrite-text", "outline", off)}${image ? sbtn("그림 다시 만들기", "redraw-page", "outline", off) : ""}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`;
-  const running =
-    live || pageOp
-      ? `${progressBlock(job, pageOp ? `${pageOp.index + 1}쪽 ${pageOp.kind === "rewrite" ? "글" : "그림"} 만드는 중` : "그림 만드는 중")}`
-      : "";
-  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span></div><div class="simple-review-actions">${sbtn("모든 쪽 그림 만들기", "draw-all", "green", busy || editing ? "disabled" : "")}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-pager"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no" aria-live="polite">${index + 1} / ${total}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div><div class="simple-page"><div class="simple-page-art">${art}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${index + 1}쪽 · 한글`) : ""}${needsEn(book) ? text("en", `English · ${index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div></section><div class="wizard-actions">${live || pageOp ? sbtn("중지", "stop") : "<span></span>"}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
+  const ownOp = pageOp && pageOp.bookId === book.id ? pageOp : null,
+    running =
+      live || ownOp
+        ? `${progressBlock(job, ownOp ? `${ownOp.index + 1}쪽 ${ownOp.kind === "rewrite" ? "글" : "그림"} 만드는 중` : "그림 만드는 중")}`
+        : "",
+    topAction = interrupted
+      ? sbtn(
+          "이어서 만들기",
+          "resume-run",
+          "green",
+          busy || editing ? "disabled" : "",
+        )
+      : sbtn(
+          "모든 쪽 그림 만들기",
+          "draw-all",
+          "green",
+          busy || editing ? "disabled" : "",
+        );
+  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span></div><div class="simple-review-actions">${topAction}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-pager"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no" aria-live="polite">${index + 1} / ${total}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div><div class="simple-page"><div class="simple-page-art">${art}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${index + 1}쪽 · 한글`) : ""}${needsEn(book) ? text("en", `English · ${index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div></section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : "<span></span>"}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
 }
 function renderFinishStep(ctx, w) {
   const state = ctx.getState(),
@@ -643,7 +833,8 @@ function renderFinishStep(ctx, w) {
   if (!book?.pages?.length) return renderReviewStep(ctx, w);
   const job = jobOfBook(state, book),
     live = runIsLive(job),
-    busy = live || !!pageOp || actionBusy,
+    interrupted = runInterrupted(job),
+    busy = live || !!pageOp || actionBusy || isPageOperationBusy(book.id),
     titles = [
       ...new Set(
         [...(book.outline?.titleCandidates || []), book.title]
@@ -652,9 +843,14 @@ function renderFinishStep(ctx, w) {
       ),
     ],
     cover = ctx.cover || (() => ""),
-    needs = pagesNeedingImages(book).length,
-    coverReady = !!book.cover?.imageAssetId;
-  return `<section class="panel simple-panel simple-finish"><div class="simple-finish-grid"><div class="simple-cover">${cover(book)}</div><div class="simple-finish-body"><h3>동화책으로 엮어요</h3><fieldset class="simple-titles"><legend>제목 고르기</legend>${titles.map((title, i) => `<label><input type="radio" name="simple-title" value="${esc(title)}" ${title === book.title ? "checked" : ""} id="simple-title-${i}"> ${esc(title)}</label>`).join("")}</fieldset><p class="small-label">${esc(imageCountLabel(book))} · 표지 ${coverReady ? "준비됨" : "아직 없음"}${needs || !coverReady ? " · 저장할 때 남은 그림을 묻고 만들어요." : ""}</p>${live ? progressBlock(job, "남은 그림 만드는 중") : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-finish-actions"><button type="button" class="btn btn-outline" data-action="preview-draft-print" ${busy ? "disabled" : ""}>인쇄 미리보기</button>${sbtn("책장에 저장", "save-book", "primary", busy ? "disabled" : "")}</div></div></div></section><div class="wizard-actions">${live ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", busy ? "disabled" : "")}<span class="wizard-hint">저장하면 책 상세 화면으로 가요.</span><span></span></div>`;
+    work = imageWork(book),
+    coverReady = !work.coverMissing,
+    saveNote = work.needsRun
+      ? " · 저장할 때 남은 그림을 묻고 만들어요."
+      : work.stale.length
+        ? " · 글을 고친 쪽 그림은 저장할 때 그대로 둘지 물어요."
+        : "";
+  return `<section class="panel simple-panel simple-finish"><div class="simple-finish-grid"><div class="simple-cover">${cover(book)}</div><div class="simple-finish-body"><h3>동화책으로 엮어요</h3><fieldset class="simple-titles"><legend>제목 고르기</legend>${titles.map((title, i) => `<label><input type="radio" name="simple-title" value="${esc(title)}" ${title === book.title ? "checked" : ""} id="simple-title-${i}"> ${esc(title)}</label>`).join("")}</fieldset><p class="small-label">${esc(imageCountLabel(book))} · 표지 ${coverReady ? "준비됨" : "아직 없음"}${saveNote}</p>${live ? progressBlock(job, "남은 그림 만드는 중") : ""}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-finish-actions"><button type="button" class="btn btn-outline" data-action="preview-draft-print" ${busy ? "disabled" : ""}>인쇄 미리보기</button>${interrupted ? sbtn("이어서 만들기", "resume-run", "green", busy ? "disabled" : "") : ""}${sbtn("책장에 저장", "save-book", "primary", busy || interrupted ? "disabled" : "")}</div></div></div></section><div class="wizard-actions">${live ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", busy ? "disabled" : "")}<span class="wizard-hint">저장하면 책 상세 화면으로 가요.</span>${interrupted ? sbtn("중지", "stop") : "<span></span>"}</div>`;
 }
 /** The whole simple create page for the app's shared wizard/draft. */
 export function renderSimpleCreate(ctx = api) {
@@ -681,7 +877,11 @@ export function renderSimpleCreate(ctx = api) {
 }
 
 /* ---------- actions ---------- */
-function confirmModal(ctx, title, body, okLabel) {
+/**
+ * A modal with 취소 and one or more named choices; resolves the chosen value or
+ * null. A single choice uses #simple-confirm-yes, several use #simple-choice-<value>.
+ */
+function choiceModal(ctx, title, body, choices) {
   return new Promise((resolve) => {
     let settled = false;
     const done = (value) => {
@@ -690,20 +890,31 @@ function confirmModal(ctx, title, body, okLabel) {
       document.removeEventListener("donghwa:modal-closed", cancel);
       resolve(value);
     };
-    const cancel = () => done(false);
+    const cancel = () => done(null),
+      single = choices.length === 1,
+      idOf = (choice) =>
+        single ? "simple-confirm-yes" : `simple-choice-${choice.value}`;
     ctx.showModal(
-      `${ctx.modalHeader(esc(title))}<div class="modal-intro simple-confirm">${body}</div><div class="modal-actions"><button type="button" class="btn btn-outline" id="simple-confirm-no">취소</button><button type="button" class="btn btn-primary" id="simple-confirm-yes">${esc(okLabel)}</button></div>`,
+      `${ctx.modalHeader(esc(title))}<div class="modal-intro simple-confirm">${body}</div><div class="modal-actions simple-choices"><button type="button" class="btn btn-outline" id="simple-confirm-no">취소</button>${choices.map((choice, i) => `<button type="button" class="btn ${i === choices.length - 1 ? "btn-primary" : "btn-outline"}" id="${idOf(choice)}">${esc(choice.label)}</button>`).join("")}</div>`,
     );
     document.addEventListener("donghwa:modal-closed", cancel, { once: true });
-    document.querySelector("#simple-confirm-yes").onclick = () => {
-      done(true);
-      ctx.closeModal();
-    };
+    for (const choice of choices)
+      document.querySelector("#" + idOf(choice)).onclick = () => {
+        done(choice.value);
+        ctx.closeModal();
+      };
     document.querySelector("#simple-confirm-no").onclick = () => {
-      done(false);
+      done(null);
       ctx.closeModal();
     };
   });
+}
+async function confirmModal(ctx, title, body, okLabel) {
+  return (
+    (await choiceModal(ctx, title, body, [
+      { value: "yes", label: okLabel },
+    ])) === "yes"
+  );
 }
 async function refreshKeyStatus() {
   if (keyStatusLoading) return;
@@ -907,16 +1118,31 @@ function imageNote(state, book) {
     ? "<br>글이 바뀐 뒤라 그림 전에 이야기 연결 검사(글 엔진 요금)가 한 번 더 들 수 있어요."
     : "";
 }
-/** Draw one page at final quality; a book still in text review first prepares sheets. */
+const OTHER_BOOK_OPEN =
+  "다른 책을 보고 있어 저장하지 않았어요. 이 책을 다시 열어 저장해 주세요.";
+const INTERRUPTED_FIRST =
+  "멈춘 그림 만들기를 먼저 ‘이어서 만들기’로 잇거나 중지해 주세요.";
+/** Options for one page picture; a test context may supply ctx.generateScene for the image pipeline. */
+const pageImageOptions = (ctx, extra) =>
+  typeof ctx.generateScene === "function"
+    ? { ...extra, generate: ctx.generateScene }
+    : extra;
+/**
+ * Draw one page of `book` at final quality; a book still in text review first
+ * prepares sheets. Every step after a wait acts on the job's own book, never on
+ * whatever draft happens to be open by then.
+ */
 async function drawPage(
   ctx,
+  book,
   index,
   { redraw = false, confirmed = false } = {},
 ) {
   const state = ctx.getState(),
-    book = ctx.getDraft(),
     job = jobOfBook(state, book);
   if (!book || !job) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
+  if (runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
+  if (await stopForImageKey(ctx, book)) return;
   const estimate = estimateSimpleCosts(state, book),
     prepare = !book.generationSnapshot,
     total = estimate.imageUnitUsd + (prepare ? estimate.sheetsUpperUsd : 0);
@@ -931,23 +1157,30 @@ async function drawPage(
     );
     if (!ok) return;
   }
-  if (prepare) {
-    const released = await runJob(ctx, job.id, "pages", "pages");
-    if (!released?.book?.generationSnapshot) {
-      ctx.render();
-      return;
-    }
+  if (prepare) await runJob(ctx, job.id, "pages", "pages");
+  // The parent may have opened another book while the sheets were prepared.
+  const target = getFullAutoJob(job.id)?.book;
+  if (!target?.generationSnapshot || target.id !== book.id) {
+    ctx.render();
+    return ctx.toast(
+      getFullAutoJob(job.id)?.error ||
+        "그림 준비가 끝나지 않아 이 쪽 그림은 만들지 않았어요.",
+    );
   }
-  const target = ctx.getDraft(),
-    controller = new AbortController();
-  pageOp = { kind: "image", index, controller };
+  const controller = new AbortController();
+  pageOp = { kind: "image", index, controller, bookId: target.id };
   ctx.render();
   try {
-    await generateBookPageImage(state, target, index, {
-      signal: controller.signal,
-      changeComposition: redraw,
-      save: ctx.save,
-    });
+    await generateBookPageImage(
+      state,
+      target,
+      index,
+      pageImageOptions(ctx, {
+        signal: controller.signal,
+        changeComposition: redraw,
+        save: ctx.save,
+      }),
+    );
     ctx.toast(`${index + 1}쪽 그림을 저장했어요.`);
   } catch (error) {
     ctx.toast(
@@ -960,10 +1193,17 @@ async function drawPage(
     ctx.render();
   }
 }
-async function askRedraw(ctx, index) {
+/** After a text change on `book`: ask before redrawing; never for a book the parent has left. */
+async function askRedraw(ctx, book, index) {
   const state = ctx.getState(),
-    book = ctx.getDraft();
-  if (!book?.pages?.[index]?.imageStale || !book.generationSnapshot) return;
+    page = book?.pages?.[index];
+  if (
+    !page ||
+    !isPageImageStale(page) ||
+    !book.generationSnapshot ||
+    ctx.getDraft() !== book
+  )
+    return;
   const unit = estimateSimpleCosts(state, book).imageUnitUsd;
   const ok = await confirmModal(
     ctx,
@@ -971,13 +1211,14 @@ async function askRedraw(ctx, index) {
     `글이 바뀌었어요. 지금 그림을 그대로 둘 수도 있어요.${imageNote(state, book)}`,
     "그림 다시 만들기",
   );
-  if (ok) await drawPage(ctx, index, { confirmed: true });
+  if (ok) await drawPage(ctx, book, index, { confirmed: true });
 }
 async function saveText(ctx) {
   const state = ctx.getState(),
     book = ctx.getDraft(),
     w = ctx.getWizard(),
     index = ctx.getEditPage();
+  if (!book) return;
   const ko = document.querySelector("#page-ko")?.value,
     en = document.querySelector("#page-en")?.value;
   const result = await applyPageText(state, book, index, {
@@ -985,17 +1226,18 @@ async function saveText(ctx) {
     en,
     save: ctx.save,
   });
-  w.simpleEditing = false;
+  if (w) w.simpleEditing = false;
   ctx.render();
   if (!result.changed) return ctx.toast("바뀐 글이 없어요.");
   ctx.toast(`${index + 1}쪽 글을 저장했어요.`);
-  if (result.imageStale) await askRedraw(ctx, index);
+  if (result.imageStale) await askRedraw(ctx, book, index);
   void refreshReading(ctx);
 }
 async function rewriteText(ctx) {
   const state = ctx.getState(),
     book = ctx.getDraft(),
     index = ctx.getEditPage();
+  if (!book) return;
   if (book.textDemo)
     return ctx.toast(
       "데모 이야기는 쪽 글을 새로 쓰지 않아요. ‘글 고치기’로 직접 고쳐 주세요.",
@@ -1009,7 +1251,7 @@ async function rewriteText(ctx) {
   );
   if (!ok) return;
   const controller = new AbortController();
-  pageOp = { kind: "rewrite", index, controller };
+  pageOp = { kind: "rewrite", index, controller, bookId: book.id };
   ctx.render();
   let result = null;
   try {
@@ -1031,34 +1273,138 @@ async function rewriteText(ctx) {
       ? `${index + 1}쪽 글을 새로 썼어요.`
       : "새 글이 지금 글과 같아요.",
   );
-  if (result.imageStale) await askRedraw(ctx, index);
+  if (result.imageStale) await askRedraw(ctx, book, index);
   void refreshReading(ctx);
 }
-/** Release the hold to the end: sheets, missing/stale pages and the cover, nothing already final. */
-async function drawAll(ctx, { finishing = false } = {}) {
-  const state = ctx.getState(),
-    book = ctx.getDraft(),
-    job = jobOfBook(state, book);
+/**
+ * Release the book's hold to the end: sheets, missing pages and the cover.
+ * Pages whose text changed after drawing (stale) are redrawn only when the
+ * parent includes them; otherwise their marks are hidden from the run and put
+ * back afterwards, so the run keeps those pictures. Returns the job after the
+ * run, or null when nothing ran.
+ */
+async function drawAll(
+  ctx,
+  {
+    book,
+    job,
+    finishing = false,
+    resuming = false,
+    includeStale,
+    confirmed = false,
+  } = {},
+) {
+  const state = ctx.getState();
+  job ||= jobOfBook(state, book);
   if (!book || !job) {
     ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
     return null;
   }
-  const needs = pagesNeedingImages(book),
-    coverMissing = !book.cover?.imageAssetId;
-  if (!needs.length && !coverMissing && book.autoGenerationComplete) {
+  const work = imageWork(book);
+  if (!work.needsRun && !(includeStale !== false && work.stale.length)) {
     if (!finishing) ctx.toast("모든 쪽과 표지 그림이 이미 있어요.");
     return job;
   }
+  if (await stopForImageKey(ctx, book)) return null;
   const estimate = estimateSimpleCosts(state, book),
-    total = estimate.imagesUsd + estimate.sheetsUpperUsd;
-  const ok = await confirmModal(
-    ctx,
-    finishing ? "남은 그림을 만들고 저장할까요?" : "모든 쪽 그림을 만들까요?",
-    `본문 ${needs.length}쪽${coverMissing ? " + 표지" : ""} · ${total > 0 ? `약 ${usd(estimate.imagesUsd)}${estimate.sheetsUpperUsd ? ` · 시트가 필요하면 최대 ${usd(estimate.sheetsUpperUsd)}` : ""}` : "무료 샘플 엔진이라 요금이 없어요"}.<br>이미 만든 최종 그림은 다시 만들지 않아요.${imageNote(state, book)}`,
-    finishing ? "그림 마저 만들기" : "모든 쪽 그림 만들기",
-  );
-  if (!ok) return null;
-  return runJob(ctx, job.id, null, "images");
+    unit = estimate.imageUnitUsd,
+    sheets = estimate.sheetsUpperUsd,
+    paid = unit > 0 || sheets > 0,
+    cost = (value) => (paid ? ` (약 ${usd(value)})` : ""),
+    newCount = work.missing.length + (work.coverMissing ? 1 : 0),
+    newUsd = newCount * unit,
+    staleUsd = work.stale.length * unit,
+    offerStale = work.stale.length > 0 && includeStale !== false;
+  let withStale = includeStale === true;
+  // Finishing a book whose pictures are all there buys nothing: no question.
+  const drawsNothing = !newCount && !sheets && !offerStale;
+  if (!confirmed && !drawsNothing) {
+    const lines = [];
+    if (newCount)
+      lines.push(
+        `새로 만들 그림: 본문 ${work.missing.length}쪽${work.coverMissing ? " + 표지" : ""}${paid ? ` · 약 ${usd(newUsd)}` : ""}`,
+      );
+    if (sheets > 0)
+      lines.push(`캐릭터·배경 시트가 필요하면 최대 ${usd(sheets)}`);
+    if (offerStale)
+      lines.push(
+        `글을 고친 쪽: ${pageList(work.stale)} · 지금 그림이 있어요. 다시 만들면 ${work.stale.length}장${paid ? ` 약 ${usd(staleUsd)}` : ""}이 더 들어요.`,
+      );
+    if (!paid) lines.push("무료 샘플 엔진이라 요금이 없어요.");
+    lines.push(
+      offerStale
+        ? "글을 고친 쪽 말고 다른 쪽의 최종 그림은 다시 만들지 않아요."
+        : "이미 만든 최종 그림은 다시 만들지 않아요.",
+    );
+    const choices = [];
+    if (work.needsRun)
+      choices.push({
+        value: "missing",
+        label: offerStale
+          ? newCount
+            ? `빈 그림만 만들기${cost(newUsd)}`
+            : "고친 쪽 그림 그대로 두고 마무리"
+          : finishing
+            ? "그림 마저 만들기"
+            : resuming
+              ? "이어서 만들기"
+              : "모든 쪽 그림 만들기",
+      });
+    if (offerStale)
+      choices.push({
+        value: "all",
+        label: newCount
+          ? `고친 ${work.stale.length}쪽도 다시 만들기${cost(newUsd + staleUsd)}`
+          : `고친 ${work.stale.length}쪽 그림 다시 만들기${cost(staleUsd)}`,
+      });
+    const choice = await choiceModal(
+      ctx,
+      resuming
+        ? "멈춘 그림 만들기를 이어 갈까요?"
+        : finishing
+          ? work.needsRun
+            ? "남은 그림을 만들고 저장할까요?"
+            : "고친 쪽 그림을 다시 만들고 저장할까요?"
+          : newCount
+            ? "모든 쪽 그림을 만들까요?"
+            : "고친 쪽 그림을 다시 만들까요?",
+      lines.join("<br>") + imageNote(state, book),
+      choices,
+    );
+    if (!choice) return null;
+    withStale = choice === "all";
+  }
+  // Run on this job's own book; pictures the parent keeps are hidden from the run.
+  const target = getFullAutoJob(job.id)?.book || book,
+    kept = withStale ? [] : hideStaleMarks(target, imageWork(target).stale);
+  try {
+    return await runJob(ctx, job.id, null, "images");
+  } finally {
+    if (kept.length) {
+      restoreStaleMarks(getFullAutoJob(job.id)?.book || target, kept);
+      ctx.save();
+    }
+  }
+}
+/** '이어서 만들기' for a run a closed tab left marked running: completed work is skipped. */
+async function resumeRun(ctx, book, job) {
+  const hold = job.stopBefore ?? null;
+  if (hold === null) return drawAll(ctx, { book, job, resuming: true });
+  if (hold === "pages" && !book.generationSnapshot) {
+    if (await stopForImageKey(ctx, book)) return null;
+    const sheets = estimateSimpleCosts(ctx.getState(), book).sheetsUpperUsd;
+    if (
+      sheets > 0 &&
+      !(await confirmModal(
+        ctx,
+        "그림 준비를 이어 할까요?",
+        `캐릭터·배경 시트를 마저 준비해요(필요한 만큼, 최대 약 ${usd(sheets)}). 이미 만든 시트는 다시 만들지 않아요.`,
+        "이어서 준비하기",
+      ))
+    )
+      return null;
+  }
+  return runJob(ctx, job.id, undefined, "images");
 }
 async function restartStory(ctx) {
   const state = ctx.getState(),
@@ -1101,41 +1447,83 @@ async function restartStory(ctx) {
     },
   });
 }
+/**
+ * 책장에 저장. Missing pictures (or an unfinished run) must be drawn first;
+ * pictures whose text changed are the parent's choice: keep them or redraw
+ * those pages. Approval happens only while this job's book is still open.
+ */
 async function saveBook(ctx) {
   const state = ctx.getState(),
     book = ctx.getDraft();
   if (!book) return;
   const job = jobOfBook(state, book);
-  if (
-    job &&
-    (pagesNeedingImages(book).length ||
-      !book.cover?.imageAssetId ||
-      !book.autoGenerationComplete)
-  ) {
-    const finished = await drawAll(ctx, { finishing: true });
-    if (!finished) return;
-    const current = ctx.getDraft();
-    if (
-      finished.status !== "review" ||
-      !current?.autoGenerationComplete ||
-      pagesNeedingImages(current).length ||
-      !current.cover?.imageAssetId
-    ) {
-      ctx.render();
-      ctx.toast(
-        finished.error ||
-          "아직 모든 그림이 준비되지 않았어요. 그림을 마저 만든 뒤 저장해 주세요.",
-      );
-      return;
+  if (job) {
+    if (runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
+    const work = imageWork(book);
+    let finished = null;
+    if (work.needsRun) {
+      finished = await drawAll(ctx, { book, job, finishing: true });
+      if (!finished) return;
+    } else if (work.stale.length) {
+      const unit = estimateSimpleCosts(state, book).imageUnitUsd,
+        choice = await choiceModal(
+          ctx,
+          "글을 고친 쪽 그림을 어떻게 할까요?",
+          `${pageList(work.stale)}은 글을 고친 뒤에도 예전 그림이 그대로 있어요.<br>그림을 그대로 두고 저장하거나, 고친 쪽 그림만 다시 만들고 저장할 수 있어요. 다른 쪽 그림은 다시 만들지 않아요.${imageNote(state, book)}`,
+          [
+            { value: "keep", label: "그림 그대로 저장" },
+            {
+              value: "redraw",
+              label: `고친 ${work.stale.length}쪽 그림 다시 만들고 저장${unit > 0 ? ` (약 ${usd(work.stale.length * unit)})` : ""}`,
+            },
+          ],
+        );
+      if (!choice) return;
+      if (choice === "redraw") {
+        finished = await drawAll(ctx, {
+          book,
+          job,
+          finishing: true,
+          includeStale: true,
+          confirmed: true,
+        });
+        if (!finished) return;
+      } else if (ctx.getDraft() !== book) return ctx.toast(OTHER_BOOK_OPEN);
+    }
+    if (finished) {
+      const current = getFullAutoJob(job.id)?.book;
+      if (!current || ctx.getDraft() !== current) {
+        ctx.render();
+        return ctx.toast(OTHER_BOOK_OPEN);
+      }
+      if (finished.status !== "review" || imageWork(current).needsRun) {
+        ctx.render();
+        return ctx.toast(
+          finished.error ||
+            "아직 모든 그림이 준비되지 않았어요. 그림을 마저 만든 뒤 저장해 주세요.",
+        );
+      }
     }
   }
   await ctx.approveBook();
 }
-/** Open a simple job at ③ or ④ (job cards, resume cards, pro '쪽마다 검수'). */
+/**
+ * Open a simple job at ③ or ④ (job cards, resume cards, pro '쪽마다 검수').
+ * Refused while a simple action runs: its later steps belong to the open book.
+ */
 export async function openSimpleJob(ctx, jobId) {
   const state = ctx.getState(),
     job = state.fullAutoJobs?.[jobId];
   if (!job) throw Error("자동 작업을 찾지 못했어요.");
+  if (isSimpleBusy()) {
+    ctx.toast("진행 중인 작업이 끝난 뒤 다른 이야기를 열어 주세요.");
+    return false;
+  }
+  if (job.simpleAbandoned) {
+    // Opened again on purpose: it is a simple story to resume once more.
+    delete job.simpleAbandoned;
+    ctx.save();
+  }
   const step = simpleStepForJob(job),
     w = wizardFromJob(job, step);
   if (!ctx.isSimpleMode()) w.simpleForced = true;
@@ -1146,6 +1534,7 @@ export async function openSimpleJob(ctx, jobId) {
   ctx.render();
   globalThis.scrollTo?.(0, 0);
   if (step >= 4) void refreshReading(ctx);
+  return true;
 }
 function validateMaterials(state, w) {
   const backgrounds = activeBackgrounds(state).filter((b) =>
@@ -1175,26 +1564,34 @@ async function handle(ctx, action, el) {
     return;
   }
   if (action === "idea") {
-    const idea = ideaState(state);
-    if (!idea.usable) return ctx.toast(idea.reason);
-    const status = document.querySelector("#simple-idea-status");
-    try {
-      const suggestion = await storyWorldTopic(idea.worldId, {
-        offset: Number(w.simpleIdeaOffset) || 0,
-        season: idea.quality.season,
-        timeOfDay: idea.quality.timeOfDay,
-      });
-      w.simpleIdeaOffset = (Number(w.simpleIdeaOffset) || 0) + 1;
-      w.topic = suggestion.topic;
-      const field = document.querySelector("#topic");
-      if (field) field.value = w.topic;
-      if (status)
-        status.textContent =
-          "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.";
-    } catch (error) {
-      if (status) status.textContent = error.message;
-      ctx.toast(error);
-    }
+    const idea = ideaState(state),
+      field = document.querySelector("#topic"),
+      status = document.querySelector("#simple-idea-status"),
+      current = String(field ? field.value : w.topic || "").trim();
+    let topic = "";
+    if (idea.world)
+      try {
+        const suggestion = await storyWorldTopic(idea.worldId, {
+          offset: Number(w.simpleIdeaOffset) || 0,
+          season: idea.quality.season,
+          timeOfDay: idea.quality.timeOfDay,
+        });
+        w.simpleIdeaOffset = (Number(w.simpleIdeaOffset) || 0) + 1;
+        topic = String(suggestion?.topic || "").trim();
+      } catch {
+        /* The built-in list below still gives an idea. */
+      }
+    if (!topic || topic === current) topic = pickIdeaTopic(current);
+    w.topic = topic;
+    if (field) field.value = topic;
+    document
+      .querySelectorAll?.('[data-simple-action="topic"]')
+      ?.forEach((chip) =>
+        chip.classList.toggle("selected", chip.dataset.topic === topic),
+      );
+    if (status)
+      status.textContent =
+        "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.";
     return;
   }
   if (action === "format") {
@@ -1292,8 +1689,41 @@ async function handle(ctx, action, el) {
     const job = jobOfWizard(state, w);
     if (!job) return;
     const done = await runJob(ctx, job.id, undefined, "text");
-    if (done && HELD.includes(done.status) && done.book && ctx.isSimpleView())
+    if (
+      done &&
+      HELD.includes(done.status) &&
+      done.book &&
+      ctx.isSimpleView() &&
+      ctx.getWizard()?.simpleJobId === done.id
+    )
       return enterReview(ctx, done);
+    ctx.render();
+    return;
+  }
+  if (action === "abandon") {
+    // ③ escape hatch: keep the stopped story in the pro job list, start over with the same picks.
+    const job = jobOfWizard(state, w);
+    if (w.simpleStep !== 3 || !canAbandon(job)) return ctx.render();
+    job.simpleAbandoned = true;
+    job.updatedAt = new Date().toISOString();
+    if (ctx.save() === false) {
+      delete job.simpleAbandoned;
+      return ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    }
+    delete w.simpleJobId;
+    w.simpleStep = 1;
+    if (lastProgress?.jobId === job.id) lastProgress = null;
+    ctx.render();
+    globalThis.scrollTo?.(0, 0);
+    ctx.toast(
+      "멈춘 이야기는 ‘제작 중인 이야기’에 두었어요. 주제·재료·엔진을 바꿔 다시 만들 수 있어요.",
+    );
+    return;
+  }
+  if (action === "resume-run") {
+    const book = ctx.getDraft(),
+      job = jobOfBook(state, book);
+    if (book && runInterrupted(job)) await resumeRun(ctx, book, job);
     ctx.render();
     return;
   }
@@ -1328,7 +1758,13 @@ async function handle(ctx, action, el) {
     return;
   }
   if (action === "edit-text") {
-    if (workBusy()) return;
+    const book = ctx.getDraft();
+    if (
+      workBusy() ||
+      isPageOperationBusy(book?.id) ||
+      runInterrupted(jobOfBook(state, book))
+    )
+      return;
     w.simpleEditing = true;
     ctx.render();
     document.querySelector("#page-ko,#page-en")?.focus();
@@ -1342,12 +1778,13 @@ async function handle(ctx, action, el) {
   if (action === "save-text") return saveText(ctx);
   if (action === "rewrite-text") return rewriteText(ctx);
   if (action === "draw-page" || action === "redraw-page")
-    return drawPage(ctx, ctx.getEditPage(), {
+    return drawPage(ctx, ctx.getDraft(), ctx.getEditPage(), {
       redraw: action === "redraw-page",
     });
   if (action === "like") {
     const book = ctx.getDraft(),
       index = ctx.getEditPage();
+    if (!book?.pages?.[index]) return;
     await setPageReviewed(state, book, index, !book.pages[index].reviewed, {
       save: ctx.save,
     });
@@ -1355,7 +1792,7 @@ async function handle(ctx, action, el) {
     return;
   }
   if (action === "draw-all") {
-    await drawAll(ctx);
+    await drawAll(ctx, { book: ctx.getDraft() });
     ctx.render();
     return;
   }

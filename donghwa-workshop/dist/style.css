@@ -4597,3 +4597,29 @@ select:focus-visible {
     padding: var(--space-3);
   }
 }
+/* R9 FIX-UI: the simple create screen keeps its toast at the top, clear of each
+ * step's bottom action bar (중지 · 동화책 만들기 · 저장) at every width and scroll.
+ * An open dialog keeps the usual bottom toast so its title stays readable. */
+body:has(.simple-create):not(:has(.modal-overlay)) #toast {
+  top: 16px;
+  bottom: auto;
+  transform: translate(-50%, -20px);
+}
+body:has(.simple-create):not(:has(.modal-overlay)) #toast.visible {
+  transform: translate(-50%, 0);
+}
+.simple-interrupted {
+  margin: var(--space-3) 0 0;
+}
+.simple-choices {
+  flex-wrap: wrap;
+}
+.simple-choices .btn {
+  white-space: normal;
+  text-align: center;
+}
+@media (max-width: 640px) {
+  .simple-choices .btn {
+    flex: 1 1 100%;
+  }
+}
