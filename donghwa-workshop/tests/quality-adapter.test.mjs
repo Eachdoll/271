@@ -209,3 +209,48 @@ test('R8-1 frozen language policy is forwarded independently and survives checkp
   await generateQualityProse(outline,saved,{engine:paid,qualityCheckpoint:result.meta.qualityCheckpoint},services(paid));assert.equal(paid.calls,calls);
  }
 });
+test('R9-A a catchphrase repeat asks one targeted fix and, if it survives, stays advisory instead of discarding the paid outline',async()=>{
+ const input=fixture();input.characters[0].catchphrase='같이 가자!';
+ const inject=(json,request)=>{if(!request.user.startsWith('아래 줄거리 JSON에서'))for(const i of [1,3])json.beats[i].summary+=' 유하가 "같이 가자!" 해요.';return json;};
+ const engine=fakeOutlineEngine(input,inject),result=await generateQualityOutline(input,{engine},services(engine));
+ assert.match(engine.calls[0].user,/^\[등장인물\] 유하: 관찰하는 아이, 말버릇 "같이 가자!"\(책 전체에서 최대 1번, 꼭 쓰지 않아도 된다\. 후렴으로 쓰지 않는다\)$/m);
+ assert.match(engine.calls[0].system,/CATCHPHRASES: Use each character's catchphrase at most once in the whole book, or not at all\./);
+ const fixes=engine.calls.filter(request=>request.user.startsWith('아래 줄거리 JSON에서'));
+ assert.equal(fixes.length,1);assert.match(fixes[0].user,/^- 말버릇 "같이 가자!" 2회\(책 전체 최대 1회\): 비트 2·비트 4 — /m);
+ assert.deepEqual(result.meta.quality.catchphraseAdvisories,[result.meta.quality.check.fix.find(message=>message.startsWith('말버릇'))]);
+ assert.equal(result.data.beats.length,frozenBeatCount(input));
+ // A clean outline is not touched by the new check.
+ const clean=fixture();clean.characters[0].catchphrase='같이 가자!';const plain=fakeOutlineEngine(clean),ok=await generateQualityOutline(clean,{engine:plain},services(plain));
+ assert.equal(plain.calls.filter(request=>request.user.startsWith('아래 줄거리 JSON에서')).length,0);assert.equal(ok.meta.quality.catchphraseAdvisories,undefined);
+});
+test('R9-A frozen rotation hides the omitted phrase from every quality prompt but still checks it',async()=>{
+ const {normalizeStoryInput}=await import('../dist/story-generation/pipeline.js');
+ const input=fixture();input.characters[0].catchphrase='같이 가자!';input.catchphrasePolicy={version:1,limit:1,omit:['yuha'],phrases:{yuha:'같이 가자!'},recentBookIds:['book-old']};
+ const inject=(json,request)=>{if(!request.user.startsWith('아래 줄거리 JSON에서'))for(const i of [1,3])json.beats[i].summary+=' 유하가 "같이 가자!" 해요.';return json;};
+ const own=(bookId,phrase)=>{const book={...clone(data.goldBooks[1]),bookId,approved:true,topic:'비 오는 날 산책'};book.outline.beats[0].summary=`유하가 "${phrase}" 하고 웃어요. ${book.outline.beats[0].summary}`;return book;};
+ input.storyQuality.approvedBooks=[own('own-omitted','같이 가자!'),own('own-other','사뿐사뿐!')];
+ let excluded;const capture={...qualityModule,runOutlineStage:args=>{excluded=args.excludeBookIds;return qualityModule.runOutlineStage(args);}};
+ const engine=fakeOutlineEngine(input,inject);await generateQualityOutline(input,{engine},{...services(engine),normalizeStoryInput,qualityModule:async()=>capture});
+ // A past book that used the omitted phrase is never offered as an example.
+ assert.ok(excluded.includes('own-omitted'));assert.ok(!excluded.includes('own-other'));
+ const first=engine.calls[0];
+ assert.match(first.user,/^\[등장인물\] 유하: 관찰하는 아이, 이번 책에서는 말버릇을 쓰지 않는다$/m);
+ assert.match(first.system,/CATCHPHRASE ROTATION: 유하 \(yuha\) used a catchphrase in a recent book, so they use no catchphrase in this book\./);
+ assert.doesNotMatch(first.system+first.user,/같이 가자/);
+ assert.ok(engine.calls.some(request=>request.user.startsWith('아래 줄거리 JSON에서')&&/- 말버릇 "같이 가자!" 2회/.test(request.user)));
+});
+test('R9-A distilled examples that repeat "같이 가자" or a cast catchphrase are skipped; gold and the source file stay as they are',async()=>{
+ const {qualityReferenceBooks,repeatsCatchphrase}=await import('../dist/story-generation/quality-adapter.js');
+ const withPhrase=(bookId,count,phrase='같이 가자!')=>{const book={...clone(data.goldBooks[0]),bookId,topic:`다른 주제 ${bookId}`};book.outline.beats.slice(0,count).forEach(beat=>{beat.summary+=` 유하가 "${phrase}" 해요.`;});return book;};
+ const three=withPhrase('d-three',3),before=clone(three);
+ const extra={...data,distilledBooks:[three,withPhrase('d-one',1),withPhrase('d-cast',2,'쿵쿵, 냠냠!'),withPhrase('d-variant',2,'같이 가!')]};
+ const ids=qualityReferenceBooks(extra,'비 오는 날',true).map(book=>book.bookId);
+ assert.ok(!ids.includes('d-three'));assert.ok(!ids.includes('d-variant'));assert.ok(ids.includes('d-one'));assert.ok(ids.includes('d-cast'));
+ assert.ok(!qualityReferenceBooks(extra,'비 오는 날',true,['쿵쿵, 냠냠!']).some(book=>book.bookId==='d-cast'));
+ assert.deepEqual(three,before);
+ const refrain=withPhrase('d-refrain',1);refrain.outline.refrain={text:'하나, 둘, 셋, 같이 가자!',usedAtBeats:[2,4]};assert.equal(repeatsCatchphrase(refrain),true);
+ assert.deepEqual(qualityReferenceBooks({...data,goldBooks:[withPhrase('g-three',3)],distilledBooks:[]},'x',true).map(book=>book.bookId),['g-three']);
+ assert.deepEqual(qualityReferenceBooks(extra,'비 오는 날',false),data.goldBooks);
+ const shipped=JSON.parse(await readFile(new URL('../dist/story-quality/examples/approved-books.json',import.meta.url),'utf8'));
+ assert.equal(shipped.length,161);assert.equal(shipped.filter(book=>repeatsCatchphrase(book)).length,98);
+});

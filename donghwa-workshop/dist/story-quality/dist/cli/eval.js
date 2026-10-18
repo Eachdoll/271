@@ -1,6 +1,6 @@
 /**
  * CLI: 평가 하네스
- *   node dist/cli/eval.js run --run-id sonnet55-v3 --gen anthropic:claude-sonnet-5-5 --judge anthropic:claude-haiku-5-5 [--beam] [--no-fix] [--examples 2] [--limit 0]
+ *   node dist/cli/eval.js run --run-id sonnet55-v3 --gen anthropic:claude-sonnet-5-5 --judge anthropic:claude-haiku-5-5 [--beam] [--no-fix] [--examples 2] [--limit 0] [--catchphrase "…"]
  *   node dist/cli/eval.js compare [--baseline <runId>]
  *   node dist/cli/eval.js calibrate --judge anthropic:claude-haiku-5-5
  *   node dist/cli/eval.js run --dry-run    (API 없이 흐름만)
@@ -18,6 +18,11 @@ function arg(name, def) {
     return v && !v.startsWith('--') ? v : 'true';
 }
 const readJson = (p) => JSON.parse(readFileSync(resolve(p), 'utf8'));
+/** --catchphrase "…" 로만 말버릇을 넣는다. 기본은 빈 값이며 그때는 프롬프트에 말버릇 구절이 아예 없다. */
+function catchphraseOption() {
+    const value = arg('catchphrase', '')?.trim();
+    return value && value !== 'true' ? { catchphrase: value } : {};
+}
 async function main() {
     const cmd = process.argv[2] ?? 'run';
     const outDir = resolve(arg('out', 'eval/results'));
@@ -72,7 +77,7 @@ async function main() {
         patterns: readJson('data/plot_patterns.json'),
         worlds: readJson('data/worlds.json'),
         inventories: readJson('data/inventories.json'),
-        protagonist: { name: '유하', traits: ['호기심 많음', '씩씩함', '장난꾸러기'], catchphrase: '같이 가자!' },
+        protagonist: { name: '유하', traits: ['호기심 많음', '씩씩함', '장난꾸러기'], ...catchphraseOption() },
         supporting: [{ name: '초록이', traits: ['느긋함', '먹보'], role: '공룡 친구' }],
         approvedBooks: gold,
         outDir,

@@ -30,6 +30,7 @@
 6 비트 마지막 문장은 다음 비트가 궁금해지게 끝낸다(마무리 비트 제외).
 7 후렴은 {{refrain_text}}를 비트 {{refrain_beats}}에만, 매번 한 단어 변주.
 8 교훈·감상 꼬리말 금지. 같은 문장 두 번 금지.
+9 말버릇은 책 전체에서 최대 1번만 쓰고, 꼭 쓰지 않아도 된다. 후렴으로 쓰지 않는다.
 
 [출력] 글만. 라벨 붙은 문단을 비트 수만큼.
 ```
@@ -56,6 +57,7 @@
 6 End each beat with a line that makes a child want to turn the page (except the last beat).
 7 Use picture-book devices: a repeating frame sentence ({{refrain_text_en}}) at beats {{refrain_beats}}, rhyme or onomatopoeia where natural.
 8 Do not translate anything. This is an original English text for the same beats.
+9 Use each character's catchphrase at most once in the whole book, or not at all. Never use it as the repeating frame sentence.
 
 [Output] Text only.
 ```

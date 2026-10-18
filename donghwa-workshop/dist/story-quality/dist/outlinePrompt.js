@@ -2,6 +2,7 @@ import { renderBanListForPrompt } from './banList.js';
 import { renderSeedForPrompt } from './composeSeed.js';
 import { renderExamplesForPrompt, retrieveExamples } from './retrieval.js';
 import { DEFAULT_BAN_EXAMPLES, DEFAULT_RULES, OUTLINE_SYSTEM, OUTLINE_USER, fill, renderNumbered } from './prompts.js';
+import { catchphraseClause } from './catchphrase.js';
 export const BEATS_FOR_PAGES = { 8: 6, 12: 7, 16: 8, 24: 8 };
 export function beatCountForPages(pages) {
     return BEATS_FOR_PAGES[pages] ?? (pages <= 8 ? 6 : pages <= 12 ? 7 : 8);
@@ -10,7 +11,7 @@ export function buildOutlinePrompt(input) {
     const p = input.pattern;
     const slots = p.beats.map((b, i) => `${i + 1} ${b.type} — ${b.slot}`).join('\n');
     const supporting = input.supporting
-        .map((c) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${c.catchphrase ? `, 말버릇 "${c.catchphrase}"` : ''}`)
+        .map((c) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${catchphraseClause(c.catchphrase, c.catchphraseOmitted === true)}`)
         .join(' / ');
     const examples = renderExamplesForPrompt(retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2));
     const rules = (input.rules ?? DEFAULT_RULES).slice(0, 7);
@@ -18,7 +19,7 @@ export function buildOutlinePrompt(input) {
     const user = fill(OUTLINE_USER, {
         protagonistName: input.protagonist.name,
         protagonistTraits: input.protagonist.traits.slice(0, 3).join(', '),
-        protagonistCatchphrase: input.protagonist.catchphrase ?? '',
+        protagonistCatchphraseClause: catchphraseClause(input.protagonist.catchphrase, input.protagonist.catchphraseOmitted === true),
         supportingCharacters: supporting ? `[조연] ${supporting}` : '',
         worldCore: input.worldCore.slice(0, 3).join(' / '),
         topic: input.topic,

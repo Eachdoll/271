@@ -1,6 +1,11 @@
 import { describeReadingViolation } from "../reading-messages.js";
 import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
 import { getLevelSpec } from "../reading-levels.js";
+import {
+  catchphraseRepeats,
+  countCatchphrase,
+  uniqueCatchphrases,
+} from "../story-quality/dist/catchphrase.js";
 
 /* Story checks complement the sentence-level estimates. They never change a
  * book or its frozen reading rules and never make a network request. */
@@ -13,6 +18,87 @@ const RULES = [
   ["drawable_scene", "그릴 수 있는 장면"],
   ["moral_tail", "교훈 꼬리말"],
 ];
+const CATCHPHRASE_FIELDS = ["catchphrase", "speechHabit", "vocalHabit"];
+/** The catchphrase prompts use for a character (catchphrase, else speech habit). */
+export function characterCatchphrase(character) {
+  return String(character?.catchphrase || character?.speechHabit || "").trim();
+}
+/**
+ * Every catchphrase that should appear at most once in this story: the cast's,
+ * plus phrases a frozen rotation policy removed from the prompt.
+ */
+export function storyCatchphrases(input = {}) {
+  const phrases = input?.catchphrasePolicy?.phrases;
+  return uniqueCatchphrases([
+    ...(Array.isArray(input?.characters) ? input.characters : []).map(
+      characterCatchphrase,
+    ),
+    ...(phrases && typeof phrases === "object" ? Object.values(phrases) : []),
+  ]);
+}
+function bookPageTextKo(book) {
+  const pages = Array.isArray(book?.pages) ? book.pages : [];
+  const text = pages
+    .map((page) => String(page?.ko ?? page?.textKo ?? ""))
+    .join("\n");
+  return text.trim() ? text : String(book?.prose?.ko || "");
+}
+/**
+ * R9 rotation, decided once when a draft is created and frozen in its input.
+ * Looks at the `recentBooks` most recent approved books whose protagonist
+ * (characterIds[0]) is this story's protagonist. A cast catchphrase that
+ * appears in those books' Korean page text is omitted from this book.
+ */
+export function catchphrasePolicyFor(
+  books,
+  characters,
+  { recentBooks = 2 } = {},
+) {
+  const cast = Array.isArray(characters) ? characters : [];
+  const protagonistId = cast[0]?.id;
+  const recent = (Array.isArray(books) ? books : [])
+    .filter(
+      (book) =>
+        book?.approved === true &&
+        !!protagonistId &&
+        Array.isArray(book.characterIds) &&
+        book.characterIds[0] === protagonistId,
+    )
+    .sort((a, b) =>
+      String(b.approvedAt || b.createdAt || "").localeCompare(
+        String(a.approvedAt || a.createdAt || ""),
+      ),
+    )
+    .slice(0, Math.max(0, recentBooks));
+  const texts = recent.map(bookPageTextKo);
+  const phrases = {};
+  for (const character of cast) {
+    const phrase = characterCatchphrase(character);
+    if (character?.id && phrase) phrases[character.id] = phrase.slice(0, 500);
+  }
+  const omit = Object.entries(phrases)
+    .filter(([, phrase]) =>
+      texts.some((text) => countCatchphrase(text, phrase) > 0),
+    )
+    .map(([id]) => id);
+  return {
+    version: 1,
+    limit: 1,
+    omit,
+    phrases,
+    recentBookIds: recent.map((book) => String(book.id || "")),
+  };
+}
+/** Remove catchphrase fields from the characters a policy omits (returns copies). */
+export function omitCatchphrases(characters, policy) {
+  const omit = new Set(Array.isArray(policy?.omit) ? policy.omit : []);
+  return (Array.isArray(characters) ? characters : []).map((character) => {
+    if (!omit.has(character?.id)) return character;
+    const copy = { ...character };
+    for (const key of CATCHPHRASE_FIELDS) delete copy[key];
+    return copy;
+  });
+}
 const canonical = (text) =>
   String(text || "")
     .normalize("NFC")
@@ -136,11 +222,13 @@ function levelMessage(language, violation) {
   return describeReadingViolation({ ...violation, language });
 }
 
-/** Return all seven checks and targeted repair instructions, without mutation. */
+/** Return all seven checks and targeted repair instructions, without mutation.
+ * Catchphrase repetition is advisory: it is reported in `warnings` only, so it
+ * never fails a check or asks for a (paid) page rewrite. */
 export function checkStory(
   outline,
   pagination,
-  { specs, allowedNames = [], storyWords = [] } = {},
+  { specs, allowedNames = [], storyWords = [], catchphrases = [] } = {},
 ) {
   const rawPages = Array.isArray(pagination)
     ? pagination
@@ -457,6 +545,26 @@ export function checkStory(
         pageNo,
         "ko",
       );
+
+  for (const language of ["ko", "en"])
+    for (const hit of catchphraseRepeats(
+      pages.map(({ page }) => textOf(page, language)),
+      Array.isArray(catchphrases) ? catchphrases : [],
+    )) {
+      const pageNos = hit.at.map((index) => pages[index].pageNo);
+      warnings.push({
+        type: "catchphrase",
+        code: "catchphrase-repeat",
+        severity: "warning",
+        advisory: true,
+        language,
+        pageNo: pageNos[1] ?? pageNos[0],
+        pages: pageNos,
+        phrase: hit.phrase,
+        count: hit.count,
+        message: `${language === "ko" ? "한글" : "영어"} 말버릇 "${hit.phrase}"이(가) ${hit.count}번 나와요(${pageNos.join("·")}쪽). 책 전체에서 한 번 이하로 줄이면 좋아요.`,
+      });
+    }
 
   const violations = checks.flatMap((check) => check.violations);
   return {

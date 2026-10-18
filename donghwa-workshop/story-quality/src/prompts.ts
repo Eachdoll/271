@@ -25,7 +25,7 @@ export function fill(template: string, vars: Record<string, string | number | nu
 export const OUTLINE_SYSTEM = `너는 3~7세 그림책 작가다. 아래 [정해진 재료]는 이미 결정된 것이므로 바꾸지 말고, 그 재료로 사건이 이어지는 이야기 설계를 JSON으로만 쓴다.
 [참고 예시]는 구조·리듬만 참고한다. 예시의 인물·물건·사건·장소를 가져오면 실패다.`;
 
-export const OUTLINE_USER = `[등장인물] {{protagonistName}}: {{protagonistTraits}}, 말버릇 "{{protagonistCatchphrase}}"
+export const OUTLINE_USER = `[등장인물] {{protagonistName}}: {{protagonistTraits}}{{protagonistCatchphraseClause}}
 {{supportingCharacters}}
 [세계관 핵심] {{worldCore}}
 [주제] {{topic}}   [가치] {{value}}   [수준] 한글 {{levelKo}}, 영어 {{levelEn}}   [쪽 수] {{pages}} → 비트 {{beatCount}}개
@@ -146,6 +146,7 @@ export const PROSE_RICH_USER_KO = `[등장인물] {{characters}}
 6 비트 마지막 문장은 다음 비트가 궁금해지게 끝낸다(마무리 비트 제외). 방법을 섞는다: 소리·실패·새로 나타난 것·질문. 질문으로 끝나는 비트는 책 전체에서 2개까지.
 7 후렴은 {{refrainText}}를 비트 {{refrainBeats}}에만, 매번 한 단어 변주.
 8 교훈·감상 꼬리말 금지. 같은 문장 두 번 금지.
+9 말버릇은 책 전체에서 최대 1번만 쓰고, 꼭 쓰지 않아도 된다. 후렴으로 쓰지 않는다.
 
 [출력] 글만. 라벨 붙은 문단을 비트 수만큼.`;
 
@@ -168,6 +169,7 @@ export const PROSE_RICH_USER_EN = `[Characters] {{characters}}
 6 End each beat with a line that makes a child want to turn the page (except the last beat). Vary the hook: a sound, a failure, something newly seen, or a question. At most TWO beats in the whole story may end with a question.
 7 Use picture-book devices: a repeating frame sentence ({{refrainText}}) at beats {{refrainBeats}}, rhyme or onomatopoeia where natural.
 8 Do not translate anything. This is an original English text for the same beats.
+9 Use each character's catchphrase at most once in the whole book, or not at all. Never use it as the repeating frame sentence.
 
 [Output] Text only.`;
 

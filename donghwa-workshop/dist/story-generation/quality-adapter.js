@@ -9,6 +9,12 @@ import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
 import { findWorld, worldCoreLines } from "../story-quality/dist/worlds.js";
 import { headNoun } from "../story-quality/dist/banList.js";
+import {
+  CATCHPHRASE_RULE_EN,
+  catchphraseRepeats,
+  isCatchphraseFix,
+} from "../story-quality/dist/catchphrase.js";
+import { storyCatchphrases } from "./checker.js";
 
 const clone = (value) =>
   value == null ? value : JSON.parse(JSON.stringify(value));
@@ -111,7 +117,47 @@ async function loadDistilledBooks(fetchImpl) {
   }
   return distilledLoads.get(fetchImpl);
 }
-export function qualityReferenceBooks(data, topic, enabled = false) {
+/** R9: the phrase that flooded the 2026-10-17 distilled set ("같이 가" core). */
+export const DISTILLED_REPEAT_PHRASES = Object.freeze(["같이 가자!"]);
+const outlineTexts = (book) => [
+  ...asList(book?.outline?.beats).map((beat) => beat?.summary),
+  book?.outline?.refrain?.text,
+];
+/** A distilled outline whose beats + refrain repeat a catchphrase 2+ times is not a usable example. */
+export function repeatsCatchphrase(book, catchphrases = []) {
+  return (
+    catchphraseRepeats(outlineTexts(book), [
+      ...DISTILLED_REPEAT_PHRASES,
+      ...asList(catchphrases),
+    ]).length > 0
+  );
+}
+/**
+ * Example books the outline prompt must not show: ones that repeat a catchphrase,
+ * and ones that use a phrase this book omits (an example would leak it back).
+ */
+export function catchphraseExampleExclusions(books, input = {}) {
+  const policy = input.catchphrasePolicy || {},
+    omitted = asList(policy.omit)
+      .map((id) => policy.phrases?.[id])
+      .filter(Boolean),
+    cast = storyCatchphrases(input);
+  return asList(books)
+    .filter(
+      (book) =>
+        book?.bookId &&
+        (repeatsCatchphrase(book, cast) ||
+          (omitted.length &&
+            catchphraseRepeats(outlineTexts(book), omitted, 1).length > 0)),
+    )
+    .map((book) => book.bookId);
+}
+export function qualityReferenceBooks(
+  data,
+  topic,
+  enabled = false,
+  catchphrases = [],
+) {
   const gold = asList(data.goldBooks);
   if (!enabled) return gold;
   const normalized = (value) =>
@@ -129,6 +175,11 @@ export function qualityReferenceBooks(data, topic, enabled = false) {
     })),
   ].filter((book) => {
     if ((target && normalized(book.topic) === target) || seen.has(book.bookId))
+      return false;
+    if (
+      book.referenceSource === "distilled" &&
+      repeatsCatchphrase(book, catchphrases)
+    )
       return false;
     seen.add(book.bookId);
     return true;
@@ -518,8 +569,16 @@ function ledger(kind, input, options, extra = {}) {
   };
 }
 
+/** R9: the catchphrase limit and this book's frozen rotation, stated next to APP CANON. */
+function catchphraseRules(input, services) {
+  const omitted = new Set(asList(input.catchphrasePolicy?.omit)),
+    names = asList(input.characters)
+      .filter((character) => omitted.has(character.id))
+      .map((character) => `${character.name} (${character.id})`);
+  return `${String(services.baseSystem || "").includes(CATCHPHRASE_RULE_EN) ? "" : `CATCHPHRASES: ${CATCHPHRASE_RULE_EN} Never use a catchphrase as the refrain or repeating frame sentence.\n`}${names.length ? `CATCHPHRASE ROTATION: ${names.join(", ")} used a catchphrase in a recent book, so they use no catchphrase in this book.\n` : ""}`;
+}
 function canonicalWorldRules(input, services, bindTargetLevel = true) {
-  return `${services.baseSystem || ""}\n${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
+  return `${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
 }
 function enrichedOutlineSchema(input, pattern, services) {
   const supplied =
@@ -702,13 +761,14 @@ function backgroundType(input) {
   if (/유치원|어린이집|kindergarten/iu.test(source)) return "kindergarten";
   return "forest";
 }
-function compactCharacter(character) {
+function compactCharacter(character, omitted = false) {
   return {
     name: short(character.name, 100),
     traits: asList(character.traits)
       .slice(0, 3)
       .map((value) => short(value, 100)),
-    ...(character.catchphrase || character.speechHabit
+    ...(omitted ? { catchphraseOmitted: true } : {}),
+    ...(!omitted && (character.catchphrase || character.speechHabit)
       ? {
           catchphrase: short(
             character.catchphrase || character.speechHabit,
@@ -853,7 +913,15 @@ export async function generateQualityOutline(
       { world, mood } = resolveStoryWorld(input, data);
     input.storyWorldMood = mood;
     assertInventoryAvailable(input, data, world);
-    const patterns = choosePatterns(input, data);
+    const patterns = choosePatterns(input, data),
+      catchphrases = storyCatchphrases(input),
+      omittedCatchphrases = new Set(asList(input.catchphrasePolicy?.omit)),
+      referenceBooks = qualityReferenceBooks(
+        data,
+        input.topic,
+        quality.useDistilledExamples === true,
+        catchphrases,
+      );
     let last;
     for (let attempt = 0; attempt < Math.min(2, patterns.length); attempt++) {
       const pattern = patterns[attempt],
@@ -904,8 +972,19 @@ export async function generateQualityOutline(
             cheap: wrap("cheap"),
           },
           bookId: offset ? `${bookId}:seed+${offset}` : bookId,
-          protagonist: compactCharacter(input.characters[0]),
-          supporting: input.characters.slice(1).map(compactCharacter),
+          protagonist: compactCharacter(
+            input.characters[0],
+            omittedCatchphrases.has(input.characters[0].id),
+          ),
+          supporting: input.characters
+            .slice(1)
+            .map((character) =>
+              compactCharacter(
+                character,
+                omittedCatchphrases.has(character.id),
+              ),
+            ),
+          catchphrases,
           worldCore: [
             ...(mood?.worldCore || []),
             ...String(input.worldNotes || input.worldName || "")
@@ -924,11 +1003,7 @@ export async function generateQualityOutline(
           variantChance: Number.isFinite(quality.variantChance)
             ? quality.variantChance
             : 0.35,
-          referenceBooks: qualityReferenceBooks(
-            data,
-            input.topic,
-            quality.useDistilledExamples === true,
-          ),
+          referenceBooks,
           approvedBooks: asList(quality.approvedBooks),
           endingType: input.endingType,
           ...(Array.isArray(quality.rules)
@@ -947,9 +1022,14 @@ export async function generateQualityOutline(
             20,
             Math.max(1, Math.round(Number(quality.patternBanWindow) || 3)),
           ),
-          excludeBookIds: [input.bookId, input.previousStory?.id].filter(
-            Boolean,
-          ),
+          excludeBookIds: [
+            input.bookId,
+            input.previousStory?.id,
+            ...catchphraseExampleExclusions(
+              [...asList(quality.approvedBooks), ...referenceBooks],
+              input,
+            ),
+          ].filter(Boolean),
         });
       last = result;
       if (
@@ -978,7 +1058,20 @@ export async function generateQualityOutline(
           : 0.35,
         regenerationAttempts: attempt,
       };
-      if (result.check.ok && report.valid) {
+      // R9: a catchphrase repeat drives the one targeted fix pass. If it survives
+      // that pass it stays an advisory, never a reason to discard a paid outline.
+      const blocking = result.check.fix.filter(
+        (message) => !isCatchphraseFix(message),
+      );
+      if (blocking.length !== result.check.fix.length)
+        qualityMeta.catchphraseAdvisories = result.check.fix.filter(
+          isCatchphraseFix,
+        );
+      if (
+        (result.check.ok ||
+          (!result.check.regenerate.length && !blocking.length)) &&
+        report.valid
+      ) {
         const outline = services.assertValid
           ? services.assertValid("outline", result.outline, input)
           : result.outline;

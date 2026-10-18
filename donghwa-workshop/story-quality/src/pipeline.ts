@@ -12,6 +12,7 @@ import { generateBeatsWithBeam } from './beamSearch.js';
 import { writeRichThenSimplify, RICH_LEVEL_OF } from './richThenSimplify.js';
 import { curiosityCheck, retellCheck, type PageText } from './childSimulator.js';
 import { extractJson, hashString } from './util.js';
+import { catchphraseClause } from './catchphrase.js';
 
 export interface Engines {
   outline: TextEngine; // 상위 권장(줄거리는 토큰이 적다)
@@ -46,6 +47,8 @@ export interface OutlineStageInput {
   referenceBooks?: BookRecord[];
   world?: WorldCard;
   variantChance?: number;
+  /** 반복 검사에 쓸 말버릇. 없으면 등장인물의 catchphrase(돌려 쓰느라 뺀 인물 포함)를 쓴다. */
+  catchphrases?: string[];
 }
 
 export interface OutlineStageResult {
@@ -73,7 +76,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     variantChance: input.variantChance,
   });
   const charactersCompact = [input.protagonist, ...input.supporting]
-    .map((c) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${c.catchphrase ? ` "${c.catchphrase}"` : ''}`)
+    .map((c) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${catchphraseClause(c.catchphrase, c.catchphraseOmitted === true)}`)
     .join(' / ');
 
   let calls = 0;
@@ -157,7 +160,8 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
   }
 
   // 코드 검사 → 지적된 비트만 고치는 수정 호출 1회
-  let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories });
+  const catchphrases = input.catchphrases ?? [input.protagonist, ...input.supporting].map((c) => c.catchphrase ?? '');
+  let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
   if (check.fix.length > 0 && check.regenerate.length === 0) {
     const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
     const fr = await input.engines.cheap.complete({ system: '너는 그림책 편집자다. JSON으로만 답한다.', user: fixUser, temperature: 0.3, maxTokens: 4000 });
@@ -166,7 +170,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     const fixed = (fr.json as StoryOutline | undefined) ?? extractJson<StoryOutline>(fr.text);
     if (fixed) {
       outline = fixed;
-      check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories });
+      check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
     }
   }
 

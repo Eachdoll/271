@@ -18,6 +18,8 @@ export interface PlotCheckInput {
     seed?: StorySeed;
     ban?: BanList;
     inventories?: Inventories;
+    /** 등장인물 말버릇. 비트 요약+후렴에서 2회 이상이거나 후렴과 핵심 구절을 공유하면 수정 항목. */
+    catchphrases?: string[];
 }
 export declare function topicKeywords(topic: string): string[];
 /** 키워드가 글에 있는지. 3자 이상 키워드는 앞 2자 접두 일치도 인정한다("멋진지" → "멋진"). */

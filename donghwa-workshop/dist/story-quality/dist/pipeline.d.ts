@@ -40,6 +40,8 @@ export interface OutlineStageInput {
     referenceBooks?: BookRecord[];
     world?: WorldCard;
     variantChance?: number;
+    /** 반복 검사에 쓸 말버릇. 없으면 등장인물의 catchphrase(돌려 쓰느라 뺀 인물 포함)를 쓴다. */
+    catchphrases?: string[];
 }
 export interface OutlineStageResult {
     outline: StoryOutline;

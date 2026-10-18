@@ -1,6 +1,6 @@
 /**
  * CLI: 증류 데이터셋 생성
- *   ANTHROPIC_API_KEY=... node dist/cli/distill.js [--out distill/out/outlines.jsonl] [--gen claude-opus-5-5] [--judge claude-haiku-5-5] [--variants 1] [--limit 0] [--concurrency 2] [--dry-run] [--estimate]
+ *   ANTHROPIC_API_KEY=... node dist/cli/distill.js [--out distill/out/outlines.jsonl] [--gen claude-opus-5-5] [--judge claude-haiku-5-5] [--variants 1] [--limit 0] [--concurrency 2] [--dry-run] [--estimate] [--catchphrase "…"]
  * 재실행하면 이미 만든 sampleId는 건너뛴다(재개).
  */
 import { mkdirSync, readFileSync } from 'node:fs';
@@ -15,6 +15,11 @@ function arg(name, def) {
         return def;
     const v = process.argv[i + 1];
     return v && !v.startsWith('--') ? v : 'true';
+}
+/** --catchphrase "…" 로만 말버릇을 넣는다. 기본은 빈 값이며 그때는 프롬프트에 말버릇 구절이 아예 없다. */
+function catchphraseOption() {
+    const value = arg('catchphrase', '')?.trim();
+    return value && value !== 'true' ? { catchphrase: value } : {};
 }
 function readJson(p) {
     return JSON.parse(readFileSync(resolve(p), 'utf8'));
@@ -90,7 +95,7 @@ async function main() {
         patterns,
         worlds,
         inventories,
-        protagonist: { name: '유하', traits: ['호기심 많음', '씩씩함', '장난꾸러기'], catchphrase: '같이 가자!' },
+        protagonist: { name: '유하', traits: ['호기심 많음', '씩씩함', '장난꾸러기'], ...catchphraseOption() },
         supporting: [{ name: '초록이', traits: ['느긋함', '먹보'], role: '공룡 친구' }],
         outPath: out,
         variantsPerCell: variants,

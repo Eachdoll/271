@@ -61,7 +61,7 @@ async function evalOne(cfg, t) {
         }
         if (!outline)
             throw new Error('JSON 파싱 실패');
-        let check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories });
+        let check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories, catchphrases: [cfg.protagonist, ...cfg.supporting].map((c) => c.catchphrase ?? '') });
         if ((cfg.options?.useFixPass ?? true) && !check.ok && check.regenerate.length === 0 && check.fix.length) {
             const fixer = cfg.fixer ?? cfg.judge;
             const fr = await fixer.complete({ system: '너는 그림책 편집자다. JSON으로만 답한다.', user: [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n'), temperature: 0.3, maxTokens: 4000 });
@@ -70,7 +70,7 @@ async function evalOne(cfg, t) {
             if (fixed) {
                 outline = fixed;
                 row.fixed = true;
-                check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories });
+                check = plotCheck({ outline, topic: t.topic, protagonistName: cfg.protagonist.name, seed, ban, inventories: cfg.inventories, catchphrases: [cfg.protagonist, ...cfg.supporting].map((c) => c.catchphrase ?? '') });
             }
         }
         row.outline = outline;

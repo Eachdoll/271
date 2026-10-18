@@ -57,7 +57,8 @@ story-quality/
     gestures.ts         직설어 탐지, 몸짓 치환 후보, 프롬프트 힌트
     prompts.ts          프롬프트 상수 + fill()
     outlinePrompt.ts    outline.v3 조립 (패턴 + 재료 + 예시 + 금지 + 규칙 7 + 금지 예시 4)
-    plotCheck.ts        인과 검사기 (심기-회수, 실패 이유, 새 요소, 주제·이름, 후렴, 꼬리말, 문형 반복, 금지 소재, 장소, 금지 목록, 재료 준수)
+    plotCheck.ts        인과 검사기 (심기-회수, 실패 이유, 새 요소, 주제·이름, 후렴, 꼬리말, 문형 반복, 금지 소재, 장소, 금지 목록, 재료 준수, 말버릇 2회 이상·후렴 겹침)
+    catchphrase.ts      말버릇 비교(앱과 공유): catchphraseCore / countCatchphrase / sharesCore / catchphraseClause. 공백·문장부호·끝 어미 하나는 무시하고 단어 경계를 지킨다
     beamSearch.ts       비트 단위 탐색: 비트마다 후보 3 → 심사 1
     richThenSimplify.ts 전문 2패스: 한 단계 위 수준으로 풍부하게 → 목표 수준으로 단순화 → 직설어 남으면 1회 수정
     childSimulator.ts   아이 시뮬레이터: 쪽별 호기심 점수, 세 문장 되말하기
@@ -97,6 +98,7 @@ ANTHROPIC_API_KEY=... npm run distill -- --gen anthropic:claude-sonnet-5-5 --jud
 npm run finetune:data -- --format mlx --out finetune/data
 ```
 
+- 평가·증류·파인튜닝 CLI의 주인공 말버릇은 기본으로 비어 있다(프롬프트에 말버릇 구절이 없다). 넣으려면 `--catchphrase "내가 먼저 해 볼래!"`. 말버릇은 책 전체에서 최대 1번이며 `plotCheck`가 2회 이상·후렴 겹침을 수정 항목으로 잡는다. 2026-10-17 이전 결과는 예전 고정값 "같이 가자!"로 만들어졌고 다시 만들지 않는다.
 - 증류 결과(`distill/out/outlines.jsonl`)의 승인 샘플은 그대로 앱의 **승인 예시 창고**(검색 few-shot)로도 쓴다: `sampleToBookRecord()`로 BookRecord를 만들어 approvedBooks에 합친다. 골드 24편 + 승인 300편이면 보급형 모델도 예시 힘으로 크게 좋아진다.
 - 엔진 지정 문법: `anthropic:<model>` / `openai:<model>` / `local:<baseUrl>#<model>` (예: `local:http://localhost:8080/v1#default`).
 - 골드 세트는 세계 23곳에 걸쳐 있다. 세계 카드(`data/worlds.json`)를 늘리면 `npm run topics:gen`이 그 세계의 주제 12개를 자동으로 붙인다(손 주제·평가 세트·골드와 겹치는 문장은 뺀다). 틀을 늘리려면 `src/expand.ts`의 `TOPIC_TEMPLATES`에 `{creature:와}`처럼 조사 표시를 붙여 추가한다.

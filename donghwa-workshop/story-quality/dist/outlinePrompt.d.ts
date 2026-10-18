@@ -9,6 +9,8 @@ export interface Character {
     name: string;
     traits: string[];
     catchphrase?: string;
+    /** 최근 책과 돌려 쓰느라 이번 책에서는 말버릇을 쓰지 않는다. true면 catchphrase가 있어도 프롬프트에 넣지 않는다. */
+    catchphraseOmitted?: boolean;
     role?: string;
 }
 export interface OutlinePromptInput {

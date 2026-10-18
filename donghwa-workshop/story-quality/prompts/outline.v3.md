@@ -12,7 +12,7 @@
 ## user
 
 ```
-[등장인물] {{protagonist.name}}: {{protagonist.traits}}, 말버릇 "{{protagonist.catchphrase}}"
+[등장인물] {{protagonist.name}}: {{protagonist.traits}}{{protagonist.catchphraseClause}}
 {{supporting_characters}}
 [세계관 핵심] {{world_core_3_lines}}
 [주제] {{topic}}   [가치] {{value_or_none}}   [수준] 한글 {{levelKo}}, 영어 {{levelEn}}   [쪽 수] {{pages}} → 비트 {{beatCount}}개
@@ -66,6 +66,7 @@
 
 ## 채우기 규칙 (코드)
 
+- `{{protagonist.catchphraseClause}}`·조연 줄의 말버릇: `catchphraseClause()`. 말버릇이 있으면 `, 말버릇 "…"(책 전체에서 최대 1번, 꼭 쓰지 않아도 된다. 후렴으로 쓰지 않는다)`, 최근 2권에서 같은 주인공이 말버릇을 썼으면 `, 이번 책에서는 말버릇을 쓰지 않는다`, 말버릇이 없으면 빈 문자열(빈 `말버릇 ""`을 남기지 않는다).
 - `{{pattern.slots}}`: 패턴 카드의 beats를 `1 setup — 슬롯 문장` 형식으로 한 줄씩.
 - `{{seed.*}}`: `composeSeed()` 결과. `obstaclesOrPlaces`는 패턴에 따라 장애물(여정형) 또는 장소(찾기형) 목록을 `1) … 2) … 3) …`로.
 - `{{banList}}`: `renderBanListForPrompt()`. 비어 있으면 줄 전체를 지운다.

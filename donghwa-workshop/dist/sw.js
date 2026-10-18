@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v27";
+const CACHE = "donghwa-shell-v28";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -23,6 +23,7 @@ const FILES = [
   "./story-quality/data/plot_patterns.json",
   "./story-quality/dist/banList.js",
   "./story-quality/dist/beamSearch.js",
+  "./story-quality/dist/catchphrase.js",
   "./story-quality/dist/childSimulator.js",
   "./story-quality/dist/composeSeed.js",
   "./story-quality/dist/gestures.js",

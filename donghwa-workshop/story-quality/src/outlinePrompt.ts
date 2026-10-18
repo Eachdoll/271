@@ -9,11 +9,14 @@ import type { StorySeed } from './composeSeed.js';
 import { renderSeedForPrompt } from './composeSeed.js';
 import { renderExamplesForPrompt, retrieveExamples } from './retrieval.js';
 import { DEFAULT_BAN_EXAMPLES, DEFAULT_RULES, OUTLINE_SYSTEM, OUTLINE_USER, fill, renderNumbered } from './prompts.js';
+import { catchphraseClause } from './catchphrase.js';
 
 export interface Character {
   name: string;
   traits: string[];
   catchphrase?: string;
+  /** 최근 책과 돌려 쓰느라 이번 책에서는 말버릇을 쓰지 않는다. true면 catchphrase가 있어도 프롬프트에 넣지 않는다. */
+  catchphraseOmitted?: boolean;
   role?: string;
 }
 
@@ -48,7 +51,7 @@ export function buildOutlinePrompt(input: OutlinePromptInput): { system: string;
   const p = input.pattern;
   const slots = p.beats.map((b, i) => `${i + 1} ${b.type} — ${b.slot}`).join('\n');
   const supporting = input.supporting
-    .map((c) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${c.catchphrase ? `, 말버릇 "${c.catchphrase}"` : ''}`)
+    .map((c) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${catchphraseClause(c.catchphrase, c.catchphraseOmitted === true)}`)
     .join(' / ');
   const examples = renderExamplesForPrompt(
     retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2),
@@ -59,7 +62,7 @@ export function buildOutlinePrompt(input: OutlinePromptInput): { system: string;
   const user = fill(OUTLINE_USER, {
     protagonistName: input.protagonist.name,
     protagonistTraits: input.protagonist.traits.slice(0, 3).join(', '),
-    protagonistCatchphrase: input.protagonist.catchphrase ?? '',
+    protagonistCatchphraseClause: catchphraseClause(input.protagonist.catchphrase, input.protagonist.catchphraseOmitted === true),
     supportingCharacters: supporting ? `[조연] ${supporting}` : '',
     worldCore: input.worldCore.slice(0, 3).join(' / '),
     topic: input.topic,

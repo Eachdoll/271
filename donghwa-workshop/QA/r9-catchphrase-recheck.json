@@ -1,0 +1,738 @@
+{
+  "version": 1,
+  "purpose": "R9-A3 offline recheck of paid r7 outlines and condensed prose with the new catchphrase checks (core match, at most once per book). No model calls; source files are read-only.",
+  "sources": {
+    "outlines": {
+      "path": "story-quality/eval/trial-2026-10-17/sonnet55-r7.jsonl",
+      "sha256": "4c96f51b121af7d48586df3d760361887b0156a888ea5065cf34b0a3b7d1adb8"
+    },
+    "prose": {
+      "path": "story-quality/eval/trial-2026-10-17/sonnet55-r7-prose-condense.jsonl",
+      "sha256": "0a6b365ec0dd2c89d9e49720a9ab64095e743a47a49ef36e0c7c8a621ade5272"
+    },
+    "distilled": {
+      "path": "dist/story-quality/examples/approved-books.json",
+      "sha256": "81606f216e6756ab104b57f0029c86123b531a9d763912d1149055505f9e6795"
+    }
+  },
+  "rules": {
+    "outline": "plotCheck fix when a catchphrase occurs 2+ times across beat summaries + refrain, or when the refrain shares its core phrase. Messages list \"비트 N\" per beat.",
+    "prose": "checkStory advisory warning (never a violation) when a catchphrase occurs 2+ times across a language's page texts.",
+    "distilled": "Opt-in distilled examples are skipped when \"같이 가자\" or a cast catchphrase occurs 2+ times in beats + refrain."
+  },
+  "summary": {
+    "catchphrases": [
+      "같이 가자!"
+    ],
+    "core": [
+      "같이가"
+    ],
+    "outlines": {
+      "books": 20,
+      "beatsTwoOrMore": 15,
+      "repeatFix": 16,
+      "refrainOverlap": 3,
+      "flagged": 16,
+      "maxBeatOccurrences": 4,
+      "meanBeatOccurrences": 1.9
+    },
+    "prose": {
+      "ko": {
+        "books": 20,
+        "twoOrMore": 15,
+        "advisoryWarnings": 15,
+        "anyUse": 20,
+        "maxOccurrences": 4
+      },
+      "en": {
+        "books": 20,
+        "twoOrMore": 0,
+        "advisoryWarnings": 0,
+        "anyUse": 0,
+        "maxOccurrences": 0
+      }
+    },
+    "distilledExamples": {
+      "books": 161,
+      "skippedWhenOptedIn": 98,
+      "kept": 63
+    }
+  },
+  "outlines": [
+    {
+      "topicId": "e01",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        7
+      ],
+      "refrain": "하나, 둘, 셋, 같이 가자!",
+      "refrainSharesCatchphrase": true,
+      "repeatFix": true,
+      "refrainFix": true,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 3회(책 전체 최대 1회, 후렴 포함): 비트 2·비트 3·비트 4·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다",
+        "후렴 \"하나, 둘, 셋, 같이 가자!\"이(가) 말버릇 \"같이 가자!\"과(와) 같은 구절을 씀 — 후렴을 다른 말로 바꾼다: 비트 3·비트 4·비트 7"
+      ]
+    },
+    {
+      "topicId": "e02",
+      "beatOccurrences": 1,
+      "beatsWithPhrase": [
+        2
+      ],
+      "refrain": "높은 사다리 안에 있을까? 아니, 달팽이네!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": false,
+      "refrainFix": false,
+      "flagged": false,
+      "fixes": []
+    },
+    {
+      "topicId": "e03",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        6
+      ],
+      "refrain": "거미줄은 넘어갈 수 없어, 지나가야 해!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 2·비트 6 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e04",
+      "beatOccurrences": 3,
+      "beatsWithPhrase": [
+        2,
+        3,
+        4
+      ],
+      "refrain": "같이 가자!",
+      "refrainSharesCatchphrase": true,
+      "repeatFix": true,
+      "refrainFix": true,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 4회(책 전체 최대 1회, 후렴 포함): 비트 2·비트 3·비트 4 — 한 곳만 남기고 나머지는 다른 말로 바꾼다",
+        "후렴 \"같이 가자!\"이(가) 말버릇 \"같이 가자!\"과(와) 같은 구절을 씀 — 후렴을 다른 말로 바꾼다: 비트 2·비트 3·비트 4"
+      ]
+    },
+    {
+      "topicId": "e05",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        1,
+        7
+      ],
+      "refrain": "하나, 잉어밥. 둘, 나뭇잎 접시. 셋, 대나무 숟가락.",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 1·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e06",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        7
+      ],
+      "refrain": "○○ 안에 있을까? 아니, ○○이네!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 2·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e07",
+      "beatOccurrences": 1,
+      "beatsWithPhrase": [
+        2
+      ],
+      "refrain": "같이 가자!",
+      "refrainSharesCatchphrase": true,
+      "repeatFix": true,
+      "refrainFix": true,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회, 후렴 포함): 비트 2·비트 3·비트 4 — 한 곳만 남기고 나머지는 다른 말로 바꾼다",
+        "후렴 \"같이 가자!\"이(가) 말버릇 \"같이 가자!\"과(와) 같은 구절을 씀 — 후렴을 다른 말로 바꾼다: 비트 2·비트 3·비트 4"
+      ]
+    },
+    {
+      "topicId": "e08",
+      "beatOccurrences": 1,
+      "beatsWithPhrase": [
+        1
+      ],
+      "refrain": "나는 ○○만큼 커!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": false,
+      "refrainFix": false,
+      "flagged": false,
+      "fixes": []
+    },
+    {
+      "topicId": "e09",
+      "beatOccurrences": 1,
+      "beatsWithPhrase": [
+        2
+      ],
+      "refrain": "뿌우!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": false,
+      "refrainFix": false,
+      "flagged": false,
+      "fixes": []
+    },
+    {
+      "topicId": "e10",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        1,
+        6
+      ],
+      "refrain": "○○은 넘어갈 수 없어, 지나가야 해!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 1·비트 6 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e11",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        1,
+        7
+      ],
+      "refrain": "나는 ○○만큼 커!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 1·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e12",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        7
+      ],
+      "refrain": "○○은 넘어갈 수 없어, 지나가야 해!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 2·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e13",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        1,
+        7
+      ],
+      "refrain": "꼬물아, 꼬물아, 어서 가자!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 1·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e14",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        1,
+        7
+      ],
+      "refrain": "하나, 둘, 셋… 별 하나 더 헤자!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 1·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e15",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        1,
+        2
+      ],
+      "refrain": "찌직찌직!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 1·비트 2 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e16",
+      "beatOccurrences": 4,
+      "beatsWithPhrase": [
+        1,
+        2,
+        6,
+        7
+      ],
+      "refrain": "바위는 넘어갈 수 없어, 지나가야 해!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 4회(책 전체 최대 1회): 비트 1·비트 2·비트 6·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e17",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        7
+      ],
+      "refrain": "숟가락이 풀숲 안에 있을까? 아니, 반짝이 풀씨네!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 2·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e18",
+      "beatOccurrences": 1,
+      "beatsWithPhrase": [
+        1
+      ],
+      "refrain": "나는 솜사탕만큼 커!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": false,
+      "refrainFix": false,
+      "flagged": false,
+      "fixes": []
+    },
+    {
+      "topicId": "e19",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        7
+      ],
+      "refrain": "개울은 넘어갈 수 없어, 지나가야 해!",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 2·비트 7 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    },
+    {
+      "topicId": "e20",
+      "beatOccurrences": 2,
+      "beatsWithPhrase": [
+        2,
+        6
+      ],
+      "refrain": "사각사각",
+      "refrainSharesCatchphrase": false,
+      "repeatFix": true,
+      "refrainFix": false,
+      "flagged": true,
+      "fixes": [
+        "말버릇 \"같이 가자!\" 2회(책 전체 최대 1회): 비트 2·비트 6 — 한 곳만 남기고 나머지는 다른 말로 바꾼다"
+      ]
+    }
+  ],
+  "prose": [
+    {
+      "topicId": "e01",
+      "ko": {
+        "pages": 12,
+        "occurrences": 4,
+        "pagesWithPhrase": [
+          4,
+          5,
+          7,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e02",
+      "ko": {
+        "pages": 12,
+        "occurrences": 1,
+        "pagesWithPhrase": [
+          3
+        ],
+        "advisory": false
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e03",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          4,
+          10
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e04",
+      "ko": {
+        "pages": 12,
+        "occurrences": 3,
+        "pagesWithPhrase": [
+          4,
+          6,
+          7
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e05",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          2,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e06",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          3,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e07",
+      "ko": {
+        "pages": 12,
+        "occurrences": 3,
+        "pagesWithPhrase": [
+          4,
+          6,
+          7
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e08",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          2
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e09",
+      "ko": {
+        "pages": 12,
+        "occurrences": 1,
+        "pagesWithPhrase": [
+          3
+        ],
+        "advisory": false
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e10",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          2,
+          11
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e11",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          2,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e12",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          3,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e13",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          1,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e14",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          2,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e15",
+      "ko": {
+        "pages": 12,
+        "occurrences": 1,
+        "pagesWithPhrase": [
+          2
+        ],
+        "advisory": false
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e16",
+      "ko": {
+        "pages": 12,
+        "occurrences": 4,
+        "pagesWithPhrase": [
+          2,
+          4,
+          11,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e17",
+      "ko": {
+        "pages": 12,
+        "occurrences": 1,
+        "pagesWithPhrase": [
+          4
+        ],
+        "advisory": false
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e18",
+      "ko": {
+        "pages": 12,
+        "occurrences": 1,
+        "pagesWithPhrase": [
+          2
+        ],
+        "advisory": false
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e19",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          4,
+          12
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    },
+    {
+      "topicId": "e20",
+      "ko": {
+        "pages": 12,
+        "occurrences": 2,
+        "pagesWithPhrase": [
+          3,
+          10
+        ],
+        "advisory": true
+      },
+      "en": {
+        "pages": 12,
+        "occurrences": 0,
+        "pagesWithPhrase": [],
+        "advisory": false
+      }
+    }
+  ]
+}

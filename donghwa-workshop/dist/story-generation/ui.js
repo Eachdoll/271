@@ -46,7 +46,11 @@ import {
   availableCharacterVariants,
   validateWardrobeSelections,
 } from "../wardrobe.js";
-import { checkStory } from "./checker.js";
+import {
+  checkStory,
+  catchphrasePolicyFor,
+  omitCatchphrases,
+} from "./checker.js";
 import { checkRichness } from "./richness.js";
 import { getStylePreset } from "../image-generation/styles.js";
 import { buildSeriesStorySelections } from "./continuity.js";
@@ -677,10 +681,16 @@ export function inputFromWizard(state, wizard) {
   const choices = validateWardrobeSelections(state, wizard),
     previous = state.books.find((book) => book.id === wizard.previousBookId),
     world = clone(getActiveWorld(state));
-  const inherited = buildSeriesStorySelections(state, wizard, previous),
-    characters = inherited.characters;
-  if (!characters.length)
+  const inherited = buildSeriesStorySelections(state, wizard, previous);
+  if (!inherited.characters.length)
     throw new Error("이야기의 주인공을 먼저 골라 주세요.");
+  // R9: decided once here and frozen in the draft/job input (never on resume).
+  // A catchphrase used in the protagonist's 2 latest approved books is left out.
+  const catchphrasePolicy = catchphrasePolicyFor(
+      state.books,
+      inherited.characters,
+    ),
+    characters = omitCatchphrases(inherited.characters, catchphrasePolicy);
   const readingLevels = freezeReadingLevels(
     {
       ...wizard,
@@ -778,6 +788,7 @@ export function inputFromWizard(state, wizard) {
       variants,
       variantByCharacter: choices.characterVariants,
       variantPageRanges: choices.variantPageRanges,
+      catchphrasePolicy,
     },
     readingLevels,
     world,

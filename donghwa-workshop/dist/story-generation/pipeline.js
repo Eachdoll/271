@@ -22,7 +22,8 @@ import {
   AUTO_MATERIAL_SCHEMA,
   inspectAutoMaterialPlan,
 } from "./auto-materials.js";
-import { checkStory } from "./checker.js";
+import { checkStory, storyCatchphrases } from "./checker.js";
+import { CATCHPHRASE_RULE_EN } from "../story-quality/dist/catchphrase.js";
 import { demoOutline, demoProse, demoPagination } from "./demo.js";
 import { buildBeatPagePlan } from "./pagination.js";
 import {
@@ -222,6 +223,45 @@ function backgroundReference(b) {
     "aliases",
   ]);
 }
+const CATCHPHRASE_FIELDS = ["catchphrase", "speechHabit", "vocalHabit"];
+/** R9 frozen catchphrase rotation. Normalising twice gives the same object. */
+function normalizeCatchphrasePolicy(policy) {
+  if (!policy || typeof policy !== "object" || Array.isArray(policy))
+    return null;
+  const text = (value, max) =>
+    typeof value === "string" ? value.trim().slice(0, max) : "";
+  const phrases = {};
+  if (policy.phrases && typeof policy.phrases === "object")
+    for (const [id, phrase] of Object.entries(policy.phrases).slice(0, 10))
+      if (text(id, 150) && text(phrase, 500))
+        phrases[text(id, 150)] = text(phrase, 500);
+  const ids = (value, max) => [
+    ...new Set(
+      (Array.isArray(value) ? value : [])
+        .map((id) => text(id, 150))
+        .filter(Boolean),
+    ),
+  ].slice(0, max);
+  return {
+    version: 1,
+    limit: 1,
+    omit: ids(policy.omit, 10),
+    phrases,
+    recentBookIds: ids(policy.recentBookIds, 2),
+  };
+}
+/** What the model may see: the limit and omitted IDs, never the omitted phrases. */
+function modelVisibleInput(input) {
+  if (!input?.catchphrasePolicy) return input;
+  const { catchphrasePolicy, ...rest } = input;
+  return {
+    ...rest,
+    catchphrasePolicy: {
+      limit: catchphrasePolicy.limit,
+      omit: catchphrasePolicy.omit,
+    },
+  };
+}
 export function normalizeStoryInput(input = {}) {
   const pageCount = Number(input.pageCount || 12);
   if (!PAGE_COUNTS.includes(pageCount))
@@ -232,7 +272,13 @@ export function normalizeStoryInput(input = {}) {
     input.characters.length > 5
   )
     throw new Error("이야기에 등장할 친구를 1~5명 골라 주세요.");
-  const characters = input.characters.map(characterReference);
+  const catchphrasePolicy = normalizeCatchphrasePolicy(input.catchphrasePolicy);
+  const characters = input.characters.map((character) => {
+    const reference = characterReference(character);
+    if (catchphrasePolicy?.omit.includes(reference?.id))
+      for (const key of CATCHPHRASE_FIELDS) delete reference[key];
+    return reference;
+  });
   if (characters.some((c) => !c?.id || !c?.name))
     throw new Error("등장인물의 ID와 이름이 필요해요.");
   if (!input.specs?.ko || !input.specs?.en)
@@ -302,6 +348,7 @@ export function normalizeStoryInput(input = {}) {
           },
         }
       : {}),
+    ...(catchphrasePolicy ? { catchphrasePolicy } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -416,6 +463,7 @@ Sentence difficulty and plot structure are independent: K1/E0 must retain the fu
 Do not add threats, frightening injury, punishment, comparisons, ridicule, or imitated authors/studios. Never state a moral at paragraph ends.
 Do not translate Korean. Write an original English picture-book text for the same beats at the selected E level, using its own allowed patterns.
 Read the supplied previousStory ORIGINAL prose, final page texts, scenes, relationships and ending before writing a sequel. If the parent's final page edits differ from the approved prose, the final page texts are authoritative for established facts and the last ending. Continue consequences and established facts, but create a new want/problem/twist. Do not copy prior sentences or repeat the previous adventure.
+CATCHPHRASES: ${CATCHPHRASE_RULE_EN} Never use a catchphrase as the refrain or repeating frame sentence. A character listed in catchphrasePolicy.omit uses no catchphrase in this book.
 Use only supplied character IDs and wardrobe variant IDs. No API credentials, endpoint addresses, commentary or instructions belong in a story.`;
 function levelRules(input) {
   return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.`;
@@ -437,7 +485,7 @@ async function complete(stage, input, payload, schema, options = {}) {
   abort(options.signal);
   const response = await engine.complete({
     system: `${baseSystem}\n${levelRules({ ...input, approvedOutline: payload.data?.approvedOutline })}\n${payload.rules}\n${payload.data?.approvedOutline?.quality?.worldMood ? `FROZEN STORY ATMOSPHERE: ${JSON.stringify(payload.data.approvedOutline.quality.worldMood)}. Use compatible weather, light and seasonal sensory details; scene time progression and fixed drawer geometry remain authoritative. Never add catalogue landmarks or portals absent from approved places.` : ""}\n${payload.data?.approvedOutline?.plotContract ? "FROZEN EVENT CONTRACT: the approvedOutline.plotContract is authoritative. Preserve every causal event, setup/payoff and character/prop state change. Brief details are optional rendering details, not new actions. For one page depict only its current event; beat stateAfter may occur on a later page." : ""}`,
-    user: JSON.stringify({ input, ...payload.data }),
+    user: JSON.stringify({ input: modelVisibleInput(input), ...payload.data }),
     jsonSchema: schema,
     temperature: temperature[stage],
     maxTokens: tokenBudget[stage],
@@ -2046,6 +2094,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
 export function inspectStory(outline, pagination, input) {
   const report = checkStory(outline, pagination, {
     specs: input.specs,
+    catchphrases: storyCatchphrases(input),
     storyWords: buildStoryWords(input, outline),
     allowedNames: (input.characters || []).flatMap((c) =>
       [c.name, c.nameEn].filter(Boolean),
