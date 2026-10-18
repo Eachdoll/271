@@ -1,0 +1,68 @@
+{
+  "note": "커밋한 dist가 아니라, FIX-B1 item 6을 흉내 낸 로컬 사본(image-generation/scene-prompt.js의 \"FROZEN EVENT AND STATE LEDGER\" → \"LOCKED EVENT AND STATE LEDGER\" 한 줄만 바꿈)으로 실행한 결과입니다. 그림 단계·책장 저장·다시 접속·책 열기까지 쉬운 모드 흐름이 통과함을 보여 줍니다.",
+  "base": "http://127.0.0.1:4188/",
+  "runs": [
+    {
+      "width": 1280,
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "steps": {
+        "defaultMode": null,
+        "settingsGroups": [
+          "우리 아이",
+          "엔진과 키",
+          "잠금",
+          "보관"
+        ],
+        "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
+        "recommended": 3,
+        "selectedCards": 5,
+        "badge": "읽기 쉬움 ✓ · 참고 2",
+        "proMode": "pro",
+        "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
+        "onePage": {
+          "toast": "2쪽 그림을 저장했어요.",
+          "error": "",
+          "image": 1
+        },
+        "allImages": "그림 8 / 8",
+        "title": "노래하는 돌은 어디에?",
+        "reopened": "노래하는 돌은 어디에?"
+      },
+      "imageBug": null,
+      "problems": []
+    },
+    {
+      "width": 390,
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "steps": {
+        "defaultMode": null,
+        "settingsGroups": [
+          "우리 아이",
+          "엔진과 키",
+          "잠금",
+          "보관"
+        ],
+        "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
+        "recommended": 3,
+        "selectedCards": 5,
+        "badge": "읽기 쉬움 ✓ · 참고 2",
+        "proMode": "pro",
+        "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
+        "onePage": {
+          "toast": "2쪽 그림을 저장했어요.",
+          "error": "",
+          "image": 1
+        },
+        "allImages": "그림 8 / 8",
+        "title": "노래하는 돌은 어디에?",
+        "reopened": "노래하는 돌은 어디에?"
+      },
+      "imageBug": null,
+      "problems": []
+    }
+  ]
+}

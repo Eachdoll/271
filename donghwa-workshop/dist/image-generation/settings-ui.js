@@ -90,6 +90,15 @@ export function renderImageSettings(state) {
       "",
     )}</tbody></table></div></section><section class="panel ig-compare-panel"><h3>같은 프롬프트로 엔진 3개 비교</h3><p class="section-sub">같은 캐릭터 시트·화풍 참조·요청 시드·크기를 사용합니다. 현재 World의 확정 시트는 바뀌지 않아요.</p><form id="ig-compare-form"><div class="field"><label for="ig-compare-prompt">비교할 장면</label><textarea id="ig-compare-prompt" required maxlength="3000">노란 티셔츠를 입은 아이가 작은 초록 공룡 친구와 함께 햇살이 드는 숲길을 걸어요. 참조 이미지의 얼굴, 의상, 색상을 그대로 유지하고 그림 안에는 글자를 넣지 마세요.</textarea></div><div class="ig-engine-checks">${ENGINE_IDS.map((id, i) => `<label><input name="ig-compare-engine" type="checkbox" value="${id}" ${i < 3 ? "checked" : ""}><span>${escape(meta(id).name)}</span><small data-credential-status="${id}">${id === "sample" ? "무료 · 키 없음" : credentialStatus[id] ? "키 저장됨" : id === "local" ? "엔드포인트 필요" : "키 필요"}</small></label>`).join("")}</div><div class="form-grid"><div class="field"><label for="ig-compare-seed">동일 요청 시드</label><input id="ig-compare-seed" type="number" min="0" max="2147483647" step="1" value="20261014" required></div><div class="field"><label for="ig-compare-size">크기</label><select id="ig-compare-size"><option value="1024x1024">1024 × 1024</option><option value="1536x1024">1536 × 1024</option></select></div></div><div class="modal-actions"><span class="small-label" id="ig-compare-progress">${comparisonRunning ? "2~3개 엔진 비교 중…" : "선택한 엔진마다 draft 생성 요청이 실행됩니다."}</span><button type="submit" class="btn btn-primary" ${comparisonRunning ? "disabled" : ""}>선택한 엔진으로 비교 생성</button></div></form><div class="ig-comparison-results" id="ig-comparison-results">${renderComparisonResults()}</div></section></section>`;
 }
+/**
+ * Minimal World image-engine form for the simple settings page: engine select
+ * and that engine's key fields. World name and style travel as hidden fields so
+ * the existing submit handler (and its sheet-regeneration confirm) saves it.
+ */
+export function renderImageEngineQuick(state) {
+  const world = getActiveWorld(state);
+  return `<form id="ig-world-form" class="quick-engine-form"><input type="hidden" id="ig-world-name" value="${escape(world.name)}"><input type="hidden" id="ig-style" value="${escape(world.stylePresetId)}"><div class="field"><label for="ig-engine">그림 엔진</label><select id="ig-engine">${ENGINE_IDS.map((id) => option(id, meta(id).name, world.imageEngine)).join("")}</select><small>엔진을 바꾸면 캐릭터 시트를 다시 만들어야 해요. 저장 전에 한 번 더 물어봐요.</small></div><div id="ig-provider-fields">${providerFields(world, world.imageEngine)}</div>${world.characterSheetsStale ? '<p class="small-label">시트 다시 생성 필요 · 그림을 만들 때 필요한 시트를 먼저 준비해요.</p>' : ""}</form>`;
+}
 function renderSheetRow(character, state) {
   const world = getActiveWorld(state);
   const sheet = getCharacterSheet(state, character.id, world);

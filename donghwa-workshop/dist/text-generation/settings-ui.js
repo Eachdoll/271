@@ -232,6 +232,17 @@ export function renderTextSettings(state) {
   editingSettings = clone(settings);
   return `<section class="panel" id="text-engine-settings" style="margin:24px 0"><h3>이야기 글 엔진 · 이미지 엔진과 별도</h3><p class="section-sub">글 품질 설정에서 줄거리·전문·심사 엔진을 각각 고를 수 있어요. 여기서는 공급자별 기본 모델과 키, 장면·쪽 나누기 설정을 관리합니다.</p><form id="text-engine-form"><div class="field"><label for="tg-engine">이야기 생성 엔진</label><select id="tg-engine">${options(settings.engine)}</select></div><div id="tg-provider-fields">${providerPanel(settings, settings.engine, "tg")}</div><div class="field" style="margin-top:18px"><label><input id="tg-hybrid" type="checkbox" ${settings.hybrid.enabled ? "checked" : ""}> 하이브리드 · 로컬 줄거리 + API 전문</label><small>기본은 꺼짐이에요. 품질 모드는 로컬 줄거리와 최종 API의 전문·심사 역할을 사용해요. 기존 생성은 로컬 초안을 API로 다듬어요.</small></div><div id="tg-hybrid-fields" ${settings.hybrid.enabled ? "" : "hidden"}><div id="tg-hybrid-local-fields">${hybridLocalFields(settings)}</div><div class="field"><label for="tg-final-engine">하이브리드 최종 API 엔진</label><select id="tg-final-engine">${options(settings.hybrid.finalEngine, false)}</select></div><div id="tg-final-provider-fields">${finalProviderFields(settings)}</div></div><div class="field" style="margin-top:18px"><label><input id="tg-story-enrichment" type="checkbox" ${settings.storyEnrichment ? "checked" : ""}> 기존 생성 · 문단별 풍부화</label><small>장면 디테일을 참고해 감각·행동·대화를 더해요. 품질 모드에서는 역할별 전문 단계를 사용하며, 이 문단별 추가 요청은 실행하지 않아요.</small></div><div class="field"><label><input id="tg-image-diversity" type="checkbox" ${settings.imageDiversity ? "checked" : ""}> 그림 다양성 검사</label><small>이웃한 그림을 비교해 알려드려요. 유료 엔진은 책당 확인 후 선택한 쪽만 다시 그려요.</small></div><div class="story-cost" id="tg-price-summary">${priceSummary(settings)}</div><p class="small-label">새 초안부터 적용해요. 이야기의 ‘변경’ 링크로 왔다면 저장 후 이야기로 돌아가 진행 중인 초안에도 적용하세요.</p><p id="tg-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions"><button class="btn btn-green" type="submit">글 엔진 설정 저장</button></div></form></section>`;
 }
+/**
+ * Minimal text-engine form for the simple settings page: one engine select and
+ * that provider's key fields. It keeps every id the existing change, click and
+ * submit handlers read (#tg-hybrid, #tg-final-engine, … stay present but hidden),
+ * so saving uses the same handler and keeps the stored hybrid/model choices.
+ */
+export function renderTextEngineQuick(state) {
+  const settings = getTextGenerationSettings(state);
+  editingSettings = clone(settings);
+  return `<form id="text-engine-form" class="quick-engine-form"><div class="field"><label for="tg-engine">글 엔진</label><select id="tg-engine">${options(settings.engine)}</select></div><div id="tg-provider-fields">${providerPanel(settings, settings.engine, "tg")}</div><div hidden><input id="tg-hybrid" type="checkbox" ${settings.hybrid.enabled ? "checked" : ""}><div id="tg-hybrid-fields" hidden><div id="tg-hybrid-local-fields">${hybridLocalFields(settings)}</div><select id="tg-final-engine">${options(settings.hybrid.finalEngine, false)}</select><div id="tg-final-provider-fields">${finalProviderFields(settings)}</div></div><input id="tg-story-enrichment" type="checkbox" ${settings.storyEnrichment ? "checked" : ""}><input id="tg-image-diversity" type="checkbox" ${settings.imageDiversity ? "checked" : ""}></div>${settings.hybrid.enabled ? '<p class="small-label">하이브리드 설정이 켜져 있어요. 프로 모드의 단계별 모델 설정이 우선 적용돼요.</p>' : ""}<p id="tg-error" class="pin-error" role="status" aria-live="polite"></p></form>`;
+}
 function checkedUrl(raw) {
   if (!raw) return "";
   let url;

@@ -552,6 +552,35 @@ function displayError(error) {
   if (element) element.textContent = error.message;
   api.toast?.(error.message);
 }
+/** Boolean quality switches a screen may flip on its own (the simple screen's 승인 예시 button). */
+const QUALITY_OPTION_KEYS = new Set([
+  "useDistilledExamples",
+  "useBeamSearch",
+  "enabled",
+  "twoPass",
+  "childSimulator",
+  "weeklyCoach",
+]);
+/**
+ * Set one boolean quality option without submitting the whole quality form:
+ * spread-merges into state.settings.storyQuality (approvedBooks, coach data and
+ * every other key are kept) and saves. Returns false and restores the previous
+ * value when the save fails. New drafts snapshot the value at creation.
+ */
+export function setStoryQualityOption(state, key, value) {
+  if (!QUALITY_OPTION_KEYS.has(key))
+    throw Error("이 글 품질 설정은 여기서 바꿀 수 없어요.");
+  state.settings ||= {};
+  const hadQuality = Object.hasOwn(state.settings, "storyQuality"),
+    previous = state.settings.storyQuality;
+  state.settings.storyQuality = { ...(previous || {}), [key]: value === true };
+  if (api?.save && api.save() === false) {
+    if (hadQuality) state.settings.storyQuality = previous;
+    else delete state.settings.storyQuality;
+    return false;
+  }
+  return true;
+}
 export function cleanupStoryQualityUI() {
   coachController?.abort();
   coachController = null;

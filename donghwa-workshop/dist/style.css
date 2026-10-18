@@ -4165,3 +4165,435 @@ select:focus-visible {
   padding: 0 8px;
   margin: 4px 0;
 }
+
+/* ---------- R9-B2 쉬운 만들기 · 쉬운 부모 설정 ---------- */
+.ui-mode-btn {
+  white-space: nowrap;
+}
+.ui-mode-short {
+  display: none;
+}
+.simple-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--greenlight);
+  color: var(--text-2);
+  font-size: 13px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.simple-create .panel,
+.simple-settings .panel {
+  min-width: 0;
+}
+.simple-panel > h3 {
+  margin-bottom: var(--space-2);
+}
+.simple-steps .step {
+  white-space: nowrap;
+}
+.simple-idea,
+.simple-format,
+.simple-distilled,
+.simple-start,
+.simple-child-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+.simple-idea .small-label {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.simple-format {
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed #d8ddcf;
+  border-radius: 10px;
+  background: var(--paper);
+}
+.simple-format strong {
+  color: var(--text-1);
+}
+.simple-format-panel {
+  margin-top: var(--space-3);
+}
+.simple-defaults-note {
+  margin-top: var(--space-3);
+}
+.simple-resume {
+  margin-top: var(--space-4);
+}
+.simple-resume h3 {
+  font-family: var(--serif);
+  font-size: 17px;
+  margin: 0 0 var(--space-2);
+}
+.simple-resume-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+.simple-resume-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--text-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.simple-resume-card small {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.simple-cards {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.simple-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.simple-card svg,
+.simple-card img {
+  max-width: 100%;
+}
+.simple-card .material-generated {
+  width: 100%;
+  height: 105px;
+  object-fit: contain;
+}
+.simple-place-emoji {
+  display: block;
+  font-size: 34px;
+  line-height: 1.4;
+}
+.simple-rec {
+  position: absolute;
+  left: 8px;
+  top: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--orange);
+  background: #fbeee4;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+.simple-allow {
+  margin-top: var(--space-6);
+}
+.simple-engine-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+.simple-engine-row .field {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.simple-engine-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.simple-engine-name strong {
+  color: var(--text-1);
+}
+.simple-engine-name small,
+.simple-note {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.simple-costs {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 10px;
+  background: #f6f7f0;
+  display: grid;
+  gap: var(--space-1);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.simple-costs li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.simple-costs strong {
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.simple-costs .simple-costs-note {
+  display: block;
+  font-size: 12px;
+}
+.simple-help {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #d8ddcf;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: help;
+}
+.simple-progress {
+  margin-top: var(--space-4);
+}
+.simple-stages {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.simple-stage.done {
+  color: var(--accent);
+}
+.simple-stage.active {
+  color: var(--orange);
+}
+.simple-bar {
+  height: 8px;
+  border-radius: 8px;
+  background: #e9ecdf;
+  overflow: hidden;
+}
+.simple-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.simple-progress .small-label {
+  margin: var(--space-2) 0 0;
+}
+.simple-done {
+  margin-top: var(--space-4);
+}
+.simple-review-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.simple-review-top > div:first-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.simple-book-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+.simple-review-actions,
+.simple-page-actions,
+.simple-finish-actions,
+.simple-backup-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.simple-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+}
+.simple-arrow {
+  min-width: 44px;
+  font-size: 20px;
+  padding: 6px 12px;
+}
+.simple-page-no {
+  font-weight: 700;
+  color: var(--text-1);
+}
+.simple-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.simple-page-art > img,
+.simple-page-art > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+.simple-empty-art {
+  border-radius: 10px;
+  gap: var(--space-3);
+  justify-items: center;
+}
+.simple-empty-art p {
+  margin: 0;
+}
+.simple-stale {
+  color: var(--warn);
+}
+.simple-page-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.simple-page-text textarea[readonly] {
+  background: #fbfbf7;
+  color: var(--text-1);
+}
+.simple-badge {
+  align-self: flex-start;
+  border-radius: 14px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #d8ddcf;
+  background: #f6f7f0;
+  color: var(--text-2);
+  max-width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.simple-badge-ok {
+  color: var(--accent);
+  background: var(--greenlight);
+}
+.simple-badge-warn {
+  color: var(--warn);
+  background: #fcf1df;
+  border-color: #efd9b5;
+}
+.simple-badge-list {
+  margin: 0;
+}
+.simple-finish-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+.simple-titles {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.simple-titles legend {
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 0 var(--space-1);
+}
+.simple-titles label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.simple-confirm {
+  line-height: 1.8;
+}
+.simple-settings .panel + .panel {
+  margin-top: var(--space-4);
+}
+.simple-child-row {
+  margin: 0 0 var(--space-4);
+}
+.simple-child-row strong {
+  font-size: 17px;
+  color: var(--text-1);
+}
+.quick-engine-form + .quick-engine-form {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.quick-engine-form
+  [data-text-provider]:not([data-text-provider="local"])
+  > .form-grid,
+.quick-engine-form
+  [data-text-provider]:not([data-text-provider="local"])
+  > .field:last-child,
+.quick-engine-form .field:has(#ig-proxy-endpoint),
+.quick-engine-form .reading-consent:has(#ig-google-pro) {
+  display: none;
+}
+.quick-engine-form #tg-provider-fields,
+.quick-engine-form #ig-provider-fields {
+  margin-top: var(--space-3);
+}
+@media (max-width: 640px) {
+  .top-actions .ui-mode-btn {
+    padding: 6px 8px;
+  }
+  .top-actions .ui-mode-btn .ui-mode-long {
+    display: none;
+  }
+  .top-actions .ui-mode-btn .ui-mode-short {
+    display: inline;
+  }
+  .top-actions .mode-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .top-actions:has(.ui-mode-btn) .status-chip {
+    max-width: 84px;
+  }
+  .simple-steps {
+    gap: 6px;
+    justify-content: space-between;
+  }
+  .simple-steps .step {
+    font-size: 0;
+    gap: 0;
+  }
+  .simple-steps .step.active {
+    font-size: 12px;
+    gap: 4px;
+  }
+  .simple-page,
+  .simple-finish-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .simple-finish-grid .simple-cover {
+    width: 100%;
+    max-width: 220px;
+    margin: 0 auto;
+  }
+  .simple-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .simple-review-actions .btn,
+  .simple-page-actions .btn,
+  .simple-finish-actions .btn {
+    flex: 1 1 auto;
+  }
+  .simple-mode-bar {
+    padding: var(--space-3);
+  }
+}

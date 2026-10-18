@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v28";
+const CACHE = "donghwa-shell-v29";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -40,6 +40,7 @@ const FILES = [
   "./full-auto-control.js",
   "./full-auto.js",
   "./full-auto-ui.js",
+  "./simple-create.js",
   "./story-generation/page-tools.js",
   "./story-generation/auto-materials.js",
   "./story-generation/scene-briefs.js",

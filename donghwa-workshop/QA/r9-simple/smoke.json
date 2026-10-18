@@ -1,0 +1,65 @@
+{
+  "base": "http://127.0.0.1:4187/",
+  "runs": [
+    {
+      "width": 1280,
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "steps": {
+        "defaultMode": null,
+        "settingsGroups": [
+          "우리 아이",
+          "엔진과 키",
+          "잠금",
+          "보관"
+        ],
+        "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
+        "recommended": 3,
+        "selectedCards": 5,
+        "badge": "읽기 쉬움 ✓ · 참고 2",
+        "proMode": "pro",
+        "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
+        "onePage": {
+          "toast": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+          "error": "",
+          "image": 0
+        },
+        "title": "노래하는 돌은 어디에?",
+        "saveSkipped": "그림 오류로 책장 저장·다시 접속·열기는 건너뛰었어요 (텍스트 단계만 검증)."
+      },
+      "imageBug": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+      "problems": []
+    },
+    {
+      "width": 390,
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "steps": {
+        "defaultMode": null,
+        "settingsGroups": [
+          "우리 아이",
+          "엔진과 키",
+          "잠금",
+          "보관"
+        ],
+        "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
+        "recommended": 3,
+        "selectedCards": 5,
+        "badge": "읽기 쉬움 ✓ · 참고 2",
+        "proMode": "pro",
+        "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
+        "onePage": {
+          "toast": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+          "error": "",
+          "image": 0
+        },
+        "title": "노래하는 돌은 어디에?",
+        "saveSkipped": "그림 오류로 책장 저장·다시 접속·열기는 건너뛰었어요 (텍스트 단계만 검증)."
+      },
+      "imageBug": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+      "problems": []
+    }
+  ]
+}
