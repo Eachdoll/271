@@ -10,7 +10,11 @@ import {
   runFullAuto,
   FULL_AUTO_STOPS,
 } from "./full-auto.js";
-import { isPageOperationBusy } from "./story-generation/page-tools.js";
+import {
+  isPageOperationBusy,
+  claimBookForRun,
+  releaseBookForRun,
+} from "./story-generation/page-tools.js";
 /** Jobs parked by a hold: nothing is running and nothing is bought until a caller releases them. */
 const HOLD_LABELS = {
   "text-review": "글 검수 대기",
@@ -189,13 +193,21 @@ async function execute(job, { navigate = true, onProgress } = {}) {
       },
     });
   };
-  if (navigate) {
-    api.onStarted?.(job);
-    api.toast(
-      "제작을 시작했어요. 책장의 제작 카드에서 진행 확인·중지를 할 수 있어요.",
-    );
-  }
+  // Claim the book before the first await: until runFullAuto marks the job
+  // running (after the stop watcher, the run lock and the credential
+  // preflight), job.status still shows the hold, and a page tool started in
+  // that gap would buy the same page as the run.
+  const claimedBookIds = [
+    ...new Set([job.bookId, job.book?.id].filter(Boolean)),
+  ];
+  for (const id of claimedBookIds) claimBookForRun(id);
   try {
+    if (navigate) {
+      api.onStarted?.(job);
+      api.toast(
+        "제작을 시작했어요. 책장의 제작 카드에서 진행 확인·중지를 할 수 있어요.",
+      );
+    }
     if (globalThis.navigator?.locks)
       await navigator.locks.request(
         "donghwa-full-auto-" + job.id,
@@ -219,6 +231,7 @@ async function execute(job, { navigate = true, onProgress } = {}) {
           : error,
       );
   } finally {
+    for (const id of claimedBookIds) releaseBookForRun(id);
     watcher.close();
     if (controller === operation) {
       controller = null;

@@ -7,7 +7,7 @@ import {createFullAutoJob,runFullAuto} from '../dist/full-auto.js';
 import {demoOutline,demoProse,demoPagination} from '../dist/story-generation/demo.js';
 import {demoSceneBriefs} from '../dist/story-generation/scene-briefs.js';
 import {StoryValidationError} from '../dist/story-generation/schemas.js';
-import {rewriteBookPage,applyPageText,setPageReviewed,pagesNeedingImages,estimateSimpleCosts,generateBookPageImage,isPageImageStale,isPageOperationBusy} from '../dist/story-generation/page-tools.js';
+import {rewriteBookPage,applyPageText,setPageReviewed,pagesNeedingImages,estimateSimpleCosts,generateBookPageImage,isPageImageStale,isPageOperationBusy,claimBookForRun,releaseBookForRun,isBookClaimedForRun} from '../dist/story-generation/page-tools.js';
 
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
 const result=(data,stage)=>({data,usage:{input:10,output:20,costUsdEstimated:.01},meta:{stage,requests:1,model:'mock'}});
@@ -215,4 +215,64 @@ test('page tools refuse to change a book while its FULL AUTO run is live',async(
  await assert.rejects(applyPageText(state,book,0,{ko:'x'}),/만드는 중/);
  await assert.rejects(rewriteBookPage(state,book,0,{rewrite:refuse('rewrite')}),/만드는 중/);
  await assert.rejects(generateBookPageImage(state,book,0,{generate:refuse('scene')}),/만드는 중/);
+});
+
+// ---- FIX-IMG: run claims, catchphrase advisory after page edits, billed rewrites without a usable page ----
+test('page tools refuse a book a starting FULL AUTO run has claimed, before it is marked running',async()=>{
+ const {state,job,book}=await heldBook({stopBefore:'pages'});
+ assert.equal(job.status,'pages-ready');
+ claimBookForRun(book.id);
+ try{
+  assert.equal(isBookClaimedForRun(book.id),true);
+  await assert.rejects(applyPageText(state,book,0,{ko:'x'}),/만드는 중/);
+  await assert.rejects(rewriteBookPage(state,book,0,{rewrite:refuse('rewrite')}),/만드는 중/);
+  await assert.rejects(generateBookPageImage(state,book,0,{generate:refuse('scene')}),/만드는 중/);
+  assert.notEqual(book.pages[0].ko,'x');
+ }finally{releaseBookForRun(book.id);}
+ assert.equal(isBookClaimedForRun(book.id),false);
+ assert.equal((await applyPageText(state,book,0,{ko:'유하가 문을 열어요.'})).changed,true);
+});
+
+test('page edits keep the catchphrase-repeat advisory from the frozen story input',async()=>{
+ const {state,job,book,save}=await heldBook(),phrase='같이 가자!';
+ for(const input of new Set([book.storyInput,job.input]))input.characters[0].catchphrase=phrase;
+ await applyPageText(state,book,0,{ko:`유하가 "${phrase}" 해요.`,save});
+ const edited=await applyPageText(state,book,1,{ko:`유하가 또 "${phrase}" 외쳐요.`,save});
+ const repeat=check=>(check?.warnings||[]).filter(w=>w.code==='catchphrase-repeat');
+ assert.deepEqual(repeat(edited.storyCheck).map(w=>[w.phrase,w.pages]),[[phrase,[1,2]]]);
+ assert.equal(edited.storyCheck,book.storyCheck);assert.equal(edited.storyCheck.passed,book.storyCheck.passed);
+ // A paid page rewrite rechecks the book the same way.
+ const rewrote=await rewriteBookPage(state,book,4,{save,rewrite:async pagination=>rewritten(pagination,4,'유하가 별을 세어요.')});
+ assert.equal(rewrote.changed,true);assert.equal(repeat(rewrote.storyCheck).length,1);assert.equal(repeat(rewrote.storyCheck)[0].code,'catchphrase-repeat');
+ // A book without its own copy of the input falls back to the job's input.
+ const own=book.storyInput;delete book.storyInput;
+ try{
+  const fallback=await applyPageText(state,book,2,{ko:`유하가 "${phrase}" 하고 웃어요.`,save});
+  assert.deepEqual(repeat(fallback.storyCheck).map(w=>w.pages),[[1,2,3]]);
+ }finally{book.storyInput=own;}
+ // The advisory never blocks: removing the repeat clears it.
+ const cleared=await applyPageText(state,book,1,{ko:'유하가 웃어요.',save});
+ assert.equal(repeat(cleared.storyCheck).length,1,'pages 1 and 3 still repeat it');
+ await applyPageText(state,book,2,{ko:'유하가 하늘을 봐요.',save});
+ assert.equal(repeat(book.storyCheck).length,0);
+});
+
+test('a paid rewrite without a usable page keeps its cost row as failed and saves it before throwing',async()=>{
+ const {state,job,book,save,saves}=await heldBook(),before=book.pages[5].ko,count=book.textUsage.calls.length;
+ const missing=async()=>({data:{pages:[]},usage:{input:70,output:10,costUsdEstimated:.003},meta:{stage:'page',requests:1,engineId:'openai',model:'mock'}});
+ await assert.rejects(rewriteBookPage(state,book,5,{save,rewrite:missing}),/받지 못했어요.*비용은 기록했어요/);
+ assert.equal(book.textUsage.calls.length,count+1);
+ const row=book.textUsage.calls.at(-1);
+ assert.deepEqual([row.action,row.pageNo,row.failed,row.input,row.requests],['rewrite-page',6,true,70,1]);
+ assert.ok(job.usage.calls.some(c=>c.failed&&c.input===70&&c.action==='rewrite-page'));
+ assert.equal(saves(),1,'the billed row is saved before the error');
+ assert.equal(book.textCosts.requestCount,book.textUsage.calls.reduce((n,c)=>n+(Number(c.requests)||1),0));
+ // A page that came back without any text is not usable either.
+ const blank=async pagination=>{const next=structuredClone(pagination);next.pages[5].textKo='';next.pages[5].textEn='  ';return {data:next,usage:{input:71,output:5},meta:{stage:'page',requests:1}};};
+ await assert.rejects(rewriteBookPage(state,book,5,{save,rewrite:blank}),/받지 못했어요/);
+ assert.deepEqual([book.textUsage.calls.at(-1).failed,book.textUsage.calls.at(-1).input],[true,71]);assert.equal(saves(),2);
+ assert.equal(book.pages[5].ko,before);assert.equal(book.pagination.pages[5].textKo,before);
+ // A response that cost nothing records nothing and saves nothing.
+ await assert.rejects(rewriteBookPage(state,book,5,{save,rewrite:async()=>({data:{pages:[]},meta:{requests:0}})}),/^Error: 다시 쓴 쪽을 받지 못했어요\.$/);
+ assert.equal(book.textUsage.calls.length,count+2);assert.equal(saves(),2);
 });

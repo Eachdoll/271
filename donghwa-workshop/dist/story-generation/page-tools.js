@@ -44,12 +44,38 @@ export function isPageOperationBusy(bookId) {
   return !!bookId && busyBooks.has(bookId);
 }
 /**
+ * Books a FULL AUTO run in this tab has claimed. The runner claims the book
+ * synchronously when it starts, before its first await (stop watcher, run
+ * lock, credential preflight), while job.status still shows the hold; page
+ * tools refuse a claimed book, so no page is bought by both.
+ */
+const runClaims = new Map();
+/** Claim a book for a FULL AUTO run in this tab; pair every call with releaseBookForRun. */
+export function claimBookForRun(bookId) {
+  if (!bookId) return false;
+  runClaims.set(bookId, (runClaims.get(bookId) || 0) + 1);
+  return true;
+}
+/** Release one claimBookForRun; the book is free again once every claim is released. */
+export function releaseBookForRun(bookId) {
+  const count = runClaims.get(bookId) || 0;
+  if (count > 1) runClaims.set(bookId, count - 1);
+  else runClaims.delete(bookId);
+}
+/** True while a FULL AUTO run in this tab has claimed this book. */
+export function isBookClaimedForRun(bookId) {
+  return !!bookId && runClaims.has(bookId);
+}
+const RUN_OWNS_MESSAGE =
+  "FULL AUTO가 이 책을 만드는 중이에요. 중지하거나 끝난 뒤에 고쳐 주세요.";
+/**
  * One page operation per book at a time: two paid requests on one book could
  * each buy the same coherence review, and a text edit landing during that
  * page's drawing would be lost.
  */
 async function exclusive(book, work) {
   const id = book?.id;
+  if (isBookClaimedForRun(id)) throw Error(RUN_OWNS_MESSAGE);
   if (id && busyBooks.has(id))
     throw Error(
       "이 책의 다른 쪽 작업이 아직 끝나지 않았어요. 끝난 뒤에 다시 시도해 주세요.",
@@ -62,6 +88,7 @@ async function exclusive(book, work) {
   }
 }
 const runOwnsBook = (state, book) =>
+  isBookClaimedForRun(book?.id) ||
   fullAutoJobForBook(state, book)?.status === "running";
 
 function pageIndexOf(book, pageIndex) {
@@ -75,28 +102,35 @@ function pageIndexOf(book, pageIndex) {
     throw Error("고칠 쪽을 찾지 못했어요.");
   return index;
 }
-/** Paid or text-changing work must not race a FULL AUTO run that owns the same book. */
+/**
+ * Paid or text-changing work must not race a FULL AUTO run that owns the same
+ * book: one marked running, or one this tab is starting (claimed, not yet running).
+ */
 function assertNotRunning(state, book) {
   const job = fullAutoJobForBook(state, book);
-  if (job?.status === "running")
-    throw Error(
-      "FULL AUTO가 이 책을 만드는 중이에요. 중지하거나 끝난 뒤에 고쳐 주세요.",
-    );
+  if (job?.status === "running" || isBookClaimedForRun(book?.id))
+    throw Error(RUN_OWNS_MESSAGE);
   return job;
 }
 function textSettingsOf(state, book) {
   return book.textGenerationSettings || getTextGenerationSettings(state);
 }
-/** Same checker inputs as the picture editor's syncDraft. */
-function recheckBook(book) {
+/**
+ * Same checker inputs as the picture editor's syncDraft, including the frozen
+ * story input, so the advisory catchphrase-repeat warning survives a page edit.
+ */
+function recheckBook(state, book) {
   if (!book.pagination || !book.outline) return;
-  const input = book.storyInput || {};
+  const storyInput =
+      book.storyInput || fullAutoJobForBook(state, book)?.input || null,
+    input = storyInput || {};
   book.storyCheck = checkStory(book.outline, book.pagination, {
     specs: book.readingLevelSnapshot?.specs || input.specs,
     storyWords: buildStoryWords(book, book.outline),
     allowedNames: (input.characters || [])
       .flatMap((c) => [c.name, c.nameEn])
       .filter(Boolean),
+    storyInput,
   });
   if (
     book.sceneBriefs?.length &&
@@ -112,7 +146,7 @@ function recheckBook(book) {
   }
 }
 /** Write one page's text everywhere the book keeps it; returns whether anything changed. */
-function writePageText(book, index, ko, en) {
+function writePageText(state, book, index, ko, en) {
   const page = book.pages[index],
     currentKo = page.ko ?? page.textKo ?? "",
     currentEn = page.en ?? page.textEn ?? "";
@@ -135,7 +169,7 @@ function writePageText(book, index, ko, en) {
     page.imageStaleAt = now();
     page.imageStaleAssetId = page.imageAssetId || page.imageUrl;
   }
-  recheckBook(book);
+  recheckBook(state, book);
   return true;
 }
 /** Same totals as the book builder, so a page rewrite shows in the book's text cost. */
@@ -293,8 +327,19 @@ async function rewritePage(
     }
     throw error;
   }
-  const row = usageRow(result, extra);
-  if (result?.meta?.requests !== 0) recordTextUsage(state, book, row);
+  const next =
+      result?.data?.pages?.find((p) => p?.pageNo === pageNo) ||
+      result?.data?.pages?.[index],
+    usable =
+      !!next &&
+      typeof next === "object" &&
+      ["textKo", "textEn"].some(
+        (key) => typeof next[key] === "string" && next[key].trim(),
+      ),
+    paid = result?.meta?.requests !== 0,
+    // A paid response without a usable page is still billed: keep its row, marked failed.
+    row = usageRow(result, usable ? extra : { ...extra, failed: true });
+  if (paid) recordTextUsage(state, book, row);
   // A FULL AUTO run started while the request was in flight: keep its cost, leave the page as the run sees it.
   if (runOwnsBook(state, book)) {
     try {
@@ -306,12 +351,22 @@ async function rewritePage(
       "FULL AUTO가 이 책을 만들기 시작해서 다시 쓴 글을 적용하지 않았어요. 사용한 요청 비용은 기록했어요.",
     );
   }
-  const next =
-    result?.data?.pages?.find((p) => p.pageNo === pageNo) ||
-    result?.data?.pages?.[index];
-  if (!next) throw Error("다시 쓴 쪽을 받지 못했어요.");
+  if (!usable) {
+    if (paid)
+      try {
+        await commit(state, book, save);
+      } catch {
+        /* Report the missing page, not the follow-up save. */
+      }
+    throw Error(
+      paid
+        ? "다시 쓴 쪽을 받지 못했어요. 사용한 요청 비용은 기록했어요."
+        : "다시 쓴 쪽을 받지 못했어요.",
+    );
+  }
   const page = book.pages[index],
     changed = writePageText(
+      state,
       book,
       index,
       String(next.textKo ?? page.ko ?? ""),
@@ -339,6 +394,7 @@ export async function applyPageText(
   return exclusive(book, async () => {
     const page = book.pages[index],
       changed = writePageText(
+        state,
         book,
         index,
         ko === undefined ? (page.ko ?? page.textKo ?? "") : String(ko),
