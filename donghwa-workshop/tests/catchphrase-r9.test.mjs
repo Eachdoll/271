@@ -143,6 +143,7 @@ test('R9-A3 inspectStory uses the cast and frozen omitted phrases; the checks pa
 
 test('R9-A service worker precaches the shared catchphrase module under the v28 shell',()=>{
  const sw=readFileSync(new URL('../dist/sw.js',import.meta.url),'utf8');
- assert.match(sw,/const CACHE = "donghwa-shell-v28";/);
+ // v28 shipped the catchphrase module; later shells (R9-B2 v29) keep precaching it.
+ assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1])>=28);
  assert.ok(sw.includes('"./story-quality/dist/catchphrase.js"'));
 });

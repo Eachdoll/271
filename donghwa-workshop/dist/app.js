@@ -33,6 +33,18 @@ import {
   cleanupFullAuto,
   isFullAutoRunning,
 } from "./full-auto-ui.js";
+import {
+  readUiMode,
+  writeUiMode,
+  nextUiMode,
+  renderSimpleCreate,
+  configureSimpleCreate,
+  openSimpleJob,
+  missingPageText,
+  pageTextProblemMessage,
+  carryFullAutoFields,
+  isSimpleBusy,
+} from "./simple-create.js";
 import { createCloudSync } from "./cloud-sync.js";
 import {
   downloadLibraryTransfer,
@@ -131,6 +143,7 @@ import {
 import {
   configureTextSettingsUI,
   renderTextSettings,
+  renderTextEngineQuick,
   getTextGenerationSettings,
 } from "./text-generation/settings-ui.js";
 import {
@@ -182,6 +195,7 @@ import {
 import {
   configureImageUI,
   renderImageSettings,
+  renderImageEngineQuick,
   renderGenerationControls,
   renderCharacterImageControls,
   previewNewCharacter,
@@ -282,6 +296,9 @@ let view = "library",
   activeBook = null;
 let vaultSessionPin = null,
   finalizeController = null;
+// R9: per-device screen mode ('simple' by default); never stored in state.
+let uiMode = readUiMode(),
+  lastProSettingsTab = "home";
 let wizard = null,
   draft = null,
   editPage = 0,
@@ -379,7 +396,16 @@ function openCredentialSettings(kind, engine) {
   const link = document.querySelector(
     '[data-story-action="open-text-settings"]',
   );
-  if (text && link) link.click();
+  if (uiMode === "simple")
+    protectedAction(() => {
+      closeModal();
+      rememberSimpleReturn();
+      view = "settings";
+      settingsTab = "simple";
+      history.replaceState(null, "", "#settings=simple");
+      render();
+    });
+  else if (text && link) link.click();
   else if (text) openStoryTextSettings(draft?.storyDraftId || null);
   else
     protectedAction(() => {
@@ -656,7 +682,7 @@ function showCloudPanel() {
   );
 }
 function confirmCloudChange(kind) {
-  if (kind === "pull" && draft && view === "edit") {
+  if (kind === "pull" && draft && (view === "edit" || simpleDraftOpen())) {
     discardDraft(() => confirmCloudChange(kind));
     return;
   }
@@ -870,6 +896,10 @@ let settingsTab =
   new URLSearchParams(location.hash.replace(/^#/, "")).get("settings") ||
   "home";
 if (!["home", "text", "image"].includes(settingsTab)) settingsTab = "home";
+if (uiMode === "simple") {
+  lastProSettingsTab = settingsTab;
+  settingsTab = "simple";
+}
 let settingsSaving = false;
 const settingsDirty = new Set();
 const settingsValues = new Map();
@@ -896,7 +926,7 @@ function render() {
   migrateWorldState(state);
   const nav = (id, label, ic) =>
     `<button class="nav ${view === id ? "active" : ""} ${id === "create" ? "create-nav" : ""}" data-action="nav" data-view="${id}">${icon(ic)}<span>${label}</span>${!parentUnlocked && id !== "library" ? icon("lock", "lock") : ""}</button>`;
-  root.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M4 16q9-4 16 1q7-5 16-1v23q-9-4-16 1q-7-5-16-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 18v22 M20 9q5-7 13-5q-2 10-13 9 M20 14l8-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><div><h1>동화공방</h1><small>DONGHWA WORKSHOP</small></div></div><div class="family"><div class="family-avatar">${!cloudPrivacyLocked && state.characters[0] ? characterSVG(state.characters[0]) : ""}</div><div><strong>${cloudPrivacyLocked ? "개인 클라우드 책장" : esc(state.characters[0]?.name || "우리 아이") + "네 이야기 공방"}</strong><small>작은 이야기가 자라는 곳</small></div></div><nav><div class="nav-group">우리 가족의 공간</div>${nav("library", "우리 책장", "book")}${!childMode ? nav("materials", "이야기 재료", "characters") + nav("create", "이야기 만들기", "spark") : ""}${childMode ? `<button class="nav ${tab === "favorites" ? "active" : ""}" data-action="child-favorites">${icon("heart")}<span>좋아하는 책</span></button>` : ""}${!childMode ? `<div class="nav-group" style="margin-top:29px">공방 관리</div>${nav("settings", "부모 설정", "settings")}` : ""}</nav><div class="sidebar-bottom"><div class="sidebar-note">${icon("leaf")}화면보다 종이로,<br>우리 아이의 속도로 읽어요.</div><div class="sidebar-footer"><span>작은 이야기, 큰 상상</span><span>v0.1</span></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">${icon("home")}<span>우리 가족의 공간</span>${icon("chevron")}<span>${{ library: "우리 책장", materials: "이야기 재료", create: "이야기 만들기", settings: "부모 설정", detail: "책 이야기", edit: "이야기 다듬기" }[view] || "우리 책장"}</span></div><div class="mobile-brand">${icon("book")}동화공방</div><div class="top-actions"><button class="status-chip" data-action="cloud-open" aria-label="${esc(cloudStatusSummary())} · 보관 관리 열기" title="${esc(cloudStatusSummary())}">${esc(cloudStatusSummary())}</button><button class="mode-btn" data-action="toggle-mode">${icon(childMode ? "lock" : "child")}${childMode ? "부모 모드" : "아이 모드"}</button><div class="top-avatar">부모</div></div></header><div id="page-content"><div id="status-strip" class="status-strip">${renderStatusStrip()}</div>${pageContent()}</div><footer class="page-footer"><span>${icon("leaf")}우리 가족만의 이야기가, 아이의 세상을 넓혀요.</span><span>글·그림 엔진 별도 선택 · 로그인하면 계정별 클라우드 저장</span></footer></main></div>`;
+  root.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M4 16q9-4 16 1q7-5 16-1v23q-9-4-16 1q-7-5-16-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 18v22 M20 9q5-7 13-5q-2 10-13 9 M20 14l8-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><div><h1>동화공방</h1><small>DONGHWA WORKSHOP</small></div></div><div class="family"><div class="family-avatar">${!cloudPrivacyLocked && state.characters[0] ? characterSVG(state.characters[0]) : ""}</div><div><strong>${cloudPrivacyLocked ? "개인 클라우드 책장" : esc(state.characters[0]?.name || "우리 아이") + "네 이야기 공방"}</strong><small>작은 이야기가 자라는 곳</small></div></div><nav><div class="nav-group">우리 가족의 공간</div>${nav("library", "우리 책장", "book")}${!childMode ? nav("materials", "이야기 재료", "characters") + nav("create", "이야기 만들기", "spark") : ""}${childMode ? `<button class="nav ${tab === "favorites" ? "active" : ""}" data-action="child-favorites">${icon("heart")}<span>좋아하는 책</span></button>` : ""}${!childMode ? `<div class="nav-group" style="margin-top:29px">공방 관리</div>${nav("settings", "부모 설정", "settings")}` : ""}</nav><div class="sidebar-bottom"><div class="sidebar-note">${icon("leaf")}화면보다 종이로,<br>우리 아이의 속도로 읽어요.</div><div class="sidebar-footer"><span>작은 이야기, 큰 상상</span><span>v0.1</span></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">${icon("home")}<span>우리 가족의 공간</span>${icon("chevron")}<span>${{ library: "우리 책장", materials: "이야기 재료", create: "이야기 만들기", settings: "부모 설정", detail: "책 이야기", edit: "이야기 다듬기" }[view] || "우리 책장"}</span></div><div class="mobile-brand">${icon("book")}동화공방</div><div class="top-actions"><button class="status-chip" data-action="cloud-open" aria-label="${esc(cloudStatusSummary())} · 보관 관리 열기" title="${esc(cloudStatusSummary())}">${esc(cloudStatusSummary())}</button>${!childMode ? uiModeButton("mode-btn ui-mode-btn") : ""}<button class="mode-btn" data-action="toggle-mode">${icon(childMode ? "lock" : "child")}${childMode ? "부모 모드" : "아이 모드"}</button><div class="top-avatar">부모</div></div></header><div id="page-content"><div id="status-strip" class="status-strip">${renderStatusStrip()}</div>${pageContent()}</div><footer class="page-footer"><span>${icon("leaf")}우리 가족만의 이야기가, 아이의 세상을 넓혀요.</span><span>글·그림 엔진 별도 선택 · 로그인하면 계정별 클라우드 저장</span></footer></main></div>`;
   if (view === "settings" && !childMode && !cloudPrivacyLocked)
     renderSettingsJump();
   if (view === "settings") restoreSettingsInputs();
@@ -1079,7 +1109,11 @@ async function saveSettingsTab() {
     settingsDirtyPanels.delete(settingsTab);
     settingsSaving = false;
     render();
-    toast("현재 탭의 설정을 모두 저장했어요.");
+    toast(
+      settingsTab === "simple"
+        ? "설정을 모두 저장했어요."
+        : "현재 탭의 설정을 모두 저장했어요.",
+    );
   } catch (error) {
     toast(error);
   } finally {
@@ -1091,7 +1125,12 @@ window.addEventListener("hashchange", () => {
   const tab = new URLSearchParams(location.hash.replace(/^#/, "")).get(
     "settings",
   );
-  if (["home", "text", "image"].includes(tab) && tab !== settingsTab) {
+  // The simple settings page is one page; its tabs exist only in pro mode.
+  if (
+    uiMode !== "simple" &&
+    ["home", "text", "image"].includes(tab) &&
+    tab !== settingsTab
+  ) {
     settingsTab = tab;
     if (view === "settings") render();
   }
@@ -1122,7 +1161,9 @@ function renderSettingsJump() {
   nav.className = "settings-jump";
   nav.setAttribute("aria-label", "설정 항목 바로가기");
   nav.innerHTML = links.join("");
-  const heading = content.querySelector(".settings-tabs");
+  const heading =
+    content.querySelector(".settings-tabs") ||
+    content.querySelector(".simple-mode-bar");
   (heading || content).insertAdjacentElement(
     heading ? "afterend" : "afterbegin",
     nav,
@@ -1130,6 +1171,53 @@ function renderSettingsJump() {
 }
 function heading(title, sub, action = "") {
   return `<div class="page-heading"><div><h2>${title}</h2><p>${sub}</p></div>${action}</div>`;
+}
+/** Simple create is shown in simple mode, or for one job opened from a pro job card. */
+function simpleCreateActive() {
+  return uiMode === "simple" || wizard?.simpleForced === true;
+}
+/** A book under review in simple steps ④/⑤ (kept in the job; the guards still ask). */
+function simpleDraftOpen() {
+  return (
+    view === "create" &&
+    simpleCreateActive() &&
+    !!draft &&
+    Number(wizard?.simpleStep) >= 4
+  );
+}
+function uiModeButton(cls = "btn btn-outline btn-small") {
+  return `<button type="button" class="${cls}" data-action="toggle-ui-mode" aria-pressed="${uiMode === "pro"}" aria-label="${uiMode === "pro" ? "쉬운 모드로 바꾸기" : "프로 모드로 바꾸기"}" title="${uiMode === "pro" ? "쉬운 만들기 화면으로 바꿔요" : "모든 세부 설정이 있는 프로페셔널 모드로 바꿔요"}"><span class="ui-mode-long">${uiMode === "pro" ? "쉬운 모드로" : "프로 모드로"}</span><span class="ui-mode-short">${uiMode === "pro" ? "쉬운" : "프로"}</span></button>`;
+}
+function uiModeBar() {
+  return `<div class="simple-mode-bar"><span><strong>${uiMode === "pro" ? "프로페셔널 모드" : "쉬운 모드"}</strong> · ${uiMode === "pro" ? "모든 세부 설정을 보여요." : "자주 쓰는 설정만 보여요. 세부 설정은 프로페셔널 모드에 그대로 있어요."}</span>${uiModeButton()}</div>`;
+}
+function rememberSimpleReturn() {
+  if (view === "create" && wizard && !textSettingsReturn)
+    textSettingsReturn = {
+      draftId: null,
+      view: "create",
+      wizard: structuredClone(wizard),
+    };
+}
+function defaultWizard() {
+  return {
+    step: 1,
+    characterIds: [activeCharacters(state)[0]?.id].filter(Boolean),
+    backgroundIds: [],
+    topic: "",
+    language: state.settings.defaultLanguage,
+    pageCount: state.settings.defaultPages,
+    koreanLevel: state.settings.defaultKoreanLevel,
+    englishLevel: state.settings.defaultEnglishLevel,
+    value: "none",
+    valueCustom: "",
+    ending: "home",
+    endingCustom: "",
+    worldMemo: getActiveWorld(state).memo || "",
+    series: "",
+    previousBookId: null,
+    outline: null,
+  };
 }
 function pageContent() {
   if (cloudPrivacyLocked)
@@ -1276,12 +1364,14 @@ function openStoryTextSettings(draftId = null) {
     wizard: wizard ? structuredClone(wizard) : null,
   };
   view = "settings";
-  settingsTab = "text";
-  history.replaceState(null, "", "#settings=text");
+  settingsTab = uiMode === "simple" ? "simple" : "text";
+  history.replaceState(null, "", "#settings=" + settingsTab);
   render();
   requestAnimationFrame(() =>
     document
-      .querySelector("#text-engine-settings")
+      .querySelector(
+        uiMode === "simple" ? "#text-engine-form" : "#text-engine-settings",
+      )
       ?.scrollIntoView({ behavior: "smooth", block: "start" }),
   );
 }
@@ -1321,26 +1411,8 @@ function renderTopicWardrobe(w) {
   return `<div class="notice" style="margin:16px 0"><strong>이야기에 어울리는 옷장 모습</strong><p class="small-label">필요한 모습만 골라 만들고, 부모가 확인하면 옷장에 저장해요.</p><div class="material-add-actions">${choices.map((choice) => `<button type="button" class="btn btn-outline btn-small" data-wardrobe-action="open" data-character-id="${esc(id)}" data-recommendation="${esc(choice.id)}">${esc(choice.name)} 추천 · 만들어 보기</button>`).join("")}</div></div>`;
 }
 function createPage() {
-  if (!wizard) {
-    wizard = {
-      step: 1,
-      characterIds: [activeCharacters(state)[0]?.id].filter(Boolean),
-      backgroundIds: [],
-      topic: "",
-      language: state.settings.defaultLanguage,
-      pageCount: state.settings.defaultPages,
-      koreanLevel: state.settings.defaultKoreanLevel,
-      englishLevel: state.settings.defaultEnglishLevel,
-      value: "none",
-      valueCustom: "",
-      ending: "home",
-      endingCustom: "",
-      worldMemo: getActiveWorld(state).memo || "",
-      series: "",
-      previousBookId: null,
-      outline: null,
-    };
-  }
+  if (!wizard) wizard = defaultWizard();
+  if (simpleCreateActive()) return renderSimpleCreate(simpleCtx);
   const w = wizard;
   const steps = ["재료 고르기", "주제와 분위기", "읽기와 형식", "만들기"];
   let inner = "";
@@ -1610,6 +1682,8 @@ function buildStoryResultBook(result) {
       calls.length > 0 &&
       calls.every((c) => Number.isFinite(c.costUsd ?? c.usage?.costUsd)),
   };
+  // A rebuilt FULL AUTO book keeps its job link, and the job points at it.
+  carryFullAutoFields(state, book, same);
   return book;
 }
 async function acceptStoryResult(result) {
@@ -1695,7 +1769,47 @@ function detailPage() {
   }
   return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2>${b.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}<p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${b.pages.length}쪽</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : "추정 $" + b.imageCosts.estimatedUsd.toFixed(3) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : "추정 $" + b.textCosts.estimatedUsd.toFixed(3)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
 }
+/** Simple mode: one page, four groups. Reuses the existing forms, ids and handlers. */
+function simpleSettingsPage() {
+  const s = state.settings,
+    child = activeCharacters(state)[0] || state.characters[0];
+  return `${heading("부모 설정", "우리 아이와 엔진, 잠금과 보관만 한곳에 모았어요.")}${uiModeBar()}${textSettingsReturn ? `<aside class="notice">이야기 입력과 초안은 보관되어 있어요. ${btn("저장한 설정으로 이야기 돌아가기", "return-story-settings", "outline")}</aside>` : ""}<div class="settings-tab-content simple-settings" role="region" aria-label="부모 설정"><section class="panel" id="simple-settings-child"><h3>우리 아이</h3><div class="simple-child-row"><span class="small-label">주인공</span><strong>${esc(child?.name || "우리 아이")}</strong>${child ? managementButton("이름·모습 바꾸기", "edit-character", child.id) : ""}</div><form id="settings-form" class="settings"><div class="form-grid">${selectField(
+    "defaultLanguage",
+    "책 언어",
+    [
+      ["dual", "한글판 · 영어판 두 권"],
+      ["bilingual", "한 쪽에 두 언어"],
+      ["ko", "한글만"],
+      ["en", "영어만"],
+    ],
+    s.defaultLanguage,
+  )}${selectField(
+    "defaultPages",
+    "쪽 수",
+    [
+      [8, "8쪽"],
+      [12, "12쪽"],
+      [16, "16쪽"],
+      [24, "24쪽"],
+    ],
+    s.defaultPages,
+  )}${renderReadingSelectors({ koreanLevel: s.defaultKoreanLevel, englishLevel: s.defaultEnglishLevel }, "default-")}${selectField(
+    "defaultLayout",
+    "인쇄 배열",
+    [
+      ["single", "일반 · 한 면에 한 쪽"],
+      ["two", "일반 · 두 쪽씩 읽는 순서"],
+      ["booklet", "제본용 · 쪽 재배치·빈 쪽 포함"],
+    ],
+    s.defaultLayout,
+  )}</div><input type="hidden" id="dailyLimit" value="${esc(s.dailyLimit)}"><input type="hidden" id="rate" value="${esc(s.rate)}"><input type="hidden" id="sr-lexile" value="${esc(s.srLexile ?? "")}"></form></section><section class="panel" id="simple-settings-engines"><h3>엔진과 키</h3><p class="section-sub">글 엔진 하나, 그림 엔진 하나와 각 키예요. 키는 PIN으로 이 기기에만 암호화해 보관해요.</p>${renderTextEngineQuick(state)}${renderImageEngineQuick(state)}</section><section class="panel" id="simple-settings-lock"><h3>잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠겨요.</p>${btn(s.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}</section><section class="panel" id="simple-settings-backup"><h3>보관</h3><p class="section-sub">다른 기기로 옮기거나 백업해 두세요. API 키와 PIN은 파일에 넣지 않아요.</p><div class="simple-backup-actions">${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden></section></div><div class="settings-save-bar"><span id="settings-save-status" role="status">${settingsDirty.has(settingsTab) ? "저장하지 않은 변경이 있어요." : "저장된 설정을 보고 있어요."}</span><button class="btn btn-green" data-action="save-settings-tab">설정 모두 저장</button></div>`;
+}
 function settingsPage() {
+  if (uiMode === "simple") {
+    settingsTab = "simple";
+    return simpleSettingsPage();
+  }
+  if (settingsTab === "simple") settingsTab = lastProSettingsTab || "home";
   const s = state.settings;
   const home = `<form id="settings-form" class="settings"><div class="settings-layout"><div class="settings-stack"><section class="panel"><h3>우리 집 이야기 기본값</h3><div class="form-grid">${selectField(
     "defaultLanguage",
@@ -1755,7 +1869,7 @@ function settingsPage() {
           renderImageSettings(state) +
           renderStyleStudioSettings(state)
         : home;
-  return `${heading("부모 설정", "우리 가족의 읽기와 만들기를 한곳에서 정해요.")}${textSettingsReturn ? `<aside class="notice">이야기 입력과 초안은 보관되어 있어요. ${btn("저장한 설정으로 이야기 돌아가기", "return-story-settings", "outline")}</aside>` : ""}<nav class="settings-tabs" role="tablist" aria-label="부모 설정">${[
+  return `${heading("부모 설정", "우리 가족의 읽기와 만들기를 한곳에서 정해요.")}${uiModeBar()}${textSettingsReturn ? `<aside class="notice">이야기 입력과 초안은 보관되어 있어요. ${btn("저장한 설정으로 이야기 돌아가기", "return-story-settings", "outline")}</aside>` : ""}<nav class="settings-tabs" role="tablist" aria-label="부모 설정">${[
     ["home", "우리 집·읽기·잠금"],
     ["text", "글 엔진·이야기 품질"],
     ["image", "그림 World·화풍"],
@@ -2269,7 +2383,71 @@ async function finalizeBook(
     );
   }
 }
+/** Approve the open draft (pro editor or simple step ⑤) through one path. */
+async function approveDraft() {
+  syncDraft();
+  if (!draft) return;
+  // Only the languages the book is printed in need text (ko-only / en-only books).
+  if (!String(draft.title || "").trim() || missingPageText(draft).length) {
+    toast(pageTextProblemMessage(draft));
+    return;
+  }
+  const book = draft,
+    cacheAudio = document.querySelector("#cache-audio-approval")?.checked;
+  try {
+    await checkBookAtLevel(book, { rewrite: false, showProgress: true });
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    toast("읽기 검사: " + error.message);
+  }
+  const autoImagesReady =
+    book.autoGenerationComplete &&
+    book.cover?.imageAssetId &&
+    book.pages.every(
+      (page) => page.imageAssetId && page.imageMeta?.quality === "final",
+    );
+  const finalizeImages =
+    !autoImagesReady &&
+    ((book.generationSnapshot?.imageEngine ||
+      getActiveWorld(state).imageEngine) !== "sample" ||
+      book.pages.some(
+        (p) => p.imageAssetId && p.imageMeta?.quality === "draft",
+      ));
+  if (finalizeImages) {
+    const world = getActiveWorld(state),
+      estimate = estimateBookCost({
+        engine: book.generationSnapshot?.imageEngine || world.imageEngine,
+        pageCount: book.pages.length,
+        size: "1536x1024",
+        quality: "final",
+        config: {
+          ...world.providerConfig?.[
+            book.generationSnapshot?.imageEngine || world.imageEngine
+          ],
+          ...book.generationSnapshot?.imageModelConfig,
+        },
+      });
+    showModal(
+      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">표지 1장과 본문 ${book.pages.length}쪽을 최종 품질로 생성합니다. 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
+    );
+    document.querySelector("#book-final-confirm").onclick = () =>
+      finalizeBook(book, { finalizeImages, cacheAudio });
+  } else await finalizeBook(book, { cacheAudio });
+}
 function discardDraft(next) {
+  if (simpleDraftOpen()) {
+    const editing = !!wizard?.simpleEditing;
+    showModal(
+      `${modalHeader("검수 중인 이야기는 보관돼요")}<p class="modal-intro">만든 글과 그림은 ‘제작 중인 이야기’에 남아 있어요. 다시 ‘이야기 만들기’에서 이어서 검수할 수 있어요.${editing ? "<br><strong>고치던 이 쪽 글은 저장되지 않아요.</strong>" : ""}</p><div class="modal-actions">${btn("계속 검수하기", "close-modal", "outline")}<button class="btn btn-primary" id="discard-confirm">나가기</button></div>`,
+    );
+    document.querySelector("#discard-confirm").onclick = () => {
+      draft = null;
+      wizard = null;
+      closeModal();
+      next();
+    };
+    return;
+  }
   if (draft && view === "edit") {
     syncDraft();
     showModal(
@@ -2335,8 +2513,32 @@ async function onAction(e) {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
+  if (a === "toggle-ui-mode") {
+    protectedAction(() => {
+      // Screen only: state, drafts, books and the in-memory wizard stay as they are.
+      if (view === "create" && wizard && !simpleCreateActive()) syncWizard();
+      if (wizard?.simpleForced) delete wizard.simpleForced;
+      uiMode = writeUiMode(nextUiMode(uiMode));
+      if (uiMode === "simple") {
+        if (settingsTab !== "simple") lastProSettingsTab = settingsTab;
+        settingsTab = "simple";
+      } else if (settingsTab === "simple")
+        settingsTab = lastProSettingsTab || "home";
+      if (view === "settings")
+        history.replaceState(null, "", "#settings=" + settingsTab);
+      render();
+      toast(
+        uiMode === "simple"
+          ? "쉬운 모드예요. 세부 설정은 프로페셔널 모드에 그대로 있어요."
+          : "프로페셔널 모드예요. 모든 세부 설정을 볼 수 있어요.",
+      );
+    });
+    return;
+  }
   if (a === "settings-tab") {
+    if (uiMode === "simple") return;
     settingsTab = el.dataset.tab;
+    lastProSettingsTab = settingsTab;
     history.replaceState(null, "", "#settings=" + settingsTab);
     render();
     return;
@@ -2718,55 +2920,7 @@ async function onAction(e) {
     return;
   }
   if (a === "approve-book") {
-    syncDraft();
-    if (
-      !draft.title.trim() ||
-      draft.pages.some((p) => !p.ko.trim() || !p.en.trim())
-    ) {
-      toast("제목과 각 쪽의 한글·영어 글을 확인해 주세요.");
-      return;
-    }
-    const book = draft,
-      cacheAudio = document.querySelector("#cache-audio-approval")?.checked;
-    try {
-      await checkBookAtLevel(book, { rewrite: false, showProgress: true });
-    } catch (error) {
-      if (error.name === "AbortError") return;
-      toast("읽기 검사: " + error.message);
-    }
-    const autoImagesReady =
-      book.autoGenerationComplete &&
-      book.cover?.imageAssetId &&
-      book.pages.every(
-        (page) => page.imageAssetId && page.imageMeta?.quality === "final",
-      );
-    const finalizeImages =
-      !autoImagesReady &&
-      ((book.generationSnapshot?.imageEngine ||
-        getActiveWorld(state).imageEngine) !== "sample" ||
-        book.pages.some(
-          (p) => p.imageAssetId && p.imageMeta?.quality === "draft",
-        ));
-    if (finalizeImages) {
-      const world = getActiveWorld(state),
-        estimate = estimateBookCost({
-          engine: book.generationSnapshot?.imageEngine || world.imageEngine,
-          pageCount: book.pages.length,
-          size: "1536x1024",
-          quality: "final",
-          config: {
-            ...world.providerConfig?.[
-              book.generationSnapshot?.imageEngine || world.imageEngine
-            ],
-            ...book.generationSnapshot?.imageModelConfig,
-          },
-        });
-      showModal(
-        `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">표지 1장과 본문 ${book.pages.length}쪽을 최종 품질로 생성합니다. 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
-      );
-      document.querySelector("#book-final-confirm").onclick = () =>
-        finalizeBook(book, { finalizeImages, cacheAudio });
-    } else await finalizeBook(book, { cacheAudio });
+    await approveDraft();
     return;
   }
   if (a === "new-character") {
@@ -3046,25 +3200,58 @@ document.addEventListener("submit", async (e) => {
     return;
   }
   if (f.id === "settings-form") {
+    // Read everything first and apply all-or-nothing: a reduced form (simple
+    // settings) or a missing field keeps the stored value instead of half-saving.
+    const keys = [
+        "defaultLanguage",
+        "defaultPages",
+        "defaultLayout",
+        "dailyLimit",
+        "rate",
+      ],
+      readingKeys = [
+        "defaultKoreanLevel",
+        "defaultEnglishLevel",
+        "srLexile",
+        "readingCheckerMode",
+        "pendingReadingSuggestions",
+      ],
+      before = Object.fromEntries(
+        [...keys, ...readingKeys].map((k) => [
+          k,
+          Object.hasOwn(state.settings, k)
+            ? structuredClone(state.settings[k])
+            : undefined,
+        ]),
+      ),
+      restore = () => {
+        for (const [k, value] of Object.entries(before))
+          if (value === undefined) delete state.settings[k];
+          else state.settings[k] = value;
+      };
     try {
-      readReadingSettings(state.settings);
+      const next = {};
+      for (const k of keys)
+        next[k] = f.querySelector("#" + k)?.value ?? state.settings[k];
+      for (const k of ["defaultPages", "dailyLimit", "rate"]) {
+        next[k] = Number(next[k]);
+        if (!Number.isFinite(next[k]))
+          throw new Error("설정 값을 확인해 주세요.");
+      }
+      if (document.getElementById("default-koreanLevel"))
+        readReadingSettings(state.settings);
+      Object.assign(state.settings, next);
     } catch (error) {
+      restore();
       e.settingsFailed = true;
       toast(error);
       return;
     }
-    for (const k of [
-      "defaultLanguage",
-      "defaultPages",
-      "defaultLayout",
-      "dailyLimit",
-      "rate",
-    ])
-      state.settings[k] = document.getElementById(k).value;
-    for (const k of ["defaultPages", "dailyLimit", "rate"])
-      state.settings[k] = Number(state.settings[k]);
     if (save()) toast("우리 가족의 기본 설정을 저장했어요.");
-    else e.settingsFailed = true;
+    else {
+      restore();
+      e.settingsFailed = true;
+    }
     return;
   }
   if (f.id === "change-pin-form") {
@@ -3304,6 +3491,11 @@ configureFullAutoUI({
   getCloudAccount: () =>
     cloudStatus.authenticated ? cloudStatus.user?.id : null,
   onStarted: () => {
+    // The simple screen shows its own progress; never navigate away from it.
+    if (view === "create" && simpleCreateActive()) {
+      render();
+      return;
+    }
     closeModal();
     view = "library";
     wizard = null;
@@ -3315,7 +3507,17 @@ configureFullAutoUI({
     return structuredClone(wizard);
   },
   buildBook: buildStoryResultBook,
+  openSimpleReview: async (jobId) => {
+    closeModal();
+    await openSimpleJob(simpleCtx, jobId);
+  },
   openReview: async (job) => {
+    // Simple mode reviews a finished FULL AUTO book in step ④ as well.
+    if (uiMode === "simple") {
+      closeModal();
+      await openSimpleJob(simpleCtx, job.id);
+      return;
+    }
     closeModal();
     draft = job.book;
     editPage = 0;
@@ -3326,6 +3528,42 @@ configureFullAutoUI({
     window.scrollTo(0, 0);
   },
 });
+const simpleCtx = {
+  getState: () => state,
+  getWizard: () => wizard,
+  setWizard: (next) => {
+    wizard = next;
+  },
+  getDraft: () => draft,
+  setDraft: (next) => {
+    draft = next;
+  },
+  getEditPage: () => editPage,
+  setEditPage: (next) => {
+    editPage = next;
+  },
+  setView: (next) => {
+    view = next;
+  },
+  isSimpleMode: () => uiMode === "simple",
+  isSimpleView: () => view === "create" && simpleCreateActive(),
+  isParent: () => parentUnlocked && !childMode,
+  save,
+  render,
+  toast,
+  showModal,
+  closeModal,
+  modalHeader,
+  protectedAction,
+  heading,
+  materialPortrait,
+  cover,
+  illustration,
+  checkBook: (book) => checkBookAtLevel(book, { rewrite: false }),
+  approveBook: () => approveDraft(),
+  openCredentialSettings,
+};
+configureSimpleCreate(simpleCtx);
 configureStoryUI({
   getState: () => state,
   save,
@@ -3535,6 +3773,8 @@ hydrateImageAssets(state)
         ) &&
         !(view === "create" && wizard) &&
         !(view === "edit" && draft) &&
+        !simpleDraftOpen() &&
+        !isSimpleBusy() &&
         !reader &&
         !finalizeController &&
         (!modalRoot.querySelector(".modal-overlay") ||
