@@ -26,12 +26,43 @@ import {
   fullAutoJobForBook,
   recordFullAutoBookUsage,
   recordFullAutoBookImage,
+  isPageImageStale,
+  clearPageImageStale,
 } from "../full-auto.js";
+
+export { isPageImageStale };
 
 const clone = (value) => (value == null ? value : structuredClone(value)),
   now = () => new Date().toISOString();
 /** One page-text rewrite: outline, prose and neighbouring pages in, one page out. */
 const PAGE_REWRITE_TOKENS = { input: 9000, output: 1200 };
+
+/** Books with a page operation in flight in this tab; FULL AUTO refuses to run them meanwhile. */
+const busyBooks = new Set();
+/** True while a page text or image operation on this book is in flight in this tab. */
+export function isPageOperationBusy(bookId) {
+  return !!bookId && busyBooks.has(bookId);
+}
+/**
+ * One page operation per book at a time: two paid requests on one book could
+ * each buy the same coherence review, and a text edit landing during that
+ * page's drawing would be lost.
+ */
+async function exclusive(book, work) {
+  const id = book?.id;
+  if (id && busyBooks.has(id))
+    throw Error(
+      "이 책의 다른 쪽 작업이 아직 끝나지 않았어요. 끝난 뒤에 다시 시도해 주세요.",
+    );
+  if (id) busyBooks.add(id);
+  try {
+    return await work();
+  } finally {
+    if (id) busyBooks.delete(id);
+  }
+}
+const runOwnsBook = (state, book) =>
+  fullAutoJobForBook(state, book)?.status === "running";
 
 function pageIndexOf(book, pageIndex) {
   const index = Number(pageIndex);
@@ -99,8 +130,10 @@ function writePageText(book, index, ko, en) {
   delete page.reviewed;
   delete page.reviewedAt;
   if (page.imageAssetId || page.imageUrl) {
+    // Bound to this image: a redraw by any path makes the mark obsolete (isPageImageStale).
     page.imageStale = true;
     page.imageStaleAt = now();
+    page.imageStaleAssetId = page.imageAssetId || page.imageUrl;
   }
   recheckBook(book);
   return true;
@@ -146,16 +179,21 @@ function usageRow(result, extra) {
     at: now(),
   };
 }
+async function saveOnly(save) {
+  if (typeof save === "function" && (await save()) === false)
+    throw Error("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+}
 /** Keep the job's book reference, the story draft and storage in step with the edited book. */
 async function commit(state, book, save) {
+  // A run that started meanwhile owns job.book and the draft: only store the kept cost rows.
+  if (runOwnsBook(state, book)) return saveOnly(save);
   const job = fullAutoJobForBook(state, book);
   if (job) {
     if (job.book?.id === book.id) job.book = book;
     job.updatedAt = now();
   }
   syncStoryDraft(book, state);
-  if (typeof save === "function" && (await save()) === false)
-    throw Error("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+  await saveOnly(save);
 }
 
 /**
@@ -164,15 +202,18 @@ async function commit(state, book, save) {
  * FULL AUTO job, including a failed paid attempt. A demo book returns
  * {changed:false, demo:true} without a request.
  */
-export async function rewriteBookPage(
-  state,
-  book,
-  pageIndex,
-  { signal, save, violations, engine, rewrite = rewriteStoryPage } = {},
-) {
+export async function rewriteBookPage(state, book, pageIndex, options = {}) {
   const index = pageIndexOf(book, pageIndex);
   assertNotRunning(state, book);
   if (book.textDemo) return { changed: false, demo: true };
+  return exclusive(book, () => rewritePage(state, book, index, options));
+}
+async function rewritePage(
+  state,
+  book,
+  index,
+  { signal, save, violations, engine, rewrite = rewriteStoryPage },
+) {
   if (!book.outline || !book.prose || !book.storyInput)
     throw Error(
       "이 책은 쪽 단위로 글을 다시 만들 수 없어요. 이야기 다듬기에서 직접 고쳐 주세요.",
@@ -254,6 +295,17 @@ export async function rewriteBookPage(
   }
   const row = usageRow(result, extra);
   if (result?.meta?.requests !== 0) recordTextUsage(state, book, row);
+  // A FULL AUTO run started while the request was in flight: keep its cost, leave the page as the run sees it.
+  if (runOwnsBook(state, book)) {
+    try {
+      await saveOnly(save);
+    } catch {
+      /* Report the refusal, not the follow-up save. */
+    }
+    throw Error(
+      "FULL AUTO가 이 책을 만들기 시작해서 다시 쓴 글을 적용하지 않았어요. 사용한 요청 비용은 기록했어요.",
+    );
+  }
   const next =
     result?.data?.pages?.find((p) => p.pageNo === pageNo) ||
     result?.data?.pages?.[index];
@@ -284,20 +336,22 @@ export async function applyPageText(
 ) {
   const index = pageIndexOf(book, pageIndex);
   assertNotRunning(state, book);
-  const page = book.pages[index],
-    changed = writePageText(
-      book,
-      index,
-      ko === undefined ? (page.ko ?? page.textKo ?? "") : String(ko),
-      en === undefined ? (page.en ?? page.textEn ?? "") : String(en),
-    );
-  if (changed) await commit(state, book, save);
-  return {
-    changed,
-    page,
-    storyCheck: book.storyCheck || null,
-    imageStale: !!page.imageStale,
-  };
+  return exclusive(book, async () => {
+    const page = book.pages[index],
+      changed = writePageText(
+        book,
+        index,
+        ko === undefined ? (page.ko ?? page.textKo ?? "") : String(ko),
+        en === undefined ? (page.en ?? page.textEn ?? "") : String(en),
+      );
+    if (changed) await commit(state, book, save);
+    return {
+      changed,
+      page,
+      storyCheck: book.storyCheck || null,
+      imageStale: !!page.imageStale,
+    };
+  });
 }
 
 /** The parent's per-page "좋아요" mark; cleared again whenever the page text changes. */
@@ -316,12 +370,16 @@ export async function setPageReviewed(
   return page;
 }
 
-/** Page indexes without a current final image (missing, draft quality or stale after a text edit). */
+/**
+ * Page indexes without a current final image (missing, draft quality or stale
+ * after a text edit). A stale mark left on an image that was redrawn since is
+ * dropped, so that page is not counted or bought again.
+ */
 export function pagesNeedingImages(book) {
   return (book?.pages || []).flatMap((page, index) =>
     !page?.imageAssetId ||
     page.imageMeta?.quality !== "final" ||
-    page.imageStale
+    isPageImageStale(page)
       ? [index]
       : [],
   );
@@ -439,34 +497,37 @@ export async function generateBookPageImage(
     throw Error(
       "그림 설정이 아직 준비되지 않았어요. 자동 작업을 '그림 준비' 단계(pages)까지 이어서 캐릭터·배경 시트를 먼저 준비해 주세요.",
     );
-  const before = book.pages[index].imageAssetId,
-    reviewsBefore = book.textUsage?.calls?.length || 0;
-  let failure = null;
-  try {
-    await generate(state, book, index, {
-      quality: "final",
-      signal,
-      changeComposition,
-      onProgress,
-    });
-  } catch (error) {
-    failure = error;
-  }
-  const page = book.pages[index];
-  // Success, or a paid image that was saved before an abort or error.
-  if (page?.imageAssetId && (!failure || page.imageAssetId !== before)) {
-    delete page.imageStale;
-    delete page.imageStaleAt;
-    recordFullAutoBookImage(state, book, page);
-  }
-  // A text edit makes generateScene buy a coherence review first; keep it on the job too.
-  for (const row of (book.textUsage?.calls || []).slice(reviewsBefore))
-    recordFullAutoBookUsage(state, book, row);
-  try {
-    await commit(state, book, save);
-  } catch (saveError) {
-    if (!failure) throw saveError;
-  }
-  if (failure) throw failure;
-  return page;
+  return exclusive(book, async () => {
+    const before = book.pages[index].imageAssetId,
+      reviewsBefore = book.textUsage?.calls?.length || 0;
+    let failure = null;
+    try {
+      await generate(state, book, index, {
+        quality: "final",
+        signal,
+        changeComposition,
+        onProgress,
+      });
+    } catch (error) {
+      failure = error;
+    }
+    // Bookkeeping for a paid image always happens, even if a FULL AUTO run started
+    // meanwhile: a lost record or a stale mark left on it would buy the page again.
+    const page = book.pages[index];
+    // Success, or a paid image that was saved before an abort or error.
+    if (page?.imageAssetId && (!failure || page.imageAssetId !== before)) {
+      clearPageImageStale(page);
+      recordFullAutoBookImage(state, book, page);
+    }
+    // A text edit makes generateScene buy a coherence review first; keep it on the job too.
+    for (const row of (book.textUsage?.calls || []).slice(reviewsBefore))
+      recordFullAutoBookUsage(state, book, row);
+    try {
+      await commit(state, book, save);
+    } catch (saveError) {
+      if (!failure) throw saveError;
+    }
+    if (failure) throw failure;
+    return page;
+  });
 }

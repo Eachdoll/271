@@ -4,7 +4,7 @@ import {seedState} from '../dist/engine.js';
 import {migrateWorldState,getActiveWorld,getCharacterSheet} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {createFullAutoJob,runFullAuto,estimateFullAutoCost,fullAutoPayload,preflightFullAuto,selectionMaterialPlan,fullAutoProgress} from '../dist/full-auto.js';
-import {applyPageText} from '../dist/story-generation/page-tools.js';
+import {applyPageText,pagesNeedingImages,generateBookPageImage,isPageOperationBusy} from '../dist/story-generation/page-tools.js';
 import {captureBookGenerationSnapshot} from '../dist/image-generation/world.js';
 import {applySeriesContinuity} from '../dist/story-generation/continuity.js';
 import {inspectAutoMaterialPlan,materializeAutoPlan} from '../dist/story-generation/auto-materials.js';
@@ -177,7 +177,8 @@ test('a series text hold keeps the series name and applies its continuity snapsh
  const job=createFullAutoJob(state,{...wizard,characterIds:['yuha','toto'],previousBookId:'seed-moon'},{stopBefore:'text',planMode:'selection'}),{ops}=countingOps(state,{failPage:-1});
  await runFullAuto(state,job,{operations:ops,buildBook:seriesBuild});
  assert.equal(job.status,'text-review');assert.deepEqual([seen[0].previousBookId,seen[0].series],[null,'유하의 작은 우주']);
- assert.equal(job.book.series,'유하의 작은 우주');assert.equal(job.book.generationSnapshot,undefined);assert.equal(job.book.previousBookId,undefined);
+ assert.equal(job.book.series,'유하의 작은 우주');assert.equal(job.book.generationSnapshot,undefined);
+ assert.equal(job.book.previousBookId,'seed-moon','the held book names its series link before the continuity snapshot exists');assert.equal(job.seriesContinuityDeferred,true);
  assert.equal(state.storyDrafts[job.storyDraftId].wizard.previousBookId,'seed-moon','the draft keeps the real series link');
  job.stopBefore='pages';
  await runFullAuto(state,job,{operations:ops,buildBook:seriesBuild});
@@ -226,4 +227,119 @@ test('exported runner holds without navigating, reports numeric progress and rel
  assert.ok(toasts.some(t=>/그림 만들 준비/.test(t)));
  await stopFullAutoJob(job.id);assert.equal(job.status,'pages-ready','a parked job keeps its hold');
  await assert.rejects(runFullAutoJob(job.id,{stopBefore:'images'}),/멈출 단계/);assert.equal(job.stopBefore,'pages');
+});
+
+// ---- FIX-B1: stale marks bound to their image, series holds in the pro editor, page-tool busy, stop recovery, review usage ----
+test('a page edited in simple mode and redrawn by another path is not bought again on release',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'}),{ops,calls}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});job.stopBefore=null;
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});assert.equal(calls.scene.length,12);
+ const page=job.book.pages[4],old=page.imageAssetId;
+ await applyPageText(state,job.book,4,{ko:page.ko+' 다시 봐요.'});
+ assert.deepEqual([page.imageStale,page.imageStaleAssetId],[true,old]);
+ // The pro editor redraws page 4 in place and leaves the simple-mode mark behind.
+ Object.assign(page,{imageAssetId:'image-pro-redraw-0004',imageUrl:'asset:image-pro-redraw-0004',imageMeta:{quality:'final'}});
+ assert.deepEqual(pagesNeedingImages(job.book),[]);
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(calls.scene.length,12,'no page is bought again');assert.equal(job.status,'review');
+ assert.deepEqual([page.imageStale,page.imageStaleAt,page.imageStaleAssetId,page.imageAssetId],[undefined,undefined,undefined,'image-pro-redraw-0004']);
+ assert.ok(job.completed['page:4']);
+});
+
+test('the page step keeps a coherence review bought before drawing on the job usage, once',async()=>{
+ const {state,wizard}=setup();
+ const job=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'}),{ops}=countingOps(state,{failPage:-1});
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});job.stopBefore=null;
+ const scene=ops.scene,review=(b,index,extra={})=>{b.textUsage.calls.push({input:300,output:40,stage:'coherence',requests:1,costUsdEstimated:.01,reviewFor:index,...extra});};
+ let failed=false;
+ ops.scene=async(s,b,index,o)=>{
+  if(index===0)review(b,0);
+  if(index===1&&!failed){failed=true;review(b,1,{failed:true});throw Object.assign(Error('검사 응답을 읽지 못했어요'),{usage:{input:300,output:40},meta:{stage:'coherence',requests:1}});}
+  return scene(s,b,index,o);
+ };
+ await assert.rejects(runFullAuto(state,job,{operations:ops,buildBook:richBuildBook}),/검사 응답/);
+ const rows=()=>job.usage.calls.filter(c=>c.stage==='coherence');
+ assert.deepEqual(rows().map(c=>c.reviewFor),[0,1],'the paid review on page 0 and the failed one on page 1, each once');
+ await runFullAuto(state,job,{operations:ops,buildBook:richBuildBook});
+ assert.equal(job.status,'review');assert.deepEqual(rows().map(c=>c.reviewFor),[0,1]);
+ assert.equal(job.usage.calls.filter(c=>c.input===300).length,2);
+});
+
+const clickListeners=[];
+globalThis.document||={addEventListener(type,listener){if(type==='click')clickListeners.push(listener);},querySelector(){return null;}};
+function uiContext(state,extra={}){
+ const ui={toasts:[],opened:[],simple:[],saves:0,pending:null};
+ configureFullAutoUI({getState:()=>state,save:()=>{ui.saves++;return true;},toast:m=>ui.toasts.push(String(m?.message||m)),isParent:()=>true,protectedAction:f=>(ui.pending=f()),onStarted(){},buildBook:richBuildBook,openReview:async job=>{ui.opened.push(job.id);},showModal(){},closeModal(){},modalHeader:t=>t,...extra});
+ ui.click=async(action,id)=>{const el={dataset:{fullAutoAction:action,id}};el.closest=()=>el;for(const listener of clickListeners)listener({target:el,preventDefault(){}});await ui.pending;};
+ return ui;
+}
+const seriesBuilder=state=>p=>{const book={...richBuildBook(p),series:p.wizard.series||'새 시리즈'};const previous=state.books.find(b=>b.id===p.wizard.previousBookId);if(previous)applySeriesContinuity(state,book,previous,{...p.wizard});else{try{captureBookGenerationSnapshot(state,book);}catch(error){book.sheetSetupNotice=error.message;}}return book;};
+
+test('a held series book never opens in the pro editor before its hold is released to pages',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),{ops}=countingOps(state,{failPage:-1});
+ const job=createFullAutoJob(state,{...wizard,characterIds:['yuha','toto'],previousBookId:'seed-moon'},{stopBefore:'text',planMode:'selection'});
+ await runFullAuto(state,job,{operations:ops,buildBook:seriesBuilder(state)});
+ assert.equal(job.status,'text-review');assert.equal(job.seriesContinuityDeferred,true);
+ const ui=uiContext(state);
+ for(const action of ['simple-review','review']){await ui.click(action,job.id);assert.match(ui.toasts.at(-1),/시리즈 편.*그림 준비/);}
+ assert.deepEqual(ui.opened,[],'refused, nothing opened');assert.equal(job.status,'text-review');
+ // The simple screen may open it: it releases the hold before any image work.
+ const simple=uiContext(state,{openSimpleReview:async id=>{simple.simple.push(id);}});
+ await simple.click('simple-review',job.id);assert.deepEqual(simple.simple,[job.id]);
+ // A plain (non-series) text hold still falls back to the pro editor.
+ const plain=createFullAutoJob(state,wizard,{stopBefore:'text',planMode:'selection'});
+ await runFullAuto(state,plain,{operations:ops,buildBook:richBuildBook});
+ const fallback=uiContext(state);await fallback.click('simple-review',plain.id);assert.deepEqual(fallback.opened,[plain.id]);
+ // After the release the series snapshot exists and the editor may open the book.
+ job.stopBefore='pages';await runFullAuto(state,job,{operations:ops,buildBook:seriesBuilder(state)});
+ assert.equal(job.book.generationSnapshot.continuity.previousBookId,'seed-moon');
+ const released=uiContext(state);await released.click('simple-review',job.id);assert.deepEqual(released.opened,[job.id]);
+});
+
+test('FULL AUTO refuses to run a book while a page tool is working on it',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),ui=uiContext(state);
+ const job=await startFullAutoJob(wizard,{demo:true,stopBefore:'pages'});
+ assert.equal(job.status,'pages-ready');
+ let finish;const gate=new Promise(resolve=>{finish=resolve;});
+ const drawing=generateBookPageImage(state,job.book,2,{save:()=>true,generate:async(s,b,i)=>{await gate;Object.assign(b.pages[i],{imageAssetId:'image-page-tool-0002',imageUrl:image,imageMeta:{quality:'final'}});return b.pages[i];}});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(isPageOperationBusy(job.bookId),true);
+ await assert.rejects(runFullAutoJob(job.id,{stopBefore:null}),/쪽 글·그림 작업이 진행 중/);
+ assert.equal(job.stopBefore,'pages','the hold is not moved');assert.equal(job.status,'pages-ready');
+ await ui.click('resume',job.id);assert.match(ui.toasts.at(-1),/쪽 글·그림 작업이 진행 중/);assert.equal(job.status,'pages-ready');
+ finish();await drawing;assert.equal(isPageOperationBusy(job.bookId),false);
+ await runFullAutoJob(job.id);assert.equal(job.status,'pages-ready');
+});
+
+test('stopping a job a closed tab left running returns it to its hold once no tab holds the run',async()=>{
+ emptyVault();
+ const {state,wizard}=setup(),ui=uiContext(state),{ops}=countingOps(state,{failPage:-1});
+ const text=createFullAutoJob(state,wizard,{stopBefore:'text',planMode:'selection'});
+ await runFullAuto(state,text,{operations:ops,buildBook:richBuildBook});
+ const pages=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'});
+ await runFullAuto(state,pages,{operations:ops,buildBook:richBuildBook});
+ const early=createFullAutoJob(state,wizard,{stopBefore:'pages',planMode:'selection'});
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'navigator'),held=new Set(),asked=[];
+ const useNavigator=value=>Object.defineProperty(globalThis,'navigator',{value,configurable:true,writable:true});
+ useNavigator({locks:{request:async(name,options,callback)=>{asked.push([name,options.ifAvailable]);return callback(held.has(name)?null:{name});}}});
+ try{
+  for(const job of [text,pages,early])Object.assign(job,{status:'running',currentStep:'pagination'});
+  // Another tab still runs it: nothing changes.
+  held.add('donghwa-full-auto-'+text.id);
+  await stopFullAutoJob(text.id);assert.equal(text.status,'running');
+  await assert.rejects(applyPageText(state,text.book,0,{ko:'x'}),/만드는 중/);
+  held.clear();const saves=ui.saves;
+  await stopFullAutoJob(text.id);
+  assert.deepEqual([text.status,text.phase,text.currentStep],['text-review','글 완성 · 쪽 검수',null]);assert.ok(ui.saves>saves);
+  assert.deepEqual(asked.at(-1),['donghwa-full-auto-'+text.id,true]);
+  assert.equal((await applyPageText(state,text.book,0,{ko:'유하가 다시 웃어요.'})).changed,true,'page tools work again');
+  await stopFullAutoJob(pages.id);assert.equal(pages.status,'pages-ready');
+  await stopFullAutoJob(early.id);assert.deepEqual([early.status,early.currentStep],['paused','pagination'],'never reached its hold');
+  // Without Web Locks, a tab with no live run of its own releases it too.
+  useNavigator({});text.status='running';
+  await stopFullAutoJob(text.id);assert.equal(text.status,'text-review');
+ }finally{if(descriptor)Object.defineProperty(globalThis,'navigator',descriptor);else delete globalThis.navigator;}
 });

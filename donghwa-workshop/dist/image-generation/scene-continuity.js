@@ -56,7 +56,14 @@ export function previousSceneReferences(book, snapshot, index) {
     .slice(0, index)
     .map((page, i) => ({ page, index: i }))
     .filter(({ page, index: i }) => {
-      if ((!page.imageAssetId && !page.imageUrl) || page.imageStale)
+      const image = page.imageAssetId || page.imageUrl;
+      // A text-edit stale mark covers only the image it was set on; a redrawn page is a reference again.
+      if (
+        !image ||
+        (page.imageStale === true &&
+          (page.imageStaleAssetId === undefined ||
+            page.imageStaleAssetId === image))
+      )
         return false;
       const captured = page.imageSceneSnapshot;
       if (

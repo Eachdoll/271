@@ -10,12 +10,18 @@ import {
   runFullAuto,
   FULL_AUTO_STOPS,
 } from "./full-auto.js";
+import { isPageOperationBusy } from "./story-generation/page-tools.js";
 /** Jobs parked by a hold: nothing is running and nothing is bought until a caller releases them. */
 const HOLD_LABELS = {
   "text-review": "글 검수 대기",
   "pages-ready": "그림 준비 완료",
 };
 const isHeld = (job) => Object.hasOwn(HOLD_LABELS, job?.status);
+const PAGE_BUSY_MESSAGE =
+  "이 책의 쪽 글·그림 작업이 진행 중이에요. 끝난 뒤에 이어 만들어 주세요.";
+/** A page tool is rewriting or drawing this job's book in this tab. */
+const pageWorkBusy = (job) =>
+  isPageOperationBusy(job?.bookId) || isPageOperationBusy(job?.book?.id);
 const esc = (value) =>
   String(value ?? "").replace(
     /[&<>"']/g,
@@ -118,6 +124,11 @@ async function execute(job, { navigate = true, onProgress } = {}) {
     api.toast(
       "이미 제작 중인 작업이 있어요. 책장에서 진행 상태를 확인해 주세요.",
     );
+    return;
+  }
+  // A paid page rewrite or drawing in flight would race the run for the same page.
+  if (pageWorkBusy(job)) {
+    api.toast(PAGE_BUSY_MESSAGE);
     return;
   }
   const state = api.getState(),
@@ -223,6 +234,35 @@ async function execute(job, { navigate = true, onProgress } = {}) {
     }
   }
 }
+/**
+ * Where a job left 'running' by a closed or crashed tab goes back to: the
+ * hold it had reached (text built for 'text', snapshot frozen for 'pages'),
+ * otherwise 'paused'. Completed steps stay completed either way.
+ */
+function recoveredStatus(job) {
+  if (job.stopBefore === "text" && job.book)
+    return ["text-review", "글 완성 · 쪽 검수"];
+  if (job.stopBefore === "pages" && job.book?.generationSnapshot)
+    return ["pages-ready", "그림 준비 완료"];
+  return ["paused", "중지 · 완료한 결과 보관"];
+}
+/**
+ * Run `work` only when no tab holds this job's run lock. Without Web Locks
+ * this tab can only vouch for itself, so it needs no live run here at all.
+ */
+async function whenRunLockFree(jobId, work) {
+  const locks = globalThis.navigator?.locks;
+  if (!locks?.request) return controller ? false : work();
+  try {
+    return await locks.request(
+      "donghwa-full-auto-" + jobId,
+      { ifAvailable: true },
+      (lock) => (lock ? work() : false),
+    );
+  } catch {
+    return false;
+  }
+}
 async function stopJob(job) {
   const running = currentJob?.id === job.id && !!controller;
   if (running) controller.abort();
@@ -236,6 +276,20 @@ async function stopJob(job) {
     job.stopRequestedAt = response.requestedAt;
     api.save();
   }
+  // 'running' but not live in this tab: a closed or crashed tab left it. Release it
+  // when no other tab holds the run, so page tools and resume work again.
+  if (!running && job.status === "running")
+    await whenRunLockFree(job.id, () => {
+      if (job.status !== "running") return false;
+      const [status, phase] = recoveredStatus(job);
+      job.status = status;
+      job.phase = phase;
+      if (status !== "paused") job.currentStep = null;
+      job.stopRequestedAt = response.requestedAt;
+      job.updatedAt = new Date().toISOString();
+      api.save();
+      return true;
+    });
   refreshCards();
   api.toast(
     response.remoteError
@@ -255,10 +309,26 @@ function jobById(jobId) {
   if (!job) throw Error("자동 작업을 찾지 못했어요.");
   return job;
 }
-function assertIdleRunner() {
+function assertIdleRunner(job) {
   if (controller) throw Error("현재 자동 작업이 실행 중이에요.");
   if (!connectedApi().isParent())
     throw Error("부모 잠금을 풀고 다시 시도해 주세요.");
+  if (job && pageWorkBusy(job)) throw Error(PAGE_BUSY_MESSAGE);
+}
+/**
+ * The pro editor may only open a book whose drawing setup is final. A held
+ * series book gets the previous book's sheets, places and style only when
+ * the hold is released to 'pages'; approving it before would freeze a plain
+ * current-World snapshot and lose the series look.
+ */
+function assertEditorReady(job) {
+  if (controller) throw Error("실행 중인 작업을 먼저 중지해 주세요.");
+  if (!job.book)
+    throw Error("아직 그림 단계의 초안이 없어요. 자동 생성을 이어 주세요.");
+  if (job.seriesContinuityDeferred && !job.book.generationSnapshot)
+    throw Error(
+      "이어지는 시리즈 편이에요. 이전 편의 캐릭터·장소·화풍을 불러오도록 먼저 '그림 준비'까지 이어 만든 뒤 검토해 주세요.",
+    );
 }
 /**
  * Create and run a FULL AUTO job through the shared runner.
@@ -301,8 +371,8 @@ export async function runFullAutoJob(
   jobId,
   { stopBefore, navigate = false, onProgress } = {},
 ) {
-  assertIdleRunner();
   const job = jobById(jobId);
+  assertIdleRunner(job);
   if (stopBefore !== undefined) {
     if (!FULL_AUTO_STOPS.includes(stopBefore))
       throw Error(
@@ -318,7 +388,12 @@ export async function runFullAutoJob(
   await execute(job, { navigate, onProgress });
   return job;
 }
-/** Explicit stop: aborts a live run here and leaves a stop request for other tabs and devices. */
+/**
+ * Explicit stop: aborts a live run here and leaves a stop request for other
+ * tabs and devices. A job still marked 'running' by a closed or crashed tab
+ * goes back to the hold it reached ('text-review' / 'pages-ready') or
+ * 'paused' once no tab holds its run lock.
+ */
 export async function stopFullAutoJob(jobId) {
   connectedApi();
   const job = jobById(jobId);
@@ -377,20 +452,13 @@ export function configureFullAutoUI(context) {
             await api.openSimpleReview(job.id);
             return;
           }
-          if (controller) throw Error("실행 중인 작업을 먼저 중지해 주세요.");
-          if (!job.book)
-            throw Error(
-              "아직 그림 단계의 초안이 없어요. 자동 생성을 이어 주세요.",
-            );
+          // Fallback to the pro editor.
+          assertEditorReady(job);
           await api.openReview(job);
           return;
         }
         if (action === "review") {
-          if (controller) throw Error("실행 중인 작업을 먼저 중지해 주세요.");
-          if (!job.book)
-            throw Error(
-              "아직 그림 단계의 초안이 없어요. 자동 생성을 이어 주세요.",
-            );
+          assertEditorReady(job);
           await api.openReview(job);
         }
       } catch (error) {

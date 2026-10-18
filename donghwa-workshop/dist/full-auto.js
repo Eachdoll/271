@@ -443,16 +443,79 @@ function recordImage(job, result) {
   for (const old of result.imageHistory || [])
     add(old.imageAssetId, old.imageMeta);
 }
-/** Keep a usage row for paid text work done on a FULL AUTO book outside runFullAuto (upsert by callId). */
-export function recordFullAutoBookUsage(state, book, row) {
-  const job = fullAutoJobForBook(state, book);
-  if (!job || !row) return false;
+/** Upsert one usage row into the job by callId (rows without a callId are appended). */
+function upsertJobUsage(job, row) {
   const calls = ((job.usage ||= { calls: [] }).calls ||= []),
     index = row.callId ? calls.findIndex((c) => c.callId === row.callId) : -1;
   if (index < 0) calls.push(clone(row));
   else calls[index] = clone(row);
+}
+/** Keep a usage row for paid text work done on a FULL AUTO book outside runFullAuto (upsert by callId). */
+export function recordFullAutoBookUsage(state, book, row) {
+  const job = fullAutoJobForBook(state, book);
+  if (!job || !row) return false;
+  upsertJobUsage(job, row);
   job.updatedAt = now();
   return true;
+}
+/**
+ * Drawing a page or the cover first buys a coherence review when the text
+ * changed; generateScene records it on book.textUsage. Copy the rows added
+ * since `from` into the job, as generateBookPageImage does.
+ */
+function copyNewBookTextUsage(job, from) {
+  for (const row of (job.book?.textUsage?.calls || []).slice(from))
+    upsertJobUsage(job, row);
+}
+const bookTextCalls = (job) => job.book?.textUsage?.calls?.length || 0;
+/** Draw a page or the cover and keep any review it bought on the job, exactly once. */
+async function withBookTextUsage(job, draw) {
+  const from = bookTextCalls(job);
+  try {
+    return await draw();
+  } catch (error) {
+    // A failed paid review is already on book.textUsage and copied below; the step must not add it again.
+    if (error && typeof error === "object" && bookTextCalls(job) > from)
+      try {
+        error.usageRecorded = true;
+      } catch {
+        /* A read-only error object keeps its own usage. */
+      }
+    throw error;
+  } finally {
+    copyNewBookTextUsage(job, from);
+  }
+}
+/** Drop a text-edit stale mark together with the image it was bound to. */
+export function clearPageImageStale(page) {
+  if (!page) return;
+  delete page.imageStale;
+  delete page.imageStaleAt;
+  delete page.imageStaleAssetId;
+}
+/**
+ * True only while the page still shows the image its text was edited under
+ * (page.imageStaleAssetId). A redraw by any path (pro editor, all pages, a
+ * page tool) replaces that image, so a leftover mark is dropped here instead
+ * of buying the page again.
+ */
+export function isPageImageStale(page) {
+  if (
+    !page ||
+    (page.imageStale === undefined &&
+      page.imageStaleAt === undefined &&
+      page.imageStaleAssetId === undefined)
+  )
+    return false;
+  const current = page.imageAssetId || page.imageUrl || null;
+  if (
+    page.imageStale === true &&
+    current !== null &&
+    current === page.imageStaleAssetId
+  )
+    return true;
+  clearPageImageStale(page);
+  return false;
 }
 /** Keep an image generated on a FULL AUTO book outside runFullAuto in the job's image usage. */
 export function recordFullAutoBookImage(state, book, result) {
@@ -483,7 +546,7 @@ function textStepKeys(job) {
 const finalImage = (page) =>
   !!page?.imageAssetId &&
   page.imageMeta?.quality === "final" &&
-  !page.imageStale;
+  !isPageImageStale(page);
 /**
  * {done, total, fraction} for the part of the run the current hold covers:
  * completed text step keys, then one step for sheets + the frozen snapshot,
@@ -549,6 +612,19 @@ function textHoldPayload(state, job, payload) {
       series: payload.wizard.series || previous.series,
     },
   };
+}
+/**
+ * A held series book is built without the previous book (no sheets yet), so
+ * name the link on the book itself: the series and previousBookId stay
+ * visible to every later screen while the continuity snapshot waits for the
+ * release to 'pages' (ensureJobSnapshot).
+ */
+function linkDeferredSeries(state, job) {
+  if (!job.seriesContinuityDeferred || !job.book) return;
+  const previous = state.books.find((b) => b.id === job.wizard.previousBookId);
+  if (!previous) return;
+  job.book.previousBookId = previous.id;
+  job.book.series ||= job.wizard.series || previous.series;
 }
 /** Freeze the book's generation snapshot once, after the sheets it references exist. */
 function ensureJobSnapshot(state, job) {
@@ -695,7 +771,7 @@ export async function runFullAuto(
         job.childGateCheckpoint = clone(error.childGateCheckpoint);
       if (error.prose) job.prose = clone(error.prose);
       if (error.pagination) job.pagination = clone(error.pagination);
-      if (error.usage)
+      if (error.usage && !error.usageRecorded)
         recordUsage(
           job,
           { usage: error.usage, meta: { ...error.meta, failed: true } },
@@ -984,6 +1060,7 @@ export async function runFullAuto(
       state.storyDrafts[job.storyDraftId].pictureBook = job.book;
       await persist();
     }
+    linkDeferredSeries(state, job);
     if (hold === "text")
       return await holdAt("text-review", "글 완성 · 쪽 검수");
     if (!job.book.generationSnapshot) {
@@ -994,34 +1071,34 @@ export async function runFullAuto(
     }
     if (hold === "pages") return await holdAt("pages-ready", "그림 준비 완료");
     for (let index = 0; index < job.book.pages.length; index++) {
-      const page = job.book.pages[index];
+      const page = job.book.pages[index],
+        edited = page?.imageStale === true;
+      // A final image drawn since the edit (any path) is current: finalImage drops the old mark.
       if (finalImage(page)) continue;
       // Text changed after this page was drawn: the old purchase no longer covers it.
-      if (page.imageStale) delete job.completed["page:" + index];
+      if (edited) delete job.completed["page:" + index];
       await step(
         "page:" + index,
         `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
-        async () => {
-          const before = job.book.pages[index]?.imageAssetId;
-          try {
-            return await ops.scene(state, job.book, index, {
-              quality: "final",
-              signal,
-              onProgress: (p) =>
-                report(p.message || `${index + 1}쪽 그림 · ${p.status}`),
-            });
-          } finally {
-            // A paid image saved before an abort is current; never redraw it on resume.
-            const current = job.book.pages[index];
-            if (current?.imageAssetId && current.imageAssetId !== before) {
-              delete current.imageStale;
-              delete current.imageStaleAt;
+        () =>
+          withBookTextUsage(job, async () => {
+            const before = job.book.pages[index]?.imageAssetId;
+            try {
+              return await ops.scene(state, job.book, index, {
+                quality: "final",
+                signal,
+                onProgress: (p) =>
+                  report(p.message || `${index + 1}쪽 그림 · ${p.status}`),
+              });
+            } finally {
+              // A paid image saved before an abort is current; never redraw it on resume.
+              const current = job.book.pages[index];
+              if (current?.imageAssetId && current.imageAssetId !== before)
+                clearPageImageStale(current);
             }
-          }
-        },
+          }),
         (r) => {
-          delete job.book.pages[index].imageStale;
-          delete job.book.pages[index].imageStaleAt;
+          clearPageImageStale(job.book.pages[index]);
           recordImage(job, r);
         },
       );
@@ -1030,7 +1107,10 @@ export async function runFullAuto(
       await step(
         "cover",
         "표지 그림 만들기",
-        () => ops.cover(state, job.book, { quality: "final", signal }),
+        () =>
+          withBookTextUsage(job, () =>
+            ops.cover(state, job.book, { quality: "final", signal }),
+          ),
         (r) => recordImage(job, r),
       );
     job.book.stage = "illustrated";

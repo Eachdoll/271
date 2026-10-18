@@ -154,16 +154,78 @@ const lower = (value) =>
   String(value || "")
     .normalize("NFKC")
     .toLowerCase();
-export function forbiddenStyleMatches(value, extras = []) {
-  const text = lower(value);
+/** Ordinary English words that are also a film title ("the pond was frozen"). */
+const TITLE_WORDS = new Set(["frozen"]);
+const STYLE_SUFFIXES = new Set(["esque", "ish", "like", "style", "styled"]);
+// "frozen like a statue" and "a frozen look" are story English; "frozen-like" and "frozen style" are not.
+const STYLE_CUE =
+  /^(?:-like|[\s"'’)\]-]*(?:style|styled|movie|film|animation|animated|princess|aesthetic|풍|스타일|처럼|같은|같이))/u;
+const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/u;
+const ASCII_WORD = /[a-z0-9]/;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function latinMatches(text, word, scope) {
+  const body = word.split(/\s+/).map(escapeRegExp).join("[\\s_-]+"),
+    left = ASCII_WORD.test(word[0]) ? "(?<![a-z0-9])" : "",
+    right = ASCII_WORD.test(word.at(-1))
+      ? "('?s|es|esque|ish|like|land|style|styled)?(?![a-z0-9])"
+      : "()",
+    pattern = new RegExp(left + body + right, "gu");
+  for (const match of text.matchAll(pattern)) {
+    // Outside style text a title word counts only next to a style cue ("frozen style", "frozen-like").
+    if (scope !== "description" || !TITLE_WORDS.has(word)) return true;
+    if (STYLE_SUFFIXES.has(match[1] || "")) return true;
+    if (STYLE_CUE.test(text.slice(match.index + match[0].length))) return true;
+  }
+  return false;
+}
+function hangulMatches(text, word, names) {
+  for (
+    let index = text.indexOf(word);
+    index >= 0;
+    index = text.indexOf(word, index + 1)
+  ) {
+    let start = index;
+    while (start > 0 && HANGUL.test(text[start - 1])) start--;
+    // "토토로" right after a known name such as 토토 is the name plus a particle, not the film.
+    const nameWithParticle =
+      start === index &&
+      names.some((name) => name.length < word.length && word.startsWith(name));
+    if (!nameWithParticle) return true;
+  }
+  return false;
+}
+/**
+ * Forbidden studio, artist, work and character names found in `value`.
+ * Latin words match on word boundaries (plus a few suffixes such as
+ * "disneyesque"); Korean words match inside a token unless the token is a
+ * known character name (`names`) followed by a particle. scope 'style' (the
+ * default) is for style text; scope 'description' is for material and story
+ * text, where an ordinary English word that is also a title ("frozen") counts
+ * only when it is used as a style reference.
+ */
+export function forbiddenStyleMatches(
+  value,
+  extras = [],
+  { names = [], scope = "style" } = {},
+) {
+  const text = lower(value),
+    known = [...new Set((names || []).map(lower).map((n) => n.trim()))].filter(
+      Boolean,
+    );
   return [
     ...new Set(
-      [...DEFAULT_FORBIDDEN_STYLE_WORDS, ...extras]
+      [...DEFAULT_FORBIDDEN_STYLE_WORDS, ...(extras || [])]
         .map(lower)
         .map((word) => word.trim())
         .filter(Boolean),
     ),
-  ].filter((word) => text.includes(word));
+  ].filter((word) =>
+    HANGUL.test(word)
+      ? hangulMatches(text, word, known)
+      : /[a-z0-9]/.test(word)
+        ? latinMatches(text, word, scope)
+        : text.includes(word),
+  );
 }
 /** Call on library changes; IDs in imported/frozen books retain their own copies. */
 export function setCustomStylePresets(state = {}) {
