@@ -68,6 +68,31 @@ export function isBookClaimedForRun(bookId) {
 }
 const RUN_OWNS_MESSAGE =
   "FULL AUTO가 이 책을 만드는 중이에요. 중지하거나 끝난 뒤에 고쳐 주세요.";
+/** The Web Lock full-auto-ui holds for the whole of a run, in whichever tab runs it. */
+const RUN_LOCK_PREFIX = "donghwa-full-auto-";
+/**
+ * Another tab may run this book's FULL AUTO job while this tab still shows
+ * the hold in memory. Before a paid page tool buys anything, refuse when any
+ * tab holds the job's run lock. Returns null (no await) without Web Locks
+ * query support or without a job; a failed query does not block the parent.
+ */
+function runLockCheck(state, book) {
+  const locks = globalThis.navigator?.locks,
+    id = fullAutoJobForBook(state, book)?.id;
+  if (!id || typeof locks?.query !== "function") return null;
+  return Promise.resolve()
+    .then(() => locks.query())
+    .then(
+      (snapshot) =>
+        (snapshot?.held || []).some(
+          (lock) => lock?.name === RUN_LOCK_PREFIX + id,
+        ),
+      () => false,
+    )
+    .then((held) => {
+      if (held) throw Error(RUN_OWNS_MESSAGE);
+    });
+}
 /**
  * One page operation per book at a time: two paid requests on one book could
  * each buy the same coherence review, and a text edit landing during that
@@ -240,6 +265,12 @@ export async function rewriteBookPage(state, book, pageIndex, options = {}) {
   const index = pageIndexOf(book, pageIndex);
   assertNotRunning(state, book);
   if (book.textDemo) return { changed: false, demo: true };
+  const lockCheck = runLockCheck(state, book);
+  if (lockCheck) {
+    await lockCheck;
+    // Checked again after the wait; exclusive() then marks the book busy in this same tick.
+    assertNotRunning(state, book);
+  }
   return exclusive(book, () => rewritePage(state, book, index, options));
 }
 async function rewritePage(
@@ -327,13 +358,14 @@ async function rewritePage(
     }
     throw error;
   }
-  const next =
-      result?.data?.pages?.find((p) => p?.pageNo === pageNo) ||
-      result?.data?.pages?.[index],
+  // A malformed response (pages not an array) is a billed response without a usable page.
+  const pages = Array.isArray(result?.data?.pages) ? result.data.pages : [],
+    next = pages.find((p) => p?.pageNo === pageNo) || pages[index],
+    // Every page carries both languages (validateStoryPage): a blank one would wipe the page.
     usable =
       !!next &&
       typeof next === "object" &&
-      ["textKo", "textEn"].some(
+      ["textKo", "textEn"].every(
         (key) => typeof next[key] === "string" && next[key].trim(),
       ),
     paid = result?.meta?.requests !== 0,
@@ -365,13 +397,7 @@ async function rewritePage(
     );
   }
   const page = book.pages[index],
-    changed = writePageText(
-      state,
-      book,
-      index,
-      String(next.textKo ?? page.ko ?? ""),
-      String(next.textEn ?? page.en ?? ""),
-    );
+    changed = writePageText(state, book, index, next.textKo, next.textEn);
   await commit(state, book, save);
   return {
     changed,
@@ -553,6 +579,12 @@ export async function generateBookPageImage(
     throw Error(
       "그림 설정이 아직 준비되지 않았어요. 자동 작업을 '그림 준비' 단계(pages)까지 이어서 캐릭터·배경 시트를 먼저 준비해 주세요.",
     );
+  const lockCheck = runLockCheck(state, book);
+  if (lockCheck) {
+    await lockCheck;
+    // Checked again after the wait; exclusive() then marks the book busy in this same tick.
+    assertNotRunning(state, book);
+  }
   return exclusive(book, async () => {
     const before = book.pages[index].imageAssetId,
       reviewsBefore = book.textUsage?.calls?.length || 0;

@@ -116,3 +116,20 @@ test('rendered selectors retain chosen defaults and escape material names',()=>{
   assert.ok(!html.includes('<script>'));
   assert.match(renderWardrobeCardActions(state.characters[0]),/옷장 1벌/);
 });
+
+test('the wardrobe pre-check reads parent text like a scene request does: material scope and the whole cast', ()=>{
+  const {state}=fixture(),variant=state.characters[0].wardrobe[0];
+  state.characters.push({id:'toto',name:'토토',nameEn:'Toto',kind:'animal',version:1,characterSheets:[],wardrobe:[]});
+  const request=description=>createVariantGenerationRequest(state,'yuha',{...variant,description},'front',7);
+  // A colour named after ice and a gift from another character are ordinary wardrobe text.
+  for (const description of ['frozen-lake blue scarf','a coat the colour of a frozen pond','토토로부터 받은 목도리'])
+    assert.doesNotThrow(()=>request(description),description);
+  // The title with a cue, a brand and the film's name are refused before any request.
+  for (const description of ['Frozen style dress','a dress like Frozen','Disney princess gown','토토로봇 무늬 잠옷','엘사처럼 파란 드레스'])
+    assert.throws(()=>request(description),/옷장 설명/,description);
+  assert.throws(()=>createVariantGenerationRequest(state,'yuha',{...variant,name:'Frozen 2 outfit'},'front',7),/옷장 설명/);
+  // The request names the same parts and names, so the provider checks exactly what was pre-checked.
+  const ok=request('frozen-lake blue scarf');
+  assert.deepEqual(ok.forbiddenWordCheck.text,['잠옷','frozen-lake blue scarf']);
+  assert.deepEqual(ok.forbiddenWordCheck.names,['유하','Yuha','토토','Toto']);
+});

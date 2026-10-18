@@ -2183,6 +2183,39 @@ export async function rewriteStoryPage(
     sceneOnly ? SCENE_REWRITE_SCHEMA : PAGE_SCHEMA,
     options,
   );
+  try {
+    return finishPageRewrite(
+      result,
+      pagination,
+      index,
+      original,
+      outline,
+      input,
+      violations,
+      sceneOnly,
+      options,
+    );
+  } catch (error) {
+    // The request was billed: a caller recording the failed row keeps its real tokens and cost.
+    if (error && typeof error === "object" && Object.isExtensible(error)) {
+      error.usage ??= result.usage;
+      error.meta ??= result.meta;
+    }
+    throw error;
+  }
+}
+/** Validate and apply one rewritten page (or scene action) after the paid request. */
+function finishPageRewrite(
+  result,
+  pagination,
+  index,
+  original,
+  outline,
+  input,
+  violations,
+  sceneOnly,
+  options,
+) {
   const next = clone(pagination);
   if (sceneOnly) {
     if (
