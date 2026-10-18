@@ -539,3 +539,39 @@ test('FIX-IMG-3 scene briefs are lenient story text; app scaffolding is never ch
   // The plot ledger and fixed instructions stay outside the check.
   assert.match(sceneGenerationRequest(state, book, 1).prompt, /LOCKED EVENT AND STATE LEDGER/);
 });
+
+test('a friend or place FULL AUTO wrote is story text until a parent edits it', async () => {
+  const {updateBackground, updateCharacter} = await import('../dist/management.js');
+  const {backgroundSheetRequest} = await import('../dist/background-sheets.js');
+  // Scene: the planned place "Frozen Lake" (model text) is drawn; strict again once a parent edited it.
+  const {state, book} = await demoBook();
+  const place = book.generationSnapshot.backgrounds[0], kept = place.description;
+  const placed = book.pages.findIndex((p, i) => sceneGenerationRequest(state, book, i).forbiddenWordCheck.text.includes(kept));
+  assert.ok(placed >= 0);
+  Object.assign(place, {source: 'full-auto', nameEn: 'Frozen Lake'});
+  const request = sceneGenerationRequest(state, book, placed);
+  assert.ok(request.forbiddenWordCheck.generated.includes('Frozen Lake') && !request.forbiddenWordCheck.text.includes('Frozen Lake'));
+  assert.ok((await draw(state, book, placed)).imageUrl);
+  place.description = 'a castle in the Pixar style';
+  await assert.rejects(draw(state, book, placed), forbidden, 'brand names stay refused in story text');
+  place.description = kept; place.parentEditedAt = '2026-10-18T00:00:00.000Z';
+  await assert.rejects(draw(state, book, placed), forbidden);
+  // Place sheet and character sheet read the same marker; management stamps it on a parent's edit.
+  const {state: own} = setup();
+  const background = own.backgrounds[0];
+  Object.assign(background, {source: 'full-auto', name: 'Frozen Lake', description: 'a quiet lake under snow'});
+  assert.ok((await sample(backgroundSheetRequest(own, background, {quality: 'draft'}))).imageUrl);
+  const edited = updateBackground(own, background.id, {description: 'a quiet lake under deep snow'});
+  const editedPlace = edited.backgrounds.find(b => b.id === background.id);
+  assert.ok(editedPlace.parentEditedAt);
+  await assert.rejects(sample(backgroundSheetRequest(edited, editedPlace, {quality: 'draft'})), forbidden);
+  const toto = own.characters.find(c => c.id === 'toto');
+  Object.assign(toto, {source: 'full-auto', description: '파란 망토, a cape like Frozen'});
+  assert.ok((await generateImage(createCharacterSheetRequest(own, 'toto'), {engine: 'sample'})).imageUrl);
+  const parentToto = updateCharacter(own, 'toto', {description: '파란 망토, a cape like Frozen!'});
+  assert.ok(parentToto.characters.find(c => c.id === 'toto').parentEditedAt);
+  await assert.rejects(generateImage(createCharacterSheetRequest(parentToto, 'toto'), {engine: 'sample'}), forbidden);
+  // A parent's own material never gets the marker.
+  const plain = updateBackground(own, own.backgrounds[1]?.id || background.id, {description: 'a sunny park'});
+  if (own.backgrounds[1]) assert.equal(plain.backgrounds.find(b => b.id === own.backgrounds[1].id).parentEditedAt, undefined);
+});

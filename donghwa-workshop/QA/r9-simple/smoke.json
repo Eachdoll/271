@@ -1,5 +1,5 @@
 {
-  "base": "http://127.0.0.1:4187/",
+  "base": "http://127.0.0.1:4180/",
   "runs": [
     {
       "width": 1280,
@@ -14,21 +14,157 @@
           "잠금",
           "보관"
         ],
+        "ideas": [
+          "캠핑장에서 본 반딧불이",
+          "무지개 끝에서 찾은 것"
+        ],
+        "ideaStatus": "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.",
+        "forcedTopicCensus": {
+          "stepButtons": 12,
+          "resumeCards": 1,
+          "exitForced": 1
+        },
         "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
         "recommended": 3,
         "selectedCards": 5,
+        "escape": {
+          "retry": "이어서 만들기",
+          "engineLocked": true,
+          "stepAfter": 1,
+          "topicKept": true,
+          "resumeCards": 0,
+          "engineUnlocked": true,
+          "stoppedJobKept": true
+        },
         "badge": "읽기 쉬움 ✓ · 참고 2",
+        "toastClear": {
+          "atTop": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              803,
+              842
+            ]
+          },
+          "atBar": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              789,
+              828
+            ]
+          }
+        },
         "proMode": "pro",
         "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
         "onePage": {
-          "toast": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+          "toast": "2쪽 그림을 저장했어요.",
           "error": "",
-          "image": 0
+          "image": 1
+        },
+        "staleCount": "그림 1 / 8 · 글 바뀐 쪽 1",
+        "keptAfterEdit": {
+          "jobId": "auto-730ff6a9-84c6-4a77-965b-e211d4517e95",
+          "status": "pages-ready",
+          "error": null,
+          "asset": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "marker": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "stale": false
+        },
+        "drawAllChoice": "취소\n빈 그림만 만들기\n고친 1쪽도 다시 만들기",
+        "stoppedRun": {
+          "jobId": "auto-730ff6a9-84c6-4a77-965b-e211d4517e95",
+          "status": "paused",
+          "error": null,
+          "asset": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "marker": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "stale": false
+        },
+        "resumeAsked": 0,
+        "resumedRun": {
+          "jobId": "auto-730ff6a9-84c6-4a77-965b-e211d4517e95",
+          "status": "review",
+          "error": null,
+          "asset": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "marker": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "stale": false
+        },
+        "allImages": "그림 8 / 8 · 글 바뀐 쪽 1",
+        "proReviewWhileDrawing": {
+          "card": 1,
+          "toast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "editor": 0,
+          "draftCard": 1,
+          "draftResume": 0,
+          "draftToast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "draftEditor": 0,
+          "draftWorkflow": 0,
+          "step": 4,
+          "redrawn": true,
+          "keptStill": true
+        },
+        "storyDraftCard": {
+          "card": 1,
+          "editor": 1,
+          "workflow": 0,
+          "regenerateToast": "FULL AUTO로 만든 책은 이미 만든 그림을 지키려고 이야기에서 다시 엮지 않아요. 쪽 글은 검수 화면에서 고쳐 주세요.",
+          "regenerateWorkflow": 0,
+          "same": true,
+          "before": {
+            "bookId": "book-8cb204c3-c518-4947-a16b-5c6dd3df0d0b",
+            "pages": [
+              "image-7f90b4fd-5e3a-4f71-a17d-ea06ef314130",
+              "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+              "image-4c0566c4-e1ba-4917-90e0-09062c921af2",
+              "image-5eb73c01-69ca-4134-8d09-d278a278e2c0",
+              "image-ea76f5d9-e135-4fff-bb91-899c17fb0d7c",
+              "image-34e804f8-d4ee-4450-b22f-e669884e18f6",
+              "image-803222df-f950-4737-8525-b229e0591e15",
+              "image-c5d59928-bc41-4712-b58d-3149061c3d95"
+            ],
+            "final": 8,
+            "cover": "image-966caa0e-b96e-4b85-a66e-9f732dcfd877",
+            "history": 7,
+            "usage": 16
+          },
+          "after": {
+            "bookId": "book-8cb204c3-c518-4947-a16b-5c6dd3df0d0b",
+            "pages": [
+              "image-7f90b4fd-5e3a-4f71-a17d-ea06ef314130",
+              "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+              "image-4c0566c4-e1ba-4917-90e0-09062c921af2",
+              "image-5eb73c01-69ca-4134-8d09-d278a278e2c0",
+              "image-ea76f5d9-e135-4fff-bb91-899c17fb0d7c",
+              "image-34e804f8-d4ee-4450-b22f-e669884e18f6",
+              "image-803222df-f950-4737-8525-b229e0591e15",
+              "image-c5d59928-bc41-4712-b58d-3149061c3d95"
+            ],
+            "final": 8,
+            "cover": "image-966caa0e-b96e-4b85-a66e-9f732dcfd877",
+            "history": 7,
+            "usage": 16
+          }
         },
         "title": "노래하는 돌은 어디에?",
-        "saveSkipped": "그림 오류로 책장 저장·다시 접속·열기는 건너뛰었어요 (텍스트 단계만 검증)."
+        "staleChoice": "취소\n그림 그대로 저장\n고친 1쪽 그림 다시 만들고 저장",
+        "keptPictures": {
+          "same": true,
+          "keptBefore": 1,
+          "keptAfter": 1,
+          "staleBefore": 0,
+          "staleAfter": 0,
+          "imageRecordsBefore": 16,
+          "saved": true
+        },
+        "reopened": "노래하는 돌은 어디에?"
       },
-      "imageBug": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+      "imageBug": null,
       "problems": []
     },
     {
@@ -44,21 +180,157 @@
           "잠금",
           "보관"
         ],
+        "ideas": [
+          "물웅덩이에 비친 거꾸로 세상",
+          "텃밭에 처음 심은 방울토마토"
+        ],
+        "ideaStatus": "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.",
+        "forcedTopicCensus": {
+          "stepButtons": 12,
+          "resumeCards": 1,
+          "exitForced": 1
+        },
         "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
         "recommended": 3,
         "selectedCards": 5,
+        "escape": {
+          "retry": "이어서 만들기",
+          "engineLocked": true,
+          "stepAfter": 1,
+          "topicKept": true,
+          "resumeCards": 0,
+          "engineUnlocked": true,
+          "stoppedJobKept": true
+        },
         "badge": "읽기 쉬움 ✓ · 참고 2",
+        "toastClear": {
+          "atTop": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              1042,
+              1081
+            ]
+          },
+          "atBar": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              733,
+              772
+            ]
+          }
+        },
         "proMode": "pro",
         "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
         "onePage": {
-          "toast": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+          "toast": "2쪽 그림을 저장했어요.",
           "error": "",
-          "image": 0
+          "image": 1
+        },
+        "staleCount": "그림 1 / 8 · 글 바뀐 쪽 1",
+        "keptAfterEdit": {
+          "jobId": "auto-cd7221b4-c852-46ed-9c76-05dd90c45704",
+          "status": "pages-ready",
+          "error": null,
+          "asset": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "marker": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "stale": false
+        },
+        "drawAllChoice": "취소\n빈 그림만 만들기\n고친 1쪽도 다시 만들기",
+        "stoppedRun": {
+          "jobId": "auto-cd7221b4-c852-46ed-9c76-05dd90c45704",
+          "status": "paused",
+          "error": null,
+          "asset": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "marker": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "stale": false
+        },
+        "resumeAsked": 0,
+        "resumedRun": {
+          "jobId": "auto-cd7221b4-c852-46ed-9c76-05dd90c45704",
+          "status": "review",
+          "error": null,
+          "asset": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "marker": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "stale": false
+        },
+        "allImages": "그림 8 / 8 · 글 바뀐 쪽 1",
+        "proReviewWhileDrawing": {
+          "card": 1,
+          "toast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "editor": 0,
+          "draftCard": 1,
+          "draftResume": 0,
+          "draftToast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "draftEditor": 0,
+          "draftWorkflow": 0,
+          "step": 4,
+          "redrawn": true,
+          "keptStill": true
+        },
+        "storyDraftCard": {
+          "card": 1,
+          "editor": 1,
+          "workflow": 0,
+          "regenerateToast": "FULL AUTO로 만든 책은 이미 만든 그림을 지키려고 이야기에서 다시 엮지 않아요. 쪽 글은 검수 화면에서 고쳐 주세요.",
+          "regenerateWorkflow": 0,
+          "same": true,
+          "before": {
+            "bookId": "book-28da493c-7f47-4bab-ba34-56f44e72307a",
+            "pages": [
+              "image-72fbd341-5159-4453-bfbc-109c5509cb93",
+              "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+              "image-4745880b-2fb4-41fc-9784-42ef9a34f4cd",
+              "image-4a046f65-7596-448f-b1ac-a53f09c46f59",
+              "image-99c21432-04c6-4f74-a08d-af2f12c57335",
+              "image-01e9fa76-686e-4b69-aaf3-150e4fe42878",
+              "image-d22ea814-7583-4e33-ad67-4024ce865906",
+              "image-df8004bb-b2d4-4d6f-99fb-359f203f193f"
+            ],
+            "final": 8,
+            "cover": "image-a5738648-f427-4a9f-9735-6e09f6ee8b1d",
+            "history": 7,
+            "usage": 16
+          },
+          "after": {
+            "bookId": "book-28da493c-7f47-4bab-ba34-56f44e72307a",
+            "pages": [
+              "image-72fbd341-5159-4453-bfbc-109c5509cb93",
+              "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+              "image-4745880b-2fb4-41fc-9784-42ef9a34f4cd",
+              "image-4a046f65-7596-448f-b1ac-a53f09c46f59",
+              "image-99c21432-04c6-4f74-a08d-af2f12c57335",
+              "image-01e9fa76-686e-4b69-aaf3-150e4fe42878",
+              "image-d22ea814-7583-4e33-ad67-4024ce865906",
+              "image-df8004bb-b2d4-4d6f-99fb-359f203f193f"
+            ],
+            "final": 8,
+            "cover": "image-a5738648-f427-4a9f-9735-6e09f6ee8b1d",
+            "history": 7,
+            "usage": 16
+          }
         },
         "title": "노래하는 돌은 어디에?",
-        "saveSkipped": "그림 오류로 책장 저장·다시 접속·열기는 건너뛰었어요 (텍스트 단계만 검증)."
+        "staleChoice": "취소\n그림 그대로 저장\n고친 1쪽 그림 다시 만들고 저장",
+        "keptPictures": {
+          "same": true,
+          "keptBefore": 1,
+          "keptAfter": 1,
+          "staleBefore": 0,
+          "staleAfter": 0,
+          "imageRecordsBefore": 16,
+          "saved": true
+        },
+        "reopened": "노래하는 돌은 어디에?"
       },
-      "imageBug": "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+      "imageBug": null,
       "problems": []
     }
   ]

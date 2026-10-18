@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-18T05:36:46.598Z",
-  "base": "http://127.0.0.1:4187/",
+  "generatedAt": "2026-10-18T10:46:31.011Z",
+  "base": "http://127.0.0.1:4180/",
   "viewport": "1280x900",
   "rules": "보이는 버튼 수. 모드 전환 버튼은 modeToggle로 따로 셉니다. 쉬운 모드 단계의 stepButtons는 재료 카드(.simple-card)와 쪽 이동 화살표([data-simple-nav])를 빼고 셉니다(R9-B2 3).",
   "proMatchesWorkOrderTable": true,
@@ -299,7 +299,7 @@
         "추가 금칙어 저장",
         "현재 탭 설정 모두 저장"
       ],
-      "scrollH": 4786,
+      "scrollH": 4806,
       "overflowX": 0
     },
     "03-materials": {

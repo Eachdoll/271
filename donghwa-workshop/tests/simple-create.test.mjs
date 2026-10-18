@@ -248,7 +248,7 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
 test('the v31 shell precaches the simple create screen', async () => {
   const {readFileSync} = await import('node:fs');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v31";/);
+  assert.match(sw, /const CACHE = "donghwa-shell-v32";/);
   assert.ok(sw.includes('"./simple-create.js"'));
 });
 

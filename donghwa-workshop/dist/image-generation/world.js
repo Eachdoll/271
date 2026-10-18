@@ -127,6 +127,17 @@ export const imageWordCheck = ({ strict = [], lenient = [], names = [] } = {}) =
   names: suppliedText(names),
 });
 /**
+ * A friend or place FULL AUTO wrote is model text until a parent edits it
+ * (management stamps parentEditedAt): its fields go to the lenient parts, so
+ * a planned "Frozen Lake" on a winter topic is drawn. Anything else is strict.
+ */
+export const modelWrittenMaterial = (item) =>
+  item?.source === "full-auto" && !item.parentEditedAt;
+export const materialWordScope = (item, parts) =>
+  modelWrittenMaterial(item)
+    ? { strict: [], lenient: parts }
+    : { strict: parts, lenient: [] };
+/**
  * Names of every character in the drawer. Parent-typed text gets no name
  * exemption, so for a sheet or a wardrobe they only shape the advice
  * ("토토로부터" → "토토에게서").
@@ -731,16 +742,17 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
   const styleReferences = getWorldStyleReferences(state, world, preset);
   return {
     // Character fields are parent text: strict, each on its own, no name exemption
-    // ("토토로부터" is refused here and in every scene that would draw it).
+    // ("토토로부터" is refused here and in every scene that would draw it). A friend
+    // FULL AUTO wrote and no parent edited is story text (lenient).
     forbiddenWordCheck: imageWordCheck({
-      strict: [
+      ...materialWordScope(character, [
         character.name,
         character.nameEn,
         character.kind,
         character.description,
         character.appearance,
         character.clothes,
-      ],
+      ]),
       names: castNames(state),
     }),
     prompt: `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
@@ -872,8 +884,9 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   // Forbidden names are checked in these parts only, never in the fixed instructions or the plot ledger.
   // Strict (parent text): character, wardrobe and place descriptions, a page's own image prompt,
   // a cover action the parent edited. Lenient (story text): page text, the planned scene action,
-  // a planned cover action, the scene brief. The book's cast names, the same for pages and the
-  // cover, exempt "토토로 달려가요" (토토 + particle) in the lenient parts only.
+  // a planned cover action, the scene brief, and a friend or place FULL AUTO wrote that no parent
+  // edited. The book's cast names, the same for pages and the cover, exempt "토토로 달려가요"
+  // (토토 + particle) in the lenient parts only.
   const pageImagePrompt = options.cover ? null : page.imagePrompt || null;
   const coverAction = book.pagination?.cover?.sceneAction,
     coverByParent =
@@ -886,29 +899,35 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     page.staging ||
     book.sceneBriefs?.length
   );
-  const forbiddenWordCheck = imageWordCheck({
-    strict: [
-      sheets.map((sheet) => [
+  const materials = [
+    ...sheets.map((sheet) =>
+      materialWordScope(sheet.characterSnapshot, [
         sheet.characterSnapshot?.name,
         sheet.characterSnapshot?.nameEn,
         sheet.characterSnapshot?.description,
       ]),
+    ),
+    materialWordScope(background, [
+      background.name,
+      background.nameEn,
+      background.description,
+      background.descriptionEn,
+      background.features,
+      background.featuresEn,
+      background.layout,
+      background.layoutEn,
+      background.rules,
+    ]),
+  ];
+  const forbiddenWordCheck = imageWordCheck({
+    strict: [
+      materials.map((part) => part.strict),
       selectedVariants.map((variant) => [variant.name, variant.description]),
-      [
-        background.name,
-        background.nameEn,
-        background.description,
-        background.descriptionEn,
-        background.features,
-        background.featuresEn,
-        background.layout,
-        background.layoutEn,
-        background.rules,
-      ],
       pageImagePrompt,
       coverByParent ? coverAction : null,
     ],
     lenient: [
+      materials.map((part) => part.lenient),
       options.cover
         ? coverByParent
           ? null
