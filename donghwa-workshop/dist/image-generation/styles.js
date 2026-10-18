@@ -154,62 +154,104 @@ const aliases = {
 };
 let customPresets = [];
 let customForbiddenWords = [];
-/** NFKC with zero-width and other format characters (\p{Cf}) removed, so "Dis\u200bney" is "Disney". */
-const visible = (value) =>
-  String(value || "")
+/**
+ * Characters that render as nothing and could hide a name ("Dis\u200bney",
+ * "Dis\u3164ney"): format characters (\p{Cf}) and other default-ignorable code
+ * points, the combining grapheme joiner U+034F, the Hangul fillers U+115F,
+ * U+1160, U+3164 and U+FFA0, and the variation selectors U+FE00-U+FE0F.
+ */
+const INVISIBLE =
+  /[\p{Cf}\p{Default_Ignorable_Code_Point}\u034f\u115f\u1160\u3164\uffa0\ufe00-\ufe0f]/gu;
+/** The text every forbidden-name check reads: invisible characters removed, then NFKC. */
+export const normalizeForbiddenText = (value) =>
+  String(value ?? "")
+    .replace(INVISIBLE, "")
     .normalize("NFKC")
-    .replace(/\p{Cf}/gu, "");
-const lower = (value) => visible(value).toLowerCase();
-/**
- * Distinctive studio, artist, film and character names, also written split
- * or joined ("Dream Works", "dream-works", "DreamWorks"). No ordinary English
- * word contains them, so they count anywhere, also joined to other words
- * ("DisneyPixar", "studioghibli", "pixar3d"). "pixart" (pixel art) is another word.
+    .replace(INVISIBLE, "");
+const lower = (value) => normalizeForbiddenText(value).toLowerCase();
+/*
+ * ONE forbidden-name policy for every image request.
+ *
+ * STRICT ('strict'; the older names 'style' and 'material' mean the same) is
+ * text a parent typed: style preset names and descriptions, the parent's extra
+ * words, character, place and wardrobe descriptions, a page's own image prompt
+ * and a cover action the parent edited. It refuses
+ *  - brand names anywhere, also joined to other words or split where their
+ *    words meet: disney, pixar (not "pixart"), ghibli, studio ghibli,
+ *    dreamworks / dream works, miyazaki, totoro, mickey mouse;
+ *  - "Frozen", "Elsa" and "Mickey" written Title-case or all caps, anywhere
+ *    (case-sensitive); in any other case only tied directly to a style cue
+ *    ("frozen style", "frozen-esque", "frozen 영화", "inspired by frozen");
+ *  - the Korean names 겨울왕국, 디즈니, 픽사, 지브리, 미야자키, 토토로, 엘사,
+ *    미키마우스, 드림웍스, with or without spaces between syllables.
+ *  No cast name exempts anything: "토토로부터" is refused and the advice
+ *  suggests "토토에게서".
+ * LENIENT ('lenient'; older name 'description') is model-written story text:
+ * page text, a generated cover action, scene briefs. Only the brand names and
+ * the Korean names written joined count, never the title words, so "Frozen
+ * look on his face" and "the frozen princess" pass. A Korean name that is one
+ * of the book's cast names plus particles ("토토로 달려가요" with 토토 in the
+ * cast) is that character.
+ * App scaffolding is never checked: request builders declare their parts in
+ * `forbiddenWordCheck: {text, generated, names}` (strict, lenient, cast names)
+ * and every path runs checkForbiddenWordCheck on them.
  */
-const BRAND_WORDS = new Map([
-  ["disney", /disney/iu],
-  ["pixar", /pixar(?!t)/iu],
-  ["dreamworks", /dream[\s_-]*works/iu],
-  ["ghibli", /ghibli/iu],
-  ["miyazaki", /miyazaki/iu],
-  ["studio ghibli", /studio[\s_-]*ghibli/iu],
-  ["totoro", /totoro/iu],
+const LENIENT_SCOPES = new Set(["lenient", "description", "generated", "story"]);
+const scopeOf = (scope) => (LENIENT_SCOPES.has(scope) ? "lenient" : "strict");
+const DASHES = String.raw`\-\u2010-\u2015`;
+/** Between the words of a brand ("Dream Works", "mickey-mouse", "studio_ghibli"). */
+const LATIN_JOIN = String.raw`[\s_${DASHES}\u00b7]*`;
+/** Between the syllables of a Korean name in parent text ("겨울 왕국", "드림 웍스"). */
+const HANGUL_JOIN = String.raw`[\s_${DASHES}\u00b7\u30fb]*`;
+/** [strict patterns, lenient patterns]; one list serves both when they agree. */
+const BRANDS = new Map([
+  ["disney", [[/disney/iu]]],
+  // "pixart" (pixel art, PixArt-α/Σ) is another word; "Pixartoon" is not.
+  ["pixar", [[/pixar(?!t(?:$|[^a-z]|alpha|sigma))/iu]]],
+  [
+    "dreamworks",
+    [
+      [new RegExp(`dream${LATIN_JOIN}works`, "iu")],
+      // Story English "her dream works": split by a space it counts only written as the name.
+      [
+        new RegExp(`dream[_${DASHES}]*works`, "iu"),
+        /Dream\s+Works|DREAM\s+WORKS/u,
+      ],
+    ],
+  ],
+  ["ghibli", [[/ghibli/iu]]],
+  ["studio ghibli", [[new RegExp(`studio${LATIN_JOIN}ghibli`, "iu")]]],
+  ["miyazaki", [[/miyazaki/iu]]],
+  ["totoro", [[/totoro/iu]]],
 ]);
-/**
- * In model-written story text "her dream works" is English: there a brand
- * split by a space counts only written as the name ("Dream Works").
- */
-const STORY_BRAND_WORDS = new Map([
-  ["dreamworks", [/dream[_-]*works/iu, /Dream\s+Works|DREAM\s+WORKS/u]],
+/** Ordinary English words or given names that are also a film or its characters. */
+const TITLE_WORDS = new Map([
+  ["frozen", { written: /(?<![A-Za-z])(?:Frozen|FROZEN)/u }],
+  ["elsa", { written: /(?<![A-Za-z])(?:Elsa|ELSA)/u }],
+  [
+    "mickey",
+    {
+      written: /(?<![A-Za-z])(?:Mickey|MICKEY)/u,
+      brand: new RegExp(`mickey${LATIN_JOIN}mouse`, "iu"),
+    },
+  ],
 ]);
-/** Ordinary English words that are also a film title ("the pond was frozen"). */
-const TITLE_WORDS = new Set(["frozen"]);
-const STYLE_SUFFIXES = new Set(["esque", "ish", "like", "style", "styled"]);
-/** An optional sequel between the title and its cue: "Frozen 2 style", "Frozen II-inspired". */
-const SEQUEL = String.raw`(?:[\s-]*(?:\d{1,2}|ii|iii|two)(?![a-z0-9]))?`;
-// "frozen like a statue" and "a frozen look" are story English; "frozen-like", "frozen style" and "Frozen 2 style" are not.
-const STYLE_CUE = new RegExp(
-  String.raw`^${SEQUEL}(?:-like|[\s"'’)\]-]*(?:style|styled|movie|animation|animated|aesthetic|inspired|themed|풍|스타일|처럼|같은|같이|느낌))`,
+// An optional sequel between the word and its cue: "frozen 2 style", "frozen ii-inspired".
+const SEQUEL = String.raw`(?:[\s${DASHES}]*(?:\d{1,2}|ii|iii|two)(?![a-z0-9]))?`;
+// A style cue right after the word: "frozen style", "frozen-like", "frozen 2 movie", "frozen풍", "elsa처럼".
+const CUE_AFTER = new RegExp(
+  String.raw`^${SEQUEL}(?:[${DASHES}]like(?![a-z])|[\s"'’”)\]_${DASHES}]*(?:styled?|styles|movies?|films?|animation|animated|aesthetic|inspired|themed?|themes|looks?|vibes?|esque|ish|영화|애니|풍|느낌|스타일|처럼|같은|같이)(?![a-z]))`,
   "iu",
 );
-// Cues that are ordinary words after a lowercase "frozen" ("a thin frozen film", "the frozen princess",
-// "a frozen look") count only after the written title, Title-case or all caps: "Frozen princess dress",
-// "Frozen look", "FROZEN THEME".
-const TITLE_CUE = new RegExp(
-  String.raw`^${SEQUEL}[\s"'’)\]-]*(?:films?|princess(?:es)?|look(?:s|ing)?|theme[sd]?|vibes?)(?![a-z])`,
-  "iu",
-);
-// "Frozen 2", "Frozen II": the Title-case title with a sequel number names the film.
-const TITLE_SEQUEL = /^[\s-]*(?:\d{1,2}|ii|iii)(?![\p{L}\p{N}])/iu;
-// A style cue before the title: "like Frozen", "like in Frozen", "inspired by Frozen", "in the style of Frozen",
-// "the movie Frozen", "a dress from Frozen", "similar to Frozen", "as seen in Frozen".
-const STYLE_CUE_BEFORE =
-  /(?:^|[^\p{L}\p{N}])(?:like(?:\s+in)?|inspired\s+by|style\s+of|as\s+(?:seen\s+)?in|based\s+on|similar\s+to|from|movie|film|영화|애니메이션|애니)(?:\s+the)?[\s"'“‘(\[]*$/iu;
-// After such a cue, "like frozen glass" and "like frozen, he waited" still describe ice;
-// "like Frozen", "like FROZEN", "like frozen." and "like frozen 2" name the film.
-const NEXT_LATIN_WORD = /^[\s"'’”)\],;-]*[a-z]/i;
-const TITLE_CASE = /^\p{Lu}\p{Ll}/u,
-  ALL_CAPS = /^\p{Lu}{2,}$/u;
+// A cue before the word that names a source ("inspired by frozen", "the movie frozen",
+// "영화 frozen"): the word is the title unless a Latin word follows it directly.
+const CUE_BEFORE_SOURCE =
+  /(?:^|[^\p{L}\p{N}])(?:inspired\s+by|(?:in\s+the\s+)?style\s+of|based\s+on|as\s+seen\s+in|similar\s+to|movies?|films?|영화|애니(?:메이션)?)(?:\s+the)?[\s"'“‘(\[:]*$/iu;
+// "like frozen" names the film; "like frozen glass" and "like frozen, he waited" are ice.
+const CUE_BEFORE_LIKE =
+  /(?:^|[^\p{L}\p{N}])like(?:\s+in)?(?:\s+the)?[\s"'“‘(\[]*$/iu;
+const NEXT_WORD = /^[\s"'’”)\]-]*[a-z]/i,
+  NEXT_WORD_PAST_COMMA = /^[\s"'’”)\],;-]*[a-z]/i;
 /**
  * What may follow a cast name inside one Korean token for it to stay the name:
  * one particle ("토토로" is 토토 + 로, "토토로서" is 토토 + 로서), then up to two
@@ -218,113 +260,139 @@ const TITLE_CASE = /^\p{Lu}\p{Ll}/u,
  */
 const NAME_PARTICLE =
   /^(?:(?:으로|로)(?:서|써)?|에게|한테|에서|에|와|과|이랑|랑|처럼|부터|까지|는|은|가|이|를|을|의|도|만)(?:의|는|은|도|만|부터|까지){0,2}요?$/u;
+// After a bare 로 a noun or style word makes it the film again: "토토로 인형", "토토로 같은 숲".
+const IP_NOUN_AFTER =
+  /^\s+(?:인형|스타일|느낌|풍|같은|같이|처럼|캐릭터|그림|영화|애니|굿즈|무늬|모양|옷|잠옷|가방|모자|티셔츠|코스튬|분장)/u;
 const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/u;
-const ASCII_WORD = /[a-z0-9]/;
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-/** A title word ("frozen") counts outside style text only as a style reference. */
-function titleUsedAsStyle(text, match, scope) {
-  const suffix = (match[1] || "").toLowerCase();
-  // "frozenesque", "Frozen2": a joined suffix or sequel number is never story English.
-  if (STYLE_SUFFIXES.has(suffix) || /^\d+$/.test(suffix)) return true;
-  const after = text.slice(match.index + match[0].length),
-    title = TITLE_CASE.test(match[0]),
-    caps = ALL_CAPS.test(match[0]);
-  if (STYLE_CUE.test(after)) return true;
-  if ((title || caps) && TITLE_CUE.test(after)) return true;
-  if (title && TITLE_SEQUEL.test(after)) return true;
-  // Parent-entered material also counts a cue before the title. Title-case
-  // "Frozen" is the title whatever follows; "frozen" and "FROZEN" only when no
-  // Latin word follows ("like FROZEN" is the title, "LIKE FROZEN SNOW" is ice).
-  return (
-    scope === "material" &&
-    STYLE_CUE_BEFORE.test(text.slice(0, match.index)) &&
-    (title || !NEXT_LATIN_WORD.test(after))
-  );
-}
-function latinMatches(text, word, scope) {
-  const brand = BRAND_WORDS.get(word);
-  if (brand)
-    return scope === "description" && STORY_BRAND_WORDS.has(word)
-      ? STORY_BRAND_WORDS.get(word).some((pattern) => pattern.test(text))
-      : brand.test(text);
-  const body = word.split(/\s+/).map(escapeRegExp).join("[\\s_-]+"),
-    left = ASCII_WORD.test(word[0]) ? "(?<![a-z0-9])" : "",
-    right = ASCII_WORD.test(word.at(-1))
-      ? "(\\d+|'?s|es|esque|ish|like|land|mouse|style|styled)?(?![a-z0-9])"
-      : "()",
-    pattern = new RegExp(left + body + right, "giu");
-  for (const match of text.matchAll(pattern)) {
-    // Style text counts every match; material and story text a title word only as a style reference.
-    if (
-      (scope !== "description" && scope !== "material") ||
-      !TITLE_WORDS.has(word)
-    )
-      return true;
-    if (titleUsedAsStyle(text, match, scope)) return true;
+const excerptOf = (value) =>
+  value.length > 40 ? `${value.slice(0, 39)}…` : value;
+
+function brandFinding(source, word, scope) {
+  const [strict, lenient = strict] = BRANDS.get(word);
+  for (const pattern of scope === "lenient" ? lenient : strict) {
+    const match = pattern.exec(source);
+    if (match) return { word, kind: "brand", excerpt: match[0] };
   }
-  return false;
+  return null;
 }
-function hangulMatches(text, word, names) {
-  // "미키 마우스" also matches "미키  마우스" and "미키-마우스".
+function titleFinding(source, word, scope) {
+  const rule = TITLE_WORDS.get(word),
+    brand = rule.brand?.exec(source);
+  if (brand) return { word, kind: "brand", excerpt: brand[0] };
+  if (scope === "lenient") return null;
+  // Written as the title or name, anywhere: "a blue Frozen dress", "FROZEN II", "Elsa".
+  const written = rule.written.exec(source);
+  if (written) return { word, kind: "title", excerpt: written[0] };
+  // Any other spelling only with a style cue directly before or after it.
   const pattern = new RegExp(
-    word.split(/\s+/).map(escapeRegExp).join("[\\s_-]+"),
-    "gu",
+    `(?<![a-z0-9])${word}(esque|ish|like|styled?|\\d+)?(?![a-z0-9])`,
+    "giu",
   );
+  for (const match of source.matchAll(pattern)) {
+    const before = source.slice(0, match.index),
+      after = source.slice(match.index + match[0].length);
+    if (
+      match[1] ||
+      CUE_AFTER.test(after) ||
+      (CUE_BEFORE_SOURCE.test(before) && !NEXT_WORD.test(after)) ||
+      (CUE_BEFORE_LIKE.test(before) && !NEXT_WORD_PAST_COMMA.test(after))
+    )
+      return { word, kind: "title-cue", excerpt: match[0] };
+  }
+  return null;
+}
+/** The cast name a Korean token spells with particles only ("토토로부터" → 토토), if any. */
+function castNameWithParticle(compact, tail, names) {
+  return (
+    names.find(
+      (name) =>
+        name.length < compact.length &&
+        compact.startsWith(name) &&
+        NAME_PARTICLE.test(compact.slice(name.length) + tail),
+    ) || null
+  );
+}
+function hangulFinding(text, word, scope, names, kind) {
+  const compact = word.replace(/\s+/g, ""),
+    pattern =
+      scope === "lenient"
+        ? new RegExp(word.split(/\s+/).map(escapeRegExp).join("[\\s_-]+"), "gu")
+        : new RegExp([...compact].map(escapeRegExp).join(HANGUL_JOIN), "gu");
   for (
     let match = pattern.exec(text);
     match;
     pattern.lastIndex = match.index + 1, match = pattern.exec(text)
   ) {
-    const index = match.index,
-      found = match[0];
+    const index = match.index;
     let start = index,
-      end = index + found.length;
+      end = index + match[0].length;
     while (start > 0 && HANGUL.test(text[start - 1])) start--;
     while (end < text.length && HANGUL.test(text[end])) end++;
-    // "토토로" right after a known name such as 토토 is the name plus particles, not the film.
-    const nameWithParticle =
-      start === index &&
-      names.some(
-        (name) =>
-          name.length < found.length &&
-          found.startsWith(name) &&
-          NAME_PARTICLE.test(text.slice(index + name.length, end)),
-      );
-    if (!nameWithParticle) return true;
+    // A name written apart ("겨울 왕국") starts a word: "다니엘 사과" is not 엘사.
+    if (match[0] !== compact && start !== index) continue;
+    const tail = text.slice(index + match[0].length, end),
+      castName =
+        start === index && match[0] === compact
+          ? castNameWithParticle(compact, tail, names)
+          : null;
+    // Lenient: a cast name plus particles is the character, unless a bare 로 is followed by a noun.
+    if (
+      scope === "lenient" &&
+      castName &&
+      !(
+        /^(?:으로|로)$/u.test(compact.slice(castName.length) + tail) &&
+        IP_NOUN_AFTER.test(text.slice(end))
+      )
+    )
+      continue;
+    return {
+      word,
+      kind,
+      excerpt: text.slice(start, end),
+      ...(castName ? { castName } : {}),
+    };
   }
-  return false;
+  return null;
 }
+/** A parent's extra Latin word: whole words, a few suffixes ("mooncats", "mooncat-style"). */
+function extraLatinFinding(source, word) {
+  const body = word.split(/\s+/).map(escapeRegExp).join(`[\\s_${DASHES}]+`),
+    left = /[a-z0-9]/.test(word[0]) ? "(?<![a-z0-9])" : "",
+    right = /[a-z0-9]/.test(word.at(-1))
+      ? "(?:\\d+|'?s|es|esque|ish|like|land|mouse|style|styled)?(?![a-z0-9])"
+      : "",
+    match = new RegExp(left + body + right, "iu").exec(source);
+  return match ? { word, kind: "custom", excerpt: match[0] } : null;
+}
+function wordFinding(source, text, word, scope, names, extra) {
+  if (BRANDS.has(word)) return brandFinding(source, word, scope);
+  if (TITLE_WORDS.has(word)) return titleFinding(source, word, scope);
+  if (HANGUL.test(word))
+    return hangulFinding(text, word, scope, names, extra ? "custom" : "korean");
+  if (/[a-z0-9]/.test(word)) return extraLatinFinding(source, word);
+  return text.includes(word)
+    ? { word, kind: extra ? "custom" : "brand", excerpt: word }
+    : null;
+}
+const DEFAULT_WORDS = new Set(DEFAULT_FORBIDDEN_STYLE_WORDS.map(lower));
 /**
- * Forbidden studio, artist, work and character names found in `value`.
- * Zero-width and other format characters are ignored ("Dis\u200bney").
- * Distinctive names ("disney", "ghibli", "dreamworks") match anywhere, also
- * joined to other words or split ("Dream Works"). Names that are ordinary
- * English words ("frozen", "elsa", "mickey") and the parent's extra words
- * match whole words, plus a few suffixes such as "frozenesque" or "Frozen2".
- * Korean words match inside a token unless the token is a known character
- * name (`names`) followed only by particles ("토토로서", "토토로는요").
- * Scopes: 'style' (the default) is for style text and counts every match.
- * 'material' is for parent-entered text (character, place and wardrobe
- * descriptions, a page's own image prompt): a title that is also an ordinary
- * word ("frozen") counts only with a style cue before or after it ("like
- * Frozen", "a dress from Frozen", "Frozen 2 style", "Frozen 느낌"); weak cues
- * after it ("film", "princess", "look", "theme", "vibe") count only after
- * Title-case or all-caps "Frozen", a bare sequel number ("Frozen II") only
- * after Title-case, and a cue before lowercase or all-caps "frozen" only when
- * no Latin word follows ("LIKE FROZEN SNOW" is ice). 'description' is for
- * model-written story text and the cover action: only a cue after it counts,
- * so "the lake looked like frozen glass" passes.
+ * Every forbidden name in `value` under one scope, with where it was found:
+ * [{word, kind: 'brand'|'title'|'title-cue'|'korean'|'custom', excerpt,
+ * castName?, scope}]. `names` are cast names: in lenient scope a Korean name
+ * that is one of them plus particles is that character; in strict scope they
+ * only shape the advice ("토토로부터" → "토토에게서").
  */
-export function forbiddenStyleMatches(
+export function forbiddenWordFindings(
   value,
-  extras = [],
-  { names = [], scope = "style" } = {},
+  { scope = "strict", names = [], extras = [] } = {},
 ) {
-  const source = visible(value),
+  const source = normalizeForbiddenText(value),
     text = source.toLowerCase(),
-    known = [...new Set((names || []).map(lower).map((n) => n.trim()))].filter(
-      Boolean,
-    );
+    mode = scopeOf(scope),
+    known = [
+      ...new Set((names || []).map(lower).map((name) => name.trim())),
+    ].filter(Boolean);
   return [
     ...new Set(
       [...DEFAULT_FORBIDDEN_STYLE_WORDS, ...(extras || [])]
@@ -332,14 +400,95 @@ export function forbiddenStyleMatches(
         .map((word) => word.trim())
         .filter(Boolean),
     ),
-  ].filter((word) =>
-    HANGUL.test(word)
-      ? hangulMatches(text, word, known)
-      : /[a-z0-9]/.test(word)
-        ? latinMatches(source, word, scope)
-        : text.includes(word),
-  );
+  ]
+    .map((word) =>
+      wordFinding(source, text, word, mode, known, !DEFAULT_WORDS.has(word)),
+    )
+    .filter(Boolean)
+    .map((finding) => ({
+      ...finding,
+      excerpt: excerptOf(finding.excerpt),
+      scope: mode,
+    }));
 }
+/**
+ * Forbidden studio, artist, work and character names found in `value`, as
+ * the matched list words. Scope 'strict' (default; also 'style', 'material')
+ * or 'lenient' (also 'description'); see forbiddenWordFindings.
+ */
+export function forbiddenStyleMatches(
+  value,
+  extras = [],
+  { names = [], scope = "strict" } = {},
+) {
+  return [
+    ...new Set(
+      forbiddenWordFindings(value, { scope, names, extras }).map((f) => f.word),
+    ),
+  ];
+}
+const hasFinalConsonant = (name) => {
+  const code = name.charCodeAt(name.length - 1) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0;
+};
+function adviceFor(finding) {
+  const quoted = `‘${finding.excerpt}’`,
+    name = finding.castName;
+  if (name)
+    return `${quoted}: 캐릭터 이름 ‘${name}’ 뒤에 붙은 말이 작품 이름 ‘${finding.word}’와 겹쳐요. ‘${name}에게서’, ‘${name}${hasFinalConsonant(name) ? "과" : "와"} 함께’처럼 바꿔 적어 주세요.`;
+  if (finding.kind === "title")
+    return finding.word === "frozen"
+      ? `${quoted}: 대문자로 쓰면 작품 이름으로 읽혀요. 얼음을 말하려면 소문자 ‘frozen’이나 ‘icy’로 쓰고, 옷·머리는 색·소재·무늬로 적어 주세요.`
+      : `${quoted}: 기존 캐릭터 이름이에요. 다른 이름이나 머리 모양·색·옷 같은 생김새로 바꿔 주세요.`;
+  if (finding.kind === "title-cue")
+    return `${quoted}: 스타일·영화·느낌·처럼 같은 말과 함께 쓰면 작품을 가리켜요. 그 말을 빼고 색·질감·무늬로 적어 주세요.`;
+  if (finding.kind === "custom")
+    return `${quoted}: 부모 설정에 추가한 금칙어예요. 다른 말로 바꿔 주세요.`;
+  return `${quoted}: 스튜디오·작가·작품 이름이에요(띄어 쓰거나 붙여 써도 같아요). 이름을 지우고 색·질감·빛·선으로 설명해 주세요.`;
+}
+/** What the parent should change, one sentence per finding (at most three). */
+export function forbiddenWordAdvice(findings = []) {
+  return [...new Set(findings.map(adviceFor))].slice(0, 3).join(" ");
+}
+const partsOf = (value) =>
+  (Array.isArray(value) ? value.flat(Infinity) : [value])
+    .filter((item) => item !== undefined && item !== null && item !== "")
+    .map((item) => (typeof item === "string" ? item : JSON.stringify(item)));
+/**
+ * The one check every image path runs: `strict` parts (parent text, also
+ * against the parent's `extras`), `lenient` parts (model-written story text)
+ * and the cast `names`. Each part is read on its own.
+ */
+export function checkForbiddenWords({
+  strict = [],
+  lenient = [],
+  names = [],
+  extras = [],
+} = {}) {
+  const cast = partsOf(names),
+    findings = [
+      ...partsOf(strict).flatMap((part) =>
+        forbiddenWordFindings(part, { scope: "strict", names: cast, extras }),
+      ),
+      ...partsOf(lenient).flatMap((part) =>
+        forbiddenWordFindings(part, { scope: "lenient", names: cast }),
+      ),
+    ];
+  return {
+    ok: findings.length === 0,
+    findings,
+    words: [...new Set(findings.map((finding) => finding.word))],
+    advice: forbiddenWordAdvice(findings),
+  };
+}
+/** checkForbiddenWords on a request's declared parts, `forbiddenWordCheck: {text, generated, names}`. */
+export const checkForbiddenWordCheck = (check, { extras = [] } = {}) =>
+  checkForbiddenWords({
+    strict: check?.text,
+    lenient: check?.generated,
+    names: check?.names,
+    extras,
+  });
 /** Call on library changes; IDs in imported/frozen books retain their own copies. */
 export function setCustomStylePresets(state = {}) {
   customForbiddenWords = Array.isArray(state.settings?.forbiddenStyleWords)
@@ -419,16 +568,19 @@ export function validateStylePreset(preset, options = {}) {
       ))
   )
     errors.push("앱에서 생성한 스타일 시트만 고정할 수 있어요.");
-  const text = [preset.name, preset.stylePrompt, preset.negativePrompt]
-    .filter((v) => typeof v === "string")
-    .join("\n");
-  const matches = forbiddenStyleMatches(
-    text,
-    options.forbiddenWords || customForbiddenWords,
-  );
+  const parts = [preset.name, preset.stylePrompt, preset.negativePrompt].filter(
+      (v) => typeof v === "string",
+    ),
+    text = parts.join("\n");
+  // Style text is parent-typed: the strict scope, plus the parent's extra words.
+  const verdict = checkForbiddenWords({
+      strict: parts,
+      extras: options.forbiddenWords || customForbiddenWords,
+    }),
+    matches = verdict.words;
   if (matches.length)
     errors.push(
-      `금칙어가 들어 있어 저장할 수 없어요: ${matches.join(", ")}. 이름 대신 재료·선·색·조명·구도를 설명해 주세요.`,
+      `금칙어가 들어 있어 저장할 수 없어요: ${matches.join(", ")}. 이름 대신 재료·선·색·조명·구도를 설명해 주세요. ${verdict.advice}`,
     );
   const namedReference =
     /\bin\s+(?:the\s+)?style\s+of\b|\binspired\s+by\s+(?!the\s+(?:scene|palette|reference|cover)\b)|\b(?:drawn|painted|illustrated)\s+by\b|(?:스튜디오|작가|화가|감독)\s*(?:의|풍|스타일)|[가-힣]{2,20}\s*의\s*(?:작품|그림)(?:\s*처럼|\s*같이)/i;

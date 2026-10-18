@@ -9,10 +9,11 @@ import {
   getCharacterSheet,
   getWorldStyleReferences,
   castNames,
+  imageWordCheck,
 } from "./image-generation/world.js";
 import {
   getStylePreset,
-  forbiddenStyleMatches,
+  checkForbiddenWordCheck,
 } from "./image-generation/styles.js";
 import {
   getImageURL,
@@ -392,28 +393,27 @@ export function createVariantGenerationRequest(
     );
   if (!["front", "full"].includes(view))
     throw new Error("정면 또는 전신 참조를 생성해 주세요.");
-  // Same check as a scene request makes on wardrobe text: parent-entered material
-  // ("frozen-lake blue scarf" is a colour, "Frozen style dress" is not) with the
-  // whole cast's names, so "토토로부터 받은 목도리" is 토토 + particles.
+  // Wardrobe text is parent text: strict, no name exemption. The pre-check runs the
+  // provider's own check on the very parts this request declares (plus the parent's
+  // extra words), so a text it accepts is accepted again when this request, or a
+  // scene wearing the outfit, is drawn.
   const wardrobeText = [variant.name, variant.description].filter(
       (part) => typeof part === "string" && part.trim(),
     ),
-    names = castNames(state);
-  if (
-    wardrobeText.some(
-      (part) =>
-        forbiddenStyleMatches(part, state.settings?.forbiddenStyleWords || [], {
-          scope: "material",
-          names,
-        }).length,
-    )
-  )
+    forbiddenWordCheck = imageWordCheck({
+      strict: wardrobeText,
+      names: castNames(state),
+    }),
+    words = checkForbiddenWordCheck(forbiddenWordCheck, {
+      extras: state.settings?.forbiddenStyleWords || [],
+    });
+  if (!words.ok)
     throw new Error(
-      "옷장 설명에는 스튜디오·작가·작품·캐릭터 이름 대신 색, 소재, 모양을 적어 주세요.",
+      `옷장 설명에는 스튜디오·작가·작품·캐릭터 이름 대신 색, 소재, 모양을 적어 주세요. ${words.advice}`,
     );
   const preset = getStylePreset(world.stylePresetId);
   return {
-    forbiddenWordCheck: { text: wardrobeText, names },
+    forbiddenWordCheck,
     prompt: `Create one ${view === "front" ? "front-facing head-and-shoulders portrait" : "front-facing full-body view"} of the same original character as the FIRST reference image. Identical face, age, body proportions and recognizable identity. Change only ${variant.type === "hair" ? "the requested hair styling" : variant.type === "accessory" ? "the requested accessory" : "the requested clothing"}: ${variant.description}. Do not copy another character from the style images. Keep all unrequested facial, hair and clothing details unchanged. The FIRST reference is identity; all remaining images define style. A clean neutral background, one character only, no labels, no text, no logos.`,
     stylePreset: clone(preset),
     referenceImages: [

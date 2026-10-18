@@ -83,8 +83,9 @@ function runLockCheck(state, book) {
   return Promise.resolve()
     .then(() => locks.query())
     .then(
+      // A snapshot whose `held` is not an array lists no held locks.
       (snapshot) =>
-        (snapshot?.held || []).some(
+        (Array.isArray(snapshot?.held) ? snapshot.held : []).some(
           (lock) => lock?.name === RUN_LOCK_PREFIX + id,
         ),
       () => false,

@@ -9,7 +9,7 @@ import { getAsset } from "./assets.js";
 import { characterSVG, sceneSVG } from "../engine.js";
 import { ENGINE_MODELS, getEngineModel, estimateImageCost } from "./models.js";
 import { renderImageRequest, StoryRendererError } from "./story-renderer.js";
-import { forbiddenStyleMatches } from "./styles.js";
+import { checkForbiddenWords, checkForbiddenWordCheck } from "./styles.js";
 import { validateCredentialInput } from "./credential-validation.js";
 
 export const ENGINE_IDS = Object.freeze([
@@ -167,37 +167,30 @@ const textList = (value) =>
     .map(String);
 /**
  * Forbidden names are checked only in text a parent, a style or the story
- * supplied: the style preset's name, description and negative prompt, plus
- * the request's own description. App scaffolding (fixed instructions, the
- * plot ledger, reference labels) is never checked. A request builder that
- * mixes both names the supplied parts in
- * `forbiddenWordCheck: {text, generated, names}`: `text` is parent-entered
- * material (character, place and wardrobe descriptions, a page's own image
- * prompt), checked strictly, so "like Frozen" is refused; `generated` is
- * model-written story text and the cover action, where "frozen" counts only
- * with a style cue after it; `names` are the whole cast's names, so "토토로"
- * (토토 + particle) is not the film. Without it the whole scene prompt counts
- * as parent-entered text. Each part is checked on its own.
+ * supplied, with the one policy in styles.js. The style preset's name,
+ * description and negative prompt are parent text (strict). A request builder
+ * names its other parts in `forbiddenWordCheck: {text, generated, names}`:
+ * `text` is parent text (strict: character, place and wardrobe descriptions,
+ * a page's own image prompt, a cover action the parent edited), `generated`
+ * is model-written story text (lenient: page text, the planned scene or cover
+ * action, the scene brief) and `names` the cast names that exempt "토토로"
+ * (토토 + particle) in the lenient parts. App scaffolding (fixed instructions,
+ * the plot ledger, reference labels) is never checked. Without declared parts
+ * the whole prompt is the parent's own text.
  */
-function forbiddenRequestText(request, rendered) {
-  const style = [
+function forbiddenRequestCheck(request, rendered) {
+  const style = textList([
       rendered.stylePreset.name,
       rendered.stylePrompt,
       rendered.negativePrompt,
-    ],
-    check = request.forbiddenWordCheck,
-    material = check ? textList(check.text) : [rendered.scenePrompt],
-    generated = check ? textList(check.generated) : [],
-    names = check ? textList(check.names) : [],
-    found = (parts, scope) =>
-      parts.some(
-        (part) => forbiddenStyleMatches(part, [], { names, scope }).length > 0,
-      );
-  return (
-    forbiddenStyleMatches(textList(style).join("\n")).length > 0 ||
-    found(material, "material") ||
-    found(generated, "description")
-  );
+    ]),
+    check = request.forbiddenWordCheck;
+  return check
+    ? checkForbiddenWordCheck({
+        ...check,
+        text: [style, check.text ?? []],
+      })
+    : checkForbiddenWords({ strict: [...style, rendered.scenePrompt] });
 }
 
 function normalizeRequest(request, metadata) {
@@ -211,9 +204,10 @@ function normalizeRequest(request, metadata) {
     if (error instanceof StoryRendererError) fail(error.message, error.code);
     throw error;
   }
-  if (forbiddenRequestText(request, rendered))
+  const words = forbiddenRequestCheck(request, rendered);
+  if (!words.ok)
     fail(
-      "설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. 색·질감·빛·선으로 설명해 주세요.",
+      `설명과 화풍에는 스튜디오·작가·작품·기존 캐릭터 이름을 사용할 수 없어요. ${words.advice || "색·질감·빛·선으로 설명해 주세요."}`,
       "forbidden_style_name",
     );
   return {

@@ -23,6 +23,25 @@ export function sceneBriefForPage(book, page) {
     ) || null
   );
 }
+/**
+ * The planned brief and staging words buildScenePrompt sends for this page
+ * (pose, weather, light, props, creature, drawable verb, sub-location):
+ * model-written story text, checked in the lenient forbidden-name scope. The
+ * app's own light-mood line is scaffolding and is not included.
+ */
+export function sceneBriefText(book, page) {
+  const brief = sceneBriefForPage(book, page || {}),
+    staging = page?.staging || {};
+  return [
+    en(brief?.pose),
+    en(brief?.weather),
+    en(brief?.light),
+    ...(Array.isArray(brief?.props) ? brief.props.map(en) : []),
+    en(brief?.creature),
+    text(staging.verb),
+    text(staging.subLocation),
+  ].filter(Boolean);
+}
 export function buildScenePrompt({
   book,
   page,

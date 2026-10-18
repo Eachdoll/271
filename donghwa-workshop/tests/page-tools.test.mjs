@@ -344,6 +344,12 @@ test('page tools refuse to buy while another tab holds the job\'s FULL AUTO run 
   assert.equal((await generateBookPageImage(state,book,3,{save,generate})).imageAssetId,'image-tab-1');
   useLocks({request:async()=>{}});
   assert.equal((await generateBookPageImage(state,book,4,{save,generate})).imageAssetId,'image-tab-2');
+  // A snapshot whose `held` is not an array (an object, a string, a number) lists no held lock.
+  for(const [index,held] of [[5,{name:'donghwa-full-auto-'+job.id}],[6,'donghwa-full-auto-'+job.id],[7,1]]){
+   useLocks({query:async()=>({held,pending:[]})});
+   assert.equal((await generateBookPageImage(state,book,index,{save,generate})).imageAssetId,'image-tab-'+(index-2),JSON.stringify(held));
+  }
+  draws-=3;
   assert.deepEqual([rewrites,draws],[1,2]);
   // A demo book never pays for a rewrite, so it needs no lock check.
   useLocks(held(['donghwa-full-auto-'+job.id]));queries=0;

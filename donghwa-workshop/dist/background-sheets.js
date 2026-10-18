@@ -2,6 +2,7 @@ import {
   getActiveWorld,
   getWorldStyleReferences,
   getWorldBackgroundSnapshot,
+  imageWordCheck,
 } from "./image-generation/world.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import {
@@ -60,6 +61,15 @@ export function backgroundSheetRequest(
       "저장된 배경 그림을 불러오는 중이에요. 잠시 후 다시 시도해 주세요.",
     );
   return {
+    // The place fields are parent text (strict); the fixed instructions are never checked.
+    forbiddenWordCheck: imageWordCheck({
+      strict: [
+        background.name,
+        background.type,
+        background.description || background.features,
+        background.layout,
+      ],
+    }),
     prompt: `Create a reusable environment reference sheet for ONE original children's picture-book location. Location name and requested facts: ${background.name}; type ${background.type || ""}; ${background.description || background.features || ""}; fixed layout ${background.layout || ""}. Show three complementary reference panels: a wide establishing view, a closer view from another useful angle, and a small detail view of the important fixed objects. All panels depict the SAME exact place and consistent geometry, wall/roof colors, window and door positions, furniture arrangement, materials, and recurring objects. For an interior show the same bed/table/window positions; for outdoors preserve path, tree and building shapes. ${existing ? "The first background reference defines this established place and its layout. Preserve it except explicit parent-requested changes in the facts above." : ""} Style images define painting medium only. Empty environment: no people, animals, faces, story action, words, captions, labels, arrows, watermarks, logos, or map text.`,
     stylePreset: clone(style),
     referenceImages: [

@@ -1,4 +1,4 @@
-import { buildScenePrompt } from "./scene-prompt.js";
+import { buildScenePrompt, sceneBriefText } from "./scene-prompt.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
 import { characterSVG } from "../engine.js";
@@ -106,7 +106,7 @@ export function getWorldStyleReferences(
   );
 }
 
-/** Parent- and material-supplied request text, flattened for the forbidden-name check. */
+/** Request text, flattened for the forbidden-name check. */
 const suppliedText = (...values) =>
   values
     .flat(Infinity)
@@ -115,9 +115,21 @@ const suppliedText = (...values) =>
       typeof value === "string" ? value : JSON.stringify(value),
     );
 /**
- * Names (Korean and English) of every character in the drawer, for the
- * forbidden-name check: a cast name followed only by particles ("토토로부터")
- * is that character, not the film. Never exempts a longer forbidden word.
+ * The one scope mapping every image request uses (sheet, wardrobe, scene,
+ * cover, place sheet): `strict` is text a parent typed, `lenient` is
+ * model-written story text, `names` are cast names. Anything else in the
+ * prompt is app scaffolding and is never checked. The provider and the
+ * wardrobe pre-check both read it with checkForbiddenWordCheck.
+ */
+export const imageWordCheck = ({ strict = [], lenient = [], names = [] } = {}) => ({
+  text: suppliedText(strict),
+  generated: suppliedText(lenient),
+  names: suppliedText(names),
+});
+/**
+ * Names of every character in the drawer. Parent-typed text gets no name
+ * exemption, so for a sheet or a wardrobe they only shape the advice
+ * ("토토로부터" → "토토에게서").
  */
 export const castNames = (state) =>
   suppliedText(
@@ -126,6 +138,50 @@ export const castNames = (state) =>
       character?.nameEn,
     ]),
   );
+/**
+ * The book's own cast, from its frozen sheets and its character list: the
+ * names that exempt "토토로 달려가요" (토토 + particle) in the book's story
+ * text, the same for every page and the cover.
+ */
+export function bookCastNames(state, book, snapshot = book?.generationSnapshot) {
+  const sheets = Array.isArray(snapshot?.characterSheets)
+    ? snapshot.characterSheets
+    : [];
+  return [
+    ...new Set(
+      suppliedText(
+        sheets.map((sheet) => [
+          sheet?.characterSnapshot?.name,
+          sheet?.characterSnapshot?.nameEn,
+        ]),
+        (Array.isArray(book?.characterIds) ? book.characterIds : []).map(
+          (id) => {
+            const frozen = sheets.find((sheet) => sheet?.characterId === id)
+              ?.characterSnapshot;
+            const character =
+              frozen || (state?.characters || []).find((c) => c?.id === id);
+            return [character?.name, character?.nameEn];
+          },
+        ),
+      ),
+    ),
+  ];
+}
+/**
+ * The cover action is parent text once the parent changed it from the
+ * planned one (`pagination.coverSceneActionGenerated`, recorded at the first
+ * edit). Without that record it counts as generated.
+ */
+export function coverActionEditedByParent(book) {
+  const pagination = book?.pagination,
+    current = pagination?.cover?.sceneAction,
+    original = pagination?.coverSceneActionGenerated;
+  return (
+    typeof current === "string" &&
+    typeof original === "string" &&
+    current.trim() !== original.trim()
+  );
+}
 
 function variantForPage(snapshot, characterId, pageNumber) {
   const range = (snapshot.variantPageRanges?.[characterId] || []).find(
@@ -674,19 +730,19 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
     .join("; ");
   const styleReferences = getWorldStyleReferences(state, world, preset);
   return {
-    // Parent-entered (or planned) character fields, each checked strictly on its own.
-    // Every known character's name counts: "토토로부터 받은 목도리" in 유하's description is 토토 + particles.
-    forbiddenWordCheck: {
-      text: suppliedText([
+    // Character fields are parent text: strict, each on its own, no name exemption
+    // ("토토로부터" is refused here and in every scene that would draw it).
+    forbiddenWordCheck: imageWordCheck({
+      strict: [
         character.name,
         character.nameEn,
         character.kind,
         character.description,
         character.appearance,
         character.clothes,
-      ]),
+      ],
       names: castNames(state),
-    },
+    }),
     prompt: `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
     stylePreset: clone(preset),
     referenceImages: [
@@ -814,12 +870,24 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     .filter(Boolean);
   const background = place.background || {};
   // Forbidden names are checked in these parts only, never in the fixed instructions or the plot ledger.
-  // Parent-entered material and a page's own image prompt are checked strictly ("like Frozen"),
-  // story text and the cover action leniently ("a frozen lake"). The whole cast's names count,
-  // also on the cover, which shows only the lead: "토토로 달려가요" is 토토 + particle.
+  // Strict (parent text): character, wardrobe and place descriptions, a page's own image prompt,
+  // a cover action the parent edited. Lenient (story text): page text, the planned scene action,
+  // a planned cover action, the scene brief. The book's cast names, the same for pages and the
+  // cover, exempt "토토로 달려가요" (토토 + particle) in the lenient parts only.
   const pageImagePrompt = options.cover ? null : page.imagePrompt || null;
-  const forbiddenWordCheck = {
-    text: suppliedText(
+  const coverAction = book.pagination?.cover?.sceneAction,
+    coverByParent =
+      !!options.cover &&
+      typeof coverAction === "string" &&
+      !!coverAction.trim() &&
+      coverActionEditedByParent(book);
+  const usesScenePrompt = !!(
+    options.cover ||
+    page.staging ||
+    book.sceneBriefs?.length
+  );
+  const forbiddenWordCheck = imageWordCheck({
+    strict: [
       sheets.map((sheet) => [
         sheet.characterSnapshot?.name,
         sheet.characterSnapshot?.nameEn,
@@ -838,34 +906,26 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
         background.rules,
       ],
       pageImagePrompt,
-    ),
-    generated: suppliedText(
+      coverByParent ? coverAction : null,
+    ],
+    lenient: [
       options.cover
-        ? book.pagination?.cover?.sceneAction || book.topic || book.title
+        ? coverByParent
+          ? null
+          : coverAction || book.topic || book.title
         : [
             pageImagePrompt ? null : scene,
             page.ko ?? page.textKo,
             page.en ?? page.textEn,
           ],
-    ),
-    names: suppliedText(
-      (snapshot.characterSheets?.length
-        ? snapshot.characterSheets
-        : sheets
-      ).map((sheet) => [
-        sheet.characterSnapshot?.name,
-        sheet.characterSnapshot?.nameEn,
-      ]),
-      (book.characterIds || []).map((id) => {
-        const character = (state?.characters || []).find((c) => c.id === id);
-        return [character?.name, character?.nameEn];
-      }),
-    ),
-  };
+      usesScenePrompt ? sceneBriefText(book, page) : null,
+    ],
+    names: bookCastNames(state, book, snapshot),
+  });
   return {
     forbiddenWordCheck,
     prompt:
-      options.cover || page.staging || book.sceneBriefs?.length
+      usesScenePrompt
         ? buildScenePrompt({
             book,
             page,

@@ -1360,9 +1360,20 @@ function captureEdits(s) {
     invalidateStoryDetails(d, { prose: true });
   }
   if (s.mode === "pages" && d.pagination) {
-    document
-      .querySelectorAll("[data-cover-field]")
-      .forEach((el) => (d.pagination.cover[el.dataset.coverField] = el.value));
+    document.querySelectorAll("[data-cover-field]").forEach((el) => {
+      const cover = d.pagination.cover,
+        field = el.dataset.coverField;
+      // The first parent edit of the cover action keeps the planned one beside the
+      // cover (outside the reviewed content), so the image check can tell parent
+      // text (strict) from model text (lenient).
+      if (
+        field === "sceneAction" &&
+        el.value !== (cover.sceneAction ?? "") &&
+        d.pagination.coverSceneActionGenerated === undefined
+      )
+        d.pagination.coverSceneActionGenerated = cover.sceneAction ?? "";
+      cover[field] = el.value;
+    });
     document
       .querySelectorAll("[data-page-field]")
       .forEach(
