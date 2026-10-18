@@ -269,6 +269,19 @@ test('the library review refuses, in both modes, while a simple action or a page
   }
 });
 
+test('the pro review keeps pictures a runner marked stale on an idle book, as simple ④ does', async () => {
+  const {readFileSync} = await import('node:fs');
+  const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
+  const start = app.indexOf('  openReview: async (job) => {');
+  const body = app.slice(start, app.indexOf('\n  },\n', start));
+  const pro = body.indexOf('closeModal();', body.indexOf('openSimpleJob(')),
+    keep = body.indexOf('keepEditedPictures(job.book)'),
+    idle = body.indexOf('job.status !== "running"'),
+    open = body.indexOf('draft = job.book');
+  assert.ok(pro > 0 && idle > pro && keep > idle && open > keep, body);
+  assert.match(body.slice(keep, open), /save\(\);/);
+});
+
 test('simple settings reuse the existing form ids so the existing handlers save them', () => {
   const {state} = setup();
   const text = renderTextEngineQuick(state);

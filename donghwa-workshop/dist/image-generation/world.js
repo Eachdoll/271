@@ -884,8 +884,8 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   // Forbidden names are checked in these parts only, never in the fixed instructions or the plot ledger.
   // Strict (parent text): character, wardrobe and place descriptions, a page's own image prompt,
   // a cover action the parent edited. Lenient (story text): page text, the planned scene action,
-  // a planned cover action, the scene brief, and a friend or place FULL AUTO wrote that no parent
-  // edited. The book's cast names, the same for pages and the cover, exempt "토토로 달려가요"
+  // a planned cover action, the scene brief, earlier pages' text and scenes, and a friend or
+  // place FULL AUTO wrote that no parent edited. The book's cast names, the same for pages and the cover, exempt "토토로 달려가요"
   // (토토 + particle) in the lenient parts only.
   const pageImagePrompt = options.cover ? null : page.imagePrompt || null;
   const coverAction = book.pagination?.cover?.sceneAction,
@@ -928,6 +928,8 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     ],
     lenient: [
       materials.map((part) => part.lenient),
+      // Earlier pages' text and scenes ride along as continuity in every later prompt.
+      earlierPages.map((prior) => [prior.textKo, prior.textEn, prior.scene]),
       options.cover
         ? coverByParent
           ? null

@@ -575,3 +575,14 @@ test('a friend or place FULL AUTO wrote is story text until a parent edits it', 
   const plain = updateBackground(own, own.backgrounds[1]?.id || background.id, {description: 'a sunny park'});
   if (own.backgrounds[1]) assert.equal(plain.backgrounds.find(b => b.id === own.backgrounds[1].id).parentEditedAt, undefined);
 });
+
+test('earlier pages that ride along in a later prompt are checked as story text', async () => {
+  const {state, book} = await demoBook();
+  book.pages[0].ko = '유하는 디즈니 공주처럼 웃었어요.';
+  const later = sceneGenerationRequest(state, book, 1);
+  assert.ok(later.forbiddenWordCheck.generated.includes('유하는 디즈니 공주처럼 웃었어요.'));
+  await assert.rejects(draw(state, book, 1), forbidden);
+  // Story text stays lenient there: the cast name plus a particle and a frozen lake are drawn.
+  book.pages[0].ko = '유하는 토토로부터 얼음 조각을 받았어요.'; book.pages[0].en = 'The frozen lake shines.';
+  assert.ok((await draw(state, book, 1)).imageUrl);
+});

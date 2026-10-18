@@ -15,8 +15,8 @@
           "보관"
         ],
         "ideas": [
-          "캠핑장에서 본 반딧불이",
-          "무지개 끝에서 찾은 것"
+          "무지개 끝에서 찾은 것",
+          "텃밭에 처음 심은 방울토마토"
         ],
         "ideaStatus": "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.",
         "forcedTopicCensus": {
@@ -70,29 +70,29 @@
         },
         "staleCount": "그림 1 / 8 · 글 바뀐 쪽 1",
         "keptAfterEdit": {
-          "jobId": "auto-730ff6a9-84c6-4a77-965b-e211d4517e95",
+          "jobId": "auto-a1991fb9-6751-4bf7-89bb-3af0ce7c475a",
           "status": "pages-ready",
           "error": null,
-          "asset": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
-          "marker": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "asset": "image-14ff42b8-3389-4b09-912e-462e01667d93",
+          "marker": "image-14ff42b8-3389-4b09-912e-462e01667d93",
           "stale": false
         },
         "drawAllChoice": "취소\n빈 그림만 만들기\n고친 1쪽도 다시 만들기",
         "stoppedRun": {
-          "jobId": "auto-730ff6a9-84c6-4a77-965b-e211d4517e95",
+          "jobId": "auto-a1991fb9-6751-4bf7-89bb-3af0ce7c475a",
           "status": "paused",
           "error": null,
-          "asset": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
-          "marker": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "asset": "image-14ff42b8-3389-4b09-912e-462e01667d93",
+          "marker": "image-14ff42b8-3389-4b09-912e-462e01667d93",
           "stale": false
         },
         "resumeAsked": 0,
         "resumedRun": {
-          "jobId": "auto-730ff6a9-84c6-4a77-965b-e211d4517e95",
+          "jobId": "auto-a1991fb9-6751-4bf7-89bb-3af0ce7c475a",
           "status": "review",
           "error": null,
-          "asset": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
-          "marker": "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
+          "asset": "image-14ff42b8-3389-4b09-912e-462e01667d93",
+          "marker": "image-14ff42b8-3389-4b09-912e-462e01667d93",
           "stale": false
         },
         "allImages": "그림 8 / 8 · 글 바뀐 쪽 1",
@@ -117,36 +117,36 @@
           "regenerateWorkflow": 0,
           "same": true,
           "before": {
-            "bookId": "book-8cb204c3-c518-4947-a16b-5c6dd3df0d0b",
+            "bookId": "book-24fd507f-b303-4716-abdb-fb965e026605",
             "pages": [
-              "image-7f90b4fd-5e3a-4f71-a17d-ea06ef314130",
-              "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
-              "image-4c0566c4-e1ba-4917-90e0-09062c921af2",
-              "image-5eb73c01-69ca-4134-8d09-d278a278e2c0",
-              "image-ea76f5d9-e135-4fff-bb91-899c17fb0d7c",
-              "image-34e804f8-d4ee-4450-b22f-e669884e18f6",
-              "image-803222df-f950-4737-8525-b229e0591e15",
-              "image-c5d59928-bc41-4712-b58d-3149061c3d95"
+              "image-19ea82cf-6ef4-40aa-9793-4ff096f9c154",
+              "image-14ff42b8-3389-4b09-912e-462e01667d93",
+              "image-ef6df3e2-a0f6-4416-945b-2ce71e843ac8",
+              "image-4c895d66-f1a0-4ef9-a818-47b4f7f8d074",
+              "image-1c6a9e39-efa0-47c1-8bb0-8c7893d53990",
+              "image-16f54384-a1a8-4be5-8e79-89ae62dd783a",
+              "image-cf14344f-4638-43a1-bfa2-1c948ef5d33f",
+              "image-2d8903bd-a0e2-47ea-b24a-fc50390c8d5f"
             ],
             "final": 8,
-            "cover": "image-966caa0e-b96e-4b85-a66e-9f732dcfd877",
+            "cover": "image-365ca007-dd8e-43e3-8b19-752a909c820c",
             "history": 7,
             "usage": 16
           },
           "after": {
-            "bookId": "book-8cb204c3-c518-4947-a16b-5c6dd3df0d0b",
+            "bookId": "book-24fd507f-b303-4716-abdb-fb965e026605",
             "pages": [
-              "image-7f90b4fd-5e3a-4f71-a17d-ea06ef314130",
-              "image-1fa666d8-15d7-4834-97d8-1ac731fc861b",
-              "image-4c0566c4-e1ba-4917-90e0-09062c921af2",
-              "image-5eb73c01-69ca-4134-8d09-d278a278e2c0",
-              "image-ea76f5d9-e135-4fff-bb91-899c17fb0d7c",
-              "image-34e804f8-d4ee-4450-b22f-e669884e18f6",
-              "image-803222df-f950-4737-8525-b229e0591e15",
-              "image-c5d59928-bc41-4712-b58d-3149061c3d95"
+              "image-19ea82cf-6ef4-40aa-9793-4ff096f9c154",
+              "image-14ff42b8-3389-4b09-912e-462e01667d93",
+              "image-ef6df3e2-a0f6-4416-945b-2ce71e843ac8",
+              "image-4c895d66-f1a0-4ef9-a818-47b4f7f8d074",
+              "image-1c6a9e39-efa0-47c1-8bb0-8c7893d53990",
+              "image-16f54384-a1a8-4be5-8e79-89ae62dd783a",
+              "image-cf14344f-4638-43a1-bfa2-1c948ef5d33f",
+              "image-2d8903bd-a0e2-47ea-b24a-fc50390c8d5f"
             ],
             "final": 8,
-            "cover": "image-966caa0e-b96e-4b85-a66e-9f732dcfd877",
+            "cover": "image-365ca007-dd8e-43e3-8b19-752a909c820c",
             "history": 7,
             "usage": 16
           }
@@ -181,8 +181,8 @@
           "보관"
         ],
         "ideas": [
-          "물웅덩이에 비친 거꾸로 세상",
-          "텃밭에 처음 심은 방울토마토"
+          "해바라기가 쑥쑥 자라는 여름",
+          "혼자 신발 끈을 묶어 본 날"
         ],
         "ideaStatus": "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.",
         "forcedTopicCensus": {
@@ -236,29 +236,29 @@
         },
         "staleCount": "그림 1 / 8 · 글 바뀐 쪽 1",
         "keptAfterEdit": {
-          "jobId": "auto-cd7221b4-c852-46ed-9c76-05dd90c45704",
+          "jobId": "auto-76c3aad9-1f13-41a7-bd11-346a90877b9b",
           "status": "pages-ready",
           "error": null,
-          "asset": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
-          "marker": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "asset": "image-20043388-1fca-4fda-861e-7e5ba50e073c",
+          "marker": "image-20043388-1fca-4fda-861e-7e5ba50e073c",
           "stale": false
         },
         "drawAllChoice": "취소\n빈 그림만 만들기\n고친 1쪽도 다시 만들기",
         "stoppedRun": {
-          "jobId": "auto-cd7221b4-c852-46ed-9c76-05dd90c45704",
+          "jobId": "auto-76c3aad9-1f13-41a7-bd11-346a90877b9b",
           "status": "paused",
           "error": null,
-          "asset": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
-          "marker": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "asset": "image-20043388-1fca-4fda-861e-7e5ba50e073c",
+          "marker": "image-20043388-1fca-4fda-861e-7e5ba50e073c",
           "stale": false
         },
         "resumeAsked": 0,
         "resumedRun": {
-          "jobId": "auto-cd7221b4-c852-46ed-9c76-05dd90c45704",
+          "jobId": "auto-76c3aad9-1f13-41a7-bd11-346a90877b9b",
           "status": "review",
           "error": null,
-          "asset": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
-          "marker": "image-2b86df33-4647-471a-8785-b51fa8d273b0",
+          "asset": "image-20043388-1fca-4fda-861e-7e5ba50e073c",
+          "marker": "image-20043388-1fca-4fda-861e-7e5ba50e073c",
           "stale": false
         },
         "allImages": "그림 8 / 8 · 글 바뀐 쪽 1",
@@ -283,36 +283,36 @@
           "regenerateWorkflow": 0,
           "same": true,
           "before": {
-            "bookId": "book-28da493c-7f47-4bab-ba34-56f44e72307a",
+            "bookId": "book-f62cb150-0290-474c-b953-bf8abc25e1b4",
             "pages": [
-              "image-72fbd341-5159-4453-bfbc-109c5509cb93",
-              "image-2b86df33-4647-471a-8785-b51fa8d273b0",
-              "image-4745880b-2fb4-41fc-9784-42ef9a34f4cd",
-              "image-4a046f65-7596-448f-b1ac-a53f09c46f59",
-              "image-99c21432-04c6-4f74-a08d-af2f12c57335",
-              "image-01e9fa76-686e-4b69-aaf3-150e4fe42878",
-              "image-d22ea814-7583-4e33-ad67-4024ce865906",
-              "image-df8004bb-b2d4-4d6f-99fb-359f203f193f"
+              "image-a1d7982e-c7ea-4366-822c-2f5bf30579ce",
+              "image-20043388-1fca-4fda-861e-7e5ba50e073c",
+              "image-9393b79d-0d36-4de1-9920-95d6d83efe69",
+              "image-3ca98fff-fdfc-4b66-be33-9950d435e08f",
+              "image-4d38b804-2850-4d9d-a992-ff0f78686a81",
+              "image-a57acc53-c45e-4ac8-be76-ccad6ea80c68",
+              "image-a204be80-0592-478a-a23b-4af394c062fb",
+              "image-df70b654-ac0a-4c58-ac67-49d00f286ba8"
             ],
             "final": 8,
-            "cover": "image-a5738648-f427-4a9f-9735-6e09f6ee8b1d",
+            "cover": "image-17bd4668-0dbb-47c2-9db8-048a744649a6",
             "history": 7,
             "usage": 16
           },
           "after": {
-            "bookId": "book-28da493c-7f47-4bab-ba34-56f44e72307a",
+            "bookId": "book-f62cb150-0290-474c-b953-bf8abc25e1b4",
             "pages": [
-              "image-72fbd341-5159-4453-bfbc-109c5509cb93",
-              "image-2b86df33-4647-471a-8785-b51fa8d273b0",
-              "image-4745880b-2fb4-41fc-9784-42ef9a34f4cd",
-              "image-4a046f65-7596-448f-b1ac-a53f09c46f59",
-              "image-99c21432-04c6-4f74-a08d-af2f12c57335",
-              "image-01e9fa76-686e-4b69-aaf3-150e4fe42878",
-              "image-d22ea814-7583-4e33-ad67-4024ce865906",
-              "image-df8004bb-b2d4-4d6f-99fb-359f203f193f"
+              "image-a1d7982e-c7ea-4366-822c-2f5bf30579ce",
+              "image-20043388-1fca-4fda-861e-7e5ba50e073c",
+              "image-9393b79d-0d36-4de1-9920-95d6d83efe69",
+              "image-3ca98fff-fdfc-4b66-be33-9950d435e08f",
+              "image-4d38b804-2850-4d9d-a992-ff0f78686a81",
+              "image-a57acc53-c45e-4ac8-be76-ccad6ea80c68",
+              "image-a204be80-0592-478a-a23b-4af394c062fb",
+              "image-df70b654-ac0a-4c58-ac67-49d00f286ba8"
             ],
             "final": 8,
-            "cover": "image-a5738648-f427-4a9f-9735-6e09f6ee8b1d",
+            "cover": "image-17bd4668-0dbb-47c2-9db8-048a744649a6",
             "history": 7,
             "usage": 16
           }

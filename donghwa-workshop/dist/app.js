@@ -33,6 +33,7 @@ import {
   cleanupFullAuto,
   isFullAutoRunning,
   openFullAutoReview,
+  keepEditedPictures,
 } from "./full-auto-ui.js";
 import {
   readUiMode,
@@ -3620,6 +3621,15 @@ configureFullAutoUI({
       return;
     }
     closeModal();
+    // As in simple ④: a runner stale mark left on an idle book keeps its picture,
+    // so approval redraws it only when the parent asks.
+    if (
+      job.book &&
+      job.status !== "running" &&
+      !isFullAutoRunning() &&
+      keepEditedPictures(job.book)
+    )
+      save();
     draft = job.book;
     editPage = 0;
     view = "edit";
