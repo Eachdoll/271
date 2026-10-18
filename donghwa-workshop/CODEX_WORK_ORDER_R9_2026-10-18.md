@@ -8,7 +8,7 @@
 | 브랜치 | `claude/cross-owner-repo-constraint-j20lhz` |
 | 앱 경로 | 저장소 안 `donghwa-workshop/` |
 | 기준 | Codex r8 (`SOURCE_COMMIT` `785f977`). 저장소 커밋 `0c2b756`에 그대로 반입되어 있다. |
-| 이번 반입 범위 | `0c2b756..` 이 지시서를 추가한 커밋. 앱 코드 변경은 없고 이 지시서와 `scripts/ux-census.mjs`(화면 조사 도구)만 있다. |
+| 이번 반입 범위 | `0c2b756..992496f`. 앱 코드 변경은 없고 이 지시서와 `scripts/ux-census.mjs`(화면 조사 도구)만 있다. |
 
 사용자 결정(2026-10-18): **분량 문제는 더 손대지 않는다.** 이번 범위는 아래 두 가지다.
 
