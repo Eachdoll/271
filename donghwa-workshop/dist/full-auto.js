@@ -47,7 +47,8 @@ import {
 import { estimateImageCost } from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
-import { layoutFor } from "./book-layout.js";
+import { layoutFor, textEstimateArgs } from "./book-layout.js";
+import { freezeReadingLevels } from "./reading-levels.js";
 import {
   applySeriesContinuity,
   bindSeriesBackgrounds,
@@ -241,6 +242,8 @@ export function estimateFullAutoCost(
     text = estimateStoryTextCost({
       settings,
       pageCount: wizard.pageCount || 12,
+      // R12: an openings wizard is sized from its v4 specs ({} for page books).
+      ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
     plan = resolveStoryStageSettings(settings, "outline"),
     planning = estimateTextCost({

@@ -6,6 +6,7 @@ import { checkRichness } from "./richness.js";
 import { currentBookPagination } from "./book-coherence.js";
 import { syncStoryDraft } from "./ui.js";
 import { buildStoryWords } from "../story-reading-context.js";
+import { textEstimateArgs } from "../book-layout.js";
 import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
@@ -525,8 +526,12 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
     return {
       textUsd: book.textDemo
         ? 0
-        : estimateStoryTextCost({ settings, pageCount: book.pages.length })
-            .costUsd,
+        : estimateStoryTextCost({
+            settings,
+            pageCount: book.pages.length,
+            // R12: an openings book is sized from its frozen specs and printed pages.
+            ...textEstimateArgs(book),
+          }).costUsd,
       pageTextUsd: book.textDemo ? 0 : pageRewriteUsd(settings),
       imageUnitUsd: unit,
       imagesUsd: imagesNeeded * unit,

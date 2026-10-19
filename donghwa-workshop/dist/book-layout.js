@@ -278,6 +278,32 @@ export function unitImageSize(book, page) {
     : policy.pageImageSize;
 }
 
+/**
+ * Extra estimateStoryTextCost arguments ({ layout, specs, pageCount }) for an
+ * openings book, draft or job (frozen specs, printed pages), or for a new
+ * wizard that layoutFor makes an openings book (`freeze` builds its v4 specs);
+ * {} for everything else, so page-book estimates are called exactly as before.
+ */
+export function textEstimateArgs(value, freeze) {
+  const { input } = sourceOf(value);
+  if (
+    isObject(value?.storyInput) ||
+    (isObject(value?.input) && isObject(value.input.specs))
+  )
+    return layoutOf(value) === "openings"
+      ? { layout: "openings", specs: input.specs, pageCount: printedPagesOf(value) }
+      : {};
+  if (layoutFor(value) !== "openings" || typeof freeze !== "function") return {};
+  return {
+    layout: "openings",
+    specs: freeze(
+      { koreanLevel: value.koreanLevel, englishLevel: value.englishLevel },
+      {},
+      { layout: "openings" },
+    ).specs,
+  };
+}
+
 /* ---------- page-count choices ---------- */
 
 /** The page-count select of the pro wizard and the simple format panel. */

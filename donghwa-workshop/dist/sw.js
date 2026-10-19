@@ -67,6 +67,7 @@ const FILES = [
   "./text-generation/settings-ui.js",
   "./story-generation/schemas.js",
   "./story-generation/pipeline.js",
+  "./story-generation/opening-prose.js",
   "./story-generation/demo.js",
   "./story-generation/checker.js",
   "./story-generation/continuity.js",

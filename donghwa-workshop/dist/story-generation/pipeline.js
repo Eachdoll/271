@@ -64,6 +64,16 @@ import {
   isOpeningsSpec,
   normalizeLayoutPolicy,
 } from "../book-layout.js";
+import {
+  budgetFor as openingBudgetFor,
+  openingTimeout,
+  isOpeningsInput,
+  layoutRuleLine,
+  lengthFitPlan,
+  applyParagraphFit,
+  OPENING_TIMEOUT_STAGES,
+  QUALITY_WRAP_TOKENS,
+} from "./opening-prose.js";
 export { buildBeatPagePlan } from "./pagination.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -88,7 +98,21 @@ const tokenBudget = {
   sceneBriefs: 14000,
   sceneBrief: 2000,
   enrichment: 3000,
+  // R12 openings only: the app length-fit pass on the non-quality prose path.
+  proseFit: 6000,
 };
+/**
+ * maxTokens of a stage: the pre-R12 constant, or for an openings draft the
+ * frozen-spec budget (opening-prose.js budgetFor) of the stages it sizes.
+ */
+export function budgetFor(stage, input) {
+  return openingBudgetFor(
+    stage,
+    input,
+    stage === "qualityWrap" ? QUALITY_WRAP_TOKENS : tokenBudget[stage],
+  );
+}
+export { OPENING_TIMEOUT_STAGES };
 const temperature = {
   outline: 0.8,
   plotContract: 0.4,
@@ -104,6 +128,7 @@ const temperature = {
   sceneBriefs: 0.8,
   sceneBrief: 0.8,
   enrichment: 0.5,
+  proseFit: 0.3,
 };
 const SECRET_FIELD =
   /^(?:apiKey|api_key|authorization|credential|credentials|secret|password|pin|pinHash|ciphertext|salt|iv|accessToken|refreshToken|token|config)$/i;
@@ -504,7 +529,7 @@ function baseSystemFor(input) {
     : baseSystem;
 }
 function levelRules(input) {
-  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.`;
+  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.${isOpeningsInput(input) ? `\n${layoutRuleLine(input)}` : ""}`;
 }
 function continuityMeta(input) {
   return input.previousStory
@@ -526,7 +551,9 @@ async function complete(stage, input, payload, schema, options = {}) {
     user: JSON.stringify({ input: modelVisibleInput(input), ...payload.data }),
     jsonSchema: schema,
     temperature: temperature[stage],
-    maxTokens: tokenBudget[stage],
+    maxTokens: budgetFor(stage, input),
+    // R12 openings only: long outputs get a longer timeout; others carry no key.
+    ...openingTimeout(stage, input, budgetFor(stage, input)),
     signal: options.signal,
   });
   const meta = {
@@ -578,6 +605,7 @@ const demo = (options) =>
 const qualityServices = () => ({
   engineFor,
   complete,
+  budgetFor,
   outlineRequestSchema,
   baseSystem,
   levelRules,
@@ -1886,6 +1914,89 @@ export async function rewriteBeat(outline, index, source, options = {}) {
   result.data = next;
   return result;
 }
+const PROSE_FIT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["paragraphs"],
+  properties: {
+    paragraphs: {
+      type: "array",
+      maxItems: 16,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["beatIndex", "text"],
+        properties: {
+          beatIndex: { type: "integer" },
+          text: { type: "string", maxLength: 6000 },
+        },
+      },
+    },
+  },
+};
+/**
+ * R12 openings, non-quality path: the app length-fit pass through the main
+ * engine, at most once per language and only when the frozen prosePolicy allows
+ * it. Only the beats outside their band are sent and replaced; every other
+ * paragraph stays byte for byte. A discarded or failed fit keeps the prose.
+ */
+async function fitOpeningsProse(result, outline, input, options, requests) {
+  const report = {};
+  for (const language of ["ko", "en"]) {
+    if (input.prosePolicy?.condenseOverBudget?.[language] !== true) continue;
+    const labels = result.data.paragraphBeats?.[language] || [],
+      rows = paragraphs(result.data[language]).map((text, index) => ({
+        beatIndex: labels[index],
+        text,
+      })),
+      plan = lengthFitPlan(rows, input.specs[language], language, input.pageCount / 2);
+    if (!plan.triggered.length) continue;
+    const triggered = new Set(plan.triggered.map((row) => row.beatIndex)),
+      unit = input.specs[language].units.opening;
+    let response;
+    try {
+      response = await complete(
+        "proseFit",
+        input,
+        {
+          rules: `LENGTH FIT (${language === "ko" ? "Korean" : "English"} only): return one paragraph per listed beat with its sentence count moved into ${unit.min}-${unit.max} sentences (target ${unit.target}). To lengthen, add sensory detail, gesture or dialogue inside the existing events; to shorten, cut repetition. Never add a new event, prop, place or character; keep cause, attempts, results and the turn. Every sentence has an explicit subject. Return {paragraphs:[{beatIndex,text}]} for exactly the listed beats.`,
+          data: {
+            approvedOutline: outline,
+            language,
+            targets: plan.lines,
+            beats: rows.filter((row) => triggered.has(row.beatIndex)),
+          },
+        },
+        PROSE_FIT_SCHEMA,
+        options,
+      );
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      requests.push({ usage: error.usage || {}, meta: error.meta || { requests: 1 } });
+      report[language] = { triggered: [...triggered], accepted: false, error: String(error.message || error).slice(0, 300) };
+      continue;
+    }
+    requests.push(response);
+    const fitted = applyParagraphFit(rows, response.data?.paragraphs, plan);
+    report[language] = { triggered: [...triggered], accepted: !!fitted };
+    if (!fitted) continue;
+    const candidate = {
+      ...result.data,
+      [language]: fitted.map((row) => row.text).join("\n\n"),
+      paragraphBeats: {
+        ...result.data.paragraphBeats,
+        [language]: fitted.map((row) => row.beatIndex),
+      },
+    };
+    try {
+      result.data = assertValid("prose", candidate, input, outline);
+    } catch (error) {
+      if (!(error instanceof StoryValidationError)) throw error;
+      report[language].accepted = false;
+    }
+  }
+  return report;
+}
 export async function generateProse(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -1917,7 +2028,7 @@ EVERY sentence must have an explicit grammatical subject in both languages. Use 
 Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least two sound/movement words. EACH approved beat must contain at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture), distributed within the beat's paragraphs. Expand each approved beat into concrete observation → attempt → visible consequence, including small gestures and specific reactions. At the earliest levels distribute these details over short permitted sentences. Never repeat an identical sentence except the approved refrain at planned beat positions, maximum 3.
 Return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with exactly one approved beat index for every blank-line-separated paragraph of the corresponding language. Each language must cover every approved beat in order; split paragraphs at beat boundaries. These paragraph labels are metadata ONLY: never place beat numbers, labels or headings into the ko/en story text or printable prose.
 Do not end paragraphs with a repeated appraisal or an explicit lesson. Respect the parent's moral through character actions and endingNote through the final action while keeping the approved ending and place.
-Korean length guide ${guidance}; prioritize the frozen levelSpec sentence/word constraints and retaining all events when ranges conflict. English total words should fit the per-page level range times ${input.pageCount}, but its sentences and rhythm must be original English, not translations.
+Korean length guide ${guidance}; prioritize the frozen levelSpec sentence/word constraints and retaining all events when ranges conflict. English total words should fit the per-page level range times ${input.pageCount}, but its sentences and rhythm must be original English, not translations.${isOpeningsInput(input) ? `\nEach approved beat paragraph = one opening: Korean ${input.specs.ko.units.opening.min}–${input.specs.ko.units.opening.max} sentences (target ${input.specs.ko.units.opening.target}), English ${input.specs.en.units.opening.min}–${input.specs.en.units.opening.max} sentences (target ${input.specs.en.units.opening.target}) per beat.` : ""}
 Write original English at ${input.specs.en.id || "selected E level"}, with repeating frames/rhyme if allowed. usedRefrainAt lists only approved used beat IDs.
 ${input.draftProse ? "This is HYBRID final refinement: read the supplied local draftProse, preserve its concrete events and approved outline, improve language and frozen-level compliance. Do not replace its story with an unrelated plot." : ""}`;
   const requests = [];
@@ -1970,6 +2081,15 @@ ${input.draftProse ? "This is HYBRID final refinement: read the supplied local d
           "한글·영어 모든 문단의 paragraphBeats 비트 표시가 필요해요.",
         ]);
       result.data = assertValid("prose", result.data, input, outline);
+      // R12 openings: one length-fit call per language when a beat is out of band.
+      if (isOpeningsInput(input) && input.prosePolicy)
+        result.meta.lengthFit = await fitOpeningsProse(
+          result,
+          outline,
+          input,
+          options,
+          requests,
+        );
       result.usage = mergeStoryUsage(requests);
       result.meta = {
         ...result.meta,

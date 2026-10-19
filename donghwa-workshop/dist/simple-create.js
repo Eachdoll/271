@@ -58,6 +58,7 @@ import {
   layoutFor,
   pageCountOptions,
   snapPageCount,
+  textEstimateArgs,
 } from "./book-layout.js";
 
 /* ---------- per-device mode ---------- */
@@ -1616,6 +1617,8 @@ export function coherenceCheckDue(state, book) {
     const row = estimateStoryTextCost({
       settings: book.textGenerationSettings || getTextGenerationSettings(state),
       pageCount: book.pages?.length || 12,
+      // R12: an openings book is sized from its frozen specs and printed pages.
+      ...textEstimateArgs(book),
     }).stages?.find((stage) => stage.stage === "coherence");
     cost = row?.requestCount > 0 ? row.costUsd / row.requestCount : 0;
   } catch {

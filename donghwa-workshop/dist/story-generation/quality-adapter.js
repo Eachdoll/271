@@ -16,6 +16,18 @@ import {
   isCatchphraseFix,
 } from "../story-quality/dist/catchphrase.js";
 import { storyCatchphrases } from "./checker.js";
+import {
+  isOpeningsInput,
+  layoutCanon,
+  layoutRuleLine,
+  lengthFitPlan,
+  lengthFitRequest,
+  applyLengthFit,
+  labeledBlocks,
+  budgetFor as openingBudgetFor,
+  openingTimeout,
+  QUALITY_WRAP_TOKENS,
+} from "./opening-prose.js";
 
 const clone = (value) =>
   value == null ? value : JSON.parse(JSON.stringify(value));
@@ -593,7 +605,7 @@ function catchphraseRules(input, services) {
   return `${String(services.baseSystem || "").includes(CATCHPHRASE_RULE_EN) ? "" : `CATCHPHRASES: ${CATCHPHRASE_RULE_EN} Never use a catchphrase as the refrain or repeating frame sentence.\n`}${names.length ? `CATCHPHRASE ROTATION: ${names.join(", ")} used a catchphrase in a recent book, so they use no catchphrase in this book.\n` : ""}`;
 }
 function canonicalWorldRules(input, services, bindTargetLevel = true) {
-  return `${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
+  return `${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
 }
 function enrichedOutlineSchema(input, pattern, services) {
   const supplied =
@@ -1309,6 +1321,20 @@ function packageLevels(input) {
           }),
     };
   }
+  // R12 openings: the target row asks for the per-opening range (a beat is an
+  // opening) and the rich row comes from the frozen richLevel, never the live
+  // seed. Page drafts keep the live-seed rows (same ledger fingerprints).
+  if (isOpeningsInput(input))
+    for (const lang of ["ko", "en"]) {
+      const spec = input.specs[lang],
+        opening = [spec.units.opening.min, spec.units.opening.max],
+        rich = spec.richLevel;
+      if (rich?.id && rich.id !== spec.id) {
+        const { id, ...row } = clone(rich);
+        levels[id] = { ...row, sentencesPerPage: opening };
+      }
+      levels[spec.id].sentencesPerPage = opening;
+    }
   return levels;
 }
 function parseLabeledProse(text, outline, lang) {
@@ -1389,11 +1415,13 @@ export async function generateQualityProse(
       const targetLevelId =
           input.specs[lang].id || (lang === "ko" ? "K1" : "E0"),
         targetOnly = quality.twoPass === false;
+      const openings = isOpeningsInput(input),
+        wrapTokens = openingBudgetFor("qualityWrap", input, QUALITY_WRAP_TOKENS);
       const wrap = (role) => ({
         id: `quality-${role}`,
         async complete(request) {
           const labels = lang === "ko" ? "[비트 n · 유형]" : "[Beat n · type]",
-            rules = `OUTPUT FORMAT OVERRIDE: return ${lang === "ko" ? "Korean" : "English"} plain story text only, NOT JSON, with ${labels} at each beat paragraph start. Keep labels through rich, simplify and emotion fixes. The app strips them into metadata before printing. Follow every approved beat, all causal state changes, and its scene brief without introducing new events. EVERY sentence, including dialogue, has an explicit grammatical subject. Attribute dialogue to a selected named speaker. Include at least THREE quoted dialogue turns in this language and one concrete sensory detail per beat. ${lang === "en" && targetLevelId === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English is original writing at its E level, never a Korean translation. The approved plotContract is frozen; stateAfter describes the endpoint, not the start of every paragraph. ${targetOnly ? "This is the only writing pass: write directly at the frozen target level." : "Rich draft may use the package rich level for syntax; simplify/fix must return to the frozen target level without removing causal events."}`;
+            rules = `OUTPUT FORMAT OVERRIDE: return ${lang === "ko" ? "Korean" : "English"} plain story text only, NOT JSON, with ${labels} at each beat paragraph start. Keep labels through rich, simplify and emotion fixes. The app strips them into metadata before printing. Follow every approved beat, all causal state changes, and its scene brief without introducing new events. EVERY sentence, including dialogue, has an explicit grammatical subject. Attribute dialogue to a selected named speaker. Include at least THREE quoted dialogue turns in this language and one concrete sensory detail per beat. ${lang === "en" && targetLevelId === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English is original writing at its E level, never a Korean translation. The approved plotContract is frozen; stateAfter describes the endpoint, not the start of every paragraph. ${targetOnly ? "This is the only writing pass: write directly at the frozen target level." : "Rich draft may use the package rich level for syntax; simplify/fix must return to the frozen target level without removing causal events."}${openings ? ` ${layoutRuleLine(input)}` : ""}`;
           const richDraft = role === "prose" && !targetOnly;
           return journal.call(
             role,
@@ -1401,7 +1429,8 @@ export async function generateQualityProse(
               ...request,
               system: `${canonicalWorldRules(input, services, !richDraft)}\n${request.system}\n${rules}`,
               user: `${request.user}\n\nFROZEN_APPROVED_OUTLINE_JSON: ${JSON.stringify(outline)}\n${richDraft ? "FINAL_TARGET_LEVEL_FOR_LATER_SIMPLIFY_ONLY" : "TARGET_LEVEL_SPEC_JSON"}: ${JSON.stringify(input.specs[lang])}`,
-              maxTokens: 12000,
+              maxTokens: wrapTokens,
+              ...openingTimeout("qualityWrap", input, wrapTokens),
             },
             services,
           );
@@ -1415,7 +1444,9 @@ export async function generateQualityProse(
         },
         lang,
         outline,
-        pageCount: input.pageCount,
+        // R12 openings: no package condense and no '[전체 분량] N쪽' line; the
+        // app length-fit pass below works per beat (= per opening) instead.
+        pageCount: openings ? undefined : input.pageCount,
         condenseOverBudget:
           input.prosePolicy?.condenseOverBudget?.[lang] === true,
         // R9 rule 9 only for drafts frozen with a catchphrase policy.
@@ -1447,7 +1478,35 @@ export async function generateQualityProse(
               "frozen selected vocabulary",
         twoPass: !targetOnly,
       });
-      const parsed = parseLabeledProse(result.simplified, outline, lang);
+      let simplified = result.simplified,
+        lengthFit = null;
+      if (openings && input.prosePolicy?.condenseOverBudget?.[lang] === true) {
+        const plan = lengthFitPlan(
+          labeledBlocks(simplified),
+          input.specs[lang],
+          lang,
+          input.pageCount / 2,
+        );
+        if (plan.triggered.length) {
+          // One cheap call per language, journal-recorded (a resume re-buys nothing).
+          const response = await journal.call(
+            "cheap",
+            {
+              ...lengthFitRequest(simplified, plan, input.specs[lang], lang),
+              maxTokens: wrapTokens,
+              ...openingTimeout("qualityWrap", input, wrapTokens),
+            },
+            services,
+          );
+          const fitted = applyLengthFit(simplified, response.text, plan);
+          lengthFit = {
+            triggered: plan.triggered.map((row) => row.beatIndex),
+            accepted: !!fitted,
+          };
+          if (fitted) simplified = fitted;
+        }
+      }
+      const parsed = parseLabeledProse(simplified, outline, lang);
       prose[lang] = parsed.text;
       prose.paragraphBeats[lang] = parsed.labels;
       results[lang] = {
@@ -1458,6 +1517,7 @@ export async function generateQualityProse(
         tellHitsAfter: result.tellHitsAfter,
         calls: result.calls,
         twoPass: !targetOnly,
+        ...(lengthFit ? { lengthFit } : {}),
       };
     }
     const validated = services.assertValid
