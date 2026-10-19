@@ -99,6 +99,8 @@ import {
   exportLibrary,
   validateImport,
   restoreLibraryImages,
+  recommendedPrintLayout,
+  OPENING_BOOKLET_NOTE,
 } from "./output.js";
 import {
   migrateWorldState,
@@ -2152,7 +2154,48 @@ function showBackgroundForm() {
     )}<div class="field field-wide"><label for="b-description">특징과 분위기</label><textarea id="b-description" maxlength="250" placeholder="큰 나무 아래 노란 미끄럼틀이 있는 아늑한 놀이터" required></textarea><small>장소 설정을 이야기 맥락으로 저장합니다. 사진으로 배경 추가는 이야기 재료의 ‘사진으로 배경 시트 만들기’에서 사용할 수 있어요.</small></div><div class="field field-wide"><label for="b-layout">고정 배치 · 문·창·가구·소품</label><textarea id="b-layout" maxlength="3000" placeholder="왼쪽 벽에 창문, 오른쪽 벽에 침대, 문 옆 노란 책장"></textarea></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${icon("check")}배경에 저장</button></div></form>`,
   );
 }
+/**
+ * R12 openings: the print dialog offers 'A4 가로 한 장에 펼침 하나' and 크게 읽기,
+ * preselects the recommended one when the stored default is the factory one,
+ * counts the range in openings and always sets the text below the picture.
+ */
+function showOpeningsPrintOptions(b) {
+  const language =
+      b.language === "en" ? "en" : b.language === "bilingual" ? "bilingual" : "ko",
+    stored = state.settings.defaultLayout,
+    booklet = stored === "booklet",
+    layout = !stored || stored === "single" ? recommendedPrintLayout(b, language) : booklet ? "single" : stored === "two" ? "two" : "single";
+  showModal(
+    `${modalHeader("종이책으로 만나기")}<p class="modal-intro">${esc(b.title)} · ${esc(openingsSummary(b) || "")} · 본문은 그림 아래에 인쇄해요. A4 인쇄 창에서 프린터 또는 ‘PDF로 저장’을 선택해 주세요.</p>${booklet ? `<div class="notice">${OPENING_BOOKLET_NOTE}. 일반 출력으로 골라 두었어요.</div>` : ""}<form id="print-form" data-id="${esc(b.id)}"><div class="form-grid">${selectField(
+      "p-layout",
+      "레이아웃",
+      [
+        ["single", "A4 가로 한 장에 펼침 하나"],
+        ["two", "크게 읽기 · A4 세로 한 장에 한 쪽"],
+      ],
+      layout,
+    )}${selectField(
+      "p-language",
+      "출력 언어",
+      [
+        ["ko", "한글판"],
+        ["en", "영어판"],
+        ["bilingual", "한 면에 영어 + 한글"],
+      ],
+      language,
+    )}<div class="field"><label for="p-pages">출력 펼침</label><input id="p-pages" value="all" placeholder="all / cover / 2-4"><small>all: 전체 · cover: 표지만 · 펼침 범위(예: 2-4) 또는 쉼표 구분</small></div>${selectField(
+      "p-color",
+      "색상",
+      [
+        ["color", "컬러"],
+        ["grayscale", "흑백"],
+      ],
+      "color",
+    )}<input type="hidden" id="p-textPosition" value="below"><input type="hidden" id="p-fontSize" value="large"><input type="hidden" id="p-margin" value="standard"></div><div class="notice" style="margin-top:20px">책 전체를 한 가지 글자 크기로 맞추고, 글이 길면 그 펼침의 그림만 조금 줄여요(펼침면은 낱쪽 그림보다 작아지지 않아요).<br>글이 넘치면 인쇄 창에서 알려 드려요. 그때는 ‘크게 읽기’를 골라 주세요.</div><div class="modal-actions"><button type="submit" class="btn btn-primary">${icon("print")}그림 + 글 인쇄 미리보기</button></div></form>`,
+  );
+}
 function showPrintOptions(b) {
+  if (layoutOf(b) === "openings") return showOpeningsPrintOptions(b);
   showModal(
     `${modalHeader("종이책으로 만나기")}<p class="modal-intro">${esc(b.title)} · 그림을 가리지 않도록 본문을 그림 아래에 따로 배치합니다. A4 인쇄 창에서 프린터 또는 ‘PDF로 저장’을 선택해 주세요.</p><form id="print-form" data-id="${esc(b.id)}"><div class="form-grid">${selectField(
       "p-layout",
