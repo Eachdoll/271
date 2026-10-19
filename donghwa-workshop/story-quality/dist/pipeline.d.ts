@@ -52,6 +52,11 @@ export interface OutlineStageInput {
      * 수정 호출에도 말버릇 항목이 없다. 말버릇 정책 없이 고정된 앱의 기존 초안이 완료한 유료 호출을 재결제하지 않게 한다.
      */
     legacyCatchphrasePrompt?: boolean;
+    /**
+     * true면 2026-10-19 견고성 수정 이전의 검사(plotCheck legacyChecks)를 쓴다. 앱이 그 이전에 저장된 유료 체크포인트를 이어 갈 때만 켠다:
+     * 검사 결과가 바뀌면 수정 호출 요청이 달라져 이미 산 응답을 다시 쓰지 못하기 때문이다.
+     */
+    legacyChecks?: boolean;
 }
 export interface OutlineStageResult {
     outline: StoryOutline;

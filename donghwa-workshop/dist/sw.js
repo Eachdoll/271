@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v38";
+const CACHE = "donghwa-shell-v39";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -13,6 +13,7 @@ const FILES = [
   "./story-quality/gold/gold_outlines_part1.json",
   "./story-quality/gold/gold_outlines_part2.json",
   "./story-generation/plot-contract.js",
+  "./story-generation/outline-normalize.js",
   "./story-generation/coherence.js",
   "./story-generation/book-coherence.js",
   "./story-generation/quality-adapter.js",

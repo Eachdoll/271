@@ -25,6 +25,11 @@ export interface PlotCheckInput {
   inventories?: Inventories;
   /** 등장인물 말버릇. 비트 요약+후렴에서 2회 이상이거나 후렴과 핵심 구절을 공유하면 수정 항목. */
   catchphrases?: string[];
+  /**
+   * true면 2026-10-19 견고성 수정 이전의 검사를 그대로 쓴다(실패 이유 정규화, 금지 소재 부분 문자열 비교, 주제 키워드).
+   * 앱은 이 규칙 표시가 없는 저장된 유료 체크포인트를 이어 갈 때만 켜서, 검사 결과가 바뀌어 수정 호출 요청이 달라지지 않게 한다.
+   */
+  legacyChecks?: boolean;
 }
 
 const MORAL_TAIL = /(좋은 거예요|소중해요|마음이 참|따뜻해요|행복했어요|고마운 일이에요|함께라서 좋아요)[.!]?\s*$/;
@@ -45,6 +50,72 @@ export function topicMentioned(text: string, topic: string): boolean {
   const kws = topicKeywords(topic);
   if (kws.length === 0) return true;
   return kws.some((k) => text.includes(k) || (k.length >= 3 && text.includes(k.slice(0, 2))));
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** 낱말 첫머리에서 시작하는 위치들. "꿀벌을"·"물총으로" 안의 "벌을"·"총으로"는 낱말 첫머리가 아니다. */
+function tokenStartIndexes(text: string, word: string): number[] {
+  const out: number[] = [];
+  const re = new RegExp(`(?:^|[^\\p{L}\\p{N}])(${escapeRegExp(word)})`, 'gu');
+  for (const m of text.matchAll(re)) out.push((m.index ?? 0) + m[0].length - m[1].length);
+  return out;
+}
+
+/**
+ * 앱의 주제 낱말(storyTopicKeywords)처럼 한 글자 명사도 주제 낱말로 본다("달에 놀러 간 날"의 "달", "비 오는 날"의 "비").
+ * topicKeywords는 세계 카드 추천에도 쓰이므로 그대로 두고, 검사에서만 낱말 첫머리 일치로 더 본다.
+ */
+export function shortTopicNouns(topic: string): string[] {
+  // "오는"의 "는"처럼 은/는은 동사 꼴이기 쉬워 떼지 않는다.
+  return [...new Set(topic
+    .split(/[\s,·/()]+/)
+    .filter((w) => w.length === 1 || !/[은는]$/u.test(w))
+    .map((w) => w.replace(PARTICLES, ''))
+    .filter((w) => w.length === 1 && /[가-힣]/u.test(w) && !STOPWORDS.has(w)))];
+}
+
+/** 주제가 비트에 있는지: 기존 키워드 비교 + 한 글자 주제 명사의 낱말 첫머리 일치. */
+export function topicCovered(text: string, topic: string): boolean {
+  return topicMentioned(text, topic) || shortTopicNouns(topic).some((w) => tokenStartIndexes(text, w).length > 0);
+}
+
+const PET_OR_FRIEND = /^(?:강아지|멍멍이|누렁이|바둑이|고양이|야옹이|병아리|오리|아기\S*|동생|친구\S*|나비|토끼|다람쥐|아기새|새끼\S*)/u;
+const NATURE = /^(?:비|빗방울|빗줄기|빗물|소나기|바람|파도|물결|우박|눈송이|싸락눈|나뭇가지|나뭇잎|햇살)$/u;
+/** 같은 문장에서 이 위치 앞의 마지막 주어(이·가·은·는으로 끝나는 어절). */
+function lastSubjectBefore(sentence: string): string {
+  const words = sentence.split(/\s+/).filter(Boolean);
+  for (let i = words.length - 1; i >= 0; i--) {
+    const m = words[i].match(/^(.+?)(?:이|가|은|는)$/u);
+    if (m) return m[1];
+  }
+  return '';
+}
+/**
+ * 일상 문맥에서 흔한 금지 항목은 그 문맥이면 넘긴다. 위협하는 문맥(사람이 때리기, 늑대가 쫓아오기, 칼로 위협하기)은 그대로 잡는다.
+ */
+const BENIGN_CONTEXT: Record<string, (before: string, after: string) => boolean> = {
+  때리: (before) => NATURE.test(lastSubjectBefore(before)),
+  쫓아와: (before, after) => PET_OR_FRIEND.test(lastSubjectBefore(before)) || /꼬리를 흔들|깡충|반가워|신나서|웃으며|놀자|장난/u.test(before + after),
+  칼로: (_before, after) => /^칼로\s+(?:\S+\s+){0,2}?\S*(?:사과|과일|빵|케이크|수박|당근|오이|감자|두부|김밥|떡|피자|채소|야채|자르|잘라|썰|깎)/u.test(after),
+};
+
+/**
+ * 금지 소재가 글에 있는지. legacy면 예전처럼 부분 문자열로 찾는다.
+ * 아니면 낱말 첫머리에서만 찾고, 일상 문맥 항목(때리·쫓아와·칼로)은 그 문장이 일상 문맥이면 넘긴다.
+ */
+export function forbiddenHit(text: string, keyword: string, legacy = false): boolean {
+  const k = keyword.trim();
+  if (k.length < 2) return false;
+  if (legacy) return text.includes(k);
+  const benign = BENIGN_CONTEXT[k];
+  for (const at of tokenStartIndexes(text, k)) {
+    if (!benign) return true;
+    const start = Math.max(text.lastIndexOf('.', at - 1), text.lastIndexOf('!', at - 1), text.lastIndexOf('?', at - 1), text.lastIndexOf('\n', at - 1)) + 1;
+    const ends = ['.', '!', '?', '\n'].map((c) => text.indexOf(c, at)).filter((i) => i >= 0);
+    const end = ends.length ? Math.min(...ends) : text.length;
+    if (!benign(text.slice(start, at), text.slice(at, end))) return true;
+  }
+  return false;
 }
 
 const PLANTED_QUANTITY = /\s+(?:한|두|세|네|다섯|하나|둘|셋|\d+)(?:\s*(?:송이|개|마리|장|켤레|자루|권|알|쌍|그루|조각|병|봉지|짝|통))?$/u;
@@ -75,16 +146,26 @@ export function containsPlanted(text: string, planted: string): boolean {
   return containsNoun(text, head);
 }
 
-/** 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")으로 쓰는 경우가 많아 ID로 정규화한다. */
-export function normalizeFailureReason(value: unknown): string | null {
+/**
+ * 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")이나 다른 표기("Wrong place", "wrong-method")로 쓰는 경우가 많아 ID로 정규화한다.
+ * legacy면 2026-10-19 이전 규칙만 쓴다.
+ */
+export function normalizeFailureReason(value: unknown, legacy = false): string | null {
   if (value == null) return null;
   const text = String(value).trim();
   if (!text) return null;
   const lower = text.toLowerCase();
   if (/^(wrong_place|wrong_method|interrupted)$/.test(lower)) return lower;
-  if (/wrong_place|잘못된 장소|엉뚱한 장소|다른 장소|거기엔 없/.test(text)) return 'wrong_place';
-  if (/wrong_method|잘못된 방법|방법이 틀|엉뚱한 방법/.test(text)) return 'wrong_method';
-  if (/interrupted|방해|끼어들|거의 됐는데|직전에/.test(text)) return 'interrupted';
+  if (legacy) {
+    if (/wrong_place|잘못된 장소|엉뚱한 장소|다른 장소|거기엔 없/.test(text)) return 'wrong_place';
+    if (/wrong_method|잘못된 방법|방법이 틀|엉뚱한 방법/.test(text)) return 'wrong_method';
+    if (/interrupted|방해|끼어들|거의 됐는데|직전에/.test(text)) return 'interrupted';
+    return text;
+  }
+  const id = lower.replace(/[\s-]+/g, '_');
+  if (/wrong_place|(?:잘못된|엉뚱한|다른)\s*(?:장소|곳)|거기엔 없/u.test(`${id} ${text}`)) return 'wrong_place';
+  if (/wrong_method|(?:잘못된|엉뚱한)\s*방법|방법이\s*(?:틀|잘못|맞지\s*않)/u.test(`${id} ${text}`)) return 'wrong_method';
+  if (/interrupted|방해|끼어들|거의\s*(?:됐|되었|다\s*됐|성공)|성공했는데|직전에/u.test(`${id} ${text}`)) return 'interrupted';
   return text;
 }
 export function plotCheck(input: PlotCheckInput): PlotCheckResult {
@@ -107,7 +188,8 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
 
   // 2 실패 이유 서로 다름 (+ 조합 재료 순서 준수)
   const attempts = beats.filter((b) => b.type === 'attempt');
-  const reasons = attempts.map((b) => normalizeFailureReason(b.failureReason));
+  const legacy = input.legacyChecks === true;
+  const reasons = attempts.map((b) => normalizeFailureReason(b.failureReason, legacy));
   if (reasons.some((r) => !r)) fix.push('attempt 비트에 failureReason이 비어 있음');
   if (new Set(reasons.filter(Boolean)).size < Math.min(3, reasons.length)) fix.push('attempt 비트의 실패 이유가 겹침');
   if (input.seed) {
@@ -122,7 +204,7 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
 
   // 4 주제·이름 → 재생성
   const all = summaries.join(' ');
-  if (!topicMentioned(all, topic)) regenerate.push(`주제 키워드(${topicKeywords(topic).join('/')})가 비트에 없음`);
+  if (!(legacy ? topicMentioned(all, topic) : topicCovered(all, topic))) regenerate.push(`주제 키워드(${topicKeywords(topic).join('/')})가 비트에 없음`);
   const nameCount = summaries.filter((s) => s.includes(protagonistName)).length;
   if (nameCount < 3) regenerate.push(`주인공 이름 "${protagonistName}"이(가) ${nameCount}개 비트에만 등장(3개 이상 필요)`);
 
@@ -166,7 +248,7 @@ export function plotCheck(input: PlotCheckInput): PlotCheckResult {
 
   // 8 금지 소재 → 재생성
   const forbidden = input.inventories?.forbiddenKeywords ?? ['괴물', '귀신', '때리', '놀리'];
-  for (const k of forbidden) if (k.trim().length >= 2 && all.includes(k)) regenerate.push(`금지 소재: ${k}`);
+  for (const k of forbidden) if (k.trim().length >= 2 && forbiddenHit(all, k, legacy)) regenerate.push(`금지 소재: ${k}`);
 
   // 9 장소 규칙: 시작·끝은 집, 중간 2곳 이상
   const keys = beats.map((b) => (b.settingKey ?? '').toLowerCase());

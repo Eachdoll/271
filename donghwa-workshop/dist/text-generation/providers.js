@@ -38,17 +38,57 @@ function safeSchema(value) {
     ? value
     : undefined;
 }
+const safeJsonKeys = (key, item) => {
+  if (["__proto__", "prototype", "constructor"].includes(key))
+    throw new Error("Invalid JSON key");
+  return item;
+};
+/** The first balanced {...} or [...] (a fence anywhere is tried first), skipping string contents. */
+function balancedJson(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  for (const candidate of [fenced?.[1], text]) {
+    if (!candidate) continue;
+    const starts = ["{", "["]
+      .map((char) => candidate.indexOf(char))
+      .filter((at) => at >= 0);
+    if (!starts.length) continue;
+    const start = Math.min(...starts),
+      open = candidate[start],
+      close = open === "{" ? "}" : "]";
+    let depth = 0,
+      inString = false,
+      escaped = false;
+    for (let i = start; i < candidate.length; i++) {
+      const char = candidate[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === open) depth++;
+      else if (char === close && --depth === 0)
+        return candidate.slice(start, i + 1);
+    }
+  }
+  return null;
+}
 function parseJson(value) {
   if (typeof value === "object" && value !== null) return value;
   const raw = String(value || "")
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  return JSON.parse(raw, (key, item) => {
-    if (["__proto__", "prototype", "constructor"].includes(key))
-      throw new Error("Invalid JSON key");
-    return item;
-  });
+  try {
+    return JSON.parse(raw, safeJsonKeys);
+  } catch (error) {
+    // Commentary after the JSON, or a leading sentence plus a fence: take the
+    // balanced JSON instead of paying for a second request.
+    const slice = balancedJson(String(value || ""));
+    if (!slice || slice === raw) throw error;
+    return JSON.parse(slice, safeJsonKeys);
+  }
 }
 async function fetchJson(url, options, config, signal) {
   let response;
@@ -373,7 +413,9 @@ export function createTextEngine({ engine, config = {} } = {}) {
       let input = 0,
         output = 0,
         actual = 0,
-        actualKnown = true;
+        actualKnown = true,
+        answered = 0,
+        lastModel = null;
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
           if (attempt) arm();
@@ -391,6 +433,8 @@ export function createTextEngine({ engine, config = {} } = {}) {
             },
             controller.signal,
           );
+          answered++;
+          lastModel = result.model || lastModel;
           input += result.usage.input;
           output += result.usage.output;
           if (Number.isFinite(result.costUsd)) actual += result.costUsd;
@@ -426,12 +470,35 @@ export function createTextEngine({ engine, config = {} } = {}) {
           };
         }
       } catch (error) {
-        if (timedOut && !req.signal?.aborted)
-          failure(
-            "글 엔진의 응답 대기 시간이 지났어요. 진행 중이던 단계를 확인하고 다시 시도해 주세요.",
-            "timeout",
-          );
-        throw error;
+        // Responses already received were paid: the stage and FULL AUTO record them.
+        const paid = (target) => {
+          if (answered && target instanceof TextEngineError && !target.usage) {
+            target.usage = { input, output };
+            if (actualKnown) target.costUsd = actual;
+            target.meta = {
+              ...(target.meta || {}),
+              engine,
+              model: lastModel,
+              requestedModel: getTextModel(engine, config),
+              requests: answered,
+              costUsdEstimated: estimateTextCost({ engine, config, input, output })
+                .costUsd,
+              pricingEstimated: true,
+            };
+          }
+          return target;
+        };
+        if (timedOut && !req.signal?.aborted) {
+          try {
+            failure(
+              "글 엔진의 응답 대기 시간이 지났어요. 진행 중이던 단계를 확인하고 다시 시도해 주세요.",
+              "timeout",
+            );
+          } catch (timeout) {
+            throw paid(timeout);
+          }
+        }
+        throw paid(error);
       } finally {
         clearTimeout(timer);
         req.signal?.removeEventListener("abort", abort);

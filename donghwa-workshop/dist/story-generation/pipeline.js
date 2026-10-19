@@ -54,6 +54,10 @@ import {
   attachPagePlotContext,
 } from "./coherence.js";
 import {
+  normalizeOutlineResponse,
+  parseJsonLenient,
+} from "./outline-normalize.js";
+import {
   generateQualityOutline,
   generateQualityProse,
   loadStoryQualityData,
@@ -516,14 +520,9 @@ async function complete(stage, input, payload, schema, options = {}) {
   if (typeof modelId === "string") meta.modelId = modelId.slice(0, 200);
   let data = response.json;
   if (data === undefined) {
-    try {
-      data = JSON.parse(
-        String(response.text || "")
-          .trim()
-          .replace(/^```(?:json)?\s*/i, "")
-          .replace(/\s*```$/, ""),
-      );
-    } catch {
+    // A fence, a leading sentence or trailing commentary around the JSON.
+    data = parseJsonLenient(response.text) ?? undefined;
+    if (data === undefined) {
       const error = new StoryValidationError(stage, [
         "이야기 엔진이 JSON을 반환하지 않았어요. 다시 생성해 주세요.",
       ]);
@@ -1759,7 +1758,8 @@ Use only supplied drawer background IDs: settings[].backgroundId and the matchin
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
 endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home. A requested moral must be shown through actions and never spoken as a lesson.`;
   const results = [];
-  let violations = [];
+  let violations = [],
+    normalized = [];
   for (let pass = 0; pass < 3; pass++) {
     if (pass)
       notify(
@@ -1802,6 +1802,12 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
       continue;
     }
     results.push(result);
+    // The same response clean-up as the quality path (ids written as names,
+    // ledger continuity, counts …) before the checks: a book-keeping slip no
+    // longer buys a whole new outline.
+    const shaped = normalizeOutlineResponse(result.data, input);
+    result.data = shaped.outline;
+    normalized = shaped.notes;
     const report = inspectOutlineRules(result.data, input);
     if (!result.data?.plotContract) {
       report.valid = false;
@@ -1825,6 +1831,7 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
         ),
         repairAttempts: pass,
         checks: report,
+        ...(normalized.length ? { normalized } : {}),
         ...(report.valid
           ? {}
           : { softIssues: report.violations.map((row) => row.message) }),
@@ -1833,10 +1840,9 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
     }
     violations = report.violations;
   }
-  const error = new StoryValidationError(
-    "outline",
-    violations.map((v) => v.message),
-  );
+  const error = new StoryValidationError("outline", [
+    ...new Set(violations.map((v) => v.message)),
+  ]);
   error.usage = mergeStoryUsage(results);
   error.meta = {
     stage: "outline",

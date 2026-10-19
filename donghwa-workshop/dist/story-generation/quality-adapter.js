@@ -20,6 +20,13 @@ import {
   isCatchphraseFix,
 } from "../story-quality/dist/catchphrase.js";
 import { storyCatchphrases } from "./checker.js";
+import { forbiddenHit } from "../story-quality/dist/plotCheck.js";
+import {
+  allowedPlaces,
+  mapCast,
+  normalizeOutlineResponse,
+  parseJsonLenient,
+} from "./outline-normalize.js";
 
 const clone = (value) =>
   value == null ? value : JSON.parse(JSON.stringify(value));
@@ -461,6 +468,7 @@ function safeResponse(response) {
     meta,
   };
 }
+const CHECK_RULES = 2;
 function ledger(kind, input, options, extra = {}) {
   const contextFingerprint = hash({
     version: 1,
@@ -482,6 +490,14 @@ function ledger(kind, input, options, extra = {}) {
       ? clone(prior)
       : { version: 1, kind, contextFingerprint, completed: {} };
   if (!object(checkpoint.completed)) checkpoint.completed = {};
+  // A checkpoint saved before the 2026-10-19 robustness checks keeps the old
+  // package checks, so its fix-pass requests (built from those checks) stay
+  // byte-identical and its paid responses keep replaying. New ones use rule 2.
+  if (
+    checkpoint.checkRules === undefined &&
+    !Object.keys(checkpoint.completed).length
+  )
+    checkpoint.checkRules = CHECK_RULES;
   const paid = [],
     engines = new Map();
   let resumed = 0;
@@ -510,6 +526,7 @@ function ledger(kind, input, options, extra = {}) {
   };
   return {
     checkpoint,
+    legacyChecks: checkpoint.checkRules !== CHECK_RULES,
     paid,
     summary,
     usage: () => mergeUsage(paid),
@@ -942,32 +959,51 @@ function filledFields(value) {
 /**
  * The fix pass (a cheap model) returns the whole outline JSON and may drop or
  * blank parts it was never asked about (plan.planted, the plotContract ledger,
- * refrain …). The result is therefore built from the ORIGINAL outline: only the
- * targeted beats, their settings and the plan/refrain fields an item names are
- * taken from the response, and only where the response filled them. Beat index
- * and type, the ledger and every other field stay as the outline model wrote them.
+ * refrain …). The result is therefore built from the ORIGINAL outline: for a
+ * targeted beat only summary/newElement/failureReason are taken (where the
+ * response filled them); its settingKey and settings row only when a place
+ * item targeted the beat and the value is a selected drawer id; its
+ * characters only after mapping to selected cast ids. plan/refrain fields an
+ * item names are taken too. Beat index and type, the ledger and every other
+ * field stay as the outline model wrote them.
  */
-function mergeTargetedFix(original, fixed, messages) {
+function mergeTargetedFix(original, fixed, messages, context = {}) {
   const targets = fixedBeatIds(original, messages),
-    merged = clone(original);
+    merged = clone(original),
+    allowed = context.allowedPlaces || new Set(),
+    placeItem = messages.some((message) => /중간 비트의 장소/u.test(message)),
+    rowOf = (outline, beatIndex) =>
+      asList(outline.settings).find(
+        (item) => object(item) && item.beatIndex === beatIndex,
+      );
   original.beats.forEach((beat, index) => {
     if (!targets.has(beat.index) || !object(fixed.beats[index])) return;
-    merged.beats[index] = {
-      ...clone(beat),
-      ...clone(filledFields(fixed.beats[index])),
-      index: beat.index,
-      type: beat.type,
-    };
+    const from = fixed.beats[index],
+      filled = filledFields({
+        summary: from.summary,
+        newElement: from.newElement,
+        failureReason: from.failureReason,
+      }),
+      next = { ...clone(beat), ...clone(filled), index: beat.index, type: beat.type };
+    if (placeItem) {
+      const fromRow = rowOf(fixed, beat.index),
+        place = allowed.has(fromRow?.backgroundId)
+          ? fromRow.backgroundId
+          : allowed.has(from.settingKey)
+            ? from.settingKey
+            : null;
+      if (place) {
+        next.settingKey = place;
+        const row = rowOf(merged, beat.index);
+        if (row) row.backgroundId = place;
+      }
+    }
+    if (Array.isArray(from.characters) && context.input) {
+      const { kept } = mapCast(from.characters, context.input);
+      if (kept.length) next.characters = kept;
+    }
+    merged.beats[index] = next;
   });
-  if (Array.isArray(merged.settings))
-    merged.settings = merged.settings.map((row) => {
-      const next = asList(fixed.settings).find(
-        (item) => object(item) && item.beatIndex === row?.beatIndex,
-      );
-      return targets.has(row?.beatIndex) && next
-        ? { ...clone(row), ...clone(filledFields(next)), beatIndex: row.beatIndex }
-        : row;
-    });
   const named = (pattern) => messages.some((message) => pattern.test(message));
   const planKeys = [
     ...(named(/plan\.planted|심은 물건/u) ? ["planted"] : []),
@@ -984,17 +1020,57 @@ function mergeTargetedFix(original, fixed, messages) {
     };
   return { merged, targets };
 }
+const beatNumber = (value) =>
+  typeof value === "string" && /^\s*\d{1,3}\s*$/u.test(value)
+    ? Number(value)
+    : value;
+/**
+ * Reads a fix response against the original outline. Unwraps a single
+ * wrapper ({"outline": {…}}), matches beats by their index (a partial answer
+ * with only the flagged beat, or reordered beats), and fills fields the
+ * response left out from the original. Returns { fixed } or { reason } when
+ * the response cannot be lined up with the original (unreadable, or a changed
+ * beat count without usable indexes): the caller then keeps the original.
+ */
 function readFixedOutline(original, response) {
-  const fixed = response.json || parseJson(response.text);
-  if (!object(fixed) || !Array.isArray(fixed.beats))
-    throw new StoryValidationError("outline", [
-      "품질 수정 응답의 비트 목록을 읽지 못했어요.",
-    ]);
-  if (fixed.beats.length !== original.beats.length)
-    throw new StoryValidationError("outline", [
-      "품질 수정은 줄거리 비트 개수를 바꿀 수 없어요.",
-    ]);
-  return fixed;
+  let raw =
+    response.json !== undefined && response.json !== null
+      ? response.json
+      : parseJson(response.text);
+  if (object(raw) && !Array.isArray(raw.beats)) {
+    const inner = Object.values(raw).filter(
+      (value) => object(value) && Array.isArray(value.beats),
+    );
+    if (inner.length === 1) raw = inner[0];
+  }
+  if (!object(raw) || !Array.isArray(raw.beats))
+    return { reason: "품질 수정 응답의 비트 목록을 읽지 못했어요." };
+  const ids = original.beats.map((beat) => beat.index),
+    beats = raw.beats.map((beat) =>
+      object(beat) && beatNumber(beat.index) !== beat.index
+        ? { ...beat, index: beatNumber(beat.index) }
+        : beat,
+    ),
+    numbered = beats.map((beat) => (object(beat) ? beat.index : undefined)),
+    byIndex =
+      numbered.every((index) => ids.includes(index)) &&
+      new Set(numbered).size === numbered.length;
+  let aligned;
+  if (
+    beats.length === ids.length &&
+    numbered.every((index, at) => index === ids[at])
+  )
+    aligned = beats;
+  else if (byIndex && beats.length)
+    aligned = original.beats.map(
+      (beat) => beats.find((item) => item.index === beat.index) || clone(beat),
+    );
+  else if (beats.length === ids.length) aligned = beats;
+  else return { reason: "품질 수정은 줄거리 비트 개수를 바꿀 수 없어요." };
+  const fixed = { ...raw, beats: aligned };
+  for (const key of Object.keys(original))
+    if (!Object.hasOwn(raw, key)) fixed[key] = clone(original[key]);
+  return { fixed };
 }
 /** Every string inside a beat/field value (summary, newElement, nested text …). */
 function stringsOf(value, out = []) {
@@ -1018,15 +1094,36 @@ function isCatchphraseEdit(change, catchphrases) {
     )
   );
 }
+/** The beam wrap answered without the app fields it must fill. */
+function beamWrapMissing(response, input) {
+  const json =
+    response.json !== undefined && response.json !== null
+      ? response.json
+      : parseJson(response.text);
+  const count = frozenBeatCount(input);
+  return (
+    !object(json) ||
+    !Array.isArray(json.beats) ||
+    (count && json.beats.length !== count) ||
+    !Array.isArray(json.settings) ||
+    !Array.isArray(json.emotionArc) ||
+    !object(json.plotContract)
+  );
+}
+const beamWrapRetry = (input) =>
+  `The previous answer left out app fields. Return the COMPLETE app outline JSON matching the supplied schema, not only the short template above: titleCandidates (exactly 3), logline, want, problem, twist, plan, exactly ${frozenBeatCount(input) || "6-8"} beats (keep each approved beam beat's index, type, summary, newElement and failureReason; characters = selected character IDs; settingKey = a selected background ID), refrain, newWordsKo, newWordsEn, settings (one row per beat), emotionArc (one per beat), endingType and plotContract.`;
 /**
- * A fix pass never costs the paid outline (and never strands a resume, which
- * replays the same response):
+ * A fix pass never costs the paid outline, never throws, and never strands a
+ * resume (which replays the same response):
  * - every item in the pass was a catchphrase advisory: keep the original
  *   outline (the recheck reports the items again as advisories);
+ * - a response that cannot be lined up with the original (unreadable,
+ *   truncated, or a changed beat count without usable indexes): keep the
+ *   original outline, recorded as mode "original"; the package recheck turns
+ *   the items into notes;
  * - otherwise the outline is rebuilt from the original with only the targeted
  *   parts taken from the response (mergeTargetedFix). Untargeted edits are
  *   dropped and recorded; the package's recheck then judges the result.
- * Only an unreadable response or a changed beat count throws.
  * The decision depends only on the request and the (checkpointed) response,
  * so a resume replays it with no new call.
  */
@@ -1035,31 +1132,39 @@ function enforceTargetedFixKeepingOutline(
   response,
   catchphrases,
   onFallback,
+  context = {},
 ) {
   const parts = fixRequestParts(request);
   if (!parts) return response;
   const { original, messages } = parts,
-    advisory = asList(messages).filter(isCatchphraseFix);
+    advisory = asList(messages).filter(isCatchphraseFix),
+    read = readFixedOutline(original, response);
   if (advisory.length && advisory.length === messages.length) {
-    const fixed = response.json || parseJson(response.text);
     if (
-      object(fixed) &&
-      Array.isArray(fixed.beats) &&
-      fixed.beats.length === original.beats.length &&
-      !untargetedChanges(original, fixed, fixedBeatIds(original, messages))
+      read.fixed &&
+      !untargetedChanges(original, read.fixed, fixedBeatIds(original, messages))
         .length
     ) {
-      const { merged } = mergeTargetedFix(original, fixed, messages);
+      const { merged } = mergeTargetedFix(original, read.fixed, messages, context);
       return { ...response, json: merged, text: JSON.stringify(merged) };
     }
     onFallback({
       mode: "original",
-      reason: untargetedReason(original, response, messages),
+      reason: read.reason || untargetedReason(original, read.fixed, messages),
     });
     return { ...response, json: original, text: JSON.stringify(original) };
   }
-  const fixed = readFixedOutline(original, response),
-    { merged, targets } = mergeTargetedFix(original, fixed, messages),
+  if (!read.fixed) {
+    onFallback({
+      mode: "original",
+      cause: "untargeted",
+      reason: read.reason,
+      restored: ["outline"],
+    });
+    return { ...response, json: original, text: JSON.stringify(original) };
+  }
+  const fixed = read.fixed,
+    { merged, targets } = mergeTargetedFix(original, fixed, messages, context),
     changes = untargetedChanges(original, fixed, targets);
   if (changes.length)
     onFallback({
@@ -1076,12 +1181,8 @@ function enforceTargetedFixKeepingOutline(
     });
   return { ...response, json: merged, text: JSON.stringify(merged) };
 }
-function untargetedReason(original, response, messages) {
-  const fixed = response.json || parseJson(response.text);
-  if (!object(fixed) || !Array.isArray(fixed.beats))
-    return "품질 수정 응답의 비트 목록을 읽지 못했어요.";
-  if (fixed.beats.length !== original.beats.length)
-    return "품질 수정은 줄거리 비트 개수를 바꿀 수 없어요.";
+function untargetedReason(original, fixed, messages) {
+  if (!fixed) return "품질 수정 응답의 비트 목록을 읽지 못했어요.";
   return (
     untargetedChanges(original, fixed, fixedBeatIds(original, messages))[0]
       ?.message || ""
@@ -1090,18 +1191,8 @@ function untargetedReason(original, response, messages) {
 /** Package check items that must still stop a book: forbidden material, and no topic word at all. */
 const isHardPlotItem = (message) =>
   /^금지 소재|^주제 키워드\(/u.test(String(message));
-function parseJson(text) {
-  try {
-    return JSON.parse(
-      String(text || "")
-        .trim()
-        .replace(/^```(?:json)?\s*/iu, "")
-        .replace(/\s*```$/u, ""),
-    );
-  } catch {
-    return null;
-  }
-}
+/** JSON with a fence, a leading sentence or trailing commentary around it. */
+const parseJson = (text) => parseJsonLenient(text);
 
 export async function generateQualityOutline(
   source,
@@ -1137,12 +1228,15 @@ export async function generateQualityOutline(
         catchphrases,
         { catchphraseFilter: r9 },
       );
+    const fixContext = { input, allowedPlaces: allowedPlaces(input) },
+      beam = quality.useBeamSearch === true;
     let last;
     for (let attempt = 0; attempt < Math.min(2, patterns.length); attempt++) {
       const pattern = patterns[attempt],
         schema = enrichedOutlineSchema(input, pattern, services),
         canon = canonicalWorldRules(input, services);
-      let fixFallback = null;
+      let fixFallback = null,
+        wrapRetried = false;
       const wrap = (role) => ({
         id: `quality-${role}`,
         async complete(request) {
@@ -1157,19 +1251,32 @@ export async function generateQualityOutline(
             candidate || judge
               ? "Return only the requested candidate/judgment JSON; do not return a complete outline."
               : `Return the COMPLETE app outline matching the supplied schema, including plan, newElement/failureReason, refrain.variation if present, twist, settings, emotionArc and plotContract. plan.pattern=${pattern.id}. Exactly ${frozenBeatCount(input)} beats. ${request.user.includes("APPROVED_BEAM_BEATS_JSON:") ? "Preserve every chosen beam summary, index, type, newElement and failureReason exactly. Fill canonical character/background IDs and coherent full fields." : ""}`;
-          const response = await journal.call(
-            role,
-            {
-              ...request,
-              system: `${canon}\n${request.system}\n${extra}`,
-              jsonSchema,
-              maxTokens: Math.max(
-                request.maxTokens || 0,
-                candidate ? 1800 : judge ? 1500 : 16000,
-              ),
-            },
-            services,
-          );
+          const sent = {
+            ...request,
+            system: `${canon}\n${request.system}\n${extra}`,
+            jsonSchema,
+            maxTokens: Math.max(
+              request.maxTokens || 0,
+              candidate ? 1800 : judge ? 1500 : 16000,
+            ),
+          };
+          let response = await journal.call(role, sent, services);
+          // Beam wrap: a model that follows the package's short wrap template
+          // leaves out the app fields (beats with cast/place ids, settings,
+          // emotionArc, plotContract). Only on that failure branch, redo just
+          // the wrap once with the fields named (journalled, so a resume
+          // replays it); never the whole beam.
+          if (
+            request.user.includes("APPROVED_BEAM_BEATS_JSON:") &&
+            beamWrapMissing(response, input)
+          ) {
+            wrapRetried = true;
+            response = await journal.call(
+              role,
+              { ...sent, user: `${request.user}\n\n${beamWrapRetry(input)}` },
+              services,
+            );
+          }
           return enforceTargetedFixKeepingOutline(
             request,
             response,
@@ -1177,6 +1284,7 @@ export async function generateQualityOutline(
             (value) => {
               fixFallback = value;
             },
+            fixContext,
           );
         },
       });
@@ -1232,6 +1340,7 @@ export async function generateQualityOutline(
           referenceBooks,
           approvedBooks: asList(quality.approvedBooks),
           endingType: input.endingType,
+          legacyChecks: journal.legacyChecks,
           ...(Array.isArray(quality.rules)
             ? { rules: quality.rules.slice(0, 7) }
             : {}),
@@ -1260,6 +1369,11 @@ export async function generateQualityOutline(
           ].filter(Boolean),
         });
       last = result;
+      // Book-keeping slips in the paid response (ids written as names, ledger
+      // continuity, counts, numbers as strings …) are cleaned up before the
+      // checks. Only the response changes, so a resume replays the same calls.
+      const shaped = normalizeOutlineResponse(result.outline, input);
+      result.outline = shaped.outline;
       if (
         result.seed &&
         result.outline.plan?.planted !== result.seed.planted.ko
@@ -1267,10 +1381,50 @@ export async function generateQualityOutline(
         result.check.fix.push("심을 물건이 정해진 시드 재료와 달라요.");
         result.check.ok = false;
       }
-      const report = services.inspectOutlineRules?.(result.outline, input) || {
-        valid: true,
-        violations: [],
-      };
+      const appReport = services.inspectOutlineRules?.(
+          result.outline,
+          input,
+        ) || {
+          valid: true,
+          violations: [],
+        },
+        report = result.outline.plotContract
+          ? appReport
+          : {
+              ...appReport,
+              valid: false,
+              violations: [
+                ...asList(appReport.violations),
+                {
+                  code: "plot_contract_missing",
+                  message: "이야기의 사건·상태 장부가 필요해요.",
+                },
+              ],
+            };
+      // Package regenerate items rechecked against the app: a forbidden word
+      // counts only at a word start outside an everyday context (꿀벌을 is not
+      // "벌을 주"), and a topic item is hard only when the app's own topic check
+      // (stop words, cast stand-ins) also finds no topic word at all.
+      const summaries = asList(result.outline.beats)
+          .map((beat) => String(beat?.summary ?? ""))
+          .join(" "),
+        appKnowsTopic = Array.isArray(appReport.topicKeywords),
+        noTopicAtAll = asList(appReport.violations).some(
+          (row) => row?.code === "topic_keyword_missing" && row.partial !== true,
+        ),
+        rechecked = [],
+        regenerate = result.check.regenerate.filter((message) => {
+          const forbidden = String(message).match(/^금지 소재: (.+)$/u)?.[1];
+          if (forbidden !== undefined && !forbiddenHit(summaries, forbidden)) {
+            rechecked.push(message);
+            return false;
+          }
+          if (/^주제 키워드\(/u.test(message) && appKnowsTopic && !noTopicAtAll) {
+            rechecked.push(message);
+            return false;
+          }
+          return true;
+        });
       const qualityMeta = {
         version: 1,
         seedSummary: result.seedSummary,
@@ -1285,6 +1439,9 @@ export async function generateQualityOutline(
           ? quality.variantChance
           : 0.35,
         regenerationAttempts: attempt,
+        ...(shaped.notes.length ? { normalized: shaped.notes } : {}),
+        ...(rechecked.length ? { recheckedPlotItems: rechecked } : {}),
+        ...(wrapRetried ? { beamWrapRetried: true } : {}),
       };
       // R9: a catchphrase repeat is an advisory. Alone it buys no fix pass; mixed
       // with other items it rides along in the one pass. Whatever survives is
@@ -1298,6 +1455,7 @@ export async function generateQualityOutline(
         );
       if (fixFallback?.cause === "untargeted")
         qualityMeta.untargetedFixRestored = {
+          ...(fixFallback.mode === "original" ? { mode: "original" } : {}),
           reason: fixFallback.reason,
           restored: fixFallback.restored,
         };
@@ -1308,23 +1466,28 @@ export async function generateQualityOutline(
       // After the last attempt, quality-only items (topic word, planted payoff,
       // refrain, repeated sentence frames …) no longer stop a paid book: they are
       // kept as notes. Forbidden material, structure, places and the ledger still stop it.
-      const passes =
-          (result.check.ok ||
-            (!result.check.regenerate.length && !blocking.length)) &&
+      // A structure/ledger problem the clean-up could not fix on the first
+      // attempt buys the existing second-pattern outline (never with beam on,
+      // where that would repeat the whole beam).
+      const hard = hardOutlineViolations(report),
+        passes =
+          (result.check.ok || (!regenerate.length && !blocking.length)) &&
           report.valid,
         moreAttempts =
-          result.check.regenerate.length &&
           attempt === 0 &&
-          patterns.length > 1,
+          patterns.length > 1 &&
+          (regenerate.length > 0 || (!beam && hard.length > 0)),
         softOnly =
           !moreAttempts &&
-          ![...result.check.regenerate, ...blocking].some(isHardPlotItem) &&
-          !hardOutlineViolations(report).length;
+          ![...regenerate, ...blocking].some(isHardPlotItem) &&
+          !hard.length;
       if (!passes && softOnly)
         qualityMeta.softIssues = [
-          ...result.check.regenerate,
-          ...blocking,
-          ...asList(report.violations).map((row) => row.message),
+          ...new Set([
+            ...regenerate,
+            ...blocking,
+            ...asList(report.violations).map((row) => row.message),
+          ]),
         ];
       if (passes || softOnly) {
         const outline = services.assertValid
@@ -1344,11 +1507,7 @@ export async function generateQualityOutline(
           },
         };
       }
-      if (
-        result.check.regenerate.length &&
-        attempt === 0 &&
-        patterns.length > 1
-      ) {
+      if (moreAttempts) {
         options.onProgress?.({
           stage: "qualityOutline",
           phase: "regenerate",
@@ -1357,10 +1516,14 @@ export async function generateQualityOutline(
         });
         continue;
       }
+      // The ledger errors arrive both as structure and as plot_contract rows:
+      // each message is listed once.
       const error = new StoryValidationError("outline", [
-        ...result.check.regenerate,
-        ...result.check.fix,
-        ...asList(report.violations).map((row) => row.message),
+        ...new Set([
+          ...regenerate,
+          ...result.check.fix,
+          ...asList(report.violations).map((row) => row.message),
+        ]),
       ]);
       error.outline = clone(result.outline);
       throw journal.fail(error, { stage: "outline", quality: qualityMeta });
