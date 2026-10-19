@@ -1,0 +1,307 @@
+{
+  "base": "http://127.0.0.1:4800/",
+  "runs": [
+    {
+      "width": 1280,
+      "steps": {
+        "wrongInvite": {
+          "error": "가족 초대 코드가 맞지 않아요.",
+          "code": 0,
+          "server": {
+            "accounts": 0,
+            "sessions": 0,
+            "libraries": 0,
+            "assets": 0,
+            "objects": 0
+          }
+        },
+        "recoveryKept": {
+          "escape": 1,
+          "back1": {
+            "code": "5021-WCGY-6ZCJ-P9GN-ETRP",
+            "title": "복구 코드를 적어 두세요",
+            "step": 4
+          },
+          "back2": {
+            "code": "5021-WCGY-6ZCJ-P9GN-ETRP",
+            "title": "복구 코드를 적어 두세요",
+            "step": 4
+          }
+        },
+        "afterSignup": {
+          "chip": "이 기기에 보관 · 클라우드에 자료 연결하기",
+          "session": true,
+          "server": {
+            "accounts": 1,
+            "sessions": 1,
+            "libraries": 0,
+            "assets": 0,
+            "objects": 0
+          }
+        },
+        "pushed": {
+          "chip": "클라우드에 저장됨",
+          "baseline": "family:700112f7-fe75-47c8-a7d5-1785342bf43e",
+          "server": {
+            "accounts": 1,
+            "sessions": 1,
+            "libraries": 1,
+            "assets": 21,
+            "objects": 22
+          }
+        },
+        "pullCancelled": {
+          "modal": 0,
+          "step": 0,
+          "breadcrumb": "우리 가족의 공간우리 책장",
+          "shelf": 1
+        },
+        "received": {
+          "chip": "클라우드에 저장됨",
+          "chips": [
+            "이 기기에 보관 · 클라우드로 PC·모바일 이어쓰기",
+            "이 기기에 보관 · 클라우드 연결 확인 중",
+            "클라우드에 저장됨"
+          ],
+          "book": true,
+          "choiceModal": false,
+          "writes": 0
+        },
+        "childReading": {
+          "chip": "클라우드에 저장됨",
+          "reads": 1,
+          "writes": 0
+        },
+        "remoteAfterReading": {
+          "favorite": true,
+          "reads": 1,
+          "chip": "클라우드에 저장됨",
+          "writes": 0
+        },
+        "wrongPasswordB": {
+          "error": "아이디 또는 비밀번호가 맞지 않아요.",
+          "sameSession": true,
+          "sameSync": true,
+          "chip": "클라우드에 저장됨"
+        },
+        "logout": {
+          "lock": 1,
+          "session": false
+        },
+        "wrongPasswordA": {
+          "error": "아이디 또는 비밀번호가 맞지 않아요.",
+          "lock": 1,
+          "session": null,
+          "sameSync": true,
+          "libraryRequests": 0
+        },
+        "unlockInPage": {
+          "lock": 0,
+          "step": 0,
+          "breadcrumb": "우리 가족의 공간우리 책장",
+          "chip": "클라우드에 저장됨"
+        },
+        "continueLocal": {
+          "lock": 0,
+          "sync": null,
+          "shelf": 1
+        },
+        "recoverSignsOutB": {
+          "lock": 1,
+          "note": true
+        },
+        "bSignsInAgain": {
+          "chip": "클라우드에 저장됨",
+          "lock": 0
+        },
+        "passwordKeepOthers": {
+          "toast": "비밀번호를 바꿨어요.",
+          "aSession": true,
+          "form": 0,
+          "bLock": 0,
+          "bChip": "클라우드에 저장됨"
+        },
+        "passwordSignOutOthers": {
+          "toast": "비밀번호를 바꿨어요.",
+          "aSession": true,
+          "form": 0,
+          "bLock": 1,
+          "bChip": "이 기기에 보관 · 클라우드로 PC·모바일 이어쓰기"
+        },
+        "deleted": {
+          "toast": "가족 계정을 삭제했어요. 이 기기의 책은 그대로 있어요.",
+          "session": null,
+          "lock": 0,
+          "server": {
+            "accounts": 0,
+            "sessions": 0,
+            "libraries": 0,
+            "assets": 0,
+            "objects": 0
+          },
+          "shelf": 1
+        },
+        "deletedAccountLogin": {
+          "error": "아이디 또는 비밀번호가 맞지 않아요.",
+          "lock": 1
+        }
+      },
+      "problems": [],
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "pass": true
+    },
+    {
+      "width": 390,
+      "steps": {
+        "wrongInvite": {
+          "error": "가족 초대 코드가 맞지 않아요.",
+          "code": 0,
+          "server": {
+            "accounts": 0,
+            "sessions": 0,
+            "libraries": 0,
+            "assets": 0,
+            "objects": 0
+          }
+        },
+        "recoveryKept": {
+          "escape": 1,
+          "back1": {
+            "code": "588J-TG3Y-S3WK-S6EW-GGQF",
+            "title": "복구 코드를 적어 두세요",
+            "step": 4
+          },
+          "back2": {
+            "code": "588J-TG3Y-S3WK-S6EW-GGQF",
+            "title": "복구 코드를 적어 두세요",
+            "step": 4
+          }
+        },
+        "afterSignup": {
+          "chip": "이 기기에 보관 · 클라우드에 자료 연결하기",
+          "session": true,
+          "server": {
+            "accounts": 1,
+            "sessions": 1,
+            "libraries": 0,
+            "assets": 0,
+            "objects": 0
+          }
+        },
+        "pushed": {
+          "chip": "클라우드에 저장됨",
+          "baseline": "family:f9efabd5-a923-4964-99da-66dde7b8f4fb",
+          "server": {
+            "accounts": 1,
+            "sessions": 1,
+            "libraries": 1,
+            "assets": 21,
+            "objects": 22
+          }
+        },
+        "pullCancelled": {
+          "modal": 0,
+          "step": 0,
+          "breadcrumb": "우리 가족의 공간우리 책장",
+          "shelf": 1
+        },
+        "received": {
+          "chip": "클라우드에 저장됨",
+          "chips": [
+            "이 기기에 보관 · 클라우드로 PC·모바일 이어쓰기",
+            "이 기기에 보관 · 클라우드 연결 확인 중",
+            "클라우드에 저장됨"
+          ],
+          "book": true,
+          "choiceModal": false,
+          "writes": 0
+        },
+        "childReading": {
+          "chip": "클라우드에 저장됨",
+          "reads": 1,
+          "writes": 0
+        },
+        "remoteAfterReading": {
+          "favorite": true,
+          "reads": 1,
+          "chip": "클라우드에 저장됨",
+          "writes": 0
+        },
+        "wrongPasswordB": {
+          "error": "아이디 또는 비밀번호가 맞지 않아요.",
+          "sameSession": true,
+          "sameSync": true,
+          "chip": "클라우드에 저장됨"
+        },
+        "logout": {
+          "lock": 1,
+          "session": false
+        },
+        "wrongPasswordA": {
+          "error": "아이디 또는 비밀번호가 맞지 않아요.",
+          "lock": 1,
+          "session": null,
+          "sameSync": true,
+          "libraryRequests": 0
+        },
+        "unlockInPage": {
+          "lock": 0,
+          "step": 0,
+          "breadcrumb": "우리 가족의 공간우리 책장",
+          "chip": "클라우드에 저장됨"
+        },
+        "continueLocal": {
+          "lock": 0,
+          "sync": null,
+          "shelf": 1
+        },
+        "recoverSignsOutB": {
+          "lock": 1,
+          "note": true
+        },
+        "bSignsInAgain": {
+          "chip": "클라우드에 저장됨",
+          "lock": 0
+        },
+        "passwordKeepOthers": {
+          "toast": "비밀번호를 바꿨어요.",
+          "aSession": true,
+          "form": 0,
+          "bLock": 0,
+          "bChip": "클라우드에 저장됨"
+        },
+        "passwordSignOutOthers": {
+          "toast": "비밀번호를 바꿨어요.",
+          "aSession": true,
+          "form": 0,
+          "bLock": 1,
+          "bChip": "이 기기에 보관 · 클라우드로 PC·모바일 이어쓰기"
+        },
+        "deleted": {
+          "toast": "가족 계정을 삭제했어요. 이 기기의 책은 그대로 있어요.",
+          "session": null,
+          "lock": 0,
+          "server": {
+            "accounts": 0,
+            "sessions": 0,
+            "libraries": 0,
+            "assets": 0,
+            "objects": 0
+          },
+          "shelf": 1
+        },
+        "deletedAccountLogin": {
+          "error": "아이디 또는 비밀번호가 맞지 않아요.",
+          "lock": 1
+        }
+      },
+      "problems": [],
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "pass": true
+    }
+  ]
+}

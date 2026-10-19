@@ -4623,3 +4623,312 @@ body:has(.simple-create):not(:has(.modal-overlay)) #toast.visible {
     flex: 1 1 100%;
   }
 }
+/* R11: the step bar's open steps are buttons (data-simple-nav, outside the
+ * 12-button count); a closed step stays plain text titled with the reason. */
+.simple-step-link {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-height: 40px;
+  padding: 0 4px;
+  border-radius: 999px;
+}
+.simple-step-link b {
+  border-color: #b9c9aa;
+}
+.simple-step-link:hover {
+  color: var(--accent);
+  background: var(--greenlight);
+}
+.simple-step-link:hover b {
+  border-color: #a9bf99;
+}
+.simple-step-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+/* After a step change focus moves to the new current step (tabindex=-1):
+ * a ring only when the move came from the keyboard. */
+.simple-steps .step[aria-current="step"] {
+  border-radius: 999px;
+}
+.simple-steps .step[aria-current="step"]:focus {
+  outline: none;
+}
+.simple-steps .step[aria-current="step"]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.simple-steps .step[aria-disabled="true"] {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+/* ①/② of a story with a job: its frozen copy, read only. */
+.simple-frozen-topic {
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 10px;
+  background: #f6f7f0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.simple-frozen-title {
+  margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+.simple-frozen-note {
+  margin: var(--space-3) 0 0;
+}
+.simple-frozen .simple-card[aria-disabled="true"] {
+  cursor: default;
+}
+.simple-costs .simple-costs-done {
+  color: var(--accent);
+  font-weight: 600;
+}
+.simple-drawing-note {
+  margin: var(--space-2) 0 0;
+  color: var(--orange);
+}
+.simple-jobs .section-sub {
+  margin-top: 0;
+}
+/* R11: 이전 · 다음 · 검수로 가기 · 동화책 만들기 stay on screen while scrolling.
+ * The panel keeps room above the bar, and focus scrolls clear of it. */
+html:has(.simple-create) {
+  scroll-padding-bottom: 96px;
+}
+.simple-create > .simple-panel {
+  padding-bottom: calc(29px + var(--space-4));
+}
+.simple-create > .wizard-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 14;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-1)
+    calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -6px 12px -10px #26352633;
+}
+@media (max-width: 640px) {
+  /* Above the fixed bottom navigation (66px at phone widths). */
+  html:has(.simple-create) {
+    scroll-padding-bottom: 170px;
+  }
+  .simple-create > .simple-panel {
+    padding-bottom: calc(22px + var(--space-4));
+  }
+  .simple-create > .wizard-actions {
+    bottom: 66px;
+    padding-bottom: var(--space-3);
+  }
+  .simple-steps .simple-step-link {
+    gap: 0;
+    min-width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* ---- Family ID accounts (family-auth-ui.js) ---- */
+.family-signin-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.family-signin-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.family-chatgpt-link {
+  font-size: 12px;
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cloud-panel .family-signin-choices,
+.cloud-lock-panel .family-signin-choices,
+.simple-account-row .family-signin-choices {
+  align-items: flex-start;
+}
+.cloud-panel .family-signin-buttons,
+.cloud-lock-panel .family-signin-buttons {
+  justify-content: flex-start;
+}
+.cloud-lock-panel > .btn,
+.cloud-lock-panel .family-signin-choices {
+  margin-top: var(--space-3);
+}
+.family-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.family-manage {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-3);
+}
+.family-manage summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.family-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.family-danger {
+  color: var(--danger);
+}
+.family-danger-button {
+  background: var(--danger);
+}
+.family-danger-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.simple-account-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.simple-account-row > .small-label {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.family-local-escape {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.family-local-escape .small-label {
+  margin: var(--space-2) 0 0;
+  line-height: 1.7;
+}
+.family-auth {
+  max-width: 480px;
+}
+.family-auth-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.family-auth-tab {
+  padding: 10px var(--space-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+.family-auth-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.family-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.family-auth-form .modal-intro {
+  margin-bottom: var(--space-2);
+}
+/* 16px keeps iPhone Safari from zooming into the field. */
+.family-auth-form .field input {
+  font-size: 16px;
+}
+.family-field .small-label {
+  margin: 0;
+}
+.family-username-preview {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 13px;
+  color: var(--accent);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+.family-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.family-check input {
+  width: 18px;
+  height: 18px;
+}
+.family-auth-error:empty,
+.family-auth-hint:empty {
+  display: none;
+}
+.family-code-input {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.family-recovery-code {
+  margin: var(--space-2) 0 var(--space-4);
+  padding: var(--space-4);
+  background: #f1f3ed;
+  border: 1px dashed #c8d2bd;
+  border-radius: 10px;
+  text-align: center;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.family-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.family-recovery .family-check {
+  margin-top: var(--space-4);
+}
+@media (max-width: 640px) {
+  .family-signin-choices {
+    align-items: stretch;
+    width: 100%;
+  }
+  .family-signin-buttons {
+    flex-direction: column;
+  }
+  .family-signin-buttons .btn {
+    width: 100%;
+  }
+  .family-recovery-code {
+    font-size: 19px;
+    letter-spacing: 1px;
+  }
+  .family-auth-tab {
+    padding: 10px var(--space-2);
+  }
+}

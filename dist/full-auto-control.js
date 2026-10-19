@@ -1,3 +1,4 @@
+import { familySessionHeaders } from "./family-auth.js";
 const START_TIMEOUT_MS = 5000;
 const withDeadline = (promise, ms) =>
   new Promise((resolve, reject) => {
@@ -56,6 +57,7 @@ async function cloudControl(
     method = "GET",
     nonce,
     signal,
+    storage,
   } = {},
 ) {
   if (!accountId || !fetchImpl) return null;
@@ -70,6 +72,8 @@ async function cloudControl(
       headers: {
         Accept: "application/json",
         "X-Cloud-Account-ID": accountId,
+        // A family sign-in is identified by its session header (same key as cloud-sync.js).
+        ...familySessionHeaders(storage),
         ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
       },
       ...(method === "POST" ? { body: JSON.stringify({ nonce }) } : {}),
@@ -108,6 +112,7 @@ export async function requestAutoStop(
         fetchImpl,
         method: "POST",
         nonce: row.nonce,
+        storage,
       });
       remoteStored = true;
     }
@@ -162,6 +167,7 @@ export function createAutoStopWatcher(
                 accountId,
                 fetchImpl,
                 signal: pending.signal,
+                storage,
               }),
               START_TIMEOUT_MS,
             )
@@ -181,6 +187,7 @@ export function createAutoStopWatcher(
             accountId,
             fetchImpl,
             signal: pending.signal,
+            storage,
           });
           if (!remoteInitialized) {
             remoteBaseline = row?.nonce || null;

@@ -159,12 +159,70 @@ export function renderFullAutoLauncher(state, wizard) {
   const estimate = estimateFullAutoCost(state, wizard);
   return `<section class="full-auto-launcher" aria-label="FULL AUTO MODE"><div><span class="role-tag">FULL AUTO MODE</span><h3>주제만 적고, 한 권을 한 번에</h3><p>고른 친구를 주인공으로 유지해요. 필요한 친구·장소는 서랍에서 고르고, 부족하면 새 시트부터 본문 그림과 표지까지 자동으로 만들어요.</p></div><label class="audio-cache-check"><input id="full-auto-allow-new" type="checkbox" checked> 부족한 재료 자동 추가 · 새 조연 최대 2명, 새 배경 최대 3곳</label><p class="small-label">${estimate.pageCount}쪽 · 부모 설정의 글·그림 엔진과 읽기 수준 사용<br>API 예상 약 $${estimate.baseUsd.toFixed(2)} · 새 시트 포함 약 $${estimate.withMaterialsAndRetryUsd.toFixed(2)}<br>참고 단가 추정이며 실제 한도가 아닙니다. 글 자동 수정·입력 참조 비용 별도.${estimate.imageEngine === "sample" ? "<br>현재 그림 엔진은 무료 고정 샘플입니다. AI 그림은 부모 설정에서 엔진을 변경해 주세요." : ""}</p><p class="small-label">완료 후 전체 초안을 검토해 책장에 저장해요. 제작 중에도 책장을 둘러볼 수 있어요. 브라우저를 완전히 종료하면 완료한 결과를 보관하고 다음 접속에서 이어 만들어요.</p><div class="story-start-actions"><button type="button" class="btn btn-green" data-action="wizard-next">줄거리부터 함께 만들기</button>${button("FULL AUTO로 한 번에", "start", null, "outline")}</div></section>`;
 }
-export function renderFullAutoJobs(state) {
+/** Simple-mode card status: what the parent would call it, not the runner's phase. */
+function simpleJobLabel(job) {
+  const book = job.book,
+    total = book?.pages?.length || 0,
+    drawn = book?.pages?.filter((p) => p?.imageAssetId).length || 0;
+  if (!book) return job.status === "running" ? "만드는 중" : "멈춤";
+  // A run with its book is making pictures (sheets first, before any page lands).
+  if (drawn || ["running", "pages-ready", "review"].includes(job.status))
+    return `그림 ${drawn}/${total}`;
+  return "글 검수 중";
+}
+/** A job made by the simple steps (its frozen wizard, or held at the text or pages). */
+export function isSimpleJob(job) {
+  return (
+    !!job?.id &&
+    (job.wizard?.simpleFlow === true ||
+      job.stopBefore === "text" ||
+      job.stopBefore === "pages" ||
+      job.status === "text-review" ||
+      job.status === "pages-ready")
+  );
+}
+/**
+ * A job the simple library card may open in the simple steps: a simple job,
+ * or any job that already has its book (④ asks before each picture). A pro
+ * run with no book stays on the pro list: its resume is the whole pipeline.
+ */
+export function opensInSimpleSteps(job) {
+  return !!job?.id && (isSimpleJob(job) || !!job.book);
+}
+/**
+ * The simple library's '제작 중인 이야기': one '이어서 만들기' that opens the
+ * story in the simple steps (nothing runs from the card), 중지 while it runs.
+ * A story replaced by '이야기 전체 다시 만들기' is not listed twice.
+ */
+function renderSimpleJobs(state) {
   const jobs = Object.values(state.fullAutoJobs || {})
-    .filter((j) => j?.id && j.status !== "final")
+    .filter(
+      (j) =>
+        opensInSimpleSteps(j) && j.status !== "final" && !j.simpleReplacedBy,
+    )
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   if (!jobs.length) return "";
-  return `<section class="panel full-auto-jobs" id="full-auto-jobs"><h3>제작 중인 이야기</h3><div class="story-drafts">${jobs
+  return `<section class="panel full-auto-jobs simple-jobs" id="full-auto-jobs" data-simple="true"><h3>제작 중인 이야기</h3><p class="section-sub">이어서 만들면 멈춘 단계에서 열려요. 여는 것만으로는 아무것도 새로 만들지 않아요.</p><div class="story-drafts">${jobs
+    .map(
+      (job) =>
+        `<article class="story-draft-card simple-job-card" data-auto-job="${esc(job.id)}"><span class="role-tag">${esc(simpleJobLabel(job))}</span><strong>${esc(job.book?.title || job.input?.topic || job.wizard?.topic || "이야기")}</strong>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${button("이어서 만들기", "simple-open", job.id, "green")}${job.status === "running" ? button("중지", "pause", job.id) : ""}</div></article>`,
+    )
+    .join("")}</div></section>`;
+}
+/**
+ * '제작 중인 이야기'. {simple:true} is the simple library's panel; {rest:true}
+ * is the pro list of the jobs that panel does not open (pro runs with no
+ * book), shown below the books in simple mode.
+ */
+export function renderFullAutoJobs(state, { simple = false, rest = false } = {}) {
+  if (simple) return renderSimpleJobs(state);
+  const jobs = Object.values(state.fullAutoJobs || {})
+    .filter(
+      (j) => j?.id && j.status !== "final" && !(rest && opensInSimpleSteps(j)),
+    )
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  if (!jobs.length) return "";
+  return `<section class="panel full-auto-jobs" ${rest ? 'id="full-auto-jobs-rest" data-rest="true"' : 'id="full-auto-jobs"'}><h3>제작 중인 이야기${rest ? " · 프로 모드에서 시작" : ""}</h3><div class="story-drafts">${jobs
     .map((job) => {
       const live = currentJob?.id === job.id && !!controller,
         held = isHeld(job) && !live,
@@ -178,8 +236,13 @@ export function renderFullAutoJobs(state) {
     .join("")}</div></section>`;
 }
 function refreshCards() {
-  const slot = document.querySelector("#full-auto-jobs");
-  if (slot) slot.outerHTML = renderFullAutoJobs(api.getState());
+  for (const slot of document.querySelectorAll?.(
+    "#full-auto-jobs, #full-auto-jobs-rest",
+  ) || [])
+    slot.outerHTML = renderFullAutoJobs(api.getState(), {
+      simple: slot.dataset?.simple === "true",
+      rest: slot.dataset?.rest === "true",
+    });
 }
 
 function runScreen(job, busy) {
@@ -596,6 +659,12 @@ export function configureFullAutoUI(context) {
         }
         if (action === "resume") {
           await execute(job);
+          return;
+        }
+        // The simple library card: open the story in the simple steps only.
+        if (action === "simple-open") {
+          if (typeof api.openSimpleReview === "function")
+            await api.openSimpleReview(job.id);
           return;
         }
         if (action === "simple-review") {

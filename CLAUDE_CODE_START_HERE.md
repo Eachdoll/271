@@ -34,10 +34,13 @@ npm run build
 cd cloud-runtime
 npm exec -- wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_steep_zodiak.sql
 npm exec -- wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_white_reptil.sql
-npm start -- --ip 127.0.0.1 --port 4173 --local --persist-to .wrangler/state --inspector-port 0
+npm exec -- wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_lively_synch.sql
+npm start -- --ip 127.0.0.1 --port 4173 --local --persist-to .wrangler/state --inspector-port 0 --var FAMILY_SIGNUP_CODE:local-family-invite-0001
 ```
 
-인증은 운영 Sites의 검증된 헤더 주입과 연결됩니다. 로컬·다른 호스팅에서 실사용자 로그인까지 구현하려면 별도 인증 연결이 필요합니다. 테스트용 사용자 헤더를 그대로 공개 인증으로 사용하지 마세요. D1/R2에는 기존 운영 사용자 자료가 들어 있으므로 이 ZIP에서 DB를 복제하거나 초기화하지 않습니다.
+`0002_lively_synch.sql`은 가족 아이디용 `family_accounts`·`family_sessions`·`auth_throttle` 표만 새로 만듭니다(기존 표는 바꾸지 않음). 0000·0001을 이미 적용한 DB(운영 포함)에는 0002만 한 번 적용하세요. 스키마를 바꿀 때는 `cloud-runtime/db/schema.ts`를 고친 뒤 `npm --prefix cloud-runtime run db:generate`로 새 마이그레이션을 만들고, 같은 표를 `server/cloud-schema.sql`에도 `IF NOT EXISTS`로 옮깁니다(`tests/family-auth-server.test.mjs`가 두 결과의 `sqlite_master` 일치를 검사).
+
+인증은 두 가지입니다. ChatGPT 로그인은 운영 Sites의 검증된 헤더 주입과 연결되고, 가족 아이디는 `/api/cloud/auth/*`가 발급한 세션 토큰을 `X-Family-Session` 헤더로 보냅니다. 가족 계정 만들기는 서버 비밀값 `FAMILY_SIGNUP_CODE`(20자 이상의 무작위 값, 예: `openssl rand -base64 24`, 가족에게 따로 전달하는 초대 코드)를 배포 환경에 설정해야 열립니다. 값이 없으면 가입은 503 `signup_closed`이고 로그인·복구는 그대로 동작합니다. 위 `--var` 값은 로컬 전용 예시이며 운영 값은 소스·문서에 적지 마세요. 테스트용 사용자 헤더를 그대로 공개 인증으로 사용하지 마세요. D1/R2에는 기존 운영 사용자 자료가 들어 있으므로 이 ZIP에서 DB를 복제하거나 초기화하지 않습니다.
 
 ## 코드 지도
 

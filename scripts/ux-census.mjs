@@ -26,7 +26,7 @@ const censusOf = (page, pass) => async (label, scope='#app') => {
     const vis = (e) => { const s=getComputedStyle(e); const r=e.getBoundingClientRect(); return s.display!=='none'&&s.visibility!=='hidden'&&r.width>0&&r.height>0; };
     const q = (s) => [...root.querySelectorAll(s)].filter(vis);
     const buttons = q('button'), toggle = buttons.filter(b=>b.matches('[data-action="toggle-ui-mode"]')), counted = buttons.filter(b=>!b.matches('[data-action="toggle-ui-mode"]'));
-    // Simple steps: material cards (.simple-card) and page arrows ([data-simple-nav]) are not counted (R9-B2 rule 3).
+    // Simple steps: material cards (.simple-card), page arrows and step-bar links ([data-simple-nav]) are not counted (R9-B2 rule 3, R11).
     const stepButtons = counted.filter(b=>!b.matches('.simple-card,[data-simple-nav]'));
     return { buttons:counted.length, modeToggle:toggle.length, stepButtons:stepButtons.length, inputs:q('input:not([type=hidden]),textarea').length, selects:q('select').length, details:q('details').length, headings:q('h1,h2,h3').map(h=>h.textContent.trim().slice(0,40)).slice(0,25), buttonLabels:counted.map(b=>b.textContent.trim().replace(/\s+/g,' ').slice(0,24)).filter(Boolean).slice(0,60), scrollH: document.scrollingElement.scrollHeight, overflowX: document.documentElement.scrollWidth - window.innerWidth };
   }, scope);
@@ -99,7 +99,7 @@ const summary = {
   generatedAt: new Date().toISOString(),
   base: BASE,
   viewport: '1280x900',
-  rules: '보이는 버튼 수. 모드 전환 버튼은 modeToggle로 따로 셉니다. 쉬운 모드 단계의 stepButtons는 재료 카드(.simple-card)와 쪽 이동 화살표([data-simple-nav])를 빼고 셉니다(R9-B2 3).',
+  rules: '보이는 버튼 수. 모드 전환 버튼은 modeToggle로 따로 셉니다. 쉬운 모드 단계의 stepButtons는 재료 카드(.simple-card)와 쪽 이동 화살표·단계 표시 버튼([data-simple-nav])을 빼고 셉니다(R9-B2 3, R11).',
   proMatchesWorkOrderTable: Object.values(proCheck).every(r=>r.same),
   proCheck,
   simpleStepsWithinLimit: Object.values(simpleSteps).every(r=>r.withinLimit),

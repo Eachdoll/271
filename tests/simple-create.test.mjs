@@ -9,8 +9,9 @@ import {
   missingPageText, pageTextProblemMessage, carryFullAutoFields,
   recommendPlaces, recommendFriends, preselectMaterials,
   simpleJobs, simpleStepForJob, jobWizardFrom, isSimpleJob,
-  topicStepButtonCount, approvalImageWork,
+  topicStepButtonCount, approvalImageWork, simpleStepAccess,
 } from '../dist/simple-create.js';
+import {renderFullAutoJobs} from '../dist/full-auto-ui.js';
 import {setStoryQualityOption} from '../dist/story-generation/quality-settings.js';
 import {renderTextEngineQuick} from '../dist/text-generation/settings-ui.js';
 import {renderImageEngineQuick} from '../dist/image-generation/settings-ui.js';
@@ -245,10 +246,10 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
   assert.equal(fresh.settings.storyQuality, undefined);
 });
 
-test('the v31 shell precaches the simple create screen', async () => {
+test('the shell precaches the simple create screen (cache v33 or later)', async () => {
   const {readFileSync} = await import('node:fs');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v32";/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 34);
   assert.ok(sw.includes('"./simple-create.js"'));
 });
 
@@ -372,4 +373,220 @@ test('a FULL AUTO story draft is never rebuilt from the story workflow', async (
   assert.ok(busy > 0 && refuse > busy, open);
   for (const later of ['closeModal()', 'openSimpleJob(', 'openFullAutoReview(']) assert.ok(open.indexOf(later) > refuse, later);
   assert.match(app, /onReady: acceptStoryResult,\s*openAutoReview: openAutoJobReview,/);
+});
+
+// ---- R11: moving between the five steps ----
+/** A simple job; `text` gives it a held book (글 검수 대기). */
+function heldJob(state, id = 'auto-r11', {text = true, status} = {}) {
+  const job = {
+    id, status: status || (text ? 'text-review' : 'paused'), stopBefore: 'text', allowNew: true, planMode: 'auto',
+    wizard: {simpleFlow: true, topic: '공룡 친구와 숲으로 소풍', characterIds: ['yuha', 'greenie', 'auto-friend'], backgroundIds: ['home', 'forest', 'auto-place'], language: 'dual', pageCount: 8, koreanLevel: 'K1', englishLevel: 'E0', qualitySeedOffset: 2},
+    plan: {characterIds: ['yuha', 'greenie', 'auto-friend'], backgroundIds: ['home', 'forest', 'auto-place'], newCharacters: [{id: 'auto-friend', name: '새 친구 포포', role: '친구'}], newBackgrounds: [{id: 'auto-place', name: '버섯 언덕', type: 'forest', description: '새로 만든 장소'}]},
+    input: {topic: '공룡 친구와 숲으로 소풍'}, completed: {outline: 'x'}, usage: {calls: []}, imageUsage: {}, updatedAt: '2026-10-18T02:00:00Z',
+  };
+  if (text) job.book = book(id);
+  state.fullAutoJobs = {...(state.fullAutoJobs || {}), [id]: job};
+  return job;
+}
+const stepLinks = html => [...html.matchAll(/<button\b[^>]*data-simple-action="goto-step"[^>]*>/g)].map(m => m[0]);
+const linkSteps = html => stepLinks(html).map(tag => Number(tag.match(/data-step="(\d)"/)[1]));
+
+test('R11 access matrix: no job, a job without text, a held job, editing and ⑤ while busy', () => {
+  const {state, wizard} = setup();
+  const rows = (w, opts) => simpleStepAccess(state, w, opts);
+  const open = list => list.filter(r => r.reachable).map(r => r.step);
+  // No job: ① always; ② needs a safe topic; ③ also needs valid materials; ④⑤ need the text.
+  assert.deepEqual(open(rows({...wizard, topic: ''})), [1]);
+  assert.match(rows({...wizard, topic: ''})[1].reason, /주제/);
+  assert.deepEqual(open(rows(structuredClone(wizard))), [1, 2, 3]);
+  assert.deepEqual(rows(structuredClone(wizard)).map(r => r.mode), ['edit', 'edit', 'edit', 'review', 'finish']);
+  assert.equal(rows(structuredClone(wizard))[3].reason, '③에서 글을 먼저 만들어 주세요.');
+  // 자동 추가 off: ③ waits for home + two places; the check recommends on a copy only.
+  const strict = {...structuredClone(wizard), topic: '비 오는 날 숲 산책', allowNew: false};
+  assert.deepEqual(open(rows(strict)), [1, 2, 3], 'untouched picks: home + two recommended places fill them first');
+  assert.deepEqual(strict.backgroundIds, [], 'the access check never changes the wizard');
+  assert.equal(strict.simplePickedFor, undefined);
+  assert.deepEqual(open(rows({...strict, topic: '달에 놀러 간 날'})), [1, 2], 'one recommended place is not enough');
+  const touched = {...strict, simplePicksTouched: true};
+  assert.deepEqual(open(rows(touched)), [1, 2]);
+  assert.match(rows(touched)[2].reason, /집 1곳과 다른 장소 2곳/);
+  // A job without text (stopped before the text): ①② frozen, ③ status, ④⑤ closed.
+  const paused = heldJob(state, 'auto-paused', {text: false});
+  const bound = {...structuredClone(wizard), simpleJobId: paused.id, simpleStep: 3};
+  assert.deepEqual(rows(bound).map(r => [r.mode, r.reachable]), [['frozen', true], ['frozen', true], ['status', true], ['review', false], ['finish', false]]);
+  // A held job: ④ always (also while drawing), ⑤ only when nothing is being made.
+  const held = heldJob(state, 'auto-held');
+  const review = {...structuredClone(wizard), simpleJobId: held.id, simpleStep: 4};
+  assert.deepEqual(open(rows(review)), [1, 2, 3, 4, 5]);
+  assert.deepEqual(open(rows(review, {busy: true})), [1, 2, 3, 4]);
+  assert.match(rows(review, {busy: true})[4].reason, /만드는 중/);
+  // A page text edit open: no other step.
+  const editing = {...review, simpleEditing: true};
+  assert.deepEqual(open(rows(editing)), [4]);
+  for (const r of rows(editing).filter(r => r.step !== 4)) assert.equal(r.reason, '고치던 글을 저장하거나 취소해 주세요.');
+});
+
+test('R11 step bar: five wrappers, buttons only on open steps other than the current one, all outside the 12-button count', () => {
+  const {state, wizard} = setup();
+  // Unbound ① with a topic: ② and ③ open; ④⑤ closed with the reason as their title.
+  const first = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, structuredClone(wizard))));
+  assert.equal((first.match(/class="step [^"]*" role="listitem"/g) || []).length, 5);
+  assert.deepEqual(linkSteps(first), [2, 3]);
+  for (const tag of stepLinks(first)) {
+    assert.match(tag, /data-simple-nav="step"/);
+    assert.match(tag, /type="button" class="simple-step-link"/);
+  }
+  assert.match(first, /aria-label="2단계 재료 고르기로 가기"/);
+  assert.match(first, /aria-label="3단계 생성으로 가기"/);
+  assert.match(first, /role="listitem" aria-current="step" tabindex="-1"><b>1<\/b>주제 넣기/);
+  assert.match(first, /aria-disabled="true" title="③에서 글을 먼저 만들어 주세요\."><b>4<\/b>/);
+  assert.ok(stepButtons(first).length <= 12);
+  // Focus lands on the current step after a step change: only it is focusable from script.
+  assert.equal((first.match(/tabindex="-1"/g) || []).length, 1);
+  assert.match(first, /<div class="step active" role="listitem" aria-current="step" tabindex="-1">/);
+  // A held story on ④: every other step is a link; ①–③ keep ✓.
+  const job = heldJob(state);
+  const w4 = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 4, simpleJobId: job.id});
+  const review = renderSimpleCreate(ctxFor(state, w4, job.book));
+  assert.deepEqual(linkSteps(review), [1, 2, 3, 5]);
+  assert.match(review, /data-step="1"[^>]*><b>✓<\/b>주제 넣기/);
+  assert.match(review, /data-step="3"[^>]*><b>✓<\/b>생성/);
+  assert.match(review, /aria-current="step" tabindex="-1"><b>4<\/b>/);
+  assert.ok(stepButtons(review).length <= 12, `④: ${stepButtons(review).length}`);
+  // Going back from ④ keeps the ✓ on ①–③ (current step shows its number).
+  const back = renderSimpleCreate(ctxFor(state, {...w4, simpleStep: 1}, job.book));
+  assert.match(back, /aria-current="step" tabindex="-1"><b>1<\/b>/);
+  assert.match(back, /data-step="2"[^>]*><b>✓<\/b>/);
+  assert.match(back, /data-step="3"[^>]*><b>✓<\/b>/);
+  // Editing a page: no step link at all.
+  const editing = renderSimpleCreate(ctxFor(state, {...w4, simpleEditing: true}, job.book));
+  assert.deepEqual(linkSteps(editing), []);
+  assert.equal((editing.match(/title="고치던 글을 저장하거나 취소해 주세요\."/g) || []).length, 4);
+  // The forced ① (opened from a pro card) with stories waiting is still at most 12.
+  for (const id of ['auto-w1', 'auto-w2', 'auto-w3']) state.fullAutoJobs[id] = {id, status: 'paused', stopBefore: 'text', wizard: {simpleFlow: true, topic: id}, input: {topic: id}, updatedAt: '2026-10-17T00:00:00Z'};
+  const forced = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleForced: true, simpleFormatOpen: true})));
+  assert.ok(stepLinks(forced).length >= 2);
+  assert.ok(stepButtons(forced).length <= 12, `forced ①: ${stepButtons(forced).length}`);
+  // Every step of every kind stays within the cap.
+  for (const step of [1, 2, 3, 4, 5]) {
+    const html = renderSimpleCreate(ctxFor(state, {...w4, simpleStep: step}, job.book));
+    assert.ok(stepButtons(html).length <= 12, `held story step ${step}: ${stepButtons(html).length}`);
+  }
+});
+
+test('R11 frozen ①/②: the job\'s own topic, format and picks, read only, with 이 주제로 새로 만들기', () => {
+  const {state, wizard} = setup();
+  const job = heldJob(state);
+  const w = ensureSimpleWizard(state, {...structuredClone(wizard), topic: '바뀐 화면 주제', simpleStep: 1, simpleJobId: job.id});
+  const first = renderSimpleCreate(ctxFor(state, w, job.book));
+  assert.match(first, /공룡 친구와 숲으로 소풍/, 'the job\'s frozen topic, not the screen copy');
+  assert.match(first, /책 제목<\/span> <strong>숲 소풍/);
+  assert.match(first, /K1 · E0 · 8쪽 · 한글판·영어판 두 권/);
+  assert.match(first, /이 이야기에 쓴 주제예요\. 바꾸려면 새 이야기로 만들어요\. 지금 이야기는 그대로 남아요\./);
+  for (const gone of ['id="topic"', 'data-simple-action="topic"', 'data-simple-action="idea"', 'data-simple-action="format"', 'simple-resume-card', 'id="language"'])
+    assert.ok(!first.includes(gone), gone);
+  assert.match(first, /data-simple-action="fork"[^>]*>이 주제로 새로 만들기/);
+  assert.doesNotMatch(first, /data-simple-action="fork"[^>]*disabled/);
+  assert.match(first, /data-action="library"/);
+  assert.match(first, /data-simple-action="next"/);
+  assert.ok(stepButtons(first).length <= 4, `frozen ①: ${stepButtons(first).length}`);
+  const second = renderSimpleCreate(ctxFor(state, {...w, simpleStep: 2}, job.book));
+  assert.doesNotMatch(second, /data-simple-action="(friend|place)"/);
+  assert.doesNotMatch(second, /<button[^>]*simple-card/);
+  assert.equal((second.match(/<div class="selection simple-card selected" aria-disabled="true">/g) || []).length, 6);
+  assert.equal((second.match(/자동 추가<\/span>/g) || []).length, 2, 'the run\'s own friend and place');
+  assert.match(second, /새 친구 포포/);
+  assert.match(second, /부족한 재료 자동 추가: 켜짐/);
+  assert.doesNotMatch(second, /id="simple-allow-new"/);
+  for (const action of ['back', 'fork', 'next']) assert.match(second, new RegExp(`data-simple-action="${action}"`));
+});
+
+test('R11 ③ with text: 글이 완성됐어요, 이전 and 검수로 가기, no start and no text estimate', () => {
+  const {state, wizard} = setup();
+  const job = heldJob(state);
+  const html = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: job.id}), job.book));
+  assert.match(html, /글이 완성됐어요 · 쪽 8개/);
+  assert.match(html, /글 만들기 · 완료/);
+  assert.doesNotMatch(html, /<span>글 만들기<\/span><strong>/, 'no estimate for text already bought');
+  assert.doesNotMatch(html, /data-simple-action="(start-text|start-demo|retry|abandon)"/);
+  assert.doesNotMatch(html, /쪽마다 검수하기/);
+  assert.match(html, /<div class="wizard-actions"><button[^>]*data-simple-action="back"[^>]*>이전<\/button>/);
+  assert.match(html, /data-simple-action="open-review"[^>]*>검수로 가기<\/button><\/div>/);
+  assert.doesNotMatch(html, /지금 그림을 만들고 있어요/, 'nothing is drawing');
+  // A job without its text keeps the run controls and gains 이전.
+  const stopped = heldJob(state, 'auto-stop', {text: false});
+  const run = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: stopped.id})));
+  for (const action of ['retry', 'abandon', 'back']) assert.match(run, new RegExp(`data-simple-action="${action}"`));
+  assert.doesNotMatch(run, /data-simple-action="open-review"/);
+});
+
+test('R11 simple library: stories being made in simple words, replaced stories listed once; pro cards unchanged', () => {
+  const {state} = setup();
+  state.fullAutoJobs = {
+    run: {id: 'run', status: 'running', stopBefore: 'text', wizard: {simpleFlow: true}, input: {topic: '달에 놀러 간 날'}, updatedAt: '5'},
+    // A pro FULL AUTO run stopped before its text: no hold, no book.
+    pro: {id: 'pro', status: 'paused', stopBefore: null, wizard: {topic: '프로 모드 우주 소풍'}, input: {topic: '프로 모드 우주 소풍'}, updatedAt: '6'},
+    // A pro run that already has its book (④ asks before each picture).
+    probook: {id: 'probook', status: 'paused', stopBefore: null, book: {...book('probook'), title: '프로 모드 숲 그림책', pages: [{imageAssetId: 'a'}, {}]}, updatedAt: '0'},
+    held: {id: 'held', status: 'text-review', book: book('held'), updatedAt: '4'},
+    drawn: {id: 'drawn', status: 'pages-ready', book: {...book('drawn'), title: '바닷가 모래성', pages: [{imageAssetId: 'a'}, {imageAssetId: 'b'}, {}]}, updatedAt: '3'},
+    old: {id: 'old', status: 'text-review', book: {...book('old'), title: '예전 이야기'}, simpleReplacedBy: 'held', updatedAt: '2'},
+    done: {id: 'done', status: 'final', book: book('done'), updatedAt: '1'},
+  };
+  const simple = renderFullAutoJobs(state, {simple: true});
+  assert.match(simple, /data-simple="true"/);
+  assert.match(simple, /<h3>제작 중인 이야기<\/h3>/);
+  assert.doesNotMatch(simple, /FULL AUTO/);
+  assert.match(simple, /role-tag">만드는 중<\/span><strong>달에 놀러 간 날/);
+  assert.match(simple, /role-tag">글 검수 중<\/span><strong>숲 소풍/);
+  assert.match(simple, /role-tag">그림 2\/3<\/span><strong>바닷가 모래성/);
+  assert.doesNotMatch(simple, /예전 이야기/, 'a story replaced by 이야기 전체 다시 만들기 is not listed twice');
+  assert.match(simple, /role-tag">그림 1\/2<\/span><strong>프로 모드 숲 그림책/, 'a pro run with its book opens in ④');
+  assert.doesNotMatch(simple, /프로 모드 우주 소풍/, 'a pro run with no book never opens in ③ (its resume is the whole pipeline)');
+  assert.equal((simple.match(/data-full-auto-action="simple-open"/g) || []).length, 4);
+  assert.equal((simple.match(/>이어서 만들기</g) || []).length, 4);
+  assert.equal((simple.match(/data-full-auto-action="pause"/g) || []).length, 1, '중지 only on the running story');
+  assert.doesNotMatch(simple, /data-full-auto-action="(resume|review|simple-review|status)"/, 'opening never runs anything');
+  // Pro mode keeps its cards exactly.
+  const pro = renderFullAutoJobs(state);
+  assert.match(pro, /FULL AUTO · /);
+  assert.match(pro, /예전 이야기/);
+  assert.match(pro, /프로 모드 우주 소풍/);
+  assert.match(pro, /id="full-auto-jobs"/);
+  assert.doesNotMatch(pro, /simple-open|data-simple="true"/);
+  // Simple mode lists the rest (pro runs with no book) on the pro list below the books.
+  const rest = renderFullAutoJobs(state, {rest: true});
+  assert.match(rest, /id="full-auto-jobs-rest" data-rest="true"/);
+  assert.match(rest, /FULL AUTO · 대기<\/span><strong>프로 모드 우주 소풍/);
+  assert.equal((rest.match(/data-auto-job=/g) || []).length, 1, 'only the job the simple panel does not open');
+  assert.doesNotMatch(rest, /simple-open/);
+  // Every unfinished job is on exactly one of the two lists, except a replaced simple story.
+  for (const id of ['run', 'held', 'drawn', 'pro', 'probook'])
+    assert.equal([simple, rest].filter(html => html.includes(`data-auto-job="${id}"`)).length, 1, id);
+  state.fullAutoJobs = {probook: state.fullAutoJobs.probook};
+  assert.equal(renderFullAutoJobs(state, {rest: true}), '', 'no empty pro list');
+});
+
+test('R11 app wiring: the kept dialog for a draft on ①–③, the drawing note, the simple library on top, one popstate listener', async () => {
+  const {readFileSync} = await import('node:fs');
+  const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
+  const open = app.slice(app.indexOf('function simpleDraftOpen() {'), app.indexOf('function uiModeButton('));
+  assert.match(open, /!!draft &&\s*\(Number\(wizard\?\.simpleStep\) >= 4 \|\| !!wizard\?\.simpleJobId\)/);
+  const discard = app.slice(app.indexOf('function discardDraft(next, { onCancel = null } = {}) {'), app.indexOf('let readerTouch'));
+  assert.ok(discard.length > 100);
+  // Browser Back past the simple screen leaves through this guard and knows when the parent stays.
+  assert.match(discard, /addEventListener\(\s*"donghwa:modal-closed",\s*\(\) => \{\s*if \(!leaving\) onCancel\(\);/);
+  assert.match(discard, /\.onclick = \(\) => \{\s*leaving = true;/);
+  const leave = app.slice(app.indexOf('leaveToLibrary: (onStay) =>'), app.indexOf('configureSimpleCreate(simpleCtx);'));
+  assert.match(leave, /discardDraft\(\s*\(\) => \{\s*view = "library";[\s\S]*\{ onCancel: onStay \}/);
+  assert.match(discard, /drawing = simpleDrawingInFlight\(\)/);
+  assert.match(discard, /지금 그리는 그림은 나가도 계속 만들어 이 이야기에 보관해요\./);
+  const library = app.slice(app.indexOf('function libraryPage() {'), app.indexOf('const managementButton'));
+  assert.match(library, /simpleJobs = !childMode && uiMode === "simple"/);
+  assert.ok(library.indexOf('renderFullAutoJobs(state, { simple: true })') < library.indexOf('class="shelf-header"'), 'above the books');
+  assert.match(library, /!childMode \? renderFullAutoJobs\(state, \{ rest: simpleJobs \}\) : ""/);
+  assert.doesNotMatch(app, /pushState|addEventListener\("popstate"/, 'history entries come from the simple screen only');
+  const simple = readFileSync(new URL('../dist/simple-create.js', import.meta.url), 'utf8');
+  assert.equal((simple.match(/addEventListener\?\.\("popstate"/g) || []).length, 1);
+  assert.doesNotMatch(simple, /beforeunload/);
 });

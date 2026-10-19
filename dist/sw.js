@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v32";
+const CACHE = "donghwa-shell-v35";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -54,6 +54,8 @@ const FILES = [
   "./story-generation/vocab/onomatopoeia_ko.json",
   "./story-generation/vocab/onomatopoeia_en.json",
   "./cloud-sync.js",
+  "./family-auth.js",
+  "./family-auth-ui.js",
   "./library-storage.js",
   "./device-transfer.js",
   "./image-generation/scene-continuity.js",
