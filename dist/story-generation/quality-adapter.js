@@ -897,7 +897,16 @@ function untargetedChanges(original, fixed, targets) {
         before: setting,
         after,
         message: `${setting.beatIndex}번 비트의 배경은 검사에서 지적하지 않았으므로 바꿀 수 없어요.`,
-        restore: null,
+        restore: (outline) => {
+          const rows = Array.isArray(outline.settings)
+            ? outline.settings
+            : (outline.settings = []);
+          const at = rows.findIndex(
+            (row) => row?.beatIndex === setting.beatIndex,
+          );
+          if (at >= 0) rows[at] = clone(setting);
+          else rows.push(clone(setting));
+        },
       });
   }
   for (const field of ["want", "problem", "endingType"])
@@ -955,13 +964,14 @@ function isCatchphraseEdit(change, catchphrases) {
   );
 }
 /**
- * R9: a catchphrase item is advisory, so it must never cost the paid outline.
- * When a fix pass that carried one breaks the targeted-fix contract:
- * - every item in the pass was a catchphrase item: fall back to the original
- *   outline (the recheck reports the items again and they stay advisories);
- * - every out-of-target change is a catchphrase edit: fall back to the
- *   original for exactly those parts and keep the fixes of the targeted beats.
- * Anything else, and every pass without a catchphrase item, throws as before.
+ * A fix pass that breaks the targeted-fix contract never costs the paid
+ * outline (and never strands a resume, which replays the same response):
+ * - every item in the pass was a catchphrase advisory: fall back to the
+ *   original outline (the recheck reports the items again as advisories);
+ * - otherwise every out-of-target part (beat, setting, want/problem/ending)
+ *   is put back from the original and the targeted fixes are kept. The
+ *   package's recheck then judges the result as for any fix pass.
+ * Only an unreadable response or a changed beat count still throws.
  * The decision depends only on the request and the (checkpointed) response,
  * so a resume replays it with no new call.
  */
@@ -976,10 +986,10 @@ function enforceTargetedFixKeepingOutline(
   } catch (error) {
     const parts =
       error instanceof StoryValidationError ? fixRequestParts(request) : null;
-    const advisory = asList(parts?.messages).filter(isCatchphraseFix);
-    if (!parts || !advisory.length) throw error;
-    const { original, messages } = parts;
-    if (advisory.length === messages.length) {
+    if (!parts) throw error;
+    const { original, messages } = parts,
+      advisory = asList(messages).filter(isCatchphraseFix);
+    if (advisory.length && advisory.length === messages.length) {
       onFallback({ mode: "original", reason: error.message });
       return { ...response, json: original, text: JSON.stringify(original) };
     }
@@ -995,18 +1005,20 @@ function enforceTargetedFixKeepingOutline(
       fixed,
       fixedBeatIds(original, messages),
     );
-    if (
-      !changes.length ||
-      !changes.every((change) => isCatchphraseEdit(change, catchphrases))
-    )
+    if (!changes.length || changes.some((change) => !change.restore))
       throw error;
     const kept = clone(fixed);
     changes.forEach((change) => change.restore(kept));
     onFallback({
       mode: "restored",
+      cause:
+        advisory.length &&
+        changes.every((change) => isCatchphraseEdit(change, catchphrases))
+          ? "catchphrase"
+          : "untargeted",
       reason: error.message,
       restored: changes.map((change) =>
-        change.kind === "beat" ? `beat:${change.id}` : change.id,
+        change.kind === "field" ? change.id : `${change.kind}:${change.id}`,
       ),
     });
     return { ...response, json: kept, text: JSON.stringify(kept) };
@@ -1218,7 +1230,15 @@ export async function generateQualityOutline(
         qualityMeta.catchphraseAdvisories = result.check.fix.filter(
           isCatchphraseFix,
         );
-      if (fixFallback) qualityMeta.catchphraseFixFallback = fixFallback;
+      if (fixFallback?.cause === "untargeted")
+        qualityMeta.untargetedFixRestored = {
+          reason: fixFallback.reason,
+          restored: fixFallback.restored,
+        };
+      else if (fixFallback) {
+        const { cause, ...kept } = fixFallback;
+        qualityMeta.catchphraseFixFallback = kept;
+      }
       if (
         (result.check.ok ||
           (!result.check.regenerate.length && !blocking.length)) &&

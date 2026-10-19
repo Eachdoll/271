@@ -65,11 +65,27 @@ test('pattern slots adapt to exact app beat counts and seeded inventory changes 
   const input=fixture(),engine=fakeOutlineEngine(input),first=await generateQualityOutline(input,{engine},services(engine));input.qualitySeedOffset=1;const second=await generateQualityOutline(input,{engine},services(engine));assert.notEqual(first.meta.quality.seed.rngSeed,second.meta.quality.seed.rngSeed);assert.notEqual(first.meta.quality.seedSummary,second.meta.quality.seedSummary);
 });
 
-test('one package fix changes only the flagged beat and rejects unrelated edits with paid usage retained',async()=>{
+test('one package fix changes only the flagged beat; an unrelated edit is put back from the original instead of discarding the paid outline',async()=>{
   const input=fixture(),engine=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서'))outline.beats[2].newElement='고친 젖은 잎';else outline.beats[2].newElement='';return outline;});
   const result=await generateQualityOutline(input,{engine},services(engine));assert.equal(engine.calls.length,2);assert.equal(result.meta.requests,2);assert.equal(result.data.beats[2].newElement,'고친 젖은 잎');
   const bad=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서')){outline.beats[2].newElement='고친 젖은 잎';outline.beats[0].summary='아예 다른 시작';}else outline.beats[2].newElement='';return outline;});
-  await assert.rejects(generateQualityOutline(input,{engine:bad},services(bad)),error=>error.usage.input===200&&error.meta.requests===2&&/지적하지/.test(error.message)&&Object.keys(error.qualityCheckpoint.completed).length===2);
+  // The out-of-target edit is restored, the targeted fix is kept, and the recheck passes: no paid outline is lost.
+  const kept=await generateQualityOutline(input,{engine:bad},services(bad));
+  assert.equal(bad.calls.length,2);assert.equal(kept.meta.requests,2);assert.equal(kept.usage.input,200);
+  assert.equal(kept.data.beats[2].newElement,'고친 젖은 잎');assert.notEqual(kept.data.beats[0].summary,'아예 다른 시작');
+  assert.deepEqual(kept.meta.quality.untargetedFixRestored.restored,['beat:1']);assert.match(kept.meta.quality.untargetedFixRestored.reason,/1번 비트는 검사에서 지적하지 않았으므로/);
+  assert.equal(kept.meta.quality.catchphraseFixFallback,undefined);assert.equal(kept.meta.quality.check.ok,true);
+  // A resume (the parent's 다시 시도) replays both paid calls and reaches the same outline with no new call.
+  const resumed=await generateQualityOutline(input,{engine:bad,qualityCheckpoint:kept.meta.qualityCheckpoint},services(bad));
+  assert.equal(bad.calls.length,2);assert.equal(resumed.meta.requests,0);assert.deepEqual(resumed.data,kept.data);
+  // An untargeted setting change is put back too.
+  const place=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서')){outline.beats[2].newElement='고친 젖은 잎';const row=outline.settings.find(r=>r.beatIndex===1);if(row)row.backgroundId='changed-place';}else outline.beats[2].newElement='';return outline;});
+  const placed=await generateQualityOutline(input,{engine:place},services(place));
+  assert.notEqual(placed.data.settings.find(r=>r.beatIndex===1)?.backgroundId,'changed-place');
+  assert.deepEqual(placed.meta.quality.untargetedFixRestored.restored,['setting:1']);
+  // A response that changes the beat count still throws, with paid usage retained.
+  const broken=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서'))outline.beats.pop();else outline.beats[2].newElement='';return outline;});
+  await assert.rejects(generateQualityOutline(input,{engine:broken},services(broken)),error=>error.usage.input===200&&error.meta.requests===2&&/비트 개수/.test(error.message)&&Object.keys(error.qualityCheckpoint.completed).length===2);
 });
 
 test('missing topic causes exactly one auxiliary-pattern regeneration, then stops with both calls accounted',async()=>{
@@ -258,9 +274,10 @@ test('R9 fix: in a mixed fix pass an out-of-target catchphrase edit is put back 
  assert.equal(result.meta.quality.check.ok,true);
  const resumed=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},services(engine));
  assert.equal(engine.calls.length,2);assert.equal(resumed.meta.requests,0);assert.deepEqual(resumed.data,result.data);
- // An unrelated edit outside the targets is still rejected exactly as before (paid usage kept).
- const bad=fakeOutlineEngine(input,fixer(' 아예 다른 사건이 생겨요.'));
- await assert.rejects(generateQualityOutline(input,{engine:bad},services(bad)),error=>/1번 비트는 검사에서 지적하지 않았으므로/.test(error.message)&&error.meta.requests===2&&Object.keys(error.qualityCheckpoint.completed).length===2);
+ // An unrelated (non-catchphrase) edit outside the targets is put back as well, recorded separately.
+ const bad=fakeOutlineEngine(input,fixer(' 아예 다른 사건이 생겨요.')),other=await generateQualityOutline(input,{engine:bad},services(bad));
+ assert.equal(other.meta.requests,2);assert.ok(!other.data.beats[0].summary.includes('아예 다른 사건'));assert.equal(other.data.beats[2].newElement,'고친 젖은 잎');
+ assert.deepEqual(other.meta.quality.untargetedFixRestored.restored,['beat:1']);assert.equal(other.meta.quality.catchphraseFixFallback,undefined);
 });
 test('R9-A frozen rotation hides the omitted phrase from every quality prompt but still checks it',async()=>{
  const {normalizeStoryInput}=await import('../dist/story-generation/pipeline.js');

@@ -590,3 +590,16 @@ test('R11 app wiring: the kept dialog for a draft on ①–③, the drawing note
   assert.equal((simple.match(/addEventListener\?\.\("popstate"/g) || []).length, 1);
   assert.doesNotMatch(simple, /beforeunload/);
 });
+
+test('a stopped story shows its error once: below the bar, not again as the progress line', async () => {
+  const {createFullAutoJob} = await import('../dist/full-auto.js');
+  const {state, wizard} = setup();
+  const message = '이야기 outline 결과를 확인해 주세요: 4번 비트는 검사에서 지적하지 않았으므로 수정할 수 없어요.';
+  const job = createFullAutoJob(state, {...structuredClone(wizard), simpleFlow: true}, {demo: true, planMode: 'selection', stopBefore: 'text'});
+  Object.assign(job, {status: 'failed', error: message, phase: message});
+  const w = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: job.id});
+  const html = renderSimpleCreate(ctxFor(state, w));
+  assert.equal(html.split(message).length - 1, 1, 'the error text appears exactly once');
+  assert.match(html, /id="simple-progress-text">멈춘 곳에서 다시 시도할 수 있어요\.</);
+  assert.match(html, /data-simple-action="retry"/);
+});

@@ -1,0 +1,23 @@
+{
+  "codeRange": "c490ba3..78553d2",
+  "additionalRange": "baf2558..78553d2",
+  "updatedWorkOrder": "67be17e",
+  "r12Included": false,
+  "exactTargetFiles": {
+    "CLAUDE.md": "5c312949004c6af21604f49b28bb957c6dcbf8e6bf4c9ade3ab75ea184187bb1",
+    "dist/simple-create.js": "ceb3213e676bec1f32932d1585f67ddada5a31099a7f68da994c5102e9c7a966",
+    "dist/story-generation/quality-adapter.js": "80b6006536f030fa3c7e8208eda28316fb35465055d237f50898be25ed1897d5",
+    "dist/sw.js": "d16a4ad11b3b7166f7d2bd37ce98bba77a0a400dc93325e3f219ea00bb6643d6",
+    "tests/quality-adapter.test.mjs": "7993e1818d024b4cfeca7e05815c4dedcec80328166ab4390bef4caf3277c15e",
+    "tests/simple-create.test.mjs": "e2814a0774ca379bbdabfe3f1845b0b2ef3fbe01d674f62b6318f941127e3b2e"
+  },
+  "nodeVersion": "24.19.0",
+  "tests": {
+    "app": 676,
+    "quality": 74,
+    "skipped": 0
+  },
+  "familyCodeUnchanged": true,
+  "migrationsUnchanged": true,
+  "paidCalls": 0
+}

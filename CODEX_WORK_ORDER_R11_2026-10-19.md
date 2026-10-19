@@ -10,16 +10,16 @@ r11은 **Claude가 코드까지 구현해 커밋했습니다.** Codex는 새로 
 | 브랜치 | `claude/cross-owner-repo-constraint-j20lhz` |
 | 앱 경로 | 저장소 안 `donghwa-workshop/` |
 | 기준 | Codex r10 배포본 = 저장소 `c490ba3` |
-| 반입 범위 | **`c490ba3..baf2558`** (코드) + 이 지시서와 구현 보고서를 추가한 문서 커밋. 이 브랜치에는 이후 r12(펼침 구성) 작업이 이어서 올라오므로 **브랜치 끝이 아니라 위 범위만** 가져옵니다. 문서 커밋의 해시는 사용자가 함께 전달합니다. |
+| 반입 범위 | **`c490ba3..78553d2`** (코드 `baf2558`까지 + 문서 커밋 `41760c1` + 줄거리 수정 오류 긴급 수정 `78553d2`). 이 브랜치에는 이후 r12(펼침 구성) 작업이 이어서 올라오므로 **브랜치 끝이 아니라 위 범위만** 가져옵니다. 문서 커밋의 해시는 사용자가 함께 전달합니다. |
 
 ```bash
 git clone https://github.com/Eachdoll/271.git
 cd 271 && git checkout claude/cross-owner-repo-constraint-j20lhz
-git log --oneline c490ba3..baf2558
-git diff --binary c490ba3..baf2558 -- donghwa-workshop > r11.patch   # 작업 저장소에서 git apply -p2 --binary r11.patch
+git log --oneline c490ba3..78553d2
+git diff --binary c490ba3..78553d2 -- donghwa-workshop > r11.patch   # 작업 저장소에서 git apply -p2 --binary r11.patch
 ```
 
-적용이 깨끗하지 않으면 해당 파일을 `baf2558`의 내용으로 덮어쓰고 완료 보고에 파일명을 적습니다. **유료 API 호출은 하지 않습니다.**
+적용이 깨끗하지 않으면 해당 파일을 `78553d2`의 내용으로 덮어쓰고 완료 보고에 파일명을 적습니다. **유료 API 호출은 하지 않습니다.**
 
 ---
 
@@ -38,7 +38,7 @@ git diff --binary c490ba3..baf2558 -- donghwa-workshop > r11.patch   # 작업 �
 
 | 명령 | 기대값 |
 | --- | --- |
-| `npm test` | **675/675** (r10 570). r10 보고의 Node 24 잠금 테스트 실패는 `93c80e2`에서 고쳤습니다. Node 24에서도 675/675여야 합니다. |
+| `npm test` | **676/676** (r10 570). r10 보고의 Node 24 잠금 테스트 실패는 `93c80e2`에서 고쳤습니다. Node 24에서도 675/675여야 합니다. |
 | `npm run test:quality` | **74/74** |
 | `npm --prefix cloud-runtime ci && npm run build` | 성공. 품질 패키지 두 사본 바이트 동일(`diff -rq story-quality/dist dist/story-quality/dist`) |
 
@@ -66,6 +66,7 @@ FAMILY_SIGNUP_CODE=<같은 값> PLAYWRIGHT_MODULE=playwright node scripts/r11-fa
 | 휴대폰(390px) | 이전/다음 버튼 줄이 화면 아래에 항상 보임 |
 | 앱 첫 화면 | 로그인 없이 그대로 사용 가능 |
 | 부모 설정 '보관' | '가족 아이디로 로그인'·'가족 계정 만들기'와 작은 'ChatGPT로 로그인' 링크 |
+| 줄거리 수정 오류 긴급 수정 | 운영에서 '4번 비트는 검사에서 지적하지 않았으므로 수정할 수 없어요'로 멈춘 이야기가 배포 뒤 ③의 '다시 시도'로 **새 유료 호출 없이** 이어짐(`tests/quality-adapter.test.mjs`가 재현과 재개 0회 호출을 확인) |
 
 ---
 
@@ -73,13 +74,13 @@ FAMILY_SIGNUP_CODE=<같은 값> PLAYWRIGHT_MODULE=playwright node scripts/r11-fa
 
 1. **D1 마이그레이션 `cloud-runtime/drizzle/0002_lively_synch.sql`을 운영 D1에 적용합니다.** 새 표(`family_accounts`, `family_sessions`, `auth_throttle`)만 만들며 기존 표는 바꾸지 않습니다. 0001을 적용했던 방식과 같게 합니다.
 2. **서버 비밀값 `FAMILY_SIGNUP_CODE`를 설정합니다.** 20자 이상 무작위 값(예: `openssl rand -base64 24`). 이 값은 **사용자에게만 따로** 전달하고 보고서·ZIP·로그에는 넣지 않습니다. 설정하지 않으면 가족 계정 가입이 닫혀 있습니다(로그인·기존 ChatGPT 클라우드는 정상).
-3. 기존 사이트(`.openai/hosting.json`의 프로젝트)에 배포합니다. 서비스 워커 캐시는 `donghwa-shell-v35`입니다.
+3. 기존 사이트(`.openai/hosting.json`의 프로젝트)에 배포합니다. 서비스 워커 캐시는 `donghwa-shell-v36`입니다.
 4. **배포된 사이트에서 한 번 확인합니다**(실제 Cloudflare D1·Sites에서만 확인 가능한 항목):
    - 새 시크릿 창 두 개에서 가입(초대 코드) → 다른 창에서 로그인 → `GET /api/cloud/session`이 `kind: "family"` 사용자를 돌려줌(= `X-Family-Session` 헤더가 Sites를 통과함)
    - 로그인 실패를 11번 반복하면 429가 나옴(= D1에서 `INSERT ... ON CONFLICT ... RETURNING`과 하위 질의 `LIMIT`가 동작함)
    - 가입·로그인 응답 시간이 정상(PBKDF2 2만 회가 요청 CPU 한도 안)
    - 시험 계정은 확인 뒤 '가족 계정 삭제'로 지웁니다.
-5. `QA/deployment.json`에 `sourceCommit`과 `sourceRange`(`c490ba3..baf2558` + 문서 커밋)를 적습니다.
+5. `QA/deployment.json`에 `sourceCommit`과 `sourceRange`(`c490ba3..78553d2`)를 적습니다.
 
 ## 4. 완료 보고
 
@@ -90,4 +91,4 @@ FAMILY_SIGNUP_CODE=<같은 값> PLAYWRIGHT_MODULE=playwright node scripts/r11-fa
 ## 5. 이번 범위 아님
 
 - 구현 보고 6절의 알려진 한계(클라우드 용량 회수, 초대 코드 추측 방지 방식)는 고치지 않습니다.
-- 같은 브랜치의 `baf2558` 이후 커밋(r12 펼침 구성)은 반입하지 않습니다. 다음 지시서로 따로 전달합니다.
+- 같은 브랜치의 `78553d2` 이후 커밋(r12 펼침 구성)은 반입하지 않습니다. 다음 지시서로 따로 전달합니다.
