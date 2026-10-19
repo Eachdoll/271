@@ -607,8 +607,8 @@ test('R13 legacy: the normalized settings of a pre-R13 save gain no field', () =
   assert.deepEqual(settings.providers.anthropic.stageModels, {medium: 'claude-haiku-5-5', upper: 'claude-opus-5-5'});
 });
 
-test('R13 shell: cache v37 precaches the model list module', () => {
+test('R13 shell: cache v37 or later precaches the model list module', () => {
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v37";/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 37);
   assert.ok(sw.includes('"./text-generation/model-list.js"'));
 });

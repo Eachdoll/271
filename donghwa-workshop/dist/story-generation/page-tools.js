@@ -27,6 +27,7 @@ import { generateScene } from "../image-generation/pipeline.js";
 import {
   estimateFullAutoCost,
   fullAutoJobForBook,
+  jobImageSnapshot,
   recordFullAutoBookUsage,
   recordFullAutoBookImage,
   isPageImageStale,
@@ -207,6 +208,46 @@ function writePageText(state, book, index, ko, en) {
   }
   recheckBook(state, book);
   return true;
+}
+/**
+ * R13: which recorded book costs leave out a model without a catalog price.
+ * Pictures say so in their own estimate; text is judged from the book's
+ * frozen text settings. The book details then never show such a part as $0.
+ */
+export function bookPricingUnknown(book = {}) {
+  const metas = [
+    ...(book.pages || []).flatMap((page) => [
+      page?.imageMeta,
+      ...(page?.imageHistory || []).map((image) => image?.imageMeta),
+    ]),
+    book.cover?.meta,
+    ...(book.coverHistory || []).map((image) => image?.meta),
+  ];
+  let text = false;
+  try {
+    text =
+      !book.textDemo &&
+      !!book.textGenerationSettings &&
+      estimateStoryTextCost({
+        settings: book.textGenerationSettings,
+        pageCount: book.pages?.length || 12,
+      }).pricingUnknown === true;
+  } catch {
+    text = false;
+  }
+  return {
+    images: metas.some((meta) => meta?.costEstimate?.pricingUnknown === true),
+    text,
+  };
+}
+/** '추정 $0.120', '추정 $0.120 · 일부 요금 미확인' or '요금 정보 없음' (R13). */
+export function estimatedCostText(usd, unknown) {
+  const value = Number(usd) || 0;
+  return unknown
+    ? value > 0
+      ? `추정 $${value.toFixed(3)} · 일부 요금 미확인`
+      : "요금 정보 없음"
+    : `추정 $${value.toFixed(3)}`;
 }
 /** Same totals as the book builder, so a page rewrite shows in the book's text cost. */
 function refreshTextCosts(book) {
@@ -523,12 +564,8 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
         config: frozenImageConfig(
           world.providerConfig?.[engine],
           book.generationSnapshot ||
-            (job?.imageModelConfig && job.imageEngine === engine
-              ? {
-                  imageModelConfig: job.imageModelConfig.model
-                    ? { model: job.imageModelConfig.model }
-                    : {},
-                }
+            (job && job.imageEngine === engine
+              ? jobImageSnapshot(job)
               : undefined),
         ),
       }),

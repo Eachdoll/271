@@ -128,6 +128,7 @@ export function parseModelList(kind, engine, data) {
   } else fail("이 공급자는 모델 목록을 제공하지 않아요.", "unsupported");
   const seen = new Set();
   return rows
+    .map((row) => ({ ...row, id: row.id.trim() }))
     .filter((row) => isModelId(row.id) && !seen.has(row.id) && seen.add(row.id))
     .slice(0, MAX_FETCHED_MODELS);
 }
@@ -138,10 +139,11 @@ function parseProxyList(data) {
   const seen = new Set();
   return data.models
     .map((row) => (typeof row === "string" ? { id: row } : row))
-    .filter(
-      (row) => isModelId(row?.id) && !seen.has(row.id) && seen.add(row.id),
-    )
+    .filter((row) => typeof row?.id === "string")
     .map((row) => ({ id: row.id.trim(), ...label(row.label) }))
+    .filter(
+      (row) => isModelId(row.id) && !seen.has(row.id) && seen.add(row.id),
+    )
     .slice(0, MAX_FETCHED_MODELS);
 }
 function httpMessage(status) {

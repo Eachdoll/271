@@ -179,10 +179,16 @@ export function listTextModels(engine) {
 /** R13: model IDs a parent may fetch or type. Never a URL with a scheme or spaces. */
 export const MODEL_ID_PATTERN = /^[A-Za-z0-9._:\/-]{1,120}$/;
 // '__custom', '__fetch' and '__stages' are the pickers' own option values.
+// An ID becomes part of a provider URL path (Gemini, fal, BFL), so empty, '.'
+// and '..' path segments are refused too: an ID never walks out of its path.
 export const isModelId = (value) =>
   typeof value === "string" &&
   MODEL_ID_PATTERN.test(value.trim()) &&
-  !value.trim().startsWith("__");
+  !value.trim().startsWith("__") &&
+  !value
+    .trim()
+    .split("/")
+    .some((part) => part === "" || part === "." || part === "..");
 export function validateModelId(value) {
   const id = String(value ?? "").trim();
   if (!isModelId(id))

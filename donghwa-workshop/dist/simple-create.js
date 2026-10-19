@@ -13,7 +13,11 @@ import {
   keepEditedPictures,
   isSimpleJob,
 } from "./full-auto-ui.js";
-import { estimateFullAutoCost, fullAutoProgress } from "./full-auto.js";
+import {
+  estimateFullAutoCost,
+  fullAutoProgress,
+  jobImageModelConfig,
+} from "./full-auto.js";
 import { readAutoStop } from "./full-auto-control.js";
 import {
   rewriteBookPage,
@@ -969,7 +973,7 @@ function simpleImageModel(job, world, engine) {
     engine,
     "final",
     job.book?.generationSnapshot?.imageModelConfig ||
-      job.imageModelConfig ||
+      jobImageModelConfig(job) ||
       world.providerConfig?.[engine] ||
       {},
   );
@@ -1050,7 +1054,11 @@ function renderGenerateStep(ctx, w) {
     imageConfig = world.providerConfig?.[imageEngine] || {},
     imageMeta = ENGINE_METADATA[imageEngine] || { name: imageEngine },
     planMode = w.allowNew !== false ? "auto" : "selection",
-    cost = estimateFullAutoCost(state, w, { planMode }),
+    // R13: with a job, its frozen text settings and picture model are priced.
+    cost = estimateFullAutoCost(state, w, {
+      planMode: job?.planMode || planMode,
+      ...(job ? { job } : {}),
+    }),
     quality = normalizeStoryQualitySettings(state.settings?.storyQuality),
     locked = !!job,
     live = runIsLive(job),
