@@ -928,6 +928,14 @@ function textOverrideNote(state) {
     ? '<p class="small-label simple-note">프로 모드의 단계별 모델 설정이 우선 적용돼요.</p>'
     : "";
 }
+/** A stopped job's error is shown once, below the bar, not again as its progress line. */
+function progressText(job) {
+  const text =
+    (lastProgress?.jobId === job?.id && lastProgress.message) ||
+    job?.phase ||
+    "준비 중";
+  return job?.error && text === job.error ? "멈춘 곳에서 다시 시도할 수 있어요." : text;
+}
 function progressBlock(job, title) {
   const progress = job ? fullAutoProgress(job) : { fraction: 0 },
     pct =
@@ -936,7 +944,7 @@ function progressBlock(job, title) {
           ? lastProgress.fraction
           : progress.fraction) * 100,
       ) || 0;
-  return `<div class="simple-progress" role="status" aria-live="polite"><p class="simple-stages" id="simple-stages">${title}</p><div class="simple-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span id="simple-progress-bar" style="width:${pct}%"></span></div><p class="small-label" id="simple-progress-text">${esc((lastProgress?.jobId === job?.id && lastProgress.message) || job?.phase || "준비 중")}</p></div>`;
+  return `<div class="simple-progress" role="status" aria-live="polite"><p class="simple-stages" id="simple-stages">${title}</p><div class="simple-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span id="simple-progress-bar" style="width:${pct}%"></span></div><p class="small-label" id="simple-progress-text">${esc(progressText(job))}</p></div>`;
 }
 function stageLine(job) {
   const done = job?.completed || {},
