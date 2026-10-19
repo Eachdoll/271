@@ -176,7 +176,7 @@ test('R12-P5 counts: 8 openings are 9..16 pictures with the cover before the tex
     assert.equal(after.imagesNeeded, 14);
     assert.ok(Math.abs(after.imagesUsd - (3 * spread + 10 * page + page)) < 1e-9, `${after.imagesUsd}`);
     // A page book (and the wizard with openings off) keeps today's numbers.
-    delete globalThis[HOOK];
+    globalThis[HOOK] = false;
     const legacy = estimateFullAutoCost(state, wizard);
     assert.equal(legacy.imageCountMax, undefined);
     assert.ok(Math.abs(legacy.imagesUsd - 17 * page) < 1e-9);

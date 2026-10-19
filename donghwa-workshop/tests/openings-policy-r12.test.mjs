@@ -16,8 +16,9 @@ import {migrateReadingSettings} from '../dist/reading-ui.js';
 
 /**
  * R12-P1: the openings policy, its pure helpers (dist/book-layout.js) and the frozen
- * input, with the feature flag OFF. Only an explicit layout 'openings' (or the test
- * hook through layoutFor) makes an openings input; K1, English-only books and every
+ * input. Written with the feature flag OFF (R12-P1); since P8 the flag is ON and the
+ * 'flag off' cases set the boolean hook to false. Only an explicit layout 'openings'
+ * (or layoutFor with the flag on) makes an openings input; K1, English-only books and every
  * existing draft, job and book stay page books (the P0 pins prove the bytes).
  */
 const HOOK = '__DONGHWA_R12_OPENINGS__';
@@ -71,14 +72,20 @@ function openingsBook(pageCount, spreadBeats) {
 const B13 = openingsBook(16, [1, 5, 8]), B6 = openingsBook(12, [1, 2, 3, 4, 5, 6]);
 
 // ---------- flag and layout choice ----------
-test('R12-P1 the openings flag is off; only the test hook turns layoutFor on, and only for K2-K4 books with Korean', () => {
-  assert.equal(L.OPENINGS_ENABLED, false);
-  assert.match(readFileSync(new URL('../dist/book-layout.js', import.meta.url), 'utf8'), /export const OPENINGS_ENABLED = false;/u);
+test('R12-P8 the openings flag is on; a boolean test hook overrides it both ways; layoutFor picks openings only for K2-K4 books with Korean', () => {
+  assert.equal(L.OPENINGS_ENABLED, true);
+  assert.match(readFileSync(new URL('../dist/book-layout.js', import.meta.url), 'utf8'), /export const OPENINGS_ENABLED = true;/u);
   withHook(undefined, () => {
+    assert.equal(L.openingsEnabled(), true);
+    assert.equal(L.layoutFor({koreanLevel: 'K2', language: 'bilingual'}), 'openings');
+    assert.equal(L.layoutFor({koreanLevel: 'K1', language: 'bilingual'}), 'pages');
+    assert.equal(L.layoutFor({koreanLevel: 'K3', language: 'en'}), 'pages');
+  });
+  withHook('yes', () => assert.equal(L.openingsEnabled(), true, 'a non-boolean hook is ignored'));
+  withHook(false, () => {
     assert.equal(L.openingsEnabled(), false);
     assert.equal(L.layoutFor({koreanLevel: 'K2', language: 'bilingual'}), 'pages');
   });
-  withHook('yes', () => assert.equal(L.openingsEnabled(), false));
   withHook(true, () => {
     assert.equal(L.openingsEnabled(), true);
     for (const koreanLevel of ['K2', 'K3', 'K4', ' k3 ']) for (const language of ['ko', 'bilingual', 'dual', undefined])
@@ -174,7 +181,7 @@ test('R12-P1 freezeReadingLevels with layout openings gives the v4 level-table u
 
 test('R12-P1 inputFromWizard with an explicit openings layout freezes the policy, v4 specs, one beat per opening and the length-fit policy', () => {
   // Explicit 'openings' works with the flag off: the caller decides, inputFromWizard never re-derives.
-  withHook(undefined, () => {
+  withHook(false, () => {
     for (const ko of ['K2', 'K3', 'K4']) for (const pageCount of [12, 16]) for (const language of ['ko', 'bilingual', 'dual']) {
       const wizard = wizardOf(ko, 'E2', pageCount, language), name = `${ko}/${pageCount}/${language}`;
       const pages = inputFromWizard(seed(), wizard), openings = inputFromWizard(seed(), wizard, {layout: 'openings'});
@@ -511,7 +518,7 @@ test('R12-P1 counting, unit specs, picture sizes and labels go through the helpe
 
 test('R12-P1 page-count choices: 12/16 for openings (16 기본), today\'s list otherwise; snapping never changes a page book', () => {
   const today = [[8, '8쪽 · 짧은 이야기'], [12, '12쪽 · 기본'], [16, '16쪽'], [24, '24쪽']];
-  withHook(undefined, () => assert.deepEqual(L.pageCountOptions({koreanLevel: 'K2', language: 'bilingual'}), today));
+  withHook(false, () => assert.deepEqual(L.pageCountOptions({koreanLevel: 'K2', language: 'bilingual'}), today));
   withHook(true, () => {
     const options = L.pageCountOptions({koreanLevel: 'K2', language: 'bilingual'});
     assert.deepEqual(options, [[12, '12쪽 · 펼침 6개 (짧게)'], [16, '16쪽 · 펼침 8개 (기본)']]);
@@ -540,7 +547,7 @@ test('R12-P1 page-count choices: 12/16 for openings (16 기본), today\'s list o
       for (const value of [8, 24, '24', undefined]) assert.equal(L.heldPageCount({...w, pageCount: value}), value, `${w.koreanLevel} ${value}`);
     assert.equal(L.heldPageCount(null), undefined, 'no level: a page wizard');
   });
-  withHook(undefined, () => {
+  withHook(false, () => {
     for (const value of [8, 12, 16, 24, '24', 13, undefined]) assert.equal(L.heldPageCount({...K2, pageCount: value}), value, `${value}`);
   });
 });
@@ -573,7 +580,7 @@ test('R12-P1 wizard defaults with the hook on: K2 untouched 16, K1 the settings 
     assert.equal(series(K2, null, 12), 16);
     assert.equal(series(K1, null, 12), 12);
   });
-  withHook(undefined, () => {
+  withHook(false, () => {
     // With openings off every value is today's: the settings default, or the previous book's pageCount.
     for (const w of [K2, K1, EN]) {
       assert.equal(fresh(w, 12), 12);
@@ -631,12 +638,12 @@ test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the by
   }
 });
 
-test('R12-P1 an openings job keeps its frozen layout on resume, also when the flag is off again; new jobs freeze it once', async () => {
+test('R12-P1 an openings job keeps its frozen layout on resume, also when the flag is off (hook false); new jobs freeze it once', async () => {
   const state = seed({imageEngine: 'openai'}), job = clone(JOB);
   const frozenPolicy = {...POLICY, spreadImageSize: '1920x816'};
   job.readingLevels = freezeReadingLevels({koreanLevel: 'K2', englishLevel: 'E2'}, state.settings, {layout: 'openings'});
   Object.assign(job.input, {layoutPolicy: frozenPolicy, specs: clone(job.readingLevels.specs), outlineBeatCount: 8});
-  const calls = await withHook(undefined, () => resumeAtInput(state, job));
+  const calls = await withHook(false, () => resumeAtInput(state, job));
   assert.deepEqual(calls, ['outline-reached']);
   assert.deepEqual(job.input.layoutPolicy, frozenPolicy, 'the job\'s own frozen policy is kept');
   assert.equal(job.input.specs.ko.layout, 'openings');
@@ -654,7 +661,7 @@ test('R12-P1 an openings job keeps its frozen layout on resume, also when the fl
     assert.throws(() => createFullAutoJob(s, wizardOf('K3', 'E3', 24, 'dual'), {demo: true}), /12쪽이나 16쪽/u);
     assert.equal(Object.keys(s.fullAutoJobs || {}).length, before, 'nothing is stored or bought');
   });
-  await withHook(undefined, () => {
+  await withHook(false, () => {
     const created = createFullAutoJob(seed(), wizardOf('K2', 'E2', 24, 'bilingual'), {demo: true});
     assert.ok(!('layoutPolicy' in created.input));
     assert.equal(created.input.pageCount, 24);
@@ -799,17 +806,18 @@ test('R12-P1 copyLayoutFields puts back exactly the original entry\'s layout fie
   assert.equal(L.isOpeningsSpec({...OPENING_SPECS.ko, layout: 'pages'}), false);
 });
 
-test('R12-P1 the service worker precaches book-layout.js without a cache bump (that waits for P8)', () => {
+test('R12-P1/P8 the service worker precaches book-layout.js; R12 bumps the shell cache exactly once (P8)', () => {
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.ok(sw.includes('"./book-layout.js",'));
+  assert.ok(sw.includes('"./story-generation/opening-prose.js",'));
   // The cache name is the base branch's own (it moves with other work), so it is not
   // pinned here. Against a pre-R12 checkout of the base this branch is built on
-  // (PRE_R12_APP_ROOT, as for the P0 pins) the line must be the same: no bump.
-  const cacheLine = text => text.match(/^const CACHE = "donghwa-shell-v\d+";$/mu)?.[0];
-  assert.ok(cacheLine(sw), 'sw.js names its shell cache');
+  // (PRE_R12_APP_ROOT, as for the P0 pins) it is exactly one number higher.
+  const cacheNumber = text => Number(text.match(/^const CACHE = "donghwa-shell-v(\d+)";$/mu)?.[1]);
+  assert.ok(cacheNumber(sw) > 0, 'sw.js names its shell cache');
   if (process.env.PRE_R12_APP_ROOT) {
     const base = readFileSync(`${process.env.PRE_R12_APP_ROOT.replace(/\/$/, '')}/dist/sw.js`, 'utf8');
-    assert.equal(cacheLine(sw), cacheLine(base), 'R12 bumps the cache only in P8');
+    assert.equal(cacheNumber(sw), cacheNumber(base) + 1, 'R12 bumps the cache once, in P8');
     assert.ok(!base.includes('"./book-layout.js",'));
   }
 });

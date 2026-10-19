@@ -21,9 +21,9 @@ import {analyzeBook} from '../dist/reading-checker.js';
 const clone = value => JSON.parse(JSON.stringify(value));
 const HOOK = '__DONGHWA_R12_OPENINGS__';
 const LEGACY = JSON.parse(readFileSync(new URL('./fixtures/legacy-page-book-r12.json', import.meta.url), 'utf8'));
-const withHook = async fn => {
+const withHook = async (fn, value = true) => {
   const had = Object.hasOwn(globalThis, HOOK), previous = globalThis[HOOK];
-  globalThis[HOOK] = true;
+  globalThis[HOOK] = value;
   try { return await fn(); } finally { if (had) globalThis[HOOK] = previous; else delete globalThis[HOOK]; }
 };
 function seed() {
@@ -118,7 +118,7 @@ test('R12-P6 labels: checks panel, reading table, level names; page books keep "
   assert.match(renderChecksPanel(legacy, {tab: 'reading'}), />3쪽으로</u);
   assert.match(renderReadingCheck(legacy), /<td>1<\/td>/u);
   // Level names say the per-opening amount when openings are on.
-  assert.doesNotMatch(renderReadingSelectors({koreanLevel: 'K2'}), /두 쪽에/u);
+  await withHook(() => assert.doesNotMatch(renderReadingSelectors({koreanLevel: 'K2'}), /두 쪽에/u), false);
   await withHook(() => {
     const html = renderReadingSelectors({koreanLevel: 'K2'});
     assert.match(html, /K2 · 그림책 5~6세 · 두 쪽에 10~15문장/u);

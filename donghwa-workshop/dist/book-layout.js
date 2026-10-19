@@ -14,11 +14,13 @@
  * grouping the model's entries by beatIndex; the model never numbers openings. */
 import { splitSentences } from "./story-quality/dist/util.js";
 
-/** Off until R12-P8. Tests and the browser smoke turn it on with the hook below. */
-export const OPENINGS_ENABLED = false;
+/** On since R12-P8: new K2-K4 books with Korean text are openings books. Tests and the browser smoke can force it either way with the boolean hook below. */
+export const OPENINGS_ENABLED = true;
 const OPENINGS_HOOK = "__DONGHWA_R12_OPENINGS__";
+/** The switch; a boolean hook (tests, browser smoke) overrides it both ways. */
 export function openingsEnabled() {
-  return OPENINGS_ENABLED || globalThis[OPENINGS_HOOK] === true;
+  const hook = globalThis[OPENINGS_HOOK];
+  return typeof hook === "boolean" ? hook : OPENINGS_ENABLED;
 }
 
 export const OPENING_PAGE_COUNTS = Object.freeze([12, 16]);

@@ -252,7 +252,16 @@ test('R12-P3 demo openings prose fits the per-beat ranges at 12 and 16 pages; th
     assert.equal(openings.beatCount, 8);
   }
   assert.equal(estimateStoryTextCost({settings, pageCount: 12, layout: 'openings', specs: V4('K2', 'E2')}).beatCount, 6);
-  // A page book or wizard adds nothing to the estimate call.
-  assert.deepEqual(textEstimateArgs({koreanLevel: 'K2', englishLevel: 'E2', language: 'bilingual', pageCount: 16}, freezeReadingLevels), {});
+  // A page book or wizard adds nothing to the estimate call (K1 and English-only are
+  // page wizards with the flag on; a K2 wizard is one only with the flag off).
+  assert.deepEqual(textEstimateArgs({koreanLevel: 'K1', englishLevel: 'E2', language: 'bilingual', pageCount: 16}, freezeReadingLevels), {});
+  assert.deepEqual(textEstimateArgs({koreanLevel: 'K2', englishLevel: 'E2', language: 'en', pageCount: 16}, freezeReadingLevels), {});
+  {
+    const had = Object.hasOwn(globalThis, '__DONGHWA_R12_OPENINGS__'), previous = globalThis.__DONGHWA_R12_OPENINGS__;
+    globalThis.__DONGHWA_R12_OPENINGS__ = false;
+    try { assert.deepEqual(textEstimateArgs({koreanLevel: 'K2', englishLevel: 'E2', language: 'bilingual', pageCount: 16}, freezeReadingLevels), {}); }
+    finally { if (had) globalThis.__DONGHWA_R12_OPENINGS__ = previous; else delete globalThis.__DONGHWA_R12_OPENINGS__; }
+  }
+  assert.equal(textEstimateArgs({koreanLevel: 'K2', englishLevel: 'E2', language: 'bilingual', pageCount: 16}, freezeReadingLevels).layout, 'openings', 'flag on (P8)');
   assert.deepEqual(textEstimateArgs({storyInput: legacyInput(), pages: []}), {});
 });

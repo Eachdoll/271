@@ -1770,7 +1770,7 @@ test('R11 ④ bottom-left is 이전, disabled while a page edit is open; ③ get
 const OPENINGS_HOOK = '__DONGHWA_R12_OPENINGS__';
 async function withOpenings(on, fn) {
   const had = Object.hasOwn(globalThis, OPENINGS_HOOK), previous = globalThis[OPENINGS_HOOK];
-  if (on) globalThis[OPENINGS_HOOK] = true; else delete globalThis[OPENINGS_HOOK];
+  if (on) globalThis[OPENINGS_HOOK] = true; else globalThis[OPENINGS_HOOK] = false;
   try { return await fn(); } finally { if (had) globalThis[OPENINGS_HOOK] = previous; else delete globalThis[OPENINGS_HOOK]; }
 }
 const k2Wizard = (pageCount, topic) => ({characterIds: ['yuha'], backgroundIds: [], topic, pageCount, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', simpleFlow: true});
@@ -1858,7 +1858,7 @@ test('R12-P1 the restart confirm prices the new story\'s page count; with openin
         await pending;
       });
     const priced = pages => estimateFullAutoCost(state, {...old.wizard, pageCount: pages}, {planMode: old.planMode || 'auto'}).textUsd;
-    assert.equal(amounts.false, usdText(estimateFullAutoCost(state, old.wizard, {planMode: old.planMode || 'auto'}).textUsd));
+    assert.equal(amounts.false, await withOpenings(false, () => usdText(estimateFullAutoCost(state, old.wizard, {planMode: old.planMode || 'auto'}).textUsd)));
     assert.equal(amounts.true, await withOpenings(true, () => usdText(priced(16))));
     assert.notEqual(amounts.true, amounts.false, 'a 16-page story is priced, not the old 24 pages');
     assert.equal(old.simpleReplacedBy, undefined, 'answered no: nothing started');

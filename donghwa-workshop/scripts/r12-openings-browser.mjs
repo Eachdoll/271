@@ -3,8 +3,8 @@
 // - simple flow per case: ① topic + format (level, language, 12/16쪽) → ② → ③
 //   데모로 체험 → ④ every entry (labels, cue chip, counter, ≤ 12 counted buttons)
 //   → 모든 그림 만들기 (sample) → ⑤ → 책장에 저장 → detail labels;
-// - pro flow per case (--pro): wizard ③ → story workflow (demo) → 줄거리 승인 →
-//   전문 승인 → 쪽 나누기 checks → 쪽 승인 → picture editor → 확정 (sample) → book;
+// - pro flow per case (--pro): wizard ③ → story workflow (데모 시작) → 줄거리 승인 →
+//   (장면 확인) → 전문 승인 → 쪽 나누기 checks → 쪽 승인 → editor → 확정 (sample) → book;
 // - reader of each saved book at every viewport: the bar stays visible, every
 //   word is in view after the follow, no horizontal scroll, the landscape-phone
 //   spread picture is at least 600px wide, the spread hint on portrait phones.
@@ -317,13 +317,26 @@ async function proFlow(spec, width) {
     await click(page, '[data-action="wizard-next"]');
     await click(page, '.full-auto-launcher [data-action="wizard-next"]', 800);
     await shot(page, `pro-${spec.name}-${width}-launch`);
+    // The demo button sits in the closed '데모 살펴보기' tools.
+    await page.locator("details.story-tools:has([data-story-action='start-demo']) > summary").first().click();
+    await sleep(page, 200);
     await storyAction("start-demo", 1000);
     await waitStory('[data-story-action="approve-outline"]');
     out.steps.outlineIntro = await page.locator(".story-workspace .modal-intro").first().textContent().catch(() => "");
-    out.steps.beatHeading = await page.locator(".story-beat-heading small").first().textContent().catch(() => "");
-    await storyAction("approve-outline", 1200);
-    await waitStory('[data-story-action="approve-prose"]', 180000);
-    await storyAction("approve-prose", 1500);
+    out.steps.beatHeading = await page.locator(".story-beat-heading small, .story-card-head small").first().textContent().catch(() => "");
+    // 줄거리 승인 → (장면 확인 · 전문 생성) → 전문 승인 → 쪽 나누기: click whichever
+    // primary step the workflow shows until the pages screen is up.
+    const flowActions = [];
+    for (let guard = 0; guard < 8; guard++) {
+      await page.waitForSelector('.modal-actions [data-story-action]:not([data-story-action="close"]):not([disabled])', { timeout: 180000 });
+      await sleep(page, 400);
+      const action = await page.locator('.modal-actions [data-story-action]:not([data-story-action="close"])').last().getAttribute("data-story-action");
+      if (action === "approve-pages") break;
+      if (!["approve-outline", "generate-prose", "approve-prose", "hybrid-final", "resume-enrichment"].includes(action)) throw Error(`예상하지 못한 단계 ${action}`);
+      flowActions.push(action);
+      await storyAction(action, 1200);
+    }
+    out.steps.flowActions = flowActions;
     await waitStory('[data-story-action="approve-pages"]', 180000);
     await sleep(page, 500);
     out.steps.pagesIntro = await page.locator(".story-workspace .modal-intro").first().textContent().catch(() => "");
@@ -342,10 +355,16 @@ async function proFlow(spec, width) {
     await page.waitForSelector(".editor-text, .ig-editor-bar, .page-rail", { timeout: 180000 });
     await sleep(page, 600);
     out.steps.editorRail = await page.evaluate(() => [...document.querySelectorAll(".page-rail .page-thumb span")].slice(0, 3).map((n) => n.textContent));
+    out.steps.editorBar = await page.locator(".ig-editor-bar").innerText().catch(() => "");
+    out.steps.overflowEditor = await overflowX(page);
     await shot(page, `pro-${spec.name}-${width}-editor`);
-    // 확정: approve the book; the sample engine draws the missing pictures.
-    await click(page, '[data-action="approve-draft"]', 800);
-    out.steps.approveModal = await page.locator("#modal-root .notice").first().textContent().catch(() => "");
+    // World 엔진(sample) draft of every entry, then 확정 (final pictures + cover).
+    await click(page, '[data-ig-action="generate-book"]', 800);
+    await page.waitForFunction(() => !document.querySelector("#ig-operation-message"), null, { timeout: 300000 });
+    await sleep(page, 800);
+    out.steps.editorBarDrawn = await page.locator(".ig-editor-bar small").first().textContent().catch(() => "");
+    await click(page, '[data-action="approve-book"]', 1200);
+    out.steps.approveModal = await page.locator(".modal .notice").first().textContent().catch(() => "");
     const confirm = page.locator("#book-final-confirm");
     if (await confirm.isVisible().catch(() => false)) await confirm.click();
     await page.waitForSelector(".detail-layout", { timeout: 300000 });
@@ -360,6 +379,10 @@ async function proFlow(spec, width) {
     if (!out.book || out.book.layoutPolicy !== "openings" || out.book.pictures !== out.book.entries || !out.book.cover)
       problem(`저장한 책: ${JSON.stringify(out.book)}`);
     if (!new RegExp(`${spec.pageCount}쪽 · 펼침 ${want}개 · 그림 ${out.book?.entries}장`, "u").test(out.steps.detail)) problem(`상세 표시: ${out.steps.detail}`);
+    if (!new RegExp(`그림 0 / ${out.book?.entries}장 생성 · 펼침 ${want}개`, "u").test(out.steps.editorBar)) problem(`편집 막대: ${out.steps.editorBar}`);
+    if (!new RegExp(`그림 ${out.book?.entries} / ${out.book?.entries}장 생성`, "u").test(out.steps.editorBarDrawn || "")) problem(`draft 뒤 편집 막대: ${out.steps.editorBarDrawn}`);
+    if (!/^펼침 1 · 1–2쪽/u.test(out.steps.beatHeading || "")) problem(`비트 머리말: ${out.steps.beatHeading}`);
+    if (out.steps.overflowPages > 1 || out.steps.overflowEditor > 1) problem("가로 넘침");
   } catch (error) {
     problem(`흐름 오류: ${error.message.split("\n")[0]}`);
     await shot(page, `pro-${spec.name}-${width}-error`).catch(() => {});

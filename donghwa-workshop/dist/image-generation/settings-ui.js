@@ -20,6 +20,12 @@ import {
 } from "./pipeline.js";
 import { estimateImageCost, estimateBookCost } from "./models.js";
 import { getImageURL, deleteImageAsset } from "./assets.js";
+import {
+  layoutOf,
+  unitImageSize,
+  unitLabel,
+  openingsOf,
+} from "../book-layout.js";
 // 설정 화면은 스타일 시트 그림이 아직 없거나 복원되지 않았어도 열려야 합니다.
 function safeStyleReferences(state, world) {
   try {
@@ -113,10 +119,37 @@ export function renderCharacterImageControls(character, state) {
   const sheet = getCharacterSheet(state, character.id, world);
   return `<div class="ig-character-controls"><small>${sheet && sheet.worldRevision === world.revision ? "World 시트 확정" : "시트 다시 생성 필요"}</small>${button("엔진으로 시트 생성", "generate-sheet", `data-id="${escape(character.id)}"`)}</div>`;
 }
+/**
+ * R12 openings: the editor bar counts pictures (entries), not printed pages, and
+ * prices each entry at its own size (spread 2048x880, page 1536x1024). Page
+ * books keep their bar byte for byte.
+ */
+function renderOpeningsGenerationControls(book, world, engine) {
+  const config = {
+      ...world.providerConfig?.[engine],
+      ...book.generationSnapshot?.imageModelConfig,
+    },
+    draftUsd = book.pages.reduce(
+      (sum, page) =>
+        sum +
+        estimateImageCost({
+          engine,
+          quality: "draft",
+          size: unitImageSize(book, page),
+          config,
+        }).costUsd,
+      0,
+    ),
+    generated = book.pages.filter((p) => p.imageAssetId || p.imageUrl).length,
+    editPage = api.getEditPage?.() || 0;
+  return `<div class="ig-editor-bar"><div><strong>World 엔진으로 미리보기 만들기</strong><small>그림 ${generated} / ${book.pages.length}장 생성 · 펼침 ${openingsOf(book).length}개 · 캐릭터·옷장·스타일·고정 장소 참조 · 앞쪽부터 순서대로 생성 · 전체 draft 예상 $${draftUsd.toFixed(2)} · 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성</small>${book.pages[editPage]?.imageDiversity?.warning ? `<small role="status">${escape(book.pages[editPage].imageDiversity.warning)}</small>` : ""}${book.imageTimeWarning ? `<small role="status">${escape(book.imageTimeWarning.message)}</small>` : ""}</div><button type="button" class="btn btn-outline" data-ig-action="generate-page">이 그림 draft 생성</button><button type="button" class="btn btn-outline" data-ig-action="change-composition">이 그림 다른 구도로</button><button type="button" class="btn btn-green" data-ig-action="generate-book">그림 ${book.pages.length}장 draft 전체 생성</button></div>`;
+}
 export function renderGenerationControls(book) {
   const world = getActiveWorld(api.getState()),
-    engine = book.generationSnapshot?.imageEngine || world.imageEngine,
-    estimated = estimateBookCost({
+    engine = book.generationSnapshot?.imageEngine || world.imageEngine;
+  if (layoutOf(book) === "openings")
+    return renderOpeningsGenerationControls(book, world, engine);
+  const estimated = estimateBookCost({
       engine,
       pageCount: book.pages.length,
       quality: "draft",
@@ -712,7 +745,7 @@ export function showSimilarPagesReview(book, { quality = "draft" } = {}) {
     },
   }).costUsd;
   api.showModal(
-    `${api.modalHeader("비슷한 구도 " + similarPages.length + "쪽 · 다시 그릴까요?")}<p>선택한 쪽만 추가 생성해요. 쪽당 예상 $${unit.toFixed(3)} · 전체 선택 시 약 $${(unit * similarPages.length).toFixed(3)}. 실제 요금은 공급자에서 확인해 주세요.</p><div class="similar-pages-options">${similarPages.map((index) => `<label><input type="checkbox" name="similar-page" value="${index}">${index + 1}쪽</label>`).join("")}</div><p id="similar-retry-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-keep">지금 그림 유지</button><button class="btn btn-primary" id="similar-confirm">선택한 쪽만 다시 그리기</button></div>`,
+    `${api.modalHeader("비슷한 구도 " + similarPages.length + "쪽 · 다시 그릴까요?")}<p>선택한 쪽만 추가 생성해요. 쪽당 예상 $${unit.toFixed(3)} · 전체 선택 시 약 $${(unit * similarPages.length).toFixed(3)}. 실제 요금은 공급자에서 확인해 주세요.</p><div class="similar-pages-options">${similarPages.map((index) => `<label><input type="checkbox" name="similar-page" value="${index}">${layoutOf(book) === "openings" ? escape(unitLabel(book, index)) : `${index + 1}쪽`}</label>`).join("")}</div><p id="similar-retry-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-keep">지금 그림 유지</button><button class="btn btn-primary" id="similar-confirm">선택한 쪽만 다시 그리기</button></div>`,
   );
   document.querySelector("#similar-keep").onclick = () => {
     book.similarityReviewDismissed = true;
@@ -777,11 +810,17 @@ async function runSceneGeneration(all, changeComposition = false) {
     pageIndex = api.getEditPage();
   const operation = new AbortController();
   currentOperation = operation;
+  // R12 openings: progress counts pictures and names the entry (펼침 k · …).
+  const openings = layoutOf(book) === "openings";
   operationModal(
     all ? "이야기의 그림을 엮고 있어요" : "이 쪽의 그림을 만들고 있어요",
     all
-      ? `0 / ${book.pages.length}쪽 · 확정된 시트가 모든 장면에 함께해요.`
-      : `${pageIndex + 1}쪽 · 다른 쪽은 유지됩니다.`,
+      ? openings
+        ? `그림 0 / ${book.pages.length}장 · 확정된 시트가 모든 장면에 함께해요.`
+        : `0 / ${book.pages.length}쪽 · 확정된 시트가 모든 장면에 함께해요.`
+      : openings
+        ? `${unitLabel(book, pageIndex)} · 다른 그림은 유지됩니다.`
+        : `${pageIndex + 1}쪽 · 다른 쪽은 유지됩니다.`,
   );
   try {
     if (all)
@@ -795,7 +834,9 @@ async function runSceneGeneration(all, changeComposition = false) {
           }
           const el = document.querySelector("#ig-operation-message");
           if (el)
-            el.textContent = `${p.completed} / ${p.total}쪽 생성${p.pageIndex == null ? "" : " · " + (p.pageIndex + 1) + "쪽"} ${p.status === "complete" ? "완료" : "작업 중"}`;
+            el.textContent = openings
+              ? `그림 ${p.completed} / ${p.total}장 생성${p.pageIndex == null ? "" : " · " + unitLabel(book, p.pageIndex)} ${p.status === "complete" ? "완료" : "작업 중"}`
+              : `${p.completed} / ${p.total}쪽 생성${p.pageIndex == null ? "" : " · " + (p.pageIndex + 1) + "쪽"} ${p.status === "complete" ? "완료" : "작업 중"}`;
         },
       });
     else
