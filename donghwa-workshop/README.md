@@ -1,5 +1,7 @@
 # 동화공방
 
+r11(쉬운 만들기 단계 자유 이동, 가족 아이디·비밀번호 로그인, 가족 공유 동기화 안정화)은 Claude가 구현했습니다. 내용과 검증은 [Claude r11 구현 보고](CLAUDE_R11_IMPLEMENTATION_2026-10-19.md), 반입·검증·배포 절차는 [Codex r11 지시서](CODEX_WORK_ORDER_R11_2026-10-19.md)에 있습니다.
+
 r9(말버릇 "같이 가자" 반복 해결, 쉬운 만들기 다섯 단계와 프로페셔널 모드)는 Claude가 구현했습니다. 내용과 검증은 [Claude r9 구현 보고](CLAUDE_R9_IMPLEMENTATION_2026-10-18.md), 반입·검증·배포 절차는 [Codex r10 지시서](CODEX_WORK_ORDER_R10_2026-10-18.md)에 있습니다. 원래 요구는 [r9 지시서](CODEX_WORK_ORDER_R9_2026-10-18.md)입니다.
 
 Codex r8은 [실측 후속 지시서](CODEX_WORK_ORDER_R8_2026-10-17.md)를 반영합니다. 새 K1·E0 초안에 언어별 분량 압축 정책을 고정하고 문장 분리·의성어 최소 길이·현재형 검사의 오탐을 수정했습니다. [r8 완료 보고](CODEX_R8_COMPLETION_2026-10-17.md)와 [오프라인 재검사](QA/r8-offline-recheck.json)를 참고하세요. 압축 기록이 없는 기존 초안은 OFF를 유지합니다.
