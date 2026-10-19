@@ -1,5 +1,5 @@
 {
- "base": "http://127.0.0.1:4961/",
+ "base": "http://127.0.0.1:4941/",
  "runs": [
   {
    "hook": false,
@@ -556,6 +556,210 @@
       }
      }
     }
+   }
+  }
+ ],
+ "newStory": [
+  {
+   "hook": false,
+   "abandon": {
+    "summary": "K2 · E2 · 24쪽 · 한 쪽에 한글 + 영어",
+    "select": {
+     "value": 24,
+     "options": [
+      8,
+      12,
+      16,
+      24
+     ]
+    },
+    "newJob": {
+     "pageCount": 24,
+     "wizardPageCount": 24,
+     "layout": "pages",
+     "status": "text-review",
+     "error": null
+    },
+    "oldJob": {
+     "abandoned": true,
+     "wizardUnchanged": true
+    },
+    "refusals": [],
+    "pageErrors": [],
+    "paidRequests": []
+   },
+   "restart": {
+    "oldText": {
+     "status": "text-review",
+     "pages": 8
+    },
+    "newJob": {
+     "pageCount": 8,
+     "wizardPageCount": 8,
+     "layout": "pages",
+     "status": "text-review",
+     "error": null
+    },
+    "oldJob": {
+     "replaced": true,
+     "wizardUnchanged": true
+    },
+    "refusals": [],
+    "pageErrors": [],
+    "paidRequests": []
+   },
+   "safetyNet": {
+    "simple": {
+     "before": {
+      "summary": "K2 · E2 · 24쪽 · 한 쪽에 한글 + 영어",
+      "select": {
+       "value": 24,
+       "options": [
+        8,
+        12,
+        16,
+        24
+       ]
+      }
+     },
+     "after": {
+      "summary": "K2 · E2 · 24쪽 · 한 쪽에 한글 + 영어",
+      "select": {
+       "value": 24,
+       "options": [
+        8,
+        12,
+        16,
+        24
+       ]
+      }
+     }
+    },
+    "pro": {
+     "before": {
+      "value": 24,
+      "options": [
+       8,
+       12,
+       16,
+       24
+      ]
+     },
+     "after": {
+      "value": 24,
+      "options": [
+       8,
+       12,
+       16,
+       24
+      ]
+     },
+     "draft": {
+      "pageCount": 24,
+      "layout": "pages"
+     }
+    },
+    "refusals": [],
+    "pageErrors": [],
+    "paidRequests": []
+   }
+  },
+  {
+   "hook": true,
+   "abandon": {
+    "summary": "K2 · E2 · 16쪽 · 한 쪽에 한글 + 영어",
+    "select": {
+     "value": 16,
+     "options": [
+      12,
+      16
+     ]
+    },
+    "newJob": {
+     "pageCount": 16,
+     "wizardPageCount": 16,
+     "layout": "openings",
+     "status": "text-review",
+     "error": null
+    },
+    "oldJob": {
+     "abandoned": true,
+     "wizardUnchanged": true
+    },
+    "refusals": [],
+    "pageErrors": [],
+    "paidRequests": []
+   },
+   "restart": {
+    "oldText": {
+     "status": "text-review",
+     "pages": 8
+    },
+    "newJob": {
+     "pageCount": 12,
+     "wizardPageCount": 12,
+     "layout": "openings",
+     "status": "text-review",
+     "error": null
+    },
+    "oldJob": {
+     "replaced": true,
+     "wizardUnchanged": true
+    },
+    "refusals": [],
+    "pageErrors": [],
+    "paidRequests": []
+   },
+   "safetyNet": {
+    "simple": {
+     "before": {
+      "summary": "K2 · E2 · 24쪽 · 한 쪽에 한글 + 영어",
+      "select": {
+       "value": 24,
+       "options": [
+        8,
+        12,
+        16,
+        24
+       ]
+      }
+     },
+     "after": {
+      "summary": "K2 · E2 · 16쪽 · 한 쪽에 한글 + 영어",
+      "select": {
+       "value": 16,
+       "options": [
+        12,
+        16
+       ]
+      }
+     }
+    },
+    "pro": {
+     "before": {
+      "value": 24,
+      "options": [
+       8,
+       12,
+       16,
+       24
+      ]
+     },
+     "after": {
+      "value": 16,
+      "options": [
+       12,
+       16
+      ]
+     },
+     "draft": {
+      "pageCount": 16,
+      "layout": "openings"
+     }
+    },
+    "refusals": [],
+    "pageErrors": [],
+    "paidRequests": []
    }
   }
  ]

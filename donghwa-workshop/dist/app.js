@@ -181,6 +181,7 @@ import {
 } from "./story-generation/ui.js";
 import { toLegacyPages, summarizeStory } from "./story-generation/pipeline.js";
 import {
+  heldPageCount,
   layoutFor,
   layoutOf,
   printedPagesOf,
@@ -1565,6 +1566,10 @@ function createPage() {
       )}</div>${w.previousBookId ? `<div class="notice" style="margin-top:24px">지난 이야기에서 이어집니다.<br>${esc(bookById(w.previousBookId)?.summary || bookById(w.previousBookId)?.title)}</div>` : ""}`;
   if (w.step === 2)
     inner = `<h3>오늘은 어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 들려주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${["공룡 친구와 소풍", "달에 놀러 간 날", "비 오는 날의 모험", "바닷속 보물 찾기", "처음 유치원에 간 날", "친구의 생일 파티"].map((t) => `<button class="chip" data-action="topic-chip" data-topic="${t}">${t}</button>`).join("")}<button class="chip" data-action="child-pick">${icon("child")}아이가 고르기</button></div><div id="wardrobe-topic-suggestions">${renderTopicWardrobe(w)}</div><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">이 주제로 조연 자동생성</button></div>${renderQualityWorldSelectors(w, { state })}`;
+  // R12 safety net: step 3's select never shows a page count the wizard does not
+  // hold (a wizard carried over from a pre-R12 8/24-page job becomes 12/16).
+  if (w.step === 3 && heldPageCount(w) !== w.pageCount)
+    w.pageCount = heldPageCount(w);
   if (w.step === 3)
     inner = `<h3>읽기와 형식을 정해요</h3><p class="section-sub">한글과 영어 수준은 따로 적용해요.</p><div class="form-grid" style="margin-top:26px">${selectField(
       "language",

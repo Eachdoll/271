@@ -271,6 +271,9 @@ export function normalizeStoryInput(input = {}) {
   const pageCount = Number(input.pageCount || 12);
   // R12: only a frozen openings policy (inputFromWizard with layout 'openings')
   // makes an openings input; without it every rule below is the pre-R12 one.
+  // v4 openings specs without the policy (an R11 tab ran the FULL AUTO input step
+  // of an openings job and rewrote job.input) are a page input: their top-level
+  // range is the single-page one, and layoutStatus flags the book layoutMismatch.
   const layoutPolicy =
     input.layoutPolicy?.kind === "openings"
       ? normalizeLayoutPolicy(input.layoutPolicy)
@@ -288,8 +291,6 @@ export function normalizeStoryInput(input = {}) {
       );
   } else if (!PAGE_COUNTS.includes(pageCount))
     throw new Error("이야기는 8·12·16·24쪽 중에서 골라 주세요.");
-  else if (isOpeningsSpec(input.specs?.ko) || isOpeningsSpec(input.specs?.en))
-    throw new Error("펼침 구성 읽기 규칙은 펼침 구성 책에서만 쓸 수 있어요.");
   if (
     !Array.isArray(input.characters) ||
     !input.characters.length ||

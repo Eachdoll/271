@@ -87,6 +87,7 @@ const OPENING_PAGE_COUNT_OPTIONS = Object.freeze([
 /** Korean sentence-count slack around a unit range: [min − 1, max + 2]. */
 const COUNT_SLACK = Object.freeze({ countBelow: 1, countAbove: 2 });
 const PAGE_COUNT_ERROR = "펼침 구성 책은 12쪽이나 16쪽이어야 해요.";
+const POLICY_MISSING_ERROR = "펼침 구성 정보가 빠져 있어 쪽 책으로 읽어요.";
 
 const isObject = (value) =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -166,12 +167,24 @@ function sourceOf(value) {
  * FULL AUTO job (input + book/pagination) or a bare input. 'openings' needs the
  * frozen policy AND, once entries exist, a valid opening structure; a policy with
  * broken or legacy entries (an old tab paginated it) is a page book with
- * layoutMismatch. The value is never marked: this module does not mutate.
+ * layoutMismatch. So is an input that kept the v4 openings specs but lost its
+ * policy: an R11 tab that ran the FULL AUTO input step of an openings job rewrote
+ * job.input from its own inputFromWizard. Its single-page range is the page rule.
+ * The value is never marked: this module does not mutate.
  */
 export function layoutStatus(value) {
   const { input, outline, pages } = sourceOf(value);
-  if (input?.layoutPolicy?.kind !== "openings")
-    return { layout: "pages", layoutMismatch: false, errors: [] };
+  if (input?.layoutPolicy?.kind !== "openings") {
+    const lostPolicy =
+      isOpeningsSpec(input?.specs?.ko) || isOpeningsSpec(input?.specs?.en);
+    return lostPolicy
+      ? {
+          layout: "pages",
+          layoutMismatch: true,
+          errors: [POLICY_MISSING_ERROR],
+        }
+      : { layout: "pages", layoutMismatch: false, errors: [] };
+  }
   const errors = Array.isArray(pages)
     ? validateOpenings(pages, input, outline).errors
     : OPENING_PAGE_COUNTS.includes(Number(input.pageCount))
@@ -292,6 +305,20 @@ export function snapPageCount(
   for (const option of OPENING_PAGE_COUNTS)
     if (Math.abs(option - count) <= Math.abs(best - count)) best = option;
   return best;
+}
+
+/**
+ * The page count a wizard holds when it starts a NEW story from an old job's
+ * wizard ('이 주제로 새로 만들기', ③ '주제·엔진 바꾸기', '이야기 전체 다시 만들기')
+ * and whenever a page-count select is shown: an openings wizard's count snapped
+ * to the nearest of 12/16 as a parent's pick (a pre-R12 job's 8 → 12, 24 → 16),
+ * so a select never shows a value the wizard does not hold. A page wizard keeps
+ * its count, so with openings off this never changes anything.
+ */
+export function heldPageCount(wizardLike) {
+  return snapPageCount(layoutFor(wizardLike), wizardLike?.pageCount, {
+    touched: true,
+  });
 }
 
 /* ---------- labels ---------- */

@@ -53,7 +53,12 @@ import { currentBookPagination } from "./story-generation/book-coherence.js";
 import { syncStoryDraft } from "./story-generation/ui.js";
 import { isHomeBackground } from "./story-generation/pipeline.js";
 import { safeTopic } from "./engine.js";
-import { layoutFor, pageCountOptions, snapPageCount } from "./book-layout.js";
+import {
+  heldPageCount,
+  layoutFor,
+  pageCountOptions,
+  snapPageCount,
+} from "./book-layout.js";
 
 /* ---------- per-device mode ---------- */
 export const UI_MODE_KEY = "donghwa-ui-mode";
@@ -455,6 +460,18 @@ function wizardFromJob(job, step) {
     simplePicksTouched: true,
     allowNew: job.allowNew !== false,
   };
+}
+/**
+ * R12: the page count a wizard that starts a new story from an old job's wizard
+ * may hold (forkWizard, ③ '주제·엔진 바꾸기', restartStory), also the safety net of
+ * every unbound render: a pre-R12 K2 job's 8 or 24 pages become 12 or 16 when
+ * the new story is an openings book, instead of failing at ③. Page wizards keep
+ * their count, so with openings off nothing changes.
+ */
+function holdPageCount(w) {
+  const held = heldPageCount(w);
+  if (held !== w.pageCount) w.pageCount = held;
+  return w;
 }
 export const isSimpleBusy = () => !!(liveRun || pageOp || actionBusy);
 /** Paid image/text work in flight (a confirm dialog waiting for the parent is not work). */
@@ -1122,6 +1139,9 @@ function renderFinishStep(ctx, w) {
 export function renderSimpleCreate(ctx = api) {
   const state = ctx.getState(),
     w = ensureSimpleWizard(state, ctx.getWizard());
+  // A story without a job may still be changed: its format select and summary
+  // never show a page count the wizard does not hold (R12 safety net).
+  if (!jobOfWizard(state, w)) holdPageCount(w);
   if (w.simpleStep >= 4 && !ctx.getDraft()) {
     const job = jobOfWizard(state, w);
     if (job?.book) ctx.setDraft?.(job.book);
@@ -2064,10 +2084,16 @@ async function restartStory(ctx) {
     book = ctx.getDraft(),
     old = jobOfBook(state, book) || jobOfWizard(state, ctx.getWizard());
   if (!old) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
+  // The new story's page count (R12: an old 8/24-page K2 job → 12/16), priced as such.
+  const pages = heldPageCount(wizardFromJob(old, 3)),
+    priced =
+      pages === old.wizard?.pageCount
+        ? old.wizard || {}
+        : { ...old.wizard, pageCount: pages };
   const demo = !!old.demo,
     cost = demo
       ? 0
-      : estimateFullAutoCost(state, old.wizard || {}, {
+      : estimateFullAutoCost(state, priced, {
           planMode: old.planMode || "auto",
         }).textUsd;
   const ok = await confirmModal(
@@ -2079,7 +2105,7 @@ async function restartStory(ctx) {
   if (!ok) return;
   if (runIsLive(old))
     await stopFullAutoJob(old.id).catch((error) => ctx.toast(error));
-  const next = wizardFromJob(old, 3);
+  const next = holdPageCount(wizardFromJob(old, 3));
   next.simpleJobId = null;
   // A new seed offset keeps cached responses from being replayed as the "new" story.
   next.qualitySeedOffset = Math.min(
@@ -2172,10 +2198,7 @@ function forkWizard(state, old, w) {
   if (w.simpleForced) next.simpleForced = true;
   // R12: the new story gets today's layout; a page job's 8 or 24 pages become the
   // nearest openings count (12/16) instead of failing at ③. Pages keep their count.
-  next.pageCount = snapPageCount(layoutFor(next), next.pageCount, {
-    touched: true,
-  });
-  return next;
+  return holdPageCount(next);
 }
 /**
  * 책장에 저장. Missing pictures (or an unfinished run) must be drawn first;
@@ -2545,6 +2568,8 @@ async function handle(ctx, action, el) {
       return ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
     }
     delete w.simpleJobId;
+    // R12: the start over is a new story, so it gets today's layout (see forkWizard).
+    holdPageCount(w);
     w.simpleStep = 1;
     if (lastProgress?.jobId === job.id) lastProgress = null;
     ctx.render();

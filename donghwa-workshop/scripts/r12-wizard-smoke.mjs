@@ -8,6 +8,13 @@
 //   16 printed pages; an 8-page K2 page book continues at 8 (off) or 12 (on);
 // - simple '이 주제로 새로 만들기' of a pre-R12 24-page K2 job: 24 (off) or 16 (on),
 //   and the old job is left as it was.
+// - the other two new-story paths from a pre-R12 job (P1 점검 수정): ③ '주제·엔진
+//   바꾸기' of a paused 24-page K2 job and ④ '이야기 전체 다시 만들기' of an 8-page
+//   K2 book (its text made here with the free demo engine). The new story's summary,
+//   format select and job hold 24/8 (off) or 16/12 (on), and ③ 데모로 체험 / the
+//   restart make a new job (free demo) instead of failing on the page count.
+// - the safety net: a 24-page K2 wizard (simple ① and pro ③) chosen with the
+//   switch off, then the switch flipped on: the next render shows and holds 16.
 // With the hook off every value must be today's. Nothing paid runs: paid hosts are
 // blocked and counted, and the story workflow is only opened, never started.
 // 사용: (cd dist && npx http-server -p 4961 -s .) & node scripts/r12-wizard-smoke.mjs [기본주소] [결과 JSON]
@@ -296,7 +303,211 @@ async function run(hook) {
   return result;
 }
 
+/**
+ * One fresh tab per new-story flow: the K2/E2 defaults and, made with the switch
+ * off (as R11 made it), one paused pre-R12 simple job of `pageCount` pages.
+ */
+async function newStoryTab(hook, pageCount) {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    locale: "ko-KR",
+    timezoneId: "Asia/Seoul",
+    serviceWorkers: "block",
+  });
+  const page = await context.newPage();
+  const out = { pageErrors: [], paidRequests: [] };
+  page.on("pageerror", (error) => out.pageErrors.push(error.message));
+  await page.route(PAID, (route) => {
+    out.paidRequests.push(route.request().url());
+    return route.abort();
+  });
+  await context.addInitScript((on) => {
+    if (on) window.__DONGHWA_R12_OPENINGS__ = true;
+    // Every toast or notice that says the page count was refused.
+    window.__r12Refusals = [];
+    new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes)
+          if (/펼침 구성 책은/u.test(node.textContent || ""))
+            window.__r12Refusals.push(node.textContent.trim());
+    }).observe(document, { childList: true, subtree: true });
+  }, hook);
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  const seeded = await page.evaluate(async (pages) => {
+    const { seedState } = await import(new URL("engine.js", location.href).href);
+    const { createFullAutoJob } = await import(new URL("full-auto.js", location.href).href);
+    const state = seedState();
+    Object.assign(state.settings, {
+      defaultKoreanLevel: "K2",
+      defaultEnglishLevel: "E2",
+      defaultLanguage: "bilingual",
+      defaultPages: 12,
+    });
+    if (pages) {
+      const hook = window.__DONGHWA_R12_OPENINGS__;
+      delete window.__DONGHWA_R12_OPENINGS__;
+      const job = createFullAutoJob(
+        state,
+        { characterIds: ["yuha", "greenie"], backgroundIds: ["forest", "garden"], topic: `바람 피리 찾기 ${pages}`, pageCount: pages, koreanLevel: "K2", englishLevel: "E2", language: "bilingual", value: "none", ending: "home", simpleFlow: true },
+        { demo: true, stopBefore: "text" },
+      );
+      if (hook !== undefined) window.__DONGHWA_R12_OPENINGS__ = hook;
+      job.status = "paused";
+      return { library: JSON.stringify(state), jobId: job.id };
+    }
+    return { library: JSON.stringify(state), jobId: null };
+  }, pageCount);
+  await context.addInitScript(
+    ([key, value]) => {
+      if (window.top === window && !sessionStorage.getItem("r12-p1-seeded")) {
+        localStorage.setItem(key, value);
+        sessionStorage.setItem("r12-p1-seeded", "1");
+      }
+    },
+    [LIBRARY_KEY, seeded.library],
+  );
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(400);
+  const click = async (selector) => {
+    await page.locator(selector).first().click();
+    await page.waitForTimeout(250);
+  };
+  const jobs = () =>
+    page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)).fullAutoJobs || {},
+      LIBRARY_KEY,
+    );
+  /** The first job not in `before`, once its free demo text is done. */
+  const newJob = async (before) => {
+    for (let i = 0; i < 100; i++) {
+      const fresh = Object.values(await jobs()).find((j) => !before.includes(j.id));
+      if (fresh && fresh.status !== "running" && fresh.status !== "ready")
+        return { pageCount: fresh.input.pageCount, wizardPageCount: fresh.wizard.pageCount, layout: fresh.input.layoutPolicy?.kind || "pages", status: fresh.status, error: fresh.error || null };
+      await page.waitForTimeout(200);
+    }
+    return null;
+  };
+  const formatSelect = () =>
+    page.evaluate(() => {
+      const node = document.querySelector("#simple-format-panel #pageCount");
+      return node ? { value: Number(node.value), options: [...node.options].map((o) => Number(o.value)) } : null;
+    });
+  const summary = () => page.locator("#simple-format-summary").textContent();
+  const unlock = async () => {
+    if (await page.locator("#pin-form").count()) {
+      await page.fill("#pin-form #pin", "1234");
+      if (await page.locator("#pin-form #pin-confirm").count())
+        await page.fill("#pin-form #pin-confirm", "1234");
+      await page.click("#pin-form button[type=submit]");
+      await page.waitForTimeout(600);
+    }
+  };
+  await click('button[data-action="nav"][data-view="settings"]');
+  await unlock();
+  await click('button[data-action="nav"][data-view="create"]');
+  const finish = async (record) => {
+    record.refusals = await page.evaluate(() => window.__r12Refusals);
+    record.pageErrors = out.pageErrors;
+    record.paidRequests = out.paidRequests;
+    await context.close();
+    return record;
+  };
+  return { page, click, unlock, jobs, newJob, formatSelect, summary, finish, jobId: seeded.jobId };
+}
+/** ③ '주제·엔진 바꾸기' of a paused pre-R12 24-page K2 job, then ③ 데모로 체험. */
+async function abandonFlow(hook) {
+  const tab = await newStoryTab(hook, 24),
+    oldBefore = JSON.stringify((await tab.jobs())[tab.jobId].wizard);
+  await tab.click(`[data-simple-action="resume"][data-id="${tab.jobId}"]`);
+  await tab.click('[data-simple-action="abandon"]');
+  const record = { summary: await tab.summary() };
+  await tab.click('[data-simple-action="format"]');
+  record.select = await tab.formatSelect();
+  await tab.click('[data-simple-action="goto-step"][data-step="3"]');
+  const before = Object.keys(await tab.jobs());
+  await tab.click('[data-simple-action="start-demo"]');
+  record.newJob = await tab.newJob(before);
+  const old = (await tab.jobs())[tab.jobId];
+  record.oldJob = { abandoned: !!old.simpleAbandoned, wizardUnchanged: JSON.stringify(old.wizard) === oldBefore };
+  return tab.finish(record);
+}
+/** ④ '이야기 전체 다시 만들기' of a pre-R12 8-page K2 book (text made here, free demo). */
+async function restartFlow(hook) {
+  const tab = await newStoryTab(hook, 8);
+  await tab.click(`[data-simple-action="resume"][data-id="${tab.jobId}"]`);
+  await tab.click('[data-simple-action="retry"]');
+  for (let i = 0; i < 100 && !(await tab.page.locator('[data-simple-action="restart"]').count()); i++)
+    await tab.page.waitForTimeout(200);
+  const old = (await tab.jobs())[tab.jobId];
+  const record = { oldText: { status: old.status, pages: old.book?.pages?.length ?? 0 } };
+  // The old story as its own text run left it (that run fills in its picks).
+  const oldBefore = JSON.stringify({ wizard: old.wizard, input: old.input });
+  const before = Object.keys(await tab.jobs());
+  await tab.click('[data-simple-action="restart"]');
+  await tab.click("#simple-confirm-yes");
+  record.newJob = await tab.newJob(before);
+  const after = (await tab.jobs())[tab.jobId];
+  record.oldJob = { replaced: !!after.simpleReplacedBy, wizardUnchanged: JSON.stringify({ wizard: after.wizard, input: after.input }) === oldBefore };
+  return tab.finish(record);
+}
+/**
+ * The render safety net: 24 pages chosen for a K2 wizard with the switch off; then
+ * (hook run only) the switch is flipped on and the screen drawn again.
+ */
+async function safetyNetFlow(flip) {
+  const tab = await newStoryTab(false, 0),
+    page = tab.page,
+    record = { simple: {}, pro: {} };
+  await tab.click('[data-simple-action="format"]');
+  await page.locator("#simple-format-panel #pageCount").selectOption("24");
+  await page.waitForTimeout(150);
+  record.simple.before = { summary: await tab.summary(), select: await tab.formatSelect() };
+  if (flip) await page.evaluate(() => (window.__DONGHWA_R12_OPENINGS__ = true));
+  await tab.click('[data-simple-action="format"]');
+  await tab.click('[data-simple-action="format"]');
+  record.simple.after = { summary: await tab.summary(), select: await tab.formatSelect() };
+  await tab.click('[data-action="toggle-ui-mode"]');
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(300);
+  await tab.click('button[data-action="nav"][data-view="create"]');
+  await tab.unlock();
+  await tab.click('[data-action="wizard-next"]');
+  await page.fill("#topic", "바람 피리 찾기");
+  await tab.click('[data-action="wizard-next"]');
+  await page.locator("#pageCount").selectOption("24");
+  await page.waitForTimeout(150);
+  const proSelect = () =>
+    page.evaluate(() => {
+      const node = document.querySelector("#pageCount");
+      return { value: Number(node.value), options: [...node.options].map((o) => Number(o.value)) };
+    });
+  record.pro.before = await proSelect();
+  if (flip) await page.evaluate(() => (window.__DONGHWA_R12_OPENINGS__ = true));
+  await tab.click('[data-action="wizard-back"]');
+  await tab.click('[data-action="wizard-next"]');
+  record.pro.after = await proSelect();
+  await tab.click('[data-action="wizard-next"]');
+  await tab.click('.full-auto-launcher [data-action="wizard-next"]');
+  await page.waitForTimeout(800);
+  record.pro.draft = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key));
+    const draft = Object.values(state.storyDrafts || {}).sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt)),
+    )[0];
+    return draft ? { pageCount: draft.input.pageCount, layout: draft.input.layoutPolicy?.kind || "pages" } : null;
+  }, LIBRARY_KEY);
+  return tab.finish(record);
+}
+
 for (const hook of [false, true]) report.runs.push(await run(hook));
+report.newStory = [];
+for (const hook of [false, true])
+  report.newStory.push({
+    hook,
+    abandon: await abandonFlow(hook),
+    restart: await restartFlow(hook),
+    safetyNet: await safetyNetFlow(hook),
+  });
 await browser.close();
 
 // ---------- expectations ----------
@@ -328,6 +539,28 @@ for (const r of report.runs) {
   expect(`${tag} pro draft`, p.draft && [p.draft.koreanLevel, p.draft.pageCount, !!p.draft.layoutPolicy, p.draft.outlineBeatCount, p.draft.readingVersion, p.draft.specVersion], on ? ["K4", 12, true, 6, 4, 4] : ["K4", 12, false, 7, 3, 3]);
   expect(`${tag} series openings`, values(p.series["openings-book-r12-p1"]), on ? [16, OPENINGS] : [16, TODAY]);
   expect(`${tag} series 8 pages`, values(p.series["short-page-book-r12-p1"]), on ? [12, OPENINGS] : [8, TODAY]);
+}
+for (const { hook: on, abandon, restart, safetyNet } of report.newStory) {
+  const tag = on ? "on" : "off";
+  for (const [name, flow] of Object.entries({ abandon, restart, safetyNet })) {
+    expect(`${tag} ${name} page errors`, flow.pageErrors, []);
+    expect(`${tag} ${name} paid requests`, flow.paidRequests, []);
+    expect(`${tag} ${name} page count refused`, flow.refusals, []);
+  }
+  const OPTIONS = on ? OPENINGS : TODAY;
+  expect(`${tag} abandon summary`, abandon.summary, `K2 · E2 · ${on ? 16 : 24}쪽 · 한 쪽에 한글 + 영어`);
+  expect(`${tag} abandon select`, abandon.select, { value: on ? 16 : 24, options: OPTIONS });
+  expect(`${tag} abandon new job`, abandon.newJob && [abandon.newJob.pageCount, abandon.newJob.wizardPageCount, abandon.newJob.layout, abandon.newJob.status], [on ? 16 : 24, on ? 16 : 24, on ? "openings" : "pages", "text-review"]);
+  expect(`${tag} abandon old job`, abandon.oldJob, { abandoned: true, wizardUnchanged: true });
+  expect(`${tag} restart old text`, restart.oldText, { status: "text-review", pages: 8 });
+  expect(`${tag} restart new job`, restart.newJob && [restart.newJob.pageCount, restart.newJob.wizardPageCount, restart.newJob.layout, restart.newJob.status], [on ? 12 : 8, on ? 12 : 8, on ? "openings" : "pages", "text-review"]);
+  expect(`${tag} restart old job`, restart.oldJob, { replaced: true, wizardUnchanged: true });
+  const { simple: sn, pro: pn } = safetyNet;
+  expect(`${tag} safety simple before`, sn.before, { summary: "K2 · E2 · 24쪽 · 한 쪽에 한글 + 영어", select: { value: 24, options: TODAY } });
+  expect(`${tag} safety simple after`, sn.after, { summary: `K2 · E2 · ${on ? 16 : 24}쪽 · 한 쪽에 한글 + 영어`, select: { value: on ? 16 : 24, options: OPTIONS } });
+  expect(`${tag} safety pro before`, pn.before, { value: 24, options: TODAY });
+  expect(`${tag} safety pro after`, pn.after, { value: on ? 16 : 24, options: OPTIONS });
+  expect(`${tag} safety pro draft`, pn.draft, { pageCount: on ? 16 : 24, layout: on ? "openings" : "pages" });
 }
 fs.writeFileSync(OUT, JSON.stringify(report, null, 1) + "\n");
 console.log(`wrote ${OUT}`);

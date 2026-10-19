@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 import * as L from '../dist/book-layout.js';
 import {LEVEL_SEED, OPENING_SEED, getLevelSpec, freezeReadingLevels, KOREAN_LEVELS, ENGLISH_LEVELS} from '../dist/reading-levels.js';
 import {RICH_LEVEL_OF} from '../dist/story-quality/dist/richThenSimplify.js';
@@ -221,7 +222,7 @@ test('R12-P1 frozenBeatCount gives 6/8 for openings before the page-book lookup;
   assert.throws(() => L.buildOpeningPlan(outline, 8.5), /맞지 않아요/u);
 });
 
-test('R12-P1 normalizeStoryInput carries layoutPolicy only when present: 12/16 with v4 specs, never 14 or v4 specs without it', () => {
+test('R12-P1 normalizeStoryInput carries layoutPolicy only when present: 12/16 with v4 specs, never 14; v4 specs without it are a page input', () => {
   const legacy = {characters: CAST, backgrounds: PLACES, pageCount: 16, topic: '바람', specs: {ko: getLevelSpec('K2'), en: getLevelSpec('E2')}, bookId: 'b'};
   const plain = normalizeStoryInput(legacy);
   assert.ok(!('layoutPolicy' in plain));
@@ -230,10 +231,19 @@ test('R12-P1 normalizeStoryInput carries layoutPolicy only when present: 12/16 w
   for (const pageCount of [12, 16]) assert.equal(normalizeStoryInput({...openings, pageCount}).outlineBeatCount, pageCount / 2);
   for (const pageCount of [8, 14, 24]) assert.throws(() => normalizeStoryInput({...openings, pageCount}), /펼침 구성 책은 12쪽이나 16쪽/u);
   assert.throws(() => normalizeStoryInput({...legacy, pageCount: 14}), {message: '이야기는 8·12·16·24쪽 중에서 골라 주세요.'});
-  for (const pageCount of [12, 16]) {
-    assert.throws(() => normalizeStoryInput({...legacy, pageCount, specs: OPENING_SPECS}), /펼침 구성 읽기 규칙은 펼침 구성 책에서만/u);
-    assert.throws(() => normalizeStoryInput({...legacy, pageCount, specs: {ko: getLevelSpec('K2'), en: OPENING_SPECS.en}}), /펼침 구성 책에서만/u);
+  // v4 openings specs that lost their policy (an R11 tab rewrote a FULL AUTO job's
+  // input, see the old-tab test below) are read as a page input with the page rules:
+  // today's page counts and beat counts, no layoutPolicy, the specs carried as they are.
+  for (const pageCount of [8, 12, 16, 24]) {
+    const lost = normalizeStoryInput({...legacy, pageCount, specs: OPENING_SPECS}), page = normalizeStoryInput({...legacy, pageCount});
+    assert.ok(!('layoutPolicy' in lost), `${pageCount}`);
+    assert.deepEqual([lost.pageCount, lost.outlineBeatCount], [pageCount, page.outlineBeatCount]);
+    assert.deepEqual(lost.specs, OPENING_SPECS);
+    assert.deepEqual({...lost, specs: null}, {...page, specs: null}, 'only the specs differ from the page input');
+    assert.deepEqual(L.layoutStatus(lost), {layout: 'pages', layoutMismatch: true, errors: ['펼침 구성 정보가 빠져 있어 쪽 책으로 읽어요.']});
+    assert.equal(normalizeStoryInput({...legacy, pageCount, specs: {ko: getLevelSpec('K2'), en: OPENING_SPECS.en}}).pageCount, pageCount);
   }
+  assert.throws(() => normalizeStoryInput({...legacy, pageCount: 14, specs: OPENING_SPECS}), {message: '이야기는 8·12·16·24쪽 중에서 골라 주세요.'});
   assert.throws(() => normalizeStoryInput({...openings, specs: {ko: getLevelSpec('K2'), en: getLevelSpec('E2')}}), /K2~K4 한글/u);
   assert.throws(() => normalizeStoryInput({...openings, specs: {ko: OPENING_SPECS.ko, en: getLevelSpec('E2')}}), /K2~K4 한글/u);
   assert.throws(() => normalizeStoryInput({...openings, language: 'en'}), /K2~K4 한글/u);
@@ -433,10 +443,16 @@ test('R12-P1 layoutOf needs the policy AND a valid structure; a policy over lega
   assert.deepEqual(L.openingsOf(mixed), []);
   assert.equal(L.unitImageSize(mixed, mixed.pages[0]), '1536x1024');
   assert.equal(L.unitLabel(mixed, 3), '4쪽');
-  // A book without the policy is a page book whatever its entries say.
-  const plain = {...book, storyInput: {...input, layoutPolicy: undefined}};
+  // A book without the policy is a page book whatever its entries say; one that kept
+  // the v4 openings specs lost its policy (an R11 tab) and is flagged layoutMismatch.
+  const plain = {...book, storyInput: {...input, layoutPolicy: undefined, specs: {ko: getLevelSpec('K2'), en: getLevelSpec('E2')}}};
   assert.deepEqual(L.layoutStatus(plain), {layout: 'pages', layoutMismatch: false, errors: []});
   assert.equal(L.printedPagesOf(plain), 13, 'a page book counts entries');
+  const lost = {...book, storyInput: {...input, layoutPolicy: undefined}};
+  for (const value of [lost, {input: lost.storyInput}, lost.storyInput, {...lost.storyInput, specs: {ko: getLevelSpec('K2'), en: OPENING_SPECS.en}}])
+    assert.deepEqual(L.layoutStatus(value), {layout: 'pages', layoutMismatch: true, errors: ['펼침 구성 정보가 빠져 있어 쪽 책으로 읽어요.']});
+  assert.equal(L.printedPagesOf(lost), 13);
+  assert.deepEqual(L.openingsOf(lost), []);
   assert.equal(L.layoutOf({...book, pages: undefined}), 'openings', 'a book with only a pagination');
   assert.equal(L.layoutOf({storyInput: input}), 'openings', 'a book record before any entry');
   // Drafts and FULL AUTO jobs: input + pagination or book; a bare input before any text.
@@ -515,6 +531,18 @@ test('R12-P1 page-count choices: 12/16 for openings (16 기본), today\'s list o
   assert.equal(L.snapPageCount('pages', 16), undefined);
   assert.equal(L.snapPageCount('pages', '24', {touched: true, defaultPages: 12}), '24');
   assert.equal(L.snapPageCount('pages', 13, {touched: true}), 13);
+  // heldPageCount: what a wizard carried over from an old job (or shown in a select) holds.
+  const K2 = {koreanLevel: 'K2', language: 'bilingual'};
+  withHook(true, () => {
+    for (const [value, held] of [[8, 12], [24, 16], [12, 12], [16, 16], ['16', 16], [undefined, 16]])
+      assert.equal(L.heldPageCount({...K2, pageCount: value}), held, `${value}`);
+    for (const w of [{koreanLevel: 'K1', language: 'ko'}, {koreanLevel: 'K3', language: 'en'}])
+      for (const value of [8, 24, '24', undefined]) assert.equal(L.heldPageCount({...w, pageCount: value}), value, `${w.koreanLevel} ${value}`);
+    assert.equal(L.heldPageCount(null), undefined, 'no level: a page wizard');
+  });
+  withHook(undefined, () => {
+    for (const value of [8, 12, 16, 24, '24', 13, undefined]) assert.equal(L.heldPageCount({...K2, pageCount: value}), value, `${value}`);
+  });
 });
 
 test('R12-P1 wizard defaults with the hook on: K2 untouched 16, K1 the settings default, a touched 12 stays, a series from a 13-entry openings book 16', () => {
@@ -563,6 +591,14 @@ test('R12-P1 wizard defaults with the hook on: K2 untouched 16, K1 the settings 
   assert.match(app, /"이야기 길이",\n\s+pageCountOptions\(w\),/u);
   assert.match(simple, /"쪽 수",\n\s+pageCountOptions\(w\),/u);
   assert.match(simple, /if \(target\.id === "pageCount"\) w\.pageCountTouched = true;\n\s+else snapFormatPageCount\(w, before\);/u);
+  // Every new story from an old job's wizard and every unbound render holds a count its
+  // layout offers (simple-create-actions.test.mjs drives them through the click handler).
+  assert.match(simple, /function holdPageCount\(w\) \{\n\s+const held = heldPageCount\(w\);\n\s+if \(held !== w\.pageCount\) w\.pageCount = held;/u);
+  assert.match(simple, /return holdPageCount\(next\);\n\}/u, 'forkWizard');
+  assert.match(simple, /const next = holdPageCount\(wizardFromJob\(old, 3\)\);/u, 'restartStory');
+  assert.match(simple, /delete w\.simpleJobId;\n(?:\s+\/\/.*\n)*\s+holdPageCount\(w\);\n\s+w\.simpleStep = 1;/u, '③ 주제·엔진 바꾸기');
+  assert.match(simple, /if \(!jobOfWizard\(state, w\)\) holdPageCount\(w\);/u, 'renderSimpleCreate');
+  assert.match(app, /if \(w\.step === 3 && heldPageCount\(w\) !== w\.pageCount\)\n\s+w\.pageCount = heldPageCount\(w\);/u, 'pro step 3');
 });
 
 // ---------- FULL AUTO: decided once at creation, read back from job.input on resume ----------
@@ -623,6 +659,82 @@ test('R12-P1 an openings job keeps its frozen layout on resume, also when the fl
     assert.ok(!('layoutPolicy' in created.input));
     assert.equal(created.input.pageCount, 24);
   });
+});
+
+// ---------- an already-open R11 tab (5f8d2f7) that runs the input step of an openings job ----------
+/**
+ * The R11 FULL AUTO input step: inputFromWizard with two arguments (pinned byte for
+ * byte to 5f8d2f7 by the P0 pins) and the job's frozen specs. It drops layoutPolicy
+ * but keeps the v4 openings specs. With PRE_R12_APP_ROOT the real 5f8d2f7 runner
+ * runs it instead, and the two must agree.
+ */
+function r11InputStep(state, job) {
+  job.wizard.characterIds = clone(job.plan.characterIds);
+  job.wizard.backgroundIds = clone(job.plan.backgroundIds);
+  job.input = legacyInputOf(state, job);
+  job.completed.input = new Date().toISOString();
+}
+const preRoot = process.env.PRE_R12_APP_ROOT ? pathToFileURL(`${process.env.PRE_R12_APP_ROOT.replace(/\/$/, '')}/`) : null;
+async function openingsJobBeforeInput(state) {
+  const job = withHook(true, () => createFullAutoJob(state, wizardOf('K2', 'E2', 16, 'bilingual'), {demo: true, stopBefore: 'text', planMode: 'selection'}));
+  assert.deepEqual([job.input.layoutPolicy, job.input.specs.ko.layout, job.readingLevels.version], [POLICY, 'openings', 4]);
+  // This shell plans the story (free), then its tab is closed before the input step.
+  const closed = () => { throw new DOMException('tab closed', 'AbortError'); };
+  await runFullAuto(state, job, {operations: {prepare: closed}, buildBook: () => { throw Error('no book'); }}).catch(() => {});
+  assert.deepEqual([job.status, !!job.completed.plan, !!job.completed.input], ['paused', true, false], job.error || '');
+  return job;
+}
+const bookOf = payload => ({id: payload.bookId, storyInput: payload.input, outline: payload.outline, pagination: payload.pagination, pages: toLegacyPages(payload.pagination), readingLevelSnapshot: payload.readingLevels});
+const LOST = {layout: 'pages', layoutMismatch: true, errors: ['펼침 구성 정보가 빠져 있어 쪽 책으로 읽어요.']};
+/** What this shell makes of a job whose input an R11 tab rewrote: a page book with the single-page rule, flagged. */
+function assertLostPolicyPageBook(job, label) {
+  assert.ok(!('layoutPolicy' in job.input), `${label}: the R11 input step drops the policy`);
+  assert.deepEqual([job.input.specs.ko.layout, job.input.specs.ko.ruleVersion, job.input.pageCount], ['openings', 4, 16], label);
+  const input = normalizeStoryInput(job.input);
+  assert.ok(!('layoutPolicy' in input), label);
+  assert.deepEqual([input.pageCount, input.outlineBeatCount], [16, schemas.BEAT_COUNTS[16]], `${label}: today's page-book beats`);
+  assert.deepEqual(L.layoutStatus(job), LOST, label);
+  assert.deepEqual(L.layoutStatus({input: job.input}), LOST, `${label}: before any entry`);
+  if (!job.pagination) return;
+  assert.equal(job.status, 'text-review', `${label}: ${job.error || ''}`);
+  assert.equal(job.pagination.pages.length, 16, `${label}: one entry per printed page`);
+  assert.ok(job.pagination.pages.every(page => !L.LAYOUT_FIELDS.some(key => key in page)), `${label}: no opening fields`);
+  assert.equal(schemas.validatePagination(job.pagination, input, job.outline).valid, true, `${label}: the page-book rules accept it`);
+  const book = job.book;
+  assert.deepEqual(L.layoutStatus(book), LOST, `${label}: the book is flagged too`);
+  assert.deepEqual([L.printedPagesOf(book), L.openingsOf(book).length, L.unitImageSize(book, book.pages[0]), L.unitLabel(book, 2)], [16, 0, '1536x1024', '3쪽'], label);
+  // The page rule is the v4 single-page range (K2 5-7 sentences per page), never a spread's.
+  assert.deepEqual(L.unitSpec(input.specs.ko, 'page').sentencesPerPageRange, input.specs.ko.sentencesPerPageRange, label);
+}
+test('R12-P1 an openings job whose input step ran in an R11 tab is a page book with layoutMismatch, and this shell runs it on (free demo)', async () => {
+  const realFetch = globalThis.fetch;
+  let network = 0;
+  globalThis.fetch = async () => { network++; throw Error('no network in this test'); };
+  try {
+    const state = seed(), job = await openingsJobBeforeInput(state);
+    // The R11 tab resumes the job: its input step runs, then it is closed at the outline.
+    const viaR11 = preRoot && clone(job);
+    r11InputStep(state, job);
+    if (preRoot) {
+      const {runFullAuto: r11RunFullAuto} = await import(new URL('dist/full-auto.js', preRoot).href);
+      const stop = async () => { throw new DOMException('closed', 'AbortError'); };
+      await r11RunFullAuto(state, viaR11, {operations: {preflight: async () => {}, outline: stop}, buildBook: () => { throw Error('no book'); }}).catch(() => {});
+      assert.ok(viaR11.completed.input);
+      assert.equal(JSON.stringify(viaR11.input), JSON.stringify(job.input), 'the emulated R11 input step is the real one');
+    }
+    assertLostPolicyPageBook(job, 'after the R11 input step');
+    // This shell picks the job up again: every stage reads it as a page book (no throw).
+    await runFullAuto(state, job, {buildBook: bookOf});
+    assertLostPolicyPageBook(job, 'continued here');
+    if (preRoot) {
+      // The R11 tab may also finish the text itself; this shell reads its book the same way.
+      const {runFullAuto: r11RunFullAuto} = await import(new URL('dist/full-auto.js', preRoot).href);
+      const other = await openingsJobBeforeInput(state);
+      await r11RunFullAuto(state, other, {buildBook: bookOf});
+      assertLostPolicyPageBook(other, 'finished in the R11 tab');
+    }
+    assert.equal(network, 0, 'nothing paid, nothing fetched');
+  } finally { globalThis.fetch = realFetch; }
 });
 
 // ---------- print text and rewrites ----------
@@ -690,7 +802,16 @@ test('R12-P1 copyLayoutFields puts back exactly the original entry\'s layout fie
 test('R12-P1 the service worker precaches book-layout.js without a cache bump (that waits for P8)', () => {
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.ok(sw.includes('"./book-layout.js",'));
-  assert.match(sw, /const CACHE = "donghwa-shell-v35";/u);
+  // The cache name is the base branch's own (it moves with other work), so it is not
+  // pinned here. Against a pre-R12 checkout of the base this branch is built on
+  // (PRE_R12_APP_ROOT, as for the P0 pins) the line must be the same: no bump.
+  const cacheLine = text => text.match(/^const CACHE = "donghwa-shell-v\d+";$/mu)?.[0];
+  assert.ok(cacheLine(sw), 'sw.js names its shell cache');
+  if (process.env.PRE_R12_APP_ROOT) {
+    const base = readFileSync(`${process.env.PRE_R12_APP_ROOT.replace(/\/$/, '')}/dist/sw.js`, 'utf8');
+    assert.equal(cacheLine(sw), cacheLine(base), 'R12 bumps the cache only in P8');
+    assert.ok(!base.includes('"./book-layout.js",'));
+  }
 });
 
 test('R12-P1 the browser smoke recorded the wizard wiring with the hook off (today\'s values) and on', () => {
@@ -710,5 +831,25 @@ test('R12-P1 the browser smoke recorded the wizard wiring with the hook off (tod
     assert.deepEqual(values(pro.series['openings-book-r12-p1']), on ? [16, OPENINGS] : [16, TODAY]);
     assert.deepEqual(values(pro.series['short-page-book-r12-p1']), on ? [12, OPENINGS] : [8, TODAY]);
     assert.deepEqual([simple.fork.summary.match(/(\d+)쪽/u)[1], simple.fork.jobUnchanged], [on ? '16' : '24', true]);
+  }
+  // The other new-story paths from a pre-R12 job, and the render safety net (P1 점검 수정).
+  assert.deepEqual(report.newStory.map(run => run.hook), [false, true]);
+  for (const {hook: on, abandon, restart, safetyNet} of report.newStory) {
+    const options = on ? OPENINGS : TODAY, layout = on ? 'openings' : 'pages', job = row => [row.pageCount, row.wizardPageCount, row.layout, row.status];
+    for (const flow of [abandon, restart, safetyNet]) assert.deepEqual([flow.pageErrors, flow.paidRequests, flow.refusals], [[], [], []]);
+    // ③ 주제·엔진 바꾸기 of a paused 24-page K2 job, then ③ 데모로 체험 (free).
+    assert.equal(abandon.summary, `K2 · E2 · ${on ? 16 : 24}쪽 · 한 쪽에 한글 + 영어`);
+    assert.deepEqual(abandon.select, {value: on ? 16 : 24, options});
+    assert.deepEqual(job(abandon.newJob), [on ? 16 : 24, on ? 16 : 24, layout, 'text-review']);
+    assert.deepEqual(abandon.oldJob, {abandoned: true, wizardUnchanged: true});
+    // ④ 이야기 전체 다시 만들기 of an 8-page K2 book (its text made with the free demo).
+    assert.deepEqual(restart.oldText, {status: 'text-review', pages: 8});
+    assert.deepEqual(job(restart.newJob), [on ? 12 : 8, on ? 12 : 8, layout, 'text-review']);
+    assert.deepEqual(restart.oldJob, {replaced: true, wizardUnchanged: true});
+    // 24 pages picked with the switch off; the hook run flips it on and draws again.
+    assert.deepEqual(safetyNet.simple.before.select, {value: 24, options: TODAY});
+    assert.deepEqual(safetyNet.simple.after, {summary: `K2 · E2 · ${on ? 16 : 24}쪽 · 한 쪽에 한글 + 영어`, select: {value: on ? 16 : 24, options}});
+    assert.deepEqual([safetyNet.pro.before, safetyNet.pro.after], [{value: 24, options: TODAY}, {value: on ? 16 : 24, options}]);
+    assert.deepEqual(safetyNet.pro.draft, {pageCount: on ? 16 : 24, layout});
   }
 });

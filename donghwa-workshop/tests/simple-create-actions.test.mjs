@@ -7,7 +7,7 @@ import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview, renderFullAutoJobs} from '../dist/full-auto-ui.js';
-import {createFullAutoJob} from '../dist/full-auto.js';
+import {createFullAutoJob, estimateFullAutoCost} from '../dist/full-auto.js';
 import {configureStoryUI, renderStoryDrafts} from '../dist/story-generation/ui.js';
 import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
 import {
@@ -1764,6 +1764,140 @@ test('R11 ④ bottom-left is 이전, disabled while a page edit is open; ③ get
   await openSimpleJob(ctx, paused.id);
   wizard.simpleStep = 1;
   assert.match(renderSimpleCreate(ctx), /data-step="3"[^>]*><b>3<\/b>/, 'no ✓ on ③ before the text exists');
+});
+
+/* ---------- R12-P1: a new story from a pre-R12 job's wizard ---------- */
+const OPENINGS_HOOK = '__DONGHWA_R12_OPENINGS__';
+async function withOpenings(on, fn) {
+  const had = Object.hasOwn(globalThis, OPENINGS_HOOK), previous = globalThis[OPENINGS_HOOK];
+  if (on) globalThis[OPENINGS_HOOK] = true; else delete globalThis[OPENINGS_HOOK];
+  try { return await fn(); } finally { if (had) globalThis[OPENINGS_HOOK] = previous; else delete globalThis[OPENINGS_HOOK]; }
+}
+const k2Wizard = (pageCount, topic) => ({characterIds: ['yuha'], backgroundIds: [], topic, pageCount, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', simpleFlow: true});
+/** The page-count select ① shows: [shown value, option values]. */
+function formatSelect(html) {
+  const select = html.match(/<select id="pageCount">([\s\S]*?)<\/select>/)?.[1] || '';
+  const options = [...select.matchAll(/<option value="(\d+)" ([^>]*)>/g)];
+  return [Number(options.find(m => m[2].includes('selected'))?.[1]), options.map(m => Number(m[1]))];
+}
+/** simple-create.js usd(): the amount a confirm shows. */
+const usdText = value => { const n = Number(value) || 0; return n <= 0 ? '$0' : '$' + n.toFixed(n < 0.1 ? 3 : 2); };
+const newJobs = before => Object.values(state.fullAutoJobs).filter(j => !before.has(j.id));
+const layoutOfJob = job => (job.input.layoutPolicy?.kind === 'openings' ? 'openings' : 'pages');
+
+for (const on of [false, true])
+  test(`R12-P1 ③ 주제·엔진 바꾸기 of a pre-R12 8/24-page K2 job starts the new story at a count ① can show (openings ${on ? 'on: 8 → 12, 24 → 16' : 'off: unchanged'})`, async () => {
+    for (const pageCount of [8, 24]) {
+      reset();
+      // Made the way R11 made it (openings off), stopped before its text was built.
+      const job = await withOpenings(false, () => createFullAutoJob(state, k2Wizard(pageCount, `바람 피리 ${pageCount}`), {demo: true, stopBefore: 'text', planMode: 'selection'}));
+      job.status = 'paused';
+      const frozen = JSON.stringify({wizard: job.wizard, input: job.input, readingLevels: job.readingLevels});
+      const expected = on ? {8: 12, 24: 16}[pageCount] : pageCount, options = on ? [12, 16] : [8, 12, 16, 24];
+      await withOpenings(on, async () => {
+        await openSimpleJob(ctx, job.id);
+        assert.equal(wizard.simpleStep, 3);
+        await click('abandon');
+        assert.deepEqual([job.simpleAbandoned, wizard.simpleJobId, wizard.simpleStep], [true, undefined, 1]);
+        assert.equal(wizard.pageCount, expected, `${pageCount}: the new story's count`);
+        wizard.simpleFormatOpen = true;
+        const html = renderSimpleCreate(ctx);
+        assert.match(html, new RegExp(`id="simple-format-summary">K2 · E2 · ${expected}쪽 · `), `${pageCount}: the summary`);
+        assert.deepEqual(formatSelect(html), [expected, options], `${pageCount}: the select shows what the wizard holds`);
+        // ③ 데모로 체험 (free) starts the new story; nothing fails on the page count.
+        wizard.simpleStep = 3;
+        const before = new Set(Object.keys(state.fullAutoJobs));
+        await click('start-demo');
+        const [fresh] = newJobs(before);
+        assert.ok(fresh, `${pageCount}: a new job (${toasts.map(t => t.message).join(' | ')})`);
+        assert.ok(!toasts.some(t => /펼침 구성 책은/.test(t.message)));
+        assert.deepEqual([fresh.input.pageCount, layoutOfJob(fresh), fresh.status], [expected, on ? 'openings' : 'pages', 'text-review'], `${pageCount}: ${fresh.error || ''}`);
+      });
+      assert.equal(JSON.stringify({wizard: job.wizard, input: job.input, readingLevels: job.readingLevels}), frozen, 'the old job is left as it was');
+      assert.equal(networkCalls, 0);
+    }
+  });
+
+for (const on of [false, true])
+  test(`R12-P1 이야기 전체 다시 만들기 of a pre-R12 8/24-page K2 book starts the new story at a count its layout offers (openings ${on ? 'on: 8 → 12, 24 → 16' : 'off: unchanged'})`, async () => {
+    for (const pageCount of [8, 24]) {
+      reset();
+      const old = await withOpenings(false, () => startFullAutoJob(k2Wizard(pageCount, `별똥별 줍기 ${pageCount}`), {demo: true, stopBefore: 'text', planMode: 'selection'}));
+      assert.equal(old.status, 'text-review', old.error || '');
+      const frozen = JSON.stringify({wizard: old.wizard, input: old.input, pages: old.book.pages.length});
+      const expected = on ? {8: 12, 24: 16}[pageCount] : pageCount;
+      await withOpenings(on, async () => {
+        await open(old);
+        const before = new Set(Object.keys(state.fullAutoJobs));
+        const pending = click('restart');
+        const asked = await answer('simple-confirm-yes');
+        assert.match(asked, /데모라 요금이 없어요/);
+        await pending;
+        const [fresh] = newJobs(before);
+        assert.ok(fresh, `${pageCount}: a new job (${toasts.map(t => t.message).join(' | ')})`);
+        assert.ok(!toasts.some(t => /펼침 구성 책은/.test(t.message)));
+        assert.deepEqual([fresh.input.pageCount, fresh.wizard.pageCount, layoutOfJob(fresh), fresh.status], [expected, expected, on ? 'openings' : 'pages', 'text-review'], `${pageCount}: ${fresh.error || ''}`);
+        assert.deepEqual([old.simpleReplacedBy, wizard.simpleJobId], [fresh.id, fresh.id]);
+      });
+      assert.equal(JSON.stringify({wizard: old.wizard, input: old.input, pages: old.book.pages.length}), frozen, 'the old story is kept as it was');
+      assert.equal(networkCalls, 0);
+    }
+  });
+
+test('R12-P1 the restart confirm prices the new story\'s page count; with openings off it is today\'s amount', async () => {
+  reset();
+  const old = await withOpenings(false, () => startFullAutoJob(k2Wizard(24, '구름 기차 24'), {demo: true, stopBefore: 'text', planMode: 'selection'}));
+  old.demo = false; // priced like a paid story; the confirm is answered 'no', so nothing runs
+  try {
+    const amounts = {};
+    for (const on of [false, true])
+      await withOpenings(on, async () => {
+        await open(old);
+        const pending = click('restart');
+        amounts[on] = (await answer('simple-confirm-no')).match(/글 엔진 요금 약 (\$\d+(?:\.\d+)?)\./)?.[1];
+        await pending;
+      });
+    const priced = pages => estimateFullAutoCost(state, {...old.wizard, pageCount: pages}, {planMode: old.planMode || 'auto'}).textUsd;
+    assert.equal(amounts.false, usdText(estimateFullAutoCost(state, old.wizard, {planMode: old.planMode || 'auto'}).textUsd));
+    assert.equal(amounts.true, await withOpenings(true, () => usdText(priced(16))));
+    assert.notEqual(amounts.true, amounts.false, 'a 16-page story is priced, not the old 24 pages');
+    assert.equal(old.simpleReplacedBy, undefined, 'answered no: nothing started');
+  } finally { old.demo = true; }
+});
+
+test('R12-P1 safety net: an unbound wizard never renders a page count its layout does not offer; a story with a job keeps its frozen count', async () => {
+  reset();
+  const unbound = pageCount => ({step: 1, simpleStep: 1, topic: '바람 피리', characterIds: ['yuha'], backgroundIds: [], pageCount, koreanLevel: 'K2', englishLevel: 'E2', language: 'bilingual', simpleFormatOpen: true});
+  for (const on of [false, true])
+    await withOpenings(on, () => {
+      for (const [pageCount, held] of on ? [[24, 16], [8, 12], [12, 12], [16, 16]] : [[24, 24], [8, 8], [12, 12], [16, 16]]) {
+        wizard = unbound(pageCount);
+        draft = null;
+        const html = renderSimpleCreate(ctx);
+        assert.equal(wizard.pageCount, held, `${on} ${pageCount}`);
+        assert.deepEqual(formatSelect(html), [held, on ? [12, 16] : [8, 12, 16, 24]], `${on} ${pageCount}`);
+        assert.match(html, new RegExp(`id="simple-format-summary">K2 · E2 · ${held}쪽 · `));
+      }
+      // K1 and English-only wizards stay page books whatever the switch says.
+      for (const extra of [{koreanLevel: 'K1'}, {language: 'en'}]) {
+        wizard = {...unbound(24), ...extra};
+        renderSimpleCreate(ctx);
+        assert.equal(wizard.pageCount, 24);
+      }
+    });
+  // A pre-R12 24-page job's own wizard is its frozen copy: never snapped, even with openings on.
+  const job = await withOpenings(false, () => createFullAutoJob(state, k2Wizard(24, '바람 피리 고정'), {demo: true, stopBefore: 'text', planMode: 'selection'}));
+  job.status = 'paused';
+  await withOpenings(true, async () => {
+    await openSimpleJob(ctx, job.id);
+    for (const step of [3, 1]) {
+      wizard.simpleStep = step;
+      const html = renderSimpleCreate(ctx);
+      assert.equal(wizard.pageCount, 24, `step ${step}`);
+      if (step === 1) assert.match(html, /K2 · E2 · 24쪽 · /);
+    }
+  });
+  assert.equal(job.wizard.pageCount, 24);
 });
 
 test('R11 아이디어 뽑기 that resolves after the story got its job leaves the bound wizard\'s topic alone', async () => {
