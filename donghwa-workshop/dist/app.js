@@ -49,7 +49,11 @@ import {
   approvalImageWork,
 } from "./simple-create.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
-import { createCloudSync } from "./cloud-sync.js";
+import {
+  createCloudSync,
+  isSeedOnlyLibrary,
+  pushBookCountWarning,
+} from "./cloud-sync.js";
 import {
   downloadLibraryTransfer,
   readLibraryBackupFile,
@@ -275,7 +279,7 @@ state.settings.style =
     flat: "플랫 일러스트",
     cartoon: "만화풍",
   }[state.settings.style] || state.settings.style;
-state.backgrounds = state.backgrounds.map((b) => ({
+const typedBackground = (b) => ({
   ...b,
   type:
     b.type ||
@@ -287,7 +291,18 @@ state.backgrounds = state.backgrounds.map((b) => ({
       beach: "sea",
     }[b.id] ||
     "forest",
-}));
+});
+state.backgrounds = state.backgrounds.map(typedBackground);
+// The built-in samples as this load path normalizes them, for the cloud
+// "nothing of the family's here yet" check. Built once, never mutated.
+let sampleLibrary = null;
+const onlySamples = () => {
+  if (!sampleLibrary) {
+    sampleLibrary = seedState();
+    sampleLibrary.backgrounds = sampleLibrary.backgrounds.map(typedBackground);
+  }
+  return isSeedOnlyLibrary(state, sampleLibrary);
+};
 setCustomStylePresets(state);
 migrateWorldState(state);
 syncActiveWorldTextSettings(state, { load: true });
@@ -693,9 +708,14 @@ function confirmCloudChange(kind) {
   }
   const c = cloudStatus,
     local = backupSummary(state),
-    remote = c.remoteSummary || {};
+    remote = c.remoteSummary || {},
+    // A device with fewer books than the cloud would shrink the family shelf.
+    shrink =
+      kind === "push" && c.remoteExists
+        ? pushBookCountWarning(local.bookCount, remote.bookCount)
+        : "";
   showModal(
-    `${modalHeader(kind === "push" ? "클라우드에 저장할 자료 확인" : "이 기기로 불러올 자료 확인")}<p class="modal-intro">${kind === "push" ? `이 기기의 책 ${local.bookCount}권·캐릭터 ${local.characterCount}명·배경 ${local.backgroundCount}곳을 로그인한 계정에 저장합니다.` : `클라우드의 책 ${remote.bookCount || 0}권·캐릭터 ${remote.characterCount || 0}명·배경 ${remote.backgroundCount || 0}곳을 이 기기로 불러옵니다.`}</p><div class="notice">${kind === "push" && c.remoteExists ? "현재 클라우드 자료가 이 기기의 내용으로 바뀝니다. 클라우드의 최신 변경을 먼저 확인해 주세요." : kind === "pull" ? "현재 이 기기의 자료는 복구용 보관함에 남긴 뒤 클라우드 내용으로 바뀝니다." : "재료·책·그림·음원을 이 계정의 저장소에 보관합니다."}</div><p id="cloud-action-error" class="text-error"></p><div class="modal-actions">${btn("취소", "close-modal", "outline")}<button type="button" class="btn btn-primary" id="cloud-action-confirm">${kind === "push" ? "이 내용으로 클라우드 저장" : "보관본을 남기고 불러오기"}</button></div>`,
+    `${modalHeader(kind === "push" ? "클라우드에 저장할 자료 확인" : "이 기기로 불러올 자료 확인")}<p class="modal-intro">${kind === "push" ? `이 기기의 책 ${local.bookCount}권·캐릭터 ${local.characterCount}명·배경 ${local.backgroundCount}곳을 로그인한 계정에 저장합니다.` : `클라우드의 책 ${remote.bookCount || 0}권·캐릭터 ${remote.characterCount || 0}명·배경 ${remote.backgroundCount || 0}곳을 이 기기로 불러옵니다.`}</p>${shrink ? '<div class="notice cloud-conflict" role="alert">' : '<div class="notice">'}${shrink ? `<strong>${esc(shrink)}</strong><br>클라우드의 최신 변경을 먼저 확인해 주세요.` : kind === "push" && c.remoteExists ? "현재 클라우드 자료가 이 기기의 내용으로 바뀝니다. 클라우드의 최신 변경을 먼저 확인해 주세요." : kind === "pull" ? "현재 이 기기의 자료는 복구용 보관함에 남긴 뒤 클라우드 내용으로 바뀝니다." : "재료·책·그림·음원을 이 계정의 저장소에 보관합니다."}</div><p id="cloud-action-error" class="text-error"></p><div class="modal-actions">${btn("취소", "close-modal", "outline")}<button type="button" class="btn btn-primary" id="cloud-action-confirm">${kind === "push" ? "이 내용으로 클라우드 저장" : "보관본을 남기고 불러오기"}</button></div>`,
     "cloud-confirm",
   );
   document.querySelector("#cloud-action-confirm").onclick = async () => {
@@ -3874,7 +3894,12 @@ hydrateImageAssets(state)
   .finally(() => {
     cloudSync = createCloudSync({
       getState: () => state,
-      hasLocalData: () => initialLibrary.kind === "ready" && !storageBlocked,
+      // Settings, the PIN and keys alone (the four sample books) are not
+      // local data: a new phone takes the family cloud without a choice.
+      hasLocalData: () =>
+        initialLibrary.kind === "ready" &&
+        !storageBlocked &&
+        (initialLibrary.invalidRecords?.length > 0 || !onlySamples()),
       isParent: () => parentUnlocked && !childMode,
       canApplyRemote: () =>
         !isFullAutoRunning() &&
