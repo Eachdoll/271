@@ -999,6 +999,12 @@ function renderGenerateStep(ctx, w) {
   const text = !!job && (!!job.book || HELD.includes(job.status));
   const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${job?.demo ? "무료" : "약 " + usd(cost.textUsd)}</strong></li>`}<li><span>그림 ${cost.pageCount}쪽 + 표지</span><strong>${cost.imageUnitUsd > 0 ? "약 " + usd(cost.imagesUsd) : "무료"}</strong></li>${cost.imageUnitUsd > 0 ? `<li><span>새 시트가 필요하면</span><strong>최대 ${usd(cost.sheetsUpperUsd)}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
   const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요." aria-label="도움말: 부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
+  // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
+  // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
+  const checkFailed =
+    job?.status === "failed" &&
+    !job?.book &&
+    /결과를 확인해 주세요/u.test(String(job?.error || ""));
   let status = "";
   if (!job)
     status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
@@ -1013,7 +1019,7 @@ function renderGenerateStep(ctx, w) {
   } else if (live)
     status = `${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
   else
-    status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}</div>${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
+    status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 이미 받은 결과를 무료로 다시 검사해요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
   return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>

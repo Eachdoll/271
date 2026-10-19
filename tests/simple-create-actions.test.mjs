@@ -1784,3 +1784,26 @@ test('R11 아이디어 뽑기 that resolves after the story got its job leaves t
     state.settings.storyQuality = quality;
   }
 });
+
+test('줄거리 새로 만들기 on a story stopped by a failed check confirms, then starts a new job with a new seed and keeps the old one', async () => {
+  reset();
+  const createdBefore = Object.keys(state.fullAutoJobs || {}).length;
+  const old = await startFullAutoJob({characterIds: ['yuha'], backgroundIds: [], topic: '공룡 친구와 소풍', pageCount: 8, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'dual', simpleFlow: true}, {demo: true, stopBefore: 'text', planMode: 'selection'});
+  // The outline check failed on a paid result: the job holds no book and the check's error.
+  Object.assign(old, {status: 'failed', error: '이야기 outline 결과를 확인해 주세요: plan.planted가 비어 있음', phase: '이야기 outline 결과를 확인해 주세요: plan.planted가 비어 있음'});
+  delete old.book;
+  const oldJson = JSON.stringify({...old, simpleReplacedBy: undefined, updatedAt: undefined});
+  assert.equal(await openSimpleJob(ctx, old.id), true);
+  assert.equal(wizard.simpleStep, 3);
+  assert.match(renderSimpleCreate(ctx), /data-simple-action="restart"[^>]*>줄거리 새로 만들기</);
+  const run = click('restart');
+  const asked = await answer('simple-confirm-yes');
+  assert.match(asked, /줄거리부터 새로 써요/);
+  await run;
+  await until(() => wizard?.simpleJobId && wizard.simpleJobId !== old.id && state.fullAutoJobs[wizard.simpleJobId]?.status !== 'running', 'the new text run');
+  const fresh = state.fullAutoJobs[wizard.simpleJobId];
+  assert.equal(fresh.wizard.qualitySeedOffset, (Number(old.wizard.qualitySeedOffset) || 0) + 1, 'a new seed, so cached responses are not replayed');
+  assert.equal(old.simpleReplacedBy, fresh.id);
+  assert.equal(JSON.stringify({...old, simpleReplacedBy: undefined, updatedAt: undefined}), oldJson, 'the old job is otherwise untouched');
+  assert.ok(Object.keys(state.fullAutoJobs).length >= createdBefore + 2);
+});

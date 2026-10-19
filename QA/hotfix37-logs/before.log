@@ -1,0 +1,54 @@
+✖ a fix pass that blanks plan.planted, drops the ledger and rewrites an untargeted beat keeps the original plan and plotContract; only the targeted fix is taken (30.225943ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 138.264685
+
+✖ failing tests:
+
+test at ../../scratch/hotfix37-baseline/tests/quality-adapter.test.mjs:339:1
+✖ a fix pass that blanks plan.planted, drops the ledger and rewrites an untargeted beat keeps the original plan and plotContract; only the targeted fix is taken (30.225943ms)
+  Error [StoryValidationError]: 이야기 outline 결과를 확인해 주세요: plan.planted가 비어 있음 / attempt 비트에 failureReason이 비어 있음 / attempt 비트의 실패 이유가 겹침 / 심을 물건이 정해진 시드 재료와 달라요.
+      at generateQualityOutline (file:///workspace/scratch/hotfix37-baseline/dist/story-generation/quality-adapter.js:1277:21)
+      at async TestContext.<anonymous> (file:///workspace/scratch/hotfix37-baseline/tests/quality-adapter.test.mjs:347:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    stage: 'outline',
+    violations: [ 'plan.planted가 비어 있음', 'attempt 비트에 failureReason이 비어 있음', 'attempt 비트의 실패 이유가 겹침', '심을 물건이 정해진 시드 재료와 달라요.' ],
+    outline: {
+      plan: { pattern: 'journey_repeat', planted: '', twistReveal: '앞에서 본 물건을 다시 이용해요.', funnyMoment: '바람에 잎이 코에 앉아요.', failureReasons: [Array] },
+      titleCandidates: [ '바람을 듣는 날', '작은 빗방울', '잎에 담긴 소리' ],
+      logline: '유하와 그린이가 빗방울의 흔적을 찾아요.',
+      want: '빗방울의 소리를 찾고 싶어요.',
+      problem: '소리의 위치가 달라져요.',
+      twist: '앞서 살펴본 물건이 소리를 냈어요.',
+      beats: [
+        [Object], [Object],
+        [Object], [Object],
+        [Object], [Object],
+        [Object]
+      ],
+      settings: [
+        [Object], [Object],
+        [Object], [Object],
+        [Object], [Object],
+        [Object]
+      ],
+      emotionArc: [
+        '궁금', '궁금',
+        '궁금', '궁금',
+        '궁금', '궁금',
+        '궁금'
+      ],
+      newWordsKo: [ '빗방울', '흔적', '바람' ],
+      newWordsEn: [ 'rain', 'leaf', 'wind' ],
+      endingType: 'home_sleep'
+    },
+    usage: { input: 200, output: 100, costUsd: 0.02 },
+    qualityCheckpoint: { version: 1, kind: 'qualityOutline', contextFingerprint: 'f414c162', completed: { '8e0b757f': [Object], cd20bd1f: [Object] } },
+    meta: { stage: 'outline', requests: 2, resumedCalls: 0, qualityCheckpoint: { version: 1, kind: 'qualityOutline', contextFingerprint: 'f414c162', completed: [Object] }, engineId: 'openai', modelId: 'test-quality-model', models: [ [Object], [Object] ], demo: false, quality: { version: 1, seedSummary: '아주 작은 양털 뭉치 · 바람·비가 옮겨 놓았다 · 장난꾸러기 산양', seedOffset: 0, patternId: 'journey_repeat', plan: [Object], check: [Object], seed: [Object], worldMood: null, worldSnapshot: null, variantChance: 0.35, regenerationAttempts: 0, untargetedFixRestored: [Object] } }
+  }

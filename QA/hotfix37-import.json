@@ -1,0 +1,26 @@
+{
+  "codeRange": "78553d2..b966f32",
+  "cumulativeCodeRange": "c490ba3..b966f32",
+  "r12Included": false,
+  "targetFiles": {
+    "CLAUDE.md": "b99691c7faaaa3c9be6d65db11518aa3413d22a71dd34cf138ab831ef8cb3069",
+    "CODEX_WORK_ORDER_R11_2026-10-19.md": "61246926169ff7040c87ffa05693a0177bcaf4861ad40823a7387f791c1a7232",
+    "dist/simple-create.js": "608013be147ea96f4b651c7653aaa204aa92cf808d2b5a887840d5a6350c06a8",
+    "dist/story-generation/quality-adapter.js": "87dd96ff9e2fba8bf19178a249c70e28b4b50683f42373e9d3e95d4538830e3e",
+    "dist/sw.js": "a95b1a2d49e63880d4c4d59285a0354a91e9bb336c57f445dd4f9cceb44ba657",
+    "tests/quality-adapter.test.mjs": "fa7a8d562b04c2ce8c6b7770c7be8d07a2426e860be0cc7b9d77ff84c14c860e",
+    "tests/simple-create-actions.test.mjs": "73278de88f0f98be42e47ac2785913fa66df920db53089e83c1aa2fcebfc4d3d",
+    "tests/simple-create.test.mjs": "644d753fb6f47f43a382fca82960b0c0109b5f5a64cc17658580fb2e8b79ac2c"
+  },
+  "nodeVersion": "24.19.0",
+  "tests": {
+    "app": 678,
+    "quality": 74,
+    "skipped": 0
+  },
+  "previousVersionRegression": "expected failure (plan.planted/failureReason), full output in QA/hotfix37-logs/before.log",
+  "buildTestRace": "initial ENOENT, then sequential full pass; first full log preserved",
+  "familyCodeUnchanged": true,
+  "migrationsUnchanged": true,
+  "paidCalls": 0
+}

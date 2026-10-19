@@ -335,3 +335,23 @@ test('R9-A distilled examples that repeat "같이 가자" or a cast catchphrase 
  const shipped=JSON.parse(await readFile(new URL('../dist/story-quality/examples/approved-books.json',import.meta.url),'utf8'));
  assert.equal(shipped.length,161);assert.equal(shipped.filter(book=>repeatsCatchphrase(book)).length,98);
 });
+
+test('a fix pass that blanks plan.planted, drops the ledger and rewrites an untargeted beat keeps the original plan and plotContract; only the targeted fix is taken',async()=>{
+  const input=fixture();let original=null;
+  const engine=fakeOutlineEngine(input,(outline,request)=>{
+    if(request.user.startsWith('아래 줄거리 JSON에서')){
+      outline.beats[2].newElement='고친 젖은 잎';outline.plan={...outline.plan,planted:''};delete outline.plotContract;outline.beats[3].summary='엉뚱한 사건이 갑자기 생겨요.';
+      for(const beat of outline.beats)delete beat.failureReason;
+    }else{outline.beats[2].newElement='';original=structuredClone(outline);}
+    return outline;});
+  const result=await generateQualityOutline(input,{engine},services(engine));
+  assert.equal(engine.calls.length,2);assert.equal(result.meta.requests,2);
+  assert.equal(result.data.beats[2].newElement,'고친 젖은 잎','the targeted fix is kept');
+  assert.equal(result.data.plan.planted,original.plan.planted,'the blanked plan.planted is not taken');
+  assert.deepEqual(result.data.plotContract,original.plotContract,'the ledger stays as the outline model wrote it');
+  assert.equal(result.data.beats[3].summary,original.beats[3].summary,'the untargeted beat is not rewritten');
+  assert.deepEqual(result.data.beats.map(b=>b.failureReason),original.beats.map(b=>b.failureReason),'fields the response dropped stay');
+  assert.ok(result.meta.quality.untargetedFixRestored.restored.includes('beat:4'));assert.equal(result.meta.quality.check.ok,true);
+  const resumed=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},services(engine));
+  assert.equal(engine.calls.length,2);assert.equal(resumed.meta.requests,0);assert.deepEqual(resumed.data,result.data);
+});
