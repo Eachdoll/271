@@ -54,11 +54,11 @@ function memoryStorage() {
   const values = new Map();
   return {getItem: key => (values.has(key) ? values.get(key) : null), setItem: (key, value) => values.set(key, String(value)), removeItem: key => values.delete(key)};
 }
-function device(env, {fetchOptions, makeBackup} = {}) {
+function device(env, {fetchOptions, makeBackup, debounceMs = 1e9} = {}) {
   const local = {state: library()};
   const sync = createCloudSync({
     getState: () => local.state, hasLocalData: () => true, isParent: () => true, canApplyRemote: () => true,
-    storage: memoryStorage(), fetchImpl: browserFetch(env, fetchOptions), pollInterval: 0, eventTarget: null, document: null, debounceMs: 1e9,
+    storage: memoryStorage(), fetchImpl: browserFetch(env, fetchOptions), pollInterval: 0, eventTarget: null, document: null, debounceMs,
     derivePasswordKey: fastKey, locks: null,
     applyRemote: async candidate => {local.state = candidate;},
     createLibraryBackup: makeBackup || (async state => ({snapshot: copy(state), imageAssets: [], audioAssets: []})),
@@ -66,15 +66,20 @@ function device(env, {fetchOptions, makeBackup} = {}) {
   return {sync, local};
 }
 const mediaPuts = (env, from) => env.log.slice(from).filter(entry => entry.method === 'PUT' && entry.path.startsWith('/api/cloud/media/'));
-
-test('a family over its quota sees the quota message and the same library is not uploaded again until it changes or the parent pushes', async () => {
-  const env = environment(), big = new Uint8Array(3 * 1024 * 1024);
+const puts = (env, from) => env.log.slice(from).filter(entry => entry.method === 'PUT');
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+/** Waits (at most `limit` ms) until `ready()` holds and no sync operation is running. */
+async function settle(sync, ready = () => true, limit = 3000) {
+  const until = Date.now() + limit;
+  while (Date.now() < until && (sync.getStatus().busy || !ready())) await sleep(5);
+}
+/** `pictures()` 3 MB images with their own ids, attached to the first character. */
+function pictureBackup(pictures) {
+  const big = new Uint8Array(3 * 1024 * 1024);
   big.set([137, 80, 78, 71, 13, 10, 26, 10]);
-  let pictures = 0;
-  // The device's pictures: `pictures` 3 MB images with their own ids.
-  const makeBackup = async state => {
+  return async state => {
     const snapshot = copy(state), assets = new Map();
-    for (let index = 0; index < pictures; index++) {
+    for (let index = 0; index < pictures(); index++) {
       const id = `image-new-picture-${String(index).padStart(6, '0')}`, bytes = big.slice();
       bytes[100] = index;
       assets.set(id, new Blob([bytes], {type: 'image/png'}));
@@ -82,14 +87,23 @@ test('a family over its quota sees the quota message and the same library is not
     }
     return {snapshot, assets};
   };
-  const {sync, local} = device(env, {makeBackup});
+}
+/** Fills the signed-in family's quota with 128 × 40 MiB rows (no bytes in R2). */
+function fillQuota(env, sync) {
+  const owner = sync.getStatus().user.id, fill = env.sqlite.prepare("INSERT INTO cloud_assets VALUES (?, ?, 'image', 'image/png', 41943040, ?, 'k', 't')");
+  for (let index = 0; index < 128; index++) fill.run(owner, 'image-filler-' + String(index).padStart(8, '0'), 'a'.repeat(64));
+}
+
+test('a family over its quota sees the quota message and the same library is not uploaded again until it changes or the parent pushes', async () => {
+  const env = environment();
+  let pictures = 0;
+  const {sync, local} = device(env, {makeBackup: pictureBackup(() => pictures)});
   try {
     await sync.start();
     assert.equal((await sync.familySignup({username: 'mom_kim', password: PASSWORD, inviteCode: INVITE})).ok, true);
     await sync.push({force: true});
     assert.equal(sync.getStatus().phase, 'ready');
-    const owner = sync.getStatus().user.id, fill = env.sqlite.prepare("INSERT INTO cloud_assets VALUES (?, ?, 'image', 'image/png', 41943040, ?, 'k', 't')");
-    for (let index = 0; index < 128; index++) fill.run(owner, 'image-filler-' + String(index).padStart(8, '0'), 'a'.repeat(64));
+    fillQuota(env, sync);
     // The parent adds a picture on this device.
     pictures = 1; local.state = {...copy(local.state), characters: [{id: 'child', name: '유하 (새 그림)'}]}; sync.changed();
     let start = env.log.length;
@@ -118,6 +132,47 @@ test('a family over its quota sees the quota message and the same library is not
     env.sqlite.prepare('DELETE FROM cloud_assets WHERE asset_id LIKE ?').run('image-filler-%');
     await sync.push();
     assert.equal(sync.getStatus().phase, 'ready');assert.equal(sync.getStatus().error, null);
+  } finally {sync.stop();}
+});
+
+test('over quota, a new edit is still tried again by the debounced save on its own; a reading-only save is not', async () => {
+  const env = environment();
+  let pictures = 0;
+  // No polling: only the debounce after sync.changed() can send anything.
+  const {sync, local} = device(env, {makeBackup: pictureBackup(() => pictures), debounceMs: 5});
+  try {
+    await sync.start();
+    assert.equal((await sync.familySignup({username: 'mom_kim', password: PASSWORD, inviteCode: INVITE})).ok, true);
+    await sync.push({force: true});
+    assert.equal(sync.getStatus().phase, 'ready');
+    fillQuota(env, sync);
+    // The parent adds a picture: refused for the quota.
+    pictures = 1; local.state = {...copy(local.state), characters: [{id: 'child', name: '유하 (새 그림)'}]}; sync.changed();
+    await sync.refresh();
+    await settle(sync);
+    await sleep(50);
+    assert.equal(sync.getStatus().reason, 'quota');
+    assert.equal(sync.getStatus().error, CLOUD_QUOTA_MESSAGE);
+    // A new edit (the title) while the quota pause holds: sync.changed() alone, no refresh() by hand.
+    let start = env.log.length;
+    local.state = {...copy(local.state), books: local.state.books.map(book => ({...book, title: book.title + '!'}))};
+    sync.changed();
+    await settle(sync, () => mediaPuts(env, start).length > 0);
+    await sleep(100);
+    assert.equal(mediaPuts(env, start).length, 1, 'the debounced save tries the changed library once');
+    assert.equal(mediaPuts(env, start)[0].status, 413);
+    assert.equal(puts(env, start).length, 1, 'refused at the picture: the library itself is not written');
+    assert.equal(sync.getStatus().reason, 'quota');
+    assert.equal(sync.getStatus().error, CLOUD_QUOTA_MESSAGE);
+    // A child reads a book: only reading statistics change.
+    start = env.log.length;
+    local.state = {...copy(local.state), books: local.state.books.map(book => ({...book, reads: 3, lastReadAt: '2026-10-19T00:00:00.000Z'}))};
+    sync.changed();
+    await settle(sync, () => env.log.length > start);
+    await sleep(100);
+    assert.ok(env.log.length > start, 'the debounced check still runs');
+    assert.deepEqual(puts(env, start), [], 'the refused library is not sent again for a reading-only save');
+    assert.equal(sync.getStatus().reason, 'quota');
   } finally {sync.stop();}
 });
 
