@@ -1,6 +1,6 @@
 import test, {before} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
@@ -17,8 +17,9 @@ import {pathToFileURL} from 'node:url';
  *   English-only and a pre-R8 draft, with the page-count error texts.
  * - validation: validatePagination / inspectStory for 8/12/16/24 entries and count mismatches.
  * - requests: every text request (system, user, schema, maxTokens, temperature and
- *   the request keys, so a new timeoutMs shows) of K1/E0 12p quality, K2/E2 16p
- *   quality and plain, K3/E3 24p plain and English-only K2/E2 drafts through
+ *   the request keys, so a new timeoutMs shows) and every stage's output data of
+ *   K1/E0 12p quality, K2/E2 16p quality and plain, K3/E3 24p plain, K4/E4 16p
+ *   Korean-only plain and English-only K2/E2 drafts through
  *   outline, quality rich/simplify/fix/condense, prose, enrichment, coherence and
  *   its repairs, pagination, repagination, page and richness rewrites,
  *   rewriteStoryPage, the child gate and its repairs, beat/brief/paragraph edits,
@@ -36,18 +37,38 @@ import {pathToFileURL} from 'node:url';
  * - estimates: estimateStoryTextCost, estimateFullAutoCost and estimateSimpleCosts.
  *
  * New K2-K4 Korean wizards are left out on purpose: they become openings books in
- * R12. The reader DOM of a seed book is pinned in the browser by
+ * R12. The reader DOM of the seed book and of the generated legacy page book
+ * (tests/fixtures/legacy-page-book-r12.json) is pinned in the browser by
  * scripts/r12-legacy-dom.mjs (QA/r12-legacy-dom.json, run it with --check).
  *
  * To compare directly with a checkout of the pre-R12 commit:
  * PRE_R12_APP_ROOT=/abs/path/to/5f8d2f7/donghwa-workshop node --test tests/openings-legacy-r12.test.mjs
+ * (add R12_PIN_DUMP=/abs/file.json to write HEAD's groups for a diff).
  * A pin changes only when legacy behaviour is changed on purpose; R12 never does.
  */
 const sha = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 const clone = value => JSON.parse(JSON.stringify(value));
 const FIXED_NOW = Date.parse('2026-10-19T09:00:00.000Z');
 
+/**
+ * R12's test hook turns the openings layout on before P8 makes it the default. Every
+ * pin (and the module loading) runs with the hook ON, for HEAD and PRE_R12_APP_ROOT
+ * alike, so from P1 on a flag-gated leak into page books, K1, English-only books or
+ * pre-R12 jobs fails here at once instead of first at P8. 5f8d2f7 never reads it.
+ */
+const OPENINGS_HOOK = '__DONGHWA_R12_OPENINGS__';
+const hookLog = [];
+async function withOpeningsHook(fn) {
+  const had = Object.prototype.hasOwnProperty.call(globalThis, OPENINGS_HOOK), previous = globalThis[OPENINGS_HOOK];
+  globalThis[OPENINGS_HOOK] = true;
+  try { return await fn(); }
+  finally { if (had) globalThis[OPENINGS_HOOK] = previous; else delete globalThis[OPENINGS_HOOK]; }
+}
+
 async function deterministic(fn) {
+  return withOpeningsHook(() => frozen(fn));
+}
+async function frozen(fn) {
   const RealDate = Date, realRandom = Math.random, realFetch = globalThis.fetch, cryptoObject = globalThis.crypto;
   class FrozenDate extends RealDate {
     constructor(...args) { super(...(args.length ? args : [FIXED_NOW])); }
@@ -383,15 +404,18 @@ const REQUEST_SCENARIOS = {
   'K2-E2-16-quality': {wizard: 'K2-E2-16-bilingual', quality: true, prose: {ko: {rich: 3, simplify: 5}, en: {rich: 3, simplify: 3}}, finalize: true, simple: true},
   'K2-E2-16-plain': {wizard: 'K2-E2-16-bilingual', quality: false, prose: {ko: {plain: 5}, en: {plain: 3}}, enrich: true, extra: true, edits: true},
   'K3-E3-24-plain': {wizard: 'K3-E3-24-dual', quality: false, prose: {ko: {plain: 12}, en: {plain: 9}}, briefRepair: true},
+  // An existing K4 page draft (Korean only): new K4 drafts become openings, this one must not.
+  'K4-E4-16-plain': {wizard: 'K4-E4-16-ko', wizardPatch: {topic: '바람 피리 찾기'}, quality: false, prose: {ko: {plain: 12}, en: {plain: 10}}, finalize: true, extra: true},
   'K2-E2-16-en-quality': {wizard: 'K2-E2-16-en', quality: true, prose: {ko: {rich: 3, simplify: 5}, en: {rich: 3, simplify: 3}}, childRepair: true},
 };
 const ledger = meta => (meta?.qualityCheckpoint ? {contextFingerprint: meta.qualityCheckpoint.contextFingerprint, keys: Object.keys(meta.qualityCheckpoint.completed || {})} : null);
 async function requestScenario(M, name, s, book) {
-  const state = seed(M, {quality: s.quality}), prepared = M.ui.inputFromWizard(state, WIZARDS[s.wizard]);
+  const state = seed(M, {quality: s.quality}), prepared = M.ui.inputFromWizard(state, {...WIZARDS[s.wizard], ...s.wizardPatch});
   const input = {...prepared.input, bookId: `legacy-${name}`};
   const scenario = {...s, normalized: M.pipeline.normalizeStoryInput(input), counts: {}};
   const log = [], engine = mockEngine(M, scenario, log), steps = [], options = {engine};
-  const row = (stage, result) => steps.push({stage, requests: result.meta?.requests ?? null, ledger: ledger(result.meta), checks: result.meta?.checks?.passed ?? null, childGate: result.meta?.childGate?.pass ?? null, coherence: result.meta?.coherence?.passed ?? null});
+  // Each stage's output data is pinned too, not only what later requests happen to carry.
+  const row = (stage, result) => steps.push({stage, requests: result.meta?.requests ?? null, ledger: ledger(result.meta), checks: result.meta?.checks?.passed ?? null, childGate: result.meta?.childGate?.pass ?? null, coherence: result.meta?.coherence?.passed ?? null, data: compact(result.data ?? null)});
   try {
     const a = await M.pipeline.generateOutline(clone(input), options); row('outline', a);
     const outline = a.data;
@@ -419,7 +443,7 @@ async function requestScenario(M, name, s, book) {
       const result = await M.pageTools.rewriteBookPage(state, simpleBook, 2, {engine, save: () => true});
       steps.push({stage: 'simple-rewrite', changed: result.changed, page: compact(result.page), storyCheck: result.storyCheck?.passed ?? null});
     }
-  } catch (error) { steps.push({stage: 'error', ...failure(error)}); }
+  } catch (error) { steps.push({...failure(error), stage: 'error', failedStage: error?.stage ?? null}); }
   return {steps, kinds: log.map(r => r.kind), requests: log};
 }
 async function requestsGroup(M, book) {
@@ -613,7 +637,7 @@ function estimatesGroup(M, fixture) {
 
 /** Every group runs on its own frozen clock and fresh random sequence, so groups never shift each other. */
 async function legacySnapshots(rootUrl, fixtures) {
-  const M = await loadModules(rootUrl), groups = {
+  const M = await withOpeningsHook(() => { hookLog.push({root: rootUrl.href, group: 'load', hook: globalThis[OPENINGS_HOOK]}); return loadModules(rootUrl); }), groups = {
     levels: () => levelsGroup(M),
     inputs: () => inputsGroup(M),
     validation: () => validationGroup(M),
@@ -628,7 +652,7 @@ async function legacySnapshots(rootUrl, fixtures) {
     estimates: () => estimatesGroup(M, fixtures.book),
   };
   const out = {};
-  for (const [name, build] of Object.entries(groups)) out[name] = await deterministic(build);
+  for (const [name, build] of Object.entries(groups)) out[name] = await deterministic(() => { hookLog.push({root: rootUrl.href, group: name, hook: globalThis[OPENINGS_HOOK]}); return build(); });
   return out;
 }
 
@@ -637,7 +661,7 @@ const PINS = {
   levels: '1c6063ed356c55392fb2b3cf1f161c7f1060b804aacc4ad2fd7589f32c986188',
   inputs: '3338fc4fab1299f563e0ecdb9e3aabc31d3b5d4b231de3251da0e79b1438c415',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
-  requests: '4fe19e5074baa7941f998305efb5bbb1b84d9ab5e41410f5bddfb75f5095a29c',
+  requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   demo: '5e95fe43d1e3d0efc5051bca729ecec11ed31de5d3fbc7a71582d630b583911e',
   fullAutoResume: '061cbf1cf0fb861ae9526b45385c3e2dc64693622982cf3fe1aa90a63701a6c3',
   fullAutoDemo: '5675220d950e89cca50f7e6304f4fa4cc354aa2ea0d359d7f8a06846457937d4',
@@ -647,8 +671,16 @@ const PINS = {
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   estimates: 'b11df8a86257773aca9daff43f2fecbd0ed2543ca356730460b3633ace60068f',
 };
-/** scripts/r12-legacy-dom.mjs at 5f8d2f7: the seed book's reader at 390px and 1280px. */
-const READER_DOM_SHA256 = '05c7375346944c8af83021ff0d494a7aabb9241c6d5ca6cbcf2d3ec0f9b4af3a';
+/** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
+const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';
+const SEED_READER_HTML_SHA256 = {
+  '390/1': '3b21019341bf4b83806e371c21496157434b992d72729735ad08a21dbf0f3e99',
+  '390/2': '278a1af22903f2d6689929f3bd78b0f1f4a14f6e53b323b56dd9aef6d9a973f5',
+  '390/12': '9b06955449547c58b293a2620d01fd7869f9ebc52a2a05d663188b5b64d871e5',
+  '1280/1': '3b21019341bf4b83806e371c21496157434b992d72729735ad08a21dbf0f3e99',
+  '1280/2': '278a1af22903f2d6689929f3bd78b0f1f4a14f6e53b323b56dd9aef6d9a973f5',
+  '1280/12': '9b06955449547c58b293a2620d01fd7869f9ebc52a2a05d663188b5b64d871e5',
+};
 const PRE_R9_PIN = "const PRE_R9_APP_REQUESTS_SHA256='2c0b9c8c0508eb26b00c783187447cbf8a0914ec2d19d707bab52f0002d28f48';";
 
 const FIXTURES = {
@@ -659,6 +691,8 @@ let head, pre;
 before(async () => {
   head = await legacySnapshots(new URL('../', import.meta.url), FIXTURES);
   if (process.env.PRE_R12_APP_ROOT) pre = await legacySnapshots(pathToFileURL(`${process.env.PRE_R12_APP_ROOT.replace(/\/$/, '')}/`), FIXTURES);
+  // R12_PIN_DUMP=/abs/file.json writes HEAD's groups, so a failing pin can be diffed against a PRE_R12 dump.
+  if (process.env.R12_PIN_DUMP) writeFileSync(process.env.R12_PIN_DUMP, JSON.stringify(head, null, 1));
 });
 
 for (const [group, expected] of Object.entries(PINS))
@@ -693,6 +727,44 @@ test('R12-P0 the request pins cover every text stage, carry no timeoutMs and end
     for (const stage of ['outline', 'prose']) assert.match(head.requests[name].steps.find(step => step.stage === stage).ledger.contextFingerprint, /^[0-9a-f]+$/);
 });
 
+test('R12-P0 every pin is computed with the openings test hook on, and the hook is restored afterwards', async () => {
+  const roots = [new URL('../', import.meta.url).href, ...(process.env.PRE_R12_APP_ROOT ? [pathToFileURL(`${process.env.PRE_R12_APP_ROOT.replace(/\/$/, '')}/`).href] : [])];
+  for (const root of roots) {
+    const rows = hookLog.filter(row => row.root === root);
+    assert.deepEqual(rows.map(row => row.group), ['load', ...Object.keys(PINS)], root);
+    for (const row of rows) assert.equal(row.hook, true, `${root} ${row.group}`);
+  }
+  assert.ok(!(OPENINGS_HOOK in globalThis), 'the hook leaked out of the pins');
+  // A caller that reads the hook at call time sees it on inside a pin, and the previous value comes back, also after a throw.
+  assert.equal(await deterministic(() => globalThis[OPENINGS_HOOK]), true);
+  assert.ok(!(OPENINGS_HOOK in globalThis));
+  globalThis[OPENINGS_HOOK] = false;
+  try {
+    await assert.rejects(deterministic(() => { assert.equal(globalThis[OPENINGS_HOOK], true); throw Error('inside'); }), /inside/u);
+    assert.equal(globalThis[OPENINGS_HOOK], false);
+  } finally { delete globalThis[OPENINGS_HOOK]; }
+});
+
+test('R12-P0 the request pins hold each stage\'s output data, K3 24p and K4 16p included', () => {
+  for (const [name, scenario] of Object.entries(head.requests))
+    for (const step of scenario.steps) {
+      if (step.stage === 'simple-rewrite') { assert.ok(step.page, name); continue; }
+      assert.ok(step.data && typeof step.data === 'object', `${name}: ${step.stage} has no pinned data`);
+    }
+  for (const [name, pages] of [['K3-E3-24-plain', 24], ['K4-E4-16-plain', 16]]) {
+    const scenario = head.requests[name], pagination = scenario.steps.find(step => step.stage === 'pagination');
+    assert.equal(pagination.data.pages.length, pages, name);
+    assert.ok(scenario.kinds.includes('pagination'), `${name} buys its pagination`);
+    assert.equal(head.requests[name].steps.find(step => step.stage === 'outline').data.beats.length, 8, name);
+  }
+  assert.equal(head.requests['K4-E4-16-plain'].steps.find(step => step.stage === 'pagination').data.pages[0].scene.who.includes('mom'), true);
+  // A paid-path change that only touches the stored pagination (no later request carries it) moves the pin.
+  const moved = clone(head.requests);
+  const k3 = moved['K3-E3-24-plain'].steps.find(step => step.stage === 'pagination');
+  k3.data = {...k3.data, openingAdjustments: []};
+  assert.notEqual(sha(moved), PINS.requests);
+});
+
 test('R12-P0 a pre-R12 FULL AUTO job resumed at the input step keeps its page input and buys nothing', () => {
   assert.equal(FIXTURES.job.readingLevels.version, 3);
   for (const [pageCount, beats] of [[16, 8], [8, 6], [24, 8]]) {
@@ -723,16 +795,23 @@ test('R12-P0 the pre-R9 request pin is unchanged', () => {
   assert.ok(readFileSync(new URL('./catchphrase-r9.test.mjs', import.meta.url), 'utf8').includes(PRE_R9_PIN));
 });
 
-test('R12-P0 the reader DOM pin of a seed book is recorded at 390px and 1280px', () => {
+test('R12-P0 the reader DOM pins of the seed book and the generated legacy page book are recorded at 390px and 1280px', () => {
   const report = JSON.parse(readFileSync(new URL('../QA/r12-legacy-dom.json', import.meta.url), 'utf8'));
-  assert.equal(report.book, 'seed-dinosaur');
-  assert.deepEqual(report.runs.map(run => run.width), [390, 1280]);
+  // seed-dinosaur is the local sample (12 pages, 'dual', SVG); the fixture is a generated K2/E2 16-page page book.
+  assert.deepEqual(report.books, ['seed-dinosaur', FIXTURES.book.id]);
+  assert.deepEqual(report.runs.map(run => [run.book, run.width, run.pageCount]), [['seed-dinosaur', 390, 12], ['seed-dinosaur', 1280, 12], [FIXTURES.book.id, 390, 16], [FIXTURES.book.id, 1280, 16]]);
+  assert.equal(FIXTURES.book.pages.length, 16);
+  // Pinned pages 1 and 2 show its PNG pictures; page 16 has no picture yet.
+  assert.ok(FIXTURES.book.storyInput?.specs && FIXTURES.book.readingLevelSnapshot && FIXTURES.book.pages.every(page => page.staging));
+  assert.deepEqual(FIXTURES.book.pages.map(page => page.imageUrl?.slice(0, 22) ?? null).filter((_, i) => [0, 1, 15].includes(i)), ['data:image/png;base64,', 'data:image/png;base64,', null]);
   for (const run of report.runs) {
     assert.deepEqual(Object.keys(run.pages), ['1', '2', String(run.pageCount)]);
     assert.deepEqual([run.pageErrors, run.paidRequests], [[], []]);
     for (const page of Object.values(run.pages)) assert.ok(page.layout.overflow <= 0);
   }
-  const pins = Object.fromEntries(report.runs.flatMap(run => Object.entries(run.pages).map(([pageNo, row]) => [`${run.width}/${pageNo}`, {html: row.htmlSha256, layout: row.layoutSha256}])));
+  const pins = Object.fromEntries(report.runs.flatMap(run => Object.entries(run.pages).map(([pageNo, row]) => [`${run.book}/${run.width}/${pageNo}`, {html: row.htmlSha256, layout: row.layoutSha256}])));
   assert.equal(sha(pins), report.readerSha256);
   assert.equal(report.readerSha256, READER_DOM_SHA256);
+  // The seed book's pages keep the hashes first recorded at eed745d.
+  for (const [key, html] of Object.entries(SEED_READER_HTML_SHA256)) assert.equal(pins[`seed-dinosaur/${key}`].html, html, key);
 });
