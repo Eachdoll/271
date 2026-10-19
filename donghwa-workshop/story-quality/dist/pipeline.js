@@ -1,7 +1,7 @@
 import { buildBanList, renderBanListForPrompt } from './banList.js';
 import { composeSeed, preferObstaclesForTopic } from './composeSeed.js';
 import { buildOutlinePrompt, roughTokenCount } from './outlinePrompt.js';
-import { plotCheck, renderFixInstructions } from './plotCheck.js';
+import { plotCheck, renderFixInstructions, containsPlanted } from './plotCheck.js';
 import { generateBeatsWithBeam } from './beamSearch.js';
 import { writeRichThenSimplify, RICH_LEVEL_OF } from './richThenSimplify.js';
 import { curiosityCheck, retellCheck } from './childSimulator.js';
@@ -115,6 +115,7 @@ export async function runOutlineStage(input) {
     }
     // 코드 검사 → 지적된 비트만 고치는 수정 호출 1회
     const catchphrases = input.legacyCatchphrasePrompt ? [] : input.catchphrases ?? cast.map((c) => c.catchphrase ?? '');
+    outline = plantedFromSeed(outline, seed);
     let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
     const onlyAdvisory = input.advisoryCatchphrases === true && check.fix.every((message) => isCatchphraseFix(message));
     if (check.fix.length > 0 && check.regenerate.length === 0 && !onlyAdvisory) {
@@ -124,11 +125,24 @@ export async function runOutlineStage(input) {
         cost += fr.costUsd ?? 0;
         const fixed = fr.json ?? extractJson(fr.text);
         if (fixed) {
-            outline = fixed;
+            outline = plantedFromSeed(fixed, seed);
             check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
         }
     }
     return { outline, check, seedSummary: `${seed.planted.ko} · ${seed.twist.ko} · ${seed.creature.ko}`, seed, calls, costUsd: cost };
+}
+/**
+ * 모델이 plan.planted를 시드 재료가 든 설명 문장으로 쓰면("엄마의 커다란 무늬 모자는 안쪽 띠가 좁다. …")
+ * 시드 재료 이름으로 되돌린다. 시드 재료가 들어 있지 않은 다른 물건이면 그대로 두어 검사가 잡게 한다.
+ */
+export function plantedFromSeed(outline, seed) {
+    const want = seed?.planted?.ko;
+    const got = outline?.plan?.planted;
+    if (!want || typeof got !== 'string' || got === want)
+        return outline;
+    if (!got.includes(want) && !containsPlanted(got, want))
+        return outline;
+    return { ...outline, plan: { ...outline.plan, planted: want } };
 }
 export async function runProseStage(input) {
     const target = input.levels[input.targetLevelId];

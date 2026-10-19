@@ -355,3 +355,24 @@ test('a fix pass that blanks plan.planted, drops the ledger and rewrites an unta
   const resumed=await generateQualityOutline(input,{engine,qualityCheckpoint:result.meta.qualityCheckpoint},services(engine));
   assert.equal(engine.calls.length,2);assert.equal(resumed.meta.requests,0);assert.deepEqual(resumed.data,result.data);
 });
+
+test('after the last attempt, quality-only items are kept as notes instead of stopping the paid book; a cast member stands for a topic word',async()=>{
+  const {inspectOutlineRules}=await import('../dist/story-generation/pipeline.js');
+  const {hardOutlineViolations}=await import('../dist/story-generation/schemas.js');
+  // 1. A repeated newElement survives the one fix pass: the outline is kept with a note, no extra paid call.
+  const input=fixture(),engine=fakeOutlineEngine(input,outline=>{outline.beats.forEach(b=>{b.newElement='같은 돌멩이';});return outline;});
+  const result=await generateQualityOutline(input,{engine},services(engine));
+  assert.equal(engine.calls.length,2);assert.ok(result.meta.quality.softIssues.some(m=>/newElement가 겹치는/.test(m)),JSON.stringify(result.meta.quality.softIssues));
+  // 2. "공룡 친구와 소풍" told through 초록이 (a dinosaur): no topic violation.
+  const beats=[{index:1,summary:'유하와 초록이가 숲으로 소풍을 가요.'}];
+  const source={topic:'공룡 친구와 소풍',characters:[{id:'yuha',name:'유하',kind:'child'},{id:'greenie',name:'초록이',kind:'dinosaur',description:'초록색 아기 공룡'}]};
+  const report=inspectOutlineRules({beats},source);
+  assert.ok(!report.violations.some(v=>v.code==='topic_keyword_missing'),JSON.stringify(report.violations));
+  // 3. Without a dinosaur in the cast the missing word is a partial (soft) note; with no topic word at all it blocks.
+  const noDino={...source,characters:[{id:'yuha',name:'유하',kind:'child'},{id:'greenie',name:'초록이',kind:'rabbit'}]};
+  const partial=inspectOutlineRules({beats},noDino).violations.filter(v=>v.code==='topic_keyword_missing');
+  assert.equal(partial.length,1);assert.equal(partial[0].partial,true);
+  assert.ok(!hardOutlineViolations({violations:partial}).length);
+  const none=inspectOutlineRules({beats:[{index:1,summary:'유하와 초록이가 집에서 놀아요.'}]},noDino).violations.filter(v=>v.code==='topic_keyword_missing');
+  assert.ok(none.length>=1&&none.every(v=>v.partial===false));assert.equal(hardOutlineViolations({violations:none}).length,none.length);
+});
