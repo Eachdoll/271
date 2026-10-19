@@ -13,7 +13,10 @@ import {
   estimateTextCost,
 } from "../text-generation/models.js";
 import { getTextGenerationSettings } from "../text-generation/settings-ui.js";
-import { estimateImageCost } from "../image-generation/models.js";
+import {
+  estimateImageCost,
+  frozenImageConfig,
+} from "../image-generation/models.js";
 import { getStylePreset } from "../image-generation/styles.js";
 import {
   getActiveWorld,
@@ -510,24 +513,36 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
         book.generationSnapshot?.imageEngine ||
         book.imageEngine ||
         world.imageEngine,
-      unit = estimateImageCost({
+      // R13: a book prices its frozen model; a held FULL AUTO book without a
+      // snapshot yet prices the model frozen on its job.
+      job = book.generationSnapshot ? null : fullAutoJobForBook(state, book),
+      image = estimateImageCost({
         engine,
         quality: "final",
         size: "1536x1024",
-        config: {
-          ...world.providerConfig?.[engine],
-          ...book.generationSnapshot?.imageModelConfig,
-        },
-      }).costUsd,
+        config: frozenImageConfig(
+          world.providerConfig?.[engine],
+          book.generationSnapshot ||
+            (job?.imageModelConfig && job.imageEngine === engine
+              ? {
+                  imageModelConfig: job.imageModelConfig.model
+                    ? { model: job.imageModelConfig.model }
+                    : {},
+                }
+              : undefined),
+        ),
+      }),
+      unit = image.costUsd,
       imagesNeeded =
         pagesNeedingImages(book).length + (book.cover?.imageAssetId ? 0 : 1),
-      settings = textSettingsOf(state, book);
+      settings = textSettingsOf(state, book),
+      story = book.textDemo
+        ? null
+        : estimateStoryTextCost({ settings, pageCount: book.pages.length }),
+      page = book.textDemo ? null : pageRewrite(settings);
     return {
-      textUsd: book.textDemo
-        ? 0
-        : estimateStoryTextCost({ settings, pageCount: book.pages.length })
-            .costUsd,
-      pageTextUsd: book.textDemo ? 0 : pageRewriteUsd(settings),
+      textUsd: story ? story.costUsd : 0,
+      pageTextUsd: page ? page.costUsd : 0,
       imageUnitUsd: unit,
       imagesUsd: imagesNeeded * unit,
       imagesNeeded,
@@ -536,30 +551,57 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
         : missingSheetCount(state, book) * unit,
       imageEngine: engine,
       pageCount: book.pages.length,
+      ...pricingFlags({
+        text: story?.pricingUnknown,
+        pageText: page?.pricingUnknown,
+        image: image.pricingUnknown,
+      }),
+      // Unpriced pictures are still paid: callers confirm by count, not by $0.
+      ...(image.pricingUnknown
+        ? {
+            sheetsNeeded: book.generationSnapshot
+              ? 0
+              : missingSheetCount(state, book),
+          }
+        : {}),
     };
   }
-  const estimate = estimateFullAutoCost(state, wizardOrBook, options);
+  const estimate = estimateFullAutoCost(state, wizardOrBook, options),
+    page =
+      options.demo === true
+        ? null
+        : pageRewrite(getTextGenerationSettings(state));
   return {
     textUsd: estimate.textUsd,
-    pageTextUsd:
-      options.demo === true
-        ? 0
-        : pageRewriteUsd(getTextGenerationSettings(state)),
+    pageTextUsd: page ? page.costUsd : 0,
     imageUnitUsd: estimate.imageUnitUsd,
     imagesUsd: estimate.imagesUsd,
     imagesNeeded: estimate.pageCount + 1,
     sheetsUpperUsd: estimate.sheetsUpperUsd,
     imageEngine: estimate.imageEngine,
     pageCount: estimate.pageCount,
+    ...pricingFlags({
+      text: estimate.textPricingUnknown,
+      pageText: page?.pricingUnknown,
+      image: estimate.imagePricingUnknown,
+    }),
   };
 }
-function pageRewriteUsd(settings) {
+/** R13: name only the parts whose model has no catalog price (legacy estimates are unchanged). */
+function pricingFlags({ text, pageText, image }) {
+  return {
+    ...(text ? { textPricingUnknown: true } : {}),
+    ...(pageText ? { pageTextPricingUnknown: true } : {}),
+    ...(image ? { imagePricingUnknown: true } : {}),
+  };
+}
+function pageRewrite(settings) {
   const stage = resolveStoryStageSettings(settings, "pagination");
   return estimateTextCost({
     ...stage,
     ...PAGE_REWRITE_TOKENS,
     model: stage.config.model,
-  }).costUsd;
+  });
 }
 
 /**

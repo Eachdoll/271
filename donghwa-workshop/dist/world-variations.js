@@ -253,7 +253,7 @@ export function renderWorldVariations(state) {
         const { engineId, config } = resolveStoryStageSettings(settings, stage);
         return engineId === "local"
           ? config.model || "로컬"
-          : getTextModelInfo(engineId, config.model).name;
+          : getTextModelInfo(engineId, config.model, config).name;
       };
       const outline = modelName("outline"),
         prose = modelName("prose"),

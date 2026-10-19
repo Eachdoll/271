@@ -80,8 +80,13 @@ const pin = async (page, click) => { await click('button[data-action="nav"][data
 await browser.close();
 
 // Pre-R9 professional numbers from the R9 work order table (1280px).
+// R13 (deliberate): the text tab gains one '모델 목록 불러오기' button in the open
+// provider panel (9 → 10). Its model choices are options of the existing
+// medium/upper selects and the '직접 입력' field stays hidden until picked, so
+// inputs and selects are unchanged. The image tab's default engine (free
+// sample) has no model select, so its numbers are unchanged.
 const table = {
-  '02-settings-text': { buttons: 9, inputs: 99, selects: 64 },
+  '02-settings-text': { buttons: 10, inputs: 99, selects: 64 },
   '02-settings-image': { buttons: 16, inputs: 10, selects: 4 },
   '03-materials': { buttons: 43, inputs: 0, selects: 0 },
   '07-outline': { buttons: 108, inputs: 21, selects: 0 },

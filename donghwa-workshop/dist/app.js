@@ -142,6 +142,7 @@ import {
 import {
   estimateBookCost,
   estimateImageCost,
+  frozenImageConfig,
 } from "./image-generation/models.js";
 import {
   generateAllScenes,
@@ -1450,7 +1451,11 @@ function renderWizardTextSummary() {
   const label = (selection) =>
     selection.engineId === "local"
       ? selection.config.model || "로컬"
-      : getTextModelInfo(selection.engineId, selection.config.model).name;
+      : getTextModelInfo(
+          selection.engineId,
+          selection.config.model,
+          selection.config,
+        ).name;
   const same =
       outline.engineId === pagination.engineId &&
       outline.config.model === pagination.config.model,
@@ -2592,10 +2597,10 @@ async function approveDraft() {
         includeCover: work.cover,
         size: "1536x1024",
         quality: "final",
-        config: {
-          ...world.providerConfig?.[engine],
-          ...book.generationSnapshot?.imageModelConfig,
-        },
+        config: frozenImageConfig(
+          world.providerConfig?.[engine],
+          book.generationSnapshot,
+        ),
       }),
       kept = book.pages.length - work.pages.length,
       what = [
@@ -2607,7 +2612,7 @@ async function approveDraft() {
         .filter(Boolean)
         .join("과 ");
     showModal(
-      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장) · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
+      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">${estimate.pricingUnknown ? `예상 이미지 API 비용 · 요금 정보 없음 (목록에 없는 모델 · ${estimate.imageCount}장)` : `예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장)`} · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
     );
     document.querySelector("#book-final-confirm").onclick = () =>
       finalizeBook(book, {

@@ -44,7 +44,10 @@ import {
   estimateStoryTextCost,
   estimateTextCost,
 } from "./text-generation/models.js";
-import { estimateImageCost } from "./image-generation/models.js";
+import {
+  estimateImageCost,
+  imageModelSnapshot,
+} from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
 import {
@@ -193,6 +196,9 @@ export function createFullAutoJob(
     worldId: world.id,
     worldRevision: world.revision,
     imageEngine: world.imageEngine,
+    // R13: the picture model is frozen with the job; a later World choice
+    // never changes this job's remaining sheets, pages or cover.
+    imageModelConfig: imageModelSnapshot(world),
     stylePresetId: world.stylePresetId,
     worldSnapshot: clone(world),
     initialSignatures: Object.fromEntries(
@@ -245,12 +251,13 @@ export function estimateFullAutoCost(
     }),
     engine = imageEngine || world.imageEngine,
     config = world.providerConfig?.[engine] || {},
-    unit = estimateImageCost({
+    image = estimateImageCost({
       engine,
       quality: "final",
       size: "1536x1024",
       config,
-    }).costUsd,
+    }),
+    unit = image.costUsd,
     pages = Number(wizard.pageCount) || 12,
     freePlan = demo === true || planMode === "selection",
     textUsd =
@@ -266,6 +273,12 @@ export function estimateFullAutoCost(
     imageUnitUsd: unit,
     imagesUsd: (pages + 1) * unit,
     sheetsUpperUsd: 10 * unit,
+    // R13: a model outside the catalog has no price; say so instead of guessing.
+    ...(demo !== true &&
+    (text.pricingUnknown || (!freePlan && planning.pricingUnknown))
+      ? { textPricingUnknown: true }
+      : {}),
+    ...(image.pricingUnknown ? { imagePricingUnknown: true } : {}),
   };
 }
 export async function preflightFullAuto(state, job) {
@@ -326,7 +339,11 @@ export async function preflightFullAuto(state, job) {
       "ComfyUI 엔드포인트와 참조 이미지를 사용하는 워크플로를 부모 설정에 저장해 주세요.",
     );
 }
-async function generateAutoBackground(state, background, { signal } = {}) {
+async function generateAutoBackground(
+  state,
+  background,
+  { signal, frozenImageModel } = {},
+) {
   const world = getActiveWorld(state),
     config = {
       ...(state.settings.imageProviderConfig?.[world.imageEngine] || {}),
@@ -334,6 +351,9 @@ async function generateAutoBackground(state, background, { signal } = {}) {
     };
   delete config.apiKey;
   delete config.key;
+  // R13: a job's background sheet draws with the job's frozen model.
+  if (frozenImageModel) config.model = frozenImageModel;
+  else if (frozenImageModel === null) delete config.model;
   if (!config.proxyEndpoint && config.transport !== "proxy")
     config.apiKey = await getCredential(world.imageEngine);
   const request = backgroundSheetRequest(state, background, {
@@ -653,9 +673,29 @@ function ensureJobSnapshot(state, job) {
       book.generationSnapshot.backgrounds || [],
     );
   }
+  // R13: the book draws with the model frozen on the job, not a World choice
+  // made since (a series that keeps the previous book's look keeps its model).
+  const snapshot = book.generationSnapshot;
+  if (
+    job.imageModelConfig &&
+    snapshot?.imageModelConfig &&
+    snapshot.imageEngine === job.imageEngine &&
+    (!previous || snapshot.continuity?.visualMode === "parent-selected-current")
+  ) {
+    if (job.imageModelConfig.model)
+      snapshot.imageModelConfig.model = job.imageModelConfig.model;
+    else delete snapshot.imageModelConfig.model;
+  }
   delete job.seriesContinuityDeferred;
   return book.generationSnapshot;
 }
+/** The job's frozen picture model: an ID, null (provider default), undefined (job made before R13). */
+const jobImageModel = (job) =>
+  job?.imageModelConfig ? job.imageModelConfig.model || null : undefined;
+const frozenModelOption = (job) =>
+  jobImageModel(job) === undefined
+    ? {}
+    : { frozenImageModel: jobImageModel(job) };
 export async function runFullAuto(
   state,
   job,
@@ -848,7 +888,11 @@ export async function runFullAuto(
         "character:" + id,
         character.name + " 캐릭터 시트 만들기",
         () =>
-          ops.characterSheet(state, character, { quality: "final", signal }),
+          ops.characterSheet(state, character, {
+            quality: "final",
+            signal,
+            ...frozenModelOption(job),
+          }),
         (result) => {
           markCharacterSheetConfirmed(state, id, {
             ...result,
@@ -879,7 +923,11 @@ export async function runFullAuto(
       await step(
         "background:" + id,
         background.name + " 고정 배경 시트 만들기",
-        () => ops.backgroundSheet(state, background, { signal }),
+        () =>
+          ops.backgroundSheet(state, background, {
+            signal,
+            ...frozenModelOption(job),
+          }),
         (result) => {
           const world = getActiveWorld(state),
             meta = {

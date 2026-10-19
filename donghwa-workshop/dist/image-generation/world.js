@@ -4,6 +4,7 @@ import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
 import { characterSVG } from "../engine.js";
 import { getStylePreset, validateStylePreset } from "./styles.js";
 import { getImageURL } from "./assets.js";
+import { imageModelSnapshot } from "./models.js";
 
 const ENGINES = new Set(["google", "openai", "bfl", "fal", "local", "sample"]);
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -690,13 +691,8 @@ export function captureBookGenerationSnapshot(state, book) {
     stylePresetId: world.stylePresetId,
     stylePreset: clone(preset),
     characterSheets: sheets,
-    imageModelConfig: {
-      googlePro:
-        world.imageModelVariant === "pro" ||
-        (!world.imageModelVariant &&
-          world.providerConfig?.google?.googlePro === true),
-      modelVariant: world.imageModelVariant === "pro" ? "pro" : "default",
-    },
+    // R13: the chosen final-picture model is frozen with the legacy variant.
+    imageModelConfig: imageModelSnapshot(world),
     styleReferences: getWorldStyleReferenceRecords(state, world, preset).map(
       clone,
     ),

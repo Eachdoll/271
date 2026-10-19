@@ -176,21 +176,175 @@ export function listTextModels(engine) {
     throw new Error("지원하는 글 엔진을 선택해 주세요.");
   return CATALOG[engine];
 }
-export function getTextModelInfo(engine, modelString) {
-  const models = listTextModels(engine);
+/** R13: model IDs a parent may fetch or type. Never a URL with a scheme or spaces. */
+export const MODEL_ID_PATTERN = /^[A-Za-z0-9._:\/-]{1,120}$/;
+// '__custom', '__fetch' and '__stages' are the pickers' own option values.
+export const isModelId = (value) =>
+  typeof value === "string" &&
+  MODEL_ID_PATTERN.test(value.trim()) &&
+  !value.trim().startsWith("__");
+export function validateModelId(value) {
+  const id = String(value ?? "").trim();
+  if (!isModelId(id))
+    throw new Error(
+      "모델 ID는 영문·숫자와 . _ : / - 만 써서 1~120자로 입력해 주세요.",
+    );
+  return id;
+}
+export const MAX_CUSTOM_MODELS = 20;
+export const MAX_FETCHED_MODELS = 200;
+/**
+ * The provider's own model registry (R13): IDs fetched from its list call
+ * (`fetchedModels.models`) or typed by the parent (`customModels`). Settings
+ * saved before R13 have neither, so they resolve exactly as before.
+ */
+export function registeredModelIds(config = {}) {
+  const ids = [];
+  for (const id of Array.isArray(config?.customModels)
+    ? config.customModels
+    : [])
+    if (isModelId(id)) ids.push(id.trim());
+  for (const row of Array.isArray(config?.fetchedModels?.models)
+    ? config.fetchedModels.models
+    : [])
+    if (isModelId(row?.id)) ids.push(row.id.trim());
+  return [...new Set(ids)];
+}
+/** Copy only a provider's valid registry fields; {} when it has none (legacy). */
+export function normalizeModelRegistry(config = {}) {
+  const result = {};
+  if (Array.isArray(config?.customModels))
+    result.customModels = [
+      ...new Set(config.customModels.filter(isModelId).map((id) => id.trim())),
+    ].slice(-MAX_CUSTOM_MODELS);
+  const fetched = config?.fetchedModels;
+  if (fetched && typeof fetched === "object" && Array.isArray(fetched.models)) {
+    const seen = new Set(),
+      models = [];
+    for (const row of fetched.models) {
+      const id = typeof row === "string" ? row : row?.id;
+      if (!isModelId(id) || seen.has(id.trim())) continue;
+      seen.add(id.trim());
+      const label =
+        typeof row?.label === "string" ? row.label.trim().slice(0, 120) : "";
+      models.push({ id: id.trim(), ...(label ? { label } : {}) });
+      if (models.length >= MAX_FETCHED_MODELS) break;
+    }
+    result.fetchedModels = {
+      fetchedAt:
+        typeof fetched.fetchedAt === "string"
+          ? fetched.fetchedAt.slice(0, 40)
+          : "",
+      models,
+    };
+  }
+  return result;
+}
+const isRegisteredModel = (config, id) =>
+  !!id && registeredModelIds(config).includes(id);
+/**
+ * A fetched or typed model outside the curated catalog. Requests stay
+ * conservative (no temperature, reasoning, effort or thinking fields, the
+ * stage budget as the output limit) and its price is unknown, never guessed.
+ */
+function customTextModel(id) {
+  return Object.freeze({
+    id,
+    name: `${id} · 목록에 없는 모델`,
+    label: `${id} · 목록에 없는 모델 · 요금은 공급자에서 확인`,
+    tier: "custom",
+    input: null,
+    output: null,
+    supportsTemperature: false,
+    reasoning: reasoning(),
+    maxOutputTokens: 128000,
+    requestOutputTokens: 0,
+    timeoutMs: 600000,
+    docs: null,
+    custom: true,
+    pricingUnknown: true,
+  });
+}
+/** `config` carries the provider registry; without it only catalog IDs resolve. */
+export function getTextModelInfo(engine, modelString, config = {}) {
+  const models = listTextModels(engine),
+    id = String(modelString || "").trim();
   return (
-    models.find((item) => item.id === String(modelString || "").trim()) ||
-    TEXT_MODELS[engine]
+    models.find((item) => item.id === id) ||
+    (engine !== "local" && isRegisteredModel(config, id)
+      ? customTextModel(id)
+      : TEXT_MODELS[engine])
   );
 }
-export function resolveTextModel(engine, modelString) {
+export function resolveTextModel(engine, modelString, config = {}) {
   listTextModels(engine);
   return engine === "local"
     ? String(modelString || "").trim()
-    : getTextModelInfo(engine, modelString).id;
+    : getTextModelInfo(engine, modelString, config).id;
 }
 export function getTextModel(engine, config = {}) {
-  return resolveTextModel(engine, config.model);
+  return resolveTextModel(engine, config.model, config);
+}
+const TIER_LABELS = Object.freeze({
+  economy: "경제형",
+  advanced: "고급",
+  premium: "상위",
+  flagship: "최고급",
+  local: "로컬",
+});
+/** 'GPT-6.1 Sol · 고급 · 입력 $2 / 출력 $10 per 1M' for a catalog row. */
+export function textModelOptionLabel(row) {
+  if (row.custom) return row.label;
+  if (row.tier === "local") return "로컬 · API 요금 없음";
+  const short = String(row.name || row.id).split(" · ")[1] || row.id;
+  return `${short} · ${TIER_LABELS[row.tier] || row.tier} · 입력 $${row.input} / 출력 $${row.output} per 1M`;
+}
+/** A short display name: 'GPT-6.1 Sol', or the ID of a model outside the catalog. */
+export function textModelShortName(engine, id, config = {}) {
+  if (engine === "local") return String(id || "").trim() || "로컬 모델";
+  const row = getTextModelInfo(engine, id, config);
+  return row.custom ? row.id : String(row.name).split(" · ")[1] || row.id;
+}
+/**
+ * Every model a parent can pick for one provider: the curated catalog, then
+ * the fetched list, then typed IDs (each ID once, catalog first).
+ */
+export function listTextModelOptions(engine, config = {}) {
+  const catalog = engine === "local" ? [] : listTextModels(engine),
+    seen = new Set(catalog.map((row) => row.id)),
+    options = catalog.map((row) => ({
+      id: row.id,
+      label: textModelOptionLabel(row),
+      group: "catalog",
+    }));
+  const outside = (name) =>
+    engine === "local"
+      ? `${name} · 로컬`
+      : `${name} · 목록에 없는 모델 · 요금은 공급자에서 확인`;
+  for (const row of Array.isArray(config?.fetchedModels?.models)
+    ? config.fetchedModels.models
+    : []) {
+    const id = typeof row === "string" ? row : row?.id;
+    if (!isModelId(id) || seen.has(id.trim())) continue;
+    seen.add(id.trim());
+    const name =
+      typeof row?.label === "string" && row.label.trim() && row.label !== id
+        ? `${row.label.trim().slice(0, 60)} (${id.trim()})`
+        : id.trim();
+    options.push({ id: id.trim(), label: outside(name), group: "fetched" });
+  }
+  for (const id of Array.isArray(config?.customModels)
+    ? config.customModels
+    : []) {
+    if (!isModelId(id) || seen.has(id.trim())) continue;
+    seen.add(id.trim());
+    options.push({
+      id: id.trim(),
+      label: outside(`${id.trim()} · 직접 입력`),
+      group: "custom",
+    });
+  }
+  return options;
 }
 /** Story defaults are separate from legacy single-model provider preferences. */
 export const STORY_STAGE_MODELS = Object.freeze({
@@ -214,9 +368,13 @@ export function getStoryStageModels(engine, config = {}) {
   const selected = config.stageModels || {},
     defaults = STORY_STAGE_MODELS[engine],
     models = listTextModels(engine);
-  const resolve = (level) =>
-    models.find((row) => row.id === String(selected[level] || "").trim())?.id ||
-    defaults[level];
+  const resolve = (level) => {
+    const id = String(selected[level] || "").trim();
+    return (
+      models.find((row) => row.id === id)?.id ||
+      (isRegisteredModel(config, id) ? id : defaults[level])
+    );
+  };
   return { medium: resolve("medium"), upper: resolve("upper") };
 }
 /** Resolve each request from an immutable draft settings snapshot, without mutating it. */
@@ -312,7 +470,7 @@ export function resolveQualityStageSettings(
       engineId === "local"
         ? requested || fallback
         : listTextModels(engineId).find((row) => row.id === requested)?.id ||
-          fallback;
+          (isRegisteredModel(provider, requested) ? requested : fallback);
   return {
     engineId,
     config: {
@@ -333,8 +491,19 @@ export function estimateTextCost({
   config = {},
   at = new Date(),
 } = {}) {
-  const info = getTextModelInfo(engineId, model ?? config.model),
-    date = new Date(at),
+  const info = getTextModelInfo(engineId, model ?? config.model, config);
+  if (info.pricingUnknown)
+    return {
+      costUsd: 0,
+      estimated: true,
+      model: info.id,
+      inputRate: null,
+      outputRate: null,
+      checkedAt: CHECKED_AT,
+      note: "목록에 없는 모델 · 요금 정보 없음 · 요금은 공급자에서 확인",
+      pricingUnknown: true,
+    };
+  const date = new Date(at),
     rates =
       info.pricingChange &&
       Number.isFinite(date.getTime()) &&
@@ -347,7 +516,7 @@ export function estimateTextCost({
         Math.max(0, Number(output) || 0) * rates.output) /
       1e6,
     estimated: true,
-    model: resolveTextModel(engineId, model ?? config.model),
+    model: resolveTextModel(engineId, model ?? config.model, config),
     inputRate: rates.input,
     outputRate: rates.output,
     checkedAt: CHECKED_AT,
@@ -416,7 +585,8 @@ export function estimateStoryTextCost({
         ? resolveQualityStageSettings(snapshot, qualityRole, qualitySettings)
         : resolveStoryStageSettings(snapshot, stage),
       reasoningFactor =
-        getTextModelInfo(engineId, config.model).reasoning.profile === "none"
+        getTextModelInfo(engineId, config.model, config).reasoning.profile ===
+        "none"
           ? 1
           : 2,
       output = Math.ceil(outputPerRequest * reasoningFactor);
@@ -487,9 +657,18 @@ export function estimateStoryTextCost({
   stages.push(stageEstimate("coherence", reviewInput, 1600, 2));
   if (childSimulator)
     stages.push(stageEstimate("childSimulator", reviewInput, 1000, 2, "cheap"));
-  const final = stages.find((row) => row.stage === "prose");
+  const final = stages.find((row) => row.stage === "prose"),
+    unknown = stages.filter((row) => row.pricingUnknown);
   return {
     ...final,
+    // R13: a model outside the catalog has no price. Its stages add nothing
+    // here and the total says '일부 요금 미확인' instead of a made-up number.
+    ...(unknown.length
+      ? {
+          pricingUnknown: true,
+          unknownPricingStages: unknown.map((row) => row.stage),
+        }
+      : {}),
     costUsd: stages.reduce((sum, row) => sum + row.costUsd, 0),
     inputTokensEstimated: stages.reduce(
       (sum, row) => sum + row.inputTokensEstimated,

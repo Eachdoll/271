@@ -4,7 +4,7 @@ import {
   normalizeStoryQualitySettings,
 } from "../text-generation/settings-ui.js";
 import {
-  listTextModels,
+  listTextModelOptions,
   resolveQualityStageSettings,
 } from "../text-generation/models.js";
 import { loadStoryQualityData } from "./quality-adapter.js";
@@ -372,14 +372,18 @@ function roleFields(state, role) {
     )
     .join(
       "",
-    )}</select></label><label class="field"><span>모델 · 비우면 단계 기본값</span><input data-quality-role-model="${role}" list="quality-models-${role}" maxlength="200" value="${esc(explicit.model || "")}" placeholder="${esc(resolved.config.model || "로컬 기본 모델")}"><datalist id="quality-models-${role}">${listTextModels(
+    )}</select></label><label class="field"><span>모델 · 비우면 단계 기본값</span><input data-quality-role-model="${role}" list="quality-models-${role}" maxlength="200" value="${esc(explicit.model || "")}" placeholder="${esc(resolved.config.model || "로컬 기본 모델")}"><datalist id="quality-models-${role}">${roleModelOptions(
+    getTextGenerationSettings(state),
     engine,
-  )
+  )}</datalist></label></fieldset>`;
+}
+/** R13: the catalog plus the provider's fetched and typed models (글 엔진 설정). */
+function roleModelOptions(settings, engine) {
+  return listTextModelOptions(engine, settings.providers?.[engine] || {})
     .map(
-      (model) =>
-        `<option value="${esc(model.id)}">${esc(model.name || model.label || model.id)}</option>`,
+      (row) => `<option value="${esc(row.id)}">${esc(row.label)}</option>`,
     )
-    .join("")}</datalist></label></fieldset>`;
+    .join("");
 }
 function renderBans(state) {
   const q = quality(state),
@@ -498,7 +502,9 @@ function readSettings(form, state) {
     if (
       model &&
       id !== "local" &&
-      !listTextModels(id).some((row) => row.id === model)
+      !listTextModelOptions(id, settings.providers?.[id] || {}).some(
+        (row) => row.id === model,
+      )
     )
       throw Error(`${ROLE_NAMES[role]}에 사용할 모델을 골라 주세요.`);
     q.engines[role] = { engine: id, ...(model ? { model } : {}) };
@@ -732,16 +738,13 @@ export function configureStoryQualityUI(context) {
           },
         },
       ),
-      model = form.querySelector(`[data-quality-role-model="${role}"]`),
-      models = listTextModels(resolved.engineId);
+      model = form.querySelector(`[data-quality-role-model="${role}"]`);
     model.value = "";
     model.placeholder = resolved.config.model || "로컬 기본 모델";
-    form.querySelector(`#quality-models-${role}`).innerHTML = models
-      .map(
-        (row) =>
-          `<option value="${esc(row.id)}">${esc(row.name || row.id)}</option>`,
-      )
-      .join("");
+    form.querySelector(`#quality-models-${role}`).innerHTML = roleModelOptions(
+      getTextGenerationSettings(api.getState()),
+      resolved.engineId,
+    );
   });
   document.addEventListener("click", (event) => {
     const element = event.target.closest("[data-quality-action]");

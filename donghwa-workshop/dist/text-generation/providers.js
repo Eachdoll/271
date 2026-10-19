@@ -136,7 +136,10 @@ function checkCompletion(data) {
 async function requestOnce(engine, config, req, signal) {
   const schema = safeSchema(req.jsonSchema),
     model = getTextModel(engine, config),
-    info = getTextModelInfo(engine, model),
+    info = getTextModelInfo(engine, model, config),
+    // R13: a fetched or typed model gets no structured-output, temperature,
+    // reasoning, effort or thinking fields; its output limit is the stage budget.
+    custom = info.custom === true,
     maxTokens = Math.min(
       info.maxOutputTokens,
       Math.max(req.maxTokens, info.requestOutputTokens),
@@ -211,7 +214,7 @@ async function requestOnce(engine, config, req, signal) {
         ? { max_tokens: maxTokens }
         : { max_completion_tokens: maxTokens }),
     };
-    if (schema && engine === "openai")
+    if (schema && engine === "openai" && !custom)
       body.response_format = {
         type: "json_schema",
         json_schema: { name: "story_result", schema, strict: false },
@@ -229,17 +232,22 @@ async function requestOnce(engine, config, req, signal) {
       config.baseUrl || config.endpoint,
       "https://generativelanguage.googleapis.com/v1beta",
     );
-    const generationConfig = {
-      ...(info.supportsTemperature ? { temperature: req.temperature } : {}),
-      maxOutputTokens: maxTokens,
-      thinkingConfig:
-        info.reasoning.profile === "google-thinking-level"
-          ? { thinkingLevel: info.reasoning.effort }
-          : { thinkingBudget: 0 },
-      ...(schema
-        ? { responseMimeType: "application/json", responseJsonSchema: schema }
-        : {}),
-    };
+    const generationConfig = custom
+      ? { maxOutputTokens: maxTokens }
+      : {
+          ...(info.supportsTemperature ? { temperature: req.temperature } : {}),
+          maxOutputTokens: maxTokens,
+          thinkingConfig:
+            info.reasoning.profile === "google-thinking-level"
+              ? { thinkingLevel: info.reasoning.effort }
+              : { thinkingBudget: 0 },
+          ...(schema
+            ? {
+                responseMimeType: "application/json",
+                responseJsonSchema: schema,
+              }
+            : {}),
+        };
     data = await fetchJson(
       `${base}/models/${model}:generateContent`,
       post(
@@ -283,7 +291,7 @@ async function requestOnce(engine, config, req, signal) {
     };
     // Current Claude models cannot force tools while thinking. Keep the full dynamic
     // story schema in the instruction and use our bounded JSON parse retry instead.
-    if (schema && !adaptive && !betweenTools) {
+    if (schema && !adaptive && !betweenTools && !custom) {
       body.tools = [
         {
           name: "return_story_json",
@@ -342,7 +350,11 @@ export function createTextEngine({ engine, config = {} } = {}) {
         req.system.length + req.user.length > 300000
       )
         failure("글 생성 입력을 확인해 주세요.", "input");
-      const info = getTextModelInfo(engine, getTextModel(engine, config)),
+      const info = getTextModelInfo(
+          engine,
+          getTextModel(engine, config),
+          config,
+        ),
         temperature = Number(req.temperature ?? 0.8),
         maxTokens = Number(req.maxTokens);
       if (
@@ -418,6 +430,7 @@ export function createTextEngine({ engine, config = {} } = {}) {
               requests: attempt + 1,
               costUsdEstimated: estimate.costUsd,
               pricingEstimated: true,
+              ...(estimate.pricingUnknown ? { pricingUnknown: true } : {}),
               transport:
                 config.proxyEndpoint || config.transport === "proxy"
                   ? "proxy"
