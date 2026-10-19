@@ -22,6 +22,7 @@ import {
   finalizeStoryPagination,
 } from "./pipeline.js";
 import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
+import { editorPolicy, revisionSummary } from "./book-revision.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -169,6 +170,8 @@ export function invalidateStoryDetails(
   return d;
 }
 export function applyStoryCheckpoint(d, checkpoint) {
+  if (checkpoint?.revisionCheckpoint)
+    d.revisionCheckpoint = clone(checkpoint.revisionCheckpoint);
   if (checkpoint?.qualityCheckpoint)
     d.qualityCheckpoint = clone(checkpoint.qualityCheckpoint);
   if (checkpoint?.childGateCheckpoint) {
@@ -254,6 +257,31 @@ export function updateStoryBriefField(briefs, index, path, value) {
   }
   target[parts.at(-1)] = String(value);
   return next;
+}
+const ASPECT_LABELS = {
+  rhythm: "읽는 리듬",
+  repetition: "반복",
+  pageTurn: "다음 쪽 궁금함",
+  sensory: "감각 묘사",
+  continuity: "앞뒤 연결",
+  dialogue: "대사",
+  ending: "결말",
+  bilingual: "한글·영어 맞춤",
+  level: "읽기 수준",
+};
+/** Editor round: the read-through's report (what changed and why) for the parent. */
+export function renderRevisionNote(revision) {
+  const line = revisionSummary(revision);
+  if (!line) return "";
+  const changed = (revision.accepted || [])
+    .map((row) => `<li>${row.pageNo}쪽 · ${esc(row.reason || "글을 다듬었어요")}</li>`)
+    .join("");
+  const issues = (revision.report?.issues || [])
+    .filter((issue) => !(revision.accepted || []).some((row) => row.pageNo === issue.pageNo))
+    .slice(0, 6)
+    .map((issue) => `<li class="check-advisory">${issue.pageNo}쪽 · ${esc(ASPECT_LABELS[issue.aspect] || issue.aspect)} · ${esc(issue.note)}</li>`)
+    .join("");
+  return `<div class="story-revision"><strong>편집자 통독</strong><p>${esc(line)}${revision.report?.overall ? ` · ${esc(revision.report.overall)}` : ""}</p>${changed || issues ? `<ul class="check-issues">${changed}${issues}</ul>` : ""}</div>`;
 }
 export function renderSceneBriefs(
   d,
@@ -556,6 +584,8 @@ function options(s, stage, forceApi = false) {
       ...resolveStoryStageSettings(settings, "coherence"),
       signal: s.controller?.signal,
     },
+    revisionOptions: resolveStoryStageSettings(settings, "coherence"),
+    revisionCheckpoint: d.revisionCheckpoint,
     sceneBriefs: d.sceneBriefs || undefined,
     bookId: d.bookId || d.id,
     stylePreset: stagingContext(d).stylePreset,
@@ -850,6 +880,9 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       variantByCharacter: choices.characterVariants,
       variantPageRanges: choices.variantPageRanges,
       catchphrasePolicy,
+      // Editor round: frozen for new drafts only (read-through, current-book
+      // context in rewrites, author-model content fixes).
+      editorPolicy: editorPolicy(),
     },
     readingLevels,
     world,
@@ -1271,7 +1304,7 @@ function checkView(s) {
             id,
             ...(typeof value === "object" ? value : { passed: value }),
           }));
-  return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${c.warnings?.length ? `<ul class="check-issues">${c.warnings.map((w) => `<li class="check-advisory">${w.pageNo ? `${w.pageNo}쪽 · ` : ""}${esc(describeReadingViolation(w))}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}</div>`;
+  return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${c.warnings?.length ? `<ul class="check-issues">${c.warnings.map((w) => `<li class="check-advisory">${w.pageNo ? `${w.pageNo}쪽 · ` : ""}${esc(describeReadingViolation(w))}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}${renderRevisionNote(s.draft.revision)}</div>`;
 }
 /** R12 openings: the pro 쪽 나누기 screen (no count select, no split/merge, no paid count fix). */
 function renderOpeningsPages(s) {
@@ -2359,10 +2392,15 @@ async function handleClick(event) {
         s,
         "승인한 전문을 쪽으로 나누고 검사하고 있어요",
         () =>
-          paginateStory(d.outline, d.prose, d.input, options(s, "pagination")),
+          // A fresh pagination of a new draft gets the editor's read-through.
+          paginateStory(d.outline, d.prose, d.input, {
+            ...options(s, "pagination"),
+            revise: true,
+          }),
         (r) => {
           d.pagination = r.data;
           d.paginationMeta = r.meta;
+          if (r.meta?.revision) d.revision = r.meta.revision;
           recordCoherence(d, r);
           d.storyCheck = r.meta?.checks;
           d.richnessCheck = r.meta?.richnessChecks || null;
@@ -2388,9 +2426,10 @@ async function handleClick(event) {
             d.outline,
             d.prose,
             { ...d.input, pageCount: targetPages },
-            options(s, "pagination"),
+            { ...options(s, "pagination"), revise: true },
           ),
         (r) => {
+          if (r.meta?.revision) d.revision = r.meta.revision;
           d.input.pageCount = targetPages;
           if (d.wizard) d.wizard.pageCount = targetPages;
           snapshot(s, "pagination");

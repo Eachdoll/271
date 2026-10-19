@@ -558,6 +558,9 @@ export function estimateStoryTextCost({
   at = new Date(),
   layout,
   specs,
+  // Editor round (input.editorPolicy): the whole-book read-through, and the
+  // quality path's simplify passes written by the author model.
+  editor = false,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -676,7 +679,7 @@ export function estimateStoryTextCost({
           input + outlineOutput + Math.ceil(baseOutput / 2),
           Math.ceil(baseOutput / 2),
           2,
-          "cheap",
+          editor ? "prose" : "cheap",
         ),
       );
   } else {
@@ -688,6 +691,11 @@ export function estimateStoryTextCost({
       stageEstimate("enrichment", 3000, 800, paragraphs.ko + paragraphs.en),
     );
   stages.push(stageEstimate("pagination", input, baseOutput));
+  if (editor)
+    stages.push({
+      ...stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2)),
+      stage: "revision",
+    });
   stages.push(stageEstimate("coherence", reviewInput, 1600, 2));
   if (childSimulator)
     stages.push(stageEstimate("childSimulator", reviewInput, 1000, 2, "cheap"));
@@ -719,9 +727,10 @@ export function estimateStoryTextCost({
     beam,
     childSimulator,
     enrichment,
+    ...(editor ? { editor: true } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }

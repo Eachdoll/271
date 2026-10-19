@@ -9,6 +9,7 @@ import {
   StoryValidationError,
 } from "./schemas.js";
 import { LEVEL_SEED } from "../reading-levels.js";
+import { hasEditorPolicy } from "./book-revision.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
 import { findWorld, worldCoreLines } from "../story-quality/dist/worlds.js";
@@ -1272,7 +1273,15 @@ export async function generateQualityOutline(
               candidate ? 1800 : judge ? 1500 : 16000,
             ),
           };
-          let response = await journal.call(role, sent, services);
+          // Editor round: the fix pass rewrites story content, so a new draft
+          // sends it to the outline (author) model instead of the economy one.
+          const caller =
+            role === "cheap" &&
+            hasEditorPolicy(input) &&
+            request.user.startsWith("아래 줄거리 JSON에서")
+              ? "outline"
+              : role;
+          let response = await journal.call(caller, sent, services);
           // Beam wrap: a model that follows the package's short wrap template
           // leaves out the app fields (beats with cast/place ids, settings,
           // emotionArc, plotContract). Only on that failure branch, redo just
@@ -1284,7 +1293,7 @@ export async function generateQualityOutline(
           ) {
             wrapRetried = true;
             response = await journal.call(
-              role,
+              caller,
               { ...sent, user: `${request.user}\n\n${beamWrapRetry(input)}` },
               services,
             );
@@ -1700,8 +1709,10 @@ export async function generateQualityProse(
           const labels = lang === "ko" ? "[비트 n · 유형]" : "[Beat n · type]",
             rules = `OUTPUT FORMAT OVERRIDE: return ${lang === "ko" ? "Korean" : "English"} plain story text only, NOT JSON, with ${labels} at each beat paragraph start. Keep labels through rich, simplify and emotion fixes. The app strips them into metadata before printing. Follow every approved beat, all causal state changes, and its scene brief without introducing new events. EVERY sentence, including dialogue, has an explicit grammatical subject. Attribute dialogue to a selected named speaker. Include at least THREE quoted dialogue turns in this language and one concrete sensory detail per beat. ${lang === "en" && targetLevelId === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English is original writing at its E level, never a Korean translation. The approved plotContract is frozen; stateAfter describes the endpoint, not the start of every paragraph. ${targetOnly ? "This is the only writing pass: write directly at the frozen target level." : "Rich draft may use the package rich level for syntax; simplify/fix must return to the frozen target level without removing causal events."}${openings ? ` ${layoutRuleLine(input)}` : ""}`;
           const richDraft = role === "prose" && !targetOnly;
+          // Editor round: simplify, emotion fix and condense write the printed
+          // text, so a new draft writes them with the author (prose) model.
           return journal.call(
-            role,
+            role === "cheap" && hasEditorPolicy(input) ? "prose" : role,
             {
               ...request,
               system: `${canonicalWorldRules(input, services, !richDraft)}\n${request.system}\n${rules}`,
@@ -1767,7 +1778,7 @@ export async function generateQualityProse(
         if (plan.triggered.length) {
           // One cheap call per language, journal-recorded (a resume re-buys nothing).
           const response = await journal.call(
-            "cheap",
+            hasEditorPolicy(input) ? "prose" : "cheap",
             {
               ...lengthFitRequest(simplified, plan, input.specs[lang], lang),
               maxTokens: wrapTokens,

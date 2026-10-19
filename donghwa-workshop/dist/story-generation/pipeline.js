@@ -69,6 +69,14 @@ import {
 } from "./quality-adapter.js";
 import { inspectChildStory } from "./quality-gates.js";
 import {
+  hasEditorPolicy,
+  REVISION_SCHEMA,
+  revisionRules,
+  revisionData,
+  revisionFingerprint,
+  applyRevision,
+} from "./book-revision.js";
+import {
   OPENING_PAGE_COUNTS,
   LAYOUT_FIELDS,
   MODEL_CUES,
@@ -116,12 +124,17 @@ const tokenBudget = {
   enrichment: 3000,
   // R12 openings only: the app length-fit pass on the non-quality prose path.
   proseFit: 6000,
+  // Editor round: the whole-book read-through returns the pages it improves.
+  revision: 16000,
 };
 /**
  * maxTokens of a stage: the pre-R12 constant, or for an openings draft the
  * frozen-spec budget (opening-prose.js budgetFor) of the stages it sizes.
  */
 export function budgetFor(stage, input) {
+  // An openings book's read-through may return as much text as its pagination.
+  if (stage === "revision")
+    return Math.max(tokenBudget.revision, openingBudgetFor("pagination", input, 0));
   return openingBudgetFor(
     stage,
     input,
@@ -145,6 +158,7 @@ const temperature = {
   sceneBrief: 0.8,
   enrichment: 0.5,
   proseFit: 0.3,
+  revision: 0.4,
 };
 const SECRET_FIELD =
   /^(?:apiKey|api_key|authorization|credential|credentials|secret|password|pin|pinHash|ciphertext|salt|iv|accessToken|refreshToken|token|config)$/i;
@@ -297,7 +311,13 @@ function normalizeCatchphrasePolicy(policy) {
   };
 }
 /** What the model may see: the limit and omitted IDs, never the omitted phrases. */
-function modelVisibleInput(input) {
+function modelVisibleInput(source) {
+  // The editor policy is an app switch, not story data for the model.
+  let input = source;
+  if (input?.editorPolicy) {
+    const { editorPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -416,6 +436,7 @@ export function normalizeStoryInput(input = {}) {
         }
       : {}),
     ...(catchphrasePolicy ? { catchphrasePolicy } : {}),
+    ...(hasEditorPolicy(input) ? { editorPolicy: { version: 1 } } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -1433,6 +1454,10 @@ export async function enrichProse(prose, outline, source, options = {}) {
               nextParagraph: rows[index + 1] || null,
               sceneBrief: sceneBrief || null,
               nextBrief: nextBrief || null,
+              // Editor round: the whole story in this language as it reads now.
+              ...(hasEditorPolicy(input)
+                ? { storyInThisLanguage: rows.join("\n\n") }
+                : {}),
             },
           },
           PARAGRAPH_SCHEMA,
@@ -2558,7 +2583,7 @@ export async function rewriteStoryPage(
     sceneOnly ? "scene" : "page",
     input,
     {
-      rules: `${rules}\n${isOpeningsInput(input) ? openingsPaginationRules(input) : paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}`,
+      rules: `${rules}\n${isOpeningsInput(input) ? openingsPaginationRules(input) : paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}${hasEditorPolicy(input) ? CURRENT_BOOK_RULE : ""}`,
       data: {
         approvedOutline: outline,
         approvedOriginalProse: prose,
@@ -2570,6 +2595,8 @@ export async function rewriteStoryPage(
         previousPage: pagination.pages[index - 1] || null,
         nextPage: pagination.pages[index + 1] || null,
         violations,
+        // Editor round: every page as it reads now (earlier repairs included).
+        ...(hasEditorPolicy(input) ? { currentBook: bookPages(pagination) } : {}),
       },
     },
     sceneOnly ? SCENE_REWRITE_SCHEMA : PAGE_SCHEMA,
@@ -2595,6 +2622,124 @@ export async function rewriteStoryPage(
     }
     throw error;
   }
+}
+const CURRENT_BOOK_RULE =
+  "\ncurrentBook is every page of the book as it reads now. Read it before writing: keep this page consistent with the pages before and after it (names, props, facts, what the reader already knows) and avoid repeating their words and sentence openings.";
+const bookPages = (pagination) =>
+  (pagination.pages || []).map((page) => ({
+    pageNo: page.pageNo,
+    beatIndex: page.beatIndex,
+    textKo: page.textKo,
+    textEn: page.textEn,
+  }));
+/**
+ * Editor round: the whole-book read-through (book-revision.js) before the page
+ * coherence review, for new drafts (input.editorPolicy) when the caller asks
+ * (options.revise: FULL AUTO and the pro wizard's first pagination). A saved
+ * options.revisionCheckpoint replays the paid answer or skips a book that is
+ * already revised, so a resume never buys it twice. An unreadable answer keeps
+ * the pages; a network error is thrown like any other paid stage.
+ */
+async function reviseStoryBook(result, outline, input, options) {
+  const pagination = result.data,
+    source = revisionFingerprint(pagination),
+    saved = options.revisionCheckpoint?.version === 1 ? options.revisionCheckpoint : null;
+  if (saved?.resultFingerprint === source && saved.revision)
+    return {
+      ...result,
+      meta: { ...result.meta, revision: clone(saved.revision) },
+    };
+  const requests = [];
+  let response = null,
+    unreadable = false;
+  if (saved?.sourceFingerprint === source && saved.response)
+    response = clone(saved.response);
+  else {
+    notify(
+      options,
+      "revision",
+      "review",
+      "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+    );
+    try {
+      const reply = await complete(
+        "revision",
+        input,
+        {
+          rules: revisionRules(input, pagination.pages.length),
+          data: revisionData(
+            outline,
+            pagination,
+            sceneBriefRows(options.sceneBriefs),
+          ),
+        },
+        REVISION_SCHEMA,
+        {
+          ...options,
+          ...options.revisionOptions,
+          signal: options.signal,
+          onProgress: options.onProgress,
+        },
+      );
+      requests.push(reply);
+      response = reply.data;
+    } catch (error) {
+      if (!(error instanceof StoryValidationError)) throw error;
+      // Billed but unreadable: keep the pages, never stop the book for it.
+      requests.push({ usage: error.usage || {}, meta: error.meta || { requests: 1 } });
+      unreadable = true;
+    }
+  }
+  const briefs = sceneBriefRows(options.sceneBriefs);
+  const applied = unreadable
+    ? { pagination: clone(pagination), accepted: [], rejected: [], report: null }
+    : applyRevision(pagination, response, {
+        outline,
+        input,
+        inspect: (value) => inspectStory(outline, value, input),
+        richness: options.richness
+          ? (value, pageNo) =>
+              checkRichness(value, input, outline, briefs).pages?.find(
+                (row) => row.pageNo === pageNo,
+              )?.passed
+          : undefined,
+      });
+  const revision = {
+    version: 1,
+    ...(unreadable ? { skipped: true, reason: "unreadable" } : {}),
+    accepted: applied.accepted,
+    rejected: applied.rejected,
+    report: applied.report,
+  };
+  const next = {
+    data: applied.pagination,
+    usage: mergeStoryUsage([result, ...requests]),
+    meta: {
+      ...result.meta,
+      revision,
+      requests:
+        (Number(result.meta?.requests) || 0) +
+        (requests.length ? requestCount(requests) : 0),
+    },
+  };
+  const checkpoint = {
+    version: 1,
+    sourceFingerprint: source,
+    resultFingerprint: revisionFingerprint(applied.pagination),
+    ...(response ? { response: clone(response) } : {}),
+    revision: clone(revision),
+  };
+  if (options.onCheckpoint)
+    await options.onCheckpoint({
+      stage: "revision",
+      pagination: clone(applied.pagination),
+      checks: inspectStory(outline, applied.pagination, input),
+      revisionCheckpoint: checkpoint,
+      usage: next.usage,
+      meta: { stage: "pagination", requests: next.meta.requests },
+    });
+  abort(options.signal);
+  return next;
 }
 /** R12 openings: the rewritten entry's kind and its unchanged partner page ("" for page books). */
 function openingEntryRule(input, pagination, index) {
@@ -2841,28 +2986,82 @@ async function finishPaginationCoherence(
     }
     if (options.skipCoherence)
       return { ...result, meta: { ...result.meta, coherence: undefined } };
-    const reviewed = await reviewStoryCoherence(
-      outline,
-      prose,
-      result.data,
-      input,
-      {
+    let unrevised = null;
+    if (options.revise === true && hasEditorPolicy(input) && !demo(options)) {
+      unrevised = result;
+      result = await reviseStoryBook(result, outline, input, options);
+      if (!result.meta?.revision?.accepted?.length) unrevised = null;
+    }
+    const review = (base) =>
+      reviewStoryCoherence(outline, prose, base.data, input, {
         ...options,
         repair: options.coherenceRepair !== false,
         onCheckpoint: options.onCheckpoint
           ? (cp) =>
               options.onCheckpoint({
                 ...cp,
-                usage: mergeStoryUsage([result, { usage: cp.usage || {} }]),
+                usage: mergeStoryUsage([base, { usage: cp.usage || {} }]),
                 meta: {
                   ...cp.meta,
                   requests:
-                    requestCount([result]) + (Number(cp.meta?.requests) || 0),
+                    requestCount([base]) + (Number(cp.meta?.requests) || 0),
                 },
               })
           : undefined,
-      },
-    );
+      });
+    let reviewed;
+    try {
+      reviewed = await review(result);
+    } catch (error) {
+      // Editor round: the editor must never be why a book stops. When the page
+      // review still fails after its repairs on a revised book, the editor's
+      // pages are put back and the unrevised book is reviewed once more.
+      if (
+        !unrevised ||
+        error?.name !== "StoryValidationError" ||
+        error.stage !== "coherence"
+      )
+        throw error;
+      const revision = {
+        ...result.meta.revision,
+        rolledBack: true,
+        rolledBackPages: result.meta.revision.accepted.map((row) => row.pageNo),
+        accepted: [],
+      };
+      result = {
+        data: unrevised.data,
+        usage: mergeStoryUsage([result, { usage: error.usage || {} }]),
+        meta: {
+          ...unrevised.meta,
+          revision,
+          requests:
+            (Number(result.meta?.requests) || 0) +
+            (Number(error.meta?.requests) || 0),
+        },
+      };
+      if (options.onCheckpoint)
+        await options.onCheckpoint({
+          stage: "revision",
+          pagination: clone(result.data),
+          checks: inspectStory(outline, result.data, input),
+          revisionCheckpoint: {
+            version: 1,
+            sourceFingerprint: revisionFingerprint(result.data),
+            resultFingerprint: revisionFingerprint(result.data),
+            revision: clone(revision),
+          },
+          usage: result.usage,
+          meta: { stage: "pagination", requests: result.meta.requests },
+        });
+      abort(options.signal);
+      notify(
+        options,
+        "revision",
+        "rollback",
+        "다듬은 글이 사건 검사와 맞지 않아 원래 글로 다시 검사하고 있어요.",
+      );
+      reviewed = await review(result);
+    }
     const next = reviewed.data.pagination;
     return {
       data: next,

@@ -233,7 +233,7 @@ export function simpleTextModelOptions(engine, provider = {}) {
 }
 /** One Korean line under the simple select: which calls the choice drives. */
 export const SIMPLE_TEXT_MODEL_NOTE =
-  "고른 모델로 줄거리·글·쪽 나누기·검사를 써요. 다듬기·심사 같은 보조 호출은 기본 경제형 모델 그대로예요.";
+  "고른 모델로 줄거리·글·글 다듬기·쪽 나누기·검사·책 전체 퇴고를 써요. 심사 같은 보조 호출은 기본 경제형 모델 그대로예요.";
 /**
  * Apply the simple choice to a provider's saved settings (mutates `source`,
  * a textGeneration object). The main writing stages ('medium' and 'upper')

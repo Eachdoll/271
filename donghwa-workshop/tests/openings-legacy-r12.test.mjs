@@ -414,6 +414,8 @@ const REQUEST_SCENARIOS = {
 const ledger = meta => (meta?.qualityCheckpoint ? {contextFingerprint: meta.qualityCheckpoint.contextFingerprint, keys: Object.keys(meta.qualityCheckpoint.completed || {})} : null);
 async function requestScenario(M, name, s, book) {
   const state = seed(M, {quality: s.quality}), prepared = M.ui.inputFromWizard(state, {...WIZARDS[s.wizard], ...s.wizardPatch});
+  // An existing draft: saved before the editor round, so it carries no editor policy.
+  delete prepared.input.editorPolicy;
   const input = {...prepared.input, bookId: `legacy-${name}`};
   const scenario = {...s, normalized: M.pipeline.normalizeStoryInput(input), counts: {}};
   const log = [], engine = mockEngine(M, scenario, log), steps = [], options = {engine};
@@ -662,7 +664,11 @@ async function legacySnapshots(rootUrl, fixtures) {
 // ---------- the pins ----------
 const PINS = {
   levels: '1c6063ed356c55392fb2b3cf1f161c7f1060b804aacc4ad2fd7589f32c986188',
-  inputs: '3338fc4fab1299f563e0ecdb9e3aabc31d3b5d4b231de3251da0e79b1438c415',
+  // Re-pinned for the editor round (2026-10-19): a NEW draft's input gains
+  // editorPolicy {version: 1} (inputFromWizard). Nothing else changes; the
+  // 'requests' pin strips it to stand for an existing draft and is unchanged.
+  // 8087d69: 3338fc4f…c415.
+  inputs: '19904f801500d95834177ccdf6bdcd08898ca068483b3c0cfe071f354fcb7e67',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -677,15 +683,23 @@ const PINS = {
   // {googlePro:false, modelVariant:'default'} here). 5f8d2f7: 5675220d…37d4.
   // Hotfix 4 (scene-brief checks, see 'demo' above): the job's usage row for the
   // demo briefs call carries the new report shape. ebfcbf9: ebcf1dd9…b4ae.
-  fullAutoDemo: '12e9fc3d22afb2643f07b88ff815f20d229f74c19f2fba61c0edb6adb3c31e2b',
+  // Editor round: the new demo jobs' input carries editorPolicy (demo runs
+  // never buy the read-through). 8087d69: 12e9fc3d…e2b.
+  fullAutoDemo: '6f236d08e17d8144c515d4de1f72e468e26cd45d4c37026a516cd610a788cca8',
   scene: '73b3552a1245eb29e27d8d527c0c83ad256231e07eabbdb36fe0be2031493a91',
   print: '637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654',
   // Re-pinned at the merge: R13 (6ccc895) renames the ③ text-engine options
   // ('GPT · OpenAI') and adds the ③ model selects (generate-K1/K2-en only;
   // ④/⑤ are unchanged). 5f8d2f7: c78d5e07…11d7.
-  review: 'f17c0136ec21435d225548e11a283783485130a1e165a0e3b4c565a62758dfc3',
+  // Editor round: ③ before any job prices the read-through and the
+  // author-model simplify (글 만들기 $1.94 → $2.46 at 12 pages) and its model
+  // note names 글 다듬기·책 전체 퇴고. 8087d69: f17c0136…dfc3.
+  review: 'e1255f42b32a88615ec884510654bd2d4ae24072ad50c2db70e0fdac72f1959d',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
-  estimates: 'b11df8a86257773aca9daff43f2fecbd0ed2543ca356730460b3633ace60068f',
+  // Editor round: FULL AUTO/simple estimates for a NEW job include the
+  // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
+  // without `editor` and estimates of existing books are unchanged. 8087d69: b11df8a8…068f.
+  estimates: '6c157a3e898895146cc8bb35c7b9ef85173cdada10ba87ea73798ce1065b6d55',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

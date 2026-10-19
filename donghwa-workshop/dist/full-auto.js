@@ -67,6 +67,7 @@ import {
 } from "./story-generation/continuity.js";
 import { safeTopic } from "./engine.js";
 import { describeStoryError } from "./story-generation/schemas.js";
+import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
   active = (list) => (list || []).filter((item) => !item.archivedAt);
@@ -320,6 +321,8 @@ export function estimateFullAutoCost(
     text = estimateStoryTextCost({
       settings,
       pageCount: wizard.pageCount || 12,
+      // Editor round: new jobs (and jobs frozen with the policy) include it.
+      ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
       // R12: an openings wizard is sized from its v4 specs ({} for page books).
       ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
@@ -537,6 +540,7 @@ export function fullAutoPayload(job) {
     childGate: clone(job.childGate || null),
     pagination: clone(job.pagination),
     richnessCheck: clone(job.richnessCheck || null),
+    ...(job.revision ? { revision: clone(job.revision) } : {}),
     textSettings: clone(job.textSettings),
     textEngineId: job.demo ? "demo" : prose.engineId,
     textModelId: job.demo ? "demo" : prose.config.model,
@@ -918,6 +922,12 @@ export async function runFullAuto(
         : resolveStoryStageSettings(job.textSettings, "coherence"),
       sceneBriefs: job.sceneBriefs,
       briefRepairs: job.briefRepairs,
+      // Editor round: the whole-book read-through (new drafts only), once.
+      revise: true,
+      revisionOptions: job.demo
+        ? demoEngine()
+        : resolveStoryStageSettings(job.textSettings, "coherence"),
+      revisionCheckpoint: job.revisionCheckpoint,
       bookId: job.bookId,
       stylePreset: getStylePreset(job.stylePresetId),
       storyEnrichment: job.textSettings.storyEnrichment !== false,
@@ -935,6 +945,8 @@ export async function runFullAuto(
           else job.proseCoherence = clone(cp.coherence);
         }
         if (cp.sceneBriefs) job.sceneBriefs = clone(cp.sceneBriefs);
+        if (cp.revisionCheckpoint)
+          job.revisionCheckpoint = clone(cp.revisionCheckpoint);
         // Paid scene-brief repairs so far, per beat; a resumed run never restarts them.
         if (cp.briefRepairs && Object.keys(cp.briefRepairs).length)
           job.briefRepairs = clone(cp.briefRepairs);
@@ -1128,9 +1140,15 @@ export async function runFullAuto(
         prepared = ops.prepare(state, job.wizard, {
           layout: frozenLayout ? "openings" : "pages",
         });
+      // The editor policy is the job's own too: a job saved before the editor
+      // round never gains it here (its requests stay as they were).
+      const { editorPolicy: _fresh, ...preparedInput } = prepared.input;
       job.input = {
-        ...prepared.input,
+        ...preparedInput,
         ...(frozenLayout ? { layoutPolicy: clone(frozenLayout) } : {}),
+        ...(hasEditorPolicy(job.input)
+          ? { editorPolicy: clone(job.input.editorPolicy) }
+          : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),
@@ -1247,6 +1265,7 @@ export async function runFullAuto(
         job.childGate = r.meta?.childGate || null;
         if (r.meta?.approvedProse) job.prose = r.meta.approvedProse;
         if (r.meta?.proseCoherence) job.proseCoherence = r.meta.proseCoherence;
+        if (r.meta?.revision) job.revision = clone(r.meta.revision);
       },
     );
     // R12 openings: the opening structure and printed pages, not the entry count.

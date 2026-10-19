@@ -585,7 +585,11 @@ test('R13 a FULL AUTO job freezes the picture model for its sheets, backgrounds 
 /* ---------- 8. legacy byte identity ---------- */
 // Re-derive from the pre-R13 sources with PRE_R13_APP_ROOT=<checkout of 67be17e donghwa-workshop>.
 const PRE_R13_ENGINE_SHA256 = 'e2ce53ee825cc53496cc286babb2f923b6df04c209e471450af624afa00dc320';
-const PRE_R13_APP_SHA256 = '982f288a9dcfb053ef20b82dc94f96fc6d1523ed5c74cb2ec9002d337a7011a5';
+// Re-pinned for the editor round (2026-10-19): only estimateFullAutoCost of a
+// NEW job changed (the read-through and the author-model simplify, +1 request);
+// every request and model is the same. With PRE_R13_APP_ROOT the deepEqual
+// below now differs in those estimate fields only. 8087d69: 982f288a…11a5.
+const PRE_R13_APP_SHA256 = '19a416ceca2cfe318728aebb7ff234734ca6edf913dca66b857f670d1177ced5';
 test('R13 legacy: settings saved before R13 send byte-identical requests, models and estimates', async () => {
   const root = new URL('../', import.meta.url);
   const engine = await legacyEngineSnapshot(root), app = await legacyAppSnapshot(root);
