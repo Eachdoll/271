@@ -1285,7 +1285,8 @@ function updateBookResults() {
 }
 function libraryPage() {
   const books = filteredBooks(),
-    // Simple mode: stories being made come first, in simple words (R11).
+    // Simple mode: stories being made come first, in simple words (R11);
+    // pro runs with no book stay on the pro list below the books.
     simpleJobs = !childMode && uiMode === "simple";
   let cards = books.map(bookCard).join("");
   if (tab === "series") {
@@ -1317,7 +1318,7 @@ function libraryPage() {
           (state.daily[localDay()] || 0) >= state.settings.dailyLimit
         ? '<aside class="notice paper-book-notice"><h3>이제 종이책으로 읽자</h3><p>오늘은 화면으로 충분히 만났어요. 종이책에서 다음 모험을 이어가요.</p></aside>'
         : ""
-  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode && !simpleJobs ? renderFullAutoJobs(state) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY, state) / 1024 / 1024).toFixed(2)} MB${localStorage.getItem(KEY) === null ? " (저장 전 추정)" : ""} · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
+  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state, { rest: simpleJobs }) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY, state) / 1024 / 1024).toFixed(2)} MB${localStorage.getItem(KEY) === null ? " (저장 전 추정)" : ""} · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
 }
 const managementButton = (label, action, id, kind = "outline") =>
   `<button type="button" class="btn btn-${kind} btn-small" data-management-action="${action}" data-id="${esc(id)}">${label}</button>`;
@@ -2529,7 +2530,8 @@ async function approveDraft() {
 function pageList(indexes) {
   return indexes.map((i) => i + 1).join("·") + "쪽";
 }
-function discardDraft(next) {
+/** Leave the open draft through its guard; onCancel runs when the parent stays (simple screen). */
+function discardDraft(next, { onCancel = null } = {}) {
   if (simpleDraftOpen()) {
     const editing = !!wizard?.simpleEditing,
       // A page or run drawing for this story goes on after the parent leaves.
@@ -2537,7 +2539,17 @@ function discardDraft(next) {
     showModal(
       `${modalHeader("검수 중인 이야기는 보관돼요")}<p class="modal-intro">만든 글과 그림은 ‘제작 중인 이야기’에 남아 있어요. 다시 ‘이야기 만들기’에서 이어서 검수할 수 있어요.${drawing ? "<br>지금 그리는 그림은 나가도 계속 만들어 이 이야기에 보관해요." : ""}${editing ? "<br><strong>고치던 이 쪽 글은 저장되지 않아요.</strong>" : ""}</p><div class="modal-actions">${btn("계속 검수하기", "close-modal", "outline")}<button class="btn btn-primary" id="discard-confirm">나가기</button></div>`,
     );
+    let leaving = false;
+    if (onCancel)
+      document.addEventListener(
+        "donghwa:modal-closed",
+        () => {
+          if (!leaving) onCancel();
+        },
+        { once: true },
+      );
     document.querySelector("#discard-confirm").onclick = () => {
+      leaving = true;
       draft = null;
       wizard = null;
       closeModal();
@@ -3681,6 +3693,19 @@ const simpleCtx = {
   checkBook: (book) => checkBookAtLevel(book, { rewrite: false }),
   approveBook: () => approveDraft(),
   openCredentialSettings,
+  // Browser Back past the simple screen's first entry: the same guarded way
+  // as 책장으로 (the kept dialog while a book is under review). Leaving inside
+  // the app keeps runs and drawings going; onStay runs if the parent stays.
+  leaveToLibrary: (onStay) =>
+    discardDraft(
+      () => {
+        view = "library";
+        activeBook = null;
+        render();
+        window.scrollTo(0, 0);
+      },
+      { onCancel: onStay },
+    ),
 };
 configureSimpleCreate(simpleCtx);
 configureStoryUI({

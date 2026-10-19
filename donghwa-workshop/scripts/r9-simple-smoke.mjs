@@ -9,6 +9,9 @@
 // R11: 브라우저 뒤로 가기(②→①→②), 단계 표시로 ④→①→③→④(같은 쪽·작업 그대로), 아래 버튼 줄
 // 고정, 쉬운 책장의 '제작 중인 이야기', 다시 연 ④의 마지막 쪽, 데모 '이 주제로 새로 만들기'(무료).
 // 책장 카드의 실행형 '이어서 만들기'는 프로 모드 카드로 확인합니다(쉬운 카드는 열기만 해요).
+// R11 리뷰 수정: 첫 ④에서 뒤로 가면 ③, 글을 고치는 중 뒤로 가기 세 번은 앱에 그대로 남고,
+// 새로 만들기 뒤 뒤로 가기는 엉뚱한 알림 없이 지나가며, 책장에서 다시 연 이야기의 뒤로 가기는
+// 실행 중인 글 만들기를 끊지 않고 앱 안에서 책장으로 갑니다.
 // 사용: (cd dist && npx http-server -p 4180 -s .) & node scripts/r9-simple-smoke.mjs [기본주소] [출력폴더]
 // 환경변수: PLAYWRIGHT_MODULE(기본 playwright), CHROMIUM_PATH(선택, 브라우저 실행 파일)
 import fs from "node:fs";
@@ -114,6 +117,27 @@ async function run(width) {
       .locator("#toast")
       .textContent()
       .catch(() => "")) || "";
+  /** Browser Back/Forward, then let the screen settle. */
+  const historyMove = async (delta) => {
+    await page.evaluate((d) => history.go(d), delta);
+    await page.waitForTimeout(700);
+  };
+  /** Clear the toast, so a toast after a move is the move's own. */
+  const clearToast = () =>
+    page.evaluate(() => {
+      const t = document.querySelector("#toast");
+      if (t) {
+        t.textContent = "";
+        t.classList.remove("visible");
+      }
+    });
+  const shownToast = () =>
+    page.evaluate(() =>
+      document.querySelector("#toast")?.classList.contains("visible")
+        ? document.querySelector("#toast").textContent
+        : "",
+    );
+  const inApp = () => page.url().startsWith(BASE);
   const idle = async (timeout = 90000) => {
     await page.waitForFunction(
       () =>
@@ -433,6 +457,25 @@ async function run(width) {
       timeout: 90000,
     });
     await page.waitForTimeout(800);
+    // R11 review fix: the first ④ after the text run has its own entry, so
+    // Back returns to ③ (not to the frozen ②), and Forward comes back to ④.
+    {
+      const firstReview = {};
+      await historyMove(-1);
+      firstReview.afterBack = await step();
+      await historyMove(1);
+      firstReview.afterForward = await step();
+      firstReview.inApp = inApp();
+      result.steps.backFromFirstReview = firstReview;
+      if (
+        firstReview.afterBack !== 3 ||
+        firstReview.afterForward !== 4 ||
+        !firstReview.inApp
+      )
+        problem(
+          `처음 열린 ④에서 뒤로 가기가 ③으로 가지 않아요: ${JSON.stringify(firstReview)}`,
+        );
+    }
     // ④ review
     const pageKo = await page.locator("#page-ko").inputValue();
     if (!pageKo.trim()) problem("④ 첫 쪽 한글 글이 비어 있어요.");
@@ -446,6 +489,48 @@ async function run(width) {
     await shot("04-review");
     await click('[data-simple-action="edit-text"]');
     await page.fill("#page-ko", pageKo.trim() + " 유하가 활짝 웃었어요.");
+    // R11 review fix: Back while the page text is being edited is refused
+    // and returns to the same entry, so three Backs never leave the app and
+    // the edit stays.
+    {
+      const editBacks = [];
+      // A mark on the entry the parent is on: each refused Back must come back to it.
+      await page.evaluate(() =>
+        history.replaceState({ ...history.state, smokeMark: "edit" }, ""),
+      );
+      for (let n = 1; n <= 3; n++) {
+        await clearToast();
+        await historyMove(-1);
+        editBacks.push({
+          inApp: inApp(),
+          sameEntry: await page
+            .evaluate(() => history.state?.smokeMark === "edit")
+            .catch(() => false),
+          step: await step(),
+          edit: (
+            await page
+              .locator("#page-ko")
+              .inputValue()
+              .catch(() => "")
+          ).includes("유하가 활짝 웃었어요."),
+          toast: await shownToast(),
+        });
+      }
+      result.steps.backWhileEditing = editBacks;
+      if (
+        editBacks.some(
+          (b) =>
+            !b.inApp ||
+            !b.sameEntry ||
+            b.step !== 4 ||
+            !b.edit ||
+            !/고치던 글을 저장하거나 취소해 주세요/.test(b.toast),
+        )
+      )
+        problem(
+          `글을 고치는 중 뒤로 가기 세 번에 앱을 떠나거나 고치던 글을 잃었어요: ${JSON.stringify(editBacks)}`,
+        );
+    }
     await click('[data-simple-action="save-text"]');
     await confirmIfAsked();
     const savedKo = await page.locator("#page-ko").inputValue();
@@ -1124,6 +1209,14 @@ async function run(width) {
       fork.same = (await storedJob(forkJob)) === before;
       fork.newJobs = (await jobCount()) - jobs;
       await shot("11-forked");
+      // R11 review fix: Back after 새로 만들기 passes over the old story's
+      // entries without a word (no '③에서 글을 먼저…' toast) and stays in the app.
+      await clearToast();
+      await historyMove(-1);
+      await page.waitForTimeout(600);
+      fork.backToast = await shownToast();
+      fork.backInApp = inApp();
+      fork.backStep = await step();
       await click('button[data-action="nav"][data-view="library"]');
       fork.leaveDialog = await page
         .locator("#discard-confirm")
@@ -1149,6 +1242,105 @@ async function run(width) {
         fork.listed !== 1
       )
         problem(`‘이 주제로 새로 만들기’가 이상해요: ${JSON.stringify(fork)}`);
+      if (fork.backToast || !fork.backInApp)
+        problem(
+          `새로 만들기 뒤 뒤로 가기가 엉뚱한 알림을 띄우거나 앱을 떠났어요: ${JSON.stringify(fork)}`,
+        );
+    }
+    // R11 review fix: a story reopened from the library card at ③. Back while
+    // its text run is live leaves inside the app (the guarded way to the
+    // library), so the run goes on and holds at the text. All free (demo).
+    {
+      const reopen = {};
+      const topic = "바닷가에서 조개 줍는 날";
+      await click('button[data-action="nav"][data-view="create"]');
+      reopen.start = await step();
+      if (reopen.start === 1 && (await page.locator("#topic").count()))
+        await page.fill("#topic", topic);
+      await click('[data-simple-action="next"]');
+      await click('[data-simple-action="next"]');
+      await page.evaluate(() => {
+        window.__smokeLockDelay = 4000;
+      });
+      await click('[data-simple-action="start-demo"]');
+      await click('[data-simple-action="stop"]');
+      await page.waitForSelector('[data-simple-action="retry"]', {
+        timeout: 20000,
+      });
+      const stopped = await page.evaluate(
+        (t) =>
+          Object.values(
+            JSON.parse(localStorage.getItem("donghwa-workshop-v1"))
+              .fullAutoJobs || {},
+          )
+            .filter((j) => j.wizard?.topic === t && !j.book)
+            .sort((a, b) =>
+              String(b.updatedAt).localeCompare(String(a.updatedAt)),
+            )[0] || null,
+        topic,
+      );
+      reopen.stoppedStatus = stopped?.status || null;
+      await click('button[data-action="nav"][data-view="library"]');
+      if (
+        await page
+          .locator("#discard-confirm")
+          .isVisible()
+          .catch(() => false)
+      )
+        await click("#discard-confirm");
+      await click(
+        `[data-full-auto-action="simple-open"][data-id="${stopped?.id}"]`,
+      );
+      reopen.opened = await step();
+      await page.evaluate(() => {
+        window.__smokeLockDelay = 6000;
+      });
+      await click('[data-simple-action="retry"]');
+      reopen.live = await page
+        .locator('[data-simple-action="stop"]')
+        .isVisible()
+        .catch(() => false);
+      await historyMove(-1);
+      reopen.inApp = inApp();
+      reopen.afterBack = await step();
+      reopen.library = await page.locator(".shelf-header").count();
+      await page.evaluate(() => {
+        window.__smokeLockDelay = 0;
+      });
+      reopen.finished = await page
+        .waitForFunction(
+          (id) =>
+            ["text-review", "failed", "paused"].includes(
+              JSON.parse(localStorage.getItem("donghwa-workshop-v1"))
+                .fullAutoJobs?.[id]?.status,
+            ),
+          stopped?.id,
+          { timeout: 60000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      reopen.status = (await jobPage(stopped?.id, 0)).status;
+      reopen.book = !!(await page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem("donghwa-workshop-v1"))
+            .fullAutoJobs?.[id]?.book,
+        stopped?.id,
+      ));
+      result.steps.reopenBackLive = reopen;
+      await shot("12-reopened-back");
+      if (
+        reopen.stoppedStatus !== "paused" ||
+        reopen.opened !== 3 ||
+        !reopen.live ||
+        !reopen.inApp ||
+        reopen.afterBack !== 0 ||
+        !reopen.library ||
+        reopen.status !== "text-review" ||
+        !reopen.book
+      )
+        problem(
+          `다시 연 이야기의 뒤로 가기가 앱을 떠나거나 글 만들기를 끊었어요: ${JSON.stringify(reopen)}`,
+        );
     }
   } catch (error) {
     problem("스크립트 오류: " + error.message);

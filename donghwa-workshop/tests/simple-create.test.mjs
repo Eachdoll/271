@@ -249,7 +249,7 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
 test('the shell precaches the simple create screen (cache v33 or later)', async () => {
   const {readFileSync} = await import('node:fs');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 33);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 34);
   assert.ok(sw.includes('"./simple-create.js"'));
 });
 
@@ -438,9 +438,12 @@ test('R11 step bar: five wrappers, buttons only on open steps other than the cur
   }
   assert.match(first, /aria-label="2단계 재료 고르기로 가기"/);
   assert.match(first, /aria-label="3단계 생성으로 가기"/);
-  assert.match(first, /role="listitem" aria-current="step"><b>1<\/b>주제 넣기/);
+  assert.match(first, /role="listitem" aria-current="step" tabindex="-1"><b>1<\/b>주제 넣기/);
   assert.match(first, /aria-disabled="true" title="③에서 글을 먼저 만들어 주세요\."><b>4<\/b>/);
   assert.ok(stepButtons(first).length <= 12);
+  // Focus lands on the current step after a step change: only it is focusable from script.
+  assert.equal((first.match(/tabindex="-1"/g) || []).length, 1);
+  assert.match(first, /<div class="step active" role="listitem" aria-current="step" tabindex="-1">/);
   // A held story on ④: every other step is a link; ①–③ keep ✓.
   const job = heldJob(state);
   const w4 = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 4, simpleJobId: job.id});
@@ -448,11 +451,11 @@ test('R11 step bar: five wrappers, buttons only on open steps other than the cur
   assert.deepEqual(linkSteps(review), [1, 2, 3, 5]);
   assert.match(review, /data-step="1"[^>]*><b>✓<\/b>주제 넣기/);
   assert.match(review, /data-step="3"[^>]*><b>✓<\/b>생성/);
-  assert.match(review, /aria-current="step"><b>4<\/b>/);
+  assert.match(review, /aria-current="step" tabindex="-1"><b>4<\/b>/);
   assert.ok(stepButtons(review).length <= 12, `④: ${stepButtons(review).length}`);
   // Going back from ④ keeps the ✓ on ①–③ (current step shows its number).
   const back = renderSimpleCreate(ctxFor(state, {...w4, simpleStep: 1}, job.book));
-  assert.match(back, /aria-current="step"><b>1<\/b>/);
+  assert.match(back, /aria-current="step" tabindex="-1"><b>1<\/b>/);
   assert.match(back, /data-step="2"[^>]*><b>✓<\/b>/);
   assert.match(back, /data-step="3"[^>]*><b>✓<\/b>/);
   // Editing a page: no step link at all.
@@ -520,7 +523,11 @@ test('R11 ③ with text: 글이 완성됐어요, 이전 and 검수로 가기, no
 test('R11 simple library: stories being made in simple words, replaced stories listed once; pro cards unchanged', () => {
   const {state} = setup();
   state.fullAutoJobs = {
-    run: {id: 'run', status: 'running', input: {topic: '달에 놀러 간 날'}, updatedAt: '5'},
+    run: {id: 'run', status: 'running', stopBefore: 'text', wizard: {simpleFlow: true}, input: {topic: '달에 놀러 간 날'}, updatedAt: '5'},
+    // A pro FULL AUTO run stopped before its text: no hold, no book.
+    pro: {id: 'pro', status: 'paused', stopBefore: null, wizard: {topic: '프로 모드 우주 소풍'}, input: {topic: '프로 모드 우주 소풍'}, updatedAt: '6'},
+    // A pro run that already has its book (④ asks before each picture).
+    probook: {id: 'probook', status: 'paused', stopBefore: null, book: {...book('probook'), title: '프로 모드 숲 그림책', pages: [{imageAssetId: 'a'}, {}]}, updatedAt: '0'},
     held: {id: 'held', status: 'text-review', book: book('held'), updatedAt: '4'},
     drawn: {id: 'drawn', status: 'pages-ready', book: {...book('drawn'), title: '바닷가 모래성', pages: [{imageAssetId: 'a'}, {imageAssetId: 'b'}, {}]}, updatedAt: '3'},
     old: {id: 'old', status: 'text-review', book: {...book('old'), title: '예전 이야기'}, simpleReplacedBy: 'held', updatedAt: '2'},
@@ -534,15 +541,30 @@ test('R11 simple library: stories being made in simple words, replaced stories l
   assert.match(simple, /role-tag">글 검수 중<\/span><strong>숲 소풍/);
   assert.match(simple, /role-tag">그림 2\/3<\/span><strong>바닷가 모래성/);
   assert.doesNotMatch(simple, /예전 이야기/, 'a story replaced by 이야기 전체 다시 만들기 is not listed twice');
-  assert.equal((simple.match(/data-full-auto-action="simple-open"/g) || []).length, 3);
-  assert.equal((simple.match(/>이어서 만들기</g) || []).length, 3);
+  assert.match(simple, /role-tag">그림 1\/2<\/span><strong>프로 모드 숲 그림책/, 'a pro run with its book opens in ④');
+  assert.doesNotMatch(simple, /프로 모드 우주 소풍/, 'a pro run with no book never opens in ③ (its resume is the whole pipeline)');
+  assert.equal((simple.match(/data-full-auto-action="simple-open"/g) || []).length, 4);
+  assert.equal((simple.match(/>이어서 만들기</g) || []).length, 4);
   assert.equal((simple.match(/data-full-auto-action="pause"/g) || []).length, 1, '중지 only on the running story');
   assert.doesNotMatch(simple, /data-full-auto-action="(resume|review|simple-review|status)"/, 'opening never runs anything');
   // Pro mode keeps its cards exactly.
   const pro = renderFullAutoJobs(state);
   assert.match(pro, /FULL AUTO · /);
   assert.match(pro, /예전 이야기/);
+  assert.match(pro, /프로 모드 우주 소풍/);
+  assert.match(pro, /id="full-auto-jobs"/);
   assert.doesNotMatch(pro, /simple-open|data-simple="true"/);
+  // Simple mode lists the rest (pro runs with no book) on the pro list below the books.
+  const rest = renderFullAutoJobs(state, {rest: true});
+  assert.match(rest, /id="full-auto-jobs-rest" data-rest="true"/);
+  assert.match(rest, /FULL AUTO · 대기<\/span><strong>프로 모드 우주 소풍/);
+  assert.equal((rest.match(/data-auto-job=/g) || []).length, 1, 'only the job the simple panel does not open');
+  assert.doesNotMatch(rest, /simple-open/);
+  // Every unfinished job is on exactly one of the two lists, except a replaced simple story.
+  for (const id of ['run', 'held', 'drawn', 'pro', 'probook'])
+    assert.equal([simple, rest].filter(html => html.includes(`data-auto-job="${id}"`)).length, 1, id);
+  state.fullAutoJobs = {probook: state.fullAutoJobs.probook};
+  assert.equal(renderFullAutoJobs(state, {rest: true}), '', 'no empty pro list');
 });
 
 test('R11 app wiring: the kept dialog for a draft on ①–③, the drawing note, the simple library on top, one popstate listener', async () => {
@@ -550,13 +572,19 @@ test('R11 app wiring: the kept dialog for a draft on ①–③, the drawing note
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
   const open = app.slice(app.indexOf('function simpleDraftOpen() {'), app.indexOf('function uiModeButton('));
   assert.match(open, /!!draft &&\s*\(Number\(wizard\?\.simpleStep\) >= 4 \|\| !!wizard\?\.simpleJobId\)/);
-  const discard = app.slice(app.indexOf('function discardDraft(next) {'), app.indexOf('let readerTouch'));
+  const discard = app.slice(app.indexOf('function discardDraft(next, { onCancel = null } = {}) {'), app.indexOf('let readerTouch'));
+  assert.ok(discard.length > 100);
+  // Browser Back past the simple screen leaves through this guard and knows when the parent stays.
+  assert.match(discard, /addEventListener\(\s*"donghwa:modal-closed",\s*\(\) => \{\s*if \(!leaving\) onCancel\(\);/);
+  assert.match(discard, /\.onclick = \(\) => \{\s*leaving = true;/);
+  const leave = app.slice(app.indexOf('leaveToLibrary: (onStay) =>'), app.indexOf('configureSimpleCreate(simpleCtx);'));
+  assert.match(leave, /discardDraft\(\s*\(\) => \{\s*view = "library";[\s\S]*\{ onCancel: onStay \}/);
   assert.match(discard, /drawing = simpleDrawingInFlight\(\)/);
   assert.match(discard, /지금 그리는 그림은 나가도 계속 만들어 이 이야기에 보관해요\./);
   const library = app.slice(app.indexOf('function libraryPage() {'), app.indexOf('const managementButton'));
   assert.match(library, /simpleJobs = !childMode && uiMode === "simple"/);
   assert.ok(library.indexOf('renderFullAutoJobs(state, { simple: true })') < library.indexOf('class="shelf-header"'), 'above the books');
-  assert.match(library, /!childMode && !simpleJobs \? renderFullAutoJobs\(state\) : ""/);
+  assert.match(library, /!childMode \? renderFullAutoJobs\(state, \{ rest: simpleJobs \}\) : ""/);
   assert.doesNotMatch(app, /pushState|addEventListener\("popstate"/, 'history entries come from the simple screen only');
   const simple = readFileSync(new URL('../dist/simple-create.js', import.meta.url), 'utf8');
   assert.equal((simple.match(/addEventListener\?\.\("popstate"/g) || []).length, 1);

@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview} from '../dist/full-auto-ui.js';
+import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview, renderFullAutoJobs} from '../dist/full-auto-ui.js';
+import {createFullAutoJob} from '../dist/full-auto.js';
 import {configureStoryUI, renderStoryDrafts} from '../dist/story-generation/ui.js';
 import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
 import {
@@ -19,6 +20,12 @@ import {
 const listeners = {};
 let modal = null, fields = {};
 const button = () => ({onclick: null});
+/**
+ * What the stub page shows: `simple` is true once the simple create screen is
+ * on the page (a later render is not its first), and `focus` records where
+ * the screen moved keyboard focus (the current step of the step bar).
+ */
+const screen = {simple: false, focus: []};
 globalThis.document = {
   addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
   removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter(f => f !== fn); },
@@ -26,6 +33,9 @@ globalThis.document = {
   querySelector(selector) {
     if (modal && /^#simple-(confirm|choice)-/.test(selector)) return (modal.buttons[selector] ||= button());
     if (selector in fields) return {value: fields[selector], textContent: '', focus() {}};
+    if (selector === '.simple-create') return screen.simple ? {} : null;
+    if (selector === '.simple-steps [aria-current="step"]')
+      return screen.simple ? {focus: options => screen.focus.push({step: wizard?.simpleStep, options})} : null;
     return null;
   },
   querySelectorAll() { return []; },
@@ -1167,70 +1177,354 @@ test('R11 a story with a job ignores topic, idea, format, friend, place and form
   }
 });
 
-test('R11 browser Back/Forward moves between steps with history entries and never starts anything', async () => {
-  reset();
-  const href = 'http://127.0.0.1:4300/#settings=simple';
-  const history = {
-    state: null, calls: [],
-    pushState(s, title, url) { this.calls.push(['push', s.donghwaSimpleStep, url]); this.state = s; },
-    replaceState(s, title, url) { this.calls.push(['replace', s.donghwaSimpleStep, url]); this.state = s; },
+/* ---------- R11 browser history: a tab's session history as a browser keeps it ---------- */
+const HREF = 'http://127.0.0.1:4300/#settings=simple';
+/**
+ * entries[0] is the page before the app (going back there unloads the app:
+ * `left`), entries[1] the library's own entry. go() moves later and fires
+ * popstate in the same step, as browsers do (history.state changes only
+ * then); push drops the forward entries.
+ */
+function fakeHistory() {
+  const h = {
+    entries: ['the page before the app', null], index: 1, calls: [], pending: 0, now: false,
+    get state() { return h.entries[h.index]; },
+    get left() { return h.index < 1; },
+    pushState(entry, title, url) { h.calls.push(['push', entry?.donghwaSimpleStep, url]); h.entries.splice(h.index + 1, Infinity, structuredClone(entry)); h.index++; },
+    replaceState(entry, title, url) { h.calls.push(['replace', entry?.donghwaSimpleStep, url]); h.entries[h.index] = structuredClone(entry); },
+    go(delta) {
+      h.calls.push(['go', delta]);
+      const traverse = () => {
+        const next = h.index + delta;
+        if (next < 0 || next >= h.entries.length) return;
+        h.index = next;
+        if (!h.left) onSimplePopState({state: h.state});
+      };
+      // `now`: the parent's Back lands while a run is waiting on the network.
+      if (h.now) return traverse();
+      h.pending++;
+      setImmediate(() => { h.pending--; traverse(); });
+    },
+    back() { h.go(-1); },
+    forward() { h.go(1); },
   };
-  globalThis.history = history;
-  globalThis.location = {href};
-  // As in a browser: the entry Back/Forward lands on is history.state when popstate fires.
-  const pop = state => { history.state = state; onSimplePopState({state}); };
-  const isView = ctx.isSimpleView;
+  return h;
+}
+/**
+ * Run with a browser history, the create view shown and the app's guarded way
+ * to the library: like discardDraft, the kept dialog while a book is under
+ * review (`stay` / `go` answer it), otherwise straight to the library.
+ */
+async function withHistory(fn) {
+  const h = fakeHistory(), saved = {isSimpleView: ctx.isSimpleView, render: ctx.render, setView: ctx.setView};
+  let view = 'create';
+  const leaves = [];
+  globalThis.history = h;
+  globalThis.location = {href: HREF};
+  ctx.isSimpleView = () => view === 'create';
+  ctx.setView = next => { view = next; };
+  ctx.render = () => {
+    const html = view === 'create' ? renderSimpleCreate(ctx) : '';
+    screen.simple = view === 'create';
+    return html;
+  };
+  ctx.leaveToLibrary = onStay => {
+    const toLibrary = () => { view = 'library'; screen.simple = false; };
+    if (draft && (wizard.simpleStep >= 4 || wizard.simpleJobId)) {
+      leaves.push({dialog: true, stay: () => onStay(), go: () => { draft = null; wizard = null; toLibrary(); }});
+      return;
+    }
+    leaves.push({dialog: false});
+    toLibrary();
+  };
+  screen.simple = false;
+  screen.focus.length = 0;
   try {
+    await fn({h, leaves, view: () => view, settle: () => until(() => h.pending === 0, 'popstate')});
+  } finally {
+    Object.assign(ctx, saved);
+    delete ctx.leaveToLibrary;
+    delete globalThis.history;
+    delete globalThis.location;
+    screen.simple = false;
+    screen.focus.length = 0;
+  }
+}
+
+test('R11 browser Back/Forward: indexed entries of the open story move between steps and never start anything', async () => {
+  reset();
+  await withHistory(async ({h, settle}) => {
     const job = await finishedJob('꼬마 소방관의 하루');
     const before = jobSnapshot(job), jobs = Object.keys(state.fullAutoJobs).length;
+    toasts.length = 0;
     assert.equal(await openSimpleJob(ctx, job.id), true);
-    assert.deepEqual(history.calls.at(-1), ['replace', 4, href], 'the first render names its step');
-    history.calls.length = 0;
+    // Opened from the library: an entry of its own on top of the library's.
+    assert.deepEqual(h.calls, [['push', 4, HREF]]);
+    assert.equal(h.entries[1], null, 'the library keeps its entry');
+    const first = h.entries[2];
+    assert.equal(first.story, job.id);
+    assert.ok(Number.isInteger(first.i));
+    h.calls.length = 0;
     await goto(2);
     await click('next');
-    assert.deepEqual(history.calls, [['push', 2, href], ['push', 3, href]], 'one entry per step change, same URL');
-    history.calls.length = 0;
-    // Back: ③ → ②, then Forward: ② → ③, then a jump back to ④.
-    pop({donghwaSimpleStep: 2});
+    assert.deepEqual(h.calls, [['push', 2, HREF], ['push', 3, HREF]], 'one entry per step change, same URL');
+    assert.deepEqual(h.entries.slice(2).map(e => [e.donghwaSimpleStep, e.i - first.i, e.story]), [[4, 0, job.id], [2, 1, job.id], [3, 2, job.id]]);
+    h.calls.length = 0;
+    screen.focus.length = 0;
+    h.back(); await settle();
     assert.equal(wizard.simpleStep, 2);
-    pop({donghwaSimpleStep: 3});
+    h.forward(); await settle();
     assert.equal(wizard.simpleStep, 3);
-    pop({donghwaSimpleStep: 4});
+    h.back(); await settle();
+    h.back(); await settle();
     assert.equal(wizard.simpleStep, 4);
     assert.equal(draft, job.book);
-    assert.deepEqual(history.calls, [], 'Back/Forward adds no entries');
-    // Other entries and other screens are left to the app.
-    onSimplePopState({state: null});
-    onSimplePopState({state: {donghwaSimpleStep: 9}});
-    ctx.isSimpleView = () => false;
-    onSimplePopState({state: {donghwaSimpleStep: 1}});
-    ctx.isSimpleView = isView;
-    assert.equal(wizard.simpleStep, 4);
-    assert.deepEqual(history.calls, []);
-    // A step that cannot be opened: the parent stays and the entry names the current step again.
-    wizard.simpleEditing = true;
-    pop({donghwaSimpleStep: 1});
-    assert.equal(wizard.simpleStep, 4);
-    assert.deepEqual(history.calls, [['replace', 4, href]]);
-    wizard.simpleEditing = false;
+    assert.deepEqual(h.calls.filter(call => call[0] !== 'go'), [], 'Back/Forward adds or rewrites no entry');
+    assert.deepEqual(screen.focus.map(f => f.step), [2, 3, 2, 4], 'focus follows every history move');
     assert.equal(jobSnapshot(job), before);
     assert.equal(Object.keys(state.fullAutoJobs).length, jobs);
     assert.equal(modal, null);
     assert.deepEqual(drawn, []);
-    // An unbound ② whose ③ is closed: Back/Forward to ③ stays on ②.
-    wizard = freshWizard({simpleStep: 2, topic: '비 오는 날 숲 산책', allowNew: false, simplePicksTouched: true, backgroundIds: ['home']});
-    draft = null;
-    renderSimpleCreate(ctx);
-    history.calls.length = 0;
-    pop({donghwaSimpleStep: 3});
-    assert.equal(wizard.simpleStep, 2);
-    assert.deepEqual(history.calls, [['replace', 2, href]]);
+    assert.deepEqual(toasts, []);
     assert.equal(networkCalls, 0);
+  });
+});
+
+test('R11 Back refused while a page edit is open goes back to the same entry: three Backs stay in the app', async () => {
+  reset();
+  await withHistory(async ({h, settle}) => {
+    const job = await finishedJob('우산 속에 들어온 작은 손님');
+    assert.equal(await openSimpleJob(ctx, job.id), true);
+    await goto(3);
+    await goto(4);
+    wizard.simpleEditing = true;
+    const entries = JSON.stringify(h.entries), at = h.index;
+    let renders = 0;
+    const render = ctx.render;
+    ctx.render = () => { renders++; return render(); };
+    try {
+      for (let n = 1; n <= 3; n++) {
+        toasts.length = 0;
+        h.back(); await settle();
+        assert.equal(h.left, false, `Back ${n} stays in the app`);
+        assert.equal(h.index, at, `Back ${n} returns to the entry the parent was on`);
+        assert.equal(wizard.simpleStep, 4);
+        assert.equal(wizard.simpleEditing, true, 'the edit is still open');
+        assert.deepEqual(toasts.map(t => t.message), [STEP_EDITING]);
+      }
+    } finally {
+      ctx.render = render;
+    }
+    assert.equal(JSON.stringify(h.entries), entries, 'no entry was rewritten');
+    assert.equal(renders, 0, 'the saved text was never drawn over the edit');
+    wizard.simpleEditing = false;
+    h.back(); await settle();
+    assert.equal(wizard.simpleStep, 3, 'with the edit closed, Back moves again');
+  });
+});
+
+test('R11 Back from a reopened story leaves through the app\'s guarded way to the library; a live text run goes on', async () => {
+  reset();
+  await withHistory(async ({h, leaves, view, settle}) => {
+    // A simple story stopped before its text, reopened from the library card.
+    const job = createFullAutoJob(state, {characterIds: ['yuha'], backgroundIds: [], topic: '바람개비가 멈춘 날', pageCount: 8, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'dual', simpleFlow: true}, {demo: true, stopBefore: 'text', planMode: 'selection'});
+    job.status = 'paused';
+    save();
+    assert.equal(await openSimpleJob(ctx, job.id), true);
+    assert.equal(wizard.simpleStep, 3);
+    assert.equal(h.entries[1], null, 'the library keeps its entry');
+    assert.equal(h.state.donghwaSimpleStep, 3);
+    // 이어서 만들기 on ③, and Back while the text run is live.
+    let backed = false;
+    onSave = () => {
+      if (backed || job.status !== 'running') return;
+      backed = true;
+      h.now = true;
+      h.back();
+      h.now = false;
+    };
+    await click('retry');
+    onSave = null;
+    await settle();
+    assert.ok(backed);
+    assert.equal(h.left, false, 'the app was not unloaded');
+    assert.deepEqual(leaves.map(l => l.dialog), [false], 'no book under review: straight to the library');
+    assert.equal(view(), 'library');
+    assert.equal(job.status, 'text-review', job.error || 'the run went on and finished its text');
+    assert.equal(wizard.simpleJobId, job.id, 'the story is kept to come back to');
+    // A book under review: the kept dialog. Staying puts this screen's entry back.
+    assert.equal(await openSimpleJob(ctx, job.id), true);
+    assert.equal(wizard.simpleStep, 4);
+    const top = h.index;
+    assert.equal(h.entries[top - 1], null);
+    h.back(); await settle();
+    assert.equal(leaves.length, 2);
+    assert.equal(leaves[1].dialog, true);
+    leaves[1].stay();
+    assert.equal(h.index, top, 'the step entry is back on top');
+    assert.deepEqual([h.state.donghwaSimpleStep, h.state.story], [4, job.id]);
+    assert.equal(view(), 'create');
+    assert.equal(draft, job.book);
+    h.back(); await settle();
+    assert.equal(leaves.length, 3, 'Back asks again');
+    leaves[2].go();
+    assert.equal(view(), 'library');
+    assert.equal(h.left, false);
+    assert.deepEqual(drawn, []);
+    assert.equal(networkCalls, 0);
+  });
+});
+
+test('R11 after 이 주제로 새로 만들기 or a reload, Back passes over another story\'s entries without a word', async () => {
+  reset();
+  await withHistory(async ({h, leaves, view, settle}) => {
+    const job = await finishedJob('숨바꼭질하다 찾은 비밀 장소');
+    assert.equal(await openSimpleJob(ctx, job.id), true);
+    await goto(1);
+    const pending = click('fork');
+    await answer('simple-confirm-yes');
+    await pending;
+    assert.equal(wizard.simpleJobId, undefined);
+    assert.equal(h.state.donghwaSimpleStep, 1);
+    assert.notEqual(h.state.story, job.id, 'the entry the screen is on names the new story');
+    const oldEntry = JSON.stringify(h.entries[h.index - 1]);
+    toasts.length = 0;
+    h.back(); await settle();
+    assert.deepEqual(toasts, [], 'no stray toast');
+    assert.equal(JSON.stringify(h.entries[2]), oldEntry, 'the old story\'s entry is not rewritten');
+    assert.equal(h.left, false);
+    assert.deepEqual(leaves.map(l => l.dialog), [false], 'past the old story, Back reaches the library');
+    assert.equal(view(), 'library');
+    assert.equal(wizard.topic, job.wizard.topic, 'the new story is kept');
+    // A reload: the library stands on an old step entry; a new story is opened.
+    wizard = null;
+    draft = null;
+    h.entries.splice(h.index + 1, Infinity, {donghwaSimpleStep: 2, i: 40, story: 'story-before-reload'}, {donghwaSimpleStep: 3, i: 41, story: 'story-before-reload'});
+    h.index += 2;
+    wizard = freshWizard({topic: '비 오는 날 열린 장화 행진'});
+    ctx.setView('create');
+    ctx.render();
+    assert.deepEqual([h.state.donghwaSimpleStep, h.state.i], [1, 42], 'its own entry on top of the old one');
+    h.back(); await settle();
+    assert.deepEqual(toasts, []);
+    assert.equal(h.left, false);
+    assert.equal(leaves.length, 2);
+    assert.equal(view(), 'library');
+    // The app's first entry rewritten to a step with no story (an older copy of
+    // this screen): passing over it would unload the app, so Back leaves to the library.
+    h.entries.splice(1, Infinity, {donghwaSimpleStep: 1});
+    h.index = 1;
+    wizard = freshWizard({topic: '첫눈이 내린 아침'});
+    ctx.setView('create');
+    ctx.render();
+    h.back(); await settle();
+    assert.equal(h.left, false);
+    assert.equal(leaves.length, 3);
+    assert.equal(view(), 'library');
+    assert.deepEqual(toasts, []);
+  });
+});
+
+test('R11 the first ④ after a text run has its own entry: Back returns to ③, then the frozen ② and ①', async () => {
+  reset();
+  await withHistory(async ({h, settle}) => {
+    wizard = freshWizard({topic: '할머니와 함께 만든 송편'});
+    draft = null;
+    ctx.render();
+    await goto(2);
+    await goto(3);
+    await click('start-demo');
+    const job = state.fullAutoJobs[wizard.simpleJobId];
+    assert.equal(job.status, 'text-review');
+    assert.equal(wizard.simpleStep, 4);
+    assert.deepEqual(h.entries.slice(2).map(e => e.donghwaSimpleStep), [1, 2, 3, 4]);
+    assert.equal(h.state.story, job.id);
+    for (const step of [3, 2, 1]) {
+      h.back(); await settle();
+      assert.equal(wizard.simpleStep, step);
+    }
+    assert.match(renderSimpleCreate(ctx), /simple-frozen/, 'entries from before the run open the story\'s frozen copy');
+    for (const step of [2, 3, 4]) {
+      h.forward(); await settle();
+      assert.equal(wizard.simpleStep, step);
+    }
+    assert.equal(draft, job.book);
+    assert.deepEqual(toasts.filter(t => /먼저|저장하거나/.test(t.message)), []);
+    assert.equal(Object.keys(state.fullAutoJobs).filter(id => state.fullAutoJobs[id].wizard?.topic === '할머니와 함께 만든 송편').length, 1);
+  });
+});
+
+test('R11 after a step change, keyboard focus moves to the new current step', async () => {
+  reset();
+  const job = await finishedJob('바닷가에서 모래성 쌓기');
+  await open(job);
+  screen.simple = true;
+  screen.focus.length = 0;
+  try {
+    await goto(1);
+    await click('next');
+    await click('back');
+    await click('open-review');
+    await click('to-finish');
+    assert.deepEqual(screen.focus.map(f => f.step), [1, 2, 1, 4, 5]);
+    assert.ok(screen.focus.every(f => f.options?.preventScroll === true), 'without scrolling the page');
+    // A refused move leaves focus where it was.
+    await click('back');
+    wizard.simpleEditing = true;
+    screen.focus.length = 0;
+    await goto(1);
+    assert.deepEqual(screen.focus, []);
+    wizard.simpleEditing = false;
   } finally {
-    ctx.isSimpleView = isView;
-    delete globalThis.history;
-    delete globalThis.location;
+    screen.simple = false;
+    screen.focus.length = 0;
   }
+  // The focus target: the current step's wrapper, focusable from script only.
+  assert.match(renderSimpleCreate(ctx), /<div class="step active" role="listitem" aria-current="step" tabindex="-1">/);
+});
+
+test('R11 이 주제로 새로 만들기 names the text price ③ will show for the new story', async () => {
+  reset();
+  const job = await finishedJob('반짝이는 조약돌 모으기');
+  assert.equal(job.planMode, 'selection', 'a demo run plans from the picks');
+  assert.equal(job.allowNew, true);
+  await open(job, 1);
+  const pending = click('fork');
+  const html = await answer('simple-confirm-yes');
+  await pending;
+  const asked = html.match(/글 엔진 요금 약 (\$[\d.]+)/)?.[1];
+  await goto(2);
+  await goto(3);
+  const shown = renderSimpleCreate(ctx).match(/<span>글 만들기<\/span><strong>약 (\$[\d.]+)<\/strong>/)?.[1];
+  assert.ok(asked && shown, `${asked} / ${shown}`);
+  assert.equal(asked, shown);
+  assert.equal(networkCalls, 0);
+});
+
+test('R11 a pro run with no book is not opened in ③ by the simple library, and ③ only ever buys text', async () => {
+  reset();
+  // A pro FULL AUTO run (no simple marker, no text hold) stopped before its text.
+  const pro = createFullAutoJob(state, {characterIds: ['yuha'], backgroundIds: [], topic: '프로 모드에서 만든 우주 소풍', pageCount: 8, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'dual'}, {demo: true, stopBefore: null, planMode: 'selection'});
+  pro.status = 'paused';
+  save();
+  assert.doesNotMatch(renderFullAutoJobs(state, {simple: true}), new RegExp(`data-auto-job="${pro.id}"`), 'not on the simple panel');
+  assert.match(renderFullAutoJobs(state, {rest: true}), new RegExp(`data-full-auto-action="resume" data-id="${pro.id}"`), 'still on the pro list below the books');
+  assert.equal(simpleJobs(state).some(j => j.id === pro.id), false);
+  // Opened at ③ anyway (a card drawn before): 이어서 만들기 stops at the text.
+  assert.equal(await openSimpleJob(ctx, pro.id), true);
+  assert.equal(wizard.simpleStep, 3);
+  const third = renderSimpleCreate(ctx);
+  assert.match(third, /지금은 글만 만들어요/);
+  assert.match(third, /data-simple-action="retry"/);
+  await click('retry');
+  assert.equal(pro.status, 'text-review', pro.error || '');
+  assert.equal(pro.book.pages.filter(p => p.imageAssetId).length, 0, 'no page picture');
+  assert.equal(pro.book.cover?.imageAssetId, undefined, 'no cover');
+  assert.deepEqual(Object.keys(pro.imageUsage || {}), [], 'nothing drawn or bought');
+  assert.equal(wizard.simpleStep, 4, 'pictures go through ④ and its confirm');
+  assert.equal(modal, null);
+  assert.deepEqual(drawn, []);
+  assert.equal(networkCalls, 0);
 });
 
 test('R11 a story reopens on the ④ page the parent last looked at, clamped to its pages', async () => {

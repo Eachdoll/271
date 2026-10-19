@@ -169,6 +169,25 @@ function simpleJobLabel(job) {
     return `그림 ${drawn}/${total}`;
   return "글 검수 중";
 }
+/** A job made by the simple steps (its frozen wizard, or held at the text or pages). */
+export function isSimpleJob(job) {
+  return (
+    !!job?.id &&
+    (job.wizard?.simpleFlow === true ||
+      job.stopBefore === "text" ||
+      job.stopBefore === "pages" ||
+      job.status === "text-review" ||
+      job.status === "pages-ready")
+  );
+}
+/**
+ * A job the simple library card may open in the simple steps: a simple job,
+ * or any job that already has its book (④ asks before each picture). A pro
+ * run with no book stays on the pro list: its resume is the whole pipeline.
+ */
+export function opensInSimpleSteps(job) {
+  return !!job?.id && (isSimpleJob(job) || !!job.book);
+}
 /**
  * The simple library's '제작 중인 이야기': one '이어서 만들기' that opens the
  * story in the simple steps (nothing runs from the card), 중지 while it runs.
@@ -176,7 +195,10 @@ function simpleJobLabel(job) {
  */
 function renderSimpleJobs(state) {
   const jobs = Object.values(state.fullAutoJobs || {})
-    .filter((j) => j?.id && j.status !== "final" && !j.simpleReplacedBy)
+    .filter(
+      (j) =>
+        opensInSimpleSteps(j) && j.status !== "final" && !j.simpleReplacedBy,
+    )
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   if (!jobs.length) return "";
   return `<section class="panel full-auto-jobs simple-jobs" id="full-auto-jobs" data-simple="true"><h3>제작 중인 이야기</h3><p class="section-sub">이어서 만들면 멈춘 단계에서 열려요. 여는 것만으로는 아무것도 새로 만들지 않아요.</p><div class="story-drafts">${jobs
@@ -186,13 +208,20 @@ function renderSimpleJobs(state) {
     )
     .join("")}</div></section>`;
 }
-export function renderFullAutoJobs(state, { simple = false } = {}) {
+/**
+ * '제작 중인 이야기'. {simple:true} is the simple library's panel; {rest:true}
+ * is the pro list of the jobs that panel does not open (pro runs with no
+ * book), shown below the books in simple mode.
+ */
+export function renderFullAutoJobs(state, { simple = false, rest = false } = {}) {
   if (simple) return renderSimpleJobs(state);
   const jobs = Object.values(state.fullAutoJobs || {})
-    .filter((j) => j?.id && j.status !== "final")
+    .filter(
+      (j) => j?.id && j.status !== "final" && !(rest && opensInSimpleSteps(j)),
+    )
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   if (!jobs.length) return "";
-  return `<section class="panel full-auto-jobs" id="full-auto-jobs"><h3>제작 중인 이야기</h3><div class="story-drafts">${jobs
+  return `<section class="panel full-auto-jobs" ${rest ? 'id="full-auto-jobs-rest" data-rest="true"' : 'id="full-auto-jobs"'}><h3>제작 중인 이야기${rest ? " · 프로 모드에서 시작" : ""}</h3><div class="story-drafts">${jobs
     .map((job) => {
       const live = currentJob?.id === job.id && !!controller,
         held = isHeld(job) && !live,
@@ -206,10 +235,12 @@ export function renderFullAutoJobs(state, { simple = false } = {}) {
     .join("")}</div></section>`;
 }
 function refreshCards() {
-  const slot = document.querySelector("#full-auto-jobs");
-  if (slot)
+  for (const slot of document.querySelectorAll?.(
+    "#full-auto-jobs, #full-auto-jobs-rest",
+  ) || [])
     slot.outerHTML = renderFullAutoJobs(api.getState(), {
       simple: slot.dataset?.simple === "true",
+      rest: slot.dataset?.rest === "true",
     });
 }
 

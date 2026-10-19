@@ -4652,6 +4652,18 @@ body:has(.simple-create):not(:has(.modal-overlay)) #toast.visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+/* After a step change focus moves to the new current step (tabindex=-1):
+ * a ring only when the move came from the keyboard. */
+.simple-steps .step[aria-current="step"] {
+  border-radius: 999px;
+}
+.simple-steps .step[aria-current="step"]:focus {
+  outline: none;
+}
+.simple-steps .step[aria-current="step"]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
 .simple-steps .step[aria-disabled="true"] {
   opacity: 0.72;
   cursor: not-allowed;

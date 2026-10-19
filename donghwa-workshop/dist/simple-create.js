@@ -11,6 +11,7 @@ import {
   getFullAutoJob,
   isFullAutoRunning,
   keepEditedPictures,
+  isSimpleJob,
 } from "./full-auto-ui.js";
 import { estimateFullAutoCost, fullAutoProgress } from "./full-auto.js";
 import { readAutoStop } from "./full-auto-control.js";
@@ -390,18 +391,12 @@ export function ensureSimpleWizard(state, wizard) {
   if (!Array.isArray(w.backgroundIds)) w.backgroundIds = [];
   if (w.previousBookId && w.simplePicksTouched === undefined)
     w.simplePicksTouched = true;
+  // A new wizard is a new story for the browser's Back/Forward entries.
+  if (!w.simpleStoryKey) w.simpleStoryKey = newStoryKey();
   return w;
 }
-export function isSimpleJob(job) {
-  return (
-    !!job?.id &&
-    (job.wizard?.simpleFlow === true ||
-      job.stopBefore === "text" ||
-      job.stopBefore === "pages" ||
-      job.status === "text-review" ||
-      job.status === "pages-ready")
-  );
-}
+// isSimpleJob lives with the library cards (full-auto-ui.js), which use it too.
+export { isSimpleJob };
 /** Simple jobs to resume, newest first: running/paused/failed text work or a held/finished book. */
 export function simpleJobs(state) {
   return Object.values(state?.fullAutoJobs || {})
@@ -435,6 +430,7 @@ const UI_FIELDS = [
   "simplePickedFor",
   "simplePicksTouched",
   "simpleRunToken",
+  "simpleStoryKey",
 ];
 /** The wizard copy a job freezes: screen-only fields out, the simple marker in. */
 export function jobWizardFrom(wizard, token) {
@@ -733,7 +729,7 @@ function stepsBar(step, access = [], { text = false } = {}) {
             ? `<button type="button" class="simple-step-link" data-simple-action="goto-step" data-step="${n}" data-simple-nav="step" aria-label="${n}단계 ${label}${toParticle(label)} 가기">${inner}</button>`
             : inner,
         closed = !current && !row.reachable;
-      return `<div class="step ${current ? "active" : done ? "done" : ""}" role="listitem"${current ? ' aria-current="step"' : ""}${closed ? ` aria-disabled="true" title="${esc(row.reason)}"` : ""}>${body}</div>`;
+      return `<div class="step ${current ? "active" : done ? "done" : ""}" role="listitem"${current ? ' aria-current="step" tabindex="-1"' : ""}${closed ? ` aria-disabled="true" title="${esc(row.reason)}"` : ""}>${body}</div>`;
     },
   ).join("")}</div>`;
 }
@@ -1151,50 +1147,161 @@ export function renderSimpleCreate(ctx = api) {
               : renderFinishStep(ctx, w);
   const html = `${heading(w.previousBookId ? "다음 이야기 이어 만들기" : "이야기 만들기", "다섯 단계로 한 권을 만들어요.", `<span class="role-tag">${esc(getActiveWorld(state).name)}</span>${w.simpleForced ? sbtn("프로 만들기 화면", "exit-forced", "plain") : ""}`)}<div class="wizard simple-create" data-simple-step="${step}">${stepsBar(step, access, { text: !!job?.book || HELD.includes(job?.status) })}${body}</div>`;
   // The browser history entry follows the step shown (first render included).
-  if (ctx === api && ctx.isSimpleView?.()) syncStepHistory(step);
+  if (ownsHistory(ctx)) syncStepHistory(w, step);
   return html;
 }
 
 /* ---------- browser Back/Forward between steps ---------- */
+/*
+ * Every step entry is {donghwaSimpleStep, i, story}: `i` is its place in the
+ * tab's history (one more than the entry it was pushed on) and `story` the
+ * story it belongs to (the job id, or the unbound wizard's simpleStoryKey).
+ * A refused move goes back to the entry the parent was on (history.go), so the
+ * popped entry is never rewritten and Back can never be used up. Entries of
+ * another story are passed over silently; an entry of another view (no step)
+ * leaves through the app's guarded way to the library.
+ */
 const HISTORY_KEY = "donghwaSimpleStep";
 const browserHistory = () =>
   globalThis.location && typeof globalThis.history?.pushState === "function"
     ? globalThis.history
     : null;
-function writeStepHistory(step, push) {
+let historyIndex = null, // `i` of the entry the screen shows
+  browserIndex = null, // `i` of the entry the browser is on (best guess)
+  historyGoAt = 0; // a history.go this screen asked for, until its popstate
+const isStepEntry = (entry) => {
+  const step = entry?.[HISTORY_KEY];
+  return Number.isInteger(step) && step >= 1 && step <= 5;
+};
+const entryIndex = (entry) => (Number.isInteger(entry?.i) ? entry.i : null);
+function newStoryKey() {
+  return (
+    "story-" +
+    (globalThis.crypto?.randomUUID?.() ||
+      Date.now().toString(36) + Math.random().toString(36).slice(2))
+  );
+}
+/** The story a wizard's entries name: its job, or its own key before the job exists. */
+function storyOf(w) {
+  if (w.simpleJobId) return w.simpleJobId;
+  w.simpleStoryKey ||= newStoryKey();
+  return w.simpleStoryKey;
+}
+/** Entries pushed before the job existed keep working once it does (same wizard). */
+const belongsTo = (entry, w) =>
+  !!entry?.story &&
+  (entry.story === w.simpleJobId || entry.story === w.simpleStoryKey);
+const historyMoving = () => !!historyGoAt && Date.now() - historyGoAt < 1500;
+/** Only the app's own simple screen writes history (not a census or test copy). */
+const ownsHistory = (ctx) => ctx === api && !!ctx?.isSimpleView?.();
+function writeStepEntry(w, step, push) {
   const history = browserHistory();
   if (!history) return;
+  const here = entryIndex(history.state) ?? browserIndex ?? 0,
+    i = push ? here + 1 : here;
   try {
     // Same URL and hash: only the entry's state names the step.
-    if (push)
-      history.pushState({ [HISTORY_KEY]: step }, "", globalThis.location.href);
-    else
-      history.replaceState(
-        { [HISTORY_KEY]: step },
-        "",
-        globalThis.location.href,
-      );
+    history[push ? "pushState" : "replaceState"](
+      { [HISTORY_KEY]: step, i, story: storyOf(w) },
+      "",
+      globalThis.location.href,
+    );
+    historyIndex = browserIndex = i;
   } catch {
     /* A sandboxed frame may refuse history; the steps still work. */
   }
 }
-function syncStepHistory(step) {
+function goHistory(delta) {
   const history = browserHistory();
-  if (history && history.state?.[HISTORY_KEY] !== step)
-    writeStepHistory(step, false);
+  if (!history || !delta || typeof history.go !== "function") return;
+  historyGoAt = Date.now();
+  try {
+    history.go(delta);
+  } catch {
+    historyGoAt = 0;
+  }
+}
+/** A refused Back/Forward: back to the entry the parent was on. */
+function returnToEntry(popped) {
+  if (Number.isInteger(popped) && Number.isInteger(historyIndex))
+    goHistory(historyIndex - popped);
+}
+/** An entry that is not this story's step to show: keep going the same way. */
+function skipEntry(popped) {
+  goHistory(
+    Number.isInteger(popped) &&
+      Number.isInteger(historyIndex) &&
+      popped > historyIndex
+      ? 1
+      : -1,
+  );
+}
+/** The entry the browser is on follows the step shown (first render included). */
+function syncStepHistory(w, step) {
+  const history = browserHistory();
+  if (!history || historyMoving()) return;
+  const entry = history.state;
+  // First shown from another view (the library card, 이야기 만들기, a resume
+  // card on another screen): an entry of its own, so Back returns there.
+  if (!globalThis.document?.querySelector?.(".simple-create"))
+    return writeStepEntry(w, step, true);
+  // The browser is on another view's entry while this screen is still shown
+  // (Back's leave dialog is open): that entry is not ours to rewrite.
+  if (!isStepEntry(entry)) return;
+  if (entry[HISTORY_KEY] !== step || !belongsTo(entry, w))
+    return writeStepEntry(w, step, false);
+  historyIndex = browserIndex = entryIndex(entry);
+}
+/** Back past this screen's first entry: the app's guarded way to the library. */
+function leaveByHistory(w) {
+  if (typeof api.leaveToLibrary !== "function") return;
+  api.leaveToLibrary(() => {
+    // The parent stayed: the popped entry is the other view's, so this
+    // screen gets its own entry again.
+    if (api.getWizard() === w && api.isSimpleView?.())
+      writeStepEntry(w, w.simpleStep, true);
+  });
 }
 /**
  * Back/Forward on the simple create screen moves between steps through the
  * same rules as the step bar; nothing starts, resumes or is bought. Any other
- * history entry, or any other screen, is left to the app.
+ * screen is left to the app.
  */
 export function onSimplePopState(event) {
-  const step = Number(event?.state?.[HISTORY_KEY]);
-  if (!api || !Number.isInteger(step) || step < 1 || step > 5) return;
-  if (!api.isSimpleView?.() || api.isParent?.() === false) return;
+  historyGoAt = 0;
+  const entry = event?.state ?? null,
+    popped = entryIndex(entry);
+  // Where the browser is now; an entry without an index is taken as one back.
+  browserIndex =
+    popped ?? (Number.isInteger(browserIndex) ? browserIndex - 1 : null);
+  if (!api || !api.isSimpleView?.() || api.isParent?.() === false) return;
   const w = api.getWizard();
-  if (!w || w.simpleStep === step) return;
-  gotoStep(api, w, step, { fromHistory: true });
+  if (!w) return;
+  if (!isStepEntry(entry)) {
+    // A step entry this version cannot read is left alone.
+    if (entry && typeof entry === "object" && HISTORY_KEY in entry) return;
+    return leaveByHistory(w);
+  }
+  // A step entry with no story (written before entries named theirs) may be
+  // the app's first entry: passing over it could unload the app, so it is
+  // treated as another view's entry.
+  if (!entry.story) return leaveByHistory(w);
+  // Another story's entry (before '이 주제로 새로 만들기', a reload or a
+  // reopened story): not this wizard's, passed over without a word.
+  if (!belongsTo(entry, w)) return skipEntry(popped);
+  const step = entry[HISTORY_KEY];
+  if (step === w.simpleStep) {
+    // The entry the screen is on (also the return from a refused move).
+    if (popped === null || popped === historyIndex) return;
+    return skipEntry(popped);
+  }
+  gotoStep(api, w, step, { fromHistory: true, entry: popped });
+}
+/** After a step change, keyboard and screen-reader users land on the new step. */
+function focusActiveStep() {
+  globalThis.document
+    ?.querySelector?.('.simple-steps [aria-current="step"]')
+    ?.focus?.({ preventScroll: true });
 }
 
 /* ---------- actions ---------- */
@@ -1379,8 +1486,11 @@ function enterReview(ctx, job) {
   ctx.setEditPage(0);
   w.simpleStep = 4;
   w.simpleEditing = false;
+  // The first ④ gets an entry of its own, so Back returns to ③.
+  if (ownsHistory(ctx)) writeStepEntry(w, 4, true);
   ctx.render();
   globalThis.scrollTo?.(0, 0);
+  focusActiveStep();
   void refreshReading(ctx);
 }
 async function startText(ctx, { demo = false, onCreated } = {}) {
@@ -1973,6 +2083,7 @@ async function restartStory(ctx) {
     (Number(old.wizard?.qualitySeedOffset) || 0) + 1,
   );
   if (ctx.getWizard()?.simpleForced) next.simpleForced = true;
+  next.simpleStoryKey = newStoryKey();
   ctx.setWizard(next);
   ctx.setDraft(null);
   ctx.setEditPage(0);
@@ -1997,10 +2108,12 @@ async function forkStory(ctx) {
     old = jobOfWizard(state, w);
   if (!old || w.simpleEditing) return;
   if (runIsLive(old) || workBusy()) return ctx.toast(FORK_BUSY);
+  const next = forkWizard(state, old, w);
   let cost = 0;
   try {
-    cost = estimateFullAutoCost(state, old.wizard || {}, {
-      planMode: old.planMode || "auto",
+    // The amount ③ will show for the new story (see renderGenerateStep).
+    cost = estimateFullAutoCost(state, next, {
+      planMode: next.allowNew !== false ? "auto" : "selection",
     }).textUsd;
   } catch {
     cost = 0;
@@ -2016,6 +2129,20 @@ async function forkStory(ctx) {
     );
   if (!ok || ctx.getWizard() !== w) return;
   if (runIsLive(old) || workBusy()) return ctx.toast(FORK_BUSY);
+  ctx.setWizard(next);
+  ctx.setDraft(null);
+  ctx.setEditPage(0);
+  ctx.render();
+  globalThis.scrollTo?.(0, 0);
+  ctx.toast(
+    "새 이야기로 시작해요. 주제와 재료를 고친 뒤 ③에서 글을 만들어요. 지금 이야기는 그대로 남아요.",
+  );
+}
+/**
+ * The unbound wizard '이 주제로 새로 만들기' starts: the job's topic, format
+ * and the parent's own picks (still active), a new seed and a new story key.
+ */
+function forkWizard(state, old, w) {
   const next = wizardFromJob(old, w.simpleStep === 2 ? 2 : 1),
     planned = (list) => new Set((list || []).map((item) => item?.id)),
     autoCharacters = planned(old.plan?.newCharacters),
@@ -2036,15 +2163,10 @@ async function forkStory(ctx) {
     999,
     (Number(old.wizard?.qualitySeedOffset) || 0) + 1,
   );
+  // A new story for the browser's Back/Forward: the old story's entries are passed over.
+  next.simpleStoryKey = newStoryKey();
   if (w.simpleForced) next.simpleForced = true;
-  ctx.setWizard(next);
-  ctx.setDraft(null);
-  ctx.setEditPage(0);
-  ctx.render();
-  globalThis.scrollTo?.(0, 0);
-  ctx.toast(
-    "새 이야기로 시작해요. 주제와 재료를 고친 뒤 ③에서 글을 만들어요. 지금 이야기는 그대로 남아요.",
-  );
+  return next;
 }
 /**
  * 책장에 저장. Missing pictures (or an unfinished run) must be drawn first;
@@ -2196,14 +2318,15 @@ function validateMaterials(state, w) {
  * a run or page operation in flight still finds its own book. Returns true
  * when the step changed.
  */
-function gotoStep(ctx, w, target, { fromHistory = false } = {}) {
+function gotoStep(ctx, w, target, { fromHistory = false, entry = null } = {}) {
   const state = ctx.getState(),
     step = Number(target);
   if (!w || !Number.isInteger(step) || step < 1 || step > 5) return false;
   const refuse = (reason, redraw = true) => {
     ctx.toast(reason);
-    // Back/Forward that cannot go there leaves the parent where they are.
-    if (fromHistory) writeStepHistory(w.simpleStep, false);
+    // Back/Forward that cannot go there returns to the entry the parent was
+    // on; the popped entry is left as it was (rewriting it would use it up).
+    if (fromHistory) returnToEntry(entry);
     if (redraw) ctx.render();
     return false;
   };
@@ -2233,9 +2356,12 @@ function gotoStep(ctx, w, target, { fromHistory = false } = {}) {
   }
   w.simpleBadgeOpen = false;
   w.simpleStep = step;
-  if (!fromHistory) writeStepHistory(step, true);
+  if (fromHistory) {
+    if (Number.isInteger(entry)) historyIndex = browserIndex = entry;
+  } else if (ownsHistory(ctx)) writeStepEntry(w, step, true);
   ctx.render();
   globalThis.scrollTo?.(0, 0);
+  focusActiveStep();
   if (step >= 4) void refreshReading(ctx);
   return true;
 }
@@ -2374,15 +2500,20 @@ async function handle(ctx, action, el) {
     // Like 글 만들기: a missing text key is named with a 키 입력 button
     // before the runner's preflight would mark the job failed.
     if (!job.demo && (await stopForTextKey(ctx, job))) return;
-    // A run not held at the text (a pro job opened here) also needs the image key.
+    // ③ only ever buys text: a job without its book (also a pro job that was
+    // never held, opened here) stops at the text, and its pictures go through
+    // ④ and their cost confirm, as ③ says.
+    const stopBefore = job.book ? undefined : "text";
+    // A run not held at the text also needs the image key.
     if (
+      stopBefore !== "text" &&
       (job.stopBefore ?? null) !== "text" &&
       (await stopForImageKey(ctx, {
         generationSnapshot: { imageEngine: job.imageEngine },
       }))
     )
       return;
-    const done = await runJob(ctx, job.id, undefined, "text");
+    const done = await runJob(ctx, job.id, stopBefore, "text");
     if (
       done &&
       HELD.includes(done.status) &&
