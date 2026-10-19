@@ -1,6 +1,28 @@
 import { createLibraryBackup, validateImport } from "./output.js";
+import {
+  FAMILY_MESSAGES,
+  FAMILY_SESSION_HEADER,
+  FAMILY_SESSION_KEY,
+  clearFamilySession,
+  derivePasswordKey,
+  familyAuthMessage,
+  formatRecoveryCode,
+  isFamilyOwnerId,
+  isFullAutoRunActive,
+  isRecoveryCode,
+  isSessionToken,
+  normalizeRecoveryCode,
+  normalizeUsername,
+  readFamilySession,
+  validateDisplayName,
+  validateExistingPassword,
+  validatePassword,
+  validateUsername,
+  writeFamilySession,
+} from "./family-auth.js";
 const REQUEST_TIMEOUT_MS = 45000,
-  REQUEST_TIMEOUT_UPLOAD = 120000;
+  REQUEST_TIMEOUT_UPLOAD = 120000,
+  AUTH_TIMEOUT_MS = 30000;
 
 /** Per-account library replication. Credentials and parent PINs never leave the device. */
 export const CLOUD_SYNC_STORAGE_KEY = "donghwa-cloud-sync-v1";
@@ -527,20 +549,33 @@ export function createCloudSync(context) {
     visibility = context.document ?? globalThis.document;
   const debounceMs = context.debounceMs ?? 1500,
     pollMs = context.pollInterval ?? 20000;
-  let metadata = null;
-  try {
-    const candidate = JSON.parse(
-      storage?.getItem(CLOUD_SYNC_STORAGE_KEY) || "null",
-    );
-    if (
-      candidate &&
-      typeof candidate.accountId === "string" &&
-      /^[a-f0-9]{64}$/.test(candidate.stateHash) &&
-      Number.isSafeInteger(candidate.revision) &&
-      candidate.revision > 0
-    )
-      metadata = candidate;
-  } catch {}
+  const deriveKey =
+    typeof context.derivePasswordKey === "function"
+      ? context.derivePasswordKey
+      : (username, password) => derivePasswordKey(username, password);
+  const isAutoRunning =
+    typeof context.isAutoRunning === "function"
+      ? context.isAutoRunning
+      : () => false;
+  const locks =
+    context.locks !== undefined ? context.locks : globalThis.navigator?.locks;
+  function storedMetadata() {
+    try {
+      const candidate = JSON.parse(
+        storage?.getItem(CLOUD_SYNC_STORAGE_KEY) || "null",
+      );
+      if (
+        candidate &&
+        typeof candidate.accountId === "string" &&
+        /^[a-f0-9]{64}$/.test(candidate.stateHash) &&
+        Number.isSafeInteger(candidate.revision) &&
+        candidate.revision > 0
+      )
+        return candidate;
+    } catch {}
+    return null;
+  }
+  let metadata = storedMetadata();
   let status = {
     phase: "idle",
     authenticated: false,
@@ -569,7 +604,9 @@ export function createCloudSync(context) {
     poll = null,
     applying = false,
     blocked = null,
-    previousUserId = metadata?.accountId || null;
+    previousUserId = metadata?.accountId || null,
+    // While a family sign-in/out is deciding the identity, sync operations wait behind it.
+    authGate = null;
   const localAvailable = () => Boolean(context.hasLocalData?.() ?? true);
   const parent = () => Boolean(context.isParent?.() ?? false);
   const getStatus = () => ({
@@ -622,6 +659,8 @@ export function createCloudSync(context) {
     op.signal.addEventListener("abort", onAbort, { once: true });
     const timer = setTimeout(onAbort, timeoutMs);
     timer.unref?.();
+    // Read at call time so a sign-in in this or another tab applies to the next request.
+    const family = readFamilySession(storage);
     try {
       response = await fetchImpl(base + path, {
         credentials: "same-origin",
@@ -631,6 +670,7 @@ export function createCloudSync(context) {
         headers: {
           Accept: "application/json",
           ...(user ? { "X-Cloud-Account-ID": user.id } : {}),
+          ...(family ? { [FAMILY_SESSION_HEADER]: family.token } : {}),
           ...options.headers,
         },
         signal: deadline.signal,
@@ -706,7 +746,11 @@ export function createCloudSync(context) {
           !/[\\\x00-\x1f\x7f]/.test(payload.signInPath)
             ? payload.signInPath
             : "",
-        reason: "sign-in",
+        // The stored family token was refused: say so instead of a plain sign-in prompt.
+        reason:
+          payload?.reason === "family-session-expired"
+            ? "family-session-expired"
+            : "sign-in",
         error: null,
       });
       return null;
@@ -1135,6 +1179,10 @@ export function createCloudSync(context) {
       return Promise.reject(
         new CloudSyncError("클라우드 연결을 먼저 시작해 주세요.", "STOPPED"),
       );
+    if (authGate) {
+      const run = () => execute(kind, action, { swallow });
+      return authGate.then(run, run);
+    }
     if (operation && kind !== "refresh" && operationKind === "refresh") {
       const run = () => execute(kind, action, { swallow });
       return operation.then(run, run);
@@ -1231,6 +1279,7 @@ export function createCloudSync(context) {
     if (!stopped) return refresh();
     stopped = false;
     target?.addEventListener?.("focus", focus);
+    target?.addEventListener?.("storage", onStorage);
     visibility?.addEventListener?.("visibilitychange", focus);
     if (pollMs > 0) {
       poll = every(focus, pollMs);
@@ -1311,8 +1360,476 @@ export function createCloudSync(context) {
     if (poll !== null) clearEvery(poll);
     poll = null;
     target?.removeEventListener?.("focus", focus);
+    target?.removeEventListener?.("storage", onStorage);
     visibility?.removeEventListener?.("visibilitychange", focus);
     emit({ phase: "stopped", busy: false });
   }
-  return { start, refresh, push, pull, changed, stop, getStatus };
+
+  // ---- Family ID accounts --------------------------------------------------
+  // Auth calls go straight to fetchImpl, never through request(): a refused
+  // password, invite or recovery code never changes the phase, the block or
+  // the privacy lock, and makes no library request.
+  const failure = (code, message, extra = {}) => ({
+    ok: false,
+    code,
+    message,
+    ...extra,
+  });
+  const KNOWN_FAILURES = new Set(["crypto_unavailable", "storage"]);
+  async function autoRunRefusal() {
+    return (await isFullAutoRunActive({ isAutoRunning, locks }))
+      ? failure("auto_running", FAMILY_MESSAGES.autoRunning)
+      : null;
+  }
+  /** Waits until no sync operation is running, so no request straddles an identity change. */
+  async function settle() {
+    while (operation) {
+      try {
+        await operation;
+      } catch {}
+    }
+  }
+  /**
+   * One family auth flow at a time. Sync work started meanwhile waits behind
+   * the gate. `work` returns {result, refresh}; refresh re-checks the account
+   * once the gate is open again.
+   */
+  async function exclusive(work) {
+    if (authGate) return failure("busy", FAMILY_MESSAGES.busy);
+    let release;
+    authGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    let outcome;
+    try {
+      await settle();
+      outcome = await work();
+    } catch (error) {
+      outcome = {
+        result: KNOWN_FAILURES.has(error?.code)
+          ? failure(error.code, error.message)
+          : failure("failed", "요청을 완료하지 못했어요. 잠시 뒤 다시 해 주세요."),
+      };
+    } finally {
+      authGate = null;
+      release();
+    }
+    if (outcome.refresh && !stopped) await refresh();
+    return outcome.result;
+  }
+  async function authPost(
+    name,
+    body,
+    { token = null, accountId = null, keepalive = false } = {},
+  ) {
+    if (!fetchImpl) return failure("network", FAMILY_MESSAGES.network);
+    const deadline = new AbortController(),
+      timer = setTimeout(() => deadline.abort(), AUTH_TIMEOUT_MS);
+    timer.unref?.();
+    let response;
+    try {
+      response = await fetchImpl(base + "/auth/" + name, {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        ...(keepalive ? { keepalive: true } : {}),
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(token ? { [FAMILY_SESSION_HEADER]: token } : {}),
+          ...(accountId ? { "X-Cloud-Account-ID": accountId } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: deadline.signal,
+      });
+    } catch {
+      return deadline.signal.aborted
+        ? failure("timeout", FAMILY_MESSAGES.timeout)
+        : failure("network", FAMILY_MESSAGES.network);
+    } finally {
+      clearTimeout(timer);
+    }
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {}
+    if (!response.ok) {
+      const code =
+          String(payload?.error?.code || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, "")
+            .slice(0, 64) || "http_" + response.status,
+        retryAfter = Math.max(
+          0,
+          Math.floor(
+            Number(
+              payload?.retryAfter ??
+                payload?.error?.retryAfter ??
+                response.headers?.get?.("Retry-After"),
+            ) || 0,
+          ),
+        );
+      return failure(
+        code,
+        familyAuthMessage(code, { retryAfter, status: response.status }),
+        { status: response.status, ...(retryAfter ? { retryAfter } : {}) },
+      );
+    }
+    return { ok: true, status: response.status, body: payload };
+  }
+  function signedInFrom(body) {
+    const user = body?.user,
+      token = body?.session?.token,
+      username = normalizeUsername(user?.username);
+    if (
+      !user ||
+      !isFamilyOwnerId(user.id) ||
+      !isSessionToken(token) ||
+      !validateUsername(username).ok
+    )
+      return null;
+    const displayName = validateDisplayName(user.displayName);
+    return {
+      user: {
+        id: user.id,
+        kind: "family",
+        username,
+        displayName: displayName.ok ? displayName.displayName : "",
+        email: "",
+      },
+      token,
+    };
+  }
+  /**
+   * The account-switch carry rule. Signing in to another account on a device
+   * that was unlocked and showing a connected, saved (not dirty) library of the
+   * previous account, or that had no cloud baseline, forgets that baseline so
+   * the explicit source choice runs and nothing uploads before the parent
+   * confirms. Any other device keeps its baseline and gets the account-changed
+   * lock (pull only).
+   */
+  function carriesOver(nextOwnerId) {
+    if (metadata?.accountId === nextOwnerId) return false;
+    const locked =
+      blocked === "account-changed" ||
+      status.phase === "account-changed" ||
+      (Boolean(metadata) && !status.authenticated);
+    if (locked) return false;
+    if (!metadata) return true;
+    return (
+      status.authenticated &&
+      status.phase === "ready" &&
+      status.connected &&
+      !status.dirty &&
+      metadata.accountId === status.user?.id
+    );
+  }
+  function forgetBaseline() {
+    try {
+      if (typeof storage?.removeItem === "function")
+        storage.removeItem(CLOUD_SYNC_STORAGE_KEY);
+      else storage?.setItem?.(CLOUD_SYNC_STORAGE_KEY, "null");
+    } catch {}
+    metadata = null;
+    previousUserId = null;
+    blocked = null;
+  }
+  /** The signed-in account is about to change: show 'checking' until the next refresh says who it is. */
+  function identityChanged() {
+    emit({
+      phase: "checking",
+      authenticated: false,
+      user: null,
+      connected: false,
+      signInPath: "",
+      remoteExists: false,
+      revision: 0,
+      updatedAt: null,
+      remoteSummary: summary(null),
+      reason: null,
+      error: null,
+    });
+  }
+  function commitSignIn(signed) {
+    const previous = readFamilySession(storage),
+      carry = carriesOver(signed.user.id);
+    try {
+      writeFamilySession(storage, {
+        token: signed.token,
+        ownerId: signed.user.id,
+        username: signed.user.username,
+        displayName: signed.user.displayName,
+      });
+    } catch {
+      void authPost("logout", {}, { token: signed.token, keepalive: true });
+      return failure("storage", FAMILY_MESSAGES.storage);
+    }
+    if (carry) forgetBaseline();
+    // The token this device held before is useless now; revoke it best effort.
+    if (previous && previous.token !== signed.token)
+      void authPost("logout", {}, { token: previous.token, keepalive: true });
+    identityChanged();
+    return null;
+  }
+  /** Shared tail of signup and recover, which both hand out a recovery code once. */
+  function signedInWithCode(response) {
+    const signed = signedInFrom(response.body),
+      recoveryCode = isRecoveryCode(response.body?.recoveryCode)
+        ? formatRecoveryCode(response.body.recoveryCode)
+        : null;
+    if (!signed)
+      return {
+        result: failure("invalid_response", FAMILY_MESSAGES.invalidResponse, {
+          recoveryCode,
+        }),
+      };
+    const problem = commitSignIn(signed);
+    // The account exists even when this device could not keep the session: still show its code.
+    if (problem) return { result: { ...problem, recoveryCode } };
+    return {
+      result: { ok: true, user: { ...signed.user }, recoveryCode },
+      refresh: true,
+    };
+  }
+  async function familySignup({
+    username,
+    password,
+    inviteCode,
+    displayName = "",
+  } = {}) {
+    const name = validateUsername(username);
+    if (!name.ok) return failure(name.code, name.message);
+    const label = validateDisplayName(displayName);
+    if (!label.ok) return failure(label.code, label.message);
+    const secret = validatePassword(password, name.username);
+    if (!secret.ok) return failure(secret.code, secret.message);
+    const invite = String(inviteCode ?? "").trim();
+    if (!invite) return failure("invite_empty", FAMILY_MESSAGES.inviteEmpty);
+    if (invite.length > 200)
+      return failure("invite_invalid", familyAuthMessage("invite_invalid"));
+    const refusal = await autoRunRefusal();
+    if (refusal) return refusal;
+    return exclusive(async () => {
+      const passwordKey = await deriveKey(name.username, password);
+      const response = await authPost("signup", {
+        username: name.username,
+        passwordKey,
+        inviteCode: invite,
+        displayName: label.displayName,
+      });
+      return response.ok ? signedInWithCode(response) : { result: response };
+    });
+  }
+  async function familyLogin({ username, password } = {}) {
+    const name = validateUsername(username);
+    if (!name.ok) return failure(name.code, name.message);
+    const secret = validateExistingPassword(password);
+    if (!secret.ok) return failure(secret.code, secret.message);
+    const refusal = await autoRunRefusal();
+    if (refusal) return refusal;
+    return exclusive(async () => {
+      const passwordKey = await deriveKey(name.username, password);
+      const response = await authPost("login", {
+        username: name.username,
+        passwordKey,
+      });
+      if (!response.ok) return { result: response };
+      const signed = signedInFrom(response.body);
+      if (!signed)
+        return {
+          result: failure("invalid_response", FAMILY_MESSAGES.invalidResponse),
+        };
+      const problem = commitSignIn(signed);
+      if (problem) return { result: problem };
+      return { result: { ok: true, user: { ...signed.user } }, refresh: true };
+    });
+  }
+  async function familyRecover({ username, recoveryCode, newPassword } = {}) {
+    const name = validateUsername(username);
+    if (!name.ok) return failure(name.code, name.message);
+    if (!isRecoveryCode(recoveryCode))
+      return failure("recovery_format", FAMILY_MESSAGES.recoveryFormat);
+    const secret = validatePassword(newPassword, name.username);
+    if (!secret.ok) return failure(secret.code, secret.message);
+    const refusal = await autoRunRefusal();
+    if (refusal) return refusal;
+    return exclusive(async () => {
+      const newPasswordKey = await deriveKey(name.username, newPassword);
+      const response = await authPost("recover", {
+        username: name.username,
+        recoveryCode: normalizeRecoveryCode(recoveryCode),
+        newPasswordKey,
+      });
+      return response.ok ? signedInWithCode(response) : { result: response };
+    });
+  }
+  /** Signs this device out of its family account; the device library stays (locked when it has a baseline). */
+  async function familyLogout() {
+    const refusal = await autoRunRefusal();
+    if (refusal) return refusal;
+    return exclusive(async () => {
+      const current = readFamilySession(storage);
+      if (!current) return { result: { ok: true }, refresh: true };
+      if (!clearFamilySession(storage))
+        return { result: failure("storage", FAMILY_MESSAGES.storage) };
+      // Best effort: the device is signed out even when the server is unreachable.
+      void authPost("logout", {}, { token: current.token, keepalive: true });
+      identityChanged();
+      return { result: { ok: true }, refresh: true };
+    });
+  }
+  async function familyChangePassword({
+    currentPassword,
+    newPassword,
+    signOutOthers = false,
+  } = {}) {
+    const current = readFamilySession(storage);
+    if (!current) return failure("family_only", FAMILY_MESSAGES.familyOnly);
+    const old = validateExistingPassword(currentPassword);
+    if (!old.ok) return failure(old.code, old.message);
+    const next = validatePassword(newPassword, current.username);
+    if (!next.ok) return failure(next.code, next.message);
+    if (currentPassword === newPassword)
+      return failure("password_same", FAMILY_MESSAGES.passwordSame);
+    return exclusive(async () => {
+      const currentPasswordKey = await deriveKey(
+          current.username,
+          currentPassword,
+        ),
+        newPasswordKey = await deriveKey(current.username, newPassword);
+      const response = await authPost(
+        "password",
+        {
+          currentPasswordKey,
+          newPasswordKey,
+          signOutOthers: signOutOthers === true,
+        },
+        { token: current.token, accountId: current.ownerId },
+      );
+      if (!response.ok) return { result: response };
+      const token = response.body?.session?.token;
+      if (!isSessionToken(token))
+        return {
+          result: failure("invalid_response", FAMILY_MESSAGES.invalidResponse),
+          refresh: true,
+        };
+      if (readFamilySession(storage)?.token !== current.token) {
+        // Another tab changed the sign-in meanwhile: never switch it back.
+        void authPost("logout", {}, { token, keepalive: true });
+        return { result: { ok: true }, refresh: true };
+      }
+      try {
+        writeFamilySession(storage, { ...current, token, savedAt: "" });
+      } catch (error) {
+        return { result: failure("storage", error.message), refresh: true };
+      }
+      return { result: { ok: true }, refresh: true };
+    });
+  }
+  /** Deletes the family account and its cloud library; this device keeps its books, unlinked. */
+  async function familyDeleteAccount({ password, confirm = "삭제" } = {}) {
+    const current = readFamilySession(storage);
+    if (!current) return failure("family_only", FAMILY_MESSAGES.familyOnly);
+    if (String(confirm ?? "").trim() !== "삭제")
+      return failure("confirm_required", FAMILY_MESSAGES.deleteConfirm);
+    const secret = validateExistingPassword(password);
+    if (!secret.ok) return failure(secret.code, secret.message);
+    const refusal = await autoRunRefusal();
+    if (refusal) return refusal;
+    return exclusive(async () => {
+      const passwordKey = await deriveKey(current.username, password);
+      const response = await authPost(
+        "delete",
+        { passwordKey, confirm: "삭제" },
+        { token: current.token, accountId: current.ownerId },
+      );
+      if (!response.ok) return { result: response };
+      if (response.body?.deleted !== true)
+        return {
+          result: failure("invalid_response", FAMILY_MESSAGES.invalidResponse),
+          refresh: true,
+        };
+      if (readFamilySession(storage)?.ownerId === current.ownerId)
+        clearFamilySession(storage);
+      if (metadata?.accountId === current.ownerId) forgetBaseline();
+      else if (previousUserId === current.ownerId)
+        previousUserId = metadata?.accountId || null;
+      identityChanged();
+      return { result: { ok: true, deleted: true }, refresh: true };
+    });
+  }
+  /**
+   * Drops this device's cloud baseline so a locked device becomes local-only.
+   * The caller has already checked the parent PIN. Signing in later offers the
+   * usual source choice.
+   */
+  async function continueLocalOnly() {
+    const refusal = await autoRunRefusal();
+    if (refusal) return refusal;
+    return exclusive(async () => {
+      forgetBaseline();
+      if (status.authenticated) {
+        blocked = "choice";
+        emit({
+          phase: "choice",
+          connected: false,
+          dirty: localAvailable(),
+          reason: status.remoteExists ? "choose-source" : "initial-upload",
+          error: null,
+        });
+      } else emit({ phase: "signed-out", connected: false, error: null });
+      return { result: { ok: true }, refresh: true };
+    });
+  }
+  /** Another tab signed in or out: follow a baseline it dropped under the carry rule, then re-check. */
+  function onStorage(event) {
+    if (stopped || (event?.key !== FAMILY_SESSION_KEY && event?.key !== null))
+      return;
+    void (async () => {
+      await settle();
+      if (stopped) return;
+      const next = readFamilySession(storage),
+        shownFamily = isFamilyOwnerId(status.user?.id) ? status.user.id : null;
+      if (next && !storedMetadata() && carriesOver(next.ownerId)) {
+        metadata = null;
+        previousUserId = null;
+        blocked = null;
+      }
+      if ((next?.ownerId || null) !== shownFamily) identityChanged();
+      await refresh();
+    })();
+  }
+  function getFamilySession() {
+    const session = readFamilySession(storage);
+    return session
+      ? {
+          ownerId: session.ownerId,
+          username: session.username,
+          displayName: session.displayName,
+        }
+      : null;
+  }
+  /** {ok:true} or the refusal shown while a FULL AUTO run is active in any tab. */
+  async function checkAccountSwitch() {
+    return (await autoRunRefusal()) || { ok: true };
+  }
+  return {
+    start,
+    refresh,
+    push,
+    pull,
+    changed,
+    stop,
+    getStatus,
+    familySignup,
+    familyLogin,
+    familyLogout,
+    familyRecover,
+    familyChangePassword,
+    familyDeleteAccount,
+    continueLocalOnly,
+    getFamilySession,
+    checkAccountSwitch,
+  };
 }
