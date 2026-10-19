@@ -1206,7 +1206,7 @@ function renderOutline(s) {
   const o = s.draft.outline;
   show(
     s,
-    `${header(s, "줄거리 카드")}<p class="modal-intro">${o.beats.length}개 비트 · ${s.draft.input.pageCount}쪽 예정 · 집에서 출발해 두 곳 이상을 거쳐 집으로 돌아와요.</p><div class="story-card"><label class="story-label">제목</label>${o.titleCandidates.map((title, i) => `<label class="story-title-pick"><input type="radio" name="story-title" value="${i}" ${s.draft.titleIndex === i ? "checked" : ""}><input type="text" maxlength="100" data-outline-title="${i}" value="${esc(title)}" aria-label="제목 후보 ${i + 1}"></label>`).join("")}<div class="field"><label>한 줄 요약</label><input data-outline-field="logline" value="${esc(o.logline)}" maxlength="500"></div><div class="story-review-grid">${[
+    `${header(s, "줄거리 카드")}<p class="modal-intro">${o.beats.length}개 비트 · ${s.draft.input.pageCount}쪽 예정${openingsDraft(s.draft) ? ` · 펼침 ${s.draft.input.pageCount / 2}개(비트 하나가 펼침 하나)` : ""} · 집에서 출발해 두 곳 이상을 거쳐 집으로 돌아와요.</p><div class="story-card"><label class="story-label">제목</label>${o.titleCandidates.map((title, i) => `<label class="story-title-pick"><input type="radio" name="story-title" value="${i}" ${s.draft.titleIndex === i ? "checked" : ""}><input type="text" maxlength="100" data-outline-title="${i}" value="${esc(title)}" aria-label="제목 후보 ${i + 1}"></label>`).join("")}<div class="field"><label>한 줄 요약</label><input data-outline-field="logline" value="${esc(o.logline)}" maxlength="500"></div><div class="story-review-grid">${[
       ["want", "주인공의 바람"],
       ["problem", "문제"],
       ["twist", "반전"],

@@ -266,6 +266,37 @@ export function openingImageRange(openings, spreadUnit, pageUnit) {
     maxUsd: Math.max(cost(1), cost(openings)),
   };
 }
+/**
+ * R12 openings: automatic text repairs before buying the text — typically
+ * about 0.75 × O to 1.6 × O combined entry rewrites (6~13 at 8 openings),
+ * never more than 2 × O; priced on the pagination engine (9k tokens in, a
+ * spread 1.9k / a page 0.9k out; the cap at the spread price). Free for demos.
+ */
+export function openingRepairEstimate(settings, openings, demo = false) {
+  const cap = 2 * openings,
+    typicalMin = Math.round(0.75 * openings),
+    typicalMax = Math.min(cap, Math.round(1.6 * openings)),
+    stage = resolveStoryStageSettings(settings, "pagination"),
+    rewrite = (output) =>
+      demo
+        ? 0
+        : estimateTextCost({
+            ...stage,
+            input: 9000,
+            output,
+            model: stage.config.model,
+          }).costUsd,
+    spread = rewrite(1900),
+    mean = (spread + rewrite(900)) / 2;
+  return {
+    typicalMin,
+    typicalMax,
+    max: cap,
+    typicalMinUsd: typicalMin * mean,
+    typicalMaxUsd: typicalMax * mean,
+    maxUsd: cap * spread,
+  };
+}
 export function estimateFullAutoCost(
   state,
   wizard,
@@ -322,6 +353,7 @@ export function estimateFullAutoCost(
       imagesMinUsd: range.minUsd,
       imageCountMin: range.minCount,
       imageCountMax: range.maxCount,
+      repairs: openingRepairEstimate(settings, pages / 2, demo === true),
       sheetsUpperUsd: 10 * unit,
     };
   }

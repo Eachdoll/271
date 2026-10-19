@@ -361,6 +361,32 @@ export function unitLabel(book, index) {
   return `펼침 ${page.openingNo} · ${first}쪽(${page.side === "left" ? "왼쪽" : "오른쪽"})`;
 }
 
+/**
+ * The reader heading of entry `index`: '펼침 4 / 8 · 7–8쪽' for a spread,
+ * '펼침 3 / 8 · 5쪽' for a page of a pair; page books keep 'n / N쪽'.
+ */
+export function openingHeading(book, index) {
+  const pages = sourceOf(book).pages || [],
+    list = openingsOf(book),
+    opening = list.find((row) => row.indices.includes(index));
+  if (!opening) return `${index + 1} / ${pages.length}쪽`;
+  const first = printedPagesOf(pages.slice(0, index)) + 1;
+  return `펼침 ${opening.openingNo} / ${list.length} · ${pages[index]?.kind === "spread" ? `${first}–${first + 1}쪽` : `${first}쪽`}`;
+}
+/** '16쪽 · 펼침 8개 · 그림 13장' (openings), or null for page books. */
+export function openingsSummary(book) {
+  if (layoutOf(book) !== "openings") return null;
+  const pages = sourceOf(book).pages || [];
+  return `${printedPagesOf(pages)}쪽 · 펼침 ${openingsOf(book).length}개 · 그림 ${pages.length}장`;
+}
+/** '펼침 8개 · 펼침면 3 · 낱쪽 10 → 그림 13장 + 표지' (or '펼침면 8 · 낱쪽 0 …'), null for page books. */
+export function openingsMix(book) {
+  if (layoutOf(book) !== "openings") return null;
+  const pages = sourceOf(book).pages || [],
+    spreads = pages.filter((page) => page?.kind === "spread").length;
+  return `펼침 ${openingsOf(book).length}개 · 펼침면 ${spreads} · 낱쪽 ${pages.length - spreads} → 그림 ${pages.length}장 + 표지`;
+}
+
 /* ---------- structure ---------- */
 
 /** One approved beat per opening; throws (before any paid call) when they differ. */

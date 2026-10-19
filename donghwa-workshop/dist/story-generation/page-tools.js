@@ -568,6 +568,19 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
               : undefined,
           ),
       imageUnitUsd: unit,
+      ...(openings
+        ? {
+            spreadUnitUsd: estimateImageCost({
+              engine,
+              quality: "final",
+              size: unitImageSize(book, { kind: "spread" }),
+              config: {
+                ...world.providerConfig?.[engine],
+                ...book.generationSnapshot?.imageModelConfig,
+              },
+            }).costUsd,
+          }
+        : {}),
       imagesUsd,
       imagesNeeded,
       sheetsUpperUsd: book.generationSnapshot
@@ -587,13 +600,15 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
     imageUnitUsd: estimate.imageUnitUsd,
     imagesUsd: estimate.imagesUsd,
     imagesNeeded: estimate.pageCount + 1,
-    // R12 openings: before the text exists the pictures are a range.
+    // R12 openings: before the text exists the pictures are a range, and the
+    // automatic text repairs have a typical count and a hard cap (2 × openings).
     ...(estimate.imageCountMax
       ? {
           imagesNeeded: estimate.imageCountMax + 1,
           imagesMinUsd: estimate.imagesMinUsd,
           imageCountMin: estimate.imageCountMin,
           imageCountMax: estimate.imageCountMax,
+          repairs: estimate.repairs,
         }
       : {}),
     sheetsUpperUsd: estimate.sheetsUpperUsd,
