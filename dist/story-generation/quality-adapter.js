@@ -3,7 +3,11 @@ import {
   englishVocabularyPrompt,
 } from "../story-reading-context.js";
 /* Bridge the supplied quality package to app engines, frozen worlds and resumable billing. */
-import { frozenBeatCount, StoryValidationError } from "./schemas.js";
+import {
+  frozenBeatCount,
+  hardOutlineViolations,
+  StoryValidationError,
+} from "./schemas.js";
 import { LEVEL_SEED } from "../reading-levels.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
@@ -1083,6 +1087,9 @@ function untargetedReason(original, response, messages) {
       ?.message || ""
   );
 }
+/** Package check items that must still stop a book: forbidden material, and no topic word at all. */
+const isHardPlotItem = (message) =>
+  /^금지 소재|^주제 키워드\(/u.test(String(message));
 function parseJson(text) {
   try {
     return JSON.parse(
@@ -1298,11 +1305,28 @@ export async function generateQualityOutline(
         const { cause, ...kept } = fixFallback;
         qualityMeta.catchphraseFixFallback = kept;
       }
-      if (
-        (result.check.ok ||
-          (!result.check.regenerate.length && !blocking.length)) &&
-        report.valid
-      ) {
+      // After the last attempt, quality-only items (topic word, planted payoff,
+      // refrain, repeated sentence frames …) no longer stop a paid book: they are
+      // kept as notes. Forbidden material, structure, places and the ledger still stop it.
+      const passes =
+          (result.check.ok ||
+            (!result.check.regenerate.length && !blocking.length)) &&
+          report.valid,
+        moreAttempts =
+          result.check.regenerate.length &&
+          attempt === 0 &&
+          patterns.length > 1,
+        softOnly =
+          !moreAttempts &&
+          ![...result.check.regenerate, ...blocking].some(isHardPlotItem) &&
+          !hardOutlineViolations(report).length;
+      if (!passes && softOnly)
+        qualityMeta.softIssues = [
+          ...result.check.regenerate,
+          ...blocking,
+          ...asList(report.violations).map((row) => row.message),
+        ];
+      if (passes || softOnly) {
         const outline = services.assertValid
           ? services.assertValid("outline", result.outline, input)
           : result.outline;

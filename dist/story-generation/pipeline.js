@@ -17,6 +17,7 @@ import {
   assertValid,
   validateOutline,
   validatePagination,
+  hardOutlineViolations,
 } from "./schemas.js";
 import {
   AUTO_MATERIAL_SCHEMA,
@@ -1559,6 +1560,34 @@ function includesTopicKeyword(body, keyword) {
         [keyword + "s", keyword + "es"].includes(token)),
   );
 }
+const KIND_TOPIC_WORDS = Object.freeze({
+  dinosaur: ["공룡", "dinosaur"],
+  rabbit: ["토끼", "rabbit", "bunny"],
+});
+/**
+ * "공룡 친구와 소풍" is told through the cast: a named character whose kind or
+ * description is that keyword (초록이, a dinosaur) stands for the word when the
+ * beats name the character.
+ */
+function castStandsForKeyword(characters, body, keyword) {
+  return (Array.isArray(characters) ? characters : []).some((c) => {
+    const name = String(c?.name || "")
+      .normalize("NFKC")
+      .toLowerCase();
+    if (!name || !body.includes(name)) return false;
+    const about = [
+      ...(KIND_TOPIC_WORDS[c.kind] || []),
+      c.description,
+      c.appearance,
+      c.role,
+    ]
+      .filter((value) => typeof value === "string")
+      .join(" ")
+      .normalize("NFKC")
+      .toLowerCase();
+    return includesTopicKeyword(about, keyword);
+  });
+}
 export function inspectOutlineRules(outline, source = {}) {
   const basic = validateOutline(outline, source),
     violations = basic.errors.map((message) => ({
@@ -1577,13 +1606,18 @@ export function inspectOutlineRules(outline, source = {}) {
     places = preflightOutlineLocations(source),
     backgrounds = source.backgrounds || source.backgroundList || [],
     allowed = new Set(backgrounds.map((b) => b.id));
-  for (const keyword of topicKeywords)
-    if (!includesTopicKeyword(body, keyword))
-      add(
-        "topic_keyword_missing",
-        `비트에 주제 키워드 ‘${keyword}’가 없어요.`,
-        { keyword },
-      );
+  const missingTopic = topicKeywords.filter(
+    (keyword) =>
+      !includesTopicKeyword(body, keyword) &&
+      !castStandsForKeyword(source.characters, body, keyword),
+  );
+  // partial: another topic word is there, so the story is still about the topic.
+  for (const keyword of missingTopic)
+    add(
+      "topic_keyword_missing",
+      `비트에 주제 키워드 ‘${keyword}’가 없어요.`,
+      { keyword, partial: missingTopic.length < topicKeywords.length },
+    );
   for (const c of source.characters || [])
     if (
       c.name &&
@@ -1776,7 +1810,9 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
         message: "줄거리의 원인·결과와 상태 기록이 필요해요.",
       });
     }
-    if (report.valid) {
+    // After the last paid repair, quality-only rules no longer stop the book.
+    const softOnly = pass === 2 && !hardOutlineViolations(report).length;
+    if (report.valid || softOnly) {
       result.data = assertValid("outline", result.data, input);
       if (input.storyWorld)
         result.data.storyWorldSnapshot = clone(input.storyWorld);
@@ -1789,6 +1825,9 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
         ),
         repairAttempts: pass,
         checks: report,
+        ...(report.valid
+          ? {}
+          : { softIssues: report.violations.map((row) => row.message) }),
       };
       return result;
     }

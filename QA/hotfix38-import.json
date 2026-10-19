@@ -1,0 +1,22 @@
+{
+  "sourceRange": "b966f32..387f436",
+  "documentCommit": "8891729",
+  "exactTargetFiles": {
+    "CLAUDE.md": "6b8e4593d9c21b991706c4ac93d863a05ad24b03ab1ecf143b44d5eaf794e3e4",
+    "dist/story-generation/pipeline.js": "5cc9f5cb28929d97e4136cecb433afa25d8c9007f915d7de0a10fa853719be60",
+    "dist/story-generation/quality-adapter.js": "5fe892f9e2d01af6e86e619f4f678158e55e891e7d3cf85db90ced9522293506",
+    "dist/story-generation/schemas.js": "ff3f17cb792153e0ab20d9502e309b2a81f7b95484368fbbacd5468b96ea43f8",
+    "dist/story-quality/dist/pipeline.d.ts": "26600be939f66685c3acac9c1d6b95c458ca8b8dc05b6a2010b67c34939ecd65",
+    "dist/story-quality/dist/pipeline.js": "db5485ef50ee5ce784410e0155aeaa6cb6337c68f53dc3f27e0e4d121ddbc0e2",
+    "dist/sw.js": "d253b891a6babe04d17b1d1fdd88f57787f781af212a3a653011b13c9380479d",
+    "story-quality/dist/pipeline.d.ts": "26600be939f66685c3acac9c1d6b95c458ca8b8dc05b6a2010b67c34939ecd65",
+    "story-quality/dist/pipeline.js": "db5485ef50ee5ce784410e0155aeaa6cb6337c68f53dc3f27e0e4d121ddbc0e2",
+    "story-quality/src/pipeline.ts": "4930a518ff6e73269f7129b490c89f3f1f9508de2b3d0589831ced4a9e86413c",
+    "story-quality/test/planted-seed-r11.test.mjs": "49f019a3630aa8515afa2ffa984a49b42394cc3df2de19db516ed3cb7c767771",
+    "tests/quality-adapter.test.mjs": "7e2d3f6afd1ac1d6c1afdf269725802a900f67fd96f565d6e4a7c47be8e11162"
+  },
+  "r12Included": false,
+  "protectedResultFiles": 35,
+  "familyCodeUnchanged": true,
+  "migrationsUnchanged": true
+}

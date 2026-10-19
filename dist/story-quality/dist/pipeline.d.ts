@@ -62,6 +62,15 @@ export interface OutlineStageResult {
     costUsd: number;
 }
 export declare function runOutlineStage(input: OutlineStageInput): Promise<OutlineStageResult>;
+/**
+ * 모델이 plan.planted를 시드 재료가 든 설명 문장으로 쓰면("엄마의 커다란 무늬 모자는 안쪽 띠가 좁다. …")
+ * 시드 재료 이름으로 되돌린다. 시드 재료가 들어 있지 않은 다른 물건이면 그대로 두어 검사가 잡게 한다.
+ */
+export declare function plantedFromSeed(outline: StoryOutline, seed: {
+    planted?: {
+        ko?: string;
+    };
+} | undefined): StoryOutline;
 export interface ProseStageInput {
     engines: Engines;
     lang: 'ko' | 'en';

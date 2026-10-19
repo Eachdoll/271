@@ -597,3 +597,24 @@ export function assertValid(stage, value, input = {}, outline) {
   if (!result.valid) throw new StoryValidationError(stage, result.errors);
   return clone(value);
 }
+/**
+ * Outline rules that describe quality, not structure: when only these remain
+ * after the paid repairs, the outline is kept with the items recorded as notes
+ * instead of stopping the whole book. Unknown or mismatched places, the home
+ * and drawer rules for pictures, the ledger and the structure stay blocking.
+ */
+export const SOFT_OUTLINE_CODES = Object.freeze(
+  new Set([
+    "topic_keyword_missing",
+    "character_name_missing",
+    "home_start_end",
+    "middle_locations",
+  ]),
+);
+export const hardOutlineViolations = (report) =>
+  (Array.isArray(report?.violations) ? report.violations : []).filter(
+    (row) =>
+      !SOFT_OUTLINE_CODES.has(row?.code) ||
+      // A story with none of the topic words is not about the topic.
+      (row.code === "topic_keyword_missing" && row.partial !== true),
+  );
