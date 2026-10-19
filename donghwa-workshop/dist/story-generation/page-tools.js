@@ -6,7 +6,12 @@ import { checkRichness } from "./richness.js";
 import { currentBookPagination } from "./book-coherence.js";
 import { syncStoryDraft } from "./ui.js";
 import { buildStoryWords } from "../story-reading-context.js";
-import { layoutOf, textEstimateArgs, unitKind } from "../book-layout.js";
+import {
+  layoutOf,
+  textEstimateArgs,
+  unitImageSize,
+  unitKind,
+} from "../book-layout.js";
 import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
@@ -522,7 +527,25 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
       }).costUsd,
       imagesNeeded =
         pagesNeedingImages(book).length + (book.cover?.imageAssetId ? 0 : 1),
-      settings = textSettingsOf(state, book);
+      settings = textSettingsOf(state, book),
+      // R12 openings: the exact price, Σ unit(kind) over the missing entries + cover.
+      openings = layoutOf(book) === "openings",
+      imagesUsd = openings
+        ? pagesNeedingImages(book).reduce(
+            (sum, index) =>
+              sum +
+              estimateImageCost({
+                engine,
+                quality: "final",
+                size: unitImageSize(book, book.pages[index]),
+                config: {
+                  ...world.providerConfig?.[engine],
+                  ...book.generationSnapshot?.imageModelConfig,
+                },
+              }).costUsd,
+            book.cover?.imageAssetId ? 0 : unit,
+          )
+        : imagesNeeded * unit;
     return {
       textUsd: book.textDemo
         ? 0
@@ -545,7 +568,7 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
               : undefined,
           ),
       imageUnitUsd: unit,
-      imagesUsd: imagesNeeded * unit,
+      imagesUsd,
       imagesNeeded,
       sheetsUpperUsd: book.generationSnapshot
         ? 0
@@ -564,6 +587,15 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
     imageUnitUsd: estimate.imageUnitUsd,
     imagesUsd: estimate.imagesUsd,
     imagesNeeded: estimate.pageCount + 1,
+    // R12 openings: before the text exists the pictures are a range.
+    ...(estimate.imageCountMax
+      ? {
+          imagesNeeded: estimate.imageCountMax + 1,
+          imagesMinUsd: estimate.imagesMinUsd,
+          imageCountMin: estimate.imageCountMin,
+          imageCountMax: estimate.imageCountMax,
+        }
+      : {}),
     sheetsUpperUsd: estimate.sheetsUpperUsd,
     imageEngine: estimate.imageEngine,
     pageCount: estimate.pageCount,

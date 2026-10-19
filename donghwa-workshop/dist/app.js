@@ -187,6 +187,7 @@ import {
   printedPagesOf,
   pageCountOptions,
   snapPageCount,
+  unitImageSize,
 } from "./book-layout.js";
 import { checkStory } from "./story-generation/checker.js";
 import { checkRichness } from "./story-generation/richness.js";
@@ -2621,17 +2622,44 @@ async function approveDraft() {
     work = approvalImageWork(book, engine),
     finalizeImages = work.finalize && (work.pages.length > 0 || work.cover);
   if (finalizeImages) {
-    const estimate = estimateBookCost({
+    const config = {
+        ...world.providerConfig?.[engine],
+        ...book.generationSnapshot?.imageModelConfig,
+      },
+      pageEstimate = estimateBookCost({
         engine,
         pageCount: work.pages.length,
         includeCover: work.cover,
         size: "1536x1024",
         quality: "final",
-        config: {
-          ...world.providerConfig?.[engine],
-          ...book.generationSnapshot?.imageModelConfig,
-        },
+        config,
       }),
+      // R12 openings: spreads to draw are priced at their own size (2048x880).
+      spreadsToDraw =
+        layoutOf(book) === "openings"
+          ? work.pages.filter((i) => book.pages[i]?.kind === "spread").length
+          : 0,
+      spreadDelta = spreadsToDraw
+        ? estimateBookCost({
+            engine,
+            pageCount: spreadsToDraw,
+            includeCover: false,
+            size: unitImageSize(book, { kind: "spread" }),
+            quality: "final",
+            config,
+          }).costUsd -
+          estimateBookCost({
+            engine,
+            pageCount: spreadsToDraw,
+            includeCover: false,
+            size: "1536x1024",
+            quality: "final",
+            config,
+          }).costUsd
+        : 0,
+      estimate = spreadsToDraw
+        ? { ...pageEstimate, costUsd: pageEstimate.costUsd + spreadDelta }
+        : pageEstimate,
       kept = book.pages.length - work.pages.length,
       what = [
         work.cover ? "표지 1장" : "",

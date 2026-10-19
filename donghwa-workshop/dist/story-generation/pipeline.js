@@ -2297,6 +2297,7 @@ function applyStaging(pagination, outline, input, options) {
       bookId: options.bookId || input.bookId || "story",
       stylePreset: options.stylePreset,
       backgrounds: input.backgrounds,
+      ...(isOpeningsInput(input) ? { openings: true } : {}),
     });
   next.sceneBriefs = clone(briefs);
   for (const page of next.pages || []) {

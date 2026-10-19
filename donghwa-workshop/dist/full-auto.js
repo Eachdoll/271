@@ -48,9 +48,12 @@ import { estimateImageCost } from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
 import {
+  SPREAD_IMAGE_SIZE,
   layoutFor,
+  layoutOf,
   printedPagesOf,
   textEstimateArgs,
+  unitLabel,
   validateOpenings,
 } from "./book-layout.js";
 import { freezeReadingLevels } from "./reading-levels.js";
@@ -79,6 +82,17 @@ function checkStopBefore(value) {
 }
 export function autoJobs(state) {
   return (state.fullAutoJobs ||= {});
+}
+/**
+ * The picture total a FULL AUTO label shows: today's 'N쪽', or for an openings
+ * job 'n장' once its book exists and '펼침 O개 · P쪽' before (R12).
+ */
+export function jobPictureTotal(job, fallback = job?.input?.pageCount) {
+  if (job?.input?.layoutPolicy?.kind !== "openings") return `${fallback}쪽`;
+  const pages = job.book?.pages?.length;
+  return pages
+    ? `${pages}장`
+    : `펼침 ${Number(job.input.pageCount) / 2}개 · ${job.input.pageCount}쪽`;
 }
 /** The FULL AUTO job that built this book, if it still exists. Read-only lookup. */
 export function fullAutoJobForBook(state, book) {
@@ -237,6 +251,21 @@ export function createFullAutoJob(
  * sheetsUpperUsd (at most 10 new sheets). Called with two arguments the
  * original fields are unchanged.
  */
+/**
+ * R12 openings: the picture range of O openings before pagination. Entries are
+ * s spreads and 2(O − s) pages for s = 1..O (at least one spread); counts and
+ * prices exclude/include the cover (one 1536x1024 picture) as named.
+ */
+export function openingImageRange(openings, spreadUnit, pageUnit) {
+  const cost = (spreads) =>
+    spreads * spreadUnit + 2 * (openings - spreads) * pageUnit + pageUnit;
+  return {
+    minCount: openings,
+    maxCount: 2 * openings - 1,
+    minUsd: Math.min(cost(1), cost(openings)),
+    maxUsd: Math.max(cost(1), cost(openings)),
+  };
+}
 export function estimateFullAutoCost(
   state,
   wizard,
@@ -269,6 +298,33 @@ export function estimateFullAutoCost(
     freePlan = demo === true || planMode === "selection",
     textUsd =
       demo === true ? 0 : text.costUsd + (freePlan ? 0 : planning.costUsd);
+  // R12 openings: before the text exists the picture count is a range, O..2O−1
+  // entries plus the cover (the mix guard rules out all pairs).
+  if (layoutFor(wizard) === "openings") {
+    const spreadUnit = estimateImageCost({
+        engine,
+        quality: "final",
+        size: SPREAD_IMAGE_SIZE,
+        config,
+      }).costUsd,
+      range = openingImageRange(pages / 2, spreadUnit, unit);
+    return {
+      baseUsd: textUsd + range.maxUsd,
+      withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
+      imageEngine: engine,
+      pageCount: pages,
+      requests: demo === true ? 0 : text.requestCount + (freePlan ? 0 : 1),
+      note: "참고 단가 추정 · 그림 수는 펼침면 수에 따라 달라요 · 새 시트 최대 10장과 유사 그림 1회 재생성 포함 상단 · 글 자동 수정·입력 참조 요금 별도",
+      textUsd,
+      imageUnitUsd: unit,
+      spreadUnitUsd: spreadUnit,
+      imagesUsd: range.maxUsd,
+      imagesMinUsd: range.minUsd,
+      imageCountMin: range.minCount,
+      imageCountMax: range.maxCount,
+      sheetsUpperUsd: 10 * unit,
+    };
+  }
   return {
     baseUsd: textUsd + (pages + 1) * unit,
     withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
@@ -575,8 +631,13 @@ export function fullAutoProgress(job) {
     if (job.book?.generationSnapshot) done += 1;
   }
   if (!job.stopBefore) {
-    const pages = job.book?.pages || [];
-    total += (pages.length || Number(job.input?.pageCount) || 12) + 1;
+    const pages = job.book?.pages || [],
+      // R12 openings: before the book exists, at most 2O − 1 entries.
+      planned =
+        job.input?.layoutPolicy?.kind === "openings"
+          ? Number(job.input.pageCount) - 1
+          : Number(job.input?.pageCount) || 12;
+    total += (pages.length || planned) + 1;
     done +=
       pages.filter(finalImage).length + (job.book?.cover?.imageAssetId ? 1 : 0);
   }
@@ -1118,7 +1179,9 @@ export async function runFullAuto(
       if (edited) delete job.completed["page:" + index];
       await step(
         "page:" + index,
-        `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
+        layoutOf(job.book) === "openings"
+          ? `그림 ${index + 1} / ${job.book.pages.length}장 · ${unitLabel(job.book, index)} 그림 만들기`
+          : `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
         () =>
           withBookTextUsage(job, async () => {
             const before = job.book.pages[index]?.imageAssetId;

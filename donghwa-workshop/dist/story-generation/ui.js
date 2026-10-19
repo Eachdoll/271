@@ -23,6 +23,7 @@ import {
 } from "./pipeline.js";
 import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
 import {
+  SPREAD_SHOTS,
   SHOTS,
   SHOT_LABELS,
   stagePagination,
@@ -138,6 +139,7 @@ function stagingContext(d) {
       getStylePreset(d.worldSnapshot?.stylePresetId),
     backgrounds: d.input.backgrounds,
     preserveManual: true,
+    ...(openingsDraft(d) ? { openings: true } : {}),
   };
 }
 /** A completed request survives cancellation; only dependent products are invalidated. */
@@ -272,8 +274,14 @@ export function renderSceneBriefs(
     .join("");
   return `<details class="story-card story-briefs" id="story-scene-details" ${open ? "open" : ""}><summary>장면 디테일 <span>${d.sceneBriefs.length}개 · 글과 그림이 함께 참고해요</span></summary><p class="story-note">수정한 디테일은 다음 전문 생성에 반영됩니다. 기존 전문과 쪽 나누기는 다시 생성해야 해요.</p>${rows}</details>`;
 }
-export function renderStoryPageStaging(page, index) {
+export function renderStoryPageStaging(page, index, { openings = false } = {}) {
   const staging = page.staging || {};
+  // R12 openings: a spread offers spread shots and the left/right halves only.
+  if (openings && page.kind === "spread") {
+    const chip = (key, value, label) =>
+      `<button type="button" class="story-chip ${staging[key] === value ? "selected" : ""}" aria-pressed="${staging[key] === value}" data-story-action="set-page-staging" data-index="${index}" data-staging-field="${key}" data-staging-value="${value}">${esc(label)}</button>`;
+    return `<div class="story-page-staging"><fieldset><legend class="story-label">구도</legend><div class="story-chip-row">${SPREAD_SHOTS.map((shot) => chip("shot", shot, SHOT_LABELS[shot] || shot)).join("")}</div></fieldset><fieldset><legend class="story-label">인물 위치</legend><div class="story-chip-row">${chip("characterSide", "left", "왼쪽")}${chip("characterSide", "right", "오른쪽")}</div></fieldset><span class="story-note">펼침면 · 접히는 가운데를 피해 그려요 · 글은 그림 아래</span></div>`;
+  }
   const chips = (key, values, labels) =>
     values
       .map(
@@ -1272,7 +1280,7 @@ function renderOpeningsPages(s) {
     `${header(s, "쪽 나누기")}<p class="modal-intro">펼침 ${openings.length}개 · ${printedPagesOf(p.pages)}쪽 · 그림 ${p.pages.length}장(펼침면 ${spreads} · 낱쪽 ${singles})${p.mixNote === "all-spreads" ? " · 모두 펼침면" : ""} · AI가 펼침마다 펼침면/낱쪽을 골랐어요.</p>${structure.valid ? "" : `<div class="notice story-count-warning" role="status"><strong>펼침 구성을 다시 맞춰야 해요.</strong><p>${esc(structure.errors.slice(0, 3).join(" "))}</p></div>`}<details class="story-card story-tools"><summary>다시 나누기·검사</summary><div class="story-inline-actions">${frozen ? `<p class="story-note">${PICTURE_FROZEN_NOTE}</p>` : button("전문 유지 · 쪽만 다시 나누기", "repaginate")}${button("검사 후 실패 쪽만 수정 · 최대 2회", "repair-pages")}${button("전문으로 돌아가기", "back-prose")}</div></details>${renderStoryChildGate(d.childGate, { dirty: d.checksDirty })}${renderStoryCoherence(d.pageCoherence || d.paginationMeta?.coherence, { dirty: d.checksDirty })}${checkView(s)}${renderStoryRichness(d.richnessCheck, { dirty: d.checksDirty })}<div class="story-card"><div class="field"><label>표지 제목</label><input data-cover-field="title" value="${esc(p.cover.title)}" maxlength="150"></div><div class="field"><label>표지 장면 · 영어</label><textarea data-cover-field="sceneAction" maxlength="1000">${esc(p.cover.sceneAction)}</textarea></div></div>${p.pages
       .map(
         (page, i) =>
-          `<article class="story-card" data-story-page="${i}"><div class="story-card-head"><strong>${esc(unitLabel(d, i))} · ${page.beatIndex}번 비트</strong>${cue(page)}<div class="story-inline-actions">${button("이 쪽만 다시", "rewrite-page", `data-index="${i}"`)}</div></div><div class="story-review-grid"><div class="field"><label>한글</label><textarea data-page-field="textKo" data-index="${i}" maxlength="15000">${esc(page.textKo)}</textarea></div><div class="field"><label>English</label><textarea data-page-field="textEn" data-index="${i}" maxlength="15000">${esc(page.textEn)}</textarea></div></div>${renderStoryPageStaging(page, i)}<div class="story-page-scene"><div class="field"><label>그릴 한 장면 · 영어 동작 설명</label><textarea data-scene-field="action" data-index="${i}" maxlength="2500">${esc(page.scene.action)}</textarea></div><div class="story-review-grid"><div class="field"><label>배경 ID 또는 장소 설명</label><input data-scene-field="where" data-index="${i}" value="${esc(page.scene.where)}"></div><div class="field"><label>감정 · 영어 한 단어</label><input data-scene-field="emotion" data-index="${i}" value="${esc(page.scene.emotion)}"></div><div class="field"><label>시간</label><select data-scene-field="timeOfDay" data-index="${i}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${page.scene.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></div><div class="field"><label>소품 · 영어, 쉼표로 구분</label><input data-scene-field="props" data-index="${i}" value="${esc(page.scene.props?.join(", ") || "")}"></div></div><div class="story-page-variants">${cast
+          `<article class="story-card" data-story-page="${i}"><div class="story-card-head"><strong>${esc(unitLabel(d, i))} · ${page.beatIndex}번 비트</strong>${cue(page)}<div class="story-inline-actions">${button("이 쪽만 다시", "rewrite-page", `data-index="${i}"`)}</div></div><div class="story-review-grid"><div class="field"><label>한글</label><textarea data-page-field="textKo" data-index="${i}" maxlength="15000">${esc(page.textKo)}</textarea></div><div class="field"><label>English</label><textarea data-page-field="textEn" data-index="${i}" maxlength="15000">${esc(page.textEn)}</textarea></div></div>${renderStoryPageStaging(page, i, { openings: true })}<div class="story-page-scene"><div class="field"><label>그릴 한 장면 · 영어 동작 설명</label><textarea data-scene-field="action" data-index="${i}" maxlength="2500">${esc(page.scene.action)}</textarea></div><div class="story-review-grid"><div class="field"><label>배경 ID 또는 장소 설명</label><input data-scene-field="where" data-index="${i}" value="${esc(page.scene.where)}"></div><div class="field"><label>감정 · 영어 한 단어</label><input data-scene-field="emotion" data-index="${i}" value="${esc(page.scene.emotion)}"></div><div class="field"><label>시간</label><select data-scene-field="timeOfDay" data-index="${i}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${page.scene.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></div><div class="field"><label>소품 · 영어, 쉼표로 구분</label><input data-scene-field="props" data-index="${i}" value="${esc(page.scene.props?.join(", ") || "")}"></div></div><div class="story-page-variants">${cast
             .map(
               (character) =>
                 `<label class="story-label">${esc(character.name)}의 모습<select data-page-variant="${esc(character.id)}" data-index="${i}"><option value="">기본 시트</option>${d.input.variants

@@ -689,6 +689,11 @@ async function sampleAdapter(request, config, context) {
         `width="${request.size.width}" height="${request.size.height}"`,
       )
       .replace(/fill="#eae9d9"/g, `fill="${paper}"`);
+    // R12 openings: a wide spread (ratio > 2) letterboxes the 800×580 template
+    // on paper-coloured bars; 3:2 output stays byte for byte as before.
+    const { width, height } = request.size;
+    if (width / height > 2)
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="${paper}"/>${svg.replace(/^<svg\b/, `<svg preserveAspectRatio="xMidYMid meet" x="0" y="0"`)}</svg>`;
   }
   const blob = new Blob([svg], { type: "image/svg+xml" });
   const imageUrl =
