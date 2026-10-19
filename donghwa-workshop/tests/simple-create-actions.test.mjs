@@ -1323,6 +1323,48 @@ test('R11 Back refused while a page edit is open goes back to the same entry: th
   });
 });
 
+test('R11 Back/Forward while a dialog is open (the one-time recovery code) never acts under it and returns to the entry', async () => {
+  reset();
+  await withHistory(async ({h, leaves, view, settle}) => {
+    const job = await finishedJob('복구 코드를 지키는 뒤로 가기');
+    assert.equal(await openSimpleJob(ctx, job.id), true);
+    await goto(3);
+    await goto(4);
+    const entries = JSON.stringify(h.entries), at = h.index;
+    let dialog = true;
+    ctx.isModalOpen = () => dialog;
+    try {
+      for (let n = 1; n <= 5; n++) {
+        h.back(); await settle();
+        assert.equal(h.index, at, `Back ${n} returns to the entry the parent was on`);
+        assert.equal(wizard.simpleStep, 4, `Back ${n} changes no step under the dialog`);
+        assert.equal(h.left, false);
+      }
+      assert.deepEqual(leaves, [], 'the leave dialog never replaces the open one');
+      assert.equal(JSON.stringify(h.entries), entries, 'no entry was rewritten');
+      // The story reopened from the library card, then sign-up from the status
+      // chip: Back over the old entries of the same story is refused too.
+      ctx.setView('library'); screen.simple = false; wizard = null; draft = null;
+      assert.equal(await openSimpleJob(ctx, job.id), true);
+      const top = h.index;
+      assert.deepEqual([h.entries[top - 1]?.donghwaSimpleStep, h.entries[top - 1]?.story], [4, job.id]);
+      h.back(); await settle();
+      assert.equal(h.index, top, 'back on the reopened story\'s entry');
+      assert.deepEqual(leaves, []);
+      assert.equal(view(), 'create');
+      assert.equal(wizard.simpleStep, 4);
+      assert.equal(modal, null, 'nothing was shown over the dialog');
+      dialog = false;
+      h.back(); await settle();
+      assert.equal(wizard.simpleStep, 3, 'with the dialog closed, Back moves again');
+    } finally {
+      delete ctx.isModalOpen;
+    }
+    assert.deepEqual(drawn, []);
+    assert.equal(networkCalls, 0);
+  });
+});
+
 test('R11 Back from a reopened story leaves through the app\'s guarded way to the library; a live text run goes on', async () => {
   reset();
   await withHistory(async ({h, leaves, view, settle}) => {
@@ -1577,5 +1619,168 @@ test('R11 reopening the story whose picture is being drawn says so (not 다른 �
   } finally {
     release();
     ctx.generateScene = generate;
+  }
+});
+
+/* ---------- R11 step navigation: rules the integration review found untested ---------- */
+test('R11 the simple library card of a story whose pictures are being made says 그림, not 글 검수 중, before the first page lands', async () => {
+  reset();
+  const job = await demoJob('구름 위 빵집');
+  await open(job);
+  let card = null;
+  onSave = () => {
+    if (card !== null || job.status !== 'running') return;
+    if (job.book.pages.some(page => page.imageAssetId)) return;
+    const html = renderFullAutoJobs(state, {simple: true}), at = html.indexOf(`data-auto-job="${job.id}"`);
+    card = html.slice(at, html.indexOf('</article>', at));
+  };
+  const pending = click('draw-all');
+  await answer('simple-confirm-yes');
+  await pending;
+  onSave = null;
+  assert.ok(card, 'the card was drawn while the run was live and no picture had landed');
+  assert.doesNotMatch(card, /글 검수 중/, 'a running picture job is not waiting for text review');
+  assert.match(card, /그림 0\/8/);
+  assert.match(card, /data-full-auto-action="pause"/, 'its 중지 sits next to the right label');
+});
+
+test('R11 ③ of a held story while its pictures are being drawn: the text line and the drawing note, no second progress or 중지', async () => {
+  reset();
+  const job = await finishedJob('비 오는 날 우산 세 개');
+  for (const index of [5, 6, 7]) dropPicture(job, index);
+  job.book.autoGenerationComplete = false;
+  job.status = 'pages-ready';
+  await open(job);
+  let third = null;
+  onSave = () => {
+    if (third !== null || job.status !== 'running') return;
+    goto(3);
+    third = renderSimpleCreate(ctx);
+  };
+  const pending = click('draw-all');
+  await answer('simple-confirm-yes');
+  await pending;
+  onSave = null;
+  assert.ok(third, 'rendered ③ while the run was live');
+  assert.match(third, /글이 완성됐어요 · 쪽 8개/);
+  assert.match(third, /지금 그림을 만들고 있어요 · ④에서 볼 수 있어요/);
+  assert.doesNotMatch(third, /class="[^"]*simple-progress/);
+  assert.doesNotMatch(third, /data-simple-action="stop"/);
+  assert.match(third, /data-simple-action="open-review"[^>]*>검수로 가기/);
+});
+
+test('R11 이 주제로 새로 만들기 from ② stays on ②, keeps a forced (pro-mode) story on the simple screen and drops the run\'s auto-added friend and place', async () => {
+  reset();
+  const job = await finishedJob('공룡 친구와 숲 소풍');
+  // As an auto-plan run leaves it: the planner's new friend and place are active
+  // materials (full-auto.js adds them to state) and in job.wizard's ids.
+  const friend = {...structuredClone(state.characters.find(c => c.id === 'greenie')), id: 'auto-friend-r11', name: '포포'};
+  const place = {...structuredClone(state.backgrounds.find(b => b.id === 'forest')), id: 'auto-place-r11', name: '버섯 언덕'};
+  state.characters.push(friend);
+  state.backgrounds.push(place);
+  try {
+    job.plan = {...(job.plan || {}), newCharacters: [friend], newBackgrounds: [place]};
+    // Also a friend deleted since, and more friends than the story can take.
+    job.wizard.characterIds = ['yuha', 'greenie', 'gone-friend', 'auto-friend-r11', 'toto', 'mom'];
+    job.wizard.backgroundIds = ['home', 'gone-place', 'forest', 'auto-place-r11'];
+    await open(job, 2);
+    wizard.simpleForced = true;
+    const pending = click('fork');
+    await answer('simple-confirm-yes');
+    await pending;
+    assert.equal(wizard.simpleJobId, undefined);
+    assert.equal(wizard.simpleStep, 2, 'a fork from ② lands on ②');
+    assert.equal(wizard.simpleForced, true, 'a forced story stays on the simple screen');
+    assert.deepEqual(wizard.characterIds, ['yuha', 'greenie', 'toto'], 'the run\'s own new friend and a deleted one are not carried over; 1 + 2 friends at most');
+    assert.deepEqual(wizard.backgroundIds, ['home', 'forest'], 'the run\'s own new place is not carried over');
+  } finally {
+    state.characters.splice(state.characters.indexOf(friend), 1);
+    state.backgrounds.splice(state.backgrounds.indexOf(place), 1);
+  }
+});
+
+test('R11 이 주제로 새로 만들기 is drawn disabled and dropped silently while this screen draws a page', async () => {
+  reset();
+  const job = await finishedJob('해바라기 키 재기');
+  await open(job);
+  let release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const generate = ctx.generateScene;
+  ctx.generateScene = async (s, book, index) => { await blocked; return generate(s, book, index); };
+  const before = wizard;
+  try {
+    const drawing = click('redraw-page');
+    await until(() => simpleDrawingInFlight(), 'the page drawing');
+    await goto(1);
+    assert.equal(wizard.simpleStep, 1);
+    assert.match(renderSimpleCreate(ctx), /data-simple-action="fork"[^>]*disabled/);
+    await click('fork');
+    assert.equal(modal, null, 'no confirm while the page is drawn');
+    assert.equal(wizard, before);
+    release();
+    await drawing;
+  } finally {
+    release();
+    ctx.generateScene = generate;
+  }
+});
+
+test('R11 ③ 이어서 만들기 that finishes while the parent is on ① leaves them on ①', async () => {
+  reset();
+  const job = await demoJob('개미 마을 이사');
+  delete job.book;
+  job.status = 'paused';
+  for (const key of Object.keys(job.completed)) if (!/^(plan|outline)$/.test(key)) delete job.completed[key];
+  await openSimpleJob(ctx, job.id);
+  assert.equal(wizard.simpleStep, 3);
+  let moved = false;
+  onSave = () => {
+    if (moved || job.status !== 'running') return;
+    moved = true;
+    goto(1);
+  };
+  await click('retry');
+  onSave = null;
+  assert.ok(moved);
+  assert.equal(job.status, 'text-review', job.error || '');
+  assert.equal(wizard.simpleStep, 1, 'not pulled to ④');
+  assert.ok(toasts.some(t => t.message === '글이 완성됐어요. 단계 표시의 ④에서 검수해요.'));
+});
+
+test('R11 ④ bottom-left is 이전, disabled while a page edit is open; ③ gets ✓ only once the text exists', async () => {
+  reset();
+  const job = await finishedJob('달팽이 경주');
+  await open(job);
+  const back = /<div class="wizard-actions"><button[^>]*data-simple-action="back"[^>]*>이전<\/button>/;
+  const backDisabled = /<div class="wizard-actions"><button[^>]*data-simple-action="back"[^>]*disabled[^>]*>이전<\/button>/;
+  assert.match(renderSimpleCreate(ctx), back);
+  assert.doesNotMatch(renderSimpleCreate(ctx), backDisabled);
+  wizard.simpleEditing = true;
+  assert.match(renderSimpleCreate(ctx), backDisabled);
+  wizard.simpleEditing = false;
+  const paused = await demoJob('개미 마을 이사 2');
+  delete paused.book;
+  paused.status = 'paused';
+  await openSimpleJob(ctx, paused.id);
+  wizard.simpleStep = 1;
+  assert.match(renderSimpleCreate(ctx), /data-step="3"[^>]*><b>3<\/b>/, 'no ✓ on ③ before the text exists');
+});
+
+test('R11 아이디어 뽑기 that resolves after the story got its job leaves the bound wizard\'s topic alone', async () => {
+  reset();
+  const job = await demoJob('바람개비 언덕');
+  const quality = state.settings.storyQuality;
+  state.settings.storyQuality = {...(quality || {}), worldId: 'forest-village'};
+  wizard = {step: 1, simpleStep: 1, topic: '바람개비 언덕', characterIds: ['yuha'], backgroundIds: []};
+  draft = null;
+  try {
+    const pending = click('idea');
+    // Before the world idea comes back the story was started (③ 데모로 체험)
+    // and the parent went back to ① through the step bar: the wizard is bound.
+    wizard.simpleJobId = job.id;
+    await pending;
+    assert.equal(wizard.topic, '바람개비 언덕', 'the bound story keeps its topic');
+  } finally {
+    state.settings.storyQuality = quality;
   }
 });

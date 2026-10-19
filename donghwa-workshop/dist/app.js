@@ -627,14 +627,19 @@ const cloudPhaseLabel = () =>
     "account-changed": "로그인 계정 변경 확인",
     "signed-out": "클라우드로 PC·모바일 이어쓰기",
     unavailable: "클라우드 연결 대기",
-    error: "클라우드 연결 확인 필요",
+    error:
+      cloudStatus.reason === "quota"
+        ? "가족 클라우드 공간이 가득 찼어요"
+        : "클라우드 연결 확인 필요",
     stopped: "클라우드 연결 중지",
   })[cloudStatus.phase] || "클라우드 저장";
 function cloudStatusSummary() {
   if (storageBlocked) return "기존 데이터 보호 중";
   return cloudStatus.connected
     ? cloudStatus.dirty
-      ? "이 기기에 보관 · 클라우드 저장 대기"
+      ? cloudStatus.reason === "quota"
+        ? "이 기기에 보관 · 클라우드 공간 가득 참"
+        : "이 기기에 보관 · 클라우드 저장 대기"
       : "클라우드에 저장됨"
     : `이 기기에 보관 · ${cloudPhaseLabel()}`;
 }
@@ -691,6 +696,11 @@ function updateCloudStatus(next) {
       settingsDirtyPanels.clear();
       parentUnlocked = false;
       textSettingsReturn = null;
+      // An in-page unlock (a family login from the lock panel or another tab)
+      // then shows the library, as the child-mode switch does, never a parent
+      // screen with parent mode off. The wizard stays with its job.
+      view = "library";
+      activeBook = null;
       closeModal();
     }
     render();
@@ -759,7 +769,14 @@ function showCloudPanel() {
 }
 function confirmCloudChange(kind) {
   if (kind === "pull" && draft && (view === "edit" || simpleDraftOpen())) {
-    discardDraft(() => confirmCloudChange(kind));
+    // Leave the editor or the simple step first: cancelling the pull confirm
+    // then shows the live library, never a screen whose wizard is gone.
+    discardDraft(() => {
+      view = "library";
+      activeBook = null;
+      render();
+      confirmCloudChange(kind);
+    });
     return;
   }
   const c = cloudStatus,
@@ -2607,6 +2624,12 @@ function pageList(indexes) {
 }
 /** Leave the open draft through its guard; onCancel runs when the parent stays (simple screen). */
 function discardDraft(next, { onCancel = null } = {}) {
+  // A dialog that must stay (the one-time recovery code, a pending sign-in) is
+  // never replaced by this one: the parent stays where they are.
+  if (modalRoot.querySelector("[data-modal-lock]")) {
+    onCancel?.();
+    return;
+  }
   if (simpleDraftOpen()) {
     const editing = !!wizard?.simpleEditing,
       // A page or run drawing for this story goes on after the parent leaves.
@@ -3800,6 +3823,8 @@ const simpleCtx = {
   isSimpleMode: () => uiMode === "simple",
   isSimpleView: () => view === "create" && simpleCreateActive(),
   isParent: () => parentUnlocked && !childMode,
+  // Browser Back/Forward never acts under an open dialog (simple-create.js).
+  isModalOpen: () => !!modalRoot.querySelector(".modal-overlay"),
   save,
   render,
   toast,

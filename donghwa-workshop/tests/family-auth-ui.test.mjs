@@ -180,3 +180,31 @@ test('app.js wires the family controls into the status card, cloud panel, lock s
   assert.doesNotMatch(app, /같은 ChatGPT 계정으로|같은 계정으로 로그인해 주세요|같은 계정으로 로그인하거나/);
   assert.match(app, /같은 가족 아이디나 ChatGPT 계정으로/);
 });
+
+test('R11 integration review: the app leaves screens and keeps dialogs the way the family flows need', () => {
+  // A cloud pull from the editor or a bound simple step leaves that screen first,
+  // so cancelling the pull confirm shows the live library (never a dead step).
+  assert.match(bodyOf('confirmCloudChange'), /discardDraft\(\(\) => \{\s*view = "library";\s*activeBook = null;\s*render\(\);\s*confirmCloudChange\(kind\);\s*\}\)/);
+  // The privacy lock moves to the library, so an in-page unlock never shows a parent screen with parent mode off.
+  assert.match(bodyOf('updateCloudStatus'), /if \(cloudPrivacyLocked\) \{[\s\S]*parentUnlocked = false;[\s\S]*view = "library";\s*activeBook = null;\s*closeModal\(\);/);
+  // discardDraft never replaces a dialog that must stay (the one-time recovery code).
+  assert.match(bodyOf('discardDraft'), /^function discardDraft\(next, \{ onCancel = null \} = \{\}\) \{\s*(?:\/\/[^\n]*\n\s*)*if \(modalRoot\.querySelector\("\[data-modal-lock\]"\)\) \{\s*onCancel\?\.\(\);\s*return;\s*\}/);
+  // The simple screen asks whether a dialog is open before acting on Back/Forward.
+  assert.match(app, /isModalOpen: \(\) => !!modalRoot\.querySelector\("\.modal-overlay"\)/);
+  // A full family quota is named on the status chip and card, not a generic connection problem.
+  assert.match(app, /cloudStatus\.reason === "quota"\s*\?\s*"가족 클라우드 공간이 가득 찼어요"/);
+  assert.match(bodyOf('cloudStatusSummary'), /cloudStatus\.reason === "quota"\s*\?\s*"이 기기에 보관 · 클라우드 공간 가득 참"/);
+});
+
+test('README describes family accounts next to ChatGPT sign-in, and no longer says every account switch locks the shelf', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  const included = readme.slice(readme.indexOf('## 포함 기능'), readme.indexOf('## 생성과 검사 범위'));
+  assert.match(included, /- \*\*가족 아이디 계정\(R11\)\*\*/, 'a 포함 기능 bullet');
+  const cloud = readme.slice(readme.indexOf('## 계정별 클라우드 동기화'));
+  for (const needle of ['**가족 아이디**', '**ChatGPT 계정**', '`/api/cloud/auth/*`', '`X-Family-Session`', '`FAMILY_SIGNUP_CODE`', '20자 이상의 무작위 값', 'oai-authenticated-user-id', '복구 코드',
+    '기본 샘플만', '읽기만 한 기록', '두 권수', '이 기기 자료로 계속 쓰기', '고르기 전에는 아무것도 올리지 않습니다', '5GB'])
+    assert.ok(cloud.includes(needle), needle);
+  assert.doesNotMatch(readme, /계정을 바꾸거나 로그아웃하면 이전 계정의 로컬 책장은 화면에서 잠급니다/);
+  assert.doesNotMatch(readme, /같은 ChatGPT 계정으로 연결한 기기/);
+  assert.doesNotMatch(readme, /`oai-authenticated-user-id`로 계정을 분리합니다/);
+});

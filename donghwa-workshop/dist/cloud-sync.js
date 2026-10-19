@@ -27,6 +27,9 @@ const REQUEST_TIMEOUT_MS = 45000,
 /** Per-account library replication. Credentials and parent PINs never leave the device. */
 export const CLOUD_SYNC_STORAGE_KEY = "donghwa-cloud-sync-v1";
 export const MAX_CLOUD_MEDIA_BYTES = 40 * 1024 * 1024;
+/** Shown when a family account is over its media quota (server code quota_exceeded). */
+export const CLOUD_QUOTA_MESSAGE =
+  "가족 클라우드 저장 공간(5GB)을 다 썼어요. 이 기기의 책과 그림은 그대로 보관돼요. 책장이 바뀌거나 ‘이 기기 자료 클라우드에 저장’을 누르면 다시 올려 봐요.";
 const encoder = new TextEncoder();
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sensitive = new Set([
@@ -604,6 +607,8 @@ export function createCloudSync(context) {
     poll = null,
     applying = false,
     blocked = null,
+    // The library fingerprint the family quota refused; auto-upload waits for a change.
+    quotaHash = null,
     previousUserId = metadata?.accountId || null,
     // While a family sign-in/out is deciding the identity, sync operations wait behind it.
     authGate = null;
@@ -702,6 +707,8 @@ export function createCloudSync(context) {
           "로그인 계정이 바뀌었어요. 새 계정의 책장을 먼저 확인해 주세요.",
           "ACCOUNT_CHANGED",
         );
+      if (code === "quota_exceeded")
+        throw new CloudSyncError(CLOUD_QUOTA_MESSAGE, "QUOTA_EXCEEDED");
       if (response.status === 409)
         throw new CloudSyncError(
           "다른 기기에서 방금 저장했어요. 어느 내용을 사용할지 선택해 주세요.",
@@ -712,6 +719,11 @@ export function createCloudSync(context) {
         throw new CloudSyncError(
           "클라우드 로그인이 필요해요. 로그인 후 다시 연결해 주세요.",
           "SIGNED_OUT",
+          // A family token revoked mid-refresh says so, like GET /session does.
+          {
+            reason:
+              body.reason === "family-session-expired" ? body.reason : null,
+          },
         );
       if (
         response.status === 404 ||
@@ -829,7 +841,14 @@ export function createCloudSync(context) {
   function schedule() {
     if (debounce !== null) clearLater(debounce);
     debounce = null;
-    if (stopped || !status.connected || !status.dirty || blocked || !parent())
+    // A quota block still lets a library change try again (reconcile compares).
+    if (
+      stopped ||
+      !status.connected ||
+      !status.dirty ||
+      (blocked && blocked !== "quota") ||
+      !parent()
+    )
       return;
     debounce = later(() => {
       debounce = null;
@@ -942,6 +961,7 @@ export function createCloudSync(context) {
       updatedAt: record.updatedAt || null,
     });
     blocked = null;
+    quotaHash = null;
     emit({
       phase: "ready",
       connected: true,
@@ -981,7 +1001,7 @@ export function createCloudSync(context) {
     check(op);
     if (deferRemote(user, true)) return getStatus();
     const remoteMedia = new Map(record.manifest.map((item) => [item.id, item]));
-    await twoAtATime(prepared.media, async (item) => {
+    const putMedia = async (item) => {
       check(op);
       if (!canApplyRemote()) return;
       const existing = remoteMedia.get(item.id);
@@ -1005,7 +1025,14 @@ export function createCloudSync(context) {
         },
         user,
       );
-    });
+    };
+    try {
+      await twoAtATime(prepared.media, putMedia);
+    } catch (error) {
+      // Over the family quota: this library is not sent again on its own.
+      if (error?.code === "QUOTA_EXCEEDED") quotaHash = stateHash;
+      throw error;
+    }
     check(op);
     if (deferRemote(user, true)) return getStatus();
     const result = await (
@@ -1042,6 +1069,7 @@ export function createCloudSync(context) {
     const dirty = (await hashCloudState(context.getState())) !== stateHash;
     check(op);
     blocked = null;
+    quotaHash = null;
     emit({
       phase: "ready",
       connected: true,
@@ -1075,6 +1103,32 @@ export function createCloudSync(context) {
     persist({ ...baseline, stateHash: current });
     return false;
   }
+  /**
+   * Whether the family quota refused exactly this library (same fingerprint):
+   * then the automatic upload waits. A changed library clears the block.
+   */
+  async function quotaUnchanged(op) {
+    if (blocked !== "quota") return false;
+    const same =
+      quotaHash !== null &&
+      (await hashCloudState(context.getState())) === quotaHash;
+    check(op);
+    if (!same) {
+      blocked = null;
+      quotaHash = null;
+    }
+    return same;
+  }
+  function quotaWaiting() {
+    emit({
+      phase: "error",
+      connected: true,
+      dirty: true,
+      reason: "quota",
+      error: CLOUD_QUOTA_MESSAGE,
+    });
+    return getStatus();
+  }
   async function reconcile(op) {
     const user = await session(op);
     if (!user) return getStatus();
@@ -1098,6 +1152,8 @@ export function createCloudSync(context) {
         deferRemote(user, true);
         return getStatus();
       }
+      // Nothing new in the cloud and the refused library unchanged: no transfer.
+      if (await quotaUnchanged(op)) return quotaWaiting();
     }
     const record = await library(op, user);
     if (blocked === "account-changed") return getStatus();
@@ -1165,6 +1221,8 @@ export function createCloudSync(context) {
         );
       return apply(record, user, op, { automatic: true });
     }
+    // The family quota refused this very library: wait for a change or a push.
+    if ((await quotaUnchanged(op)) && dirty) return quotaWaiting();
     emit({
       phase: "ready",
       connected: true,
@@ -1237,7 +1295,14 @@ export function createCloudSync(context) {
               phase: "signed-out",
               authenticated: false,
               connected: false,
-              reason: "sign-in",
+              reason: error.reason || "sign-in",
+              error: error.message,
+            });
+          } else if (error.code === "QUOTA_EXCEEDED") {
+            blocked = "quota";
+            emit({
+              phase: "error",
+              reason: "quota",
               error: error.message,
             });
           } else if (error.code === "UNAVAILABLE") {
@@ -1328,9 +1393,16 @@ export function createCloudSync(context) {
   }
   function push({ force = false } = {}) {
     return execute("push", async (op) => {
+      // The parent asked to save: a quota refusal is tried again once.
+      if (blocked === "quota") {
+        blocked = null;
+        quotaHash = null;
+      }
       const user = await session(op);
       if (!user)
-        throw new CloudSyncError("클라우드 로그인이 필요해요.", "SIGNED_OUT");
+        throw new CloudSyncError("클라우드 로그인이 필요해요.", "SIGNED_OUT", {
+          reason: status.reason,
+        });
       const record = await library(op, user);
       return upload(record, user, op, force);
     });
@@ -1339,7 +1411,9 @@ export function createCloudSync(context) {
     return execute("pull", async (op) => {
       const user = await session(op);
       if (!user)
-        throw new CloudSyncError("클라우드 로그인이 필요해요.", "SIGNED_OUT");
+        throw new CloudSyncError("클라우드 로그인이 필요해요.", "SIGNED_OUT", {
+          reason: status.reason,
+        });
       const record = await library(op, user);
       if (!record.exists)
         throw new CloudSyncError(
@@ -1534,6 +1608,7 @@ export function createCloudSync(context) {
     metadata = null;
     previousUserId = null;
     blocked = null;
+    quotaHash = null;
   }
   /** The signed-in account is about to change: show 'checking' until the next refresh says who it is. */
   function identityChanged() {

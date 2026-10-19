@@ -165,7 +165,8 @@ function simpleJobLabel(job) {
     total = book?.pages?.length || 0,
     drawn = book?.pages?.filter((p) => p?.imageAssetId).length || 0;
   if (!book) return job.status === "running" ? "만드는 중" : "멈춤";
-  if (drawn || ["pages-ready", "review"].includes(job.status))
+  // A run with its book is making pictures (sheets first, before any page lands).
+  if (drawn || ["running", "pages-ready", "review"].includes(job.status))
     return `그림 ${drawn}/${total}`;
   return "글 검수 중";
 }

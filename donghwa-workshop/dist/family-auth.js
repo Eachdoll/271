@@ -104,8 +104,25 @@ const SERVER_MESSAGES = Object.freeze({
     "로그인 계정이 바뀌었어요. 화면을 새로 고친 뒤 다시 해 주세요.",
   storage_unavailable: "지금은 클라우드에 연결할 수 없어요. 잠시 뒤 다시 해 주세요.",
   cloud_unavailable: "지금은 클라우드에 연결할 수 없어요. 잠시 뒤 다시 해 주세요.",
+  // The server's name for an origin refusal; the other two stay as aliases.
+  origin_forbidden:
+    "이 주소에서는 로그인할 수 없어요. 동화공방 주소로 직접 열어 주세요.",
   forbidden_origin: "이 주소에서는 로그인할 수 없어요. 동화공방 주소로 직접 열어 주세요.",
   origin_mismatch: "이 주소에서는 로그인할 수 없어요. 동화공방 주소로 직접 열어 주세요.",
+  invalid_username: FAMILY_MESSAGES.usernameFormat,
+  reserved_username: FAMILY_MESSAGES.usernameReserved,
+  invalid_display_name: FAMILY_MESSAGES.displayNameInvalid,
+  confirm_required: FAMILY_MESSAGES.deleteConfirm,
+  invalid_password_key:
+    "비밀번호 확인값이 올바르지 않아요. 화면을 새로 고친 뒤 다시 해 주세요.",
+  json_required: "요청 형식이 맞지 않아요. 화면을 새로 고친 뒤 다시 해 주세요.",
+  invalid_json: "요청 형식이 맞지 않아요. 화면을 새로 고친 뒤 다시 해 주세요.",
+  invalid_request: "요청 형식이 맞지 않아요. 화면을 새로 고친 뒤 다시 해 주세요.",
+  size_mismatch: "보내는 중에 내용이 끊겼어요. 다시 해 주세요.",
+  request_interrupted: "보내는 중에 내용이 끊겼어요. 다시 해 주세요.",
+  request_too_large: "입력한 내용이 너무 길어요.",
+  not_found: "이 사이트에서는 가족 아이디 로그인을 아직 쓸 수 없어요.",
+  method_not_allowed: "이 사이트에서는 가족 아이디 로그인을 아직 쓸 수 없어요.",
 });
 
 const defaultStorage = () => {

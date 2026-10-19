@@ -293,6 +293,17 @@ async function putMedia(request, env, user, id) {
   const sha256 = (request.headers.get("X-Content-SHA256") || "").toLowerCase();
   if (!SHA256.test(sha256))
     fail(400, "invalid_digest", "그림·음원의 SHA-256 확인값이 필요해요.");
+  // A family over its quota is refused on the declared size, before any of the
+  // body (up to 40 MB) is read. An id already stored is no new usage.
+  const declared = request.headers.get("Content-Length");
+  if (
+    user.id.startsWith(FAMILY_OWNER_PREFIX) &&
+    declared !== null &&
+    /^\d+$/.test(declared) &&
+    Number(declared) <= CLOUD_LIMITS.mediaBytes &&
+    !(await assetRow(env, user.id, id))
+  )
+    await checkFamilyQuota(env, user.id, Number(declared));
   const bytes = await boundedBody(request, CLOUD_LIMITS.mediaBytes);
   if (!bytes.length)
     fail(400, "empty_media", "빈 그림·음원 파일은 저장할 수 없어요.");
@@ -790,12 +801,17 @@ export const FAMILY_LIMITS = Object.freeze({
   minIterations: 10000,
   maxIterations: 100000,
   authBodyBytes: 4096,
-  signupCodeMinLength: 12,
+  // The invite is compared before any throttle, so its entropy is what stops
+  // guessing: deploy a random value (e.g. `openssl rand -base64 24`).
+  signupCodeMinLength: 20,
   quotaBytes: 5 * 1024 * 1024 * 1024,
   quotaAssets: 20000,
 });
 const THROTTLES = Object.freeze({
+  // Only requests holding the right invite share this bucket (it caps hashing).
   signup: { limit: 30, windowSeconds: 60 * 60 },
+  // Wrong invites count in their own bucket and never block a right invite.
+  signupWrongInvite: { limit: 300, windowSeconds: 60 * 60 },
   login: { limit: 10, windowSeconds: 15 * 60 },
   recover: { limit: 5, windowSeconds: 60 * 60 },
   account: { limit: 10, windowSeconds: 60 * 60 },
@@ -1006,7 +1022,14 @@ async function accountByUsername(env, username) {
     .bind(username)
     .first();
 }
-async function createSession(env, account, now) {
+/**
+ * Issues a session only while the account still holds `passwordHash` (the
+ * hash the caller checked or just wrote). A login that raced a recovery or a
+ * "sign out other devices" password change then gets no session: an INSERT
+ * that landed before that change is removed by its DELETE, and one that lands
+ * after it matches no row (INSERT ... SELECT is one statement).
+ */
+async function createSession(env, account, now, passwordHash) {
   const token = base64url(randomBytes(32)),
     tokenHash = await hexDigest(token);
   const created = isoAt(now),
@@ -1016,19 +1039,22 @@ async function createSession(env, account, now) {
   )
     .bind(account.id, created, created)
     .run();
-  await env.DB.prepare(
-    "INSERT INTO family_sessions (token_hash, account_id, owner_id, created_at, last_seen_at, idle_expires_at, absolute_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  const inserted = await env.DB.prepare(
+    "INSERT INTO family_sessions (token_hash, account_id, owner_id, created_at, last_seen_at, idle_expires_at, absolute_expires_at) SELECT ?, id, owner_id, ?, ?, ?, ? FROM family_accounts WHERE id = ? AND owner_id = ? AND password_hash = ?",
   )
     .bind(
       tokenHash,
-      account.id,
-      account.owner_id,
       created,
       created,
       expiresAt,
       isoAt(now + FAMILY_LIMITS.sessionAbsoluteMs),
+      account.id,
+      account.owner_id,
+      passwordHash,
     )
     .run();
+  if (!Number(inserted.meta?.changes))
+    fail(401, "invalid_credentials", INVALID_CREDENTIALS);
   await env.DB.prepare(
     "DELETE FROM family_sessions WHERE account_id = ? AND token_hash NOT IN (SELECT token_hash FROM family_sessions WHERE account_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)",
   )
@@ -1147,12 +1173,16 @@ async function familySignup(body, env, now) {
       "가족 계정 만들기가 아직 열리지 않았어요. 사이트 관리자에게 가족 초대 코드를 받아 주세요.",
     );
   storage(env, { bucket: false });
-  await throttle(env, "signup", THROTTLES.signup, now);
-  await pruneThrottle(env, now);
+  // The invite is checked first (a constant-time digest compare, no PBKDF2):
+  // wrong-invite traffic can never use up the bucket that right invites share.
   const invite =
     typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
-  if (!sameHex(await hexDigest(invite), await hexDigest(configured)))
+  if (!sameHex(await hexDigest(invite), await hexDigest(configured))) {
+    await throttle(env, "signup:wrong-invite", THROTTLES.signupWrongInvite, now);
     fail(403, "invite_invalid", "가족 초대 코드가 맞지 않아요.");
+  }
+  await throttle(env, "signup", THROTTLES.signup, now);
+  await pruneThrottle(env, now);
   const username = canonicalUsername(body.username);
   checkUsername(username);
   const keyBytes = passwordKeyBytes(body.passwordKey);
@@ -1178,7 +1208,8 @@ async function familySignup(body, env, now) {
     display_name: displayName,
   };
   const code = newRecoveryCode(),
-    created = isoAt(now);
+    created = isoAt(now),
+    passwordHash = await hashPasswordKey(keyBytes);
   const result = await env.DB.prepare(
     "INSERT INTO family_accounts (id, owner_id, username, display_name, password_hash, recovery_hash, password_changed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO NOTHING",
   )
@@ -1187,14 +1218,14 @@ async function familySignup(body, env, now) {
       account.owner_id,
       username,
       displayName,
-      await hashPasswordKey(keyBytes),
+      passwordHash,
       await recoveryHash(account.id, code),
       created,
       created,
     )
     .run();
   if (!Number(result.meta?.changes)) taken();
-  const { session } = await createSession(env, account, now);
+  const { session } = await createSession(env, account, now, passwordHash);
   return json(
     {
       user: familyUser(account),
@@ -1217,7 +1248,12 @@ async function familyLogin(body, env, now) {
   if (!account || !(await verifyPasswordKey(account.password_hash, keyBytes)))
     fail(401, "invalid_credentials", INVALID_CREDENTIALS);
   await clearThrottle(env, "login:" + username);
-  const { session } = await createSession(env, account, now);
+  const { session } = await createSession(
+    env,
+    account,
+    now,
+    account.password_hash,
+  );
   return json({ user: familyUser(account), session });
 }
 async function familyLogout(request, env) {
@@ -1247,13 +1283,14 @@ async function familyRecover(body, env, now) {
     !sameHex(await recoveryHash(account.id, code), account.recovery_hash)
   )
     fail(401, "invalid_recovery", INVALID_RECOVERY);
-  const next = newRecoveryCode();
+  const next = newRecoveryCode(),
+    passwordHash = await hashPasswordKey(keyBytes);
   // Single use: only the request that still sees the old digest may rotate it.
   const result = await env.DB.prepare(
     "UPDATE family_accounts SET password_hash = ?, recovery_hash = ?, password_changed_at = ? WHERE id = ? AND recovery_hash = ?",
   )
     .bind(
-      await hashPasswordKey(keyBytes),
+      passwordHash,
       await recoveryHash(account.id, next),
       isoAt(now),
       account.id,
@@ -1266,7 +1303,7 @@ async function familyRecover(body, env, now) {
     .bind(account.id)
     .run();
   await clearThrottle(env, "login:" + username);
-  const { session } = await createSession(env, account, now);
+  const { session } = await createSession(env, account, now, passwordHash);
   return json({
     user: familyUser(account),
     session,
@@ -1286,11 +1323,12 @@ async function familyPassword(request, body, env, now) {
   if (!(await verifyPasswordKey(account.password_hash, current)))
     fail(401, "invalid_credentials", INVALID_CREDENTIALS);
   // CAS: a concurrent change that landed first is never reverted.
+  const passwordHash = await hashPasswordKey(next);
   const result = await env.DB.prepare(
     "UPDATE family_accounts SET password_hash = ?, password_changed_at = ? WHERE id = ? AND password_hash = ?",
   )
     .bind(
-      await hashPasswordKey(next),
+      passwordHash,
       isoAt(now),
       account.id,
       account.password_hash,
@@ -1298,7 +1336,7 @@ async function familyPassword(request, body, env, now) {
     .run();
   if (!Number(result.meta?.changes))
     fail(401, "invalid_credentials", INVALID_CREDENTIALS);
-  const created = await createSession(env, account, now);
+  const created = await createSession(env, account, now, passwordHash);
   await env.DB.prepare("DELETE FROM family_sessions WHERE token_hash = ?")
     .bind(tokenHash)
     .run();

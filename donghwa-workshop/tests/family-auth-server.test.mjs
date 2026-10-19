@@ -205,9 +205,15 @@ test('login is throttled per username before hashing, answers Retry-After and ro
   noDDL(env);
 });
 
-test('signup attempts are throttled globally (30 per hour) and recover attempts per username (5 per hour)',async()=>{
-  const env=environment();
-  for(let attempt=0;attempt<30;attempt++)assert.equal((await signup(env,{inviteCode:'wrong-invite-code'})).status,403);
+test('signups with the right invite are throttled globally (30 per hour) and recover attempts per username (5 per hour)',async()=>{
+  const env=environment(),spy=spyDeriveBits();
+  try {
+    for(let attempt=0;attempt<100;attempt++)assert.equal((await signup(env,{inviteCode:'wrong-invite-code'})).status,403);
+    assert.equal((await call(env,'/api/cloud/auth/signup',{body:{}})).status,403,'an empty body is a wrong invite too');
+    assert.equal(spy.calls,0,'wrong invites never hash');
+  } finally {spy.restore();}
+  assert.equal(count(env,'SELECT COUNT(*) AS n FROM auth_throttle WHERE bucket = ?',await sha('signup')),0,'wrong invites never touch the shared signup bucket');
+  for(let attempt=0;attempt<30;attempt++)assert.equal((await signup(env,{username:`dad_${String(attempt).padStart(2,'0')}`})).status,201);
   const limited=await signup(env);
   assert.equal(limited.status,429);assert.equal(limited.data.error.code,'too_many_attempts');assert.ok(Number(limited.response.headers.get('Retry-After'))>0);
   env.clock.t=T0+60*60*1000;
@@ -218,6 +224,63 @@ test('signup attempts are throttled globally (30 per hour) and recover attempts 
   assert.equal(blocked.data.error.message,`시도가 너무 많아요. ${Math.ceil(blocked.data.retryAfter/60)}분 뒤 다시 해 주세요.`);
   env.clock.t=T0+2*60*60*1000;
   assert.equal((await recover(env,'mom_kim',mom.data.recoveryCode)).status,200);
+});
+
+test('wrong invites cannot keep sign-up closed: they count in their own bucket and a right invite still gets in',async()=>{
+  const env=environment();
+  // 30 anonymous wrong-invite requests used to fill the one shared bucket.
+  for(let attempt=0;attempt<30;attempt++)assert.equal((await signup(env,{inviteCode:'guess-'+attempt})).status,403);
+  assert.equal((await signup(env)).status,201,'a family with the right invite is not blocked by guessing');
+  for(let attempt=30;attempt<300;attempt++)assert.equal((await signup(env,{inviteCode:'guess-'+attempt})).status,403);
+  const slowed=await signup(env,{inviteCode:'guess-300'});
+  assert.equal(slowed.status,429,'the wrong-invite bucket has its own hourly limit');
+  assert.equal(count(env,'SELECT count AS n FROM auth_throttle WHERE bucket = ?',await sha('signup:wrong-invite')),301);
+  assert.equal(count(env,'SELECT count AS n FROM auth_throttle WHERE bucket = ?',await sha('signup')),1);
+  assert.equal((await signup(env,{username:'dad_lee'})).status,201,'still open for the right invite');
+  noDDL(env);
+});
+
+test('the signup code must be at least 20 characters',async()=>{
+  assert.equal(FAMILY_LIMITS.signupCodeMinLength,20);
+  for(const signupCode of ['x'.repeat(19),'  '+'y'.repeat(19)+'  ']) {
+    const env=environment({signupCode});
+    assert.equal((await signup(env,{inviteCode:signupCode})).data.error.code,'signup_closed',signupCode);
+  }
+  const env=environment({signupCode:'z'.repeat(20)});
+  assert.equal((await signup(env,{inviteCode:'z'.repeat(20)})).status,201);
+});
+
+test('a login that races a recovery, a sign-out-others password change or a delete never keeps a session made with the old password',async()=>{
+  for(const competitor of ['recover','password','delete']) {
+    const env=environment(),mom=await signup(env),prepare=env.DB.prepare;
+    let fired=false,rival=null;
+    // When the login has read the account row (old password_hash) the competing request runs to completion first.
+    env.DB.prepare=sql=>{
+      const statement=prepare(sql);
+      if(fired || !/password_hash.*FROM family_accounts WHERE username = \?/.test(sql))return statement;
+      return {bind(...args){const bound=statement.bind(...args);return {...bound,async first(){
+        const row=await bound.first();
+        if(!fired) {
+          fired=true;
+          if(competitor==='recover')rival=await recover(env,'mom_kim',mom.data.recoveryCode);
+          else if(competitor==='password')rival=await changePassword(env,{token:mom.token,owner:mom.owner},{currentPasswordKey:mom.passwordKey,newPasswordKey:key(),signOutOthers:true});
+          else rival=await call(env,'/api/cloud/auth/delete',{session:mom.token,account:mom.owner,body:{passwordKey:mom.passwordKey,confirm:'삭제'}});
+        }
+        return row;
+      }};}};
+    };
+    const raced=await login(env,'mom_kim',mom.passwordKey);
+    env.DB.prepare=prepare;
+    assert.ok(fired,competitor);assert.equal(rival.status,200,competitor);
+    assert.equal(raced.status,401,competitor+': the old password no longer gets a session');
+    assert.deepEqual(raced.data,{error:{code:'invalid_credentials',message:'아이디 또는 비밀번호가 맞지 않아요.'}});
+    assert.equal(count(env,'SELECT COUNT(*) AS n FROM family_sessions'),competitor==='delete'?0:1,competitor+': only the new session is left');
+    if(competitor!=='delete')assert.equal((await whoami(env,rival.data.session.token)).data.authenticated,true);
+  }
+  // Without a race the same insert succeeds and the plain flows are unchanged.
+  const env=environment(),mom=await signup(env);
+  assert.equal((await login(env,'mom_kim',mom.passwordKey)).status,200);
+  assert.ok(env.statements.some(sql=>/^INSERT INTO family_sessions .* SELECT .* FROM family_accounts WHERE id = \? AND owner_id = \? AND password_hash = \?$/.test(sql)));
 });
 
 test('session resolution truth table: a family header wins, never falls back, and family: Sites ids are rejected',async()=>{
@@ -456,6 +519,29 @@ test('family owners get a 5 GB and 20000-file media quota; Sites owners do not',
   assert.equal((await upload(env,{session:dad.token,account:dad.owner})).status,201);
   assert.equal((await upload(env,{session:dad.token,account:dad.owner,id:'image-cloud-fixture-quota-2'})).data.error.code,'quota_exceeded');
   assert.equal(env.writes.length,3);
+});
+
+test('an over-quota family upload is refused on its Content-Length before the body is read',async()=>{
+  const env=environment(),mom=await signup(env);
+  const insert=env.sqlite.prepare("INSERT INTO cloud_assets (owner_id, asset_id, kind, mime_type, byte_size, sha256, object_key, created_at) VALUES (?, ?, 'image', 'image/png', ?, ?, 'x', '2026-10-19T00:00:00.000Z')");
+  for(let index=0;index<128;index++)insert.run(mom.owner,`image-quota-fill-${String(index).padStart(6,'0')}`,40*1024*1024,'0'.repeat(64));
+  const size=30*1024*1024,chunk=new Uint8Array(1024*1024);chunk.set(png);
+  const send=async(id,{declare=true}={})=>{
+    let pulled=0;
+    const body=new ReadableStream({pull(controller){if(pulled>=size){controller.close();return;}pulled+=chunk.byteLength;controller.enqueue(chunk);}});
+    const headers={'X-Family-Session':mom.token,'X-Cloud-Account-ID':mom.owner,Origin:ORIGIN,'Content-Type':'image/png','X-Content-SHA256':'a'.repeat(64),...(declare?{'Content-Length':String(size)}:{})};
+    const response=await handleCloudRequest(new Request(ORIGIN+'/api/cloud/media/'+id,{method:'PUT',headers,body,duplex:'half'}),env,{now:()=>T0});
+    return {status:response.status,data:await response.json(),pulled};
+  };
+  const refused=await send('image-quota-precheck-0001');
+  assert.equal(refused.status,413);assert.equal(refused.data.error.code,'quota_exceeded');
+  assert.ok(refused.pulled<=2*chunk.byteLength,`read ${refused.pulled} bytes before refusing`);
+  const undeclared=await send('image-quota-precheck-0002',{declare:false});
+  assert.equal(undeclared.status,400,'without Content-Length the body is read and checked as before');
+  assert.equal(env.writes.length,0);
+  // A Sites owner is never measured against the family quota.
+  env.sqlite.prepare("UPDATE cloud_assets SET owner_id = 'owner-A'").run();
+  assert.equal((await upload(env,{session:mom.token,account:mom.owner})).status,201,'below the quota again');
 });
 
 test('no table stores tokens, passwordKeys or recovery codes in clear; stored hashes use bounded PBKDF2',async()=>{

@@ -1277,6 +1277,14 @@ export function onSimplePopState(event) {
   if (!api || !api.isSimpleView?.() || api.isParent?.() === false) return;
   const w = api.getWizard();
   if (!w) return;
+  // A dialog is open (the one-time recovery code, a confirm, the leave
+  // dialog): Back/Forward never acts under it. The browser goes back to the
+  // entry the parent was on and the dialog stays as it is.
+  if (api.isModalOpen?.()) {
+    if (Number.isInteger(historyIndex) && Number.isInteger(browserIndex))
+      goHistory(historyIndex - browserIndex);
+    return;
+  }
   if (!isStepEntry(entry)) {
     // A step entry this version cannot read is left alone.
     if (entry && typeof entry === "object" && HISTORY_KEY in entry) return;
