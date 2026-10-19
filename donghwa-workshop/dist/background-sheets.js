@@ -17,6 +17,11 @@ import {
   deleteImageAsset,
 } from "./image-generation/assets.js";
 import { estimateImageCost } from "./image-generation/models.js";
+/** '예상 $0.17', or '요금 정보 없음' for a picture model outside the catalog (R13). */
+export const sheetPriceText = (estimate) =>
+  estimate.pricingUnknown
+    ? "요금 정보 없음"
+    : "예상 $" + estimate.costUsd.toFixed(2);
 const clone = (x) => JSON.parse(JSON.stringify(x)),
   esc = (x) =>
     String(x ?? "").replace(
@@ -162,7 +167,7 @@ async function generate(s, quality = "draft") {
     s.quality = quality;
     s.busy = false;
     api.showModal(
-      `${api.modalHeader(esc(s.background.name + "의 고정 배경 시트"))}<img class="ig-sheet-preview" src="${esc(asset.imageUrl)}" alt="${esc(s.background.name)} 배경 시트"><p class="modal-intro">문·창 위치, 방과 가구 배치, 색상이 같은 장소로 보이는지 확인하세요. 이후 해당 장소 장면과 다음 편에 이 시트를 참조로 전송합니다.</p><div class="modal-actions"><button class="btn btn-outline" data-action="close-modal">확정하지 않기</button><button class="btn btn-primary" data-background-sheet="confirm">${quality === "draft" ? "최종 배경 시트 생성 · 예상 $" + estimateImageCost({ engine: world.imageEngine, quality: "final", size: "1536x1024", config }).costUsd.toFixed(2) : "이 배경 시트 확정"}</button></div>`,
+      `${api.modalHeader(esc(s.background.name + "의 고정 배경 시트"))}<img class="ig-sheet-preview" src="${esc(asset.imageUrl)}" alt="${esc(s.background.name)} 배경 시트"><p class="modal-intro">문·창 위치, 방과 가구 배치, 색상이 같은 장소로 보이는지 확인하세요. 이후 해당 장소 장면과 다음 편에 이 시트를 참조로 전송합니다.</p><div class="modal-actions"><button class="btn btn-outline" data-action="close-modal">확정하지 않기</button><button class="btn btn-primary" data-background-sheet="confirm">${quality === "draft" ? "최종 배경 시트 생성 · " + sheetPriceText(estimateImageCost({ engine: world.imageEngine, quality: "final", size: "1536x1024", config })) : "이 배경 시트 확정"}</button></div>`,
       "wide",
     );
   } catch (error) {
@@ -202,7 +207,7 @@ async function begin(id) {
   };
   flow = s;
   api.showModal(
-    `${api.modalHeader(esc(background.name + "의 배경을 먼저 고정하기"))}<p class="modal-intro">${esc(ENGINE_METADATA[world.imageEngine].name)} · ${esc(getStylePreset(world.stylePresetId).name)}<br>캐릭터가 없는 장소 참조 시트를 만들고 부모가 확정합니다. 저장된 배경 그림이 있으면 같은 장소를 유지하는 참조로 함께 전송합니다.</p><div class="notice">draft 미리보기 예상 $${estimate.costUsd.toFixed(2)} · 최종 생성은 결과 확인 뒤 별도 요청합니다.</div><div class="modal-actions"><button class="btn btn-outline" data-action="close-modal">닫기</button><button class="btn btn-primary" data-background-sheet="start">비용 확인 · 미리 생성</button></div>`,
+    `${api.modalHeader(esc(background.name + "의 배경을 먼저 고정하기"))}<p class="modal-intro">${esc(ENGINE_METADATA[world.imageEngine].name)} · ${esc(getStylePreset(world.stylePresetId).name)}<br>캐릭터가 없는 장소 참조 시트를 만들고 부모가 확정합니다. 저장된 배경 그림이 있으면 같은 장소를 유지하는 참조로 함께 전송합니다.</p><div class="notice">draft 미리보기 ${sheetPriceText(estimate)} · 최종 생성은 결과 확인 뒤 별도 요청합니다.</div><div class="modal-actions"><button class="btn btn-outline" data-action="close-modal">닫기</button><button class="btn btn-primary" data-background-sheet="start">비용 확인 · 미리 생성</button></div>`,
   );
 }
 export function configureBackgroundSheets(context) {

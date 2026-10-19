@@ -51,6 +51,10 @@ import {
 } from "./simple-create.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
+  bookPricingUnknown,
+  estimatedCostText,
+} from "./story-generation/page-tools.js";
+import {
   createCloudSync,
   isSeedOnlyLibrary,
   pushBookCountWarning,
@@ -142,6 +146,7 @@ import {
 import {
   estimateBookCost,
   estimateImageCost,
+  frozenImageConfig,
 } from "./image-generation/models.js";
 import {
   generateAllScenes,
@@ -1450,7 +1455,11 @@ function renderWizardTextSummary() {
   const label = (selection) =>
     selection.engineId === "local"
       ? selection.config.model || "로컬"
-      : getTextModelInfo(selection.engineId, selection.config.model).name;
+      : getTextModelInfo(
+          selection.engineId,
+          selection.config.model,
+          selection.config,
+        ).name;
   const same =
       outline.engineId === pagination.engineId &&
       outline.config.model === pagination.config.model,
@@ -1911,7 +1920,7 @@ function detailPage() {
     view = "library";
     return libraryPage();
   }
-  return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2>${b.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}<p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${b.pages.length}쪽</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : "추정 $" + b.imageCosts.estimatedUsd.toFixed(3) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : "추정 $" + b.textCosts.estimatedUsd.toFixed(3)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
+  return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2>${b.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}<p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${b.pages.length}쪽</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : estimatedCostText(b.imageCosts.estimatedUsd, bookPricingUnknown(b).images) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : estimatedCostText(b.textCosts.estimatedUsd, bookPricingUnknown(b).text)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
 }
 /** Simple mode: one page, four groups. Reuses the existing forms, ids and handlers. */
 function simpleSettingsPage() {
@@ -2592,10 +2601,10 @@ async function approveDraft() {
         includeCover: work.cover,
         size: "1536x1024",
         quality: "final",
-        config: {
-          ...world.providerConfig?.[engine],
-          ...book.generationSnapshot?.imageModelConfig,
-        },
+        config: frozenImageConfig(
+          world.providerConfig?.[engine],
+          book.generationSnapshot,
+        ),
       }),
       kept = book.pages.length - work.pages.length,
       what = [
@@ -2607,7 +2616,7 @@ async function approveDraft() {
         .filter(Boolean)
         .join("과 ");
     showModal(
-      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장) · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
+      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">${estimate.pricingUnknown ? `예상 이미지 API 비용 · 요금 정보 없음 (목록에 없는 모델 · ${estimate.imageCount}장)` : `예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장)`} · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
     );
     document.querySelector("#book-final-confirm").onclick = () =>
       finalizeBook(book, {

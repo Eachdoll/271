@@ -13,7 +13,11 @@ import {
   keepEditedPictures,
   isSimpleJob,
 } from "./full-auto-ui.js";
-import { estimateFullAutoCost, fullAutoProgress } from "./full-auto.js";
+import {
+  estimateFullAutoCost,
+  fullAutoProgress,
+  jobImageModelConfig,
+} from "./full-auto.js";
 import { readAutoStop } from "./full-auto-control.js";
 import {
   rewriteBookPage,
@@ -36,7 +40,24 @@ import { listCredentialStatus } from "./image-generation/vault.js";
 import {
   getTextGenerationSettings,
   normalizeStoryQualitySettings,
+  simpleTextModelValue,
+  simpleTextModelOptions,
+  applySimpleTextModel,
+  fetchAndStoreTextModels,
+  SIMPLE_TEXT_MODEL_NOTE,
+  SIMPLE_FETCH_OPTION,
 } from "./text-generation/settings-ui.js";
+import {
+  currentImageModel,
+  imageModelOptions,
+  applyImageModelChoice,
+  fetchAndStoreImageModels,
+} from "./image-generation/settings-ui.js";
+import {
+  getEngineModel,
+  IMAGE_MODEL_ENGINES,
+} from "./image-generation/models.js";
+import { supportsModelList } from "./text-generation/model-list.js";
 import {
   getTextModelInfo,
   resolveStoryStageSettings,
@@ -91,6 +112,16 @@ const usd = (value) => {
   const n = Number(value) || 0;
   return n <= 0 ? "$0" : "$" + n.toFixed(n < 0.1 ? 3 : 2);
 };
+/** '약 $1.20', or for a model outside the catalog '요금 정보 없음' / '약 $0.20 · 일부 요금 미확인' (R13). */
+const textFee = (value, unknown) =>
+  unknown
+    ? Number(value) > 0
+      ? `약 ${usd(value)} · 일부 요금 미확인`
+      : "요금 정보 없음"
+    : `약 ${usd(value)}`;
+/** '약 $0.17', or '요금 정보 없음' when the picture model has no catalog price (R13). */
+const imageFee = (costs, value) =>
+  costs?.imagePricingUnknown ? "요금 정보 없음" : `약 ${usd(value)}`;
 const sbtn = (label, action, kind = "outline", attrs = "") =>
   `<button type="button" class="btn btn-${kind}" data-simple-action="${action}" ${attrs}>${label}</button>`;
 export const SIMPLE_STEPS = Object.freeze([
@@ -180,9 +211,9 @@ const LANGUAGE_LABELS = {
 };
 const TEXT_ENGINES = ["openai", "anthropic", "google", "local"];
 const TEXT_ENGINE_NAMES = {
-  openai: "OpenAI",
-  anthropic: "Anthropic · Claude",
-  google: "Google · Gemini",
+  openai: "GPT · OpenAI",
+  anthropic: "Claude · Anthropic",
+  google: "Gemini · Google",
   local: "로컬 · LM Studio / Ollama",
   demo: "데모 글 · 무료",
 };
@@ -920,6 +951,39 @@ const keyMissing = (engine, config = {}) =>
   !config.proxyEndpoint &&
   config.transport !== "proxy" &&
   keyStatus[engine] !== true;
+const CUSTOM_ID_INPUT = (id, label) =>
+  `<input id="${id}" type="text" maxlength="120" spellcheck="false" autocomplete="off" hidden placeholder="모델 ID (영문·숫자와 . _ : / -)" aria-label="${label}">`;
+/**
+ * R13 ③: the 모델 select next to 글 엔진. Before a job it saves the parent's
+ * choice for the main writing stages; once a job exists it shows the model
+ * frozen in the job's text settings and is locked. Selects are not counted
+ * in the 12-button cap; the free list call is the select's own option.
+ */
+function textModelField(job, settings, engine, locked) {
+  if (engine === "demo") return "";
+  const provider =
+      (job ? job.textSettings : settings)?.providers?.[engine] || {},
+    value = simpleTextModelValue(engine, provider);
+  return `<div class="field"><label for="simple-text-model">모델</label><select id="simple-text-model" data-engine="${esc(engine)}" data-current="${esc(value)}" ${locked ? "disabled" : ""}>${simpleTextModelOptions(engine, provider)}${locked ? "" : SIMPLE_FETCH_OPTION}</select>${locked ? "" : CUSTOM_ID_INPUT("simple-text-model-custom", "글 모델 ID 직접 입력")}<small>${esc(SIMPLE_TEXT_MODEL_NOTE)}</small></div>`;
+}
+/** The final-picture model a job draws with (frozen), or the World's current one. */
+function simpleImageModel(job, world, engine) {
+  if (!job) return currentImageModel(world, engine);
+  return getEngineModel(
+    engine,
+    "final",
+    job.book?.generationSnapshot?.imageModelConfig ||
+      jobImageModelConfig(job) ||
+      world.providerConfig?.[engine] ||
+      {},
+  );
+}
+/** R13 ③: the 그림 엔진 row's 모델 select (none for ComfyUI and the free sample). */
+function imageModelField(job, world, engine, locked) {
+  if (!IMAGE_MODEL_ENGINES.includes(engine)) return "";
+  const selected = simpleImageModel(job, world, engine);
+  return `<div class="field simple-image-model"><label for="simple-image-model">그림 모델</label><select id="simple-image-model" data-engine="${esc(engine)}" data-current="${esc(selected)}" ${locked ? "disabled" : ""}>${imageModelOptions(world, engine, selected)}${locked ? "" : `<option value="__custom">직접 입력…</option>${supportsModelList("image", engine) ? '<option value="__fetch">모델 목록 불러오기 · 무료…</option>' : ""}`}</select>${locked ? "" : CUSTOM_ID_INPUT("simple-image-model-custom", "그림 모델 ID 직접 입력")}</div>`;
+}
 function textOverrideNote(state) {
   const settings = getTextGenerationSettings(state),
     quality = settings.storyQuality;
@@ -980,7 +1044,8 @@ function renderGenerateStep(ctx, w) {
         ? "데모"
         : textEngine === "local"
           ? stage.config?.model || "로컬 모델"
-          : getTextModelInfo(stage.engineId, stage.config?.model)?.name ||
+          : getTextModelInfo(stage.engineId, stage.config?.model, stage.config)
+              ?.name ||
             stage.config?.model ||
             "",
     textConfig = settings.providers?.[textEngine] || {},
@@ -989,15 +1054,25 @@ function renderGenerateStep(ctx, w) {
     imageConfig = world.providerConfig?.[imageEngine] || {},
     imageMeta = ENGINE_METADATA[imageEngine] || { name: imageEngine },
     planMode = w.allowNew !== false ? "auto" : "selection",
-    cost = estimateFullAutoCost(state, w, { planMode }),
+    // R13: with a job, its frozen text settings and picture model are priced.
+    cost = estimateFullAutoCost(state, w, {
+      planMode: job?.planMode || planMode,
+      ...(job ? { job } : {}),
+    }),
     quality = normalizeStoryQualitySettings(state.settings?.storyQuality),
     locked = !!job,
     live = runIsLive(job),
     distilled = quality.useDistilledExamples === true;
   if (typeof document !== "undefined") queueMicrotask(() => refreshKeyStatus());
-  const engineLine = `<div class="simple-engine-row"><div class="field"><label for="simple-text-engine">글 엔진</label><select id="simple-text-engine" ${locked ? "disabled" : ""}>${(textEngine === "demo" ? ["demo"] : TEXT_ENGINES).map((id) => `<option value="${id}" ${id === textEngine ? "selected" : ""}>${esc(TEXT_ENGINE_NAMES[id])}${id === "demo" ? "" : " · " + esc(keyLabel(id, settings.providers?.[id]))}</option>`).join("")}</select><small>${esc(model)}${locked ? " · 이 이야기에 고정됨" : ""}</small></div>${!locked && keyMissing(textEngine, textConfig) ? sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`) : ""}</div>${textEngine === "demo" ? "" : textOverrideNote(state)}<div class="simple-engine-row"><div class="simple-engine-name"><span class="small-label">그림 엔진</span><strong>${esc(imageMeta.name)}</strong><small>${esc(keyLabel(imageEngine, imageConfig))} · 그림은 다음 단계에서 써요</small></div>${locked ? "" : sbtn("바꾸기", "image-settings", "plain", `data-engine="${esc(imageEngine)}"`)}${!locked && keyMissing(imageEngine, imageConfig) && imageMeta.requiresKey !== false ? sbtn("키 입력", "image-key", "outline", `data-engine="${esc(imageEngine)}"`) : ""}</div>`;
+  const engineLine = `<div class="simple-engine-row"><div class="field"><label for="simple-text-engine">글 엔진</label><select id="simple-text-engine" ${locked ? "disabled" : ""}>${(textEngine === "demo" ? ["demo"] : TEXT_ENGINES).map((id) => `<option value="${id}" ${id === textEngine ? "selected" : ""}>${esc(TEXT_ENGINE_NAMES[id])}${id === "demo" ? "" : " · " + esc(keyLabel(id, settings.providers?.[id]))}</option>`).join("")}</select><small>${esc(model)}${locked ? " · 이 이야기에 고정됨" : ""}</small></div>${textModelField(job, settings, textEngine, locked)}${!locked && keyMissing(textEngine, textConfig) ? sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`) : ""}</div>${textEngine === "demo" ? "" : textOverrideNote(state)}<div class="simple-engine-row"><div class="simple-engine-name"><span class="small-label">그림 엔진</span><strong>${esc(imageMeta.name)}</strong><small>${esc(keyLabel(imageEngine, imageConfig))} · 그림은 다음 단계에서 써요</small></div>${imageModelField(job, world, imageEngine, locked)}${locked ? "" : sbtn("바꾸기", "image-settings", "plain", `data-engine="${esc(imageEngine)}"`)}${!locked && keyMissing(imageEngine, imageConfig) && imageMeta.requiresKey !== false ? sbtn("키 입력", "image-key", "outline", `data-engine="${esc(imageEngine)}"`) : ""}</div>`;
   const text = !!job && (!!job.book || HELD.includes(job.status));
-  const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${job?.demo ? "무료" : "약 " + usd(cost.textUsd)}</strong></li>`}<li><span>그림 ${cost.pageCount}쪽 + 표지</span><strong>${cost.imageUnitUsd > 0 ? "약 " + usd(cost.imagesUsd) : "무료"}</strong></li>${cost.imageUnitUsd > 0 ? `<li><span>새 시트가 필요하면</span><strong>최대 ${usd(cost.sheetsUpperUsd)}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
+  // R13: a model outside the catalog has no price: '요금 정보 없음' for its part,
+  // '일부 요금 미확인' on a total that leaves it out.
+  const textCost = job?.demo
+      ? "무료"
+      : textFee(cost.textUsd, cost.textPricingUnknown),
+    imagePriced = cost.imageUnitUsd > 0 || cost.imagePricingUnknown;
+  const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${textCost}</strong></li>`}<li><span>그림 ${cost.pageCount}쪽 + 표지</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : cost.imageUnitUsd > 0 ? "약 " + usd(cost.imagesUsd) : "무료"}</strong></li>${imagePriced ? `<li><span>새 시트가 필요하면</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : `최대 ${usd(cost.sheetsUpperUsd)}`}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
   const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요." aria-label="도움말: 부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
@@ -1609,20 +1684,26 @@ export function coherenceCheckDue(state, book) {
       stage: "pages",
     });
   if (!due) return { due: false, usd: 0 };
-  let cost = 0;
+  let cost = 0,
+    unknown = false;
   try {
     const row = estimateStoryTextCost({
       settings: book.textGenerationSettings || getTextGenerationSettings(state),
       pageCount: book.pages?.length || 12,
     }).stages?.find((stage) => stage.stage === "coherence");
     cost = row?.requestCount > 0 ? row.costUsd / row.requestCount : 0;
+    unknown = row?.pricingUnknown === true;
   } catch {
     cost = 0;
   }
-  return { due: true, usd: Number.isFinite(cost) && cost > 0 ? cost : 0 };
+  return {
+    due: true,
+    usd: Number.isFinite(cost) && cost > 0 ? cost : 0,
+    ...(unknown ? { pricingUnknown: true } : {}),
+  };
 }
 const checkFee = (check) =>
-  `글 엔진 요금${check.usd > 0 ? ` 약 ${usd(check.usd)}` : ""}`;
+  `글 엔진 요금${check.pricingUnknown ? " · 요금 정보 없음" : check.usd > 0 ? ` 약 ${usd(check.usd)}` : ""}`;
 function imageNote(state, book) {
   const check = coherenceCheckDue(state, book);
   return check.due
@@ -1666,13 +1747,14 @@ async function drawPage(
   const estimate = estimateSimpleCosts(state, book),
     prepare = !book.generationSnapshot,
     total = estimate.imageUnitUsd + (prepare ? estimate.sheetsUpperUsd : 0);
-  if (!confirmed && total > 0) {
+  // R13: a picture model without a catalog price is still paid: always ask.
+  if (!confirmed && (total > 0 || estimate.imagePricingUnknown)) {
     const ok = await confirmModal(
       ctx,
       prepare
         ? "그림 준비와 이 쪽 그림"
         : `${index + 1}쪽 그림을 ${redraw ? "다시 " : ""}만들까요?`,
-      `${prepare ? `처음 그림이라 캐릭터·배경 시트를 먼저 준비해요(필요한 만큼, 최대 약 ${usd(estimate.sheetsUpperUsd)}).<br>` : ""}${index + 1}쪽 그림 약 ${usd(estimate.imageUnitUsd)} · 최종 품질${imageNote(state, book)}`,
+      `${prepare ? `처음 그림이라 캐릭터·배경 시트를 먼저 준비해요(필요한 만큼, 최대 ${imageFee(estimate, estimate.sheetsUpperUsd)}).<br>` : ""}${index + 1}쪽 그림 ${imageFee(estimate, estimate.imageUnitUsd)} · 최종 품질${imageNote(state, book)}`,
       prepare ? "준비하고 그림 만들기" : "그림 만들기",
     );
     if (!ok) return;
@@ -1740,10 +1822,10 @@ async function askRedraw(ctx, book, index) {
     ctx.getDraft() !== book
   )
     return;
-  const unit = estimateSimpleCosts(state, book).imageUnitUsd;
+  const costs = estimateSimpleCosts(state, book);
   const ok = await confirmModal(
     ctx,
-    `이 쪽 그림도 다시 만들까요? (약 ${usd(unit)})`,
+    `이 쪽 그림도 다시 만들까요? (${imageFee(costs, costs.imageUnitUsd)})`,
     `글이 바뀌었어요. 지금 그림을 그대로 둘 수도 있어요.${imageNote(state, book)}`,
     "그림 다시 만들기",
   );
@@ -1814,11 +1896,11 @@ async function rewriteText(ctx) {
     return ctx.toast(
       "데모 이야기는 쪽 글을 새로 쓰지 않아요. ‘글 고치기’로 직접 고쳐 주세요.",
     );
-  const cost = estimateSimpleCosts(state, book).pageTextUsd;
+  const costs = estimateSimpleCosts(state, book);
   const ok = await confirmModal(
     ctx,
     `${index + 1}쪽 글을 다시 만들까요?`,
-    `이 쪽 글만 새로 써요. 글 엔진 요금 약 ${usd(cost)} · 그림은 묻고 나서만 다시 만들어요.`,
+    `이 쪽 글만 새로 써요. 글 엔진 요금 ${textFee(costs.pageTextUsd, costs.pageTextPricingUnknown)} · 그림은 묻고 나서만 다시 만들어요.`,
     "글 다시 만들기",
   );
   if (!ok) return;
@@ -1953,14 +2035,17 @@ async function drawAll(
   const estimate = estimateSimpleCosts(state, book),
     unit = estimate.imageUnitUsd,
     sheets = estimate.sheetsUpperUsd,
-    paid = unit > 0 || sheets > 0,
-    cost = (value) => (paid ? ` (약 ${usd(value)})` : ""),
+    // R13: unpriced pictures are paid too; sheets are then counted, not priced.
+    unpriced = estimate.imagePricingUnknown === true,
+    sheetWork = sheets > 0 || (unpriced && estimate.sheetsNeeded > 0),
+    paid = unit > 0 || sheets > 0 || unpriced,
+    cost = (value) => (paid ? ` (${imageFee(estimate, value)})` : ""),
     newCount = work.missing.length + (work.coverMissing ? 1 : 0),
     newUsd = newCount * unit,
     staleUsd = work.stale.length * unit,
     offerStale = work.stale.length > 0 && includeStale !== false,
     // Missing pictures, a missing cover or sheets still to prepare: the run draws.
-    drawsNew = newCount > 0 || sheets > 0 || !book.generationSnapshot;
+    drawsNew = newCount > 0 || sheetWork || !book.generationSnapshot;
   let withStale = includeStale === true;
   if (drawsNew && (await stopForImageKey(ctx, book))) return null;
   // Finishing a book whose pictures are all there buys nothing: no question.
@@ -1969,13 +2054,15 @@ async function drawAll(
     const lines = [];
     if (newCount)
       lines.push(
-        `새로 만들 그림: 본문 ${work.missing.length}쪽${work.coverMissing ? " + 표지" : ""}${paid ? ` · 약 ${usd(newUsd)}` : ""}`,
+        `새로 만들 그림: 본문 ${work.missing.length}쪽${work.coverMissing ? " + 표지" : ""}${paid ? ` · ${imageFee(estimate, newUsd)}` : ""}`,
       );
-    if (sheets > 0)
-      lines.push(`캐릭터·배경 시트가 필요하면 최대 ${usd(sheets)}`);
+    if (sheetWork)
+      lines.push(
+        `캐릭터·배경 시트가 필요하면 최대 ${unpriced ? `${estimate.sheetsNeeded}장 · 요금 정보 없음` : usd(sheets)}`,
+      );
     if (offerStale)
       lines.push(
-        `글을 고친 쪽: ${pageList(work.stale)} · 지금 그림이 있어요. 다시 만들면 ${work.stale.length}장${paid ? ` 약 ${usd(staleUsd)}` : ""}이 더 들어요.`,
+        `글을 고친 쪽: ${pageList(work.stale)} · 지금 그림이 있어요. 다시 만들면 ${work.stale.length}장${paid ? ` ${imageFee(estimate, staleUsd)}` : ""}이 더 들어요.`,
       );
     if (!paid) lines.push("무료 샘플 엔진이라 요금이 없어요.");
     lines.push(
@@ -2063,13 +2150,14 @@ async function resumeRun(ctx, book, job) {
   if (hold === null) return drawAll(ctx, { book, job, resuming: true });
   if (hold === "pages" && !book.generationSnapshot) {
     if (await stopForImageKey(ctx, book)) return null;
-    const sheets = estimateSimpleCosts(ctx.getState(), book).sheetsUpperUsd;
+    const costs = estimateSimpleCosts(ctx.getState(), book),
+      sheets = costs.sheetsUpperUsd;
     if (
-      sheets > 0 &&
+      (sheets > 0 || costs.sheetsNeeded > 0) &&
       !(await confirmModal(
         ctx,
         "그림 준비를 이어 할까요?",
-        `캐릭터·배경 시트를 마저 준비해요(필요한 만큼, 최대 약 ${usd(sheets)}). 이미 만든 시트는 다시 만들지 않아요.`,
+        `캐릭터·배경 시트를 마저 준비해요(필요한 만큼, 최대 ${costs.imagePricingUnknown ? `${costs.sheetsNeeded}장 · 요금 정보 없음` : `약 ${usd(sheets)}`}). 이미 만든 시트는 다시 만들지 않아요.`,
         "이어서 준비하기",
       ))
     )
@@ -2083,15 +2171,15 @@ async function restartStory(ctx) {
     old = jobOfBook(state, book) || jobOfWizard(state, ctx.getWizard());
   if (!old) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
   const demo = !!old.demo,
-    cost = demo
-      ? 0
+    estimate = demo
+      ? { textUsd: 0 }
       : estimateFullAutoCost(state, old.wizard || {}, {
           planMode: old.planMode || "auto",
-        }).textUsd;
+        });
   const ok = await confirmModal(
     ctx,
     "이야기 전체를 다시 만들까요?",
-    `줄거리부터 새로 써요. ${demo ? "데모라 요금이 없어요." : `글 엔진 요금 약 ${usd(cost)}.`}<br>지금 이야기는 지우지 않고 ‘제작 중인 이야기’에 보관해요.`,
+    `줄거리부터 새로 써요. ${demo ? "데모라 요금이 없어요." : `글 엔진 요금 ${textFee(estimate.textUsd, estimate.textPricingUnknown)}.`}<br>지금 이야기는 지우지 않고 ‘제작 중인 이야기’에 보관해요.`,
     "다시 만들기",
   );
   if (!ok) return;
@@ -2131,12 +2219,15 @@ async function forkStory(ctx) {
   if (!old || w.simpleEditing) return;
   if (runIsLive(old) || workBusy()) return ctx.toast(FORK_BUSY);
   const next = forkWizard(state, old, w);
-  let cost = 0;
+  let cost = 0,
+    unknown = false;
   try {
     // The amount ③ will show for the new story (see renderGenerateStep).
-    cost = estimateFullAutoCost(state, next, {
+    const estimate = estimateFullAutoCost(state, next, {
       planMode: next.allowNew !== false ? "auto" : "selection",
-    }).textUsd;
+    });
+    cost = estimate.textUsd;
+    unknown = estimate.textPricingUnknown === true;
   } catch {
     cost = 0;
   }
@@ -2146,7 +2237,7 @@ async function forkStory(ctx) {
     ok = await confirmModal(
       ctx,
       "이 주제로 새 이야기를 만들까요?",
-      `지금 이야기 ‘${esc(title)}’의 글과 그림은 그대로 남아요. ‘이어서 만들기’에서 언제든 다시 열 수 있어요.<br>새 이야기의 글은 ③에서 ‘글 만들기’를 누를 때 만들어요 · 글 엔진 요금 약 ${usd(cost)} (데모는 무료). 그림은 ④에서 따로 물어요.`,
+      `지금 이야기 ‘${esc(title)}’의 글과 그림은 그대로 남아요. ‘이어서 만들기’에서 언제든 다시 열 수 있어요.<br>새 이야기의 글은 ③에서 ‘글 만들기’를 누를 때 만들어요 · 글 엔진 요금 ${textFee(cost, unknown)} (데모는 무료). 그림은 ④에서 따로 물어요.`,
       "새 이야기로 고치기",
     );
   if (!ok || ctx.getWizard() !== w) return;
@@ -2210,7 +2301,8 @@ async function saveBook(ctx) {
     } else if (work.stale.length) {
       // Keeping every picture still saves through the story-connection check
       // when the text changed since it last passed: say so, with its fee.
-      const unit = estimateSimpleCosts(state, book).imageUnitUsd,
+      const costs = estimateSimpleCosts(state, book),
+        unit = costs.imageUnitUsd,
         check = coherenceCheckDue(state, book),
         choice = await choiceModal(
           ctx,
@@ -2219,11 +2311,11 @@ async function saveBook(ctx) {
           [
             {
               value: "keep",
-              label: `그림 그대로 저장${check.due ? ` · 이야기 연결 검사${check.usd > 0 ? ` 약 ${usd(check.usd)}` : " 글 엔진 요금"}` : ""}`,
+              label: `그림 그대로 저장${check.due ? ` · 이야기 연결 검사${check.pricingUnknown ? " 요금 정보 없음" : check.usd > 0 ? ` 약 ${usd(check.usd)}` : " 글 엔진 요금"}` : ""}`,
             },
             {
               value: "redraw",
-              label: `고친 ${work.stale.length}쪽 그림 다시 만들고 저장${unit > 0 ? ` (약 ${usd(work.stale.length * unit)})` : ""}`,
+              label: `고친 ${work.stale.length}쪽 그림 다시 만들고 저장${unit > 0 || costs.imagePricingUnknown ? ` (${imageFee(costs, work.stale.length * unit)})` : ""}`,
             },
           ],
         );
@@ -2769,7 +2861,93 @@ function onChange(event) {
       }
       api.render();
     });
+    return;
   }
+  if (
+    ["simple-text-model", "simple-text-model-custom"].includes(target.id) ||
+    ["simple-image-model", "simple-image-model-custom"].includes(target.id)
+  )
+    onModelChange(target, w);
+}
+/**
+ * R13 ③ model selects. '직접 입력…' shows the ID field; '모델 목록 불러오기
+ * · 무료…' runs the free list call and puts the select back. A pick is saved
+ * only while no job exists for this story (a job keeps its frozen choice).
+ */
+function onModelChange(target, w) {
+  const image = target.id.startsWith("simple-image-model"),
+    select = document.querySelector(
+      image ? "#simple-image-model" : "#simple-text-model",
+    ),
+    custom = document.querySelector(
+      image ? "#simple-image-model-custom" : "#simple-text-model-custom",
+    ),
+    engine = select?.dataset.engine;
+  if (!select || !engine) return;
+  if (target === select && select.value === "__custom") {
+    if (custom) {
+      custom.hidden = false;
+      custom.focus?.();
+    }
+    return;
+  }
+  if (target === select && select.value === "__fetch") {
+    select.value = select.dataset.current ?? "";
+    api.protectedAction(async () => {
+      const state = api.getState();
+      if (jobOfWizard(state, w)) return;
+      select.disabled = true;
+      try {
+        const list = await (image
+          ? fetchAndStoreImageModels(state, engine, () => api.save())
+          : fetchAndStoreTextModels(state, engine, () => api.save()));
+        api.toast(
+          `${image ? "그림" : "글"} 모델 ${list.models.length}개를 불러왔어요. 목록 불러오기는 요금이 들지 않아요.`,
+        );
+      } catch (error) {
+        api.toast(error);
+      } finally {
+        if (select.isConnected) select.disabled = false;
+      }
+      api.render();
+    });
+    return;
+  }
+  const value = target === custom ? custom.value.trim() : select.value;
+  if (target === custom && !value) return;
+  api.protectedAction(() => {
+    const state = api.getState();
+    if (jobOfWizard(state, w)) return;
+    const world = getActiveWorld(state);
+    try {
+      if (image) {
+        const before = clone(world.providerConfig ?? null);
+        if (!applyImageModelChoice(world, engine, value)) return;
+        if (api.save() === false) {
+          if (before === null) delete world.providerConfig;
+          else world.providerConfig = before;
+          api.toast("그림 모델을 저장하지 못했어요.");
+        }
+      } else {
+        const before = clone(state.settings.textGeneration ?? null),
+          worldBefore = clone(world.textGeneration ?? null);
+        state.settings.textGeneration ||= {};
+        if (!applySimpleTextModel(state.settings.textGeneration, engine, value))
+          return;
+        syncActiveWorldTextSettings(state);
+        if (api.save() === false) {
+          if (before === null) delete state.settings.textGeneration;
+          else state.settings.textGeneration = before;
+          if (worldBefore === null) delete world.textGeneration;
+          else world.textGeneration = worldBefore;
+          api.toast("글 모델을 저장하지 못했어요.");
+        }
+      }
+    } catch (error) {
+      api.toast(error);
+    }
+    api.render();
+  });
 }
 /**
  * Redraw only the step bar when what is open changed without a redraw (the

@@ -7,7 +7,13 @@
  */
 import { getAsset } from "./assets.js";
 import { characterSVG, sceneSVG } from "../engine.js";
-import { ENGINE_MODELS, getEngineModel, estimateImageCost } from "./models.js";
+import {
+  ENGINE_MODELS,
+  getEngineModel,
+  estimateImageCost,
+  chosenImageModel,
+  isCatalogImageModel,
+} from "./models.js";
 import { renderImageRequest, StoryRendererError } from "./story-renderer.js";
 import { checkForbiddenWords, checkForbiddenWordCheck } from "./styles.js";
 import { validateCredentialInput } from "./credential-validation.js";
@@ -801,8 +807,12 @@ async function googleAdapter(request, config, context, blobs) {
     });
   }
   const dimension = Math.max(request.size.width, request.size.height);
-  const imageSize =
-    model === ENGINE_MODELS.google.draft
+  // R13: a fetched or typed Gemini image model gets the aspect ratio only;
+  // the 1K/2K/4K size switch belongs to the catalog models.
+  const known = isCatalogImageModel("google", model);
+  const imageSize = !known
+    ? null
+    : model === ENGINE_MODELS.google.draft
       ? "1K"
       : dimension > 2048
         ? "4K"
@@ -816,7 +826,9 @@ async function googleAdapter(request, config, context, blobs) {
     generationConfig: {
       seed: request.seed,
       responseModalities: ["TEXT", "IMAGE"],
-      imageConfig: { aspectRatio: aspectRatio(request.size), imageSize },
+      imageConfig: known
+        ? { aspectRatio: aspectRatio(request.size), imageSize }
+        : { aspectRatio: aspectRatio(request.size) },
     },
   };
   const result = await fetchJSON(
@@ -849,7 +861,7 @@ async function googleAdapter(request, config, context, blobs) {
     costUsd: billedCost(result),
     providerSize: {
       aspectRatio: body.generationConfig.imageConfig.aspectRatio,
-      imageSize,
+      ...(known ? { imageSize } : {}),
     },
     qualitySupported: false,
   };
@@ -998,7 +1010,12 @@ async function bflAdapter(request, config, context, blobs) {
 }
 async function falAdapter(request, config, context, blobs) {
   const base = endpoint(config, "https://queue.fal.run");
-  const model = `${getEngineModel("fal", request.quality, config)}/${blobs.length ? "edit" : "text-to-image"}`;
+  // R13: a typed fal model is its full endpoint path; only the Seedream
+  // catalog models get the edit / text-to-image suffix added here.
+  const chosen = getEngineModel("fal", request.quality, config);
+  const model = isCatalogImageModel("fal", chosen)
+    ? `${chosen}/${blobs.length ? "edit" : "text-to-image"}`
+    : chosen;
   const headers = { Authorization: `Key ${apiKey(config)}` };
   const body = {
     prompt: request.composedPrompt,
@@ -1390,6 +1407,10 @@ async function proxyAdapter(engine, request, config, context, blobs) {
     quality: request.quality,
     modelVariant: config.modelVariant,
     googlePro: config.googlePro === true,
+    // R13: only a chosen model travels; the proxy's default stays as before.
+    ...(chosenImageModel(engine, config)
+      ? { model: chosenImageModel(engine, config) }
+      : {}),
   };
   const result = await fetchJSON(
     `${base}/api/image/${engine}`,

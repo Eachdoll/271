@@ -35,6 +35,7 @@ import {
   resolveTextModel,
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  registeredModelIds,
 } from "../text-generation/models.js";
 import {
   getTextGenerationSettings,
@@ -433,7 +434,7 @@ export function updateStoryDraftEngine(draft, selection = {}, fallback = {}) {
       {};
     providers[id] = {
       ...clone(value),
-      model: resolveTextModel(id, value.model),
+      model: resolveTextModel(id, value.model, value),
     };
     if (id === "local" && !providers[id].baseUrl && !providers[id].endpoint)
       providers[id].baseUrl = "http://127.0.0.1:1234/v1";
@@ -445,10 +446,15 @@ export function updateStoryDraftEngine(draft, selection = {}, fallback = {}) {
   if (Object.hasOwn(selection, "model")) {
     if (
       engine !== "local" &&
-      !listTextModels(engine).some((row) => row.id === selection.model)
+      !listTextModels(engine).some((row) => row.id === selection.model) &&
+      !registeredModelIds(providers[engine]).includes(selection.model)
     )
       throw new Error("선택한 엔진에서 사용할 모델을 골라 주세요.");
-    providers[engine].model = resolveTextModel(engine, selection.model);
+    providers[engine].model = resolveTextModel(
+      engine,
+      selection.model,
+      providers[engine],
+    );
   }
   const hybridEnabled =
     engine !== "local" && (selection.hybridEnabled ?? isHybrid(source));
@@ -481,7 +487,7 @@ export function renderStoryEngineSelector(
       );
       return id === "local"
         ? config.model || "로컬"
-        : getTextModelInfo(id, config.model).name;
+        : getTextModelInfo(id, config.model, config).name;
     };
     return `<section class="story-engine-card story-engine-summary" aria-label="이 초안의 글 엔진"><p>줄거리 <strong>${esc(roleName("outline"))}</strong> · 전문 <strong>${esc(roleName("prose"))}</strong> · 심사·단순화 <strong>${esc(roleName("cheap"))}</strong></p>${busy ? "" : button("변경", "open-text-settings")}</section>`;
   }
@@ -489,7 +495,7 @@ export function renderStoryEngineSelector(
     const { engineId: id, config } = resolveStoryStageSettings(settings, stage);
     return id === "local"
       ? config.model || "로컬"
-      : getTextModelInfo(id, config.model).name;
+      : getTextModelInfo(id, config.model, config).name;
   };
   return `<section class="story-engine-card story-engine-summary" aria-label="이 초안의 글 엔진"><p>${draft.demo ? '<span class="story-demo-label">데모</span>' : ""}${isHybrid(settings) ? `줄거리 <strong>${esc(name("outline"))}</strong> · 전문 <strong>${esc(name("prose"))}</strong> · 쪽 나누기 <strong>${esc(name("pagination"))}</strong> · 하이브리드 켜짐` : `줄거리·쪽 나누기 <strong>${esc(name("outline"))}</strong> · 전문 <strong>${esc(name("prose"))}</strong>`}</p>${busy ? "" : button("변경", "open-text-settings")}</section>`;
 }

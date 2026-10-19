@@ -4,6 +4,11 @@ import { pathToFileURL } from "node:url";
 import { generateImage } from "../dist/image-generation/providers.js";
 import { translateWardrobeWithGoogle } from "../dist/wardrobe-translation.js";
 import { createTextEngine } from "../dist/text-generation/providers.js";
+import { isModelId, listTextModels } from "../dist/text-generation/models.js";
+import {
+  fetchProviderModels,
+  supportsModelList,
+} from "../dist/text-generation/model-list.js";
 
 const KEY_ENV = Object.freeze({
   google: "GOOGLE_IMAGE_API_KEY",
@@ -20,6 +25,17 @@ const ENDPOINT_ENV = Object.freeze({
   local: "COMFYUI_BASE_URL",
 });
 
+const TEXT_KEY_ENV = Object.freeze({
+  openai: "OPENAI_API_KEY",
+  google: "GOOGLE_IMAGE_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+});
+const TEXT_BASE_ENV = Object.freeze({
+  openai: "OPENAI_TEXT_ENDPOINT",
+  google: "GOOGLE_TEXT_ENDPOINT",
+  anthropic: "ANTHROPIC_TEXT_ENDPOINT",
+  local: "LOCAL_TEXT_BASE_URL",
+});
 function proxyError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -74,7 +90,7 @@ async function readBody(request, limit) {
     throw proxyError(400, "요청 JSON을 읽을 수 없어요.");
   }
 }
-function respond(response, status, payload, origin) {
+function respond(response, status, payload, origin, methods = "POST, OPTIONS") {
   const headers = {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
@@ -83,7 +99,7 @@ function respond(response, status, payload, origin) {
   };
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
-    headers["Access-Control-Allow-Methods"] = "POST, OPTIONS";
+    headers["Access-Control-Allow-Methods"] = methods;
     headers["Access-Control-Allow-Headers"] = "Content-Type";
   }
   response.writeHead(status, headers);
@@ -96,6 +112,7 @@ export function createImageProxyHandler({
   generate = generateImage,
   translate = translateWardrobeWithGoogle,
   textEngineFactory = createTextEngine,
+  listModels = fetchProviderModels,
   maxBodyBytes = 70 * 1024 * 1024,
 } = {}) {
   const allowedOrigins = originsFromEnv(env);
@@ -112,8 +129,86 @@ export function createImageProxyHandler({
       const textMatch = path.match(
         /^\/api\/text\/(openai|google|anthropic|local)$/,
       );
-      if (!match && !translation && !textMatch)
+      // R13 '모델 목록 불러오기' through the proxy: a free GET list call made
+      // with the server's own key. Only model IDs and names come back.
+      const modelsMatch = path.match(
+        /^\/api\/models\/(text|image)\/(openai|google|anthropic|local)$/,
+      );
+      if (!match && !translation && !textMatch && !modelsMatch)
         throw proxyError(404, "엔진 주소를 확인해 주세요.");
+      if (modelsMatch) {
+        if (request.method === "OPTIONS") {
+          respond(response, 204, null, origin, "GET, OPTIONS");
+          return;
+        }
+        if (request.method !== "GET")
+          throw proxyError(405, "모델 목록은 GET 요청으로만 받을 수 있어요.");
+        if (!claimedOrigin) {
+          const supplied = String(request.headers["x-image-proxy-token"] || ""),
+            expected = String(env.IMAGE_PROXY_TOKEN || "");
+          if (
+            !expected ||
+            supplied.length !== expected.length ||
+            supplied.length > 1024 ||
+            !timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))
+          )
+            throw proxyError(
+              403,
+              "Origin 헤더 또는 서버 프록시 토큰이 필요해요.",
+            );
+        }
+        const [, kind, engine] = modelsMatch;
+        if (!supportsModelList(kind, engine))
+          throw proxyError(
+            404,
+            "이 공급자는 모델 목록을 제공하지 않아요. 모델 ID를 직접 입력해 주세요.",
+          );
+        const config =
+          kind === "text"
+            ? {
+                apiKey: env[TEXT_KEY_ENV[engine]] || undefined,
+                ...(env[TEXT_BASE_ENV[engine]]
+                  ? { baseUrl: env[TEXT_BASE_ENV[engine]] }
+                  : engine === "local"
+                    ? { baseUrl: "http://127.0.0.1:1234/v1" }
+                    : {}),
+              }
+            : {
+                apiKey: env[KEY_ENV[engine]] || undefined,
+                ...(env[ENDPOINT_ENV[engine]]
+                  ? { endpoint: env[ENDPOINT_ENV[engine]] }
+                  : {}),
+              };
+        if (engine !== "local" && !config.apiKey)
+          throw proxyError(
+            503,
+            "서버 환경변수에 이 공급자의 API 키를 설정해 주세요.",
+          );
+        const controller = new AbortController(),
+          close = () => {
+            if (!response.writableEnded) controller.abort();
+          };
+        response.once("close", close);
+        try {
+          const list = await listModels({
+            kind,
+            engine,
+            config,
+            signal: controller.signal,
+          });
+          if (!response.destroyed)
+            respond(
+              response,
+              200,
+              { fetchedAt: list.fetchedAt, models: list.models },
+              origin,
+              "GET, OPTIONS",
+            );
+        } finally {
+          response.removeListener("close", close);
+        }
+        return;
+      }
       if (request.method === "OPTIONS") {
         respond(response, 204, null, origin);
         return;
@@ -185,6 +280,13 @@ export function createImageProxyHandler({
             if (!response.writableEnded) controller.abort();
           };
         response.once("close", close);
+        // R13: a fetched or typed model outside the catalog is registered for
+        // this one request so the shared engine sends it (conservative shape);
+        // catalog models and requests without a model are unchanged.
+        const outside =
+          engine !== "local" &&
+          isModelId(payload.model) &&
+          !listTextModels(engine).some((row) => row.id === payload.model);
         try {
           const adapter = textEngineFactory({
             engine,
@@ -203,6 +305,7 @@ export function createImageProxyHandler({
                         : payload.model,
                   }
                 : {}),
+              ...(outside ? { customModels: [payload.model.trim()] } : {}),
             },
           });
           const result = await adapter.complete({
@@ -274,6 +377,8 @@ export function createImageProxyHandler({
           : {}),
         googlePro: payload.googlePro === true,
         modelVariant: payload.modelVariant === "pro" ? "pro" : undefined,
+        // R13: the browser's chosen final-picture model (an ID, never a URL).
+        ...(isModelId(payload.model) ? { model: payload.model.trim() } : {}),
       };
       if (engine === "local") {
         if (env.COMFYUI_WORKFLOW_JSON) {
