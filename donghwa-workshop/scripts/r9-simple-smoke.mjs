@@ -6,6 +6,9 @@
 // 쪽 그림을 만드는 동안 프로 모드 '완성 초안 검토'는 같은 책을 열지 않습니다.
 // FIX-UI-3: '이어 만들 이야기'의 FULL AUTO 초안은 '검수 열기'로만 열리고(그리는 중엔 거절),
 // 다시 엮지 않아 산 그림이 그대로 남으며, 아이디어 뽑기 안내가 화면에 남는지 확인합니다.
+// R11: 브라우저 뒤로 가기(②→①→②), 단계 표시로 ④→①→③→④(같은 쪽·작업 그대로), 아래 버튼 줄
+// 고정, 쉬운 책장의 '제작 중인 이야기', 다시 연 ④의 마지막 쪽, 데모 '이 주제로 새로 만들기'(무료).
+// 책장 카드의 실행형 '이어서 만들기'는 프로 모드 카드로 확인합니다(쉬운 카드는 열기만 해요).
 // 사용: (cd dist && npx http-server -p 4180 -s .) & node scripts/r9-simple-smoke.mjs [기본주소] [출력폴더]
 // 환경변수: PLAYWRIGHT_MODULE(기본 playwright), CHROMIUM_PATH(선택, 브라우저 실행 파일)
 import fs from "node:fs";
@@ -126,6 +129,34 @@ async function run(width) {
   };
   const library = () =>
     page.evaluate(() => localStorage.getItem("donghwa-workshop-v1"));
+  /** How many FULL AUTO jobs are stored (moving between steps never adds one). */
+  const jobCount = () =>
+    page.evaluate(
+      () =>
+        Object.keys(
+          JSON.parse(localStorage.getItem("donghwa-workshop-v1") || "{}")
+            .fullAutoJobs || {},
+        ).length,
+    );
+  /** One stored job as JSON (to prove a step change or a fork left it as it was). */
+  const storedJob = (id) =>
+    page.evaluate(
+      (jobId) =>
+        JSON.stringify(
+          JSON.parse(localStorage.getItem("donghwa-workshop-v1") || "{}")
+            .fullAutoJobs?.[jobId] ?? null,
+        ),
+      id,
+    );
+  /** ④ back to its first page (a reopened story starts on the page last shown). */
+  const firstPage = async () => {
+    for (let i = 0; i < 30; i++) {
+      const prev = page.locator('[data-simple-action="page-prev"]');
+      if (!(await prev.count()) || (await prev.isDisabled())) return;
+      await prev.click();
+      await page.waitForTimeout(150);
+    }
+  };
   /** One page of a simple job's book as stored (the newest job with a book when jobId is null). */
   const jobPage = (jobId, index) =>
     page.evaluate(
@@ -307,6 +338,44 @@ async function run(width) {
       .locator(".simple-card.selected")
       .count();
     await shot("02-materials");
+    // R11: the browser's Back goes from ② to ① inside the app (topic kept),
+    // Forward comes back to ②. Nothing is started or bought.
+    const backNav = { jobsBefore: await jobCount() };
+    await page.evaluate(() => history.back());
+    await page
+      .waitForFunction(
+        () =>
+          document.querySelector(".simple-create")?.dataset.simpleStep === "1",
+        null,
+        { timeout: 5000 },
+      )
+      .catch(() => {});
+    backNav.afterBack = await step();
+    backNav.topic = await page
+      .locator("#topic")
+      .inputValue()
+      .catch(() => "");
+    await page.evaluate(() => history.forward());
+    await page
+      .waitForFunction(
+        () =>
+          document.querySelector(".simple-create")?.dataset.simpleStep === "2",
+        null,
+        { timeout: 5000 },
+      )
+      .catch(() => {});
+    backNav.afterForward = await step();
+    backNav.jobsAfter = await jobCount();
+    result.steps.browserBack = backNav;
+    if (
+      backNav.afterBack !== 1 ||
+      !backNav.topic.includes("공룡 친구와 숲으로 소풍") ||
+      backNav.afterForward !== 2 ||
+      backNav.jobsAfter !== backNav.jobsBefore
+    )
+      problem(
+        `브라우저 뒤로 가기로 ②→①→② 이동이 안 돼요: ${JSON.stringify(backNav)}`,
+      );
     await click('[data-simple-action="next"]');
     // ③ generate (demo text only)
     if ((await step()) !== 3) problem("③으로 넘어가지 않았어요.");
@@ -392,6 +461,107 @@ async function run(width) {
     result.steps.badge = await page
       .locator("#simple-reading-badge")
       .textContent();
+    // R11: ④ → ① → ③ → ④ through the step bar. ① shows the story's frozen
+    // copy (no topic field, '이 주제로 새로 만들기'), ③ says the text is done
+    // and offers 검수로 가기, and ④ comes back on the same page; the stored
+    // job is unchanged.
+    {
+      const reviewJob = (await jobPage(null, 0)).jobId,
+        round = {
+          page: await page.locator(".simple-page-no").textContent(),
+          job: await storedJob(reviewJob),
+          jobs: await jobCount(),
+        };
+      await click('[data-simple-action="goto-step"][data-step="1"]');
+      round.atFirst = await step();
+      round.frozen = await page.locator(".simple-frozen").count();
+      round.topicField = await page.locator("#topic").count();
+      round.fork = await page.locator('[data-simple-action="fork"]').count();
+      await shot("04a-frozen-topic");
+      // Leaving from this frozen ① still asks (the book under review is kept).
+      await click('button[data-action="nav"][data-view="library"]');
+      round.leaveDialog = await page
+        .locator("#discard-confirm")
+        .isVisible()
+        .catch(() => false);
+      if (round.leaveDialog)
+        await click('#modal-root [data-action="close-modal"]');
+      round.stayed = await step();
+      await click('[data-simple-action="goto-step"][data-step="3"]');
+      round.atThird = await step();
+      round.toReview = await page
+        .locator('[data-simple-action="open-review"]')
+        .count();
+      round.startText = await page
+        .locator('[data-simple-action="start-text"]')
+        .count();
+      await click('[data-simple-action="goto-step"][data-step="4"]');
+      round.back = await step();
+      round.pageAfter = await page.locator(".simple-page-no").textContent();
+      round.liked = await page
+        .locator('[data-simple-action="like"]')
+        .getAttribute("aria-pressed");
+      round.same = (await storedJob(reviewJob)) === round.job;
+      round.jobsAfter = await jobCount();
+      delete round.job;
+      result.steps.stepBarRoundTrip = round;
+      if (
+        round.atFirst !== 1 ||
+        !round.frozen ||
+        round.topicField ||
+        !round.fork ||
+        !round.leaveDialog ||
+        round.stayed !== 1 ||
+        round.atThird !== 3 ||
+        !round.toReview ||
+        round.startText ||
+        round.back !== 4 ||
+        round.pageAfter !== round.page ||
+        round.liked !== "true" ||
+        !round.same ||
+        round.jobsAfter !== round.jobs
+      )
+        problem(`단계 표시로 ④→①→③→④ 이동이 이상해요: ${JSON.stringify(round)}`);
+      // The bottom actions stay on screen (above the phone's bottom navigation),
+      // and every step link has a 40px hit area.
+      const sticky = await page.evaluate(() => {
+        window.scrollTo(0, 0);
+        const bar = document
+            .querySelector(".simple-create > .wizard-actions")
+            .getBoundingClientRect(),
+          nav = document.querySelector(".sidebar").getBoundingClientRect(),
+          covers =
+            nav.bottom >= innerHeight - 1 && nav.width >= innerWidth - 1
+              ? innerHeight - nav.top
+              : 0,
+          links = [...document.querySelectorAll(".simple-step-link")].map(
+            (link) => {
+              const r = link.getBoundingClientRect();
+              return [Math.round(r.width), Math.round(r.height)];
+            },
+          );
+        return {
+          bar: [Math.round(bar.top), Math.round(bar.bottom)],
+          innerHeight,
+          navCovers: Math.round(covers),
+          links,
+        };
+      });
+      result.steps.stickyActions = sticky;
+      if (
+        sticky.bar[0] < 0 ||
+        sticky.bar[1] > sticky.innerHeight - sticky.navCovers + 1
+      )
+        problem(`④ 아래 버튼 줄이 화면에 보이지 않아요: ${JSON.stringify(sticky)}`);
+      if (
+        sticky.links.length !== 4 ||
+        sticky.links.some(([w, h]) => w < 40 || h < 40)
+      )
+        problem(`단계 표시 버튼이 작거나 수가 달라요: ${JSON.stringify(sticky)}`);
+      await page.screenshot({
+        path: path.join(OUT, `${width}-04b-sticky-actions.png`),
+      });
+    }
     // The toast never covers the bottom action bar, at the top or the bottom of the page.
     const atTop = await toastOverBar("맨 위", () => window.scrollTo(0, 0));
     const atBar = await toastOverBar("버튼 줄이 화면 아래", () => {
@@ -512,6 +682,46 @@ async function run(width) {
           .catch(() => false)
       )
         await click("#discard-confirm");
+      // R11: the simple library lists the story above the books in simple
+      // words, with one '이어서 만들기' that only opens it (nothing runs).
+      const simpleLibrary = await page.evaluate((id) => {
+        const section = document.querySelector(
+            '#full-auto-jobs[data-simple="true"]',
+          ),
+          card = section?.querySelector(`[data-auto-job="${id}"]`),
+          shelf = document.querySelector(".shelf-header");
+        return {
+          card: !!card,
+          label: card?.querySelector(".role-tag")?.textContent || "",
+          open:
+            card?.querySelectorAll('[data-full-auto-action="simple-open"]')
+              .length || 0,
+          runs:
+            card?.querySelectorAll(
+              '[data-full-auto-action="resume"],[data-full-auto-action="review"]',
+            ).length || 0,
+          aboveBooks: !!(
+            section &&
+            shelf &&
+            section.compareDocumentPosition(shelf) &
+              Node.DOCUMENT_POSITION_FOLLOWING
+          ),
+        };
+      }, jobId);
+      result.steps.simpleLibrary = simpleLibrary;
+      if (
+        !simpleLibrary.card ||
+        simpleLibrary.open !== 1 ||
+        simpleLibrary.runs ||
+        !simpleLibrary.aboveBooks ||
+        /FULL AUTO/.test(simpleLibrary.label)
+      )
+        problem(
+          `쉬운 모드 책장의 ‘제작 중인 이야기’가 달라요: ${JSON.stringify(simpleLibrary)}`,
+        );
+      await shot("06a2-simple-library");
+      // The pro library card's 이어서 만들기 runs the job (the simple card only opens it).
+      await click('.top-actions [data-action="toggle-ui-mode"]');
       const resume = page.locator(
         `[data-full-auto-action="resume"][data-id="${jobId}"]`,
       );
@@ -546,10 +756,19 @@ async function run(width) {
           `그림을 그대로 둔 쪽을 이어 만들기가 다시 그렸어요: ${JSON.stringify(resumed)}`,
         );
       await shot("06b-resumed");
-      // Back to ④ from the card: every picture is there, page 2 still kept.
-      await click(`[data-full-auto-action="review"][data-id="${jobId}"]`);
+      await click('.top-actions [data-action="toggle-ui-mode"]');
+      // Back to ④ from the simple card: every picture is there, page 2 still
+      // kept, and ④ opens on the page the parent last looked at (R11).
+      await click(`[data-full-auto-action="simple-open"][data-id="${jobId}"]`);
       await page.waitForTimeout(500);
       if ((await step()) !== 4) problem("완성 초안 검토가 ④로 열리지 않아요.");
+      result.steps.reopenedOnPage = await page
+        .locator(".simple-page-no")
+        .textContent();
+      if (!/^2 \//.test(result.steps.reopenedOnPage || ""))
+        problem(
+          `다시 연 ④가 마지막으로 본 쪽이 아니에요: ${result.steps.reopenedOnPage}`,
+        );
       result.steps.allImages = await page
         .locator("#simple-image-count")
         .textContent();
@@ -577,7 +796,8 @@ async function run(width) {
     if (imagesOk) {
       // While page 1 is being redrawn here, the pro library's 완성 초안 검토
       // must not open the same book in the pro editor.
-      // Reopened from the card, ④ starts at page 1.
+      // Page 1 of the reopened story.
+      await firstPage();
       const firstBefore = (await jobPage(jobId, 0)).asset;
       await page.evaluate(() => {
         window.__smokeImageDelay = 4000;
@@ -737,7 +957,7 @@ async function run(width) {
           .catch(() => false)
       )
         await click("#discard-confirm");
-      await click(`[data-full-auto-action="review"][data-id="${jobId}"]`);
+      await click(`[data-full-auto-action="simple-open"][data-id="${jobId}"]`);
       await page.waitForTimeout(500);
       if ((await step()) !== 4)
         problem("‘검수 열기’ 뒤 책장 카드로 ④에 돌아오지 못했어요.");
@@ -839,6 +1059,96 @@ async function run(width) {
     } else {
       result.steps.saveSkipped =
         "그림 오류로 책장 저장·다시 접속·열기는 건너뛰었어요 (텍스트 단계만 검증).";
+    }
+    // R11: a free demo story's frozen ① and '이 주제로 새로 만들기': the old
+    // story stays exactly as it was (still listed), the new one starts unbound
+    // at ① with the same topic, and nothing new is made until ③ 글 만들기.
+    {
+      const fork = {};
+      await click('button[data-action="nav"][data-view="library"]');
+      if (
+        await page
+          .locator("#discard-confirm")
+          .isVisible()
+          .catch(() => false)
+      )
+        await click("#discard-confirm");
+      await click('[data-action="new-story"]');
+      // A reload above locked the parent screens again: unlock with the PIN.
+      if (
+        await page
+          .locator("#pin-form #pin")
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await page.fill("#pin-form #pin", "1234");
+        await page.click("#pin-form button[type=submit]");
+        await page.waitForTimeout(800);
+      }
+      await page.waitForSelector("#topic", { timeout: 10000 });
+      fork.start = await step();
+      await page.fill("#topic", "바닷가에서 조개 줍는 날");
+      await click('[data-simple-action="next"]');
+      await click('[data-simple-action="next"]');
+      await click('[data-simple-action="start-demo"]');
+      await page.waitForSelector('.simple-create[data-simple-step="4"]', {
+        timeout: 90000,
+      });
+      await page.waitForTimeout(500);
+      const forkJob = (await jobPage(null, 0)).jobId,
+        before = await storedJob(forkJob),
+        jobs = await jobCount();
+      await click('[data-simple-action="goto-step"][data-step="1"]');
+      fork.frozenTopic = await page
+        .locator(".simple-frozen-topic")
+        .textContent()
+        .catch(() => "");
+      await click('[data-simple-action="fork"]');
+      fork.asked = await page
+        .locator(".simple-confirm")
+        .textContent()
+        .catch(() => "");
+      fork.okLabel = await page
+        .locator("#simple-confirm-yes")
+        .textContent()
+        .catch(() => "");
+      await shot("10-fork-confirm");
+      await click("#simple-confirm-yes");
+      await page.waitForTimeout(300);
+      fork.step = await step();
+      fork.topic = await page
+        .locator("#topic")
+        .inputValue()
+        .catch(() => "");
+      fork.idea = await page.locator('[data-simple-action="idea"]').count();
+      fork.same = (await storedJob(forkJob)) === before;
+      fork.newJobs = (await jobCount()) - jobs;
+      await shot("11-forked");
+      await click('button[data-action="nav"][data-view="library"]');
+      fork.leaveDialog = await page
+        .locator("#discard-confirm")
+        .isVisible()
+        .catch(() => false);
+      if (fork.leaveDialog) await click("#discard-confirm");
+      fork.listed = await page
+        .locator(`[data-full-auto-action="simple-open"][data-id="${forkJob}"]`)
+        .count();
+      result.steps.fork = fork;
+      if (
+        fork.start !== 1 ||
+        fork.frozenTopic.trim() !== "바닷가에서 조개 줍는 날" ||
+        !/이어서 만들기/.test(fork.asked) ||
+        !/데모는 무료/.test(fork.asked) ||
+        fork.okLabel.trim() !== "새 이야기로 고치기" ||
+        fork.step !== 1 ||
+        fork.topic !== "바닷가에서 조개 줍는 날" ||
+        !fork.idea ||
+        !fork.same ||
+        fork.newJobs !== 0 ||
+        fork.leaveDialog ||
+        fork.listed !== 1
+      )
+        problem(`‘이 주제로 새로 만들기’가 이상해요: ${JSON.stringify(fork)}`);
     }
   } catch (error) {
     problem("스크립트 오류: " + error.message);

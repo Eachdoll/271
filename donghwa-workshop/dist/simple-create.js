@@ -475,6 +475,95 @@ const canAbandon = (job) =>
   !runIsLive(job) &&
   ["paused", "failed", "ready", "running"].includes(job.status);
 
+/* ---------- moving between the five steps (R11) ---------- */
+const STEP_EDITING = "고치던 글을 저장하거나 취소해 주세요.",
+  STEP_NO_TEXT = "③에서 글을 먼저 만들어 주세요.",
+  STEP_FINISH_BUSY = "만드는 중이에요. 끝난 뒤 ⑤로 갈 수 있어요.",
+  TEXT_READY_ELSEWHERE = "글이 완성됐어요. 단계 표시의 ④에서 검수해요.",
+  FORK_BUSY =
+    "만드는 중에는 새 이야기를 시작할 수 없어요. 중지하거나 끝난 뒤에 해 주세요.",
+  REOPEN_PICTURE_BUSY = "그림을 만드는 중이에요. 끝난 뒤 다시 열어 주세요.",
+  REOPEN_TEXT_BUSY = "글을 만드는 중이에요. 끝난 뒤 다시 열어 주세요.",
+  REOPEN_OTHER_BUSY = "진행 중인 작업이 끝난 뒤 다른 이야기를 열어 주세요.";
+/**
+ * Which of the five steps the parent can open from where they are, and how
+ * each would show. Pure: nothing on the wizard or the job changes (materials
+ * are recommended on a copy). Rows are {step, reachable, mode, reason}:
+ * 'edit' (no job yet, the parent's own inputs), 'frozen' (①② of a job: its
+ * frozen copy), 'status' (③ of a job), 'review' (④), 'finish' (⑤).
+ * `busy` is what disables 동화책 만들기 on ④; ⑤ is closed while it is true.
+ */
+export function simpleStepAccess(state, w = {}, { busy = false } = {}) {
+  const job = jobOfWizard(state, w),
+    text = !!job?.book || HELD.includes(job?.status),
+    row = (step, reachable, mode, reason = "") => ({
+      step,
+      reachable: !!reachable,
+      mode,
+      reason: reachable ? "" : reason,
+    });
+  let rows;
+  if (!job) {
+    const topic = safeTopic(w?.topic),
+      topicReason = topic.message || "이야기 주제를 입력해 주세요.";
+    let materials = topicReason;
+    if (topic.ok) {
+      // A copy, so the access check never fills the parent's picks itself.
+      const probe = {
+        ...w,
+        characterIds: [...(w.characterIds || [])],
+        backgroundIds: [...(w.backgroundIds || [])],
+      };
+      if (!probe.simplePicksTouched) preselectMaterials(state, probe);
+      materials = validateMaterials(state, probe);
+    }
+    rows = [
+      row(1, true, "edit"),
+      row(2, topic.ok, "edit", topicReason),
+      row(3, topic.ok && !materials, "edit", materials || topicReason),
+      row(4, false, "review", STEP_NO_TEXT),
+      row(5, false, "finish", STEP_NO_TEXT),
+    ];
+  } else
+    rows = [
+      row(1, true, "frozen"),
+      row(2, true, "frozen"),
+      row(3, true, "status"),
+      row(4, text, "review", STEP_NO_TEXT),
+      row(5, text && !busy, "finish", text ? STEP_FINISH_BUSY : STEP_NO_TEXT),
+    ];
+  if (w?.simpleEditing)
+    rows = rows.map((r) =>
+      r.step === w.simpleStep ? r : { ...r, reachable: false, reason: STEP_EDITING },
+    );
+  return rows;
+}
+/** The expression ④ uses to disable 동화책 만들기, for the wizard's own job. */
+function finishBusy(state, w) {
+  const job = jobOfWizard(state, w),
+    bookId = job?.book?.id;
+  return !!(
+    runIsLive(job) ||
+    pageOp ||
+    actionBusy ||
+    (bookId && isPageOperationBusy(bookId))
+  );
+}
+/** A picture is being drawn by this screen (a page, the sheets or a whole run). */
+export function simpleDrawingInFlight() {
+  return !!(
+    (pageOp && pageOp.kind !== "rewrite") ||
+    (liveRun && liveRun.kind !== "text")
+  );
+}
+/** ④ page last shown per job, in memory only (this tab). */
+const reviewPages = new Map();
+function rememberedPage(job, book = job?.book) {
+  const total = book?.pages?.length || 0,
+    saved = Number(reviewPages.get(job?.id)) || 0;
+  return total ? Math.max(0, Math.min(saved, total - 1)) : 0;
+}
+
 /* ---------- pictures kept after a text edit ---------- */
 /*
  * Keeping a picture after its text changed is the parent's lasting decision.
@@ -614,8 +703,39 @@ function stopMark(state, jobId) {
 /* ---------- rendering ---------- */
 const fallbackHeading = (title, sub, action = "") =>
   `<div class="page-heading"><div><h2>${title}</h2><p>${sub}</p></div>${action}</div>`;
-function stepsBar(step) {
-  return `<div class="steps simple-steps" role="list" aria-label="쉬운 만들기 단계">${SIMPLE_STEPS.map((label, i) => `<div class="step ${i + 1 === step ? "active" : i + 1 < step ? "done" : ""}" role="listitem" ${i + 1 === step ? 'aria-current="step"' : ""}><b>${i + 1 < step ? "✓" : i + 1}</b>${label}</div>`).join("")}</div>`;
+/** '으로' after a final consonant other than ㄹ, '로' otherwise (생성으로, 검수로). */
+function toParticle(word) {
+  const code = String(word).trim().slice(-1).charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  const final = code % 28;
+  return final && final !== 8 ? "으로" : "로";
+}
+/**
+ * The five-step indicator. A step the parent can open from here is a button
+ * (data-simple-nav: outside the 12-button count); the current step and the
+ * closed ones stay plain, a closed one titled with why it is closed.
+ */
+function stepsBar(step, access = [], { text = false } = {}) {
+  const open = access.map((row) => (row?.reachable ? 1 : 0)).join("");
+  return `<div class="steps simple-steps" role="list" aria-label="쉬운 만들기 단계" data-open="${open}">${SIMPLE_STEPS.map(
+    (label, i) => {
+      const n = i + 1,
+        row = access[i] || { reachable: false, mode: "", reason: "" },
+        current = n === step,
+        done =
+          !current &&
+          (row.mode === "frozen" ||
+            (row.mode === "status" && text) ||
+            n < step),
+        inner = `<b>${done ? "✓" : n}</b>${label}`,
+        body =
+          !current && row.reachable
+            ? `<button type="button" class="simple-step-link" data-simple-action="goto-step" data-step="${n}" data-simple-nav="step" aria-label="${n}단계 ${label}${toParticle(label)} 가기">${inner}</button>`
+            : inner,
+        closed = !current && !row.reachable;
+      return `<div class="step ${current ? "active" : done ? "done" : ""}" role="listitem"${current ? ' aria-current="step"' : ""}${closed ? ` aria-disabled="true" title="${esc(row.reason)}"` : ""}>${body}</div>`;
+    },
+  ).join("")}</div>`;
 }
 function selectField(id, label, options, value) {
   return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${options.map(([v, t]) => `<option value="${v}" ${String(v) === String(value) ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
@@ -683,8 +803,28 @@ function renderResumeCards(state, w) {
       "",
     )}</div>${jobs.length > shown ? `<p class="small-label">나머지 ${jobs.length - shown}권은 책장의 ‘제작 중인 이야기’에서 이어 갈 수 있어요.</p>` : ""}</section>`;
 }
+const FROZEN_NOTE =
+  "이 이야기에 쓴 주제예요. 바꾸려면 새 이야기로 만들어요. 지금 이야기는 그대로 남아요.";
+/** '이 주제로 새로 만들기': closed while anything is being made for the story. */
+function forkButton(job) {
+  return sbtn(
+    "이 주제로 새로 만들기",
+    "fork",
+    "outline",
+    runIsLive(job) || workBusy() ? "disabled" : "",
+  );
+}
+/** ① of a story that has a job: the job's own frozen copy, read only. */
+function renderFrozenTopic(ctx, w, job) {
+  const frozen = job.wizard || {},
+    topic = frozen.topic || job.input?.topic || "",
+    title = String(job.book?.title || "").trim();
+  return `<section class="panel simple-panel simple-frozen"><h3>이 이야기의 주제</h3><p class="simple-frozen-topic">${esc(topic)}</p>${title ? `<p class="simple-frozen-title"><span class="small-label">책 제목</span> <strong>${esc(title)}</strong></p>` : ""}<div class="simple-format"><span class="small-label">책 형식</span><strong>${esc(formatSummary(frozen))}</strong></div><p class="small-label simple-frozen-note">${FROZEN_NOTE}</p><div class="simple-start">${forkButton(job)}</div></section><div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">주제를 바꾸면 새 이야기가 돼요.</span>${sbtn("다음", "next", "green")}</div>`;
+}
 function renderTopicStep(ctx, w) {
-  const state = ctx.getState();
+  const state = ctx.getState(),
+    job = jobOfWizard(state, w);
+  if (job) return renderFrozenTopic(ctx, w, job);
   return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? IDEA_NOTE : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w) : ""}<p class="small-label simple-defaults-note">교훈·마무리·분위기는 부모 설정의 기본값을 써요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
@@ -694,7 +834,49 @@ const PLACE_EMOJI = {
   space: "🌙",
   sea: "🐚",
 };
+/** ② of a story that has a job: the friends and places it was made with, not clickable. */
+function renderFrozenMaterials(ctx, w, job) {
+  const state = ctx.getState(),
+    frozen = job.wizard || {},
+    plan = job.plan || {},
+    added = (list) => new Set((list || []).map((item) => item?.id)),
+    newCharacters = added(plan.newCharacters),
+    newPlaces = added(plan.newBackgrounds),
+    find = (list, extra, id) =>
+      (list || []).find((item) => item?.id === id) ||
+      (extra || []).find((item) => item?.id === id) ||
+      null,
+    characters = (frozen.characterIds || [])
+      .map((id) => find(state.characters, plan.newCharacters, id))
+      .filter(Boolean),
+    places = (frozen.backgroundIds || [])
+      .map((id) => find(state.backgrounds, plan.newBackgrounds, id))
+      .filter(Boolean),
+    portrait = ctx.materialPortrait || (() => ""),
+    card = (inner) =>
+      `<div class="selection simple-card selected" aria-disabled="true">${inner}</div>`,
+    auto = '<span class="simple-rec">자동 추가</span>';
+  return `<section class="panel simple-panel simple-frozen"><h3>이 이야기의 친구와 장소</h3><p class="section-sub">이 이야기에 쓴 재료예요. 바꾸려면 새 이야기로 만들어요. 지금 이야기는 그대로 남아요.</p><p class="form-label">함께하는 친구</p><div class="selection-grid simple-cards">${characters
+    .map((c, i) =>
+      card(
+        `${portrait(c)}<strong>${esc(c.name)}</strong><small>${i === 0 ? "주인공" : esc(c.role || "친구")}</small>${newCharacters.has(c.id) ? auto : ""}`,
+      ),
+    )
+    .join(
+      "",
+    )}</div><p class="form-label">이야기 장소</p><div class="selection-grid simple-cards">${places
+    .map((b) =>
+      card(
+        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || "🌿"}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
+      ),
+    )
+    .join(
+      "",
+    )}</div><p class="small-label simple-allow">부족한 재료 자동 추가: ${job.allowNew !== false ? "켜짐" : "꺼짐"}</p><div class="simple-start">${forkButton(job)}</div></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">재료를 바꾸면 새 이야기가 돼요.</span>${sbtn("다음", "next", "green")}</div>`;
+}
 function renderMaterialsStep(ctx, w) {
+  const job = jobOfWizard(ctx.getState(), w);
+  if (job) return renderFrozenMaterials(ctx, w, job);
   const state = ctx.getState(),
     characters = activeCharacters(state),
     backgrounds = activeBackgrounds(state),
@@ -810,18 +992,25 @@ function renderGenerateStep(ctx, w) {
     distilled = quality.useDistilledExamples === true;
   if (typeof document !== "undefined") queueMicrotask(() => refreshKeyStatus());
   const engineLine = `<div class="simple-engine-row"><div class="field"><label for="simple-text-engine">글 엔진</label><select id="simple-text-engine" ${locked ? "disabled" : ""}>${(textEngine === "demo" ? ["demo"] : TEXT_ENGINES).map((id) => `<option value="${id}" ${id === textEngine ? "selected" : ""}>${esc(TEXT_ENGINE_NAMES[id])}${id === "demo" ? "" : " · " + esc(keyLabel(id, settings.providers?.[id]))}</option>`).join("")}</select><small>${esc(model)}${locked ? " · 이 이야기에 고정됨" : ""}</small></div>${!locked && keyMissing(textEngine, textConfig) ? sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`) : ""}</div>${textEngine === "demo" ? "" : textOverrideNote(state)}<div class="simple-engine-row"><div class="simple-engine-name"><span class="small-label">그림 엔진</span><strong>${esc(imageMeta.name)}</strong><small>${esc(keyLabel(imageEngine, imageConfig))} · 그림은 다음 단계에서 써요</small></div>${locked ? "" : sbtn("바꾸기", "image-settings", "plain", `data-engine="${esc(imageEngine)}"`)}${!locked && keyMissing(imageEngine, imageConfig) && imageMeta.requiresKey !== false ? sbtn("키 입력", "image-key", "outline", `data-engine="${esc(imageEngine)}"`) : ""}</div>`;
-  const costLines = `<ul class="simple-costs"><li><span>글 만들기</span><strong>${job?.demo ? "무료" : "약 " + usd(cost.textUsd)}</strong></li><li><span>그림 ${cost.pageCount}쪽 + 표지</span><strong>${cost.imageUnitUsd > 0 ? "약 " + usd(cost.imagesUsd) : "무료"}</strong></li>${cost.imageUnitUsd > 0 ? `<li><span>새 시트가 필요하면</span><strong>최대 ${usd(cost.sheetsUpperUsd)}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
+  const text = !!job && (!!job.book || HELD.includes(job.status));
+  const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${job?.demo ? "무료" : "약 " + usd(cost.textUsd)}</strong></li>`}<li><span>그림 ${cost.pageCount}쪽 + 표지</span><strong>${cost.imageUnitUsd > 0 ? "약 " + usd(cost.imagesUsd) : "무료"}</strong></li>${cost.imageUnitUsd > 0 ? `<li><span>새 시트가 필요하면</span><strong>최대 ${usd(cost.sheetsUpperUsd)}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
   const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요." aria-label="도움말: 부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
   let status = "";
   if (!job)
     status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
-  else if (live)
+  else if (text) {
+    const pages = job.book?.pages?.length || 0,
+      bookId = job.book?.id,
+      drawing =
+        live ||
+        (!!pageOp && pageOp.bookId === bookId) ||
+        (!!bookId && isPageOperationBusy(bookId));
+    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
+  } else if (live)
     status = `${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
-  else if (HELD.includes(job.status) || job.book)
-    status = `<div class="notice simple-done">글이 완성됐어요. 쪽마다 글을 확인해 주세요.</div><div class="simple-start">${sbtn("쪽마다 검수하기", "open-review", "primary")}</div>`;
   else
     status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}</div>${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${status}</section><div class="wizard-actions">${locked ? "<span></span>" : sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span><span></span></div>`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(
@@ -908,7 +1097,7 @@ function renderReviewStep(ctx, w) {
           "green",
           busy || editing ? "disabled" : "",
         );
-  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span></div><div class="simple-review-actions">${topAction}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-pager"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no" aria-live="polite">${index + 1} / ${total}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div><div class="simple-page"><div class="simple-page-art">${art}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${index + 1}쪽 · 한글`) : ""}${needsEn(book) ? text("en", `English · ${index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div></section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : "<span></span>"}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
+  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span></div><div class="simple-review-actions">${topAction}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-pager"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no" aria-live="polite">${index + 1} / ${total}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div><div class="simple-page"><div class="simple-page-art">${art}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${index + 1}쪽 · 한글`) : ""}${needsEn(book) ? text("en", `English · ${index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div></section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
 }
 function renderFinishStep(ctx, w) {
   const state = ctx.getState(),
@@ -947,6 +1136,8 @@ export function renderSimpleCreate(ctx = api) {
     else w.simpleStep = job ? 3 : Math.min(w.simpleStep, 3);
   }
   const step = w.simpleStep,
+    job = jobOfWizard(state, w),
+    access = simpleStepAccess(state, w, { busy: finishBusy(state, w) }),
     heading = ctx.heading || fallbackHeading,
     body =
       step === 1
@@ -958,7 +1149,52 @@ export function renderSimpleCreate(ctx = api) {
             : step === 4
               ? renderReviewStep(ctx, w)
               : renderFinishStep(ctx, w);
-  return `${heading(w.previousBookId ? "다음 이야기 이어 만들기" : "이야기 만들기", "다섯 단계로 한 권을 만들어요.", `<span class="role-tag">${esc(getActiveWorld(state).name)}</span>${w.simpleForced ? sbtn("프로 만들기 화면", "exit-forced", "plain") : ""}`)}<div class="wizard simple-create" data-simple-step="${step}">${stepsBar(step)}${body}</div>`;
+  const html = `${heading(w.previousBookId ? "다음 이야기 이어 만들기" : "이야기 만들기", "다섯 단계로 한 권을 만들어요.", `<span class="role-tag">${esc(getActiveWorld(state).name)}</span>${w.simpleForced ? sbtn("프로 만들기 화면", "exit-forced", "plain") : ""}`)}<div class="wizard simple-create" data-simple-step="${step}">${stepsBar(step, access, { text: !!job?.book || HELD.includes(job?.status) })}${body}</div>`;
+  // The browser history entry follows the step shown (first render included).
+  if (ctx === api && ctx.isSimpleView?.()) syncStepHistory(step);
+  return html;
+}
+
+/* ---------- browser Back/Forward between steps ---------- */
+const HISTORY_KEY = "donghwaSimpleStep";
+const browserHistory = () =>
+  globalThis.location && typeof globalThis.history?.pushState === "function"
+    ? globalThis.history
+    : null;
+function writeStepHistory(step, push) {
+  const history = browserHistory();
+  if (!history) return;
+  try {
+    // Same URL and hash: only the entry's state names the step.
+    if (push)
+      history.pushState({ [HISTORY_KEY]: step }, "", globalThis.location.href);
+    else
+      history.replaceState(
+        { [HISTORY_KEY]: step },
+        "",
+        globalThis.location.href,
+      );
+  } catch {
+    /* A sandboxed frame may refuse history; the steps still work. */
+  }
+}
+function syncStepHistory(step) {
+  const history = browserHistory();
+  if (history && history.state?.[HISTORY_KEY] !== step)
+    writeStepHistory(step, false);
+}
+/**
+ * Back/Forward on the simple create screen moves between steps through the
+ * same rules as the step bar; nothing starts, resumes or is bought. Any other
+ * history entry, or any other screen, is left to the app.
+ */
+export function onSimplePopState(event) {
+  const step = Number(event?.state?.[HISTORY_KEY]);
+  if (!api || !Number.isInteger(step) || step < 1 || step > 5) return;
+  if (!api.isSimpleView?.() || api.isParent?.() === false) return;
+  const w = api.getWizard();
+  if (!w || w.simpleStep === step) return;
+  gotoStep(api, w, step, { fromHistory: true });
 }
 
 /* ---------- actions ---------- */
@@ -1192,9 +1428,18 @@ async function startText(ctx, { demo = false, onCreated } = {}) {
   }
   const current = ctx.getWizard();
   if (done && current?.simpleJobId === done.id && ctx.isSimpleView()) {
-    if (HELD.includes(done.status) && done.book) return enterReview(ctx, done);
+    if (HELD.includes(done.status) && done.book) return arriveAtReview(ctx, done);
   }
   ctx.render();
+}
+/**
+ * A text run of the open story finished: the first arrival at ④ when the
+ * parent is still waiting on ③; anywhere else the parent stays put.
+ */
+function arriveAtReview(ctx, job) {
+  if (ctx.getWizard()?.simpleStep === 3) return enterReview(ctx, job);
+  ctx.render();
+  ctx.toast(TEXT_READY_ELSEWHERE);
 }
 async function refreshReading(ctx) {
   const book = ctx.getDraft();
@@ -1742,6 +1987,66 @@ async function restartStory(ctx) {
   });
 }
 /**
+ * '이 주제로 새로 만들기' on a frozen ①/②: a new, unbound story from the
+ * job's own topic, format and picks. The old job is left exactly as it is
+ * (still listed, still resumable); nothing is bought until ③ 글 만들기.
+ */
+async function forkStory(ctx) {
+  const state = ctx.getState(),
+    w = ctx.getWizard(),
+    old = jobOfWizard(state, w);
+  if (!old || w.simpleEditing) return;
+  if (runIsLive(old) || workBusy()) return ctx.toast(FORK_BUSY);
+  let cost = 0;
+  try {
+    cost = estimateFullAutoCost(state, old.wizard || {}, {
+      planMode: old.planMode || "auto",
+    }).textUsd;
+  } catch {
+    cost = 0;
+  }
+  const title = String(
+      old.book?.title || old.wizard?.topic || old.input?.topic || "이야기",
+    ).trim(),
+    ok = await confirmModal(
+      ctx,
+      "이 주제로 새 이야기를 만들까요?",
+      `지금 이야기 ‘${esc(title)}’의 글과 그림은 그대로 남아요. ‘이어서 만들기’에서 언제든 다시 열 수 있어요.<br>새 이야기의 글은 ③에서 ‘글 만들기’를 누를 때 만들어요 · 글 엔진 요금 약 ${usd(cost)} (데모는 무료). 그림은 ④에서 따로 물어요.`,
+      "새 이야기로 고치기",
+    );
+  if (!ok || ctx.getWizard() !== w) return;
+  if (runIsLive(old) || workBusy()) return ctx.toast(FORK_BUSY);
+  const next = wizardFromJob(old, w.simpleStep === 2 ? 2 : 1),
+    planned = (list) => new Set((list || []).map((item) => item?.id)),
+    autoCharacters = planned(old.plan?.newCharacters),
+    autoPlaces = planned(old.plan?.newBackgrounds),
+    characters = new Set(activeCharacters(state).map((c) => c.id)),
+    places = new Set(activeBackgrounds(state).map((b) => b.id));
+  delete next.simpleJobId;
+  // Materials the run added on its own are not carried over: the new story
+  // plans its own (or the parent picks them in ②).
+  next.characterIds = (next.characterIds || [])
+    .filter((id) => characters.has(id) && !autoCharacters.has(id))
+    .slice(0, 1 + MAX_FRIENDS);
+  next.backgroundIds = (next.backgroundIds || [])
+    .filter((id) => places.has(id) && !autoPlaces.has(id))
+    .slice(0, MAX_PLACES);
+  // A new seed offset keeps cached responses from being replayed as the new story.
+  next.qualitySeedOffset = Math.min(
+    999,
+    (Number(old.wizard?.qualitySeedOffset) || 0) + 1,
+  );
+  if (w.simpleForced) next.simpleForced = true;
+  ctx.setWizard(next);
+  ctx.setDraft(null);
+  ctx.setEditPage(0);
+  ctx.render();
+  globalThis.scrollTo?.(0, 0);
+  ctx.toast(
+    "새 이야기로 시작해요. 주제와 재료를 고친 뒤 ③에서 글을 만들어요. 지금 이야기는 그대로 남아요.",
+  );
+}
+/**
  * 책장에 저장. Missing pictures (or an unfinished run) must be drawn first;
  * pictures whose text changed are the parent's choice: keep them or redraw
  * those pages. Approval happens only while this job's book is still open.
@@ -1811,6 +2116,16 @@ async function saveBook(ctx) {
   }
   await ctx.approveBook();
 }
+/** Why a story cannot be opened while this screen is making something. */
+function reopenBusyMessage(job) {
+  const bookId = job?.book?.id;
+  if (pageOp && bookId && pageOp.bookId === bookId)
+    return pageOp.kind === "rewrite" ? REOPEN_TEXT_BUSY : REOPEN_PICTURE_BUSY;
+  if (liveRun?.jobId === job?.id)
+    return liveRun.kind === "text" ? REOPEN_TEXT_BUSY : REOPEN_PICTURE_BUSY;
+  if (bookId && isPageOperationBusy(bookId)) return REOPEN_PICTURE_BUSY;
+  return REOPEN_OTHER_BUSY;
+}
 /**
  * Open a simple job at ③ or ④ (job cards, resume cards, pro '쪽마다 검수').
  * Refused while a simple action runs: its later steps belong to the open book.
@@ -1820,7 +2135,16 @@ export async function openSimpleJob(ctx, jobId) {
     job = state.fullAutoJobs?.[jobId];
   if (!job) throw Error("자동 작업을 찾지 못했어요.");
   if (isSimpleBusy()) {
-    ctx.toast("진행 중인 작업이 끝난 뒤 다른 이야기를 열어 주세요.");
+    const open = ctx.getWizard?.();
+    // The story being made is already the open one: just show it again.
+    if (open?.simpleJobId === job.id) {
+      if (!ctx.isSimpleMode()) open.simpleForced = true;
+      ctx.setView("create");
+      ctx.render();
+      globalThis.scrollTo?.(0, 0);
+      return true;
+    }
+    ctx.toast(reopenBusyMessage(job));
     return false;
   }
   let changed = false;
@@ -1845,7 +2169,8 @@ export async function openSimpleJob(ctx, jobId) {
   if (!ctx.isSimpleMode()) w.simpleForced = true;
   ctx.setWizard(w);
   ctx.setDraft(step >= 4 ? job.book : null);
-  ctx.setEditPage(0);
+  // Back to the page the parent last looked at in ④ (this tab only).
+  ctx.setEditPage(step >= 4 ? rememberedPage(job) : 0);
   ctx.setView("create");
   ctx.render();
   globalThis.scrollTo?.(0, 0);
@@ -1864,10 +2189,70 @@ function validateMaterials(state, w) {
     return "부족한 재료 자동 추가를 껐다면 집 1곳과 다른 장소 2곳을 골라 주세요.";
   return null;
 }
+/**
+ * The one way between the five steps (step bar, 이전/다음, 검수로 가기,
+ * 동화책 만들기, browser Back/Forward). Screen only: nothing starts, resumes
+ * or is bought, and the open draft is kept while the parent browses ①–③ so
+ * a run or page operation in flight still finds its own book. Returns true
+ * when the step changed.
+ */
+function gotoStep(ctx, w, target, { fromHistory = false } = {}) {
+  const state = ctx.getState(),
+    step = Number(target);
+  if (!w || !Number.isInteger(step) || step < 1 || step > 5) return false;
+  const refuse = (reason, redraw = true) => {
+    ctx.toast(reason);
+    // Back/Forward that cannot go there leaves the parent where they are.
+    if (fromHistory) writeStepHistory(w.simpleStep, false);
+    if (redraw) ctx.render();
+    return false;
+  };
+  // No redraw: it would put the saved text back over the parent's edit.
+  if (w.simpleEditing) return refuse(STEP_EDITING, false);
+  const job = jobOfWizard(state, w);
+  if (!job) {
+    if (w.simpleStep === 1) {
+      const field = globalThis.document?.querySelector?.("#topic");
+      if (field) w.topic = field.value;
+    }
+    if (step >= 2 && safeTopic(w.topic).ok) preselectMaterials(state, w);
+  }
+  const row = simpleStepAccess(state, w, { busy: finishBusy(state, w) })[
+    step - 1
+  ];
+  if (!row.reachable) return refuse(row.reason);
+  if (step >= 4) {
+    const book = job?.book;
+    if (!book) return refuse(STEP_NO_TEXT);
+    const draft = ctx.getDraft();
+    // Coming back to ④ lands on the same page unless another book was open.
+    if (!draft || (draft !== book && !isSimpleBusy())) {
+      ctx.setDraft(book);
+      ctx.setEditPage(rememberedPage(job, book));
+    }
+  }
+  w.simpleBadgeOpen = false;
+  w.simpleStep = step;
+  if (!fromHistory) writeStepHistory(step, true);
+  ctx.render();
+  globalThis.scrollTo?.(0, 0);
+  if (step >= 4) void refreshReading(ctx);
+  return true;
+}
 async function handle(ctx, action, el) {
   const state = ctx.getState(),
     w = ctx.getWizard();
   if (!w) return;
+  // ①/② of a story that has a job are its frozen copy: changes go only
+  // through '이 주제로 새로 만들기'.
+  const bound = !!jobOfWizard(state, w);
+  if (
+    bound &&
+    ["topic", "idea", "format", "friend", "place"].includes(action)
+  )
+    return;
+  if (action === "goto-step") return gotoStep(ctx, w, el.dataset.step);
+  if (action === "fork") return forkStory(ctx);
   if (action === "topic") {
     w.topic = el.dataset.topic;
     delete w.simpleIdeaNote;
@@ -1900,7 +2285,7 @@ async function handle(ctx, action, el) {
         /* The built-in list below still gives an idea. */
       }
     // The parent moved on while the world idea loaded: leave the topic alone.
-    if (ctx.getWizard() !== w || w.simpleStep !== 1) return;
+    if (ctx.getWizard() !== w || w.simpleStep !== 1 || w.simpleJobId) return;
     if (!topic || topic === current) topic = pickIdeaTopic(current);
     w.topic = topic;
     // Kept on the screen state, so a later redraw of ① still shows it.
@@ -1932,32 +2317,8 @@ async function handle(ctx, action, el) {
     await openSimpleJob(ctx, el.dataset.id);
     return;
   }
-  if (action === "next") {
-    if (w.simpleStep === 1) {
-      const topic = document.querySelector("#topic");
-      if (topic) w.topic = topic.value;
-      const check = safeTopic(w.topic);
-      if (!check.ok)
-        return ctx.toast(check.message || "이야기 주제를 입력해 주세요.");
-      preselectMaterials(state, w);
-      w.simpleStep = 2;
-    } else if (w.simpleStep === 2) {
-      const problem = validateMaterials(state, w);
-      if (problem) return ctx.toast(problem);
-      w.simpleStep = 3;
-    }
-    ctx.render();
-    globalThis.scrollTo?.(0, 0);
-    return;
-  }
-  if (action === "back") {
-    if (w.simpleStep === 5) w.simpleStep = 4;
-    else if (w.simpleStep === 3 && !jobOfWizard(state, w)) w.simpleStep = 2;
-    else if (w.simpleStep === 2) w.simpleStep = 1;
-    ctx.render();
-    globalThis.scrollTo?.(0, 0);
-    return;
-  }
+  if (action === "next") return gotoStep(ctx, w, w.simpleStep + 1);
+  if (action === "back") return gotoStep(ctx, w, w.simpleStep - 1);
   if (action === "friend") {
     const id = el.dataset.id;
     if (id === w.characterIds[0])
@@ -2029,7 +2390,7 @@ async function handle(ctx, action, el) {
       ctx.isSimpleView() &&
       ctx.getWizard()?.simpleJobId === done.id
     )
-      return enterReview(ctx, done);
+      return arriveAtReview(ctx, done);
     ctx.render();
     return;
   }
@@ -2060,11 +2421,7 @@ async function handle(ctx, action, el) {
     ctx.render();
     return;
   }
-  if (action === "open-review") {
-    const job = jobOfWizard(state, w);
-    if (job?.book) enterReview(ctx, job);
-    return;
-  }
+  if (action === "open-review") return gotoStep(ctx, w, 4);
   if (action === "stop") {
     if (pageOp) {
       pageOp.controller.abort();
@@ -2082,8 +2439,16 @@ async function handle(ctx, action, el) {
   if (action === "page-prev" || action === "page-next") {
     const book = ctx.getDraft();
     if (!book || w.simpleEditing) return;
-    const next = ctx.getEditPage() + (action === "page-next" ? 1 : -1);
-    ctx.setEditPage(Math.max(0, Math.min(book.pages.length - 1, next)));
+    const next = Math.max(
+      0,
+      Math.min(
+        book.pages.length - 1,
+        ctx.getEditPage() + (action === "page-next" ? 1 : -1),
+      ),
+    );
+    ctx.setEditPage(next);
+    const job = jobOfBook(state, book);
+    if (job) reviewPages.set(job.id, next);
     w.simpleBadgeOpen = false;
     ctx.render();
     return;
@@ -2134,12 +2499,8 @@ async function handle(ctx, action, el) {
     return;
   }
   if (action === "restart") return restartStory(ctx);
-  if (action === "to-finish") {
-    w.simpleStep = 5;
-    ctx.render();
-    globalThis.scrollTo?.(0, 0);
-    return;
-  }
+  // Refused while anything is being made, even from a button drawn before.
+  if (action === "to-finish") return gotoStep(ctx, w, 5);
   if (action === "save-book") return saveBook(ctx);
 }
 /* Screen-only actions, and stop/resume, never wait behind a running action. */
@@ -2156,6 +2517,7 @@ const QUIET = new Set([
   "cancel-text",
   "back",
   "next",
+  "goto-step",
   "friend",
   "place",
   "to-finish",
@@ -2196,6 +2558,18 @@ function onChange(event) {
   const target = event.target,
     w = api.getWizard();
   if (!w) return;
+  // A story with a job keeps its frozen format and picks (see '이 주제로 새로 만들기').
+  if (
+    jobOfWizard(api.getState(), w) &&
+    [
+      "language",
+      "pageCount",
+      "koreanLevel",
+      "englishLevel",
+      "simple-allow-new",
+    ].includes(target.id)
+  )
+    return;
   if (
     ["language", "pageCount", "koreanLevel", "englishLevel"].includes(target.id)
   ) {
@@ -2207,6 +2581,7 @@ function onChange(event) {
   }
   if (target.id === "simple-allow-new") {
     w.allowNew = target.checked;
+    refreshStepBar(w);
     return;
   }
   if (target.name === "simple-title") {
@@ -2243,6 +2618,28 @@ function onChange(event) {
     });
   }
 }
+/**
+ * Redraw only the step bar when what is open changed without a redraw (the
+ * topic being typed on ①, the 자동 추가 switch on ②), so a step the parent
+ * can now reach is a button without waiting for the next full redraw.
+ */
+function refreshStepBar(w, probe = w) {
+  if (typeof document === "undefined" || !api?.isSimpleView?.()) return;
+  const bar = document.querySelector?.(".simple-create > .simple-steps"),
+    state = api.getState();
+  if (!bar || jobOfWizard(state, w)) return;
+  const access = simpleStepAccess(state, probe, {
+    busy: finishBusy(state, w),
+  });
+  if (bar.dataset?.open !== access.map((r) => (r.reachable ? 1 : 0)).join(""))
+    bar.outerHTML = stepsBar(w.simpleStep, access);
+}
+function onInput(event) {
+  if (event.target?.id !== "topic" || !api?.isSimpleView?.()) return;
+  const w = api.getWizard();
+  if (!w || w.simpleStep !== 1) return;
+  refreshStepBar(w, { ...w, topic: event.target.value });
+}
 /** Wire the simple screen once; ctx exposes the app's wizard/draft/editPage through getters and setters. */
 export function configureSimpleCreate(ctx) {
   api = ctx;
@@ -2250,4 +2647,7 @@ export function configureSimpleCreate(ctx) {
   configured = true;
   document.addEventListener("click", onClick);
   document.addEventListener("change", onChange);
+  document.addEventListener("input", onInput);
+  // A no-op outside the simple create screen (see onSimplePopState).
+  globalThis.window?.addEventListener?.("popstate", onSimplePopState);
 }

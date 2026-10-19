@@ -4623,3 +4623,107 @@ body:has(.simple-create):not(:has(.modal-overlay)) #toast.visible {
     flex: 1 1 100%;
   }
 }
+/* R11: the step bar's open steps are buttons (data-simple-nav, outside the
+ * 12-button count); a closed step stays plain text titled with the reason. */
+.simple-step-link {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-height: 40px;
+  padding: 0 4px;
+  border-radius: 999px;
+}
+.simple-step-link b {
+  border-color: #b9c9aa;
+}
+.simple-step-link:hover {
+  color: var(--accent);
+  background: var(--greenlight);
+}
+.simple-step-link:hover b {
+  border-color: #a9bf99;
+}
+.simple-step-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.simple-steps .step[aria-disabled="true"] {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+/* ①/② of a story with a job: its frozen copy, read only. */
+.simple-frozen-topic {
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 10px;
+  background: #f6f7f0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.simple-frozen-title {
+  margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+.simple-frozen-note {
+  margin: var(--space-3) 0 0;
+}
+.simple-frozen .simple-card[aria-disabled="true"] {
+  cursor: default;
+}
+.simple-costs .simple-costs-done {
+  color: var(--accent);
+  font-weight: 600;
+}
+.simple-drawing-note {
+  margin: var(--space-2) 0 0;
+  color: var(--orange);
+}
+.simple-jobs .section-sub {
+  margin-top: 0;
+}
+/* R11: 이전 · 다음 · 검수로 가기 · 동화책 만들기 stay on screen while scrolling.
+ * The panel keeps room above the bar, and focus scrolls clear of it. */
+html:has(.simple-create) {
+  scroll-padding-bottom: 96px;
+}
+.simple-create > .simple-panel {
+  padding-bottom: calc(29px + var(--space-4));
+}
+.simple-create > .wizard-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 14;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-1)
+    calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -6px 12px -10px #26352633;
+}
+@media (max-width: 640px) {
+  /* Above the fixed bottom navigation (66px at phone widths). */
+  html:has(.simple-create) {
+    scroll-padding-bottom: 170px;
+  }
+  .simple-create > .simple-panel {
+    padding-bottom: calc(22px + var(--space-4));
+  }
+  .simple-create > .wizard-actions {
+    bottom: 66px;
+    padding-bottom: var(--space-3);
+  }
+  .simple-steps .simple-step-link {
+    gap: 0;
+    min-width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+}
