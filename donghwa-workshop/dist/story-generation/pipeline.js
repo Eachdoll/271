@@ -35,6 +35,9 @@ import {
   inspectSceneBriefs,
   sceneBriefRules,
   demoSceneBriefs,
+  normalizeSceneBrief,
+  normalizeSceneBriefs,
+  locateBriefIssue,
 } from "./scene-briefs.js";
 import { stagePagination } from "./staging.js";
 import { checkRichness, richnessPromptRules } from "./richness.js";
@@ -1062,17 +1065,48 @@ export async function reviewStoryCoherence(
     throw paidError(error, requests, { stage: "coherence" });
   }
 }
-async function briefCheckpoint(options, briefs, requests, report) {
+/**
+ * Paid repair calls per beat over every run of a job (still two per run): a
+ * beat with a hard issue may be repaired on 다시 시도 once more, a beat with
+ * only soft issues gets one run's worth and is then kept as a note.
+ */
+export const BRIEF_REPAIR_LIMIT = 4;
+export const BRIEF_SOFT_REPAIR_LIMIT = 2;
+// The model sees the same three fields as before; severity stays app-side.
+const requestViolation = ({ beatIndex, code, message }) => ({
+  beatIndex,
+  code,
+  message,
+});
+const repairsOf = (options) => {
+  const rows = {};
+  for (const [key, value] of Object.entries(options.briefRepairs || {}))
+    if (Number.isInteger(Number(value)) && Number(value) > 0)
+      rows[key] = Number(value);
+  return rows;
+};
+async function briefCheckpoint(options, briefs, requests, report, repairs) {
   if (options.onCheckpoint)
     await options.onCheckpoint({
       stage: "sceneBriefs",
       sceneBriefs: clone(briefs),
       briefChecks: clone(report),
+      ...(repairs && Object.keys(repairs).length
+        ? { briefRepairs: clone(repairs) }
+        : {}),
       usage: mergeStoryUsage(requests),
       meta: { stage: "sceneBriefs", requests: requestCount(requests) },
     });
 }
-/** One initial request, then only offending beats, at most two repairs per beat. */
+/**
+ * One initial request, then only offending beats: two repairs per beat per run
+ * and BRIEF_REPAIR_LIMIT over all runs (options.briefRepairs, carried in the
+ * checkpoint). A saved checkpoint is re-inspected before anything is bought, so
+ * a job that stopped on a check this version accepts resumes with no new call.
+ * Hard issues (beat number, required fields, counts) stop the stage; soft ones
+ * are kept as notes (meta.softIssues) once repairs run out; advisories are
+ * never repaired or billed.
+ */
 export async function generateSceneBriefs(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -1091,12 +1125,13 @@ export async function generateSceneBriefs(outline, source, options = {}) {
       },
     };
   const requests = [],
-    allowed = new Set(outline.beats.map((b) => b.index));
+    allowed = new Set(outline.beats.map((b) => b.index)),
+    repairs = repairsOf(options);
   let briefs = [];
   try {
     // A partial checkpoint is resumable. Never pay again for valid saved beats.
     if (sceneBriefRows(options.sceneBriefs).length)
-      briefs = clone(sceneBriefRows(options.sceneBriefs));
+      briefs = normalizeSceneBriefs(clone(sceneBriefRows(options.sceneBriefs)));
     else {
       const schema = clone(SCENE_BRIEFS_SCHEMA);
       schema.properties.briefs.minItems = outline.beats.length;
@@ -1109,17 +1144,31 @@ export async function generateSceneBriefs(outline, source, options = {}) {
         options,
       );
       requests.push(result);
-      briefs = sceneBriefRows(result.data);
+      briefs = normalizeSceneBriefs(result.data);
     }
     // Unknown IDs are not allowed to displace approved beats.
     briefs = briefs.filter((b) => allowed.has(b?.beatIndex));
     let report = inspectSceneBriefs(briefs, outline, input);
-    await briefCheckpoint(options, briefs, requests, report);
+    await briefCheckpoint(options, briefs, requests, report, repairs);
     abort(options.signal);
-    for (let pass = 0; pass < 2 && !report.valid; pass++) {
+    const capped = new Set();
+    for (let pass = 0; pass < 2 && !report.passed; pass++) {
       const targets = report.failedBeatIndexes;
       for (const beatIndex of targets) {
         abort(options.signal);
+        const violations = inspectSceneBriefs(
+          briefs,
+          outline,
+          input,
+        ).issues.filter((v) => v.beatIndex === beatIndex);
+        if (!violations.length) continue;
+        const limit = violations.some((v) => v.severity === "hard")
+          ? BRIEF_REPAIR_LIMIT
+          : BRIEF_SOFT_REPAIR_LIMIT;
+        if ((repairs[beatIndex] || 0) >= limit) {
+          capped.add(beatIndex);
+          continue;
+        }
         notify(
           options,
           "sceneBriefs",
@@ -1127,12 +1176,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
           `${beatIndex}번 장면 디테일을 다듬고 있어요 (${pass + 1}/2).`,
           { beatIndex, attempt: pass + 1 },
         );
-        const violations = inspectSceneBriefs(
-          briefs,
-          outline,
-          input,
-        ).issues.filter((v) => v.beatIndex === beatIndex);
-        if (!violations.length) continue;
+        repairs[beatIndex] = (repairs[beatIndex] || 0) + 1;
         let result;
         try {
           result = await complete(
@@ -1144,7 +1188,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
                 approvedOutline: outline,
                 targetBeatIndex: beatIndex,
                 existingBriefs: briefs,
-                violations,
+                violations: violations.map(requestViolation),
               },
             },
             SCENE_BRIEF_SCHEMA,
@@ -1157,22 +1201,34 @@ export async function generateSceneBriefs(outline, source, options = {}) {
             usage: error.usage || {},
             meta: error.meta || { requests: 1 },
           });
+          // The attempt was billed: keep its count with the checkpoint.
+          await briefCheckpoint(options, briefs, requests, report, repairs);
           continue;
         }
-        if (result.data?.beatIndex === beatIndex)
+        const fixed = normalizeSceneBrief(result.data);
+        if (fixed?.beatIndex === beatIndex)
           briefs = [
             ...briefs.filter((b) => b.beatIndex !== beatIndex),
-            result.data,
+            fixed,
           ].sort((a, b) => a.beatIndex - b.beatIndex);
         report = inspectSceneBriefs(briefs, outline, input);
-        await briefCheckpoint(options, briefs, requests, report);
+        await briefCheckpoint(options, briefs, requests, report, repairs);
         abort(options.signal);
       }
       report = inspectSceneBriefs(briefs, outline, input);
     }
     if (!report.valid) {
-      const error = new StoryValidationError("sceneBriefs", report.errors);
+      const stopped = report.hardBeatIndexes.filter((i) => capped.has(i));
+      const error = new StoryValidationError("sceneBriefs", [
+        ...(stopped.length
+          ? [
+              `${stopped.join("·")}번 장면은 자동 수정을 ${BRIEF_REPAIR_LIMIT}번 해도 같은 문제가 남아 더 고치지 않아요. '줄거리 새로 만들기'로 새로 쓸 수 있어요.`,
+            ]
+          : []),
+        ...report.errors,
+      ]);
       error.sceneBriefs = clone(briefs);
+      error.briefRepairs = clone(repairs);
       throw error;
     }
     return {
@@ -1183,11 +1239,15 @@ export async function generateSceneBriefs(outline, source, options = {}) {
         engineId: options.engine?.id || options.engineId,
         requests: requestCount(requests),
         checks: report,
+        ...(Object.keys(repairs).length ? { briefRepairs: clone(repairs) } : {}),
+        ...(report.softIssues.length ? { softIssues: report.softIssues } : {}),
         demo: false,
       },
     };
   } catch (error) {
     error.sceneBriefs = clone(briefs);
+    if (!error.briefRepairs && Object.keys(repairs).length)
+      error.briefRepairs = clone(repairs);
     throw paidError(error, requests, { stage: "sceneBriefs" });
   }
 }
@@ -1199,7 +1259,7 @@ export async function rewriteSceneBrief(
   options = {},
 ) {
   const input = normalizeStoryInput(source),
-    rows = clone(sceneBriefRows(briefs));
+    rows = normalizeSceneBriefs(clone(sceneBriefRows(briefs)));
   if (!outline?.beats?.some((b) => b.index === beatIndex))
     throw new Error("다시 만들 장면을 골라 주세요.");
   abort(options.signal);
@@ -1216,7 +1276,8 @@ export async function rewriteSceneBrief(
   }
   const requests = [];
   let next = rows,
-    violations = [];
+    violations = [],
+    report = null;
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       const result = await complete(
@@ -1228,19 +1289,19 @@ export async function rewriteSceneBrief(
             approvedOutline: outline,
             targetBeatIndex: beatIndex,
             existingBriefs: next,
-            violations,
+            violations: violations.map(requestViolation),
           },
         },
         SCENE_BRIEF_SCHEMA,
         options,
       );
       requests.push(result);
-      if (result.data?.beatIndex === beatIndex)
-        next = [
-          ...rows.filter((b) => b.beatIndex !== beatIndex),
-          result.data,
-        ].sort((a, b) => a.beatIndex - b.beatIndex);
-      const report = inspectSceneBriefs(next, outline, input);
+      const fixed = normalizeSceneBrief(result.data);
+      if (fixed?.beatIndex === beatIndex)
+        next = [...rows.filter((b) => b.beatIndex !== beatIndex), fixed].sort(
+          (a, b) => a.beatIndex - b.beatIndex,
+        );
+      report = inspectSceneBriefs(next, outline, input);
       violations = report.issues.filter((v) => v.beatIndex === beatIndex);
       await briefCheckpoint(options, next, requests, report);
       abort(options.signal);
@@ -1258,10 +1319,25 @@ export async function rewriteSceneBrief(
           },
         };
     }
-    throw new StoryValidationError(
-      "sceneBriefs",
-      violations.map((v) => v.message),
-    );
+    // Three tries: a hard issue stops, soft ones stay as notes.
+    const hard = violations.filter((v) => v.severity === "hard");
+    if (!hard.length)
+      return {
+        data: next,
+        usage: mergeStoryUsage(requests),
+        meta: {
+          stage: "sceneBriefs",
+          engineId: options.engine?.id || options.engineId,
+          requests: requestCount(requests),
+          checks: report,
+          repairAttempts: 3,
+          softIssues: [...new Set(violations.map(locateBriefIssue))],
+          demo: false,
+        },
+      };
+    throw new StoryValidationError("sceneBriefs", [
+      ...new Set(hard.map(locateBriefIssue)),
+    ]);
   } catch (error) {
     error.sceneBriefs = next;
     throw paidError(error, requests, { stage: "sceneBriefs" });

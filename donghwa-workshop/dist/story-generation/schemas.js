@@ -283,6 +283,34 @@ export class StoryValidationError extends Error {
     this.violations = errors;
   }
 }
+/** Korean names for the stage token of a StoryValidationError message. */
+export const STORY_STAGE_LABELS = Object.freeze({
+  outline: "줄거리",
+  plotContract: "사건 장부",
+  sceneBriefs: "장면 디테일",
+  sceneBrief: "장면 디테일",
+  proseDraft: "글 초안",
+  prose: "글",
+  enrichment: "글 다듬기",
+  pagination: "쪽 나누기",
+  page: "쪽",
+  coherence: "일관성 검사",
+  coherenceRepair: "일관성 수정",
+  materials: "재료 고르기",
+});
+/**
+ * Display form of a stage error ('이야기 sceneBriefs 결과를 확인해 주세요: …' →
+ * '장면 디테일 결과를 확인해 주세요: …'). The error message itself is unchanged
+ * (pinned by legacy snapshots); only the stored job.error is translated.
+ */
+export const describeStoryError = (text) =>
+  String(text ?? "").replace(
+    /^이야기 ([A-Za-z]+) 결과를 확인해 주세요/u,
+    (whole, stage) =>
+      STORY_STAGE_LABELS[stage]
+        ? `${STORY_STAGE_LABELS[stage]} 결과를 확인해 주세요`
+        : whole,
+  );
 const object = (value) =>
   value && typeof value === "object" && !Array.isArray(value);
 const text = (value, max) =>

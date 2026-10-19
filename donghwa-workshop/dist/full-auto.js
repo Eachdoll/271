@@ -66,6 +66,7 @@ import {
   bindSeriesBackgrounds,
 } from "./story-generation/continuity.js";
 import { safeTopic } from "./engine.js";
+import { describeStoryError } from "./story-generation/schemas.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
   active = (list) => (list || []).filter((item) => !item.archivedAt);
@@ -916,6 +917,7 @@ export async function runFullAuto(
         ? demoEngine()
         : resolveStoryStageSettings(job.textSettings, "coherence"),
       sceneBriefs: job.sceneBriefs,
+      briefRepairs: job.briefRepairs,
       bookId: job.bookId,
       stylePreset: getStylePreset(job.stylePresetId),
       storyEnrichment: job.textSettings.storyEnrichment !== false,
@@ -933,6 +935,9 @@ export async function runFullAuto(
           else job.proseCoherence = clone(cp.coherence);
         }
         if (cp.sceneBriefs) job.sceneBriefs = clone(cp.sceneBriefs);
+        // Paid scene-brief repairs so far, per beat; a resumed run never restarts them.
+        if (cp.briefRepairs && Object.keys(cp.briefRepairs).length)
+          job.briefRepairs = clone(cp.briefRepairs);
         if (cp.prose) job.prose = clone(cp.prose);
         if (cp.enrichmentCheckpoint)
           job.enrichmentCheckpoint = clone(cp.enrichmentCheckpoint);
@@ -963,6 +968,9 @@ export async function runFullAuto(
         job.childGateCheckpoint = clone(error.childGateCheckpoint);
       if (error.prose) job.prose = clone(error.prose);
       if (error.pagination) job.pagination = clone(error.pagination);
+      if (error.sceneBriefs?.length) job.sceneBriefs = clone(error.sceneBriefs);
+      if (error.briefRepairs && Object.keys(error.briefRepairs).length)
+        job.briefRepairs = clone(error.briefRepairs);
       if (error.usage && !error.usageRecorded)
         recordUsage(
           job,
@@ -1355,8 +1363,11 @@ export async function runFullAuto(
     }
     job.status =
       error.name === "AbortError" || signal?.aborted ? "paused" : "failed";
+    // Shown to the parent: the stage token becomes its Korean name.
     job.error =
-      error.name === "AbortError" ? null : String(error.message || error);
+      error.name === "AbortError"
+        ? null
+        : describeStoryError(String(error.message || error));
     job.phase =
       job.status === "paused" ? "중단 · 이어 만들 수 있어요" : job.phase;
     try {

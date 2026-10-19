@@ -604,6 +604,9 @@ test('a stopped story shows its error once: below the bar, not again as the prog
   assert.match(html, /data-simple-action="retry"/);
   // A failed check replays the same way on 다시 시도, so a new outline is offered (cost confirm happens on click).
   assert.match(html, /data-simple-action="restart"[^>]*>줄거리 새로 만들기</);
+  // Hotfix 4: the note says what 다시 시도 costs (saved results reused, leftover repairs may be billed).
+  assert.match(html, /다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요\. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요\./);
+  assert.doesNotMatch(html, /무료로 다시 검사/);
   Object.assign(job, {error: '클라우드에 연결하지 못했어요.', phase: '클라우드에 연결하지 못했어요.'});
   assert.doesNotMatch(renderSimpleCreate(ctxFor(state, w)), /줄거리 새로 만들기/, 'a network error only offers 다시 시도');
 });

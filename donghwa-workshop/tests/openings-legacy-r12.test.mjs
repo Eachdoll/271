@@ -665,12 +665,19 @@ const PINS = {
   inputs: '3338fc4fab1299f563e0ecdb9e3aabc31d3b5d4b231de3251da0e79b1438c415',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
-  demo: '5e95fe43d1e3d0efc5051bca729ecec11ed31de5d3fbc7a71582d630b583911e',
+  // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
+  // meta.checks report gained advisories/softIssues/notes/hardBeatIndexes, and
+  // the rain-prop rule is a note, so the rainy demo book reports passed:true
+  // instead of a rain_topic error. Demo data, usage and every request byte are
+  // unchanged (the 'requests' pin holds). ebfcbf9: 5e95fe43…911e.
+  demo: '146ec0449bbaafbd49a22019eada3bcf8df83ee9c3e4580db4d07e67608ccd7d',
   fullAutoResume: '061cbf1cf0fb861ae9526b45385c3e2dc64693622982cf3fe1aa90a63701a6c3',
   // Re-pinned at the R12 × main-line merge: R13 (6ccc895) freezes the picture
   // model on every new job (job.imageModelConfig = imageModelSnapshot(world),
   // {googlePro:false, modelVariant:'default'} here). 5f8d2f7: 5675220d…37d4.
-  fullAutoDemo: 'ebcf1dd9b66f01f2afbfda91ac3d11f54ecf1353e96731163bb51a989637b4ae',
+  // Hotfix 4 (scene-brief checks, see 'demo' above): the job's usage row for the
+  // demo briefs call carries the new report shape. ebfcbf9: ebcf1dd9…b4ae.
+  fullAutoDemo: '12e9fc3d22afb2643f07b88ff815f20d229f74c19f2fba61c0edb6adb3c31e2b',
   scene: '73b3552a1245eb29e27d8d527c0c83ad256231e07eabbdb36fe0be2031493a91',
   print: '637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654',
   // Re-pinned at the merge: R13 (6ccc895) renames the ③ text-engine options

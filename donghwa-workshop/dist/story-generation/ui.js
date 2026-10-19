@@ -268,9 +268,13 @@ export function renderSceneBriefs(
         return `<label class="field"><span>${esc(label)}</span><input data-brief-field="${path}" data-index="${index}" maxlength="500" value="${esc(value || "")}"></label>`;
       };
       const issues = checked.issues.filter(
-        (issue) => issue.beatIndex === brief.beatIndex,
-      );
-      return `<details class="story-scene-brief" data-brief-details="${index}" ${openBeats.has(index) ? "open" : ""}><summary><strong>비트 ${brief.beatIndex}</strong><span>${esc(TIME_LABELS[brief.timeOfDay] || "시간 선택")} · ${esc(brief.pose?.ko || "동작 입력")}</span>${issues.length ? '<span class="story-check-badge fail">확인 필요</span>' : ""}</summary><label class="field"><span>시간</span><select data-brief-field="timeOfDay" data-index="${index}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${brief.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></label>${BRIEF_FIELDS.map(([path, label]) => `<fieldset class="story-brief-pair"><legend>${label}</legend><div class="story-review-grid">${field(`${path}.ko`, "한글")}${field(`${path}.en`, "English · 그림에 함께 전달")}</div></fieldset>`).join("")}<div class="story-review-grid">${field("dialogueLine", "대사 한 줄")}${field("humor", "작은 재미")}</div>${issues.length ? `<ul class="story-note">${issues.map((issue) => `<li>${esc(issue.message)}</li>`).join("")}</ul>` : ""}${button("이 장면만 다시", "rewrite-scene-brief", `data-index="${brief.beatIndex}"`)}</details>`;
+          (issue) => issue.beatIndex === brief.beatIndex,
+        ),
+        notes = (checked.advisories || []).filter(
+          (issue) => issue.beatIndex === brief.beatIndex,
+        ),
+        blocking = issues.some((issue) => issue.severity === "hard");
+      return `<details class="story-scene-brief" data-brief-details="${index}" ${openBeats.has(index) ? "open" : ""}><summary><strong>비트 ${brief.beatIndex}</strong><span>${esc(TIME_LABELS[brief.timeOfDay] || "시간 선택")} · ${esc(brief.pose?.ko || "동작 입력")}</span>${blocking ? '<span class="story-check-badge fail">확인 필요</span>' : issues.length || notes.length ? '<span class="story-check-badge">참고</span>' : ""}</summary><label class="field"><span>시간</span><select data-brief-field="timeOfDay" data-index="${index}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${brief.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></label>${BRIEF_FIELDS.map(([path, label]) => `<fieldset class="story-brief-pair"><legend>${label}</legend><div class="story-review-grid">${field(`${path}.ko`, "한글")}${field(`${path}.en`, "English · 그림에 함께 전달")}</div></fieldset>`).join("")}<div class="story-review-grid">${field("dialogueLine", "대사 한 줄")}${field("humor", "작은 재미")}</div>${issues.length || notes.length ? `<ul class="story-note">${issues.map((issue) => `<li>${esc(issue.message)}</li>`).join("")}${notes.map((issue) => `<li class="check-advisory">${esc(issue.message)}</li>`).join("")}</ul>` : ""}${button("이 장면만 다시", "rewrite-scene-brief", `data-index="${brief.beatIndex}"`)}</details>`;
     })
     .join("");
   return `<details class="story-card story-briefs" id="story-scene-details" ${open ? "open" : ""}><summary>장면 디테일 <span>${d.sceneBriefs.length}개 · 글과 그림이 함께 참고해요</span></summary><p class="story-note">수정한 디테일은 다음 전문 생성에 반영됩니다. 기존 전문과 쪽 나누기는 다시 생성해야 해요.</p>${rows}</details>`;

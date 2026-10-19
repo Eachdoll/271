@@ -1603,9 +1603,20 @@ function packageLevels(input) {
     }
   return levels;
 }
+/** A code fence around the whole labeled text is wrapping, not content. */
+const unfenced = (text) => {
+  const match = /^```[^\n]*\n([\s\S]*?)\n?```\s*$/u.exec(text);
+  return match ? match[1].trim() : text;
+};
+/**
+ * Labels: '[비트 1 · 유형]' / '[Beat 1 · type]'. Also accepted, without touching
+ * the prose: no space before the number ('[비트1]') and bold markers around the
+ * label. Missing labels or paragraphs are still rejected, never guessed.
+ */
 function parseLabeledProse(text, outline, lang) {
-  const source = String(text || "").trim(),
-    pattern = /^\s*\[(?:비트|Beat)\s+(\d+)(?:\s*[·:—-][^\]\r\n]*)?\]\s*/gimu,
+  const source = unfenced(String(text || "").trim()),
+    pattern =
+      /^\s*(?:\*\*)?\[(?:비트|Beat)\s*(\d+)(?:\s*[·:—-][^\]\r\n]*)?\](?:\*\*)?\s*/gimu,
     matches = [...source.matchAll(pattern)],
     expected = outline.beats.map((beat) => beat.index),
     labels = [],
@@ -1631,7 +1642,7 @@ function parseLabeledProse(text, outline, lang) {
         "전문 비트 라벨과 문단의 내용을 확인해 주세요.",
       ]);
     for (const row of rows) {
-      if (/\[(?:비트|Beat)\s+\d+/iu.test(row))
+      if (/\[(?:비트|Beat)\s*\d+/iu.test(row))
         throw new StoryValidationError("prose", [
           "비트 라벨은 각 문단 첫 줄에만 사용할 수 있어요.",
         ]);
