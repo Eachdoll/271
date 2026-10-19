@@ -1,7 +1,10 @@
 /**
  * Private per-account cloud library API for the Sites dispatch runtime.
- * Only Sites-injected authenticated headers identify an owner. The matching
- * X-Cloud-Account-ID is a race guard, never a source of authentication.
+ * An owner is identified either by a family session token (X-Family-Session,
+ * looked up by its SHA-256 digest in D1) or, without that header, by the
+ * Sites-injected authenticated headers. A family header always wins and never
+ * falls back to the Sites account. The matching X-Cloud-Account-ID is a race
+ * guard, never a source of authentication.
  */
 export const CLOUD_LIMITS = Object.freeze({
   mediaBytes: 40 * 1024 * 1024,
@@ -48,21 +51,28 @@ const FORBIDDEN_KEYS = new Set([
   "parentpinhash",
   "parentpinsalt",
   "parentpinverifier",
+  "passwordkey",
+  "currentpasswordkey",
+  "newpasswordkey",
+  "recoverycode",
+  "sessiontoken",
+  "familysession",
   "__proto__",
   "constructor",
   "prototype",
 ]);
 
 class CloudError extends Error {
-  constructor(status, code, message, extra = {}) {
+  constructor(status, code, message, extra = {}, headers = {}) {
     super(message);
     this.status = status;
     this.code = code;
     this.extra = extra;
+    this.headers = headers;
   }
 }
-const fail = (status, code, message, extra) => {
-  throw new CloudError(status, code, message, extra);
+const fail = (status, code, message, extra, headers) => {
+  throw new CloudError(status, code, message, extra, headers);
 };
 function privateHeaders(extra = {}) {
   return new Headers({
@@ -304,6 +314,8 @@ async function putMedia(request, env, user, id) {
       );
     return json({ asset: assetManifest(existing), reused: true });
   }
+  if (user.id.startsWith(FAMILY_OWNER_PREFIX))
+    await checkFamilyQuota(env, user.id, bytes.byteLength);
   // Content-specific paths ensure concurrent differing uploads never overwrite.
   const ownerHash = await digest(encoder.encode(user.id));
   const objectKey = `cloud-media/${ownerHash}/${id}/${sha256}`;
@@ -336,6 +348,19 @@ async function putMedia(request, env, user, id) {
     return json({ asset: assetManifest(existing), reused: true });
   }
   return json({ asset, reused: false }, 201);
+}
+// Family owners share one site-wide bucket, so each family gets a fixed quota.
+async function checkFamilyQuota(env, owner, size) {
+  const usage = await env.DB.prepare(
+    "SELECT COALESCE(SUM(byte_size), 0) AS bytes, COUNT(*) AS count FROM cloud_assets WHERE owner_id = ?",
+  )
+    .bind(owner)
+    .first();
+  if (
+    Number(usage?.bytes || 0) + size > FAMILY_LIMITS.quotaBytes ||
+    Number(usage?.count || 0) >= FAMILY_LIMITS.quotaAssets
+  )
+    fail(413, "quota_exceeded", "가족 클라우드 저장 공간(5GB)을 다 썼어요.");
 }
 async function getMedia(env, user, id) {
   kindForId(id);
@@ -732,13 +757,660 @@ async function autoJobControl(request, env, user, id) {
   return json({ jobId: id, stop: { nonce: body.nonce, requestedAt } });
 }
 
-/** Returns null for all routes outside /api/cloud. No client secrets are used. */
-export async function handleCloudRequest(request, env) {
+// ---------------------------------------------------------------------------
+// Family ID/password accounts. The browser derives passwordKey with PBKDF2
+// (600k) so the password never leaves the device; the server stores only a
+// second PBKDF2 over that key and SHA-256 digests of session tokens, recovery
+// codes and throttle scopes. Sessions travel only in the X-Family-Session header.
+const FAMILY_SESSION_HEADER = "X-Family-Session";
+const FAMILY_OWNER_PREFIX = "family:";
+const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const USERNAME = /^[a-z][a-z0-9_]{3,19}$/;
+const RESERVED_USERNAMES = new Set([
+  "admin",
+  "root",
+  "system",
+  "support",
+  "chatgpt",
+  "openai",
+  "family",
+  "donghwa",
+  "guest",
+  "test",
+]);
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const RECOVERY_CODE = /^[0-9A-HJKMNP-TV-Z]{20}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const FAMILY_LIMITS = Object.freeze({
+  sessionIdleMs: 180 * DAY_MS,
+  sessionAbsoluteMs: 400 * DAY_MS,
+  sessionRenewMs: DAY_MS,
+  sessionsPerAccount: 20,
+  passwordIterations: 20000,
+  minIterations: 10000,
+  maxIterations: 100000,
+  authBodyBytes: 4096,
+  signupCodeMinLength: 12,
+  quotaBytes: 5 * 1024 * 1024 * 1024,
+  quotaAssets: 20000,
+});
+const THROTTLES = Object.freeze({
+  signup: { limit: 30, windowSeconds: 60 * 60 },
+  login: { limit: 10, windowSeconds: 15 * 60 },
+  recover: { limit: 5, windowSeconds: 60 * 60 },
+  account: { limit: 10, windowSeconds: 60 * 60 },
+});
+const AUTH_ROUTES = new Set([
+  "signup",
+  "login",
+  "logout",
+  "recover",
+  "password",
+  "delete",
+]);
+const AUTH_REQUIRED_MESSAGE =
+  "가족 아이디나 ChatGPT 계정으로 로그인하면 클라우드 보관함을 사용할 수 있어요.";
+const INVALID_CREDENTIALS = "아이디 또는 비밀번호가 맞지 않아요.";
+const INVALID_RECOVERY = "아이디나 복구 코드가 맞지 않아요.";
+const SESSION_EXPIRED = "family-session-expired";
+
+const isoAt = (ms) => new Date(ms).toISOString();
+const randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length));
+const hexDigest = (text) => digest(encoder.encode(text));
+function base64url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+/** Decodes canonical unpadded base64url of exactly `length` bytes, else null. */
+function fromBase64url(text, length) {
+  if (typeof text !== "string" || !/^[A-Za-z0-9_-]+$/.test(text)) return null;
+  let binary;
+  try {
+    binary = atob(
+      text.replace(/-/g, "+").replace(/_/g, "/") +
+        "=".repeat((4 - (text.length % 4)) % 4),
+    );
+  } catch {
+    return null;
+  }
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return bytes.length === length && base64url(bytes) === text ? bytes : null;
+}
+/** Constant-time comparison for equal-length secrets (lengths are public). */
+function sameBytes(a, b) {
+  if (a.byteLength !== b.byteLength) return false;
+  if (typeof crypto.subtle.timingSafeEqual === "function")
+    return crypto.subtle.timingSafeEqual(a, b);
+  let difference = 0;
+  for (let index = 0; index < a.byteLength; index += 1)
+    difference |= a[index] ^ b[index];
+  return difference === 0;
+}
+const sameHex = (a, b) =>
+  typeof a === "string" &&
+  typeof b === "string" &&
+  sameBytes(encoder.encode(a), encoder.encode(b));
+
+function canonicalUsername(value) {
+  return typeof value === "string"
+    ? value.normalize("NFKC").trim().toLowerCase()
+    : "";
+}
+function checkUsername(username) {
+  if (!USERNAME.test(username))
+    fail(
+      400,
+      "invalid_username",
+      "아이디는 영문 소문자로 시작하고 영문 소문자·숫자·밑줄(_)로 4~20자예요.",
+    );
+  if (RESERVED_USERNAMES.has(username))
+    fail(400, "reserved_username", "쓸 수 없는 아이디예요.");
+}
+function passwordKeyBytes(value) {
+  const bytes = fromBase64url(value, 32);
+  if (!bytes)
+    fail(
+      400,
+      "invalid_password_key",
+      "비밀번호 확인값이 올바르지 않아요. 화면을 새로 고친 뒤 다시 해 주세요.",
+    );
+  return bytes;
+}
+function displayNameOf(value) {
+  if (value === undefined || value === null) return "";
+  const name = typeof value === "string" ? value.normalize("NFC").trim() : null;
+  if (
+    name === null ||
+    [...name].length > 20 ||
+    /[\p{Cc}\u2028\u2029]/u.test(name)
+  )
+    fail(
+      400,
+      "invalid_display_name",
+      "가족 이름은 줄바꿈 같은 특수 문자 없이 20자까지 쓸 수 있어요.",
+    );
+  return name;
+}
+
+async function pbkdf2(keyBytes, salt, iterations) {
+  const key = await crypto.subtle.importKey("raw", keyBytes, "PBKDF2", false, [
+    "deriveBits",
+  ]);
+  return new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: "PBKDF2", hash: "SHA-256", salt, iterations },
+      key,
+      256,
+    ),
+  );
+}
+async function hashPasswordKey(keyBytes) {
+  const salt = randomBytes(16),
+    iterations = FAMILY_LIMITS.passwordIterations;
+  const derived = await pbkdf2(keyBytes, salt, iterations);
+  return `pbkdf2-sha256$${iterations}$${base64url(salt)}$${base64url(derived)}`;
+}
+async function verifyPasswordKey(stored, keyBytes) {
+  const parts = typeof stored === "string" ? stored.split("$") : [];
+  if (
+    parts.length !== 4 ||
+    parts[0] !== "pbkdf2-sha256" ||
+    !/^[1-9][0-9]{0,8}$/.test(parts[1])
+  )
+    return false;
+  const iterations = Number(parts[1]);
+  // Workers cap PBKDF2 at 100000 iterations; refuse anything outside the bounds.
+  if (
+    iterations < FAMILY_LIMITS.minIterations ||
+    iterations > FAMILY_LIMITS.maxIterations
+  )
+    return false;
+  const salt = fromBase64url(parts[2], 16),
+    expected = fromBase64url(parts[3], 32);
+  if (!salt || !expected) return false;
+  return sameBytes(await pbkdf2(keyBytes, salt, iterations), expected);
+}
+
+function newRecoveryCode() {
+  return Array.from(randomBytes(20), (byte) => CROCKFORD[byte & 31]).join("");
+}
+const formatRecoveryCode = (code) => code.match(/.{4}/g).join("-");
+function normalizeRecoveryCode(value) {
+  if (typeof value !== "string" || value.length > 80) return "";
+  return value
+    .normalize("NFKC")
+    .toUpperCase()
+    .replace(/[\s-]/g, "")
+    .replace(/O/g, "0")
+    .replace(/[IL]/g, "1");
+}
+const recoveryHash = (accountId, code) =>
+  hexDigest(`dhw-recovery-v1:${accountId}:${code}`);
+
+/** Fixed-window attempt counter; counts every attempt before any hashing. */
+async function throttle(env, scope, { limit, windowSeconds }, now) {
+  const seconds = Math.floor(now / 1000),
+    windowStart = seconds - (seconds % windowSeconds);
+  const row = await env.DB.prepare(
+    "INSERT INTO auth_throttle (bucket, window_start, count) VALUES (?, ?, 1) ON CONFLICT(bucket, window_start) DO UPDATE SET count = count + 1 RETURNING count",
+  )
+    .bind(await hexDigest(scope), windowStart)
+    .first();
+  if (!(Number(row?.count) <= limit)) {
+    const retryAfter = Math.max(1, windowStart + windowSeconds - seconds);
+    fail(
+      429,
+      "too_many_attempts",
+      `시도가 너무 많아요. ${Math.ceil(retryAfter / 60)}분 뒤 다시 해 주세요.`,
+      { retryAfter },
+      { "Retry-After": String(retryAfter) },
+    );
+  }
+}
+async function clearThrottle(env, scope) {
+  try {
+    await env.DB.prepare("DELETE FROM auth_throttle WHERE bucket = ?")
+      .bind(await hexDigest(scope))
+      .run();
+  } catch {
+    /* 오래된 시도 기록은 시간이 지나면 저절로 풀립니다. */
+  }
+}
+async function pruneThrottle(env, now) {
+  try {
+    await env.DB.prepare(
+      "DELETE FROM auth_throttle WHERE rowid IN (SELECT rowid FROM auth_throttle WHERE window_start < ? LIMIT 100)",
+    )
+      .bind(Math.floor(now / 1000) - 2 * 24 * 60 * 60)
+      .run();
+  } catch {
+    /* 정리는 다음 요청에서 다시 시도합니다. */
+  }
+}
+
+const familyUser = (account) => ({
+  id: account.owner_id,
+  kind: "family",
+  username: account.username,
+  displayName: account.display_name || "",
+  email: "",
+});
+async function accountByUsername(env, username) {
+  return env.DB.prepare(
+    "SELECT id, owner_id, username, display_name, password_hash, recovery_hash FROM family_accounts WHERE username = ?",
+  )
+    .bind(username)
+    .first();
+}
+async function createSession(env, account, now) {
+  const token = base64url(randomBytes(32)),
+    tokenHash = await hexDigest(token);
+  const created = isoAt(now),
+    expiresAt = isoAt(now + FAMILY_LIMITS.sessionIdleMs);
+  await env.DB.prepare(
+    "DELETE FROM family_sessions WHERE account_id = ? AND (idle_expires_at <= ? OR absolute_expires_at <= ?)",
+  )
+    .bind(account.id, created, created)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO family_sessions (token_hash, account_id, owner_id, created_at, last_seen_at, idle_expires_at, absolute_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  )
+    .bind(
+      tokenHash,
+      account.id,
+      account.owner_id,
+      created,
+      created,
+      expiresAt,
+      isoAt(now + FAMILY_LIMITS.sessionAbsoluteMs),
+    )
+    .run();
+  await env.DB.prepare(
+    "DELETE FROM family_sessions WHERE account_id = ? AND token_hash NOT IN (SELECT token_hash FROM family_sessions WHERE account_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)",
+  )
+    .bind(account.id, account.id, FAMILY_LIMITS.sessionsPerAccount)
+    .run();
+  return { tokenHash, session: { token, expiresAt } };
+}
+
+/**
+ * Resolves the request owner. A present X-Family-Session header is decisive:
+ * valid -> family user; malformed, unknown or expired -> anonymous with a
+ * reason (Sites headers are ignored). D1 is read only when that header exists;
+ * storage failures propagate (503) and never degrade to anonymous.
+ */
+export async function resolveIdentity(request, env, now = Date.now()) {
+  const token = request.headers.get(FAMILY_SESSION_HEADER);
+  if (token !== null) {
+    if (!SESSION_TOKEN.test(token))
+      return { user: null, reason: SESSION_EXPIRED };
+    storage(env, { bucket: false });
+    const tokenHash = await hexDigest(token);
+    const row = await env.DB.prepare(
+      "SELECT s.account_id, s.owner_id, s.last_seen_at, s.idle_expires_at, s.absolute_expires_at, a.username, a.display_name FROM family_sessions AS s JOIN family_accounts AS a ON a.id = s.account_id AND a.owner_id = s.owner_id WHERE s.token_hash = ?",
+    )
+      .bind(tokenHash)
+      .first();
+    const current = isoAt(now);
+    if (
+      !row ||
+      !(row.idle_expires_at > current) ||
+      !(row.absolute_expires_at > current)
+    )
+      return { user: null, reason: SESSION_EXPIRED };
+    const renewBefore = isoAt(now - FAMILY_LIMITS.sessionRenewMs);
+    if (row.last_seen_at < renewBefore) {
+      try {
+        await env.DB.prepare(
+          "UPDATE family_sessions SET last_seen_at = ?, idle_expires_at = ? WHERE token_hash = ? AND last_seen_at < ?",
+        )
+          .bind(
+            current,
+            isoAt(now + FAMILY_LIMITS.sessionIdleMs),
+            tokenHash,
+            renewBefore,
+          )
+          .run();
+      } catch {
+        /* 갱신은 하루 한 번 다시 시도합니다. */
+      }
+    }
+    return {
+      user: familyUser(row),
+      session: { tokenHash, accountId: row.account_id },
+    };
+  }
+  const user = authenticatedUser(request);
+  // The family: owner prefix is reserved; a Sites id must never claim it.
+  if (!user || user.id.startsWith(FAMILY_OWNER_PREFIX)) return { user: null };
+  return { user };
+}
+
+async function readAuthJSON(request) {
+  if (
+    request.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() !==
+    "application/json"
+  )
+    fail(415, "json_required", "JSON 형식으로 보내 주세요.");
+  const bytes = await boundedBody(request, FAMILY_LIMITS.authBodyBytes);
+  let body;
+  try {
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    fail(
+      400,
+      "invalid_json",
+      "요청 내용을 읽을 수 없어요. 다시 시도해 주세요.",
+    );
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    fail(400, "invalid_request", "요청 내용을 확인해 주세요.");
+  return body;
+}
+async function requireFamilyAccount(request, env, now) {
+  const identity = await resolveIdentity(request, env, now);
+  if (!identity.user)
+    fail(
+      401,
+      "authentication_required",
+      AUTH_REQUIRED_MESSAGE,
+      identity.reason ? { reason: identity.reason } : {},
+    );
+  if (identity.user.kind !== "family")
+    fail(403, "family_only", "가족 아이디로 로그인했을 때만 쓸 수 있어요.");
+  checkAccount(request, identity.user, { required: true });
+  const account = await env.DB.prepare(
+    "SELECT id, owner_id, username, display_name, password_hash FROM family_accounts WHERE id = ? AND owner_id = ?",
+  )
+    .bind(identity.session.accountId, identity.user.id)
+    .first();
+  if (!account)
+    fail(401, "authentication_required", AUTH_REQUIRED_MESSAGE, {
+      reason: SESSION_EXPIRED,
+    });
+  return { account, tokenHash: identity.session.tokenHash };
+}
+
+async function familySignup(body, env, now) {
+  const configured =
+    typeof env?.FAMILY_SIGNUP_CODE === "string"
+      ? env.FAMILY_SIGNUP_CODE.trim()
+      : "";
+  if (configured.length < FAMILY_LIMITS.signupCodeMinLength)
+    fail(
+      503,
+      "signup_closed",
+      "가족 계정 만들기가 아직 열리지 않았어요. 사이트 관리자에게 가족 초대 코드를 받아 주세요.",
+    );
+  storage(env, { bucket: false });
+  await throttle(env, "signup", THROTTLES.signup, now);
+  await pruneThrottle(env, now);
+  const invite =
+    typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
+  if (!sameHex(await hexDigest(invite), await hexDigest(configured)))
+    fail(403, "invite_invalid", "가족 초대 코드가 맞지 않아요.");
+  const username = canonicalUsername(body.username);
+  checkUsername(username);
+  const keyBytes = passwordKeyBytes(body.passwordKey);
+  const displayName = displayNameOf(body.displayName);
+  const taken = () =>
+    fail(
+      409,
+      "username_taken",
+      "이미 있는 아이디예요. 로그인하거나 다른 아이디를 써 주세요.",
+    );
+  if (
+    await env.DB.prepare(
+      "SELECT 1 AS taken FROM family_accounts WHERE username = ?",
+    )
+      .bind(username)
+      .first()
+  )
+    taken();
+  const account = {
+    id: crypto.randomUUID(),
+    owner_id: FAMILY_OWNER_PREFIX + crypto.randomUUID(),
+    username,
+    display_name: displayName,
+  };
+  const code = newRecoveryCode(),
+    created = isoAt(now);
+  const result = await env.DB.prepare(
+    "INSERT INTO family_accounts (id, owner_id, username, display_name, password_hash, recovery_hash, password_changed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO NOTHING",
+  )
+    .bind(
+      account.id,
+      account.owner_id,
+      username,
+      displayName,
+      await hashPasswordKey(keyBytes),
+      await recoveryHash(account.id, code),
+      created,
+      created,
+    )
+    .run();
+  if (!Number(result.meta?.changes)) taken();
+  const { session } = await createSession(env, account, now);
+  return json(
+    {
+      user: familyUser(account),
+      session,
+      recoveryCode: formatRecoveryCode(code),
+    },
+    201,
+  );
+}
+async function familyLogin(body, env, now) {
+  storage(env, { bucket: false });
+  const username = canonicalUsername(body.username),
+    keyBytes = passwordKeyBytes(body.passwordKey);
+  if (!USERNAME.test(username))
+    fail(401, "invalid_credentials", INVALID_CREDENTIALS);
+  await throttle(env, "login:" + username, THROTTLES.login, now);
+  await pruneThrottle(env, now);
+  const account = await accountByUsername(env, username);
+  // Unknown usernames return the same 401 without computing a hash.
+  if (!account || !(await verifyPasswordKey(account.password_hash, keyBytes)))
+    fail(401, "invalid_credentials", INVALID_CREDENTIALS);
+  await clearThrottle(env, "login:" + username);
+  const { session } = await createSession(env, account, now);
+  return json({ user: familyUser(account), session });
+}
+async function familyLogout(request, env) {
+  const token = request.headers.get(FAMILY_SESSION_HEADER);
+  if (token !== null && SESSION_TOKEN.test(token)) {
+    try {
+      await env.DB.prepare("DELETE FROM family_sessions WHERE token_hash = ?")
+        .bind(await hexDigest(token))
+        .run();
+    } catch {
+      /* 로그아웃은 저장소 장애와 상관없이 이 기기에서 끝납니다. */
+    }
+  }
+  return json({ ok: true });
+}
+async function familyRecover(body, env, now) {
+  storage(env, { bucket: false });
+  const username = canonicalUsername(body.username),
+    keyBytes = passwordKeyBytes(body.newPasswordKey);
+  if (!USERNAME.test(username)) fail(401, "invalid_recovery", INVALID_RECOVERY);
+  await throttle(env, "recover:" + username, THROTTLES.recover, now);
+  const account = await accountByUsername(env, username);
+  const code = normalizeRecoveryCode(body.recoveryCode);
+  if (
+    !account ||
+    !RECOVERY_CODE.test(code) ||
+    !sameHex(await recoveryHash(account.id, code), account.recovery_hash)
+  )
+    fail(401, "invalid_recovery", INVALID_RECOVERY);
+  const next = newRecoveryCode();
+  // Single use: only the request that still sees the old digest may rotate it.
+  const result = await env.DB.prepare(
+    "UPDATE family_accounts SET password_hash = ?, recovery_hash = ?, password_changed_at = ? WHERE id = ? AND recovery_hash = ?",
+  )
+    .bind(
+      await hashPasswordKey(keyBytes),
+      await recoveryHash(account.id, next),
+      isoAt(now),
+      account.id,
+      account.recovery_hash,
+    )
+    .run();
+  if (!Number(result.meta?.changes))
+    fail(401, "invalid_recovery", INVALID_RECOVERY);
+  await env.DB.prepare("DELETE FROM family_sessions WHERE account_id = ?")
+    .bind(account.id)
+    .run();
+  await clearThrottle(env, "login:" + username);
+  const { session } = await createSession(env, account, now);
+  return json({
+    user: familyUser(account),
+    session,
+    recoveryCode: formatRecoveryCode(next),
+  });
+}
+async function familyPassword(request, body, env, now) {
+  const { account, tokenHash } = await requireFamilyAccount(request, env, now);
+  const current = passwordKeyBytes(body.currentPasswordKey),
+    next = passwordKeyBytes(body.newPasswordKey);
+  if (
+    body.signOutOthers !== undefined &&
+    typeof body.signOutOthers !== "boolean"
+  )
+    fail(400, "invalid_request", "요청 내용을 확인해 주세요.");
+  await throttle(env, "account:" + account.id, THROTTLES.account, now);
+  if (!(await verifyPasswordKey(account.password_hash, current)))
+    fail(401, "invalid_credentials", INVALID_CREDENTIALS);
+  // CAS: a concurrent change that landed first is never reverted.
+  const result = await env.DB.prepare(
+    "UPDATE family_accounts SET password_hash = ?, password_changed_at = ? WHERE id = ? AND password_hash = ?",
+  )
+    .bind(
+      await hashPasswordKey(next),
+      isoAt(now),
+      account.id,
+      account.password_hash,
+    )
+    .run();
+  if (!Number(result.meta?.changes))
+    fail(401, "invalid_credentials", INVALID_CREDENTIALS);
+  const created = await createSession(env, account, now);
+  await env.DB.prepare("DELETE FROM family_sessions WHERE token_hash = ?")
+    .bind(tokenHash)
+    .run();
+  if (body.signOutOthers === true)
+    await env.DB.prepare(
+      "DELETE FROM family_sessions WHERE account_id = ? AND token_hash <> ?",
+    )
+      .bind(account.id, created.tokenHash)
+      .run();
+  return json({ session: created.session });
+}
+async function familyDelete(request, body, env, now) {
+  const { account } = await requireFamilyAccount(request, env, now);
+  if (body.confirm !== "삭제")
+    fail(400, "confirm_required", '확인 칸에 "삭제"라고 적어 주세요.');
+  const keyBytes = passwordKeyBytes(body.passwordKey);
+  await throttle(env, "account:" + account.id, THROTTLES.account, now);
+  if (!(await verifyPasswordKey(account.password_hash, keyBytes)))
+    fail(401, "invalid_credentials", INVALID_CREDENTIALS);
+  const owner = account.owner_id,
+    ownerHash = await hexDigest(owner),
+    keys = new Set();
+  const library = await env.DB.prepare(
+    "SELECT state_json FROM cloud_libraries WHERE owner_id = ?",
+  )
+    .bind(owner)
+    .first();
+  try {
+    const pointer = JSON.parse(library?.state_json || "null");
+    if (pointer?.storage === "r2" && typeof pointer.objectKey === "string")
+      keys.add(pointer.objectKey);
+  } catch {
+    /* 읽을 수 없는 포인터는 지울 객체가 없습니다. */
+  }
+  const assets = await env.DB.prepare(
+    "SELECT object_key FROM cloud_assets WHERE owner_id = ?",
+  )
+    .bind(owner)
+    .all();
+  for (const row of assets.results || [])
+    if (typeof row.object_key === "string") keys.add(row.object_key);
+  // Sessions go first so other devices lose access before data disappears;
+  // the account row goes last so a failed run can be retried after login.
+  await env.DB.prepare("DELETE FROM family_sessions WHERE account_id = ?")
+    .bind(account.id)
+    .run();
+  for (const table of ["cloud_libraries", "cloud_assets", "auto_job_controls"])
+    await env.DB.prepare(`DELETE FROM ${table} WHERE owner_id = ?`)
+      .bind(owner)
+      .run();
+  await env.DB.prepare(
+    "DELETE FROM family_accounts WHERE id = ? AND owner_id = ?",
+  )
+    .bind(account.id, owner)
+    .run();
+  // Only objects under this owner's own key prefixes are ever removed.
+  for (const key of keys)
+    if (
+      key.startsWith(`cloud-snapshots/${ownerHash}/`) ||
+      key.startsWith(`cloud-media/${ownerHash}/`)
+    )
+      await removeObject(env, key);
+  return json({ deleted: true });
+}
+async function handleFamilyAuth(request, env, url, now) {
+  const route = url.pathname.slice("/api/cloud/auth/".length);
+  if (!AUTH_ROUTES.has(route))
+    fail(404, "not_found", "클라우드 보관함 주소를 확인해 주세요.");
+  if (request.method !== "POST")
+    return json(
+      {
+        error: {
+          code: "method_not_allowed",
+          message: "POST 요청을 사용해 주세요.",
+        },
+      },
+      405,
+      { Allow: "POST" },
+    );
+  checkMutationOrigin(request, url);
+  const site = request.headers.get("Sec-Fetch-Site");
+  if (site !== null && site !== "same-origin")
+    fail(
+      403,
+      "origin_forbidden",
+      "같은 동화공방 사이트에서만 가족 계정을 쓸 수 있어요.",
+    );
+  if (route === "logout") return await familyLogout(request, env);
+  const body = await readAuthJSON(request);
+  if (route === "signup") return await familySignup(body, env, now);
+  if (route === "login") return await familyLogin(body, env, now);
+  if (route === "recover") return await familyRecover(body, env, now);
+  if (route === "password")
+    return await familyPassword(request, body, env, now);
+  return await familyDelete(request, body, env, now);
+}
+
+/**
+ * Returns null for all routes outside /api/cloud. No client secrets are used.
+ * `options.now` (a function returning epoch ms) is injectable for tests.
+ */
+export async function handleCloudRequest(request, env, options = {}) {
   const url = new URL(request.url);
   if (url.pathname !== "/api/cloud" && !url.pathname.startsWith("/api/cloud/"))
     return null;
+  const clock = typeof options?.now === "function" ? options.now : Date.now;
   try {
-    const user = authenticatedUser(request);
+    const now = Number(clock());
+    if (url.pathname.startsWith("/api/cloud/auth/"))
+      return await handleFamilyAuth(request, env, url, now);
+    const identity = await resolveIdentity(request, env, now),
+      user = identity.user;
     if (url.pathname === "/api/cloud/session" && request.method === "GET")
       return json(
         user
@@ -746,13 +1418,15 @@ export async function handleCloudRequest(request, env) {
           : {
               authenticated: false,
               signInPath: "/signin-with-chatgpt?return_to=%2F",
+              ...(identity.reason ? { reason: identity.reason } : {}),
             },
       );
     if (!user)
       fail(
         401,
         "authentication_required",
-        "같은 ChatGPT 계정으로 로그인하면 클라우드 보관함을 사용할 수 있어요.",
+        AUTH_REQUIRED_MESSAGE,
+        identity.reason ? { reason: identity.reason } : {},
       );
     const mutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
     checkAccount(request, user, { required: mutation });
@@ -810,6 +1484,7 @@ export async function handleCloudRequest(request, env) {
       return json(
         { error: { code: error.code, message: error.message }, ...error.extra },
         error.status,
+        error.headers,
       );
     // Storage/provider exceptions must not expose owner IDs, object keys or data.
     return json(

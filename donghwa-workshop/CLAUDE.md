@@ -34,6 +34,7 @@ npm run test:quality
 - `storyDate`와 세계/계절/시간 설정은 제작 시점에 고정합니다. 재접속 날짜로 계절을 다시 계산하지 않습니다.
 - 키는 브라우저 PIN 기반 AES-GCM 보관함 또는 별도 프록시 환경변수에서만 읽습니다. 라이브러리·프롬프트·로그·백업·소스에 키를 넣지 않습니다. 추적 ID `key_...`는 OpenAI API 비밀 키가 아닙니다.
 - 서버는 Sites가 검증해 전달한 인증 헤더를 신뢰합니다. 다른 호스팅에 옮길 때 클라이언트가 보낸 같은 이름의 헤더를 인증으로 쓰지 마세요. 출처·계정 일치·CAS 버전 검사는 유지하세요.
+- 가족 계정(R11)은 `X-Family-Session` 헤더의 세션 토큰으로만 식별합니다. 서버는 토큰의 SHA-256으로 D1 `family_sessions`를 조회하며 토큰·복구 코드·비밀번호를 원문으로 저장하지 않습니다(비밀번호는 브라우저에서 PBKDF2로 만든 `passwordKey`만 전송). 이 헤더가 있으면 Sites 헤더보다 우선하고, 잘못되거나 만료된 토큰은 익명(`reason: "family-session-expired"`)으로 처리할 뿐 Sites 계정으로 넘어가지 않습니다. 소유자 ID 접두사 `family:`는 가족 계정 전용이라 이것으로 시작하는 Sites ID는 거부합니다. 가입은 배포 때 서버 비밀값 `FAMILY_SIGNUP_CODE`(12자 이상)를 설정해야 열리며, 그 값을 소스·문서·라이브러리·로그에 넣지 않습니다. 인증 경로는 `server/cloud-api.js`의 `/api/cloud/auth/*`(signup·login·logout·recover·password·delete), 스키마는 Drizzle `0002` 마이그레이션입니다.
 - 새 DB 변경은 Drizzle 마이그레이션으로 추가합니다. 이미 적용한 SQL을 덮어쓰거나 요청 처리 중 DDL을 실행하지 않습니다.
 - API 오류 때 샘플 그림·고정 이야기로 자동 대체하지 않습니다. 모의 테스트 통과와 실제 유료 모델의 글/그림 품질 평가는 구분합니다.
 - 유료 `distill`, `eval`, 코치, 파인튜닝 실행은 사용자가 요청한 범위에서만 합니다. `topics:gen`과 `distill:estimate`는 모델 호출 없이 실행됩니다. 2026-10-17 증류 200편을 실행했고 승인본은 161편입니다. 원본·승인본·요약은 `story-quality/distill/runs/2026-10-17/`에 보존합니다. 앱에서의 증류 예시 사용은 R6-4의 명시적 옵션이며 기본 OFF입니다.
