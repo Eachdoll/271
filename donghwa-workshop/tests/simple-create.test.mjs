@@ -602,4 +602,8 @@ test('a stopped story shows its error once: below the bar, not again as the prog
   assert.equal(html.split(message).length - 1, 1, 'the error text appears exactly once');
   assert.match(html, /id="simple-progress-text">멈춘 곳에서 다시 시도할 수 있어요\.</);
   assert.match(html, /data-simple-action="retry"/);
+  // A failed check replays the same way on 다시 시도, so a new outline is offered (cost confirm happens on click).
+  assert.match(html, /data-simple-action="restart"[^>]*>줄거리 새로 만들기</);
+  Object.assign(job, {error: '클라우드에 연결하지 못했어요.', phase: '클라우드에 연결하지 못했어요.'});
+  assert.doesNotMatch(renderSimpleCreate(ctxFor(state, w)), /줄거리 새로 만들기/, 'a network error only offers 다시 시도');
 });

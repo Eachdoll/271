@@ -923,12 +923,65 @@ function untargetedChanges(original, fixed, targets) {
       });
   return changes;
 }
-function enforceTargetedFix(request, response) {
-  const parts = fixRequestParts(request);
-  if (!parts) return response;
-  const { original, messages } = parts,
-    fixed = response.json || parseJson(response.text),
-    targets = fixedBeatIds(original, messages);
+/** Values a fix response actually filled (no empty strings, nulls or empty lists). */
+function filledFields(value) {
+  return Object.fromEntries(
+    Object.entries(object(value) ? value : {}).filter(
+      ([, item]) =>
+        item !== undefined &&
+        item !== null &&
+        !(typeof item === "string" && !item.trim()) &&
+        !(Array.isArray(item) && !item.length),
+    ),
+  );
+}
+/**
+ * The fix pass (a cheap model) returns the whole outline JSON and may drop or
+ * blank parts it was never asked about (plan.planted, the plotContract ledger,
+ * refrain …). The result is therefore built from the ORIGINAL outline: only the
+ * targeted beats, their settings and the plan/refrain fields an item names are
+ * taken from the response, and only where the response filled them. Beat index
+ * and type, the ledger and every other field stay as the outline model wrote them.
+ */
+function mergeTargetedFix(original, fixed, messages) {
+  const targets = fixedBeatIds(original, messages),
+    merged = clone(original);
+  original.beats.forEach((beat, index) => {
+    if (!targets.has(beat.index) || !object(fixed.beats[index])) return;
+    merged.beats[index] = {
+      ...clone(beat),
+      ...clone(filledFields(fixed.beats[index])),
+      index: beat.index,
+      type: beat.type,
+    };
+  });
+  if (Array.isArray(merged.settings))
+    merged.settings = merged.settings.map((row) => {
+      const next = asList(fixed.settings).find(
+        (item) => object(item) && item.beatIndex === row?.beatIndex,
+      );
+      return targets.has(row?.beatIndex) && next
+        ? { ...clone(row), ...clone(filledFields(next)), beatIndex: row.beatIndex }
+        : row;
+    });
+  const named = (pattern) => messages.some((message) => pattern.test(message));
+  const planKeys = [
+    ...(named(/plan\.planted|심은 물건/u) ? ["planted"] : []),
+    ...(named(/plan\.pattern/u) ? ["pattern"] : []),
+  ];
+  const plan = filledFields(fixed.plan);
+  for (const key of planKeys)
+    if (typeof plan[key] === "string")
+      merged.plan = { ...(object(merged.plan) ? merged.plan : {}), [key]: plan[key] };
+  if (named(/후렴|refrain/u) && object(fixed.refrain))
+    merged.refrain = {
+      ...(object(merged.refrain) ? clone(merged.refrain) : {}),
+      ...clone(filledFields(fixed.refrain)),
+    };
+  return { merged, targets };
+}
+function readFixedOutline(original, response) {
+  const fixed = response.json || parseJson(response.text);
   if (!object(fixed) || !Array.isArray(fixed.beats))
     throw new StoryValidationError("outline", [
       "품질 수정 응답의 비트 목록을 읽지 못했어요.",
@@ -937,9 +990,7 @@ function enforceTargetedFix(request, response) {
     throw new StoryValidationError("outline", [
       "품질 수정은 줄거리 비트 개수를 바꿀 수 없어요.",
     ]);
-  const [first] = untargetedChanges(original, fixed, targets);
-  if (first) throw new StoryValidationError("outline", [first.message]);
-  return { ...response, json: fixed, text: JSON.stringify(fixed) };
+  return fixed;
 }
 /** Every string inside a beat/field value (summary, newElement, nested text …). */
 function stringsOf(value, out = []) {
@@ -964,14 +1015,14 @@ function isCatchphraseEdit(change, catchphrases) {
   );
 }
 /**
- * A fix pass that breaks the targeted-fix contract never costs the paid
- * outline (and never strands a resume, which replays the same response):
- * - every item in the pass was a catchphrase advisory: fall back to the
- *   original outline (the recheck reports the items again as advisories);
- * - otherwise every out-of-target part (beat, setting, want/problem/ending)
- *   is put back from the original and the targeted fixes are kept. The
- *   package's recheck then judges the result as for any fix pass.
- * Only an unreadable response or a changed beat count still throws.
+ * A fix pass never costs the paid outline (and never strands a resume, which
+ * replays the same response):
+ * - every item in the pass was a catchphrase advisory: keep the original
+ *   outline (the recheck reports the items again as advisories);
+ * - otherwise the outline is rebuilt from the original with only the targeted
+ *   parts taken from the response (mergeTargetedFix). Untargeted edits are
+ *   dropped and recorded; the package's recheck then judges the result.
+ * Only an unreadable response or a changed beat count throws.
  * The decision depends only on the request and the (checkpointed) response,
  * so a resume replays it with no new call.
  */
@@ -981,34 +1032,32 @@ function enforceTargetedFixKeepingOutline(
   catchphrases,
   onFallback,
 ) {
-  try {
-    return enforceTargetedFix(request, response);
-  } catch (error) {
-    const parts =
-      error instanceof StoryValidationError ? fixRequestParts(request) : null;
-    if (!parts) throw error;
-    const { original, messages } = parts,
-      advisory = asList(messages).filter(isCatchphraseFix);
-    if (advisory.length && advisory.length === messages.length) {
-      onFallback({ mode: "original", reason: error.message });
-      return { ...response, json: original, text: JSON.stringify(original) };
-    }
+  const parts = fixRequestParts(request);
+  if (!parts) return response;
+  const { original, messages } = parts,
+    advisory = asList(messages).filter(isCatchphraseFix);
+  if (advisory.length && advisory.length === messages.length) {
     const fixed = response.json || parseJson(response.text);
     if (
-      !object(fixed) ||
-      !Array.isArray(fixed.beats) ||
-      fixed.beats.length !== original.beats.length
-    )
-      throw error;
-    const changes = untargetedChanges(
-      original,
-      fixed,
-      fixedBeatIds(original, messages),
-    );
-    if (!changes.length || changes.some((change) => !change.restore))
-      throw error;
-    const kept = clone(fixed);
-    changes.forEach((change) => change.restore(kept));
+      object(fixed) &&
+      Array.isArray(fixed.beats) &&
+      fixed.beats.length === original.beats.length &&
+      !untargetedChanges(original, fixed, fixedBeatIds(original, messages))
+        .length
+    ) {
+      const { merged } = mergeTargetedFix(original, fixed, messages);
+      return { ...response, json: merged, text: JSON.stringify(merged) };
+    }
+    onFallback({
+      mode: "original",
+      reason: untargetedReason(original, response, messages),
+    });
+    return { ...response, json: original, text: JSON.stringify(original) };
+  }
+  const fixed = readFixedOutline(original, response),
+    { merged, targets } = mergeTargetedFix(original, fixed, messages),
+    changes = untargetedChanges(original, fixed, targets);
+  if (changes.length)
     onFallback({
       mode: "restored",
       cause:
@@ -1016,13 +1065,23 @@ function enforceTargetedFixKeepingOutline(
         changes.every((change) => isCatchphraseEdit(change, catchphrases))
           ? "catchphrase"
           : "untargeted",
-      reason: error.message,
+      reason: changes[0].message,
       restored: changes.map((change) =>
         change.kind === "field" ? change.id : `${change.kind}:${change.id}`,
       ),
     });
-    return { ...response, json: kept, text: JSON.stringify(kept) };
-  }
+  return { ...response, json: merged, text: JSON.stringify(merged) };
+}
+function untargetedReason(original, response, messages) {
+  const fixed = response.json || parseJson(response.text);
+  if (!object(fixed) || !Array.isArray(fixed.beats))
+    return "품질 수정 응답의 비트 목록을 읽지 못했어요.";
+  if (fixed.beats.length !== original.beats.length)
+    return "품질 수정은 줄거리 비트 개수를 바꿀 수 없어요.";
+  return (
+    untargetedChanges(original, fixed, fixedBeatIds(original, messages))[0]
+      ?.message || ""
+  );
 }
 function parseJson(text) {
   try {
