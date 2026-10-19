@@ -73,9 +73,189 @@ async function sha256(bytes) {
     .join("");
 }
 
-/** Ignores local PINs, credentials and temporary object URLs when comparing revisions. */
+/**
+ * Per-device reading statistics. A child-mode tablet writes them on every
+ * opened book but cannot upload, so they never count as a change or a
+ * conflict; they travel with the next real save and are merged on apply.
+ */
+const READING_COUNTS = ["reads", "paperReads"],
+  READING_TIMES = ["lastReadAt", "paperReadAt"];
+const HASH_VERSION = 2;
+function withoutReadingStats(state) {
+  if (!state || typeof state !== "object" || Array.isArray(state)) return state;
+  const { daily, ...rest } = state;
+  if (Array.isArray(state.books))
+    rest.books = state.books.map((book) => {
+      if (!book || typeof book !== "object") return book;
+      const copy = { ...book };
+      for (const field of [...READING_COUNTS, ...READING_TIMES])
+        delete copy[field];
+      return copy;
+    });
+  return rest;
+}
+const stateBytes = (state) =>
+  encoder.encode(JSON.stringify(semanticValue(state)));
+
+/** Ignores local PINs, credentials, temporary object URLs and reading statistics when comparing revisions. */
 export function hashCloudState(state) {
-  return sha256(encoder.encode(JSON.stringify(semanticValue(state))));
+  return sha256(stateBytes(withoutReadingStats(state)));
+}
+/** The pre-R11 fingerprint, used only to upgrade baselines saved before reading statistics were left out. */
+const legacyHash = (state) => sha256(stateBytes(state));
+
+const countOf = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+};
+const isLater = (candidate, current) => {
+  const next = typeof candidate === "string" ? Date.parse(candidate) : NaN,
+    now = typeof current === "string" ? Date.parse(current) : NaN;
+  return Number.isFinite(next) && (!Number.isFinite(now) || next > now);
+};
+/**
+ * Keeps this device's reading statistics when a remote library replaces it:
+ * for books on both sides the larger count and the later time win, and the
+ * daily counter takes the larger value per day. Mutates and returns target.
+ */
+export function mergeReadingStats(target, local) {
+  if (!target || typeof target !== "object" || !local) return target;
+  const mine = new Map(
+    (Array.isArray(local.books) ? local.books : [])
+      .filter((book) => book && typeof book.id === "string")
+      .map((book) => [book.id, book]),
+  );
+  for (const book of Array.isArray(target.books) ? target.books : []) {
+    const own = book && mine.get(book.id);
+    if (!own) continue;
+    for (const field of READING_COUNTS)
+      if (countOf(own[field]) > countOf(book[field]))
+        book[field] = countOf(own[field]);
+    for (const field of READING_TIMES)
+      if (isLater(own[field], book[field])) book[field] = own[field];
+  }
+  if (
+    local.daily &&
+    typeof local.daily === "object" &&
+    !Array.isArray(local.daily)
+  ) {
+    let daily =
+      target.daily &&
+      typeof target.daily === "object" &&
+      !Array.isArray(target.daily)
+        ? target.daily
+        : null;
+    for (const [day, count] of Object.entries(local.daily)) {
+      if (["__proto__", "constructor", "prototype"].includes(day)) continue;
+      if (countOf(count) <= countOf(daily?.[day])) continue;
+      daily ||= target.daily = {};
+      daily[day] = countOf(count);
+    }
+  }
+  return target;
+}
+
+/* A brand-new device holds the built-in sample library; that is not data worth offering to upload. */
+const SAMPLE_COLLECTIONS = ["books", "characters", "backgrounds"],
+  SAMPLE_SETTINGS = new Set([
+    "settings",
+    "daily",
+    "readingLog",
+    "version",
+    "activeWorldId",
+    "worlds",
+  ]),
+  SAMPLE_BOOK_USAGE = [
+    ...READING_COUNTS,
+    ...READING_TIMES,
+    "favorite",
+    "printedAt",
+    "worldId",
+    "imageEngine",
+    "stylePresetId",
+    "generationSnapshot",
+  ];
+function sampleFingerprint(collection, record) {
+  if (!record || typeof record !== "object") return null;
+  const copy = { ...record };
+  if (collection === "books")
+    for (const field of SAMPLE_BOOK_USAGE) delete copy[field];
+  if (collection === "characters") {
+    delete copy.sheetSeed;
+    if (
+      Array.isArray(copy.characterSheets) &&
+      copy.characterSheets.every(
+        (sheet) =>
+          sheet?.meta?.legacySample === true &&
+          sheet.meta.source === "local-svg",
+      )
+    )
+      delete copy.characterSheets;
+  }
+  return JSON.stringify(semanticValue(copy));
+}
+const emptyValue = (value) =>
+  value == null ||
+  value === false ||
+  value === "" ||
+  (typeof value === "object" && Object.keys(value).length === 0);
+const sampleReferences = new WeakMap();
+/**
+ * True while the library content is still the built-in sample library `seed`
+ * (as the app normalizes it on load): the same books, characters and
+ * backgrounds and nothing the family made. Settings, the PIN, keys, reading
+ * statistics, favourites and the sample World binding do not count. Any field
+ * this function does not know about counts as family content.
+ */
+export function isSeedOnlyLibrary(state, seed) {
+  if (!state || typeof state !== "object" || !seed || typeof seed !== "object")
+    return false;
+  if (Array.isArray(state.worlds) && state.worlds.length > 1) return false;
+  for (const [key, value] of Object.entries(state))
+    if (
+      !SAMPLE_SETTINGS.has(key) &&
+      !SAMPLE_COLLECTIONS.includes(key) &&
+      !emptyValue(value)
+    )
+      return false;
+  let reference = sampleReferences.get(seed);
+  if (!reference) {
+    reference = Object.fromEntries(
+      SAMPLE_COLLECTIONS.map((collection) => [
+        collection,
+        new Map(
+          (seed[collection] || []).map((record) => [
+            record.id,
+            sampleFingerprint(collection, record),
+          ]),
+        ),
+      ]),
+    );
+    sampleReferences.set(seed, reference);
+  }
+  for (const collection of SAMPLE_COLLECTIONS) {
+    const records = state[collection] ?? [],
+      samples = reference[collection],
+      seen = new Set();
+    if (!Array.isArray(records) || records.length !== samples.size)
+      return false;
+    for (const record of records) {
+      if (seen.has(record?.id) || !samples.has(record?.id)) return false;
+      seen.add(record.id);
+      if (samples.get(record.id) !== sampleFingerprint(collection, record))
+        return false;
+    }
+  }
+  return true;
+}
+
+/** Shown before a push replaces a cloud copy that has more books than this device. */
+export function pushBookCountWarning(deviceBooks, cloudBooks) {
+  const device = countOf(deviceBooks),
+    cloud = countOf(cloudBooks);
+  return cloud > device
+    ? `클라우드에는 책이 ${cloud}권, 이 기기에는 ${device}권 있어요. 저장하면 클라우드의 책장이 이 기기 것으로 바뀌어요.`
+    : "";
 }
 
 function dataBlob(dataUrl, kind) {
@@ -314,6 +494,8 @@ async function cloudSnapshot(state, makeBackup) {
 
 /**
  * getState(), hasLocalData(), isParent(), canApplyRemote(), applyRemote(candidate,meta), onChange(status).
+ * hasLocalData() is false for a library that still holds only the built-in samples (isSeedOnlyLibrary).
+ * The candidate already carries this device's reading statistics (mergeReadingStats).
  * applyRemote MUST first retain raw local recovery data, then restoreLibraryImages(candidate),
  * preserve this device's PIN, assign and durably save. Return false to cancel; throw on failure.
  * No baseline is committed until that callback succeeds. API keys stay in the existing vault.
@@ -417,6 +599,7 @@ export function createCloudSync(context) {
         "동기화 상태를 이 기기에 보관할 수 없어요. 브라우저 저장 권한을 확인해 주세요.",
         "LOCAL_STORAGE_UNAVAILABLE",
       );
+    next = { ...next, hashVersion: HASH_VERSION };
     try {
       storage.setItem(CLOUD_SYNC_STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -481,7 +664,7 @@ export function createCloudSync(context) {
         );
       if (response.status === 409)
         throw new CloudSyncError(
-          "다른 기기에서 책장이 바뀌었어요. 어느 내용을 사용할지 선택해 주세요.",
+          "다른 기기에서 방금 저장했어요. 어느 내용을 사용할지 선택해 주세요.",
           "CONFLICT",
           { revision: Number(body.revision) || 0 },
         );
@@ -631,8 +814,7 @@ export function createCloudSync(context) {
   }
   async function apply(record, user, op, { automatic = false } = {}) {
     if (deferRemote(user, automatic)) return getStatus();
-    const initialSequence = sequence,
-      initialHash = await hashCloudState(context.getState());
+    const initialHash = await hashCloudState(context.getState());
     check(op);
     const images = [],
       audio = [];
@@ -672,16 +854,23 @@ export function createCloudSync(context) {
       }),
     );
     check(op);
-    if (
-      sequence !== initialSequence ||
-      (await hashCloudState(context.getState())) !== initialHash
-    )
+    // Opening a book during the download saves reading statistics only; those
+    // are merged below. Re-hash until no save lands while the digest runs.
+    let currentHash, seen;
+    do {
+      seen = sequence;
+      currentHash = await hashCloudState(context.getState());
+      check(op);
+    } while (seen !== sequence);
+    if (currentHash !== initialHash)
       throw new CloudSyncError(
         "불러오는 동안 이 기기의 내용이 바뀌었어요. 저장할 내용을 다시 선택해 주세요.",
         "CONFLICT",
         { revision: record.revision },
       );
     if (deferRemote(user, automatic)) return getStatus();
+    if (blocked !== "account-changed")
+      mergeReadingStats(candidate, context.getState());
     applying = true;
     let result;
     try {
@@ -822,6 +1011,26 @@ export function createCloudSync(context) {
     });
     return getStatus();
   }
+  /**
+   * Whether this device changed since `baseline`. A baseline saved before
+   * reading statistics were left out of the fingerprint is upgraded in place
+   * when the device is otherwise untouched, so the update itself never makes
+   * every device look changed (and upload or conflict) at once.
+   */
+  async function localDirty(baseline, op) {
+    const state = context.getState(),
+      legacy = baseline.hashVersion !== HASH_VERSION;
+    // Both digests serialize the same state synchronously before awaiting.
+    const [current, previous] = await Promise.all([
+      hashCloudState(state),
+      legacy ? legacyHash(state) : null,
+    ]);
+    check(op);
+    if (current === baseline.stateHash) return false;
+    if (!legacy || previous !== baseline.stateHash) return true;
+    persist({ ...baseline, stateHash: current });
+    return false;
+  }
   async function reconcile(op) {
     const user = await session(op);
     if (!user) return getStatus();
@@ -829,9 +1038,7 @@ export function createCloudSync(context) {
     if (blocked === "account-changed") return getStatus();
     const currentBaseline = metadata?.accountId === user.id ? metadata : null;
     if (meta.exists && currentBaseline?.revision === meta.revision) {
-      const dirty =
-        (await hashCloudState(context.getState())) !==
-        currentBaseline.stateHash;
+      const dirty = await localDirty(currentBaseline, op);
       if (!dirty) {
         blocked = null;
         emit({
@@ -864,19 +1071,23 @@ export function createCloudSync(context) {
       });
       return getStatus();
     }
-    const dirty =
-      (await hashCloudState(context.getState())) !== baseline.stateHash;
-    check(op);
-    if (
-      record.exists &&
-      record.revision !== baseline.revision &&
-      (await hashCloudState(record.state)) ===
-        (await hashCloudState(context.getState()))
-    ) {
+    const dirty = await localDirty(baseline, op);
+    // Same content on both sides (also an older baseline whose only local
+    // difference was reading statistics): advance the baseline, no transfer.
+    let sameHash = null;
+    if (record.exists && (record.revision !== baseline.revision || dirty)) {
+      const [localHash, remoteHash] = await Promise.all([
+        hashCloudState(context.getState()),
+        hashCloudState(record.state),
+      ]);
+      check(op);
+      if (localHash === remoteHash) sameHash = localHash;
+    }
+    if (sameHash) {
       persist({
         accountId: user.id,
         revision: record.revision,
-        stateHash: await hashCloudState(context.getState()),
+        stateHash: sameHash,
         updatedAt: record.updatedAt || null,
       });
       blocked = null;
@@ -902,7 +1113,9 @@ export function createCloudSync(context) {
     if (record.revision !== baseline.revision || !record.exists) {
       if (dirty || !record.exists)
         throw new CloudSyncError(
-          "다른 기기에서 책장이 바뀌었어요. 어느 내용을 사용할지 선택해 주세요.",
+          record.exists
+            ? "다른 기기에서 방금 저장했어요. 어느 내용을 사용할지 선택해 주세요."
+            : "다른 기기에서 책장이 바뀌었어요. 어느 내용을 사용할지 선택해 주세요.",
           "CONFLICT",
           { revision: record.revision },
         );
@@ -1027,12 +1240,42 @@ export function createCloudSync(context) {
   }
   function changed() {
     if (applying || stopped) return;
-    sequence++;
+    const seen = ++sequence,
+      baseline = metadata;
     emit({
       dirty: true,
       ...(status.connected && !blocked ? { reason: "local-changes" } : {}),
     });
     schedule();
+    // A save that only recorded reading (a child opening a book) leaves the
+    // fingerprint at the baseline: settle back to "saved" without a request.
+    if (
+      !status.connected ||
+      blocked ||
+      baseline?.accountId !== status.user?.id
+    )
+      return;
+    hashCloudState(context.getState()).then(
+      (hash) => {
+        if (
+          hash !== baseline.stateHash ||
+          seen !== sequence ||
+          stopped ||
+          operation ||
+          blocked ||
+          metadata !== baseline ||
+          !status.connected
+        )
+          return;
+        if (debounce !== null) clearLater(debounce);
+        debounce = null;
+        emit({
+          dirty: false,
+          ...(status.reason === "local-changes" ? { reason: null } : {}),
+        });
+      },
+      () => {},
+    );
   }
   function push({ force = false } = {}) {
     return execute("push", async (op) => {
