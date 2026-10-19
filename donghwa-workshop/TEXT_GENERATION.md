@@ -78,3 +78,16 @@ K1·K2, E0·E1의 의성어·짧은 감탄사만 있는 문장은 최소 길이�
 현재형 검사는 `is tired`, `is closed`, `is so excited` 같은 형용사와 `reed`·`weed`·`sled`·`shed` 같은 명사를 과거형으로 오인하지 않도록 보완했다. 확인된 형용사의 부정·병렬 형태도 처리하되, `Yuha closed the door.`·`said`·`went` 같은 과거 서술은 계속 차단한다. E0 전문과 단순화·압축에는 `Use says, not said. Use present tense for every narration sentence.`를 전달한다. 완전한 문법 분석기는 아니다.
 
 [확정 지시서](CODEX_WORK_ORDER_R8_2026-10-17.md) · [r8 완료 보고](CODEX_R8_COMPLETION_2026-10-17.md) · [같은 글의 오프라인 재검사](QA/r8-offline-recheck.json)
+
+## 2026-10-19 R12 펼침 구성
+
+새 K2~K4 초안 중 한글이 있는 책(`ko`·`bilingual`·`dual`)은 펼침 구성 책입니다. 호출자(`startStoryWorkflow`·`createFullAutoJob`)가 만들 때 `layoutFor(wizard)`로 한 번 정해 `inputFromWizard(..., {layout: "openings"})`가 `input.layoutPolicy`(`{version: 1, kind: "openings", spreadImageSize: "2048x880", pageImageSize: "1536x1024"}`), 펼침 수만큼의 비트(`outlineBeatCount` = 쪽 수 ÷ 2), v4 펼침 규격과 분량 압축 정책을 고정합니다. 재개·재접속·설정 변경은 다시 정하지 않습니다. K1, 영어만인 책, 정책이 없는 기존 초안·작업·책은 R12 이전 요청·검사와 바이트 단위로 같습니다.
+
+- **분량.** 한글은 펼침 하나에 K2·K3 10~15문장(목표 12), K4 10~16문장(목표 13)이고 낱쪽 하나는 그 절반(K2·K3 5~7, K4 5~8)입니다. K3의 문장 길이는 7~10어절입니다. 영어는 지금과 같은 인쇄 쪽당 분량(E2 쪽당 1~2문장, 펼침면은 2~4문장)이며 검사도 기존처럼 엄격합니다.
+- **한글 허용 범위(펼침·낱쪽 단위).** 문장 수가 범위의 −1~+2 밖이거나, 의성어만인 문장을 뺀 평균 어절이 범위 ±0.5 밖이거나, 긴 문장이 1/3을 넘거나 하나라도 최대+3어절을 넘을 때만 막습니다. 그 안의 차이는 ‘한글 펼침면 참고 · …’ 권고로만 보여 줍니다. 풍부함 검사는 펼침 단위로 명사·감각·대화를 합쳐 세고, 반복 어미는 권고입니다.
+- **전문과 쪽 나누기.** 전문 요청은 비트마다 한 펼침 분량을 적고, 분량이 맞지 않는 비트만 값싼 모델로 한 번 맞춥니다(`proseFit`). 쪽 나누기 응답은 펼침마다 `spread` 하나 또는 `page` 둘이며 `cue`(고른 이유)를 담습니다. 펼침 번호·`entryId`·쪽 번호는 모델이 아니라 앱이 `normalizeOpenings`로 매깁니다.
+- **수정.** 배치 필드(kind·openingNo·side·entryId·cue)는 쪽 다시 쓰기·일관성 수정에서 그대로 유지하고, 바꾼 응답은 거절합니다. 자동 수정은 책당 펼침 수의 2배까지(16쪽 16회), 비트가 빠졌을 때만 쪽 나누기를 다시 합니다. 그림이 생긴 뒤에는 구조를 바꾸는 동작(쪽 나누기 다시 하기·나누기·합치기)을 막습니다.
+- **비용·시간.** 단계별 최대 출력은 가장 긴 펼침 응답의 1.25배 + 1000토큰(최대 32000), 시간 제한은 60초 + 토큰당 15ms이며 기존 값보다 짧아지지 않습니다. 예상 비용은 펼침 규격과 인쇄 쪽 수로 계산하고, 쪽 다시 쓰기 요금은 펼침면·낱쪽을 구분합니다.
+- **기존 탭.** R11 이전 앱이 열린 탭이 펼침 작업의 입력 단계를 이어 실행하면 정책이 빠지고 v4 규격만 남은 쪽 책이 됩니다. 이 앱은 그 작업·책을 쪽 책으로 읽고 `layoutStatus(...).layoutMismatch`로 표시합니다(앱 셸 캐시 `donghwa-shell-v36`으로 새로고침 후에는 생기지 않습니다).
+
+검증: `tests/openings-*-r12.test.mjs`, `scripts/r12-openings-recheck.mjs`(`QA/r12-openings-recheck.json`, 같은 글의 오프라인 재검사), `scripts/r12-openings-browser.mjs`(`QA/r12-openings-browser.json`, 데모 글·샘플 그림으로 쉬운·프로 흐름 전체).

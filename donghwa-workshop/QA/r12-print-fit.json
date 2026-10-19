@@ -1,0 +1,982 @@
+{
+  "generatedBy": "scripts/r12-print-fit.mjs",
+  "cases": [
+    {
+      "name": "single K2 12×7",
+      "layout": "single",
+      "ko": "K2",
+      "enLevel": "E2",
+      "spread": 12,
+      "page": 6,
+      "eojeol": 7,
+      "language": "ko",
+      "ready": "ready",
+      "bookFont": 17.5,
+      "floor": 14,
+      "fonts": [
+        17.499975
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 84.3,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        }
+      ],
+      "sheets": 10,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "single K2 15×7",
+      "layout": "single",
+      "ko": "K2",
+      "enLevel": "E2",
+      "spread": 15,
+      "page": 7,
+      "eojeol": 7,
+      "language": "ko",
+      "ready": "ready",
+      "bookFont": 15.5,
+      "floor": 14,
+      "fonts": [
+        15.500024999999999
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 84.3,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        }
+      ],
+      "sheets": 10,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "single K2 17×7",
+      "layout": "single",
+      "ko": "K2",
+      "enLevel": "E2",
+      "spread": 17,
+      "page": 9,
+      "eojeol": 7,
+      "language": "ko",
+      "ready": "ready",
+      "bookFont": 14,
+      "floor": 14,
+      "fonts": [
+        14.000024999999999
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 84.3,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 108.2,
+          "scale": 0.95,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        }
+      ],
+      "sheets": 10,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "single K3 15×10",
+      "layout": "single",
+      "ko": "K3",
+      "enLevel": "E3",
+      "spread": 15,
+      "page": 7,
+      "eojeol": 10,
+      "language": "ko",
+      "ready": "ready",
+      "bookFont": 13,
+      "floor": 13,
+      "fonts": [
+        12.999975000000001
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 84.3,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 108.2,
+          "scale": 0.95,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 108.2,
+          "scale": 0.95,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 113.9,
+          "scale": 1,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        }
+      ],
+      "sheets": 10,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "single K2+E2 15 sentences",
+      "layout": "single",
+      "ko": "K2",
+      "enLevel": "E2",
+      "spread": 15,
+      "page": 7,
+      "eojeol": 7,
+      "en": [
+        4,
+        2,
+        9
+      ],
+      "language": "bilingual",
+      "ready": "ready",
+      "bookFont": 14,
+      "floor": 14,
+      "fonts": [
+        14.000024999999999
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 84.3,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 102.5,
+          "scale": 0.9,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 102.5,
+          "scale": 0.9,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 102.5,
+          "scale": 0.9,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        }
+      ],
+      "sheets": 10,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "single K2+E3",
+      "layout": "single",
+      "ko": "K2",
+      "enLevel": "E3",
+      "spread": 12,
+      "page": 6,
+      "eojeol": 7,
+      "en": [
+        8,
+        4,
+        12
+      ],
+      "language": "bilingual",
+      "ready": "ready",
+      "bookFont": 14,
+      "floor": 14,
+      "fonts": [
+        14.000024999999999
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 84.3,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 102.5,
+          "scale": 0.9,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 102.5,
+          "scale": 0.9,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 84.3,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 102.5,
+          "scale": 0.9,
+          "topDeltaMm": 0,
+          "foldGapMm": 0
+        }
+      ],
+      "sheets": 10,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "크게 읽기 K4 16×13",
+      "layout": "two",
+      "ko": "K4",
+      "enLevel": "E4",
+      "spread": 16,
+      "page": 8,
+      "eojeol": 13,
+      "language": "ko",
+      "ready": "ready",
+      "bookFont": 17,
+      "floor": 12,
+      "fonts": [
+        17.000025
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 118.7,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 158.1,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 158.1,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 158.1,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        }
+      ],
+      "sheets": 18,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    },
+    {
+      "name": "크게 읽기 K4+E4",
+      "layout": "two",
+      "ko": "K4",
+      "enLevel": "E4",
+      "spread": 16,
+      "page": 8,
+      "eojeol": 13,
+      "en": [
+        16,
+        8,
+        14
+      ],
+      "language": "bilingual",
+      "ready": "ready",
+      "bookFont": 13,
+      "floor": 12,
+      "fonts": [
+        12.999975000000001
+      ],
+      "overflow": 0,
+      "printEnabled": true,
+      "singleArtMm": 118.7,
+      "openings": [
+        {
+          "opening": 1,
+          "kind": "spread",
+          "folios": [
+            1,
+            2
+          ],
+          "artHeightMm": 158.1,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 2,
+          "kind": "pair",
+          "folios": [
+            3,
+            4
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 3,
+          "kind": "pair",
+          "folios": [
+            5,
+            6
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 4,
+          "kind": "spread",
+          "folios": [
+            7,
+            8
+          ],
+          "artHeightMm": 158.1,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 5,
+          "kind": "pair",
+          "folios": [
+            9,
+            10
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 6,
+          "kind": "pair",
+          "folios": [
+            11,
+            12
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 7,
+          "kind": "pair",
+          "folios": [
+            13,
+            14
+          ],
+          "artHeightMm": 118.7,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        },
+        {
+          "opening": 8,
+          "kind": "spread",
+          "folios": [
+            15,
+            16
+          ],
+          "artHeightMm": 158.1,
+          "scale": 1,
+          "topDeltaMm": null,
+          "foldGapMm": null
+        }
+      ],
+      "sheets": 18,
+      "phoneOverflowX": 0,
+      "pageErrors": []
+    }
+  ],
+  "problems": [],
+  "passed": true
+}

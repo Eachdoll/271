@@ -1,0 +1,1070 @@
+{
+ "base": "http://127.0.0.1:4971/",
+ "books": [
+  "seed-dinosaur",
+  "legacy-page-book-r12"
+ ],
+ "runs": [
+  {
+   "book": "seed-dinosaur",
+   "width": 390,
+   "height": 844,
+   "pageErrors": [],
+   "paidRequests": [],
+   "pages": {
+    "1": {
+     "htmlSha256": "3b21019341bf4b83806e371c21496157434b992d72729735ad08a21dbf0f3e99",
+     "layoutSha256": "86b9f8c5570a8d32dfaae431e1d5b12291c3e1adf04c8d283ca1af5e07d909d0",
+     "layout": {
+      "dialog": {
+       "x": 0,
+       "y": 0,
+       "w": 390,
+       "h": 844
+      },
+      "top": {
+       "x": 21,
+       "y": 37,
+       "w": 348,
+       "h": 44,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 21,
+       "y": 361,
+       "w": 348,
+       "h": 110,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 31,
+       "y": 364,
+       "w": 328,
+       "h": 65,
+       "font": "18px",
+       "display": "block"
+      },
+      "en": {
+       "x": 31,
+       "y": 439,
+       "w": 328,
+       "h": 29,
+       "font": "16px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 21,
+       "y": 486,
+       "w": 348,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 21,
+       "y": 550,
+       "w": 348,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 21,
+       "y": 627,
+       "w": 348,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "2": {
+     "htmlSha256": "278a1af22903f2d6689929f3bd78b0f1f4a14f6e53b323b56dd9aef6d9a973f5",
+     "layoutSha256": "c0853978c9090aa615b2cfa85fa486d9b330436f145dcc95da7868c00f1d04fe",
+     "layout": {
+      "dialog": {
+       "x": 0,
+       "y": 0,
+       "w": 390,
+       "h": 844
+      },
+      "top": {
+       "x": 21,
+       "y": 37,
+       "w": 348,
+       "h": 44,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 21,
+       "y": 361,
+       "w": 348,
+       "h": 77,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 31,
+       "y": 364,
+       "w": 328,
+       "h": 32,
+       "font": "18px",
+       "display": "block"
+      },
+      "en": {
+       "x": 31,
+       "y": 407,
+       "w": 328,
+       "h": 29,
+       "font": "16px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 21,
+       "y": 453,
+       "w": 348,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 21,
+       "y": 517,
+       "w": 348,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 21,
+       "y": 594,
+       "w": 348,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "12": {
+     "htmlSha256": "9b06955449547c58b293a2620d01fd7869f9ebc52a2a05d663188b5b64d871e5",
+     "layoutSha256": "86b9f8c5570a8d32dfaae431e1d5b12291c3e1adf04c8d283ca1af5e07d909d0",
+     "layout": {
+      "dialog": {
+       "x": 0,
+       "y": 0,
+       "w": 390,
+       "h": 844
+      },
+      "top": {
+       "x": 21,
+       "y": 37,
+       "w": 348,
+       "h": 44,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 21,
+       "y": 361,
+       "w": 348,
+       "h": 110,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 31,
+       "y": 364,
+       "w": 328,
+       "h": 65,
+       "font": "18px",
+       "display": "block"
+      },
+      "en": {
+       "x": 31,
+       "y": 439,
+       "w": 328,
+       "h": 29,
+       "font": "16px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 21,
+       "y": 486,
+       "w": 348,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 21,
+       "y": 550,
+       "w": 348,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 21,
+       "y": 627,
+       "w": 348,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    }
+   },
+   "pageCount": 12
+  },
+  {
+   "book": "seed-dinosaur",
+   "width": 1280,
+   "height": 800,
+   "pageErrors": [],
+   "paidRequests": [],
+   "pages": {
+    "1": {
+     "htmlSha256": "3b21019341bf4b83806e371c21496157434b992d72729735ad08a21dbf0f3e99",
+     "layoutSha256": "891d5d29c71103a1951b382a14265ffb1859bef89f0e90ea1848e2b27552202a",
+     "layout": {
+      "dialog": {
+       "x": 140,
+       "y": 74,
+       "w": 1000,
+       "h": 651
+      },
+      "top": {
+       "x": 171,
+       "y": 99,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 171,
+       "y": 183,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 171,
+       "y": 183,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 655,
+       "y": 183,
+       "w": 454,
+       "h": 160,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 665,
+       "y": 193,
+       "w": 434,
+       "h": 87,
+       "font": "23px",
+       "display": "block"
+      },
+      "en": {
+       "x": 665,
+       "y": 299,
+       "w": 434,
+       "h": 34,
+       "font": "19px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 171,
+       "y": 533,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 171,
+       "y": 597,
+       "w": 938,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 171,
+       "y": 681,
+       "w": 938,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "2": {
+     "htmlSha256": "278a1af22903f2d6689929f3bd78b0f1f4a14f6e53b323b56dd9aef6d9a973f5",
+     "layoutSha256": "8cf6217aaf97e710f64dd6f0a75bfa54b0c02f70f86d9f03175203a292587fc1",
+     "layout": {
+      "dialog": {
+       "x": 140,
+       "y": 74,
+       "w": 1000,
+       "h": 651
+      },
+      "top": {
+       "x": 171,
+       "y": 99,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 171,
+       "y": 183,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 171,
+       "y": 183,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 655,
+       "y": 183,
+       "w": 454,
+       "h": 116,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 665,
+       "y": 193,
+       "w": 434,
+       "h": 44,
+       "font": "23px",
+       "display": "block"
+      },
+      "en": {
+       "x": 665,
+       "y": 255,
+       "w": 434,
+       "h": 34,
+       "font": "19px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 171,
+       "y": 533,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 171,
+       "y": 597,
+       "w": 938,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 171,
+       "y": 681,
+       "w": 938,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "12": {
+     "htmlSha256": "9b06955449547c58b293a2620d01fd7869f9ebc52a2a05d663188b5b64d871e5",
+     "layoutSha256": "015c33f81e22fe2e7087ea6e9bdd34529282e3da7dc8922dd4676ac793f47679",
+     "layout": {
+      "dialog": {
+       "x": 140,
+       "y": 40,
+       "w": 1000,
+       "h": 720
+      },
+      "top": {
+       "x": 171,
+       "y": 65,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 655,
+       "y": 149,
+       "w": 454,
+       "h": 160,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 665,
+       "y": 159,
+       "w": 434,
+       "h": 87,
+       "font": "23px",
+       "display": "block"
+      },
+      "en": {
+       "x": 665,
+       "y": 264,
+       "w": 434,
+       "h": 34,
+       "font": "19px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 171,
+       "y": 499,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 171,
+       "y": 563,
+       "w": 938,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 171,
+       "y": 647,
+       "w": 938,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    }
+   },
+   "pageCount": 12
+  },
+  {
+   "book": "legacy-page-book-r12",
+   "width": 390,
+   "height": 844,
+   "pageErrors": [],
+   "paidRequests": [],
+   "pages": {
+    "1": {
+     "htmlSha256": "04f2fe2d2a50449de79b48069644d1dfb71c0ba79fa2ef9a9ff6fe9b22bcbe83",
+     "layoutSha256": "3d7210569b335497f07f9246d4a8312b1905d64a5b1c58c2ecd732bc0587bc64",
+     "layout": {
+      "dialog": {
+       "x": 0,
+       "y": 0,
+       "w": 390,
+       "h": 844
+      },
+      "top": {
+       "x": 21,
+       "y": 37,
+       "w": 348,
+       "h": 44,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 312,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 312,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 21,
+       "y": 421,
+       "w": 348,
+       "h": 110,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 31,
+       "y": 424,
+       "w": 328,
+       "h": 65,
+       "font": "18px",
+       "display": "block"
+      },
+      "en": {
+       "x": 31,
+       "y": 499,
+       "w": 328,
+       "h": 29,
+       "font": "16px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 21,
+       "y": 546,
+       "w": 348,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 21,
+       "y": 610,
+       "w": 348,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 21,
+       "y": 687,
+       "w": 348,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "2": {
+     "htmlSha256": "a3df9c0ae0b9ecf6a96c76735f517621ac4a7c571131330d7460e1ce9cbc9fd9",
+     "layoutSha256": "3d7210569b335497f07f9246d4a8312b1905d64a5b1c58c2ecd732bc0587bc64",
+     "layout": {
+      "dialog": {
+       "x": 0,
+       "y": 0,
+       "w": 390,
+       "h": 844
+      },
+      "top": {
+       "x": 21,
+       "y": 37,
+       "w": 348,
+       "h": 44,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 312,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 312,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 21,
+       "y": 421,
+       "w": 348,
+       "h": 110,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 31,
+       "y": 424,
+       "w": 328,
+       "h": 65,
+       "font": "18px",
+       "display": "block"
+      },
+      "en": {
+       "x": 31,
+       "y": 499,
+       "w": 328,
+       "h": 29,
+       "font": "16px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 21,
+       "y": 546,
+       "w": 348,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 21,
+       "y": 610,
+       "w": 348,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 21,
+       "y": 687,
+       "w": 348,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "16": {
+     "htmlSha256": "3b4c76ada28c50c684e59caf9f6a52995149b606d066e14b25319eee45406b86",
+     "layoutSha256": "86b9f8c5570a8d32dfaae431e1d5b12291c3e1adf04c8d283ca1af5e07d909d0",
+     "layout": {
+      "dialog": {
+       "x": 0,
+       "y": 0,
+       "w": 390,
+       "h": 844
+      },
+      "top": {
+       "x": 21,
+       "y": 37,
+       "w": 348,
+       "h": 44,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 21,
+       "y": 101,
+       "w": 348,
+       "h": 252,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 21,
+       "y": 361,
+       "w": 348,
+       "h": 110,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 31,
+       "y": 364,
+       "w": 328,
+       "h": 65,
+       "font": "18px",
+       "display": "block"
+      },
+      "en": {
+       "x": 31,
+       "y": 439,
+       "w": 328,
+       "h": 29,
+       "font": "16px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 21,
+       "y": 486,
+       "w": 348,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 21,
+       "y": 550,
+       "w": 348,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 21,
+       "y": 627,
+       "w": 348,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    }
+   },
+   "pageCount": 16
+  },
+  {
+   "book": "legacy-page-book-r12",
+   "width": 1280,
+   "height": 800,
+   "pageErrors": [],
+   "paidRequests": [],
+   "pages": {
+    "1": {
+     "htmlSha256": "04f2fe2d2a50449de79b48069644d1dfb71c0ba79fa2ef9a9ff6fe9b22bcbe83",
+     "layoutSha256": "ebc5e7af0db09d1b97a136181857d13f15e24732c88d17beb60f91553176e298",
+     "layout": {
+      "dialog": {
+       "x": 140,
+       "y": 40,
+       "w": 1000,
+       "h": 720
+      },
+      "top": {
+       "x": 171,
+       "y": 65,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 454,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 454,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 655,
+       "y": 149,
+       "w": 454,
+       "h": 160,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 665,
+       "y": 159,
+       "w": 434,
+       "h": 87,
+       "font": "23px",
+       "display": "block"
+      },
+      "en": {
+       "x": 665,
+       "y": 264,
+       "w": 434,
+       "h": 34,
+       "font": "19px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 171,
+       "y": 624,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 171,
+       "y": 688,
+       "w": 938,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 171,
+       "y": 772,
+       "w": 938,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "2": {
+     "htmlSha256": "a3df9c0ae0b9ecf6a96c76735f517621ac4a7c571131330d7460e1ce9cbc9fd9",
+     "layoutSha256": "ebc5e7af0db09d1b97a136181857d13f15e24732c88d17beb60f91553176e298",
+     "layout": {
+      "dialog": {
+       "x": 140,
+       "y": 40,
+       "w": 1000,
+       "h": 720
+      },
+      "top": {
+       "x": 171,
+       "y": 65,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 454,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 454,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 655,
+       "y": 149,
+       "w": 454,
+       "h": 160,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 665,
+       "y": 159,
+       "w": 434,
+       "h": 87,
+       "font": "23px",
+       "display": "block"
+      },
+      "en": {
+       "x": 665,
+       "y": 264,
+       "w": 434,
+       "h": 34,
+       "font": "19px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 171,
+       "y": 624,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 171,
+       "y": 688,
+       "w": 938,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 171,
+       "y": 772,
+       "w": 938,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    },
+    "16": {
+     "htmlSha256": "3b4c76ada28c50c684e59caf9f6a52995149b606d066e14b25319eee45406b86",
+     "layoutSha256": "015c33f81e22fe2e7087ea6e9bdd34529282e3da7dc8922dd4676ac793f47679",
+     "layout": {
+      "dialog": {
+       "x": 140,
+       "y": 40,
+       "w": 1000,
+       "h": 720
+      },
+      "top": {
+       "x": 171,
+       "y": 65,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "picture": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "art": {
+       "x": 171,
+       "y": 149,
+       "w": 454,
+       "h": 329,
+       "font": "15px",
+       "display": "block"
+      },
+      "body": {
+       "x": 655,
+       "y": 149,
+       "w": 454,
+       "h": 160,
+       "font": "15px",
+       "display": "block"
+      },
+      "ko": {
+       "x": 665,
+       "y": 159,
+       "w": 434,
+       "h": 87,
+       "font": "23px",
+       "display": "block"
+      },
+      "en": {
+       "x": 665,
+       "y": 264,
+       "w": 434,
+       "h": 34,
+       "font": "19px",
+       "display": "block"
+      },
+      "pager": {
+       "x": 171,
+       "y": 499,
+       "w": 938,
+       "h": 64,
+       "font": "15px",
+       "display": "flex"
+      },
+      "options": {
+       "x": 171,
+       "y": 563,
+       "w": 938,
+       "h": 69,
+       "font": "15px",
+       "display": "block"
+      },
+      "status": {
+       "x": 171,
+       "y": 647,
+       "w": 938,
+       "h": 19,
+       "font": "12px",
+       "display": "block"
+      },
+      "overflow": 0
+     }
+    }
+   },
+   "pageCount": 16
+  }
+ ],
+ "readerSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16"
+}

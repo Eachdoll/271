@@ -529,6 +529,24 @@ export function estimateTextCost({
     note: "토큰 단가 기반 추정 · 실제 청구액 아님",
   };
 }
+/**
+ * R12 openings: typical output tokens of a whole openings book from its frozen
+ * specs (target sentences per opening × middle eojeol × 4.8 for Korean; target
+ * sentences × middle words, within the words range, × 2.4 for English).
+ */
+function openingTextTokens(specs, openings) {
+  const middle = (range, fallback) =>
+    range && Number.isFinite(range.min) && Number.isFinite(range.max)
+      ? (range.min + range.max) / 2
+      : fallback;
+  const ko = specs.ko.units.opening,
+    en = specs.en.units.opening,
+    koTokens = ko.target * middle(specs.ko.wordsPerSentence, 6) * 4.8,
+    enWords = en.target * middle(specs.en.wordsPerSentence, 7),
+    enTokens =
+      (en.words ? Math.min(Math.max(enWords, en.words.min), en.words.max) : enWords) * 2.4;
+  return Math.ceil(openings * (koTokens + enTokens));
+}
 export function estimateStoryTextCost({
   engine = "openai",
   engineId = engine,
@@ -538,6 +556,8 @@ export function estimateStoryTextCost({
   settings = {},
   previousTextLength = 0,
   at = new Date(),
+  layout,
+  specs,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -547,12 +567,18 @@ export function estimateStoryTextCost({
     beam = quality && qualitySettings.useBeamSearch === true,
     childSimulator = quality && qualitySettings.childSimulator !== false;
   const pages = Math.max(1, Math.round(Number(pageCount) || 12)),
+    // R12 openings: one beat per opening and output sized from the frozen specs.
+    openings =
+      layout === "openings" && specs?.ko?.units && specs?.en?.units
+        ? Math.max(1, Math.round(pages / 2))
+        : 0,
     beats = Math.min(
       24,
       Math.max(
         1,
         Math.round(
           Number(beatCount) ||
+            openings ||
             Math.min(8, Math.max(6, Math.ceil(pages / 2) + 1)),
         ),
       ),
@@ -560,7 +586,9 @@ export function estimateStoryTextCost({
     enrichment = settings.storyEnrichment !== false && !quality;
   const input =
       6000 + Math.ceil(Math.max(0, Number(previousTextLength) || 0) / 2),
-    baseOutput = 2500 + pages * 150;
+    baseOutput = openings
+      ? Math.max(2500 + pages * 150, 2500 + openingTextTokens(specs, openings))
+      : 2500 + pages * 150;
   // New outlines include a causal contract and before/after state ledger. Rebuilding an
   // edited outline is conditional, while reviewing prose and final pages is mandatory.
   const outlineOutput = Math.max(baseOutput, beats * 1100),

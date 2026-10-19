@@ -7,6 +7,12 @@ import { currentBookPagination } from "./book-coherence.js";
 import { syncStoryDraft } from "./ui.js";
 import { buildStoryWords } from "../story-reading-context.js";
 import {
+  layoutOf,
+  textEstimateArgs,
+  unitImageSize,
+  unitKind,
+} from "../book-layout.js";
+import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
   estimateStoryTextCost,
@@ -557,31 +563,74 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
       // R13: a book prices its frozen model; a held FULL AUTO book without a
       // snapshot yet prices the model frozen on its job.
       job = book.generationSnapshot ? null : fullAutoJobForBook(state, book),
+      imageConfig = frozenImageConfig(
+        world.providerConfig?.[engine],
+        book.generationSnapshot ||
+          (job && job.imageEngine === engine
+            ? jobImageSnapshot(job)
+            : undefined),
+      ),
       image = estimateImageCost({
         engine,
         quality: "final",
         size: "1536x1024",
-        config: frozenImageConfig(
-          world.providerConfig?.[engine],
-          book.generationSnapshot ||
-            (job && job.imageEngine === engine
-              ? jobImageSnapshot(job)
-              : undefined),
-        ),
+        config: imageConfig,
       }),
       unit = image.costUsd,
       imagesNeeded =
         pagesNeedingImages(book).length + (book.cover?.imageAssetId ? 0 : 1),
       settings = textSettingsOf(state, book),
+      // R12 openings: the exact price, Σ unit(kind) over the missing entries + cover.
+      // R13: every size prices the same frozen model (imageConfig).
+      openings = layoutOf(book) === "openings",
+      imagesUsd = openings
+        ? pagesNeedingImages(book).reduce(
+            (sum, index) =>
+              sum +
+              estimateImageCost({
+                engine,
+                quality: "final",
+                size: unitImageSize(book, book.pages[index]),
+                config: imageConfig,
+              }).costUsd,
+            book.cover?.imageAssetId ? 0 : unit,
+          )
+        : imagesNeeded * unit,
       story = book.textDemo
         ? null
-        : estimateStoryTextCost({ settings, pageCount: book.pages.length }),
-      page = book.textDemo ? null : pageRewrite(settings);
+        : estimateStoryTextCost({
+            settings,
+            pageCount: book.pages.length,
+            // R12: an openings book is sized from its frozen specs and printed pages.
+            ...textEstimateArgs(book),
+          }),
+      page = book.textDemo
+        ? null
+        : pageRewrite(
+            settings,
+            // R12 openings: the kind of the page being rewritten (a spread by default).
+            openings
+              ? unitKind(book.pages[options.pageIndex]) === "page" &&
+                Number.isInteger(options.pageIndex)
+                ? "page"
+                : "spread"
+              : undefined,
+          );
     return {
       textUsd: story ? story.costUsd : 0,
       pageTextUsd: page ? page.costUsd : 0,
       imageUnitUsd: unit,
-      imagesUsd: imagesNeeded * unit,
+      ...(openings
+        ? {
+            spreadUnitUsd: estimateImageCost({
+              engine,
+              quality: "final",
+              size: unitImageSize(book, { kind: "spread" }),
+              config: imageConfig,
+            }).costUsd,
+          }
+        : {}),
+      imagesUsd,
       imagesNeeded,
       sheetsUpperUsd: book.generationSnapshot
         ? 0
@@ -614,6 +663,17 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
     imageUnitUsd: estimate.imageUnitUsd,
     imagesUsd: estimate.imagesUsd,
     imagesNeeded: estimate.pageCount + 1,
+    // R12 openings: before the text exists the pictures are a range, and the
+    // automatic text repairs have a typical count and a hard cap (2 × openings).
+    ...(estimate.imageCountMax
+      ? {
+          imagesNeeded: estimate.imageCountMax + 1,
+          imagesMinUsd: estimate.imagesMinUsd,
+          imageCountMin: estimate.imageCountMin,
+          imageCountMax: estimate.imageCountMax,
+          repairs: estimate.repairs,
+        }
+      : {}),
     sheetsUpperUsd: estimate.sheetsUpperUsd,
     imageEngine: estimate.imageEngine,
     pageCount: estimate.pageCount,
@@ -632,11 +692,17 @@ function pricingFlags({ text, pageText, image }) {
     ...(image ? { imagePricingUnknown: true } : {}),
   };
 }
-function pageRewrite(settings) {
+/**
+ * R12 openings: a rewrite is sized per entry kind (a spread outputs about 1.9k
+ * tokens, a single page about 0.9k); page books keep PAGE_REWRITE_TOKENS.
+ */
+const OPENING_REWRITE_OUTPUT = { spread: 1900, page: 900 };
+function pageRewrite(settings, kind) {
   const stage = resolveStoryStageSettings(settings, "pagination");
   return estimateTextCost({
     ...stage,
     ...PAGE_REWRITE_TOKENS,
+    ...(kind ? { output: OPENING_REWRITE_OUTPUT[kind] } : {}),
     model: stage.config.model,
   });
 }

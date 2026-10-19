@@ -52,6 +52,16 @@ import {
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
 import {
+  SPREAD_IMAGE_SIZE,
+  layoutFor,
+  layoutOf,
+  printedPagesOf,
+  textEstimateArgs,
+  unitLabel,
+  validateOpenings,
+} from "./book-layout.js";
+import { freezeReadingLevels } from "./reading-levels.js";
+import {
   applySeriesContinuity,
   bindSeriesBackgrounds,
 } from "./story-generation/continuity.js";
@@ -76,6 +86,17 @@ function checkStopBefore(value) {
 }
 export function autoJobs(state) {
   return (state.fullAutoJobs ||= {});
+}
+/**
+ * The picture total a FULL AUTO label shows: today's 'N쪽', or for an openings
+ * job 'n장' once its book exists and '펼침 O개 · P쪽' before (R12).
+ */
+export function jobPictureTotal(job, fallback = job?.input?.pageCount) {
+  if (job?.input?.layoutPolicy?.kind !== "openings") return `${fallback}쪽`;
+  const pages = job.book?.pages?.length;
+  return pages
+    ? `${pages}장`
+    : `펼침 ${Number(job.input.pageCount) / 2}개 · ${job.input.pageCount}쪽`;
 }
 /** The FULL AUTO job that built this book, if it still exists. Read-only lookup. */
 export function fullAutoJobForBook(state, book) {
@@ -170,10 +191,15 @@ export function createFullAutoJob(
     mode = isDemo ? "selection" : planMode;
   if (mode === "selection")
     selectionMaterialPlan(state, { ...wizard, characterIds: selected });
-  const prepared = inputFromWizard(state, {
-      ...wizard,
-      characterIds: selected,
-    }),
+  // R12: the layout is decided once, here, and frozen in job.input.
+  const prepared = inputFromWizard(
+      state,
+      {
+        ...wizard,
+        characterIds: selected,
+      },
+      { layout: layoutFor(wizard) },
+    ),
     world = getActiveWorld(state),
     previous = state.books.find(
       (b) => b.id === wizard.previousBookId,
@@ -232,6 +258,55 @@ export function createFullAutoJob(
  * sheetsUpperUsd (at most 10 new sheets). Called with two arguments the
  * original fields are unchanged.
  */
+/**
+ * R12 openings: the picture range of O openings before pagination. Entries are
+ * s spreads and 2(O − s) pages for s = 1..O (at least one spread); counts and
+ * prices exclude/include the cover (one 1536x1024 picture) as named.
+ */
+export function openingImageRange(openings, spreadUnit, pageUnit) {
+  const cost = (spreads) =>
+    spreads * spreadUnit + 2 * (openings - spreads) * pageUnit + pageUnit;
+  return {
+    minCount: openings,
+    maxCount: 2 * openings - 1,
+    minUsd: Math.min(cost(1), cost(openings)),
+    maxUsd: Math.max(cost(1), cost(openings)),
+  };
+}
+/**
+ * R12 openings: automatic text repairs before buying the text — typically
+ * about 0.75 × O to 1.6 × O combined entry rewrites (6~13 at 8 openings),
+ * never more than 2 × O; priced on the pagination engine (9k tokens in, a
+ * spread 1.9k / a page 0.9k out; the cap at the spread price). Free for demos.
+ */
+export function openingRepairEstimate(settings, openings, demo = false) {
+  const cap = 2 * openings,
+    typicalMin = Math.round(0.75 * openings),
+    typicalMax = Math.min(cap, Math.round(1.6 * openings)),
+    stage = resolveStoryStageSettings(settings, "pagination"),
+    priced = (output) =>
+      demo
+        ? { costUsd: 0 }
+        : estimateTextCost({
+            ...stage,
+            input: 9000,
+            output,
+            model: stage.config.model,
+          }),
+    spreadRow = priced(1900),
+    spread = spreadRow.costUsd,
+    mean = (spread + priced(900).costUsd) / 2;
+  return {
+    typicalMin,
+    typicalMax,
+    max: cap,
+    typicalMinUsd: typicalMin * mean,
+    typicalMaxUsd: typicalMax * mean,
+    maxUsd: cap * spread,
+    // R13: a pagination model outside the catalog has no price.
+    ...(spreadRow.pricingUnknown ? { pricingUnknown: true } : {}),
+  };
+}
 export function estimateFullAutoCost(
   state,
   wizard,
@@ -244,6 +319,8 @@ export function estimateFullAutoCost(
     text = estimateStoryTextCost({
       settings,
       pageCount: wizard.pageCount || 12,
+      // R12: an openings wizard is sized from its v4 specs ({} for page books).
+      ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
     plan = resolveStoryStageSettings(settings, "outline"),
     planning = estimateTextCost({
@@ -267,7 +344,47 @@ export function estimateFullAutoCost(
     pages = Number(wizard.pageCount) || 12,
     freePlan = demo === true || planMode === "selection",
     textUsd =
-      demo === true ? 0 : text.costUsd + (freePlan ? 0 : planning.costUsd);
+      demo === true ? 0 : text.costUsd + (freePlan ? 0 : planning.costUsd),
+    // R13: a model outside the catalog has no price; say so instead of guessing.
+    pricingFlags = {
+      ...(demo !== true &&
+      (text.pricingUnknown || (!freePlan && planning.pricingUnknown))
+        ? { textPricingUnknown: true }
+        : {}),
+      ...(image.pricingUnknown ? { imagePricingUnknown: true } : {}),
+    };
+  // R12 openings: before the text exists the picture count is a range, O..2O−1
+  // entries plus the cover (the mix guard rules out all pairs). R13: both sizes
+  // price the same (job-frozen) picture model.
+  if (layoutFor(wizard) === "openings") {
+    const spread = estimateImageCost({
+        engine,
+        quality: "final",
+        size: SPREAD_IMAGE_SIZE,
+        config,
+      }),
+      spreadUnit = spread.costUsd,
+      range = openingImageRange(pages / 2, spreadUnit, unit);
+    return {
+      baseUsd: textUsd + range.maxUsd,
+      withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
+      imageEngine: engine,
+      pageCount: pages,
+      requests: demo === true ? 0 : text.requestCount + (freePlan ? 0 : 1),
+      note: "참고 단가 추정 · 그림 수는 펼침면 수에 따라 달라요 · 새 시트 최대 10장과 유사 그림 1회 재생성 포함 상단 · 글 자동 수정·입력 참조 요금 별도",
+      textUsd,
+      imageUnitUsd: unit,
+      spreadUnitUsd: spreadUnit,
+      imagesUsd: range.maxUsd,
+      imagesMinUsd: range.minUsd,
+      imageCountMin: range.minCount,
+      imageCountMax: range.maxCount,
+      repairs: openingRepairEstimate(settings, pages / 2, demo === true),
+      sheetsUpperUsd: 10 * unit,
+      ...pricingFlags,
+      ...(spread.pricingUnknown ? { imagePricingUnknown: true } : {}),
+    };
+  }
   return {
     baseUsd: textUsd + (pages + 1) * unit,
     withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
@@ -279,12 +396,7 @@ export function estimateFullAutoCost(
     imageUnitUsd: unit,
     imagesUsd: (pages + 1) * unit,
     sheetsUpperUsd: 10 * unit,
-    // R13: a model outside the catalog has no price; say so instead of guessing.
-    ...(demo !== true &&
-    (text.pricingUnknown || (!freePlan && planning.pricingUnknown))
-      ? { textPricingUnknown: true }
-      : {}),
-    ...(image.pricingUnknown ? { imagePricingUnknown: true } : {}),
+    ...pricingFlags,
   };
 }
 export async function preflightFullAuto(state, job) {
@@ -587,8 +699,13 @@ export function fullAutoProgress(job) {
     if (job.book?.generationSnapshot) done += 1;
   }
   if (!job.stopBefore) {
-    const pages = job.book?.pages || [];
-    total += (pages.length || Number(job.input?.pageCount) || 12) + 1;
+    const pages = job.book?.pages || [],
+      // R12 openings: before the book exists, at most 2O − 1 entries.
+      planned =
+        job.input?.layoutPolicy?.kind === "openings"
+          ? Number(job.input.pageCount) - 1
+          : Number(job.input?.pageCount) || 12;
+    total += (pages.length || planned) + 1;
     done +=
       pages.filter(finalImage).length + (job.book?.cover?.imageAssetId ? 1 : 0);
   }
@@ -994,9 +1111,18 @@ export async function runFullAuto(
     if (!job.completed.input) {
       job.wizard.characterIds = clone(job.plan.characterIds);
       job.wizard.backgroundIds = clone(job.plan.backgroundIds);
-      const prepared = ops.prepare(state, job.wizard);
+      // The layout comes from the job's frozen input, never from the wizard or the
+      // current flag: a pre-R12 job stays a page book with its own page count.
+      const frozenLayout =
+          job.input?.layoutPolicy?.kind === "openings"
+            ? job.input.layoutPolicy
+            : null,
+        prepared = ops.prepare(state, job.wizard, {
+          layout: frozenLayout ? "openings" : "pages",
+        });
       job.input = {
         ...prepared.input,
+        ...(frozenLayout ? { layoutPolicy: clone(frozenLayout) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),
@@ -1115,7 +1241,14 @@ export async function runFullAuto(
         if (r.meta?.proseCoherence) job.proseCoherence = r.meta.proseCoherence;
       },
     );
-    if (job.pagination.pages.length !== job.input.pageCount)
+    // R12 openings: the opening structure and printed pages, not the entry count.
+    if (job.input?.layoutPolicy?.kind === "openings") {
+      const structure = validateOpenings(job.pagination, job.input, job.outline);
+      if (!structure.valid)
+        throw Error(
+          `목표 ${job.input.pageCount}쪽(펼침 ${job.input.pageCount / 2}개)과 만든 ${printedPagesOf(job.pagination.pages)}쪽의 펼침 구성이 달라요. 완료된 글을 검토해 주세요. ${structure.errors[0] || ""}`.trim(),
+        );
+    } else if (job.pagination.pages.length !== job.input.pageCount)
       throw Error(
         `목표 ${job.input.pageCount}쪽과 생성한 ${job.pagination.pages.length}쪽이 달라요. 완료된 글을 검토해 주세요.`,
       );
@@ -1167,7 +1300,9 @@ export async function runFullAuto(
       if (edited) delete job.completed["page:" + index];
       await step(
         "page:" + index,
-        `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
+        layoutOf(job.book) === "openings"
+          ? `그림 ${index + 1} / ${job.book.pages.length}장 · ${unitLabel(job.book, index)} 그림 만들기`
+          : `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
         () =>
           withBookTextUsage(job, async () => {
             const before = job.book.pages[index]?.imageAssetId;

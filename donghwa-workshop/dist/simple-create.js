@@ -74,6 +74,23 @@ import { currentBookPagination } from "./story-generation/book-coherence.js";
 import { syncStoryDraft } from "./story-generation/ui.js";
 import { isHomeBackground } from "./story-generation/pipeline.js";
 import { safeTopic } from "./engine.js";
+import {
+  CUES,
+  heldPageCount,
+  layoutFor,
+  layoutOf,
+  openingsMix,
+  openingsSummary,
+  pageCountOptions,
+  snapPageCount,
+  textEstimateArgs,
+  unitLabel,
+  unitSpec,
+} from "./book-layout.js";
+import { splitSentences } from "./story-quality/dist/util.js";
+/** R12: an entry's name in messages — '펼침 3 · 5쪽(왼쪽)' (openings) or 'n쪽'. */
+const pageName = (book, index) =>
+  layoutOf(book) === "openings" ? unitLabel(book, index) : `${index + 1}쪽`;
 
 /* ---------- per-device mode ---------- */
 export const UI_MODE_KEY = "donghwa-ui-mode";
@@ -486,6 +503,18 @@ function wizardFromJob(job, step) {
     allowNew: job.allowNew !== false,
   };
 }
+/**
+ * R12: the page count a wizard that starts a new story from an old job's wizard
+ * may hold (forkWizard, ③ '주제·엔진 바꾸기', restartStory), also the safety net of
+ * every unbound render: a pre-R12 K2 job's 8 or 24 pages become 12 or 16 when
+ * the new story is an openings book, instead of failing at ③. Page wizards keep
+ * their count, so with openings off nothing changes.
+ */
+function holdPageCount(w) {
+  const held = heldPageCount(w);
+  if (held !== w.pageCount) w.pageCount = held;
+  return w;
+}
 export const isSimpleBusy = () => !!(liveRun || pageOp || actionBusy);
 /** Paid image/text work in flight (a confirm dialog waiting for the parent is not work). */
 const workBusy = () => !!(liveRun || pageOp);
@@ -781,12 +810,7 @@ function renderFormatPanel(w) {
   )}${selectField(
     "pageCount",
     "쪽 수",
-    [
-      [8, "8쪽 · 짧은 이야기"],
-      [12, "12쪽 · 기본"],
-      [16, "16쪽"],
-      [24, "24쪽"],
-    ],
+    pageCountOptions(w),
     w.pageCount,
   )}${renderReadingSelectors(w)}</div>`;
 }
@@ -1067,12 +1091,25 @@ function renderGenerateStep(ctx, w) {
   const engineLine = `<div class="simple-engine-row"><div class="field"><label for="simple-text-engine">글 엔진</label><select id="simple-text-engine" ${locked ? "disabled" : ""}>${(textEngine === "demo" ? ["demo"] : TEXT_ENGINES).map((id) => `<option value="${id}" ${id === textEngine ? "selected" : ""}>${esc(TEXT_ENGINE_NAMES[id])}${id === "demo" ? "" : " · " + esc(keyLabel(id, settings.providers?.[id]))}</option>`).join("")}</select><small>${esc(model)}${locked ? " · 이 이야기에 고정됨" : ""}</small></div>${textModelField(job, settings, textEngine, locked)}${!locked && keyMissing(textEngine, textConfig) ? sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`) : ""}</div>${textEngine === "demo" ? "" : textOverrideNote(state)}<div class="simple-engine-row"><div class="simple-engine-name"><span class="small-label">그림 엔진</span><strong>${esc(imageMeta.name)}</strong><small>${esc(keyLabel(imageEngine, imageConfig))} · 그림은 다음 단계에서 써요</small></div>${imageModelField(job, world, imageEngine, locked)}${locked ? "" : sbtn("바꾸기", "image-settings", "plain", `data-engine="${esc(imageEngine)}"`)}${!locked && keyMissing(imageEngine, imageConfig) && imageMeta.requiresKey !== false ? sbtn("키 입력", "image-key", "outline", `data-engine="${esc(imageEngine)}"`) : ""}</div>`;
   const text = !!job && (!!job.book || HELD.includes(job.status));
   // R13: a model outside the catalog has no price: '요금 정보 없음' for its part,
-  // '일부 요금 미확인' on a total that leaves it out.
+  // '일부 요금 미확인' on a total that leaves it out. R12 openings: before the
+  // text exists the pictures are a range and the automatic repairs are listed.
   const textCost = job?.demo
       ? "무료"
       : textFee(cost.textUsd, cost.textPricingUnknown),
-    imagePriced = cost.imageUnitUsd > 0 || cost.imagePricingUnknown;
-  const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${textCost}</strong></li>`}<li><span>그림 ${cost.pageCount}쪽 + 표지</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : cost.imageUnitUsd > 0 ? "약 " + usd(cost.imagesUsd) : "무료"}</strong></li>${imagePriced ? `<li><span>새 시트가 필요하면</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : `최대 ${usd(cost.sheetsUpperUsd)}`}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
+    imagePriced = cost.imageUnitUsd > 0 || cost.imagePricingUnknown,
+    imagesCost = cost.imagePricingUnknown
+      ? "요금 정보 없음"
+      : cost.imageUnitUsd > 0
+        ? cost.imageCountMax
+          ? `약 ${usd(cost.imagesMinUsd)}~${usd(cost.imagesUsd)}`
+          : "약 " + usd(cost.imagesUsd)
+        : "무료",
+    repairsCost = cost.repairs?.pricingUnknown
+      ? "요금 정보 없음"
+      : cost.repairs
+        ? `약 ${usd(cost.repairs.typicalMinUsd)}~${usd(cost.repairs.typicalMaxUsd)} (최대 ${usd(cost.repairs.maxUsd)})`
+        : "";
+  const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${textCost}</strong></li>`}<li><span>${cost.imageCountMax ? `그림 ${cost.imageCountMin}~${cost.imageCountMax}장 + 표지 (펼침면 수에 따라)` : `그림 ${cost.pageCount}쪽 + 표지`}</span><strong>${imagesCost}</strong></li>${cost.repairs && !job?.demo ? `<li><span>검사 후 자동 수정: 보통 ${cost.repairs.typicalMin}~${cost.repairs.typicalMax}회 · 최대 ${cost.repairs.max}회</span><strong>${repairsCost}</strong></li>` : ""}${imagePriced ? `<li><span>새 시트가 필요하면</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : `최대 ${usd(cost.sheetsUpperUsd)}`}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
   const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요." aria-label="도움말: 부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
@@ -1133,7 +1170,7 @@ function pageBadge(book, index) {
 export function imageCountLabel(book) {
   const total = book?.pages?.length || 0,
     work = imageWork(book);
-  return `그림 ${total - work.missing.length} / ${total}${work.stale.length ? ` · 글 바뀐 쪽 ${work.stale.length}` : ""}`;
+  return `그림 ${total - work.missing.length} / ${total}${work.stale.length ? ` · ${layoutOf(book) === "openings" ? "글 바뀐 그림" : "글 바뀐 쪽"} ${work.stale.length}` : ""}`;
 }
 const INTERRUPTED_NOTE =
   '<div class="notice simple-interrupted">그림 만들기가 중간에 멈췄어요(창이 닫혔거나 새로 열었어요). ‘이어서 만들기’를 누르면 남은 그림만 만들어요. 이미 만든 그림은 다시 만들지 않아요.</div>';
@@ -1155,19 +1192,42 @@ function renderReviewStep(ctx, w) {
     image = hasImage(page),
     badge = pageBadge(book, index),
     reviewed = book.pages.filter((p) => p.reviewed).length,
-    illustration = ctx.illustration || (() => "");
+    illustration = ctx.illustration || (() => ""),
+    // R12 openings: entry names, the kind's art box, a sentence counter, a cue chip.
+    openings = layoutOf(book) === "openings",
+    kind = page?.kind === "spread" ? "spread" : "page";
   const art = image
     ? `${illustration(book, index)}${isPageTextEdited(page) ? '<p class="small-label simple-stale">글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요.</p>' : ""}`
-    : `<div class="image-missing simple-empty-art"><p>아직 그림이 없어요.</p>${sbtn("그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
+    : `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p>${sbtn("그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
+  const textOf = (lang) =>
+    page[lang] ?? page[lang === "ko" ? "textKo" : "textEn"] ?? "";
+  const rows = (lang) =>
+    openings
+      ? ` rows="${Math.min(14, Math.max(4, Math.ceil(textOf(lang).length / (lang === "ko" ? 22 : 40))))}"`
+      : "";
   const text = (lang, label) =>
-    `<div class="field"><label for="page-${lang}">${label}</label><textarea id="page-${lang}" lang="${lang}" ${editing ? "" : "readonly"}>${esc(page[lang] ?? page[lang === "ko" ? "textKo" : "textEn"] ?? "")}</textarea></div>`;
+    `<div class="field"><label for="page-${lang}">${label}</label><textarea id="page-${lang}" lang="${lang}"${rows(lang)} ${editing ? "" : "readonly"}>${esc(textOf(lang))}</textarea></div>`;
+  const band = openings
+      ? unitSpec(book.storyInput?.specs?.ko, kind)?.sentencesPerPageRange
+      : null,
+    sentences = band ? splitSentences(textOf("ko")).length : 0,
+    counter =
+      band && needsKo(book)
+        ? `<p class="small-label simple-sentence-count${sentences < band.min || sentences > band.max ? " simple-count-off" : ""}">문장 ${sentences} · 권장 ${band.min}~${band.max}</p>`
+        : "",
+    cue = openings
+      ? `<span class="simple-cue">${kind === "spread" ? "펼침면" : "낱쪽"}${page.cue && CUES[page.cue] ? ` · ${esc(CUES[page.cue])}` : ""}</span>`
+      : "",
+    pageLabel = openings ? unitLabel(book, index) : `${index + 1}쪽`,
+    pager = (extra = "") =>
+      `<div class="simple-pager${extra}"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no"${extra ? "" : ' aria-live="polite"'}>${index + 1} / ${total}${openings ? ` · ${esc(pageLabel)}` : ""}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div>`;
   const pageActions = editing
     ? `${sbtn("저장", "save-text", "green")}${sbtn("취소", "cancel-text")}`
     : `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("글 다시 만들기", "rewrite-text", "outline", off)}${image ? sbtn("그림 다시 만들기", "redraw-page", "outline", off) : ""}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`;
   const ownOp = pageOp && pageOp.bookId === book.id ? pageOp : null,
     running =
       live || ownOp
-        ? `${progressBlock(job, ownOp ? `${ownOp.index + 1}쪽 ${ownOp.kind === "rewrite" ? "글" : "그림"} 만드는 중` : "그림 만드는 중")}`
+        ? `${progressBlock(job, ownOp ? `${pageName(book, ownOp.index)} ${ownOp.kind === "rewrite" ? "글" : "그림"} 만드는 중` : "그림 만드는 중")}`
         : "",
     topAction = interrupted
       ? sbtn(
@@ -1177,12 +1237,12 @@ function renderReviewStep(ctx, w) {
           busy || editing ? "disabled" : "",
         )
       : sbtn(
-          "모든 쪽 그림 만들기",
+          openings ? "모든 그림 만들기" : "모든 쪽 그림 만들기",
           "draw-all",
           "green",
           busy || editing ? "disabled" : "",
         );
-  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span></div><div class="simple-review-actions">${topAction}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-pager"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no" aria-live="polite">${index + 1} / ${total}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div><div class="simple-page"><div class="simple-page-art">${art}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${index + 1}쪽 · 한글`) : ""}${needsEn(book) ? text("en", `English · ${index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div></section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
+  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span>${openings ? `<span class="small-label simple-openings-mix">${esc(openingsMix(book))}<br>AI가 펼침마다 펼침면/낱쪽을 골랐어요</span>` : ""}</div><div class="simple-review-actions">${topAction}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${pager()}<div class="simple-page${openings ? ` simple-page-${kind}` : ""}"><div class="simple-page-art">${art}${cue}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${pageLabel} · 한글`) : ""}${counter}${needsEn(book) ? text("en", `English · ${openings ? pageLabel : index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div>${openings ? pager(" simple-pager-bottom") : ""}</section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
 }
 function renderFinishStep(ctx, w) {
   const state = ctx.getState(),
@@ -1209,12 +1269,15 @@ function renderFinishStep(ctx, w) {
       : work.stale.length
         ? " · 글을 고친 쪽 그림은 저장할 때 그대로 둘지 물어요."
         : "";
-  return `<section class="panel simple-panel simple-finish"><div class="simple-finish-grid"><div class="simple-cover">${cover(book)}</div><div class="simple-finish-body"><h3>동화책으로 엮어요</h3><fieldset class="simple-titles"><legend>제목 고르기</legend>${titles.map((title, i) => `<label><input type="radio" name="simple-title" value="${esc(title)}" ${title === book.title ? "checked" : ""} id="simple-title-${i}"> ${esc(title)}</label>`).join("")}</fieldset><p class="small-label">${esc(imageCountLabel(book))} · 표지 ${coverReady ? "준비됨" : "아직 없음"}${saveNote}</p>${live ? progressBlock(job, "남은 그림 만드는 중") : ""}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-finish-actions"><button type="button" class="btn btn-outline" data-action="preview-draft-print" ${busy ? "disabled" : ""}>인쇄 미리보기</button>${interrupted ? sbtn("이어서 만들기", "resume-run", "green", busy ? "disabled" : "") : ""}${sbtn("책장에 저장", "save-book", "primary", busy || interrupted ? "disabled" : "")}</div></div></div></section><div class="wizard-actions">${live ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", busy ? "disabled" : "")}<span class="wizard-hint">저장하면 책 상세 화면으로 가요.</span>${interrupted ? sbtn("중지", "stop") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel simple-finish"><div class="simple-finish-grid"><div class="simple-cover">${cover(book)}</div><div class="simple-finish-body"><h3>동화책으로 엮어요</h3><fieldset class="simple-titles"><legend>제목 고르기</legend>${titles.map((title, i) => `<label><input type="radio" name="simple-title" value="${esc(title)}" ${title === book.title ? "checked" : ""} id="simple-title-${i}"> ${esc(title)}</label>`).join("")}</fieldset>${openingsSummary(book) ? `<p class="small-label simple-openings-summary">${esc(openingsSummary(book))} + 표지</p>` : ""}<p class="small-label">${esc(imageCountLabel(book))} · 표지 ${coverReady ? "준비됨" : "아직 없음"}${saveNote}</p>${live ? progressBlock(job, "남은 그림 만드는 중") : ""}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-finish-actions"><button type="button" class="btn btn-outline" data-action="preview-draft-print" ${busy ? "disabled" : ""}>인쇄 미리보기</button>${interrupted ? sbtn("이어서 만들기", "resume-run", "green", busy ? "disabled" : "") : ""}${sbtn("책장에 저장", "save-book", "primary", busy || interrupted ? "disabled" : "")}</div></div></div></section><div class="wizard-actions">${live ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", busy ? "disabled" : "")}<span class="wizard-hint">저장하면 책 상세 화면으로 가요.</span>${interrupted ? sbtn("중지", "stop") : "<span></span>"}</div>`;
 }
 /** The whole simple create page for the app's shared wizard/draft. */
 export function renderSimpleCreate(ctx = api) {
   const state = ctx.getState(),
     w = ensureSimpleWizard(state, ctx.getWizard());
+  // A story without a job may still be changed: its format select and summary
+  // never show a page count the wizard does not hold (R12 safety net).
+  if (!jobOfWizard(state, w)) holdPageCount(w);
   if (w.simpleStep >= 4 && !ctx.getDraft()) {
     const job = jobOfWizard(state, w);
     if (job?.book) ctx.setDraft?.(job.book);
@@ -1690,6 +1753,8 @@ export function coherenceCheckDue(state, book) {
     const row = estimateStoryTextCost({
       settings: book.textGenerationSettings || getTextGenerationSettings(state),
       pageCount: book.pages?.length || 12,
+      // R12: an openings book is sized from its frozen specs and printed pages.
+      ...textEstimateArgs(book),
     }).stages?.find((stage) => stage.stage === "coherence");
     cost = row?.requestCount > 0 ? row.costUsd / row.requestCount : 0;
     unknown = row?.pricingUnknown === true;
@@ -1753,8 +1818,8 @@ async function drawPage(
       ctx,
       prepare
         ? "그림 준비와 이 쪽 그림"
-        : `${index + 1}쪽 그림을 ${redraw ? "다시 " : ""}만들까요?`,
-      `${prepare ? `처음 그림이라 캐릭터·배경 시트를 먼저 준비해요(필요한 만큼, 최대 ${imageFee(estimate, estimate.sheetsUpperUsd)}).<br>` : ""}${index + 1}쪽 그림 ${imageFee(estimate, estimate.imageUnitUsd)} · 최종 품질${imageNote(state, book)}`,
+        : `${pageName(book, index)} 그림을 ${redraw ? "다시 " : ""}만들까요?`,
+      `${prepare ? `처음 그림이라 캐릭터·배경 시트를 먼저 준비해요(필요한 만큼, 최대 ${imageFee(estimate, estimate.sheetsUpperUsd)}).<br>` : ""}${pageName(book, index)} 그림 ${imageFee(estimate, book.pages[index]?.kind === "spread" && estimate.spreadUnitUsd ? estimate.spreadUnitUsd : estimate.imageUnitUsd)} · 최종 품질${imageNote(state, book)}`,
       prepare ? "준비하고 그림 만들기" : "그림 만들기",
     );
     if (!ok) return;
@@ -1794,7 +1859,7 @@ async function drawPage(
         save: ctx.save,
       }),
     );
-    ctx.toast(`${index + 1}쪽 그림을 저장했어요.`);
+    ctx.toast(`${pageName(book, index)} 그림을 저장했어요.`);
   } catch (error) {
     ctx.toast(
       error?.name === "AbortError"
@@ -1883,7 +1948,7 @@ async function saveText(ctx) {
   if (w) w.simpleEditing = false;
   ctx.render();
   if (!result.changed) return ctx.toast("바뀐 글이 없어요.");
-  ctx.toast(`${index + 1}쪽 글을 저장했어요.`);
+  ctx.toast(`${pageName(book, index)} 글을 저장했어요.`);
   if (result.imageStale) await askRedraw(ctx, book, index);
   void refreshReading(ctx);
 }
@@ -1896,10 +1961,11 @@ async function rewriteText(ctx) {
     return ctx.toast(
       "데모 이야기는 쪽 글을 새로 쓰지 않아요. ‘글 고치기’로 직접 고쳐 주세요.",
     );
-  const costs = estimateSimpleCosts(state, book);
+  // R12 openings: a rewrite is priced by the kind of this entry (spread or page).
+  const costs = estimateSimpleCosts(state, book, { pageIndex: index });
   const ok = await confirmModal(
     ctx,
-    `${index + 1}쪽 글을 다시 만들까요?`,
+    `${pageName(book, index)} 글을 다시 만들까요?`,
     `이 쪽 글만 새로 써요. 글 엔진 요금 ${textFee(costs.pageTextUsd, costs.pageTextPricingUnknown)} · 그림은 묻고 나서만 다시 만들어요.`,
     "글 다시 만들기",
   );
@@ -1931,7 +1997,7 @@ async function rewriteText(ctx) {
   }
   ctx.toast(
     result.changed
-      ? `${index + 1}쪽 글을 새로 썼어요.`
+      ? `${pageName(book, index)} 글을 새로 썼어요.`
       : "새 글이 지금 글과 같아요.",
   );
   if (result.imageStale) await askRedraw(ctx, book, index);
@@ -2170,10 +2236,16 @@ async function restartStory(ctx) {
     book = ctx.getDraft(),
     old = jobOfBook(state, book) || jobOfWizard(state, ctx.getWizard());
   if (!old) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
+  // The new story's page count (R12: an old 8/24-page K2 job → 12/16), priced as such.
+  const pages = heldPageCount(wizardFromJob(old, 3)),
+    priced =
+      pages === old.wizard?.pageCount
+        ? old.wizard || {}
+        : { ...old.wizard, pageCount: pages };
   const demo = !!old.demo,
     estimate = demo
       ? { textUsd: 0 }
-      : estimateFullAutoCost(state, old.wizard || {}, {
+      : estimateFullAutoCost(state, priced, {
           planMode: old.planMode || "auto",
         });
   const ok = await confirmModal(
@@ -2185,7 +2257,7 @@ async function restartStory(ctx) {
   if (!ok) return;
   if (runIsLive(old))
     await stopFullAutoJob(old.id).catch((error) => ctx.toast(error));
-  const next = wizardFromJob(old, 3);
+  const next = holdPageCount(wizardFromJob(old, 3));
   next.simpleJobId = null;
   // A new seed offset keeps cached responses from being replayed as the "new" story.
   next.qualitySeedOffset = Math.min(
@@ -2279,7 +2351,9 @@ function forkWizard(state, old, w) {
   // A new story for the browser's Back/Forward: the old story's entries are passed over.
   next.simpleStoryKey = newStoryKey();
   if (w.simpleForced) next.simpleForced = true;
-  return next;
+  // R12: the new story gets today's layout; a page job's 8 or 24 pages become the
+  // nearest openings count (12/16) instead of failing at ③. Pages keep their count.
+  return holdPageCount(next);
 }
 /**
  * 책장에 저장. Missing pictures (or an unfinished run) must be drawn first;
@@ -2650,6 +2724,8 @@ async function handle(ctx, action, el) {
       return ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
     }
     delete w.simpleJobId;
+    // R12: the start over is a new story, so it gets today's layout (see forkWizard).
+    holdPageCount(w);
     w.simpleStep = 1;
     if (lastProgress?.jobId === job.id) lastProgress = null;
     ctx.render();
@@ -2798,6 +2874,27 @@ function onClick(event) {
     }
   });
 }
+/**
+ * R12: a language or level change that moves the wizard between page and openings
+ * layouts snaps the page count (16 기본 until the parent picks one) and swaps the
+ * choices. Within one layout nothing changes, so with openings off this is a no-op.
+ */
+function snapFormatPageCount(w, before) {
+  const after = layoutFor(w);
+  if (before === after) return;
+  w.pageCount = snapPageCount(after, w.pageCount, {
+    touched: !!w.pageCountTouched,
+    defaultPages: api.getState()?.settings?.defaultPages,
+  });
+  const select = document.querySelector("#simple-format-panel #pageCount");
+  if (select)
+    select.innerHTML = pageCountOptions(w)
+      .map(
+        ([value, label]) =>
+          `<option value="${value}" ${String(value) === String(w.pageCount) ? "selected" : ""}>${label}</option>`,
+      )
+      .join("");
+}
 function onChange(event) {
   if (!api?.isSimpleView?.()) return;
   const target = event.target,
@@ -2818,8 +2915,11 @@ function onChange(event) {
   if (
     ["language", "pageCount", "koreanLevel", "englishLevel"].includes(target.id)
   ) {
+    const before = layoutFor(w);
     w[target.id] =
       target.id === "pageCount" ? Number(target.value) : target.value;
+    if (target.id === "pageCount") w.pageCountTouched = true;
+    else snapFormatPageCount(w, before);
     const summary = document.querySelector("#simple-format-summary");
     if (summary) summary.textContent = formatSummary(w);
     return;

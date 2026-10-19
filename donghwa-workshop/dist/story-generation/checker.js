@@ -1,6 +1,7 @@
 import { describeReadingViolation } from "../reading-messages.js";
 import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
 import { getLevelSpec } from "../reading-levels.js";
+import { unitKind, unitSpec } from "../book-layout.js";
 import {
   catchphraseRepeats,
   countCatchphrase,
@@ -386,7 +387,30 @@ export function checkStory(
         `${beat.index}번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.`,
       );
   const turn = beats.find((beat) => beat.type === "turn");
-  if (turn && pages.length) {
+  // R12 openings (frozen v4 specs): the turn window counts openings, not entries.
+  const openingNos = pages.map(({ page }) => page?.openingNo),
+    byOpening =
+      readingSpecs.ko?.layout === "openings" &&
+      pages.length > 0 &&
+      openingNos.every((value) => Number.isInteger(value) && value > 0);
+  if (turn && byOpening) {
+    const firstTurn = pages.find(
+      ({ page }) => indexOf(page?.beatIndex) === indexOf(turn.index),
+    );
+    const count = Math.max(...openingNos),
+      low = Math.max(1, Math.floor((count * 2) / 3)),
+      high = Math.min(count, low + 1);
+    if (
+      firstTurn &&
+      (firstTurn.page.openingNo < low || firstTurn.page.openingNo > high)
+    )
+      add(
+        "beat_mapping",
+        "pagination",
+        `반전은 펼침 ${low}~${high}에서 시작해야 해요.`,
+        firstTurn.pageNo,
+      );
+  } else if (turn && pages.length) {
     const firstTurn = pages.find(
       ({ page }) => indexOf(page?.beatIndex) === indexOf(turn.index),
     );
@@ -463,9 +487,10 @@ export function checkStory(
   for (const { page, pageNo } of pages)
     for (const language of ["ko", "en"]) {
       try {
+        // R12: an openings spec is judged per unit (spread or page).
         const result = analyzeEstimatedPage(
           textOf(page, language),
-          readingSpecs[language],
+          unitSpec(readingSpecs[language], unitKind(page)),
           { language, allowedNames, storyWords },
         );
         levelResults[language].push({ pageNo, result });

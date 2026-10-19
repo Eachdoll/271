@@ -412,7 +412,12 @@ export function createTextEngine({ engine, config = {} } = {}) {
       const controller = new AbortController(),
         abort = () => controller.abort();
       req.signal?.addEventListener("abort", abort, { once: true });
-      const timeoutMs = Number(config.timeoutMs) || info.timeoutMs;
+      // R12: an openings request may ask for a longer timeout (req.timeoutMs);
+      // without it (every pre-R12 request) the timeout is unchanged.
+      const timeoutMs = Math.max(
+        Number(config.timeoutMs) || info.timeoutMs,
+        Number(req.timeoutMs) || 0,
+      );
       let timer = null;
       const arm = () => {
         clearTimeout(timer);

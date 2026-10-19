@@ -24,6 +24,13 @@ export const TIMES_OF_DAY = Object.freeze([
   "evening",
   "night",
 ]);
+/** R12 openings: shots a spread may use (no close-up or over-the-shoulder across the fold). */
+export const SPREAD_SHOTS = Object.freeze([
+  "wide",
+  "medium",
+  "high_angle",
+  "from_behind",
+]);
 const SIDES = ["left", "center", "right"],
   TEXT_SIDES = ["left", "right", "top", "bottom"];
 const string = { type: "string", minLength: 1, maxLength: 1000 };
@@ -394,7 +401,11 @@ function locationFor(page, brief, background, previousLocations, warn) {
   return choice;
 }
 
-function planShots(pages, outline, warnings, preserveManual) {
+function planShots(pages, outline, warnings, preserveManual, openings = false) {
+  // R12 openings: a spread only takes a spread shot; page books are unchanged.
+  const spreadAt = (index) => openings && pages[index]?.kind === "spread",
+    allowedAt = (index, shot) =>
+      !spreadAt(index) || SPREAD_SHOTS.includes(shot);
   const n = pages.length,
     turnBeat = array(outline?.beats).find(
       (beat) => beat?.type === "turn",
@@ -419,12 +430,14 @@ function planShots(pages, outline, warnings, preserveManual) {
     fixed.set(0, "wide");
     fixed.set(n - 1, "wide");
   }
-  if (turnIndex > 0 && turnIndex < n - 1) fixed.set(turnIndex, "closeup");
+  if (turnIndex > 0 && turnIndex < n - 1)
+    fixed.set(turnIndex, spreadAt(turnIndex) ? "medium" : "closeup");
   pages.forEach((page, index) => {
     if (
       preserveManual &&
       page.stagingManual?.shot &&
-      SHOTS.includes(page.staging?.shot)
+      SHOTS.includes(page.staging?.shot) &&
+      allowedAt(index, page.staging.shot)
     )
       fixed.set(index, page.staging.shot);
   });
@@ -436,6 +449,7 @@ function planShots(pages, outline, warnings, preserveManual) {
     if (fixed.has(i)) continue;
     const acceptable = (shot) =>
       SHOTS.includes(shot) &&
+      allowedAt(i, shot) &&
       shot !== shots[i - 1] &&
       shot !== fixed.get(i + 1);
     if (!acceptable(shots[i]))
@@ -455,7 +469,7 @@ function planShots(pages, outline, warnings, preserveManual) {
   for (const quota of quotas) {
     while (count(quota.shots) < quota.minimum) {
       const indices = Array.from({ length: n }, (_, i) => i)
-        .filter((i) => !fixed.has(i) && i > 0 && i < n - 1)
+        .filter((i) => !fixed.has(i) && !spreadAt(i) && i > 0 && i < n - 1)
         .sort(
           (a, b) =>
             Math.abs(a - (n - 1) * quota.target) -
@@ -501,7 +515,7 @@ function planShots(pages, outline, warnings, preserveManual) {
       "shot_closing",
       "마지막 쪽은 넓은 구도가 권장돼요. 선택한 구도를 유지했어요.",
     );
-  if (turnIndex >= 0 && shots[turnIndex] !== "closeup")
+  if (turnIndex >= 0 && !spreadAt(turnIndex) && shots[turnIndex] !== "closeup")
     warn(
       turnIndex,
       "shot_turn",
@@ -530,7 +544,9 @@ export function stagePagination(pagination, context = {}) {
     ),
     bookId = context.bookId || result.bookId || result.id || "untitled-book",
     preserveManual = context.preserveManual !== false,
-    shots = planShots(pages, context.outline, warnings, preserveManual),
+    // R12 openings (frozen layout passed by the caller): spread and pair rules.
+    openings = context.openings === true,
+    shots = planShots(pages, context.outline, warnings, preserveManual, openings),
     usedVerbs = new Set(),
     locations = new Map();
   let previousTime = 0;
@@ -578,13 +594,26 @@ export function stagePagination(pagination, context = {}) {
       timeIndex = 3;
     }
     previousTime = timeIndex;
-    const timeOfDay = TIMES_OF_DAY[timeIndex],
+    const spread = openings && page.kind === "spread",
+      timeOfDay = TIMES_OF_DAY[timeIndex],
       characterSide =
-        manual.characterSide && SIDES.includes(original.characterSide)
+        manual.characterSide &&
+        SIDES.includes(original.characterSide) &&
+        !(spread && original.characterSide === "center")
           ? original.characterSide
-          : index % 2
-            ? "right"
-            : "left",
+          : openings
+            ? spread
+              ? // A spread alternates by opening and is never centred (the fold).
+                Number(page.openingNo) % 2 === 0
+                ? "right"
+                : "left"
+              : // A page of a pair defaults to its outer side.
+                page.side === "right"
+                ? "right"
+                : "left"
+            : index % 2
+              ? "right"
+              : "left",
       textSide =
         manual.textSide && TEXT_SIDES.includes(original.textSide)
           ? original.textSide
@@ -642,9 +671,15 @@ export function updatePageStaging(
   const result = clone(pagination || {}),
     page = result.pages?.[pageIndex];
   if (!page) return result;
-  const edits = {};
-  if (SHOTS.includes(patch.shot)) edits.shot = patch.shot;
-  if (SIDES.includes(patch.characterSide))
+  const edits = {},
+    // R12 openings: a spread refuses the centre side and non-spread shots.
+    spread = context.openings === true && page.kind === "spread";
+  if (SHOTS.includes(patch.shot) && (!spread || SPREAD_SHOTS.includes(patch.shot)))
+    edits.shot = patch.shot;
+  if (
+    SIDES.includes(patch.characterSide) &&
+    !(spread && patch.characterSide === "center")
+  )
     edits.characterSide = patch.characterSide;
   if (TEXT_SIDES.includes(patch.textSide)) edits.textSide = patch.textSide;
   page.staging = { ...(page.staging || {}), ...edits };

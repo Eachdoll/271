@@ -11,6 +11,39 @@ import {
   CHILD_RETELL_SYSTEM,
 } from "../story-quality/dist/prompts.js";
 import { coherenceFingerprint } from "./coherence.js";
+import { openingsOf, validateOpenings } from "../book-layout.js";
+import { isOpeningsInput } from "./opening-prose.js";
+
+/**
+ * R12 openings: the child simulator reads one item per opening (its entries'
+ * texts joined), numbered by the opening's LAST entry, so a 0-score opening
+ * only ever rewrites the ending of a spread or a right page. Page books (and an
+ * openings input whose entries lost their structure) are judged per page.
+ */
+function childView(pagination, input) {
+  const pages = list(pagination?.pages);
+  if (
+    !isOpeningsInput(input) ||
+    !pages.length ||
+    !pages.every((page) => Number.isInteger(page?.openingNo))
+  )
+    return pagination;
+  return {
+    pages: openingsOf(pages).map((opening) => {
+      const members = opening.indices.map((index) => pages[index]),
+        join = (key) =>
+          members
+            .map((page) => String(page?.[key] ?? ""))
+            .filter((value) => value.trim())
+            .join(" ");
+      return {
+        pageNo: members.at(-1).pageNo,
+        textKo: join("textKo"),
+        textEn: join("textEn"),
+      };
+    }),
+  };
+}
 
 const object = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -284,7 +317,14 @@ function normalizedGate(raw, pagination, outline) {
     rewriteTurnParagraph: retell.recommendTurnRewrite,
   };
 }
-function currentChildCheckpoint(report, outline, prose, pagination, language) {
+function currentChildCheckpoint(
+  report,
+  outline,
+  prose,
+  pagination,
+  language,
+  view = pagination,
+) {
   return (
     object(report) &&
     [1, 2].includes(report.version) &&
@@ -292,7 +332,7 @@ function currentChildCheckpoint(report, outline, prose, pagination, language) {
     report.language === language &&
     report.contentFingerprint ===
       coherenceFingerprint({ outline, prose, pagination, stage: "pages" }) &&
-    validateCuriosity(report.raw?.curiosity, pagination) &&
+    validateCuriosity(report.raw?.curiosity, view) &&
     validateRetell(report.raw?.retell, outline)
   );
 }
@@ -382,11 +422,16 @@ export async function inspectChildStory(
       nextProse,
       nextPages,
       language,
+      childView(nextPages, input),
     )
   ) {
     const childGate = {
       ...clone(options.childGateCheckpoint),
-      ...normalizedGate(options.childGateCheckpoint.raw, nextPages, outline),
+      ...normalizedGate(
+        options.childGateCheckpoint.raw,
+        childView(nextPages, input),
+        outline,
+      ),
       cached: true,
     };
     return {
@@ -505,7 +550,7 @@ export async function inspectChildStory(
             : null;
       if (!mode) throw Error("알 수 없는 아이 시뮬레이터 요청이에요.");
       const valid = mode === "curiosity" ? validateCuriosity : validateRetell,
-        target = mode === "curiosity" ? nextPages : outline;
+        target = mode === "curiosity" ? childView(nextPages, input) : outline;
       if (valid(raw[mode], target))
         return {
           json: clone(raw[mode]),
@@ -560,7 +605,7 @@ export async function inspectChildStory(
     try {
       await runChildGate(
         { cheap: wrapped },
-        list(nextPages.pages).map((page) => ({
+        list(childView(nextPages, input).pages).map((page) => ({
           pageNo: page.pageNo,
           text:
             page[language === "ko" ? "textKo" : "textEn"] ??
@@ -574,7 +619,7 @@ export async function inspectChildStory(
       await Promise.allSettled(pending);
       throw error;
     }
-    return { raw, ...normalizedGate(raw, nextPages, outline) };
+    return { raw, ...normalizedGate(raw, childView(nextPages, input), outline) };
   };
   try {
     let gate;
@@ -610,7 +655,7 @@ export async function inspectChildStory(
     if (journal.phase === "repair") {
       const initialRaw = journal.rounds["0"]?.raw;
       if (
-        !validateCuriosity(initialRaw?.curiosity, nextPages) ||
+        !validateCuriosity(initialRaw?.curiosity, childView(nextPages, input)) ||
         !validateRetell(initialRaw?.retell, outline)
       )
         throw Error(
@@ -618,7 +663,7 @@ export async function inspectChildStory(
         );
       gate = {
         raw: initialRaw,
-        ...normalizedGate(initialRaw, nextPages, outline),
+        ...normalizedGate(initialRaw, childView(nextPages, input), outline),
       };
       for (const target of list(journal.repairs.turns)) {
         if (target.status !== "pending") continue;
@@ -686,17 +731,28 @@ export async function inspectChildStory(
         journal.repairs.repagination.attempts =
           (journal.repairs.repagination.attempts || 0) + 1;
         await save({ childGatePending: true });
+        const openings = isOpeningsInput(input),
+          kinds = openings
+            ? openingsOf(list(nextPages.pages))
+                .map((opening) => (opening.kind === "spread" ? "S" : "P"))
+                .join(",")
+            : "";
         const result = await paid(() =>
           services.repaginate(outline, nextProse, input, {
             ...options,
             skipChildGate: true,
             skipCoherence: true,
             repair: false,
+            // R12 openings: keep the current spread/pair choice when the text allows.
+            ...(openings ? { openingKinds: kinds } : {}),
           }),
         );
+        // R12 openings: the same openings on the same beats, even if a kind changed.
         if (
-          !Array.isArray(result.data?.pages) ||
-          result.data.pages.length !== nextPages.pages.length
+          openings
+            ? !validateOpenings(result.data, input, outline).valid
+            : !Array.isArray(result.data?.pages) ||
+              result.data.pages.length !== nextPages.pages.length
         )
           throw Error("반전 문단을 바꾼 뒤 쪽을 다시 나누지 못했어요.");
         nextPages = clone(result.data);
@@ -773,7 +829,7 @@ export async function inspectChildStory(
     }
     gate = {
       raw: journal.raw,
-      ...normalizedGate(journal.raw, nextPages, outline),
+      ...normalizedGate(journal.raw, childView(nextPages, input), outline),
     };
     Object.assign(journal, gate, { checkedAt: timestamp(options.now) });
     await save();

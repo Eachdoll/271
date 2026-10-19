@@ -7,6 +7,39 @@ const valueText = (value) => {
     return `${value.min ?? "—"}~${value.max ?? "—"}`;
   return JSON.stringify(value);
 };
+const UNIT_NAMES = { spread: "펼침면", page: "낱쪽", opening: "펼침" };
+const eojeol = (value) =>
+  Number.isFinite(Number(value)) ? `${Number(Number(value).toFixed(1))}어절` : "—";
+/** R12 openings (Korean unit rules): the three blocking codes and the one combined note. */
+function describeUnitViolation(violation) {
+  const unit = UNIT_NAMES[violation.unit] || "쪽",
+    range = (value) => `${value?.min ?? "—"}~${value?.max ?? "—"}`;
+  switch (violation.code) {
+    case "unit-sentence-count":
+      return `한글 ${unit} 문장 ${violation.actual}개 (권장 ${range(violation.expected)} · ${range(violation.band)}개를 벗어나면 고쳐 써요)`;
+    case "unit-mean-length":
+      return `한글 ${unit} 문장 평균 ${eojeol(violation.actual)} (허용 ${range(violation.expected)}어절)`;
+    case "unit-long-sentences":
+      return `한글 ${unit} 긴 문장 ${violation.actual}개 · 가장 긴 문장 ${eojeol(violation.longest)} (${violation.limit}어절 넘는 문장은 ${violation.max}개까지, ${violation.hardLimit}어절 넘는 문장은 없어야 해요)`;
+    case "unit-length-note": {
+      const parts = [
+        ...(violation.offSentences
+          ? [`짧거나 긴 문장 ${violation.offSentences}개`]
+          : []),
+        ...(violation.mean != null ? [`평균 ${eojeol(violation.mean)}`] : []),
+        `문장 ${violation.sentenceCount}개(권장 ${range(violation.expected)})`,
+        ...(violation.characters
+          ? [
+              `${violation.characters.actual}자(권장 ${violation.characters.min}~${violation.characters.max}자)`,
+            ]
+          : []),
+      ];
+      return `한글 ${unit} 참고 · ${parts.join(" · ")}`;
+    }
+    default:
+      return "";
+  }
+}
 /** Plain text only; callers escape it when rendering HTML. */
 export function describeReadingViolation(violation) {
   if (typeof violation === "string") return violation;
@@ -16,6 +49,8 @@ export function describeReadingViolation(violation) {
     return violation.message;
   if (typeof violation.suggestion === "string" && violation.suggestion)
     return violation.suggestion;
+  const unitMessage = describeUnitViolation(violation);
+  if (unitMessage) return unitMessage;
   if (
     violation.code === "out-of-vocabulary" &&
     violation.severity === "warning"
