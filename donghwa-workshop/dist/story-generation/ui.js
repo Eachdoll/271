@@ -41,6 +41,12 @@ import {
   normalizeStoryQualitySettings,
 } from "../text-generation/settings-ui.js";
 import { freezeReadingLevels } from "../reading-levels.js";
+import {
+  OPENING_PAGE_COUNTS,
+  OPENING_KOREAN_LEVELS,
+  openingsLayoutPolicy,
+  layoutFor,
+} from "../book-layout.js";
 import { getActiveWorld } from "../image-generation/world.js";
 import {
   availableCharacterVariants,
@@ -678,7 +684,21 @@ function drawerBackgrounds(state, existing = []) {
   ];
 }
 
-export function inputFromWizard(state, wizard) {
+/**
+ * The frozen input of a new draft or job. The layout is decided by the CALLER and
+ * never re-derived here: only startStoryWorkflow and createFullAutoJob pass
+ * layoutFor(wizard), and the FULL AUTO input step passes the layout its job.input
+ * already holds. 'pages' (the default) is the pre-R12 input, byte for byte.
+ * 'openings' adds layoutPolicy, v4 openings reading rules, one beat per opening
+ * and the openings prose length policy; it accepts only 12 or 16 printed pages and
+ * throws before any paid call otherwise (it never snaps silently).
+ */
+export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
+  if (layout !== "pages" && layout !== "openings")
+    throw new Error("책 구성은 pages 또는 openings여야 해요.");
+  const openings = layout === "openings";
+  if (openings && !OPENING_PAGE_COUNTS.includes(Number(wizard.pageCount || 12)))
+    throw new Error("펼침 구성 책은 12쪽이나 16쪽으로 골라 주세요.");
   const choices = validateWardrobeSelections(state, wizard),
     previous = state.books.find((book) => book.id === wizard.previousBookId),
     world = clone(getActiveWorld(state));
@@ -701,7 +721,14 @@ export function inputFromWizard(state, wizard) {
         ]?.words || [],
     },
     state.settings,
+    ...(openings ? [{ layout: "openings" }] : []),
   );
+  if (
+    openings &&
+    (!OPENING_KOREAN_LEVELS.includes(readingLevels.koreanLevel) ||
+      wizard.language === "en")
+  )
+    throw new Error("펼침 구성 책은 한글이 있는 K2~K4 책에서만 만들 수 있어요.");
   const variants = (wizard.characterIds || [])
     .map((id) => state.characters.find((c) => c.id === id))
     .filter(Boolean)
@@ -760,10 +787,13 @@ export function inputFromWizard(state, wizard) {
         Math.max(0, Number(wizard.qualitySeedOffset) || 0),
       ),
       pageCount: Number(wizard.pageCount || 12),
-      outlineBeatCount: beatCountFor(
-        Number(wizard.pageCount || 12),
-        readingLevels.koreanLevel,
-      ),
+      ...(openings ? { layoutPolicy: openingsLayoutPolicy() } : {}),
+      outlineBeatCount: openings
+        ? Number(wizard.pageCount || 12) / 2
+        : beatCountFor(
+            Number(wizard.pageCount || 12),
+            readingLevels.koreanLevel,
+          ),
       endingType: wizard.ending === "open" ? "open" : "home_sleep",
       moral:
         wizard.value === "custom"
@@ -780,9 +810,10 @@ export function inputFromWizard(state, wizard) {
       previousStory: inherited.previousStory,
       prosePolicy: {
         version: 1,
+        // Openings drafts allow the app length-fit pass in both languages.
         condenseOverBudget: {
-          ko: readingLevels.koreanLevel === "K1",
-          en: readingLevels.englishLevel === "E0",
+          ko: openings || readingLevels.koreanLevel === "K1",
+          en: openings || readingLevels.englishLevel === "E0",
         },
       },
       specs: readingLevels.specs,
@@ -849,7 +880,9 @@ export function startStoryWorkflow(wizard) {
   cleanupStoryWorkflow();
   const state = api.getState();
   try {
-    const prepared = inputFromWizard(state, wizard),
+    const prepared = inputFromWizard(state, wizard, {
+        layout: layoutFor(wizard),
+      }),
       textSettings = clone(getTextGenerationSettings(state));
     session = {
       state,

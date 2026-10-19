@@ -47,6 +47,7 @@ import {
 import { estimateImageCost } from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
+import { layoutFor } from "./book-layout.js";
 import {
   applySeriesContinuity,
   bindSeriesBackgrounds,
@@ -166,10 +167,15 @@ export function createFullAutoJob(
     mode = isDemo ? "selection" : planMode;
   if (mode === "selection")
     selectionMaterialPlan(state, { ...wizard, characterIds: selected });
-  const prepared = inputFromWizard(state, {
-      ...wizard,
-      characterIds: selected,
-    }),
+  // R12: the layout is decided once, here, and frozen in job.input.
+  const prepared = inputFromWizard(
+      state,
+      {
+        ...wizard,
+        characterIds: selected,
+      },
+      { layout: layoutFor(wizard) },
+    ),
     world = getActiveWorld(state),
     previous = state.books.find(
       (b) => b.id === wizard.previousBookId,
@@ -915,9 +921,18 @@ export async function runFullAuto(
     if (!job.completed.input) {
       job.wizard.characterIds = clone(job.plan.characterIds);
       job.wizard.backgroundIds = clone(job.plan.backgroundIds);
-      const prepared = ops.prepare(state, job.wizard);
+      // The layout comes from the job's frozen input, never from the wizard or the
+      // current flag: a pre-R12 job stays a page book with its own page count.
+      const frozenLayout =
+          job.input?.layoutPolicy?.kind === "openings"
+            ? job.input.layoutPolicy
+            : null,
+        prepared = ops.prepare(state, job.wizard, {
+          layout: frozenLayout ? "openings" : "pages",
+        });
       job.input = {
         ...prepared.input,
+        ...(frozenLayout ? { layoutPolicy: clone(frozenLayout) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

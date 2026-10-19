@@ -94,6 +94,7 @@ const FILES = [
   "./photo-materials.js",
   "./companions.js",
   "./reading-levels.js",
+  "./book-layout.js",
   "./reading-checker.js",
   "./reading-ui.js",
   "./reading-messages.js",

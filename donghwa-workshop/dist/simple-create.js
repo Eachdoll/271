@@ -53,6 +53,7 @@ import { currentBookPagination } from "./story-generation/book-coherence.js";
 import { syncStoryDraft } from "./story-generation/ui.js";
 import { isHomeBackground } from "./story-generation/pipeline.js";
 import { safeTopic } from "./engine.js";
+import { layoutFor, pageCountOptions, snapPageCount } from "./book-layout.js";
 
 /* ---------- per-device mode ---------- */
 export const UI_MODE_KEY = "donghwa-ui-mode";
@@ -750,12 +751,7 @@ function renderFormatPanel(w) {
   )}${selectField(
     "pageCount",
     "쪽 수",
-    [
-      [8, "8쪽 · 짧은 이야기"],
-      [12, "12쪽 · 기본"],
-      [16, "16쪽"],
-      [24, "24쪽"],
-    ],
+    pageCountOptions(w),
     w.pageCount,
   )}${renderReadingSelectors(w)}</div>`;
 }
@@ -2174,6 +2170,11 @@ function forkWizard(state, old, w) {
   // A new story for the browser's Back/Forward: the old story's entries are passed over.
   next.simpleStoryKey = newStoryKey();
   if (w.simpleForced) next.simpleForced = true;
+  // R12: the new story gets today's layout; a page job's 8 or 24 pages become the
+  // nearest openings count (12/16) instead of failing at ③. Pages keep their count.
+  next.pageCount = snapPageCount(layoutFor(next), next.pageCount, {
+    touched: true,
+  });
   return next;
 }
 /**
@@ -2692,6 +2693,27 @@ function onClick(event) {
     }
   });
 }
+/**
+ * R12: a language or level change that moves the wizard between page and openings
+ * layouts snaps the page count (16 기본 until the parent picks one) and swaps the
+ * choices. Within one layout nothing changes, so with openings off this is a no-op.
+ */
+function snapFormatPageCount(w, before) {
+  const after = layoutFor(w);
+  if (before === after) return;
+  w.pageCount = snapPageCount(after, w.pageCount, {
+    touched: !!w.pageCountTouched,
+    defaultPages: api.getState()?.settings?.defaultPages,
+  });
+  const select = document.querySelector("#simple-format-panel #pageCount");
+  if (select)
+    select.innerHTML = pageCountOptions(w)
+      .map(
+        ([value, label]) =>
+          `<option value="${value}" ${String(value) === String(w.pageCount) ? "selected" : ""}>${label}</option>`,
+      )
+      .join("");
+}
 function onChange(event) {
   if (!api?.isSimpleView?.()) return;
   const target = event.target,
@@ -2712,8 +2734,11 @@ function onChange(event) {
   if (
     ["language", "pageCount", "koreanLevel", "englishLevel"].includes(target.id)
   ) {
+    const before = layoutFor(w);
     w[target.id] =
       target.id === "pageCount" ? Number(target.value) : target.value;
+    if (target.id === "pageCount") w.pageCountTouched = true;
+    else snapFormatPageCount(w, before);
     const summary = document.querySelector("#simple-format-summary");
     if (summary) summary.textContent = formatSummary(w);
     return;

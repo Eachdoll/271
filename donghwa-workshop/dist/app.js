@@ -180,6 +180,13 @@ import {
   fullAutoJobOfDraft,
 } from "./story-generation/ui.js";
 import { toLegacyPages, summarizeStory } from "./story-generation/pipeline.js";
+import {
+  layoutFor,
+  layoutOf,
+  printedPagesOf,
+  pageCountOptions,
+  snapPageCount,
+} from "./book-layout.js";
 import { checkStory } from "./story-generation/checker.js";
 import { checkRichness } from "./story-generation/richness.js";
 import {
@@ -1301,7 +1308,7 @@ function rememberSimpleReturn() {
     };
 }
 function defaultWizard() {
-  return {
+  const w = {
     step: 1,
     characterIds: [activeCharacters(state)[0]?.id].filter(Boolean),
     backgroundIds: [],
@@ -1319,6 +1326,11 @@ function defaultWizard() {
     previousBookId: null,
     outline: null,
   };
+  // R12: an openings wizard starts at 16 (기본); page books keep the settings default.
+  w.pageCount = snapPageCount(layoutFor(w), w.pageCount, {
+    defaultPages: state.settings.defaultPages,
+  });
+  return w;
 }
 function pageContent() {
   if (cloudPrivacyLocked)
@@ -1504,6 +1516,17 @@ function startStory(previous = null) {
     previousBookId: previous?.id || null,
     outline: null,
   };
+  // R12: the next book keeps the previous book's printed pages, snapped to what its
+  // own layout offers (an openings book of 13 entries is 16 printed pages).
+  const previousPages =
+    previous && layoutOf(previous) === "openings"
+      ? printedPagesOf(previous)
+      : previous?.pageCount;
+  wizard.pageCount = snapPageCount(
+    layoutFor(wizard),
+    previousPages || state.settings.defaultPages,
+    { touched: !!previousPages, defaultPages: state.settings.defaultPages },
+  );
   view = "create";
   render();
   window.scrollTo(0, 0);
@@ -1556,12 +1579,7 @@ function createPage() {
     )}${selectField(
       "pageCount",
       "이야기 길이",
-      [
-        [8, "8쪽 · 짧은 이야기"],
-        [12, "12쪽 · 기본"],
-        [16, "16쪽"],
-        [24, "24쪽"],
-      ],
+      pageCountOptions(w),
       w.pageCount,
     )}${renderReadingSelectors(w)}${selectField(
       "value",
@@ -3619,7 +3637,44 @@ document.addEventListener("input", (e) => {
     updateBookResults();
   }
 });
+/**
+ * R12 page count of the pro wizard's step 3: a parent's pick is kept (touched);
+ * a language or level change that moves the wizard between page and openings
+ * layouts snaps the count and swaps the choices (12/16 for openings). Within one
+ * layout nothing changes, so with openings off this never runs.
+ */
+function syncWizardPageCount(target) {
+  if (target.id === "pageCount") {
+    wizard.pageCountTouched = true;
+    return;
+  }
+  const before = layoutFor(wizard);
+  syncWizard();
+  const after = layoutFor(wizard);
+  if (before === after) return;
+  wizard.pageCount = snapPageCount(after, wizard.pageCount, {
+    touched: !!wizard.pageCountTouched,
+    defaultPages: state.settings.defaultPages,
+  });
+  const select = document.getElementById("pageCount");
+  if (select)
+    select.innerHTML = pageCountOptions(wizard)
+      .map(
+        ([v, t]) =>
+          `<option value="${v}" ${String(v) === String(wizard.pageCount) ? "selected" : ""}>${t}</option>`,
+      )
+      .join("");
+}
 document.addEventListener("change", async (e) => {
+  if (
+    view === "create" &&
+    wizard?.step === 3 &&
+    !simpleCreateActive() &&
+    ["pageCount", "language", "koreanLevel", "englishLevel"].includes(
+      e.target.id,
+    )
+  )
+    syncWizardPageCount(e.target);
   if (
     view === "create" &&
     wizard?.step === 3 &&

@@ -1,5 +1,10 @@
 import { STAGING_SCHEMA } from "./staging.js";
 import { PLOT_CONTRACT_SCHEMA, inspectPlotContract } from "./plot-contract.js";
+import {
+  OPENING_PAGE_COUNTS,
+  OPENING_DEFAULT_PAGES,
+  validateOpenings,
+} from "../book-layout.js";
 /* Story stage schemas and structural validation. Content checks live in checker.js. */
 export const STORY_STAGES = Object.freeze([
   "outline_draft",
@@ -12,12 +17,18 @@ export const STORY_STAGES = Object.freeze([
 ]);
 export const PAGE_COUNTS = Object.freeze([8, 12, 16, 24]);
 export const BEAT_COUNTS = Object.freeze({ 8: 6, 12: 7, 16: 8, 24: 8 });
+/** R12 openings books (input.layoutPolicy): 12 or 16 printed pages, one beat per opening. */
+export { OPENING_PAGE_COUNTS, OPENING_DEFAULT_PAGES };
 export function beatCountFor(pageCount, koreanLevel) {
   const count = BEAT_COUNTS[pageCount];
   return koreanLevel === "K1" ? Math.min(count || 7, 7) : count;
 }
 /** Old frozen specs retain their original count, unless an explicit frozen count exists. */
 export function frozenBeatCount(input = {}) {
+  if (input.layoutPolicy?.kind === "openings") {
+    const pageCount = Number(input.pageCount);
+    return OPENING_PAGE_COUNTS.includes(pageCount) ? pageCount / 2 : null;
+  }
   if (!BEAT_COUNTS[input.pageCount]) return null;
   if ([6, 7, 8].includes(input.outlineBeatCount)) return input.outlineBeatCount;
   const spec = input.specs?.ko || input.readingLevelSnapshot?.specs?.ko;
@@ -565,6 +576,21 @@ export function validatePagination(
     !text(value.cover.sceneAction, 500)
   )
     errors.push("표지 제목과 장면 설명을 확인해 주세요.");
+  // R12 openings: O..2O entries (a spread is one entry, two printed pages) whose
+  // opening structure and printed-page total validateOpenings checks.
+  if (input.layoutPolicy?.kind === "openings") {
+    if (Array.isArray(value.pages))
+      value.pages.forEach((p, i) =>
+        errors.push(
+          ...validateStoryPage(p, input, outline).errors.map(
+            (e) => `${i + 1}번째 항목: ${e}`,
+          ),
+        ),
+      );
+    errors.push(...validateOpenings(value, input, outline).errors);
+    checkSafety(value, errors);
+    return { valid: errors.length === 0, errors };
+  }
   if (
     !Array.isArray(value.pages) ||
     value.pages.length < 8 ||

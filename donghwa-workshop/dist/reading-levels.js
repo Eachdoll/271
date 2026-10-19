@@ -250,7 +250,134 @@ export function getLevelSpec(id) {
   if (!LEVEL_SPECS[id]) throw new Error("알 수 없는 읽기 단계예요.");
   return clone(LEVEL_SPECS[id]);
 }
-export function freezeReadingLevels(options = {}, defaults = {}) {
+/**
+ * R12 openings (펼침 구성) rows, frozen per new openings draft as reading rules v4.
+ * Separate from LEVEL_SEED and levels.json, which keep today's page books (v3).
+ * Sentences per unit: a single page, a spread (both facing pages, one picture) and
+ * an opening (one approved beat: a spread, or a left + right page pair). English
+ * keeps today's amount per printed page (a spread is twice the page range); K3
+ * characters are advisory only. richLevelOf is today's RICH_LEVEL_OF
+ * (story-quality richThenSimplify.js), frozen so the rich draft row never follows
+ * a later seed change.
+ */
+export const OPENING_SEED = deepFreeze({
+  version: 4,
+  ko: {
+    K2: {
+      units: {
+        page: { min: 5, max: 7, target: 6 },
+        spread: { min: 10, max: 15, target: 12 },
+        opening: { min: 10, max: 15, target: 12 },
+      },
+      newWordsPerBook: 10,
+    },
+    K3: {
+      units: {
+        page: { min: 5, max: 7, target: 6, chars: { min: 140, max: 350, advisory: true } },
+        spread: { min: 10, max: 15, target: 12, chars: { min: 280, max: 700, advisory: true } },
+        opening: { min: 10, max: 15, target: 12, chars: { min: 280, max: 700, advisory: true } },
+      },
+    },
+    K4: {
+      units: {
+        page: { min: 5, max: 8, target: 6 },
+        spread: { min: 10, max: 16, target: 13 },
+        opening: { min: 10, max: 16, target: 13 },
+      },
+    },
+  },
+  en: {
+    E0: {
+      units: {
+        page: { min: 1, max: 2, target: 1 },
+        spread: { min: 2, max: 4, target: 2 },
+        opening: { min: 2, max: 4, target: 2 },
+      },
+    },
+    E1: {
+      units: {
+        page: { min: 1, max: 1, target: 1 },
+        spread: { min: 2, max: 2, target: 2 },
+        opening: { min: 2, max: 2, target: 2 },
+      },
+    },
+    E2: {
+      units: {
+        page: { min: 1, max: 2, target: 2 },
+        spread: { min: 2, max: 4, target: 4 },
+        opening: { min: 2, max: 4, target: 4 },
+      },
+    },
+    E3: {
+      units: {
+        page: { min: 2, max: 4, target: 4, words: { min: 40, max: 80 } },
+        spread: { min: 4, max: 8, target: 8, words: { min: 80, max: 160 } },
+        opening: { min: 4, max: 8, target: 8, words: { min: 80, max: 160 } },
+      },
+    },
+    E4: {
+      units: {
+        page: { min: 4, max: 8, target: 8, words: { min: 80, max: 150 } },
+        spread: { min: 8, max: 16, target: 16, words: { min: 160, max: 300 } },
+        opening: { min: 8, max: 16, target: 16, words: { min: 160, max: 300 } },
+      },
+    },
+  },
+  // Korean only: a count outside [min − 1, max + 2] or a mean outside
+  // [min − 0.5, max + 0.5] eojeol blocks; more than ceil(n/3) long sentences or
+  // one over max + 3 blocks; anything milder is one combined note per unit.
+  unitTolerance: {
+    countBelow: 1,
+    countAbove: 2,
+    meanSlack: 0.5,
+    longShareCeil: 1 / 3,
+    longOver: 3,
+  },
+  richLevelOf: {
+    K2: "K3",
+    K3: "K4",
+    K4: "K4",
+    E0: "E2",
+    E1: "E2",
+    E2: "E3",
+    E3: "E4",
+    E4: "E4",
+  },
+});
+/** A v4 openings spec: today's spec with single-page ranges, units and frozen rows. */
+function openingLevelSpec(spec) {
+  const lang = spec.id.startsWith("K") ? "ko" : "en",
+    row = OPENING_SEED[lang][spec.id];
+  if (!row)
+    throw new Error("펼침 구성 책은 한글 K2~K4 단계에서만 만들 수 있어요.");
+  const richId = OPENING_SEED.richLevelOf[spec.id],
+    out = {
+      ...spec,
+      ruleVersion: OPENING_SEED.version,
+      layout: "openings",
+      // An older shell reading this spec still builds a coherent single-page book.
+      sentencesPerPage: row.units.page.target,
+      sentencesPerPageRange: {
+        min: row.units.page.min,
+        max: row.units.page.max,
+      },
+      units: clone(row.units),
+      richLevel: { id: richId, ...clone(LEVEL_SEED[lang][richId]) },
+    };
+  if (lang === "ko") {
+    // K3 characters per unit are advisory (units.*.chars), never a blocking page range.
+    delete out.charsPerPage;
+    out.unitTolerance = clone(OPENING_SEED.unitTolerance);
+  }
+  if (row.newWordsPerBook != null) out.newWordsPerBook = row.newWordsPerBook;
+  return out;
+}
+/**
+ * The reading rules frozen into a new draft. Called with two arguments (every
+ * page book, K1 and English-only) it returns the v3 snapshot exactly as before
+ * R12; { layout: "openings" } returns the v4 openings snapshot.
+ */
+export function freezeReadingLevels(options = {}, defaults = {}, { layout } = {}) {
   const levels = normalizeReadingLevels(options, defaults);
   const ko = getLevelSpec(levels.koreanLevel),
     en = getLevelSpec(levels.englishLevel);
@@ -266,6 +393,13 @@ export function freezeReadingLevels(options = {}, defaults = {}) {
     en.topicVocabulary = unique(options.topicVocabulary);
     en.vocabList = unique([...en.vocabList, ...en.topicVocabulary]);
   }
+  if (layout === "openings")
+    return {
+      version: OPENING_SEED.version,
+      layout: "openings",
+      ...levels,
+      specs: { ko: openingLevelSpec(ko), en: openingLevelSpec(en) },
+    };
   return { version: READING_LEVEL_VERSION, ...levels, specs: { ko, en } };
 }
 

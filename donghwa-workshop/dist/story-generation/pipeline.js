@@ -59,6 +59,11 @@ import {
   resolveStoryWorld,
 } from "./quality-adapter.js";
 import { inspectChildStory } from "./quality-gates.js";
+import {
+  OPENING_PAGE_COUNTS,
+  isOpeningsSpec,
+  normalizeLayoutPolicy,
+} from "../book-layout.js";
 export { buildBeatPagePlan } from "./pagination.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -264,8 +269,27 @@ function modelVisibleInput(input) {
 }
 export function normalizeStoryInput(input = {}) {
   const pageCount = Number(input.pageCount || 12);
-  if (!PAGE_COUNTS.includes(pageCount))
+  // R12: only a frozen openings policy (inputFromWizard with layout 'openings')
+  // makes an openings input; without it every rule below is the pre-R12 one.
+  const layoutPolicy =
+    input.layoutPolicy?.kind === "openings"
+      ? normalizeLayoutPolicy(input.layoutPolicy)
+      : null;
+  if (layoutPolicy) {
+    if (!OPENING_PAGE_COUNTS.includes(pageCount))
+      throw new Error("펼침 구성 책은 12쪽이나 16쪽으로 골라 주세요.");
+    if (
+      !isOpeningsSpec(input.specs?.ko) ||
+      !isOpeningsSpec(input.specs?.en) ||
+      input.language === "en"
+    )
+      throw new Error(
+        "펼침 구성 책에는 펼침 구성 읽기 규칙(K2~K4 한글)이 필요해요.",
+      );
+  } else if (!PAGE_COUNTS.includes(pageCount))
     throw new Error("이야기는 8·12·16·24쪽 중에서 골라 주세요.");
+  else if (isOpeningsSpec(input.specs?.ko) || isOpeningsSpec(input.specs?.en))
+    throw new Error("펼침 구성 읽기 규칙은 펼침 구성 책에서만 쓸 수 있어요.");
   if (
     !Array.isArray(input.characters) ||
     !input.characters.length ||
@@ -299,6 +323,7 @@ export function normalizeStoryInput(input = {}) {
     worldName: String(input.worldName || input.world?.name || "").slice(0, 200),
     topic: String(input.topic || "친구와 작은 발견").slice(0, 1000),
     pageCount,
+    ...(layoutPolicy ? { layoutPolicy } : {}),
     outlineBeatCount: frozenBeatCount({ ...input, pageCount }),
     storyWorld: cleanReference(
       input.storyWorld || input.storyWorldSnapshot || null,
