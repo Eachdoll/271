@@ -1,0 +1,568 @@
+{
+  "generatedBy": "scripts/r12-openings-recheck.mjs",
+  "paidCalls": 0,
+  "sources": [
+    {
+      "file": "sonnet55-r7-prose.jsonl",
+      "sha256": "a1caa371fc2417e51c0e7071c9a3dd5259959bacd0e0066438183f608a0934d6",
+      "rows": 20
+    },
+    {
+      "file": "sonnet55-r7-prose-condense.jsonl",
+      "sha256": "0a6b365ec0dd2c89d9e49720a9ab64095e743a47a49ef36e0c7c8a621ade5272",
+      "rows": 20
+    },
+    {
+      "file": "sonnet55-r7-prose-sonnetsimp.jsonl",
+      "sha256": "ae0c4f0eb7cb442df17cb7d5f9cf4a5cdc525396a8a75dfa63cabd2c4c025f13",
+      "rows": 20
+    }
+  ],
+  "method": [
+    "One saved beat paragraph = one opening. SPREAD = the whole paragraph (units.spread); PAIR = the paragraph halved at the sentence boundary nearest half its characters (units.page each).",
+    "Reading: analyzeEstimatedPage with unitSpec(v4 openings spec, kind); Korean uses the unit tolerances, English stays strict.",
+    "Richness: checkRichness with the v4 openings specs (pooled per opening); no scene briefs, so sensory and noun rates are upper bounds.",
+    "Expected rewrites: first-pass entries failing reading or richness (a failing entry costs one combined rewrite). TODAY = the same text as a page book (both halves of every paragraph as pages, v3 specs, legacy richness); NEW = a mixed openings book (first, middle and last openings spreads, the others pairs), capped at 2 × openings."
+  ],
+  "levels": {
+    "K2/E2/rich": {
+      "paragraphs": 420,
+      "unitPassPercent": {
+        "ko": {
+          "spread": 54.8,
+          "page": 64.6,
+          "pairBothPages": 42.1,
+          "violationsByUnitAndCode": {
+            "spread:unit-sentence-count": 103,
+            "page:unit-sentence-count": 87,
+            "spread:unit-long-sentences": 83,
+            "page:unit-long-sentences": 115,
+            "page:unit-mean-length": 167,
+            "spread:unit-mean-length": 43,
+            "spread:connective-endings": 5,
+            "page:connective-endings": 5
+          }
+        },
+        "en": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:sentence-count": 410,
+            "spread:sentence-length": 1759,
+            "spread:out-of-vocabulary": 419,
+            "page:sentence-length": 1759,
+            "page:out-of-vocabulary": 818,
+            "page:sentence-count": 743
+          }
+        }
+      },
+      "richnessPerOpening": {
+        "spreads": {
+          "openings": 420,
+          "koBlockedPercent": 27.4,
+          "enBlockedPercent": 39.3,
+          "eitherBlockedPercent": 52.9,
+          "koByCodePercent": {
+            "sensory_window": 17.4,
+            "direct_emotion": 10.2,
+            "missing_subject": 1.2,
+            "concrete_nouns": 0.2
+          },
+          "enByCodePercent": {
+            "sensory_window": 26.7,
+            "missing_subject": 20.2,
+            "direct_emotion": 0.2,
+            "concrete_nouns": 0.7
+          }
+        },
+        "pairs": {
+          "openings": 420,
+          "koBlockedPercent": 28.6,
+          "enBlockedPercent": 34.5,
+          "eitherBlockedPercent": 50.2,
+          "koByCodePercent": {
+            "sensory_window": 17.4,
+            "direct_emotion": 10.2,
+            "missing_subject": 2.6,
+            "concrete_nouns": 0.2
+          },
+          "enByCodePercent": {
+            "sensory_window": 26.7,
+            "missing_subject": 11.7,
+            "direct_emotion": 0.2,
+            "concrete_nouns": 0.7
+          }
+        }
+      },
+      "expectedRewritesPerBook": {
+        "books": 60,
+        "today": {
+          "ko": 14,
+          "en": 14,
+          "total": 14
+        },
+        "new": {
+          "ko": 5.6,
+          "en": 11,
+          "total": 11,
+          "totalCapped": 11
+        },
+        "newNeedsFewer": {
+          "ko": true,
+          "en": true,
+          "total": true
+        }
+      }
+    },
+    "K2/E2/simplified": {
+      "paragraphs": 420,
+      "unitPassPercent": {
+        "ko": {
+          "spread": 21,
+          "page": 28.1,
+          "pairBothPages": 13.8,
+          "violationsByUnitAndCode": {
+            "spread:unit-sentence-count": 196,
+            "page:unit-sentence-count": 229,
+            "spread:unit-mean-length": 223,
+            "page:unit-mean-length": 449,
+            "spread:unit-long-sentences": 15,
+            "page:unit-long-sentences": 25,
+            "spread:connective-endings": 2,
+            "page:connective-endings": 2
+          }
+        },
+        "en": {
+          "spread": 0.5,
+          "page": 2.7,
+          "pairBothPages": 0.2,
+          "violationsByUnitAndCode": {
+            "spread:sentence-count": 382,
+            "spread:sentence-length": 1465,
+            "spread:out-of-vocabulary": 364,
+            "page:sentence-length": 1465,
+            "page:out-of-vocabulary": 686,
+            "page:sentence-count": 675
+          }
+        }
+      },
+      "richnessPerOpening": {
+        "spreads": {
+          "openings": 420,
+          "koBlockedPercent": 41.4,
+          "enBlockedPercent": 55.2,
+          "eitherBlockedPercent": 68.3,
+          "koByCodePercent": {
+            "sensory_window": 34.8,
+            "direct_emotion": 5,
+            "missing_subject": 2.4,
+            "concrete_nouns": 3.3
+          },
+          "enByCodePercent": {
+            "sensory_window": 45.2,
+            "concrete_nouns": 4.5,
+            "missing_subject": 15,
+            "direct_emotion": 0.2
+          }
+        },
+        "pairs": {
+          "openings": 420,
+          "koBlockedPercent": 41.2,
+          "enBlockedPercent": 52.4,
+          "eitherBlockedPercent": 66.2,
+          "koByCodePercent": {
+            "sensory_window": 34.8,
+            "direct_emotion": 5,
+            "missing_subject": 2.9,
+            "concrete_nouns": 3.3
+          },
+          "enByCodePercent": {
+            "sensory_window": 45.2,
+            "concrete_nouns": 4.5,
+            "missing_subject": 8.1,
+            "direct_emotion": 0.2
+          }
+        }
+      },
+      "expectedRewritesPerBook": {
+        "books": 60,
+        "today": {
+          "ko": 13.9,
+          "en": 13.9,
+          "total": 14
+        },
+        "new": {
+          "ko": 8.8,
+          "en": 10.9,
+          "total": 11,
+          "totalCapped": 11
+        },
+        "newNeedsFewer": {
+          "ko": true,
+          "en": true,
+          "total": true
+        }
+      }
+    },
+    "K3/E3/rich": {
+      "paragraphs": 420,
+      "unitPassPercent": {
+        "ko": {
+          "spread": 4,
+          "page": 11.8,
+          "pairBothPages": 1.7,
+          "violationsByUnitAndCode": {
+            "spread:unit-sentence-count": 103,
+            "spread:unit-mean-length": 373,
+            "page:unit-sentence-count": 87,
+            "page:unit-mean-length": 690,
+            "spread:unit-long-sentences": 10,
+            "page:unit-long-sentences": 11
+          }
+        },
+        "en": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:sentence-length": 2116,
+            "spread:out-of-vocabulary": 310,
+            "spread:page-words": 397,
+            "page:out-of-vocabulary": 578,
+            "page:page-words": 783,
+            "page:sentence-length": 2116,
+            "spread:sentence-count": 156,
+            "page:sentence-count": 254
+          }
+        }
+      },
+      "richnessPerOpening": {
+        "spreads": {
+          "openings": 420,
+          "koBlockedPercent": 52.4,
+          "enBlockedPercent": 63.6,
+          "eitherBlockedPercent": 80,
+          "koByCodePercent": {
+            "sensory": 43.3,
+            "concrete_nouns": 4.5,
+            "direct_emotion": 10.2,
+            "missing_subject": 1.2
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 5.2,
+            "sensory": 54.3,
+            "missing_subject": 20.2,
+            "direct_emotion": 0.2
+          }
+        },
+        "pairs": {
+          "openings": 420,
+          "koBlockedPercent": 53.1,
+          "enBlockedPercent": 61,
+          "eitherBlockedPercent": 78.8,
+          "koByCodePercent": {
+            "sensory": 43.3,
+            "concrete_nouns": 4.5,
+            "direct_emotion": 10.2,
+            "missing_subject": 2.6
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 5.2,
+            "sensory": 54.3,
+            "missing_subject": 11.7,
+            "direct_emotion": 0.2
+          }
+        }
+      },
+      "expectedRewritesPerBook": {
+        "books": 60,
+        "today": {
+          "ko": 14,
+          "en": 14,
+          "total": 14
+        },
+        "new": {
+          "ko": 10.4,
+          "en": 11,
+          "total": 11,
+          "totalCapped": 11
+        },
+        "newNeedsFewer": {
+          "ko": true,
+          "en": true,
+          "total": true
+        }
+      }
+    },
+    "K3/E3/simplified": {
+      "paragraphs": 420,
+      "unitPassPercent": {
+        "ko": {
+          "spread": 0.2,
+          "page": 1,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:unit-sentence-count": 196,
+            "spread:unit-mean-length": 409,
+            "page:unit-sentence-count": 229,
+            "page:unit-mean-length": 787,
+            "spread:unit-long-sentences": 2,
+            "page:unit-long-sentences": 2
+          }
+        },
+        "en": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:sentence-length": 2451,
+            "spread:out-of-vocabulary": 243,
+            "spread:page-words": 420,
+            "page:sentence-length": 2451,
+            "page:out-of-vocabulary": 444,
+            "page:page-words": 840,
+            "page:sentence-count": 212,
+            "spread:sentence-count": 117
+          }
+        }
+      },
+      "richnessPerOpening": {
+        "spreads": {
+          "openings": 420,
+          "koBlockedPercent": 68.6,
+          "enBlockedPercent": 79,
+          "eitherBlockedPercent": 91.4,
+          "koByCodePercent": {
+            "sensory": 61.7,
+            "concrete_nouns": 16,
+            "direct_emotion": 5,
+            "missing_subject": 2.4
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 18.3,
+            "sensory": 72.1,
+            "missing_subject": 15,
+            "direct_emotion": 0.2
+          }
+        },
+        "pairs": {
+          "openings": 420,
+          "koBlockedPercent": 68.8,
+          "enBlockedPercent": 76.9,
+          "eitherBlockedPercent": 90.7,
+          "koByCodePercent": {
+            "sensory": 61.7,
+            "concrete_nouns": 16,
+            "direct_emotion": 5,
+            "missing_subject": 2.9
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 18.3,
+            "sensory": 72.1,
+            "missing_subject": 8.1,
+            "direct_emotion": 0.2
+          }
+        }
+      },
+      "expectedRewritesPerBook": {
+        "books": 60,
+        "today": {
+          "ko": 14,
+          "en": 14,
+          "total": 14
+        },
+        "new": {
+          "ko": 11,
+          "en": 11,
+          "total": 11,
+          "totalCapped": 11
+        },
+        "newNeedsFewer": {
+          "ko": true,
+          "en": true,
+          "total": true
+        }
+      }
+    },
+    "K4/E4/rich": {
+      "paragraphs": 420,
+      "unitPassPercent": {
+        "ko": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:unit-sentence-count": 98,
+            "spread:unit-mean-length": 420,
+            "page:unit-sentence-count": 79,
+            "page:unit-mean-length": 837
+          }
+        },
+        "en": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:sentence-count": 198,
+            "spread:sentence-length": 2563,
+            "spread:page-words": 420,
+            "page:sentence-count": 332,
+            "page:sentence-length": 2563,
+            "page:out-of-vocabulary": 341,
+            "page:page-words": 840,
+            "spread:out-of-vocabulary": 181
+          }
+        }
+      },
+      "richnessPerOpening": {
+        "spreads": {
+          "openings": 420,
+          "koBlockedPercent": 52.4,
+          "enBlockedPercent": 63.6,
+          "eitherBlockedPercent": 80,
+          "koByCodePercent": {
+            "sensory": 43.3,
+            "concrete_nouns": 4.5,
+            "direct_emotion": 10.2,
+            "missing_subject": 1.2
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 5.2,
+            "sensory": 54.3,
+            "missing_subject": 20.2,
+            "direct_emotion": 0.2
+          }
+        },
+        "pairs": {
+          "openings": 420,
+          "koBlockedPercent": 53.1,
+          "enBlockedPercent": 61,
+          "eitherBlockedPercent": 78.8,
+          "koByCodePercent": {
+            "sensory": 43.3,
+            "concrete_nouns": 4.5,
+            "direct_emotion": 10.2,
+            "missing_subject": 2.6
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 5.2,
+            "sensory": 54.3,
+            "missing_subject": 11.7,
+            "direct_emotion": 0.2
+          }
+        }
+      },
+      "expectedRewritesPerBook": {
+        "books": 60,
+        "today": {
+          "ko": 14,
+          "en": 14,
+          "total": 14
+        },
+        "new": {
+          "ko": 11,
+          "en": 11,
+          "total": 11,
+          "totalCapped": 11
+        },
+        "newNeedsFewer": {
+          "ko": true,
+          "en": true,
+          "total": true
+        }
+      }
+    },
+    "K4/E4/simplified": {
+      "paragraphs": 420,
+      "unitPassPercent": {
+        "ko": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:unit-sentence-count": 195,
+            "spread:unit-mean-length": 420,
+            "page:unit-sentence-count": 226,
+            "page:unit-mean-length": 838,
+            "spread:unit-long-sentences": 1,
+            "page:unit-long-sentences": 1
+          }
+        },
+        "en": {
+          "spread": 0,
+          "page": 0,
+          "pairBothPages": 0,
+          "violationsByUnitAndCode": {
+            "spread:sentence-count": 235,
+            "spread:sentence-length": 2823,
+            "spread:out-of-vocabulary": 147,
+            "spread:page-words": 420,
+            "page:sentence-count": 403,
+            "page:sentence-length": 2823,
+            "page:page-words": 840,
+            "page:out-of-vocabulary": 288
+          }
+        }
+      },
+      "richnessPerOpening": {
+        "spreads": {
+          "openings": 420,
+          "koBlockedPercent": 68.6,
+          "enBlockedPercent": 79,
+          "eitherBlockedPercent": 91.4,
+          "koByCodePercent": {
+            "sensory": 61.7,
+            "concrete_nouns": 16,
+            "direct_emotion": 5,
+            "missing_subject": 2.4
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 18.3,
+            "sensory": 72.1,
+            "missing_subject": 15,
+            "direct_emotion": 0.2
+          }
+        },
+        "pairs": {
+          "openings": 420,
+          "koBlockedPercent": 68.8,
+          "enBlockedPercent": 76.9,
+          "eitherBlockedPercent": 90.7,
+          "koByCodePercent": {
+            "sensory": 61.7,
+            "concrete_nouns": 16,
+            "direct_emotion": 5,
+            "missing_subject": 2.9
+          },
+          "enByCodePercent": {
+            "concrete_nouns": 18.3,
+            "sensory": 72.1,
+            "missing_subject": 8.1,
+            "direct_emotion": 0.2
+          }
+        }
+      },
+      "expectedRewritesPerBook": {
+        "books": 60,
+        "today": {
+          "ko": 14,
+          "en": 14,
+          "total": 14
+        },
+        "new": {
+          "ko": 11,
+          "en": 11,
+          "total": 11,
+          "totalCapped": 11
+        },
+        "newNeedsFewer": {
+          "ko": true,
+          "en": true,
+          "total": true
+        }
+      }
+    }
+  },
+  "newNeedsFewerEverywhere": true
+}

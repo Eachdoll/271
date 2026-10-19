@@ -457,6 +457,291 @@ function briefFor(sceneBriefs, beatIndex) {
   );
 }
 
+/** The frozen specs (input or snapshot) say this draft is an R12 openings draft. */
+function openingsSpecs(input, pagination) {
+  const snap = input.readingLevelSnapshot || pagination?.readingLevelSnapshot;
+  return (
+    (input.specs?.ko || snap?.specs?.ko)?.layout === "openings" ||
+    (input.specs?.en || snap?.specs?.en)?.layout === "openings"
+  );
+}
+// Openings: sentences a missing-subject count skips (dialogue, questions and
+// exclamations, sounds, attributions); Korean X도 / X만 are subjects.
+const KO_ATTRIBUTION = /^(?:하며|하고|라고|며|고)(?:\s|$)/u;
+const EN_ATTRIBUTION =
+  /\b(?:said|says|asked|asks|whispered|whispers|shouted|shouts|called|calls|replied|replies|cried|cries)\b/i;
+function exemptFromSubject(sentence, language) {
+  const raw = String(sentence || "").trim();
+  if (/["“”「」『』]/u.test(raw) || /(?:^|\s)'|'(?:\s|[.,!?]|$)/u.test(raw))
+    return true;
+  if (/[?!？！][”’"'」』)\s]*$/u.test(raw)) return true;
+  if (standaloneSound(raw, language)) return true;
+  if (language === "ko") {
+    const core = sentenceCore(raw);
+    if (KO_ATTRIBUTION.test(core)) return true;
+    // A sound or interjection sentence: every word a sound word or doubled syllables.
+    const tokens = core.split(/\s+/u).filter(Boolean);
+    if (
+      tokens.length &&
+      tokens.length <= 3 &&
+      tokens.every((token) => /^([가-힣]{1,3})\1{1,3}[!?.]*$/u.test(token))
+    )
+      return true;
+    return false;
+  }
+  return EN_ATTRIBUTION.test(raw);
+}
+function openingsSubject(sentence, language, names) {
+  if (hasSubject(sentence, language, names)) return true;
+  if (language !== "ko") return false;
+  return sentenceCore(sentence)
+    .split(/\s+/u)
+    .some((token) => /^[가-힣]{1,24}(?:도|만)$/u.test(token));
+}
+
+/**
+ * R12 openings branch, selected by the frozen specs: concrete nouns, sensory and
+ * dialogue pool per opening (a spread, or the two facing pages); a pooled miss is
+ * repaired on the entry of that opening with fewer hits. direct_emotion and
+ * missing_text stay per entry and block. missing_subject skips dialogue, '?'/'!',
+ * sounds and attributions in both languages and blocks only at 2+ sentences AND
+ * 25%+ of the narration. repeated_ending resets per entry and is advisory (runs of
+ * 4+). Advisories are reported in `advisories` and never enter failedPageNos.
+ */
+function checkRichnessOpenings(raw, input, sceneBriefs, pagination) {
+  const issues = [],
+    advisories = [];
+  const pages = raw
+    .map((page, index) => ({
+      pageNo: Number.isInteger(page?.pageNo) ? page.pageNo : index + 1,
+      beatIndex: page?.beatIndex,
+      openingNo: Number.isInteger(page?.openingNo) ? page.openingNo : null,
+      valid: true,
+      issues: [],
+      advisories: [],
+      metrics: {},
+      source: page,
+    }))
+    .sort((a, b) => a.pageNo - b.pageNo);
+  // An entry without an opening number (a mismatched book) is its own unit.
+  const groups = [];
+  for (const row of pages) {
+    const last = groups.at(-1);
+    if (last && row.openingNo != null && last.openingNo === row.openingNo)
+      last.rows.push(row);
+    else groups.push({ openingNo: row.openingNo, rows: [row] });
+  }
+  const labelOf = (group, index) =>
+    `펼침 ${group.openingNo ?? index + 1}`;
+  const record = (list, row, language, code, message, extra = {}) => {
+    const issue = {
+      type: "richness",
+      kind: "page",
+      pageNo: row.pageNo,
+      language,
+      code,
+      message,
+      heuristic: true,
+      ...extra,
+    };
+    (list === advisories ? row.advisories : row.issues).push(issue);
+    list.push(issue);
+  };
+  const add = (row, language, code, message, extra) =>
+    record(issues, row, language, code, message, extra);
+  const advise = (row, language, code, message, extra) =>
+    record(advisories, row, language, code, message, {
+      ...extra,
+      advisory: true,
+      severity: "warning",
+    });
+  // The entry of an opening with fewer hits of a pooled metric (ties: the first).
+  const target = (group, language, key) =>
+    group.rows.reduce((best, row) =>
+      row.metrics[language][key] < best.metrics[language][key] ? row : best,
+    );
+  const summary = {};
+  for (const language of ["ko", "en"]) {
+    const id = levelId(input, pagination, language),
+      high = /^[KE][34]$/.test(id),
+      minimumNouns = high ? 2 : 1,
+      requiredDialogueOpenings = Math.ceil(groups.length * (high ? 0.5 : 1 / 3)),
+      names = characterNames(input, language);
+    for (const row of pages) {
+      const text = textOf(row.source, language),
+        brief = briefFor(sceneBriefs, row.beatIndex),
+        parts = sentences(text),
+        nouns = concreteMatches(text, language, brief, row.source),
+        sensory = sensoryMatches(text, language, brief),
+        emotions = emotionMatches(text, language),
+        narration = parts.filter((sentence) => !exemptFromSubject(sentence, language)),
+        missing = parts.flatMap((sentence, index) =>
+          exemptFromSubject(sentence, language) ||
+          openingsSubject(sentence, language, names)
+            ? []
+            : [{ sentenceIndex: index, sentence }],
+        );
+      row.metrics[language] = {
+        concreteNouns: nouns,
+        concreteNounCount: nouns.length,
+        sensoryWords: sensory,
+        sensoryCount: sensory.length,
+        dialogue: dialogue(text),
+        directEmotionWords: emotions,
+        missingSubjects: missing,
+        narrationSentences: narration.length,
+        sentenceCount: parts.length,
+        exemptFragments: parts.filter((s) => standaloneSound(s, language))
+          .length,
+      };
+      if (!text.trim())
+        add(row, language, "missing_text", "본문이 없어 풍부도를 검사할 수 없어요.");
+      if (emotions.length)
+        add(
+          row,
+          language,
+          "direct_emotion",
+          `감정 직설어(${emotions.join(", ")})를 승인한 몸짓·행동으로 바꿔 주세요.`,
+          { words: emotions },
+        );
+      if (missing.length) {
+        const message = `${missing.map((m) => m.sentenceIndex + 1).join(", ")}번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.`,
+          blocks =
+            missing.length >= 2 &&
+            missing.length >= 0.25 * Math.max(1, narration.length);
+        (blocks ? add : advise)(row, language, "missing_subject", message, {
+          sentences: missing,
+        });
+      }
+      let previousEnding = null,
+        run = 0,
+        reported = false;
+      for (const sentence of parts) {
+        const current = ending(sentence, language);
+        if (current === null) continue;
+        run = current === previousEnding ? run + 1 : 1;
+        previousEnding = current;
+        if (run >= 4 && !reported) {
+          reported = true;
+          advise(
+            row,
+            language,
+            "repeated_ending",
+            "같은 종결 방식이 네 문장 이상 이어져요. 질문·감탄·청유를 섞으면 좋아요.",
+            { ending: current },
+          );
+        }
+      }
+    }
+    const pooled = groups.map((group) => ({
+      nouns: unique(
+        group.rows.flatMap((row) => row.metrics[language].concreteNouns),
+      ),
+      sensory: group.rows.some((row) => row.metrics[language].sensoryCount),
+      dialogue: group.rows.some((row) => row.metrics[language].dialogue),
+    }));
+    groups.forEach((group, index) => {
+      if (pooled[index].nouns.length < minimumNouns)
+        add(
+          target(group, language, "concreteNounCount"),
+          language,
+          "concrete_nouns",
+          `${labelOf(group, index)}에 승인한 장면의 구체 명사를 ${minimumNouns}개 이상 사용해 주세요.`,
+          { actual: pooled[index].nouns.length, expected: minimumNouns },
+        );
+      if (high && !pooled[index].sensory)
+        add(
+          target(group, language, "sensoryCount"),
+          language,
+          "sensory",
+          `${labelOf(group, index)}에 장면 브리프의 감각어 또는 의성어를 1개 이상 넣어 주세요.`,
+        );
+    });
+    if (!high) {
+      if (groups.length === 1 && !pooled[0].sensory)
+        add(
+          target(groups[0], language, "sensoryCount"),
+          language,
+          "sensory_window",
+          "장면 브리프의 감각어 또는 의성어를 1개 이상 넣어 주세요.",
+        );
+      for (let index = 1; index < groups.length; index++)
+        if (!pooled[index - 1].sensory && !pooled[index].sensory)
+          add(
+            target(groups[index], language, "sensoryCount"),
+            language,
+            "sensory_window",
+            `${labelOf(groups[index - 1], index - 1)}~${labelOf(groups[index], index).replace("펼침 ", "")} 중 한 곳에 감각어 또는 의성어가 필요해요.`,
+            {
+              window: [groups[index - 1].openingNo, groups[index].openingNo],
+            },
+          );
+    }
+    const dialogueOpenings = groups
+        .filter((_, index) => pooled[index].dialogue)
+        .map((group, index) => group.openingNo ?? index + 1),
+      shortage = Math.max(0, requiredDialogueOpenings - dialogueOpenings.length);
+    const candidates = groups
+      .map((group, index) => ({ group, index }))
+      .filter(({ index }) => !pooled[index].dialogue)
+      .sort(
+        (a, b) =>
+          Number(Boolean(briefFor(sceneBriefs, b.group.rows[0].beatIndex).dialogueLine)) -
+            Number(Boolean(briefFor(sceneBriefs, a.group.rows[0].beatIndex).dialogueLine)) ||
+          a.index - b.index,
+      );
+    for (const { group, index } of candidates.slice(0, shortage))
+      add(
+        group.rows[0],
+        language,
+        "dialogue_pages",
+        `대화가 있는 펼침이 ${dialogueOpenings.length}/${requiredDialogueOpenings}개예요. ${labelOf(group, index)}에 장면 브리프의 대사를 같은 사건 안에서 활용해 주세요.`,
+        { actual: dialogueOpenings.length, expected: requiredDialogueOpenings },
+      );
+    summary[language] = {
+      level: id,
+      layout: "openings",
+      openings: groups.length,
+      minimumConcreteNouns: minimumNouns,
+      sensoryWindow: high ? 1 : 2,
+      dialogueOpenings,
+      requiredDialogueOpenings,
+      dialoguePages: pages
+        .filter((row) => row.metrics[language].dialogue)
+        .map((row) => row.pageNo),
+      requiredDialoguePages: requiredDialogueOpenings,
+    };
+  }
+  for (const row of pages) {
+    row.valid = row.issues.length === 0;
+    row.passed = row.valid;
+    row.violations = row.issues;
+    delete row.source;
+  }
+  const failedPageNos = unique(issues.map((issue) => issue.pageNo)).sort(
+      (a, b) => a - b,
+    ),
+    valid = pages.length > 0 && issues.length === 0;
+  return {
+    valid,
+    passed: valid,
+    heuristic: true,
+    method: "dictionary-regex",
+    layout: "openings",
+    pages,
+    issues,
+    violations: issues,
+    advisories,
+    failedPageNos,
+    repairPageNos: failedPageNos,
+    summary,
+    notes: [
+      ...NOTES,
+      "펼침 구성: 구체 명사·감각어·대화는 펼침(펼침면 또는 마주 보는 두 쪽) 단위로 셉니다. 참고 항목은 자동으로 고쳐 쓰지 않아요.",
+    ],
+  };
+}
+
 /** Inspect text only. Inputs, frozen reading levels, prose and scene briefs are never mutated. */
 export function checkRichness(
   pagination,
@@ -466,6 +751,8 @@ export function checkRichness(
 ) {
   const raw = Array.isArray(pagination) ? pagination : pagination?.pages || [],
     issues = [];
+  if (openingsSpecs(input || {}, pagination))
+    return checkRichnessOpenings(raw, input || {}, sceneBriefs, pagination);
   const pages = raw
     .map((page, index) => ({
       pageNo: Number.isInteger(page?.pageNo) ? page.pageNo : index + 1,

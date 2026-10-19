@@ -1,5 +1,6 @@
 import { splitSentences as sharedSplitSentences } from "./story-quality/dist/util.js";
 import { VOCAB_DATA, ENGLISH_ONOMATOPOEIA } from "./reading-vocab.js";
+import { unitKind, unitSpec } from "./book-layout.js";
 /* Browser-local FK, Revised Spache, Dale–Chall and Korean pattern estimates.
  * These are not certified AR, Lexile or KReaD scores. No Python dependency. */
 const round = (n) => Math.round(n * 100) / 100;
@@ -281,7 +282,102 @@ const ADJECTIVE_CUES = new Set([
   "very",
   "too",
 ]);
+/**
+ * R12 openings, Korean only (a frozen v4 spec with unitTolerance, usually through
+ * unitSpec(spec, kind)): sentence count, mean eojeol and long sentences are judged
+ * per unit with tolerances; single off-range sentences become ONE advisory note.
+ * Returns { blocking, note }. English and every pre-R12 spec never come here.
+ */
+function unitLengthRules(metrics, spec) {
+  const tol = spec.unitTolerance,
+    range = spec.sentencesPerPageRange,
+    wps = spec.wordsPerSentence,
+    unit = spec.unit || "page",
+    n = metrics.sentenceCount,
+    blocking = [];
+  const band = {
+    min: range.min - number(tol.countBelow, 1),
+    max: range.max + number(tol.countAbove, 2),
+  };
+  if (n < band.min || n > band.max)
+    blocking.push({
+      code: "unit-sentence-count",
+      language: "ko",
+      unit,
+      actual: n,
+      expected: { min: range.min, max: range.max },
+      band,
+    });
+  const exempt = new Set(metrics.minimumLengthExemptSentenceIndices),
+    lengths = metrics.wordsPerSentence.filter((_, index) => !exempt.has(index)),
+    mean = lengths.length
+      ? round(lengths.reduce((sum, value) => sum + value, 0) / lengths.length)
+      : null,
+    slack = number(tol.meanSlack, 0.5);
+  if (mean != null && (mean < wps.min - slack || mean > wps.max + slack))
+    blocking.push({
+      code: "unit-mean-length",
+      language: "ko",
+      unit,
+      actual: mean,
+      expected: { min: wps.min - slack, max: wps.max + slack },
+    });
+  const long = lengths.filter((value) => value > wps.max).length,
+    longest = lengths.length ? Math.max(...lengths) : 0,
+    // ceil(n/3) long sentences are fine; the epsilon keeps 12 × (1/3) at 4.
+    allowedLong = Math.ceil(n * number(tol.longShareCeil, 1 / 3) - 1e-9),
+    hardLimit = wps.max + number(tol.longOver, 3);
+  if (long > allowedLong || longest > hardLimit)
+    blocking.push({
+      code: "unit-long-sentences",
+      language: "ko",
+      unit,
+      actual: long,
+      max: allowedLong,
+      longest,
+      limit: wps.max,
+      hardLimit,
+    });
+  const offSentences = lengths.filter(
+      (value) => value < wps.min || value > wps.max,
+    ).length,
+    countOff = n < range.min || n > range.max,
+    chars = spec.advisoryCharsPerPage,
+    charsOff =
+      Array.isArray(chars) &&
+      (metrics.characterCount < chars[0] || metrics.characterCount > chars[1]);
+  const note =
+    offSentences || countOff || charsOff
+      ? {
+          code: "unit-length-note",
+          language: "ko",
+          severity: "warning",
+          advisory: true,
+          unit,
+          offSentences,
+          mean,
+          sentenceCount: n,
+          expected: { min: range.min, max: range.max },
+          ...(charsOff
+            ? {
+                characters: {
+                  actual: metrics.characterCount,
+                  min: chars[0],
+                  max: chars[1],
+                },
+              }
+            : {}),
+        }
+      : null;
+  return { blocking, note };
+}
+const unitRulesApply = (spec, lang) =>
+  lang === "ko" &&
+  spec?.layout === "openings" &&
+  !!spec.unitTolerance &&
+  !!spec.sentencesPerPageRange;
 function violations(metrics, spec, lang) {
+  if (unitRulesApply(spec, lang)) return unitViolations(metrics, spec);
   const out = [],
     expected =
       spec.sentencesPerPageRange ||
@@ -346,6 +442,32 @@ function violations(metrics, spec, lang) {
           max: spec.maxConnectiveEndingsPerSentence,
         });
     });
+  return out;
+}
+/** Openings Korean: unit length rules plus today's vocabulary and connective checks. */
+function unitViolations(metrics, spec) {
+  const out = [...unitLengthRules(metrics, spec).blocking];
+  if (
+    !metrics.vocabularySkipped &&
+    metrics.outOfVocabRatio > number(spec.maxOutOfVocabRatio, 0.1)
+  )
+    out.push({
+      code: "out-of-vocabulary",
+      language: "ko",
+      actual: metrics.outOfVocabRatio,
+      max: spec.maxOutOfVocabRatio,
+      words: metrics.outOfVocabWords,
+    });
+  metrics.connectiveEndingsPerSentence.forEach((count, index) => {
+    if (count > number(spec.maxConnectiveEndingsPerSentence, 1))
+      out.push({
+        code: "connective-endings",
+        language: "ko",
+        sentenceIndex: index,
+        actual: count,
+        max: spec.maxConnectiveEndingsPerSentence,
+      });
+  });
   return out;
 }
 export function analyzeEstimatedPage(text, levelSpec, options = {}) {
@@ -472,6 +594,10 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
   issues = issues.filter(
     (issue) => !warnings.some((warning) => warning.code === issue.code),
   );
+  if (unitRulesApply(spec, lang)) {
+    const note = unitLengthRules(metrics, spec).note;
+    if (note) warnings.push(note);
+  }
   return {
     language: lang,
     passed: issues.length === 0,
@@ -557,11 +683,13 @@ export function estimateReadingScore(book) {
 }
 function bookResult(book, specs, options) {
   const pages = pageList(book).map((page, index) => {
-    const ko = analyzeEstimatedPage(pageText(page, "ko"), specs.ko, {
+    // R12: an openings spec is judged per unit (spread or page); others unchanged.
+    const kind = unitKind(page),
+      ko = analyzeEstimatedPage(pageText(page, "ko"), unitSpec(specs.ko, kind), {
         ...options,
         language: "ko",
       }),
-      en = analyzeEstimatedPage(pageText(page, "en"), specs.en, {
+      en = analyzeEstimatedPage(pageText(page, "en"), unitSpec(specs.en, kind), {
         ...options,
         language: "en",
       });

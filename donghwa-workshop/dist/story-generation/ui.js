@@ -287,7 +287,12 @@ export function renderStoryRichness(report, { dirty = false } = {}) {
       const problems = page.issues || page.violations || [];
       return `<div class="story-richness-page"><strong>${Number(page.pageNo) || "?"}쪽</strong> ${page.passed === false || problems.length ? '<span class="story-check-badge fail">확인 필요</span>' : '<span class="story-check-badge">확인</span>'}${problems.length ? `<span>${problems.map((issue) => esc(issue.message || issue.code || issue)).join(" · ")}</span>` : ""}</div>`;
     })
-    .join("")}</details>`;
+    .join("")}${
+    // R12 openings: advisories (never rewritten automatically) are listed apart.
+    report.advisories?.length
+      ? `<p class="story-note">참고(자동으로 고치지 않아요)</p><ul>${report.advisories.map((issue) => `<li>${issue.pageNo ? `${Number(issue.pageNo)}쪽 · ` : ""}${esc(issue.message || issue.code)}</li>`).join("")}</ul>`
+      : ""
+  }</details>`;
 }
 
 /** Structural inspiration only: selected patterns never introduce reference-book events. */
