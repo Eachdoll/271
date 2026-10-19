@@ -51,6 +51,20 @@ import {
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import { createCloudSync } from "./cloud-sync.js";
 import {
+  configureFamilyAuthUI,
+  openFamilyAuth,
+  openFamilyPassword,
+  openFamilyDelete,
+  familyLogoutAction,
+  followChatGptLink,
+  accountLine,
+  signedOutNote,
+  renderSignedOutChoices,
+  renderCloudAccountControls,
+  renderSimpleAccountRow,
+  renderLocalOnlyEscape,
+} from "./family-auth-ui.js";
+import {
   downloadLibraryTransfer,
   readLibraryBackupFile,
   backupSummary,
@@ -627,9 +641,11 @@ function renderStatusStrip() {
 function cloudStatusCard() {
   if (childMode) return "";
   const c = cloudStatus,
-    user = c.user?.displayName || c.user?.email || "",
-    signin = c.signInPath || "/signin-with-chatgpt?return_to=%2F";
-  return `<aside class="cloud-status-card ${c.phase === "conflict" ? "cloud-conflict" : ""}" role="status"><div><strong>${esc(cloudPhaseLabel())}</strong><p>${c.authenticated ? `${esc(user)} · ${c.updatedAt ? "마지막 저장 " + esc(new Date(c.updatedAt).toLocaleString("ko-KR")) : "계정별 비공개 책장"}` : "같은 ChatGPT 계정으로 로그인하면 재료·시트·책·그림을 여러 기기에서 이어 쓸 수 있어요."}${c.error ? "<br>" + esc(c.error) : ""}</p></div>${c.authenticated ? btn("클라우드 관리", "cloud-open", "outline", "settings") : `<a class="btn btn-green" href="${esc(signin)}" target="_top">ChatGPT로 로그인</a>`}</aside>`;
+    user =
+      c.user?.kind === "family"
+        ? accountLine(c.user)
+        : c.user?.displayName || c.user?.email || "";
+  return `<aside class="cloud-status-card ${c.phase === "conflict" ? "cloud-conflict" : ""}" role="status"><div><strong>${esc(cloudPhaseLabel())}</strong><p>${c.authenticated ? `${esc(user)} · ${c.updatedAt ? "마지막 저장 " + esc(new Date(c.updatedAt).toLocaleString("ko-KR")) : "계정별 비공개 책장"}` : esc(signedOutNote(c))}${c.error ? "<br>" + esc(c.error) : ""}</p></div>${c.authenticated ? (c.user?.kind === "family" ? `<div class="family-signin-buttons">${btn("클라우드 관리", "cloud-open", "outline", "settings")}<button type="button" class="btn btn-outline" data-action="family-logout">로그아웃</button></div>` : btn("클라우드 관리", "cloud-open", "outline", "settings")) : renderSignedOutChoices(c)}</aside>`;
 }
 function updateCloudStatus(next) {
   const before = cloudPrivacyLocked;
@@ -675,14 +691,53 @@ function updateCloudStatus(next) {
   if (panel)
     panel.textContent =
       cloudPhaseLabel() + (next.error ? " · " + next.error : "");
+  const accountRow = document.querySelector("#simple-account-row");
+  if (accountRow) accountRow.outerHTML = renderSimpleAccountRow(next);
+}
+/** Parent mode for account changes, except on a locked device whose library is already hidden. */
+function accountAction(fn) {
+  if (cloudPrivacyLocked || (parentUnlocked && !childMode)) return fn();
+  pinCallback = () => {
+    childMode = false;
+    parentUnlocked = true;
+    fn();
+  };
+  openPin();
+}
+/**
+ * Locked device escape: after this device's parent PIN (the usual PIN form),
+ * forget the cloud baseline and keep using the books stored here.
+ */
+function continueLocalOnlyWithPin() {
+  if (!cloudSync) return;
+  if (!state.settings.pinHash) {
+    toast(
+      "이 기기에는 부모 PIN이 없어서 이 방법을 쓸 수 없어요. 이전 계정으로 다시 로그인해 주세요.",
+    );
+    return;
+  }
+  pinCallback = async () => {
+    const result = await cloudSync.continueLocalOnly();
+    if (!result.ok) {
+      // The PIN opened parent mode only for this step.
+      lockVault();
+      vaultSessionPin = null;
+      parentUnlocked = false;
+      render();
+      toast(result.message);
+      return;
+    }
+    toast("클라우드와 연결을 끊었어요. 이 기기의 책을 그대로 써요.");
+  };
+  openPin();
 }
 function showCloudPanel() {
   const c = cloudStatus,
     local = backupSummary(state),
     remote = c.remoteSummary || {},
-    signin = c.signInPath || "/signin-with-chatgpt?return_to=%2F";
+    escape = cloudPrivacyLocked ? renderLocalOnlyEscape() : "";
   showModal(
-    `${modalHeader("클라우드 저장 · 기기 동기화")}<p id="cloud-panel-status" class="modal-intro" role="status">${esc(cloudPhaseLabel())}${c.error ? " · " + esc(c.error) : ""}</p>${c.authenticated ? `<p class="small-label">로그인: ${esc(c.user?.displayName || c.user?.email || "")}<br>이 계정의 자료만 서버에서 읽고 저장합니다.</p><div class="cloud-library-compare"><div><strong>이 기기</strong><p>책 ${local.bookCount}권 · 캐릭터 ${local.characterCount}명 · 배경 ${local.backgroundCount}곳</p></div><div><strong>클라우드</strong><p>${c.remoteExists ? `책 ${remote.bookCount || 0}권 · 캐릭터 ${remote.characterCount || 0}명 · 배경 ${remote.backgroundCount || 0}곳` : "아직 저장된 자료가 없어요."}</p></div></div><div class="notice">처음 한 번 연결하면 이후 변경 사항을 자동 저장합니다. PC와 모바일은 같은 ChatGPT 계정으로 로그인해 주세요. 두 기기에서 동시에 수정한 경우 자료를 덮어쓰지 않고 선택을 기다립니다. API 키·부모 PIN은 기기에 유지합니다.</div><div class="modal-actions">${btn("연결 새로 확인", "cloud-refresh", "outline", "refresh")}<button type="button" class="btn btn-outline" data-action="cloud-pull" ${!c.remoteExists || c.busy ? "disabled" : ""}>클라우드 자료 불러오기</button><button type="button" class="btn btn-primary" data-action="cloud-push" ${c.busy || c.phase === "account-changed" || storageBlocked ? "disabled" : ""}>이 기기 자료 클라우드에 저장</button></div><p class="small-label">${c.phase === "account-changed" ? "이 기기는 다른 계정의 자료를 보관하고 있어요. 현재 계정의 클라우드 자료를 먼저 불러오거나 이전 계정으로 로그인해 주세요." : "불러오기 전 현재 자료는 복구용 보관함에 남깁니다."}</p><a href="/signout-with-chatgpt?return_to=%2F" target="_top" class="small-label">ChatGPT 로그아웃 · 다른 계정으로 연결</a>` : `<p class="modal-intro">로그인하면 이 계정의 책장과 재료를 클라우드에 보관합니다. 처음에는 기존 자료가 있는 기기에서 로그인하고 올려 주세요.</p><a class="btn btn-green" href="${esc(signin)}" target="_top">ChatGPT로 로그인</a>`}`,
+    `${modalHeader("클라우드 저장 · 기기 동기화")}<p id="cloud-panel-status" class="modal-intro" role="status">${esc(cloudPhaseLabel())}${c.error ? " · " + esc(c.error) : ""}</p>${c.authenticated ? `<p class="small-label">${esc(accountLine(c.user))}<br>이 계정의 자료만 서버에서 읽고 저장합니다.</p><div class="cloud-library-compare"><div><strong>이 기기</strong><p>책 ${local.bookCount}권 · 캐릭터 ${local.characterCount}명 · 배경 ${local.backgroundCount}곳</p></div><div><strong>클라우드</strong><p>${c.remoteExists ? `책 ${remote.bookCount || 0}권 · 캐릭터 ${remote.characterCount || 0}명 · 배경 ${remote.backgroundCount || 0}곳` : "아직 저장된 자료가 없어요."}</p></div></div><div class="notice">처음 한 번 연결하면 이후 변경 사항을 자동 저장합니다. PC와 모바일은 같은 가족 아이디나 ChatGPT 계정으로 로그인해 주세요. 두 기기에서 동시에 수정한 경우 자료를 덮어쓰지 않고 선택을 기다립니다. API 키·부모 PIN은 기기에 유지합니다.</div><div class="modal-actions">${btn("연결 새로 확인", "cloud-refresh", "outline", "refresh")}<button type="button" class="btn btn-outline" data-action="cloud-pull" ${!c.remoteExists || c.busy ? "disabled" : ""}>클라우드 자료 불러오기</button><button type="button" class="btn btn-primary" data-action="cloud-push" ${c.busy || c.phase === "account-changed" || storageBlocked ? "disabled" : ""}>이 기기 자료 클라우드에 저장</button></div><p class="small-label">${c.phase === "account-changed" ? "이 기기는 다른 계정의 자료를 보관하고 있어요. 현재 계정의 클라우드 자료를 먼저 불러오거나 이전 계정으로 로그인해 주세요." : "불러오기 전 현재 자료는 복구용 보관함에 남깁니다."}</p>${escape}${renderCloudAccountControls(c)}` : `<p class="modal-intro">${c.reason === "family-session-expired" ? esc(signedOutNote(c)) + "<br>" : ""}로그인하면 이 계정의 책장과 재료를 클라우드에 보관합니다. 가족 아이디나 ChatGPT 계정 중 하나로 로그인해 주세요. 처음에는 기존 자료가 있는 기기에서 로그인하고 올려 주세요.</p>${renderSignedOutChoices(c)}${escape}`}`,
     "wide cloud-panel",
   );
 }
@@ -720,7 +775,7 @@ function confirmCloudChange(kind) {
       render();
       toast(
         kind === "push"
-          ? "클라우드에 저장했어요. 다른 기기에서 같은 계정으로 로그인해 주세요."
+          ? "클라우드에 저장했어요. 다른 기기에서도 같은 가족 아이디나 ChatGPT 계정으로 로그인해 주세요."
           : "클라우드 자료를 불러왔어요.",
       );
     } catch (error) {
@@ -807,7 +862,7 @@ function deviceStorageNotice() {
 function showDeviceTransfer() {
   const summary = backupSummary(state);
   showModal(
-    `${modalHeader("다른 기기에서 이어쓰기")}<p class="modal-intro">클라우드 로그인으로 같은 계정의 기기 동기화를 사용할 수 있습니다. 여기서는 별도로 파일을 내보내거나 가져옵니다. 파일 이동은 서버에 업로드하지 않아요.</p>${storageBlocked ? `<div class="notice">기존 원본을 보호 중입니다. 샘플 재료가 보여도 기존 데이터에 덮어쓰지 않습니다.<p>${esc(initialLibrary.error || "저장 데이터 읽기 실패")}</p>${initialLibrary.raw ? btn("읽지 못한 원본 파일 보관", "download-original", "outline", "download") : ""}</div>` : `<p class="small-label">이 기기: 캐릭터 ${summary.characterCount}명 · 배경 ${summary.backgroundCount}곳 · 책 ${summary.bookCount}권 · World ${summary.worldCount}개</p><button type="button" class="btn btn-green" data-action="transfer-export">그림·재료 포함 이동용 JSON 저장</button>`}<ol class="device-transfer-steps"><li>원래 기기에서 ‘이동용 JSON 저장’을 눌러 주세요.</li><li>저장한 파일을 모바일로 보내 주세요.</li><li>아래에서 JSON 또는 기존 ZIP을 선택하고 내용을 확인한 뒤 가져오세요.</li></ol><label class="btn btn-primary device-file-label" for="device-transfer-file">이 기기로 백업 파일 가져오기</label><input id="device-transfer-file" type="file" accept="application/json,application/zip,.json,.zip" hidden><p id="device-transfer-status" class="small-label" role="status"></p><p class="small-label">캐릭터·배경·확정 시트·책·그림·음원·World·초안을 함께 옮깁니다. API 키와 PIN은 파일에 넣지 않으며 이 기기의 기존 키·PIN은 유지됩니다.</p><button type="button" class="btn btn-outline" data-action="download-recovery">가져오기 전 복구용 보관본 내려받기</button>`,
+    `${modalHeader("다른 기기에서 이어쓰기")}<p class="modal-intro">가족 아이디나 ChatGPT 계정으로 로그인하면 같은 계정의 기기 동기화를 사용할 수 있습니다. 여기서는 별도로 파일을 내보내거나 가져옵니다. 파일 이동은 서버에 업로드하지 않아요.</p>${storageBlocked ? `<div class="notice">기존 원본을 보호 중입니다. 샘플 재료가 보여도 기존 데이터에 덮어쓰지 않습니다.<p>${esc(initialLibrary.error || "저장 데이터 읽기 실패")}</p>${initialLibrary.raw ? btn("읽지 못한 원본 파일 보관", "download-original", "outline", "download") : ""}</div>` : `<p class="small-label">이 기기: 캐릭터 ${summary.characterCount}명 · 배경 ${summary.backgroundCount}곳 · 책 ${summary.bookCount}권 · World ${summary.worldCount}개</p><button type="button" class="btn btn-green" data-action="transfer-export">그림·재료 포함 이동용 JSON 저장</button>`}<ol class="device-transfer-steps"><li>원래 기기에서 ‘이동용 JSON 저장’을 눌러 주세요.</li><li>저장한 파일을 모바일로 보내 주세요.</li><li>아래에서 JSON 또는 기존 ZIP을 선택하고 내용을 확인한 뒤 가져오세요.</li></ol><label class="btn btn-primary device-file-label" for="device-transfer-file">이 기기로 백업 파일 가져오기</label><input id="device-transfer-file" type="file" accept="application/json,application/zip,.json,.zip" hidden><p id="device-transfer-status" class="small-label" role="status"></p><p class="small-label">캐릭터·배경·확정 시트·책·그림·음원·World·초안을 함께 옮깁니다. API 키와 PIN은 파일에 넣지 않으며 이 기기의 기존 키·PIN은 유지됩니다.</p><button type="button" class="btn btn-outline" data-action="download-recovery">가져오기 전 복구용 보관본 내려받기</button>`,
     "wide",
   );
 }
@@ -1226,7 +1281,7 @@ function defaultWizard() {
 }
 function pageContent() {
   if (cloudPrivacyLocked)
-    return `<section class="panel"><h3>로그인 계정의 책장을 확인해 주세요</h3><p>기존 기기의 보관본은 유지됩니다. 같은 계정으로 로그인하거나 현재 계정의 클라우드 자료를 불러올 수 있어요.</p>${btn("클라우드 연결 확인", "cloud-open", "green", "lock")}</section>`;
+    return `<section class="panel cloud-lock-panel"><h3>로그인 계정의 책장을 확인해 주세요</h3><p>기존 기기의 보관본은 유지됩니다. 같은 가족 아이디나 ChatGPT 계정으로 로그인하거나 현재 계정의 클라우드 자료를 불러올 수 있어요.${cloudStatus.reason === "family-session-expired" ? "<br>" + esc(signedOutNote(cloudStatus)) : ""}</p>${cloudStatus.authenticated || (view === "library" && !childMode) ? "" : renderSignedOutChoices(cloudStatus)}${btn("클라우드 연결 확인", "cloud-open", cloudStatus.authenticated ? "green" : "outline", "lock")}${renderLocalOnlyEscape()}</section>`;
   if (view === "materials") return materialsPage();
   if (view === "create") return createPage();
   if (view === "settings") return settingsPage();
@@ -1847,7 +1902,7 @@ function simpleSettingsPage() {
       ["booklet", "제본용 · 쪽 재배치·빈 쪽 포함"],
     ],
     s.defaultLayout,
-  )}</div><input type="hidden" id="dailyLimit" value="${esc(s.dailyLimit)}"><input type="hidden" id="rate" value="${esc(s.rate)}"><input type="hidden" id="sr-lexile" value="${esc(s.srLexile ?? "")}"></form></section><section class="panel" id="simple-settings-engines"><h3>엔진과 키</h3><p class="section-sub">글 엔진 하나, 그림 엔진 하나와 각 키예요. 키는 PIN으로 이 기기에만 암호화해 보관해요.</p>${renderTextEngineQuick(state)}${renderImageEngineQuick(state)}</section><section class="panel" id="simple-settings-lock"><h3>잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠겨요.</p>${btn(s.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}</section><section class="panel" id="simple-settings-backup"><h3>보관</h3><p class="section-sub">다른 기기로 옮기거나 백업해 두세요. API 키와 PIN은 파일에 넣지 않아요.</p><div class="simple-backup-actions">${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden></section></div><div class="settings-save-bar"><span id="settings-save-status" role="status">${settingsDirty.has(settingsTab) ? "저장하지 않은 변경이 있어요." : "저장된 설정을 보고 있어요."}</span><button class="btn btn-green" data-action="save-settings-tab">설정 모두 저장</button></div>`;
+  )}</div><input type="hidden" id="dailyLimit" value="${esc(s.dailyLimit)}"><input type="hidden" id="rate" value="${esc(s.rate)}"><input type="hidden" id="sr-lexile" value="${esc(s.srLexile ?? "")}"></form></section><section class="panel" id="simple-settings-engines"><h3>엔진과 키</h3><p class="section-sub">글 엔진 하나, 그림 엔진 하나와 각 키예요. 키는 PIN으로 이 기기에만 암호화해 보관해요.</p>${renderTextEngineQuick(state)}${renderImageEngineQuick(state)}</section><section class="panel" id="simple-settings-lock"><h3>잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠겨요.</p>${btn(s.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}</section><section class="panel" id="simple-settings-backup"><h3>보관</h3><p class="section-sub">다른 기기로 옮기거나 백업해 두세요. API 키와 PIN은 파일에 넣지 않아요.</p>${renderSimpleAccountRow(cloudStatus)}<div class="simple-backup-actions">${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden></section></div><div class="settings-save-bar"><span id="settings-save-status" role="status">${settingsDirty.has(settingsTab) ? "저장하지 않은 변경이 있어요." : "저장된 설정을 보고 있어요."}</span><button class="btn btn-green" data-action="save-settings-tab">설정 모두 저장</button></div>`;
 }
 function settingsPage() {
   if (uiMode === "simple") {
@@ -1905,7 +1960,7 @@ function settingsPage() {
       [1.05, "조금 빠르게"],
     ],
     s.rate,
-  )}</div><div class="notice" style="margin-top:17px">오늘 앱으로 ${state.daily[localDay()] || 0}권을 열었어요. 제한에 도달하면 종이책을 권해요. 읽어주기 목소리는 기기에 설치된 음성에 따라 달라집니다.</div></section></div><div class="settings-stack"><section class="panel"><h3>부모 잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠깁니다.</p>${btn(state.settings.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}<p class="small-label" style="margin-top:17px">PIN은 이 브라우저의 화면 잠금입니다. 기기와 브라우저에 접근할 수 있는 사용자를 서버에서 인증하는 기능은 아닙니다.</p></section><section class="panel"><h3>이야기 보관과 백업</h3><p class="section-sub">책과 캐릭터는 이 브라우저에 보관됩니다. 가끔 백업해 우리 가족의 이야기를 남겨 주세요.</p>${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}<div style="margin-top:13px">${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}</div><div style="margin-top:13px">${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden><p class="small-label" style="margin-top:17px">같은 계정으로 클라우드에 연결하면 PC·모바일이 동기화됩니다. 이동용 JSON 또는 ZIP으로 이전 자료를 가져올 수도 있어요. API 키는 새 기기에서 다시 등록합니다.</p></section><section class="panel"><h3>현재 공방의 기능</h3><p class="small-label">장면 디테일·글 풍부화 · 별도 글·이미지 엔진 · 한영 음성 합성 · A4 인쇄 · 시리즈 · 기기 저장<br><br>이미지 생성은 아래 World 엔진과 API 키로 연결합니다. 글은 아래 글 엔진에서 별도로 선택합니다. 사진 변환과 완성 그림 가져오기는 이야기 재료에서 사용할 수 있습니다.</p></section></div></div><div class="settings-save"><button type="button" class="btn btn-outline" data-management-action="reset-parent-preferences">기본 설정 초기화</button><button type="submit" class="btn btn-primary">${icon("check")}설정 저장</button></div></form>`;
+  )}</div><div class="notice" style="margin-top:17px">오늘 앱으로 ${state.daily[localDay()] || 0}권을 열었어요. 제한에 도달하면 종이책을 권해요. 읽어주기 목소리는 기기에 설치된 음성에 따라 달라집니다.</div></section></div><div class="settings-stack"><section class="panel"><h3>부모 잠금</h3><p class="section-sub">새로고침하면 만들기·설정이 다시 잠깁니다.</p>${btn(state.settings.pinHash ? "부모 PIN 바꾸기" : "부모 PIN 설정", "change-pin", "outline", "lock")}<p class="small-label" style="margin-top:17px">PIN은 이 브라우저의 화면 잠금입니다. 기기와 브라우저에 접근할 수 있는 사용자를 서버에서 인증하는 기능은 아닙니다.</p></section><section class="panel"><h3>이야기 보관과 백업</h3><p class="section-sub">책과 캐릭터는 이 브라우저에 보관됩니다. 가끔 백업해 우리 가족의 이야기를 남겨 주세요.</p>${btn("다른 기기로 옮기기 · 가져오기", "device-transfer", "green", "upload")}<div style="margin-top:13px">${btn("전체 라이브러리 ZIP 백업", "export-library", "outline", "download")}</div><div style="margin-top:13px">${btn("JSON · ZIP 백업 가져오기", "import-library", "outline", "upload")}</div><input type="file" id="import-file" accept="application/json,application/zip,.json,.zip" hidden><p class="small-label" style="margin-top:17px">같은 가족 아이디나 ChatGPT 계정으로 클라우드에 연결하면 PC·모바일이 동기화됩니다. 이동용 JSON 또는 ZIP으로 이전 자료를 가져올 수도 있어요. API 키는 새 기기에서 다시 등록합니다.</p></section><section class="panel"><h3>현재 공방의 기능</h3><p class="small-label">장면 디테일·글 풍부화 · 별도 글·이미지 엔진 · 한영 음성 합성 · A4 인쇄 · 시리즈 · 기기 저장<br><br>이미지 생성은 아래 World 엔진과 API 키로 연결합니다. 글은 아래 글 엔진에서 별도로 선택합니다. 사진 변환과 완성 그림 가져오기는 이야기 재료에서 사용할 수 있습니다.</p></section></div></div><div class="settings-save"><button type="button" class="btn btn-outline" data-management-action="reset-parent-preferences">기본 설정 초기화</button><button type="submit" class="btn btn-primary">${icon("check")}설정 저장</button></div></form>`;
   const content =
     settingsTab === "text"
       ? renderTextSettings(state) + renderStoryQualitySettings(state)
@@ -2593,6 +2648,38 @@ async function onAction(e) {
   }
   if (a === "cloud-open") {
     showCloudPanel();
+    return;
+  }
+  // Family ID accounts. The ChatGPT links are checked first (FULL AUTO, stored family session).
+  if (a === "chatgpt-signin" || a === "chatgpt-signout") {
+    await followChatGptLink(e, el);
+    return;
+  }
+  if (a === "family-login" || a === "family-signup") {
+    openFamilyAuth(a === "family-login" ? "login" : "signup");
+    return;
+  }
+  if (a === "family-migrate") {
+    openFamilyAuth("signup", {
+      notice:
+        "ChatGPT 계정의 클라우드 책장은 그대로 남아요. 가족 아이디로 로그인한 뒤 이 기기의 책을 올릴지 고를 수 있어요. 이미 가족 아이디가 있으면 ‘로그인’을 눌러 주세요.",
+    });
+    return;
+  }
+  if (a === "family-logout") {
+    accountAction(() => void familyLogoutAction());
+    return;
+  }
+  if (a === "family-password") {
+    accountAction(openFamilyPassword);
+    return;
+  }
+  if (a === "family-delete") {
+    accountAction(openFamilyDelete);
+    return;
+  }
+  if (a === "cloud-continue-local") {
+    continueLocalOnlyWithPin();
     return;
   }
   if (a === "settings-jump") {
@@ -3500,6 +3587,8 @@ document.addEventListener("change", async (e) => {
 document.addEventListener("keydown", (e) => {
   if (!modalRoot.firstChild) return;
   if (e.key === "Escape") {
+    // A pending sign-in and the one-time recovery code must not vanish on Escape.
+    if (modalRoot.querySelector("[data-modal-lock]")) return;
     closeModal();
     return;
   }
@@ -3563,6 +3652,18 @@ configureBackgroundSheets({
   modalHeader,
   protectedAction,
   isParent: () => parentUnlocked && !childMode,
+});
+configureFamilyAuthUI({
+  getSync: () => cloudSync,
+  getStatus: () => cloudStatus,
+  showModal,
+  closeModal,
+  modalHeader,
+  toast,
+  // Show where the new account stands (source choice, lock or connected).
+  onSignedIn: () => {
+    if (!modalRoot.firstChild) showCloudPanel();
+  },
 });
 configureTextSettingsUI({
   getState: () => state,
@@ -3890,7 +3991,9 @@ hydrateImageAssets(state)
         !reader &&
         !finalizeController &&
         (!modalRoot.querySelector(".modal-overlay") ||
-          !!modalRoot.querySelector(".cloud-panel,.cloud-confirm")),
+          !!modalRoot.querySelector(".cloud-panel,.cloud-confirm,.family-auth")),
+      // Family sign-in/out waits for FULL AUTO in this tab (other tabs: Web Locks).
+      isAutoRunning: () => isFullAutoRunning(),
       applyRemote: applyCloudLibrary,
       onChange: updateCloudStatus,
     });
