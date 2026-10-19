@@ -1689,7 +1689,10 @@ function buildStoryResultBook(result) {
           result.sceneBriefs?.find((b) => b.beatIndex === page.beatIndex) || {},
         ) &&
       JSON.stringify(prior.variantByCharacter || {}) ===
-        JSON.stringify(page.variantByCharacter || {})
+        JSON.stringify(page.variantByCharacter || {}) &&
+      // R12: a picture stays only on the same entry of the same kind.
+      prior.entryId === page.entryId &&
+      prior.kind === page.kind
     )
       return { ...prior, ...page };
     if (prior?.imageAssetId)
@@ -1753,7 +1756,16 @@ function buildStoryResultBook(result) {
     style: state.settings.style,
     approved: false,
   });
-  copyWardrobeSelections(options, book, state);
+  // R12 openings: the parent's wardrobe ranges are in printed pages (an entry
+  // takes the range containing its first printed page); the book's rebuilt
+  // ranges below are per entry, like every index-keyed picture tool.
+  copyWardrobeSelections(
+    result.input?.layoutPolicy?.kind === "openings"
+      ? { ...options, pageCount: printedPagesOf(result.pagination.pages) }
+      : options,
+    book,
+    state,
+  );
   for (const id of book.characterIds) {
     const ranges = [];
     for (const page of result.pagination.pages) {

@@ -1819,7 +1819,7 @@ async function rewriteText(ctx) {
     return ctx.toast(
       "데모 이야기는 쪽 글을 새로 쓰지 않아요. ‘글 고치기’로 직접 고쳐 주세요.",
     );
-  const cost = estimateSimpleCosts(state, book).pageTextUsd;
+  const cost = estimateSimpleCosts(state, book, { pageIndex: index }).pageTextUsd;
   const ok = await confirmModal(
     ctx,
     `${index + 1}쪽 글을 다시 만들까요?`,

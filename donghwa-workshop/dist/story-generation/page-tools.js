@@ -6,7 +6,7 @@ import { checkRichness } from "./richness.js";
 import { currentBookPagination } from "./book-coherence.js";
 import { syncStoryDraft } from "./ui.js";
 import { buildStoryWords } from "../story-reading-context.js";
-import { textEstimateArgs } from "../book-layout.js";
+import { layoutOf, textEstimateArgs, unitKind } from "../book-layout.js";
 import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
@@ -532,7 +532,18 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
             // R12: an openings book is sized from its frozen specs and printed pages.
             ...textEstimateArgs(book),
           }).costUsd,
-      pageTextUsd: book.textDemo ? 0 : pageRewriteUsd(settings),
+      pageTextUsd: book.textDemo
+        ? 0
+        : pageRewriteUsd(
+            settings,
+            // R12 openings: the kind of the page being rewritten (a spread by default).
+            layoutOf(book) === "openings"
+              ? unitKind(book.pages[options.pageIndex]) === "page" &&
+                Number.isInteger(options.pageIndex)
+                ? "page"
+                : "spread"
+              : undefined,
+          ),
       imageUnitUsd: unit,
       imagesUsd: imagesNeeded * unit,
       imagesNeeded,
@@ -558,11 +569,17 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
     pageCount: estimate.pageCount,
   };
 }
-function pageRewriteUsd(settings) {
+/**
+ * R12 openings: a rewrite is sized per entry kind (a spread outputs about 1.9k
+ * tokens, a single page about 0.9k); page books keep PAGE_REWRITE_TOKENS.
+ */
+const OPENING_REWRITE_OUTPUT = { spread: 1900, page: 900 };
+function pageRewriteUsd(settings, kind) {
   const stage = resolveStoryStageSettings(settings, "pagination");
   return estimateTextCost({
     ...stage,
     ...PAGE_REWRITE_TOKENS,
+    ...(kind ? { output: OPENING_REWRITE_OUTPUT[kind] } : {}),
     model: stage.config.model,
   }).costUsd;
 }

@@ -17,6 +17,7 @@ import {
   assertValid,
   validateOutline,
   validatePagination,
+  openingPaginationSchema,
 } from "./schemas.js";
 import {
   AUTO_MATERIAL_SCHEMA,
@@ -61,8 +62,15 @@ import {
 import { inspectChildStory } from "./quality-gates.js";
 import {
   OPENING_PAGE_COUNTS,
+  LAYOUT_FIELDS,
+  MODEL_CUES,
+  buildOpeningPlan,
+  copyLayoutFields,
   isOpeningsSpec,
   normalizeLayoutPolicy,
+  normalizeOpenings,
+  openingsOf,
+  validateOpenings,
 } from "../book-layout.js";
 import {
   budgetFor as openingBudgetFor,
@@ -982,6 +990,12 @@ export async function reviewStoryCoherence(
             variantByCharacter: clone(original.variantByCharacter),
             ...(original.staging ? { staging: clone(original.staging) } : {}),
           };
+          // R12 openings: a repaired entry keeps its place in the opening.
+          if (original.kind !== undefined)
+            nextPages.pages[index] = copyLayoutFields(
+              original,
+              nextPages.pages[index],
+            );
         }
         nextPages = attachPagePlotContext(nextPages, outline);
       } else {
@@ -2177,6 +2191,102 @@ For every page scene.where MUST equal its approved beat's settingKey/backgroundI
 scene.who contains selected character IDs; scene.where is a supplied background ID or concrete location description. scene.action is one drawable English sentence of 8–30 words with a physical verb, position and visible props. Abstract feelings alone are not actions. scene.emotion is one English word; timeOfDay is morning/day/afternoon/evening/night; props is an English list.
 Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs to an allowed variant or null. Honor per-book defaults and page ranges. Set isRefrainPage true only where the approved refrain actually appears. cover.sceneAction is a concrete English cover scene without text/logo instructions.`;
 }
+/**
+ * R12 openings pagination rules (replace 'exactly N pages', 'one page = one
+ * drawable scene', the page turn window and 'never one page per beat'); the
+ * place, staging, cast, wardrobe and cover rules stay as for page books.
+ */
+function openingsPaginationRules(input, options = {}) {
+  const count = input.pageCount / 2,
+    ko = input.specs.ko.units,
+    en = input.specs.en.units,
+    range = (unit) => `${unit.min}-${unit.max}`;
+  return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own drawable moment and its part of the beat text). Choose from the content: a spread for a highlight, a big reveal or surprise, arriving at a new place, the turn, the ending, or wide scenery; two pages when the beat has two distinct drawable moments (before/after, two actions, two places). No fixed ratio, but use at least one spread and at least one pair. Copy the beat paragraph; for two pages split where the moment changes. Light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${MODEL_CUES.join(", ")}. scene.action is one moment per entry. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko.spread)}, English ${range(en.spread)}; a single page Korean ${range(ko.page)}, English ${range(en.page)}.${options.openingKinds ? ` Keep opening kinds ${options.openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
+Do not rewrite the prose stage, omit events, invent a different plot, or change its approved ending. Apply Korean and English frozen sentence/word limits independently on every entry. Preserve quoted dialogue, sensory details, causal attempts and twist from the original prose.
+${paginationRules(input).split("\n").slice(3).join("\n")}`;
+}
+/**
+ * R12 openings: the free, deterministic clean-up of a pagination (normalize,
+ * merge bad pairs, mix guard), then staging and the generated-output checks.
+ * Structural errors (a missing or unknown beat) are left to inspectStory, which
+ * asks for the one paid fix (a repagination); malformed text still throws.
+ */
+function settleOpenings(data, outline, input, options) {
+  const plan = buildOpeningPlan(outline, input.pageCount / 2),
+    fixed = normalizeOpenings(data?.pages, plan, input.specs),
+    next = {
+      ...clone(data || {}),
+      pages: fixed.pages,
+      openingAdjustments: fixed.openingAdjustments,
+      mixNote: fixed.mixNote,
+    };
+  if (fixed.unplaced.length) next.openingUnplaced = fixed.unplaced.length;
+  else delete next.openingUnplaced;
+  const staged = applyStaging(next, outline, input, options),
+    structural = new Set(validateOpenings(staged, input, outline).errors),
+    hard = validatePagination(staged, input, outline).errors.filter(
+      (error) => !structural.has(error),
+    );
+  if (hard.length) throw new StoryValidationError("pagination", hard);
+  return clone(staged);
+}
+/** A stored openings pagination whose structure drifted, normalized for free. */
+function renormalizeOpenings(pagination, outline, input) {
+  if (!isOpeningsInput(input) || !Array.isArray(pagination?.pages))
+    return pagination;
+  if (validateOpenings(pagination, input, outline).valid) return pagination;
+  const fixed = normalizeOpenings(
+    pagination.pages,
+    buildOpeningPlan(outline, input.pageCount / 2),
+    input.specs,
+  );
+  return {
+    ...clone(pagination),
+    pages: fixed.pages,
+    openingAdjustments: [
+      ...(pagination.openingAdjustments || []),
+      ...fixed.openingAdjustments,
+    ],
+    mixNote: fixed.mixNote,
+  };
+}
+async function paginateOpeningsOnce(outline, prose, input, options, violations) {
+  if (demo(options))
+    return demoResult(
+      "pagination",
+      applyStaging(demoPagination(outline, prose, input), outline, input, options),
+      input,
+    );
+  const count = input.pageCount / 2,
+    result = await complete(
+      "pagination",
+      input,
+      {
+        rules: `${openingsPaginationRules(input, options)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
+        data: {
+          approvedOutline: outline,
+          approvedOriginalProse: prose,
+          openingPlan: buildOpeningPlan(outline, count),
+          ...(options.sceneBriefs
+            ? { sceneBriefs: sceneBriefRows(options.sceneBriefs) }
+            : {}),
+          ...(violations.length ? { violations } : {}),
+        },
+      },
+      openingPaginationSchema(count),
+      options,
+    );
+  try {
+    result.data = settleOpenings(result.data, outline, input, options);
+  } catch (error) {
+    error.usage ??= result.usage;
+    error.meta ??= result.meta;
+    throw error;
+  }
+  result.meta.openingAdjustments = clone(result.data.openingAdjustments);
+  result.meta.mixNote = result.data.mixNote;
+  return result;
+}
 function applyStaging(pagination, outline, input, options) {
   pagination = attachPagePlotContext(pagination, outline);
   if (!options.sceneBriefs && !options.staging) return pagination;
@@ -2209,6 +2319,8 @@ function validateGeneratedPagination(value, input, outline) {
   return clone(value);
 }
 async function paginateOnce(outline, prose, input, options, violations = []) {
+  if (isOpeningsInput(input))
+    return paginateOpeningsOnce(outline, prose, input, options, violations);
   if (demo(options))
     return demoResult(
       "pagination",
@@ -2258,11 +2370,21 @@ export function inspectStory(outline, pagination, input) {
       [c.name, c.nameEn].filter(Boolean),
     ),
   });
-  if (pagination.pages?.length !== input.pageCount) {
+  // R12 openings: the opening structure (validateOpenings) replaces the entry count.
+  const structure = isOpeningsInput(input)
+    ? validateOpenings(pagination, input, outline)
+    : null;
+  if (
+    structure
+      ? !structure.valid
+      : pagination.pages?.length !== input.pageCount
+  ) {
     const violation = {
       type: "beat_mapping",
       kind: "pagination",
-      message: `${input.pageCount}쪽을 요청했지만 ${pagination.pages?.length || 0}쪽이에요.`,
+      message: structure
+        ? structure.errors.slice(0, 3).join(" ")
+        : `${input.pageCount}쪽을 요청했지만 ${pagination.pages?.length || 0}쪽이에요.`,
     };
     report.violations.push(violation);
     report.checks
@@ -2297,6 +2419,8 @@ export async function rewriteStoryPage(
     if (sceneOnly)
       next.pages[index].scene.action =
         base.pages[index]?.scene.action || original.scene.action;
+    if (original.kind !== undefined)
+      next.pages[index] = copyLayoutFields(original, next.pages[index]);
     return {
       ...demoResult("page", next, input),
       meta: {
@@ -2307,12 +2431,12 @@ export async function rewriteStoryPage(
   }
   const rules = sceneOnly
     ? `Rewrite ONLY the drawable English scene.action for page ${pageNo}, 8–30 words containing a visible verb, location and props. Do not change any text, cast, wardrobe, beat or other scene fields. Return {action:string}.`
-    : `Rewrite only story page ${pageNo}, preserving pageNo=${pageNo}, beatIndex=${original.beatIndex}, cast and allowed wardrobe IDs. Preserve its concrete event and all ORIGINAL prose facts, adjacent continuity and the approved twist. Repair the listed violations only. Other pages must stay unchanged. If a violation names only one language, keep the other language byte-for-byte unchanged. Return one StoryPage. Do not invent a new event or lesson. ${options.richness ? richnessPromptRules() : ""}`;
+    : `Rewrite only story page ${pageNo}, preserving pageNo=${pageNo}, beatIndex=${original.beatIndex}, cast and allowed wardrobe IDs. Preserve its concrete event and all ORIGINAL prose facts, adjacent continuity and the approved twist. Repair the listed violations only. Other pages must stay unchanged. If a violation names only one language, keep the other language byte-for-byte unchanged. Return one StoryPage. Do not invent a new event or lesson. ${options.richness ? richnessPromptRules() : ""}${openingEntryRule(input, pagination, index)}`;
   const result = await complete(
     sceneOnly ? "scene" : "page",
     input,
     {
-      rules: `${rules}\n${paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}`,
+      rules: `${rules}\n${isOpeningsInput(input) ? openingsPaginationRules(input) : paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}`,
       data: {
         approvedOutline: outline,
         approvedOriginalProse: prose,
@@ -2349,6 +2473,17 @@ export async function rewriteStoryPage(
     }
     throw error;
   }
+}
+/** R12 openings: the rewritten entry's kind and its unchanged partner page ("" for page books). */
+function openingEntryRule(input, pagination, index) {
+  if (!isOpeningsInput(input)) return "";
+  const page = pagination.pages[index];
+  if (page?.kind === "spread")
+    return ` This entry is a spread: one wide picture across both facing pages of opening ${page.openingNo}, with the whole beat text.`;
+  const partner = pagination.pages.find(
+    (other, i) => i !== index && other.openingNo === page?.openingNo,
+  );
+  return ` This entry is the ${page?.side === "right" ? "right" : "left"} page of opening ${page?.openingNo}; its partner page${partner ? ` ${partner.pageNo}` : ""} stays unchanged.`;
 }
 /** Validate and apply one rewritten page (or scene action) after the paid request. */
 function finishPageRewrite(
@@ -2395,9 +2530,25 @@ function finishPageRewrite(
       result.data.stagingManual = clone(original.stagingManual || {});
       result.data.stagingRegeneration = original.stagingRegeneration || 0;
     }
+    // R12: a rewrite never moves an entry. The model's page carries no layout
+    // fields; a changed one is refused, and the original's are copied back.
+    const layout = isOpeningsInput(input) || original.kind !== undefined;
+    if (
+      layout &&
+      LAYOUT_FIELDS.some(
+        (key) =>
+          result.data?.[key] !== undefined && result.data[key] !== original[key],
+      )
+    )
+      throw new StoryValidationError("page", [
+        "다시 쓴 쪽의 펼침 정보(펼침 번호·쪽 위치·종류)를 바꿀 수 없어요.",
+      ]);
     result.data = assertValid("page", result.data, input, outline);
+    if (layout) result.data = copyLayoutFields(original, result.data);
     next.pages[index] = result.data;
   }
+  if (sceneOnly && original.kind !== undefined)
+    next.pages[index] = copyLayoutFields(original, next.pages[index]);
   result.data = applyStaging(next, outline, input, options);
   result.meta.checks = inspectStory(outline, next, input);
   return result;
@@ -2439,6 +2590,7 @@ async function finishPaginationRichness(
     report = checkRichness(next, input, outline, briefs),
     attempts = 0;
   try {
+    const budget = isOpeningsInput(input) ? openingBudget(options, input) : null;
     for (
       let pass = 0;
       pass < 2 && !report.passed && options.repair !== false && !demo(options);
@@ -2449,9 +2601,12 @@ async function finishPaginationRichness(
       for (const pageNo of targets) {
         abort(options.signal);
         if ((repairCounts[pageNo] || 0) >= 2) continue;
+        // R12 openings: paid rewrites stop at the shared cap (2 × openings).
+        if (budget && budget.used >= budget.max) break;
         const violations = report.violations.filter((v) => v.pageNo === pageNo);
         if (!violations.length) continue;
         repairCounts[pageNo] = (repairCounts[pageNo] || 0) + 1;
+        if (budget) budget.used++;
         notify(
           options,
           "pagination",
@@ -2504,6 +2659,9 @@ async function finishPaginationRichness(
         richnessChecks: report,
         richnessRepairAttempts: attempts,
         requests: requestCount([result, ...requests]),
+        ...(isOpeningsInput(input)
+          ? { repairBudget: { ...openingBudget(options, input) } }
+          : {}),
       },
     },
     outline,
@@ -2511,6 +2669,14 @@ async function finishPaginationRichness(
     input,
     options,
   );
+}
+/**
+ * R12 openings: the per-run cap on paid entry rewrites, 2 × openings, shared by
+ * repairPagination and the richness loop through the options object.
+ */
+function openingBudget(options, input) {
+  options.openingRepairBudget ||= { used: 0, max: input.pageCount };
+  return options.openingRepairBudget;
 }
 async function finishPaginationCoherence(
   result,
@@ -2612,6 +2778,8 @@ export async function finalizeStoryPagination(
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
   assertValid("prose", prose, input, outline);
+  // R12 openings: structural drift is fixed for free before any paid step.
+  pagination = renormalizeOpenings(pagination, outline, input);
   assertValid("pagination", pagination, input, outline);
   abort(options.signal);
   return finishPaginationCoherence(
@@ -2638,9 +2806,12 @@ export async function repairPagination(
   options = {},
 ) {
   options = { ...options, pageRepairCounts: options.pageRepairCounts || {} };
-  const input = normalizeStoryInput(source);
+  const input = normalizeStoryInput(source),
+    openings = isOpeningsInput(input);
+  if (openings) openingBudget(options, input);
   abort(options.signal);
-  let next = clone(pagination),
+  // R12 openings: structural drift is fixed for free before any paid step.
+  let next = renormalizeOpenings(clone(pagination), outline, input),
     report = inspectStory(outline, next, input),
     attempts = 0;
   const requests = [];
@@ -2660,6 +2831,8 @@ export async function repairPagination(
       input,
       options,
     );
+  if (openings && !demo(options))
+    return repairOpeningsPagination(outline, prose, next, input, options);
   try {
     for (let pass = 0; pass < 2 && !report.passed; pass++) {
       attempts++;
@@ -2737,6 +2910,119 @@ export async function repairPagination(
         checks: report,
         repairAttempts: attempts,
         repairRequestCount: requests.length,
+        requests: requests.reduce(
+          (n, result) => n + (Number(result.meta?.requests) || 1),
+          0,
+        ),
+        ...continuityMeta(input),
+      },
+    },
+    outline,
+    prose,
+    input,
+    options,
+  );
+}
+/**
+ * R12 openings repairPagination: a missing or unknown beat is the one paid
+ * structural fix (a repagination); otherwise ONE rewrite per failing entry per
+ * pass carries its reading and richness violations together, within the shared
+ * cap of 2 × openings paid rewrites (left issues stay as badges).
+ */
+async function repairOpeningsPagination(outline, prose, pagination, input, options) {
+  const budget = openingBudget(options, input),
+    briefs = sceneBriefRows(options.sceneBriefs),
+    requests = [];
+  let next = pagination,
+    report = inspectStory(outline, next, input),
+    richness = options.richness
+      ? checkRichness(next, input, outline, briefs)
+      : null,
+    attempts = 0;
+  const failing = () =>
+    report.needsRepagination
+      ? []
+      : [
+          ...new Set([
+            ...report.failedPageNos,
+            ...(richness?.failedPageNos || []),
+          ]),
+        ].sort((a, b) => a - b);
+  try {
+    for (
+      let pass = 0;
+      pass < 2 && (report.needsRepagination || failing().length);
+      pass++
+    ) {
+      attempts++;
+      notify(
+        options,
+        "pagination",
+        "repair",
+        `이야기 검사 결과를 고치고 있어요 (${pass + 1}/2).`,
+        { attempt: pass + 1, failedPageNos: report.failedPageNos },
+      );
+      if (report.needsRepagination) {
+        const result = await paginateOnce(
+          outline,
+          prose,
+          input,
+          options,
+          report.violations.filter((v) => v.kind === "pagination"),
+        );
+        requests.push(result);
+        next = result.data;
+        await checkpoint(options, next, inspectStory(outline, next, input), attempts, requests);
+      } else
+        for (const pageNo of failing()) {
+          abort(options.signal);
+          if (budget.used >= budget.max) break;
+          const violations = [
+            ...report.violations.filter((v) => v.pageNo === pageNo),
+            ...(richness?.violations || []).filter((v) => v.pageNo === pageNo),
+          ];
+          if (!violations.length) continue;
+          budget.used++;
+          options.pageRepairCounts[pageNo] =
+            (options.pageRepairCounts[pageNo] || 0) + 1;
+          notify(
+            options,
+            "pagination",
+            "repair-page",
+            `${pass + 1}/2차 수정 · ${pageNo}번째 쪽을 고치고 있어요.`,
+            { attempt: pass + 1, pageNo },
+          );
+          const result = await rewriteStoryPage(next, pageNo, outline, prose, input, {
+            ...options,
+            violations,
+            richness: violations.some((v) => v.type === "richness"),
+          });
+          requests.push(result);
+          next = result.data;
+          await checkpoint(options, next, inspectStory(outline, next, input), attempts, requests);
+        }
+      report = inspectStory(outline, next, input);
+      richness = options.richness
+        ? checkRichness(next, input, outline, briefs)
+        : null;
+      if (budget.used >= budget.max && !report.needsRepagination) break;
+    }
+  } catch (error) {
+    error.pagination = next;
+    throw paidError(error, requests, { stage: "pagination" });
+  }
+  return finishPaginationRichness(
+    {
+      data: next,
+      usage: mergeStoryUsage(requests),
+      meta: {
+        stage: "pagination",
+        engineId: options.engine?.id || options.engineId || "unknown",
+        demo: false,
+        checks: report,
+        repairAttempts: attempts,
+        repairRequestCount: requests.length,
+        repairBudget: { ...budget },
         requests: requests.reduce(
           (n, result) => n + (Number(result.meta?.requests) || 1),
           0,
@@ -2881,7 +3167,10 @@ export function toLegacyPages(pagination, basePages = []) {
         JSON.stringify(prior.variantByCharacter || {}) !==
           JSON.stringify(page.variantByCharacter || {}) ||
         JSON.stringify(prior.staging || {}) !==
-          JSON.stringify(page.staging || {});
+          JSON.stringify(page.staging || {}) ||
+        // R12: a picture belongs to its entry and kind (never 3:2 art on a spread).
+        ((prior.kind !== undefined || page.kind !== undefined) &&
+          (prior.kind !== page.kind || prior.entryId !== page.entryId));
     const result = {
       ...clone(prior),
       ...clone(page),

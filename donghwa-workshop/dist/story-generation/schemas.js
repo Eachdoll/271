@@ -3,6 +3,7 @@ import { PLOT_CONTRACT_SCHEMA, inspectPlotContract } from "./plot-contract.js";
 import {
   OPENING_PAGE_COUNTS,
   OPENING_DEFAULT_PAGES,
+  MODEL_CUES,
   validateOpenings,
 } from "../book-layout.js";
 /* Story stage schemas and structural validation. Content checks live in checker.js. */
@@ -243,6 +244,22 @@ export const PAGINATION_SCHEMA = {
     pages: { type: "array", items: PAGE_SCHEMA, minItems: 8, maxItems: 24 },
   },
 };
+/**
+ * R12 openings pagination: PAGE_SCHEMA plus the cue enum, O..2O entries. The
+ * model never returns kind, side or opening numbers; the app derives them.
+ */
+export function openingPaginationSchema(openings) {
+  const page = JSON.parse(JSON.stringify(PAGE_SCHEMA));
+  page.required = [...page.required, "cue"];
+  page.properties.cue = { type: "string", enum: [...MODEL_CUES] };
+  return {
+    ...JSON.parse(JSON.stringify(PAGINATION_SCHEMA)),
+    properties: {
+      ...JSON.parse(JSON.stringify(PAGINATION_SCHEMA.properties)),
+      pages: { type: "array", items: page, minItems: openings, maxItems: 2 * openings },
+    },
+  };
+}
 export const PARAGRAPH_SCHEMA = {
   type: "object",
   additionalProperties: false,

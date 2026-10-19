@@ -47,7 +47,12 @@ import {
 import { estimateImageCost } from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
-import { layoutFor, textEstimateArgs } from "./book-layout.js";
+import {
+  layoutFor,
+  printedPagesOf,
+  textEstimateArgs,
+  validateOpenings,
+} from "./book-layout.js";
 import { freezeReadingLevels } from "./reading-levels.js";
 import {
   applySeriesContinuity,
@@ -1054,7 +1059,14 @@ export async function runFullAuto(
         if (r.meta?.proseCoherence) job.proseCoherence = r.meta.proseCoherence;
       },
     );
-    if (job.pagination.pages.length !== job.input.pageCount)
+    // R12 openings: the opening structure and printed pages, not the entry count.
+    if (job.input?.layoutPolicy?.kind === "openings") {
+      const structure = validateOpenings(job.pagination, job.input, job.outline);
+      if (!structure.valid)
+        throw Error(
+          `목표 ${job.input.pageCount}쪽(펼침 ${job.input.pageCount / 2}개)과 만든 ${printedPagesOf(job.pagination.pages)}쪽의 펼침 구성이 달라요. 완료된 글을 검토해 주세요. ${structure.errors[0] || ""}`.trim(),
+        );
+    } else if (job.pagination.pages.length !== job.input.pageCount)
       throw Error(
         `목표 ${job.input.pageCount}쪽과 생성한 ${job.pagination.pages.length}쪽이 달라요. 완료된 글을 검토해 주세요.`,
       );

@@ -44,8 +44,14 @@ import { freezeReadingLevels } from "../reading-levels.js";
 import {
   OPENING_PAGE_COUNTS,
   OPENING_KOREAN_LEVELS,
+  CUES,
+  LAYOUT_FIELDS,
   openingsLayoutPolicy,
+  openingsOf,
+  printedPagesOf,
   layoutFor,
+  unitLabel,
+  validateOpenings,
 } from "../book-layout.js";
 import { getActiveWorld } from "../image-generation/world.js";
 import {
@@ -1046,6 +1052,13 @@ export function syncStoryDraft(book, state) {
             stagingRegeneration: page.stagingRegeneration || 0,
           }
         : {}),
+      // R12 openings: an entry keeps its place (kind, side, opening, id, cue).
+      ...Object.fromEntries(
+        LAYOUT_FIELDS.filter((key) => page[key] !== undefined).map((key) => [
+          key,
+          clone(page[key]),
+        ]),
+      ),
     }));
   d.checksDirty = true;
   d.updatedAt = new Date().toISOString();
@@ -1137,6 +1150,27 @@ export function updateStoryBeatLocation(outline, input, index, backgroundId) {
   }
   return next;
 }
+/** R12: a draft frozen as an openings book (its input's layout policy). */
+function openingsDraft(draft) {
+  return draft?.input?.layoutPolicy?.kind === "openings";
+}
+/**
+ * R12 openings: the structure is frozen once any entry has a picture or a FULL
+ * AUTO picture step ('page:N') completed, so index-keyed picture work never
+ * points at a different entry. Repagination is offered only before that.
+ */
+function openingsStructureFrozen(s) {
+  const d = s.draft,
+    book = d.pictureBook || null,
+    jobs = s.state?.fullAutoJobs || {},
+    job = d.fullAutoRunId ? jobs[d.fullAutoRunId] : null;
+  return (
+    (book?.pages || []).some((page) => page?.imageAssetId || page?.imageUrl) ||
+    Object.keys(job?.completed || {}).some((key) => key.startsWith("page:"))
+  );
+}
+const PICTURE_FROZEN_NOTE =
+  "그림이 있는 책은 쪽을 다시 나누지 않아요. 글은 쪽마다 고칠 수 있어요.";
 export function renderStoryBeatCard(draft, index, { open = false } = {}) {
   const outline = draft.outline,
     beat = outline.beats[index],
@@ -1151,12 +1185,14 @@ export function renderStoryBeatCard(draft, index, { open = false } = {}) {
     index,
     outline.beats.length,
   );
-  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${plan
-    .filter((page) => page.beatIndex === beat.index)
-    .map((page) => page.pageNo)
-    .join(
-      "·",
-    )}쪽</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "집" : "배경 서랍"}</legend><div class="story-chip-row">${backgrounds.map((background) => `<button type="button" class="story-chip ${place === background.id ? "selected" : ""}" aria-pressed="${place === background.id}" data-story-action="set-beat-location" data-index="${index}" data-background-id="${esc(background.id)}">${esc(background.name || background.nameEn || background.id)}</button>`).join("") || '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>'}</div>${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
+  // R12 openings: one beat is one opening (two facing printed pages).
+  const pagesLabel = openingsDraft(draft)
+    ? `펼침 ${index + 1} · ${2 * index + 1}–${2 * index + 2}쪽`
+    : `${plan
+        .filter((page) => page.beatIndex === beat.index)
+        .map((page) => page.pageNo)
+        .join("·")}쪽`;
+  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${pagesLabel}</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "집" : "배경 서랍"}</legend><div class="story-chip-row">${backgrounds.map((background) => `<button type="button" class="story-chip ${place === background.id ? "selected" : ""}" aria-pressed="${place === background.id}" data-story-action="set-beat-location" data-index="${index}" data-background-id="${esc(background.id)}">${esc(background.name || background.nameEn || background.id)}</button>`).join("") || '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>'}</div>${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
 }
 function renderOutline(s) {
   const o = s.draft.outline;
@@ -1219,7 +1255,43 @@ function checkView(s) {
           }));
   return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${c.warnings?.length ? `<ul class="check-issues">${c.warnings.map((w) => `<li class="check-advisory">${w.pageNo ? `${w.pageNo}쪽 · ` : ""}${esc(describeReadingViolation(w))}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}</div>`;
 }
+/** R12 openings: the pro 쪽 나누기 screen (no count select, no split/merge, no paid count fix). */
+function renderOpeningsPages(s) {
+  const d = s.draft,
+    p = d.pagination,
+    cast = d.input.characters,
+    structure = validateOpenings(p, d.input, d.outline),
+    openings = openingsOf(p.pages),
+    spreads = p.pages.filter((page) => page.kind === "spread").length,
+    singles = p.pages.length - spreads,
+    frozen = openingsStructureFrozen(s);
+  const cue = (page) =>
+    `<span class="story-check-badge opening-cue">${page.kind === "spread" ? "펼침면" : "낱쪽"}${page.cue && CUES[page.cue] ? ` · ${esc(CUES[page.cue])}` : ""}</span>`;
+  show(
+    s,
+    `${header(s, "쪽 나누기")}<p class="modal-intro">펼침 ${openings.length}개 · ${printedPagesOf(p.pages)}쪽 · 그림 ${p.pages.length}장(펼침면 ${spreads} · 낱쪽 ${singles})${p.mixNote === "all-spreads" ? " · 모두 펼침면" : ""} · AI가 펼침마다 펼침면/낱쪽을 골랐어요.</p>${structure.valid ? "" : `<div class="notice story-count-warning" role="status"><strong>펼침 구성을 다시 맞춰야 해요.</strong><p>${esc(structure.errors.slice(0, 3).join(" "))}</p></div>`}<details class="story-card story-tools"><summary>다시 나누기·검사</summary><div class="story-inline-actions">${frozen ? `<p class="story-note">${PICTURE_FROZEN_NOTE}</p>` : button("전문 유지 · 쪽만 다시 나누기", "repaginate")}${button("검사 후 실패 쪽만 수정 · 최대 2회", "repair-pages")}${button("전문으로 돌아가기", "back-prose")}</div></details>${renderStoryChildGate(d.childGate, { dirty: d.checksDirty })}${renderStoryCoherence(d.pageCoherence || d.paginationMeta?.coherence, { dirty: d.checksDirty })}${checkView(s)}${renderStoryRichness(d.richnessCheck, { dirty: d.checksDirty })}<div class="story-card"><div class="field"><label>표지 제목</label><input data-cover-field="title" value="${esc(p.cover.title)}" maxlength="150"></div><div class="field"><label>표지 장면 · 영어</label><textarea data-cover-field="sceneAction" maxlength="1000">${esc(p.cover.sceneAction)}</textarea></div></div>${p.pages
+      .map(
+        (page, i) =>
+          `<article class="story-card" data-story-page="${i}"><div class="story-card-head"><strong>${esc(unitLabel(d, i))} · ${page.beatIndex}번 비트</strong>${cue(page)}<div class="story-inline-actions">${button("이 쪽만 다시", "rewrite-page", `data-index="${i}"`)}</div></div><div class="story-review-grid"><div class="field"><label>한글</label><textarea data-page-field="textKo" data-index="${i}" maxlength="15000">${esc(page.textKo)}</textarea></div><div class="field"><label>English</label><textarea data-page-field="textEn" data-index="${i}" maxlength="15000">${esc(page.textEn)}</textarea></div></div>${renderStoryPageStaging(page, i)}<div class="story-page-scene"><div class="field"><label>그릴 한 장면 · 영어 동작 설명</label><textarea data-scene-field="action" data-index="${i}" maxlength="2500">${esc(page.scene.action)}</textarea></div><div class="story-review-grid"><div class="field"><label>배경 ID 또는 장소 설명</label><input data-scene-field="where" data-index="${i}" value="${esc(page.scene.where)}"></div><div class="field"><label>감정 · 영어 한 단어</label><input data-scene-field="emotion" data-index="${i}" value="${esc(page.scene.emotion)}"></div><div class="field"><label>시간</label><select data-scene-field="timeOfDay" data-index="${i}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${page.scene.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></div><div class="field"><label>소품 · 영어, 쉼표로 구분</label><input data-scene-field="props" data-index="${i}" value="${esc(page.scene.props?.join(", ") || "")}"></div></div><div class="story-page-variants">${cast
+            .map(
+              (character) =>
+                `<label class="story-label">${esc(character.name)}의 모습<select data-page-variant="${esc(character.id)}" data-index="${i}"><option value="">기본 시트</option>${d.input.variants
+                  .filter((v) => v.characterId === character.id)
+                  .map(
+                    (v) =>
+                      `<option value="${esc(v.id)}" ${page.variantByCharacter?.[character.id] === v.id ? "selected" : ""}>${esc(v.name || v.id)}</option>`,
+                  )
+                  .join("")}</select></label>`,
+            )
+            .join("")}</div></div></article>`,
+      )
+      .join(
+        "",
+      )}${note()}<label class="story-note"><input type="checkbox" id="story-accept-failures"> 읽기 수준·표현 검사 경고를 확인했습니다. 플롯 연결 오류는 수정 후 진행합니다.</label><div class="modal-actions">${button("저장하고 닫기", "close")}${button("쪽 승인 · 그림 단계로", "approve-pages", structure.valid ? "" : "disabled", "primary")}</div>`,
+  );
+}
 function renderPages(s) {
+  if (openingsDraft(s.draft)) return renderOpeningsPages(s);
   const p = s.draft.pagination,
     cast = s.draft.input.characters,
     target = s.draft.input.pageCount,
@@ -1661,7 +1733,14 @@ async function approvePages(
     throw new Error(
       "줄거리의 사건·장소가 바뀌었어요. 줄거리에서 설계와 장면을 다시 확인해 주세요.",
     );
-  if (d.pagination.pages.length !== d.input.pageCount)
+  if (openingsDraft(d)) {
+    // R12 openings: the opening structure and printed pages, not the entry count.
+    const structure = validateOpenings(d.pagination, d.input, d.outline);
+    if (!structure.valid)
+      throw new Error(
+        `펼침 구성을 확인해 주세요: ${structure.errors.slice(0, 2).join(" ")}`,
+      );
+  } else if (d.pagination.pages.length !== d.input.pageCount)
     throw new Error(
       `현재 ${d.pagination.pages.length}쪽 / 목표 ${d.input.pageCount}쪽입니다. 위의 복구 버튼으로 쪽 수를 맞춰 주세요.`,
     );
@@ -2036,6 +2115,13 @@ async function handleClick(event) {
         },
       );
     }
+    if (
+      openingsDraft(d) &&
+      ["fit-page-count", "split-page", "merge-page"].includes(action)
+    )
+      throw new Error(
+        "펼침 구성 책은 AI가 고른 펼침을 그대로 써요. 글은 쪽마다 고칠 수 있어요.",
+      );
     if (action === "fit-page-count") {
       snapshot(s, "pagination");
       const fitted = splitPaginationToCount(d.pagination, d.input.pageCount, {
@@ -2269,9 +2355,13 @@ async function handleClick(event) {
       );
     }
     if (action === "repaginate") {
-      const targetPages =
-        Number(document.querySelector("#story-page-count")?.value) ||
-        d.input.pageCount;
+      // R12 openings: the frozen page count, and never once a picture exists.
+      if (openingsDraft(d) && openingsStructureFrozen(s))
+        throw new Error(PICTURE_FROZEN_NOTE);
+      const targetPages = openingsDraft(d)
+        ? d.input.pageCount
+        : Number(document.querySelector("#story-page-count")?.value) ||
+          d.input.pageCount;
       return run(
         s,
         "전문은 유지하고 쪽만 다시 나누고 있어요",

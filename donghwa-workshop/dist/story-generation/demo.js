@@ -1,4 +1,6 @@
 import { frozenBeatCount } from "./schemas.js";
+import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
+import { splitSentences } from "../story-quality/dist/util.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -460,7 +462,143 @@ function wardrobeFor(input, pageNo) {
   }
   return result;
 }
+/* Openings demo scenes per demo paragraph: [spread, left page, right page]. */
+const OPENING_ACTIONS = Object.freeze({
+  setup: [
+    "The two friends walk along the sunny forest path while one carries a small picnic bag.",
+    "The child taps a metal lunch box inside a picnic bag beside the open front door.",
+    "The two friends walk side by side into the forest while leaves sway above them.",
+  ],
+  want: [
+    "The friends stand beneath a big tree and point at a small sign with a stone picture.",
+    "The companion points at a small wooden sign nailed beside a big tree trunk.",
+    "The two friends lift their heads and listen while walking toward the distant sound.",
+  ],
+  attempt1: [
+    "The child taps a large stone with a small stick while the companion leans closer.",
+    "The child taps a large stone on the path with a small stick and listens.",
+    "The companion touches the dusty stone with its nose and sneezes beside the child.",
+  ],
+  attempt2: [
+    "The friends lift a small stone while tiny ants march out along the grass.",
+    "The child lifts a small stone while tiny ants walk out from underneath it.",
+    "The friends kneel beside the grass and watch the ants pass between the stones.",
+  ],
+  attempt3: [
+    "The companion blows into a hollow stick while the child listens beside the rocks.",
+    "The companion picks up a long hollow stick and blows into one end of it.",
+    "The two friends walk on tiptoe toward the big rocks while wind moves their hair.",
+  ],
+  attempts: [
+    "The friends tap a big stone, lift a small one and blow a hollow stick on the path.",
+    "The child taps a large stone with a stick while ants walk from a small stone.",
+    "The companion blows into a hollow stick and both friends tiptoe toward the rocks.",
+  ],
+  turn: [
+    "The friends kneel by the big rocks and find a metal lunch box wedged between them.",
+    "The child peeks between two big rocks at a shiny metal lunch box with an open lid.",
+    "The companion points at the lunch box as wind blows across its open lid.",
+  ],
+  resolution: [
+    "The friends pull the lunch box from the rocks and blow across its metal rim.",
+    "The two friends pull the metal lunch box out from between the rocks together.",
+    "The child blows across the lunch box rim while birds sit on a branch above.",
+  ],
+  close: [
+    "The child places the lunch box beside the bed and hugs a soft pillow under moonlight.",
+    "The friends walk home along the path beneath an orange evening sky.",
+    "The child places the lunch box beside the bed and hugs a soft pillow.",
+  ],
+});
+/**
+ * R12 openings demo pagination: openings 1, the turn and the close are spreads,
+ * the others are pairs split at the middle sentence. The app derives kind,
+ * side, opening number and entry id through normalizeOpenings.
+ */
+function demoOpeningsPagination(outline, prose, input) {
+  const count = outline.beats.length,
+    plan = buildOpeningPlan(outline, count),
+    keys = openingDemoKeys(outline),
+    turn = outline.beats.findIndex((beat) => beat.type === "turn"),
+    spreads = new Set([0, turn, count - 1]),
+    cast = input.characters.map((c) => c.id),
+    background = input.backgrounds?.[0]?.id,
+    beatText = (language, beatIndex) => {
+      const labels = prose.paragraphBeats?.[language] || [],
+        rows = splitParagraphs(prose[language]);
+      return rows.filter((_, i) => labels[i] === beatIndex).join(" ");
+    };
+  const entries = [];
+  outline.beats.forEach((beat, k) => {
+    const actions = OPENING_ACTIONS[keys[k]] || OPENING_ACTIONS.setup,
+      last = k === count - 1,
+      scene = (action) => ({
+        who: cast,
+        where: last
+          ? "A quiet bedroom at home"
+          : background || "A forest path beside trees and stones",
+        action,
+        emotion: last ? "calm" : k >= turn && turn >= 0 ? "surprised" : "curious",
+        timeOfDay: last ? "night" : k >= count - 2 ? "evening" : k < 1 ? "morning" : "day",
+        props: last
+          ? ["metal lunch box", "soft pillow"]
+          : ["metal lunch box", k < 3 ? "stone" : "yellow leaf"],
+      }),
+      ko = beatText("ko", beat.index),
+      en = beatText("en", beat.index),
+      base = {
+        beatIndex: beat.index,
+        variantByCharacter: wardrobeFor(input, plan[k].printedPages[0]),
+        isRefrainPage: false,
+      };
+    if (spreads.has(k))
+      entries.push({
+        ...base,
+        textKo: ko,
+        textEn: en,
+        scene: scene(actions[0]),
+        cue: k === 0 ? "arrival" : last ? "ending" : "turn",
+      });
+    else {
+      const koRows = splitSentences(ko),
+        enRows = splitSentences(en),
+        koCut = Math.ceil(koRows.length / 2),
+        enCut = Math.ceil(enRows.length / 2);
+      entries.push(
+        {
+          ...base,
+          textKo: koRows.slice(0, koCut).join(" "),
+          textEn: enRows.slice(0, enCut).join(" "),
+          scene: scene(actions[1]),
+          cue: "two-moments",
+        },
+        {
+          ...base,
+          variantByCharacter: wardrobeFor(input, plan[k].printedPages[1]),
+          textKo: koRows.slice(koCut).join(" "),
+          textEn: enRows.slice(enCut).join(" "),
+          scene: scene(actions[2]),
+          cue: "two-moments",
+        },
+      );
+    }
+  });
+  entries.forEach((entry, index) => (entry.pageNo = index + 1));
+  const fixed = normalizeOpenings(entries, plan, input.specs);
+  return {
+    cover: {
+      title: input.title || outline.titleCandidates[0],
+      sceneAction:
+        "The two friends hold a metal lunch box beside forest stones beneath swaying leaves.",
+    },
+    pages: fixed.pages,
+    openingAdjustments: fixed.openingAdjustments,
+    mixNote: fixed.mixNote,
+  };
+}
 export function demoPagination(outline, prose, input) {
+  if (input.layoutPolicy?.kind === "openings")
+    return demoOpeningsPagination(outline, prose, input);
   const count = input.pageCount,
     ko = spreadProse(prose.ko, count),
     en = spreadProse(prose.en, count),
