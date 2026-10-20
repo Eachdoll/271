@@ -290,11 +290,13 @@ test('FULL AUTO: a new job freezes the policy, asks for the read-through with th
   assert.equal(job.status, 'text-review');
   assert.equal(seen.revise, true);
   assert.ok(seen.revisionOptions?.config?.model, 'the read-through uses the upper (coherence) model');
-  assert.equal(job.revisionCheckpoint.resultFingerprint, 'b');
+  // R27: the book is built, so the paid-call journal is dropped (never replayed again).
+  assert.equal(job.revisionCheckpoint, undefined);
   assert.equal(job.revision.accepted[0].pageNo, 2);
   assert.equal(fullAutoPayload(job).revision.accepted.length, 1);
   assert.equal(job.book.revision.accepted.length, 1);
-  // A resumed run hands the saved checkpoint back.
+  // A resumed run (text not finished) hands the saved checkpoint back.
+  job.revisionCheckpoint = {version: 1, sourceFingerprint: 'a', resultFingerprint: 'b', revision: clone(job.revision)};
   job.completed.pagination = undefined;
   delete job.completed.pagination;
   job.status = 'paused';

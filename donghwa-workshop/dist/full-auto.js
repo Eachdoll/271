@@ -1,4 +1,5 @@
 /* Full Auto is a resumable client-side job. No credentials or engine responses are stored in job inputs. */
+import { pruneTextJournals } from "./finalize-cleanup.js";
 import {
   generateMaterialPlan,
   generateOutline,
@@ -1432,6 +1433,8 @@ export async function runFullAuto(
       } else if (!signal?.aborted) ensureJobSnapshot(state, job);
       // Stopped meanwhile: the book is kept and saved without a snapshot; the check below ends the run.
       state.storyDrafts[job.storyDraftId].pictureBook = job.book;
+      // R27: the text is done; its paid-call journals are never replayed again.
+      pruneTextJournals(job);
       await persist();
     }
     linkDeferredSeries(state, job);

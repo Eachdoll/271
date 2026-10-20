@@ -1,3 +1,4 @@
+import { isSpilledLibrary } from "./library-storage.js";
 const clone = (value) => (value == null ? value : structuredClone(value));
 
 /** Keep only the small resume/revision header after the authoritative book is saved. */
@@ -20,8 +21,34 @@ export function finalizeBookRecords(state, book) {
     delete state.fullAutoJobs[book.fullAutoRunId];
   }
 }
+/*
+ * R27: the paid-call journals a FULL AUTO job keeps so a resumed run never
+ * buys a call twice. Once the book is built (the text steps are all done),
+ * nothing replays them, so they are dropped; the meeting's record stays on
+ * outline.council. A job without a book, or whose text is unfinished (a
+ * hold, a stop), keeps every journal.
+ */
+export const TEXT_JOURNALS = Object.freeze([
+  "qualityCheckpoint",
+  "councilCheckpoint",
+  "enrichmentCheckpoint",
+  "revisionCheckpoint",
+  "childGateCheckpoint",
+]);
+export function pruneTextJournals(job) {
+  if (!job?.book || !job.completed?.pagination) return 0;
+  let pruned = 0;
+  for (const key of TEXT_JOURNALS)
+    if (key in job) {
+      delete job[key];
+      pruned++;
+    }
+  return pruned;
+}
 export function cleanupOldWorkRecords(state) {
   let cleaned = 0;
+  for (const job of Object.values(state.fullAutoJobs || {}))
+    if (job?.status !== "running" && pruneTextJournals(job)) cleaned++;
   for (const book of state.books || []) {
     if (book.approved === false || (book.stage && book.stage !== "final"))
       continue;
@@ -36,5 +63,7 @@ export function cleanupOldWorkRecords(state) {
   return cleaned;
 }
 export function estimateLibraryStorage(storage, key, state = {}) {
-  return (storage.getItem(key) ?? JSON.stringify(state)).length * 2;
+  const raw = storage.getItem(key);
+  // R27: a pointer to the big store is tiny; size the library itself.
+  return (raw == null || isSpilledLibrary(raw) ? JSON.stringify(state) : raw).length * 2;
 }
