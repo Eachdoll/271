@@ -400,3 +400,31 @@ test('R22 a rewritten direction opens the log of the next meeting; generateOutli
   assert.equal(legacyEngine.calls.length, 3);
   assert.ok(!('council' in plain.data));
 });
+
+test('R25 council ban list: recent planted objects reach the author and the editor only when frozen on the draft', async () => {
+  const {councilRecentFor, councilRecentPlanted, COUNCIL_RECENT_LIMIT} = await import('../dist/story-generation/council.js');
+  const records = ['빨간 우산', '파란 우산', '작은 종', '노란 장화', '도토리', '은빛 열쇠', '나뭇잎 배', '구슬'].map((planted, i) => ({usedElements: {planted}, createdAt: `2026-10-${10 + i}`}));
+  const recent = councilRecentFor(records);
+  assert.equal(recent.version, 1);
+  assert.equal(recent.planted.length, COUNCIL_RECENT_LIMIT);
+  assert.ok(!recent.planted.includes('파란 우산'), 'the same head noun counts once');
+  const run = async (extra) => {
+    const engine = roomEngine(), input = councilInput(extra);
+    await runStoryCouncil(input, {engine}, {engineFor: async () => engine});
+    const author = engine.calls.find((c) => /\[피치 3개 쓰기\]/u.test(c.user)).user,
+      editor = engine.calls.find((c) => /그림책 편집자/u.test(c.system)).user;
+    return {author, editor, input};
+  };
+  const withList = await run({councilRecent: {version: 1, planted: ['빨간 우산', '작은 종']}});
+  assert.deepEqual(councilRecentPlanted(withList.input), ['빨간 우산', '작은 종'], 'normalize keeps the frozen list');
+  assert.match(withList.author, /\[최근 책에서 심은 물건 — 이번에는 심지 않는다\] 빨간 우산, 작은 종/u);
+  assert.match(withList.editor, /\[최근 책의 심은 물건\] 빨간 우산, 작은 종 — /u);
+  // No key, or an empty list: the R20–R23 requests, byte for byte.
+  const plain = await run({}), empty = await run({councilRecent: {version: 1, planted: []}});
+  assert.equal(empty.author, plain.author); assert.equal(empty.editor, plain.editor);
+  assert.doesNotMatch(plain.author, /최근 책/u); assert.doesNotMatch(plain.editor, /최근 책/u);
+  // The list is an app switch: the outline request never carries the key.
+  const input = councilInput({topic: '바람 피리 찾기', councilRecent: {version: 1, planted: ['빨간 우산']}}), engine = roomEngine(); engine.input = input;
+  await generateOutline(input, {engine});
+  assert.doesNotMatch(JSON.stringify(engine.calls.at(-1)), /councilRecent/u);
+});

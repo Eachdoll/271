@@ -90,6 +90,7 @@ import {
   bibleBriefRules,
   biblePaginationRules,
   attachCouncil,
+  councilRecentPlanted,
 } from "./council.js";
 import {
   hasEditorPolicy,
@@ -357,6 +358,10 @@ function modelVisibleInput(source) {
     const { promptPolicy, ...rest } = input;
     input = rest;
   }
+  if (input?.councilRecent) {
+    const { councilRecent, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -487,6 +492,10 @@ export function normalizeStoryInput(input = {}) {
     ...(hasArcPolicy(input) ? { arcPolicy: { version: 1 } } : {}),
     ...(hasCouncilPolicy(input) ? { councilPolicy: { version: 1 } } : {}),
     ...(hasPromptPolicy(input) ? { promptPolicy: { version: 1 } } : {}),
+    // R25: the frozen planted objects of recent books (the meeting's ban list).
+    ...(input.councilRecent?.version === 1
+      ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
+      : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(

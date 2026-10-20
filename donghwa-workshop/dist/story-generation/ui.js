@@ -27,7 +27,7 @@ import { editorPolicy, revisionSummary } from "./book-revision.js";
 import { craftPolicy } from "./craft-rules.js";
 import { arcPolicy } from "./arc-rules.js";
 import { promptPolicy } from "./prompt-policy.js";
-import { councilPolicy, recordParentDecision, renderCouncilCard, isCouncilHold } from "./council.js";
+import { councilRecentFor, councilPolicy, recordParentDecision, renderCouncilCard, isCouncilHold } from "./council.js";
 import {
   renderCouncilRoom,
   liveCouncilRecord,
@@ -939,6 +939,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       arcPolicy: arcPolicy(),
       // The writers' room before the outline (pitches, verdicts, bible, decision log).
       councilPolicy: councilPolicy(),
+      // R25: the latest approved books' planted objects, frozen for the meeting.
+      councilRecent: councilRecentFor(storyQualityBookRecords(state)),
       // R23: tidier requests (default rules back, bible over seed, lean canon).
       promptPolicy: promptPolicy(),
     },

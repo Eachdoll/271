@@ -1237,6 +1237,7 @@ export async function runFullAuto(
         arcPolicy: _freshArc,
         councilPolicy: _freshCouncil,
         promptPolicy: _freshPrompt,
+        councilRecent: _freshRecent,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1256,6 +1257,9 @@ export async function runFullAuto(
           : {}),
         ...(hasPromptPolicy(job.input)
           ? { promptPolicy: clone(job.input.promptPolicy) }
+          : {}),
+        ...(job.input?.councilRecent
+          ? { councilRecent: clone(job.input.councilRecent) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),

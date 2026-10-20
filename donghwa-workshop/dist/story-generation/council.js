@@ -17,6 +17,33 @@ import { parseJsonLenient } from "./outline-normalize.js";
 import { isOpeningsInput } from "./opening-prose.js";
 import { renderCouncilRoom } from "./council-room.js";
 import { hasPromptPolicy, readerVocabularyLine } from "./prompt-policy.js";
+import { headNoun } from "../story-quality/dist/banList.js";
+
+/*
+ * R25 (council ban list): a new draft freezes the planted objects of the
+ * latest approved books as input.councilRecent {version: 1, planted}. With
+ * at least one, the author bot is told not to plant them again and the editor
+ * bot's checklist marks a pitch that does. Frozen at creation, so a resumed
+ * meeting replays its saved answers byte for byte; drafts without the key
+ * (or with an empty list) send the R20–R23 requests unchanged.
+ */
+export const COUNCIL_RECENT_VERSION = 1;
+export const COUNCIL_RECENT_LIMIT = 6;
+export function councilRecentFor(records = []) {
+  const planted = [];
+  for (const record of Array.isArray(records) ? records : []) {
+    const name = str(record?.usedElements?.planted || record?.outline?.plan?.planted, 40);
+    if (name && !planted.some((row) => headNoun(row) === headNoun(name))) planted.push(name);
+    if (planted.length >= COUNCIL_RECENT_LIMIT) break;
+  }
+  return { version: COUNCIL_RECENT_VERSION, planted };
+}
+export function councilRecentPlanted(input) {
+  const recent = input?.councilRecent;
+  return recent?.version === COUNCIL_RECENT_VERSION && Array.isArray(recent.planted)
+    ? recent.planted.map((name) => str(name, 40)).filter(Boolean).slice(0, COUNCIL_RECENT_LIMIT)
+    : [];
+}
 
 export const COUNCIL_POLICY_VERSION = 1;
 export const councilPolicy = () => ({ version: COUNCIL_POLICY_VERSION });
@@ -532,7 +559,8 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     `[조건]\n${conditions.map((row, i) => `${i + 1} ${row}`).join("\n")}`,
     `[주제] ${str(input.topic, 200)}`,
   ].join("\n\n");
-  const pitchInstructions = `[피치 3개 쓰기] 서로 다른 반전으로 피치 3개. 피치마다: title(제목), logline(한 줄 줄거리), stakes(못 하면 잃는 것, 구체적인 물건·순간·얼굴), planted{name(심은 물건, 한글), nameEn(영어 명사구), firstSeen(1비트에서 처음 보이는 자리)}, ladder(시도 ${attempts}개, 차례로 더 큰 대가와 다른 방법), lowPoint(마지막 시도 끝, 포기 직전의 한 문장 — 단서가 바로 옆에 있다), turn{seen(아이가 보거나 듣는 것), realized(주인공이 제 말로 알아차리는 말), overturns(뒤집히는 믿음)}, payoff(주인공이 손으로 해내는 해결), echo(처음의 물건이나 말이 달라진 모습으로 돌아오는 끝).${hasPromptPolicy(input) ? `\n${readerVocabularyLine(card)}` : ""}`;
+  const recentPlanted = councilRecentPlanted(input);
+  const pitchInstructions = `[피치 3개 쓰기] 서로 다른 반전으로 피치 3개. 피치마다: title(제목), logline(한 줄 줄거리), stakes(못 하면 잃는 것, 구체적인 물건·순간·얼굴), planted{name(심은 물건, 한글), nameEn(영어 명사구), firstSeen(1비트에서 처음 보이는 자리)}, ladder(시도 ${attempts}개, 차례로 더 큰 대가와 다른 방법), lowPoint(마지막 시도 끝, 포기 직전의 한 문장 — 단서가 바로 옆에 있다), turn{seen(아이가 보거나 듣는 것), realized(주인공이 제 말로 알아차리는 말), overturns(뒤집히는 믿음)}, payoff(주인공이 손으로 해내는 해결), echo(처음의 물건이나 말이 달라진 모습으로 돌아오는 끝).${hasPromptPolicy(input) ? `\n${readerVocabularyLine(card)}` : ""}${recentPlanted.length ? `\n[최근 책에서 심은 물건 — 이번에는 심지 않는다] ${recentPlanted.join(", ")} (같은 종류의 다른 색·크기도 같은 물건으로 본다).` : ""}`;
   try {
     // Round A: the author's three pitches (a second round only if every pitch is vetoed).
     let pitches = [],
@@ -577,7 +605,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         critic("editor", "editor", (d) => byPitch(d.verdicts, pitches.length),
           "편집자",
           PERSONA.editor,
-          `${context}\n\n[점검표 — 항목마다 0(없음)·1(약함)·2(분명함)]\n${SPINE_CHECKLIST.map((row, i) => `${i + 1} ${row}`).join("\n")}${references.length ? `\n\n[참조 — 좋은 책의 뼈대 카드. 인물·물건·사건 재사용 금지]\n${references.join("\n")}` : ""}\n\n${shown}\n\n[출력] JSON만. 피치마다 verdict{pitch, stakes, ladder, lowPoint, turn, payoff, direction, veto(뼈대 결격이면 true), vetoReason, fixes(고칠 점 최대 2개)}와 pick(방향에 가장 잘 도달하는 피치 번호).`,
+          `${context}\n\n[점검표 — 항목마다 0(없음)·1(약함)·2(분명함)]\n${SPINE_CHECKLIST.map((row, i) => `${i + 1} ${row}`).join("\n")}${recentPlanted.length ? `\n[최근 책의 심은 물건] ${recentPlanted.join(", ")} — 피치의 planted가 이 가운데 하나(머리 낱말이 같으면 같은 물건)이면 fixes에 '최근 책과 같은 심은 물건'을 적고 direction을 1 낮춘다.` : ""}${references.length ? `\n\n[참조 — 좋은 책의 뼈대 카드. 인물·물건·사건 재사용 금지]\n${references.join("\n")}` : ""}\n\n${shown}\n\n[출력] JSON만. 피치마다 verdict{pitch, stakes, ladder, lowPoint, turn, payoff, direction, veto(뼈대 결격이면 true), vetoReason, fixes(고칠 점 최대 2개)}와 pick(방향에 가장 잘 도달하는 피치 번호).`,
           EDITOR_SCHEMA,
           0.2,
           1600,

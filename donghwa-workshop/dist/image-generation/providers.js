@@ -17,6 +17,7 @@ import {
 import { renderImageRequest, StoryRendererError } from "./story-renderer.js";
 import { checkForbiddenWords, checkForbiddenWordCheck } from "./styles.js";
 import { validateCredentialInput } from "./credential-validation.js";
+import { fetchWithRetry, isRetryableStatus } from "../transient-retry.js";
 
 export const ENGINE_IDS = Object.freeze([
   "google",
@@ -242,6 +243,7 @@ function requestContext(config, signal) {
   return {
     signal: controller.signal,
     fetch: config.fetch || globalThis.fetch.bind(globalThis),
+    ...(Array.isArray(config.retryDelaysMs) ? { retryDelaysMs: config.retryDelaysMs } : {}),
     interval: Math.max(100, Number(config.pollIntervalMs) || 1000),
     cleanup() {
       clearTimeout(timer);
@@ -258,7 +260,19 @@ async function fetchResponse(url, options, context, { download = null } = {}) {
   if (context.signal.aborted) throw abortError();
   let response;
   try {
-    response = await context.fetch(url, { ...options, signal: context.signal });
+    // R25: a busy answer (429/5xx/529) to a generation request is sent again
+    // after a short wait; downloads of a finished picture are not repeated.
+    response = download
+      ? await context.fetch(url, { ...options, signal: context.signal })
+      : await fetchWithRetry(
+          context.fetch,
+          url,
+          { ...options, signal: context.signal },
+          {
+            signal: context.signal,
+            ...(Array.isArray(context.retryDelaysMs) ? { delays: context.retryDelaysMs } : {}),
+          },
+        );
   } catch (error) {
     if (context.signal.aborted || error?.name === "AbortError")
       throw abortError();
@@ -301,7 +315,9 @@ async function fetchResponse(url, options, context, { download = null } = {}) {
               ? "엔진이 요청을 받지 못했어요. 이미지 크기·참조 파일 형식과 모델 설정을 확인해 주세요."
               : status === 404
                 ? "엔진 주소 또는 모델을 찾지 못했어요. 엔드포인트를 확인해 주세요."
-                : "엔진에서 이미지 생성 요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.";
+                : isRetryableStatus(status)
+                  ? "그림 엔진이 지금 바빠요. 기다렸다가 두 번 더 보냈지만 받지 못했어요. 잠시 뒤 다시 시도해 주세요."
+                  : "엔진에서 이미지 생성 요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.";
     fail(`${message} (HTTP ${status})`, "http_error", status);
   }
   return response;
