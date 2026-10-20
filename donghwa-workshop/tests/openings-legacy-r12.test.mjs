@@ -742,7 +742,11 @@ const PINS = {
   // Monochrome UX: ③ now renders semantic slider switches and folded engine/cost details.
   // Before: 520fc68c7960c4598b05017f4e13f81f68724dcb30e5c422ddd6bd74ef346f09.
   // Baseline 08f09d4 dump vs current: only review differs; all request/data/price pins match.
-  review: '564133dec96545749ad00abe83d42b7079dc624d302c11cffcf6be9664d3a1b9',
+  // Review model (R26): ③ before any job prices the new story with its coherence
+  // judgement on the medium model (글 약 $2.48 → $1.94 at 12 pages) and its folded
+  // engine/cost details gain the '검사는 최고 모델로' switch; ④ and ⑤ are unchanged
+  // (diffed against 0109553). 0109553: 564133de…a1b9.
+  review: 'a68b451fbcd7144ca785d8b6f181da4375ee41054bd141e43766a621e28754f2',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -752,7 +756,11 @@ const PINS = {
   // withMaterialsAndRetryUsd); estimates of existing jobs and books are
   // unchanged (dump-diffed: only those four fields of fullAuto.* differ).
   // a113ead: 6c157a3e…6d55.
-  estimates: 'bcdb6bbbc0f9b9fbca89d7521d168d8c86e913670cfc1d38aac6c6ceb0557f77',
+  // Review model (R26): FULL AUTO/simple estimates for a NEW job price the two
+  // coherence reviews on the medium model (textUsd/baseUsd/withMaterialsAndRetryUsd
+  // only); estimateStoryTextCost of a snapshot without reviewTier, and estimates
+  // of existing jobs and books, are unchanged. 0109553: bcdb6bbb…7f77.
+  estimates: '7e95b83e7b7cc0ebf5922ede1df0ee64ae7fe57dfd70d4539e5a7320e793ee38',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

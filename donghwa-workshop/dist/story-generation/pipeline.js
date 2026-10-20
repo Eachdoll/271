@@ -1075,7 +1075,11 @@ export async function reviewStoryCoherence(
           },
         },
         stage === "pages" ? pageRepairSchema : proseRepairSchema,
-        reviewOptions,
+        // R26: repairs write text, so they keep the upper model even when the
+        // judgement ran on the review tier (same options when none is given).
+        options.coherenceRepairOptions
+          ? { ...reviewOptions, ...options.coherenceRepairOptions, signal: options.signal, onProgress: options.onProgress }
+          : reviewOptions,
       );
       requests.push(result);
       if (stage === "pages") {

@@ -44,6 +44,7 @@ import {
   resolveQualityStageSettings,
   estimateStoryTextCost,
   estimateTextCost,
+  freezeReviewTier,
 } from "./text-generation/models.js";
 import {
   estimateImageCost,
@@ -290,7 +291,10 @@ export function createFullAutoJob(
         return [id, materialSignature(c)];
       }),
     ),
-    textSettings: clone(getTextGenerationSettings(state)),
+    // R26: a new job freezes where its coherence judgement runs (a demo buys nothing).
+    textSettings: isDemo
+      ? clone(getTextGenerationSettings(state))
+      : freezeReviewTier(clone(getTextGenerationSettings(state))),
     allowNew,
     stopBefore: hold,
     demo: isDemo,
@@ -375,7 +379,8 @@ export function estimateFullAutoCost(
   // R13: once a job exists, its estimate uses the job's frozen text settings
   // and picture model, never a model chosen since (or its price).
   const world = getActiveWorld(state),
-    settings = job?.textSettings || getTextGenerationSettings(state),
+    // R26: a new job will freeze its review tier, so it is priced with it.
+    settings = job?.textSettings || freezeReviewTier(getTextGenerationSettings(state)),
     text = estimateStoryTextCost({
       settings,
       pageCount: wizard.pageCount || 12,
@@ -991,7 +996,11 @@ export async function runFullAuto(
       pageCoherence: job.pageCoherence,
       coherenceOptions: job.demo
         ? demoEngine()
-        : resolveStoryStageSettings(job.textSettings, "coherence"),
+        : resolveStoryStageSettings(job.textSettings, "coherenceReview"),
+      // R26: repairs keep the upper model (a job without reviewTier: the same one).
+      ...(job.demo
+        ? {}
+        : { coherenceRepairOptions: resolveStoryStageSettings(job.textSettings, "coherence") }),
       // 2026-10-20: after its two repairs the page review leaves notes on the
       // book instead of stopping it (the run then holds at the text).
       acceptUnresolvedCoherence: true,

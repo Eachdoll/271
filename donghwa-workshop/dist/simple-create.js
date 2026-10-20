@@ -68,6 +68,8 @@ import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
   estimateStoryTextCost,
+  reviewTierOf,
+  REVIEW_TIER_UPPER,
 } from "./text-generation/models.js";
 import { syncActiveWorldTextSettings } from "./world-variations.js";
 import {
@@ -1184,6 +1186,14 @@ function renderGenerateStep(ctx, w) {
     councilLine = job?.demo
       ? ""
       : renderActionSwitch({ id: "simple-council-switch", label: "회의 후 부모 확인", description: locked ? "이 이야기에 고정된 설정이에요." : "켜면 이야기 안을 직접 고르고, 끄면 봇 추천으로 자동 진행해요.", action: "toggle-council-review", checked: councilReview, disabled: locked, className: "simple-distilled simple-council-review" });
+  // R26 검사 모델: the parent's preference before a job, the job's frozen tier after.
+  const reviewUpper = job
+      ? reviewTierOf(job.textSettings) === REVIEW_TIER_UPPER
+      : settings.reviewTier === REVIEW_TIER_UPPER,
+    reviewLine =
+      job?.demo || textEngine === "demo" || textEngine === "local"
+        ? ""
+        : renderActionSwitch({ id: "simple-review-switch", label: "검사는 최고 모델로", description: locked ? "이 이야기에 고정된 설정이에요." : "끄면(기본) 사건 연결 판정은 한 단계 낮은 모델로 해 요금을 줄여요. 글을 쓰고 고치는 모델은 그대로예요.", action: "toggle-review-tier", checked: reviewUpper, disabled: locked, className: "simple-distilled simple-review-tier" });
   const distilledLine = renderActionSwitch({ id: "simple-distilled-switch", label: "증류 추가 예시", description: locked ? "이 이야기에 고정된 설정이에요." : "승인 예시를 더 참고해요. 꺼도 기본 9점 이상 예시는 유지돼요.", action: "toggle-distilled", checked: distilled, disabled: locked, className: "simple-distilled" });
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
@@ -1216,7 +1226,7 @@ function renderGenerateStep(ctx, w) {
   }
   else
     status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}</details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${reviewLine}${job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}</details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(
@@ -2785,6 +2795,29 @@ async function handle(ctx, action, el) {
     ctx.render();
     return;
   }
+  if (action === "toggle-review-tier") {
+    // R26: a parent setting stored with the text settings (and the World's
+    // copy); only '켜짐' is stored. Locked once the story has its job.
+    if (jobOfWizard(state, w)) return;
+    const text = (state.settings.textGeneration ||= {}),
+      world = getActiveWorld(state),
+      before = { text: text.reviewTier, world: world?.textGeneration?.reviewTier },
+      upper = text.reviewTier !== REVIEW_TIER_UPPER;
+    for (const target of [text, world?.textGeneration].filter(Boolean)) {
+      if (upper) target.reviewTier = REVIEW_TIER_UPPER;
+      else delete target.reviewTier;
+    }
+    if (ctx.save() === false) {
+      for (const [target, value] of [[text, before.text], [world?.textGeneration, before.world]])
+        if (target) {
+          if (value === undefined) delete target.reviewTier;
+          else target.reviewTier = value;
+        }
+      ctx.toast("설정을 저장하지 못했어요.");
+    }
+    ctx.render();
+    return;
+  }
   if (action === "toggle-council-review") {
     // R22: a parent setting (on unless turned off); locked once the story has its job.
     if (jobOfWizard(state, w)) return;
@@ -3050,7 +3083,7 @@ function onClick(event) {
         if (api.isSimpleView?.() && !api.getWizard()?.simpleEditing)
           api.render();
       }
-      if (action === "toggle-distilled" || action === "toggle-council-review")
+      if (action === "toggle-distilled" || action === "toggle-council-review" || action === "toggle-review-tier")
         globalThis.document?.querySelector?.(`[data-simple-action="${action}"]`)?.focus?.({ preventScroll: true });
     }
   });
