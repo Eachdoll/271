@@ -1,6 +1,7 @@
 import { splitSentences as sharedSplitSentences } from "./story-quality/dist/util.js";
 import { VOCAB_DATA, ENGLISH_ONOMATOPOEIA } from "./reading-vocab.js";
 import { unitKind, unitSpec } from "./book-layout.js";
+import { rhythmBand, bookBudget } from "./page-rhythm.js";
 /* Browser-local FK, Revised Spache, Dale–Chall and Korean pattern estimates.
  * These are not certified AR, Lexile or KReaD scores. No Python dependency. */
 const round = (n) => Math.round(n * 100) / 100;
@@ -295,7 +296,8 @@ function unitLengthRules(metrics, spec) {
     unit = spec.unit || "page",
     n = metrics.sentenceCount,
     blocking = [];
-  const band = {
+  // Page rhythm: the wide per-unit band; the book total is judged elsewhere.
+  const band = rhythmBand(spec) || {
     min: range.min - number(tol.countBelow, 1),
     max: range.max + number(tol.countAbove, 2),
   };
@@ -341,7 +343,7 @@ function unitLengthRules(metrics, spec) {
   const offSentences = lengths.filter(
       (value) => value < wps.min || value > wps.max,
     ).length,
-    countOff = n < range.min || n > range.max,
+    countOff = !rhythmBand(spec) && (n < range.min || n > range.max),
     chars = spec.advisoryCharsPerPage,
     charsOff =
       Array.isArray(chars) &&
@@ -379,7 +381,9 @@ const unitRulesApply = (spec, lang) =>
 function violations(metrics, spec, lang) {
   if (unitRulesApply(spec, lang)) return unitViolations(metrics, spec);
   const out = [],
+    // Page rhythm: a frozen rhythm spec judges each page by its wide band.
     expected =
+      rhythmBand(spec) ||
       spec.sentencesPerPageRange ||
       (typeof spec.sentencesPerPage === "number"
         ? { min: spec.sentencesPerPage, max: spec.sentencesPerPage }
@@ -709,6 +713,20 @@ function bookResult(book, specs, options) {
   );
   const metrics = {};
   for (const lang of ["ko", "en"]) {
+    const budget = bookBudget(specs[lang], pageList(book));
+    if (budget) {
+      const total = pages.reduce(
+        (sum, page) => sum + page[lang].metrics.sentenceCount,
+        0,
+      );
+      if (total < budget.min || total > budget.max)
+        bookViolations.push({
+          code: "book-sentence-total",
+          language: lang,
+          actual: total,
+          expected: { min: budget.min, max: budget.max },
+        });
+    }
     const outside = unique(
       pages.flatMap((p) => p[lang].metrics.outOfVocabWords),
     );

@@ -1,3 +1,4 @@
+import {withPageRhythm} from '../dist/page-rhythm.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -189,7 +190,9 @@ test('R12-P1 inputFromWizard with an explicit openings layout freezes the policy
       assert.equal(openings.input.outlineBeatCount, pageCount / 2, name);
       assert.equal(openings.input.pageCount, pageCount);
       assert.deepEqual(openings.input.prosePolicy, {version: 1, condenseOverBudget: {ko: true, en: true}});
-      assert.deepEqual(openings.readingLevels, freezeReadingLevels({...wizard, koVocabulary: []}, seed().settings, {layout: 'openings'}));
+      // Page rhythm (2026-10-19): new drafts add `rhythm` to the frozen specs.
+      const frozen = freezeReadingLevels({...wizard, koVocabulary: []}, seed().settings, {layout: 'openings'});
+      assert.deepEqual(openings.readingLevels, {...frozen, specs: withPageRhythm(frozen.specs)});
       assert.deepEqual(openings.input.specs, openings.readingLevels.specs);
       assert.deepEqual(Object.keys(openings.input).slice(Object.keys(openings.input).indexOf('pageCount'), Object.keys(openings.input).indexOf('pageCount') + 3), ['pageCount', 'layoutPolicy', 'outlineBeatCount']);
       // Everything else is the page input, byte for byte.

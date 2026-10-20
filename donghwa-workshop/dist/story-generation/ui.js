@@ -23,6 +23,7 @@ import {
 } from "./pipeline.js";
 import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
 import { editorPolicy, revisionSummary } from "./book-revision.js";
+import { withPageRhythm } from "../page-rhythm.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -788,6 +789,9 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       wizard.language === "en")
   )
     throw new Error("펼침 구성 책은 한글이 있는 K2~K4 책에서만 만들 수 있어요.");
+  // Page rhythm: new drafts judge the book's sentence total (±20%) and let
+  // each page vary; frozen here in the specs (and the job's readingLevels).
+  readingLevels.specs = withPageRhythm(readingLevels.specs);
   const variants = (wizard.characterIds || [])
     .map((id) => state.characters.find((c) => c.id === id))
     .filter(Boolean)

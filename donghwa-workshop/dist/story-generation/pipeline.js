@@ -68,6 +68,7 @@ import {
   resolveStoryWorld,
 } from "./quality-adapter.js";
 import { inspectChildStory } from "./quality-gates.js";
+import { rhythmPromptLine } from "../page-rhythm.js";
 import {
   hasEditorPolicy,
   REVISION_SCHEMA,
@@ -566,7 +567,7 @@ function baseSystemFor(input) {
     : baseSystem;
 }
 function levelRules(input) {
-  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.${isOpeningsInput(input) ? `\n${layoutRuleLine(input)}` : ""}`;
+  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.${isOpeningsInput(input) ? `\n${layoutRuleLine(input)}` : ""}${rhythmPromptLine(input.specs) ? `\n${rhythmPromptLine(input.specs)}` : ""}`;
 }
 function continuityMeta(input) {
   return input.previousStory

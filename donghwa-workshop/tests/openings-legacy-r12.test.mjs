@@ -414,9 +414,8 @@ const REQUEST_SCENARIOS = {
 const ledger = meta => (meta?.qualityCheckpoint ? {contextFingerprint: meta.qualityCheckpoint.contextFingerprint, keys: Object.keys(meta.qualityCheckpoint.completed || {})} : null);
 async function requestScenario(M, name, s, book) {
   const state = seed(M, {quality: s.quality}), prepared = M.ui.inputFromWizard(state, {...WIZARDS[s.wizard], ...s.wizardPatch});
-  // An existing draft: saved before the editor round, so it carries no editor policy.
-  delete prepared.input.editorPolicy;
-  const input = {...prepared.input, bookId: `legacy-${name}`};
+  // An existing draft: saved before the editor round and page rhythm.
+  const input = {...asExistingDraft(prepared.input), bookId: `legacy-${name}`};
   const scenario = {...s, normalized: M.pipeline.normalizeStoryInput(input), counts: {}};
   const log = [], engine = mockEngine(M, scenario, log), steps = [], options = {engine};
   // Each stage's output data is pinned too, not only what later requests happen to carry.
@@ -458,10 +457,23 @@ async function requestsGroup(M, book) {
 }
 
 // ---------- free demo engine and FULL AUTO ----------
+/**
+ * A draft saved before the editor round and page rhythm (2026-10-19): no
+ * editorPolicy and no `rhythm` in its frozen specs. Pre-round roots have
+ * neither, so this is a no-op there.
+ */
+function asExistingDraft(input) {
+  const {editorPolicy, ...rest} = input;
+  const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
+    const {rhythm, ...plain} = spec || {};
+    return [lang, plain];
+  }));
+  return {...rest, specs};
+}
 async function demoGroup(M) {
   const out = {};
   for (const name of ['K1-E0-12-bilingual', 'K2-E2-16-bilingual', 'K3-E3-24-dual', 'K2-E2-8-dual', 'K2-E2-16-en', 'K4-E4-16-ko']) {
-    const state = seed(M), input = {...M.ui.inputFromWizard(state, WIZARDS[name]).input, bookId: `demo-${name}`}, normalized = M.pipeline.normalizeStoryInput(input);
+    const state = seed(M), input = {...asExistingDraft(M.ui.inputFromWizard(state, WIZARDS[name]).input), bookId: `demo-${name}`}, normalized = M.pipeline.normalizeStoryInput(input);
     const outline = M.demo.demoOutline(normalized), prose = M.demo.demoProse(outline, normalized);
     out[`${name}-raw`] = {outline, prose, pagination: M.demo.demoPagination(outline, prose, normalized)};
     const options = {engineId: 'demo'};
@@ -668,7 +680,9 @@ const PINS = {
   // editorPolicy {version: 1} (inputFromWizard). Nothing else changes; the
   // 'requests' pin strips it to stand for an existing draft and is unchanged.
   // 8087d69: 3338fc4f…c415.
-  inputs: '19904f801500d95834177ccdf6bdcd08898ca068483b3c0cfe071f354fcb7e67',
+  // Page rhythm (2026-10-19): a new draft's frozen specs also gain `rhythm`
+  // (every language but E0/E1). 23c3519: 19904f80…7e67.
+  inputs: '55c71176dd874a238ed74ccfa4bbab3f40adfc3bf97f6f856763af6fd0153f2d',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -685,7 +699,8 @@ const PINS = {
   // demo briefs call carries the new report shape. ebfcbf9: ebcf1dd9…b4ae.
   // Editor round: the new demo jobs' input carries editorPolicy (demo runs
   // never buy the read-through). 8087d69: 12e9fc3d…e2b.
-  fullAutoDemo: '6f236d08e17d8144c515d4de1f72e468e26cd45d4c37026a516cd610a788cca8',
+  // Page rhythm: the new demo jobs' frozen specs carry `rhythm`. 23c3519: 6f236d08…cca8.
+  fullAutoDemo: '0e922d9f35b46e6431d8487057d4c49bdd4f3f435ccfa9fa4d46f89a633fec0f',
   scene: '73b3552a1245eb29e27d8d527c0c83ad256231e07eabbdb36fe0be2031493a91',
   print: '637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654',
   // Re-pinned at the merge: R13 (6ccc895) renames the ③ text-engine options
