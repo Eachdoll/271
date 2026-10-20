@@ -469,6 +469,36 @@ export function getActiveWorld(state) {
 }
 
 /** A shared place has a separately approved rendering in each World. */
+/** The fixed facts a place sheet was approved for (stored on the sheet as `settings`). */
+export function backgroundSheetFacts(background) {
+  return JSON.stringify({
+    name: background.name,
+    type: background.type,
+    description: background.description || background.features || "",
+    layout: background.layout || "",
+  });
+}
+/**
+ * 2026-10-20: a sheet depicts the place's type, description and layout, not
+ * its name; a renamed place keeps its approved picture. Older sheets stored
+ * the name inside the same JSON, so the comparison parses both sides.
+ */
+export function sameBackgroundLook(storedSettings, facts) {
+  if (storedSettings === facts) return true;
+  try {
+    const stored = JSON.parse(storedSettings),
+      current = JSON.parse(facts);
+    return (
+      !!stored &&
+      typeof stored === "object" &&
+      stored.type === current.type &&
+      String(stored.description ?? "") === String(current.description ?? "") &&
+      String(stored.layout ?? "") === String(current.layout ?? "")
+    );
+  } catch {
+    return false;
+  }
+}
 export function getWorldBackgroundSnapshot(
   state,
   background,
@@ -477,19 +507,14 @@ export function getWorldBackgroundSnapshot(
   const result = clone(background);
   delete result.backgroundHistory;
   delete result.backgroundSheets;
-  const facts = JSON.stringify({
-    name: background.name,
-    type: background.type,
-    description: background.description || background.features || "",
-    layout: background.layout || "",
-  });
+  const facts = backgroundSheetFacts(background);
   const matching = (sheet) =>
     sheet.confirmedAt &&
     sheet.meta?.worldId === world.id &&
     sheet.meta?.worldRevision === world.revision &&
     sheet.meta?.imageEngine === world.imageEngine &&
     sheet.meta?.stylePresetId === world.stylePresetId &&
-    sheet.settings === facts;
+    sameBackgroundLook(sheet.settings, facts);
   const sheet = [...(background.backgroundSheets || [])]
     .reverse()
     .find(matching);

@@ -45,7 +45,8 @@ test('Character edits keep input, prior sheets, old engine book snapshots, and o
 test('Repeated name and description edits keep the first book appearance and version history', () => {
   const first = updateCharacter(fixture(),'child',{description:'초록 옷'});
   const second = updateCharacter(first,'child',{name:'민아'});
-  assert.equal(second.characters[0].version,3);
+  // 2026-10-20: the version follows the look; the rename keeps version 2 (and its sheet).
+  assert.equal(second.characters[0].version,2);
   assert.equal(second.characters[0].characterHistory.length,2);
   assert.equal(second.characters[0].characterHistory[1].description,'초록 옷');
   assert.equal(second.books[1].characterSnapshots[0].description,'노란 옷');

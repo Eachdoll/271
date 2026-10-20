@@ -24,7 +24,10 @@ test('old watercolor Worlds upgrade once and preserve frozen books',()=>{
   migrateWorldState(state);assert.equal(world.revision,2);assert.deepEqual(book.generationSnapshot,before);
 });
 test('editing one character invalidates only that character sheet',()=>{
-  const state=seedState();migrateWorldState(state);const edited=updateCharacter(state,'yuha',{name:'유하 새 이름'});
+  const state=seedState();migrateWorldState(state);
+  // 2026-10-20: a rename keeps the approved sheet; a changed look invalidates it.
+  const renamed=updateCharacter(state,'yuha',{name:'유하 새 이름'});assert.ok(getCharacterSheet(renamed,'yuha'));
+  const edited=updateCharacter(state,'yuha',{description:'파란 옷에 노란 모자'});
   assert.equal(getCharacterSheet(edited,'yuha'),null);assert.ok(getCharacterSheet(edited,'greenie'));
   markCharacterSheetConfirmed(edited,'yuha',{imageUrl:'data:image/png;base64,real',seed:4,meta:{requestedSeed:4}});assert.ok(getCharacterSheet(edited,'yuha'));
 });

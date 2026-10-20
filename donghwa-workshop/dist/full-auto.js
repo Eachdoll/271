@@ -17,6 +17,7 @@ import {
   inspectAutoMaterialPlan,
   materializeAutoPlan,
   materialSignature,
+  materialSignatureMatches,
 } from "./story-generation/auto-materials.js";
 import {
   getActiveWorld,
@@ -772,7 +773,8 @@ function assertJobWorld(state, job) {
     const item = [...state.characters, ...state.backgrounds].find(
       (x) => x.id === id,
     );
-    if (!item || materialSignature(item) !== signature)
+    // 2026-10-20: a renamed material (same look) does not stop the run.
+    if (!materialSignatureMatches(item, signature))
       throw Error(
         "사용 중인 기존 재료가 수정·삭제되었어요. 완성한 부분을 검토하거나 새 FULL AUTO를 시작해 주세요.",
       );

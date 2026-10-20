@@ -171,6 +171,34 @@ export function activeBackgrounds(state) {
   return (state.backgrounds || []).filter((item) => !item.archivedAt);
 }
 
+/**
+ * 2026-10-20: fields a character sheet depicts. Only a change here makes the
+ * sheet stale (and bumps the version the sheet is matched by); a new name,
+ * role, traits or catchphrase keeps the approved sheet.
+ */
+export const CHARACTER_APPEARANCE_FIELDS = Object.freeze(
+  new Set([
+    "kind",
+    "age",
+    "color",
+    "hairColor",
+    "skinColor",
+    "description",
+    "appearance",
+    "clothes",
+    "variant",
+    "referenceImages",
+    "referencePhotoAssetIds",
+  ]),
+);
+export function characterAppearanceChanged(original, patch) {
+  const normalized = normalizePatch(patch, CHARACTER_FIELDS);
+  return Object.entries(normalized).some(
+    ([field, value]) =>
+      CHARACTER_APPEARANCE_FIELDS.has(field) &&
+      JSON.stringify(value) !== JSON.stringify(original?.[field]),
+  );
+}
 export function updateCharacter(state, id, patch) {
   const original = record(state, "characters", id);
   if (original.archivedAt)
@@ -181,6 +209,7 @@ export function updateCharacter(state, id, patch) {
       JSON.stringify(value) !== JSON.stringify(original[field]),
   );
   if (!changed) return state;
+  const lookChanged = characterAppearanceChanged(original, normalized);
   if (
     ("name" in normalized && !normalized.name) ||
     ("nameEn" in normalized && !normalized.nameEn)
@@ -198,26 +227,32 @@ export function updateCharacter(state, id, patch) {
   const updated = {
     ...previous,
     ...normalized,
-    version: Math.max(1, Number(previous.version) || 1) + 1,
+    // The version is what a sheet is matched by: it moves only with the look.
+    version: lookChanged
+      ? Math.max(1, Number(previous.version) || 1) + 1
+      : Math.max(1, Number(previous.version) || 1),
     // A parent's edit makes a FULL AUTO friend parent text (strict image-word scope).
     ...(previous.source === "full-auto" ? { parentEditedAt: updatedAt } : {}),
     characterHistory: [
       ...(previous.characterHistory || []),
       { ...materialSnapshot(previous), supersededAt: updatedAt },
     ],
-    sheetStale: true,
-    sheetInvalidatedAt: updatedAt,
+    ...(lookChanged
+      ? { sheetStale: true, sheetInvalidatedAt: updatedAt }
+      : {}),
     updatedAt,
   };
   next.characters = next.characters.map((item) =>
     item.id === id ? updated : item,
   );
-  // Only the edited character needs a new approval; unchanged cast keep their sheets.
-  for (const world of next.worlds || [])
-    if (world.characterIds?.includes(id)) {
-      world.characterSheetsStale = true;
-      world.updatedAt = updatedAt;
-    }
+  // Only the edited character needs a new approval; unchanged cast keep their
+  // sheets, and a renamed one keeps its own.
+  if (lookChanged)
+    for (const world of next.worlds || [])
+      if (world.characterIds?.includes(id)) {
+        world.characterSheetsStale = true;
+        world.updatedAt = updatedAt;
+      }
   return next;
 }
 
@@ -257,6 +292,29 @@ export const deleteBackground = archiveBackground;
 export const restoreBackground = (state, id) =>
   restoreMaterial(state, "backgrounds", id);
 
+/** Fields a place sheet depicts; a new name keeps the approved picture. */
+export const BACKGROUND_APPEARANCE_FIELDS = Object.freeze(
+  new Set([
+    "type",
+    "description",
+    "layout",
+    "rules",
+    "kind",
+    "features",
+    "mood",
+    "color",
+    "referenceImages",
+    "referencePhotoAssetIds",
+  ]),
+);
+export function backgroundAppearanceChanged(original, patch) {
+  const normalized = normalizePatch(patch, BACKGROUND_FIELDS);
+  return Object.entries(normalized).some(
+    ([field, value]) =>
+      BACKGROUND_APPEARANCE_FIELDS.has(field) &&
+      JSON.stringify(value) !== JSON.stringify(original?.[field]),
+  );
+}
 export function updateBackground(state, id, patch) {
   const original = record(state, "backgrounds", id);
   if (original.archivedAt) throw new Error("삭제한 장소는 먼저 복원해 주세요.");
@@ -277,14 +335,19 @@ export function updateBackground(state, id, patch) {
     return state;
   const next = clone(state),
     previous = record(next, "backgrounds", id),
-    updatedAt = now();
+    updatedAt = now(),
+    // 2026-10-20: the version follows the look; a renamed place keeps its
+    // approved picture (sheets and imported pictures are matched by it).
+    lookChanged = backgroundAppearanceChanged(original, normalized);
   preserveBookMaterial(next, previous, "background");
   next.backgrounds = next.backgrounds.map((item) =>
     item.id === id
       ? {
           ...item,
           ...normalized,
-          version: Math.max(1, Number(item.version) || 1) + 1,
+          version: lookChanged
+            ? Math.max(1, Number(item.version) || 1) + 1
+            : Math.max(1, Number(item.version) || 1),
           ...(item.source === "full-auto" ? { parentEditedAt: updatedAt } : {}),
           backgroundHistory: [
             ...(item.backgroundHistory || []),
@@ -402,7 +465,7 @@ export function configureManagementUI(api) {
     if (character.archivedAt)
       throw new Error("삭제한 캐릭터는 먼저 복원해 주세요.");
     api.showModal(
-      `${api.modalHeader(escape(character.name) + " 설정 수정")}<p class="modal-intro">수정하면 새 버전으로 저장하고 캐릭터 시트를 다시 생성해야 합니다. 기존 책은 원래 모습과 시트를 보관합니다.</p><form id="management-character-form" data-id="${escape(id)}"><div class="form-grid">${field("name", "이름 · 한글", character.name, { required: true, max: 30 })}${field("nameEn", "이름 · 영어", character.nameEn, { required: true, max: 40 })}${select(
+      `${api.modalHeader(escape(character.name) + " 설정 수정")}<p class="modal-intro">이름·역할·성격·말버릇만 바꾸면 확정한 시트는 그대로예요. 모습(종류·색·설명·옷)을 바꾸면 시트를 다시 만들어 확정해야 해요. 기존 책은 원래 모습과 시트를 보관합니다.</p><form id="management-character-form" data-id="${escape(id)}"><div class="form-grid">${field("name", "이름 · 한글", character.name, { required: true, max: 30 })}${field("nameEn", "이름 · 영어", character.nameEn, { required: true, max: 40 })}${select(
         "role",
         "역할",
         character.role,
@@ -428,7 +491,7 @@ export function configureManagementUI(api) {
     if (background.archivedAt)
       throw new Error("삭제한 장소는 먼저 복원해 주세요.");
     api.showModal(
-      `${api.modalHeader(escape(background.name) + " 설정 수정")}<p class="modal-intro">장소의 이름과 특징을 바꿉니다. 기존 책은 만들 때의 장소 설정을 보관합니다.</p><form id="management-background-form" data-id="${escape(id)}"><div class="form-grid">${field("name", "장소 이름", background.name, { required: true })}${select(
+      `${api.modalHeader(escape(background.name) + " 설정 수정")}<p class="modal-intro">장소의 이름과 특징을 바꿉니다. 이름만 바꾸면 확정한 장소 그림은 그대로이고, 종류·특징·배치를 바꾸면 그림을 다시 만들어요. 기존 책은 만들 때의 장소 설정을 보관합니다.</p><form id="management-background-form" data-id="${escape(id)}"><div class="form-grid">${field("name", "장소 이름", background.name, { required: true })}${select(
         "type",
         "장소 종류",
         background.type || "forest",
@@ -592,6 +655,11 @@ export function configureManagementUI(api) {
         if (next === api.getState()) {
           api.closeModal();
           api.toast("수정한 내용이 없어요.");
+          return;
+        }
+        // 2026-10-20: a rename (role, traits, catchphrase …) keeps the sheet: no confirm.
+        if (!characterAppearanceChanged(original, patch)) {
+          commit(next, "캐릭터를 수정했어요. 확정한 시트는 그대로예요.");
           return;
         }
         confirm(
