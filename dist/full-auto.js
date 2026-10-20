@@ -1178,12 +1178,19 @@ export async function runFullAuto(
         });
       // The editor policy is the job's own too: a job saved before the editor
       // round never gains it here (its requests stay as they were).
-      const { editorPolicy: _fresh, ...preparedInput } = prepared.input;
+      const {
+        editorPolicy: _fresh,
+        craftPolicy: _freshCraft,
+        ...preparedInput
+      } = prepared.input;
       job.input = {
         ...preparedInput,
         ...(frozenLayout ? { layoutPolicy: clone(frozenLayout) } : {}),
         ...(hasEditorPolicy(job.input)
           ? { editorPolicy: clone(job.input.editorPolicy) }
+          : {}),
+        ...(job.input?.craftPolicy?.version === 1
+          ? { craftPolicy: clone(job.input.craftPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),

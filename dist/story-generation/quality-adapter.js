@@ -10,6 +10,7 @@ import {
 } from "./schemas.js";
 import { LEVEL_SEED } from "../reading-levels.js";
 import { hasEditorPolicy } from "./book-revision.js";
+import { craftCanonRules, hasCraftPolicy } from "./craft-rules.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
 import { findWorld, worldCoreLines } from "../story-quality/dist/worlds.js";
@@ -187,10 +188,16 @@ export function qualityReferenceBooks(
   topic,
   enabled = false,
   catchphrases = [],
-  { catchphraseFilter = true } = {},
+  { catchphraseFilter = true, levelKo = null } = {},
 ) {
   const gold = asList(data.goldBooks);
   if (!enabled) return gold;
+  // Craft drafts: distilled examples of the draft's own Korean level when enough exist.
+  let distilled = asList(data.distilledBooks);
+  if (levelKo) {
+    const same = distilled.filter((book) => book?.levelKo === levelKo);
+    if (same.length >= 10) distilled = same;
+  }
   const normalized = (value) =>
     String(value || "")
       .normalize("NFC")
@@ -200,7 +207,7 @@ export function qualityReferenceBooks(
     seen = new Set();
   return [
     ...gold.map((book) => ({ ...book, referenceSource: "gold" })),
-    ...asList(data.distilledBooks).map((book) => ({
+    ...distilled.map((book) => ({
       ...book,
       referenceSource: "distilled",
     })),
@@ -626,8 +633,9 @@ function catchphraseRules(input, services) {
       .map((character) => `${character.name} (${character.id})`);
   return `${String(services.baseSystem || "").includes(CATCHPHRASE_RULE_EN) ? "" : `CATCHPHRASES: ${CATCHPHRASE_RULE_EN} Never use a catchphrase as the refrain or repeating frame sentence.\n`}${names.length ? `CATCHPHRASE ROTATION: ${names.join(", ")} used a catchphrase in a recent book, so they use no catchphrase in this book.\n` : ""}`;
 }
-function canonicalWorldRules(input, services, bindTargetLevel = true) {
-  return `${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
+function canonicalWorldRules(input, services, bindTargetLevel = true, stage = "outline") {
+  const craft = craftCanonRules(input, stage);
+  return `${craft ? `${craft}\n` : ""}${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
 }
 function enrichedOutlineSchema(input, pattern, services) {
   const supplied =
@@ -1239,7 +1247,10 @@ export async function generateQualityOutline(
         input.topic,
         quality.useDistilledExamples === true,
         catchphrases,
-        { catchphraseFilter: r9 },
+        {
+          catchphraseFilter: r9,
+          levelKo: hasCraftPolicy(input) ? input.specs?.ko?.id || null : null,
+        },
       );
     const fixContext = { input, allowedPlaces: allowedPlaces(input) },
       beam = quality.useBeamSearch === true;
@@ -1715,7 +1726,7 @@ export async function generateQualityProse(
             role === "cheap" && hasEditorPolicy(input) ? "prose" : role,
             {
               ...request,
-              system: `${canonicalWorldRules(input, services, !richDraft)}\n${request.system}\n${rules}`,
+              system: `${canonicalWorldRules(input, services, !richDraft, "prose")}\n${request.system}\n${rules}`,
               user: `${request.user}\n\nFROZEN_APPROVED_OUTLINE_JSON: ${JSON.stringify(outline)}\n${richDraft ? "FINAL_TARGET_LEVEL_FOR_LATER_SIMPLIFY_ONLY" : "TARGET_LEVEL_SPEC_JSON"}: ${JSON.stringify(input.specs[lang])}`,
               maxTokens: wrapTokens,
               ...openingTimeout("qualityWrap", input, wrapTokens),

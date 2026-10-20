@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, ...plain} = spec || {};
     return [lang, plain];
@@ -682,7 +682,9 @@ const PINS = {
   // 8087d69: 3338fc4f…c415.
   // Page rhythm (2026-10-19): a new draft's frozen specs also gain `rhythm`
   // (every language but E0/E1). 23c3519: 19904f80…7e67.
-  inputs: '55c71176dd874a238ed74ccfa4bbab3f40adfc3bf97f6f856763af6fd0153f2d',
+  // Craft rules (2026-10-20): a new draft's input also gains craftPolicy
+  // {version: 1}. 25e3760: 55c71176…3f2d.
+  inputs: 'f3db9e82b8a2d4da80b4e4945e5246ea6eee87887315eaaa70ee0150657f3e24',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -700,7 +702,8 @@ const PINS = {
   // Editor round: the new demo jobs' input carries editorPolicy (demo runs
   // never buy the read-through). 8087d69: 12e9fc3d…e2b.
   // Page rhythm: the new demo jobs' frozen specs carry `rhythm`. 23c3519: 6f236d08…cca8.
-  fullAutoDemo: '0e922d9f35b46e6431d8487057d4c49bdd4f3f435ccfa9fa4d46f89a633fec0f',
+  // Craft rules: the new demo jobs' input carries craftPolicy. 25e3760: 0e922d9f…ec0f.
+  fullAutoDemo: '063dc4a030d9eee0310a21f95c71c4e479e9b2d896983125d695d13f425f567c',
   scene: '73b3552a1245eb29e27d8d527c0c83ad256231e07eabbdb36fe0be2031493a91',
   print: '637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654',
   // Re-pinned at the merge: R13 (6ccc895) renames the ③ text-engine options

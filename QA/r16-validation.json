@@ -1,0 +1,52 @@
+{
+  "repository": "https://github.com/Eachdoll/271",
+  "branch": "claude/cross-owner-repo-constraint-j20lhz",
+  "codeRange": "b6ad977..137312a",
+  "documentCommit": "47f5bdf",
+  "baseline": "7831f90aeb723661aa8d572e5737acbc016136fd",
+  "matchedFiles": {
+    "donghwa-workshop/CLAUDE.md": "05843eade260b16e079b376d971d90c066b4d6689ab4e262a1783740484531ab",
+    "donghwa-workshop/CODEX_WORK_ORDER_R16_2026-10-20.md": "e6e0f68d4d4a4b17021678dedabe100255a627739ca9c309b7e9ad471613b4b8",
+    "donghwa-workshop/dist/full-auto.js": "ae075426d8c7f6cd03ac2813bce7c922d75d41e0b840bddd43db000b784ca4aa",
+    "donghwa-workshop/dist/image-generation/scene-prompt.js": "2a19b05b888870abe02c7eb4cf77aa4e29877c154f55f10612e1a607af12b08a",
+    "donghwa-workshop/dist/story-generation/book-revision.js": "24ad7aefb72f58ab9a4a2711d361b16dc1e1988c182865e16bcd28d49844e889",
+    "donghwa-workshop/dist/story-generation/checker.js": "b04a620a1553566976c97da9a7b3c1513d9020bd67683c8316e3dd5ecd9107bb",
+    "donghwa-workshop/dist/story-generation/craft-rules.js": "a2772c8e34b1767ad7d52050cf592cb7fb3e979f2164fb9f40b0cb2b00f2b2f9",
+    "donghwa-workshop/dist/story-generation/pipeline.js": "50622b57ddc068ececcf4d928c4d929979e63958af890fa66381c77d578ae034",
+    "donghwa-workshop/dist/story-generation/quality-adapter.js": "2d58633b1db3079c5e13bfa565236f3e664d8061c53fd702bf575425555843c7",
+    "donghwa-workshop/dist/story-generation/schemas.js": "02d31b781579dc49e52e6b62ce1dec1bbef77f6eddbb9e40c82a455710a57d20",
+    "donghwa-workshop/dist/story-generation/ui.js": "887b3479dfbdbb1e76a27ec0d87313020d2e780b14ca7ac5a479e45cdf948aed",
+    "donghwa-workshop/dist/sw.js": "924a5e7d05b9dc54d9d8a97c9de5e80b5f7fdedfb628d534c4942bd27ba34482",
+    "donghwa-workshop/tests/craft-rules.test.mjs": "6c56eb23b177992af9c7207b66efd39888498d0de12f7039fff6b7e4f27076ec",
+    "donghwa-workshop/tests/openings-legacy-r12.test.mjs": "e13754b60f2ecd9cb05fc436aa3a64aa6f352c8be4dcfc9c56260c6fed5679e4",
+    "donghwa-workshop/tests/openings-policy-r12.test.mjs": "57143d944b7b0927afdca0118103cccede53832c1883a3222f44eca8f34390c5"
+  },
+  "build": "passed",
+  "qualityCompiledCopies": "identical",
+  "runtimeClient": "identical",
+  "tests": {
+    "app": 864,
+    "quality": 79,
+    "failures": 0,
+    "skipped": 0
+  },
+  "paidApiCalls": 0,
+  "serviceWorker": "donghwa-shell-v47",
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "ux": {
+    "proSameAsTable": true,
+    "errors": [],
+    "paidRequests": 0,
+    "maxSimpleStepButtons": 10
+  },
+  "simpleSmoke": {
+    "widths": [
+      1280,
+      390
+    ],
+    "result": "passed",
+    "errors": 0,
+    "paidRequests": 0,
+    "imageBugSkipped": false
+  }
+}

@@ -3,6 +3,8 @@ import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
 import { getLevelSpec } from "../reading-levels.js";
 import { unitKind, unitSpec } from "../book-layout.js";
 import { bookBudget, usualSentences } from "../page-rhythm.js";
+import { keyPropsNamed } from "./craft-rules.js";
+import { sceneBriefRows } from "./scene-briefs.js";
 import {
   catchphraseRepeats,
   countCatchphrase,
@@ -237,6 +239,7 @@ export function checkStory(
     storyWords = [],
     storyInput = null,
     catchphrases = storyInput ? storyCatchphrases(storyInput) : [],
+    craftPolicy = null
   } = {},
 ) {
   const rawPages = Array.isArray(pagination)
@@ -575,6 +578,28 @@ export function checkStory(
       }
   }
 
+  // Craft drafts: a small object the page's words name should be in scene.action
+  // so the picture shows it (advisory; the pagination rule asks for it).
+  if (craftPolicy?.version === 1) {
+    const briefs = sceneBriefRows(pagination?.sceneBriefs);
+    for (const { page, pageNo } of pages) {
+      const brief = briefs.find((b) => b?.beatIndex === page?.beatIndex),
+        action = String(page?.scene?.action || "").toLowerCase(),
+        missing = keyPropsNamed(brief, page).filter(
+          (prop) => !action.includes(prop.toLowerCase()),
+        );
+      if (missing.length)
+        warnings.push({
+          type: "drawable_scene",
+          code: "key-prop-missing",
+          severity: "warning",
+          advisory: true,
+          pageNo,
+          props: missing,
+          message: `${pageNo}쪽 글에 나온 ${missing.join(", ")}이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.`,
+        });
+    }
+  }
   for (const { page, pageNo } of pages) {
     const action = String(page?.scene?.action || ""),
       tokens = englishWords(action);
