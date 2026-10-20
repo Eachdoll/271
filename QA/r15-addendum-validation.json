@@ -1,0 +1,36 @@
+{
+  "upstream": "https://github.com/Eachdoll/271",
+  "branch": "claude/cross-owner-repo-constraint-j20lhz",
+  "range": "deed539..b6ad977",
+  "commits": [
+    "4faaf9a",
+    "b6ad977"
+  ],
+  "importedFilesByteIdentical": 9,
+  "tests": {
+    "app": 856,
+    "quality": 79,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": "passed",
+  "ux": {
+    "proSameAsTable": true,
+    "errors": [],
+    "paidRequests": 0,
+    "maxSimpleStepButtons": 10
+  },
+  "serviceWorker": "donghwa-shell-v46",
+  "push": false,
+  "deploy": false,
+  "simpleSmoke": {
+    "widths": [
+      1280,
+      390
+    ],
+    "result": "passed",
+    "errors": 0,
+    "paidRequests": 0,
+    "knownImageBugSkipped": false
+  }
+}

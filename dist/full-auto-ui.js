@@ -4,6 +4,7 @@ import {
   createAutoStopWatcher,
 } from "./full-auto-control.js";
 import {
+  deleteFullAutoJob,
   autoJobs,
   createFullAutoJob,
   estimateFullAutoCost,
@@ -206,7 +207,7 @@ function renderSimpleJobs(state) {
   return `<section class="panel full-auto-jobs simple-jobs" id="full-auto-jobs" data-simple="true"><h3>제작 중인 이야기</h3><p class="section-sub">이어서 만들면 멈춘 단계에서 열려요. 여는 것만으로는 아무것도 새로 만들지 않아요.</p><div class="story-drafts">${jobs
     .map(
       (job) =>
-        `<article class="story-draft-card simple-job-card" data-auto-job="${esc(job.id)}"><span class="role-tag">${esc(simpleJobLabel(job))}</span><strong>${esc(job.book?.title || job.input?.topic || job.wizard?.topic || "이야기")}</strong>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${button("이어서 만들기", "simple-open", job.id, "green")}${job.status === "running" ? button("중지", "pause", job.id) : ""}</div></article>`,
+        `<article class="story-draft-card simple-job-card" data-auto-job="${esc(job.id)}"><span class="role-tag">${esc(simpleJobLabel(job))}</span><strong>${esc(job.book?.title || job.input?.topic || job.wizard?.topic || "이야기")}</strong>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${button("이어서 만들기", "simple-open", job.id, "green")}${job.status === "running" ? button("중지", "pause", job.id) : button("지우기", "delete", job.id, "plain")}</div></article>`,
     )
     .join("")}</div></section>`;
 }
@@ -232,7 +233,7 @@ export function renderFullAutoJobs(state, { simple = false, rest = false } = {})
           pending?.nonce &&
           pending.nonce !== job.stopBaselineNonce &&
           job.status !== "paused";
-      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}</div></article>`;
+      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}</div></article>`;
     })
     .join("")}</div></section>`;
 }
@@ -652,6 +653,27 @@ export function configureFullAutoUI(context) {
         if (!job) throw Error("자동 작업을 찾지 못했어요.");
         if (action === "pause") {
           await stopJob(job);
+          return;
+        }
+        // Delete an in-progress story: ask first, then remove the job and its draft.
+        if (action === "delete" || action === "delete-confirm") {
+          if ((currentJob?.id === job.id && controller) || job.status === "running")
+            throw Error("만드는 중인 이야기는 먼저 중지한 뒤 지울 수 있어요.");
+          if (pageWorkBusy(job)) throw Error(PAGE_BUSY_MESSAGE);
+          const title = job.book?.title || job.input?.topic || job.wizard?.topic || "이야기";
+          if (action === "delete") {
+            api.showModal(
+              `${api.modalHeader("만들던 이야기 지우기")}<p class="modal-intro">‘${esc(title)}’ 이야기를 지울까요? 만들던 글과 그림 초안이 사라지고 되돌릴 수 없어요.</p><p class="small-label">이미 책장에 저장한 책과 서랍의 등장인물·배경은 그대로 남아요. 이미 낸 요금은 돌려받을 수 없어요.</p><div class="modal-actions">${button("취소", "close")}${button("지우기", "delete-confirm", job.id, "primary")}</div>`,
+            );
+            return;
+          }
+          const removed = deleteFullAutoJob(state, job.id);
+          if (inspectedId === job.id) inspectedId = null;
+          if (api.save() === false) throw Error("지운 내용을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+          api.closeModal();
+          api.onJobDeleted?.(removed);
+          api.render();
+          api.toast(`‘${removed.title}’ 이야기를 지웠어요.`);
           return;
         }
         if (action === "status") {

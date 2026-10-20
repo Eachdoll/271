@@ -3942,6 +3942,14 @@ configureFullAutoUI({
     return structuredClone(wizard);
   },
   buildBook: buildStoryResultBook,
+  // A deleted in-progress story: leave any screen that still shows it.
+  onJobDeleted: ({ jobId }) => {
+    if (wizard?.simpleJobId === jobId || draft?.fullAutoRunId === jobId) {
+      wizard = null;
+      if (draft?.fullAutoRunId === jobId) draft = null;
+      if (view === "create" || view === "edit") view = "library";
+    }
+  },
   // While a simple action is running, openSimpleJob refuses (and says why); keep the dialog open.
   openSimpleReview: async (jobId) => {
     if (!isSimpleBusy()) closeModal();

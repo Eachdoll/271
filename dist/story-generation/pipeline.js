@@ -1617,6 +1617,16 @@ export function preflightOutlineLocations(source = {}) {
   };
 }
 const TOPIC_STOP_WORDS = new Set([
+  "날",
+  "하루",
+  "처음",
+  "마지막",
+  "때",
+  "다시",
+  "같이",
+  "모든",
+  "많은",
+  "여러",
   "친구",
   "친구들",
   "이야기",
@@ -1686,24 +1696,8 @@ export function storyTopicKeywords(topic = "") {
         .toLowerCase()
         .match(/[\p{L}\p{N}]+/gu) || [],
     result = [];
-  for (let word of words) {
-    if (TOPIC_STOP_WORDS.has(word)) continue;
-    if (/[가-힣]/u.test(word)) {
-      // Drop requests and conjugated predicates; retain nouns, including one-syllable topics.
-      if (
-        /(?:해요|어요|아요|어요|에요|예요|하고|하며|하는|하던|하며|싶어|싶어요|찾아요|찾아줘|만들어요|만들어줘|해주세요|주세요|하기|하기로|있어요|없어요|했어요|됐어요)$/u.test(
-          word,
-        )
-      )
-        continue;
-      if (word.length > 1)
-        word = word.replace(
-          /(?:에서는|으로는|에게는|에서|에게|으로|처럼|까지|부터|보다|이랑|랑|와|과|을|를|은|는|의|로)$/u,
-          "",
-        );
-      if (word === "비가" || (word.length > 2 && word.endsWith("가")))
-        word = word.slice(0, -1);
-    }
+  for (const raw of words) {
+    const word = /[가-힣]/u.test(raw) ? koreanTopicNoun(raw) : raw;
     if (
       !word ||
       TOPIC_STOP_WORDS.has(word) ||
@@ -1715,6 +1709,85 @@ export function storyTopicKeywords(topic = "") {
   }
   return result.slice(0, 12);
 }
+/* 2026-10-20: "달에 놀러 간 날" gave 달에·놀러·간·날 and every outline about
+ * the moon failed the topic check. Particles are taken off by the sound they
+ * follow (가·는·를·와·로 after a vowel, 이·은·을·과·으로 after a consonant),
+ * 에/에서 always; predicates (놀러, 쓰고, 줍는, 날아간, 잃어버린) and generic
+ * time words (날, 처음) are not topics; a one-syllable keyword must be a
+ * known noun (달, 비, 눈, 별 …), so a verb stem (줍, 심) never becomes one. */
+const KO_ONE_SYLLABLE_NOUNS = new Set(
+  "달 비 눈 별 해 꽃 숲 집 길 산 강 섬 배 차 책 공 개 새 곰 말 소 닭 양 쥐 벌 게 물 불 빵 떡 밥 옷 문 연 굴 알 콩 감 귤 밤 잎 풀 돌 흙 탑 성 왕 용 뱀 학 곶 못 늪 벽 춤 꿈 빛 봄 똥 방 컵 붓 활 북 종 침 약 실 끈 솔 빗".split(
+    " ",
+  ),
+);
+const KO_PREDICATE_NOUN_EXCEPTIONS = new Set([
+  "기린", "시간", "공간", "인간", "사진", "마린", "어린이", "창고", "사고", "최고", "공고", "포도", "사과", "도서", "의자", "모자", "과자", "피자", "바나나",
+]);
+const hasBatchim = (syllable) => {
+  const code = syllable.codePointAt(0) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0;
+};
+function koreanTopicNoun(raw) {
+  if (TOPIC_STOP_WORDS.has(raw)) return "";
+  if (KO_PREDICATE_NOUN_EXCEPTIONS.has(raw)) return raw;
+  // Requests and conjugated predicates are never topics.
+  if (
+    /(?:해요|어요|아요|에요|예요|하고|하며|하는|하던|싶어|싶어요|찾아요|찾아줘|만들어요|만들어줘|해주세요|주세요|하기|하기로|있어요|없어요|했어요|됐어요)$/u.test(
+      raw,
+    )
+  )
+    return "";
+  let word = raw,
+    stripped = false;
+  // Particles: always-on first, then by the sound before them.
+  const always = /(?:에서는|에서도|에서|에게는|에게|한테|까지|부터|처럼|보다|에는|에도|에)$/u.exec(word);
+  if (always && word.length > always[0].length) {
+    word = word.slice(0, -always[0].length);
+    stripped = true;
+  } else {
+    for (const [ending, afterConsonant] of [
+      ["으로", true],
+      ["이랑", true],
+      ["로", null],
+      ["랑", false],
+      ["과", true],
+      ["와", false],
+      ["을", true],
+      ["를", false],
+      ["은", true],
+      ["는", false],
+      ["의", null],
+      ["가", false],
+      ["이", true],
+    ]) {
+      if (!word.endsWith(ending) || word.length <= ending.length) continue;
+      const stem = word.slice(0, -ending.length),
+        last = stem.at(-1);
+      if (afterConsonant === true && !hasBatchim(last)) continue;
+      if (afterConsonant === false && hasBatchim(last)) continue;
+      // 고양이·아이·놀이: a trailing 이 after a consonant is usually the noun.
+      if (ending === "이" && stem.length < 2) continue;
+      if (ending === "이" && /(?:양|놀|아|오|원숭|송|돼|벌|거북|달팽)$/u.test(stem)) continue;
+      word = stem;
+      stripped = true;
+      break;
+    }
+  }
+  if (KO_PREDICATE_NOUN_EXCEPTIONS.has(word)) return word;
+  // Predicate forms left after particles: purpose (놀러), linking (쓰고·가서·하며),
+  // adnominal (줍는·날아간·잃어버린·놀던·심은·갈).
+  if (
+    !stripped &&
+    /(?:러|고|서|며|면|던|는|간|온|린|난|된|본|탄|운|쓴|준|든|른|은|을|할|갈|올|볼|줄|진|인)$/u.test(
+      word,
+    ) &&
+    !(word.length === 1 && KO_ONE_SYLLABLE_NOUNS.has(word))
+  )
+    return "";
+  if (TOPIC_STOP_WORDS.has(word)) return "";
+  if (word.length === 1 && !KO_ONE_SYLLABLE_NOUNS.has(word)) return "";
+  return word;
+}
 function includesTopicKeyword(body, keyword) {
   const tokens = body.match(/[\p{L}\p{N}]+/gu) || [];
   return tokens.some(
@@ -1722,7 +1795,7 @@ function includesTopicKeyword(body, keyword) {
       token === keyword ||
       (/[가-힣]/u.test(keyword) &&
         token.startsWith(keyword) &&
-        /^(?:이|가|을|를|은|는|에|와|과|의|도|만|로|으로|들|처럼|까지|부터|마다|보다|랑|이라|이었|이에|이다|예요|야|요|하|해|했|한|할|합|되|된)/u.test(
+        /^(?:이|가|을|를|은|는|에|와|과|의|도|만|로|으로|들|처럼|까지|부터|마다|보다|랑|이라|이었|이에|이다|예요|야|요|하|해|했|한|할|합|되|된|나라|빛|님|맞이|속|길|마을|놀이|구경|나들이|여행|밭|가)/u.test(
           token.slice(keyword.length),
         )) ||
       (!/[가-힣]/u.test(keyword) &&
