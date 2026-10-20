@@ -100,9 +100,25 @@ test('reader cards, the direction line and the condition block come from the lev
 
 test('the room: five economy calls, the chair scores with vetoes, the bible is normalised, the log is written; a resume replays without a call', async () => {
   const input = councilInput(), engine = roomEngine(); engine.input = input;
-  const saved = [];
-  const result = await runStoryCouncil(input, {engine, onCheckpoint: (cp) => saved.push(cp)}, {engineFor: async () => engine});
+  const saved = [], events = [];
+  const result = await runStoryCouncil(input, {engine, onCheckpoint: (cp) => saved.push(cp), onProgress: (e) => events.push(e)}, {engineFor: async () => engine});
   assert.equal(engine.calls.length, COUNCIL_CALLS);
+  // R21: the room follows the meeting: a snapshot with the phase and who speaks after every answer.
+  const phases = saved.map(cp => cp.councilCheckpoint?.record?.phase).filter(Boolean);
+  assert.deepEqual([...new Set(phases)], ['pitches', 'verdicts', 'bible', 'done']);
+  const roomEvents = events.filter(e => e.stage === 'council' && e.council);
+  assert.deepEqual(roomEvents[0].council.roles, {chair: 'speaking', author: 'speaking', editor: 'waiting', art: 'waiting', reader: 'waiting'});
+  const judging = roomEvents.find(e => e.phase === 'verdicts');
+  assert.deepEqual(judging.council.roles, {chair: 'waiting', author: 'done', editor: 'speaking', art: 'speaking', reader: 'speaking'});
+  assert.equal(judging.council.pitches.length, 3);
+  const landed = roomEvents.filter(e => e.phase === 'verdicts' && e.council.verdicts);
+  assert.ok(landed.length >= 3, 'each verdict lands in the room as it arrives');
+  assert.ok(landed.some(e => e.council.roles.editor === 'done' && e.council.verdicts.editor));
+  const bibleEvent = roomEvents.find(e => e.phase === 'bible');
+  assert.deepEqual(bibleEvent.council.roles, {chair: 'done', author: 'speaking', editor: 'done', art: 'done', reader: 'done'});
+  assert.equal(bibleEvent.council.chosen, 2);
+  assert.equal(roomEvents.at(-1).phase, 'done');
+  assert.equal(roomEvents.at(-1).council.bible.title, '빨간 장화의 종');
   const {record} = result;
   assert.equal(record.pitches.length, 3);
   assert.equal(record.chosen, 2);

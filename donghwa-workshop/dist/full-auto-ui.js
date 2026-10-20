@@ -16,6 +16,7 @@ import {
   openStopReport,
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
+import { renderCouncilRoom, liveCouncilRecord, emptyCouncilRecord } from "./story-generation/council-room.js";
 import {
   isPageOperationBusy,
   isPageImageStale,
@@ -251,6 +252,15 @@ function refreshCards() {
     });
 }
 
+/** R21: the writers' room in the status window (a live run follows it; a finished one keeps it). */
+function councilRoomHtml(job, busy) {
+  const record = liveCouncilRecord(job);
+  if (!record) {
+    const pending = job?.input?.councilPolicy?.version === 1 && !job?.demo && !job?.completed?.outline;
+    return busy && pending ? renderCouncilRoom(emptyCouncilRecord(job.input), { live: true }) : "";
+  }
+  return renderCouncilRoom(record, { live: busy && record.phase !== "done" });
+}
 function runScreen(job, busy) {
   inspectedId = job.id;
   const plan = job.plan,
@@ -261,7 +271,7 @@ function runScreen(job, busy) {
     ),
     imageCalls = Object.keys(job.imageUsage || {}).length;
   api.showModal(
-    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><p id="full-auto-count" class="small-label">그림 ${images} / ${jobPictureTotal(job)} · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
+    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><div id="full-auto-council" class="council-room-wrap">${councilRoomHtml(job, busy)}</div><p id="full-auto-count" class="small-label">그림 ${images} / ${jobPictureTotal(job)} · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
       ["plan", "재료 선택"],
       ["input", "시트 준비"],
       ["outline", "줄거리"],
@@ -379,8 +389,10 @@ async function execute(job, { navigate = true, onProgress, redraw = [] } = {}) {
         )
           return;
         const progress = document.querySelector("#full-auto-progress"),
-          count = document.querySelector("#full-auto-count");
+          count = document.querySelector("#full-auto-count"),
+          room = document.querySelector("#full-auto-council");
         if (progress) progress.textContent = message;
+        if (room) room.innerHTML = councilRoomHtml(job, true);
         if (count)
           count.textContent = `그림 ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job)} · 글 요청 ${job.usage.calls.reduce((n, c) => n + (Number(c.requests) || 0), 0)}회`;
       },

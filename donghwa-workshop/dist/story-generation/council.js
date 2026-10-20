@@ -15,6 +15,7 @@ import { ledger } from "./quality-adapter.js";
 import { frozenBeatCount, StoryValidationError } from "./schemas.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { isOpeningsInput } from "./opening-prose.js";
+import { renderCouncilRoom } from "./council-room.js";
 
 export const COUNCIL_POLICY_VERSION = 1;
 export const councilPolicy = () => ({ version: COUNCIL_POLICY_VERSION });
@@ -467,10 +468,18 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     overrode: false,
     bible: null,
     decisions: [],
+    // R21 회의실: which round is on and who is speaking, saved after every
+    // answer so a screen (or a resumed run) can draw the room as it was.
+    phase: "pitches",
+    roles: { chair: "speaking", author: "speaking", editor: "waiting", art: "waiting", reader: "waiting" },
   };
   const log = (entry) => appendDecision(record, entry);
-  const progress = (message) =>
-    options.onProgress?.({ stage: "council", phase: "request", message });
+  const snapshot = async (phase, message) => {
+    record.phase = phase;
+    journal.checkpoint.record = clone(record);
+    await journal.save();
+    options.onProgress?.({ stage: "council", phase, message, council: clone(record) });
+  };
   const ask = async (label, system, user, jsonSchema, temperature, maxTokens) => {
     const response = await journal.call("cheap", { system, user, jsonSchema, temperature, maxTokens }, services);
     const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));
@@ -490,7 +499,9 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
       scores = [],
       picked = null;
     for (let round = 0; round < 2; round++) {
-      progress(PROGRESS.pitches);
+      record.roles = { chair: "speaking", author: "speaking", editor: "waiting", art: "waiting", reader: "waiting" };
+      record.verdicts = null;
+      await snapshot("pitches", PROGRESS.pitches);
       const vetoNote =
         round && verdicts
           ? `\n\n[이전 피치의 거부 사유 — 같은 실수를 되풀이하지 않는다]\n${scores.map((row) => `피치 ${row.pitch}: ${row.vetoes.join(" / ")}`).join("\n")}`
@@ -506,11 +517,23 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
       pitches = list(proposed.pitches).map((row) => normalizePitch(row, attempts)).filter(Boolean).slice(0, 3);
       if (!pitches.length) throw journal.fail(councilError("작가 봇이 쓸 수 있는 피치를 내지 못했어요."));
       log({ by: "작가 봇", kind: "proposed", what: `피치 ${pitches.length}개: ${pitches.map((p) => p.title || p.logline).join(" / ")}`, why: round ? "거부된 피치를 대신해 다시 제안" : "방향·조건에 맞춘 첫 제안" });
-      // Round B: the three critics in parallel, each with its own standard.
-      progress(PROGRESS.verdicts);
+      record.pitches = pitches;
+      record.roles = { chair: "waiting", author: "done", editor: "speaking", art: "speaking", reader: "speaking" };
+      // Round B: the three critics in parallel, each with its own standard; the
+      // room shows each verdict as it lands.
+      await snapshot("verdicts", PROGRESS.verdicts);
       const shown = `[피치]\n${JSON.stringify(pitches)}`;
+      const partial = {};
+      const critic = async (role, key, shape, ...args) => {
+        const data = await ask(...args);
+        partial[key] = shape(data);
+        record.verdicts = { ...(record.verdicts || {}), ...partial };
+        record.roles[role] = "done";
+        await snapshot("verdicts", PROGRESS.verdicts);
+        return data;
+      };
       const [editor, art, reader] = await Promise.all([
-        ask(
+        critic("editor", "editor", (d) => byPitch(d.verdicts, pitches.length),
           "편집자",
           PERSONA.editor,
           `${context}\n\n[점검표 — 항목마다 0(없음)·1(약함)·2(분명함)]\n${SPINE_CHECKLIST.map((row, i) => `${i + 1} ${row}`).join("\n")}${references.length ? `\n\n[참조 — 좋은 책의 뼈대 카드. 인물·물건·사건 재사용 금지]\n${references.join("\n")}` : ""}\n\n${shown}\n\n[출력] JSON만. 피치마다 verdict{pitch, stakes, ladder, lowPoint, turn, payoff, direction, veto(뼈대 결격이면 true), vetoReason, fixes(고칠 점 최대 2개)}와 pick(방향에 가장 잘 도달하는 피치 번호).`,
@@ -518,7 +541,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
           0.2,
           1600,
         ),
-        ask(
+        critic("art", "art", (d) => byPitch(d.verdicts, pitches.length),
           "그림 감독",
           PERSONA.art,
           `${context}\n\n[그릴 수 있는가 — 항목마다 0·1·2]\ndrawableTurn: 반전이 아이 눈에 보이는 순간인가(마음속 깨달음만이면 0)\nplantedVisible: 심은 물건이 1비트 그림에 자연스럽게 놓이는가\nlowPointVisible: 바닥이 그림으로 드러나는가(큰 공간에 작은 아이, 빈 손, 멈춘 발)\nvariety: 비트마다 장소·카메라·크기가 달라지는가\n또 피치마다 책 전체에 되풀이할 시각 모티프 2~3개(ko/en)를 제안한다. 승인 재료 밖의 장소·인물을 쓰면 veto.\n\n${shown}\n\n[출력] JSON만. verdicts[{pitch, drawableTurn, plantedVisible, lowPointVisible, variety, motifs[{ko,en}], veto, vetoReason, fixes}], pick.`,
@@ -526,7 +549,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
           0.2,
           1600,
         ),
-        ask(
+        critic("reader", "reader", (d) => byPitch(d.reactions, pitches.length),
           "독자",
           PERSONA.reader(card),
           `어른이 피치 3개를 차례로 들려줘요.\n\n${shown}\n\n[출력] JSON만. 피치마다 reaction{pitch, nextQuestion(듣다가 "다음엔?" 하고 묻고 싶은 정도 0·1·2), retell(반전을 네 말로 한 문장), retellHasTurn(그 한 문장에 반전이 들어 있으면 true), scary(무섭거나 어려운 데가 있으면 한 줄, 없으면 빈 문자열)}, favorite(제일 듣고 싶은 피치 번호).`,
@@ -542,6 +565,9 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         picks: { editor: Number(editor.pick) || null, art: Number(art.pick) || null, reader: Number(reader.favorite) || null },
       };
       scores = chairScores(verdicts.editor, verdicts.art, verdicts.reader, pitches.length);
+      record.verdicts = verdicts;
+      record.scores = scores;
+      record.roles.chair = "speaking";
       for (const row of scores)
         log({ by: "의장", kind: "reviewed", what: `피치 ${row.pitch}: 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 → ${row.score}/12`, why: row.vetoes.length ? `거부: ${row.vetoes.join(" / ")}` : "" });
       const choice = pickPitch(scores, editor, art);
@@ -566,7 +592,8 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         log({ by: "의장", kind: "dropped", what: `피치 ${row.pitch} '${pitches[row.pitch - 1]?.title}'`, why: row.vetoes.length ? row.vetoes.join(" / ") : `점수 ${row.score} < ${scores[index].score}` });
     log({ by: "의장", kind: "adopted", what: `피치 ${picked.pick} '${chosen.title}'`, why: picked.overrode ? "모든 피치가 거부되어 가장 높은 점수를 택함" : `편집자 ${scores[index].editor}/12 · 그림 ${scores[index].art}/8 · 독자 ${scores[index].reader}/4` });
     // Round C: the author fixes the bible from the chosen pitch and the critics' fixes.
-    progress(PROGRESS.bible);
+    record.roles = { chair: "done", author: "speaking", editor: "done", art: "done", reader: "done" };
+    await snapshot("bible", PROGRESS.bible);
     const fixes = [...list(e?.fixes), ...list(a?.fixes), ...(r?.scary ? [`독자: ${str(r.scary, 200)}`] : [])].map((row) => str(row, 200)).filter(Boolean);
     const motifs = list(a?.motifs).filter(object).map((m) => ({ ko: str(m.ko, 60), en: str(m.en, 60) })).filter((m) => m.ko || m.en);
     const bibleReply = await ask(
@@ -592,8 +619,8 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     };
     record.bible = bible;
     log({ by: "작가 봇", kind: "revised", what: `바이블 확정 '${bible.title}'`, why: fixes.length ? `반영한 지적 ${fixes.length}개: ${fixes.join(" / ")}`.slice(0, 300) : "지적 없음" });
-    journal.checkpoint.record = clone(record);
-    await journal.save();
+    record.roles = { chair: "done", author: "done", editor: "done", art: "done", reader: "done" };
+    await snapshot("done", "기획 회의를 마쳤어요. 바이블대로 줄거리를 씁니다.");
     return { record, usage: journal.usage(), meta: { ...journal.summary(), stage: "council" } };
   } catch (error) {
     if (error?.name === "AbortError") throw error;
@@ -617,6 +644,7 @@ export function attachCouncil(outline, result) {
     chosen: record.chosen,
     overrode: record.overrode,
     decisions: record.decisions,
+    verdicts: record.verdicts ? { editor: record.verdicts.editor, art: record.verdicts.art, reader: record.verdicts.reader, picks: record.verdicts.picks } : null,
   });
   return outline;
 }
@@ -650,7 +678,7 @@ export function renderCouncilCard(outline) {
     .slice(-12)
     .map((d) => `<li><small>${esc(d.by)} · ${esc({ proposed: "제안", reviewed: "검토", adopted: "채택", revised: "수정", dropped: "폐기" }[d.kind] || d.kind)}</small> ${esc(d.what)}${d.why ? ` <small>— ${esc(d.why)}</small>` : ""}</li>`)
     .join("");
-  return `<details class="story-card story-council"><summary>기획 회의 <span class="story-check-badge">${esc(councilSummaryLine(outline).replace(/^기획 회의 · /u, ""))}</span></summary><p class="story-note">방향: ${esc(c.direction)}</p><ol class="council-pitches">${pitches}</ol>${spine}${log ? `<p class="story-note">결정 기록 (최근 ${Math.min(12, list(c.decisions).length)}건)</p><ul class="council-log">${log}</ul>` : ""}</details>`;
+  return `<details class="story-card story-council"><summary>기획 회의 <span class="story-check-badge">${esc(councilSummaryLine(outline).replace(/^기획 회의 · /u, ""))}</span></summary>${renderCouncilRoom({ ...c, bible: bible || null, phase: "done", roles: null }, { compact: true })}<p class="story-note">방향: ${esc(c.direction)}</p><ol class="council-pitches">${pitches}</ol>${spine}${log ? `<p class="story-note">결정 기록 (최근 ${Math.min(12, list(c.decisions).length)}건)</p><ul class="council-log">${log}</ul>` : ""}</details>`;
 }
 /** The stop report's section (from the outline, or from the checkpoint when the outline never came). */
 export function councilReportRows(job) {

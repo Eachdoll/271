@@ -82,6 +82,7 @@ import {
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
 import { councilSummaryLine } from "./story-generation/council.js";
+import { councilRoomBlock, renderCouncilRoom, liveCouncilRecord, emptyCouncilRecord } from "./story-generation/council-room.js";
 import {
   placeEmoji,
   placeTypeLabel,
@@ -1175,11 +1176,11 @@ function renderGenerateStep(ctx, w) {
         live ||
         (!!pageOp && pageOp.bookId === bookId) ||
         (!!bookId && isPageOperationBusy(bookId));
-    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${councilSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline))}</p>` : ""}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
+    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${councilSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
   } else if (live)
-    status = `${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
+    status = `${councilRoomBlock(job, { live: true })}${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
   else
-    status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
+    status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
   return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
@@ -1656,6 +1657,12 @@ function onRunProgress(event) {
     fraction: Number(event.fraction) || 0,
   };
   if (typeof document === "undefined" || !api.isSimpleView?.()) return;
+  // R21: the meeting room follows the run (the record is saved after every answer).
+  const room = document.querySelector("#simple-council-room");
+  if (room) {
+    const record = liveCouncilRecord(event.job);
+    room.innerHTML = renderCouncilRoom(record || emptyCouncilRecord(event.job.input), { live: !record || record.phase !== "done" });
+  }
   const text = document.querySelector("#simple-progress-text"),
     bar = document.querySelector("#simple-progress-bar"),
     stages = document.querySelector("#simple-stages"),
