@@ -439,9 +439,38 @@ const PROGRESS = Object.freeze({
   pitches: "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
   verdicts: "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
   bible: "기획 회의 · 작가 봇이 스토리 바이블을 확정하고 있어요.",
+  review: "기획 회의 결과 확인 · 피치를 고르거나 방향을 고쳐 이어 가 주세요.",
 });
 function councilError(message) {
   return new StoryValidationError("council", [message]);
+}
+/**
+ * R22 회의 결과 보고 진행: with options.councilHold the meeting stops after the
+ * chair's scores (phase "review") and throws this; the caller parks the job,
+ * the parent picks a pitch (or keeps the chair's), adds a note, or rewrites
+ * the direction, and the resumed run replays the paid rounds from the journal.
+ */
+export const COUNCIL_HOLD = "CouncilHold";
+export function isCouncilHold(error) {
+  return error?.name === COUNCIL_HOLD;
+}
+function councilHoldError() {
+  const error = new Error("기획 회의 결과를 보고 피치를 고르거나 방향을 고쳐 이어 가 주세요.");
+  error.name = COUNCIL_HOLD;
+  error.stage = "council";
+  // The paid rounds were recorded through onCheckpoint at every snapshot; a
+  // step that bills an error's usage must not add a failed row for a hold.
+  error.usageRecorded = true;
+  return error;
+}
+/** The parent's choice for a held meeting: a pitch number and an optional note. */
+export function normalizeCouncilChoice(choice, count) {
+  if (!object(choice)) return null;
+  const pick = Math.round(Number(choice.pick));
+  return {
+    pick: pick >= 1 && pick <= count ? pick : null,
+    note: str(choice.note, 300),
+  };
 }
 /**
  * Run the meeting (or replay it from options.councilCheckpoint without a
@@ -472,8 +501,19 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     // answer so a screen (or a resumed run) can draw the room as it was.
     phase: "pitches",
     roles: { chair: "speaking", author: "speaking", editor: "waiting", art: "waiting", reader: "waiting" },
+    // R22: the chair's recommendation while the parent looks (phase "review"),
+    // and what the parent decided once the meeting goes on.
+    recommended: null,
+    parentChoice: null,
   };
   const log = (entry) => appendDecision(record, entry);
+  // R22: what the parent did to earlier meetings of this story (a rewritten
+  // direction) comes first in the log, so the record explains why this
+  // meeting met again.
+  for (const row of list(options.councilHistory))
+    if (object(row) && str(row.what, 300))
+      log({ by: "부모", kind: str(row.kind, 20) || "revised", what: str(row.what, 300), why: str(row.why, 300) });
+  const hold = options.councilHold === true;
   const snapshot = async (phase, message) => {
     record.phase = phase;
     journal.checkpoint.record = clone(record);
@@ -577,29 +617,46 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
       }
       log({ by: "의장", kind: "dropped", what: "피치 3개 모두 거부권", why: "작가 봇에게 거부 사유를 주고 한 번 더 제안을 받음" });
     }
+    record.pitches = pitches;
+    record.verdicts = verdicts;
+    record.scores = scores;
+    record.recommended = picked.pick;
+    const choice = normalizeCouncilChoice(options.councilChoice, pitches.length);
+    if (hold && !choice) {
+      // R22: stop here with the chair's recommendation; the parent decides.
+      record.roles = { chair: "speaking", author: "waiting", editor: "done", art: "done", reader: "done" };
+      log({ by: "의장", kind: "reviewed", what: `피치 ${picked.pick} '${pitches[picked.pick - 1]?.title}' 추천`, why: picked.overrode ? "모든 피치가 거부되어 가장 높은 점수를 추천" : "부모님의 선택을 기다림" });
+      await snapshot("review", PROGRESS.review);
+      throw councilHoldError();
+    }
+    const parentPick = choice?.pick && choice.pick !== picked.pick ? choice.pick : null;
+    if (parentPick) picked = { pick: parentPick, overrode: !!scores.find((row) => row.pitch === parentPick)?.vetoes.length };
     const index = picked.pick - 1,
       chosen = pitches[index],
       e = verdicts.editor[index],
       a = verdicts.art[index],
       r = verdicts.reader[index];
-    record.pitches = pitches;
-    record.verdicts = verdicts;
-    record.scores = scores;
     record.chosen = picked.pick;
     record.overrode = picked.overrode;
+    if (choice) record.parentChoice = { pick: picked.pick, note: choice.note };
     for (const row of scores)
       if (row.pitch !== picked.pick)
-        log({ by: "의장", kind: "dropped", what: `피치 ${row.pitch} '${pitches[row.pitch - 1]?.title}'`, why: row.vetoes.length ? row.vetoes.join(" / ") : `점수 ${row.score} < ${scores[index].score}` });
-    log({ by: "의장", kind: "adopted", what: `피치 ${picked.pick} '${chosen.title}'`, why: picked.overrode ? "모든 피치가 거부되어 가장 높은 점수를 택함" : `편집자 ${scores[index].editor}/12 · 그림 ${scores[index].art}/8 · 독자 ${scores[index].reader}/4` });
+        log({ by: "의장", kind: "dropped", what: `피치 ${row.pitch} '${pitches[row.pitch - 1]?.title}'`, why: parentPick ? "부모가 다른 피치를 고름" : row.vetoes.length ? row.vetoes.join(" / ") : `점수 ${row.score} < ${scores[index].score}` });
+    if (parentPick)
+      log({ by: "부모", kind: "adopted", what: `피치 ${picked.pick} '${chosen.title}'`, why: `의장 추천(피치 ${record.recommended}) 대신 회의 결과를 보고 고름${picked.overrode ? " · 거부권을 넘어 택함" : ""}` });
+    else
+      log({ by: choice ? "부모" : "의장", kind: "adopted", what: `피치 ${picked.pick} '${chosen.title}'`, why: choice ? "의장 추천대로 회의 결과를 보고 확인" : picked.overrode ? "모든 피치가 거부되어 가장 높은 점수를 택함" : `편집자 ${scores[index].editor}/12 · 그림 ${scores[index].art}/8 · 독자 ${scores[index].reader}/4` });
+    if (choice?.note) log({ by: "부모", kind: "revised", what: `한마디: ${choice.note}`, why: "작가 봇이 바이블에 반영" });
     // Round C: the author fixes the bible from the chosen pitch and the critics' fixes.
     record.roles = { chair: "done", author: "speaking", editor: "done", art: "done", reader: "done" };
     await snapshot("bible", PROGRESS.bible);
     const fixes = [...list(e?.fixes), ...list(a?.fixes), ...(r?.scary ? [`독자: ${str(r.scary, 200)}`] : [])].map((row) => str(row, 200)).filter(Boolean);
     const motifs = list(a?.motifs).filter(object).map((m) => ({ ko: str(m.ko, 60), en: str(m.en, 60) })).filter((m) => m.ko || m.en);
+    const parentNote = choice?.note ? `\n\n[부모 메모 — 반드시 반영] ${choice.note}` : "";
     const bibleReply = await ask(
       "작가",
       PERSONA.author,
-      `${context}\n\n[고른 피치]\n${JSON.stringify(chosen)}\n\n[고칠 점]\n${fixes.length ? fixes.map((row, i) => `${i + 1} ${row}`).join("\n") : "없음"}\n\n[아트 디렉터의 모티프 제안]\n${JSON.stringify(motifs)}\n\n[독자 되말하기] ${str(r?.retell, 300) || "없음"}\n\n[바이블 확정] 고친 점을 반영해 피치의 모든 필드를 다시 쓰고, visual{pictures: 비트 ${beats}개마다 {beatIndex, ko(아이가 보는 것 한 문장), en(그릴 수 있는 영어 한 문장: 8~25단어, 물리적 동사와 보이는 소품)}, motifs(2~3개, ko/en), plantedPlacementEn(1비트 그림에서 심은 물건이 놓인 자리, 영어)}를 붙인다. 비트 순서: ${beatLabels(beats).map((l, i) => `${i + 1} ${l}`).join(", ")}.\n\n[출력] JSON만. {"bible":{...}}`,
+      `${context}\n\n[고른 피치]\n${JSON.stringify(chosen)}\n\n[고칠 점]\n${fixes.length ? fixes.map((row, i) => `${i + 1} ${row}`).join("\n") : "없음"}\n\n[아트 디렉터의 모티프 제안]\n${JSON.stringify(motifs)}\n\n[독자 되말하기] ${str(r?.retell, 300) || "없음"}${parentNote}\n\n[바이블 확정] 고친 점을 반영해 피치의 모든 필드를 다시 쓰고, visual{pictures: 비트 ${beats}개마다 {beatIndex, ko(아이가 보는 것 한 문장), en(그릴 수 있는 영어 한 문장: 8~25단어, 물리적 동사와 보이는 소품)}, motifs(2~3개, ko/en), plantedPlacementEn(1비트 그림에서 심은 물건이 놓인 자리, 영어)}를 붙인다. 비트 순서: ${beatLabels(beats).map((l, i) => `${i + 1} ${l}`).join(", ")}.\n\n[출력] JSON만. {"bible":{...}}`,
       BIBLE_SCHEMA(beats, attempts),
       0.5,
       3500,
@@ -624,7 +681,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     return { record, usage: journal.usage(), meta: { ...journal.summary(), stage: "council" } };
   } catch (error) {
     if (error?.name === "AbortError") throw error;
-    throw journal.fail(error);
+    throw journal.fail(error, isCouncilHold(error) ? { held: true } : {});
   }
 }
 /** The outline carries the bible (binding later stages) and the meeting record (the log). */
@@ -643,6 +700,8 @@ export function attachCouncil(outline, result) {
     reactions: record.verdicts?.reader || [],
     chosen: record.chosen,
     overrode: record.overrode,
+    recommended: record.recommended ?? null,
+    parentChoice: record.parentChoice ?? null,
     decisions: record.decisions,
     verdicts: record.verdicts ? { editor: record.verdicts.editor, art: record.verdicts.art, reader: record.verdicts.reader, picks: record.verdicts.picks } : null,
   });
@@ -655,7 +714,7 @@ export function councilSummaryLine(outline) {
   if (!object(c) || !c.chosen) return "";
   const row = list(c.scores).find((s) => s.pitch === c.chosen);
   const title = str(c.pitches?.[c.chosen - 1]?.title, 60);
-  return `기획 회의 · 피치 ${list(c.pitches).length}개 중 '${title}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${c.overrode ? " · 거부권을 넘어 택함" : ""}`;
+  return `기획 회의 · 피치 ${list(c.pitches).length}개 중 '${title}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${c.overrode ? " · 거부권을 넘어 택함" : ""}${object(c.parentChoice) ? (c.parentChoice.pick !== c.recommended ? " · 부모가 고름" : " · 부모 확인") : ""}`;
 }
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/gu, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -678,7 +737,10 @@ export function renderCouncilCard(outline) {
     .slice(-12)
     .map((d) => `<li><small>${esc(d.by)} · ${esc({ proposed: "제안", reviewed: "검토", adopted: "채택", revised: "수정", dropped: "폐기" }[d.kind] || d.kind)}</small> ${esc(d.what)}${d.why ? ` <small>— ${esc(d.why)}</small>` : ""}</li>`)
     .join("");
-  return `<details class="story-card story-council"><summary>기획 회의 <span class="story-check-badge">${esc(councilSummaryLine(outline).replace(/^기획 회의 · /u, ""))}</span></summary>${renderCouncilRoom({ ...c, bible: bible || null, phase: "done", roles: null }, { compact: true })}<p class="story-note">방향: ${esc(c.direction)}</p><ol class="council-pitches">${pitches}</ol>${spine}${log ? `<p class="story-note">결정 기록 (최근 ${Math.min(12, list(c.decisions).length)}건)</p><ul class="council-log">${log}</ul>` : ""}</details>`;
+  const parent = object(c.parentChoice)
+    ? `<p class="story-note">부모 선택: 피치 ${c.parentChoice.pick}${c.parentChoice.pick !== c.recommended ? ` (의장 추천 피치 ${c.recommended} 대신)` : " (의장 추천대로)"}${c.parentChoice.note ? ` · 한마디: “${esc(c.parentChoice.note)}”` : ""}</p>`
+    : "";
+  return `<details class="story-card story-council"><summary>기획 회의 <span class="story-check-badge">${esc(councilSummaryLine(outline).replace(/^기획 회의 · /u, ""))}</span></summary>${renderCouncilRoom({ ...c, bible: bible || null, phase: "done", roles: null }, { compact: true })}<p class="story-note">방향: ${esc(c.direction)}</p>${parent}<ol class="council-pitches">${pitches}</ol>${spine}${log ? `<p class="story-note">결정 기록 (최근 ${Math.min(12, list(c.decisions).length)}건)</p><ul class="council-log">${log}</ul>` : ""}</details>`;
 }
 /** The stop report's section (from the outline, or from the checkpoint when the outline never came). */
 export function councilReportRows(job) {
@@ -688,8 +750,10 @@ export function councilReportRows(job) {
   for (const row of list(c.conditions)) rows.push(`- 조건: ${str(row, 400)}`);
   list(c.pitches).forEach((p, i) => {
     const score = list(c.scores).find((s) => s.pitch === i + 1);
-    rows.push(`- 피치 ${i + 1}${i + 1 === c.chosen ? " (채택)" : ""}: ${str(p.title, 60)} — ${str(p.logline, 300)}${score ? ` · 편집자 ${score.editor}/12 · 그림 ${score.art}/8 · 독자 ${score.reader}/4${score.vetoes.length ? ` · 거부 ${score.vetoes.join(" / ")}` : ""}` : ""}`);
+    rows.push(`- 피치 ${i + 1}${i + 1 === c.chosen ? " (채택)" : i + 1 === c.recommended && !c.chosen ? " (의장 추천 · 부모 선택 대기)" : ""}: ${str(p.title, 60)} — ${str(p.logline, 300)}${score ? ` · 편집자 ${score.editor}/12 · 그림 ${score.art}/8 · 독자 ${score.reader}/4${score.vetoes.length ? ` · 거부 ${score.vetoes.join(" / ")}` : ""}` : ""}`);
   });
+  if (object(c.parentChoice))
+    rows.push(`- 부모 선택: 피치 ${c.parentChoice.pick}${c.parentChoice.pick !== c.recommended ? ` (의장 추천 피치 ${c.recommended} 대신)` : " (의장 추천대로)"}${c.parentChoice.note ? ` · 한마디: ${str(c.parentChoice.note, 300)}` : ""}`);
   if (object(c.bible || job?.outline?.bible)) {
     const b = c.bible || job.outline.bible;
     rows.push(`- 바이블: 잃는 것 ${str(b.stakes, 200)} / 심은 물건 ${str(b.planted?.name, 80)} / 바닥 ${str(b.lowPoint, 200)} / 반전 ${str(b.turn?.seen, 200)} → ${str(b.turn?.realized, 200)}`);

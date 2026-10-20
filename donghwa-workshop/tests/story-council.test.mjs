@@ -10,7 +10,7 @@ import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 import {normalizeStoryInput, generateOutline} from '../dist/story-generation/pipeline.js';
 import {OUTLINE_SCHEMA, assertValid, STORY_STAGE_LABELS} from '../dist/story-generation/schemas.js';
 import {inputFromWizard} from '../dist/story-generation/ui.js';
-import {councilPolicy, hasCouncilPolicy, COUNCIL_CALLS, readerCard, readerAge, directionLine, conditionBlock, runStoryCouncil, attachCouncil, chairScores, bibleOutlineRules, bibleBriefRules, biblePaginationRules, biblePictureRules, appendDecision, recordParentDecision, councilSummaryLine, renderCouncilCard, councilReportRows, MAX_DECISIONS} from '../dist/story-generation/council.js';
+import {isCouncilHold, normalizeCouncilChoice, councilPolicy, hasCouncilPolicy, COUNCIL_CALLS, readerCard, readerAge, directionLine, conditionBlock, runStoryCouncil, attachCouncil, chairScores, bibleOutlineRules, bibleBriefRules, biblePaginationRules, biblePictureRules, appendDecision, recordParentDecision, councilSummaryLine, renderCouncilCard, councilReportRows, MAX_DECISIONS} from '../dist/story-generation/council.js';
 import {generateQualityOutline} from '../dist/story-generation/quality-adapter.js';
 import {estimateStoryTextCost} from '../dist/text-generation/models.js';
 import {buildStopReport} from '../dist/story-generation/stop-report.js';
@@ -299,4 +299,104 @@ test('the child simulator of a council draft speaks at the reader card age; a le
   const legacy = await run({language: 'both', storyQuality: {enabled: true, childSimulator: true}, specs: {ko: getLevelSpec('K2'), en: getLevelSpec('E2')}});
   assert.ok(legacy.engine.calls.every(call => /4세 아이/u.test(call.system)));
   assert.equal(legacy.result.meta.childGate.pass, true);
+});
+
+/* ---------- R22 회의 결과 보고 진행 ---------- */
+test('R22 councilHold parks the meeting after the chair scores: four calls, phase review, the recommendation, no failure', async () => {
+  const input = councilInput(), engine = roomEngine(); engine.input = input;
+  const saved = [], events = [];
+  const error = await runStoryCouncil(input, {engine, councilHold: true, onCheckpoint: (cp) => saved.push(cp), onProgress: (e) => events.push(e)}, {engineFor: async () => engine}).then(() => null, (e) => e);
+  assert.ok(error, 'the meeting stops');
+  assert.equal(isCouncilHold(error), true);
+  assert.equal(error.name, 'CouncilHold');
+  assert.equal(engine.calls.length, COUNCIL_CALLS - 1, 'the bible is not written yet');
+  assert.equal(error.usageRecorded, true, 'the rounds were billed through onCheckpoint; a step adds no failed row');
+  assert.equal(error.usage.input, 40);
+  assert.equal(error.meta.held, true);
+  assert.equal(error.meta.requests, 4);
+  const record = error.councilCheckpoint.record;
+  assert.equal(record.phase, 'review');
+  assert.equal(record.recommended, 2);
+  assert.equal(record.chosen, null);
+  assert.equal(record.parentChoice, null);
+  assert.deepEqual(record.roles, {chair: 'speaking', author: 'waiting', editor: 'done', art: 'done', reader: 'done'});
+  assert.equal(record.pitches.length, 3);
+  assert.deepEqual(record.scores.map(r => r.pitch), [1, 2, 3]);
+  assert.deepEqual(record.decisions.at(-1), {...record.decisions.at(-1), by: '의장', kind: 'reviewed', what: "피치 2 '피치 2' 추천", why: '부모님의 선택을 기다림'});
+  assert.equal(saved.at(-1).councilCheckpoint.record.phase, 'review', 'the parked room is saved for the screen');
+  assert.equal(events.at(-1).phase, 'review');
+  assert.match(events.at(-1).message, /^기획 회의 결과 확인/u);
+  assert.equal(Object.keys(error.councilCheckpoint.completed).length, 4, 'four paid answers in the journal');
+  // Without the hold the same input meets to the end (R20 behaviour).
+  const plain = roomEngine(); plain.input = input;
+  const result = await runStoryCouncil(input, {engine: plain}, {engineFor: async () => plain});
+  assert.equal(plain.calls.length, COUNCIL_CALLS);
+  assert.equal(result.record.recommended, 2);
+  assert.equal(result.record.parentChoice, null);
+});
+
+test('R22 the resumed meeting takes the parent\'s pitch and note: the rounds replay, only the bible is bought, the log says who chose', async () => {
+  const input = councilInput(), engine = roomEngine(); engine.input = input;
+  const held = await runStoryCouncil(input, {engine, councilHold: true}, {engineFor: async () => engine}).then(() => null, (e) => e);
+  assert.equal(engine.calls.length, 4);
+  const resumed = await runStoryCouncil(input, {engine, councilHold: true, councilCheckpoint: held.councilCheckpoint, councilChoice: {pick: 1, note: ' 토토가  더 많이 나오게 '}}, {engineFor: async () => engine});
+  assert.equal(engine.calls.length, 5, 'only the bible call is new');
+  assert.equal(resumed.meta.requests, 1);
+  assert.equal(resumed.meta.resumedCalls, 4);
+  const bibleRequest = engine.calls[4];
+  assert.match(bibleRequest.user, /\[고른 피치\]\n\{"title":"피치 1"/u);
+  assert.match(bibleRequest.user, /\[독자 되말하기\] 종이 울렸어\n\n\[부모 메모 — 반드시 반영\] 토토가 더 많이 나오게\n\n\[바이블 확정\]/u);
+  const {record} = resumed;
+  assert.equal(record.chosen, 1);
+  assert.equal(record.recommended, 2);
+  assert.equal(record.overrode, true, 'pitch 1 carried a veto; the parent went past it');
+  assert.deepEqual(record.parentChoice, {pick: 1, note: '토토가 더 많이 나오게'});
+  assert.equal(record.phase, 'done');
+  const parent = record.decisions.filter(d => d.by === '부모');
+  assert.deepEqual(parent.map(d => [d.kind, d.what, d.why]), [
+    ['adopted', "피치 1 '피치 1'", '의장 추천(피치 2) 대신 회의 결과를 보고 고름 · 거부권을 넘어 택함'],
+    ['revised', '한마디: 토토가 더 많이 나오게', '작가 봇이 바이블에 반영'],
+  ]);
+  assert.ok(record.decisions.some(d => d.kind === 'dropped' && d.what.startsWith("피치 2") && d.why === '부모가 다른 피치를 고름'));
+  const outline = attachCouncil({}, resumed);
+  assert.equal(outline.council.parentChoice.pick, 1);
+  assert.equal(outline.council.recommended, 2);
+  assert.match(councilSummaryLine(outline), /채택 · 편집자 10\/12 · 그림 7\/8 · 독자 2\/4 · 거부권을 넘어 택함 · 부모가 고름$/u);
+  assert.match(renderCouncilCard(outline), /<p class="story-note">부모 선택: 피치 1 \(의장 추천 피치 2 대신\) · 한마디: “토토가 더 많이 나오게”<\/p>/u);
+  assert.ok(councilReportRows({outline}).some(row => row === '- 부모 선택: 피치 1 (의장 추천 피치 2 대신) · 한마디: 토토가 더 많이 나오게'));
+  // The recommendation kept as is: a byte-identical bible request to the never-parked meeting, logged as the parent's confirmation.
+  const again = roomEngine(); again.input = input;
+  const held2 = await runStoryCouncil(input, {engine: again, councilHold: true}, {engineFor: async () => again}).then(() => null, (e) => e);
+  const confirmed = await runStoryCouncil(input, {engine: again, councilHold: true, councilCheckpoint: held2.councilCheckpoint, councilChoice: {pick: 2}}, {engineFor: async () => again});
+  const plain = roomEngine(); plain.input = input;
+  await runStoryCouncil(input, {engine: plain}, {engineFor: async () => plain});
+  assert.deepEqual(again.calls[4], plain.calls[4], 'no note, same pitch: the same bible request');
+  assert.deepEqual(confirmed.record.parentChoice, {pick: 2, note: ''});
+  assert.equal(confirmed.record.overrode, false);
+  assert.deepEqual(confirmed.record.decisions.filter(d => d.by === '부모').map(d => [d.kind, d.what, d.why]), [['adopted', "피치 2 '피치 2'", '의장 추천대로 회의 결과를 보고 확인']]);
+  assert.match(councilSummaryLine(attachCouncil({}, confirmed)), / · 부모 확인$/u);
+  assert.deepEqual(normalizeCouncilChoice({pick: '9', note: 'x'}, 3), {pick: null, note: 'x'}, 'an impossible pick falls back to the chair');
+  assert.equal(normalizeCouncilChoice(null, 3), null);
+});
+
+test('R22 a rewritten direction opens the log of the next meeting; generateOutline parks on the hold and goes on with the choice', async () => {
+  const input = councilInput({topic: '바람 피리 찾기', direction: '절정에서 아이가 아기 여우의 두려움에 공감하게'}), engine = roomEngine(); engine.input = input;
+  const history = [{kind: 'revised', what: '방향 고침: “반전이 분명하게” → “절정에서 아이가 아기 여우의 두려움에 공감하게”', why: '회의 결과를 보고 부모가 다시 회의를 요청'}];
+  const held = await generateOutline(input, {engine, councilHold: true, councilHistory: history}).then(() => null, (e) => e);
+  assert.equal(isCouncilHold(held), true);
+  assert.equal(engine.calls.length, 4, 'no outline request before the parent chose');
+  assert.deepEqual(held.councilCheckpoint.record.decisions[0], {...held.councilCheckpoint.record.decisions[0], by: '부모', kind: 'revised', what: history[0].what, why: history[0].why});
+  assert.match(held.councilCheckpoint.record.direction, /^5~6세 독자\. 절정에서 아이가/u);
+  const result = await generateOutline(input, {engine, councilHold: true, councilHistory: history, councilCheckpoint: held.councilCheckpoint, councilChoice: {pick: 2, note: '바닥은 덜 무섭게'}});
+  assert.equal(engine.calls.length, 4 + 1 + 3, 'the bible, then the outline passes (soft issues → three outline calls, as in R20)');
+  assert.equal(result.data.council.parentChoice.note, '바닥은 덜 무섭게');
+  assert.equal(result.data.council.decisions[0].by, '부모');
+  assert.equal(result.meta.council.requests, 1);
+  assert.equal(result.meta.requests, 4);
+  assert.match(engine.calls[5].system, /STORY BIBLE \(binding/u);
+  // A legacy draft and a council draft without the hold are untouched by these options.
+  const legacy = legacyInput({topic: '바람 피리 찾기'}), legacyEngine = roomEngine(); legacyEngine.input = legacy;
+  const plain = await generateOutline(legacy, {engine: legacyEngine, councilHold: true, councilChoice: {pick: 1}});
+  assert.equal(legacyEngine.calls.length, 3);
+  assert.ok(!('council' in plain.data));
 });

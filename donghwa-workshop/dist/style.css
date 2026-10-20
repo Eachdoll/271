@@ -5087,5 +5087,23 @@ html:has(.simple-create) {
 .council-room-bible { margin: 10px 0 0; font-size: 12px; color: #3b3630; }
 .simple-council-details > summary { cursor: pointer; font-size: 13px; color: var(--text-2); margin-top: var(--space-2); }
 @keyframes council-pulse { 0%, 100% { opacity: .35; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+/* R22 회의 결과 보고 진행: the chair's recommendation and the parent's choice form. */
+.council-room-pitches li.council-recommended { border-color: #e8c27a; background: #fff9ec; }
+.pitch-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #f3d9a4; color: #5a3d00; font-size: 11px; font-weight: 600; vertical-align: middle; }
+.council-review { margin: var(--space-3) 0; padding: 12px; border: 1px solid #e6e1d3; border-radius: 14px; background: #fff; }
+.council-review-intro { margin: 0 0 8px; font-size: 14px; color: #3b3630; }
+.council-review-picks { border: 0; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.council-review-picks legend { font-weight: 700; font-size: 13px; padding: 0; margin-bottom: 4px; }
+.council-pick { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border: 1px solid #e6e1d3; border-radius: 10px; background: #fffdf7; cursor: pointer; }
+.council-pick:has(input:checked) { border-color: #9cc893; background: #f3faf1; }
+.council-pick input { margin-top: 3px; }
+.council-pick-body { display: grid; gap: 2px; font-size: 13px; min-width: 0; }
+.council-pick .pitch-logline { color: #3b3630; }
+.council-pick .pitch-score, .council-pick .pitch-turn { font-size: 12px; color: #7a7261; }
+.council-review .field textarea { min-height: 3.2em; }
+.council-redirect > summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
+.council-redirect .field { margin-top: 6px; }
+.full-auto-council-review { margin: var(--space-2) 0; }
+.story-council-review { display: block; margin-top: var(--space-2); font-size: 13px; }
 @media (max-width: 640px) { .council-table { grid-template-columns: repeat(3, minmax(0, 1fr)); } .council-seat .seat-avatar { width: 60px; height: 60px; } }
 @media (prefers-reduced-motion: reduce) { .council-seat.state-speaking .seat-avatar::after { animation: none; } }

@@ -731,7 +731,11 @@ const PINS = {
   // Writers' room (R20): ③ before any job prices the five council calls
   // (글 만들기 $2.46 → $2.48 at 12 pages); nothing else on ③, ④ or ⑤ changes.
   // a113ead: 21b16ee3…d5f6.
-  review: 'b8f4af05ad1c9c1363cef64edfb281c84725f188ac43cd10a0a0194b7dc7052a',
+  // 회의 결과 보고 진행 (R22): ③ before any job gains the '회의 결과 보고 진행 ·
+  // 켜짐' line (help text and its 끄기 button) under the 승인 예시 line; the
+  // prices, ④ and ⑤ are byte-identical (diffed against 15db614's dump).
+  // 15db614: b8f4af05…052a.
+  review: '520fc68c7960c4598b05017f4e13f81f68724dcb30e5c422ddd6bd74ef346f09',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost

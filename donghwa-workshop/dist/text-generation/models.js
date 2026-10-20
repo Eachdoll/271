@@ -547,6 +547,24 @@ function openingTextTokens(specs, openings) {
       (en.words ? Math.min(Math.max(enWords, en.words.min), en.words.max) : enWords) * 2.4;
   return Math.ceil(openings * (koTokens + enTokens));
 }
+/**
+ * R22 회의 결과 보고 진행: what one more writers' room costs on a job's or
+ * draft's frozen text settings (the five economy calls), for the
+ * 방향 고쳐 다시 회의 confirm. Takes {textSettings, wizard, input, demo}.
+ */
+export function estimateCouncilCost(job) {
+  if (!job || job.demo) return { costUsd: 0, pricingUnknown: false };
+  const text = estimateStoryTextCost({
+    settings: job.textSettings || {},
+    pageCount: job.wizard?.pageCount || job.input?.pageCount || 12,
+    council: true,
+  });
+  const row = (text.stages || []).find((stage) => stage.stage === "council");
+  return {
+    costUsd: Number(row?.costUsd) || 0,
+    pricingUnknown: row?.pricingUnknown === true,
+  };
+}
 export function estimateStoryTextCost({
   engine = "openai",
   engineId = engine,

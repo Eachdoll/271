@@ -22,9 +22,13 @@ const esc = (value) =>
 export const COUNCIL_PHASES = Object.freeze([
   ["pitches", "피치"],
   ["verdicts", "판정"],
+  // R22: shown only for a meeting the parent looked at ('회의 결과 보고 진행').
+  ["review", "부모 선택"],
   ["bible", "바이블"],
   ["done", "확정"],
 ]);
+/** R22: a meeting parked for the parent's choice (its checkpoint record). */
+export const reviewPending = (record) => record?.phase === "review" && !record?.chosen;
 
 /** The record to draw for a job: the finished outline's, else the live checkpoint's. */
 export function liveCouncilRecord(job) {
@@ -58,6 +62,9 @@ function seatState(record, role) {
 }
 const pitchTitle = (record, n) => str(record?.pitches?.[n - 1]?.title, 40) || `피치 ${n}`;
 const chosenRow = (record) => list(record?.scores).find((row) => row.pitch === record?.chosen) || null;
+/** R22: how the pitch was settled, for the chair's line and the summary. */
+const parentTag = (record) =>
+  object(record?.parentChoice) ? (record.parentChoice.pick !== record.recommended ? " · 부모가 고름" : " · 부모 확인") : "";
 /** What each seat says at this moment (one short line). */
 export function seatLine(record, role) {
   const phase = record?.phase || "waiting",
@@ -67,14 +74,17 @@ export function seatLine(record, role) {
   if (role === "chair") {
     if (done || record?.chosen) {
       const row = chosenRow(record);
-      return `피치 ${record.chosen} '${pitchTitle(record, record.chosen)}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${record.overrode ? " · 거부권을 넘어 택함" : ""}`;
+      return `피치 ${record.chosen} '${pitchTitle(record, record.chosen)}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${record.overrode ? " · 거부권을 넘어 택함" : ""}${parentTag(record)}`;
     }
+    if (phase === "review" && record?.recommended)
+      return `피치 ${record.recommended} '${pitchTitle(record, record.recommended)}' 추천 · 부모님의 선택을 기다려요.`;
     if (phase === "verdicts") return "세 판정을 모아 채점표를 만들고 있어요.";
     return record?.direction ? `방향: ${str(record.direction, 120)}` : "방향과 조건을 모으고 있어요.";
   }
   if (role === "author") {
     if (done && record?.bible) return `바이블 '${str(record.bible.title, 40)}' 확정 · 심은 물건: ${str(record.bible.planted?.name, 30)}`;
     if (phase === "bible") return "지적을 반영해 바이블을 쓰고 있어요.";
+    if (phase === "review") return "부모님이 고르면 그 피치로 바이블을 써요.";
     if (list(record?.pitches).length) return `피치: ${list(record.pitches).map((p) => str(p.title, 24)).join(" / ")}`;
     return phase === "pitches" ? "피치 세 개를 쓰고 있어요." : "방향을 기다려요.";
   }
@@ -124,15 +134,22 @@ function pitchCards(record) {
     .map((p, i) => {
       const n = i + 1,
         row = list(record.scores).find((s) => s.pitch === n),
-        chosen = record.chosen === n;
-      return `<li class="${chosen ? "council-chosen" : row?.vetoes?.length ? "council-vetoed" : ""}"><strong>${chosen ? "✓ " : ""}${esc(str(p.title, 40))}</strong><span class="pitch-logline">${esc(str(p.logline, 120))}</span>${row ? `<span class="pitch-score">편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}</span>${row.vetoes?.length ? `<span class="pitch-veto">거부: ${esc(row.vetoes.join(" / "))}</span>` : ""}` : `<span class="pitch-score">판정 기다리는 중</span>`}</li>`;
+        chosen = record.chosen === n,
+        // R22: the chair's recommendation while the parent looks, or when the parent chose another.
+        recommended = record.recommended === n && (!record.chosen || record.chosen !== n);
+      return `<li class="${chosen ? "council-chosen" : row?.vetoes?.length ? "council-vetoed" : ""}${recommended ? " council-recommended" : ""}"><strong>${chosen ? "✓ " : ""}${esc(str(p.title, 40))}${recommended ? ' <span class="pitch-tag">의장 추천</span>' : ""}</strong><span class="pitch-logline">${esc(str(p.logline, 120))}</span>${row ? `<span class="pitch-score">편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}</span>${row.vetoes?.length ? `<span class="pitch-veto">거부: ${esc(row.vetoes.join(" / "))}</span>` : ""}` : `<span class="pitch-score">판정 기다리는 중</span>`}</li>`;
     })
     .join("")}</ol>`;
 }
 function phaseStrip(record) {
   const at = record?.phase === "waiting" ? -1 : phaseIndex(record?.phase),
-    done = record?.phase === "done";
-  return `<ol class="council-phases" aria-label="회의 진행">${COUNCIL_PHASES.map(([id, label], i) => `<li class="${done || i < at ? "done" : i === at ? "active" : ""}">${label}</li>`).join("")}</ol>`;
+    done = record?.phase === "done",
+    // R22: the parent's step appears only in a meeting the parent looked at.
+    reviewed = record?.phase === "review" || object(record?.parentChoice);
+  return `<ol class="council-phases" aria-label="회의 진행">${COUNCIL_PHASES.map(([id, label], i) => ({ id, label, i }))
+    .filter(({ id }) => id !== "review" || reviewed)
+    .map(({ label, i }) => `<li class="${done || i < at ? "done" : i === at ? "active" : ""}">${label}</li>`)
+    .join("")}</ol>`;
 }
 /** The room. `live` adds the pulsing seats; `compact` hides the role titles. */
 export function renderCouncilRoom(record, { live = false, compact = false } = {}) {
@@ -148,13 +165,48 @@ export function renderCouncilRoom(record, { live = false, compact = false } = {}
  * (an empty room before the first answer), a folded one once it is over, and
  * nothing for a draft without the policy.
  */
-export function councilRoomBlock(job, { live = false, compact = false } = {}) {
+export function councilRoomBlock(job, { live = false, compact = false, open = false } = {}) {
   const record = liveCouncilRecord(job),
     policy = job?.input?.councilPolicy?.version === 1,
     pending = policy && !job?.demo && !job?.completed?.outline;
   if (!record && !(live && pending)) return "";
   const html = renderCouncilRoom(record || emptyCouncilRecord(job?.input), { live: live && (!record || record.phase !== "done"), compact });
   if (live) return `<div id="simple-council-room" class="council-room-wrap">${html}</div>`;
+  // R22: the parked meeting stays open while the parent chooses.
+  if (open) return `<div class="council-room-wrap">${html}</div>`;
   const row = chosenRow(record);
-  return `<details class="simple-council-details"><summary>회의실 다시 보기${record?.chosen ? ` · '${esc(pitchTitle(record, record.chosen))}' 채택${row ? ` · ${row.score}/12` : ""}` : ""}</summary><div class="council-room-wrap">${html}</div></details>`;
+  return `<details class="simple-council-details"><summary>회의실 다시 보기${record?.chosen ? ` · '${esc(pitchTitle(record, record.chosen))}' 채택${row ? ` · ${row.score}/12` : ""}${parentTag(record)}` : ""}</summary><div class="council-room-wrap">${html}</div></details>`;
+}
+
+/* ---------- R22 회의 결과 보고 진행: the parent's choice ---------- */
+/**
+ * The choice form for a parked meeting: one radio per pitch (the chair's
+ * recommendation checked), a note for the author bot, and a folded field to
+ * rewrite the direction for a new meeting. The caller adds its own buttons
+ * (계속 · 방향 고쳐 다시 회의) and reads the form with readCouncilChoice /
+ * readCouncilDirection. `fee` is the caller's price line for a new meeting.
+ */
+export function renderCouncilReviewForm(record, { direction = "", fee = "" } = {}) {
+  const r = object(record) ? record : {},
+    pitches = list(r.pitches),
+    recommended = r.recommended || 1;
+  if (!pitches.length) return "";
+  const picks = pitches
+    .map((p, i) => {
+      const n = i + 1,
+        row = list(r.scores).find((s) => s.pitch === n);
+      return `<label class="council-pick${n === recommended ? " council-recommended" : ""}"><input type="radio" name="council-pick" value="${n}" ${n === recommended ? "checked" : ""}><span class="council-pick-body"><strong>${esc(str(p.title, 40))}${n === recommended ? ' <span class="pitch-tag">의장 추천</span>' : ""}</strong><span class="pitch-logline">${esc(str(p.logline, 160))}</span>${row ? `<span class="pitch-score">편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}${row.vetoes?.length ? ` · 거부: ${esc(row.vetoes.join(" / "))}` : ""}</span>` : ""}${p.turn?.seen ? `<span class="pitch-turn">반전: ${esc(str(p.turn.seen, 80))} → “${esc(unquote(p.turn.realized))}”</span>` : ""}</span></label>`;
+    })
+    .join("");
+  return `<div class="council-review" id="council-review"><p class="council-review-intro">의장이 피치 ${recommended} '${esc(pitchTitle(r, recommended))}'을(를) 추천했어요. 그대로 가거나 다른 피치를 고르고, 작가 봇에게 한마디를 남길 수 있어요.</p><fieldset class="council-review-picks"><legend>이 피치로 쓰기</legend>${picks}</fieldset><div class="field"><label for="council-note">작가 봇에게 한마디 (선택)</label><textarea id="council-note" maxlength="300" rows="2" placeholder="예: 토토가 더 많이 나오게, 바닥 장면은 덜 무섭게"></textarea></div><details class="council-redirect"><summary>방향을 고쳐 다시 회의하기</summary><div class="field"><label for="council-direction">새 방향 한 줄</label><input id="council-direction" maxlength="200" value="${esc(str(direction, 200))}" placeholder="예: 절정에서 아이가 아기 여우의 두려움에 공감하게"></div><p class="small-label">다시 회의하면 작가·편집자·그림 감독·독자 봇을 새로 부르고 지금 피치는 버려요${fee ? ` · ${esc(fee)}` : ""}.</p></details></div>`;
+}
+/** The pick and the note from the form (null when no form is on the page). */
+export function readCouncilChoice(root = globalThis.document) {
+  const checked = root?.querySelector?.('input[name="council-pick"]:checked');
+  if (!checked) return null;
+  return { pick: Math.round(Number(checked.value)) || 1, note: str(root.querySelector?.("#council-note")?.value, 300) };
+}
+/** The rewritten direction from the form ("" when empty or absent). */
+export function readCouncilDirection(root = globalThis.document) {
+  return str(root?.querySelector?.("#council-direction")?.value, 200);
 }
