@@ -5,6 +5,7 @@ import {
   estimateTextCost,
 } from "./models.js";
 import { validateCredentialInput } from "../image-generation/credential-validation.js";
+import { fetchWithRetry, isRetryableStatus } from "../transient-retry.js";
 export class TextEngineError extends Error {
   constructor(message, code = "text_error", status = null) {
     super(message);
@@ -93,11 +94,16 @@ function parseJson(value) {
 async function fetchJson(url, options, config, signal) {
   let response;
   try {
-    response = await (config.fetch || globalThis.fetch)(url, {
-      ...options,
-      signal,
-      credentials: "omit",
-    });
+    // R25: a busy answer (429/5xx/529) is sent again after a short wait.
+    response = await fetchWithRetry(
+      config.fetch || globalThis.fetch,
+      url,
+      { ...options, signal, credentials: "omit" },
+      {
+        signal,
+        ...(Array.isArray(config.retryDelaysMs) ? { delays: config.retryDelaysMs } : {}),
+      },
+    );
   } catch (error) {
     if (signal?.aborted)
       throw new DOMException("글 생성을 중지했어요.", "AbortError");
@@ -109,7 +115,7 @@ async function fetchJson(url, options, config, signal) {
   if (!response.ok) {
     const status = response.status;
     failure(
-      `${status === 401 ? "글 엔진 인증에 실패했어요. 추적 ID 대신 비밀 키 전체를 저장했는지 확인해 주세요." : status === 403 ? "이 글 모델의 프로젝트 사용 권한을 확인해 주세요." : status === 429 ? "글 엔진의 잔액·사용량·요청 한도를 확인해 주세요." : status === 404 ? "글 엔진 주소와 모델 이름을 확인해 주세요." : "글 엔진이 요청을 처리하지 못했어요. 모델과 요청 설정을 확인해 주세요."} (HTTP ${status})`,
+      `${status === 401 ? "글 엔진 인증에 실패했어요. 추적 ID 대신 비밀 키 전체를 저장했는지 확인해 주세요." : status === 403 ? "이 글 모델의 프로젝트 사용 권한을 확인해 주세요." : status === 429 ? "글 엔진의 잔액·사용량·요청 한도를 확인해 주세요." : status === 404 ? "글 엔진 주소와 모델 이름을 확인해 주세요." : isRetryableStatus(status) ? "글 엔진이 지금 바빠요. 기다렸다가 두 번 더 보냈지만 받지 못했어요. 잠시 뒤 ‘다시 시도’를 눌러 주세요. 이미 받은 결과는 다시 사지 않아요." : "글 엔진이 요청을 처리하지 못했어요. 모델과 요청 설정을 확인해 주세요."} (HTTP ${status})`,
       "http",
       status,
     );
