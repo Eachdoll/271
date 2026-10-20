@@ -1,0 +1,594 @@
+{
+  "baseline": "d00771c95e20a58e6e483323a8215f3ff40838c9",
+  "asset": "assets/council/watercolor-portraits.webp",
+  "assetBytes": 385692,
+  "sha256": "2e0fed6826bf45cc4db1522c30c53891d0c0ad851e4afeb97c44bc6dd42d9e93",
+  "imageGenerationCalls": 1,
+  "userEngineApiCalls": 0,
+  "cache": "donghwa-shell-v59",
+  "build": "passed",
+  "appTests": 923,
+  "qualityTests": 84,
+  "targetedTests": 11,
+  "failed": 0,
+  "before": [
+    {
+      "width": 1280,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "plainChars": 13986,
+        "compressedChars": 4281,
+        "ratio": 3.27,
+        "fallback": true,
+        "localStorageRoundtrip": true,
+        "koreanError": true,
+        "originalPreserved": true
+      },
+      "audit": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "pageHeight": 2261,
+        "pageWidth": 1280,
+        "continue": {
+          "top": 1925,
+          "width": 113,
+          "height": 40
+        },
+        "review": {
+          "top": 1374,
+          "width": 864,
+          "height": 534
+        },
+        "room": {
+          "top": 852,
+          "width": 864,
+          "height": 510
+        },
+        "engine": null,
+        "duplicatePitchCards": 3,
+        "selectionPitchCards": 3,
+        "waitingSeatOpacity": "0.55",
+        "textSizes": [
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          }
+        ],
+        "actions": [
+          {
+            "label": "이 피치로 계속",
+            "height": 40,
+            "width": 113
+          },
+          {
+            "label": "방향 고쳐 다시 회의",
+            "height": 42,
+            "width": 142
+          },
+          {
+            "label": "주제·엔진 바꾸기",
+            "height": 42,
+            "width": 126
+          }
+        ]
+      },
+      "choice": {
+        "pick": 1,
+        "note": "토토가 더 많이 돕게 해 주세요",
+        "direction": "친구의 작은 도움이 반전이 되는 이야기"
+      },
+      "council": {
+        "threePitches": true,
+        "recommendedInitiallySelected": true,
+        "parentChoiceAndNote": true,
+        "directionInput": true,
+        "paidActionsNotClicked": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "plainChars": 13986,
+        "compressedChars": 4281,
+        "ratio": 3.27,
+        "fallback": true,
+        "localStorageRoundtrip": true,
+        "koreanError": true,
+        "originalPreserved": true
+      },
+      "audit": {
+        "viewport": {
+          "width": 390,
+          "height": 900
+        },
+        "pageHeight": 2823,
+        "pageWidth": 390,
+        "continue": {
+          "top": 2334,
+          "width": 113,
+          "height": 40
+        },
+        "review": {
+          "top": 1738,
+          "width": 314,
+          "height": 579
+        },
+        "room": {
+          "top": 967,
+          "width": 314,
+          "height": 759
+        },
+        "engine": null,
+        "duplicatePitchCards": 3,
+        "selectionPitchCards": 3,
+        "waitingSeatOpacity": "0.55",
+        "textSizes": [
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          }
+        ],
+        "actions": [
+          {
+            "label": "이 피치로 계속",
+            "height": 40,
+            "width": 113
+          },
+          {
+            "label": "방향 고쳐 다시 회의",
+            "height": 42,
+            "width": 142
+          },
+          {
+            "label": "주제·엔진 바꾸기",
+            "height": 42,
+            "width": 126
+          }
+        ]
+      },
+      "choice": {
+        "pick": 1,
+        "note": "토토가 더 많이 돕게 해 주세요",
+        "direction": "친구의 작은 도움이 반전이 되는 이야기"
+      },
+      "council": {
+        "threePitches": true,
+        "recommendedInitiallySelected": true,
+        "parentChoiceAndNote": true,
+        "directionInput": true,
+        "paidActionsNotClicked": true
+      },
+      "status": "passed"
+    }
+  ],
+  "after": [
+    {
+      "width": 1280,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "plainChars": 13986,
+        "compressedChars": 4281,
+        "ratio": 3.27,
+        "fallback": true,
+        "localStorageRoundtrip": true,
+        "koreanError": true,
+        "originalPreserved": true
+      },
+      "audit": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "pageHeight": 2261,
+        "pageWidth": 1280,
+        "continue": {
+          "top": 1925,
+          "width": 113,
+          "height": 40
+        },
+        "review": {
+          "top": 1374,
+          "width": 864,
+          "height": 534
+        },
+        "room": {
+          "top": 852,
+          "width": 864,
+          "height": 510
+        },
+        "engine": null,
+        "duplicatePitchCards": 3,
+        "selectionPitchCards": 3,
+        "waitingSeatOpacity": "0.55",
+        "textSizes": [
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          }
+        ],
+        "actions": [
+          {
+            "label": "이 피치로 계속",
+            "height": 40,
+            "width": 113
+          },
+          {
+            "label": "방향 고쳐 다시 회의",
+            "height": 42,
+            "width": 142
+          },
+          {
+            "label": "주제·엔진 바꾸기",
+            "height": 42,
+            "width": 126
+          }
+        ]
+      },
+      "choice": {
+        "pick": 1,
+        "note": "토토가 더 많이 돕게 해 주세요",
+        "direction": "친구의 작은 도움이 반전이 되는 이야기"
+      },
+      "images": {
+        "ok": true,
+        "width": 1536,
+        "height": 1024,
+        "bytes": 385692,
+        "viewports": 5
+      },
+      "council": {
+        "threePitches": true,
+        "recommendedInitiallySelected": true,
+        "parentChoiceAndNote": true,
+        "directionInput": true,
+        "paidActionsNotClicked": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "plainChars": 13986,
+        "compressedChars": 4281,
+        "ratio": 3.27,
+        "fallback": true,
+        "localStorageRoundtrip": true,
+        "koreanError": true,
+        "originalPreserved": true
+      },
+      "audit": {
+        "viewport": {
+          "width": 390,
+          "height": 900
+        },
+        "pageHeight": 2823,
+        "pageWidth": 390,
+        "continue": {
+          "top": 2334,
+          "width": 113,
+          "height": 40
+        },
+        "review": {
+          "top": 1738,
+          "width": 314,
+          "height": 579
+        },
+        "room": {
+          "top": 967,
+          "width": 314,
+          "height": 759
+        },
+        "engine": null,
+        "duplicatePitchCards": 3,
+        "selectionPitchCards": 3,
+        "waitingSeatOpacity": "0.55",
+        "textSizes": [
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "seat-title",
+            "fontSize": "11px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "seat-bubble",
+            "fontSize": "12px",
+            "color": "rgb(59, 54, 48)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          },
+          {
+            "selector": "pitch-score",
+            "fontSize": "12px",
+            "color": "rgb(122, 114, 97)"
+          }
+        ],
+        "actions": [
+          {
+            "label": "이 피치로 계속",
+            "height": 40,
+            "width": 113
+          },
+          {
+            "label": "방향 고쳐 다시 회의",
+            "height": 42,
+            "width": 142
+          },
+          {
+            "label": "주제·엔진 바꾸기",
+            "height": 42,
+            "width": 126
+          }
+        ]
+      },
+      "choice": {
+        "pick": 1,
+        "note": "토토가 더 많이 돕게 해 주세요",
+        "direction": "친구의 작은 도움이 반전이 되는 이야기"
+      },
+      "images": {
+        "ok": true,
+        "width": 1536,
+        "height": 1024,
+        "bytes": 385692,
+        "viewports": 5
+      },
+      "council": {
+        "threePitches": true,
+        "recommendedInitiallySelected": true,
+        "parentChoiceAndNote": true,
+        "directionInput": true,
+        "paidActionsNotClicked": true
+      },
+      "status": "passed"
+    }
+  ],
+  "offline": {
+    "cacheNames": [
+      "donghwa-shell-v59"
+    ],
+    "bytes": 385692,
+    "width": 1536,
+    "height": 1024,
+    "avatarCount": 5,
+    "status": "passed"
+  }
+}

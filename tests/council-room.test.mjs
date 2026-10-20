@@ -1,30 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {COUNCIL_ROLES, councilAvatar, councilRole} from '../dist/story-generation/council-avatars.js';
+import fs from 'node:fs';
+import {COUNCIL_ROLES, COUNCIL_AVATAR_SHEET, councilAvatar, councilRole} from '../dist/story-generation/council-avatars.js';
 import {COUNCIL_PHASES, liveCouncilRecord, emptyCouncilRecord, seatLine, renderCouncilRoom, councilRoomBlock, reviewPending, renderCouncilReviewForm, readCouncilChoice, readCouncilDirection} from '../dist/story-generation/council-room.js';
 
 /**
- * 2026-10-20 R21 회의실: five original avatars ship as inline SVG, and the
+ * 2026-10-20 R21 회의실: five original watercolor avatars ship in a bundled sheet, and the
  * room is drawn from the meeting record (live from the checkpoint, later from
  * the outline), one seat per role with what it said so far.
  */
 const pitch = (title, planted = '작은 종') => ({title, logline: `유하가 ${planted} 소리를 따라가요`, stakes: '저녁 노래를 못 불러요', planted: {name: planted, nameEn: 'a small bell', firstSeen: '가방 고리'}, ladder: ['꿀길', '풍차'], lowPoint: '"그냥 집에 갈까"', turn: {seen: '돌 틈의 작은 종', realized: '"내 종이잖아!"', overturns: '남의 종이 아니었다'}, payoff: '종을 울려요', echo: '머리맡의 종'});
 const record = (phase, extra = {}) => ({phase, direction: '5~6세 독자가 절정에서 공감', reader: {age: '5~6세'}, pitches: [pitch('따르릉'), pitch('빨간 장화의 종', '빨간 장화'), pitch('노란 우산', '노란 우산')], scores: [], verdicts: null, chosen: null, bible: null, decisions: [], roles: {chair: 'waiting', author: 'done', editor: 'speaking', art: 'speaking', reader: 'speaking'}, ...extra});
 
-test('every role has an original inline SVG avatar with its own gradients and a label', () => {
+test('watercolor avatars preserve accessible role labels and use one bundled offline sheet', () => {
   assert.deepEqual(COUNCIL_ROLES.map(r => r.id), ['chair', 'author', 'editor', 'art', 'reader']);
+  const frames = new Set();
   for (const role of COUNCIL_ROLES) {
     const svg = councilAvatar(role.id);
     assert.match(svg, /^<svg class="council-avatar" viewBox="0 0 120 120" role="img" aria-label="/u);
     assert.match(svg, new RegExp(`aria-label="${role.name}"`, 'u'));
-    assert.doesNotMatch(svg, /<image|href="http|url\(http/u, 'no external resource: nothing to fetch, nothing to pay');
-    assert.ok((svg.match(/<radialGradient id="[a-z]{2}-iris"/gu) || []).length === 1, `${role.id} has one iris gradient`);
-    assert.ok((svg.match(/<circle [^>]*fill="#fff"/gu) || []).length >= 4, `${role.id} has eye highlights`);
+    assert.ok(svg.includes(`href="${COUNCIL_AVATAR_SHEET}"`));
+    assert.doesNotMatch(svg, /href="https?:|data:image|<script|onload=/u);
+    frames.add(svg.match(/ x="(-?\d+)" y="(-?\d+)"/u).slice(1).join(','));
   }
+  assert.equal(frames.size, 5, 'each role uses a distinct portrait');
+  const asset = fs.readFileSync(new URL('../dist/assets/council/watercolor-portraits.webp', import.meta.url));
+  assert.equal(asset.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(asset.toString('ascii', 8, 12), 'WEBP');
+  assert.ok(asset.length < 512 * 1024, 'the five portraits share an asset smaller than 512 KiB');
+  const worker = fs.readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
+  assert.ok(worker.includes(`"${COUNCIL_AVATAR_SHEET}"`), 'avatars remain available offline');
   assert.equal(councilAvatar('nobody'), '');
+  assert.equal(councilAvatar('__proto__'), '');
   assert.equal(councilRole('reader').title, '소리로만 듣는 아이');
-  const ids = new Set(COUNCIL_ROLES.map(r => councilAvatar(r.id).match(/id="([a-z]{2})-bg"/u)[1]));
-  assert.equal(ids.size, 5, 'gradient ids do not collide between avatars on one page');
 });
 
 test('the record to draw: the finished outline wins, then the live checkpoint, else nothing', () => {
