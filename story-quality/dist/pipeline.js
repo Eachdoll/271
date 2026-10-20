@@ -1,5 +1,5 @@
 import { buildBanList, renderBanListForPrompt } from './banList.js';
-import { composeSeed, preferObstaclesForTopic } from './composeSeed.js';
+import { applySeedOverrides, composeSeed, preferObstaclesForTopic } from './composeSeed.js';
 import { buildOutlinePrompt, roughTokenCount } from './outlinePrompt.js';
 import { plotCheck, renderFixInstructions, containsPlanted } from './plotCheck.js';
 import { generateBeatsWithBeam } from './beamSearch.js';
@@ -12,7 +12,7 @@ export async function runOutlineStage(input) {
         recentBooks: Math.min(50, Math.max(1, Math.round(input.banWindow ?? 10))),
         recentBooksForPattern: Math.min(20, Math.max(1, Math.round(input.patternBanWindow ?? 3))),
     });
-    const seed = composeSeed({
+    const seed = applySeedOverrides(composeSeed({
         pattern: input.pattern,
         inventories: input.inventories,
         backgroundType: input.backgroundType,
@@ -21,7 +21,7 @@ export async function runOutlineStage(input) {
         preferObstacleIds: preferObstaclesForTopic(input.topic),
         world: input.world,
         variantChance: input.variantChance,
-    });
+    }), input.seedOverrides);
     const cast = [input.protagonist, ...input.supporting];
     const clauses = input.legacyCatchphrasePrompt ? cast.map((c) => (c.catchphrase ? ` "${c.catchphrase}"` : '')) : catchphraseClauses(cast);
     const charactersCompact = cast.map((c, i) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${clauses[i]}`).join(' / ');

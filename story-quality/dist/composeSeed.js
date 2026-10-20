@@ -78,6 +78,17 @@ export function composeSeed(opts) {
         reasons.push(reasons[reasons.length % 3]);
     return { patternId: pattern.id, planted, obstacles: chosen, twist, creature, humor, subLocations, failureReasons: reasons, rngSeed };
 }
+export function applySeedOverrides(seed, overrides) {
+    if (!overrides || typeof overrides !== 'object')
+        return seed;
+    return {
+        ...seed,
+        ...(overrides.planted?.ko ? { planted: { ko: overrides.planted.ko, en: overrides.planted.en || overrides.planted.ko } } : {}),
+        ...(overrides.twist?.ko ? { twist: { id: overrides.twist.id || 'bible', ko: overrides.twist.ko, en: overrides.twist.en || overrides.twist.ko, hint: overrides.twist.hint || '' } } : {}),
+        ...(overrides.humor === null ? { humor: { ko: '', en: '' } } : overrides.humor?.ko ? { humor: overrides.humor } : {}),
+        ...(Array.isArray(overrides.subLocations) ? { subLocations: overrides.subLocations.filter((l) => l?.ko) } : {}),
+    };
+}
 /** 프롬프트의 [정해진 재료] 블록. outline.v3.md의 {{seed.*}} 자리에 그대로 들어간다. */
 export function renderSeedForPrompt(seed, inv, pattern) {
     const isJourney = pattern.id === 'journey_repeat';
@@ -96,8 +107,9 @@ export function renderSeedForPrompt(seed, inv, pattern) {
         `- ${stepLabel}: ${steps}`,
         `- 시도별 실패 이유: ${reasons}`,
         `- 배경 생물: ${seed.creature.ko} (한 번 이상 등장)`,
-        `- 웃음 포인트: ${seed.humor.ko}`,
-        `- 세부 장소 후보: ${seed.subLocations.map((l) => l.ko).join(', ')}`,
+        // R23: a bible-settled seed has no humour beat or sub-location list; the line is left out.
+        ...(seed.humor?.ko ? [`- 웃음 포인트: ${seed.humor.ko}`] : []),
+        ...(seed.subLocations.length ? [`- 세부 장소 후보: ${seed.subLocations.map((l) => l.ko).join(', ')}`] : []),
     ].join('\n');
 }
 /** 주제 키워드 → 어울리는 장애물 id (비·물·바람·밤 등). 없으면 빈 배열. */

@@ -46,6 +46,19 @@ export interface ComposeOptions {
 /** 물건에 색(색 붙일 수 있는 물건이면) 또는 크기 변형을, 생물에 성격 변형을 붙인다. 이미 붙어 있으면 그대로. */
 export declare function applyVariant(rng: () => number, item: Bi, kind: 'object' | 'creature', rules: NonNullable<Inventories['variantRules']>): Bi;
 export declare function composeSeed(opts: ComposeOptions): StorySeed;
+/**
+ * R23: slots a settled story bible decides (the app passes them). The planted
+ * object and the twist replace the random picks; `humor: null` drops the
+ * humour beat and an empty `subLocations` drops the sub-location line, so the
+ * prompt names one binding structure instead of two that disagree.
+ */
+export interface SeedOverrides {
+    planted?: Bi;
+    twist?: StorySeed['twist'];
+    humor?: Bi | null;
+    subLocations?: Bi[];
+}
+export declare function applySeedOverrides(seed: StorySeed, overrides?: SeedOverrides | null): StorySeed;
 /** 프롬프트의 [정해진 재료] 블록. outline.v3.md의 {{seed.*}} 자리에 그대로 들어간다. */
 export declare function renderSeedForPrompt(seed: StorySeed, inv: Inventories, pattern: PlotPatternCard): string;
 /** 주제 키워드 → 어울리는 장애물 id (비·물·바람·밤 등). 없으면 빈 배열. */

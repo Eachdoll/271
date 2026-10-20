@@ -4,7 +4,7 @@
  */
 import type { BookRecord, GestureDictionary, Inventories, LevelSpecEn, LevelSpecKo, PlotPatternCard, StoryOutline, TextEngine } from './types.js';
 import type { WorldCard } from './worlds.js';
-import { type BackgroundType, type StorySeed } from './composeSeed.js';
+import { type BackgroundType, type SeedOverrides, type StorySeed } from './composeSeed.js';
 import { type Character } from './outlinePrompt.js';
 import type { ExampleStyle } from './retrieval.js';
 import { plotCheck } from './plotCheck.js';
@@ -63,6 +63,8 @@ export interface OutlineStageInput {
      * 검사 결과가 바뀌면 수정 호출 요청이 달라져 이미 산 응답을 다시 쓰지 못하기 때문이다.
      */
     legacyChecks?: boolean;
+    /** R23: slots a settled story bible decides (planted object, twist; humour and sub-locations dropped). */
+    seedOverrides?: SeedOverrides | null;
 }
 export interface OutlineStageResult {
     outline: StoryOutline;

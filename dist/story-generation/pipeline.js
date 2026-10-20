@@ -82,6 +82,7 @@ import {
   arcProseRules,
   inspectArc,
 } from "./arc-rules.js";
+import { hasPromptPolicy } from "./prompt-policy.js";
 import {
   hasCouncilPolicy,
   runStoryCouncil,
@@ -352,6 +353,10 @@ function modelVisibleInput(source) {
     const { councilPolicy, ...rest } = input;
     input = rest;
   }
+  if (input?.promptPolicy) {
+    const { promptPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -481,6 +486,7 @@ export function normalizeStoryInput(input = {}) {
     ...(input.craftPolicy?.version === 1 ? { craftPolicy: { version: 1 } } : {}),
     ...(hasArcPolicy(input) ? { arcPolicy: { version: 1 } } : {}),
     ...(hasCouncilPolicy(input) ? { councilPolicy: { version: 1 } } : {}),
+    ...(hasPromptPolicy(input) ? { promptPolicy: { version: 1 } } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -2144,7 +2150,8 @@ export async function generateOutline(source, options = {}) {
   if (input.storyQuality?.enabled) {
     const result = await generateQualityOutline(
       input,
-      bibleRules ? { ...options, storyBibleRules: bibleRules } : options,
+      // R23: the bible itself too, so the seed's planted object and turn follow it.
+      bibleRules ? { ...options, storyBibleRules: bibleRules, storyBible: council.record.bible } : options,
       qualityServices(),
     );
     result.data.quality = clone(result.meta.quality || {});

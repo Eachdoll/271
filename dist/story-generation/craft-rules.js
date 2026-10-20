@@ -7,6 +7,7 @@
  * {version: 1}; every rule here is gated on it, so existing drafts, jobs and
  * books send byte-identical requests.
  */
+import { hasPromptPolicy } from "./prompt-policy.js";
 export const CRAFT_POLICY_VERSION = 1;
 export const craftPolicy = () => ({ version: CRAFT_POLICY_VERSION });
 export const hasCraftPolicy = (input) =>
@@ -37,10 +38,18 @@ const isHomePlace = (background = {}) =>
   );
 const companionCount = (input) =>
   Math.max(0, (Array.isArray(input?.characters) ? input.characters : []).length - 1);
-const locationCount = (input) =>
-  (Array.isArray(input?.backgrounds) ? input.backgrounds : []).filter(
+const locationCount = (input) => {
+  const all = (Array.isArray(input?.backgrounds) ? input.backgrounds : []).filter(
     (b) => !isHomePlace(b),
-  ).length;
+  );
+  // R23: a policy draft counts the places the parent chose (the whole drawer
+  // is only the pool); without chosen places, or without the policy, every
+  // supplied place counts as before.
+  const chosen = hasPromptPolicy(input)
+    ? new Set((Array.isArray(input?.preferredBackgroundIds) ? input.preferredBackgroundIds : []).map(String))
+    : null;
+  return chosen?.size ? all.filter((b) => chosen.has(String(b.id))).length : all.length;
+};
 /** Every supplied companion takes part; a big cast is spread over the beats. */
 export function castSpreadRule(input) {
   const companions = companionCount(input);

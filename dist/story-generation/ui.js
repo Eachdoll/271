@@ -26,6 +26,7 @@ import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
 import { editorPolicy, revisionSummary } from "./book-revision.js";
 import { craftPolicy } from "./craft-rules.js";
 import { arcPolicy } from "./arc-rules.js";
+import { promptPolicy } from "./prompt-policy.js";
 import { councilPolicy, recordParentDecision, renderCouncilCard, isCouncilHold } from "./council.js";
 import {
   renderCouncilRoom,
@@ -935,6 +936,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       arcPolicy: arcPolicy(),
       // The writers' room before the outline (pitches, verdicts, bible, decision log).
       councilPolicy: councilPolicy(),
+      // R23: tidier requests (default rules back, bible over seed, lean canon).
+      promptPolicy: promptPolicy(),
     },
     readingLevels,
     world,
