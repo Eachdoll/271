@@ -89,6 +89,7 @@ import {
   writeStoredLibrary,
   keepRecoveryPoint,
   latestRecoveryPoint,
+  decodeStoredLibrary,
 } from "./library-storage.js";
 import {
   seedState,
@@ -443,7 +444,7 @@ function save() {
     return true;
   } catch (error) {
     toast(
-      storageBlocked
+      storageBlocked || error?.code === "QUOTA"
         ? error.message
         : "저장 공간이 부족하거나 저장 권한이 없어요. 백업 후 다시 시도해 주세요.",
     );
@@ -909,7 +910,7 @@ async function applyCloudLibrary(candidate, meta) {
     }
     if (recovery && !blocked) {
       try {
-        const old = validateImport(recovery, { allowStoredAssets: true });
+        const old = validateImport(decodeStoredLibrary(recovery), { allowStoredAssets: true });
         await restoreLibraryImages(old);
       } catch {}
     }
@@ -995,7 +996,7 @@ async function showLibraryImport(file) {
         setCustomStylePresets(state);
         if (recoveryText && !previousBlocked) {
           try {
-            const rollback = validateImport(recoveryText, {
+            const rollback = validateImport(decodeStoredLibrary(recoveryText), {
               allowStoredAssets: true,
             });
             await restoreLibraryImages(rollback);
@@ -2977,7 +2978,7 @@ async function onAction(e) {
   if (a === "download-original") {
     if (initialLibrary.raw)
       downloadFile(
-        initialLibrary.raw,
+        decodeStoredLibrary(initialLibrary.raw),
         "donghwa-workshop-original.json",
         "application/json",
       );
@@ -2989,8 +2990,8 @@ async function onAction(e) {
       if (!point) return toast("보관된 복구 파일이 아직 없어요.");
       downloadFile(
         point.mediaDeferred
-          ? (await createLibraryBackup(JSON.parse(point.text))).text
-          : point.text,
+          ? (await createLibraryBackup(JSON.parse(decodeStoredLibrary(point.text)))).text
+          : decodeStoredLibrary(point.text),
         "donghwa-workshop-recovery.json",
         "application/json",
       );

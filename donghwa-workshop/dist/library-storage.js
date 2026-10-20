@@ -1,3 +1,170 @@
+/*
+ * 2026-10-20 저장 한도: the library lives in localStorage, whose quota is a
+ * few MB of UTF-16 (Safari: about 5MB). A library that no longer fits as
+ * plain JSON is stored LZW-compressed (UTF-8 bytes → 9..16-bit codes packed
+ * fifteen bits per code unit in U+0100..U+80FF, so the value never holds a
+ * surrogate). The value starts with COMPRESSED_MARK; plain JSON is still
+ * read and written as before, and a reader always goes through
+ * decodeStoredLibrary. A quota refusal after both tries becomes a Korean
+ * StorageQuotaError naming the sizes, never the browser's English text.
+ */
+export const COMPRESSED_MARK = "\u0001dwz1:";
+const CLEAR = 256,
+  EOD = 257,
+  FIRST = 258,
+  MAX_CODES = 1 << 16,
+  CHUNK_BITS = 15,
+  CHUNK_BASE = 0x100;
+export function isCompressedLibrary(raw) {
+  return typeof raw === "string" && raw.startsWith(COMPRESSED_MARK);
+}
+/** JSON text → compact storage string (deterministic, no surrogates). */
+export function encodeStoredLibrary(text) {
+  const bytes = new TextEncoder().encode(String(text ?? ""));
+  let out = "",
+    bitBuf = 0,
+    bitCount = 0;
+  const parts = [];
+  const emit = (code, width) => {
+    bitBuf = (bitBuf << width) | code;
+    bitCount += width;
+    while (bitCount >= CHUNK_BITS) {
+      bitCount -= CHUNK_BITS;
+      out += String.fromCharCode(CHUNK_BASE + ((bitBuf >>> bitCount) & 0x7fff));
+      bitBuf &= (1 << bitCount) - 1;
+      if (out.length >= 8192) {
+        parts.push(out);
+        out = "";
+      }
+    }
+  };
+  let dict = new Map(),
+    next = FIRST,
+    width = 9,
+    prefix = -1;
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i];
+    if (prefix < 0) {
+      prefix = byte;
+      continue;
+    }
+    const key = prefix * 256 + byte,
+      found = dict.get(key);
+    if (found !== undefined) {
+      prefix = found;
+      continue;
+    }
+    emit(prefix, width);
+    dict.set(key, next++);
+    if (next === 1 << width && width < 16) width++;
+    else if (next === MAX_CODES) {
+      emit(CLEAR, width);
+      dict = new Map();
+      next = FIRST;
+      width = 9;
+    }
+    prefix = byte;
+  }
+  if (prefix >= 0) emit(prefix, width);
+  emit(EOD, width);
+  if (bitCount > 0) emit(0, CHUNK_BITS - bitCount);
+  parts.push(out);
+  return COMPRESSED_MARK + parts.join("");
+}
+/** Storage string → JSON text. Plain JSON (no mark) is returned as is. */
+export function decodeStoredLibrary(raw) {
+  if (!isCompressedLibrary(raw)) return raw;
+  const data = raw.slice(COMPRESSED_MARK.length);
+  let pos = 0,
+    bitBuf = 0,
+    bitCount = 0;
+  const read = (width) => {
+    while (bitCount < width) {
+      if (pos >= data.length) return EOD;
+      const unit = data.charCodeAt(pos++) - CHUNK_BASE;
+      if (unit < 0 || unit > 0x7fff)
+        throw new Error("기기 보관 데이터가 손상됐어요.");
+      bitBuf = (bitBuf << CHUNK_BITS) | unit;
+      bitCount += CHUNK_BITS;
+    }
+    bitCount -= width;
+    const code = (bitBuf >>> bitCount) & ((1 << width) - 1);
+    bitBuf &= (1 << bitCount) - 1;
+    return code;
+  };
+  let out = new Uint8Array(Math.max(64, data.length * 4)),
+    length = 0;
+  const append = (entry) => {
+    if (length + entry.length > out.length) {
+      const bigger = new Uint8Array(Math.max(out.length * 2, length + entry.length));
+      bigger.set(out);
+      out = bigger;
+    }
+    out.set(entry, length);
+    length += entry.length;
+  };
+  let table = [],
+    next = FIRST,
+    width = 9,
+    previous = null;
+  const entryOf = (code) => {
+    if (code < 256) return Uint8Array.of(code);
+    const entry = table[code - FIRST];
+    if (!entry) throw new Error("기기 보관 데이터가 손상됐어요.");
+    return entry;
+  };
+  for (;;) {
+    const code = read(width);
+    if (code === EOD) break;
+    if (code === CLEAR) {
+      table = [];
+      next = FIRST;
+      width = 9;
+      previous = null;
+      continue;
+    }
+    let entry;
+    if (code === next && previous) {
+      entry = new Uint8Array(previous.length + 1);
+      entry.set(previous);
+      entry[previous.length] = previous[0];
+    } else entry = entryOf(code);
+    append(entry);
+    if (previous && next < MAX_CODES) {
+      const added = new Uint8Array(previous.length + 1);
+      added.set(previous);
+      added[previous.length] = entry[0];
+      table[next++ - FIRST] = added;
+      if (next + 1 === 1 << width && width < 16) width++;
+    }
+    previous = entry;
+  }
+  return new TextDecoder().decode(out.subarray(0, length));
+}
+/** The browser refused a write for lack of space (any vendor's name or text). */
+export function isQuotaError(error) {
+  return (
+    !!error &&
+    (error.name === "QuotaExceededError" ||
+      error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      error.code === 22 ||
+      error.code === 1014 ||
+      /quota/iu.test(String(error.message || "")))
+  );
+}
+const mb = (chars) => (Math.round((chars * 2) / 1024 / 1024 * 10) / 10).toFixed(1);
+export class StorageQuotaError extends Error {
+  constructor(plainChars, compressedChars) {
+    super(
+      `이 기기 브라우저의 저장 한도를 넘어 책장을 저장하지 못했어요 (책장 약 ${mb(plainChars)}MB, 압축해도 약 ${mb(compressedChars)}MB). 끝난 이야기를 책장에 저장하고 '제작 중인 이야기'에서 필요 없는 작업을 지우면 줄어들어요. 이 기기의 자료는 그대로예요.`,
+    );
+    this.name = "StorageQuotaError";
+    this.code = "QUOTA";
+    this.plainChars = plainChars;
+    this.compressedChars = compressedChars;
+  }
+}
+
 /** Startup checks structure only. Byte/signature checks belong to external imports. */
 export function validateStoredLibrary(text) {
   if (typeof text !== "string" || text.length > 250 * 1024 * 1024)
@@ -90,7 +257,7 @@ export function readStoredLibrary(storage, key, { validate, seed }) {
       return { state: seed(), kind: "fresh", raw: null, error: null };
     return {
       ...(() => {
-        const result = validate(raw);
+        const result = validate(decodeStoredLibrary(raw));
         return result?.invalidRecords
           ? { state: result.state, invalidRecords: result.invalidRecords }
           : { state: result, invalidRecords: [] };
@@ -132,7 +299,33 @@ export function writeStoredLibrary(
         item.record,
       );
   }
-  storage.setItem(key, JSON.stringify(preserved));
+  const text = JSON.stringify(preserved);
+  // Plain JSON first (readable, cheap); compressed when the plain value does
+  // not fit, and from then on (a compressed value is never tried plain again).
+  let current = null;
+  try {
+    current = storage.getItem(key);
+  } catch {}
+  const compressedFirst = isCompressedLibrary(current);
+  let encoded = null,
+    quota = null;
+  for (const mode of compressedFirst ? ["compressed"] : ["plain", "compressed"]) {
+    try {
+      if (mode === "plain") storage.setItem(key, text);
+      else {
+        encoded ??= encodeStoredLibrary(text);
+        storage.setItem(key, encoded);
+      }
+      return;
+    } catch (error) {
+      if (!isQuotaError(error)) throw error;
+      quota = error;
+    }
+  }
+  encoded ??= encodeStoredLibrary(text);
+  const failure = new StorageQuotaError(text.length, encoded.length);
+  failure.cause = quota;
+  throw failure;
 }
 const DB = "donghwa-workshop-library-recovery",
   STORE = "snapshots";
