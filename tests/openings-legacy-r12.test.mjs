@@ -735,7 +735,10 @@ const PINS = {
   // 켜짐' line (help text and its 끄기 button) under the 승인 예시 line; the
   // prices, ④ and ⑤ are byte-identical (diffed against 15db614's dump).
   // 15db614: b8f4af05…052a.
-  review: '520fc68c7960c4598b05017f4e13f81f68724dcb30e5c422ddd6bd74ef346f09',
+  // Monochrome UX: ③ now renders semantic slider switches and folded engine/cost details.
+  // Before: 520fc68c7960c4598b05017f4e13f81f68724dcb30e5c422ddd6bd74ef346f09.
+  // Baseline 08f09d4 dump vs current: only review differs; all request/data/price pins match.
+  review: '564133dec96545749ad00abe83d42b7079dc624d302c11cffcf6be9664d3a1b9',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost

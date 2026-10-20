@@ -130,7 +130,7 @@ test('each simple step shows at most 12 buttons (material cards and page arrows 
   assert.match(generate, /data-simple-action="start-text"/);
   assert.match(generate, /data-simple-action="start-demo"/);
   assert.match(generate, /그림은 다음 단계에서/);
-  assert.match(generate, /승인 예시 함께 쓰기 · <strong>꺼짐/);
+  assert.match(generate, /role="switch" aria-checked="false"[^>]*data-simple-action="toggle-distilled"/);
   assert.ok(counts[2] <= 3, 'step ② is cards plus 이전/다음');
 });
 
@@ -242,7 +242,7 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
   const fresh = {settings: {}};
   const {wizard} = setup(), full = setup().state;
   const html = renderSimpleCreate(ctxFor(full, ensureSimpleWizard(full, {...wizard, simpleStep: 3})));
-  assert.match(html, /<strong>꺼짐<\/strong>/);
+  assert.match(html, /role="switch" aria-checked="false"[^>]*data-simple-action="toggle-distilled"/);
   assert.equal(fresh.settings.storyQuality, undefined);
 });
 

@@ -6,6 +6,7 @@
  * saved after every round) or from the finished outline, so the screen can
  * follow a live run and show the same room again later.
  */
+import { councilDecisionCosts } from "../text-generation/models.js";
 import { COUNCIL_ROLES, councilAvatar } from "./council-avatars.js";
 
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -20,11 +21,11 @@ const unquote = (value) => str(value, 120).replace(/^["“'‘]+|["”'’]+$/gu
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/gu, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 export const COUNCIL_PHASES = Object.freeze([
-  ["pitches", "피치"],
-  ["verdicts", "판정"],
+  ["pitches", "이야기 안"],
+  ["verdicts", "검토"],
   // R22: shown only for a meeting the parent looked at ('회의 결과 보고 진행').
   ["review", "부모 선택"],
-  ["bible", "바이블"],
+  ["bible", "설계서"],
   ["done", "확정"],
 ]);
 /** R22: a meeting parked for the parent's choice (its checkpoint record). */
@@ -60,7 +61,7 @@ function seatState(record, role) {
   if (record?.phase === "done" || !object(record?.roles)) return "done";
   return record.roles[role] || "waiting";
 }
-const pitchTitle = (record, n) => str(record?.pitches?.[n - 1]?.title, 40) || `피치 ${n}`;
+const pitchTitle = (record, n) => str(record?.pitches?.[n - 1]?.title, 40) || `이야기 안 ${n}`;
 const chosenRow = (record) => list(record?.scores).find((row) => row.pitch === record?.chosen) || null;
 /** R22: how the pitch was settled, for the chair's line and the summary. */
 const parentTag = (record) =>
@@ -74,19 +75,19 @@ export function seatLine(record, role) {
   if (role === "chair") {
     if (done || record?.chosen) {
       const row = chosenRow(record);
-      return `피치 ${record.chosen} '${pitchTitle(record, record.chosen)}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${record.overrode ? " · 거부권을 넘어 택함" : ""}${parentTag(record)}`;
+      return `이야기 안 ${record.chosen} '${pitchTitle(record, record.chosen)}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${record.overrode ? " · 검토 의견을 보고 부모가 선택" : ""}${parentTag(record)}`;
     }
     if (phase === "review" && record?.recommended)
-      return `피치 ${record.recommended} '${pitchTitle(record, record.recommended)}' 추천 · 부모님의 선택을 기다려요.`;
+      return `이야기 안 ${record.recommended} '${pitchTitle(record, record.recommended)}' 추천 · 부모님의 선택을 기다려요.`;
     if (phase === "verdicts") return "세 판정을 모아 채점표를 만들고 있어요.";
     return record?.direction ? `방향: ${str(record.direction, 120)}` : "방향과 조건을 모으고 있어요.";
   }
   if (role === "author") {
-    if (done && record?.bible) return `바이블 '${str(record.bible.title, 40)}' 확정 · 심은 물건: ${str(record.bible.planted?.name, 30)}`;
-    if (phase === "bible") return "지적을 반영해 바이블을 쓰고 있어요.";
-    if (phase === "review") return "부모님이 고르면 그 피치로 바이블을 써요.";
-    if (list(record?.pitches).length) return `피치: ${list(record.pitches).map((p) => str(p.title, 24)).join(" / ")}`;
-    return phase === "pitches" ? "피치 세 개를 쓰고 있어요." : "방향을 기다려요.";
+    if (done && record?.bible) return `설계서 '${str(record.bible.title, 40)}' 확정 · 심은 물건: ${str(record.bible.planted?.name, 30)}`;
+    if (phase === "bible") return "지적을 반영해 설계서를 쓰고 있어요.";
+    if (phase === "review") return "부모님이 고르면 고른 이야기로 설계서를 써요.";
+    if (list(record?.pitches).length) return `이야기 안: ${list(record.pitches).map((p) => str(p.title, 24)).join(" / ")}`;
+    return phase === "pitches" ? "이야기 안 세 개를 쓰고 있어요." : "방향을 기다려요.";
   }
   if (role === "editor") {
     const rows = list(v.editor).filter(Boolean);
@@ -94,7 +95,7 @@ export function seatLine(record, role) {
       const pick = v.picks?.editor;
       const row = rows.find((r) => r.pitch === pick) || rows[0];
       const veto = rows.find((r) => r.veto);
-      return `${pick ? `피치 ${pick} 추천` : "판정 끝"}${row?.fixes?.length ? ` · 고칠 점: ${str(row.fixes[0], 60)}` : ""}${veto ? ` · 피치 ${veto.pitch} 거부: ${str(veto.vetoReason, 40)}` : ""}`;
+      return `${pick ? `이야기 안 ${pick} 추천` : "판정 끝"}${row?.fixes?.length ? ` · 고칠 점: ${str(row.fixes[0], 60)}` : ""}${veto ? ` · 이야기 안 ${veto.pitch} 검토 필요: ${str(veto.vetoReason, 40)}` : ""}`;
     }
     return at >= 1 && seatState(record, role) === "speaking" ? "점검표로 뼈대를 보고 있어요." : "점검표를 펴 두고 기다려요.";
   }
@@ -104,7 +105,7 @@ export function seatLine(record, role) {
       const pick = v.picks?.art;
       const row = rows.find((r) => r.pitch === pick) || rows[0];
       const motifs = list(row?.motifs).map((m) => str(m.ko || m.en, 20)).filter(Boolean);
-      return `${pick ? `피치 ${pick} 추천` : "판정 끝"}${motifs.length ? ` · 모티프: ${motifs.join(", ")}` : ""}${row?.veto ? ` · 거부: ${str(row.vetoReason, 40)}` : ""}`;
+      return `${pick ? `이야기 안 ${pick} 추천` : "판정 끝"}${motifs.length ? ` · 모티프: ${motifs.join(", ")}` : ""}${row?.veto ? ` · 검토 필요: ${str(row.vetoReason, 40)}` : ""}`;
     }
     return at >= 1 && seatState(record, role) === "speaking" ? "그릴 수 있는 반전인지 보고 있어요." : "펼침면을 떠올리며 기다려요.";
   }
@@ -121,11 +122,11 @@ export function seatLine(record, role) {
 }
 
 const STATE_LABEL = Object.freeze({ waiting: "기다림", speaking: "말하는 중", done: "끝" });
-function seat(record, role, { compact }) {
+function seat(record, role, { compact, terse = false }) {
   const meta = COUNCIL_ROLES.find((r) => r.id === role),
     state = seatState(record, role),
     age = role === "reader" && record?.reader?.age ? `<span class="seat-age">${esc(record.reader.age)}</span>` : "";
-  return `<div class="council-seat seat-${role} state-${state}" data-role="${role}"><div class="seat-avatar">${councilAvatar(role)}${age}<span class="seat-state" aria-label="${STATE_LABEL[state]}">${state === "done" ? "✓" : state === "speaking" ? "…" : ""}</span></div><div class="seat-name">${esc(meta?.name || role)}</div>${compact ? "" : `<div class="seat-title">${esc(meta?.title || "")}</div>`}<div class="seat-bubble">${esc(seatLine(record, role))}</div></div>`;
+  return `<div class="council-seat seat-${role} state-${state}" data-role="${role}"><div class="seat-avatar">${councilAvatar(role)}${age}<span class="seat-state" aria-label="${STATE_LABEL[state]}">${state === "done" ? "✓" : state === "speaking" ? "…" : ""}</span></div><div class="seat-name">${esc(meta?.name || role)}</div>${compact ? "" : `<div class="seat-title">${esc(meta?.title || "")}</div>`}${terse ? "" : `<div class="seat-bubble">${esc(seatLine(record, role))}</div>`}</div>`;
 }
 function pitchCards(record) {
   const pitches = list(record?.pitches);
@@ -148,17 +149,20 @@ function phaseStrip(record) {
     reviewed = record?.phase === "review" || object(record?.parentChoice);
   return `<ol class="council-phases" aria-label="회의 진행">${COUNCIL_PHASES.map(([id, label], i) => ({ id, label, i }))
     .filter(({ id }) => id !== "review" || reviewed)
-    .map(({ label, i }) => `<li class="${done || i < at ? "done" : i === at ? "active" : ""}">${label}</li>`)
+    .map(({ label, i }) => `<li class="${done || i < at ? "done" : i === at ? "active" : ""}"${!done && i === at ? ' aria-current="step"' : ""}>${label}</li>`)
     .join("")}</ol>`;
 }
 /** The room. `live` adds the pulsing seats; `compact` hides the role titles. */
-export function renderCouncilRoom(record, { live = false, compact = false } = {}) {
+export function renderCouncilRoom(record, { live = false, compact = false, hidePitches = false } = {}) {
   const r = object(record) ? record : emptyCouncilRecord();
-  const seats = COUNCIL_ROLES.map((role) => seat(r, role.id, { compact })).join("");
+  const choosing = reviewPending(r);
+  const seats = COUNCIL_ROLES.map((role) => seat(r, role.id, { compact: compact || choosing, terse: choosing })).join("");
+  const opinions = choosing ? `<details class="council-opinions"><summary>봇들의 검토 의견</summary>${COUNCIL_ROLES.map(role => `<p><strong>${esc(role.name)}</strong> ${esc(seatLine(r, role.id))}</p>`).join("")}</details>` : "";
+  const progress = choosing ? "부모님의 선택을 기다려요. 받은 회의 결과는 보관돼 있어요." : r.phase === "done" ? "선택한 이야기와 회의 기록을 다시 볼 수 있어요." : "봇들이 이야기의 방향을 의논하고 있어요. 받은 답은 단계마다 보관돼요.";
   const bible = r.phase === "done" && object(r.bible)
-    ? `<p class="council-room-bible"><strong>바이블</strong> 잃는 것: ${esc(str(r.bible.stakes, 80))} · 바닥: ${esc(str(r.bible.lowPoint, 80))} · 반전: ${esc(str(r.bible.turn?.seen, 60))} → “${esc(unquote(r.bible.turn?.realized))}”</p>`
+    ? `<p class="council-room-bible"><strong>이야기 설계서</strong> 잃는 것: ${esc(str(r.bible.stakes, 80))} · 가장 어려운 순간: ${esc(str(r.bible.lowPoint, 80))} · 반전: ${esc(str(r.bible.turn?.seen, 60))} → “${esc(unquote(r.bible.turn?.realized))}”</p>`
     : "";
-  return `<div class="council-room ${live ? "live" : ""} phase-${esc(r.phase || "waiting")}">${phaseStrip(r)}<div class="council-table">${seats}</div>${pitchCards(r)}${bible}</div>`;
+  return `<div class="council-room ${live ? "live" : ""} phase-${esc(r.phase || "waiting")}">${phaseStrip(r)}<p class="council-progress-label">${progress}</p><div class="council-table">${seats}</div>${opinions}${choosing || hidePitches ? "" : pitchCards(r)}${bible}</div>`;
 }
 /**
  * The ③ / status-window block for a job: a live room while the meeting runs
@@ -187,18 +191,31 @@ export function councilRoomBlock(job, { live = false, compact = false, open = fa
  * readCouncilDirection. `fee` is the caller's price line for a new meeting.
  */
 export function renderCouncilReviewForm(record, { direction = "", fee = "" } = {}) {
-  const r = object(record) ? record : {},
-    pitches = list(r.pitches),
-    recommended = r.recommended || 1;
+  const r = object(record) ? record : {}, pitches = list(r.pitches), recommended = r.recommended || 1;
   if (!pitches.length) return "";
-  const picks = pitches
-    .map((p, i) => {
-      const n = i + 1,
-        row = list(r.scores).find((s) => s.pitch === n);
-      return `<label class="council-pick${n === recommended ? " council-recommended" : ""}"><input type="radio" name="council-pick" value="${n}" ${n === recommended ? "checked" : ""}><span class="council-pick-body"><strong>${esc(str(p.title, 40))}${n === recommended ? ' <span class="pitch-tag">의장 추천</span>' : ""}</strong><span class="pitch-logline">${esc(str(p.logline, 160))}</span>${row ? `<span class="pitch-score">편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}${row.vetoes?.length ? ` · 거부: ${esc(row.vetoes.join(" / "))}` : ""}</span>` : ""}${p.turn?.seen ? `<span class="pitch-turn">반전: ${esc(str(p.turn.seen, 80))} → “${esc(unquote(p.turn.realized))}”</span>` : ""}</span></label>`;
-    })
-    .join("");
-  return `<div class="council-review" id="council-review"><p class="council-review-intro">의장이 피치 ${recommended} '${esc(pitchTitle(r, recommended))}'을(를) 추천했어요. 그대로 가거나 다른 피치를 고르고, 작가 봇에게 한마디를 남길 수 있어요.</p><fieldset class="council-review-picks"><legend>이 피치로 쓰기</legend>${picks}</fieldset><div class="field"><label for="council-note">작가 봇에게 한마디 (선택)</label><textarea id="council-note" maxlength="300" rows="2" placeholder="예: 토토가 더 많이 나오게, 바닥 장면은 덜 무섭게"></textarea></div><details class="council-redirect"><summary>방향을 고쳐 다시 회의하기</summary><div class="field"><label for="council-direction">새 방향 한 줄</label><input id="council-direction" maxlength="200" value="${esc(str(direction, 200))}" placeholder="예: 절정에서 아이가 아기 여우의 두려움에 공감하게"></div><p class="small-label">다시 회의하면 작가·편집자·그림 감독·독자 봇을 새로 부르고 지금 피치는 버려요${fee ? ` · ${esc(fee)}` : ""}.</p></details></div>`;
+  const picks = pitches.map((p, i) => {
+    const n = i + 1, row = list(r.scores).find(s => s.pitch === n);
+    return `<div class="council-pick-option"><label class="council-pick${n === recommended ? " council-recommended" : ""}"><input type="radio" name="council-pick" value="${n}" data-pitch-title="${esc(str(p.title, 40))}" ${n === recommended ? "checked" : ""}><span class="council-pick-body"><strong>${esc(str(p.title, 40))}${n === recommended ? ' <span class="pitch-tag">의장 추천</span>' : ""}</strong><span class="pitch-logline">${esc(str(p.logline, 160))}</span>${p.turn?.seen ? `<span class="pitch-turn">반전: ${esc(str(p.turn.seen, 80))} → “${esc(unquote(p.turn.realized))}”</span>` : ""}</span></label>${row ? `<details class="pitch-review-details"><summary>점수·검토 의견</summary><p>편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}${row.vetoes?.length ? `<br>검토 필요: ${esc(row.vetoes.join(" / "))}` : ""}</p></details>` : ""}</div>`;
+  }).join("");
+  return `<div class="council-review" id="council-review"><h4 id="council-choice-heading" tabindex="-1">어떤 이야기로 이어 갈까요?</h4><p class="council-review-intro">추천한 안을 쓰거나 다른 이야기를 골라 주세요.</p><fieldset class="council-review-picks"><legend>이야기 안 선택</legend>${picks}</fieldset><div class="field"><label for="council-note">작가 봇에게 한마디 (선택)</label><textarea id="council-note" maxlength="300" rows="2" placeholder="예: 토토가 더 많이 나오게, 가장 어려운 장면은 덜 무섭게"></textarea></div><details class="council-redirect"><summary>방향을 고쳐 다시 회의하기</summary><div class="field"><label for="council-direction">새 방향 한 줄</label><input id="council-direction" maxlength="200" value="${esc(str(direction, 200))}" placeholder="예: 친구의 작은 도움이 반전이 되는 이야기"></div><p class="small-label">다시 회의하면 지금 이야기 안 대신 새 안을 만들어요${fee ? ` · 추가 예상 ${esc(fee)}` : ""}.</p></details></div>`;
+}
+let choiceFeedbackBound = false;
+/** Update only the selection summary; never redraw a parent's typed note. */
+export function bindCouncilChoiceFeedback() {
+  if (choiceFeedbackBound || typeof document === "undefined") return;
+  choiceFeedbackBound = true;
+  const updateKeyboardInset = () => {
+    const viewport = globalThis.visualViewport;
+    const inset = viewport ? Math.max(0, innerHeight - viewport.height - viewport.offsetTop) : 0;
+    document.documentElement.style.setProperty("--keyboard-inset", `${inset}px`);
+    document.documentElement.classList.toggle("council-keyboard-open", inset > 100 && !!document.querySelector(".council-choice-actions"));
+  };
+  globalThis.visualViewport?.addEventListener?.("resize", updateKeyboardInset);
+  globalThis.visualViewport?.addEventListener?.("scroll", updateKeyboardInset);
+  document.addEventListener("change", event => {
+    if (!event.target?.matches?.('input[name="council-pick"]')) return;
+    for (const label of document.querySelectorAll("[data-council-selected-title]")) label.textContent = event.target.dataset.pitchTitle || `이야기 안 ${event.target.value}`;
+  });
 }
 /** The pick and the note from the form (null when no form is on the page). */
 export function readCouncilChoice(root = globalThis.document) {
@@ -209,4 +226,11 @@ export function readCouncilChoice(root = globalThis.document) {
 /** The rewritten direction from the form ("" when empty or absent). */
 export function readCouncilDirection(root = globalThis.document) {
   return str(root?.querySelector?.("#council-direction")?.value, 200);
+}
+
+/** Separate prior estimated usage from each upcoming action. */
+export function renderCouncilBudget(job) {
+  const c = councilDecisionCosts(job);
+  const money = (value, unknown) => unknown ? (value > 0 ? `약 $${value.toFixed(3)} · 일부 미확인` : "요금 정보 없음") : `약 $${value.toFixed(3)}`;
+  return `<div class="council-budget"><span>지금까지 글 요청 추정 <strong>${money(c.usedUsd, c.usedUnknown)}</strong></span><span>이 안으로 글 이어쓰기 예상 <strong>${money(c.continueUsd, c.continueUnknown)}</strong></span><span>다시 회의 추가 예상 <strong>${money(c.meetingUsd, c.meetingUnknown)}</strong></span><small>받은 회의 답은 다시 사지 않아요. 공급자 실제 청구액과 다를 수 있고 자동 수정·그림 비용은 별도예요.</small></div>`;
 }

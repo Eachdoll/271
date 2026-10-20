@@ -56,27 +56,27 @@ test('each seat says one line for its moment', () => {
   assert.equal(seatLine(empty, 'reader'), '이불을 안고 기다려요.');
   const pitching = record('pitches', {pitches: [], roles: {chair: 'speaking', author: 'speaking', editor: 'waiting', art: 'waiting', reader: 'waiting'}});
   assert.equal(seatLine(pitching, 'chair'), '방향: 5~6세 독자가 절정에서 공감');
-  assert.equal(seatLine(pitching, 'author'), '피치 세 개를 쓰고 있어요.');
+  assert.equal(seatLine(pitching, 'author'), '이야기 안 세 개를 쓰고 있어요.');
   assert.equal(seatLine(pitching, 'editor'), '점검표를 펴 두고 기다려요.');
   const judging = record('verdicts', {verdicts: {editor: [{pitch: 1, fixes: ['시도 2를 키울 것']}, {pitch: 2, fixes: []}, {pitch: 3, veto: true, vetoReason: '잃는 것이 없음'}], picks: {editor: 2}}});
   judging.roles.editor = 'done';
-  assert.equal(seatLine(judging, 'author'), '피치: 따르릉 / 빨간 장화의 종 / 노란 우산');
-  assert.equal(seatLine(judging, 'editor'), '피치 2 추천 · 피치 3 거부: 잃는 것이 없음');
+  assert.equal(seatLine(judging, 'author'), '이야기 안: 따르릉 / 빨간 장화의 종 / 노란 우산');
+  assert.equal(seatLine(judging, 'editor'), '이야기 안 2 추천 · 이야기 안 3 검토 필요: 잃는 것이 없음');
   assert.equal(seatLine(judging, 'art'), '그릴 수 있는 반전인지 보고 있어요.');
   assert.equal(seatLine(judging, 'reader'), '눈을 크게 뜨고 듣고 있어요.');
   assert.equal(seatLine(judging, 'chair'), '세 판정을 모아 채점표를 만들고 있어요.');
   const done = record('done', {roles: null, chosen: 2, overrode: false, scores: [{pitch: 2, editor: 12, art: 8, reader: 4, score: 12, vetoes: []}], verdicts: {editor: [{pitch: 2, fixes: ['바닥을 조용하게']}], art: [{pitch: 2, motifs: [{ko: '빨간 장화', en: 'red boots'}, {ko: '물방울'}]}], reader: [{pitch: 2, retell: '"유하 장화가 종이었어"', nextQuestion: 2}], picks: {editor: 2, art: 2, reader: 2}}, bible: pitch('빨간 장화의 종', '빨간 장화')});
-  assert.equal(seatLine(done, 'chair'), "피치 2 '빨간 장화의 종' 채택 · 편집자 12/12 · 그림 8/8 · 독자 4/4");
-  assert.equal(seatLine(done, 'author'), "바이블 '빨간 장화의 종' 확정 · 심은 물건: 빨간 장화");
-  assert.equal(seatLine(done, 'editor'), '피치 2 추천 · 고칠 점: 바닥을 조용하게');
-  assert.equal(seatLine(done, 'art'), '피치 2 추천 · 모티프: 빨간 장화, 물방울');
+  assert.equal(seatLine(done, 'chair'), "이야기 안 2 '빨간 장화의 종' 채택 · 편집자 12/12 · 그림 8/8 · 독자 4/4");
+  assert.equal(seatLine(done, 'author'), "설계서 '빨간 장화의 종' 확정 · 심은 물건: 빨간 장화");
+  assert.equal(seatLine(done, 'editor'), '이야기 안 2 추천 · 고칠 점: 바닥을 조용하게');
+  assert.equal(seatLine(done, 'art'), '이야기 안 2 추천 · 모티프: 빨간 장화, 물방울');
   assert.equal(seatLine(done, 'reader'), '“유하 장화가 종이었어” · 다음엔? ★★');
   assert.equal(seatLine(done, 'ghost'), '');
 });
 
 test('the room: phase strip, seat states, pitch cards with scores and the settled bible', () => {
   const live = renderCouncilRoom(record('verdicts'), {live: true});
-  assert.match(live, /^<div class="council-room live phase-verdicts"><ol class="council-phases" aria-label="회의 진행"><li class="done">피치<\/li><li class="active">판정<\/li><li class="">바이블<\/li><li class="">확정<\/li><\/ol>/u);
+  assert.match(live, /^<div class="council-room live phase-verdicts"><ol class="council-phases" aria-label="회의 진행"><li class="done">이야기 안<\/li><li class="active" aria-current="step">검토<\/li><li class="">설계서<\/li><li class="">확정<\/li><\/ol>/u);
   assert.match(live, /<div class="council-seat seat-author state-done" data-role="author"><div class="seat-avatar"><svg class="council-avatar"/u);
   assert.match(live, /seat-editor state-speaking/u);
   assert.match(live, /seat-reader state-speaking[\s\S]*<span class="seat-age">5~6세<\/span>/u);
@@ -90,7 +90,7 @@ test('the room: phase strip, seat states, pitch cards with scores and the settle
   assert.doesNotMatch(done, /seat-title/u, 'compact hides the role titles');
   assert.match(done, /<li class="council-chosen"><strong>✓ 빨간 장화의 종<\/strong>/u);
   assert.match(done, /<li class="council-vetoed"><strong>따르릉<\/strong>[\s\S]*<span class="pitch-veto">거부: 독자: 반전을 되말하지 못함<\/span>/u);
-  assert.match(done, /<p class="council-room-bible"><strong>바이블<\/strong> 잃는 것: 저녁 노래를 못 불러요 · 바닥: &quot;그냥 집에 갈까&quot; · 반전: 돌 틈의 작은 종 → “내 종이잖아!”<\/p>/u);
+  assert.match(done, /<p class="council-room-bible"><strong>이야기 설계서<\/strong> 잃는 것: 저녁 노래를 못 불러요 · 가장 어려운 순간: &quot;그냥 집에 갈까&quot; · 반전: 돌 틈의 작은 종 → “내 종이잖아!”<\/p>/u);
   assert.match(renderCouncilRoom(null), /phase-waiting/u);
 });
 
@@ -116,37 +116,40 @@ test('R22 a parked meeting: the review phase in the strip, the chair waits with 
   assert.equal(reviewPending(r), true);
   assert.equal(reviewPending(record('verdicts')), false);
   assert.equal(reviewPending({...r, chosen: 2}), false);
-  assert.equal(seatLine(r, 'chair'), "피치 2 '빨간 장화의 종' 추천 · 부모님의 선택을 기다려요.");
-  assert.equal(seatLine(r, 'author'), '부모님이 고르면 그 피치로 바이블을 써요.');
-  assert.equal(seatLine(r, 'editor'), '피치 2 추천 · 고칠 점: 바닥을 조용하게 · 피치 3 거부: 잃는 것이 없음');
+  assert.equal(seatLine(r, 'chair'), "이야기 안 2 '빨간 장화의 종' 추천 · 부모님의 선택을 기다려요.");
+  assert.equal(seatLine(r, 'author'), '부모님이 고르면 고른 이야기로 설계서를 써요.');
+  assert.equal(seatLine(r, 'editor'), '이야기 안 2 추천 · 고칠 점: 바닥을 조용하게 · 이야기 안 3 검토 필요: 잃는 것이 없음');
   const html = renderCouncilRoom(r);
-  assert.match(html, /^<div class="council-room  phase-review"><ol class="council-phases" aria-label="회의 진행"><li class="done">피치<\/li><li class="done">판정<\/li><li class="active">부모 선택<\/li><li class="">바이블<\/li><li class="">확정<\/li><\/ol>/u);
-  assert.match(html, /<li class=" council-recommended"><strong>빨간 장화의 종 <span class="pitch-tag">의장 추천<\/span><\/strong>/u);
+  assert.match(html, /^<div class="council-room  phase-review"><ol class="council-phases" aria-label="회의 진행"><li class="done">이야기 안<\/li><li class="done">검토<\/li><li class="active" aria-current="step">부모 선택<\/li><li class="">설계서<\/li><li class="">확정<\/li><\/ol>/u);
+  assert.doesNotMatch(html, /council-room-pitches/u, "the parent review form is the only list of choices");
+  assert.match(html, /council-opinions/u, 'bot opinions stay available in details');
   assert.match(html, /seat-chair state-speaking/u);
   assert.match(html, /seat-author state-waiting/u);
   // A meeting that never parked keeps the four-step strip (the existing assertion above holds).
   assert.doesNotMatch(renderCouncilRoom(record('verdicts')), /부모 선택/u);
   // Once settled by the parent: the step stays, the chair says who chose.
   const chosen = {...parked(), phase: 'done', roles: null, chosen: 1, overrode: true, parentChoice: {pick: 1, note: '토토가 더 많이'}, bible: pitch('따르릉')};
-  assert.equal(seatLine(chosen, 'chair'), "피치 1 '따르릉' 채택 · 편집자 10/12 · 그림 7/8 · 독자 2/4 · 거부권을 넘어 택함 · 부모가 고름");
+  assert.equal(seatLine(chosen, 'chair'), "이야기 안 1 '따르릉' 채택 · 편집자 10/12 · 그림 7/8 · 독자 2/4 · 검토 의견을 보고 부모가 선택 · 부모가 고름");
   const settled = renderCouncilRoom(chosen);
-  assert.match(settled, /<li class="done">부모 선택<\/li><li class="done">바이블<\/li><li class="done">확정<\/li>/u);
+  assert.match(settled, /<li class="done">부모 선택<\/li><li class="done">설계서<\/li><li class="done">확정<\/li>/u);
   assert.match(settled, /<li class="council-chosen"><strong>✓ 따르릉<\/strong>/u);
   assert.match(settled, /<li class=" council-recommended"><strong>빨간 장화의 종 <span class="pitch-tag">의장 추천<\/span>/u, 'the chair\'s pick stays visible next to the parent\'s');
-  assert.equal(seatLine({...chosen, chosen: 2, overrode: false, parentChoice: {pick: 2, note: ''}, bible: pitch('빨간 장화의 종', '빨간 장화')}, 'chair'), "피치 2 '빨간 장화의 종' 채택 · 편집자 12/12 · 그림 8/8 · 독자 4/4 · 부모 확인");
+  assert.equal(seatLine({...chosen, chosen: 2, overrode: false, parentChoice: {pick: 2, note: ''}, bible: pitch('빨간 장화의 종', '빨간 장화')}, 'chair'), "이야기 안 2 '빨간 장화의 종' 채택 · 편집자 12/12 · 그림 8/8 · 독자 4/4 · 부모 확인");
 });
 
 test('R22 the choice form: one radio per pitch with the recommendation checked, a note, a folded direction; the readers', () => {
   const form = renderCouncilReviewForm(parked(), {direction: '절정에서 공감', fee: '회의 요금 약 $0.02'});
-  assert.match(form, /^<div class="council-review" id="council-review"><p class="council-review-intro">의장이 피치 2 '빨간 장화의 종'을\(를\) 추천했어요\./u);
+  assert.match(form, /id="council-choice-heading" tabindex="-1">어떤 이야기로 이어 갈까요\?/u);
   assert.equal((form.match(/<input type="radio" name="council-pick"/gu) || []).length, 3);
-  assert.match(form, /<input type="radio" name="council-pick" value="2" checked>/u);
+  assert.match(form, /<input type="radio" name="council-pick" value="2"[^>]*checked>/u);
   assert.doesNotMatch(form, /value="1" checked|value="3" checked/u);
-  assert.match(form, /<label class="council-pick council-recommended"><input type="radio" name="council-pick" value="2" checked><span class="council-pick-body"><strong>빨간 장화의 종 <span class="pitch-tag">의장 추천<\/span><\/strong>/u);
-  assert.match(form, /<span class="pitch-score">편집자 12\/12 · 그림 8\/8 · 독자 4\/4 · 합계 12<\/span><span class="pitch-turn">반전: 돌 틈의 작은 종 → “내 종이잖아!”<\/span>/u);
+  assert.match(form, /<label class="council-pick council-recommended"><input type="radio" name="council-pick" value="2"[^>]*checked><span class="council-pick-body"><strong>빨간 장화의 종 <span class="pitch-tag">의장 추천<\/span><\/strong>/u);
+  assert.match(form, /<details class="pitch-review-details"><summary>점수·검토 의견<\/summary>/u);
+  assert.match(form, /편집자 12\/12 · 그림 8\/8 · 독자 4\/4 · 합계 12/u);
+  assert.match(form, /반전: 돌 틈의 작은 종 → “내 종이잖아!”/u);
   assert.match(form, /<textarea id="council-note" maxlength="300" rows="2"/u);
   assert.match(form, /<details class="council-redirect"><summary>방향을 고쳐 다시 회의하기<\/summary>[\s\S]*<input id="council-direction" maxlength="200" value="절정에서 공감"/u);
-  assert.match(form, /지금 피치는 버려요 · 회의 요금 약 \$0\.02\.<\/p><\/details><\/div>$/u);
+  assert.match(form, /지금 이야기 안 대신 새 안을 만들어요 · 추가 예상 회의 요금 약 \$0\.02\.<\/p><\/details><\/div>$/u);
   assert.equal(renderCouncilReviewForm(record('pitches', {pitches: []})), '', 'no pitches, no form');
   // The readers take any root with querySelector (the page, or a stub).
   const root = (map) => ({querySelector: (sel) => (sel in map ? {value: map[sel]} : null)});

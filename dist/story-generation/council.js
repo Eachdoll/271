@@ -714,7 +714,7 @@ export function councilSummaryLine(outline) {
   if (!object(c) || !c.chosen) return "";
   const row = list(c.scores).find((s) => s.pitch === c.chosen);
   const title = str(c.pitches?.[c.chosen - 1]?.title, 60);
-  return `기획 회의 · 피치 ${list(c.pitches).length}개 중 '${title}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${c.overrode ? " · 거부권을 넘어 택함" : ""}${object(c.parentChoice) ? (c.parentChoice.pick !== c.recommended ? " · 부모가 고름" : " · 부모 확인") : ""}`;
+  return `기획 회의 · 이야기 안 ${list(c.pitches).length}개 중 '${title}' 채택${row ? ` · 편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4` : ""}${c.overrode ? " · 검토 의견을 보고 부모가 선택" : ""}${object(c.parentChoice) ? (c.parentChoice.pick !== c.recommended ? " · 부모가 고름" : " · 부모 확인") : ""}`;
 }
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/gu, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
@@ -727,20 +727,20 @@ export function renderCouncilCard(outline) {
     .map((p, i) => {
       const row = list(c.scores).find((s) => s.pitch === i + 1),
         chosen = i + 1 === c.chosen;
-      return `<li class="${chosen ? "council-chosen" : ""}"><strong>${chosen ? "✓ " : ""}${esc(p.title)}</strong> — ${esc(p.logline)}${row ? `<br><small>편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}/12${row.vetoes.length ? ` · 거부: ${esc(row.vetoes.join(" / "))}` : ""}</small>` : ""}${c.reactions?.[i]?.retell ? `<br><small>독자(${esc(c.reader?.age || "")}) 되말하기: “${esc(c.reactions[i].retell)}”</small>` : ""}</li>`;
+      return `<li class="${chosen ? "council-chosen" : ""}"><strong>${chosen ? "✓ " : ""}${esc(p.title)}</strong> — ${esc(p.logline)}${row ? `<br><small>편집자 ${row.editor}/12 · 그림 ${row.art}/8 · 독자 ${row.reader}/4 · 합계 ${row.score}/12${row.vetoes.length ? ` · 검토 필요: ${esc(row.vetoes.join(" / "))}` : ""}</small>` : ""}${c.reactions?.[i]?.retell ? `<br><small>독자(${esc(c.reader?.age || "")}) 되말하기: “${esc(c.reactions[i].retell)}”</small>` : ""}</li>`;
     })
     .join("");
   const spine = object(bible)
-    ? `<dl class="council-spine"><dt>못 하면 잃는 것</dt><dd>${esc(bible.stakes)}</dd><dt>심은 물건</dt><dd>${esc(bible.planted?.name)} — ${esc(bible.planted?.firstSeen)}</dd><dt>시도 사다리</dt><dd>${list(bible.ladder).map(esc).join(" → ")}</dd><dt>바닥</dt><dd>${esc(bible.lowPoint)}</dd><dt>반전</dt><dd>${esc(bible.turn?.seen)} → “${esc(bible.turn?.realized)}” → ${esc(bible.turn?.overturns)}</dd><dt>해결·끝</dt><dd>${esc(bible.payoff)} / ${esc(bible.echo)}</dd>${list(bible.visual?.motifs).length ? `<dt>모티프</dt><dd>${list(bible.visual.motifs).map((m) => esc(m.ko || m.en)).join(" · ")}</dd>` : ""}</dl>`
+    ? `<dl class="council-spine"><dt>못 하면 잃는 것</dt><dd>${esc(bible.stakes)}</dd><dt>심은 물건</dt><dd>${esc(bible.planted?.name)} — ${esc(bible.planted?.firstSeen)}</dd><dt>시도 사다리</dt><dd>${list(bible.ladder).map(esc).join(" → ")}</dd><dt>가장 어려운 순간</dt><dd>${esc(bible.lowPoint)}</dd><dt>반전</dt><dd>${esc(bible.turn?.seen)} → “${esc(bible.turn?.realized)}” → ${esc(bible.turn?.overturns)}</dd><dt>해결·끝</dt><dd>${esc(bible.payoff)} / ${esc(bible.echo)}</dd>${list(bible.visual?.motifs).length ? `<dt>모티프</dt><dd>${list(bible.visual.motifs).map((m) => esc(m.ko || m.en)).join(" · ")}</dd>` : ""}</dl>`
     : "";
   const log = list(c.decisions)
     .slice(-12)
     .map((d) => `<li><small>${esc(d.by)} · ${esc({ proposed: "제안", reviewed: "검토", adopted: "채택", revised: "수정", dropped: "폐기" }[d.kind] || d.kind)}</small> ${esc(d.what)}${d.why ? ` <small>— ${esc(d.why)}</small>` : ""}</li>`)
     .join("");
   const parent = object(c.parentChoice)
-    ? `<p class="story-note">부모 선택: 피치 ${c.parentChoice.pick}${c.parentChoice.pick !== c.recommended ? ` (의장 추천 피치 ${c.recommended} 대신)` : " (의장 추천대로)"}${c.parentChoice.note ? ` · 한마디: “${esc(c.parentChoice.note)}”` : ""}</p>`
+    ? `<p class="story-note">부모 선택: 이야기 안 ${c.parentChoice.pick}${c.parentChoice.pick !== c.recommended ? ` (의장 추천 안 ${c.recommended} 대신)` : " (의장 추천대로)"}${c.parentChoice.note ? ` · 한마디: “${esc(c.parentChoice.note)}”` : ""}</p>`
     : "";
-  return `<details class="story-card story-council"><summary>기획 회의 <span class="story-check-badge">${esc(councilSummaryLine(outline).replace(/^기획 회의 · /u, ""))}</span></summary>${renderCouncilRoom({ ...c, bible: bible || null, phase: "done", roles: null }, { compact: true })}<p class="story-note">방향: ${esc(c.direction)}</p>${parent}<ol class="council-pitches">${pitches}</ol>${spine}${log ? `<p class="story-note">결정 기록 (최근 ${Math.min(12, list(c.decisions).length)}건)</p><ul class="council-log">${log}</ul>` : ""}</details>`;
+  return `<details class="story-card story-council"><summary>기획 회의 <span class="story-check-badge">${esc(councilSummaryLine(outline).replace(/^기획 회의 · /u, ""))}</span></summary>${renderCouncilRoom({ ...c, bible: bible || null, phase: "done", roles: null }, { compact: true, hidePitches: true })}<p class="story-note">방향: ${esc(c.direction)}</p>${parent}<ol class="council-pitches">${pitches}</ol>${spine}${log ? `<p class="story-note">결정 기록 (최근 ${Math.min(12, list(c.decisions).length)}건)</p><ul class="council-log">${log}</ul>` : ""}</details>`;
 }
 /** The stop report's section (from the outline, or from the checkpoint when the outline never came). */
 export function councilReportRows(job) {

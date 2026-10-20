@@ -1,3 +1,4 @@
+import { storageStatusView } from "./ui-controls.js";
 import { buildStoryWords } from "./story-reading-context.js";
 import { credentialToastAction } from "./credential-errors.js";
 import { renderChecksPanel } from "./checks-panel.js";
@@ -669,6 +670,10 @@ function cloudStatusSummary() {
       : "클라우드에 저장됨"
     : `이 기기에 보관 · ${cloudPhaseLabel()}`;
 }
+function storageChipContent() {
+  const status = storageStatusView(cloudStatus, storageBlocked || cloudPrivacyLocked);
+  return `<span aria-hidden="true">${status.state === "attention" ? "!" : status.state === "saved" ? "●" : "○"}</span><span>${esc(status.label)}</span>${status.time ? `<span class="storage-chip-time">${esc(status.time)}</span>` : ""}`;
+}
 function renderStatusStrip() {
   if (childMode) return "";
   const exceptional =
@@ -735,7 +740,8 @@ function updateCloudStatus(next) {
   if (slot) slot.innerHTML = renderStatusStrip();
   const chip = document.querySelector(".status-chip");
   if (chip) {
-    chip.textContent = cloudStatusSummary();
+    chip.innerHTML = storageChipContent();
+    chip.dataset.storageState = storageStatusView(cloudStatus, storageBlocked || cloudPrivacyLocked).state;
     chip.setAttribute("aria-label", cloudStatusSummary() + " · 보관 관리 열기");
     chip.title = cloudStatusSummary();
   }
@@ -1050,7 +1056,7 @@ function render() {
   migrateWorldState(state);
   const nav = (id, label, ic) =>
     `<button class="nav ${view === id ? "active" : ""} ${id === "create" ? "create-nav" : ""}" data-action="nav" data-view="${id}">${icon(ic)}<span>${label}</span>${!parentUnlocked && id !== "library" ? icon("lock", "lock") : ""}</button>`;
-  root.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M4 16q9-4 16 1q7-5 16-1v23q-9-4-16 1q-7-5-16-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 18v22 M20 9q5-7 13-5q-2 10-13 9 M20 14l8-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><div><h1>동화공방</h1><small>DONGHWA WORKSHOP</small></div></div><div class="family"><div class="family-avatar">${!cloudPrivacyLocked && state.characters[0] ? characterSVG(state.characters[0]) : ""}</div><div><strong>${cloudPrivacyLocked ? "개인 클라우드 책장" : esc(state.characters[0]?.name || "우리 아이") + "네 이야기 공방"}</strong><small>작은 이야기가 자라는 곳</small></div></div><nav><div class="nav-group">우리 가족의 공간</div>${nav("library", "우리 책장", "book")}${!childMode ? nav("materials", "이야기 재료", "characters") + nav("create", "이야기 만들기", "spark") : ""}${childMode ? `<button class="nav ${tab === "favorites" ? "active" : ""}" data-action="child-favorites">${icon("heart")}<span>좋아하는 책</span></button>` : ""}${!childMode ? `<div class="nav-group" style="margin-top:29px">공방 관리</div>${nav("settings", "부모 설정", "settings")}` : ""}</nav><div class="sidebar-bottom"><div class="sidebar-note">${icon("leaf")}화면보다 종이로,<br>우리 아이의 속도로 읽어요.</div><div class="sidebar-footer"><span>작은 이야기, 큰 상상</span><span>v0.1</span></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">${icon("home")}<span>우리 가족의 공간</span>${icon("chevron")}<span>${{ library: "우리 책장", materials: "이야기 재료", create: "이야기 만들기", settings: "부모 설정", detail: "책 이야기", edit: "이야기 다듬기" }[view] || "우리 책장"}</span></div><div class="mobile-brand">${icon("book")}동화공방</div><div class="top-actions"><button class="status-chip" data-action="cloud-open" aria-label="${esc(cloudStatusSummary())} · 보관 관리 열기" title="${esc(cloudStatusSummary())}">${esc(cloudStatusSummary())}</button>${!childMode ? uiModeButton("mode-btn ui-mode-btn") : ""}<button class="mode-btn" data-action="toggle-mode">${icon(childMode ? "lock" : "child")}${childMode ? "부모 모드" : "아이 모드"}</button><div class="top-avatar">부모</div></div></header><div id="page-content"><div id="status-strip" class="status-strip">${renderStatusStrip()}</div>${pageContent()}</div><footer class="page-footer"><span>${icon("leaf")}우리 가족만의 이야기가, 아이의 세상을 넓혀요.</span><span>글·그림 엔진 별도 선택 · 로그인하면 계정별 클라우드 저장</span></footer></main></div>`;
+  root.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M4 16q9-4 16 1q7-5 16-1v23q-9-4-16 1q-7-5-16-1z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M20 18v22 M20 9q5-7 13-5q-2 10-13 9 M20 14l8-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><div><h1>동화공방</h1><small>DONGHWA WORKSHOP</small></div></div><div class="family"><div class="family-avatar">${!cloudPrivacyLocked && state.characters[0] ? characterSVG(state.characters[0]) : ""}</div><div><strong>${cloudPrivacyLocked ? "개인 클라우드 책장" : esc(state.characters[0]?.name || "우리 아이") + "네 이야기 공방"}</strong><small>작은 이야기가 자라는 곳</small></div></div><nav><div class="nav-group">우리 가족의 공간</div>${nav("library", "우리 책장", "book")}${!childMode ? nav("materials", "이야기 재료", "characters") + nav("create", "이야기 만들기", "spark") : ""}${childMode ? `<button class="nav ${tab === "favorites" ? "active" : ""}" data-action="child-favorites">${icon("heart")}<span>좋아하는 책</span></button>` : ""}${!childMode ? `<div class="nav-group" style="margin-top:29px">공방 관리</div>${nav("settings", "부모 설정", "settings")}` : ""}</nav><div class="sidebar-bottom"><div class="sidebar-note">${icon("leaf")}화면보다 종이로,<br>우리 아이의 속도로 읽어요.</div><div class="sidebar-footer"><span>작은 이야기, 큰 상상</span><span>v0.1</span></div></div></aside><main class="main"><header class="topbar"><div class="breadcrumb">${icon("home")}<span>우리 가족의 공간</span>${icon("chevron")}<span>${{ library: "우리 책장", materials: "이야기 재료", create: "이야기 만들기", settings: "부모 설정", detail: "책 이야기", edit: "이야기 다듬기" }[view] || "우리 책장"}</span></div><div class="mobile-brand">${icon("book")}동화공방</div><div class="top-actions"><button class="status-chip" data-storage-state="${storageStatusView(cloudStatus, storageBlocked || cloudPrivacyLocked).state}" data-action="cloud-open" aria-label="${esc(cloudStatusSummary())} · 보관 관리 열기" title="${esc(cloudStatusSummary())}">${storageChipContent()}</button>${!childMode ? uiModeButton("mode-btn ui-mode-btn") : ""}<button class="mode-btn" data-action="toggle-mode">${icon(childMode ? "lock" : "child")}${childMode ? "부모 모드" : "아이 모드"}</button><div class="top-avatar">부모</div></div></header><div id="page-content"><div id="status-strip" class="status-strip">${renderStatusStrip()}</div>${pageContent()}</div><footer class="page-footer"><span>${icon("leaf")}우리 가족만의 이야기가, 아이의 세상을 넓혀요.</span><span>글·그림 엔진 별도 선택 · 로그인하면 계정별 클라우드 저장</span></footer></main></div>`;
   if (view === "settings" && !childMode && !cloudPrivacyLocked)
     renderSettingsJump();
   if (view === "settings") restoreSettingsInputs();

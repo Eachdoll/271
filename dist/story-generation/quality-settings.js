@@ -1,3 +1,4 @@
+import { renderCheckboxSwitch } from "../ui-controls.js";
 /* Parent-owned structure settings. Reference cards contain abstract structure only. */
 import {
   getTextGenerationSettings,
@@ -468,7 +469,7 @@ function renderCoach(state) {
 export function renderStoryQualitySettings(state) {
   const q = quality(state),
     toggle = (field, label, help) =>
-      `<label class="quality-toggle"><input type="checkbox" data-quality-flag="${field}" ${q[field] ? "checked" : ""}><span>${label}<small>${help}</small></span></label>`;
+      renderCheckboxSwitch({id: `quality-${field}`, qualityFlag: field, label, description: help, checked: q[field], className: "quality-toggle"});
   return `<section class="panel" id="story-quality-settings"><h3>이야기 구성·글 품질</h3><form id="story-quality-form">${toggle("enabled", "구성 재료·패턴으로 이야기 만들기", "일관된 기승전결과 새로운 시도를 구성합니다.")}${toggle("useDistilledExamples", "증류 예시 함께 쓰기", "자동 판정만 통과한 161편입니다. 새 이야기(뼈대 규칙)는 이 가운데 9점 이상을 ‘뼈대 카드’로 늘 참고하고, 이 스위치는 예전 초안과 8점 예시에만 영향을 줍니다. 같은 주제는 제외하고 골드를 먼저 후보에 둡니다.")}${toggle("useBeamSearch", "비트 탐색", "기본 꺼짐 · 비트마다 후보 3개를 만들고 심사해 요청과 요금이 늘어요.")}${toggle("twoPass", "풍부화 2패스", "풍부하게 쓴 뒤 목표 읽기 수준으로 다듬습니다.")}${toggle("childSimulator", "아이 시뮬레이터", "다음 쪽에 대한 궁금증과 목표·반전·해결의 되말하기를 검사합니다.")}${toggle("weeklyCoach", "주간 코치", "최근 승인 책을 살펴 제안하며 자동으로 규칙을 바꾸지 않습니다.")}<details class="story-card"><summary>단계별 엔진</summary><div class="quality-role-grid">${Object.keys(
     ROLE_NAMES,
   )

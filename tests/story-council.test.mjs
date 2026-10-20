@@ -246,7 +246,7 @@ test('the decision log, the summary line, the card and the stop report rows', ()
   assert.equal(target.decisions[0].what, '5');
   assert.equal(appendDecision(null, {}), null);
   const outline = {council: {version: 1, direction: '5~6세 독자. 공감', conditions: ['독자: 5~6세'], reader: {id: 'K2', age: '5~6세'}, pitches: [pitch(1), pitch(2, '빨간 장화')], scores: [{pitch: 1, editor: 9, art: 6, reader: 2, score: 8.3, vetoes: ['독자: 반전을 되말하지 못함']}, {pitch: 2, editor: 12, art: 8, reader: 4, score: 12, vetoes: []}], picks: {editor: 2, art: 2, reader: 2}, reactions: [{retell: '종이 울렸어'}, {retell: '장화가 종이었어'}], chosen: 2, overrode: false, decisions: [{at: 'x', by: '의장', kind: 'adopted', what: "피치 2 '피치 2'", why: '점수'}]}, bible: {...pitch(2, '빨간 장화'), visual: {pictures: [], motifs: [{ko: '물방울', en: 'raindrops'}]}}};
-  assert.equal(councilSummaryLine(outline), "기획 회의 · 피치 2개 중 '피치 2' 채택 · 편집자 12/12 · 그림 8/8 · 독자 4/4");
+  assert.equal(councilSummaryLine(outline), "기획 회의 · 이야기 안 2개 중 '피치 2' 채택 · 편집자 12/12 · 그림 8/8 · 독자 4/4");
   assert.equal(councilSummaryLine({}), '');
   const card = renderCouncilCard(outline);
   assert.match(card, /<details class="story-card story-council"><summary>기획 회의/u);
@@ -361,8 +361,8 @@ test('R22 the resumed meeting takes the parent\'s pitch and note: the rounds rep
   const outline = attachCouncil({}, resumed);
   assert.equal(outline.council.parentChoice.pick, 1);
   assert.equal(outline.council.recommended, 2);
-  assert.match(councilSummaryLine(outline), /채택 · 편집자 10\/12 · 그림 7\/8 · 독자 2\/4 · 거부권을 넘어 택함 · 부모가 고름$/u);
-  assert.match(renderCouncilCard(outline), /<p class="story-note">부모 선택: 피치 1 \(의장 추천 피치 2 대신\) · 한마디: “토토가 더 많이 나오게”<\/p>/u);
+  assert.match(councilSummaryLine(outline), /채택 · 편집자 10\/12 · 그림 7\/8 · 독자 2\/4 · 검토 의견을 보고 부모가 선택 · 부모가 고름$/u);
+  assert.match(renderCouncilCard(outline), /<p class="story-note">부모 선택: 이야기 안 1 \(의장 추천 안 2 대신\) · 한마디: “토토가 더 많이 나오게”<\/p>/u);
   assert.ok(councilReportRows({outline}).some(row => row === '- 부모 선택: 피치 1 (의장 추천 피치 2 대신) · 한마디: 토토가 더 많이 나오게'));
   // The recommendation kept as is: a byte-identical bible request to the never-parked meeting, logged as the parent's confirmation.
   const again = roomEngine(); again.input = input;

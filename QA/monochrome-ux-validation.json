@@ -1,0 +1,217 @@
+{
+  "date": "2026-10-20",
+  "baselineCommit": "08f09d49a25caeba22412efadc323a24cda853b0",
+  "scope": "monochrome UI, accessible switches and council decision simplification",
+  "tests": {
+    "app": {
+      "passed": 928,
+      "failed": 0
+    },
+    "quality": {
+      "passed": 84,
+      "failed": 0
+    },
+    "simpleBrowserSmoke": "PASS desktop/mobile; fake engines",
+    "censusErrors": [],
+    "paidApiCalls": 0
+  },
+  "browser": [
+    {
+      "width": 1280,
+      "errors": [],
+      "paidRequests": [],
+      "switches": {
+        "keyboardSpace": true,
+        "keyboardEnter": true,
+        "persistAfterReload": true,
+        "detailsInitiallyClosed": true
+      },
+      "nativeParentSwitch": {
+        "role": true,
+        "keyboard": true
+      },
+      "proLauncherSwitch": true,
+      "review": {
+        "singleSetOfChoices": true,
+        "continueVisibleAtPageTop": true,
+        "buttonHeight": 48,
+        "buttonViewportTop": 823,
+        "currentPhase": true
+      },
+      "selection": {
+        "summaryTracksRadio": true,
+        "notePreserved": true,
+        "frozenSwitchesDisabled": true,
+        "frozenCouncilValueIndependentOfNewDefault": true
+      },
+      "theme": {
+        "body": [
+          245,
+          245,
+          245
+        ],
+        "nav": [
+          230,
+          230,
+          230
+        ],
+        "chipText": "○이 기기에 보관",
+        "chipFits": true,
+        "overflow": false,
+        "waitingOpacity": "1"
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "switches": {
+        "keyboardSpace": true,
+        "keyboardEnter": true,
+        "persistAfterReload": true,
+        "detailsInitiallyClosed": true
+      },
+      "review": {
+        "singleSetOfChoices": true,
+        "continueVisibleAtPageTop": true,
+        "buttonHeight": 48,
+        "buttonViewportTop": 759,
+        "currentPhase": true
+      },
+      "selection": {
+        "summaryTracksRadio": true,
+        "notePreserved": true,
+        "frozenSwitchesDisabled": true,
+        "frozenCouncilValueIndependentOfNewDefault": true
+      },
+      "theme": {
+        "body": [
+          245,
+          245,
+          245
+        ],
+        "nav": [
+          230,
+          230,
+          230
+        ],
+        "chipText": "○이 기기에 보관",
+        "chipFits": true,
+        "overflow": false,
+        "waitingOpacity": "1"
+      },
+      "status": "passed"
+    },
+    {
+      "width": 320,
+      "errors": [],
+      "paidRequests": [],
+      "switches": {
+        "keyboardSpace": true,
+        "keyboardEnter": true,
+        "persistAfterReload": true,
+        "detailsInitiallyClosed": true
+      },
+      "review": {
+        "singleSetOfChoices": true,
+        "continueVisibleAtPageTop": true,
+        "buttonHeight": 48,
+        "buttonViewportTop": 759,
+        "currentPhase": true
+      },
+      "selection": {
+        "summaryTracksRadio": true,
+        "notePreserved": true,
+        "frozenSwitchesDisabled": true,
+        "frozenCouncilValueIndependentOfNewDefault": true
+      },
+      "theme": {
+        "body": [
+          245,
+          245,
+          245
+        ],
+        "nav": [
+          230,
+          230,
+          230
+        ],
+        "chipText": "○이 기기에 보관",
+        "chipFits": true,
+        "overflow": false,
+        "waitingOpacity": "1"
+      },
+      "status": "passed"
+    }
+  ],
+  "pinComparison": {
+    "levels": {
+      "same": true,
+      "before": "1c6063ed356c55392fb2b3cf1f161c7f1060b804aacc4ad2fd7589f32c986188",
+      "after": "1c6063ed356c55392fb2b3cf1f161c7f1060b804aacc4ad2fd7589f32c986188"
+    },
+    "inputs": {
+      "same": true,
+      "before": "770c6ce0a4247b8e10d02ed1f5b76984e663314c427e7e298d9bb0d9eef49ba0",
+      "after": "770c6ce0a4247b8e10d02ed1f5b76984e663314c427e7e298d9bb0d9eef49ba0"
+    },
+    "validation": {
+      "same": true,
+      "before": "4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44",
+      "after": "4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44"
+    },
+    "requests": {
+      "same": true,
+      "before": "7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12",
+      "after": "7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12"
+    },
+    "demo": {
+      "same": true,
+      "before": "146ec0449bbaafbd49a22019eada3bcf8df83ee9c3e4580db4d07e67608ccd7d",
+      "after": "146ec0449bbaafbd49a22019eada3bcf8df83ee9c3e4580db4d07e67608ccd7d"
+    },
+    "fullAutoResume": {
+      "same": true,
+      "before": "061cbf1cf0fb861ae9526b45385c3e2dc64693622982cf3fe1aa90a63701a6c3",
+      "after": "061cbf1cf0fb861ae9526b45385c3e2dc64693622982cf3fe1aa90a63701a6c3"
+    },
+    "fullAutoDemo": {
+      "same": true,
+      "before": "f1752df63a878dcb7cadd96ef45c754a948c9970680c52693e77b1777ef1e662",
+      "after": "f1752df63a878dcb7cadd96ef45c754a948c9970680c52693e77b1777ef1e662"
+    },
+    "scene": {
+      "same": true,
+      "before": "34ee02d12bfcaf889a73d076089ff1e8194f9315581f10f06e6159dbeec85394",
+      "after": "34ee02d12bfcaf889a73d076089ff1e8194f9315581f10f06e6159dbeec85394"
+    },
+    "print": {
+      "same": true,
+      "before": "637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654",
+      "after": "637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654"
+    },
+    "review": {
+      "same": false,
+      "before": "520fc68c7960c4598b05017f4e13f81f68724dcb30e5c422ddd6bd74ef346f09",
+      "after": "564133dec96545749ad00abe83d42b7079dc624d302c11cffcf6be9664d3a1b9"
+    },
+    "checks": {
+      "same": true,
+      "before": "60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6",
+      "after": "60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6"
+    },
+    "estimates": {
+      "same": true,
+      "before": "bcdb6bbbc0f9b9fbca89d7521d168d8c86e913670cfc1d38aac6c6ceb0557f77",
+      "after": "bcdb6bbbc0f9b9fbca89d7521d168d8c86e913670cfc1d38aac6c6ceb0557f77"
+    }
+  },
+  "readerSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "cache": "donghwa-shell-v60",
+  "limits": [
+    "Chromium viewport emulation; no physical iOS/Android keyboard test",
+    "No paid model quality evaluation",
+    "Production version and smoke results recorded after deployment"
+  ]
+}
