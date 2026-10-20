@@ -5111,7 +5111,7 @@ html:has(.simple-create) {
 /* Monochrome interface. Illustration, photo and watercolor pixels keep their colors. */
 :root { --action-offset: 16px; }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid #202020; outline-offset: 3px; }
-input:focus, textarea:focus, select:focus { outline-color: #555; }
+input:focus, textarea:focus, select:focus { outline-color: #555555; }
 input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 .btn, .mode-btn, .chip, .tab, .status-chip { min-height: 44px; }
 .simple-arrow, .icon-btn { min-width: 44px; min-height: 44px; }
@@ -5119,10 +5119,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 .setting-switch-copy { min-width: 0; flex: 1; display: grid; gap: 4px; }
 .setting-switch-title { font-size: 14px; font-weight: 700; color: var(--ink); }
 .setting-switch-copy small { display: block; font-size: 12px; line-height: 1.55; color: var(--muted); }
-.switch-value { font-size: 12px; color: #555; white-space: nowrap; }
+.switch-value { font-size: 12px; color: #555555; white-space: nowrap; }
 .setting-switch, .switch-input-wrap { flex: 0 0 52px; width: 52px; height: 44px; position: relative; display: inline-flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; cursor: pointer; }
-.switch-track { position: relative; display: block; width: 48px; height: 28px; border: 1px solid #999; border-radius: 20px; background: #dedede; transition: background .16s; }
-.switch-thumb { display: block; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0003; transition: transform .16s; }
+.switch-track { position: relative; display: block; width: 48px; height: 28px; border: 1px solid #999999; border-radius: 20px; background: #dedede; transition: background .16s; }
+.switch-thumb { display: block; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px #00000033; transition: transform .16s; }
 .setting-switch[aria-checked="true"] .switch-track, .switch-input-wrap input:checked + .switch-track { background: #292929; border-color: #292929; }
 .setting-switch[aria-checked="true"] .switch-thumb, .switch-input-wrap input:checked + .switch-track .switch-thumb { transform: translateX(20px); }
 .switch-input-wrap input { position: absolute; inset: 0; margin: 0; width: 52px; height: 44px; opacity: 0; z-index: 1; cursor: pointer; }
@@ -5139,7 +5139,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 .council-decision-heading p, .council-progress-label { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 6px 0 12px; }
 .council-seat.state-waiting { opacity: 1; }
 .council-seat.state-waiting .seat-state { border-style: dashed; }
-.council-seat .seat-title { font-size: 12px; color: #555; }
+.council-seat .seat-title { font-size: 12px; color: #555555; }
 .council-seat .seat-bubble { font-size: 14px; line-height: 1.55; }
 .council-seat .seat-age { font-size: 12px; }
 .council-opinions { margin-top: 12px; font-size: 13px; }
@@ -5148,25 +5148,25 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 .council-review h4 { font-size: 18px; margin: 0 0 8px; }
 .council-review-intro { font-size: 14px; }
 .council-review-picks { gap: 12px; }
-.council-pick { min-height: 60px; padding: 14px; background: #fff; }
+.council-pick { min-height: 60px; padding: 14px; background: #ffffff; }
 .council-pick:has(input:checked) { border: 2px solid #292929; padding: 13px; background: #f4f4f4; }
 .council-pick-body { font-size: 14px; gap: 6px; }
-.council-pick .pitch-turn, .council-pick .pitch-logline { font-size: 14px; color: #444; }
+.council-pick .pitch-turn, .council-pick .pitch-logline { font-size: 14px; color: #444444; }
 .pitch-review-details { padding: 0 14px; font-size: 13px; color: #505050; }
 .pitch-review-details p { margin: 0 0 12px; }
 .council-budget { display: grid; gap: 8px; padding: 14px; background: #f0f0f0; border-radius: 10px; font-size: 13px; margin: 16px 0; }
 .council-budget > span { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
-.council-budget small { color: #555; font-size: 12px; }
+.council-budget small { color: #555555; font-size: 12px; }
 .council-secondary-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
-.council-choice-actions { position: fixed; bottom: var(--action-offset); left: 276px; right: 44px; z-index: 35; margin: 0; padding: 12px 16px; border: 1px solid #d5d5d5; border-radius: 14px; background: #fffffff5; box-shadow: 0 8px 32px #0002; display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16px; }
+.council-choice-actions { position: fixed; bottom: var(--action-offset); left: 276px; right: 44px; z-index: 35; margin: 0; padding: 12px 16px; border: 1px solid #d5d5d5; border-radius: 14px; background: #fffffff5; box-shadow: 0 8px 32px #00000022; display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 16px; }
 .council-selection-summary { min-width: 0; display: grid; gap: 2px; }
-.council-selection-summary small { color: #555; font-size: 12px; }
+.council-selection-summary small { color: #555555; font-size: 12px; }
 .council-selection-summary strong { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .council-choice-actions .btn { flex-shrink: 0; min-height: 48px; }
 .simple-create:has(.council-choice-actions) { padding-bottom: 140px; }
 .status-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.status-chip[data-storage-state="attention"] { border: 2px solid #444; font-weight: 700; }
-.storage-chip-time { font-size: 12px; color: #666; }
+.status-chip[data-storage-state="attention"] { border: 2px solid #444444; font-weight: 700; }
+.storage-chip-time { font-size: 12px; color: #666666; }
 @media (max-width: 900px) and (min-width: 641px) { .council-choice-actions { left: 105px; right: 25px; } }
 @media (max-width: 640px) {
   :root { --action-offset: calc(82px + env(safe-area-inset-bottom)); }
