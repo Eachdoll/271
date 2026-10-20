@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, ...plain} = spec || {};
     return [lang, plain];
@@ -684,7 +684,10 @@ const PINS = {
   // (every language but E0/E1). 23c3519: 19904f80…7e67.
   // Craft rules (2026-10-20): a new draft's input also gains craftPolicy
   // {version: 1}. 25e3760: 55c71176…3f2d.
-  inputs: 'f3db9e82b8a2d4da80b4e4945e5246ea6eee87887315eaaa70ee0150657f3e24',
+  // Story spine (2026-10-20, R19): a new draft's input also gains arcPolicy
+  // {version: 1}; nothing else in the group changes (dump-diffed against
+  // 894ab59). 894ab59: f3db9e82…3e24.
+  inputs: '8208a67979a9f667c98fd98c3bc5bc9aa8a5e4e118ad9fcbfda59bd13c5e3e15',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -703,7 +706,9 @@ const PINS = {
   // never buy the read-through). 8087d69: 12e9fc3d…e2b.
   // Page rhythm: the new demo jobs' frozen specs carry `rhythm`. 23c3519: 6f236d08…cca8.
   // Craft rules: the new demo jobs' input carries craftPolicy. 25e3760: 0e922d9f…ec0f.
-  fullAutoDemo: '063dc4a030d9eee0310a21f95c71c4e479e9b2d896983125d695d13f425f567c',
+  // Story spine (R19): the new demo jobs' input carries arcPolicy (demo runs
+  // buy nothing; the pre-R12 job fixture is unchanged). 894ab59: 063dc4a0…567c.
+  fullAutoDemo: '700e54fbe188b334a6dea1149c8dfb37f39ea157a440849c81622ee7c9ac4e95',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -715,7 +720,10 @@ const PINS = {
   // Editor round: ③ before any job prices the read-through and the
   // author-model simplify (글 만들기 $1.94 → $2.46 at 12 pages) and its model
   // note names 글 다듬기·책 전체 퇴고. 8087d69: f17c0136…dfc3.
-  review: 'e1255f42b32a88615ec884510654bd2d4ae24072ad50c2db70e0fdac72f1959d',
+  // Story spine (R19): ③'s '승인 예시 함께 쓰기' help text says the 9-point
+  // examples are always in as spine cards (title and aria-label only; buttons,
+  // prices and ④/⑤ are unchanged). 894ab59: e1255f42…959d.
+  review: '21b16ee3aee8b422d0447a4af9fb7b85258e12fbba8c75dd4e3b85081a40d5f6',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost

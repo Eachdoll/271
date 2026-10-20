@@ -7,6 +7,7 @@ import { buildBanList, renderBanListForPrompt } from './banList.js';
 import type { WorldCard } from './worlds.js';
 import { composeSeed, preferObstaclesForTopic, type BackgroundType, type StorySeed } from './composeSeed.js';
 import { buildOutlinePrompt, roughTokenCount, type Character } from './outlinePrompt.js';
+import type { ExampleStyle } from './retrieval.js';
 import { plotCheck, renderFixInstructions, containsPlanted } from './plotCheck.js';
 import { generateBeatsWithBeam } from './beamSearch.js';
 import { writeRichThenSimplify, RICH_LEVEL_OF } from './richThenSimplify.js';
@@ -59,6 +60,11 @@ export interface OutlineStageInput {
    * 수정 호출에도 말버릇 항목이 없다. 말버릇 정책 없이 고정된 앱의 기존 초안이 완료한 유료 호출을 재결제하지 않게 한다.
    */
   legacyCatchphrasePrompt?: boolean;
+  /** R19 뼈대 카드 예시('arc')와 점수 하한. 없으면 예전 예시 문안 그대로. */
+  exampleStyle?: ExampleStyle;
+  exampleMinRubric?: number;
+  /** R19: 참고 예시를 줄이기 시작하는 대략 토큰 예산(기본 1,800). 뼈대 카드는 더 길어 앱이 올려 준다. */
+  exampleTokenBudget?: number;
   /**
    * true면 2026-10-19 견고성 수정 이전의 검사(plotCheck legacyChecks)를 쓴다. 앱이 그 이전에 저장된 유료 체크포인트를 이어 갈 때만 켠다:
    * 검사 결과가 바뀌면 수정 호출 요청이 달라져 이미 산 응답을 다시 쓰지 못하기 때문이다.
@@ -162,13 +168,15 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
       banExamples: input.banExamples,
       exampleCount,
       excludeBookIds: input.excludeBookIds,
+      exampleStyle: input.exampleStyle,
+      exampleMinRubric: input.exampleMinRubric,
       legacyCatchphrasePrompt,
     });
     // R9: 말버릇 사용 한도 문구는 참고 예시 예산(1,800)에 세지 않는다. r8 문안 길이로 재므로 한도 문구 때문에
     // 예시가 빠지지 않고, 예시 수는 r8과 같다(r8 문안이면 실제 프롬프트와 같은 길이).
     const overBudget = (exampleCount: number) => {
       const measured = makePrompt(exampleCount, true);
-      return roughTokenCount(measured.system + measured.user) > 1800;
+      return roughTokenCount(measured.system + measured.user) > (input.exampleTokenBudget ?? 1800);
     };
     let exampleCount = 2;
     while (exampleCount > 0 && overBudget(exampleCount)) exampleCount--;
@@ -231,6 +239,8 @@ export interface ProseStageInput {
   condenseOverBudget?: boolean;
   /** true면 규칙 9(말버릇 한도)가 없는 r8 풍부 쓰기 문안을 쓴다(앱의 기존 초안 재결제 방지). */
   legacyCatchphrasePrompt?: boolean;
+  /** R19: 단순화·고침·압축 때 줄이지 말아야 할 줄(뼈대). 없으면 문안 그대로. */
+  keepLines?: string;
 }
 
 export async function runProseStage(input: ProseStageInput) {
@@ -257,6 +267,7 @@ export async function runProseStage(input: ProseStageInput) {
     pageCount: input.pageCount,
     condenseOverBudget: input.condenseOverBudget,
     legacyCatchphrasePrompt: input.legacyCatchphrasePrompt,
+    keepLines: input.keepLines,
   });
 }
 

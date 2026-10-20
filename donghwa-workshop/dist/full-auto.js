@@ -69,6 +69,7 @@ import {
 import { safeTopic } from "./engine.js";
 import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
+import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -1189,6 +1190,7 @@ export async function runFullAuto(
       const {
         editorPolicy: _fresh,
         craftPolicy: _freshCraft,
+        arcPolicy: _freshArc,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1199,6 +1201,9 @@ export async function runFullAuto(
           : {}),
         ...(job.input?.craftPolicy?.version === 1
           ? { craftPolicy: clone(job.input.craftPolicy) }
+          : {}),
+        ...(hasArcPolicy(job.input)
+          ? { arcPolicy: clone(job.input.arcPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),

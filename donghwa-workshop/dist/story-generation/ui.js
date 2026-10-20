@@ -24,6 +24,7 @@ import {
 import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
 import { editorPolicy, revisionSummary } from "./book-revision.js";
 import { craftPolicy } from "./craft-rules.js";
+import { arcPolicy } from "./arc-rules.js";
 import { withPageRhythm } from "../page-rhythm.js";
 import {
   SPREAD_SHOTS,
@@ -904,6 +905,7 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       editorPolicy: editorPolicy(),
       // Picture-book craft rules (suspense, sound refrain, key props, camera).
       craftPolicy: craftPolicy(),
+      arcPolicy: arcPolicy(),
     },
     readingLevels,
     world,

@@ -28,6 +28,8 @@ export interface RichSimplifyInput {
     condenseOverBudget?: boolean;
     /** true면 규칙 9(말버릇 한도)가 없는 r8 문안. 말버릇 정책 없이 고정된 앱의 기존 초안용. */
     legacyCatchphrasePrompt?: boolean;
+    /** R19: '[반드시 지킬 것]'에 덧붙이는 줄(뼈대 보존). 단순화·고침·압축 세 호출 모두에 들어간다. 없으면 문안 그대로. */
+    keepLines?: string;
     onPass?: (pass: "rich" | "simplify" | "fix" | "condense", text: string) => void;
 }
 export interface RichSimplifyResult {

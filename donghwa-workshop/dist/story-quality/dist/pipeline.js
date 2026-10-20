@@ -93,13 +93,15 @@ export async function runOutlineStage(input) {
             banExamples: input.banExamples,
             exampleCount,
             excludeBookIds: input.excludeBookIds,
+            exampleStyle: input.exampleStyle,
+            exampleMinRubric: input.exampleMinRubric,
             legacyCatchphrasePrompt,
         });
         // R9: 말버릇 사용 한도 문구는 참고 예시 예산(1,800)에 세지 않는다. r8 문안 길이로 재므로 한도 문구 때문에
         // 예시가 빠지지 않고, 예시 수는 r8과 같다(r8 문안이면 실제 프롬프트와 같은 길이).
         const overBudget = (exampleCount) => {
             const measured = makePrompt(exampleCount, true);
-            return roughTokenCount(measured.system + measured.user) > 1800;
+            return roughTokenCount(measured.system + measured.user) > (input.exampleTokenBudget ?? 1800);
         };
         let exampleCount = 2;
         while (exampleCount > 0 && overBudget(exampleCount))
@@ -168,6 +170,7 @@ export async function runProseStage(input) {
         pageCount: input.pageCount,
         condenseOverBudget: input.condenseOverBudget,
         legacyCatchphrasePrompt: input.legacyCatchphrasePrompt,
+        keepLines: input.keepLines,
     });
 }
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */

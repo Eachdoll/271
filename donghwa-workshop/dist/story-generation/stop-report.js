@@ -277,7 +277,7 @@ function modelLine(job) {
     provider.stageModels?.upper ? `상위 ${str(provider.stageModels.upper, 80)}` : "",
   ].filter(Boolean);
   const quality = object(settings?.storyQuality) ? settings.storyQuality : {};
-  return `- 글 엔진: ${job?.demo ? "데모 (무료 예시)" : engine || "?"}${models.length ? ` · ${models.join(" · ")}` : ""} · 품질 경로 ${quality.enabled ? "켜짐" : "꺼짐"}${quality.enabled ? ` (아이 시뮬레이터 ${quality.childSimulator === false ? "꺼짐" : "켜짐"}, 두 단계 글 ${quality.twoPass === false ? "꺼짐" : "켜짐"}, 승인 예시 ${quality.useDistilledExamples ? "켜짐" : "꺼짐"})` : ""} · 통독 ${object(job?.input?.editorPolicy) ? "켜짐" : "없음"} · 솜씨 규칙 ${object(job?.input?.craftPolicy) ? "켜짐" : "없음"}`;
+  return `- 글 엔진: ${job?.demo ? "데모 (무료 예시)" : engine || "?"}${models.length ? ` · ${models.join(" · ")}` : ""} · 품질 경로 ${quality.enabled ? "켜짐" : "꺼짐"}${quality.enabled ? ` (아이 시뮬레이터 ${quality.childSimulator === false ? "꺼짐" : "켜짐"}, 두 단계 글 ${quality.twoPass === false ? "꺼짐" : "켜짐"}, 승인 예시 ${quality.useDistilledExamples ? "켜짐" : "꺼짐"})` : ""} · 통독 ${object(job?.input?.editorPolicy) ? "켜짐" : "없음"} · 솜씨 규칙 ${object(job?.input?.craftPolicy) ? "켜짐" : "없음"} · 뼈대 규칙 ${object(job?.input?.arcPolicy) ? "켜짐" : "없음"}`;
 }
 
 /** The report as Markdown text. */

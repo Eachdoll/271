@@ -8,6 +8,7 @@ import { renderBanListForPrompt } from './banList.js';
 import type { StorySeed } from './composeSeed.js';
 import { renderSeedForPrompt } from './composeSeed.js';
 import { renderExamplesForPrompt, retrieveExamples } from './retrieval.js';
+import type { ExampleStyle } from './retrieval.js';
 import { DEFAULT_BAN_EXAMPLES, DEFAULT_RULES, OUTLINE_SYSTEM, OUTLINE_USER, fill, renderNumbered } from './prompts.js';
 import { catchphraseClauses } from './catchphrase.js';
 
@@ -39,6 +40,10 @@ export interface OutlinePromptInput {
   banExamples?: string[];
   exampleCount?: number;
   excludeBookIds?: string[];
+  /** R19: 'arc'면 참고 예시를 뼈대 카드(위기·바닥·반전·되돌아옴)로 그린다. 없으면 예전 한 줄 비트 목록(바이트 동일). */
+  exampleStyle?: ExampleStyle;
+  /** R19: 이 점수 미만의 증류 예시는 후보에서 뺀다(점수 없는 골드는 유지). */
+  exampleMinRubric?: number;
   /**
    * true면 R9 이전(r8) 등장인물 줄을 글자 그대로 쓴다: 말버릇 사용 한도 문구 없음, 주인공은 빈 말버릇도 `말버릇 ""`로.
    * 말버릇 정책 없이 고정된 앱의 기존 초안이 같은 요청을 보내 완료한 유료 호출을 다시 결제하지 않게 한다.
@@ -67,7 +72,9 @@ export function buildOutlinePrompt(input: OutlinePromptInput): { system: string;
     .map((c, i) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${clauses[i + 1]}`)
     .join(' / ');
   const examples = renderExamplesForPrompt(
-    retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2),
+    retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2, { minRubric: input.exampleMinRubric }),
+    input.exampleStyle === 'arc' ? 1300 : 420,
+    input.exampleStyle,
   );
   const rules = (input.rules ?? DEFAULT_RULES).slice(0, 7);
   const banExamples = (input.banExamples ?? DEFAULT_BAN_EXAMPLES).slice(0, 4);

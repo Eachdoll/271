@@ -681,6 +681,7 @@ export const SOFT_OUTLINE_CODES = Object.freeze(
     "home_start_end",
     "middle_locations",
     "refrain_missing",
+    "arc_turn_planted",
   ]),
 );
 export const hardOutlineViolations = (report) =>

@@ -77,8 +77,14 @@ import {
   hasCraftPolicy,
 } from "./craft-rules.js";
 import {
+  hasArcPolicy,
+  arcOutlineRules,
+  arcProseRules,
+  inspectArc,
+} from "./arc-rules.js";
+import {
   hasEditorPolicy,
-  REVISION_SCHEMA,
+  revisionSchema,
   revisionRules,
   revisionData,
   revisionFingerprint,
@@ -330,6 +336,10 @@ function modelVisibleInput(source) {
     const { craftPolicy, ...rest } = input;
     input = rest;
   }
+  if (input?.arcPolicy) {
+    const { arcPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -452,6 +462,7 @@ export function normalizeStoryInput(input = {}) {
     ...(catchphrasePolicy ? { catchphrasePolicy } : {}),
     ...(hasEditorPolicy(input) ? { editorPolicy: { version: 1 } } : {}),
     ...(input.craftPolicy?.version === 1 ? { craftPolicy: { version: 1 } } : {}),
+    ...(hasArcPolicy(input) ? { arcPolicy: { version: 1 } } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -1516,7 +1527,7 @@ export async function enrichProse(prose, outline, source, options = {}) {
           "enrichment",
           input,
           {
-            rules: `Rewrite only the supplied ${language} paragraph as ONE paragraph with no blank lines. Return {paragraph:string}. This is enrichment, not expansion: keep sentence/word ranges and selected vocabulary/grammar. Preserve every approved event, fixed architecture, character identity, physical prop state and neighboring continuity. Use only compatible brief details; never replace an approved event to satisfy a checklist. Keep names/pronouns and concrete object subjects explicit. Do not write or translate the other language.\n${richnessPromptRules(language)}\nUse at least one sound/touch detail and concrete prop from this beat's brief, with a sound/movement word. Show emotion through physical action instead of direct emotion labels. Include a question, invitation or a complete exclamatory sentence if allowed by levelSpec; do not force forbidden grammar into E0/E1. Preserve allowed repeating English frames. Vary endings without three identical endings in a row. The final sentence gently anticipates the next approved beat, except for the closing beat. Do not invent a new event to foreshadow.${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}`,
+            rules: `Rewrite only the supplied ${language} paragraph as ONE paragraph with no blank lines. Return {paragraph:string}. This is enrichment, not expansion: keep sentence/word ranges and selected vocabulary/grammar. Preserve every approved event, fixed architecture, character identity, physical prop state and neighboring continuity. Use only compatible brief details; never replace an approved event to satisfy a checklist. Keep names/pronouns and concrete object subjects explicit. Do not write or translate the other language.\n${richnessPromptRules(language)}\nUse at least one sound/touch detail and concrete prop from this beat's brief, with a sound/movement word. Show emotion through physical action instead of direct emotion labels. Include a question, invitation or a complete exclamatory sentence if allowed by levelSpec; do not force forbidden grammar into E0/E1. Preserve allowed repeating English frames. Vary endings without three identical endings in a row. The final sentence gently anticipates the next approved beat, except for the closing beat. Do not invent a new event to foreshadow.${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${arcProseRules(input) ? `\n${arcProseRules(input)}` : ""}`,
             data: {
               approvedOutline: outline,
               language,
@@ -1951,6 +1962,9 @@ export function inspectOutlineRules(outline, source = {}) {
       `비트에 주제 키워드 ‘${keyword}’가 없어요.`,
       { keyword, partial: missingTopic.length < topicKeywords.length },
     );
+  // R19 story spine (soft, fixed by the fix pass): the turn brings the planted thing back.
+  for (const row of inspectArc(outline, source))
+    add(row.code, row.message, { beatIndex: row.beatIndex });
   // Craft: a K1/K2 book plans a sound-word refrain (soft, fixed by the fix pass).
   if (soundRefrainRequired(source)) {
     const refrain = outline?.refrain,
@@ -2109,7 +2123,7 @@ Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> clo
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
 Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. ${customEnding(input) ? "The first beat uses a supplied home background ID from homeBackgroundIds; the final beat takes place wherever the parent's ending puts it (any supplied ID, home or not)." : "The first and final beat use the SAME supplied home background ID from homeBackgroundIds."} Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
-${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}`;
+${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}${arcOutlineRules(input) ? `\n${arcOutlineRules(input)}` : ""}`;
   const results = [];
   let violations = [],
     normalized = [];
@@ -2373,7 +2387,7 @@ Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least 
 Return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with exactly one approved beat index for every blank-line-separated paragraph of the corresponding language. Each language must cover every approved beat in order; split paragraphs at beat boundaries. These paragraph labels are metadata ONLY: never place beat numbers, labels or headings into the ko/en story text or printable prose.
 Do not end paragraphs with a repeated appraisal or an explicit lesson. Respect the parent's moral through character actions and endingNote through the final action while keeping the approved ending and place.
 Korean length guide ${guidance}; prioritize the frozen levelSpec sentence/word constraints and retaining all events when ranges conflict. English total words should fit the per-page level range times ${input.pageCount}, but its sentences and rhythm must be original English, not translations.${isOpeningsInput(input) ? `\nEach approved beat paragraph = one opening: Korean ${input.specs.ko.units.opening.min}–${input.specs.ko.units.opening.max} sentences (target ${input.specs.ko.units.opening.target}), English ${input.specs.en.units.opening.min}–${input.specs.en.units.opening.max} sentences (target ${input.specs.en.units.opening.target}) per beat.` : ""}
-Write original English at ${input.specs.en.id || "selected E level"}, with repeating frames/rhyme if allowed. usedRefrainAt lists only approved used beat IDs.${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}
+Write original English at ${input.specs.en.id || "selected E level"}, with repeating frames/rhyme if allowed. usedRefrainAt lists only approved used beat IDs.${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${arcProseRules(input) ? `\n${arcProseRules(input)}` : ""}
 ${input.draftProse ? "This is HYBRID final refinement: read the supplied local draftProse, preserve its concrete events and approved outline, improve language and frozen-level compliance. Do not replace its story with an unrelated plot." : ""}`;
   const requests = [];
   let errors = [];
@@ -2858,7 +2872,7 @@ async function reviseStoryBook(result, outline, input, options) {
             sceneBriefRows(options.sceneBriefs),
           ),
         },
-        REVISION_SCHEMA,
+        revisionSchema(input),
         {
           ...options,
           ...options.revisionOptions,

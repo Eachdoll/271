@@ -91,7 +91,7 @@ export async function writeRichThenSimplify(input) {
             decodableRule: input.decodable
                 ? "- Prefer CVC words (cat, sun, big) and the sight-word list."
                 : "",
-            extraFixes: "",
+            extraFixes: input.keepLines ?? "",
             lengthBudget,
             richText: rich,
         });
@@ -120,7 +120,7 @@ export async function writeRichThenSimplify(input) {
                 refrainText,
                 refrainBeats,
                 decodableRule: "",
-                extraFixes: renderTellFixInstructions(hits, input.gestureDict),
+                extraFixes: [input.keepLines, renderTellFixInstructions(hits, input.gestureDict)].filter(Boolean).join("\n"),
                 lengthBudget,
                 richText: simplified,
             });
@@ -150,7 +150,7 @@ export async function writeRichThenSimplify(input) {
             .map((p, i) => `${p.label}: 지금 ${p.count}문장 → ${per[i]}문장 이하`)
             .join("\n");
         const r4 = await simplifier.complete({
-            system: [PROSE_CONDENSE_SYSTEM, tenseRule].filter(Boolean).join("\n"),
+            system: [PROSE_CONDENSE_SYSTEM, tenseRule, input.keepLines].filter(Boolean).join("\n"),
             user: fill(PROSE_CONDENSE_USER, {
                 budgetMin: budget.min,
                 budgetMax: budget.max,

@@ -54,6 +54,8 @@ export interface RichSimplifyInput {
   condenseOverBudget?: boolean;
   /** true면 규칙 9(말버릇 한도)가 없는 r8 문안. 말버릇 정책 없이 고정된 앱의 기존 초안용. */
   legacyCatchphrasePrompt?: boolean;
+  /** R19: '[반드시 지킬 것]'에 덧붙이는 줄(뼈대 보존). 단순화·고침·압축 세 호출 모두에 들어간다. 없으면 문안 그대로. */
+  keepLines?: string;
   onPass?: (
     pass: "rich" | "simplify" | "fix" | "condense",
     text: string,
@@ -180,7 +182,7 @@ export async function writeRichThenSimplify(
         decodableRule: input.decodable
           ? "- Prefer CVC words (cat, sun, big) and the sight-word list."
           : "",
-        extraFixes: "",
+        extraFixes: input.keepLines ?? "",
         lengthBudget,
         richText: rich,
       },
@@ -213,7 +215,7 @@ export async function writeRichThenSimplify(
           refrainText,
           refrainBeats,
           decodableRule: "",
-          extraFixes: renderTellFixInstructions(hits, input.gestureDict),
+          extraFixes: [input.keepLines, renderTellFixInstructions(hits, input.gestureDict)].filter(Boolean).join("\n"),
           lengthBudget,
           richText: simplified,
         },
@@ -250,7 +252,7 @@ export async function writeRichThenSimplify(
       .map((p, i) => `${p.label}: 지금 ${p.count}문장 → ${per[i]}문장 이하`)
       .join("\n");
     const r4 = await simplifier.complete({
-      system: [PROSE_CONDENSE_SYSTEM, tenseRule].filter(Boolean).join("\n"),
+      system: [PROSE_CONDENSE_SYSTEM, tenseRule, input.keepLines].filter(Boolean).join("\n"),
       user: fill(PROSE_CONDENSE_USER, {
         budgetMin: budget.min,
         budgetMax: budget.max,
