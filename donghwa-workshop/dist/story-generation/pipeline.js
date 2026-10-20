@@ -70,6 +70,12 @@ import {
 import { inspectChildStory } from "./quality-gates.js";
 import { rhythmPromptLine } from "../page-rhythm.js";
 import {
+  craftOutlineRules,
+  craftProseRules,
+  craftPaginationRules,
+  soundRefrainRequired,
+} from "./craft-rules.js";
+import {
   hasEditorPolicy,
   REVISION_SCHEMA,
   revisionRules,
@@ -313,10 +319,14 @@ function normalizeCatchphrasePolicy(policy) {
 }
 /** What the model may see: the limit and omitted IDs, never the omitted phrases. */
 function modelVisibleInput(source) {
-  // The editor policy is an app switch, not story data for the model.
+  // The editor and craft policies are app switches, not story data for the model.
   let input = source;
   if (input?.editorPolicy) {
     const { editorPolicy, ...rest } = input;
+    input = rest;
+  }
+  if (input?.craftPolicy) {
+    const { craftPolicy, ...rest } = input;
     input = rest;
   }
   if (!input?.catchphrasePolicy) return input;
@@ -438,6 +448,7 @@ export function normalizeStoryInput(input = {}) {
       : {}),
     ...(catchphrasePolicy ? { catchphrasePolicy } : {}),
     ...(hasEditorPolicy(input) ? { editorPolicy: { version: 1 } } : {}),
+    ...(input.craftPolicy?.version === 1 ? { craftPolicy: { version: 1 } } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -1444,7 +1455,7 @@ export async function enrichProse(prose, outline, source, options = {}) {
           "enrichment",
           input,
           {
-            rules: `Rewrite only the supplied ${language} paragraph as ONE paragraph with no blank lines. Return {paragraph:string}. This is enrichment, not expansion: keep sentence/word ranges and selected vocabulary/grammar. Preserve every approved event, fixed architecture, character identity, physical prop state and neighboring continuity. Use only compatible brief details; never replace an approved event to satisfy a checklist. Keep names/pronouns and concrete object subjects explicit. Do not write or translate the other language.\n${richnessPromptRules(language)}\nUse at least one sound/touch detail and concrete prop from this beat's brief, with a sound/movement word. Show emotion through physical action instead of direct emotion labels. Include a question, invitation or a complete exclamatory sentence if allowed by levelSpec; do not force forbidden grammar into E0/E1. Preserve allowed repeating English frames. Vary endings without three identical endings in a row. The final sentence gently anticipates the next approved beat, except for the closing beat. Do not invent a new event to foreshadow.`,
+            rules: `Rewrite only the supplied ${language} paragraph as ONE paragraph with no blank lines. Return {paragraph:string}. This is enrichment, not expansion: keep sentence/word ranges and selected vocabulary/grammar. Preserve every approved event, fixed architecture, character identity, physical prop state and neighboring continuity. Use only compatible brief details; never replace an approved event to satisfy a checklist. Keep names/pronouns and concrete object subjects explicit. Do not write or translate the other language.\n${richnessPromptRules(language)}\nUse at least one sound/touch detail and concrete prop from this beat's brief, with a sound/movement word. Show emotion through physical action instead of direct emotion labels. Include a question, invitation or a complete exclamatory sentence if allowed by levelSpec; do not force forbidden grammar into E0/E1. Preserve allowed repeating English frames. Vary endings without three identical endings in a row. The final sentence gently anticipates the next approved beat, except for the closing beat. Do not invent a new event to foreshadow.${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}`,
             data: {
               approvedOutline: outline,
               language,
@@ -1860,6 +1871,18 @@ export function inspectOutlineRules(outline, source = {}) {
       `비트에 주제 키워드 ‘${keyword}’가 없어요.`,
       { keyword, partial: missingTopic.length < topicKeywords.length },
     );
+  // Craft: a K1/K2 book plans a sound-word refrain (soft, fixed by the fix pass).
+  if (soundRefrainRequired(source)) {
+    const refrain = outline?.refrain,
+      text = String(refrain?.text || "").trim(),
+      planned = Array.isArray(refrain?.usedAtBeats) ? refrain.usedAtBeats : [];
+    if (!text || planned.length < 2)
+      add(
+        "refrain_missing",
+        "K1·K2 책에는 소리말 후렴(예: '딸랑!')을 비트 2~3곳에 계획해 주세요.",
+        { planned: planned.length },
+      );
+  }
   for (const c of source.characters || [])
     if (
       c.name &&
@@ -1999,7 +2022,7 @@ Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> clo
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
 Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. The first and final beat use the SAME supplied home background ID from homeBackgroundIds. Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
-endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home. A requested moral must be shown through actions and never spoken as a lesson.`;
+endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home. A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}`;
   const results = [];
   let violations = [],
     normalized = [];
@@ -2263,7 +2286,7 @@ Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least 
 Return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with exactly one approved beat index for every blank-line-separated paragraph of the corresponding language. Each language must cover every approved beat in order; split paragraphs at beat boundaries. These paragraph labels are metadata ONLY: never place beat numbers, labels or headings into the ko/en story text or printable prose.
 Do not end paragraphs with a repeated appraisal or an explicit lesson. Respect the parent's moral through character actions and endingNote through the final action while keeping the approved ending and place.
 Korean length guide ${guidance}; prioritize the frozen levelSpec sentence/word constraints and retaining all events when ranges conflict. English total words should fit the per-page level range times ${input.pageCount}, but its sentences and rhythm must be original English, not translations.${isOpeningsInput(input) ? `\nEach approved beat paragraph = one opening: Korean ${input.specs.ko.units.opening.min}–${input.specs.ko.units.opening.max} sentences (target ${input.specs.ko.units.opening.target}), English ${input.specs.en.units.opening.min}–${input.specs.en.units.opening.max} sentences (target ${input.specs.en.units.opening.target}) per beat.` : ""}
-Write original English at ${input.specs.en.id || "selected E level"}, with repeating frames/rhyme if allowed. usedRefrainAt lists only approved used beat IDs.
+Write original English at ${input.specs.en.id || "selected E level"}, with repeating frames/rhyme if allowed. usedRefrainAt lists only approved used beat IDs.${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}
 ${input.draftProse ? "This is HYBRID final refinement: read the supplied local draftProse, preserve its concrete events and approved outline, improve language and frozen-level compliance. Do not replace its story with an unrelated plot." : ""}`;
   const requests = [];
   let errors = [];
@@ -2409,7 +2432,7 @@ One page = one drawable scene. Keep all beats mapped to ascending pageNo; pageNo
 Apply Korean and English frozen sentence/word limits independently on every page. Preserve quoted dialogue, sensory details, causal attempts and twist from the original prose.
 For every page scene.where MUST equal its approved beat's settingKey/backgroundId when that is a supplied drawer ID, including the home ID at the beginning and end. Never replace that ID with a different place, a name or a description. Previously approved legacy new places retain the exact same stable location string. Inherit timeOfDay, concrete props and physical constraints from that beat's sceneBrief when supplied. Propose page staging from that same event: shot, alternating characterSide/textSide, lightMood inside the palette, a canon-safe subLocation, verb and seed. Never add a different action or structure to make shots diverse. Keep architecture identical across pages; do not invent decorative buildings unrelated to the prose. scene.action should express the page's concrete event and the relevant established landmark, not a generic pose.
 scene.who contains selected character IDs; scene.where is a supplied background ID or concrete location description. scene.action is one drawable English sentence of 8–30 words with a physical verb, position and visible props. Abstract feelings alone are not actions. scene.emotion is one English word; timeOfDay is morning/day/afternoon/evening/night; props is an English list.
-Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs to an allowed variant or null. Honor per-book defaults and page ranges. Set isRefrainPage true only where the approved refrain actually appears. cover.sceneAction is a concrete English cover scene without text/logo instructions.`;
+Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs to an allowed variant or null. Honor per-book defaults and page ranges. Set isRefrainPage true only where the approved refrain actually appears. cover.sceneAction is a concrete English cover scene without text/logo instructions.${craftPaginationRules(input) ? `\n${craftPaginationRules(input)}` : ""}`;
 }
 /**
  * R12 openings pagination rules (replace 'exactly N pages', 'one page = one
@@ -2590,6 +2613,7 @@ export function inspectStory(outline, pagination, input) {
     allowedNames: (input.characters || []).flatMap((c) =>
       [c.name, c.nameEn].filter(Boolean),
     ),
+    craftPolicy: input.craftPolicy || null,
   });
   // R12 openings: the opening structure (validateOpenings) replaces the entry count.
   const structure = isOpeningsInput(input)

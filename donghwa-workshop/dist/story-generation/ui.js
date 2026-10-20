@@ -23,6 +23,7 @@ import {
 } from "./pipeline.js";
 import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
 import { editorPolicy, revisionSummary } from "./book-revision.js";
+import { craftPolicy } from "./craft-rules.js";
 import { withPageRhythm } from "../page-rhythm.js";
 import {
   SPREAD_SHOTS,
@@ -269,6 +270,8 @@ const ASPECT_LABELS = {
   ending: "결말",
   bilingual: "한글·영어 맞춤",
   level: "읽기 수준",
+  suspense: "수수께끼 지키기",
+  sound: "소리말",
 };
 /** Editor round: the read-through's report (what changed and why) for the parent. */
 export function renderRevisionNote(revision) {
@@ -887,6 +890,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // Editor round: frozen for new drafts only (read-through, current-book
       // context in rewrites, author-model content fixes).
       editorPolicy: editorPolicy(),
+      // Picture-book craft rules (suspense, sound refrain, key props, camera).
+      craftPolicy: craftPolicy(),
     },
     readingLevels,
     world,
