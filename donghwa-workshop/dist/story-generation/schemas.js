@@ -421,7 +421,7 @@ export function validateOutline(value, input = {}) {
     value.emotionArc.length !== beats?.length
   )
     errors.push("감정 흐름은 비트마다 하나씩 필요해요.");
-  if (!["home_sleep", "open"].includes(value.endingType))
+  if (!["home_sleep", "open", "custom"].includes(value.endingType))
     errors.push("결말 방식을 확인해 주세요.");
   if (input.endingType && value.endingType !== input.endingType)
     errors.push("선택한 결말 방식을 유지해 주세요.");

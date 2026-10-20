@@ -865,7 +865,14 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
             Number(wizard.pageCount || 12),
             readingLevels.koreanLevel,
           ),
-      endingType: wizard.ending === "open" ? "open" : "home_sleep",
+      // 2026-10-20: a typed ending is its own ending type; the story may end
+      // away from home. An empty typed ending still means home.
+      endingType:
+        wizard.ending === "open"
+          ? "open"
+          : wizard.ending === "custom" && String(wizard.endingCustom || "").trim()
+            ? "custom"
+            : "home_sleep",
       moral:
         wizard.value === "custom"
           ? String(wizard.valueCustom || "").trim()

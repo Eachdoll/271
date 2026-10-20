@@ -27,7 +27,7 @@ export interface OutlinePromptInput {
     inventories: Inventories;
     ban: BanList;
     approvedBooks: BookRecord[];
-    endingType: 'home_sleep' | 'open';
+    endingType: 'home_sleep' | 'open' | 'custom';
     rules?: string[];
     banExamples?: string[];
     exampleCount?: number;

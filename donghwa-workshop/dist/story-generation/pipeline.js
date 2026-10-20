@@ -402,7 +402,9 @@ export function normalizeStoryInput(input = {}) {
     storyWorld: cleanReference(
       input.storyWorld || input.storyWorldSnapshot || null,
     ),
-    endingType: input.endingType === "open" ? "open" : "home_sleep",
+    endingType: ["open", "custom"].includes(input.endingType)
+      ? input.endingType
+      : "home_sleep",
     moral: String(
       input.moral ||
         (input.value === "custom" ? input.valueCustom : input.value) ||
@@ -1648,6 +1650,17 @@ export async function generateMaterialPlan(source, catalog, options = {}) {
   });
 }
 
+/**
+ * 2026-10-20: the parent typed how the story ends (endingType "custom", new
+ * drafts only). The outline, contract, pagination and quality canon then let
+ * the final beat happen wherever that ending puts it; only the start is home.
+ */
+export const customEnding = (input) =>
+  input?.endingType === "custom" && !!String(input?.endingNote || "").trim();
+export function endingRuleLine(input) {
+  const note = String(input?.endingNote || "").trim().replace(/\s+/gu, " ");
+  return `endingType=custom. The parent wrote how the story ends: "${note}". The final beat enacts exactly this as a concrete action in the place where it happens; do not add a return home, a bedtime or sleep unless that ending says so. Close calmly in that place.`;
+}
 /** Home recognition is shared with the drawer UI; no model may invent a home. */
 export function isHomeBackground(background = {}) {
   if (
@@ -1994,7 +2007,11 @@ export function inspectOutlineRules(outline, source = {}) {
   if (beats.length) {
     const first = settingByBeat.get(beats[0]?.index)?.backgroundId,
       last = settingByBeat.get(beats.at(-1)?.index)?.backgroundId;
-    if (!places.homeBackgroundIds.includes(first) || last !== first)
+    // 2026-10-20: a typed ending may end anywhere; only the start is home.
+    if (customEnding(source)) {
+      if (!places.homeBackgroundIds.includes(first))
+        add("home_start_end", "시작 비트는 집·방 배경을 골라 주세요.");
+    } else if (!places.homeBackgroundIds.includes(first) || last !== first)
       add(
         "home_start_end",
         "시작과 마무리 비트는 같은 집·방 배경을 골라 주세요.",
@@ -2051,6 +2068,9 @@ function outlineRequestSchema(input) {
   setting.properties.backgroundId.enum = ids;
   schema.properties.beats.items.properties.settingKey.enum = ids;
   schema.required.push("plotContract");
+  // 2026-10-20: a typed ending is a third ending type (new drafts only).
+  if (input.endingType === "custom")
+    schema.properties.endingType.enum = ["home_sleep", "open", "custom"];
   return schema;
 }
 export async function generateOutline(source, options = {}) {
@@ -2087,9 +2107,9 @@ export async function generateOutline(source, options = {}) {
   const rules = `${plotContractRules(input)}\nDesign the complete StoryOutline, not page text. Exactly ${count} beats for ${input.pageCount} pages, with indexes 1..${count}.
 Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> close. Pack the three-attempt pattern into these available attempt beats: two small funny failures, with the last attempt leading to the turn. Every beat changes the situation; summaries have 2–3 concrete sentences.
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
-Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. The first and final beat use the SAME supplied home background ID from homeBackgroundIds. Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
+Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. ${customEnding(input) ? "The first beat uses a supplied home background ID from homeBackgroundIds; the final beat takes place wherever the parent's ending puts it (any supplied ID, home or not)." : "The first and final beat use the SAME supplied home background ID from homeBackgroundIds."} Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
-endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home. A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}`;
+${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}`;
   const results = [];
   let violations = [],
     normalized = [];
@@ -2497,7 +2517,7 @@ function paginationRules(input) {
   return `Paginate the supplied APPROVED prose into exactly ${input.pageCount} pages. Do not rewrite the prose stage, omit events, invent a different plot, or change its approved ending. Light sentence smoothing and splitting/merging adjacent page blocks are allowed.
 One page = one drawable scene. Keep all beats mapped to ascending pageNo; pageNo=1..${input.pageCount}. All approved beat IDs appear in order. Start the turn at ${Math.floor((input.pageCount * 2) / 3)}–${Math.floor((input.pageCount * 2) / 3) + 1}; the final page maps to close.
 Apply Korean and English frozen sentence/word limits independently on every page. Preserve quoted dialogue, sensory details, causal attempts and twist from the original prose.
-For every page scene.where MUST equal its approved beat's settingKey/backgroundId when that is a supplied drawer ID, including the home ID at the beginning and end. Never replace that ID with a different place, a name or a description. Previously approved legacy new places retain the exact same stable location string. Inherit timeOfDay, concrete props and physical constraints from that beat's sceneBrief when supplied. Propose page staging from that same event: shot, alternating characterSide/textSide, lightMood inside the palette, a canon-safe subLocation, verb and seed. Never add a different action or structure to make shots diverse. Keep architecture identical across pages; do not invent decorative buildings unrelated to the prose. scene.action should express the page's concrete event and the relevant established landmark, not a generic pose.
+For every page scene.where MUST equal its approved beat's settingKey/backgroundId when that is a supplied drawer ID, including the home ID at the beginning${customEnding(input) ? "" : " and end"}. Never replace that ID with a different place, a name or a description. Previously approved legacy new places retain the exact same stable location string. Inherit timeOfDay, concrete props and physical constraints from that beat's sceneBrief when supplied. Propose page staging from that same event: shot, alternating characterSide/textSide, lightMood inside the palette, a canon-safe subLocation, verb and seed. Never add a different action or structure to make shots diverse. Keep architecture identical across pages; do not invent decorative buildings unrelated to the prose. scene.action should express the page's concrete event and the relevant established landmark, not a generic pose.
 scene.who contains selected character IDs; scene.where is a supplied background ID or concrete location description. scene.action is one drawable English sentence of 8–30 words with a physical verb, position and visible props. Abstract feelings alone are not actions. scene.emotion is one English word; timeOfDay is morning/day/afternoon/evening/night; props is an English list.
 Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs to an allowed variant or null. Honor per-book defaults and page ranges. Set isRefrainPage true only where the approved refrain actually appears. cover.sceneAction is a concrete English cover scene without text/logo instructions.${craftPaginationRules(input) ? `\n${craftPaginationRules(input)}` : ""}`;
 }

@@ -1628,7 +1628,7 @@ function createPage() {
         ["custom", "직접 입력"],
       ],
       w.ending,
-    )}<div class="field" id="ending-custom-field" ${w.ending === "custom" ? "" : "hidden"}><label for="endingCustom">직접 적는 이야기의 끝</label><textarea id="endingCustom" maxlength="1000" placeholder="집에 돌아온 뒤 어떤 행동과 말로 마칠까요?">${esc(w.endingCustom || "")}</textarea></div><div class="field"><label for="series">시리즈 이름 <span class="count">비워두면 새 시리즈</span></label><input id="series" maxlength="60" value="${esc(w.series)}" placeholder="예: 유하의 작은 모험" ${w.previousBookId ? "readonly" : ""}></div></div>`;
+    )}<div class="field" id="ending-custom-field" ${w.ending === "custom" ? "" : "hidden"}><label for="endingCustom">직접 적는 이야기의 끝</label><textarea id="endingCustom" maxlength="1000" placeholder="이야기가 어디서 어떤 행동과 말로 끝날까요? 예: 바닷가에서 친구들과 조개를 나눠 들고 노래하며 끝나요 (집으로 돌아오지 않아도 돼요)">${esc(w.endingCustom || "")}</textarea></div><div class="field"><label for="series">시리즈 이름 <span class="count">비워두면 새 시리즈</span></label><input id="series" maxlength="60" value="${esc(w.series)}" placeholder="예: 유하의 작은 모험" ${w.previousBookId ? "readonly" : ""}></div></div>`;
   if (w.step === 4)
     inner = `<h3>어떤 방식으로 만들까요?</h3><details class="story-start-options"><summary>구성 패턴 · 세계관 메모</summary><div class="field" style="margin-top:20px"><label for="worldMemo">세계관 메모 · 함께 지킬 설정</label><textarea id="worldMemo" maxlength="2000" placeholder="친구들의 관계, 장소의 특징, 다음 편에도 유지할 설정">${esc(w.worldMemo || "")}</textarea></div>${renderQualityPatternSelector(w, { state, id: "storyQualityPatternId" })}</details>${renderWizardTextSummary()}${renderFullAutoLauncher(state, w)}`;
 

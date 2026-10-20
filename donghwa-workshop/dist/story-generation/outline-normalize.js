@@ -498,8 +498,8 @@ export function normalizeOutlineResponse(source, input = {}) {
     notes.push("반전(twist)을 plan.twistReveal에서 가져왔어요.");
   }
   if (
-    !["home_sleep", "open"].includes(outline.endingType) &&
-    ["home_sleep", "open"].includes(input.endingType)
+    !["home_sleep", "open", "custom"].includes(outline.endingType) &&
+    ["home_sleep", "open", "custom"].includes(input.endingType)
   )
     outline.endingType = input.endingType;
   if (object(outline.refrain)) {

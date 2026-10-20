@@ -35,7 +35,7 @@ export interface OutlineStageInput {
   backgroundType: BackgroundType;
   inventories: Inventories;
   approvedBooks: BookRecord[];
-  endingType: 'home_sleep' | 'open';
+  endingType: 'home_sleep' | 'open' | 'custom';
   rules?: string[];
   banExamples?: string[];
   /** 보급형 모델로 줄거리를 만들 때 ON 권장 */

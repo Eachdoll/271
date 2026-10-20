@@ -633,8 +633,20 @@ function catchphraseRules(input, services) {
       .map((character) => `${character.name} (${character.id})`);
   return `${String(services.baseSystem || "").includes(CATCHPHRASE_RULE_EN) ? "" : `CATCHPHRASES: ${CATCHPHRASE_RULE_EN} Never use a catchphrase as the refrain or repeating frame sentence.\n`}${names.length ? `CATCHPHRASE ROTATION: ${names.join(", ")} used a catchphrase in a recent book, so they use no catchphrase in this book.\n` : ""}`;
 }
+/**
+ * 2026-10-20: the quality path never saw the parent's typed ending (only the
+ * ending type in the JSON template), so the outline ended at home. New drafts
+ * with endingType "custom" get the ending as a binding canon block.
+ */
+export function endingCanonBlock(input, stage = "outline") {
+  const note = String(input?.endingNote || "").trim().replace(/\s+/gu, " ");
+  if (input?.endingType !== "custom" || !note) return "";
+  return stage === "prose"
+    ? `ENDING (the parent's own ending, binding): "${note}". The final paragraph enacts it as concrete action and words in the place where it happens; no return home, bedtime or sleep unless the ending says so.`
+    : `ENDING (the parent's own ending, binding): "${note}". The final beat enacts exactly this as a concrete action wherever it happens, and its settingKey is that place (any supplied background, home or not); do not add a return home, a bedtime or sleep unless the ending says so. The first beat still starts at the home background. endingType is "custom".`;
+}
 function canonicalWorldRules(input, services, bindTargetLevel = true, stage = "outline") {
-  const craft = craftCanonRules(input, stage);
+  const craft = [endingCanonBlock(input, stage), craftCanonRules(input, stage)].filter(Boolean).join("\n");
   return `${craft ? `${craft}\n` : ""}${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
 }
 function enrichedOutlineSchema(input, pattern, services) {
