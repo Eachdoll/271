@@ -16,6 +16,7 @@ import { frozenBeatCount, StoryValidationError } from "./schemas.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { isOpeningsInput } from "./opening-prose.js";
 import { renderCouncilRoom } from "./council-room.js";
+import { hasPromptPolicy, readerVocabularyLine } from "./prompt-policy.js";
 
 export const COUNCIL_POLICY_VERSION = 1;
 export const councilPolicy = () => ({ version: COUNCIL_POLICY_VERSION });
@@ -531,7 +532,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     `[조건]\n${conditions.map((row, i) => `${i + 1} ${row}`).join("\n")}`,
     `[주제] ${str(input.topic, 200)}`,
   ].join("\n\n");
-  const pitchInstructions = `[피치 3개 쓰기] 서로 다른 반전으로 피치 3개. 피치마다: title(제목), logline(한 줄 줄거리), stakes(못 하면 잃는 것, 구체적인 물건·순간·얼굴), planted{name(심은 물건, 한글), nameEn(영어 명사구), firstSeen(1비트에서 처음 보이는 자리)}, ladder(시도 ${attempts}개, 차례로 더 큰 대가와 다른 방법), lowPoint(마지막 시도 끝, 포기 직전의 한 문장 — 단서가 바로 옆에 있다), turn{seen(아이가 보거나 듣는 것), realized(주인공이 제 말로 알아차리는 말), overturns(뒤집히는 믿음)}, payoff(주인공이 손으로 해내는 해결), echo(처음의 물건이나 말이 달라진 모습으로 돌아오는 끝).`;
+  const pitchInstructions = `[피치 3개 쓰기] 서로 다른 반전으로 피치 3개. 피치마다: title(제목), logline(한 줄 줄거리), stakes(못 하면 잃는 것, 구체적인 물건·순간·얼굴), planted{name(심은 물건, 한글), nameEn(영어 명사구), firstSeen(1비트에서 처음 보이는 자리)}, ladder(시도 ${attempts}개, 차례로 더 큰 대가와 다른 방법), lowPoint(마지막 시도 끝, 포기 직전의 한 문장 — 단서가 바로 옆에 있다), turn{seen(아이가 보거나 듣는 것), realized(주인공이 제 말로 알아차리는 말), overturns(뒤집히는 믿음)}, payoff(주인공이 손으로 해내는 해결), echo(처음의 물건이나 말이 달라진 모습으로 돌아오는 끝).${hasPromptPolicy(input) ? `\n${readerVocabularyLine(card)}` : ""}`;
   try {
     // Round A: the author's three pitches (a second round only if every pitch is vetoed).
     let pitches = [],

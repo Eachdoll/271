@@ -90,6 +90,7 @@ test('R9-A1 general path: the system prompt limits catchphrases and the model ne
  const prepared=inputFromWizard(state,wizard);prepared.input.storyQuality={enabled:false};
  // R20: this test reads the general-path outline request; the writers' room before it has its own tests.
  delete prepared.input.councilPolicy;
+ delete prepared.input.promptPolicy;
  const requests=[];const engine={id:'fake',async complete(request){requests.push(request);return {text:'not json',usage:{input:0,output:0}};}};
  await assert.rejects(generateOutline(prepared.input,{engine}));
  assert.ok(requests.length>=1);

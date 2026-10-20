@@ -5,7 +5,7 @@
 import type { BookRecord, GestureDictionary, Inventories, LevelSpecEn, LevelSpecKo, PlotPatternCard, StoryOutline, TextEngine } from './types.js';
 import { buildBanList, renderBanListForPrompt } from './banList.js';
 import type { WorldCard } from './worlds.js';
-import { composeSeed, preferObstaclesForTopic, type BackgroundType, type StorySeed } from './composeSeed.js';
+import { applySeedOverrides, composeSeed, preferObstaclesForTopic, type BackgroundType, type SeedOverrides, type StorySeed } from './composeSeed.js';
 import { buildOutlinePrompt, roughTokenCount, type Character } from './outlinePrompt.js';
 import type { ExampleStyle } from './retrieval.js';
 import { plotCheck, renderFixInstructions, containsPlanted } from './plotCheck.js';
@@ -70,6 +70,8 @@ export interface OutlineStageInput {
    * 검사 결과가 바뀌면 수정 호출 요청이 달라져 이미 산 응답을 다시 쓰지 못하기 때문이다.
    */
   legacyChecks?: boolean;
+  /** R23: slots a settled story bible decides (planted object, twist; humour and sub-locations dropped). */
+  seedOverrides?: SeedOverrides | null;
 }
 
 export interface OutlineStageResult {
@@ -86,16 +88,19 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     recentBooks: Math.min(50, Math.max(1, Math.round(input.banWindow ?? 10))),
     recentBooksForPattern: Math.min(20, Math.max(1, Math.round(input.patternBanWindow ?? 3))),
   });
-  const seed = composeSeed({
-    pattern: input.pattern,
-    inventories: input.inventories,
-    backgroundType: input.backgroundType,
-    rngSeed: hashString(input.bookId),
-    ban,
-    preferObstacleIds: preferObstaclesForTopic(input.topic),
-    world: input.world,
-    variantChance: input.variantChance,
-  });
+  const seed = applySeedOverrides(
+    composeSeed({
+      pattern: input.pattern,
+      inventories: input.inventories,
+      backgroundType: input.backgroundType,
+      rngSeed: hashString(input.bookId),
+      ban,
+      preferObstacleIds: preferObstaclesForTopic(input.topic),
+      world: input.world,
+      variantChance: input.variantChance,
+    }),
+    input.seedOverrides,
+  );
   const cast = [input.protagonist, ...input.supporting];
   const clauses = input.legacyCatchphrasePrompt ? cast.map((c) => (c.catchphrase ? ` "${c.catchphrase}"` : '')) : catchphraseClauses(cast);
   const charactersCompact = cast.map((c, i) => `${c.name}: ${c.traits.slice(0, 2).join('·')}${clauses[i]}`).join(' / ');

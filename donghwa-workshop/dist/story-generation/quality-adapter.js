@@ -19,6 +19,7 @@ import {
   ARC_EXAMPLE_MIN_RUBRIC,
   ARC_EXAMPLE_TOKEN_BUDGET,
 } from "./arc-rules.js";
+import { hasPromptPolicy, bibleSeedOverrides, compactCanonCharacter, compactCanonBackground, outlineLevelLine } from "./prompt-policy.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
 import { findWorld, worldCoreLines } from "../story-quality/dist/worlds.js";
@@ -658,7 +659,13 @@ export function endingCanonBlock(input, stage = "outline") {
 }
 function canonicalWorldRules(input, services, bindTargetLevel = true, stage = "outline") {
   const craft = [endingCanonBlock(input, stage), craftCanonRules(input, stage), arcCanonRules(input, stage)].filter(Boolean).join("\n");
-  return `${craft ? `${craft}\n` : ""}${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
+  // R23: the outline stage of a policy draft gets a one-line level summary and
+  // a canon without colours, wardrobe or likes; the prose stages keep the JSON.
+  const lean = stage === "outline" && bindTargetLevel && hasPromptPolicy(input);
+  const levelBlock = lean
+    ? outlineLevelLine(input, frozenBeatCount(input))
+    : bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass.";
+  return `${craft ? `${craft}\n` : ""}${services.baseSystem || ""}\n${catchphraseRules(input, services)}${levelBlock}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: lean ? asList(input.characters).map(compactCanonCharacter) : input.characters, backgrounds: lean ? asList(input.backgrounds).map(compactCanonBackground) : input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
 }
 function enrichedOutlineSchema(input, pattern, services) {
   const supplied =
@@ -1406,11 +1413,18 @@ export async function generateQualityOutline(
               }
             : {}),
           legacyChecks: journal.legacyChecks,
-          ...(Array.isArray(quality.rules)
+          // R23: an empty settings array no longer overrides the package's
+          // default rules and ban examples (policy drafts); a coach's own
+          // rules still replace them.
+          ...(Array.isArray(quality.rules) && !(hasPromptPolicy(input) && !quality.rules.length)
             ? { rules: quality.rules.slice(0, 7) }
             : {}),
-          ...(Array.isArray(quality.banExamples)
+          ...(Array.isArray(quality.banExamples) && !(hasPromptPolicy(input) && !quality.banExamples.length)
             ? { banExamples: quality.banExamples.slice(0, 4) }
+            : {}),
+          // R23: the story bible decides the seed's planted object and turn.
+          ...(hasPromptPolicy(input) && bibleSeedOverrides(options.storyBible)
+            ? { seedOverrides: bibleSeedOverrides(options.storyBible) }
             : {}),
           useBeamSearch: quality.useBeamSearch === true,
           seriesId: input.seriesId,

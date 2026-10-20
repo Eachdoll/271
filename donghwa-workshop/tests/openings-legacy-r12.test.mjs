@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, ...plain} = spec || {};
     return [lang, plain];
@@ -690,7 +690,9 @@ const PINS = {
   // Writers' room (2026-10-20, R20): a new draft's input also gains
   // councilPolicy {version: 1} (no other key: an unwritten direction is left
   // out). Dump-diffed against a113ead. a113ead: 8208a679…3e15.
-  inputs: '770c6ce0a4247b8e10d02ed1f5b76984e663314c427e7e298d9bb0d9eef49ba0',
+  // Prompt tidy-up (R23): a new draft's input also gains promptPolicy {version: 1}
+  // (the only change: dump-diffed against 9b7bd4b). 9b7bd4b: 770c6ce0…9ba0.
+  inputs: '6eea4aab52c8cce2aaa6cde8a29ed6942086195c88a90c057c26e71f8743a4cd',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -713,7 +715,9 @@ const PINS = {
   // buy nothing; the pre-R12 job fixture is unchanged). 894ab59: 063dc4a0…567c.
   // Writers' room (R20): the new demo jobs' input carries councilPolicy (the demo
   // never meets; the pre-R12 job fixture is unchanged). a113ead: 700e54fb…4e95.
-  fullAutoDemo: 'f1752df63a878dcb7cadd96ef45c754a948c9970680c52693e77b1777ef1e662',
+  // Prompt tidy-up (R23): the new demo jobs' input carries promptPolicy (the demo
+  // engine sends no prompt; the pre-R12 job fixture is unchanged). 9b7bd4b: f1752df6…e662.
+  fullAutoDemo: '06aaf6332139cdead0d017ebd4481c1256f82975cf123e6c333f949c1fb282ab',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

@@ -131,7 +131,7 @@ test('demo FULL AUTO with the sample engine draws every page and the cover of a 
   assert.ok(book.outline.plotContract, 'the demo outline carries a plot contract');
   // A scene request for this book passes the provider check with the real ledger in its prompt.
   const request = sceneGenerationRequest(state, book, 0, {quality: 'final'});
-  assert.match(request.prompt, /LOCKED EVENT AND STATE LEDGER/); assert.doesNotMatch(request.prompt, /FROZEN EVENT/);
+  assert.match(request.prompt, /LOCKED EVENT AND STATE LEDGER|EVENT \(beat \d/); assert.doesNotMatch(request.prompt, /FROZEN EVENT/);
   assert.ok((await generateImage(request, {engine: 'sample'})).imageUrl);
   // Page text "토토로 달려가요" is 토토 + particle in a book where 토토 is in the cast.
   book.pages[1].ko = '토토로 달려가요.';
@@ -149,7 +149,7 @@ test('demo FULL AUTO with the sample engine draws every page and the cover of a 
   assert.equal(job.status, 'review', job.error || ''); assert.equal(job.error, null);
   assert.equal(finished.pages.length, 12);
   assert.ok(finished.pages.every(p => p.imageAssetId && p.imageMeta?.quality === 'final' && p.imageMeta.engine === 'sample'));
-  assert.match(finished.pages[0].imageMeta.prompt, /LOCKED EVENT AND STATE LEDGER/);
+  assert.match(finished.pages[0].imageMeta.prompt, /LOCKED EVENT AND STATE LEDGER|EVENT \(beat \d/);
   assert.ok(finished.cover?.imageAssetId); assert.equal(fullAutoProgress(job).fraction, 1);
   assert.equal(paidFetches, 0);
   assert.ok(job.usage.calls.every(c => !c.costUsd && !c.costUsdEstimated));
@@ -537,7 +537,7 @@ test('FIX-IMG-3 scene briefs are lenient story text; app scaffolding is never ch
   brief.pose = {ko: '포즈', en: 'a Frozen look on her face'};
   assert.ok((await draw(state, book, 1)).imageUrl);
   // The plot ledger and fixed instructions stay outside the check.
-  assert.match(sceneGenerationRequest(state, book, 1).prompt, /LOCKED EVENT AND STATE LEDGER/);
+  assert.match(sceneGenerationRequest(state, book, 1).prompt, /LOCKED EVENT AND STATE LEDGER|EVENT \(beat \d/);
 });
 
 test('a friend or place FULL AUTO wrote is story text until a parent edits it', async () => {

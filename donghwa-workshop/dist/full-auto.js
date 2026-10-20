@@ -71,6 +71,7 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
+import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -1226,6 +1227,7 @@ export async function runFullAuto(
         craftPolicy: _freshCraft,
         arcPolicy: _freshArc,
         councilPolicy: _freshCouncil,
+        promptPolicy: _freshPrompt,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1242,6 +1244,9 @@ export async function runFullAuto(
           : {}),
         ...(hasCouncilPolicy(job.input)
           ? { councilPolicy: clone(job.input.councilPolicy) }
+          : {}),
+        ...(hasPromptPolicy(job.input)
+          ? { promptPolicy: clone(job.input.promptPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
