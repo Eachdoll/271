@@ -1,0 +1,200 @@
+{
+  "date": "2026-10-20",
+  "deployment": {
+    "version_number": 37,
+    "commit_sha": "5ccaa7ad988acc65316b9fa76e723abdcb12d7fe",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_6441110bf9ac81918d947c0d245e4121",
+    "deployment_id": "appgdep_6ad7f403d3c881918cfe97f32bfa8a0e",
+    "status": "succeeded",
+    "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "env_set_revision": 1,
+    "cache": "donghwa-shell-v66",
+    "upstream_commit": "09bb65efef28811f17c87d8560699168b26a4386",
+    "updated_at": "2026-10-20T23:07:03.363417+00:00"
+  },
+  "sourceComparison": {
+    "upstream": "09bb65efef28811f17c87d8560699168b26a4386",
+    "importedHead": "5ccaa7ad988acc65316b9fa76e723abdcb12d7fe",
+    "pathsCompared": 490,
+    "different": []
+  },
+  "importMap": {
+    "6b6db7220c7f3d8a1f7959fb889003001635ee86": "400290475f09f29a25ad333dfea5ffc176176f3a",
+    "010955351afc63da4242f9b95fc60c9cb9d36782": "d6d974bd2e558891370ecbf548fc6ee357d0f99c",
+    "bfd7f232b0b997e6b22329d5812c12c7fb870e17": "0bc95c0323b16a9ad8c2229837c2942b2ae20caf",
+    "311e4df085c24514add1482fad7fd8ffa2735144": "9cfb73ef9940c451a3246bbf3eba44ec20265245",
+    "0e7883cdd9330cbd3747900f7105e56ab698a2d3": "7583a2a81547e125944bff7d03ee70ca67e5759c",
+    "38cc8de41c6e22350cc8f16ce8ccb4e87fa5fec2": "82b33689b98baa6cc30345ef549e659169c3c68d",
+    "46afae819dce058054fea64948c045265917bf54": "34589893e7988ace850c93c0f93a442f267fd100",
+    "2b94f8b55e8d0f020d122ae3e8f223513655b557": "b9fb0c15536a312c118119cd6f1e94931160f5b9",
+    "5daac59601317dad58b84cdddd26c677f18f027a": "771264afc29df1d3f1c45b4c898e75f4b88ad05c",
+    "09bb65efef28811f17c87d8560699168b26a4386": "5ccaa7ad988acc65316b9fa76e723abdcb12d7fe"
+  },
+  "tests": {
+    "app": {
+      "tests": 953,
+      "pass": 953,
+      "fail": 0
+    },
+    "quality": {
+      "tests": 85,
+      "pass": 85,
+      "fail": 0
+    }
+  },
+  "qualityCopiesIdentical": true,
+  "build": "PASS; no tracked generated file changes",
+  "census": {
+    "proSameAsTable": true,
+    "errors": [],
+    "paidRequests": 0,
+    "simpleStepButtons": {
+      "1": 10,
+      "2": 2,
+      "3": 9,
+      "4": 9,
+      "4Editing": 8,
+      "5": 3
+    }
+  },
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "simpleSmoke": {
+    "1280": "PASS",
+    "390": "PASS"
+  },
+  "targetedBrowser": [
+    {
+      "width": 1280,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "forcedLocalLimit": 300,
+        "pointerCharacters": 61,
+        "actualBooks": 4,
+        "favoriteSurvivedReload": true,
+        "largeStorageLabel": true
+      },
+      "settingsBar": {
+        "direction": "row",
+        "height": 77
+      },
+      "council": {
+        "sameRemainingEstimate": "약 $1.76",
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 쓴 금액 약 $0.018 · 남은 예상 약 $1.76",
+        "switchFoldedAndLocked": true,
+        "notePreserved": true,
+        "continueVisible": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "forcedLocalLimit": 300,
+        "pointerCharacters": 61,
+        "actualBooks": 4,
+        "favoriteSurvivedReload": true,
+        "largeStorageLabel": true
+      },
+      "settingsBar": {
+        "direction": "row",
+        "height": 61
+      },
+      "council": {
+        "sameRemainingEstimate": "약 $1.76",
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 쓴 금액 약 $0.018 · 남은 예상 약 $1.76",
+        "switchFoldedAndLocked": true,
+        "notePreserved": true,
+        "continueVisible": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "case": "missing-big-storage",
+      "originalPointerPreserved": true,
+      "storageBlocked": true,
+      "status": "passed"
+    }
+  ],
+  "productionBrowser": [
+    {
+      "width": 1280,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "forcedLocalLimit": 300,
+        "pointerCharacters": 61,
+        "actualBooks": 4,
+        "favoriteSurvivedReload": true,
+        "largeStorageLabel": true
+      },
+      "settingsBar": {
+        "direction": "row",
+        "height": 77
+      },
+      "council": {
+        "sameRemainingEstimate": "약 $1.76",
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 쓴 금액 약 $0.018 · 남은 예상 약 $1.76",
+        "switchFoldedAndLocked": true,
+        "notePreserved": true,
+        "continueVisible": true
+      },
+      "release": {
+        "worker66": true,
+        "retry": true,
+        "promptPolicy": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "storage": {
+        "forcedLocalLimit": 300,
+        "pointerCharacters": 61,
+        "actualBooks": 4,
+        "favoriteSurvivedReload": true,
+        "largeStorageLabel": true
+      },
+      "settingsBar": {
+        "direction": "row",
+        "height": 61
+      },
+      "council": {
+        "sameRemainingEstimate": "약 $1.76",
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 쓴 금액 약 $0.018 · 남은 예상 약 $1.76",
+        "switchFoldedAndLocked": true,
+        "notePreserved": true,
+        "continueVisible": true
+      },
+      "release": {
+        "worker66": true,
+        "retry": true,
+        "promptPolicy": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "errors": [],
+      "paidRequests": [],
+      "case": "missing-big-storage",
+      "originalPointerPreserved": true,
+      "storageBlocked": true,
+      "status": "passed"
+    }
+  ],
+  "limits": [
+    "Chromium viewport emulation; not a physical iPhone/Safari test",
+    "Local library quota reduced to 300 characters for the browser test; not a stress test of the full device disk",
+    "Cloud API isolated for production UI tests; no actual family library modified",
+    "No paid model generation or quality evaluation"
+  ]
+}
