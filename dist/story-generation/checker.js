@@ -1,6 +1,8 @@
 import { describeReadingViolation } from "../reading-messages.js";
 import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
 import { getLevelSpec } from "../reading-levels.js";
+import { unitKind, unitSpec } from "../book-layout.js";
+import { bookBudget, usualSentences } from "../page-rhythm.js";
 import {
   catchphraseRepeats,
   countCatchphrase,
@@ -386,7 +388,30 @@ export function checkStory(
         `${beat.index}번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.`,
       );
   const turn = beats.find((beat) => beat.type === "turn");
-  if (turn && pages.length) {
+  // R12 openings (frozen v4 specs): the turn window counts openings, not entries.
+  const openingNos = pages.map(({ page }) => page?.openingNo),
+    byOpening =
+      readingSpecs.ko?.layout === "openings" &&
+      pages.length > 0 &&
+      openingNos.every((value) => Number.isInteger(value) && value > 0);
+  if (turn && byOpening) {
+    const firstTurn = pages.find(
+      ({ page }) => indexOf(page?.beatIndex) === indexOf(turn.index),
+    );
+    const count = Math.max(...openingNos),
+      low = Math.max(1, Math.floor((count * 2) / 3)),
+      high = Math.min(count, low + 1);
+    if (
+      firstTurn &&
+      (firstTurn.page.openingNo < low || firstTurn.page.openingNo > high)
+    )
+      add(
+        "beat_mapping",
+        "pagination",
+        `반전은 펼침 ${low}~${high}에서 시작해야 해요.`,
+        firstTurn.pageNo,
+      );
+  } else if (turn && pages.length) {
     const firstTurn = pages.find(
       ({ page }) => indexOf(page?.beatIndex) === indexOf(turn.index),
     );
@@ -463,9 +488,10 @@ export function checkStory(
   for (const { page, pageNo } of pages)
     for (const language of ["ko", "en"]) {
       try {
+        // R12: an openings spec is judged per unit (spread or page).
         const result = analyzeEstimatedPage(
           textOf(page, language),
-          readingSpecs[language],
+          unitSpec(readingSpecs[language], unitKind(page)),
           { language, allowedNames, storyWords },
         );
         levelResults[language].push({ pageNo, result });
@@ -490,6 +516,41 @@ export function checkStory(
         );
       }
     }
+  // Page rhythm: the whole-book sentence total of a rhythm spec stays within
+  // ±20% of the usual total. A miss is put on the two pages furthest from
+  // their usual length in that direction, so a page rewrite can fix it.
+  for (const language of ["ko", "en"]) {
+    const spec = readingSpecs[language],
+      budget = bookBudget(
+        spec,
+        pages.map(({ page }) => page),
+      );
+    if (!budget) continue;
+    const rows = levelResults[language].map(({ pageNo, result }) => {
+        const page = pages.find((row) => row.pageNo === pageNo)?.page;
+        return {
+          pageNo,
+          count: result.metrics.sentenceCount,
+          usual: usualSentences(unitSpec(spec, unitKind(page))),
+        };
+      }),
+      total = rows.reduce((sum, row) => sum + row.count, 0),
+      over = total > budget.max;
+    if (!over && total >= budget.min) continue;
+    const chosen = rows
+      .map((row) => ({ ...row, gap: row.count - row.usual }))
+      .filter((row) => (over ? row.gap > 0 : row.gap < 0))
+      .sort((a, b) => (over ? b.gap - a.gap : a.gap - b.gap))
+      .slice(0, 2);
+    for (const row of chosen.length ? chosen : rows.slice(0, 1))
+      add(
+        "level",
+        "page",
+        `${language === "ko" ? "한글" : "영어"} 책 전체 문장 ${total}개가 목표 ${budget.min}~${budget.max}개를 ${over ? "넘었어요. 이 쪽의 문장을 줄여 주세요" : "밑돌아요. 이 쪽에 문장을 더해 주세요"}(이 쪽 ${row.count}개, 보통 ${row.usual}개).`,
+        row.pageNo,
+        language,
+      );
+  }
   for (const language of ["ko", "en"]) {
     const results = levelResults[language],
       outside = unique(

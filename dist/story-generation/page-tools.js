@@ -7,13 +7,22 @@ import { currentBookPagination } from "./book-coherence.js";
 import { syncStoryDraft } from "./ui.js";
 import { buildStoryWords } from "../story-reading-context.js";
 import {
+  layoutOf,
+  textEstimateArgs,
+  unitImageSize,
+  unitKind,
+} from "../book-layout.js";
+import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
   estimateStoryTextCost,
   estimateTextCost,
 } from "../text-generation/models.js";
 import { getTextGenerationSettings } from "../text-generation/settings-ui.js";
-import { estimateImageCost } from "../image-generation/models.js";
+import {
+  estimateImageCost,
+  frozenImageConfig,
+} from "../image-generation/models.js";
 import { getStylePreset } from "../image-generation/styles.js";
 import {
   getActiveWorld,
@@ -24,6 +33,7 @@ import { generateScene } from "../image-generation/pipeline.js";
 import {
   estimateFullAutoCost,
   fullAutoJobForBook,
+  jobImageSnapshot,
   recordFullAutoBookUsage,
   recordFullAutoBookImage,
   isPageImageStale,
@@ -204,6 +214,46 @@ function writePageText(state, book, index, ko, en) {
   }
   recheckBook(state, book);
   return true;
+}
+/**
+ * R13: which recorded book costs leave out a model without a catalog price.
+ * Pictures say so in their own estimate; text is judged from the book's
+ * frozen text settings. The book details then never show such a part as $0.
+ */
+export function bookPricingUnknown(book = {}) {
+  const metas = [
+    ...(book.pages || []).flatMap((page) => [
+      page?.imageMeta,
+      ...(page?.imageHistory || []).map((image) => image?.imageMeta),
+    ]),
+    book.cover?.meta,
+    ...(book.coverHistory || []).map((image) => image?.meta),
+  ];
+  let text = false;
+  try {
+    text =
+      !book.textDemo &&
+      !!book.textGenerationSettings &&
+      estimateStoryTextCost({
+        settings: book.textGenerationSettings,
+        pageCount: book.pages?.length || 12,
+      }).pricingUnknown === true;
+  } catch {
+    text = false;
+  }
+  return {
+    images: metas.some((meta) => meta?.costEstimate?.pricingUnknown === true),
+    text,
+  };
+}
+/** '추정 $0.120', '추정 $0.120 · 일부 요금 미확인' or '요금 정보 없음' (R13). */
+export function estimatedCostText(usd, unknown) {
+  const value = Number(usd) || 0;
+  return unknown
+    ? value > 0
+      ? `추정 $${value.toFixed(3)} · 일부 요금 미확인`
+      : "요금 정보 없음"
+    : `추정 $${value.toFixed(3)}`;
 }
 /** Same totals as the book builder, so a page rewrite shows in the book's text cost. */
 function refreshTextCosts(book) {
@@ -510,56 +560,151 @@ export function estimateSimpleCosts(state, wizardOrBook = {}, options = {}) {
         book.generationSnapshot?.imageEngine ||
         book.imageEngine ||
         world.imageEngine,
-      unit = estimateImageCost({
+      // R13: a book prices its frozen model; a held FULL AUTO book without a
+      // snapshot yet prices the model frozen on its job.
+      job = book.generationSnapshot ? null : fullAutoJobForBook(state, book),
+      imageConfig = frozenImageConfig(
+        world.providerConfig?.[engine],
+        book.generationSnapshot ||
+          (job && job.imageEngine === engine
+            ? jobImageSnapshot(job)
+            : undefined),
+      ),
+      image = estimateImageCost({
         engine,
         quality: "final",
         size: "1536x1024",
-        config: {
-          ...world.providerConfig?.[engine],
-          ...book.generationSnapshot?.imageModelConfig,
-        },
-      }).costUsd,
+        config: imageConfig,
+      }),
+      unit = image.costUsd,
       imagesNeeded =
         pagesNeedingImages(book).length + (book.cover?.imageAssetId ? 0 : 1),
-      settings = textSettingsOf(state, book);
+      settings = textSettingsOf(state, book),
+      // R12 openings: the exact price, Σ unit(kind) over the missing entries + cover.
+      // R13: every size prices the same frozen model (imageConfig).
+      openings = layoutOf(book) === "openings",
+      imagesUsd = openings
+        ? pagesNeedingImages(book).reduce(
+            (sum, index) =>
+              sum +
+              estimateImageCost({
+                engine,
+                quality: "final",
+                size: unitImageSize(book, book.pages[index]),
+                config: imageConfig,
+              }).costUsd,
+            book.cover?.imageAssetId ? 0 : unit,
+          )
+        : imagesNeeded * unit,
+      story = book.textDemo
+        ? null
+        : estimateStoryTextCost({
+            settings,
+            pageCount: book.pages.length,
+            // R12: an openings book is sized from its frozen specs and printed pages.
+            ...textEstimateArgs(book),
+          }),
+      page = book.textDemo
+        ? null
+        : pageRewrite(
+            settings,
+            // R12 openings: the kind of the page being rewritten (a spread by default).
+            openings
+              ? unitKind(book.pages[options.pageIndex]) === "page" &&
+                Number.isInteger(options.pageIndex)
+                ? "page"
+                : "spread"
+              : undefined,
+          );
     return {
-      textUsd: book.textDemo
-        ? 0
-        : estimateStoryTextCost({ settings, pageCount: book.pages.length })
-            .costUsd,
-      pageTextUsd: book.textDemo ? 0 : pageRewriteUsd(settings),
+      textUsd: story ? story.costUsd : 0,
+      pageTextUsd: page ? page.costUsd : 0,
       imageUnitUsd: unit,
-      imagesUsd: imagesNeeded * unit,
+      ...(openings
+        ? {
+            spreadUnitUsd: estimateImageCost({
+              engine,
+              quality: "final",
+              size: unitImageSize(book, { kind: "spread" }),
+              config: imageConfig,
+            }).costUsd,
+          }
+        : {}),
+      imagesUsd,
       imagesNeeded,
       sheetsUpperUsd: book.generationSnapshot
         ? 0
         : missingSheetCount(state, book) * unit,
       imageEngine: engine,
       pageCount: book.pages.length,
+      ...pricingFlags({
+        text: story?.pricingUnknown,
+        pageText: page?.pricingUnknown,
+        image: image.pricingUnknown,
+      }),
+      // Unpriced pictures are still paid: callers confirm by count, not by $0.
+      ...(image.pricingUnknown
+        ? {
+            sheetsNeeded: book.generationSnapshot
+              ? 0
+              : missingSheetCount(state, book),
+          }
+        : {}),
     };
   }
-  const estimate = estimateFullAutoCost(state, wizardOrBook, options);
+  const estimate = estimateFullAutoCost(state, wizardOrBook, options),
+    page =
+      options.demo === true
+        ? null
+        : pageRewrite(getTextGenerationSettings(state));
   return {
     textUsd: estimate.textUsd,
-    pageTextUsd:
-      options.demo === true
-        ? 0
-        : pageRewriteUsd(getTextGenerationSettings(state)),
+    pageTextUsd: page ? page.costUsd : 0,
     imageUnitUsd: estimate.imageUnitUsd,
     imagesUsd: estimate.imagesUsd,
     imagesNeeded: estimate.pageCount + 1,
+    // R12 openings: before the text exists the pictures are a range, and the
+    // automatic text repairs have a typical count and a hard cap (2 × openings).
+    ...(estimate.imageCountMax
+      ? {
+          imagesNeeded: estimate.imageCountMax + 1,
+          imagesMinUsd: estimate.imagesMinUsd,
+          imageCountMin: estimate.imageCountMin,
+          imageCountMax: estimate.imageCountMax,
+          repairs: estimate.repairs,
+        }
+      : {}),
     sheetsUpperUsd: estimate.sheetsUpperUsd,
     imageEngine: estimate.imageEngine,
     pageCount: estimate.pageCount,
+    ...pricingFlags({
+      text: estimate.textPricingUnknown,
+      pageText: page?.pricingUnknown,
+      image: estimate.imagePricingUnknown,
+    }),
   };
 }
-function pageRewriteUsd(settings) {
+/** R13: name only the parts whose model has no catalog price (legacy estimates are unchanged). */
+function pricingFlags({ text, pageText, image }) {
+  return {
+    ...(text ? { textPricingUnknown: true } : {}),
+    ...(pageText ? { pageTextPricingUnknown: true } : {}),
+    ...(image ? { imagePricingUnknown: true } : {}),
+  };
+}
+/**
+ * R12 openings: a rewrite is sized per entry kind (a spread outputs about 1.9k
+ * tokens, a single page about 0.9k); page books keep PAGE_REWRITE_TOKENS.
+ */
+const OPENING_REWRITE_OUTPUT = { spread: 1900, page: 900 };
+function pageRewrite(settings, kind) {
   const stage = resolveStoryStageSettings(settings, "pagination");
   return estimateTextCost({
     ...stage,
     ...PAGE_REWRITE_TOKENS,
+    ...(kind ? { output: OPENING_REWRITE_OUTPUT[kind] } : {}),
     model: stage.config.model,
-  }).costUsd;
+  });
 }
 
 /**

@@ -51,6 +51,10 @@ import {
 } from "./simple-create.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
+  bookPricingUnknown,
+  estimatedCostText,
+} from "./story-generation/page-tools.js";
+import {
   createCloudSync,
   isSeedOnlyLibrary,
   pushBookCountWarning,
@@ -99,6 +103,8 @@ import {
   exportLibrary,
   validateImport,
   restoreLibraryImages,
+  recommendedPrintLayout,
+  OPENING_BOOKLET_NOTE,
 } from "./output.js";
 import {
   migrateWorldState,
@@ -142,6 +148,7 @@ import {
 import {
   estimateBookCost,
   estimateImageCost,
+  frozenImageConfig,
 } from "./image-generation/models.js";
 import {
   generateAllScenes,
@@ -180,6 +187,18 @@ import {
   fullAutoJobOfDraft,
 } from "./story-generation/ui.js";
 import { toLegacyPages, summarizeStory } from "./story-generation/pipeline.js";
+import {
+  heldPageCount,
+  layoutFor,
+  layoutOf,
+  openingHeading,
+  openingsSummary,
+  printedPagesOf,
+  pageCountOptions,
+  snapPageCount,
+  unitImageSize,
+  unitLabel,
+} from "./book-layout.js";
 import { checkStory } from "./story-generation/checker.js";
 import { checkRichness } from "./story-generation/richness.js";
 import {
@@ -544,7 +563,7 @@ function refreshHydratedImages() {
   });
 }
 function bookCard(book) {
-  return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="${childMode ? "read-book" : "open-book"}" data-id="${esc(book.id)}">${childMode ? icon("play") + "읽어줘" : esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${!childMode ? renderReadingBadge(book, { compact: true }) : ""}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span></div></div></article>`;
+  return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="${childMode ? "read-book" : "open-book"}" data-id="${esc(book.id)}">${childMode ? icon("play") + "읽어줘" : esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${!childMode ? renderReadingBadge(book, { compact: true }) : ""}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${layoutOf(book) === "openings" ? printedPagesOf(book) : book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span></div></div></article>`;
 }
 function protectedAction(fn) {
   if (cloudPrivacyLocked) {
@@ -1301,7 +1320,7 @@ function rememberSimpleReturn() {
     };
 }
 function defaultWizard() {
-  return {
+  const w = {
     step: 1,
     characterIds: [activeCharacters(state)[0]?.id].filter(Boolean),
     backgroundIds: [],
@@ -1319,6 +1338,11 @@ function defaultWizard() {
     previousBookId: null,
     outline: null,
   };
+  // R12: an openings wizard starts at 16 (기본); page books keep the settings default.
+  w.pageCount = snapPageCount(layoutFor(w), w.pageCount, {
+    defaultPages: state.settings.defaultPages,
+  });
+  return w;
 }
 function pageContent() {
   if (cloudPrivacyLocked)
@@ -1450,7 +1474,11 @@ function renderWizardTextSummary() {
   const label = (selection) =>
     selection.engineId === "local"
       ? selection.config.model || "로컬"
-      : getTextModelInfo(selection.engineId, selection.config.model).name;
+      : getTextModelInfo(
+          selection.engineId,
+          selection.config.model,
+          selection.config,
+        ).name;
   const same =
       outline.engineId === pagination.engineId &&
       outline.config.model === pagination.config.model,
@@ -1504,6 +1532,17 @@ function startStory(previous = null) {
     previousBookId: previous?.id || null,
     outline: null,
   };
+  // R12: the next book keeps the previous book's printed pages, snapped to what its
+  // own layout offers (an openings book of 13 entries is 16 printed pages).
+  const previousPages =
+    previous && layoutOf(previous) === "openings"
+      ? printedPagesOf(previous)
+      : previous?.pageCount;
+  wizard.pageCount = snapPageCount(
+    layoutFor(wizard),
+    previousPages || state.settings.defaultPages,
+    { touched: !!previousPages, defaultPages: state.settings.defaultPages },
+  );
   view = "create";
   render();
   window.scrollTo(0, 0);
@@ -1542,6 +1581,10 @@ function createPage() {
       )}</div>${w.previousBookId ? `<div class="notice" style="margin-top:24px">지난 이야기에서 이어집니다.<br>${esc(bookById(w.previousBookId)?.summary || bookById(w.previousBookId)?.title)}</div>` : ""}`;
   if (w.step === 2)
     inner = `<h3>오늘은 어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 들려주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${["공룡 친구와 소풍", "달에 놀러 간 날", "비 오는 날의 모험", "바닷속 보물 찾기", "처음 유치원에 간 날", "친구의 생일 파티"].map((t) => `<button class="chip" data-action="topic-chip" data-topic="${t}">${t}</button>`).join("")}<button class="chip" data-action="child-pick">${icon("child")}아이가 고르기</button></div><div id="wardrobe-topic-suggestions">${renderTopicWardrobe(w)}</div><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">이 주제로 조연 자동생성</button></div>${renderQualityWorldSelectors(w, { state })}`;
+  // R12 safety net: step 3's select never shows a page count the wizard does not
+  // hold (a wizard carried over from a pre-R12 8/24-page job becomes 12/16).
+  if (w.step === 3 && heldPageCount(w) !== w.pageCount)
+    w.pageCount = heldPageCount(w);
   if (w.step === 3)
     inner = `<h3>읽기와 형식을 정해요</h3><p class="section-sub">한글과 영어 수준은 따로 적용해요.</p><div class="form-grid" style="margin-top:26px">${selectField(
       "language",
@@ -1556,12 +1599,7 @@ function createPage() {
     )}${selectField(
       "pageCount",
       "이야기 길이",
-      [
-        [8, "8쪽 · 짧은 이야기"],
-        [12, "12쪽 · 기본"],
-        [16, "16쪽"],
-        [24, "24쪽"],
-      ],
+      pageCountOptions(w),
       w.pageCount,
     )}${renderReadingSelectors(w)}${selectField(
       "value",
@@ -1627,7 +1665,7 @@ function editorPage() {
     return libraryPage();
   }
   const p = draft.pages[editPage];
-  return `${heading("이야기 다듬기", "한 쪽씩 살펴보고, 우리 아이에게 어울리는 말로 바꿔 주세요.", `<span class="small-label">부모 미확정 · 초안</span>`)}${renderGenerationControls(draft)}${renderChecksPanel(draft, { tab: checksTab, details: { reading: renderReadingCheck(draft), events: renderStoryQuality(draft), richness: renderRichnessQuality(draft), coherence: renderStoryCoherence(draft.pageCoherence, { dirty: !isCoherenceCurrent(draft.pageCoherence, { outline: draft.outline, prose: draft.prose, pagination: currentBookPagination(draft), stage: "pages" }) }) } })}<div class="editor-title"><input id="book-title" maxlength="80" aria-label="책 제목" value="${esc(draft.title)}"></div><div class="editor-layout"><div class="page-rail">${draft.pages.map((p, i) => `<button class="page-thumb ${i === editPage ? "active" : ""}" data-action="edit-page" data-page="${i}" aria-label="${i + 1}쪽 편집">${illustration(draft, i)}<span>${i + 1}쪽</span></button>`).join("")}</div><section class="panel"><div class="editor-main"><div class="editor-art"><div class="editor-picturebook text-below">${illustration(draft, editPage)}<div class="page-typeset-preview" aria-label="그림 아래 본문 미리보기">${draft.language !== "en" ? `<p lang="ko" data-typeset="ko">${esc(p.ko ?? p.textKo ?? "")}</p>` : ""}${draft.language !== "ko" ? `<p lang="en" data-typeset="en">${esc(p.en ?? p.textEn ?? "")}</p>` : ""}</div></div><div class="editor-tools">${btn("샘플 그림 변형", "regenerate-art", "outline", "refresh")}${btn("글 포함 인쇄 미리보기", "preview-draft-print", "outline", "print")}</div></div><div class="editor-text"><div class="field"><label for="page-ko">${editPage + 1}쪽 · 한글</label><textarea id="page-ko">${esc(p.ko)}</textarea></div><div class="field"><label for="page-en">English · ${editPage + 1}</label><textarea id="page-en">${esc(p.en)}</textarea></div>${btn("이야기 글 다시 다듬기", "regenerate-text", "outline", "refresh")}<span class="small-label">${p.imageAssetId ? "World 엔진으로 만든 그림입니다." : "현재 그림은 SVG 샘플입니다. 커버 화풍은 World 엔진으로 장면을 생성해 주세요."}</span></div></div><div class="editor-bottom"><span>${icon("check")}그림 아래에 본문이 인쇄됩니다. 확정 전에도 인쇄 미리보기를 볼 수 있어요.</span><label class="audio-cache-check"><input type="checkbox" id="cache-audio-approval" checked>확정 시 쪽별 음원 저장 · OpenAI 키가 있을 때만 · 예상 $${estimateBookAudio(draft).costUsd.toFixed(3)}</label>${btn("확정하고 책장에 저장", "approve-book", "primary", "check")}</div></section></div>`;
+  return `${heading("이야기 다듬기", "한 쪽씩 살펴보고, 우리 아이에게 어울리는 말로 바꿔 주세요.", `<span class="small-label">부모 미확정 · 초안</span>`)}${renderGenerationControls(draft)}${renderChecksPanel(draft, { tab: checksTab, details: { reading: renderReadingCheck(draft), events: renderStoryQuality(draft), richness: renderRichnessQuality(draft), coherence: renderStoryCoherence(draft.pageCoherence, { dirty: !isCoherenceCurrent(draft.pageCoherence, { outline: draft.outline, prose: draft.prose, pagination: currentBookPagination(draft), stage: "pages" }) }) } })}<div class="editor-title"><input id="book-title" maxlength="80" aria-label="책 제목" value="${esc(draft.title)}"></div><div class="editor-layout"><div class="page-rail">${draft.pages.map((p, i) => `<button class="page-thumb ${i === editPage ? "active" : ""}" data-action="edit-page" data-page="${i}" aria-label="${esc(unitLabel(draft, i))} 편집">${illustration(draft, i)}<span>${esc(unitLabel(draft, i))}</span></button>`).join("")}</div><section class="panel"><div class="editor-main"><div class="editor-art"><div class="editor-picturebook text-below">${illustration(draft, editPage)}<div class="page-typeset-preview" aria-label="그림 아래 본문 미리보기">${draft.language !== "en" ? `<p lang="ko" data-typeset="ko">${esc(p.ko ?? p.textKo ?? "")}</p>` : ""}${draft.language !== "ko" ? `<p lang="en" data-typeset="en">${esc(p.en ?? p.textEn ?? "")}</p>` : ""}</div></div><div class="editor-tools">${btn("샘플 그림 변형", "regenerate-art", "outline", "refresh")}${btn("글 포함 인쇄 미리보기", "preview-draft-print", "outline", "print")}</div></div><div class="editor-text"><div class="field"><label for="page-ko">${esc(unitLabel(draft, editPage))} · 한글</label><textarea id="page-ko">${esc(p.ko)}</textarea></div><div class="field"><label for="page-en">English · ${editPage + 1}</label><textarea id="page-en">${esc(p.en)}</textarea></div>${btn("이야기 글 다시 다듬기", "regenerate-text", "outline", "refresh")}<span class="small-label">${p.imageAssetId ? "World 엔진으로 만든 그림입니다." : "현재 그림은 SVG 샘플입니다. 커버 화풍은 World 엔진으로 장면을 생성해 주세요."}</span></div></div><div class="editor-bottom"><span>${icon("check")}그림 아래에 본문이 인쇄됩니다. 확정 전에도 인쇄 미리보기를 볼 수 있어요.</span><label class="audio-cache-check"><input type="checkbox" id="cache-audio-approval" checked>확정 시 쪽별 음원 저장 · OpenAI 키가 있을 때만 · 예상 $${estimateBookAudio(draft).costUsd.toFixed(3)}</label>${btn("확정하고 책장에 저장", "approve-book", "primary", "check")}</div></section></div>`;
 }
 function buildStoryResultBook(result) {
   const same =
@@ -1666,7 +1704,10 @@ function buildStoryResultBook(result) {
           result.sceneBriefs?.find((b) => b.beatIndex === page.beatIndex) || {},
         ) &&
       JSON.stringify(prior.variantByCharacter || {}) ===
-        JSON.stringify(page.variantByCharacter || {})
+        JSON.stringify(page.variantByCharacter || {}) &&
+      // R12: a picture stays only on the same entry of the same kind.
+      prior.entryId === page.entryId &&
+      prior.kind === page.kind
     )
       return { ...prior, ...page };
     if (prior?.imageAssetId)
@@ -1730,7 +1771,16 @@ function buildStoryResultBook(result) {
     style: state.settings.style,
     approved: false,
   });
-  copyWardrobeSelections(options, book, state);
+  // R12 openings: the parent's wardrobe ranges are in printed pages (an entry
+  // takes the range containing its first printed page); the book's rebuilt
+  // ranges below are per entry, like every index-keyed picture tool.
+  copyWardrobeSelections(
+    result.input?.layoutPolicy?.kind === "openings"
+      ? { ...options, pageCount: printedPagesOf(result.pagination.pages) }
+      : options,
+    book,
+    state,
+  );
   for (const id of book.characterIds) {
     const ranges = [];
     for (const page of result.pagination.pages) {
@@ -1911,7 +1961,7 @@ function detailPage() {
     view = "library";
     return libraryPage();
   }
-  return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2>${b.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}<p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${b.pages.length}쪽</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : "추정 $" + b.imageCosts.estimatedUsd.toFixed(3) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : "추정 $" + b.textCosts.estimatedUsd.toFixed(3)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
+  return `${heading("우리 가족의 이야기", "종이로 읽고, 익숙한 목소리로 함께 들어요.", btn("책장으로", "library", "outline", "back"))}${b.justCreated ? '<div class="success-note">' + icon("check") + "새 동화책이 완성됐어요! 종이책으로 첫 모험을 시작해 볼까요?</div>" : ""}<div class="detail-layout"><div class="detail-cover">${cover(b)}</div><section class="detail-info"><span class="role-tag">${esc(b.series)} · ${b.episode || 1}편</span><h2>${esc(b.title)}</h2>${b.styleChanged ? '<span class="style-changed-badge">그림체 변경됨</span>' : ""}<p>${esc(b.titleEn)}</p>${renderReadingBadge(b)}<div class="metadata"><span><b>${openingsSummary(b) ? esc(openingsSummary(b)) : `${b.pages.length}쪽`}</b>이야기 길이</span><span><b>${languageLabel(b.language)}</b>읽는 언어</span><span><b>${b.reads || 0}번</b>함께 읽었어요</span></div><p>${esc(b.summary || b.pages[0]?.ko)}</p><div class="detail-actions">${!childMode ? btn("인쇄 · PDF로 저장", "print-options", "primary", "print", `data-id="${esc(b.id)}"`) : ""}${btn("책 읽고 듣기", "read-book", "green", "play", `data-id="${esc(b.id)}"`)}${!childMode ? btn("복사본으로 그림·글 수정", "revise-book-copy", "outline", "edit", `data-id="${esc(b.id)}"`) : ""}${!childMode ? `<button type="button" class="btn btn-outline" data-reading-action="feedback" data-id="${esc(b.id)}">읽은 뒤 난이도 알려주기</button>` : ""}${!childMode ? btn("다음 편 만들기", "continue-book", "outline", "spark", `data-id="${esc(b.id)}"`) : ""}</div>${!childMode ? renderAudioPreparationControls(b) : ""}${!childMode ? `<div class="detail-secondary"><button data-action="favorite" data-id="${esc(b.id)}">${icon("heart")}${b.favorite ? "즐겨찾기 해제" : "즐겨찾기"}</button><button data-action="paper-read" data-id="${esc(b.id)}">${icon("check")}오늘 종이로 읽음</button><button data-action="branch-book" data-id="${esc(b.id)}">${icon("plus")}새 시리즈</button>${managementButton("책 삭제", "delete-book", b.id)}</div><div class="book-details-note">${b.imageCosts ? `그림 비용 ${b.imageCosts.actualAvailable ? "실제 $" + b.imageCosts.actualUsd.toFixed(3) : estimatedCostText(b.imageCosts.estimatedUsd, bookPricingUnknown(b).images) + " · 실제 청구액은 공급자 사용 내역을 확인해 주세요."}<br>` : ""}${b.textDemo ? "글 생성: 무료 데모<br>" : b.textCosts ? `글 비용 ${b.textCosts.actualAvailable ? "실제 $" + b.textCosts.actualUsd.toFixed(3) : estimatedCostText(b.textCosts.estimatedUsd, bookPricingUnknown(b).text)} · ${esc(b.textModelId || b.textEngineId)}<br>` : ""}${b.continuity?.reason ? esc(b.continuity.reason) + "<br>" : ""}${b.audioCacheStatus?.message ? esc(b.audioCacheStatus.message) + "<br>" : ""}등장인물: ${(b.characterIds || []).map((id) => esc(char(id)?.name)).join(", ")}<br>${b.printedAt ? "마지막 인쇄 창 열기: " + new Date(b.printedAt).toLocaleDateString("ko-KR") : "아직 인쇄 기록이 없어요."}${b.paperReadAt ? "<br>종이로 읽은 날: " + new Date(b.paperReadAt).toLocaleDateString("ko-KR") : ""}</div>` : ""}</section></div>`;
 }
 /** Simple mode: one page, four groups. Reuses the existing forms, ids and handlers. */
 function simpleSettingsPage() {
@@ -2113,7 +2163,48 @@ function showBackgroundForm() {
     )}<div class="field field-wide"><label for="b-description">특징과 분위기</label><textarea id="b-description" maxlength="250" placeholder="큰 나무 아래 노란 미끄럼틀이 있는 아늑한 놀이터" required></textarea><small>장소 설정을 이야기 맥락으로 저장합니다. 사진으로 배경 추가는 이야기 재료의 ‘사진으로 배경 시트 만들기’에서 사용할 수 있어요.</small></div><div class="field field-wide"><label for="b-layout">고정 배치 · 문·창·가구·소품</label><textarea id="b-layout" maxlength="3000" placeholder="왼쪽 벽에 창문, 오른쪽 벽에 침대, 문 옆 노란 책장"></textarea></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${icon("check")}배경에 저장</button></div></form>`,
   );
 }
+/**
+ * R12 openings: the print dialog offers 'A4 가로 한 장에 펼침 하나' and 크게 읽기,
+ * preselects the recommended one when the stored default is the factory one,
+ * counts the range in openings and always sets the text below the picture.
+ */
+function showOpeningsPrintOptions(b) {
+  const language =
+      b.language === "en" ? "en" : b.language === "bilingual" ? "bilingual" : "ko",
+    stored = state.settings.defaultLayout,
+    booklet = stored === "booklet",
+    layout = !stored || stored === "single" ? recommendedPrintLayout(b, language) : booklet ? "single" : stored === "two" ? "two" : "single";
+  showModal(
+    `${modalHeader("종이책으로 만나기")}<p class="modal-intro">${esc(b.title)} · ${esc(openingsSummary(b) || "")} · 본문은 그림 아래에 인쇄해요. A4 인쇄 창에서 프린터 또는 ‘PDF로 저장’을 선택해 주세요.</p>${booklet ? `<div class="notice">${OPENING_BOOKLET_NOTE}. 일반 출력으로 골라 두었어요.</div>` : ""}<form id="print-form" data-id="${esc(b.id)}"><div class="form-grid">${selectField(
+      "p-layout",
+      "레이아웃",
+      [
+        ["single", "A4 가로 한 장에 펼침 하나"],
+        ["two", "크게 읽기 · A4 세로 한 장에 한 쪽"],
+      ],
+      layout,
+    )}${selectField(
+      "p-language",
+      "출력 언어",
+      [
+        ["ko", "한글판"],
+        ["en", "영어판"],
+        ["bilingual", "한 면에 영어 + 한글"],
+      ],
+      language,
+    )}<div class="field"><label for="p-pages">출력 펼침</label><input id="p-pages" value="all" placeholder="all / cover / 2-4"><small>all: 전체 · cover: 표지만 · 펼침 범위(예: 2-4) 또는 쉼표 구분</small></div>${selectField(
+      "p-color",
+      "색상",
+      [
+        ["color", "컬러"],
+        ["grayscale", "흑백"],
+      ],
+      "color",
+    )}<input type="hidden" id="p-textPosition" value="below"><input type="hidden" id="p-fontSize" value="large"><input type="hidden" id="p-margin" value="standard"></div><div class="notice" style="margin-top:20px">책 전체를 한 가지 글자 크기로 맞추고, 글이 길면 그 펼침의 그림만 조금 줄여요(펼침면은 낱쪽 그림보다 작아지지 않아요).<br>글이 넘치면 인쇄 창에서 알려 드려요. 그때는 ‘크게 읽기’를 골라 주세요.</div><div class="modal-actions"><button type="submit" class="btn btn-primary">${icon("print")}그림 + 글 인쇄 미리보기</button></div></form>`,
+  );
+}
 function showPrintOptions(b) {
+  if (layoutOf(b) === "openings") return showOpeningsPrintOptions(b);
   showModal(
     `${modalHeader("종이책으로 만나기")}<p class="modal-intro">${esc(b.title)} · 그림을 가리지 않도록 본문을 그림 아래에 따로 배치합니다. A4 인쇄 창에서 프린터 또는 ‘PDF로 저장’을 선택해 주세요.</p><form id="print-form" data-id="${esc(b.id)}"><div class="form-grid">${selectField(
       "p-layout",
@@ -2220,10 +2311,16 @@ function renderReader() {
   const r = reader;
   if (!r) return;
   const b = r.book,
-    p = b.pages[r.page];
+    p = b.pages[r.page],
+    // R12 openings: '펼침 k / O · printed pages' and a stacked 21:9 spread.
+    openings = layoutOf(b) === "openings",
+    spread = openings && p?.kind === "spread";
   showModal(
-    `<div class="reader-top"><strong>${esc(b.title)}</strong><small>${r.page + 1} / ${b.pages.length}쪽</small><button class="close-btn" data-action="close-modal" aria-label="읽기 닫기">${icon("close")}</button></div><div class="reader-page"><div class="reader-picture">${illustration(b, r.page)}</div><div class="reader-body"><div class="audio-indicator">${icon("headphones")}종이책을 보며 들어요</div>${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}</div></div><div class="reader-pagination"><button class="btn btn-outline" data-action="reader-prev" ${r.page === 0 ? "disabled" : ""} aria-label="이전 쪽">${icon("back")}</button><button class="btn btn-green" data-action="reader-toggle-play">${r.speaking ? "읽기 멈춤" : "읽어주기"}</button><span>${r.page + 1} / ${b.pages.length}</span><button class="btn btn-outline" data-action="reader-next" ${r.page === b.pages.length - 1 ? "disabled" : ""} aria-label="다음 쪽">${icon("chevron")}</button></div><details class="reader-play-options"><summary>재생 설정 · 글자 크기</summary><div class="reader-lang-actions">${b.language !== "en" ? btn("한글", "speak-ko", "soft", "volume") : ""}${b.language !== "ko" ? btn("English", "speak-en", "outline", "volume") : ""}${btn("다시 듣기", "replay-speech", "outline", "refresh")}${btn("멈춤", "stop-speech", "outline", "pause")}</div><div class="reader-size-controls" role="group" aria-label="글자 크기">${["기본", "크게", "아주 크게"].map((label, index) => `<button class="btn btn-outline" data-action="reader-font" data-size="${index}" aria-pressed="${readerFontSize === index}">${label}</button>`).join("")}</div><div class="reader-options"><label>속도 <select id="reader-rate"><option value="0.65" ${r.rate === 0.65 ? "selected" : ""}>천천히</option><option value="0.85" ${r.rate === 0.85 ? "selected" : ""}>보통</option><option value="1.05" ${r.rate === 1.05 ? "selected" : ""}>조금 빠르게</option></select></label><label><input type="checkbox" id="reader-continuous" ${r.continuous ? "checked" : ""}>이어 듣기</label><button data-action="audio-only">${r.audioOnly ? "그림과 글 보기" : "듣기 전용"}</button></div></details><div class="reader-status" id="reader-status">재생 버튼을 누르면 이 쪽을 읽어줘요.</div>${r.page === b.pages.length - 1 ? `<div class="reader-feedback"><button type="button" class="btn btn-green" data-reading-action="feedback" data-id="${esc(b.id)}">다 읽었어요 · 쉬움 / 딱 맞음 / 어려움</button></div>` : ""}`,
-    `reader reader-font-${readerFontSize} ` + (r.audioOnly ? "audio-only" : ""),
+    `<div class="reader-top"><strong>${esc(b.title)}</strong><small>${openings ? esc(openingHeading(b, r.page)) : `${r.page + 1} / ${b.pages.length}쪽`}</small><button class="close-btn" data-action="close-modal" aria-label="읽기 닫기">${icon("close")}</button></div>${spread ? `<div class="reader-page reader-spread"><div class="reader-picture">${illustration(b, r.page)}</div><p class="reader-turn-hint">폰을 가로로 돌리면 그림이 커져요</p>` : `<div class="reader-page"><div class="reader-picture">${illustration(b, r.page)}</div>`}<div class="reader-body"><div class="audio-indicator">${icon("headphones")}종이책을 보며 들어요</div>${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}</div></div><div class="reader-pagination"><button class="btn btn-outline" data-action="reader-prev" ${r.page === 0 ? "disabled" : ""} aria-label="이전 쪽">${icon("back")}</button><button class="btn btn-green" data-action="reader-toggle-play">${r.speaking ? "읽기 멈춤" : "읽어주기"}</button><span>${r.page + 1} / ${b.pages.length}</span><button class="btn btn-outline" data-action="reader-next" ${r.page === b.pages.length - 1 ? "disabled" : ""} aria-label="다음 쪽">${icon("chevron")}</button></div><details class="reader-play-options"><summary>재생 설정 · 글자 크기</summary><div class="reader-lang-actions">${b.language !== "en" ? btn("한글", "speak-ko", "soft", "volume") : ""}${b.language !== "ko" ? btn("English", "speak-en", "outline", "volume") : ""}${btn("다시 듣기", "replay-speech", "outline", "refresh")}${btn("멈춤", "stop-speech", "outline", "pause")}</div><div class="reader-size-controls" role="group" aria-label="글자 크기">${["기본", "크게", "아주 크게"].map((label, index) => `<button class="btn btn-outline" data-action="reader-font" data-size="${index}" aria-pressed="${readerFontSize === index}">${label}</button>`).join("")}</div><div class="reader-options"><label>속도 <select id="reader-rate"><option value="0.65" ${r.rate === 0.65 ? "selected" : ""}>천천히</option><option value="0.85" ${r.rate === 0.85 ? "selected" : ""}>보통</option><option value="1.05" ${r.rate === 1.05 ? "selected" : ""}>조금 빠르게</option></select></label><label><input type="checkbox" id="reader-continuous" ${r.continuous ? "checked" : ""}>이어 듣기</label><button data-action="audio-only">${r.audioOnly ? "그림과 글 보기" : "듣기 전용"}</button></div></details><div class="reader-status" id="reader-status">재생 버튼을 누르면 이 쪽을 읽어줘요.</div>${r.page === b.pages.length - 1 ? `<div class="reader-feedback"><button type="button" class="btn btn-green" data-reading-action="feedback" data-id="${esc(b.id)}">다 읽었어요 · 쉬움 / 딱 맞음 / 어려움</button></div>` : ""}`,
+    `reader reader-font-${readerFontSize} ` +
+      // R12 openings: a sticky bar and word follow (page books unchanged).
+      (openings ? "reader-openings " : "") +
+      (r.audioOnly ? "audio-only" : ""),
   );
 }
 function readerWords(text, language) {
@@ -2256,6 +2353,19 @@ function stopSpeech() {
   const s = document.querySelector("#reader-status");
   if (s) s.textContent = "재생 버튼을 누르면 이 쪽을 읽어줘요.";
 }
+/** Scroll a spoken word into view only when it is above the top or behind the bar. */
+function followReaderWord(el) {
+  const modal = el.closest(".modal");
+  if (!modal || typeof el.getBoundingClientRect !== "function") return;
+  const rect = el.getBoundingClientRect(),
+    top = modal.getBoundingClientRect().top,
+    bar = modal.querySelector(".reader-pagination"),
+    bottom = bar
+      ? bar.getBoundingClientRect().top
+      : modal.getBoundingClientRect().bottom;
+  if (rect.top < top || rect.bottom > bottom)
+    el.scrollIntoView({ block: "nearest" });
+}
 async function speak(language) {
   if (!reader) return;
   stopSpeech();
@@ -2281,12 +2391,14 @@ async function speak(language) {
         document
           .querySelectorAll("[data-reader-word].is-speaking")
           .forEach((el) => el.classList.remove("is-speaking"));
-        if (word)
-          document
-            .querySelector(
-              `[data-reader-word="${language}"][data-word-index="${word.index}"]`,
-            )
-            ?.classList.add("is-speaking");
+        if (word) {
+          const el = document.querySelector(
+            `[data-reader-word="${language}"][data-word-index="${word.index}"]`,
+          );
+          el?.classList.add("is-speaking");
+          // R12 openings: keep the spoken word in view above the sticky bar.
+          if (el && layoutOf(r.book) === "openings") followReaderWord(el);
+        }
       },
       onError: (error) => {
         if (token !== speechToken || reader !== r) return;
@@ -2586,17 +2698,45 @@ async function approveDraft() {
     work = approvalImageWork(book, engine),
     finalizeImages = work.finalize && (work.pages.length > 0 || work.cover);
   if (finalizeImages) {
-    const estimate = estimateBookCost({
+    // R13: the book's frozen picture model; R12: every size priced with it.
+    const config = frozenImageConfig(
+        world.providerConfig?.[engine],
+        book.generationSnapshot,
+      ),
+      pageEstimate = estimateBookCost({
         engine,
         pageCount: work.pages.length,
         includeCover: work.cover,
         size: "1536x1024",
         quality: "final",
-        config: {
-          ...world.providerConfig?.[engine],
-          ...book.generationSnapshot?.imageModelConfig,
-        },
+        config,
       }),
+      // R12 openings: spreads to draw are priced at their own size (2048x880).
+      spreadsToDraw =
+        layoutOf(book) === "openings"
+          ? work.pages.filter((i) => book.pages[i]?.kind === "spread").length
+          : 0,
+      spreadDelta = spreadsToDraw
+        ? estimateBookCost({
+            engine,
+            pageCount: spreadsToDraw,
+            includeCover: false,
+            size: unitImageSize(book, { kind: "spread" }),
+            quality: "final",
+            config,
+          }).costUsd -
+          estimateBookCost({
+            engine,
+            pageCount: spreadsToDraw,
+            includeCover: false,
+            size: "1536x1024",
+            quality: "final",
+            config,
+          }).costUsd
+        : 0,
+      estimate = spreadsToDraw
+        ? { ...pageEstimate, costUsd: pageEstimate.costUsd + spreadDelta }
+        : pageEstimate,
       kept = book.pages.length - work.pages.length,
       what = [
         work.cover ? "표지 1장" : "",
@@ -2607,7 +2747,7 @@ async function approveDraft() {
         .filter(Boolean)
         .join("과 ");
     showModal(
-      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장) · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
+      `${modalHeader("최종 그림을 만들고 책을 확정할까요?")}<p class="modal-intro">${what}을 최종 품질로 생성합니다.${kept ? ` 이미 최종 그림이 있는 ${kept}쪽은 다시 만들지 않아요.` : ""}${work.stale.length ? ` 글을 고친 ${pageList(work.stale)}도 새로 그려요.` : ""} 확정한 캐릭터·옷장·스타일과 장소 참조를 사용하며, 앞쪽 그림을 이어 참조하도록 한 쪽씩 순서대로 만듭니다.</p><div class="notice">${estimate.pricingUnknown ? `예상 이미지 API 비용 · 요금 정보 없음 (목록에 없는 모델 · ${estimate.imageCount}장)` : `예상 이미지 API 비용 약 $${estimate.costUsd.toFixed(2)} (${estimate.imageCount}장)`} · 입력 참조·재시도 비용 별도${cacheAudio ? `<br>음원 예상 약 $${estimateBookAudio(book).costUsd.toFixed(3)} · OpenAI 키가 있을 때` : ""}</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">더 다듬기</button><button type="button" class="btn btn-primary" id="book-final-confirm">비용 확인 · 최종 생성하고 확정</button></div>`,
     );
     document.querySelector("#book-final-confirm").onclick = () =>
       finalizeBook(book, {
@@ -3619,7 +3759,44 @@ document.addEventListener("input", (e) => {
     updateBookResults();
   }
 });
+/**
+ * R12 page count of the pro wizard's step 3: a parent's pick is kept (touched);
+ * a language or level change that moves the wizard between page and openings
+ * layouts snaps the count and swaps the choices (12/16 for openings). Within one
+ * layout nothing changes, so with openings off this never runs.
+ */
+function syncWizardPageCount(target) {
+  if (target.id === "pageCount") {
+    wizard.pageCountTouched = true;
+    return;
+  }
+  const before = layoutFor(wizard);
+  syncWizard();
+  const after = layoutFor(wizard);
+  if (before === after) return;
+  wizard.pageCount = snapPageCount(after, wizard.pageCount, {
+    touched: !!wizard.pageCountTouched,
+    defaultPages: state.settings.defaultPages,
+  });
+  const select = document.getElementById("pageCount");
+  if (select)
+    select.innerHTML = pageCountOptions(wizard)
+      .map(
+        ([v, t]) =>
+          `<option value="${v}" ${String(v) === String(wizard.pageCount) ? "selected" : ""}>${t}</option>`,
+      )
+      .join("");
+}
 document.addEventListener("change", async (e) => {
+  if (
+    view === "create" &&
+    wizard?.step === 3 &&
+    !simpleCreateActive() &&
+    ["pageCount", "language", "koreanLevel", "englishLevel"].includes(
+      e.target.id,
+    )
+  )
+    syncWizardPageCount(e.target);
   if (
     view === "create" &&
     wizard?.step === 3 &&

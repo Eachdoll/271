@@ -176,21 +176,181 @@ export function listTextModels(engine) {
     throw new Error("지원하는 글 엔진을 선택해 주세요.");
   return CATALOG[engine];
 }
-export function getTextModelInfo(engine, modelString) {
-  const models = listTextModels(engine);
+/** R13: model IDs a parent may fetch or type. Never a URL with a scheme or spaces. */
+export const MODEL_ID_PATTERN = /^[A-Za-z0-9._:\/-]{1,120}$/;
+// '__custom', '__fetch' and '__stages' are the pickers' own option values.
+// An ID becomes part of a provider URL path (Gemini, fal, BFL), so empty, '.'
+// and '..' path segments are refused too: an ID never walks out of its path.
+export const isModelId = (value) =>
+  typeof value === "string" &&
+  MODEL_ID_PATTERN.test(value.trim()) &&
+  !value.trim().startsWith("__") &&
+  !value
+    .trim()
+    .split("/")
+    .some((part) => part === "" || part === "." || part === "..");
+export function validateModelId(value) {
+  const id = String(value ?? "").trim();
+  if (!isModelId(id))
+    throw new Error(
+      "모델 ID는 영문·숫자와 . _ : / - 만 써서 1~120자로 입력해 주세요.",
+    );
+  return id;
+}
+export const MAX_CUSTOM_MODELS = 20;
+export const MAX_FETCHED_MODELS = 200;
+/**
+ * The provider's own model registry (R13): IDs fetched from its list call
+ * (`fetchedModels.models`) or typed by the parent (`customModels`). Settings
+ * saved before R13 have neither, so they resolve exactly as before.
+ */
+export function registeredModelIds(config = {}) {
+  const ids = [];
+  for (const id of Array.isArray(config?.customModels)
+    ? config.customModels
+    : [])
+    if (isModelId(id)) ids.push(id.trim());
+  for (const row of Array.isArray(config?.fetchedModels?.models)
+    ? config.fetchedModels.models
+    : [])
+    if (isModelId(row?.id)) ids.push(row.id.trim());
+  return [...new Set(ids)];
+}
+/** Copy only a provider's valid registry fields; {} when it has none (legacy). */
+export function normalizeModelRegistry(config = {}) {
+  const result = {};
+  if (Array.isArray(config?.customModels))
+    result.customModels = [
+      ...new Set(config.customModels.filter(isModelId).map((id) => id.trim())),
+    ].slice(-MAX_CUSTOM_MODELS);
+  const fetched = config?.fetchedModels;
+  if (fetched && typeof fetched === "object" && Array.isArray(fetched.models)) {
+    const seen = new Set(),
+      models = [];
+    for (const row of fetched.models) {
+      const id = typeof row === "string" ? row : row?.id;
+      if (!isModelId(id) || seen.has(id.trim())) continue;
+      seen.add(id.trim());
+      const label =
+        typeof row?.label === "string" ? row.label.trim().slice(0, 120) : "";
+      models.push({ id: id.trim(), ...(label ? { label } : {}) });
+      if (models.length >= MAX_FETCHED_MODELS) break;
+    }
+    result.fetchedModels = {
+      fetchedAt:
+        typeof fetched.fetchedAt === "string"
+          ? fetched.fetchedAt.slice(0, 40)
+          : "",
+      models,
+    };
+  }
+  return result;
+}
+const isRegisteredModel = (config, id) =>
+  !!id && registeredModelIds(config).includes(id);
+/**
+ * A fetched or typed model outside the curated catalog. Requests stay
+ * conservative (no temperature, reasoning, effort or thinking fields, the
+ * stage budget as the output limit) and its price is unknown, never guessed.
+ */
+function customTextModel(id) {
+  return Object.freeze({
+    id,
+    name: `${id} · 목록에 없는 모델`,
+    label: `${id} · 목록에 없는 모델 · 요금은 공급자에서 확인`,
+    tier: "custom",
+    input: null,
+    output: null,
+    supportsTemperature: false,
+    reasoning: reasoning(),
+    maxOutputTokens: 128000,
+    requestOutputTokens: 0,
+    timeoutMs: 600000,
+    docs: null,
+    custom: true,
+    pricingUnknown: true,
+  });
+}
+/** `config` carries the provider registry; without it only catalog IDs resolve. */
+export function getTextModelInfo(engine, modelString, config = {}) {
+  const models = listTextModels(engine),
+    id = String(modelString || "").trim();
   return (
-    models.find((item) => item.id === String(modelString || "").trim()) ||
-    TEXT_MODELS[engine]
+    models.find((item) => item.id === id) ||
+    (engine !== "local" && isRegisteredModel(config, id)
+      ? customTextModel(id)
+      : TEXT_MODELS[engine])
   );
 }
-export function resolveTextModel(engine, modelString) {
+export function resolveTextModel(engine, modelString, config = {}) {
   listTextModels(engine);
   return engine === "local"
     ? String(modelString || "").trim()
-    : getTextModelInfo(engine, modelString).id;
+    : getTextModelInfo(engine, modelString, config).id;
 }
 export function getTextModel(engine, config = {}) {
-  return resolveTextModel(engine, config.model);
+  return resolveTextModel(engine, config.model, config);
+}
+const TIER_LABELS = Object.freeze({
+  economy: "경제형",
+  advanced: "고급",
+  premium: "상위",
+  flagship: "최고급",
+  local: "로컬",
+});
+/** 'GPT-6.1 Sol · 고급 · 입력 $2 / 출력 $10 per 1M' for a catalog row. */
+export function textModelOptionLabel(row) {
+  if (row.custom) return row.label;
+  if (row.tier === "local") return "로컬 · API 요금 없음";
+  const short = String(row.name || row.id).split(" · ")[1] || row.id;
+  return `${short} · ${TIER_LABELS[row.tier] || row.tier} · 입력 $${row.input} / 출력 $${row.output} per 1M`;
+}
+/** A short display name: 'GPT-6.1 Sol', or the ID of a model outside the catalog. */
+export function textModelShortName(engine, id, config = {}) {
+  if (engine === "local") return String(id || "").trim() || "로컬 모델";
+  const row = getTextModelInfo(engine, id, config);
+  return row.custom ? row.id : String(row.name).split(" · ")[1] || row.id;
+}
+/**
+ * Every model a parent can pick for one provider: the curated catalog, then
+ * the fetched list, then typed IDs (each ID once, catalog first).
+ */
+export function listTextModelOptions(engine, config = {}) {
+  const catalog = engine === "local" ? [] : listTextModels(engine),
+    seen = new Set(catalog.map((row) => row.id)),
+    options = catalog.map((row) => ({
+      id: row.id,
+      label: textModelOptionLabel(row),
+      group: "catalog",
+    }));
+  const outside = (name) =>
+    engine === "local"
+      ? `${name} · 로컬`
+      : `${name} · 목록에 없는 모델 · 요금은 공급자에서 확인`;
+  for (const row of Array.isArray(config?.fetchedModels?.models)
+    ? config.fetchedModels.models
+    : []) {
+    const id = typeof row === "string" ? row : row?.id;
+    if (!isModelId(id) || seen.has(id.trim())) continue;
+    seen.add(id.trim());
+    const name =
+      typeof row?.label === "string" && row.label.trim() && row.label !== id
+        ? `${row.label.trim().slice(0, 60)} (${id.trim()})`
+        : id.trim();
+    options.push({ id: id.trim(), label: outside(name), group: "fetched" });
+  }
+  for (const id of Array.isArray(config?.customModels)
+    ? config.customModels
+    : []) {
+    if (!isModelId(id) || seen.has(id.trim())) continue;
+    seen.add(id.trim());
+    options.push({
+      id: id.trim(),
+      label: outside(`${id.trim()} · 직접 입력`),
+      group: "custom",
+    });
+  }
+  return options;
 }
 /** Story defaults are separate from legacy single-model provider preferences. */
 export const STORY_STAGE_MODELS = Object.freeze({
@@ -214,9 +374,13 @@ export function getStoryStageModels(engine, config = {}) {
   const selected = config.stageModels || {},
     defaults = STORY_STAGE_MODELS[engine],
     models = listTextModels(engine);
-  const resolve = (level) =>
-    models.find((row) => row.id === String(selected[level] || "").trim())?.id ||
-    defaults[level];
+  const resolve = (level) => {
+    const id = String(selected[level] || "").trim();
+    return (
+      models.find((row) => row.id === id)?.id ||
+      (isRegisteredModel(config, id) ? id : defaults[level])
+    );
+  };
   return { medium: resolve("medium"), upper: resolve("upper") };
 }
 /** Resolve each request from an immutable draft settings snapshot, without mutating it. */
@@ -312,7 +476,7 @@ export function resolveQualityStageSettings(
       engineId === "local"
         ? requested || fallback
         : listTextModels(engineId).find((row) => row.id === requested)?.id ||
-          fallback;
+          (isRegisteredModel(provider, requested) ? requested : fallback);
   return {
     engineId,
     config: {
@@ -333,8 +497,19 @@ export function estimateTextCost({
   config = {},
   at = new Date(),
 } = {}) {
-  const info = getTextModelInfo(engineId, model ?? config.model),
-    date = new Date(at),
+  const info = getTextModelInfo(engineId, model ?? config.model, config);
+  if (info.pricingUnknown)
+    return {
+      costUsd: 0,
+      estimated: true,
+      model: info.id,
+      inputRate: null,
+      outputRate: null,
+      checkedAt: CHECKED_AT,
+      note: "목록에 없는 모델 · 요금 정보 없음 · 요금은 공급자에서 확인",
+      pricingUnknown: true,
+    };
+  const date = new Date(at),
     rates =
       info.pricingChange &&
       Number.isFinite(date.getTime()) &&
@@ -347,12 +522,30 @@ export function estimateTextCost({
         Math.max(0, Number(output) || 0) * rates.output) /
       1e6,
     estimated: true,
-    model: resolveTextModel(engineId, model ?? config.model),
+    model: resolveTextModel(engineId, model ?? config.model, config),
     inputRate: rates.input,
     outputRate: rates.output,
     checkedAt: CHECKED_AT,
     note: "토큰 단가 기반 추정 · 실제 청구액 아님",
   };
+}
+/**
+ * R12 openings: typical output tokens of a whole openings book from its frozen
+ * specs (target sentences per opening × middle eojeol × 4.8 for Korean; target
+ * sentences × middle words, within the words range, × 2.4 for English).
+ */
+function openingTextTokens(specs, openings) {
+  const middle = (range, fallback) =>
+    range && Number.isFinite(range.min) && Number.isFinite(range.max)
+      ? (range.min + range.max) / 2
+      : fallback;
+  const ko = specs.ko.units.opening,
+    en = specs.en.units.opening,
+    koTokens = ko.target * middle(specs.ko.wordsPerSentence, 6) * 4.8,
+    enWords = en.target * middle(specs.en.wordsPerSentence, 7),
+    enTokens =
+      (en.words ? Math.min(Math.max(enWords, en.words.min), en.words.max) : enWords) * 2.4;
+  return Math.ceil(openings * (koTokens + enTokens));
 }
 export function estimateStoryTextCost({
   engine = "openai",
@@ -363,6 +556,11 @@ export function estimateStoryTextCost({
   settings = {},
   previousTextLength = 0,
   at = new Date(),
+  layout,
+  specs,
+  // Editor round (input.editorPolicy): the whole-book read-through, and the
+  // quality path's simplify passes written by the author model.
+  editor = false,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -372,12 +570,18 @@ export function estimateStoryTextCost({
     beam = quality && qualitySettings.useBeamSearch === true,
     childSimulator = quality && qualitySettings.childSimulator !== false;
   const pages = Math.max(1, Math.round(Number(pageCount) || 12)),
+    // R12 openings: one beat per opening and output sized from the frozen specs.
+    openings =
+      layout === "openings" && specs?.ko?.units && specs?.en?.units
+        ? Math.max(1, Math.round(pages / 2))
+        : 0,
     beats = Math.min(
       24,
       Math.max(
         1,
         Math.round(
           Number(beatCount) ||
+            openings ||
             Math.min(8, Math.max(6, Math.ceil(pages / 2) + 1)),
         ),
       ),
@@ -385,7 +589,9 @@ export function estimateStoryTextCost({
     enrichment = settings.storyEnrichment !== false && !quality;
   const input =
       6000 + Math.ceil(Math.max(0, Number(previousTextLength) || 0) / 2),
-    baseOutput = 2500 + pages * 150;
+    baseOutput = openings
+      ? Math.max(2500 + pages * 150, 2500 + openingTextTokens(specs, openings))
+      : 2500 + pages * 150;
   // New outlines include a causal contract and before/after state ledger. Rebuilding an
   // edited outline is conditional, while reviewing prose and final pages is mandatory.
   const outlineOutput = Math.max(baseOutput, beats * 1100),
@@ -416,7 +622,8 @@ export function estimateStoryTextCost({
         ? resolveQualityStageSettings(snapshot, qualityRole, qualitySettings)
         : resolveStoryStageSettings(snapshot, stage),
       reasoningFactor =
-        getTextModelInfo(engineId, config.model).reasoning.profile === "none"
+        getTextModelInfo(engineId, config.model, config).reasoning.profile ===
+        "none"
           ? 1
           : 2,
       output = Math.ceil(outputPerRequest * reasoningFactor);
@@ -472,7 +679,7 @@ export function estimateStoryTextCost({
           input + outlineOutput + Math.ceil(baseOutput / 2),
           Math.ceil(baseOutput / 2),
           2,
-          "cheap",
+          editor ? "prose" : "cheap",
         ),
       );
   } else {
@@ -484,12 +691,26 @@ export function estimateStoryTextCost({
       stageEstimate("enrichment", 3000, 800, paragraphs.ko + paragraphs.en),
     );
   stages.push(stageEstimate("pagination", input, baseOutput));
+  if (editor)
+    stages.push({
+      ...stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2)),
+      stage: "revision",
+    });
   stages.push(stageEstimate("coherence", reviewInput, 1600, 2));
   if (childSimulator)
     stages.push(stageEstimate("childSimulator", reviewInput, 1000, 2, "cheap"));
-  const final = stages.find((row) => row.stage === "prose");
+  const final = stages.find((row) => row.stage === "prose"),
+    unknown = stages.filter((row) => row.pricingUnknown);
   return {
     ...final,
+    // R13: a model outside the catalog has no price. Its stages add nothing
+    // here and the total says '일부 요금 미확인' instead of a made-up number.
+    ...(unknown.length
+      ? {
+          pricingUnknown: true,
+          unknownPricingStages: unknown.map((row) => row.stage),
+        }
+      : {}),
     costUsd: stages.reduce((sum, row) => sum + row.costUsd, 0),
     inputTokensEstimated: stages.reduce(
       (sum, row) => sum + row.inputTokensEstimated,
@@ -506,9 +727,10 @@ export function estimateStoryTextCost({
     beam,
     childSimulator,
     enrichment,
+    ...(editor ? { editor: true } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }

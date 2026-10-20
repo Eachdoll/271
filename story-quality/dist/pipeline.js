@@ -116,7 +116,7 @@ export async function runOutlineStage(input) {
     // 코드 검사 → 지적된 비트만 고치는 수정 호출 1회
     const catchphrases = input.legacyCatchphrasePrompt ? [] : input.catchphrases ?? cast.map((c) => c.catchphrase ?? '');
     outline = plantedFromSeed(outline, seed);
-    let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
+    let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases, legacyChecks: input.legacyChecks });
     const onlyAdvisory = input.advisoryCatchphrases === true && check.fix.every((message) => isCatchphraseFix(message));
     if (check.fix.length > 0 && check.regenerate.length === 0 && !onlyAdvisory) {
         const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
@@ -126,7 +126,7 @@ export async function runOutlineStage(input) {
         const fixed = fr.json ?? extractJson(fr.text);
         if (fixed) {
             outline = plantedFromSeed(fixed, seed);
-            check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
+            check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases, legacyChecks: input.legacyChecks });
         }
     }
     return { outline, check, seedSummary: `${seed.planted.ko} · ${seed.twist.ko} · ${seed.creature.ko}`, seed, calls, costUsd: cost };

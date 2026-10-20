@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v38";
+const CACHE = "donghwa-shell-v44";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -13,6 +13,8 @@ const FILES = [
   "./story-quality/gold/gold_outlines_part1.json",
   "./story-quality/gold/gold_outlines_part2.json",
   "./story-generation/plot-contract.js",
+  "./story-generation/outline-normalize.js",
+  "./story-generation/book-revision.js",
   "./story-generation/coherence.js",
   "./story-generation/book-coherence.js",
   "./story-generation/quality-adapter.js",
@@ -63,10 +65,12 @@ const FILES = [
   "./world-variations.js",
   "./background-sheets.js",
   "./text-generation/models.js",
+  "./text-generation/model-list.js",
   "./text-generation/providers.js",
   "./text-generation/settings-ui.js",
   "./story-generation/schemas.js",
   "./story-generation/pipeline.js",
+  "./story-generation/opening-prose.js",
   "./story-generation/demo.js",
   "./story-generation/checker.js",
   "./story-generation/continuity.js",
@@ -94,7 +98,9 @@ const FILES = [
   "./photo-materials.js",
   "./companions.js",
   "./reading-levels.js",
+  "./book-layout.js",
   "./reading-checker.js",
+  "./page-rhythm.js",
   "./reading-ui.js",
   "./reading-messages.js",
   "./credential-errors.js",

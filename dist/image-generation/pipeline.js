@@ -10,6 +10,7 @@ import {
 import { nextShot, seedForPage } from "../story-generation/staging.js";
 import { ensureBookStoryCoherence } from "../story-generation/book-coherence.js";
 import { saveImage, getImageURL, deleteImageAsset } from "./assets.js";
+import { frozenImageConfig } from "./models.js";
 import {
   getActiveWorld,
   captureBookGenerationSnapshot,
@@ -50,18 +51,34 @@ function worldForSnapshot(state, snapshot) {
   const world =
     state.worlds?.find((world) => world.id === snapshot?.worldId) ||
     getActiveWorld(state);
-  return snapshot?.imageModelConfig
+  // R13: a book draws with its frozen model. A snapshot without one drew with
+  // the provider default, so a model chosen later for the World never leaks in.
+  const current = world.providerConfig?.[snapshot?.imageEngine];
+  return snapshot?.imageModelConfig ||
+    (snapshot && current && Object.hasOwn(current, "model"))
     ? {
         ...world,
         providerConfig: {
           ...world.providerConfig,
-          [snapshot.imageEngine]: {
-            ...world.providerConfig?.[snapshot.imageEngine],
-            ...snapshot.imageModelConfig,
-          },
+          [snapshot.imageEngine]: frozenImageConfig(current, snapshot),
         },
       }
     : world;
+}
+/**
+ * A FULL AUTO job's sheets draw with the model frozen on the job (R13):
+ * `frozenModel` is that ID, or null for the provider default. Undefined
+ * (any caller outside a job) keeps the World's current choice.
+ */
+export function withFrozenImageModel(world, frozenModel) {
+  if (frozenModel === undefined) return world;
+  const config = { ...world.providerConfig?.[world.imageEngine] };
+  if (frozenModel) config.model = frozenModel;
+  else delete config.model;
+  return {
+    ...world,
+    providerConfig: { ...world.providerConfig, [world.imageEngine]: config },
+  };
 }
 
 async function providerConfig(state, world, engine, signal) {
@@ -542,7 +559,10 @@ export async function generateCharacterSheet(
       "캐릭터를 먼저 저장해 주세요.",
       "CHARACTER_NOT_FOUND",
     );
-  const world = getActiveWorld(state);
+  const world = withFrozenImageModel(
+    getActiveWorld(state),
+    options.frozenImageModel,
+  );
   const context = {
     worldId: world.id,
     worldRevision: world.revision,

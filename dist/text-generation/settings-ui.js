@@ -6,11 +6,20 @@ import {
   estimateTextCost,
   getStoryStageModels,
   estimateStoryTextCost,
+  STORY_STAGE_MODELS,
+  listTextModelOptions,
+  textModelShortName,
+  normalizeModelRegistry,
+  validateModelId,
+  isModelId,
+  MAX_CUSTOM_MODELS,
 } from "./models.js";
+import { fetchProviderModels } from "./model-list.js";
 import {
   saveCredential,
   removeCredential,
   hasCredential,
+  getCredential,
 } from "../image-generation/vault.js";
 const ENGINES = ["openai", "anthropic", "google", "local"],
   NAMES = {
@@ -131,15 +140,20 @@ export function getTextGenerationSettings(state) {
     engine = ENGINES.includes(source.engine) ? source.engine : "openai",
     providers = {};
   for (const id of ENGINES) {
-    const p = source.providers?.[id] || {};
+    const p = source.providers?.[id] || {},
+      // R13: fetched and typed model IDs travel with the provider (and into
+      // every frozen draft/job copy); settings saved before R13 have none.
+      registry = normalizeModelRegistry(p),
+      known = { ...p, ...registry };
     providers[id] = {
-      model: resolveTextModel(id, p.model),
+      model: resolveTextModel(id, p.model, known),
       ...(id !== "local"
-        ? { stageModels: getStoryStageModels(id, p) }
+        ? { stageModels: getStoryStageModels(id, known) }
         : { baseUrl: p.baseUrl || "http://127.0.0.1:1234/v1" }),
       ...(p.proxyEndpoint
         ? { proxyEndpoint: p.proxyEndpoint, transport: "proxy" }
         : {}),
+      ...registry,
     };
   }
   return {
@@ -166,26 +180,145 @@ function options(selected, local = true) {
     )
     .join("");
 }
-function modelOptions(engine, selected) {
-  return listTextModels(engine)
-    .map(
-      (row) =>
-        `<option value="${esc(row.id)}" ${row.id === selected ? "selected" : ""}>${esc(row.label || row.name)}</option>`,
-    )
-    .join("");
+const CUSTOM_OPTION = '<option value="__custom">직접 입력…</option>';
+/** <optgroup>s: the curated catalog, the fetched list, then typed IDs (R13). */
+function groupedModelOptions(engine, config, selected) {
+  const options = listTextModelOptions(engine, config),
+    fetched = normalizeModelRegistry(config).fetchedModels;
+  const group = (name, label) => {
+    const rows = options.filter((row) => row.group === name);
+    return rows.length
+      ? `<optgroup label="${esc(label)}">${rows.map((row) => `<option value="${esc(row.id)}" ${row.id === selected ? "selected" : ""}>${esc(row.label)}</option>`).join("")}</optgroup>`
+      : "";
+  };
+  return `${group("catalog", "추천 목록 · 요금 확인 2026-10-15")}${group("fetched", `불러온 목록${fetched?.fetchedAt ? ` · ${fetched.fetchedAt.slice(0, 10)}` : ""}`)}${group("custom", "직접 입력한 모델")}`;
 }
-function modelDetails(engine, model) {
-  const row = getTextModelInfo(engine, model),
-    input = estimateTextCost({ engine, model, input: 1000000 }).costUsd,
+function modelOptions(engine, selected, config = {}) {
+  return `${groupedModelOptions(engine, config, selected)}${CUSTOM_OPTION}`;
+}
+function modelDetails(engine, model, config = {}) {
+  const row = getTextModelInfo(engine, model, config);
+  if (row.custom)
+    return `<p class="small-label">목록에 없는 모델 · 요금 정보 없음 · 요금은 공급자에서 확인해 주세요. 온도·추론 설정 없이 단계별 출력 한도만 보내요.</p>`;
+  const input = estimateTextCost({ engine, model, input: 1000000 }).costUsd,
     output = estimateTextCost({ engine, model, output: 1000000 }).costUsd;
   return `<p class="small-label">입력 $${input} / 출력 $${output} · 각각 100만 토큰당 참고 단가${row.pricingChange ? `<br>요금 변경 예정: ${esc(row.pricingChange.effectiveAt)}부터 입력 $${row.pricingChange.input} / 출력 $${row.pricingChange.output}.` : ""} · <a href="${esc(row.docs)}" target="_blank" rel="noopener noreferrer">공식 모델 안내 ↗</a></p>`;
 }
-function providerFields(settings, engine, prefix = "tg") {
+const shortName = (engine, id, config) =>
+  textModelShortName(engine, id, config);
+/**
+ * The simple choice (R13): one model for the main writing stages. '' means the
+ * stage defaults, '__stages' a pro-mode medium/upper pair it leaves untouched.
+ */
+export function simpleTextModelValue(engine, provider = {}) {
+  if (engine === "local") return String(provider.model || "").trim();
+  const models = getStoryStageModels(engine, provider),
+    defaults = STORY_STAGE_MODELS[engine];
+  if (models.medium === defaults.medium && models.upper === defaults.upper)
+    return "";
+  return models.medium === models.upper ? models.medium : "__stages";
+}
+/** <option>s for the simple 모델 select (③ and the simple settings). */
+export function simpleTextModelOptions(engine, provider = {}) {
+  const value = simpleTextModelValue(engine, provider);
+  if (engine === "local") {
+    const options = listTextModelOptions("local", provider);
+    if (value && !options.some((row) => row.id === value))
+      options.push({ id: value, label: `${value} · 로컬`, group: "custom" });
+    return `<option value="" ${value ? "" : "selected"}>자동 · 로컬 서버의 첫 모델</option>${options.map((row) => `<option value="${esc(row.id)}" ${row.id === value ? "selected" : ""}>${esc(row.label)}</option>`).join("")}${CUSTOM_OPTION}`;
+  }
+  const defaults = STORY_STAGE_MODELS[engine],
+    models = getStoryStageModels(engine, provider);
+  return `<option value="" ${value === "" ? "selected" : ""}>기본 추천 · ${esc(shortName(engine, defaults.medium))} + ${esc(shortName(engine, defaults.upper))} (단계별 자동)</option>${value === "__stages" ? `<option value="__stages" selected>프로 모드 단계별 설정 · ${esc(shortName(engine, models.medium, provider))} + ${esc(shortName(engine, models.upper, provider))}</option>` : ""}${groupedModelOptions(engine, provider, value)}${CUSTOM_OPTION}`;
+}
+/** One Korean line under the simple select: which calls the choice drives. */
+export const SIMPLE_TEXT_MODEL_NOTE =
+  "고른 모델로 줄거리·글·글 다듬기·쪽 나누기·검사·책 전체 퇴고를 써요. 심사 같은 보조 호출은 기본 경제형 모델 그대로예요.";
+/**
+ * Apply the simple choice to a provider's saved settings (mutates `source`,
+ * a textGeneration object). The main writing stages ('medium' and 'upper')
+ * use the model; economy helpers keep their defaults. Returns true on change.
+ */
+export function applySimpleTextModel(source, engine, value) {
+  if (!ENGINES.includes(engine))
+    throw new Error("지원하는 글 엔진을 선택해 주세요.");
+  if (value === "__stages") return false;
+  source.providers ||= {};
+  const p = (source.providers[engine] ||= {});
+  if (engine === "local") {
+    const id = value ? validateModelId(value) : "";
+    if (id) rememberTypedModel(p, engine, id);
+    p.model = id;
+    return true;
+  }
+  if (!value) {
+    p.stageModels = { ...STORY_STAGE_MODELS[engine] };
+    return true;
+  }
+  const id = validateModelId(value);
+  rememberTypedModel(p, engine, id);
+  p.stageModels = { medium: id, upper: id };
+  return true;
+}
+/** A typed ID outside the catalog and the fetched list joins customModels. */
+function rememberTypedModel(p, engine, id) {
+  const registry = normalizeModelRegistry(p);
+  if (
+    (engine === "local" ||
+      !listTextModels(engine).some((row) => row.id === id)) &&
+    !registry.fetchedModels?.models.some((row) => row.id === id)
+  )
+    p.customModels = [
+      ...(registry.customModels || []).filter((item) => item !== id),
+      id,
+    ].slice(-MAX_CUSTOM_MODELS);
+}
+function modelStatus(engine, p) {
+  const fetched = normalizeModelRegistry(p).fetchedModels;
+  return fetched
+    ? `불러온 목록 ${fetched.models.length}개 · ${esc(fetched.fetchedAt.slice(0, 10))}`
+    : "목록 불러오기는 무료예요 · 이 키로 쓸 수 있는 글 모델만 보여 줘요.";
+}
+/** The '직접 입력' field, shown only while a select has '직접 입력…' chosen. */
+function customModelField(prefix) {
+  return `<input id="${prefix}-custom-model" data-text-field="customModel" type="text" maxlength="120" spellcheck="false" autocomplete="off" hidden placeholder="모델 ID (영문·숫자와 . _ : / -)" aria-label="글 모델 ID 직접 입력">`;
+}
+/**
+ * Pro panels get a '모델 목록 불러오기' button. Simple screens keep their
+ * 12-button cap, so there the same free list call is the select's own
+ * '모델 목록 불러오기 · 무료…' option (SIMPLE_FETCH_OPTION).
+ */
+function modelListRow(engine, p, simple = false) {
+  return `${simple ? "" : '<div class="material-add-actions"><button type="button" class="btn btn-outline" data-text-setting="fetch-models">모델 목록 불러오기</button></div>'}<small data-text-model-status role="status" aria-live="polite">${modelStatus(engine, p)}</small>`;
+}
+export const SIMPLE_FETCH_OPTION =
+  '<option value="__fetch">모델 목록 불러오기 · 무료…</option>';
+function providerFields(
+  settings,
+  engine,
+  prefix = "tg",
+  { simple = false } = {},
+) {
   const p = settings.providers[engine];
   if (engine === "local")
-    return `<div class="form-grid"><div class="field"><label for="${prefix}-base-url">OpenAI 호환 로컬 주소</label><input id="${prefix}-base-url" data-text-field="baseUrl" type="url" value="${esc(p.baseUrl)}" placeholder="http://127.0.0.1:1234/v1"><small>LM Studio·Ollama에서 모델과 서버를 실행하고 /v1까지 입력하세요.</small></div><div class="field"><label for="${prefix}-local-model">로컬 모델 이름 · 선택</label><input id="${prefix}-local-model" data-text-field="localModel" maxlength="200" value="${esc(p.model)}" placeholder="비우면 /v1/models의 첫 실행 모델"><small>로컬의 줄거리·초안은 이 모델을 함께 사용해요. API 요금은 없으며 컴퓨터 비용은 별도예요.</small></div></div>`;
+    return simple
+      ? `<div class="form-grid"><div class="field"><label for="${prefix}-base-url">OpenAI 호환 로컬 주소</label><input id="${prefix}-base-url" data-text-field="baseUrl" type="url" value="${esc(p.baseUrl)}" placeholder="http://127.0.0.1:1234/v1"><small>LM Studio·Ollama에서 모델과 서버를 실행하고 /v1까지 입력하세요.</small></div><div class="field"><label for="${prefix}-model">모델</label><select id="${prefix}-model" data-text-field="model" data-current="${esc(simpleTextModelValue("local", p))}">${simpleTextModelOptions("local", p)}${SIMPLE_FETCH_OPTION}</select>${customModelField(prefix)}<small>로컬 모델은 API 요금이 없어요. 컴퓨터 비용은 별도예요.</small>${modelListRow(engine, p, true)}</div></div>`
+      : `<div class="form-grid"><div class="field"><label for="${prefix}-base-url">OpenAI 호환 로컬 주소</label><input id="${prefix}-base-url" data-text-field="baseUrl" type="url" value="${esc(p.baseUrl)}" placeholder="http://127.0.0.1:1234/v1"><small>LM Studio·Ollama에서 모델과 서버를 실행하고 /v1까지 입력하세요.</small></div><div class="field"><label for="${prefix}-local-model">로컬 모델 이름 · 선택</label><input id="${prefix}-local-model" data-text-field="localModel" maxlength="200" value="${esc(p.model)}" placeholder="비우면 /v1/models의 첫 실행 모델" list="${prefix}-local-models"><datalist id="${prefix}-local-models">${listTextModelOptions(
+          "local",
+          p,
+        )
+          .map(
+            (row) =>
+              `<option value="${esc(row.id)}">${esc(row.label)}</option>`,
+          )
+          .join(
+            "",
+          )}</datalist><small>로컬의 줄거리·초안은 이 모델을 함께 사용해요. API 요금은 없으며 컴퓨터 비용은 별도예요.</small></div></div>`;
   const models = getStoryStageModels(engine, p);
-  return `<div class="form-grid"><div class="field"><label for="${prefix}-model-medium">중간 등급 기본 모델 · 장면·쪽 나누기</label><select id="${prefix}-model-medium" data-text-field="medium">${modelOptions(engine, models.medium)}</select><small>글 품질 설정의 기본 전문 역할과 기존 생성의 줄거리에도 사용해요.</small><div data-text-price="medium">${modelDetails(engine, models.medium)}</div></div><div class="field"><label for="${prefix}-model-upper">상위 등급 기본 모델 · 전체 일관성 검사</label><select id="${prefix}-model-upper" data-text-field="upper">${modelOptions(engine, models.upper)}</select><small>글 품질 설정의 기본 줄거리·코치 역할과 기존 생성의 전문에도 사용해요.</small><div data-text-price="upper">${modelDetails(engine, models.upper)}</div></div></div><div class="field"><label for="${prefix}-api-key">${esc(NAMES[engine])} API 비밀 키</label><input id="${prefix}-api-key" data-text-field="apiKey" data-text-credential-engine="${engine}" type="password" autocomplete="off" maxlength="16384" placeholder="비밀 키 전체를 입력하세요"><small>${engine === "openai" ? "key_ 추적 ID나 sk-… 가려진 값 대신 생성할 때 복사한 sk- 비밀 키 전체를 입력하세요. " : ""}키는 PIN으로 기기에 암호화하며 클라우드·백업에 넣지 않아요.</small></div><div class="material-add-actions"><button type="button" class="btn btn-outline" data-text-setting="save-key">키 암호화 저장</button><button type="button" class="btn btn-outline" data-text-setting="delete-key">저장된 키 삭제</button></div><div class="field" style="margin-top:15px"><label for="${prefix}-proxy">글 프록시 주소 · 선택</label><input id="${prefix}-proxy" data-text-field="proxyEndpoint" type="url" value="${esc(p.proxyEndpoint || "")}" placeholder="https://my-proxy.example"><small>프록시는 서버 환경변수 키를 사용하며 브라우저의 키를 보내지 않아요.</small></div>`;
+  const modelFields = simple
+    ? `<div class="field"><label for="${prefix}-model">모델</label><select id="${prefix}-model" data-text-field="model" data-current="${esc(simpleTextModelValue(engine, p))}">${simpleTextModelOptions(engine, p)}${SIMPLE_FETCH_OPTION}</select>${customModelField(prefix)}<small>${SIMPLE_TEXT_MODEL_NOTE}</small>${modelListRow(engine, p, true)}</div>`
+    : `<div class="form-grid"><div class="field"><label for="${prefix}-model-medium">중간 등급 기본 모델 · 장면·쪽 나누기</label><select id="${prefix}-model-medium" data-text-field="medium">${modelOptions(engine, models.medium, p)}</select><small>글 품질 설정의 기본 전문 역할과 기존 생성의 줄거리에도 사용해요.</small><div data-text-price="medium">${modelDetails(engine, models.medium, p)}</div></div><div class="field"><label for="${prefix}-model-upper">상위 등급 기본 모델 · 전체 일관성 검사</label><select id="${prefix}-model-upper" data-text-field="upper">${modelOptions(engine, models.upper, p)}</select><small>글 품질 설정의 기본 줄거리·코치 역할과 기존 생성의 전문에도 사용해요.</small><div data-text-price="upper">${modelDetails(engine, models.upper, p)}</div></div></div>${customModelField(prefix)}${modelListRow(engine, p)}`;
+  return `${modelFields}<div class="field"><label for="${prefix}-api-key">${esc(NAMES[engine])} API 비밀 키</label><input id="${prefix}-api-key" data-text-field="apiKey" data-text-credential-engine="${engine}" type="password" autocomplete="off" maxlength="16384" placeholder="비밀 키 전체를 입력하세요"><small>${engine === "openai" ? "key_ 추적 ID나 sk-… 가려진 값 대신 생성할 때 복사한 sk- 비밀 키 전체를 입력하세요. " : ""}키는 PIN으로 기기에 암호화하며 클라우드·백업에 넣지 않아요.</small></div><div class="material-add-actions"><button type="button" class="btn btn-outline" data-text-setting="save-key">키 암호화 저장</button><button type="button" class="btn btn-outline" data-text-setting="delete-key">저장된 키 삭제</button></div><div class="field" style="margin-top:15px"><label for="${prefix}-proxy">글 프록시 주소 · 선택</label><input id="${prefix}-proxy" data-text-field="proxyEndpoint" type="url" value="${esc(p.proxyEndpoint || "")}" placeholder="https://my-proxy.example"><small>프록시는 서버 환경변수 키를 사용하며 브라우저의 키를 보내지 않아요.</small></div>`;
 }
 function refreshCredentialLabels() {
   if (typeof document === "undefined") return;
@@ -201,10 +334,14 @@ function refreshCredentialLabels() {
       })
       .catch(() => {});
 }
-function providerPanel(settings, engine, prefix) {
+function providerPanel(settings, engine, prefix, simple = false) {
   if (typeof document !== "undefined") queueMicrotask(refreshCredentialLabels);
-  return `<div data-text-provider="${engine}" data-text-prefix="${prefix}">${providerFields(settings, engine, prefix)}</div>`;
+  return `<div data-text-provider="${engine}" data-text-prefix="${prefix}"${simple ? ' data-text-simple="1"' : ""}>${providerFields(settings, engine, prefix, { simple })}</div>`;
 }
+/** The simple settings page draws its main provider with one 모델 select (R13). */
+const isQuickForm = () =>
+  typeof document !== "undefined" &&
+  !!document.querySelector("#text-engine-form.quick-engine-form");
 function finalProviderFields(settings) {
   return settings.hybrid.finalEngine === settings.engine
     ? '<p class="small-label">위에서 고른 공급자의 전문·쪽 나누기 모델과 키를 함께 사용해요.</p>'
@@ -225,7 +362,7 @@ function priceSummary(settings) {
     : enrichment
       ? ` + 한글·영어 문단 풍부화 ${enrichment.requestCount}회 포함`
       : " · 문단 풍부화 꺼짐";
-  return `<strong>12쪽 이야기 글 예상: 약 $${estimate.costUsd.toFixed(3)}</strong><br><small>약 ${estimate.requestCount}회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회${prose}${estimate.childSimulator ? " + 아이 시뮬레이터 2회" : ""}${estimate.beam ? ` · 비트 탐색은 후보·심사 ${estimate.beatCount * 2}회와 마무리 1회` : ""} (${estimate.beatCount}개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. ${settings.imageDiversity !== false ? "유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. " : ""}ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요.</small>`;
+  return `<strong>12쪽 이야기 글 예상: 약 $${estimate.costUsd.toFixed(3)}${estimate.pricingUnknown ? " · 일부 요금 미확인" : ""}</strong><br><small>${estimate.pricingUnknown ? "목록에 없는 모델을 쓰는 단계는 요금 정보 없음이라 합계에서 빠졌어요. 요금은 공급자에서 확인해 주세요. " : ""}약 ${estimate.requestCount}회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회${prose}${estimate.childSimulator ? " + 아이 시뮬레이터 2회" : ""}${estimate.beam ? ` · 비트 탐색은 후보·심사 ${estimate.beatCount * 2}회와 마무리 1회` : ""} (${estimate.beatCount}개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. ${settings.imageDiversity !== false ? "유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. " : ""}ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요.</small>`;
 }
 export function renderTextSettings(state) {
   const settings = getTextGenerationSettings(state);
@@ -241,7 +378,7 @@ export function renderTextSettings(state) {
 export function renderTextEngineQuick(state) {
   const settings = getTextGenerationSettings(state);
   editingSettings = clone(settings);
-  return `<form id="text-engine-form" class="quick-engine-form"><div class="field"><label for="tg-engine">글 엔진</label><select id="tg-engine">${options(settings.engine)}</select></div><div id="tg-provider-fields">${providerPanel(settings, settings.engine, "tg")}</div><div hidden><input id="tg-hybrid" type="checkbox" ${settings.hybrid.enabled ? "checked" : ""}><div id="tg-hybrid-fields" hidden><div id="tg-hybrid-local-fields">${hybridLocalFields(settings)}</div><select id="tg-final-engine">${options(settings.hybrid.finalEngine, false)}</select><div id="tg-final-provider-fields">${finalProviderFields(settings)}</div></div><input id="tg-story-enrichment" type="checkbox" ${settings.storyEnrichment ? "checked" : ""}><input id="tg-image-diversity" type="checkbox" ${settings.imageDiversity ? "checked" : ""}></div>${settings.hybrid.enabled ? '<p class="small-label">하이브리드 설정이 켜져 있어요. 프로 모드의 단계별 모델 설정이 우선 적용돼요.</p>' : ""}<p id="tg-error" class="pin-error" role="status" aria-live="polite"></p></form>`;
+  return `<form id="text-engine-form" class="quick-engine-form"><div class="field"><label for="tg-engine">글 엔진 · 공급자</label><select id="tg-engine">${options(settings.engine)}</select></div><div id="tg-provider-fields">${providerPanel(settings, settings.engine, "tg", true)}</div><div hidden><input id="tg-hybrid" type="checkbox" ${settings.hybrid.enabled ? "checked" : ""}><div id="tg-hybrid-fields" hidden><div id="tg-hybrid-local-fields">${hybridLocalFields(settings)}</div><select id="tg-final-engine">${options(settings.hybrid.finalEngine, false)}</select><div id="tg-final-provider-fields">${finalProviderFields(settings)}</div></div><input id="tg-story-enrichment" type="checkbox" ${settings.storyEnrichment ? "checked" : ""}><input id="tg-image-diversity" type="checkbox" ${settings.imageDiversity ? "checked" : ""}></div>${settings.hybrid.enabled ? '<p class="small-label">하이브리드 설정이 켜져 있어요. 프로 모드의 단계별 모델 설정이 우선 적용돼요.</p>' : ""}<p id="tg-error" class="pin-error" role="status" aria-live="polite"></p></form>`;
 }
 function checkedUrl(raw) {
   if (!raw) return "";
@@ -271,17 +408,44 @@ function readProvider(container, { validate = false } = {}) {
   const engine = container.dataset.textProvider,
     p = editingSettings.providers[engine],
     field = (name) => container.querySelector(`[data-text-field="${name}"]`);
+  // R13 '직접 입력…': the typed ID is checked when saving; while editing an
+  // unfinished ID leaves the previous choice in place.
+  const pick = (value, fallback) => {
+    if (value !== "__custom") return value;
+    const raw = field("customModel")?.value ?? "";
+    if (!validate && !isModelId(raw)) return fallback;
+    const id = validateModelId(raw);
+    rememberTypedModel(p, engine, id);
+    return id;
+  };
   if (engine === "local") {
     const value = field("baseUrl").value.trim();
     p.baseUrl = validate ? checkedUrl(value) : value;
     if (validate && !p.baseUrl)
       throw new Error("로컬 엔드포인트 주소를 입력해 주세요.");
-    p.model = field("localModel").value.trim();
+    if (field("model"))
+      applySimpleTextModel(
+        editingSettings,
+        "local",
+        pick(field("model").value, p.model || ""),
+      );
+    else p.model = field("localModel").value.trim();
   } else {
-    p.stageModels = {
-      medium: resolveTextModel(engine, field("medium").value),
-      upper: resolveTextModel(engine, field("upper").value),
-    };
+    if (field("model"))
+      applySimpleTextModel(
+        editingSettings,
+        engine,
+        pick(field("model").value, "__stages"),
+      );
+    else {
+      const current = getStoryStageModels(engine, p),
+        medium = pick(field("medium").value, current.medium),
+        upper = pick(field("upper").value, current.upper);
+      p.stageModels = {
+        medium: resolveTextModel(engine, medium, p),
+        upper: resolveTextModel(engine, upper, p),
+      };
+    }
     const value = field("proxyEndpoint").value.trim(),
       proxy = validate ? checkedUrl(value) : value;
     if (proxy) {
@@ -291,6 +455,101 @@ function readProvider(container, { validate = false } = {}) {
       delete p.proxyEndpoint;
       delete p.transport;
     }
+  }
+}
+/**
+ * Keep a fetched list in the saved settings and the active World's copy
+ * (IDs, names and fetchedAt only). Restores both and throws when `save` fails.
+ */
+export function storeFetchedTextModels(state, engine, list, save) {
+  const world = getActiveWorld(state),
+    before = clone(state.settings.textGeneration ?? null),
+    worldBefore = clone(world.textGeneration ?? null);
+  for (const target of [
+    (state.settings.textGeneration ||= {}),
+    world.textGeneration,
+  ].filter(Boolean)) {
+    target.providers ||= {};
+    target.providers[engine] = {
+      ...target.providers[engine],
+      fetchedModels: clone(list),
+    };
+  }
+  if (save() === false) {
+    if (before === null) delete state.settings.textGeneration;
+    else state.settings.textGeneration = before;
+    if (worldBefore === null) delete world.textGeneration;
+    else world.textGeneration = worldBefore;
+    throw new Error("불러온 모델 목록을 저장하지 못했어요.");
+  }
+}
+/**
+ * Fetch one provider's text models with the saved settings (③ and others
+ * outside the settings form). The saved key or the saved proxy is used.
+ */
+export async function fetchAndStoreTextModels(state, engine, save) {
+  const config = getTextGenerationSettings(state).providers[engine] || {},
+    proxy = config.proxyEndpoint || config.transport === "proxy",
+    apiKey = engine === "local" || proxy ? null : await getCredential(engine);
+  if (engine !== "local" && !proxy && !apiKey)
+    throw new Error(
+      `먼저 ${NAMES[engine]} API 비밀 키를 저장해 주세요. 목록 불러오기는 저장된 키로만 해요.`,
+    );
+  const list = await fetchProviderModels({
+    kind: "text",
+    engine,
+    config: { ...config, apiKey },
+  });
+  storeFetchedTextModels(state, engine, list, save);
+  return list;
+}
+/**
+ * R13 '모델 목록 불러오기': a free list call (no tokens) with the saved key or
+ * the provider's proxy. Only IDs, names and fetchedAt are stored, never the
+ * key; the selection does not change. On an error nothing changes.
+ */
+async function fetchTextModels(container, engine, button) {
+  if (!editingSettings)
+    editingSettings = getTextGenerationSettings(api.getState());
+  readProviders();
+  const config = editingSettings.providers[engine] || {},
+    proxy = config.proxyEndpoint || config.transport === "proxy",
+    status = container.querySelector("[data-text-model-status]");
+  button.disabled = true;
+  if (status) status.textContent = "모델 목록을 불러오는 중이에요…";
+  try {
+    const apiKey =
+      engine === "local" || proxy ? null : await getCredential(engine);
+    if (engine !== "local" && !proxy && !apiKey)
+      throw new Error(
+        `먼저 ${NAMES[engine]} API 비밀 키를 저장해 주세요. 목록 불러오기는 저장된 키로만 해요.`,
+      );
+    const list = await fetchProviderModels({
+      kind: "text",
+      engine,
+      config: { ...config, apiKey },
+    });
+    storeFetchedTextModels(api.getState(), engine, list, () => api.save());
+    editingSettings.providers[engine].fetchedModels = clone(list);
+    // Redraw this provider's selects with the new list; keep a typed key.
+    const key = container.querySelector('[data-text-field="apiKey"]')?.value;
+    container.innerHTML = providerFields(
+      editingSettings,
+      engine,
+      container.dataset.textPrefix,
+      { simple: container.dataset.textSimple === "1" },
+    );
+    const keyField = container.querySelector('[data-text-field="apiKey"]');
+    if (keyField && key) keyField.value = key;
+    refreshCredentialLabels();
+    api.toast(
+      `${NAMES[engine]}에서 글 모델 ${list.models.length}개를 불러왔어요. 목록 불러오기는 요금이 들지 않아요.`,
+    );
+  } catch (error) {
+    if (status?.isConnected) status.textContent = error.message;
+    throw error;
+  } finally {
+    if (button.isConnected) button.disabled = false;
   }
 }
 function readProviders(validate = false) {
@@ -317,6 +576,33 @@ export function configureTextSettingsUI(context) {
   configured = true;
   document.addEventListener("change", (event) => {
     if (!api.isParent() || !event.target.closest("#text-engine-form")) return;
+    // R13 simple select: '모델 목록 불러오기 · 무료…' runs the free list call
+    // and puts the select back on the model it showed.
+    if (
+      event.target.matches('[data-text-field="model"]') &&
+      event.target.value === "__fetch"
+    ) {
+      const select = event.target,
+        container = select.closest("[data-text-provider]");
+      select.value = select.dataset.current ?? "";
+      api.protectedAction(async () => {
+        try {
+          await fetchTextModels(
+            container,
+            container.dataset.textProvider,
+            select,
+          );
+        } catch (error) {
+          showError(error);
+        }
+      });
+      return;
+    }
+    if (
+      event.target.matches('[data-text-field="model"]') &&
+      event.target.value !== "__custom"
+    )
+      event.target.dataset.current = event.target.value;
     try {
       if (!editingSettings)
         editingSettings = getTextGenerationSettings(api.getState());
@@ -327,6 +613,7 @@ export function configureTextSettingsUI(context) {
           editingSettings,
           editingSettings.engine,
           "tg",
+          isQuickForm(),
         );
         redrawFinal();
       } else if (event.target.id === "tg-final-engine") {
@@ -342,13 +629,30 @@ export function configureTextSettingsUI(context) {
         editingSettings.imageDiversity = event.target.checked;
       } else if (
         event.target.matches(
-          '[data-text-field="medium"],[data-text-field="upper"]',
+          '[data-text-field="medium"],[data-text-field="upper"],[data-text-field="model"]',
         )
       ) {
         const container = event.target.closest("[data-text-provider]"),
-          level = event.target.dataset.textField;
-        container.querySelector(`[data-text-price="${level}"]`).innerHTML =
-          modelDetails(container.dataset.textProvider, event.target.value);
+          engine = container.dataset.textProvider,
+          level = event.target.dataset.textField,
+          custom = container.querySelector('[data-text-field="customModel"]'),
+          price = container.querySelector(`[data-text-price="${level}"]`);
+        // R13: '직접 입력…' shows the ID field under the selects.
+        if (custom) {
+          custom.hidden = ![
+            ...container.querySelectorAll("select[data-text-field]"),
+          ].some((select) => select.value === "__custom");
+          if (event.target.value === "__custom") custom.focus?.();
+        }
+        if (price)
+          price.innerHTML =
+            event.target.value === "__custom"
+              ? '<p class="small-label">아래 칸에 모델 ID를 입력하면 저장할 때 목록에 더해요. 목록에 없는 모델은 요금 정보 없음으로 표시해요.</p>'
+              : modelDetails(
+                  engine,
+                  event.target.value,
+                  editingSettings.providers[engine],
+                );
       }
       updatePriceSummary();
     } catch (error) {
@@ -364,6 +668,10 @@ export function configureTextSettingsUI(context) {
         const container = button.closest("[data-text-provider]"),
           engine = container.dataset.textProvider,
           field = container.querySelector('[data-text-field="apiKey"]');
+        if (button.dataset.textSetting === "fetch-models") {
+          await fetchTextModels(container, engine, button);
+          return;
+        }
         if (button.dataset.textSetting === "save-key") {
           await saveCredential(engine, field.value);
           if (field.isConnected) field.value = "";

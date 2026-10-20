@@ -1,5 +1,11 @@
 import { STAGING_SCHEMA } from "./staging.js";
 import { PLOT_CONTRACT_SCHEMA, inspectPlotContract } from "./plot-contract.js";
+import {
+  OPENING_PAGE_COUNTS,
+  OPENING_DEFAULT_PAGES,
+  MODEL_CUES,
+  validateOpenings,
+} from "../book-layout.js";
 /* Story stage schemas and structural validation. Content checks live in checker.js. */
 export const STORY_STAGES = Object.freeze([
   "outline_draft",
@@ -12,12 +18,18 @@ export const STORY_STAGES = Object.freeze([
 ]);
 export const PAGE_COUNTS = Object.freeze([8, 12, 16, 24]);
 export const BEAT_COUNTS = Object.freeze({ 8: 6, 12: 7, 16: 8, 24: 8 });
+/** R12 openings books (input.layoutPolicy): 12 or 16 printed pages, one beat per opening. */
+export { OPENING_PAGE_COUNTS, OPENING_DEFAULT_PAGES };
 export function beatCountFor(pageCount, koreanLevel) {
   const count = BEAT_COUNTS[pageCount];
   return koreanLevel === "K1" ? Math.min(count || 7, 7) : count;
 }
 /** Old frozen specs retain their original count, unless an explicit frozen count exists. */
 export function frozenBeatCount(input = {}) {
+  if (input.layoutPolicy?.kind === "openings") {
+    const pageCount = Number(input.pageCount);
+    return OPENING_PAGE_COUNTS.includes(pageCount) ? pageCount / 2 : null;
+  }
   if (!BEAT_COUNTS[input.pageCount]) return null;
   if ([6, 7, 8].includes(input.outlineBeatCount)) return input.outlineBeatCount;
   const spec = input.specs?.ko || input.readingLevelSnapshot?.specs?.ko;
@@ -232,6 +244,22 @@ export const PAGINATION_SCHEMA = {
     pages: { type: "array", items: PAGE_SCHEMA, minItems: 8, maxItems: 24 },
   },
 };
+/**
+ * R12 openings pagination: PAGE_SCHEMA plus the cue enum, O..2O entries. The
+ * model never returns kind, side or opening numbers; the app derives them.
+ */
+export function openingPaginationSchema(openings) {
+  const page = JSON.parse(JSON.stringify(PAGE_SCHEMA));
+  page.required = [...page.required, "cue"];
+  page.properties.cue = { type: "string", enum: [...MODEL_CUES] };
+  return {
+    ...JSON.parse(JSON.stringify(PAGINATION_SCHEMA)),
+    properties: {
+      ...JSON.parse(JSON.stringify(PAGINATION_SCHEMA.properties)),
+      pages: { type: "array", items: page, minItems: openings, maxItems: 2 * openings },
+    },
+  };
+}
 export const PARAGRAPH_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -255,6 +283,34 @@ export class StoryValidationError extends Error {
     this.violations = errors;
   }
 }
+/** Korean names for the stage token of a StoryValidationError message. */
+export const STORY_STAGE_LABELS = Object.freeze({
+  outline: "줄거리",
+  plotContract: "사건 장부",
+  sceneBriefs: "장면 디테일",
+  sceneBrief: "장면 디테일",
+  proseDraft: "글 초안",
+  prose: "글",
+  enrichment: "글 다듬기",
+  pagination: "쪽 나누기",
+  page: "쪽",
+  coherence: "일관성 검사",
+  coherenceRepair: "일관성 수정",
+  materials: "재료 고르기",
+});
+/**
+ * Display form of a stage error ('이야기 sceneBriefs 결과를 확인해 주세요: …' →
+ * '장면 디테일 결과를 확인해 주세요: …'). The error message itself is unchanged
+ * (pinned by legacy snapshots); only the stored job.error is translated.
+ */
+export const describeStoryError = (text) =>
+  String(text ?? "").replace(
+    /^이야기 ([A-Za-z]+) 결과를 확인해 주세요/u,
+    (whole, stage) =>
+      STORY_STAGE_LABELS[stage]
+        ? `${STORY_STAGE_LABELS[stage]} 결과를 확인해 주세요`
+        : whole,
+  );
 const object = (value) =>
   value && typeof value === "object" && !Array.isArray(value);
 const text = (value, max) =>
@@ -565,6 +621,21 @@ export function validatePagination(
     !text(value.cover.sceneAction, 500)
   )
     errors.push("표지 제목과 장면 설명을 확인해 주세요.");
+  // R12 openings: O..2O entries (a spread is one entry, two printed pages) whose
+  // opening structure and printed-page total validateOpenings checks.
+  if (input.layoutPolicy?.kind === "openings") {
+    if (Array.isArray(value.pages))
+      value.pages.forEach((p, i) =>
+        errors.push(
+          ...validateStoryPage(p, input, outline).errors.map(
+            (e) => `${i + 1}번째 항목: ${e}`,
+          ),
+        ),
+      );
+    errors.push(...validateOpenings(value, input, outline).errors);
+    checkSafety(value, errors);
+    return { valid: errors.length === 0, errors };
+  }
   if (
     !Array.isArray(value.pages) ||
     value.pages.length < 8 ||

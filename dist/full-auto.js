@@ -44,14 +44,30 @@ import {
   estimateStoryTextCost,
   estimateTextCost,
 } from "./text-generation/models.js";
-import { estimateImageCost } from "./image-generation/models.js";
+import {
+  estimateImageCost,
+  imageModelSnapshot,
+  frozenImageConfig,
+} from "./image-generation/models.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { inputFromWizard } from "./story-generation/ui.js";
+import {
+  SPREAD_IMAGE_SIZE,
+  layoutFor,
+  layoutOf,
+  printedPagesOf,
+  textEstimateArgs,
+  unitLabel,
+  validateOpenings,
+} from "./book-layout.js";
+import { freezeReadingLevels } from "./reading-levels.js";
 import {
   applySeriesContinuity,
   bindSeriesBackgrounds,
 } from "./story-generation/continuity.js";
 import { safeTopic } from "./engine.js";
+import { describeStoryError } from "./story-generation/schemas.js";
+import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
   active = (list) => (list || []).filter((item) => !item.archivedAt);
@@ -72,6 +88,17 @@ function checkStopBefore(value) {
 }
 export function autoJobs(state) {
   return (state.fullAutoJobs ||= {});
+}
+/**
+ * The picture total a FULL AUTO label shows: today's 'N쪽', or for an openings
+ * job 'n장' once its book exists and '펼침 O개 · P쪽' before (R12).
+ */
+export function jobPictureTotal(job, fallback = job?.input?.pageCount) {
+  if (job?.input?.layoutPolicy?.kind !== "openings") return `${fallback}쪽`;
+  const pages = job.book?.pages?.length;
+  return pages
+    ? `${pages}장`
+    : `펼침 ${Number(job.input.pageCount) / 2}개 · ${job.input.pageCount}쪽`;
 }
 /** The FULL AUTO job that built this book, if it still exists. Read-only lookup. */
 export function fullAutoJobForBook(state, book) {
@@ -166,10 +193,15 @@ export function createFullAutoJob(
     mode = isDemo ? "selection" : planMode;
   if (mode === "selection")
     selectionMaterialPlan(state, { ...wizard, characterIds: selected });
-  const prepared = inputFromWizard(state, {
-      ...wizard,
-      characterIds: selected,
-    }),
+  // R12: the layout is decided once, here, and frozen in job.input.
+  const prepared = inputFromWizard(
+      state,
+      {
+        ...wizard,
+        characterIds: selected,
+      },
+      { layout: layoutFor(wizard) },
+    ),
     world = getActiveWorld(state),
     previous = state.books.find(
       (b) => b.id === wizard.previousBookId,
@@ -193,6 +225,9 @@ export function createFullAutoJob(
     worldId: world.id,
     worldRevision: world.revision,
     imageEngine: world.imageEngine,
+    // R13: the picture model is frozen with the job; a later World choice
+    // never changes this job's remaining sheets, pages or cover.
+    imageModelConfig: imageModelSnapshot(world),
     stylePresetId: world.stylePresetId,
     worldSnapshot: clone(world),
     initialSignatures: Object.fromEntries(
@@ -225,16 +260,71 @@ export function createFullAutoJob(
  * sheetsUpperUsd (at most 10 new sheets). Called with two arguments the
  * original fields are unchanged.
  */
+/**
+ * R12 openings: the picture range of O openings before pagination. Entries are
+ * s spreads and 2(O − s) pages for s = 1..O (at least one spread); counts and
+ * prices exclude/include the cover (one 1536x1024 picture) as named.
+ */
+export function openingImageRange(openings, spreadUnit, pageUnit) {
+  const cost = (spreads) =>
+    spreads * spreadUnit + 2 * (openings - spreads) * pageUnit + pageUnit;
+  return {
+    minCount: openings,
+    maxCount: 2 * openings - 1,
+    minUsd: Math.min(cost(1), cost(openings)),
+    maxUsd: Math.max(cost(1), cost(openings)),
+  };
+}
+/**
+ * R12 openings: automatic text repairs before buying the text — typically
+ * about 0.75 × O to 1.6 × O combined entry rewrites (6~13 at 8 openings),
+ * never more than 2 × O; priced on the pagination engine (9k tokens in, a
+ * spread 1.9k / a page 0.9k out; the cap at the spread price). Free for demos.
+ */
+export function openingRepairEstimate(settings, openings, demo = false) {
+  const cap = 2 * openings,
+    typicalMin = Math.round(0.75 * openings),
+    typicalMax = Math.min(cap, Math.round(1.6 * openings)),
+    stage = resolveStoryStageSettings(settings, "pagination"),
+    priced = (output) =>
+      demo
+        ? { costUsd: 0 }
+        : estimateTextCost({
+            ...stage,
+            input: 9000,
+            output,
+            model: stage.config.model,
+          }),
+    spreadRow = priced(1900),
+    spread = spreadRow.costUsd,
+    mean = (spread + priced(900).costUsd) / 2;
+  return {
+    typicalMin,
+    typicalMax,
+    max: cap,
+    typicalMinUsd: typicalMin * mean,
+    typicalMaxUsd: typicalMax * mean,
+    maxUsd: cap * spread,
+    // R13: a pagination model outside the catalog has no price.
+    ...(spreadRow.pricingUnknown ? { pricingUnknown: true } : {}),
+  };
+}
 export function estimateFullAutoCost(
   state,
   wizard,
-  { planMode = "auto", demo = false, imageEngine } = {},
+  { planMode = "auto", demo = false, imageEngine, job } = {},
 ) {
+  // R13: once a job exists, its estimate uses the job's frozen text settings
+  // and picture model, never a model chosen since (or its price).
   const world = getActiveWorld(state),
-    settings = getTextGenerationSettings(state),
+    settings = job?.textSettings || getTextGenerationSettings(state),
     text = estimateStoryTextCost({
       settings,
       pageCount: wizard.pageCount || 12,
+      // Editor round: new jobs (and jobs frozen with the policy) include it.
+      ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
+      // R12: an openings wizard is sized from its v4 specs ({} for page books).
+      ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
     plan = resolveStoryStageSettings(settings, "outline"),
     planning = estimateTextCost({
@@ -243,18 +333,62 @@ export function estimateFullAutoCost(
       output: 5000,
       model: plan.config.model,
     }),
-    engine = imageEngine || world.imageEngine,
-    config = world.providerConfig?.[engine] || {},
-    unit = estimateImageCost({
+    engine = imageEngine || job?.imageEngine || world.imageEngine,
+    frozen = job ? jobImageSnapshot(job) : undefined,
+    config = frozen
+      ? frozenImageConfig(world.providerConfig?.[engine], frozen)
+      : world.providerConfig?.[engine] || {},
+    image = estimateImageCost({
       engine,
       quality: "final",
       size: "1536x1024",
       config,
-    }).costUsd,
+    }),
+    unit = image.costUsd,
     pages = Number(wizard.pageCount) || 12,
     freePlan = demo === true || planMode === "selection",
     textUsd =
-      demo === true ? 0 : text.costUsd + (freePlan ? 0 : planning.costUsd);
+      demo === true ? 0 : text.costUsd + (freePlan ? 0 : planning.costUsd),
+    // R13: a model outside the catalog has no price; say so instead of guessing.
+    pricingFlags = {
+      ...(demo !== true &&
+      (text.pricingUnknown || (!freePlan && planning.pricingUnknown))
+        ? { textPricingUnknown: true }
+        : {}),
+      ...(image.pricingUnknown ? { imagePricingUnknown: true } : {}),
+    };
+  // R12 openings: before the text exists the picture count is a range, O..2O−1
+  // entries plus the cover (the mix guard rules out all pairs). R13: both sizes
+  // price the same (job-frozen) picture model.
+  if (layoutFor(wizard) === "openings") {
+    const spread = estimateImageCost({
+        engine,
+        quality: "final",
+        size: SPREAD_IMAGE_SIZE,
+        config,
+      }),
+      spreadUnit = spread.costUsd,
+      range = openingImageRange(pages / 2, spreadUnit, unit);
+    return {
+      baseUsd: textUsd + range.maxUsd,
+      withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
+      imageEngine: engine,
+      pageCount: pages,
+      requests: demo === true ? 0 : text.requestCount + (freePlan ? 0 : 1),
+      note: "참고 단가 추정 · 그림 수는 펼침면 수에 따라 달라요 · 새 시트 최대 10장과 유사 그림 1회 재생성 포함 상단 · 글 자동 수정·입력 참조 요금 별도",
+      textUsd,
+      imageUnitUsd: unit,
+      spreadUnitUsd: spreadUnit,
+      imagesUsd: range.maxUsd,
+      imagesMinUsd: range.minUsd,
+      imageCountMin: range.minCount,
+      imageCountMax: range.maxCount,
+      repairs: openingRepairEstimate(settings, pages / 2, demo === true),
+      sheetsUpperUsd: 10 * unit,
+      ...pricingFlags,
+      ...(spread.pricingUnknown ? { imagePricingUnknown: true } : {}),
+    };
+  }
   return {
     baseUsd: textUsd + (pages + 1) * unit,
     withMaterialsAndRetryUsd: textUsd + (pages * 2 + 11) * unit,
@@ -266,6 +400,7 @@ export function estimateFullAutoCost(
     imageUnitUsd: unit,
     imagesUsd: (pages + 1) * unit,
     sheetsUpperUsd: 10 * unit,
+    ...pricingFlags,
   };
 }
 export async function preflightFullAuto(state, job) {
@@ -326,7 +461,11 @@ export async function preflightFullAuto(state, job) {
       "ComfyUI 엔드포인트와 참조 이미지를 사용하는 워크플로를 부모 설정에 저장해 주세요.",
     );
 }
-async function generateAutoBackground(state, background, { signal } = {}) {
+async function generateAutoBackground(
+  state,
+  background,
+  { signal, frozenImageModel } = {},
+) {
   const world = getActiveWorld(state),
     config = {
       ...(state.settings.imageProviderConfig?.[world.imageEngine] || {}),
@@ -334,6 +473,9 @@ async function generateAutoBackground(state, background, { signal } = {}) {
     };
   delete config.apiKey;
   delete config.key;
+  // R13: a job's background sheet draws with the job's frozen model.
+  if (frozenImageModel) config.model = frozenImageModel;
+  else if (frozenImageModel === null) delete config.model;
   if (!config.proxyEndpoint && config.transport !== "proxy")
     config.apiKey = await getCredential(world.imageEngine);
   const request = backgroundSheetRequest(state, background, {
@@ -398,6 +540,7 @@ export function fullAutoPayload(job) {
     childGate: clone(job.childGate || null),
     pagination: clone(job.pagination),
     richnessCheck: clone(job.richnessCheck || null),
+    ...(job.revision ? { revision: clone(job.revision) } : {}),
     textSettings: clone(job.textSettings),
     textEngineId: job.demo ? "demo" : prose.engineId,
     textModelId: job.demo ? "demo" : prose.config.model,
@@ -561,8 +704,13 @@ export function fullAutoProgress(job) {
     if (job.book?.generationSnapshot) done += 1;
   }
   if (!job.stopBefore) {
-    const pages = job.book?.pages || [];
-    total += (pages.length || Number(job.input?.pageCount) || 12) + 1;
+    const pages = job.book?.pages || [],
+      // R12 openings: before the book exists, at most 2O − 1 entries.
+      planned =
+        job.input?.layoutPolicy?.kind === "openings"
+          ? Number(job.input.pageCount) - 1
+          : Number(job.input?.pageCount) || 12;
+    total += (pages.length || planned) + 1;
     done +=
       pages.filter(finalImage).length + (job.book?.cover?.imageAssetId ? 1 : 0);
   }
@@ -653,9 +801,54 @@ function ensureJobSnapshot(state, job) {
       book.generationSnapshot.backgrounds || [],
     );
   }
+  // R13: the book draws with the model frozen on the job, not a World choice
+  // made since (a series that keeps the previous book's look keeps its model).
+  const snapshot = book.generationSnapshot,
+    frozenModel = jobImageModel(job);
+  if (
+    frozenModel !== undefined &&
+    snapshot?.imageModelConfig &&
+    snapshot.imageEngine === job.imageEngine &&
+    (!previous || snapshot.continuity?.visualMode === "parent-selected-current")
+  ) {
+    if (frozenModel) snapshot.imageModelConfig.model = frozenModel;
+    else delete snapshot.imageModelConfig.model;
+  }
   delete job.seriesContinuityDeferred;
   return book.generationSnapshot;
 }
+/**
+ * The picture-model fields a job froze. A job saved before R13 has no
+ * `imageModelConfig`; it drew with the provider default, which its World copy
+ * (`worldSnapshot`, no `model`) still says, so a model chosen later never
+ * reaches its remaining sheets, pages or cover.
+ */
+export function jobImageModelConfig(job) {
+  return (
+    job?.imageModelConfig ||
+    (job?.worldSnapshot ? imageModelSnapshot(job.worldSnapshot) : undefined)
+  );
+}
+/** The job's frozen picture model: an ID, null (provider default), undefined (no job). */
+const jobImageModel = (job) => {
+  const config = jobImageModelConfig(job);
+  return config ? config.model || null : undefined;
+};
+/**
+ * What a job's pictures are priced and drawn with: its book's snapshot once
+ * there is one, else the job's frozen model (undefined without a job).
+ */
+export function jobImageSnapshot(job) {
+  if (job?.book?.generationSnapshot) return job.book.generationSnapshot;
+  const model = jobImageModel(job);
+  return model === undefined
+    ? undefined
+    : { imageModelConfig: model ? { model } : {} };
+}
+const frozenModelOption = (job) =>
+  jobImageModel(job) === undefined
+    ? {}
+    : { frozenImageModel: jobImageModel(job) };
 export async function runFullAuto(
   state,
   job,
@@ -728,6 +921,13 @@ export async function runFullAuto(
         ? demoEngine()
         : resolveStoryStageSettings(job.textSettings, "coherence"),
       sceneBriefs: job.sceneBriefs,
+      briefRepairs: job.briefRepairs,
+      // Editor round: the whole-book read-through (new drafts only), once.
+      revise: true,
+      revisionOptions: job.demo
+        ? demoEngine()
+        : resolveStoryStageSettings(job.textSettings, "coherence"),
+      revisionCheckpoint: job.revisionCheckpoint,
       bookId: job.bookId,
       stylePreset: getStylePreset(job.stylePresetId),
       storyEnrichment: job.textSettings.storyEnrichment !== false,
@@ -745,6 +945,11 @@ export async function runFullAuto(
           else job.proseCoherence = clone(cp.coherence);
         }
         if (cp.sceneBriefs) job.sceneBriefs = clone(cp.sceneBriefs);
+        if (cp.revisionCheckpoint)
+          job.revisionCheckpoint = clone(cp.revisionCheckpoint);
+        // Paid scene-brief repairs so far, per beat; a resumed run never restarts them.
+        if (cp.briefRepairs && Object.keys(cp.briefRepairs).length)
+          job.briefRepairs = clone(cp.briefRepairs);
         if (cp.prose) job.prose = clone(cp.prose);
         if (cp.enrichmentCheckpoint)
           job.enrichmentCheckpoint = clone(cp.enrichmentCheckpoint);
@@ -775,6 +980,9 @@ export async function runFullAuto(
         job.childGateCheckpoint = clone(error.childGateCheckpoint);
       if (error.prose) job.prose = clone(error.prose);
       if (error.pagination) job.pagination = clone(error.pagination);
+      if (error.sceneBriefs?.length) job.sceneBriefs = clone(error.sceneBriefs);
+      if (error.briefRepairs && Object.keys(error.briefRepairs).length)
+        job.briefRepairs = clone(error.briefRepairs);
       if (error.usage && !error.usageRecorded)
         recordUsage(
           job,
@@ -848,7 +1056,11 @@ export async function runFullAuto(
         "character:" + id,
         character.name + " 캐릭터 시트 만들기",
         () =>
-          ops.characterSheet(state, character, { quality: "final", signal }),
+          ops.characterSheet(state, character, {
+            quality: "final",
+            signal,
+            ...frozenModelOption(job),
+          }),
         (result) => {
           markCharacterSheetConfirmed(state, id, {
             ...result,
@@ -879,7 +1091,11 @@ export async function runFullAuto(
       await step(
         "background:" + id,
         background.name + " 고정 배경 시트 만들기",
-        () => ops.backgroundSheet(state, background, { signal }),
+        () =>
+          ops.backgroundSheet(state, background, {
+            signal,
+            ...frozenModelOption(job),
+          }),
         (result) => {
           const world = getActiveWorld(state),
             meta = {
@@ -915,9 +1131,24 @@ export async function runFullAuto(
     if (!job.completed.input) {
       job.wizard.characterIds = clone(job.plan.characterIds);
       job.wizard.backgroundIds = clone(job.plan.backgroundIds);
-      const prepared = ops.prepare(state, job.wizard);
+      // The layout comes from the job's frozen input, never from the wizard or the
+      // current flag: a pre-R12 job stays a page book with its own page count.
+      const frozenLayout =
+          job.input?.layoutPolicy?.kind === "openings"
+            ? job.input.layoutPolicy
+            : null,
+        prepared = ops.prepare(state, job.wizard, {
+          layout: frozenLayout ? "openings" : "pages",
+        });
+      // The editor policy is the job's own too: a job saved before the editor
+      // round never gains it here (its requests stay as they were).
+      const { editorPolicy: _fresh, ...preparedInput } = prepared.input;
       job.input = {
-        ...prepared.input,
+        ...preparedInput,
+        ...(frozenLayout ? { layoutPolicy: clone(frozenLayout) } : {}),
+        ...(hasEditorPolicy(job.input)
+          ? { editorPolicy: clone(job.input.editorPolicy) }
+          : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),
@@ -1034,9 +1265,17 @@ export async function runFullAuto(
         job.childGate = r.meta?.childGate || null;
         if (r.meta?.approvedProse) job.prose = r.meta.approvedProse;
         if (r.meta?.proseCoherence) job.proseCoherence = r.meta.proseCoherence;
+        if (r.meta?.revision) job.revision = clone(r.meta.revision);
       },
     );
-    if (job.pagination.pages.length !== job.input.pageCount)
+    // R12 openings: the opening structure and printed pages, not the entry count.
+    if (job.input?.layoutPolicy?.kind === "openings") {
+      const structure = validateOpenings(job.pagination, job.input, job.outline);
+      if (!structure.valid)
+        throw Error(
+          `목표 ${job.input.pageCount}쪽(펼침 ${job.input.pageCount / 2}개)과 만든 ${printedPagesOf(job.pagination.pages)}쪽의 펼침 구성이 달라요. 완료된 글을 검토해 주세요. ${structure.errors[0] || ""}`.trim(),
+        );
+    } else if (job.pagination.pages.length !== job.input.pageCount)
       throw Error(
         `목표 ${job.input.pageCount}쪽과 생성한 ${job.pagination.pages.length}쪽이 달라요. 완료된 글을 검토해 주세요.`,
       );
@@ -1088,7 +1327,9 @@ export async function runFullAuto(
       if (edited) delete job.completed["page:" + index];
       await step(
         "page:" + index,
-        `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
+        layoutOf(job.book) === "openings"
+          ? `그림 ${index + 1} / ${job.book.pages.length}장 · ${unitLabel(job.book, index)} 그림 만들기`
+          : `${index + 1} / ${job.book.pages.length}쪽 그림 만들기`,
         () =>
           withBookTextUsage(job, async () => {
             const before = job.book.pages[index]?.imageAssetId;
@@ -1141,8 +1382,11 @@ export async function runFullAuto(
     }
     job.status =
       error.name === "AbortError" || signal?.aborted ? "paused" : "failed";
+    // Shown to the parent: the stage token becomes its Korean name.
     job.error =
-      error.name === "AbortError" ? null : String(error.message || error);
+      error.name === "AbortError"
+        ? null
+        : describeStoryError(String(error.message || error));
     job.phase =
       job.status === "paused" ? "중단 · 이어 만들 수 있어요" : job.phase;
     try {

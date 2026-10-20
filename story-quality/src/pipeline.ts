@@ -59,6 +59,11 @@ export interface OutlineStageInput {
    * 수정 호출에도 말버릇 항목이 없다. 말버릇 정책 없이 고정된 앱의 기존 초안이 완료한 유료 호출을 재결제하지 않게 한다.
    */
   legacyCatchphrasePrompt?: boolean;
+  /**
+   * true면 2026-10-19 견고성 수정 이전의 검사(plotCheck legacyChecks)를 쓴다. 앱이 그 이전에 저장된 유료 체크포인트를 이어 갈 때만 켠다:
+   * 검사 결과가 바뀌면 수정 호출 요청이 달라져 이미 산 응답을 다시 쓰지 못하기 때문이다.
+   */
+  legacyChecks?: boolean;
 }
 
 export interface OutlineStageResult {
@@ -179,7 +184,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
   // 코드 검사 → 지적된 비트만 고치는 수정 호출 1회
   const catchphrases = input.legacyCatchphrasePrompt ? [] : input.catchphrases ?? cast.map((c) => c.catchphrase ?? '');
   outline = plantedFromSeed(outline, seed);
-  let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
+  let check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases, legacyChecks: input.legacyChecks });
   const onlyAdvisory = input.advisoryCatchphrases === true && check.fix.every((message) => isCatchphraseFix(message));
   if (check.fix.length > 0 && check.regenerate.length === 0 && !onlyAdvisory) {
     const fixUser = [`아래 줄거리 JSON에서 지적된 항목만 고쳐 전체 JSON을 다시 출력한다. 나머지 비트는 글자 하나 바꾸지 않는다.`, renderFixInstructions(check), JSON.stringify(outline)].join('\n\n');
@@ -189,7 +194,7 @@ export async function runOutlineStage(input: OutlineStageInput): Promise<Outline
     const fixed = (fr.json as StoryOutline | undefined) ?? extractJson<StoryOutline>(fr.text);
     if (fixed) {
       outline = plantedFromSeed(fixed, seed);
-      check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases });
+      check = plotCheck({ outline, topic: input.topic, protagonistName: input.protagonist.name, seed, ban, inventories: input.inventories, catchphrases, legacyChecks: input.legacyChecks });
     }
   }
 

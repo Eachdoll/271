@@ -1,4 +1,6 @@
 import { frozenBeatCount } from "./schemas.js";
+import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
+import { splitSentences } from "../story-quality/dist/util.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -285,7 +287,94 @@ function authoredUnits(count) {
   }
   return result;
 }
+/*
+ * R12 openings demo (펼침 구성): one authored paragraph per beat, written for
+ * K2/E2 — Korean 12 sentences of 5-7 eojeol, English 4 sentences of 5-9 words
+ * from the E2 list — so a pair splits into 6 + 6 and 2 + 2. Other levels reuse
+ * this text; the demo is free and is not a quality claim.
+ */
+const OPENING_DEMO = Object.freeze({
+  setup: [
+    "아침 햇살이 숲길 위에 반짝 내려요. 두 친구가 작은 가방을 메고 나와요. 가방 안에는 빈 도시락 통이 있어요. 친구가 통을 손가락으로 톡톡 두드려요. 길가의 나뭇잎이 바람에 살랑살랑 흔들려요. 두 친구는 나란히 숲으로 걸어가요. 새 한 마리가 나무 위에서 노래해요. “오늘은 숲에서 멋진 걸 찾자!” 친구가 손을 흔들며 크게 외쳐요. 다른 친구도 활짝 웃으며 고개를 끄덕여요. 두 친구의 발소리가 사뿐사뿐 울려요. 숲길 끝에서 시원한 바람이 불어와요.",
+    "The sun is up over the woods. We put a little box in my bag. “We will look for a stone,” I said. The wind makes a whoosh in the tree.",
+  ],
+  want: [
+    "숲 입구에 커다란 나무가 서 있어요. 나무 옆에 작은 팻말이 붙어 있어요. 팻말에는 노래하는 돌 그림이 있어요. “노래하는 돌을 꼭 찾고 싶어!” 친구가 팻말을 손으로 가리켜요. 다른 친구가 팻말을 가만히 들여다봐요. 두 친구는 귀를 쫑긋 세워요. 멀리서 후우 하는 소리가 들려요. 소리는 금방 다시 조용해져요. 친구가 가방 끈을 꼭 잡아요. 두 친구는 소리 나는 쪽으로 걸어요. 발밑의 흙이 촉촉하고 부드러워요.",
+    "A picture is on the big tree. It is a picture of a little stone. “I want to find that stone,” my friend said. A song comes from the woods.",
+  ],
+  attempt1: [
+    "길 위에 큰 돌 하나가 있어요. 친구가 막대기로 돌을 톡톡 쳐요. 돌에서는 쿵쿵 낮은 소리만 나요. “이 돌은 노래를 안 해.” 다른 친구가 돌에 코를 대 봐요. 돌 위의 먼지가 코를 간질여요. 친구가 에취 하고 재채기를 해요. 먼지가 햇빛 속에서 반짝 날아요. 두 친구는 돌을 한 번 더 봐요. 큰 돌은 아무 소리도 내지 않아요. 친구가 막대기를 가방에 다시 넣어요. 두 친구는 다음 돌을 찾아 걸어요.",
+    "A big stone is on the path. My friend hits it with a stick. “No song in this stone,” I said. The big stone is wet from the rain.",
+  ],
+  attempt2: [
+    "풀숲 옆에 작은 돌들이 모여 있어요. 친구가 작은 돌 하나를 들어 올려요. 돌 아래에서 개미들이 줄줄이 나와요. 개미들은 빵 부스러기를 등에 업고 가요. “개미야, 미안해. 길을 비켜 줄게.” 다른 친구가 돌을 살며시 내려놓아요. 개미들이 돌 사이로 바쁘게 지나가요. 두 친구는 무릎을 꿇고 가만히 지켜봐요. 개미 한 마리가 풀잎 위로 올라가요. 풀잎 끝이 아래로 살짝 휘어요. 바람이 다시 후우 하고 지나가요. 두 친구는 소리를 따라 고개를 돌려요.",
+    "We look under a little stone. Little ants come out from under it. “Here is your way, ants,” I said. We put the stone down in the sand.",
+  ],
+  attempt3: [
+    "친구가 긴 나뭇가지 하나를 주워요. 나뭇가지 안은 텅 비어 있어요. 친구가 나뭇가지에 입을 대고 불어요. 나뭇가지에서는 아무 소리도 나지 않아요. “이상하다, 여기서는 노래가 안 나.” 다른 친구가 나뭇가지를 귀에 대 봐요. 나뭇가지 속은 조용하기만 해요. 그때 바람이 머리카락을 살랑 흔들어요. 바위 틈에서 후우 소리가 다시 들려요. 두 친구는 서로 눈을 맞춰요. 친구가 바위 쪽을 손가락으로 가리켜요. 두 친구는 살금살금 바위로 다가가요.",
+    "My friend finds a long old stick. My friend puts it to her lips. I said, “Where is the song?” The soft wind is by the big stones.",
+  ],
+  attempts: [
+    "길 위에 큰 돌 하나가 있어요. 친구가 막대기로 돌을 톡톡 쳐요. 돌에서는 쿵쿵 낮은 소리만 나요. “이 돌은 노래를 안 해.” 친구가 작은 돌 하나를 들어 올려요. 돌 아래에서 개미들이 줄줄이 나와요. 다른 친구가 돌을 살며시 내려놓아요. 친구가 빈 나뭇가지에 입을 대고 불어요. 나뭇가지에서는 아무 소리도 나지 않아요. 그때 바위 틈에서 후우 소리가 들려요. 두 친구는 서로 눈을 맞춰요. 두 친구는 살금살금 바위로 다가가요.",
+    "My friend hits a big stone with a stick. Little ants come out from under a stone. My friend said, “Where is the song?” The soft rain is on the big stones.",
+  ],
+  turn: [
+    "바위 사이에 무언가 반짝 빛나요. 친구가 바위 틈을 가만히 들여다봐요. 바위 틈에 빈 도시락 통이 끼어 있어요. 통 뚜껑이 조금 열려 있어요. 바람이 통 안으로 후우 들어가요. 통이 휘이 하고 노래를 불러요. “아하, 통이 노래하고 있었어!” 다른 친구가 입을 동그랗게 벌려요. 노래하는 것은 돌이 아니었어요. 두 친구는 통을 한참 바라봐요. 바람이 멈추자 노래도 뚝 그쳐요. 친구가 통을 두 손으로 살살 당겨요.",
+    "A wet box is in the big stones. It is an old box with an open lid. “The box sings a song,” my friend said. The wind comes into the box.",
+  ],
+  resolution: [
+    "두 친구가 통을 바위에서 꺼내요. 통은 차갑고 조금 무거워요. 통을 꺼내자 노래가 멈춰요. “이제 우리가 노래를 만들어 보자.” 친구가 통 가장자리에 입을 대요. 친구가 통에 후우 바람을 불어요. 통에서 휘이 노래가 다시 나와요. 다른 친구도 차례로 통을 불어요. 두 친구의 노래가 숲에 퍼져요. 새들이 나뭇가지 위에서 짹짹 따라 해요. 친구가 통 뚜껑을 살며시 닫아요. 두 친구는 통을 가방에 넣어요.",
+    "We take the box out of the stones. My friend puts the box to her lips. We blow, and a song comes out. “We can make it again,” I said.",
+  ],
+  close: [
+    "해가 숲 너머로 천천히 내려가요. 두 친구가 집으로 걸어와요. 하늘이 주황빛으로 곱게 물들어요. 친구가 현관문을 살며시 열어요. 집 안에서 따뜻한 빵 냄새가 나요. 친구가 통을 침대 옆에 놓아요. 창밖으로 둥근 달이 떠올라요. “잘 자, 노래하는 도시락 통아.” 친구가 작은 베개를 꼭 안아요. 다른 친구는 이불을 폭신폭신 덮어요. 방 안이 조용하고 포근해져요. 두 친구는 스르르 눈을 감아요.",
+    "We walk home under the red sky. I put the box by my soft bed. “Thank you, little box,” I said. The moon is up over my home.",
+  ],
+});
+/** The demo paragraph key of every beat: attempts in order, or one combined attempt. */
+function openingDemoKeys(outline) {
+  const attempts = outline.beats.filter((beat) => beat.type === "attempt").length;
+  let attempt = 0;
+  return outline.beats.map((beat) =>
+    beat.type === "attempt"
+      ? attempts === 1
+        ? "attempts"
+        : `attempt${Math.min(3, ++attempt)}`
+      : OPENING_DEMO[beat.type]
+        ? beat.type
+        : "setup",
+  );
+}
+/** Openings demo prose: one paragraph per approved beat (a beat is an opening). */
+function demoOpeningsProse(outline, input) {
+  const baseline = demoOutline(input),
+    keys = openingDemoKeys(outline),
+    ko = keys.map((key) => OPENING_DEMO[key][0]),
+    en = keys.map((key) => OPENING_DEMO[key][1]);
+  // A parent's beat edit is quoted verbatim into that beat, as in page demos.
+  outline.beats.forEach((beat, index) => {
+    if (
+      beat.summary !==
+      baseline.beats.find((b) => b.index === beat.index)?.summary
+    )
+      ko[index] = beat.summary;
+  });
+  if (input.endingType === "open") {
+    ko[ko.length - 1] += " “내일은 노래하는 나무를 찾자!”";
+    const last = sentences(en.at(-1));
+    en[en.length - 1] = [...last.slice(0, -1), "What song can we find tomorrow?"].join(" ");
+  }
+  const labels = outline.beats.map((beat) => beat.index);
+  return {
+    ko: ko.join("\n\n"),
+    en: en.join("\n\n"),
+    usedRefrainAt: [],
+    paragraphBeats: { ko: [...labels], en: [...labels] },
+  };
+}
 export function demoProse(outline, input) {
+  if (input.layoutPolicy?.kind === "openings")
+    return demoOpeningsProse(outline, input);
   const units = authoredUnits(input.pageCount),
     baseline = demoOutline(input),
     mapping = plan[input.pageCount];
@@ -373,7 +462,143 @@ function wardrobeFor(input, pageNo) {
   }
   return result;
 }
+/* Openings demo scenes per demo paragraph: [spread, left page, right page]. */
+const OPENING_ACTIONS = Object.freeze({
+  setup: [
+    "The two friends walk along the sunny forest path while one carries a small picnic bag.",
+    "The child taps a metal lunch box inside a picnic bag beside the open front door.",
+    "The two friends walk side by side into the forest while leaves sway above them.",
+  ],
+  want: [
+    "The friends stand beneath a big tree and point at a small sign with a stone picture.",
+    "The companion points at a small wooden sign nailed beside a big tree trunk.",
+    "The two friends lift their heads and listen while walking toward the distant sound.",
+  ],
+  attempt1: [
+    "The child taps a large stone with a small stick while the companion leans closer.",
+    "The child taps a large stone on the path with a small stick and listens.",
+    "The companion touches the dusty stone with its nose and sneezes beside the child.",
+  ],
+  attempt2: [
+    "The friends lift a small stone while tiny ants march out along the grass.",
+    "The child lifts a small stone while tiny ants walk out from underneath it.",
+    "The friends kneel beside the grass and watch the ants pass between the stones.",
+  ],
+  attempt3: [
+    "The companion blows into a hollow stick while the child listens beside the rocks.",
+    "The companion picks up a long hollow stick and blows into one end of it.",
+    "The two friends walk on tiptoe toward the big rocks while wind moves their hair.",
+  ],
+  attempts: [
+    "The friends tap a big stone, lift a small one and blow a hollow stick on the path.",
+    "The child taps a large stone with a stick while ants walk from a small stone.",
+    "The companion blows into a hollow stick and both friends tiptoe toward the rocks.",
+  ],
+  turn: [
+    "The friends kneel by the big rocks and find a metal lunch box wedged between them.",
+    "The child peeks between two big rocks at a shiny metal lunch box with an open lid.",
+    "The companion points at the lunch box as wind blows across its open lid.",
+  ],
+  resolution: [
+    "The friends pull the lunch box from the rocks and blow across its metal rim.",
+    "The two friends pull the metal lunch box out from between the rocks together.",
+    "The child blows across the lunch box rim while birds sit on a branch above.",
+  ],
+  close: [
+    "The child places the lunch box beside the bed and hugs a soft pillow under moonlight.",
+    "The friends walk home along the path beneath an orange evening sky.",
+    "The child places the lunch box beside the bed and hugs a soft pillow.",
+  ],
+});
+/**
+ * R12 openings demo pagination: openings 1, the turn and the close are spreads,
+ * the others are pairs split at the middle sentence. The app derives kind,
+ * side, opening number and entry id through normalizeOpenings.
+ */
+function demoOpeningsPagination(outline, prose, input) {
+  const count = outline.beats.length,
+    plan = buildOpeningPlan(outline, count),
+    keys = openingDemoKeys(outline),
+    turn = outline.beats.findIndex((beat) => beat.type === "turn"),
+    spreads = new Set([0, turn, count - 1]),
+    cast = input.characters.map((c) => c.id),
+    background = input.backgrounds?.[0]?.id,
+    beatText = (language, beatIndex) => {
+      const labels = prose.paragraphBeats?.[language] || [],
+        rows = splitParagraphs(prose[language]);
+      return rows.filter((_, i) => labels[i] === beatIndex).join(" ");
+    };
+  const entries = [];
+  outline.beats.forEach((beat, k) => {
+    const actions = OPENING_ACTIONS[keys[k]] || OPENING_ACTIONS.setup,
+      last = k === count - 1,
+      scene = (action) => ({
+        who: cast,
+        where: last
+          ? "A quiet bedroom at home"
+          : background || "A forest path beside trees and stones",
+        action,
+        emotion: last ? "calm" : k >= turn && turn >= 0 ? "surprised" : "curious",
+        timeOfDay: last ? "night" : k >= count - 2 ? "evening" : k < 1 ? "morning" : "day",
+        props: last
+          ? ["metal lunch box", "soft pillow"]
+          : ["metal lunch box", k < 3 ? "stone" : "yellow leaf"],
+      }),
+      ko = beatText("ko", beat.index),
+      en = beatText("en", beat.index),
+      base = {
+        beatIndex: beat.index,
+        variantByCharacter: wardrobeFor(input, plan[k].printedPages[0]),
+        isRefrainPage: false,
+      };
+    if (spreads.has(k))
+      entries.push({
+        ...base,
+        textKo: ko,
+        textEn: en,
+        scene: scene(actions[0]),
+        cue: k === 0 ? "arrival" : last ? "ending" : "turn",
+      });
+    else {
+      const koRows = splitSentences(ko),
+        enRows = splitSentences(en),
+        koCut = Math.ceil(koRows.length / 2),
+        enCut = Math.ceil(enRows.length / 2);
+      entries.push(
+        {
+          ...base,
+          textKo: koRows.slice(0, koCut).join(" "),
+          textEn: enRows.slice(0, enCut).join(" "),
+          scene: scene(actions[1]),
+          cue: "two-moments",
+        },
+        {
+          ...base,
+          variantByCharacter: wardrobeFor(input, plan[k].printedPages[1]),
+          textKo: koRows.slice(koCut).join(" "),
+          textEn: enRows.slice(enCut).join(" "),
+          scene: scene(actions[2]),
+          cue: "two-moments",
+        },
+      );
+    }
+  });
+  entries.forEach((entry, index) => (entry.pageNo = index + 1));
+  const fixed = normalizeOpenings(entries, plan, input.specs);
+  return {
+    cover: {
+      title: input.title || outline.titleCandidates[0],
+      sceneAction:
+        "The two friends hold a metal lunch box beside forest stones beneath swaying leaves.",
+    },
+    pages: fixed.pages,
+    openingAdjustments: fixed.openingAdjustments,
+    mixNote: fixed.mixNote,
+  };
+}
 export function demoPagination(outline, prose, input) {
+  if (input.layoutPolicy?.kind === "openings")
+    return demoOpeningsPagination(outline, prose, input);
   const count = input.pageCount,
     ko = spreadProse(prose.ko, count),
     en = spreadProse(prose.en, count),

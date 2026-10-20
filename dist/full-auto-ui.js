@@ -9,6 +9,7 @@ import {
   estimateFullAutoCost,
   runFullAuto,
   FULL_AUTO_STOPS,
+  jobPictureTotal,
 } from "./full-auto.js";
 import {
   isPageOperationBusy,
@@ -157,7 +158,7 @@ export function cleanupFullAuto(hide = false) {
 }
 export function renderFullAutoLauncher(state, wizard) {
   const estimate = estimateFullAutoCost(state, wizard);
-  return `<section class="full-auto-launcher" aria-label="FULL AUTO MODE"><div><span class="role-tag">FULL AUTO MODE</span><h3>주제만 적고, 한 권을 한 번에</h3><p>고른 친구를 주인공으로 유지해요. 필요한 친구·장소는 서랍에서 고르고, 부족하면 새 시트부터 본문 그림과 표지까지 자동으로 만들어요.</p></div><label class="audio-cache-check"><input id="full-auto-allow-new" type="checkbox" checked> 부족한 재료 자동 추가 · 새 조연 최대 2명, 새 배경 최대 3곳</label><p class="small-label">${estimate.pageCount}쪽 · 부모 설정의 글·그림 엔진과 읽기 수준 사용<br>API 예상 약 $${estimate.baseUsd.toFixed(2)} · 새 시트 포함 약 $${estimate.withMaterialsAndRetryUsd.toFixed(2)}<br>참고 단가 추정이며 실제 한도가 아닙니다. 글 자동 수정·입력 참조 비용 별도.${estimate.imageEngine === "sample" ? "<br>현재 그림 엔진은 무료 고정 샘플입니다. AI 그림은 부모 설정에서 엔진을 변경해 주세요." : ""}</p><p class="small-label">완료 후 전체 초안을 검토해 책장에 저장해요. 제작 중에도 책장을 둘러볼 수 있어요. 브라우저를 완전히 종료하면 완료한 결과를 보관하고 다음 접속에서 이어 만들어요.</p><div class="story-start-actions"><button type="button" class="btn btn-green" data-action="wizard-next">줄거리부터 함께 만들기</button>${button("FULL AUTO로 한 번에", "start", null, "outline")}</div></section>`;
+  return `<section class="full-auto-launcher" aria-label="FULL AUTO MODE"><div><span class="role-tag">FULL AUTO MODE</span><h3>주제만 적고, 한 권을 한 번에</h3><p>고른 친구를 주인공으로 유지해요. 필요한 친구·장소는 서랍에서 고르고, 부족하면 새 시트부터 본문 그림과 표지까지 자동으로 만들어요.</p></div><label class="audio-cache-check"><input id="full-auto-allow-new" type="checkbox" checked> 부족한 재료 자동 추가 · 새 조연 최대 2명, 새 배경 최대 3곳</label><p class="small-label">${estimate.pageCount}쪽 · 부모 설정의 글·그림 엔진과 읽기 수준 사용<br>API 예상 약 $${estimate.baseUsd.toFixed(2)} · 새 시트 포함 약 $${estimate.withMaterialsAndRetryUsd.toFixed(2)}${estimate.textPricingUnknown || estimate.imagePricingUnknown ? " · 일부 요금 미확인 (목록에 없는 모델은 요금 정보 없음)" : ""}<br>참고 단가 추정이며 실제 한도가 아닙니다. 글 자동 수정·입력 참조 비용 별도.${estimate.imageEngine === "sample" ? "<br>현재 그림 엔진은 무료 고정 샘플입니다. AI 그림은 부모 설정에서 엔진을 변경해 주세요." : ""}</p><p class="small-label">완료 후 전체 초안을 검토해 책장에 저장해요. 제작 중에도 책장을 둘러볼 수 있어요. 브라우저를 완전히 종료하면 완료한 결과를 보관하고 다음 접속에서 이어 만들어요.</p><div class="story-start-actions"><button type="button" class="btn btn-green" data-action="wizard-next">줄거리부터 함께 만들기</button>${button("FULL AUTO로 한 번에", "start", null, "outline")}</div></section>`;
 }
 /** Simple-mode card status: what the parent would call it, not the runner's phase. */
 function simpleJobLabel(job) {
@@ -231,7 +232,7 @@ export function renderFullAutoJobs(state, { simple = false, rest = false } = {})
           pending?.nonce &&
           pending.nonce !== job.stopBaselineNonce &&
           job.status !== "paused";
-      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${job.input?.pageCount || 12}쪽 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}</div></article>`;
+      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}</div></article>`;
     })
     .join("")}</div></section>`;
 }
@@ -255,7 +256,7 @@ function runScreen(job, busy) {
     ),
     imageCalls = Object.keys(job.imageUsage || {}).length;
   api.showModal(
-    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><p id="full-auto-count" class="small-label">그림 ${images} / ${job.input.pageCount}쪽 · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
+    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><p id="full-auto-count" class="small-label">그림 ${images} / ${jobPictureTotal(job)} · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
       ["plan", "재료 선택"],
       ["input", "시트 준비"],
       ["outline", "줄거리"],
@@ -376,7 +377,7 @@ async function execute(job, { navigate = true, onProgress, redraw = [] } = {}) {
           count = document.querySelector("#full-auto-count");
         if (progress) progress.textContent = message;
         if (count)
-          count.textContent = `그림 ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${job.input.pageCount}쪽 · 글 요청 ${job.usage.calls.reduce((n, c) => n + (Number(c.requests) || 0), 0)}회`;
+          count.textContent = `그림 ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job)} · 글 요청 ${job.usage.calls.reduce((n, c) => n + (Number(c.requests) || 0), 0)}회`;
       },
     });
   };

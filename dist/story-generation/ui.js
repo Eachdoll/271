@@ -22,7 +22,10 @@ import {
   finalizeStoryPagination,
 } from "./pipeline.js";
 import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
+import { editorPolicy, revisionSummary } from "./book-revision.js";
+import { withPageRhythm } from "../page-rhythm.js";
 import {
+  SPREAD_SHOTS,
   SHOTS,
   SHOT_LABELS,
   stagePagination,
@@ -35,12 +38,25 @@ import {
   resolveTextModel,
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  registeredModelIds,
 } from "../text-generation/models.js";
 import {
   getTextGenerationSettings,
   normalizeStoryQualitySettings,
 } from "../text-generation/settings-ui.js";
 import { freezeReadingLevels } from "../reading-levels.js";
+import {
+  OPENING_PAGE_COUNTS,
+  OPENING_KOREAN_LEVELS,
+  CUES,
+  LAYOUT_FIELDS,
+  openingsLayoutPolicy,
+  openingsOf,
+  printedPagesOf,
+  layoutFor,
+  unitLabel,
+  validateOpenings,
+} from "../book-layout.js";
 import { getActiveWorld } from "../image-generation/world.js";
 import {
   availableCharacterVariants,
@@ -126,6 +142,7 @@ function stagingContext(d) {
       getStylePreset(d.worldSnapshot?.stylePresetId),
     backgrounds: d.input.backgrounds,
     preserveManual: true,
+    ...(openingsDraft(d) ? { openings: true } : {}),
   };
 }
 /** A completed request survives cancellation; only dependent products are invalidated. */
@@ -154,6 +171,8 @@ export function invalidateStoryDetails(
   return d;
 }
 export function applyStoryCheckpoint(d, checkpoint) {
+  if (checkpoint?.revisionCheckpoint)
+    d.revisionCheckpoint = clone(checkpoint.revisionCheckpoint);
   if (checkpoint?.qualityCheckpoint)
     d.qualityCheckpoint = clone(checkpoint.qualityCheckpoint);
   if (checkpoint?.childGateCheckpoint) {
@@ -240,6 +259,31 @@ export function updateStoryBriefField(briefs, index, path, value) {
   target[parts.at(-1)] = String(value);
   return next;
 }
+const ASPECT_LABELS = {
+  rhythm: "읽는 리듬",
+  repetition: "반복",
+  pageTurn: "다음 쪽 궁금함",
+  sensory: "감각 묘사",
+  continuity: "앞뒤 연결",
+  dialogue: "대사",
+  ending: "결말",
+  bilingual: "한글·영어 맞춤",
+  level: "읽기 수준",
+};
+/** Editor round: the read-through's report (what changed and why) for the parent. */
+export function renderRevisionNote(revision) {
+  const line = revisionSummary(revision);
+  if (!line) return "";
+  const changed = (revision.accepted || [])
+    .map((row) => `<li>${row.pageNo}쪽 · ${esc(row.reason || "글을 다듬었어요")}</li>`)
+    .join("");
+  const issues = (revision.report?.issues || [])
+    .filter((issue) => !(revision.accepted || []).some((row) => row.pageNo === issue.pageNo))
+    .slice(0, 6)
+    .map((issue) => `<li class="check-advisory">${issue.pageNo}쪽 · ${esc(ASPECT_LABELS[issue.aspect] || issue.aspect)} · ${esc(issue.note)}</li>`)
+    .join("");
+  return `<div class="story-revision"><strong>편집자 통독</strong><p>${esc(line)}${revision.report?.overall ? ` · ${esc(revision.report.overall)}` : ""}</p>${changed || issues ? `<ul class="check-issues">${changed}${issues}</ul>` : ""}</div>`;
+}
 export function renderSceneBriefs(
   d,
   { open = false, openBeats = new Set() } = {},
@@ -253,15 +297,25 @@ export function renderSceneBriefs(
         return `<label class="field"><span>${esc(label)}</span><input data-brief-field="${path}" data-index="${index}" maxlength="500" value="${esc(value || "")}"></label>`;
       };
       const issues = checked.issues.filter(
-        (issue) => issue.beatIndex === brief.beatIndex,
-      );
-      return `<details class="story-scene-brief" data-brief-details="${index}" ${openBeats.has(index) ? "open" : ""}><summary><strong>비트 ${brief.beatIndex}</strong><span>${esc(TIME_LABELS[brief.timeOfDay] || "시간 선택")} · ${esc(brief.pose?.ko || "동작 입력")}</span>${issues.length ? '<span class="story-check-badge fail">확인 필요</span>' : ""}</summary><label class="field"><span>시간</span><select data-brief-field="timeOfDay" data-index="${index}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${brief.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></label>${BRIEF_FIELDS.map(([path, label]) => `<fieldset class="story-brief-pair"><legend>${label}</legend><div class="story-review-grid">${field(`${path}.ko`, "한글")}${field(`${path}.en`, "English · 그림에 함께 전달")}</div></fieldset>`).join("")}<div class="story-review-grid">${field("dialogueLine", "대사 한 줄")}${field("humor", "작은 재미")}</div>${issues.length ? `<ul class="story-note">${issues.map((issue) => `<li>${esc(issue.message)}</li>`).join("")}</ul>` : ""}${button("이 장면만 다시", "rewrite-scene-brief", `data-index="${brief.beatIndex}"`)}</details>`;
+          (issue) => issue.beatIndex === brief.beatIndex,
+        ),
+        notes = (checked.advisories || []).filter(
+          (issue) => issue.beatIndex === brief.beatIndex,
+        ),
+        blocking = issues.some((issue) => issue.severity === "hard");
+      return `<details class="story-scene-brief" data-brief-details="${index}" ${openBeats.has(index) ? "open" : ""}><summary><strong>비트 ${brief.beatIndex}</strong><span>${esc(TIME_LABELS[brief.timeOfDay] || "시간 선택")} · ${esc(brief.pose?.ko || "동작 입력")}</span>${blocking ? '<span class="story-check-badge fail">확인 필요</span>' : issues.length || notes.length ? '<span class="story-check-badge">참고</span>' : ""}</summary><label class="field"><span>시간</span><select data-brief-field="timeOfDay" data-index="${index}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${brief.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></label>${BRIEF_FIELDS.map(([path, label]) => `<fieldset class="story-brief-pair"><legend>${label}</legend><div class="story-review-grid">${field(`${path}.ko`, "한글")}${field(`${path}.en`, "English · 그림에 함께 전달")}</div></fieldset>`).join("")}<div class="story-review-grid">${field("dialogueLine", "대사 한 줄")}${field("humor", "작은 재미")}</div>${issues.length || notes.length ? `<ul class="story-note">${issues.map((issue) => `<li>${esc(issue.message)}</li>`).join("")}${notes.map((issue) => `<li class="check-advisory">${esc(issue.message)}</li>`).join("")}</ul>` : ""}${button("이 장면만 다시", "rewrite-scene-brief", `data-index="${brief.beatIndex}"`)}</details>`;
     })
     .join("");
   return `<details class="story-card story-briefs" id="story-scene-details" ${open ? "open" : ""}><summary>장면 디테일 <span>${d.sceneBriefs.length}개 · 글과 그림이 함께 참고해요</span></summary><p class="story-note">수정한 디테일은 다음 전문 생성에 반영됩니다. 기존 전문과 쪽 나누기는 다시 생성해야 해요.</p>${rows}</details>`;
 }
-export function renderStoryPageStaging(page, index) {
+export function renderStoryPageStaging(page, index, { openings = false } = {}) {
   const staging = page.staging || {};
+  // R12 openings: a spread offers spread shots and the left/right halves only.
+  if (openings && page.kind === "spread") {
+    const chip = (key, value, label) =>
+      `<button type="button" class="story-chip ${staging[key] === value ? "selected" : ""}" aria-pressed="${staging[key] === value}" data-story-action="set-page-staging" data-index="${index}" data-staging-field="${key}" data-staging-value="${value}">${esc(label)}</button>`;
+    return `<div class="story-page-staging"><fieldset><legend class="story-label">구도</legend><div class="story-chip-row">${SPREAD_SHOTS.map((shot) => chip("shot", shot, SHOT_LABELS[shot] || shot)).join("")}</div></fieldset><fieldset><legend class="story-label">인물 위치</legend><div class="story-chip-row">${chip("characterSide", "left", "왼쪽")}${chip("characterSide", "right", "오른쪽")}</div></fieldset><span class="story-note">펼침면 · 접히는 가운데를 피해 그려요 · 글은 그림 아래</span></div>`;
+  }
   const chips = (key, values, labels) =>
     values
       .map(
@@ -281,7 +335,12 @@ export function renderStoryRichness(report, { dirty = false } = {}) {
       const problems = page.issues || page.violations || [];
       return `<div class="story-richness-page"><strong>${Number(page.pageNo) || "?"}쪽</strong> ${page.passed === false || problems.length ? '<span class="story-check-badge fail">확인 필요</span>' : '<span class="story-check-badge">확인</span>'}${problems.length ? `<span>${problems.map((issue) => esc(issue.message || issue.code || issue)).join(" · ")}</span>` : ""}</div>`;
     })
-    .join("")}</details>`;
+    .join("")}${
+    // R12 openings: advisories (never rewritten automatically) are listed apart.
+    report.advisories?.length
+      ? `<p class="story-note">참고(자동으로 고치지 않아요)</p><ul>${report.advisories.map((issue) => `<li>${issue.pageNo ? `${Number(issue.pageNo)}쪽 · ` : ""}${esc(issue.message || issue.code)}</li>`).join("")}</ul>`
+      : ""
+  }</details>`;
 }
 
 /** Structural inspiration only: selected patterns never introduce reference-book events. */
@@ -433,7 +492,7 @@ export function updateStoryDraftEngine(draft, selection = {}, fallback = {}) {
       {};
     providers[id] = {
       ...clone(value),
-      model: resolveTextModel(id, value.model),
+      model: resolveTextModel(id, value.model, value),
     };
     if (id === "local" && !providers[id].baseUrl && !providers[id].endpoint)
       providers[id].baseUrl = "http://127.0.0.1:1234/v1";
@@ -445,10 +504,15 @@ export function updateStoryDraftEngine(draft, selection = {}, fallback = {}) {
   if (Object.hasOwn(selection, "model")) {
     if (
       engine !== "local" &&
-      !listTextModels(engine).some((row) => row.id === selection.model)
+      !listTextModels(engine).some((row) => row.id === selection.model) &&
+      !registeredModelIds(providers[engine]).includes(selection.model)
     )
       throw new Error("선택한 엔진에서 사용할 모델을 골라 주세요.");
-    providers[engine].model = resolveTextModel(engine, selection.model);
+    providers[engine].model = resolveTextModel(
+      engine,
+      selection.model,
+      providers[engine],
+    );
   }
   const hybridEnabled =
     engine !== "local" && (selection.hybridEnabled ?? isHybrid(source));
@@ -481,7 +545,7 @@ export function renderStoryEngineSelector(
       );
       return id === "local"
         ? config.model || "로컬"
-        : getTextModelInfo(id, config.model).name;
+        : getTextModelInfo(id, config.model, config).name;
     };
     return `<section class="story-engine-card story-engine-summary" aria-label="이 초안의 글 엔진"><p>줄거리 <strong>${esc(roleName("outline"))}</strong> · 전문 <strong>${esc(roleName("prose"))}</strong> · 심사·단순화 <strong>${esc(roleName("cheap"))}</strong></p>${busy ? "" : button("변경", "open-text-settings")}</section>`;
   }
@@ -489,7 +553,7 @@ export function renderStoryEngineSelector(
     const { engineId: id, config } = resolveStoryStageSettings(settings, stage);
     return id === "local"
       ? config.model || "로컬"
-      : getTextModelInfo(id, config.model).name;
+      : getTextModelInfo(id, config.model, config).name;
   };
   return `<section class="story-engine-card story-engine-summary" aria-label="이 초안의 글 엔진"><p>${draft.demo ? '<span class="story-demo-label">데모</span>' : ""}${isHybrid(settings) ? `줄거리 <strong>${esc(name("outline"))}</strong> · 전문 <strong>${esc(name("prose"))}</strong> · 쪽 나누기 <strong>${esc(name("pagination"))}</strong> · 하이브리드 켜짐` : `줄거리·쪽 나누기 <strong>${esc(name("outline"))}</strong> · 전문 <strong>${esc(name("prose"))}</strong>`}</p>${busy ? "" : button("변경", "open-text-settings")}</section>`;
 }
@@ -521,6 +585,8 @@ function options(s, stage, forceApi = false) {
       ...resolveStoryStageSettings(settings, "coherence"),
       signal: s.controller?.signal,
     },
+    revisionOptions: resolveStoryStageSettings(settings, "coherence"),
+    revisionCheckpoint: d.revisionCheckpoint,
     sceneBriefs: d.sceneBriefs || undefined,
     bookId: d.bookId || d.id,
     stylePreset: stagingContext(d).stylePreset,
@@ -678,7 +744,21 @@ function drawerBackgrounds(state, existing = []) {
   ];
 }
 
-export function inputFromWizard(state, wizard) {
+/**
+ * The frozen input of a new draft or job. The layout is decided by the CALLER and
+ * never re-derived here: only startStoryWorkflow and createFullAutoJob pass
+ * layoutFor(wizard), and the FULL AUTO input step passes the layout its job.input
+ * already holds. 'pages' (the default) is the pre-R12 input, byte for byte.
+ * 'openings' adds layoutPolicy, v4 openings reading rules, one beat per opening
+ * and the openings prose length policy; it accepts only 12 or 16 printed pages and
+ * throws before any paid call otherwise (it never snaps silently).
+ */
+export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
+  if (layout !== "pages" && layout !== "openings")
+    throw new Error("책 구성은 pages 또는 openings여야 해요.");
+  const openings = layout === "openings";
+  if (openings && !OPENING_PAGE_COUNTS.includes(Number(wizard.pageCount || 12)))
+    throw new Error("펼침 구성 책은 12쪽이나 16쪽으로 골라 주세요.");
   const choices = validateWardrobeSelections(state, wizard),
     previous = state.books.find((book) => book.id === wizard.previousBookId),
     world = clone(getActiveWorld(state));
@@ -701,7 +781,17 @@ export function inputFromWizard(state, wizard) {
         ]?.words || [],
     },
     state.settings,
+    ...(openings ? [{ layout: "openings" }] : []),
   );
+  if (
+    openings &&
+    (!OPENING_KOREAN_LEVELS.includes(readingLevels.koreanLevel) ||
+      wizard.language === "en")
+  )
+    throw new Error("펼침 구성 책은 한글이 있는 K2~K4 책에서만 만들 수 있어요.");
+  // Page rhythm: new drafts judge the book's sentence total (±20%) and let
+  // each page vary; frozen here in the specs (and the job's readingLevels).
+  readingLevels.specs = withPageRhythm(readingLevels.specs);
   const variants = (wizard.characterIds || [])
     .map((id) => state.characters.find((c) => c.id === id))
     .filter(Boolean)
@@ -760,10 +850,13 @@ export function inputFromWizard(state, wizard) {
         Math.max(0, Number(wizard.qualitySeedOffset) || 0),
       ),
       pageCount: Number(wizard.pageCount || 12),
-      outlineBeatCount: beatCountFor(
-        Number(wizard.pageCount || 12),
-        readingLevels.koreanLevel,
-      ),
+      ...(openings ? { layoutPolicy: openingsLayoutPolicy() } : {}),
+      outlineBeatCount: openings
+        ? Number(wizard.pageCount || 12) / 2
+        : beatCountFor(
+            Number(wizard.pageCount || 12),
+            readingLevels.koreanLevel,
+          ),
       endingType: wizard.ending === "open" ? "open" : "home_sleep",
       moral:
         wizard.value === "custom"
@@ -780,9 +873,10 @@ export function inputFromWizard(state, wizard) {
       previousStory: inherited.previousStory,
       prosePolicy: {
         version: 1,
+        // Openings drafts allow the app length-fit pass in both languages.
         condenseOverBudget: {
-          ko: readingLevels.koreanLevel === "K1",
-          en: readingLevels.englishLevel === "E0",
+          ko: openings || readingLevels.koreanLevel === "K1",
+          en: openings || readingLevels.englishLevel === "E0",
         },
       },
       specs: readingLevels.specs,
@@ -790,6 +884,9 @@ export function inputFromWizard(state, wizard) {
       variantByCharacter: choices.characterVariants,
       variantPageRanges: choices.variantPageRanges,
       catchphrasePolicy,
+      // Editor round: frozen for new drafts only (read-through, current-book
+      // context in rewrites, author-model content fixes).
+      editorPolicy: editorPolicy(),
     },
     readingLevels,
     world,
@@ -849,7 +946,9 @@ export function startStoryWorkflow(wizard) {
   cleanupStoryWorkflow();
   const state = api.getState();
   try {
-    const prepared = inputFromWizard(state, wizard),
+    const prepared = inputFromWizard(state, wizard, {
+        layout: layoutFor(wizard),
+      }),
       textSettings = clone(getTextGenerationSettings(state));
     session = {
       state,
@@ -1008,6 +1107,13 @@ export function syncStoryDraft(book, state) {
             stagingRegeneration: page.stagingRegeneration || 0,
           }
         : {}),
+      // R12 openings: an entry keeps its place (kind, side, opening, id, cue).
+      ...Object.fromEntries(
+        LAYOUT_FIELDS.filter((key) => page[key] !== undefined).map((key) => [
+          key,
+          clone(page[key]),
+        ]),
+      ),
     }));
   d.checksDirty = true;
   d.updatedAt = new Date().toISOString();
@@ -1099,6 +1205,27 @@ export function updateStoryBeatLocation(outline, input, index, backgroundId) {
   }
   return next;
 }
+/** R12: a draft frozen as an openings book (its input's layout policy). */
+function openingsDraft(draft) {
+  return draft?.input?.layoutPolicy?.kind === "openings";
+}
+/**
+ * R12 openings: the structure is frozen once any entry has a picture or a FULL
+ * AUTO picture step ('page:N') completed, so index-keyed picture work never
+ * points at a different entry. Repagination is offered only before that.
+ */
+function openingsStructureFrozen(s) {
+  const d = s.draft,
+    book = d.pictureBook || null,
+    jobs = s.state?.fullAutoJobs || {},
+    job = d.fullAutoRunId ? jobs[d.fullAutoRunId] : null;
+  return (
+    (book?.pages || []).some((page) => page?.imageAssetId || page?.imageUrl) ||
+    Object.keys(job?.completed || {}).some((key) => key.startsWith("page:"))
+  );
+}
+const PICTURE_FROZEN_NOTE =
+  "그림이 있는 책은 쪽을 다시 나누지 않아요. 글은 쪽마다 고칠 수 있어요.";
 export function renderStoryBeatCard(draft, index, { open = false } = {}) {
   const outline = draft.outline,
     beat = outline.beats[index],
@@ -1113,18 +1240,20 @@ export function renderStoryBeatCard(draft, index, { open = false } = {}) {
     index,
     outline.beats.length,
   );
-  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${plan
-    .filter((page) => page.beatIndex === beat.index)
-    .map((page) => page.pageNo)
-    .join(
-      "·",
-    )}쪽</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "집" : "배경 서랍"}</legend><div class="story-chip-row">${backgrounds.map((background) => `<button type="button" class="story-chip ${place === background.id ? "selected" : ""}" aria-pressed="${place === background.id}" data-story-action="set-beat-location" data-index="${index}" data-background-id="${esc(background.id)}">${esc(background.name || background.nameEn || background.id)}</button>`).join("") || '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>'}</div>${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
+  // R12 openings: one beat is one opening (two facing printed pages).
+  const pagesLabel = openingsDraft(draft)
+    ? `펼침 ${index + 1} · ${2 * index + 1}–${2 * index + 2}쪽`
+    : `${plan
+        .filter((page) => page.beatIndex === beat.index)
+        .map((page) => page.pageNo)
+        .join("·")}쪽`;
+  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${pagesLabel}</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "집" : "배경 서랍"}</legend><div class="story-chip-row">${backgrounds.map((background) => `<button type="button" class="story-chip ${place === background.id ? "selected" : ""}" aria-pressed="${place === background.id}" data-story-action="set-beat-location" data-index="${index}" data-background-id="${esc(background.id)}">${esc(background.name || background.nameEn || background.id)}</button>`).join("") || '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>'}</div>${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
 }
 function renderOutline(s) {
   const o = s.draft.outline;
   show(
     s,
-    `${header(s, "줄거리 카드")}<p class="modal-intro">${o.beats.length}개 비트 · ${s.draft.input.pageCount}쪽 예정 · 집에서 출발해 두 곳 이상을 거쳐 집으로 돌아와요.</p><div class="story-card"><label class="story-label">제목</label>${o.titleCandidates.map((title, i) => `<label class="story-title-pick"><input type="radio" name="story-title" value="${i}" ${s.draft.titleIndex === i ? "checked" : ""}><input type="text" maxlength="100" data-outline-title="${i}" value="${esc(title)}" aria-label="제목 후보 ${i + 1}"></label>`).join("")}<div class="field"><label>한 줄 요약</label><input data-outline-field="logline" value="${esc(o.logline)}" maxlength="500"></div><div class="story-review-grid">${[
+    `${header(s, "줄거리 카드")}<p class="modal-intro">${o.beats.length}개 비트 · ${s.draft.input.pageCount}쪽 예정${openingsDraft(s.draft) ? ` · 펼침 ${s.draft.input.pageCount / 2}개(비트 하나가 펼침 하나)` : ""} · 집에서 출발해 두 곳 이상을 거쳐 집으로 돌아와요.</p><div class="story-card"><label class="story-label">제목</label>${o.titleCandidates.map((title, i) => `<label class="story-title-pick"><input type="radio" name="story-title" value="${i}" ${s.draft.titleIndex === i ? "checked" : ""}><input type="text" maxlength="100" data-outline-title="${i}" value="${esc(title)}" aria-label="제목 후보 ${i + 1}"></label>`).join("")}<div class="field"><label>한 줄 요약</label><input data-outline-field="logline" value="${esc(o.logline)}" maxlength="500"></div><div class="story-review-grid">${[
       ["want", "주인공의 바람"],
       ["problem", "문제"],
       ["twist", "반전"],
@@ -1179,9 +1308,45 @@ function checkView(s) {
             id,
             ...(typeof value === "object" ? value : { passed: value }),
           }));
-  return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${c.warnings?.length ? `<ul class="check-issues">${c.warnings.map((w) => `<li class="check-advisory">${w.pageNo ? `${w.pageNo}쪽 · ` : ""}${esc(describeReadingViolation(w))}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}</div>`;
+  return `<div class="story-card story-check-details"><strong>이야기 자동 검사</strong><p>${c.passed === true ? "검사 기준을 통과했어요." : c.passed === false ? "수정이 필요한 항목이 있어요. 배지를 확인해 주세요." : "최신 쪽에 대한 검사 결과입니다."}</p>${entries.map((item) => `<span class="story-check-badge ${item.passed === false || item.ok === false ? "fail" : ""}">${esc(item.label || item.name || item.id || item.type)} ${item.passed === false || item.ok === false ? "확인 필요" : "확인"}</span>`).join("")}${Array.isArray(c.violations) && c.violations.length ? `<ul>${c.violations.map((item) => `<li>${item.pageNo ? `${item.pageNo}쪽 · ` : ""}${esc(item.message || item.reason || item.type || item.code)}</li>`).join("")}</ul>` : ""}${c.warnings?.length ? `<ul class="check-issues">${c.warnings.map((w) => `<li class="check-advisory">${w.pageNo ? `${w.pageNo}쪽 · ` : ""}${esc(describeReadingViolation(w))}</li>`).join("")}</ul>` : ""}${s.draft.checksDirty ? '<p class="story-note">글이나 장면을 수정했어요. 그림 생성 전에 최신 내용으로 다시 검사합니다.</p>' : ""}${renderRevisionNote(s.draft.revision)}</div>`;
+}
+/** R12 openings: the pro 쪽 나누기 screen (no count select, no split/merge, no paid count fix). */
+function renderOpeningsPages(s) {
+  const d = s.draft,
+    p = d.pagination,
+    cast = d.input.characters,
+    structure = validateOpenings(p, d.input, d.outline),
+    openings = openingsOf(p.pages),
+    spreads = p.pages.filter((page) => page.kind === "spread").length,
+    singles = p.pages.length - spreads,
+    frozen = openingsStructureFrozen(s);
+  const cue = (page) =>
+    `<span class="story-check-badge opening-cue">${page.kind === "spread" ? "펼침면" : "낱쪽"}${page.cue && CUES[page.cue] ? ` · ${esc(CUES[page.cue])}` : ""}</span>`;
+  show(
+    s,
+    `${header(s, "쪽 나누기")}<p class="modal-intro">펼침 ${openings.length}개 · ${printedPagesOf(p.pages)}쪽 · 그림 ${p.pages.length}장(펼침면 ${spreads} · 낱쪽 ${singles})${p.mixNote === "all-spreads" ? " · 모두 펼침면" : ""} · AI가 펼침마다 펼침면/낱쪽을 골랐어요.</p>${structure.valid ? "" : `<div class="notice story-count-warning" role="status"><strong>펼침 구성을 다시 맞춰야 해요.</strong><p>${esc(structure.errors.slice(0, 3).join(" "))}</p></div>`}<details class="story-card story-tools"><summary>다시 나누기·검사</summary><div class="story-inline-actions">${frozen ? `<p class="story-note">${PICTURE_FROZEN_NOTE}</p>` : button("전문 유지 · 쪽만 다시 나누기", "repaginate")}${button("검사 후 실패 쪽만 수정 · 최대 2회", "repair-pages")}${button("전문으로 돌아가기", "back-prose")}</div></details>${renderStoryChildGate(d.childGate, { dirty: d.checksDirty })}${renderStoryCoherence(d.pageCoherence || d.paginationMeta?.coherence, { dirty: d.checksDirty })}${checkView(s)}${renderStoryRichness(d.richnessCheck, { dirty: d.checksDirty })}<div class="story-card"><div class="field"><label>표지 제목</label><input data-cover-field="title" value="${esc(p.cover.title)}" maxlength="150"></div><div class="field"><label>표지 장면 · 영어</label><textarea data-cover-field="sceneAction" maxlength="1000">${esc(p.cover.sceneAction)}</textarea></div></div>${p.pages
+      .map(
+        (page, i) =>
+          `<article class="story-card" data-story-page="${i}"><div class="story-card-head"><strong>${esc(unitLabel(d, i))} · ${page.beatIndex}번 비트</strong>${cue(page)}<div class="story-inline-actions">${button("이 쪽만 다시", "rewrite-page", `data-index="${i}"`)}</div></div><div class="story-review-grid"><div class="field"><label>한글</label><textarea data-page-field="textKo" data-index="${i}" maxlength="15000">${esc(page.textKo)}</textarea></div><div class="field"><label>English</label><textarea data-page-field="textEn" data-index="${i}" maxlength="15000">${esc(page.textEn)}</textarea></div></div>${renderStoryPageStaging(page, i, { openings: true })}<div class="story-page-scene"><div class="field"><label>그릴 한 장면 · 영어 동작 설명</label><textarea data-scene-field="action" data-index="${i}" maxlength="2500">${esc(page.scene.action)}</textarea></div><div class="story-review-grid"><div class="field"><label>배경 ID 또는 장소 설명</label><input data-scene-field="where" data-index="${i}" value="${esc(page.scene.where)}"></div><div class="field"><label>감정 · 영어 한 단어</label><input data-scene-field="emotion" data-index="${i}" value="${esc(page.scene.emotion)}"></div><div class="field"><label>시간</label><select data-scene-field="timeOfDay" data-index="${i}">${BRIEF_TIMES.map((time) => `<option value="${time}" ${page.scene.timeOfDay === time ? "selected" : ""}>${TIME_LABELS[time]}</option>`).join("")}</select></div><div class="field"><label>소품 · 영어, 쉼표로 구분</label><input data-scene-field="props" data-index="${i}" value="${esc(page.scene.props?.join(", ") || "")}"></div></div><div class="story-page-variants">${cast
+            .map(
+              (character) =>
+                `<label class="story-label">${esc(character.name)}의 모습<select data-page-variant="${esc(character.id)}" data-index="${i}"><option value="">기본 시트</option>${d.input.variants
+                  .filter((v) => v.characterId === character.id)
+                  .map(
+                    (v) =>
+                      `<option value="${esc(v.id)}" ${page.variantByCharacter?.[character.id] === v.id ? "selected" : ""}>${esc(v.name || v.id)}</option>`,
+                  )
+                  .join("")}</select></label>`,
+            )
+            .join("")}</div></div></article>`,
+      )
+      .join(
+        "",
+      )}${note()}<label class="story-note"><input type="checkbox" id="story-accept-failures"> 읽기 수준·표현 검사 경고를 확인했습니다. 플롯 연결 오류는 수정 후 진행합니다.</label><div class="modal-actions">${button("저장하고 닫기", "close")}${button("쪽 승인 · 그림 단계로", "approve-pages", structure.valid ? "" : "disabled", "primary")}</div>`,
+  );
 }
 function renderPages(s) {
+  if (openingsDraft(s.draft)) return renderOpeningsPages(s);
   const p = s.draft.pagination,
     cast = s.draft.input.characters,
     target = s.draft.input.pageCount,
@@ -1623,7 +1788,14 @@ async function approvePages(
     throw new Error(
       "줄거리의 사건·장소가 바뀌었어요. 줄거리에서 설계와 장면을 다시 확인해 주세요.",
     );
-  if (d.pagination.pages.length !== d.input.pageCount)
+  if (openingsDraft(d)) {
+    // R12 openings: the opening structure and printed pages, not the entry count.
+    const structure = validateOpenings(d.pagination, d.input, d.outline);
+    if (!structure.valid)
+      throw new Error(
+        `펼침 구성을 확인해 주세요: ${structure.errors.slice(0, 2).join(" ")}`,
+      );
+  } else if (d.pagination.pages.length !== d.input.pageCount)
     throw new Error(
       `현재 ${d.pagination.pages.length}쪽 / 목표 ${d.input.pageCount}쪽입니다. 위의 복구 버튼으로 쪽 수를 맞춰 주세요.`,
     );
@@ -1998,6 +2170,13 @@ async function handleClick(event) {
         },
       );
     }
+    if (
+      openingsDraft(d) &&
+      ["fit-page-count", "split-page", "merge-page"].includes(action)
+    )
+      throw new Error(
+        "펼침 구성 책은 AI가 고른 펼침을 그대로 써요. 글은 쪽마다 고칠 수 있어요.",
+      );
     if (action === "fit-page-count") {
       snapshot(s, "pagination");
       const fitted = splitPaginationToCount(d.pagination, d.input.pageCount, {
@@ -2217,10 +2396,15 @@ async function handleClick(event) {
         s,
         "승인한 전문을 쪽으로 나누고 검사하고 있어요",
         () =>
-          paginateStory(d.outline, d.prose, d.input, options(s, "pagination")),
+          // A fresh pagination of a new draft gets the editor's read-through.
+          paginateStory(d.outline, d.prose, d.input, {
+            ...options(s, "pagination"),
+            revise: true,
+          }),
         (r) => {
           d.pagination = r.data;
           d.paginationMeta = r.meta;
+          if (r.meta?.revision) d.revision = r.meta.revision;
           recordCoherence(d, r);
           d.storyCheck = r.meta?.checks;
           d.richnessCheck = r.meta?.richnessChecks || null;
@@ -2231,9 +2415,13 @@ async function handleClick(event) {
       );
     }
     if (action === "repaginate") {
-      const targetPages =
-        Number(document.querySelector("#story-page-count")?.value) ||
-        d.input.pageCount;
+      // R12 openings: the frozen page count, and never once a picture exists.
+      if (openingsDraft(d) && openingsStructureFrozen(s))
+        throw new Error(PICTURE_FROZEN_NOTE);
+      const targetPages = openingsDraft(d)
+        ? d.input.pageCount
+        : Number(document.querySelector("#story-page-count")?.value) ||
+          d.input.pageCount;
       return run(
         s,
         "전문은 유지하고 쪽만 다시 나누고 있어요",
@@ -2242,9 +2430,10 @@ async function handleClick(event) {
             d.outline,
             d.prose,
             { ...d.input, pageCount: targetPages },
-            options(s, "pagination"),
+            { ...options(s, "pagination"), revise: true },
           ),
         (r) => {
+          if (r.meta?.revision) d.revision = r.meta.revision;
           d.input.pageCount = targetPages;
           if (d.wizard) d.wizard.pageCount = targetPages;
           snapshot(s, "pagination");

@@ -1,0 +1,53 @@
+{
+  "sourceRange": "387f436..25e3760",
+  "r15Range": "a03d149..25e3760",
+  "documentCommit": "deed539",
+  "node": "24.19.0",
+  "appTests": {
+    "passed": 850,
+    "failed": 0,
+    "skipped": 0
+  },
+  "qualityTests": {
+    "passed": 79,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": "passed",
+  "simpleSmoke": {
+    "1280": "passed",
+    "390": "passed",
+    "paidRequests": 0
+  },
+  "uxCensus": {
+    "proSameAsTable": true,
+    "errors": 0,
+    "paidRequests": 0,
+    "maxStepButtons": 10
+  },
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "openings": [
+    {
+      "file": "r15-openings-browser.json",
+      "passed": true,
+      "runs": 28,
+      "problems": 0,
+      "pageErrors": 0,
+      "blockedFontEntries": 20
+    },
+    {
+      "file": "r15-openings-complement.json",
+      "passed": true,
+      "runs": 28,
+      "problems": 0,
+      "pageErrors": 0,
+      "blockedFontEntries": 20
+    }
+  ],
+  "deployment": {
+    "status": "not_requested",
+    "localCacheVersion": 44,
+    "lastConfirmedProductionVersion": 27
+  },
+  "paidApiCalls": 0
+}

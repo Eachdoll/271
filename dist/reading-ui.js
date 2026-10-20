@@ -8,10 +8,12 @@ import {
   validateAndRewriteBook,
   applyReadingFeedback,
   acceptReadingSuggestion,
+  OPENING_SEED,
 } from "./reading-levels.js";
 import { describeReadingViolation } from "./reading-messages.js";
 export { describeReadingViolation };
 import { analyzeBook, estimateReadingScore } from "./reading-checker.js";
+import { layoutOf, openingsEnabled, unitLabel } from "./book-layout.js";
 
 const escape = (value) =>
   String(value ?? "").replace(
@@ -34,8 +36,15 @@ const labels = {
 };
 let api,
   currentOperation = null;
+/** R12: with openings on, K2-K4 name their per-opening amount ('두 쪽에 10~15문장'). */
+const levelLabel = (level) => {
+  const unit = OPENING_SEED.ko[level]?.units?.opening;
+  return openingsEnabled() && unit
+    ? `${labels[level]} · 두 쪽에 ${unit.min}~${unit.max}문장`
+    : labels[level];
+};
 const select = (id, label, levels, value) =>
-  `<div class="field"><label for="${id}">${label}</label><select id="${id}">${levels.map((level) => `<option value="${level}" ${level === value ? "selected" : ""}>${labels[level]}</option>`).join("")}</select></div>`;
+  `<div class="field"><label for="${id}">${label}</label><select id="${id}">${levels.map((level) => `<option value="${level}" ${level === value ? "selected" : ""}>${levelLabel(level)}</option>`).join("")}</select></div>`;
 export function migrateReadingSettings(settings) {
   settings.defaultKoreanLevel = normalizeReadingLevels({
     koreanLevel: settings.defaultKoreanLevel,
@@ -170,7 +179,7 @@ export function renderReadingCheck(book) {
           )
           .join("")}</ul></details>`
       : ""
-  }${check?.pages?.length ? `<details class="reading-check-details"><summary>쪽별 검사 보기</summary><div class="reading-check-table"><table><thead><tr><th>쪽</th><th>한글 어절 / 어미</th><th>영어 FK / Spache / DC</th><th>단계</th></tr></thead><tbody>${check.pages.map((page, index) => `<tr><td>${index + 1}</td><td>${page.ko?.metrics?.averageWordsPerSentence ?? "—"} / ${page.ko?.metrics?.connectiveEndings ?? "—"}${page.ko?.metrics?.vocabularySkipped ? " · 어휘 목록 없음" : ""}</td><td>${page.en?.metrics?.fkGrade ?? "—"} / ${page.en?.metrics?.spache ?? "—"} / ${page.en?.metrics?.daleChall ?? "—"}</td><td>${page.passed ? "범위 안" : "수준 범위 밖"}</td></tr>`).join("")}</tbody></table></div></details>` : ""}</div><button type="button" class="btn btn-outline btn-small" data-reading-action="check-draft">${book.prose ? "수준 검사 · 본문 유지" : "수준 검사 · 최대 2회 재작성"}</button></div>`;
+  }${check?.pages?.length ? `<details class="reading-check-details"><summary>쪽별 검사 보기</summary><div class="reading-check-table"><table><thead><tr><th>쪽</th><th>한글 어절 / 어미</th><th>영어 FK / Spache / DC</th><th>단계</th></tr></thead><tbody>${check.pages.map((page, index) => `<tr><td>${layoutOf(book) === "openings" ? escape(unitLabel(book, index)) : index + 1}</td><td>${page.ko?.metrics?.averageWordsPerSentence ?? "—"} / ${page.ko?.metrics?.connectiveEndings ?? "—"}${page.ko?.metrics?.vocabularySkipped ? " · 어휘 목록 없음" : ""}</td><td>${page.en?.metrics?.fkGrade ?? "—"} / ${page.en?.metrics?.spache ?? "—"} / ${page.en?.metrics?.daleChall ?? "—"}</td><td>${page.passed ? "범위 안" : "수준 범위 밖"}</td></tr>`).join("")}</tbody></table></div></details>` : ""}</div><button type="button" class="btn btn-outline btn-small" data-reading-action="check-draft">${book.prose ? "수준 검사 · 본문 유지" : "수준 검사 · 최대 2회 재작성"}</button></div>`;
 }
 export function cleanupReadingOperation() {
   currentOperation?.abort();

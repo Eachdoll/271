@@ -3,6 +3,33 @@ const text = (value) => (typeof value === "string" ? value.trim() : "");
 const en = (value) => text(value?.en ?? value);
 const json = (value) => JSON.stringify(value ?? {});
 import { plotContextForPage } from "../story-generation/coherence.js";
+import { layoutOf } from "../book-layout.js";
+import { pictureCarriesPage } from "../page-rhythm.js";
+/** R12 openings: shots a spread may use (no close-ups across the fold). */
+const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
+/**
+ * R12 openings composition. A spread is one wide scene across the fold: the
+ * lead stays on a half (a 'center' side becomes the opening's own half), faces
+ * and the key action keep out of the middle tenth. A page of a pair keeps
+ * today's composition plus its binding edge. Text is always printed below:
+ * no quiet text half, no textSide, and the cue is never sent.
+ */
+function openingComposition(page, staging, leadName) {
+  const panels =
+    "One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.";
+  if (page.kind === "spread") {
+    const shot = SPREAD_SHOTS.includes(staging.shot) ? staging.shot : "wide",
+      side =
+        staging.characterSide === "left" || staging.characterSide === "right"
+          ? staging.characterSide
+          : Number(page.openingNo) % 2 === 0
+            ? "right"
+            : "left";
+    return `${SHOT_TEXT[shot]}; ${leadName} on the ${side} half. Wide double-page spread in one continuous scene. The book's fold runs down the vertical centre line: keep every face, hand and the key action out of the middle tenth and balance the scene across both halves. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. ${panels}`;
+  }
+  const right = page.side === "right";
+  return `${SHOT_TEXT[staging.shot] || SHOT_TEXT.wide}; ${leadName} on the ${staging.characterSide || (right ? "right" : "left")} side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the ${right ? "right" : "left"} page of a two-page opening; keep faces and hands a tenth of the width away from the ${right ? "left" : "right"} (binding) edge. ${panels}`;
+}
 const SHOT_TEXT = {
   wide: "wide establishing shot",
   medium: "medium shot",
@@ -67,7 +94,10 @@ export function buildScenePrompt({
       book.printOptions?.textPosition ||
       book.outputSettings?.textPosition) === "staged";
   const shot = cover ? "medium" : staging.shot || "wide";
-  const composition = `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
+  const openings = !cover && layoutOf(book) === "openings";
+  const composition = openings
+    ? openingComposition(page, staging, leadName)
+    : `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
   const time = brief?.timeOfDay || page.scene?.timeOfDay || "day";
   const mood = book.outline?.quality?.worldMood || book.storyQuality?.worldMood;
   const atmosphere = mood
@@ -92,7 +122,7 @@ export function buildScenePrompt({
       page.scene?.prompt ||
       currentNarrative.en ||
       currentNarrative.ko;
-  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.`;
+  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
   const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.`;
   const background = place.background;
   const facts = background

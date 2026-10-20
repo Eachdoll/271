@@ -38,17 +38,57 @@ function safeSchema(value) {
     ? value
     : undefined;
 }
+const safeJsonKeys = (key, item) => {
+  if (["__proto__", "prototype", "constructor"].includes(key))
+    throw new Error("Invalid JSON key");
+  return item;
+};
+/** The first balanced {...} or [...] (a fence anywhere is tried first), skipping string contents. */
+function balancedJson(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  for (const candidate of [fenced?.[1], text]) {
+    if (!candidate) continue;
+    const starts = ["{", "["]
+      .map((char) => candidate.indexOf(char))
+      .filter((at) => at >= 0);
+    if (!starts.length) continue;
+    const start = Math.min(...starts),
+      open = candidate[start],
+      close = open === "{" ? "}" : "]";
+    let depth = 0,
+      inString = false,
+      escaped = false;
+    for (let i = start; i < candidate.length; i++) {
+      const char = candidate[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === open) depth++;
+      else if (char === close && --depth === 0)
+        return candidate.slice(start, i + 1);
+    }
+  }
+  return null;
+}
 function parseJson(value) {
   if (typeof value === "object" && value !== null) return value;
   const raw = String(value || "")
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  return JSON.parse(raw, (key, item) => {
-    if (["__proto__", "prototype", "constructor"].includes(key))
-      throw new Error("Invalid JSON key");
-    return item;
-  });
+  try {
+    return JSON.parse(raw, safeJsonKeys);
+  } catch (error) {
+    // Commentary after the JSON, or a leading sentence plus a fence: take the
+    // balanced JSON instead of paying for a second request.
+    const slice = balancedJson(String(value || ""));
+    if (!slice || slice === raw) throw error;
+    return JSON.parse(slice, safeJsonKeys);
+  }
 }
 async function fetchJson(url, options, config, signal) {
   let response;
@@ -136,7 +176,10 @@ function checkCompletion(data) {
 async function requestOnce(engine, config, req, signal) {
   const schema = safeSchema(req.jsonSchema),
     model = getTextModel(engine, config),
-    info = getTextModelInfo(engine, model),
+    info = getTextModelInfo(engine, model, config),
+    // R13: a fetched or typed model gets no structured-output, temperature,
+    // reasoning, effort or thinking fields; its output limit is the stage budget.
+    custom = info.custom === true,
     maxTokens = Math.min(
       info.maxOutputTokens,
       Math.max(req.maxTokens, info.requestOutputTokens),
@@ -211,7 +254,7 @@ async function requestOnce(engine, config, req, signal) {
         ? { max_tokens: maxTokens }
         : { max_completion_tokens: maxTokens }),
     };
-    if (schema && engine === "openai")
+    if (schema && engine === "openai" && !custom)
       body.response_format = {
         type: "json_schema",
         json_schema: { name: "story_result", schema, strict: false },
@@ -229,17 +272,22 @@ async function requestOnce(engine, config, req, signal) {
       config.baseUrl || config.endpoint,
       "https://generativelanguage.googleapis.com/v1beta",
     );
-    const generationConfig = {
-      ...(info.supportsTemperature ? { temperature: req.temperature } : {}),
-      maxOutputTokens: maxTokens,
-      thinkingConfig:
-        info.reasoning.profile === "google-thinking-level"
-          ? { thinkingLevel: info.reasoning.effort }
-          : { thinkingBudget: 0 },
-      ...(schema
-        ? { responseMimeType: "application/json", responseJsonSchema: schema }
-        : {}),
-    };
+    const generationConfig = custom
+      ? { maxOutputTokens: maxTokens }
+      : {
+          ...(info.supportsTemperature ? { temperature: req.temperature } : {}),
+          maxOutputTokens: maxTokens,
+          thinkingConfig:
+            info.reasoning.profile === "google-thinking-level"
+              ? { thinkingLevel: info.reasoning.effort }
+              : { thinkingBudget: 0 },
+          ...(schema
+            ? {
+                responseMimeType: "application/json",
+                responseJsonSchema: schema,
+              }
+            : {}),
+        };
     data = await fetchJson(
       `${base}/models/${model}:generateContent`,
       post(
@@ -283,7 +331,7 @@ async function requestOnce(engine, config, req, signal) {
     };
     // Current Claude models cannot force tools while thinking. Keep the full dynamic
     // story schema in the instruction and use our bounded JSON parse retry instead.
-    if (schema && !adaptive && !betweenTools) {
+    if (schema && !adaptive && !betweenTools && !custom) {
       body.tools = [
         {
           name: "return_story_json",
@@ -342,7 +390,11 @@ export function createTextEngine({ engine, config = {} } = {}) {
         req.system.length + req.user.length > 300000
       )
         failure("글 생성 입력을 확인해 주세요.", "input");
-      const info = getTextModelInfo(engine, getTextModel(engine, config)),
+      const info = getTextModelInfo(
+          engine,
+          getTextModel(engine, config),
+          config,
+        ),
         temperature = Number(req.temperature ?? 0.8),
         maxTokens = Number(req.maxTokens);
       if (
@@ -360,7 +412,12 @@ export function createTextEngine({ engine, config = {} } = {}) {
       const controller = new AbortController(),
         abort = () => controller.abort();
       req.signal?.addEventListener("abort", abort, { once: true });
-      const timeoutMs = Number(config.timeoutMs) || info.timeoutMs;
+      // R12: an openings request may ask for a longer timeout (req.timeoutMs);
+      // without it (every pre-R12 request) the timeout is unchanged.
+      const timeoutMs = Math.max(
+        Number(config.timeoutMs) || info.timeoutMs,
+        Number(req.timeoutMs) || 0,
+      );
       let timer = null;
       const arm = () => {
         clearTimeout(timer);
@@ -373,7 +430,9 @@ export function createTextEngine({ engine, config = {} } = {}) {
       let input = 0,
         output = 0,
         actual = 0,
-        actualKnown = true;
+        actualKnown = true,
+        answered = 0,
+        lastModel = null;
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
           if (attempt) arm();
@@ -391,6 +450,8 @@ export function createTextEngine({ engine, config = {} } = {}) {
             },
             controller.signal,
           );
+          answered++;
+          lastModel = result.model || lastModel;
           input += result.usage.input;
           output += result.usage.output;
           if (Number.isFinite(result.costUsd)) actual += result.costUsd;
@@ -418,6 +479,7 @@ export function createTextEngine({ engine, config = {} } = {}) {
               requests: attempt + 1,
               costUsdEstimated: estimate.costUsd,
               pricingEstimated: true,
+              ...(estimate.pricingUnknown ? { pricingUnknown: true } : {}),
               transport:
                 config.proxyEndpoint || config.transport === "proxy"
                   ? "proxy"
@@ -426,12 +488,35 @@ export function createTextEngine({ engine, config = {} } = {}) {
           };
         }
       } catch (error) {
-        if (timedOut && !req.signal?.aborted)
-          failure(
-            "글 엔진의 응답 대기 시간이 지났어요. 진행 중이던 단계를 확인하고 다시 시도해 주세요.",
-            "timeout",
-          );
-        throw error;
+        // Responses already received were paid: the stage and FULL AUTO record them.
+        const paid = (target) => {
+          if (answered && target instanceof TextEngineError && !target.usage) {
+            target.usage = { input, output };
+            if (actualKnown) target.costUsd = actual;
+            target.meta = {
+              ...(target.meta || {}),
+              engine,
+              model: lastModel,
+              requestedModel: getTextModel(engine, config),
+              requests: answered,
+              costUsdEstimated: estimateTextCost({ engine, config, input, output })
+                .costUsd,
+              pricingEstimated: true,
+            };
+          }
+          return target;
+        };
+        if (timedOut && !req.signal?.aborted) {
+          try {
+            failure(
+              "글 엔진의 응답 대기 시간이 지났어요. 진행 중이던 단계를 확인하고 다시 시도해 주세요.",
+              "timeout",
+            );
+          } catch (timeout) {
+            throw paid(timeout);
+          }
+        }
+        throw paid(error);
       } finally {
         clearTimeout(timer);
         req.signal?.removeEventListener("abort", abort);

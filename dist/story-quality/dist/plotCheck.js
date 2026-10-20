@@ -18,6 +18,73 @@ export function topicMentioned(text, topic) {
         return true;
     return kws.some((k) => text.includes(k) || (k.length >= 3 && text.includes(k.slice(0, 2))));
 }
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** 낱말 첫머리에서 시작하는 위치들. "꿀벌을"·"물총으로" 안의 "벌을"·"총으로"는 낱말 첫머리가 아니다. */
+function tokenStartIndexes(text, word) {
+    const out = [];
+    const re = new RegExp(`(?:^|[^\\p{L}\\p{N}])(${escapeRegExp(word)})`, 'gu');
+    for (const m of text.matchAll(re))
+        out.push((m.index ?? 0) + m[0].length - m[1].length);
+    return out;
+}
+/**
+ * 앱의 주제 낱말(storyTopicKeywords)처럼 한 글자 명사도 주제 낱말로 본다("달에 놀러 간 날"의 "달", "비 오는 날"의 "비").
+ * topicKeywords는 세계 카드 추천에도 쓰이므로 그대로 두고, 검사에서만 낱말 첫머리 일치로 더 본다.
+ */
+export function shortTopicNouns(topic) {
+    // "오는"의 "는"처럼 은/는은 동사 꼴이기 쉬워 떼지 않는다.
+    return [...new Set(topic
+            .split(/[\s,·/()]+/)
+            .filter((w) => w.length === 1 || !/[은는]$/u.test(w))
+            .map((w) => w.replace(PARTICLES, ''))
+            .filter((w) => w.length === 1 && /[가-힣]/u.test(w) && !STOPWORDS.has(w)))];
+}
+/** 주제가 비트에 있는지: 기존 키워드 비교 + 한 글자 주제 명사의 낱말 첫머리 일치. */
+export function topicCovered(text, topic) {
+    return topicMentioned(text, topic) || shortTopicNouns(topic).some((w) => tokenStartIndexes(text, w).length > 0);
+}
+const PET_OR_FRIEND = /^(?:강아지|멍멍이|누렁이|바둑이|고양이|야옹이|병아리|오리|아기\S*|동생|친구\S*|나비|토끼|다람쥐|아기새|새끼\S*)/u;
+const NATURE = /^(?:비|빗방울|빗줄기|빗물|소나기|바람|파도|물결|우박|눈송이|싸락눈|나뭇가지|나뭇잎|햇살)$/u;
+/** 같은 문장에서 이 위치 앞의 마지막 주어(이·가·은·는으로 끝나는 어절). */
+function lastSubjectBefore(sentence) {
+    const words = sentence.split(/\s+/).filter(Boolean);
+    for (let i = words.length - 1; i >= 0; i--) {
+        const m = words[i].match(/^(.+?)(?:이|가|은|는)$/u);
+        if (m)
+            return m[1];
+    }
+    return '';
+}
+/**
+ * 일상 문맥에서 흔한 금지 항목은 그 문맥이면 넘긴다. 위협하는 문맥(사람이 때리기, 늑대가 쫓아오기, 칼로 위협하기)은 그대로 잡는다.
+ */
+const BENIGN_CONTEXT = {
+    때리: (before) => NATURE.test(lastSubjectBefore(before)),
+    쫓아와: (before, after) => PET_OR_FRIEND.test(lastSubjectBefore(before)) || /꼬리를 흔들|깡충|반가워|신나서|웃으며|놀자|장난/u.test(before + after),
+    칼로: (_before, after) => /^칼로\s+(?:\S+\s+){0,2}?\S*(?:사과|과일|빵|케이크|수박|당근|오이|감자|두부|김밥|떡|피자|채소|야채|자르|잘라|썰|깎)/u.test(after),
+};
+/**
+ * 금지 소재가 글에 있는지. legacy면 예전처럼 부분 문자열로 찾는다.
+ * 아니면 낱말 첫머리에서만 찾고, 일상 문맥 항목(때리·쫓아와·칼로)은 그 문장이 일상 문맥이면 넘긴다.
+ */
+export function forbiddenHit(text, keyword, legacy = false) {
+    const k = keyword.trim();
+    if (k.length < 2)
+        return false;
+    if (legacy)
+        return text.includes(k);
+    const benign = BENIGN_CONTEXT[k];
+    for (const at of tokenStartIndexes(text, k)) {
+        if (!benign)
+            return true;
+        const start = Math.max(text.lastIndexOf('.', at - 1), text.lastIndexOf('!', at - 1), text.lastIndexOf('?', at - 1), text.lastIndexOf('\n', at - 1)) + 1;
+        const ends = ['.', '!', '?', '\n'].map((c) => text.indexOf(c, at)).filter((i) => i >= 0);
+        const end = ends.length ? Math.min(...ends) : text.length;
+        if (!benign(text.slice(start, at), text.slice(at, end)))
+            return true;
+    }
+    return false;
+}
 const PLANTED_QUANTITY = /\s+(?:한|두|세|네|다섯|하나|둘|셋|\d+)(?:\s*(?:송이|개|마리|장|켤레|자루|권|알|쌍|그루|조각|병|봉지|짝|통))?$/u;
 const KO_PARTICLES = '(?:(?:에게|한테|께서|에서|부터|까지|처럼|보다|이랑|하고|으로|랑|와|과|의|을|를|이|가|은|는|도|만|에|로){1,3})?';
 /**
@@ -46,8 +113,11 @@ export function containsPlanted(text, planted) {
     const head = phrase.split(/\s+/).at(-1) ?? '';
     return containsNoun(text, head);
 }
-/** 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")으로 쓰는 경우가 많아 ID로 정규화한다. */
-export function normalizeFailureReason(value) {
+/**
+ * 모델이 failureReason을 한글 설명("거의 됐는데 방해: …")이나 다른 표기("Wrong place", "wrong-method")로 쓰는 경우가 많아 ID로 정규화한다.
+ * legacy면 2026-10-19 이전 규칙만 쓴다.
+ */
+export function normalizeFailureReason(value, legacy = false) {
     if (value == null)
         return null;
     const text = String(value).trim();
@@ -56,11 +126,21 @@ export function normalizeFailureReason(value) {
     const lower = text.toLowerCase();
     if (/^(wrong_place|wrong_method|interrupted)$/.test(lower))
         return lower;
-    if (/wrong_place|잘못된 장소|엉뚱한 장소|다른 장소|거기엔 없/.test(text))
+    if (legacy) {
+        if (/wrong_place|잘못된 장소|엉뚱한 장소|다른 장소|거기엔 없/.test(text))
+            return 'wrong_place';
+        if (/wrong_method|잘못된 방법|방법이 틀|엉뚱한 방법/.test(text))
+            return 'wrong_method';
+        if (/interrupted|방해|끼어들|거의 됐는데|직전에/.test(text))
+            return 'interrupted';
+        return text;
+    }
+    const id = lower.replace(/[\s-]+/g, '_');
+    if (/wrong_place|(?:잘못된|엉뚱한|다른)\s*(?:장소|곳)|거기엔 없/u.test(`${id} ${text}`))
         return 'wrong_place';
-    if (/wrong_method|잘못된 방법|방법이 틀|엉뚱한 방법/.test(text))
+    if (/wrong_method|(?:잘못된|엉뚱한)\s*방법|방법이\s*(?:틀|잘못|맞지\s*않)/u.test(`${id} ${text}`))
         return 'wrong_method';
-    if (/interrupted|방해|끼어들|거의 됐는데|직전에/.test(text))
+    if (/interrupted|방해|끼어들|거의\s*(?:됐|되었|다\s*됐|성공)|성공했는데|직전에/u.test(`${id} ${text}`))
         return 'interrupted';
     return text;
 }
@@ -85,7 +165,8 @@ export function plotCheck(input) {
     }
     // 2 실패 이유 서로 다름 (+ 조합 재료 순서 준수)
     const attempts = beats.filter((b) => b.type === 'attempt');
-    const reasons = attempts.map((b) => normalizeFailureReason(b.failureReason));
+    const legacy = input.legacyChecks === true;
+    const reasons = attempts.map((b) => normalizeFailureReason(b.failureReason, legacy));
     if (reasons.some((r) => !r))
         fix.push('attempt 비트에 failureReason이 비어 있음');
     if (new Set(reasons.filter(Boolean)).size < Math.min(3, reasons.length))
@@ -103,7 +184,7 @@ export function plotCheck(input) {
         fix.push('newElement가 겹치는 비트가 있음');
     // 4 주제·이름 → 재생성
     const all = summaries.join(' ');
-    if (!topicMentioned(all, topic))
+    if (!(legacy ? topicMentioned(all, topic) : topicCovered(all, topic)))
         regenerate.push(`주제 키워드(${topicKeywords(topic).join('/')})가 비트에 없음`);
     const nameCount = summaries.filter((s) => s.includes(protagonistName)).length;
     if (nameCount < 3)
@@ -151,7 +232,7 @@ export function plotCheck(input) {
     // 8 금지 소재 → 재생성
     const forbidden = input.inventories?.forbiddenKeywords ?? ['괴물', '귀신', '때리', '놀리'];
     for (const k of forbidden)
-        if (k.trim().length >= 2 && all.includes(k))
+        if (k.trim().length >= 2 && forbiddenHit(all, k, legacy))
             regenerate.push(`금지 소재: ${k}`);
     // 9 장소 규칙: 시작·끝은 집, 중간 2곳 이상
     const keys = beats.map((b) => (b.settingKey ?? '').toLowerCase());

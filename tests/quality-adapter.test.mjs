@@ -83,9 +83,19 @@ test('one package fix changes only the flagged beat; an unrelated edit is put ba
   const placed=await generateQualityOutline(input,{engine:place},services(place));
   assert.notEqual(placed.data.settings.find(r=>r.beatIndex===1)?.backgroundId,'changed-place');
   assert.deepEqual(placed.meta.quality.untargetedFixRestored.restored,['setting:1']);
-  // A response that changes the beat count still throws, with paid usage retained.
-  const broken=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서'))outline.beats.pop();else outline.beats[2].newElement='';return outline;});
-  await assert.rejects(generateQualityOutline(input,{engine:broken},services(broken)),error=>error.usage.input===200&&error.meta.requests===2&&/비트 개수/.test(error.message)&&Object.keys(error.qualityCheckpoint.completed).length===2);
+  // A response that leaves out a beat is matched by index: the missing beat stays as the outline model wrote it.
+  const dropped=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서')){outline.beats[2].newElement='고친 젖은 잎';outline.beats.pop();}else outline.beats[2].newElement='';return outline;});
+  const kept7=await generateQualityOutline(input,{engine:dropped},services(dropped));
+  assert.equal(kept7.data.beats.length,7);assert.equal(kept7.data.beats[2].newElement,'고친 젖은 잎');assert.equal(kept7.meta.requests,2);
+  // A response that changes the beat count no longer throws (2026-10-19): the original paid outline is kept,
+  // recorded as mode "original", the item stays a note, and a resume replays it with no new call.
+  const broken=fakeOutlineEngine(input,(outline,request)=>{if(request.user.startsWith('아래 줄거리 JSON에서'))outline.beats.push({...outline.beats.at(-1),index:8});else outline.beats[2].newElement='';return outline;});
+  const original=await generateQualityOutline(input,{engine:broken},services(broken));
+  assert.equal(original.usage.input,200);assert.equal(original.meta.requests,2);assert.equal(original.data.beats.length,7);
+  assert.deepEqual(original.meta.quality.untargetedFixRestored,{mode:'original',reason:'품질 수정은 줄거리 비트 개수를 바꿀 수 없어요.',restored:['outline']});
+  assert.ok(original.meta.quality.softIssues.some(m=>/newElement가 비어/.test(m)));
+  const replay=await generateQualityOutline(input,{engine:broken,qualityCheckpoint:original.meta.qualityCheckpoint},services(broken));
+  assert.equal(broken.calls.length,2);assert.equal(replay.meta.requests,0);assert.deepEqual(replay.data,original.data);
 });
 
 test('missing topic causes exactly one auxiliary-pattern regeneration, then stops with both calls accounted',async()=>{

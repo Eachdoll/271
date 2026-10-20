@@ -6,6 +6,14 @@ import {
   getWorldBackgroundSnapshot,
 } from "../image-generation/world.js";
 import { getStylePreset } from "../image-generation/styles.js";
+import { chosenImageModel } from "../image-generation/models.js";
+const modelField = (world) => {
+  const model = chosenImageModel(
+    world?.imageEngine,
+    world?.providerConfig?.[world?.imageEngine],
+  );
+  return model ? { model } : {};
+};
 
 const clone = (value) =>
   value == null ? value : JSON.parse(JSON.stringify(value));
@@ -587,7 +595,11 @@ export function applySeriesContinuity(state, book, previousBook, wizard = {}) {
             : "default",
         },
       )
-    : { googlePro: currentWorld.imageModelVariant === "pro" };
+    : {
+        googlePro: currentWorld.imageModelVariant === "pro",
+        // R13: the current World's chosen final-picture model, frozen for this book.
+        ...modelField(currentWorld),
+      };
   const snapshot = {
     imageModelConfig,
     ...world,

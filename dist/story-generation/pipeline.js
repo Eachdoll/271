@@ -18,6 +18,7 @@ import {
   validateOutline,
   validatePagination,
   hardOutlineViolations,
+  openingPaginationSchema,
 } from "./schemas.js";
 import {
   AUTO_MATERIAL_SCHEMA,
@@ -34,6 +35,9 @@ import {
   inspectSceneBriefs,
   sceneBriefRules,
   demoSceneBriefs,
+  normalizeSceneBrief,
+  normalizeSceneBriefs,
+  locateBriefIssue,
 } from "./scene-briefs.js";
 import { stagePagination } from "./staging.js";
 import { checkRichness, richnessPromptRules } from "./richness.js";
@@ -54,12 +58,47 @@ import {
   attachPagePlotContext,
 } from "./coherence.js";
 import {
+  normalizeOutlineResponse,
+  parseJsonLenient,
+} from "./outline-normalize.js";
+import {
   generateQualityOutline,
   generateQualityProse,
   loadStoryQualityData,
   resolveStoryWorld,
 } from "./quality-adapter.js";
 import { inspectChildStory } from "./quality-gates.js";
+import { rhythmPromptLine } from "../page-rhythm.js";
+import {
+  hasEditorPolicy,
+  REVISION_SCHEMA,
+  revisionRules,
+  revisionData,
+  revisionFingerprint,
+  applyRevision,
+} from "./book-revision.js";
+import {
+  OPENING_PAGE_COUNTS,
+  LAYOUT_FIELDS,
+  MODEL_CUES,
+  buildOpeningPlan,
+  copyLayoutFields,
+  isOpeningsSpec,
+  normalizeLayoutPolicy,
+  normalizeOpenings,
+  openingsOf,
+  validateOpenings,
+} from "../book-layout.js";
+import {
+  budgetFor as openingBudgetFor,
+  openingTimeout,
+  isOpeningsInput,
+  layoutRuleLine,
+  lengthFitPlan,
+  applyParagraphFit,
+  OPENING_TIMEOUT_STAGES,
+  QUALITY_WRAP_TOKENS,
+} from "./opening-prose.js";
 export { buildBeatPagePlan } from "./pagination.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -84,7 +123,26 @@ const tokenBudget = {
   sceneBriefs: 14000,
   sceneBrief: 2000,
   enrichment: 3000,
+  // R12 openings only: the app length-fit pass on the non-quality prose path.
+  proseFit: 6000,
+  // Editor round: the whole-book read-through returns the pages it improves.
+  revision: 16000,
 };
+/**
+ * maxTokens of a stage: the pre-R12 constant, or for an openings draft the
+ * frozen-spec budget (opening-prose.js budgetFor) of the stages it sizes.
+ */
+export function budgetFor(stage, input) {
+  // An openings book's read-through may return as much text as its pagination.
+  if (stage === "revision")
+    return Math.max(tokenBudget.revision, openingBudgetFor("pagination", input, 0));
+  return openingBudgetFor(
+    stage,
+    input,
+    stage === "qualityWrap" ? QUALITY_WRAP_TOKENS : tokenBudget[stage],
+  );
+}
+export { OPENING_TIMEOUT_STAGES };
 const temperature = {
   outline: 0.8,
   plotContract: 0.4,
@@ -100,6 +158,8 @@ const temperature = {
   sceneBriefs: 0.8,
   sceneBrief: 0.8,
   enrichment: 0.5,
+  proseFit: 0.3,
+  revision: 0.4,
 };
 const SECRET_FIELD =
   /^(?:apiKey|api_key|authorization|credential|credentials|secret|password|pin|pinHash|ciphertext|salt|iv|accessToken|refreshToken|token|config)$/i;
@@ -252,7 +312,13 @@ function normalizeCatchphrasePolicy(policy) {
   };
 }
 /** What the model may see: the limit and omitted IDs, never the omitted phrases. */
-function modelVisibleInput(input) {
+function modelVisibleInput(source) {
+  // The editor policy is an app switch, not story data for the model.
+  let input = source;
+  if (input?.editorPolicy) {
+    const { editorPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -265,7 +331,27 @@ function modelVisibleInput(input) {
 }
 export function normalizeStoryInput(input = {}) {
   const pageCount = Number(input.pageCount || 12);
-  if (!PAGE_COUNTS.includes(pageCount))
+  // R12: only a frozen openings policy (inputFromWizard with layout 'openings')
+  // makes an openings input; without it every rule below is the pre-R12 one.
+  // v4 openings specs without the policy (an R11 tab ran the FULL AUTO input step
+  // of an openings job and rewrote job.input) are a page input: their top-level
+  // range is the single-page one, and layoutStatus flags the book layoutMismatch.
+  const layoutPolicy =
+    input.layoutPolicy?.kind === "openings"
+      ? normalizeLayoutPolicy(input.layoutPolicy)
+      : null;
+  if (layoutPolicy) {
+    if (!OPENING_PAGE_COUNTS.includes(pageCount))
+      throw new Error("펼침 구성 책은 12쪽이나 16쪽으로 골라 주세요.");
+    if (
+      !isOpeningsSpec(input.specs?.ko) ||
+      !isOpeningsSpec(input.specs?.en) ||
+      input.language === "en"
+    )
+      throw new Error(
+        "펼침 구성 책에는 펼침 구성 읽기 규칙(K2~K4 한글)이 필요해요.",
+      );
+  } else if (!PAGE_COUNTS.includes(pageCount))
     throw new Error("이야기는 8·12·16·24쪽 중에서 골라 주세요.");
   if (
     !Array.isArray(input.characters) ||
@@ -300,6 +386,7 @@ export function normalizeStoryInput(input = {}) {
     worldName: String(input.worldName || input.world?.name || "").slice(0, 200),
     topic: String(input.topic || "친구와 작은 발견").slice(0, 1000),
     pageCount,
+    ...(layoutPolicy ? { layoutPolicy } : {}),
     outlineBeatCount: frozenBeatCount({ ...input, pageCount }),
     storyWorld: cleanReference(
       input.storyWorld || input.storyWorldSnapshot || null,
@@ -350,6 +437,7 @@ export function normalizeStoryInput(input = {}) {
         }
       : {}),
     ...(catchphrasePolicy ? { catchphrasePolicy } : {}),
+    ...(hasEditorPolicy(input) ? { editorPolicy: { version: 1 } } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -479,7 +567,7 @@ function baseSystemFor(input) {
     : baseSystem;
 }
 function levelRules(input) {
-  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.`;
+  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.${isOpeningsInput(input) ? `\n${layoutRuleLine(input)}` : ""}${rhythmPromptLine(input.specs) ? `\n${rhythmPromptLine(input.specs)}` : ""}`;
 }
 function continuityMeta(input) {
   return input.previousStory
@@ -501,7 +589,9 @@ async function complete(stage, input, payload, schema, options = {}) {
     user: JSON.stringify({ input: modelVisibleInput(input), ...payload.data }),
     jsonSchema: schema,
     temperature: temperature[stage],
-    maxTokens: tokenBudget[stage],
+    maxTokens: budgetFor(stage, input),
+    // R12 openings only: long outputs get a longer timeout; others carry no key.
+    ...openingTimeout(stage, input, budgetFor(stage, input)),
     signal: options.signal,
   });
   const meta = {
@@ -516,14 +606,9 @@ async function complete(stage, input, payload, schema, options = {}) {
   if (typeof modelId === "string") meta.modelId = modelId.slice(0, 200);
   let data = response.json;
   if (data === undefined) {
-    try {
-      data = JSON.parse(
-        String(response.text || "")
-          .trim()
-          .replace(/^```(?:json)?\s*/i, "")
-          .replace(/\s*```$/, ""),
-      );
-    } catch {
+    // A fence, a leading sentence or trailing commentary around the JSON.
+    data = parseJsonLenient(response.text) ?? undefined;
+    if (data === undefined) {
       const error = new StoryValidationError(stage, [
         "이야기 엔진이 JSON을 반환하지 않았어요. 다시 생성해 주세요.",
       ]);
@@ -553,6 +638,7 @@ const demo = (options) =>
 const qualityServices = () => ({
   engineFor,
   complete,
+  budgetFor,
   outlineRequestSchema,
   baseSystem,
   levelRules,
@@ -929,6 +1015,12 @@ export async function reviewStoryCoherence(
             variantByCharacter: clone(original.variantByCharacter),
             ...(original.staging ? { staging: clone(original.staging) } : {}),
           };
+          // R12 openings: a repaired entry keeps its place in the opening.
+          if (original.kind !== undefined)
+            nextPages.pages[index] = copyLayoutFields(
+              original,
+              nextPages.pages[index],
+            );
         }
         nextPages = attachPagePlotContext(nextPages, outline);
       } else {
@@ -995,17 +1087,48 @@ export async function reviewStoryCoherence(
     throw paidError(error, requests, { stage: "coherence" });
   }
 }
-async function briefCheckpoint(options, briefs, requests, report) {
+/**
+ * Paid repair calls per beat over every run of a job (still two per run): a
+ * beat with a hard issue may be repaired on 다시 시도 once more, a beat with
+ * only soft issues gets one run's worth and is then kept as a note.
+ */
+export const BRIEF_REPAIR_LIMIT = 4;
+export const BRIEF_SOFT_REPAIR_LIMIT = 2;
+// The model sees the same three fields as before; severity stays app-side.
+const requestViolation = ({ beatIndex, code, message }) => ({
+  beatIndex,
+  code,
+  message,
+});
+const repairsOf = (options) => {
+  const rows = {};
+  for (const [key, value] of Object.entries(options.briefRepairs || {}))
+    if (Number.isInteger(Number(value)) && Number(value) > 0)
+      rows[key] = Number(value);
+  return rows;
+};
+async function briefCheckpoint(options, briefs, requests, report, repairs) {
   if (options.onCheckpoint)
     await options.onCheckpoint({
       stage: "sceneBriefs",
       sceneBriefs: clone(briefs),
       briefChecks: clone(report),
+      ...(repairs && Object.keys(repairs).length
+        ? { briefRepairs: clone(repairs) }
+        : {}),
       usage: mergeStoryUsage(requests),
       meta: { stage: "sceneBriefs", requests: requestCount(requests) },
     });
 }
-/** One initial request, then only offending beats, at most two repairs per beat. */
+/**
+ * One initial request, then only offending beats: two repairs per beat per run
+ * and BRIEF_REPAIR_LIMIT over all runs (options.briefRepairs, carried in the
+ * checkpoint). A saved checkpoint is re-inspected before anything is bought, so
+ * a job that stopped on a check this version accepts resumes with no new call.
+ * Hard issues (beat number, required fields, counts) stop the stage; soft ones
+ * are kept as notes (meta.softIssues) once repairs run out; advisories are
+ * never repaired or billed.
+ */
 export async function generateSceneBriefs(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -1024,12 +1147,13 @@ export async function generateSceneBriefs(outline, source, options = {}) {
       },
     };
   const requests = [],
-    allowed = new Set(outline.beats.map((b) => b.index));
+    allowed = new Set(outline.beats.map((b) => b.index)),
+    repairs = repairsOf(options);
   let briefs = [];
   try {
     // A partial checkpoint is resumable. Never pay again for valid saved beats.
     if (sceneBriefRows(options.sceneBriefs).length)
-      briefs = clone(sceneBriefRows(options.sceneBriefs));
+      briefs = normalizeSceneBriefs(clone(sceneBriefRows(options.sceneBriefs)));
     else {
       const schema = clone(SCENE_BRIEFS_SCHEMA);
       schema.properties.briefs.minItems = outline.beats.length;
@@ -1042,17 +1166,31 @@ export async function generateSceneBriefs(outline, source, options = {}) {
         options,
       );
       requests.push(result);
-      briefs = sceneBriefRows(result.data);
+      briefs = normalizeSceneBriefs(result.data);
     }
     // Unknown IDs are not allowed to displace approved beats.
     briefs = briefs.filter((b) => allowed.has(b?.beatIndex));
     let report = inspectSceneBriefs(briefs, outline, input);
-    await briefCheckpoint(options, briefs, requests, report);
+    await briefCheckpoint(options, briefs, requests, report, repairs);
     abort(options.signal);
-    for (let pass = 0; pass < 2 && !report.valid; pass++) {
+    const capped = new Set();
+    for (let pass = 0; pass < 2 && !report.passed; pass++) {
       const targets = report.failedBeatIndexes;
       for (const beatIndex of targets) {
         abort(options.signal);
+        const violations = inspectSceneBriefs(
+          briefs,
+          outline,
+          input,
+        ).issues.filter((v) => v.beatIndex === beatIndex);
+        if (!violations.length) continue;
+        const limit = violations.some((v) => v.severity === "hard")
+          ? BRIEF_REPAIR_LIMIT
+          : BRIEF_SOFT_REPAIR_LIMIT;
+        if ((repairs[beatIndex] || 0) >= limit) {
+          capped.add(beatIndex);
+          continue;
+        }
         notify(
           options,
           "sceneBriefs",
@@ -1060,12 +1198,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
           `${beatIndex}번 장면 디테일을 다듬고 있어요 (${pass + 1}/2).`,
           { beatIndex, attempt: pass + 1 },
         );
-        const violations = inspectSceneBriefs(
-          briefs,
-          outline,
-          input,
-        ).issues.filter((v) => v.beatIndex === beatIndex);
-        if (!violations.length) continue;
+        repairs[beatIndex] = (repairs[beatIndex] || 0) + 1;
         let result;
         try {
           result = await complete(
@@ -1077,7 +1210,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
                 approvedOutline: outline,
                 targetBeatIndex: beatIndex,
                 existingBriefs: briefs,
-                violations,
+                violations: violations.map(requestViolation),
               },
             },
             SCENE_BRIEF_SCHEMA,
@@ -1090,22 +1223,34 @@ export async function generateSceneBriefs(outline, source, options = {}) {
             usage: error.usage || {},
             meta: error.meta || { requests: 1 },
           });
+          // The attempt was billed: keep its count with the checkpoint.
+          await briefCheckpoint(options, briefs, requests, report, repairs);
           continue;
         }
-        if (result.data?.beatIndex === beatIndex)
+        const fixed = normalizeSceneBrief(result.data);
+        if (fixed?.beatIndex === beatIndex)
           briefs = [
             ...briefs.filter((b) => b.beatIndex !== beatIndex),
-            result.data,
+            fixed,
           ].sort((a, b) => a.beatIndex - b.beatIndex);
         report = inspectSceneBriefs(briefs, outline, input);
-        await briefCheckpoint(options, briefs, requests, report);
+        await briefCheckpoint(options, briefs, requests, report, repairs);
         abort(options.signal);
       }
       report = inspectSceneBriefs(briefs, outline, input);
     }
     if (!report.valid) {
-      const error = new StoryValidationError("sceneBriefs", report.errors);
+      const stopped = report.hardBeatIndexes.filter((i) => capped.has(i));
+      const error = new StoryValidationError("sceneBriefs", [
+        ...(stopped.length
+          ? [
+              `${stopped.join("·")}번 장면은 자동 수정을 ${BRIEF_REPAIR_LIMIT}번 해도 같은 문제가 남아 더 고치지 않아요. '줄거리 새로 만들기'로 새로 쓸 수 있어요.`,
+            ]
+          : []),
+        ...report.errors,
+      ]);
       error.sceneBriefs = clone(briefs);
+      error.briefRepairs = clone(repairs);
       throw error;
     }
     return {
@@ -1116,11 +1261,15 @@ export async function generateSceneBriefs(outline, source, options = {}) {
         engineId: options.engine?.id || options.engineId,
         requests: requestCount(requests),
         checks: report,
+        ...(Object.keys(repairs).length ? { briefRepairs: clone(repairs) } : {}),
+        ...(report.softIssues.length ? { softIssues: report.softIssues } : {}),
         demo: false,
       },
     };
   } catch (error) {
     error.sceneBriefs = clone(briefs);
+    if (!error.briefRepairs && Object.keys(repairs).length)
+      error.briefRepairs = clone(repairs);
     throw paidError(error, requests, { stage: "sceneBriefs" });
   }
 }
@@ -1132,7 +1281,7 @@ export async function rewriteSceneBrief(
   options = {},
 ) {
   const input = normalizeStoryInput(source),
-    rows = clone(sceneBriefRows(briefs));
+    rows = normalizeSceneBriefs(clone(sceneBriefRows(briefs)));
   if (!outline?.beats?.some((b) => b.index === beatIndex))
     throw new Error("다시 만들 장면을 골라 주세요.");
   abort(options.signal);
@@ -1149,7 +1298,8 @@ export async function rewriteSceneBrief(
   }
   const requests = [];
   let next = rows,
-    violations = [];
+    violations = [],
+    report = null;
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       const result = await complete(
@@ -1161,19 +1311,19 @@ export async function rewriteSceneBrief(
             approvedOutline: outline,
             targetBeatIndex: beatIndex,
             existingBriefs: next,
-            violations,
+            violations: violations.map(requestViolation),
           },
         },
         SCENE_BRIEF_SCHEMA,
         options,
       );
       requests.push(result);
-      if (result.data?.beatIndex === beatIndex)
-        next = [
-          ...rows.filter((b) => b.beatIndex !== beatIndex),
-          result.data,
-        ].sort((a, b) => a.beatIndex - b.beatIndex);
-      const report = inspectSceneBriefs(next, outline, input);
+      const fixed = normalizeSceneBrief(result.data);
+      if (fixed?.beatIndex === beatIndex)
+        next = [...rows.filter((b) => b.beatIndex !== beatIndex), fixed].sort(
+          (a, b) => a.beatIndex - b.beatIndex,
+        );
+      report = inspectSceneBriefs(next, outline, input);
       violations = report.issues.filter((v) => v.beatIndex === beatIndex);
       await briefCheckpoint(options, next, requests, report);
       abort(options.signal);
@@ -1191,10 +1341,25 @@ export async function rewriteSceneBrief(
           },
         };
     }
-    throw new StoryValidationError(
-      "sceneBriefs",
-      violations.map((v) => v.message),
-    );
+    // Three tries: a hard issue stops, soft ones stay as notes.
+    const hard = violations.filter((v) => v.severity === "hard");
+    if (!hard.length)
+      return {
+        data: next,
+        usage: mergeStoryUsage(requests),
+        meta: {
+          stage: "sceneBriefs",
+          engineId: options.engine?.id || options.engineId,
+          requests: requestCount(requests),
+          checks: report,
+          repairAttempts: 3,
+          softIssues: [...new Set(violations.map(locateBriefIssue))],
+          demo: false,
+        },
+      };
+    throw new StoryValidationError("sceneBriefs", [
+      ...new Set(hard.map(locateBriefIssue)),
+    ]);
   } catch (error) {
     error.sceneBriefs = next;
     throw paidError(error, requests, { stage: "sceneBriefs" });
@@ -1290,6 +1455,10 @@ export async function enrichProse(prose, outline, source, options = {}) {
               nextParagraph: rows[index + 1] || null,
               sceneBrief: sceneBrief || null,
               nextBrief: nextBrief || null,
+              // Editor round: the whole story in this language as it reads now.
+              ...(hasEditorPolicy(input)
+                ? { storyInThisLanguage: rows.join("\n\n") }
+                : {}),
             },
           },
           PARAGRAPH_SCHEMA,
@@ -1759,7 +1928,8 @@ Use only supplied drawer background IDs: settings[].backgroundId and the matchin
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
 endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home. A requested moral must be shown through actions and never spoken as a lesson.`;
   const results = [];
-  let violations = [];
+  let violations = [],
+    normalized = [];
   for (let pass = 0; pass < 3; pass++) {
     if (pass)
       notify(
@@ -1802,6 +1972,12 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
       continue;
     }
     results.push(result);
+    // The same response clean-up as the quality path (ids written as names,
+    // ledger continuity, counts …) before the checks: a book-keeping slip no
+    // longer buys a whole new outline.
+    const shaped = normalizeOutlineResponse(result.data, input);
+    result.data = shaped.outline;
+    normalized = shaped.notes;
     const report = inspectOutlineRules(result.data, input);
     if (!result.data?.plotContract) {
       report.valid = false;
@@ -1825,6 +2001,7 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
         ),
         repairAttempts: pass,
         checks: report,
+        ...(normalized.length ? { normalized } : {}),
         ...(report.valid
           ? {}
           : { softIssues: report.violations.map((row) => row.message) }),
@@ -1833,10 +2010,9 @@ endingType=${input.endingType}. Close calmly at home; open ending additionally h
     }
     violations = report.violations;
   }
-  const error = new StoryValidationError(
-    "outline",
-    violations.map((v) => v.message),
-  );
+  const error = new StoryValidationError("outline", [
+    ...new Set(violations.map((v) => v.message)),
+  ]);
   error.usage = mergeStoryUsage(results);
   error.meta = {
     stage: "outline",
@@ -1899,6 +2075,89 @@ export async function rewriteBeat(outline, index, source, options = {}) {
   result.data = next;
   return result;
 }
+const PROSE_FIT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["paragraphs"],
+  properties: {
+    paragraphs: {
+      type: "array",
+      maxItems: 16,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["beatIndex", "text"],
+        properties: {
+          beatIndex: { type: "integer" },
+          text: { type: "string", maxLength: 6000 },
+        },
+      },
+    },
+  },
+};
+/**
+ * R12 openings, non-quality path: the app length-fit pass through the main
+ * engine, at most once per language and only when the frozen prosePolicy allows
+ * it. Only the beats outside their band are sent and replaced; every other
+ * paragraph stays byte for byte. A discarded or failed fit keeps the prose.
+ */
+async function fitOpeningsProse(result, outline, input, options, requests) {
+  const report = {};
+  for (const language of ["ko", "en"]) {
+    if (input.prosePolicy?.condenseOverBudget?.[language] !== true) continue;
+    const labels = result.data.paragraphBeats?.[language] || [],
+      rows = paragraphs(result.data[language]).map((text, index) => ({
+        beatIndex: labels[index],
+        text,
+      })),
+      plan = lengthFitPlan(rows, input.specs[language], language, input.pageCount / 2);
+    if (!plan.triggered.length) continue;
+    const triggered = new Set(plan.triggered.map((row) => row.beatIndex)),
+      unit = input.specs[language].units.opening;
+    let response;
+    try {
+      response = await complete(
+        "proseFit",
+        input,
+        {
+          rules: `LENGTH FIT (${language === "ko" ? "Korean" : "English"} only): return one paragraph per listed beat with its sentence count moved into ${unit.min}-${unit.max} sentences (target ${unit.target}). To lengthen, add sensory detail, gesture or dialogue inside the existing events; to shorten, cut repetition. Never add a new event, prop, place or character; keep cause, attempts, results and the turn. Every sentence has an explicit subject. Return {paragraphs:[{beatIndex,text}]} for exactly the listed beats.`,
+          data: {
+            approvedOutline: outline,
+            language,
+            targets: plan.lines,
+            beats: rows.filter((row) => triggered.has(row.beatIndex)),
+          },
+        },
+        PROSE_FIT_SCHEMA,
+        options,
+      );
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      requests.push({ usage: error.usage || {}, meta: error.meta || { requests: 1 } });
+      report[language] = { triggered: [...triggered], accepted: false, error: String(error.message || error).slice(0, 300) };
+      continue;
+    }
+    requests.push(response);
+    const fitted = applyParagraphFit(rows, response.data?.paragraphs, plan);
+    report[language] = { triggered: [...triggered], accepted: !!fitted };
+    if (!fitted) continue;
+    const candidate = {
+      ...result.data,
+      [language]: fitted.map((row) => row.text).join("\n\n"),
+      paragraphBeats: {
+        ...result.data.paragraphBeats,
+        [language]: fitted.map((row) => row.beatIndex),
+      },
+    };
+    try {
+      result.data = assertValid("prose", candidate, input, outline);
+    } catch (error) {
+      if (!(error instanceof StoryValidationError)) throw error;
+      report[language].accepted = false;
+    }
+  }
+  return report;
+}
 export async function generateProse(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -1930,7 +2189,7 @@ EVERY sentence must have an explicit grammatical subject in both languages. Use 
 Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least two sound/movement words. EACH approved beat must contain at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture), distributed within the beat's paragraphs. Expand each approved beat into concrete observation → attempt → visible consequence, including small gestures and specific reactions. At the earliest levels distribute these details over short permitted sentences. Never repeat an identical sentence except the approved refrain at planned beat positions, maximum 3.
 Return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with exactly one approved beat index for every blank-line-separated paragraph of the corresponding language. Each language must cover every approved beat in order; split paragraphs at beat boundaries. These paragraph labels are metadata ONLY: never place beat numbers, labels or headings into the ko/en story text or printable prose.
 Do not end paragraphs with a repeated appraisal or an explicit lesson. Respect the parent's moral through character actions and endingNote through the final action while keeping the approved ending and place.
-Korean length guide ${guidance}; prioritize the frozen levelSpec sentence/word constraints and retaining all events when ranges conflict. English total words should fit the per-page level range times ${input.pageCount}, but its sentences and rhythm must be original English, not translations.
+Korean length guide ${guidance}; prioritize the frozen levelSpec sentence/word constraints and retaining all events when ranges conflict. English total words should fit the per-page level range times ${input.pageCount}, but its sentences and rhythm must be original English, not translations.${isOpeningsInput(input) ? `\nEach approved beat paragraph = one opening: Korean ${input.specs.ko.units.opening.min}–${input.specs.ko.units.opening.max} sentences (target ${input.specs.ko.units.opening.target}), English ${input.specs.en.units.opening.min}–${input.specs.en.units.opening.max} sentences (target ${input.specs.en.units.opening.target}) per beat.` : ""}
 Write original English at ${input.specs.en.id || "selected E level"}, with repeating frames/rhyme if allowed. usedRefrainAt lists only approved used beat IDs.
 ${input.draftProse ? "This is HYBRID final refinement: read the supplied local draftProse, preserve its concrete events and approved outline, improve language and frozen-level compliance. Do not replace its story with an unrelated plot." : ""}`;
   const requests = [];
@@ -1983,6 +2242,15 @@ ${input.draftProse ? "This is HYBRID final refinement: read the supplied local d
           "한글·영어 모든 문단의 paragraphBeats 비트 표시가 필요해요.",
         ]);
       result.data = assertValid("prose", result.data, input, outline);
+      // R12 openings: one length-fit call per language when a beat is out of band.
+      if (isOpeningsInput(input) && input.prosePolicy)
+        result.meta.lengthFit = await fitOpeningsProse(
+          result,
+          outline,
+          input,
+          options,
+          requests,
+        );
       result.usage = mergeStoryUsage(requests);
       result.meta = {
         ...result.meta,
@@ -2070,6 +2338,102 @@ For every page scene.where MUST equal its approved beat's settingKey/backgroundI
 scene.who contains selected character IDs; scene.where is a supplied background ID or concrete location description. scene.action is one drawable English sentence of 8–30 words with a physical verb, position and visible props. Abstract feelings alone are not actions. scene.emotion is one English word; timeOfDay is morning/day/afternoon/evening/night; props is an English list.
 Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs to an allowed variant or null. Honor per-book defaults and page ranges. Set isRefrainPage true only where the approved refrain actually appears. cover.sceneAction is a concrete English cover scene without text/logo instructions.`;
 }
+/**
+ * R12 openings pagination rules (replace 'exactly N pages', 'one page = one
+ * drawable scene', the page turn window and 'never one page per beat'); the
+ * place, staging, cast, wardrobe and cover rules stay as for page books.
+ */
+function openingsPaginationRules(input, options = {}) {
+  const count = input.pageCount / 2,
+    ko = input.specs.ko.units,
+    en = input.specs.en.units,
+    range = (unit) => `${unit.min}-${unit.max}`;
+  return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own drawable moment and its part of the beat text). Choose from the content: a spread for a highlight, a big reveal or surprise, arriving at a new place, the turn, the ending, or wide scenery; two pages when the beat has two distinct drawable moments (before/after, two actions, two places). No fixed ratio, but use at least one spread and at least one pair. Copy the beat paragraph; for two pages split where the moment changes. Light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${MODEL_CUES.join(", ")}. scene.action is one moment per entry. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko.spread)}, English ${range(en.spread)}; a single page Korean ${range(ko.page)}, English ${range(en.page)}.${options.openingKinds ? ` Keep opening kinds ${options.openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
+Do not rewrite the prose stage, omit events, invent a different plot, or change its approved ending. Apply Korean and English frozen sentence/word limits independently on every entry. Preserve quoted dialogue, sensory details, causal attempts and twist from the original prose.
+${paginationRules(input).split("\n").slice(3).join("\n")}`;
+}
+/**
+ * R12 openings: the free, deterministic clean-up of a pagination (normalize,
+ * merge bad pairs, mix guard), then staging and the generated-output checks.
+ * Structural errors (a missing or unknown beat) are left to inspectStory, which
+ * asks for the one paid fix (a repagination); malformed text still throws.
+ */
+function settleOpenings(data, outline, input, options) {
+  const plan = buildOpeningPlan(outline, input.pageCount / 2),
+    fixed = normalizeOpenings(data?.pages, plan, input.specs),
+    next = {
+      ...clone(data || {}),
+      pages: fixed.pages,
+      openingAdjustments: fixed.openingAdjustments,
+      mixNote: fixed.mixNote,
+    };
+  if (fixed.unplaced.length) next.openingUnplaced = fixed.unplaced.length;
+  else delete next.openingUnplaced;
+  const staged = applyStaging(next, outline, input, options),
+    structural = new Set(validateOpenings(staged, input, outline).errors),
+    hard = validatePagination(staged, input, outline).errors.filter(
+      (error) => !structural.has(error),
+    );
+  if (hard.length) throw new StoryValidationError("pagination", hard);
+  return clone(staged);
+}
+/** A stored openings pagination whose structure drifted, normalized for free. */
+function renormalizeOpenings(pagination, outline, input) {
+  if (!isOpeningsInput(input) || !Array.isArray(pagination?.pages))
+    return pagination;
+  if (validateOpenings(pagination, input, outline).valid) return pagination;
+  const fixed = normalizeOpenings(
+    pagination.pages,
+    buildOpeningPlan(outline, input.pageCount / 2),
+    input.specs,
+  );
+  return {
+    ...clone(pagination),
+    pages: fixed.pages,
+    openingAdjustments: [
+      ...(pagination.openingAdjustments || []),
+      ...fixed.openingAdjustments,
+    ],
+    mixNote: fixed.mixNote,
+  };
+}
+async function paginateOpeningsOnce(outline, prose, input, options, violations) {
+  if (demo(options))
+    return demoResult(
+      "pagination",
+      applyStaging(demoPagination(outline, prose, input), outline, input, options),
+      input,
+    );
+  const count = input.pageCount / 2,
+    result = await complete(
+      "pagination",
+      input,
+      {
+        rules: `${openingsPaginationRules(input, options)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
+        data: {
+          approvedOutline: outline,
+          approvedOriginalProse: prose,
+          openingPlan: buildOpeningPlan(outline, count),
+          ...(options.sceneBriefs
+            ? { sceneBriefs: sceneBriefRows(options.sceneBriefs) }
+            : {}),
+          ...(violations.length ? { violations } : {}),
+        },
+      },
+      openingPaginationSchema(count),
+      options,
+    );
+  try {
+    result.data = settleOpenings(result.data, outline, input, options);
+  } catch (error) {
+    error.usage ??= result.usage;
+    error.meta ??= result.meta;
+    throw error;
+  }
+  result.meta.openingAdjustments = clone(result.data.openingAdjustments);
+  result.meta.mixNote = result.data.mixNote;
+  return result;
+}
 function applyStaging(pagination, outline, input, options) {
   pagination = attachPagePlotContext(pagination, outline);
   if (!options.sceneBriefs && !options.staging) return pagination;
@@ -2080,6 +2444,7 @@ function applyStaging(pagination, outline, input, options) {
       bookId: options.bookId || input.bookId || "story",
       stylePreset: options.stylePreset,
       backgrounds: input.backgrounds,
+      ...(isOpeningsInput(input) ? { openings: true } : {}),
     });
   next.sceneBriefs = clone(briefs);
   for (const page of next.pages || []) {
@@ -2102,6 +2467,8 @@ function validateGeneratedPagination(value, input, outline) {
   return clone(value);
 }
 async function paginateOnce(outline, prose, input, options, violations = []) {
+  if (isOpeningsInput(input))
+    return paginateOpeningsOnce(outline, prose, input, options, violations);
   if (demo(options))
     return demoResult(
       "pagination",
@@ -2151,11 +2518,21 @@ export function inspectStory(outline, pagination, input) {
       [c.name, c.nameEn].filter(Boolean),
     ),
   });
-  if (pagination.pages?.length !== input.pageCount) {
+  // R12 openings: the opening structure (validateOpenings) replaces the entry count.
+  const structure = isOpeningsInput(input)
+    ? validateOpenings(pagination, input, outline)
+    : null;
+  if (
+    structure
+      ? !structure.valid
+      : pagination.pages?.length !== input.pageCount
+  ) {
     const violation = {
       type: "beat_mapping",
       kind: "pagination",
-      message: `${input.pageCount}쪽을 요청했지만 ${pagination.pages?.length || 0}쪽이에요.`,
+      message: structure
+        ? structure.errors.slice(0, 3).join(" ")
+        : `${input.pageCount}쪽을 요청했지만 ${pagination.pages?.length || 0}쪽이에요.`,
     };
     report.violations.push(violation);
     report.checks
@@ -2190,6 +2567,8 @@ export async function rewriteStoryPage(
     if (sceneOnly)
       next.pages[index].scene.action =
         base.pages[index]?.scene.action || original.scene.action;
+    if (original.kind !== undefined)
+      next.pages[index] = copyLayoutFields(original, next.pages[index]);
     return {
       ...demoResult("page", next, input),
       meta: {
@@ -2200,12 +2579,12 @@ export async function rewriteStoryPage(
   }
   const rules = sceneOnly
     ? `Rewrite ONLY the drawable English scene.action for page ${pageNo}, 8–30 words containing a visible verb, location and props. Do not change any text, cast, wardrobe, beat or other scene fields. Return {action:string}.`
-    : `Rewrite only story page ${pageNo}, preserving pageNo=${pageNo}, beatIndex=${original.beatIndex}, cast and allowed wardrobe IDs. Preserve its concrete event and all ORIGINAL prose facts, adjacent continuity and the approved twist. Repair the listed violations only. Other pages must stay unchanged. If a violation names only one language, keep the other language byte-for-byte unchanged. Return one StoryPage. Do not invent a new event or lesson. ${options.richness ? richnessPromptRules() : ""}`;
+    : `Rewrite only story page ${pageNo}, preserving pageNo=${pageNo}, beatIndex=${original.beatIndex}, cast and allowed wardrobe IDs. Preserve its concrete event and all ORIGINAL prose facts, adjacent continuity and the approved twist. Repair the listed violations only. Other pages must stay unchanged. If a violation names only one language, keep the other language byte-for-byte unchanged. Return one StoryPage. Do not invent a new event or lesson. ${options.richness ? richnessPromptRules() : ""}${openingEntryRule(input, pagination, index)}`;
   const result = await complete(
     sceneOnly ? "scene" : "page",
     input,
     {
-      rules: `${rules}\n${paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}`,
+      rules: `${rules}\n${isOpeningsInput(input) ? openingsPaginationRules(input) : paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}${hasEditorPolicy(input) ? CURRENT_BOOK_RULE : ""}`,
       data: {
         approvedOutline: outline,
         approvedOriginalProse: prose,
@@ -2217,6 +2596,8 @@ export async function rewriteStoryPage(
         previousPage: pagination.pages[index - 1] || null,
         nextPage: pagination.pages[index + 1] || null,
         violations,
+        // Editor round: every page as it reads now (earlier repairs included).
+        ...(hasEditorPolicy(input) ? { currentBook: bookPages(pagination) } : {}),
       },
     },
     sceneOnly ? SCENE_REWRITE_SCHEMA : PAGE_SCHEMA,
@@ -2242,6 +2623,135 @@ export async function rewriteStoryPage(
     }
     throw error;
   }
+}
+const CURRENT_BOOK_RULE =
+  "\ncurrentBook is every page of the book as it reads now. Read it before writing: keep this page consistent with the pages before and after it (names, props, facts, what the reader already knows) and avoid repeating their words and sentence openings.";
+const bookPages = (pagination) =>
+  (pagination.pages || []).map((page) => ({
+    pageNo: page.pageNo,
+    beatIndex: page.beatIndex,
+    textKo: page.textKo,
+    textEn: page.textEn,
+  }));
+/**
+ * Editor round: the whole-book read-through (book-revision.js) before the page
+ * coherence review, for new drafts (input.editorPolicy) when the caller asks
+ * (options.revise: FULL AUTO and the pro wizard's first pagination). A saved
+ * options.revisionCheckpoint replays the paid answer or skips a book that is
+ * already revised, so a resume never buys it twice. An unreadable answer keeps
+ * the pages; a network error is thrown like any other paid stage.
+ */
+async function reviseStoryBook(result, outline, input, options) {
+  const pagination = result.data,
+    source = revisionFingerprint(pagination),
+    saved = options.revisionCheckpoint?.version === 1 ? options.revisionCheckpoint : null;
+  if (saved?.resultFingerprint === source && saved.revision)
+    return {
+      ...result,
+      meta: { ...result.meta, revision: clone(saved.revision) },
+    };
+  const requests = [];
+  let response = null,
+    unreadable = false;
+  if (saved?.sourceFingerprint === source && saved.response)
+    response = clone(saved.response);
+  else {
+    notify(
+      options,
+      "revision",
+      "review",
+      "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+    );
+    try {
+      const reply = await complete(
+        "revision",
+        input,
+        {
+          rules: revisionRules(input, pagination.pages.length),
+          data: revisionData(
+            outline,
+            pagination,
+            sceneBriefRows(options.sceneBriefs),
+          ),
+        },
+        REVISION_SCHEMA,
+        {
+          ...options,
+          ...options.revisionOptions,
+          signal: options.signal,
+          onProgress: options.onProgress,
+        },
+      );
+      requests.push(reply);
+      response = reply.data;
+    } catch (error) {
+      if (!(error instanceof StoryValidationError)) throw error;
+      // Billed but unreadable: keep the pages, never stop the book for it.
+      requests.push({ usage: error.usage || {}, meta: error.meta || { requests: 1 } });
+      unreadable = true;
+    }
+  }
+  const briefs = sceneBriefRows(options.sceneBriefs);
+  const applied = unreadable
+    ? { pagination: clone(pagination), accepted: [], rejected: [], report: null }
+    : applyRevision(pagination, response, {
+        outline,
+        input,
+        inspect: (value) => inspectStory(outline, value, input),
+        richness: options.richness
+          ? (value, pageNo) =>
+              checkRichness(value, input, outline, briefs).pages?.find(
+                (row) => row.pageNo === pageNo,
+              )?.passed
+          : undefined,
+      });
+  const revision = {
+    version: 1,
+    ...(unreadable ? { skipped: true, reason: "unreadable" } : {}),
+    accepted: applied.accepted,
+    rejected: applied.rejected,
+    report: applied.report,
+  };
+  const next = {
+    data: applied.pagination,
+    usage: mergeStoryUsage([result, ...requests]),
+    meta: {
+      ...result.meta,
+      revision,
+      requests:
+        (Number(result.meta?.requests) || 0) +
+        (requests.length ? requestCount(requests) : 0),
+    },
+  };
+  const checkpoint = {
+    version: 1,
+    sourceFingerprint: source,
+    resultFingerprint: revisionFingerprint(applied.pagination),
+    ...(response ? { response: clone(response) } : {}),
+    revision: clone(revision),
+  };
+  if (options.onCheckpoint)
+    await options.onCheckpoint({
+      stage: "revision",
+      pagination: clone(applied.pagination),
+      checks: inspectStory(outline, applied.pagination, input),
+      revisionCheckpoint: checkpoint,
+      usage: next.usage,
+      meta: { stage: "pagination", requests: next.meta.requests },
+    });
+  abort(options.signal);
+  return next;
+}
+/** R12 openings: the rewritten entry's kind and its unchanged partner page ("" for page books). */
+function openingEntryRule(input, pagination, index) {
+  if (!isOpeningsInput(input)) return "";
+  const page = pagination.pages[index];
+  if (page?.kind === "spread")
+    return ` This entry is a spread: one wide picture across both facing pages of opening ${page.openingNo}, with the whole beat text.`;
+  const partner = pagination.pages.find(
+    (other, i) => i !== index && other.openingNo === page?.openingNo,
+  );
+  return ` This entry is the ${page?.side === "right" ? "right" : "left"} page of opening ${page?.openingNo}; its partner page${partner ? ` ${partner.pageNo}` : ""} stays unchanged.`;
 }
 /** Validate and apply one rewritten page (or scene action) after the paid request. */
 function finishPageRewrite(
@@ -2288,9 +2798,25 @@ function finishPageRewrite(
       result.data.stagingManual = clone(original.stagingManual || {});
       result.data.stagingRegeneration = original.stagingRegeneration || 0;
     }
+    // R12: a rewrite never moves an entry. The model's page carries no layout
+    // fields; a changed one is refused, and the original's are copied back.
+    const layout = isOpeningsInput(input) || original.kind !== undefined;
+    if (
+      layout &&
+      LAYOUT_FIELDS.some(
+        (key) =>
+          result.data?.[key] !== undefined && result.data[key] !== original[key],
+      )
+    )
+      throw new StoryValidationError("page", [
+        "다시 쓴 쪽의 펼침 정보(펼침 번호·쪽 위치·종류)를 바꿀 수 없어요.",
+      ]);
     result.data = assertValid("page", result.data, input, outline);
+    if (layout) result.data = copyLayoutFields(original, result.data);
     next.pages[index] = result.data;
   }
+  if (sceneOnly && original.kind !== undefined)
+    next.pages[index] = copyLayoutFields(original, next.pages[index]);
   result.data = applyStaging(next, outline, input, options);
   result.meta.checks = inspectStory(outline, next, input);
   return result;
@@ -2332,6 +2858,7 @@ async function finishPaginationRichness(
     report = checkRichness(next, input, outline, briefs),
     attempts = 0;
   try {
+    const budget = isOpeningsInput(input) ? openingBudget(options, input) : null;
     for (
       let pass = 0;
       pass < 2 && !report.passed && options.repair !== false && !demo(options);
@@ -2342,9 +2869,12 @@ async function finishPaginationRichness(
       for (const pageNo of targets) {
         abort(options.signal);
         if ((repairCounts[pageNo] || 0) >= 2) continue;
+        // R12 openings: paid rewrites stop at the shared cap (2 × openings).
+        if (budget && budget.used >= budget.max) break;
         const violations = report.violations.filter((v) => v.pageNo === pageNo);
         if (!violations.length) continue;
         repairCounts[pageNo] = (repairCounts[pageNo] || 0) + 1;
+        if (budget) budget.used++;
         notify(
           options,
           "pagination",
@@ -2397,6 +2927,9 @@ async function finishPaginationRichness(
         richnessChecks: report,
         richnessRepairAttempts: attempts,
         requests: requestCount([result, ...requests]),
+        ...(isOpeningsInput(input)
+          ? { repairBudget: { ...openingBudget(options, input) } }
+          : {}),
       },
     },
     outline,
@@ -2404,6 +2937,14 @@ async function finishPaginationRichness(
     input,
     options,
   );
+}
+/**
+ * R12 openings: the per-run cap on paid entry rewrites, 2 × openings, shared by
+ * repairPagination and the richness loop through the options object.
+ */
+function openingBudget(options, input) {
+  options.openingRepairBudget ||= { used: 0, max: input.pageCount };
+  return options.openingRepairBudget;
 }
 async function finishPaginationCoherence(
   result,
@@ -2446,28 +2987,82 @@ async function finishPaginationCoherence(
     }
     if (options.skipCoherence)
       return { ...result, meta: { ...result.meta, coherence: undefined } };
-    const reviewed = await reviewStoryCoherence(
-      outline,
-      prose,
-      result.data,
-      input,
-      {
+    let unrevised = null;
+    if (options.revise === true && hasEditorPolicy(input) && !demo(options)) {
+      unrevised = result;
+      result = await reviseStoryBook(result, outline, input, options);
+      if (!result.meta?.revision?.accepted?.length) unrevised = null;
+    }
+    const review = (base) =>
+      reviewStoryCoherence(outline, prose, base.data, input, {
         ...options,
         repair: options.coherenceRepair !== false,
         onCheckpoint: options.onCheckpoint
           ? (cp) =>
               options.onCheckpoint({
                 ...cp,
-                usage: mergeStoryUsage([result, { usage: cp.usage || {} }]),
+                usage: mergeStoryUsage([base, { usage: cp.usage || {} }]),
                 meta: {
                   ...cp.meta,
                   requests:
-                    requestCount([result]) + (Number(cp.meta?.requests) || 0),
+                    requestCount([base]) + (Number(cp.meta?.requests) || 0),
                 },
               })
           : undefined,
-      },
-    );
+      });
+    let reviewed;
+    try {
+      reviewed = await review(result);
+    } catch (error) {
+      // Editor round: the editor must never be why a book stops. When the page
+      // review still fails after its repairs on a revised book, the editor's
+      // pages are put back and the unrevised book is reviewed once more.
+      if (
+        !unrevised ||
+        error?.name !== "StoryValidationError" ||
+        error.stage !== "coherence"
+      )
+        throw error;
+      const revision = {
+        ...result.meta.revision,
+        rolledBack: true,
+        rolledBackPages: result.meta.revision.accepted.map((row) => row.pageNo),
+        accepted: [],
+      };
+      result = {
+        data: unrevised.data,
+        usage: mergeStoryUsage([result, { usage: error.usage || {} }]),
+        meta: {
+          ...unrevised.meta,
+          revision,
+          requests:
+            (Number(result.meta?.requests) || 0) +
+            (Number(error.meta?.requests) || 0),
+        },
+      };
+      if (options.onCheckpoint)
+        await options.onCheckpoint({
+          stage: "revision",
+          pagination: clone(result.data),
+          checks: inspectStory(outline, result.data, input),
+          revisionCheckpoint: {
+            version: 1,
+            sourceFingerprint: revisionFingerprint(result.data),
+            resultFingerprint: revisionFingerprint(result.data),
+            revision: clone(revision),
+          },
+          usage: result.usage,
+          meta: { stage: "pagination", requests: result.meta.requests },
+        });
+      abort(options.signal);
+      notify(
+        options,
+        "revision",
+        "rollback",
+        "다듬은 글이 사건 검사와 맞지 않아 원래 글로 다시 검사하고 있어요.",
+      );
+      reviewed = await review(result);
+    }
     const next = reviewed.data.pagination;
     return {
       data: next,
@@ -2505,6 +3100,8 @@ export async function finalizeStoryPagination(
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
   assertValid("prose", prose, input, outline);
+  // R12 openings: structural drift is fixed for free before any paid step.
+  pagination = renormalizeOpenings(pagination, outline, input);
   assertValid("pagination", pagination, input, outline);
   abort(options.signal);
   return finishPaginationCoherence(
@@ -2531,9 +3128,12 @@ export async function repairPagination(
   options = {},
 ) {
   options = { ...options, pageRepairCounts: options.pageRepairCounts || {} };
-  const input = normalizeStoryInput(source);
+  const input = normalizeStoryInput(source),
+    openings = isOpeningsInput(input);
+  if (openings) openingBudget(options, input);
   abort(options.signal);
-  let next = clone(pagination),
+  // R12 openings: structural drift is fixed for free before any paid step.
+  let next = renormalizeOpenings(clone(pagination), outline, input),
     report = inspectStory(outline, next, input),
     attempts = 0;
   const requests = [];
@@ -2553,6 +3153,8 @@ export async function repairPagination(
       input,
       options,
     );
+  if (openings && !demo(options))
+    return repairOpeningsPagination(outline, prose, next, input, options);
   try {
     for (let pass = 0; pass < 2 && !report.passed; pass++) {
       attempts++;
@@ -2630,6 +3232,119 @@ export async function repairPagination(
         checks: report,
         repairAttempts: attempts,
         repairRequestCount: requests.length,
+        requests: requests.reduce(
+          (n, result) => n + (Number(result.meta?.requests) || 1),
+          0,
+        ),
+        ...continuityMeta(input),
+      },
+    },
+    outline,
+    prose,
+    input,
+    options,
+  );
+}
+/**
+ * R12 openings repairPagination: a missing or unknown beat is the one paid
+ * structural fix (a repagination); otherwise ONE rewrite per failing entry per
+ * pass carries its reading and richness violations together, within the shared
+ * cap of 2 × openings paid rewrites (left issues stay as badges).
+ */
+async function repairOpeningsPagination(outline, prose, pagination, input, options) {
+  const budget = openingBudget(options, input),
+    briefs = sceneBriefRows(options.sceneBriefs),
+    requests = [];
+  let next = pagination,
+    report = inspectStory(outline, next, input),
+    richness = options.richness
+      ? checkRichness(next, input, outline, briefs)
+      : null,
+    attempts = 0;
+  const failing = () =>
+    report.needsRepagination
+      ? []
+      : [
+          ...new Set([
+            ...report.failedPageNos,
+            ...(richness?.failedPageNos || []),
+          ]),
+        ].sort((a, b) => a - b);
+  try {
+    for (
+      let pass = 0;
+      pass < 2 && (report.needsRepagination || failing().length);
+      pass++
+    ) {
+      attempts++;
+      notify(
+        options,
+        "pagination",
+        "repair",
+        `이야기 검사 결과를 고치고 있어요 (${pass + 1}/2).`,
+        { attempt: pass + 1, failedPageNos: report.failedPageNos },
+      );
+      if (report.needsRepagination) {
+        const result = await paginateOnce(
+          outline,
+          prose,
+          input,
+          options,
+          report.violations.filter((v) => v.kind === "pagination"),
+        );
+        requests.push(result);
+        next = result.data;
+        await checkpoint(options, next, inspectStory(outline, next, input), attempts, requests);
+      } else
+        for (const pageNo of failing()) {
+          abort(options.signal);
+          if (budget.used >= budget.max) break;
+          const violations = [
+            ...report.violations.filter((v) => v.pageNo === pageNo),
+            ...(richness?.violations || []).filter((v) => v.pageNo === pageNo),
+          ];
+          if (!violations.length) continue;
+          budget.used++;
+          options.pageRepairCounts[pageNo] =
+            (options.pageRepairCounts[pageNo] || 0) + 1;
+          notify(
+            options,
+            "pagination",
+            "repair-page",
+            `${pass + 1}/2차 수정 · ${pageNo}번째 쪽을 고치고 있어요.`,
+            { attempt: pass + 1, pageNo },
+          );
+          const result = await rewriteStoryPage(next, pageNo, outline, prose, input, {
+            ...options,
+            violations,
+            richness: violations.some((v) => v.type === "richness"),
+          });
+          requests.push(result);
+          next = result.data;
+          await checkpoint(options, next, inspectStory(outline, next, input), attempts, requests);
+        }
+      report = inspectStory(outline, next, input);
+      richness = options.richness
+        ? checkRichness(next, input, outline, briefs)
+        : null;
+      if (budget.used >= budget.max && !report.needsRepagination) break;
+    }
+  } catch (error) {
+    error.pagination = next;
+    throw paidError(error, requests, { stage: "pagination" });
+  }
+  return finishPaginationRichness(
+    {
+      data: next,
+      usage: mergeStoryUsage(requests),
+      meta: {
+        stage: "pagination",
+        engineId: options.engine?.id || options.engineId || "unknown",
+        demo: false,
+        checks: report,
+        repairAttempts: attempts,
+        repairRequestCount: requests.length,
+        repairBudget: { ...budget },
         requests: requests.reduce(
           (n, result) => n + (Number(result.meta?.requests) || 1),
           0,
@@ -2774,7 +3489,10 @@ export function toLegacyPages(pagination, basePages = []) {
         JSON.stringify(prior.variantByCharacter || {}) !==
           JSON.stringify(page.variantByCharacter || {}) ||
         JSON.stringify(prior.staging || {}) !==
-          JSON.stringify(page.staging || {});
+          JSON.stringify(page.staging || {}) ||
+        // R12: a picture belongs to its entry and kind (never 3:2 art on a spread).
+        ((prior.kind !== undefined || page.kind !== undefined) &&
+          (prior.kind !== page.kind || prior.entryId !== page.entryId));
     const result = {
       ...clone(prior),
       ...clone(page),

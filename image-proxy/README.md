@@ -14,4 +14,6 @@ Google 초안은 `gemini-3.1-flash-lite-image`(1K만), 확정은 `gemini-3.1-fla
 
 글 엔진은 `POST /api/text/:engine`이며 OpenAI·Google·Anthropic·로컬을 별도로 선택합니다. 환경변수 키는 `OPENAI_API_KEY`, `GOOGLE_IMAGE_API_KEY`, `ANTHROPIC_API_KEY`이고 로컬 주소·모델은 `LOCAL_TEXT_BASE_URL`, `LOCAL_TEXT_MODEL`입니다. 공급자 기본 주소를 바꾸려면 `OPENAI_TEXT_ENDPOINT`, `GOOGLE_TEXT_ENDPOINT`, `ANTHROPIC_TEXT_ENDPOINT`를 사용합니다. 브라우저 요청에 API 키와 접속 설정을 넣지 않습니다. 자세한 내용은 `TEXT_GENERATION.md`를 참고하세요.
 
+R13 ‘모델 목록 불러오기’는 `GET /api/models/text/:engine`(openai·anthropic·google·local)과 `GET /api/models/image/:engine`(openai·google)입니다. 같은 출처·토큰 규칙으로 서버 환경변수 키를 써서 공급자의 목록 API만 부르고(토큰·요금 없음), 생성용 모델 ID와 이름만 돌려줍니다. 글·그림 요청의 `model`이 카탈로그에 없는 ID(`/^[A-Za-z0-9._:\/-]{1,120}$/`)이면 그 요청에서만 등록해 온도·추론 설정 없이 보냅니다.
+
 글 요청의 model 선택도 서버 어댑터 설정에 전달하며, 상위 모델의 온도·추론·출력 토큰 규칙은 공통 텍스트 어댑터에서 처리합니다. API 키는 모델 선택과 무관하게 서버 환경변수에서만 읽습니다.

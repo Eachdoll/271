@@ -12,14 +12,42 @@ import {
   listCredentialStatus,
   saveCredential,
   removeCredential,
+  getCredential,
 } from "./vault.js";
 import {
   generateScene,
   generateAllScenes,
   generateCharacterSheet,
 } from "./pipeline.js";
-import { estimateImageCost, estimateBookCost } from "./models.js";
+import {
+  estimateImageCost,
+  estimateBookCost,
+  getEngineModel,
+  ENGINE_MODELS,
+  MODEL_VERIFIED_AT,
+  IMAGE_MODEL_ENGINES,
+  listImageModelOptions,
+  imageModelOptionLabel,
+  imageModelShortName,
+  frozenImageConfig,
+  isCatalogImageModel,
+} from "./models.js";
+import {
+  normalizeModelRegistry,
+  validateModelId,
+  MAX_CUSTOM_MODELS,
+} from "../text-generation/models.js";
+import {
+  fetchProviderModels,
+  supportsModelList,
+} from "../text-generation/model-list.js";
 import { getImageURL, deleteImageAsset } from "./assets.js";
+import {
+  layoutOf,
+  unitImageSize,
+  unitLabel,
+  openingsOf,
+} from "../book-layout.js";
 // 설정 화면은 스타일 시트 그림이 아직 없거나 복원되지 않았어도 열려야 합니다.
 function safeStyleReferences(state, world) {
   try {
@@ -59,11 +87,58 @@ const option = (value, label, selected) =>
   `<option value="${value}" ${value === selected ? "selected" : ""}>${escape(label)}</option>`;
 const button = (label, action, attrs = "") =>
   `<button type="button" class="btn btn-outline btn-small" data-ig-action="${action}" ${attrs}>${label}</button>`;
-function providerFields(world, engine) {
+/**
+ * The final-picture model a World's provider draws with now: the parent's
+ * R13 choice, else the legacy Google Pro switch, else the provider default.
+ */
+export function currentImageModel(world, engine) {
+  const config = world?.providerConfig?.[engine] || {};
+  return getEngineModel(engine, "final", {
+    ...config,
+    ...(engine === "google" &&
+    world?.imageEngine === "google" &&
+    world?.imageModelVariant === "pro"
+      ? { googlePro: true }
+      : {}),
+  });
+}
+/** <option>s for a provider's picture models, grouped as catalog / fetched / typed. */
+export function imageModelOptions(world, engine, selected) {
+  const config = world?.providerConfig?.[engine] || {},
+    options = listImageModelOptions(engine, config);
+  if (selected && !options.some((row) => row.id === selected))
+    options.push({
+      id: selected,
+      label: imageModelOptionLabel(engine, selected),
+      group: "custom",
+    });
+  const group = (name, label) => {
+    const rows = options.filter((row) => row.group === name);
+    return rows.length
+      ? `<optgroup label="${escape(label)}">${rows.map((row) => option(escape(row.id), row.label, selected)).join("")}</optgroup>`
+      : "";
+  };
+  const fetched = normalizeModelRegistry(config).fetchedModels;
+  return `${group("catalog", `추천 목록 · 요금 확인 ${MODEL_VERIFIED_AT}`)}${group("fetched", `불러온 목록${fetched?.fetchedAt ? ` · ${fetched.fetchedAt.slice(0, 10)}` : ""}`)}${group("custom", "직접 입력한 모델")}`;
+}
+/** R13: 공급자 → 모델. One select per provider with a list button and a typed ID. */
+function imageModelField(world, engine, simple = false) {
+  if (!IMAGE_MODEL_ENGINES.includes(engine)) return "";
+  const selected = currentImageModel(world, engine),
+    single = ENGINE_MODELS[engine].draft === ENGINE_MODELS[engine].final,
+    listed = supportsModelList("image", engine),
+    fetched = normalizeModelRegistry(
+      world.providerConfig?.[engine],
+    ).fetchedModels;
+  // Simple screens keep their 12-button cap: there the free list call is the
+  // select's own '모델 목록 불러오기 · 무료…' option instead of a button.
+  return `<div class="field ig-model-field" style="margin-top:18px"><label for="ig-model">그림 모델 · 최종 그림</label><select id="ig-model" data-ig-model-engine="${escape(engine)}" data-current="${escape(selected)}">${imageModelOptions(world, engine, selected)}<option value="__custom">직접 입력…</option>${simple && listed ? '<option value="__fetch">모델 목록 불러오기 · 무료…</option>' : ""}</select><input id="ig-model-custom" type="text" maxlength="120" spellcheck="false" autocomplete="off" hidden placeholder="모델 ID (영문·숫자와 . _ : / -)" aria-label="그림 모델 ID 직접 입력"><small>${single ? "미리보기도 이 모델로 그려요." : `미리보기는 ${escape(imageModelShortName(engine, ENGINE_MODELS[engine].draft))} 그대로예요.`} 이미 만든 책과 진행 중인 작업은 만들 때의 모델을 그대로 써요.${engine === "fal" ? " 직접 입력은 fal 모델 경로 전체예요." : ""}</small>${listed && !simple ? `<div class="ig-key-actions">${button("모델 목록 불러오기", "fetch-models")}</div>` : ""}<small id="ig-model-status" role="status" aria-live="polite">${fetched ? `불러온 목록 ${fetched.models.length}개 · ${escape(fetched.fetchedAt.slice(0, 10))}` : listed ? "목록 불러오기는 무료예요 · 키로 쓸 수 있는 그림 모델만 보여 줘요." : ""}</small></div>`;
+}
+function providerFields(world, engine, simple = false) {
   const config = world.providerConfig?.[engine] || {};
   if (engine === "sample")
     return `<div class="notice"><strong>기기 내 무료 샘플 · API 키 없음</strong><br>인터넷이나 API 비용 없이 종류·색상이 반영된 고정 그림 템플릿을 사용해요. 커버의 정교한 수채화를 AI로 재생성하거나 사진을 그림으로 바꾸는 엔진은 아닙니다.<br><br>커버 화풍을 무료로 쓰려면 Gemini 웹 앱의 무료 한도에서 직접 만든 그림을 가져오거나, 직접 설치한 ComfyUI를 연결해 주세요.</div><div class="material-add-actions"><button type="button" class="btn btn-outline btn-small" data-photo-action="import-character">완성된 캐릭터 그림 가져오기 · 무료</button></div>`;
-  return `<div class="ig-provider-title"><strong>${escape(meta(engine).name)}</strong><span>${escape(meta(engine).model)}</span></div><p class="small-label">${escape(meta(engine).description || "공급자의 유료 API 요금이 적용됩니다.")}</p><div class="field"><label for="ig-api-key">${engine === "local" ? "인증 토큰 · 선택" : "API 키"}</label><input type="password" id="ig-api-key" autocomplete="off" maxlength="16384" ${engine === "openai" ? 'aria-describedby="ig-openai-key-help"' : ""} placeholder="${credentialStatus[engine] ? "암호화된 키가 저장되어 있어요 · 바꾸려면 새로 입력" : "키를 입력하면 이 브라우저에 암호화해 저장해요"}"><small data-credential-status="${engine}">${credentialStatus[engine] ? "키 저장됨 · 평문은 표시하지 않습니다." : "저장된 키 없음"}</small></div>${engine === "openai" ? '<p class="small-label">이미지는 GPT Image 2를 사용합니다. 미리보기는 low, 최종 생성은 high 품질입니다.</p><p id="ig-openai-key-help" class="small-label">OpenAI 화면의 추적 ID(key_)가 아니라 비밀 키(sk-) 전체를 입력하세요. sk-…처럼 가려진 값은 사용할 수 없습니다. 비밀 키는 생성할 때만 전체를 복사할 수 있어요. <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI에서 새 비밀 키 만들기 ↗</a></p>' : ""}<div class="ig-key-actions">${button("키 암호화 저장", "save-key")}${button("저장된 키 삭제", "delete-key")}</div><p id="ig-key-error" class="pin-error" role="status" aria-live="polite"></p>${engine !== "local" ? `<div class="field" style="margin-top:18px"><label for="ig-proxy-endpoint">CORS 프록시 주소 · 선택</label><input id="ig-proxy-endpoint" type="url" value="${escape(config.proxyEndpoint || "")}" placeholder="https://image-proxy.example.com"><small>주소를 저장하면 브라우저의 키를 보내지 않고 프록시의 환경변수 키로 생성해요. 비워두면 공급자에 직접 연결합니다.</small></div>` : ""}${engine === "google" ? `<label class="reading-consent" style="margin-top:18px"><input type="checkbox" id="ig-google-pro" ${config.googlePro ? "checked" : ""}>최종 그림에 Gemini 3 Pro Image 사용 · 상위 모델 · 추가 API 요금</label>` : ""}${engine === "local" ? `<div class="field" style="margin-top:19px"><label for="ig-endpoint">ComfyUI 엔드포인트</label><input id="ig-endpoint" type="url" value="${escape(config.endpoint || "http://127.0.0.1:8188")}" placeholder="https://comfy.example.com"><small>이 브라우저에서 접근할 수 있어야 합니다. HTTPS 앱에서 HTTP 주소는 브라우저가 차단할 수 있어요.</small></div><div class="field" style="margin-top:14px"><label for="ig-workflow">API 형식 워크플로 JSON</label><textarea id="ig-workflow" rows="7" spellcheck="false" placeholder="ComfyUI의 Save (API Format)으로 내보낸 JSON">${escape(config.workflow ? JSON.stringify(config.workflow, null, 2) : "")}</textarea><small>텍스트: {{prompt}}, {{negativePrompt}} · 시드: {{seed}} · 크기: {{width}}, {{height}}<br>참조: {{referenceImage:0}}, {{referenceImage:1}}… 또는 {{referenceImages}}. 캐릭터 시트와 화풍 참조를 모두 사용해야 해요.</small></div>` : ""}`;
+  return `<div class="ig-provider-title"><strong>${escape(meta(engine).name)}</strong><span>${escape(meta(engine).model)}</span></div><p class="small-label">${escape(meta(engine).description || "공급자의 유료 API 요금이 적용됩니다.")}</p><div class="field"><label for="ig-api-key">${engine === "local" ? "인증 토큰 · 선택" : "API 키"}</label><input type="password" id="ig-api-key" autocomplete="off" maxlength="16384" ${engine === "openai" ? 'aria-describedby="ig-openai-key-help"' : ""} placeholder="${credentialStatus[engine] ? "암호화된 키가 저장되어 있어요 · 바꾸려면 새로 입력" : "키를 입력하면 이 브라우저에 암호화해 저장해요"}"><small data-credential-status="${engine}">${credentialStatus[engine] ? "키 저장됨 · 평문은 표시하지 않습니다." : "저장된 키 없음"}</small></div>${engine === "openai" ? '<p class="small-label">기본 모델은 GPT Image 2입니다. 미리보기는 low, 최종 생성은 high 품질입니다.</p><p id="ig-openai-key-help" class="small-label">OpenAI 화면의 추적 ID(key_)가 아니라 비밀 키(sk-) 전체를 입력하세요. sk-…처럼 가려진 값은 사용할 수 없습니다. 비밀 키는 생성할 때만 전체를 복사할 수 있어요. <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI에서 새 비밀 키 만들기 ↗</a></p>' : ""}<div class="ig-key-actions">${button("키 암호화 저장", "save-key")}${button("저장된 키 삭제", "delete-key")}</div><p id="ig-key-error" class="pin-error" role="status" aria-live="polite"></p>${engine !== "local" ? `<div class="field" style="margin-top:18px"><label for="ig-proxy-endpoint">CORS 프록시 주소 · 선택</label><input id="ig-proxy-endpoint" type="url" value="${escape(config.proxyEndpoint || "")}" placeholder="https://image-proxy.example.com"><small>주소를 저장하면 브라우저의 키를 보내지 않고 프록시의 환경변수 키로 생성해요. 비워두면 공급자에 직접 연결합니다.</small></div>` : ""}${imageModelField(world, engine, simple)}${engine === "local" ? `<div class="field" style="margin-top:19px"><label for="ig-endpoint">ComfyUI 엔드포인트</label><input id="ig-endpoint" type="url" value="${escape(config.endpoint || "http://127.0.0.1:8188")}" placeholder="https://comfy.example.com"><small>이 브라우저에서 접근할 수 있어야 합니다. HTTPS 앱에서 HTTP 주소는 브라우저가 차단할 수 있어요.</small></div><div class="field" style="margin-top:14px"><label for="ig-workflow">API 형식 워크플로 JSON</label><textarea id="ig-workflow" rows="7" spellcheck="false" placeholder="ComfyUI의 Save (API Format)으로 내보낸 JSON">${escape(config.workflow ? JSON.stringify(config.workflow, null, 2) : "")}</textarea><small>텍스트: {{prompt}}, {{negativePrompt}} · 시드: {{seed}} · 크기: {{width}}, {{height}}<br>참조: {{referenceImage:0}}, {{referenceImage:1}}… 또는 {{referenceImages}}. 캐릭터 시트와 화풍 참조를 모두 사용해야 해요.</small></div>` : ""}`;
 }
 export function renderImageSettings(state) {
   const world = getActiveWorld(state);
@@ -97,7 +172,7 @@ export function renderImageSettings(state) {
  */
 export function renderImageEngineQuick(state) {
   const world = getActiveWorld(state);
-  return `<form id="ig-world-form" class="quick-engine-form"><input type="hidden" id="ig-world-name" value="${escape(world.name)}"><input type="hidden" id="ig-style" value="${escape(world.stylePresetId)}"><div class="field"><label for="ig-engine">그림 엔진</label><select id="ig-engine">${ENGINE_IDS.map((id) => option(id, meta(id).name, world.imageEngine)).join("")}</select><small>엔진을 바꾸면 캐릭터 시트를 다시 만들어야 해요. 저장 전에 한 번 더 물어봐요.</small></div><div id="ig-provider-fields">${providerFields(world, world.imageEngine)}</div>${world.characterSheetsStale ? '<p class="small-label">시트 다시 생성 필요 · 그림을 만들 때 필요한 시트를 먼저 준비해요.</p>' : ""}</form>`;
+  return `<form id="ig-world-form" class="quick-engine-form"><input type="hidden" id="ig-world-name" value="${escape(world.name)}"><input type="hidden" id="ig-style" value="${escape(world.stylePresetId)}"><div class="field"><label for="ig-engine">그림 엔진</label><select id="ig-engine">${ENGINE_IDS.map((id) => option(id, meta(id).name, world.imageEngine)).join("")}</select><small>엔진을 바꾸면 캐릭터 시트를 다시 만들어야 해요. 저장 전에 한 번 더 물어봐요.</small></div><div id="ig-provider-fields">${providerFields(world, world.imageEngine, true)}</div>${world.characterSheetsStale ? '<p class="small-label">시트 다시 생성 필요 · 그림을 만들 때 필요한 시트를 먼저 준비해요.</p>' : ""}</form>`;
 }
 function renderSheetRow(character, state) {
   const world = getActiveWorld(state);
@@ -113,24 +188,51 @@ export function renderCharacterImageControls(character, state) {
   const sheet = getCharacterSheet(state, character.id, world);
   return `<div class="ig-character-controls"><small>${sheet && sheet.worldRevision === world.revision ? "World 시트 확정" : "시트 다시 생성 필요"}</small>${button("엔진으로 시트 생성", "generate-sheet", `data-id="${escape(character.id)}"`)}</div>`;
 }
+/**
+ * R12 openings: the editor bar counts pictures (entries), not printed pages, and
+ * prices each entry at its own size (spread 2048x880, page 1536x1024). Page
+ * books keep their bar byte for byte.
+ */
+function renderOpeningsGenerationControls(book, world, engine) {
+  // R13: the book's frozen model (a later World choice never leaks in).
+  const config = frozenImageConfig(
+      world.providerConfig?.[engine],
+      book.generationSnapshot,
+    ),
+    prices = book.pages.map((page) =>
+      estimateImageCost({
+        engine,
+        quality: "draft",
+        size: unitImageSize(book, page),
+        config,
+      }),
+    ),
+    draftUsd = prices.reduce((sum, price) => sum + price.costUsd, 0),
+    pricingUnknown = prices.some((price) => price.pricingUnknown),
+    generated = book.pages.filter((p) => p.imageAssetId || p.imageUrl).length,
+    editPage = api.getEditPage?.() || 0;
+  return `<div class="ig-editor-bar"><div><strong>World 엔진으로 미리보기 만들기</strong><small>그림 ${generated} / ${book.pages.length}장 생성 · 펼침 ${openingsOf(book).length}개 · 캐릭터·옷장·스타일·고정 장소 참조 · 앞쪽부터 순서대로 생성 · ${pricingUnknown ? "전체 draft 요금 정보 없음 (목록에 없는 모델)" : `전체 draft 예상 $${draftUsd.toFixed(2)}`} · 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성</small>${book.pages[editPage]?.imageDiversity?.warning ? `<small role="status">${escape(book.pages[editPage].imageDiversity.warning)}</small>` : ""}${book.imageTimeWarning ? `<small role="status">${escape(book.imageTimeWarning.message)}</small>` : ""}</div><button type="button" class="btn btn-outline" data-ig-action="generate-page">이 그림 draft 생성</button><button type="button" class="btn btn-outline" data-ig-action="change-composition">이 그림 다른 구도로</button><button type="button" class="btn btn-green" data-ig-action="generate-book">그림 ${book.pages.length}장 draft 전체 생성</button></div>`;
+}
 export function renderGenerationControls(book) {
   const world = getActiveWorld(api.getState()),
-    engine = book.generationSnapshot?.imageEngine || world.imageEngine,
-    estimated = estimateBookCost({
+    engine = book.generationSnapshot?.imageEngine || world.imageEngine;
+  if (layoutOf(book) === "openings")
+    return renderOpeningsGenerationControls(book, world, engine);
+  const estimated = estimateBookCost({
       engine,
       pageCount: book.pages.length,
       quality: "draft",
       includeCover: false,
       size: "1536x1024",
-      config: {
-        ...world.providerConfig?.[engine],
-        ...book.generationSnapshot?.imageModelConfig,
-      },
+      config: frozenImageConfig(
+        world.providerConfig?.[engine],
+        book.generationSnapshot,
+      ),
     });
   const generated = book.pages.filter(
     (p) => p.imageAssetId || p.imageUrl,
   ).length;
-  return `<div class="ig-editor-bar"><div><strong>World 엔진으로 미리보기 만들기</strong><small>${generated} / ${book.pages.length}쪽 생성 · 캐릭터·옷장·스타일·고정 장소 참조 · 앞쪽부터 순서대로 생성 · 전체 draft 예상 $${estimated.costUsd.toFixed(2)} · 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성</small>${book.pages[api.getEditPage?.() || 0]?.imageDiversity?.warning ? `<small role="status">${escape(book.pages[api.getEditPage?.() || 0].imageDiversity.warning)}</small>` : ""}${book.imageTimeWarning ? `<small role="status">${escape(book.imageTimeWarning.message)}</small>` : ""}</div><button type="button" class="btn btn-outline" data-ig-action="generate-page">이 쪽 draft 생성</button><button type="button" class="btn btn-outline" data-ig-action="change-composition">이 쪽 다른 구도로</button><button type="button" class="btn btn-green" data-ig-action="generate-book">${book.pages.length}쪽 draft 전체 생성</button></div>`;
+  return `<div class="ig-editor-bar"><div><strong>World 엔진으로 미리보기 만들기</strong><small>${generated} / ${book.pages.length}쪽 생성 · 캐릭터·옷장·스타일·고정 장소 참조 · 앞쪽부터 순서대로 생성 · ${estimated.pricingUnknown ? "전체 draft 요금 정보 없음 (목록에 없는 모델)" : `전체 draft 예상 $${estimated.costUsd.toFixed(2)}`} · 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성</small>${book.pages[api.getEditPage?.() || 0]?.imageDiversity?.warning ? `<small role="status">${escape(book.pages[api.getEditPage?.() || 0].imageDiversity.warning)}</small>` : ""}${book.imageTimeWarning ? `<small role="status">${escape(book.imageTimeWarning.message)}</small>` : ""}</div><button type="button" class="btn btn-outline" data-ig-action="generate-page">이 쪽 draft 생성</button><button type="button" class="btn btn-outline" data-ig-action="change-composition">이 쪽 다른 구도로</button><button type="button" class="btn btn-green" data-ig-action="generate-book">${book.pages.length}쪽 draft 전체 생성</button></div>`;
 }
 function renderComparisonResults() {
   return comparisonResults
@@ -168,6 +270,129 @@ function engineConfig(state, engine) {
     {}
   );
 }
+/**
+ * R13 '모델 목록 불러오기': a free list call to the provider (or the saved
+ * proxy). Stores only model IDs and names with fetchedAt, never the key;
+ * on any error nothing changes and the Korean message is shown.
+ */
+/**
+ * Fetch a provider's picture models with the saved World settings and keep
+ * the list on that provider (IDs, names, fetchedAt). Restores and throws when
+ * `save` fails. Used by the settings forms and the simple ③ select.
+ */
+export async function fetchAndStoreImageModels(state, engine, save) {
+  if (!supportsModelList("image", engine))
+    throw new Error(
+      "이 공급자는 모델 목록을 제공하지 않아요. 모델 ID를 직접 입력해 주세요.",
+    );
+  const world = getActiveWorld(state),
+    config = engineConfig(state, engine),
+    proxy = config.proxyEndpoint || config.transport === "proxy",
+    apiKey = proxy ? null : await getCredential(engine);
+  if (!proxy && !apiKey)
+    throw missingCredentialError(
+      meta(engine).name + "의 API 키를 먼저 암호화해 저장해 주세요.",
+      engine,
+      "image",
+    );
+  const list = await fetchProviderModels({
+    kind: "image",
+    engine,
+    config: { ...config, apiKey },
+  });
+  world.providerConfig ||= {};
+  const before = world.providerConfig[engine];
+  world.providerConfig[engine] = { ...before, fetchedModels: list };
+  if (save() === false) {
+    if (before === undefined) delete world.providerConfig[engine];
+    else world.providerConfig[engine] = before;
+    throw new Error("불러온 모델 목록을 저장하지 못했어요.");
+  }
+  return list;
+}
+async function fetchImageModels(engine, button) {
+  if (!supportsModelList("image", engine)) return;
+  const state = api.getState(),
+    world = getActiveWorld(state),
+    status = document.querySelector("#ig-model-status");
+  if (button) button.disabled = true;
+  if (status) status.textContent = "모델 목록을 불러오는 중이에요…";
+  try {
+    const list = await fetchAndStoreImageModels(state, engine, () =>
+      api.save(),
+    );
+    const select = document.querySelector("#ig-model");
+    if (select?.dataset.igModelEngine === engine) {
+      const value = select.value,
+        fetchOption = select.querySelector('option[value="__fetch"]')
+          ? '<option value="__fetch">모델 목록 불러오기 · 무료…</option>'
+          : "";
+      select.innerHTML = `${imageModelOptions(world, engine, value === "__custom" ? currentImageModel(world, engine) : value)}<option value="__custom">직접 입력…</option>${fetchOption}`;
+      select.value = value;
+    }
+    if (status)
+      status.textContent = `불러온 목록 ${list.models.length}개 · ${list.fetchedAt.slice(0, 10)}`;
+    api.toast(
+      `${meta(engine).name}에서 그림 모델 ${list.models.length}개를 불러왔어요. 목록 불러오기는 요금이 들지 않아요.`,
+    );
+  } catch (error) {
+    if (status) status.textContent = error.message;
+    throw error;
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+/**
+ * Record a parent's final-picture model for one provider of the World (R13).
+ * Written only when it differs from what the provider draws with now, so a
+ * plain re-save keeps settings saved before R13 exactly as they were. A typed
+ * ID outside the catalog and the fetched list is remembered in customModels.
+ * Returns true when the World changed. No World revision bump: confirmed
+ * sheets stay valid, and books and jobs keep the model they froze.
+ */
+export function applyImageModelChoice(
+  world,
+  engine,
+  modelId,
+  before = currentImageModel(world, engine),
+) {
+  if (!IMAGE_MODEL_ENGINES.includes(engine)) return false;
+  const id = validateModelId(modelId);
+  if (id === before) return false;
+  world.providerConfig ||= {};
+  const config = (world.providerConfig[engine] ||= {}),
+    registry = normalizeModelRegistry(config);
+  config.model = id;
+  if (
+    !isCatalogImageModel(engine, id) &&
+    !registry.fetchedModels?.models.some((row) => row.id === id)
+  )
+    config.customModels = [
+      ...(registry.customModels || []).filter((item) => item !== id),
+      id,
+    ].slice(-MAX_CUSTOM_MODELS);
+  return true;
+}
+/** The model the World form chose: undefined without a model select, else an ID. */
+function readImageModelChoice(engine) {
+  const select = document.querySelector("#ig-model");
+  if (!select || select.dataset.igModelEngine !== engine) return undefined;
+  if (select.value !== "__custom") return select.value;
+  return validateModelId(document.querySelector("#ig-model-custom")?.value);
+}
+/** '예상 $0.17', or '요금 정보 없음' for a model outside the catalog (R13). */
+function sheetPriceLabel(state) {
+  const engine = getActiveWorld(state).imageEngine,
+    price = estimateImageCost({
+      engine,
+      quality: "final",
+      size: "1536x1024",
+      config: engineConfig(state, engine),
+    });
+  return price.pricingUnknown
+    ? "요금 정보 없음"
+    : "예상 $" + price.costUsd.toFixed(2);
+}
 function updateProviderConfig(world, engine) {
   world.providerConfig = world.providerConfig || {};
   if (engine !== "local") return;
@@ -198,7 +423,30 @@ export function configureImageUI(context) {
       document.querySelector("#ig-provider-fields").innerHTML = providerFields(
         getActiveWorld(state),
         e.target.value,
+        !!document.querySelector("#ig-world-form.quick-engine-form"),
       );
+    }
+    if (e.target.id === "ig-model" && e.target.value === "__fetch") {
+      const select = e.target,
+        engine = select.dataset.igModelEngine;
+      select.value = select.dataset.current || "";
+      api.protectedAction(async () => {
+        try {
+          await fetchImageModels(engine, select);
+        } catch (error) {
+          api.toast(error);
+        }
+      });
+      return;
+    }
+    if (e.target.id === "ig-model") {
+      if (e.target.value !== "__custom")
+        e.target.dataset.current = e.target.value;
+      const custom = document.querySelector("#ig-model-custom");
+      if (custom) {
+        custom.hidden = e.target.value !== "__custom";
+        if (!custom.hidden) custom.focus?.();
+      }
     }
     if (e.target.id === "ig-style") {
       const preset = getStylePreset(e.target.value),
@@ -235,6 +483,10 @@ export function configureImageUI(context) {
           document.querySelector("#ig-api-key").value = "";
           await refreshStatuses();
           api.toast("이 엔진의 저장된 키를 삭제했어요.");
+          return;
+        }
+        if (action === "fetch-models") {
+          await fetchImageModels(engine, el);
           return;
         }
         if (action === "cancel-generation") {
@@ -303,11 +555,15 @@ function saveWorldSettings() {
             workflow: document.querySelector("#ig-workflow").value.trim(),
           }
         : null;
+    // R13: the model select replaced the Pro checkbox. The legacy Pro switch
+    // stays as saved; a picked model wins over it (see getEngineModel).
     const connection = {
       proxyEndpoint:
         document.querySelector("#ig-proxy-endpoint")?.value.trim() || "",
-      googlePro: document.querySelector("#ig-google-pro")?.checked || false,
+      googlePro:
+        engine === "google" && Boolean(world.providerConfig?.google?.googlePro),
     };
+    const modelChoice = readImageModelChoice(engine);
     if (engine === "google")
       connection.modelVariant = connection.googlePro ? "pro" : "default";
     if (connection.proxyEndpoint) {
@@ -347,12 +603,15 @@ function saveWorldSettings() {
         };
       }
       world.providerConfig ||= {};
+      const chosenBefore = currentImageModel(world, engine);
       if (!["local", "sample"].includes(engine))
         world.providerConfig[engine] = {
           ...world.providerConfig[engine],
           ...connection,
           transport: connection.proxyEndpoint ? "proxy" : "direct",
         };
+      if (modelChoice !== undefined)
+        applyImageModelChoice(world, engine, modelChoice, chosenBefore);
       const result = updateWorldGenerationSettings(state, {
         imageEngine: engine,
         stylePresetId: style,
@@ -580,7 +839,7 @@ async function runSheetGeneration(input, { quality = "draft", seed } = {}) {
     currentOperation = null;
     pendingSheetCandidate = result;
     api.showModal(
-      `${api.modalHeader(escape(character.name + "의 시트를 확인해 주세요"))}<img class="ig-sheet-preview" src="${escape(result.imageUrl)}" alt="${escape(character.name)}의 새 캐릭터 시트"><p class="modal-intro">얼굴, 옷과 표정이 같은 친구로 보이는지 확인해 주세요. ${formatSeed(result)} · 요청 ${escape(result.meta?.requestedSeed ?? "—")}</p><div class="modal-actions"><button type="button" class="btn btn-outline" id="ig-sheet-cancel">확정하지 않기</button><button type="button" class="btn btn-primary" id="ig-sheet-confirm">${quality === "draft" && getActiveWorld(state).imageEngine !== "sample" ? "최종 시트 생성 · 예상 $" + estimateImageCost({ engine: getActiveWorld(state).imageEngine, quality: "final", size: "1536x1024", config: engineConfig(state, getActiveWorld(state).imageEngine) }).costUsd.toFixed(2) : "이 최종 시트 확정"}</button></div>`,
+      `${api.modalHeader(escape(character.name + "의 시트를 확인해 주세요"))}<img class="ig-sheet-preview" src="${escape(result.imageUrl)}" alt="${escape(character.name)}의 새 캐릭터 시트"><p class="modal-intro">얼굴, 옷과 표정이 같은 친구로 보이는지 확인해 주세요. ${formatSeed(result)} · 요청 ${escape(result.meta?.requestedSeed ?? "—")}</p><div class="modal-actions"><button type="button" class="btn btn-outline" id="ig-sheet-cancel">확정하지 않기</button><button type="button" class="btn btn-primary" id="ig-sheet-confirm">${quality === "draft" && getActiveWorld(state).imageEngine !== "sample" ? "최종 시트 생성 · " + sheetPriceLabel(state) : "이 최종 시트 확정"}</button></div>`,
       "wide",
     );
     document.querySelector("#ig-sheet-cancel").onclick = api.closeModal;
@@ -646,15 +905,16 @@ export function selectSimilarPages(book, { quality = "final", signal } = {}) {
     engine = book.generationSnapshot?.imageEngine || world.imageEngine;
   if (!pages.length || engine === "sample" || book.similarityReviewDismissed)
     return Promise.resolve([]);
-  const unit = estimateImageCost({
-    engine,
-    quality,
-    size: "1536x1024",
-    config: {
-      ...world.providerConfig?.[engine],
-      ...book.generationSnapshot?.imageModelConfig,
-    },
-  }).costUsd;
+  const price = estimateImageCost({
+      engine,
+      quality,
+      size: "1536x1024",
+      config: frozenImageConfig(
+        world.providerConfig?.[engine],
+        book.generationSnapshot,
+      ),
+    }),
+    unit = price.costUsd;
   return new Promise((resolve, reject) => {
     const abort = () => {
       signal?.removeEventListener("abort", abort);
@@ -671,7 +931,7 @@ export function selectSimilarPages(book, { quality = "final", signal } = {}) {
     }
     signal?.addEventListener("abort", abort, { once: true });
     api.showModal(
-      `${api.modalHeader(`비슷한 구도 ${pages.length}쪽 · 다시 그릴까요?`)}<p>고른 쪽만 추가 생성해요. 쪽당 약 $${unit.toFixed(3)} · 모두 선택하면 약 $${(unit * pages.length).toFixed(3)}.</p>${pages.map((index) => `<label class="similar-page-choice"><input name="similar-final-page" type="checkbox" value="${index}">${index + 1}쪽</label>`).join("")}<p id="similar-final-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-final-keep">지금 그림 유지하고 확정</button><button class="btn btn-green" id="similar-final-retry">고른 쪽 다시 그리기</button></div>`,
+      `${api.modalHeader(`비슷한 구도 ${pages.length}쪽 · 다시 그릴까요?`)}<p>고른 쪽만 추가 생성해요. ${price.pricingUnknown ? "요금 정보 없음 · 목록에 없는 모델이라 요금은 공급자에서 확인해 주세요." : `쪽당 약 $${unit.toFixed(3)} · 모두 선택하면 약 $${(unit * pages.length).toFixed(3)}.`}</p>${pages.map((index) => `<label class="similar-page-choice"><input name="similar-final-page" type="checkbox" value="${index}">${index + 1}쪽</label>`).join("")}<p id="similar-final-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-final-keep">지금 그림 유지하고 확정</button><button class="btn btn-green" id="similar-final-retry">고른 쪽 다시 그리기</button></div>`,
     );
     document.querySelector("#similar-final-keep").onclick = () => done([]);
     document.querySelector("#similar-final-retry").onclick = () => {
@@ -702,17 +962,18 @@ export function showSimilarPagesReview(book, { quality = "draft" } = {}) {
     book.similarityReviewDismissed
   )
     return;
-  const unit = estimateImageCost({
-    engine,
-    quality,
-    size: "1536x1024",
-    config: {
-      ...world.providerConfig?.[engine],
-      ...book.generationSnapshot?.imageModelConfig,
-    },
-  }).costUsd;
+  const price = estimateImageCost({
+      engine,
+      quality,
+      size: "1536x1024",
+      config: frozenImageConfig(
+        world.providerConfig?.[engine],
+        book.generationSnapshot,
+      ),
+    }),
+    unit = price.costUsd;
   api.showModal(
-    `${api.modalHeader("비슷한 구도 " + similarPages.length + "쪽 · 다시 그릴까요?")}<p>선택한 쪽만 추가 생성해요. 쪽당 예상 $${unit.toFixed(3)} · 전체 선택 시 약 $${(unit * similarPages.length).toFixed(3)}. 실제 요금은 공급자에서 확인해 주세요.</p><div class="similar-pages-options">${similarPages.map((index) => `<label><input type="checkbox" name="similar-page" value="${index}">${index + 1}쪽</label>`).join("")}</div><p id="similar-retry-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-keep">지금 그림 유지</button><button class="btn btn-primary" id="similar-confirm">선택한 쪽만 다시 그리기</button></div>`,
+    `${api.modalHeader("비슷한 구도 " + similarPages.length + "쪽 · 다시 그릴까요?")}<p>선택한 쪽만 추가 생성해요. ${price.pricingUnknown ? "요금 정보 없음 · 목록에 없는 모델이에요." : `쪽당 예상 $${unit.toFixed(3)} · 전체 선택 시 약 $${(unit * similarPages.length).toFixed(3)}.`} 실제 요금은 공급자에서 확인해 주세요.</p><div class="similar-pages-options">${similarPages.map((index) => `<label><input type="checkbox" name="similar-page" value="${index}">${layoutOf(book) === "openings" ? escape(unitLabel(book, index)) : `${index + 1}쪽`}</label>`).join("")}</div><p id="similar-retry-error" role="status"></p><div class="modal-actions"><button class="btn btn-outline" id="similar-keep">지금 그림 유지</button><button class="btn btn-primary" id="similar-confirm">선택한 쪽만 다시 그리기</button></div>`,
   );
   document.querySelector("#similar-keep").onclick = () => {
     book.similarityReviewDismissed = true;
@@ -733,7 +994,7 @@ export function showSimilarPagesReview(book, { quality = "draft" } = {}) {
     currentOperation = operation;
     operationModal(
       "선택한 쪽의 구도를 바꾸고 있어요",
-      `추가 생성 ${indexes.length}쪽 · 예상 $${(unit * indexes.length).toFixed(3)}`,
+      `추가 생성 ${indexes.length}쪽 · ${price.pricingUnknown ? "요금 정보 없음" : `예상 $${(unit * indexes.length).toFixed(3)}`}`,
     );
     try {
       for (const index of indexes) {
@@ -777,11 +1038,17 @@ async function runSceneGeneration(all, changeComposition = false) {
     pageIndex = api.getEditPage();
   const operation = new AbortController();
   currentOperation = operation;
+  // R12 openings: progress counts pictures and names the entry (펼침 k · …).
+  const openings = layoutOf(book) === "openings";
   operationModal(
     all ? "이야기의 그림을 엮고 있어요" : "이 쪽의 그림을 만들고 있어요",
     all
-      ? `0 / ${book.pages.length}쪽 · 확정된 시트가 모든 장면에 함께해요.`
-      : `${pageIndex + 1}쪽 · 다른 쪽은 유지됩니다.`,
+      ? openings
+        ? `그림 0 / ${book.pages.length}장 · 확정된 시트가 모든 장면에 함께해요.`
+        : `0 / ${book.pages.length}쪽 · 확정된 시트가 모든 장면에 함께해요.`
+      : openings
+        ? `${unitLabel(book, pageIndex)} · 다른 그림은 유지됩니다.`
+        : `${pageIndex + 1}쪽 · 다른 쪽은 유지됩니다.`,
   );
   try {
     if (all)
@@ -795,7 +1062,9 @@ async function runSceneGeneration(all, changeComposition = false) {
           }
           const el = document.querySelector("#ig-operation-message");
           if (el)
-            el.textContent = `${p.completed} / ${p.total}쪽 생성${p.pageIndex == null ? "" : " · " + (p.pageIndex + 1) + "쪽"} ${p.status === "complete" ? "완료" : "작업 중"}`;
+            el.textContent = openings
+              ? `그림 ${p.completed} / ${p.total}장 생성${p.pageIndex == null ? "" : " · " + unitLabel(book, p.pageIndex)} ${p.status === "complete" ? "완료" : "작업 중"}`
+              : `${p.completed} / ${p.total}쪽 생성${p.pageIndex == null ? "" : " · " + (p.pageIndex + 1) + "쪽"} ${p.status === "complete" ? "완료" : "작업 중"}`;
         },
       });
     else
