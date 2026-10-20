@@ -105,7 +105,9 @@ export interface ProseStageInput {
 }
 export declare function runProseStage(input: ProseStageInput): Promise<import("./richThenSimplify.js").RichSimplifyResult>;
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */
-export declare function runChildGate(engines: Engines, pages: PageText[], prose: string, outline: StoryOutline): Promise<{
+export declare function runChildGate(engines: Engines, pages: PageText[], prose: string, outline: StoryOutline, opts?: {
+    age?: string;
+}): Promise<{
     curiosity: import("./childSimulator.js").CuriosityResult;
     retell: import("./childSimulator.js").RetellResult;
     pass: boolean;

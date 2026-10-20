@@ -8,6 +8,7 @@
  */
 import { STORY_STAGE_LABELS, describeStoryError } from "./schemas.js";
 import { plotContractForBeat } from "./plot-contract.js";
+import { councilReportRows } from "./council.js";
 
 const list = (value) => (Array.isArray(value) ? value : []);
 const object = (value) =>
@@ -319,6 +320,7 @@ export function buildStopReport(job, { now = new Date() } = {}) {
     if (failure?.requests) rows.push(`- 이 단계의 요청 수: ${failure.requests}`);
   } else rows.push("- 멈추지 않았어요. 아래 검사 결과는 참고로 남은 항목이에요.");
   for (const note of list(job.notes)) rows.push(`- 메모: ${str(note, 500)}`);
+  rows.push(...councilReportRows(job));
   rows.push("", "## 검사 결과");
   const checkRows = [
     ...coherenceSection("쪽 사건 연결 검사", job.pageCoherence),

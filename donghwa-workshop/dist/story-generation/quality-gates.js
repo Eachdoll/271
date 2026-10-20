@@ -1,6 +1,7 @@
 /* Adapt the supplied quality package to persisted app drafts. Simulators are
  * advisory; the separate semantic review remains the hard illustration gate. */
 import { runChildGate } from "../story-quality/dist/pipeline.js";
+import { readerAge } from "./council.js";
 import {
   runWeeklyCoach,
   mergeRules,
@@ -649,10 +650,13 @@ export async function inspectChildStory(
       pending = [];
     const invoke = async (request) => {
       abort(options.signal);
+      // R20: a council draft's simulator speaks at the reader card's age, so the
+      // system text is matched by its question, not byte for byte.
+      const system = String(request.system || "");
       const mode =
-        request.system === CHILD_CURIOSITY_SYSTEM
+        system === CHILD_CURIOSITY_SYSTEM || system.includes('"다음엔?"')
           ? "curiosity"
-          : request.system === CHILD_RETELL_SYSTEM
+          : system === CHILD_RETELL_SYSTEM || system.includes("무슨 이야기였어?")
             ? "retell"
             : null;
       if (!mode) throw Error("알 수 없는 아이 시뮬레이터 요청이에요.");
@@ -740,6 +744,7 @@ export async function inspectChildStory(
         })),
         nextProse[language],
         outline,
+        readerAge(input) ? { age: readerAge(input) } : undefined,
       );
     } catch (error) {
       await Promise.allSettled(pending);

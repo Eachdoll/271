@@ -70,6 +70,7 @@ import { safeTopic } from "./engine.js";
 import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
+import { hasCouncilPolicy } from "./story-generation/council.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -362,6 +363,8 @@ export function estimateFullAutoCost(
       pageCount: wizard.pageCount || 12,
       // Editor round: new jobs (and jobs frozen with the policy) include it.
       ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
+      // R20: new jobs (and jobs frozen with the policy) include the writers' room.
+      ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : { council: true }),
       // R12: an openings wizard is sized from its v4 specs ({} for page books).
       ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
@@ -955,6 +958,7 @@ export async function runFullAuto(
         ]),
       ),
       qualityCheckpoint: job.qualityCheckpoint,
+      councilCheckpoint: job.councilCheckpoint,
       childGateCheckpoint: job.childGateCheckpoint,
       proseCoherence: job.proseCoherence,
       pageCoherence: job.pageCoherence,
@@ -981,6 +985,8 @@ export async function runFullAuto(
       onCheckpoint: async (cp) => {
         if (cp.qualityCheckpoint)
           job.qualityCheckpoint = clone(cp.qualityCheckpoint);
+        if (cp.councilCheckpoint)
+          job.councilCheckpoint = clone(cp.councilCheckpoint);
         if (cp.childGateCheckpoint)
           job.childGateCheckpoint = clone(cp.childGateCheckpoint);
         if (cp.coherence) {
@@ -1191,6 +1197,7 @@ export async function runFullAuto(
         editorPolicy: _fresh,
         craftPolicy: _freshCraft,
         arcPolicy: _freshArc,
+        councilPolicy: _freshCouncil,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1204,6 +1211,9 @@ export async function runFullAuto(
           : {}),
         ...(hasArcPolicy(job.input)
           ? { arcPolicy: clone(job.input.arcPolicy) }
+          : {}),
+        ...(hasCouncilPolicy(job.input)
+          ? { councilPolicy: clone(job.input.councilPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),

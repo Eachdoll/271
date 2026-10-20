@@ -286,6 +286,7 @@ export class StoryValidationError extends Error {
 /** Korean names for the stage token of a StoryValidationError message. */
 export const STORY_STAGE_LABELS = Object.freeze({
   outline: "줄거리",
+  council: "기획 회의",
   plotContract: "사건 장부",
   sceneBriefs: "장면 디테일",
   sceneBrief: "장면 디테일",

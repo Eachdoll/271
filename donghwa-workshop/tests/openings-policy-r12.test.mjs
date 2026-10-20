@@ -628,6 +628,7 @@ function legacyInputOf(state, job) {
   delete prepared.input.editorPolicy;
   delete prepared.input.craftPolicy;
   delete prepared.input.arcPolicy;
+  delete prepared.input.councilPolicy;
   return {...prepared.input, backgrounds: prepared.input.backgrounds.filter(b => job.plan.backgroundIds.includes(b.id)), preferredBackgroundIds: clone(job.plan.backgroundIds), specs: clone(job.readingLevels.specs), bookId: job.bookId, storyDate: job.input.storyDate || job.createdAt};
 }
 test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the byte-identical page input, with openings on', async () => {
@@ -644,6 +645,7 @@ test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the by
     assert.ok(!('editorPolicy' in job.input), 'no editor policy for a job saved before the editor round');
     assert.ok(!('craftPolicy' in job.input), 'no craft policy either');
     assert.ok(!('arcPolicy' in job.input), 'no arc policy either');
+    assert.ok(!('councilPolicy' in job.input), 'no council policy either');
     assert.equal(job.input.pageCount, pageCount, 'the parent\'s page count is never snapped');
   }
 });

@@ -1,8 +1,9 @@
 import { CHILD_CURIOSITY_SYSTEM, CHILD_CURIOSITY_USER, CHILD_RETELL_SYSTEM, CHILD_RETELL_USER, fill } from './prompts.js';
 import { extractJson } from './util.js';
-export async function curiosityCheck(engine, pages) {
+const withAge = (system, age) => (age ? system.replace('4세', age) : system);
+export async function curiosityCheck(engine, pages, opts = {}) {
     const user = fill(CHILD_CURIOSITY_USER, { pages: pages.map((p) => `${p.pageNo}. ${p.text}`).join('\n') });
-    const r = await engine.complete({ system: CHILD_CURIOSITY_SYSTEM, user, temperature: 0.3, maxTokens: 900 });
+    const r = await engine.complete({ system: withAge(CHILD_CURIOSITY_SYSTEM, opts.age), user, temperature: 0.3, maxTokens: 900 });
     const j = r.json ?? extractJson(r.text) ?? {};
     const scored = (j.pages ?? []).map((p) => ({
         pageNo: Number(p.pageNo),
@@ -15,12 +16,12 @@ export async function curiosityCheck(engine, pages) {
     const overall = scored.length ? Math.round((scored.reduce((a, p) => a + p.score, 0) / scored.length) * 5 * 10) / 10 : typeof j.overall === 'number' ? clamp(j.overall, 0, 10) : 0;
     return { pages: scored, dropPages: drop.length ? drop : j.dropPages ?? [], overall, pass: drop.length === 0 && overall >= 6, costUsd: r.costUsd ?? 0 };
 }
-export async function retellCheck(engine, prose, beats) {
+export async function retellCheck(engine, prose, beats, opts = {}) {
     const user = fill(CHILD_RETELL_USER, {
         prose,
         beats: beats.map((b) => `${b.index} [${b.type}] ${b.summary}`).join('\n'),
     });
-    const r = await engine.complete({ system: CHILD_RETELL_SYSTEM, user, temperature: 0.3, maxTokens: 600 });
+    const r = await engine.complete({ system: withAge(CHILD_RETELL_SYSTEM, opts.age), user, temperature: 0.3, maxTokens: 600 });
     const j = r.json ?? extractJson(r.text) ?? {};
     const covered = (j.coveredBeats ?? []).map(Number);
     const coreTypes = ['want', 'turn', 'resolution'];

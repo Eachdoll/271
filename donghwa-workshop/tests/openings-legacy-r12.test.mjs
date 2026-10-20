@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, ...plain} = spec || {};
     return [lang, plain];
@@ -687,7 +687,10 @@ const PINS = {
   // Story spine (2026-10-20, R19): a new draft's input also gains arcPolicy
   // {version: 1}; nothing else in the group changes (dump-diffed against
   // 894ab59). 894ab59: f3db9e82…3e24.
-  inputs: '8208a67979a9f667c98fd98c3bc5bc9aa8a5e4e118ad9fcbfda59bd13c5e3e15',
+  // Writers' room (2026-10-20, R20): a new draft's input also gains
+  // councilPolicy {version: 1} (no other key: an unwritten direction is left
+  // out). Dump-diffed against a113ead. a113ead: 8208a679…3e15.
+  inputs: '770c6ce0a4247b8e10d02ed1f5b76984e663314c427e7e298d9bb0d9eef49ba0',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -708,7 +711,9 @@ const PINS = {
   // Craft rules: the new demo jobs' input carries craftPolicy. 25e3760: 0e922d9f…ec0f.
   // Story spine (R19): the new demo jobs' input carries arcPolicy (demo runs
   // buy nothing; the pre-R12 job fixture is unchanged). 894ab59: 063dc4a0…567c.
-  fullAutoDemo: '700e54fbe188b334a6dea1149c8dfb37f39ea157a440849c81622ee7c9ac4e95',
+  // Writers' room (R20): the new demo jobs' input carries councilPolicy (the demo
+  // never meets; the pre-R12 job fixture is unchanged). a113ead: 700e54fb…4e95.
+  fullAutoDemo: 'f1752df63a878dcb7cadd96ef45c754a948c9970680c52693e77b1777ef1e662',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -723,12 +728,20 @@ const PINS = {
   // Story spine (R19): ③'s '승인 예시 함께 쓰기' help text says the 9-point
   // examples are always in as spine cards (title and aria-label only; buttons,
   // prices and ④/⑤ are unchanged). 894ab59: e1255f42…959d.
-  review: '21b16ee3aee8b422d0447a4af9fb7b85258e12fbba8c75dd4e3b85081a40d5f6',
+  // Writers' room (R20): ③ before any job prices the five council calls
+  // (글 만들기 $2.46 → $2.48 at 12 pages); nothing else on ③, ④ or ⑤ changes.
+  // a113ead: 21b16ee3…d5f6.
+  review: 'b8f4af05ad1c9c1363cef64edfb281c84725f188ac43cd10a0a0194b7dc7052a',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
   // without `editor` and estimates of existing books are unchanged. 8087d69: b11df8a8…068f.
-  estimates: '6c157a3e898895146cc8bb35c7b9ef85173cdada10ba87ea73798ce1065b6d55',
+  // Writers' room (R20): FULL AUTO/simple estimates for a NEW job include the
+  // five economy-model council calls (+5 requests, textUsd/baseUsd/
+  // withMaterialsAndRetryUsd); estimates of existing jobs and books are
+  // unchanged (dump-diffed: only those four fields of fullAuto.* differ).
+  // a113ead: 6c157a3e…6d55.
+  estimates: 'bcdb6bbbc0f9b9fbca89d7521d168d8c86e913670cfc1d38aac6c6ceb0557f77',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

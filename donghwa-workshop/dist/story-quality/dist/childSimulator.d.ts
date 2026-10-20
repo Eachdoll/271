@@ -20,7 +20,11 @@ export interface CuriosityResult {
     pass: boolean;
     costUsd: number;
 }
-export declare function curiosityCheck(engine: TextEngine, pages: PageText[]): Promise<CuriosityResult>;
+/** R20: the simulated child's age ('5세'); undefined keeps the 4세 text byte for byte. */
+export interface ChildOptions {
+    age?: string;
+}
+export declare function curiosityCheck(engine: TextEngine, pages: PageText[], opts?: ChildOptions): Promise<CuriosityResult>;
 export interface RetellResult {
     retell: string[];
     coveredBeats: number[];
@@ -34,4 +38,4 @@ export interface RetellResult {
     recommendTurnRewrite: boolean;
     costUsd: number;
 }
-export declare function retellCheck(engine: TextEngine, prose: string, beats: Beat[]): Promise<RetellResult>;
+export declare function retellCheck(engine: TextEngine, prose: string, beats: Beat[], opts?: ChildOptions): Promise<RetellResult>;

@@ -497,7 +497,7 @@ function safeResponse(response) {
   };
 }
 const CHECK_RULES = 2;
-function ledger(kind, input, options, extra = {}) {
+export function ledger(kind, input, options, extra = {}, checkpointKey = "qualityCheckpoint") {
   const contextFingerprint = hash({
     version: 1,
     kind,
@@ -510,7 +510,7 @@ function ledger(kind, input, options, extra = {}) {
       ]),
     ),
   });
-  const prior = options.qualityCheckpoint;
+  const prior = options[checkpointKey];
   const checkpoint =
     prior?.version === 1 &&
     prior.kind === kind &&
@@ -533,7 +533,7 @@ function ledger(kind, input, options, extra = {}) {
     stage: kind,
     requests: requestCount(paid),
     resumedCalls: resumed,
-    qualityCheckpoint: clone(checkpoint),
+    [checkpointKey]: clone(checkpoint),
     engineId: paid[0]?.meta?.engineId || null,
     modelId: paid[0]?.meta?.modelId || paid[0]?.meta?.model || null,
     models: paid.map((row) => ({
@@ -547,7 +547,7 @@ function ledger(kind, input, options, extra = {}) {
     if (options.onCheckpoint)
       await options.onCheckpoint({
         stage: kind,
-        qualityCheckpoint: clone(checkpoint),
+        [checkpointKey]: clone(checkpoint),
         usage: mergeUsage(paid),
         meta: summary(),
       });
@@ -557,6 +557,7 @@ function ledger(kind, input, options, extra = {}) {
     legacyChecks: checkpoint.checkRules !== CHECK_RULES,
     paid,
     summary,
+    save,
     usage: () => mergeUsage(paid),
     get resumed() {
       return resumed;
@@ -581,9 +582,11 @@ function ledger(kind, input, options, extra = {}) {
         stage: kind,
         phase: "request",
         message:
-          kind === "qualityOutline"
-            ? "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요."
-            : "장면을 풍부하게 쓴 뒤 선택한 읽기 수준으로 다듬고 있어요.",
+          kind === "council"
+            ? "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요."
+            : kind === "qualityOutline"
+              ? "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요."
+              : "장면을 풍부하게 쓴 뒤 선택한 읽기 수준으로 다듬고 있어요.",
         qualityRole: role,
       });
       let response;
@@ -619,7 +622,7 @@ function ledger(kind, input, options, extra = {}) {
     },
     fail(error, details = {}) {
       error.usage = mergeUsage(paid);
-      error.qualityCheckpoint = clone(checkpoint);
+      error[checkpointKey] = clone(checkpoint);
       error.meta = { ...(error.meta || {}), ...summary(), ...details };
       return error;
     },
@@ -1280,7 +1283,8 @@ export async function generateQualityOutline(
     for (let attempt = 0; attempt < Math.min(2, patterns.length); attempt++) {
       const pattern = patterns[attempt],
         schema = enrichedOutlineSchema(input, pattern, services),
-        canon = canonicalWorldRules(input, services);
+        // R20: the story bible settled by the writers' room binds every outline request.
+        canon = [canonicalWorldRules(input, services), options.storyBibleRules || ""].filter(Boolean).join("\n");
       let fixFallback = null,
         wrapRetried = false;
       const wrap = (role) => ({

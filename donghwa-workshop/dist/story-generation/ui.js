@@ -25,6 +25,7 @@ import { BRIEF_TIMES, inspectSceneBriefs } from "./scene-briefs.js";
 import { editorPolicy, revisionSummary } from "./book-revision.js";
 import { craftPolicy } from "./craft-rules.js";
 import { arcPolicy } from "./arc-rules.js";
+import { councilPolicy, recordParentDecision, renderCouncilCard } from "./council.js";
 import { withPageRhythm } from "../page-rhythm.js";
 import {
   SPREAD_SHOTS,
@@ -177,6 +178,8 @@ export function applyStoryCheckpoint(d, checkpoint) {
     d.revisionCheckpoint = clone(checkpoint.revisionCheckpoint);
   if (checkpoint?.qualityCheckpoint)
     d.qualityCheckpoint = clone(checkpoint.qualityCheckpoint);
+  if (checkpoint?.councilCheckpoint)
+    d.councilCheckpoint = clone(checkpoint.councilCheckpoint);
   if (checkpoint?.childGateCheckpoint) {
     d.childGateCheckpoint = clone(checkpoint.childGateCheckpoint);
     if (
@@ -587,6 +590,7 @@ function options(s, stage, forceApi = false) {
       ]),
     ),
     qualityCheckpoint: d.qualityCheckpoint,
+    councilCheckpoint: d.councilCheckpoint,
     childGateCheckpoint: d.childGateCheckpoint || d.childGate,
     proseCoherence: d.proseCoherence,
     pageCoherence: d.pageCoherence,
@@ -829,6 +833,11 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       preferredBackgroundIds: clone(wizard.backgroundIds || []),
       worldNotes: inherited.worldNotes,
       topic: String(wizard.topic || "").trim(),
+      // R20: the parent's one-line direction for the writers' room, only when
+      // written (an empty key would change a resumed legacy job's input bytes).
+      ...(String(wizard.direction || "").trim()
+        ? { direction: String(wizard.direction).trim().slice(0, 200) }
+        : {}),
       storyDate: wizard.storyDate || new Date().toISOString(),
       language: wizard.language || "bilingual",
       storyStructurePresetId: wizard.storyStructurePresetId || "auto",
@@ -906,6 +915,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // Picture-book craft rules (suspense, sound refrain, key props, camera).
       craftPolicy: craftPolicy(),
       arcPolicy: arcPolicy(),
+      // The writers' room before the outline (pitches, verdicts, bible, decision log).
+      councilPolicy: councilPolicy(),
     },
     readingLevels,
     world,
@@ -1032,6 +1043,7 @@ export function resumeStoryDraft(id, { useCurrentTextSettings = false } = {}) {
       approvedBooks: storyQualityBookRecords(state),
     };
     draft.qualityCheckpoint = null;
+    draft.councilCheckpoint = null;
   }
   session = {
     state,
@@ -1272,7 +1284,7 @@ function renderOutline(s) {
   const o = s.draft.outline;
   show(
     s,
-    `${header(s, "줄거리 카드")}<p class="modal-intro">${o.beats.length}개 비트 · ${s.draft.input.pageCount}쪽 예정${openingsDraft(s.draft) ? ` · 펼침 ${s.draft.input.pageCount / 2}개(비트 하나가 펼침 하나)` : ""} · 집에서 출발해 두 곳 이상을 거쳐 집으로 돌아와요.</p><div class="story-card"><label class="story-label">제목</label>${o.titleCandidates.map((title, i) => `<label class="story-title-pick"><input type="radio" name="story-title" value="${i}" ${s.draft.titleIndex === i ? "checked" : ""}><input type="text" maxlength="100" data-outline-title="${i}" value="${esc(title)}" aria-label="제목 후보 ${i + 1}"></label>`).join("")}<div class="field"><label>한 줄 요약</label><input data-outline-field="logline" value="${esc(o.logline)}" maxlength="500"></div><div class="story-review-grid">${[
+    `${header(s, "줄거리 카드")}<p class="modal-intro">${o.beats.length}개 비트 · ${s.draft.input.pageCount}쪽 예정${openingsDraft(s.draft) ? ` · 펼침 ${s.draft.input.pageCount / 2}개(비트 하나가 펼침 하나)` : ""} · 집에서 출발해 두 곳 이상을 거쳐 집으로 돌아와요.</p>${renderCouncilCard(o)}<div class="story-card"><label class="story-label">제목</label>${o.titleCandidates.map((title, i) => `<label class="story-title-pick"><input type="radio" name="story-title" value="${i}" ${s.draft.titleIndex === i ? "checked" : ""}><input type="text" maxlength="100" data-outline-title="${i}" value="${esc(title)}" aria-label="제목 후보 ${i + 1}"></label>`).join("")}<div class="field"><label>한 줄 요약</label><input data-outline-field="logline" value="${esc(o.logline)}" maxlength="500"></div><div class="story-review-grid">${[
       ["want", "주인공의 바람"],
       ["problem", "문제"],
       ["twist", "반전"],
@@ -1743,6 +1755,7 @@ function acceptOutline(s, { allowDirty = false } = {}) {
   s.draft.selectedTitle = o.titleCandidates[s.draft.titleIndex || 0];
   s.draft.input.title = s.draft.selectedTitle;
   s.draft.stage = "outline_ok";
+  recordParentDecision(s.draft, "줄거리 승인", "프로 마법사의 줄거리 카드에서 확인");
   snapshot(s, "outline");
 }
 function acceptProse(s) {
@@ -2162,6 +2175,7 @@ async function handleClick(event) {
         approvedBooks: storyQualityBookRecords(s.state),
       };
       d.qualityCheckpoint = null;
+      d.councilCheckpoint = null;
       saveDraft(s);
       renderSession(s);
       api.toast(
@@ -2241,6 +2255,7 @@ async function handleClick(event) {
       );
       d.wizard.qualitySeedOffset = d.input.qualitySeedOffset;
       d.qualityCheckpoint = null;
+      d.councilCheckpoint = null;
       return run(
         s,
         "다른 재료로 줄거리를 구성하고 있어요",
@@ -2596,6 +2611,7 @@ function handleChange(event) {
         s.draft.wizard[event.target.dataset.qualityWorldField] =
           event.target.value;
         s.draft.qualityCheckpoint = null;
+        s.draft.councilCheckpoint = null;
         saveDraft(s);
         return;
       }
@@ -2604,6 +2620,7 @@ function handleChange(event) {
       s.draft.input.storyQuality.patternId = event.target.value;
       s.draft.wizard.storyQualityPatternId = event.target.value;
       s.draft.qualityCheckpoint = null;
+      s.draft.councilCheckpoint = null;
       saveDraft(s);
       renderLaunch(s);
       return;

@@ -5039,3 +5039,17 @@ html:has(.simple-create) {
 .simple-check-note {
   color: var(--warn, #8a5a00);
 }
+
+/* R20 기획 회의 */
+/* The folded direction field stays out of the wizard step's field budget until the parent opens it. */
+.wizard-direction:not([open]) > .field { display: none; }
+.wizard-direction > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-2); }
+.wizard-direction[open] > summary { margin-bottom: 7px; }
+.simple-council-note { color: var(--ink-soft, #4a4a4a); }
+.story-council .council-pitches { padding-left: 1.2em; margin: 8px 0; }
+.story-council .council-pitches li { margin: 6px 0; }
+.story-council .council-chosen { background: rgba(120, 170, 110, 0.14); border-radius: 8px; padding: 4px 6px; }
+.story-council .council-spine { display: grid; grid-template-columns: 7em 1fr; gap: 4px 10px; margin: 8px 0; font-size: 0.95em; }
+.story-council .council-spine dt { font-weight: 700; color: var(--ink-soft, #4a4a4a); }
+.story-council .council-spine dd { margin: 0; }
+.story-council .council-log { padding-left: 1.2em; font-size: 0.9em; }

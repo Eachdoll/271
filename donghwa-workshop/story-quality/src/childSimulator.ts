@@ -20,9 +20,15 @@ export interface CuriosityResult {
   costUsd: number;
 }
 
-export async function curiosityCheck(engine: TextEngine, pages: PageText[]): Promise<CuriosityResult> {
+/** R20: the simulated child's age ('5세'); undefined keeps the 4세 text byte for byte. */
+export interface ChildOptions {
+  age?: string;
+}
+const withAge = (system: string, age?: string): string => (age ? system.replace('4세', age) : system);
+
+export async function curiosityCheck(engine: TextEngine, pages: PageText[], opts: ChildOptions = {}): Promise<CuriosityResult> {
   const user = fill(CHILD_CURIOSITY_USER, { pages: pages.map((p) => `${p.pageNo}. ${p.text}`).join('\n') });
-  const r = await engine.complete({ system: CHILD_CURIOSITY_SYSTEM, user, temperature: 0.3, maxTokens: 900 });
+  const r = await engine.complete({ system: withAge(CHILD_CURIOSITY_SYSTEM, opts.age), user, temperature: 0.3, maxTokens: 900 });
   const j = (r.json as Partial<CuriosityResult> | undefined) ?? extractJson<Partial<CuriosityResult>>(r.text) ?? {};
   const scored = (j.pages ?? []).map((p) => ({
     pageNo: Number(p.pageNo),
@@ -50,12 +56,12 @@ export interface RetellResult {
   costUsd: number;
 }
 
-export async function retellCheck(engine: TextEngine, prose: string, beats: Beat[]): Promise<RetellResult> {
+export async function retellCheck(engine: TextEngine, prose: string, beats: Beat[], opts: ChildOptions = {}): Promise<RetellResult> {
   const user = fill(CHILD_RETELL_USER, {
     prose,
     beats: beats.map((b) => `${b.index} [${b.type}] ${b.summary}`).join('\n'),
   });
-  const r = await engine.complete({ system: CHILD_RETELL_SYSTEM, user, temperature: 0.3, maxTokens: 600 });
+  const r = await engine.complete({ system: withAge(CHILD_RETELL_SYSTEM, opts.age), user, temperature: 0.3, maxTokens: 600 });
   const j = (r.json as Partial<RetellResult> | undefined) ?? extractJson<Partial<RetellResult>>(r.text) ?? {};
   const covered = (j.coveredBeats ?? []).map(Number);
   const coreTypes: Beat['type'][] = ['want', 'turn', 'resolution'];

@@ -589,7 +589,11 @@ const PRE_R13_ENGINE_SHA256 = 'e2ce53ee825cc53496cc286babb2f923b6df04c209e471450
 // NEW job changed (the read-through and the author-model simplify, +1 request);
 // every request and model is the same. With PRE_R13_APP_ROOT the deepEqual
 // below now differs in those estimate fields only. 8087d69: 982f288a…11a5.
-const PRE_R13_APP_SHA256 = '19a416ceca2cfe318728aebb7ff234734ca6edf913dca66b857f670d1177ced5';
+// Re-pinned for the writers' room (2026-10-20, R20): again only
+// estimateFullAutoCost of a NEW job changed (five economy-model council calls,
+// +5 requests); every request and model is the same (the R12 'requests' and
+// 'fullAutoResume' pins hold). a113ead: 19a416ce…ced5.
+const PRE_R13_APP_SHA256 = '4e583e24785f2aeb352caf715cb4111fe453a26132191d3bb2ec4c6060da809b';
 test('R13 legacy: settings saved before R13 send byte-identical requests, models and estimates', async () => {
   const root = new URL('../', import.meta.url);
   const engine = await legacyEngineSnapshot(root), app = await legacyAppSnapshot(root);

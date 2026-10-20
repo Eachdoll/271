@@ -272,8 +272,8 @@ export async function runProseStage(input: ProseStageInput) {
 }
 
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */
-export async function runChildGate(engines: Engines, pages: PageText[], prose: string, outline: StoryOutline) {
-  const [cur, ret] = await Promise.all([curiosityCheck(engines.cheap, pages), retellCheck(engines.cheap, prose, outline.beats)]);
+export async function runChildGate(engines: Engines, pages: PageText[], prose: string, outline: StoryOutline, opts: { age?: string } = {}) {
+  const [cur, ret] = await Promise.all([curiosityCheck(engines.cheap, pages, opts), retellCheck(engines.cheap, prose, outline.beats, opts)]);
   return {
     curiosity: cur,
     retell: ret,

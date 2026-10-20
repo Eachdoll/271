@@ -83,6 +83,14 @@ import {
   inspectArc,
 } from "./arc-rules.js";
 import {
+  hasCouncilPolicy,
+  runStoryCouncil,
+  bibleOutlineRules,
+  bibleBriefRules,
+  biblePaginationRules,
+  attachCouncil,
+} from "./council.js";
+import {
   hasEditorPolicy,
   revisionSchema,
   revisionRules,
@@ -340,6 +348,10 @@ function modelVisibleInput(source) {
     const { arcPolicy, ...rest } = input;
     input = rest;
   }
+  if (input?.councilPolicy) {
+    const { councilPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -425,6 +437,11 @@ export function normalizeStoryInput(input = {}) {
         (input.ending === "custom" ? input.endingCustom : "") ||
         "",
     ).slice(0, 1000),
+    // R20: the parent's one-line direction for the writers' room; only when
+    // written, so a draft without one keeps its input (and requests) byte-identical.
+    ...(String(input.direction || "").trim()
+      ? { direction: String(input.direction).trim().slice(0, 200) }
+      : {}),
     previousSummary: String(
       input.previousSummary || input.previousStory?.summaryForNext || "",
     ).slice(0, 10000),
@@ -463,6 +480,7 @@ export function normalizeStoryInput(input = {}) {
     ...(hasEditorPolicy(input) ? { editorPolicy: { version: 1 } } : {}),
     ...(input.craftPolicy?.version === 1 ? { craftPolicy: { version: 1 } } : {}),
     ...(hasArcPolicy(input) ? { arcPolicy: { version: 1 } } : {}),
+    ...(hasCouncilPolicy(input) ? { councilPolicy: { version: 1 } } : {}),
     specs: clone(input.specs),
     variants: cleanReference(input.variants || []),
     variantByCharacter: cleanReference(
@@ -1244,7 +1262,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
       const result = await complete(
         "sceneBriefs",
         input,
-        { rules: sceneBriefRules(), data: { approvedOutline: outline } },
+        { rules: `${sceneBriefRules()}${bibleBriefRules(outline)}`, data: { approvedOutline: outline } },
         schema,
         options,
       );
@@ -2106,15 +2124,32 @@ export async function generateOutline(source, options = {}) {
       await loadStoryQualityData(),
     ).world;
   if (!places.valid) throw new StoryValidationError("outline", places.errors);
+  // R20: the writers' room meets once before the outline; a resumed run replays
+  // it from options.councilCheckpoint without a paid call.
+  const council = hasCouncilPolicy(input)
+    ? await runStoryCouncil(input, options, qualityServices())
+    : null;
+  const bibleRules = council ? bibleOutlineRules(council.record.bible, input) : "";
+  const withCouncil = (result) => {
+    if (!council) return result;
+    attachCouncil(result.data, council);
+    result.usage = mergeStoryUsage([council, result]);
+    result.meta = {
+      ...result.meta,
+      requests: (Number(result.meta?.requests) || 0) + (Number(council.meta.requests) || 0),
+      council: council.meta,
+    };
+    return result;
+  };
   if (input.storyQuality?.enabled) {
     const result = await generateQualityOutline(
       input,
-      options,
+      bibleRules ? { ...options, storyBibleRules: bibleRules } : options,
       qualityServices(),
     );
     result.data.quality = clone(result.meta.quality || {});
     result.data = assertValid("outline", result.data, input);
-    return result;
+    return withCouncil(result);
   }
   const count = frozenBeatCount(input),
     attempts = count - 5;
@@ -2123,7 +2158,7 @@ Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> clo
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
 Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. ${customEnding(input) ? "The first beat uses a supplied home background ID from homeBackgroundIds; the final beat takes place wherever the parent's ending puts it (any supplied ID, home or not)." : "The first and final beat use the SAME supplied home background ID from homeBackgroundIds."} Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
-${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}${arcOutlineRules(input) ? `\n${arcOutlineRules(input)}` : ""}`;
+${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}${arcOutlineRules(input) ? `\n${arcOutlineRules(input)}` : ""}${bibleRules ? `\n${bibleRules}` : ""}`;
   const results = [];
   let violations = [],
     normalized = [];
@@ -2189,13 +2224,14 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
       result.data = assertValid("outline", result.data, input);
       if (input.storyWorld)
         result.data.storyWorldSnapshot = clone(input.storyWorld);
-      result.usage = mergeStoryUsage(results);
+      if (council) attachCouncil(result.data, council);
+      result.usage = mergeStoryUsage(council ? [council, ...results] : results);
       result.meta = {
         ...result.meta,
-        requests: results.reduce(
-          (sum, r) => sum + (Number(r.meta.requests) || 1),
-          0,
-        ),
+        requests:
+          (council ? Number(council.meta.requests) || 0 : 0) +
+          results.reduce((sum, r) => sum + (Number(r.meta.requests) || 1), 0),
+        ...(council ? { council: council.meta } : {}),
         repairAttempts: pass,
         checks: report,
         ...(normalized.length ? { normalized } : {}),
@@ -2210,13 +2246,12 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
   const error = new StoryValidationError("outline", [
     ...new Set(violations.map((v) => v.message)),
   ]);
-  error.usage = mergeStoryUsage(results);
+  error.usage = mergeStoryUsage(council ? [council, ...results] : results);
   error.meta = {
     stage: "outline",
-    requests: results.reduce(
-      (sum, r) => sum + (Number(r.meta.requests) || 1),
-      0,
-    ),
+    requests:
+      (council ? Number(council.meta.requests) || 0 : 0) +
+      results.reduce((sum, r) => sum + (Number(r.meta.requests) || 1), 0),
     repairAttempts: 2,
     demo: false,
   };
@@ -2606,7 +2641,7 @@ async function paginateOpeningsOnce(outline, prose, input, options, violations) 
       "pagination",
       input,
       {
-        rules: `${openingsPaginationRules(input, options)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
+        rules: `${openingsPaginationRules(input, options)}${biblePaginationRules(outline, input)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
         data: {
           approvedOutline: outline,
           approvedOriginalProse: prose,
@@ -2685,7 +2720,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
     "pagination",
     input,
     {
-      rules: `${paginationRules(input)}\nThe ${outline.beats.length} outline beats are NOT pages. Expand them into exactly ${input.pageCount} pages by splitting events across pages. Never return one page per beat. Follow the supplied pagePlan (pageNo -> beatIndex); retain the approved prose and ending.${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
+      rules: `${paginationRules(input)}${biblePaginationRules(outline, input)}\nThe ${outline.beats.length} outline beats are NOT pages. Expand them into exactly ${input.pageCount} pages by splitting events across pages. Never return one page per beat. Follow the supplied pagePlan (pageNo -> beatIndex); retain the approved prose and ending.${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
       data: {
         approvedOutline: outline,
         approvedOriginalProse: prose,
