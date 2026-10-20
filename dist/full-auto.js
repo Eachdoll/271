@@ -67,6 +67,7 @@ import {
 } from "./story-generation/continuity.js";
 import { safeTopic } from "./engine.js";
 import { describeStoryError } from "./story-generation/schemas.js";
+import { captureFailure } from "./story-generation/stop-report.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -900,7 +901,7 @@ export async function runFullAuto(
   if (job.status === "running")
     throw Error("이 자동 작업이 이미 실행 중이에요.");
   // An unknown hold must never fall through to buying images.
-  const hold = checkStopBefore(job.stopBefore);
+  let hold = checkStopBefore(job.stopBefore);
   const persist = async () => {
     job.updatedAt = now();
     if ((await save()) === false)
@@ -916,6 +917,7 @@ export async function runFullAuto(
     job.phase = message;
     job.currentStep = null;
     job.error = null;
+    delete job.failure;
     await persist();
     abort(signal);
     report(message);
@@ -956,6 +958,9 @@ export async function runFullAuto(
       coherenceOptions: job.demo
         ? demoEngine()
         : resolveStoryStageSettings(job.textSettings, "coherence"),
+      // 2026-10-20: after its two repairs the page review leaves notes on the
+      // book instead of stopping it (the run then holds at the text).
+      acceptUnresolvedCoherence: true,
       sceneBriefs: job.sceneBriefs,
       briefRepairs: job.briefRepairs,
       // Editor round: the whole-book read-through (new drafts only), once.
@@ -1036,6 +1041,7 @@ export async function runFullAuto(
     abort(signal);
     job.status = "running";
     job.error = null;
+    delete job.failure;
     await persist();
     const selectionPlan = job.planMode === "selection" || job.demo;
     await step(
@@ -1322,6 +1328,15 @@ export async function runFullAuto(
       throw Error(
         `목표 ${job.input.pageCount}쪽과 생성한 ${job.pagination.pages.length}쪽이 달라요. 완료된 글을 검토해 주세요.`,
       );
+    // 2026-10-20: notes the page review could not settle after its repairs
+    // hold a full run at the text: the parent reads them in ④ before any
+    // picture is bought, and releases the hold with 모든 그림 만들기.
+    if (hold === null && !job.book && job.pageCoherence?.unresolved > 0) {
+      hold = "text";
+      job.stopBefore = "text";
+      const note = `사건 연결 지적 ${job.pageCoherence.unresolved}곳이 참고로 남아 그림 전에 멈췄어요. 쪽마다 확인한 뒤 그림을 만들어 주세요.`;
+      if (!job.notes.includes(note)) job.notes.push(note);
+    }
     if (!job.book) {
       if (typeof buildBook !== "function")
         throw Error("책 편집 연결을 확인해 주세요.");
@@ -1430,6 +1445,9 @@ export async function runFullAuto(
       error.name === "AbortError"
         ? null
         : describeStoryError(String(error.message || error));
+    // 2026-10-20: what the 멈춤 리포트 reads beside the message.
+    if (job.status === "failed") job.failure = captureFailure(error, job);
+    else delete job.failure;
     job.phase =
       job.status === "paused" ? "중단 · 이어 만들 수 있어요" : job.phase;
     try {

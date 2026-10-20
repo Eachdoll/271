@@ -1,0 +1,74 @@
+{
+  "upstream": "https://github.com/Eachdoll/271",
+  "branch": "claude/cross-owner-repo-constraint-j20lhz",
+  "codeRange": "47f5bdf..cf4d99a",
+  "documentCommit": "e3ce630",
+  "matchedFiles": {
+    "donghwa-workshop/CLAUDE.md": "3d8c4bbf9aa2cd2ccc8eebf2042298e0ef0f116d30033c35118b238145574708",
+    "donghwa-workshop/CODEX_WORK_ORDER_R17_2026-10-20.md": "de79aa801d36f5565daaa100d3be286ce391908897705cd094fbba44ce07c7c9",
+    "donghwa-workshop/dist/full-auto-ui.js": "b21ee1155e1ebaf1d9e0aefc6d435152f3d58f92115d54798f96868c7dbc924a",
+    "donghwa-workshop/dist/full-auto.js": "af9d172d0ae962284853517ee43d3735dc4a43ee7407495b494e2bca3ceb6424",
+    "donghwa-workshop/dist/simple-create.js": "53ddb8bda905a90a9c35a5d062c237a8c7db62a7e4e726bf427c2a13dd855e14",
+    "donghwa-workshop/dist/story-generation/book-coherence.js": "05825496cff833bb1a9488f26b357de450511469274c3cb01e691615c456bc35",
+    "donghwa-workshop/dist/story-generation/coherence.js": "98ecfc3ab18bfacd3b5406763ebb68ad40ec5a1e6edd5a066f7ef73187e09a34",
+    "donghwa-workshop/dist/story-generation/page-tools.js": "c6bf34f672a77cd019057a1bac2f9df8b5254e4e1580e5757c75986fe537507e",
+    "donghwa-workshop/dist/story-generation/pipeline.js": "8251626ddf6374c0cd9cc9906bae40962d4a002e609ce9c7f9055acc26a8a35e",
+    "donghwa-workshop/dist/story-generation/quality-gates.js": "7c66e4aa277ea8a02392135a2b0a106502a32a57c95dbe520e155490fa4d413e",
+    "donghwa-workshop/dist/story-generation/stop-report.js": "ec965f4ef025604a9eee6133cbd5201b7c17819d0cf0755b7dca72394540204e",
+    "donghwa-workshop/dist/story-generation/ui.js": "5bcc50fa8f73a8ea91645d25abd4bcc579f1da76ccdcfd745fb119736be95078",
+    "donghwa-workshop/dist/style.css": "b317f91e4517ebc89387e34ae91ba8eb5e531b500cc3a92aa8f5815a44211fed",
+    "donghwa-workshop/dist/sw.js": "f6ea1387d01308121e52c6929e4d17834f78cbf29a9b39d81af981e66d7a4c30",
+    "donghwa-workshop/tests/check-notes.test.mjs": "a1d219f4bb37ebc4b256172ea69cd59d8f7cbedd6053fac7ae6e5f1014a211bb",
+    "donghwa-workshop/tests/story-quality-gates.test.mjs": "beae1f0c13625dac7ee72b7664b0795f21a5f687b1e7d211c1f4279a7bf6528c"
+  },
+  "baseline": "992531d7debab83686464ed4bd997e79a5c3c386",
+  "build": "passed",
+  "qualityCompiledCopies": "identical",
+  "runtimeClient": "identical",
+  "appTests": 870,
+  "qualityTests": 79,
+  "failures": 0,
+  "skipped": 0,
+  "serviceWorker": "donghwa-shell-v48",
+  "ux": {
+    "proSameAsTable": true,
+    "errors": [],
+    "paidRequests": 0,
+    "maxSimpleStepButtons": 10
+  },
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "reportBrowser": [
+    {
+      "width": 1280,
+      "status": "passed",
+      "copied": true,
+      "downloaded": true,
+      "closed": true,
+      "asciiFilename": true,
+      "noSecrets": true,
+      "pageErrors": [],
+      "paidRequests": []
+    },
+    {
+      "width": 390,
+      "status": "passed",
+      "copied": true,
+      "downloaded": true,
+      "closed": true,
+      "asciiFilename": true,
+      "noSecrets": true,
+      "pageErrors": [],
+      "paidRequests": []
+    }
+  ],
+  "simpleSmoke": {
+    "widths": [
+      1280,
+      390
+    ],
+    "result": "passed",
+    "errors": 0,
+    "paidRequests": 0,
+    "imageBugSkipped": false
+  }
+}

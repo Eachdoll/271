@@ -451,6 +451,11 @@ export function renderStoryQualityPlan(draft) {
 }
 export function renderStoryChildGate(report, { dirty = false } = {}) {
   if (!report) return "";
+  // 2026-10-20: a simulator whose answers could not be read twice is a note, not a result.
+  if (report.skipped)
+    return report.reason === "unreadable"
+      ? '<section class="story-card quality-child-gate"><strong>아이 시뮬레이터 · 건너뜀</strong><p class="story-note">심사 모델의 답을 두 번 읽지 못해 이번 글은 이 참고 없이 넘어갔어요. 글을 고치면 다음 검사에서 다시 시도해요.</p></section>'
+      : "";
   const retell = report.retell || {},
     curiosity = report.curiosity || {},
     labels = { want: "바람", turn: "반전", resolution: "해결" };

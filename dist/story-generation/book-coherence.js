@@ -57,6 +57,9 @@ export async function ensureBookStoryCoherence(
         ...selection,
         signal,
         repair: false,
+        // 2026-10-20: what the reviewer flags after a parent edit stays a note
+        // on the page; it never blocks the picture the parent asked for.
+        acceptUnresolvedCoherence: true,
         pageCoherence: book.pageCoherence,
         onProgress: (progress) =>
           onProgress?.({ status: "story-review", message: progress.message }),
