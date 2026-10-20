@@ -383,6 +383,24 @@ export function getStoryStageModels(engine, config = {}) {
   };
   return { medium: resolve("medium"), upper: resolve("upper") };
 }
+/**
+ * R26 검사 모델: where the coherence review's judgement runs. A new job or
+ * draft freezes textSettings.reviewTier: "medium" by default, "upper" when
+ * the parent turned on '검사는 최고 모델로' (settings.textGeneration.reviewTier).
+ * A snapshot without the key (every job and draft before R26) reviews with the
+ * upper model as before, so its requests and estimates are unchanged.
+ */
+export const REVIEW_TIER_MEDIUM = "medium";
+export const REVIEW_TIER_UPPER = "upper";
+export function freezeReviewTier(settings = {}) {
+  return {
+    ...settings,
+    reviewTier: settings.reviewTier === REVIEW_TIER_UPPER ? REVIEW_TIER_UPPER : REVIEW_TIER_MEDIUM,
+  };
+}
+/** The review tier a frozen snapshot uses ("upper" when it has none). */
+export const reviewTierOf = (settings) =>
+  settings?.reviewTier === REVIEW_TIER_MEDIUM ? REVIEW_TIER_MEDIUM : REVIEW_TIER_UPPER;
 /** Resolve each request from an immutable draft settings snapshot, without mutating it. */
 export function resolveStoryStageSettings(settings = {}, stage) {
   if (
@@ -396,6 +414,8 @@ export function resolveStoryStageSettings(settings = {}, stage) {
       "pagination",
       "coherence",
       "coherenceRepair",
+      // R26: the coherence reviewer's judgement (not its repairs).
+      "coherenceReview",
     ].includes(stage)
   )
     throw new Error("지원하는 이야기 생성 단계를 선택해 주세요.");
@@ -415,11 +435,13 @@ export function resolveStoryStageSettings(settings = {}, stage) {
     : selected;
   const provider = settings.providers?.[engineId] || {},
     models = getStoryStageModels(engineId, provider),
-    level = ["outline", "plotContract", "sceneBriefs", "pagination"].includes(
-      stage,
-    )
-      ? "medium"
-      : "upper";
+    level =
+      ["outline", "plotContract", "sceneBriefs", "pagination"].includes(stage) ||
+      // R26: a frozen reviewTier "medium" sends the review's judgement to the
+      // medium model; repairs, the read-through and writing stay upper.
+      (stage === "coherenceReview" && settings.reviewTier === REVIEW_TIER_MEDIUM)
+        ? "medium"
+        : "upper";
   return {
     engineId,
     config: {
@@ -717,7 +739,9 @@ export function estimateStoryTextCost({
       ...stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2)),
       stage: "revision",
     });
-  stages.push(stageEstimate("coherence", reviewInput, 1600, 2));
+  // R26: the review rows are priced on the review model (the same row as before
+  // for a snapshot without reviewTier).
+  stages.push({ ...stageEstimate("coherenceReview", reviewInput, 1600, 2), stage: "coherence" });
   if (childSimulator)
     stages.push(stageEstimate("childSimulator", reviewInput, 1000, 2, "cheap"));
   const final = stages.find((row) => row.stage === "prose"),
@@ -753,7 +777,7 @@ export function estimateStoryTextCost({
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `${council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `${council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }
 

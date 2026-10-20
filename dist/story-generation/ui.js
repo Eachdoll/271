@@ -47,6 +47,7 @@ import {
 import { buildBeatPagePlan, splitPaginationToCount } from "./pagination.js";
 import {
   estimateCouncilCost,
+  freezeReviewTier,
   listTextModels,
   getTextModelInfo,
   resolveTextModel,
@@ -614,9 +615,11 @@ function options(s, stage, forceApi = false) {
     proseCoherence: d.proseCoherence,
     pageCoherence: d.pageCoherence,
     coherenceOptions: {
-      ...resolveStoryStageSettings(settings, "coherence"),
+      ...resolveStoryStageSettings(settings, "coherenceReview"),
       signal: s.controller?.signal,
     },
+    // R26: repairs keep the upper model.
+    coherenceRepairOptions: resolveStoryStageSettings(settings, "coherence"),
     revisionOptions: resolveStoryStageSettings(settings, "coherence"),
     revisionCheckpoint: d.revisionCheckpoint,
     sceneBriefs: d.sceneBriefs || undefined,
@@ -1000,7 +1003,8 @@ export function startStoryWorkflow(wizard) {
     const prepared = inputFromWizard(state, wizard, {
         layout: layoutFor(wizard),
       }),
-      textSettings = clone(getTextGenerationSettings(state));
+      // R26: a new draft freezes where its coherence judgement runs.
+      textSettings = freezeReviewTier(clone(getTextGenerationSettings(state)));
     session = {
       state,
       draft: {
@@ -1043,7 +1047,7 @@ export function resumeStoryDraft(id, { useCurrentTextSettings = false } = {}) {
     draft.input.backgrounds || [],
   );
   if (useCurrentTextSettings) {
-    draft.textSettings = clone(getTextGenerationSettings(state));
+    draft.textSettings = freezeReviewTier(clone(getTextGenerationSettings(state)));
     draft.input.storyQuality = {
       ...clone(draft.textSettings.storyQuality),
       patternId:
@@ -2217,7 +2221,7 @@ async function handleClick(event) {
       return;
     }
     if (action === "use-current-text-settings") {
-      d.textSettings = clone(getTextGenerationSettings(s.state));
+      d.textSettings = freezeReviewTier(clone(getTextGenerationSettings(s.state)));
       d.input.storyQuality = {
         ...clone(d.textSettings.storyQuality),
         patternId:

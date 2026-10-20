@@ -86,7 +86,8 @@ await browser.close();
 // inputs and selects are unchanged. The image tab's default engine (free
 // sample) has no model select, so its numbers are unchanged.
 const table = {
-  '02-settings-text': { buttons: 10, inputs: 99, selects: 64 },
+  // R26: +1 input, the '검사는 최고 모델로' box on the text settings page.
+  '02-settings-text': { buttons: 10, inputs: 100, selects: 64 },
   '02-settings-image': { buttons: 16, inputs: 10, selects: 4 },
   '03-materials': { buttons: 43, inputs: 0, selects: 0 },
   '07-outline': { buttons: 108, inputs: 21, selects: 0 },

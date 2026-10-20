@@ -359,9 +359,11 @@ async function rewritePage(
     proseCoherence: book.proseCoherence,
     pageCoherence: book.pageCoherence,
     coherenceOptions: {
-      ...resolveStoryStageSettings(settings, "coherence"),
+      ...resolveStoryStageSettings(settings, "coherenceReview"),
       signal,
     },
+    // R26: repairs keep the upper model.
+    coherenceRepairOptions: resolveStoryStageSettings(settings, "coherence"),
     // 2026-10-20: a rewrite the reviewer still flags after its repairs keeps
     // the note on the page instead of failing the rewrite.
     acceptUnresolvedCoherence: true,

@@ -35,7 +35,8 @@ export async function ensureBookStoryCoherence(
     return;
   const settings =
       book.textGenerationSettings || getTextGenerationSettings(state),
-    selection = resolveStoryStageSettings(settings, "coherence");
+    // R26: this review never repairs, so it runs on the book's review tier.
+    selection = resolveStoryStageSettings(settings, "coherenceReview");
   const record = (result) => {
     if (result?.usage && result.meta?.requests !== 0) {
       book.textUsage ||= { calls: [] };

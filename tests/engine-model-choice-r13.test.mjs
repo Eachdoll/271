@@ -593,7 +593,10 @@ const PRE_R13_ENGINE_SHA256 = 'e2ce53ee825cc53496cc286babb2f923b6df04c209e471450
 // estimateFullAutoCost of a NEW job changed (five economy-model council calls,
 // +5 requests); every request and model is the same (the R12 'requests' and
 // 'fullAutoResume' pins hold). a113ead: 19a416ce…ced5.
-const PRE_R13_APP_SHA256 = '4e583e24785f2aeb352caf715cb4111fe453a26132191d3bb2ec4c6060da809b';
+// Re-pinned for the review model (2026-10-20, R26): only estimateFullAutoCost of
+// a NEW job changed (its two coherence reviews priced on the medium model);
+// every request and model of a pre-R26 snapshot is the same. 0109553: 4e583e24…809b.
+const PRE_R13_APP_SHA256 = 'a70f345eac3925121f3e06d5cef97d8ae8a0b06ea8f73a39fd775a5919455b9b';
 test('R13 legacy: settings saved before R13 send byte-identical requests, models and estimates', async () => {
   const root = new URL('../', import.meta.url);
   const engine = await legacyEngineSnapshot(root), app = await legacyAppSnapshot(root);
