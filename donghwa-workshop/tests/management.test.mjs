@@ -118,7 +118,10 @@ test('World rename and book deletion leave other records and reading limit count
 test('Validation rejects invalid edits before changing the local library', () => {
   const state = freeze(fixture());
   for (const patch of [{name:''},{nameEn:' '},{age:0},{age:2.5},{color:'red'},{variant:100},{kind:'unknown'}]) assert.throws(() => updateCharacter(state,'child',patch));
-  assert.throws(() => updateBackground(state,'home',{type:'unknown'}));
+  // 2026-10-20: a typed kind ('도시') is allowed; empty, overlong or marked-up kinds are not.
+  assert.throws(() => updateBackground(state,'home',{type:''}));
+  assert.throws(() => updateBackground(state,'home',{type:'x'.repeat(40)}));
+  assert.throws(() => updateBackground(state,'home',{type:'<b>도시</b>'}));
   assert.throws(() => updateBackground(state,'home',{name:''}));
   assert.throws(() => archiveCharacter(state,'missing'));
   assert.throws(() => deleteBook(state,'missing'));

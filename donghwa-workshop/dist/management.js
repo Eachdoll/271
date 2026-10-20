@@ -1,3 +1,11 @@
+import {
+  normalizePlaceType,
+  readPlaceType,
+  isPresetPlaceType,
+  PLACE_TYPE_CHOICES,
+  PLACE_TYPE_CUSTOM,
+  placeTypeCustomField,
+} from "./place-types.js";
 /** Local library edits always create new records; book and sheet history is immutable. */
 const clone = (value) =>
   globalThis.structuredClone
@@ -323,11 +331,8 @@ export function updateBackground(state, id, patch) {
   const normalized = normalizePatch(patch, BACKGROUND_FIELDS);
   if ("name" in normalized && !normalized.name)
     throw new Error("장소 이름을 입력해 주세요.");
-  if (
-    "type" in normalized &&
-    !["home", "school", "forest", "sea", "space"].includes(normalized.type)
-  )
-    throw new Error("장소 종류를 확인해 주세요.");
+  // 2026-10-20: a preset id or the parent's own short kind ("도시").
+  if ("type" in normalized) normalized.type = normalizePlaceType(normalized.type);
   if (
     !Object.entries(normalized).some(
       ([field, value]) =>
@@ -500,15 +505,9 @@ export function configureManagementUI(api) {
       `${api.modalHeader(escape(background.name) + " 설정 수정")}<p class="modal-intro">장소의 이름과 특징을 바꿉니다. 이름만 바꾸면 확정한 장소 그림은 그대로이고, 종류·특징·배치를 바꾸면 그림을 다시 만들어요. 기존 책은 만들 때의 장소 설정을 보관합니다.</p><form id="management-background-form" data-id="${escape(id)}"><div class="form-grid">${field("name", "장소 이름", background.name, { required: true })}${select(
         "type",
         "장소 종류",
-        background.type || "forest",
-        [
-          ["home", "집"],
-          ["school", "유치원"],
-          ["forest", "숲 · 놀이터"],
-          ["sea", "바다"],
-          ["space", "우주 · 상상 세계"],
-        ],
-      )}<div class="field field-wide"><label for="management-description">특징과 분위기</label><textarea id="management-description" name="description" maxlength="3000">${escape(background.description || background.features)}</textarea></div><div class="field field-wide"><label for="management-layout">고정 배치 · 문·창·가구·소품</label><textarea id="management-layout" name="layout" maxlength="3000">${escape(background.layout)}</textarea></div></div><div class="modal-actions">${button("취소", "cancel-management")}<button type="submit" class="btn btn-primary">장소 설정 저장</button></div></form>`,
+        isPresetPlaceType(background.type) ? background.type : PLACE_TYPE_CUSTOM,
+        PLACE_TYPE_CHOICES,
+      )}${placeTypeCustomField("management-typeCustom", { name: "typeCustom", value: background.type })}<div class="field field-wide"><label for="management-description">특징과 분위기</label><textarea id="management-description" name="description" maxlength="3000">${escape(background.description || background.features)}</textarea></div><div class="field field-wide"><label for="management-layout">고정 배치 · 문·창·가구·소품</label><textarea id="management-layout" name="layout" maxlength="3000">${escape(background.layout)}</textarea></div></div><div class="modal-actions">${button("취소", "cancel-management")}<button type="submit" class="btn btn-primary">장소 설정 저장</button></div></form>`,
     );
     pending = null;
   };
@@ -644,6 +643,9 @@ export function configureManagementUI(api) {
         const patch = Object.fromEntries(new FormData(form)),
           id = form.dataset.id;
         if (form.id === "management-background-form") {
+          // 2026-10-20: the typed kind wins over the preset select.
+          patch.type = readPlaceType(patch.type, patch.typeCustom);
+          delete patch.typeCustom;
           commit(
             updateBackground(api.getState(), id, patch),
             "장소 설정을 수정했어요.",

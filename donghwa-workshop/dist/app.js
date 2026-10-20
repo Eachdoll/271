@@ -162,6 +162,12 @@ import {
   activeBackgrounds,
 } from "./management.js";
 import { configurePhotoUI, cleanupPhotoFlow } from "./photo-materials.js";
+import {
+  PLACE_TYPE_CHOICES,
+  readPlaceType,
+  placeTypeCustomField,
+  placeEmoji,
+} from "./place-types.js";
 import { configureCompanionUI, cleanupCompanionFlow } from "./companions.js";
 import {
   unlockVault,
@@ -1455,7 +1461,7 @@ function materialsPage() {
   return `${heading("이야기 재료", "한 번 만든 친구와 장소를, 다음 이야기에도 그대로.", btn("설정으로 만들기", "new-character", "primary", "plus"))}<div class="material-add-actions"><button type="button" class="btn btn-outline btn-small" data-companion-action="open">조연 자동생성하여 추가하기</button>${photoButton("사진으로 캐릭터 만들기", "new-character")}${photoButton("완성된 캐릭터 그림 가져오기 · 무료", "import-character")}</div><div class="style-banner"><div><strong>${icon("leaf")} 우리 집 세계 · ${esc(state.settings.style)}</strong><small>${getActiveWorld(state).imageEngine === "sample" ? "무료 샘플은 고정 그림 템플릿이에요. 커버의 수채화는 AI 엔진 또는 완성 그림 가져오기를 사용해요." : "캐릭터의 외모는 유지하고, 그림의 질감은 선택한 실제 화풍 참조를 따라요."}</small></div>${btn("화풍 · 엔진 설정", "nav", "outline", "settings", 'data-view="settings"')}</div>${getActiveWorld(state).styleUpgradeNotice ? `<div class="notice" style="margin-top:15px">${esc(getActiveWorld(state).styleUpgradeNotice)}</div>` : ""}<div class="section-header"><h3>등장인물 서랍 <span class="count">${characters.length}명</span></h3><span class="small-label">설정 수정 · 삭제 · 시트 다시 생성</span></div><div class="character-grid">${characters.map((c) => `<article class="character-card"><div class="character-picture">${materialPortrait(c)}</div><span class="role-tag">${esc(c.role)}</span><h4>${esc(c.name)} <span class="count">${esc(c.nameEn)}</span></h4>${c.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${state.books.filter((b) => b.characterIds?.includes(c.id)).length}권에 등장 · ${esc(c.description || "우리 집 이야기 친구")}</p>${btn("캐릭터 시트 보기", "character-sheet", "outline", "characters", `data-id="${esc(c.id)}"`)}${renderCharacterImageControls(c, state)}${renderWardrobeCardActions(c)}<div class="material-card-actions">${managementButton("설정 수정", "edit-character", c.id)}${managementButton("삭제", "delete-character", c.id)}</div></article>`).join("") || `<div class="empty-state"><h3>이야기 친구를 만나볼까요?</h3><p>한 번 만든 친구는 다음 책에도 함께해요.</p>${btn("친구 만들기", "new-character", "green")}</div>`}</div><div class="section-header"><h3>배경 서랍 <span class="count">${backgrounds.length}곳</span></h3>${btn("설정으로 추가", "new-background", "outline", "plus")}</div><div class="material-add-actions">${photoButton("사진으로 배경 시트 만들기", "new-background")}${photoButton("완성된 배경 그림 가져오기 · 무료", "import-background")}</div><div class="background-grid">${backgrounds
     .map((raw) => {
       const b = getWorldBackgroundSnapshot(state, raw);
-      return `<article class="background-card">${b.imageAssetId && getImageURL(b.imageAssetId) ? `<img class="background-generated" src="${esc(getImageURL(b.imageAssetId))}" alt="${esc(b.name)} 배경">` : `<div class="background-emoji">${{ home: "🏡", school: "🏫", forest: "🌳", space: "🌙", sea: "🐚" }[b.type] || "🌿"}</div>`}<h4>${esc(b.name)}</h4>${raw.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${esc(b.description || b.features || "이야기가 시작되는 작은 장소")}</p><div class="material-card-actions">${managementButton("수정", "edit-background", b.id)}${managementButton("삭제", "delete-background", b.id)}</div>${renderBackgroundSheetActions(raw, state)}</article>`;
+      return `<article class="background-card">${b.imageAssetId && getImageURL(b.imageAssetId) ? `<img class="background-generated" src="${esc(getImageURL(b.imageAssetId))}" alt="${esc(b.name)} 배경">` : `<div class="background-emoji">${placeEmoji(b.type)}</div>`}<h4>${esc(b.name)}</h4>${raw.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${esc(b.description || b.features || "이야기가 시작되는 작은 장소")}</p><div class="material-card-actions">${managementButton("수정", "edit-background", b.id)}${managementButton("삭제", "delete-background", b.id)}</div>${renderBackgroundSheetActions(raw, state)}</article>`;
     })
     .join(
       "",
@@ -2162,15 +2168,9 @@ function showBackgroundForm() {
     `${modalHeader("이야기가 머무는 장소")}<form id="background-form"><div class="form-grid"><div class="field"><label for="b-name">장소 이름</label><input id="b-name" required maxlength="50" placeholder="예: 유하네 놀이터"></div>${selectField(
       "b-type",
       "장소 종류",
-      [
-        ["home", "집"],
-        ["school", "유치원"],
-        ["forest", "숲 · 놀이터"],
-        ["sea", "바다"],
-        ["space", "우주 · 상상 세계"],
-      ],
+      PLACE_TYPE_CHOICES,
       "forest",
-    )}<div class="field field-wide"><label for="b-description">특징과 분위기</label><textarea id="b-description" maxlength="250" placeholder="큰 나무 아래 노란 미끄럼틀이 있는 아늑한 놀이터" required></textarea><small>장소 설정을 이야기 맥락으로 저장합니다. 사진으로 배경 추가는 이야기 재료의 ‘사진으로 배경 시트 만들기’에서 사용할 수 있어요.</small></div><div class="field field-wide"><label for="b-layout">고정 배치 · 문·창·가구·소품</label><textarea id="b-layout" maxlength="3000" placeholder="왼쪽 벽에 창문, 오른쪽 벽에 침대, 문 옆 노란 책장"></textarea></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${icon("check")}배경에 저장</button></div></form>`,
+    )}${placeTypeCustomField("b-type-custom")}<div class="field field-wide"><label for="b-description">특징과 분위기</label><textarea id="b-description" maxlength="250" placeholder="큰 나무 아래 노란 미끄럼틀이 있는 아늑한 놀이터" required></textarea><small>장소 설정을 이야기 맥락으로 저장합니다. 사진으로 배경 추가는 이야기 재료의 ‘사진으로 배경 시트 만들기’에서 사용할 수 있어요.</small></div><div class="field field-wide"><label for="b-layout">고정 배치 · 문·창·가구·소품</label><textarea id="b-layout" maxlength="3000" placeholder="왼쪽 벽에 창문, 오른쪽 벽에 침대, 문 옆 노란 책장"></textarea></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${icon("check")}배경에 저장</button></div></form>`,
   );
 }
 /**
@@ -3718,10 +3718,20 @@ document.addEventListener("submit", async (e) => {
     return;
   }
   if (f.id === "background-form") {
+    let type;
+    try {
+      type = readPlaceType(
+        document.getElementById("b-type").value,
+        document.getElementById("b-type-custom")?.value,
+      );
+    } catch (error) {
+      toast(error.message);
+      return;
+    }
     state.backgrounds.push({
       id: "bg-" + crypto.randomUUID(),
       name: document.getElementById("b-name").value.trim(),
-      type: document.getElementById("b-type").value,
+      type,
       description: document.getElementById("b-description").value.trim(),
       layout: document.getElementById("b-layout").value.trim(),
     });

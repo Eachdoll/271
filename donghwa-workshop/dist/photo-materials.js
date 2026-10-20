@@ -16,6 +16,11 @@ import {
 import { saveImage } from "./image-generation/assets.js";
 import { backgroundSettingsKey } from "./background-sheets.js";
 import { identityLine, GENDER_CHOICES } from "./image-generation/identity.js";
+import {
+  PLACE_TYPE_CHOICES,
+  readPlaceType,
+  placeTypeCustomField,
+} from "./place-types.js";
 
 const MAX_PHOTOS = 3;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -353,15 +358,9 @@ function backgroundFields() {
   return `<div class="field"><label for="photo-name">장소 이름 · 한글</label><input id="photo-name" required maxlength="50" placeholder="예: 우리 집 놀이터"></div><div class="field"><label for="photo-name-en">장소 이름 · 영어</label><input id="photo-name-en" maxlength="70" placeholder="예: Our Playground"></div>${selectField(
     "photo-type",
     "장소 종류",
-    [
-      ["home", "집"],
-      ["school", "유치원 · 학교"],
-      ["forest", "숲 · 정원"],
-      ["space", "우주"],
-      ["sea", "바다"],
-    ],
+    PLACE_TYPE_CHOICES,
     "home",
-  )}<div class="field field-wide"><label for="photo-appearance">장소 특징 · 꼭 남길 것</label><textarea id="photo-appearance" required maxlength="500" placeholder="예: 창가에 작은 책장이 있고, 초록 소파 옆에 노란 쿠션이 있어요."></textarea><small>사진을 보며 장소의 특징을 직접 적어 주세요. 인물과 주소 등은 그림에서 제외하도록 요청합니다.</small></div><div class="field field-wide"><label for="photo-layout">고정할 배치 · 선택</label><textarea id="photo-layout" maxlength="1000" placeholder="예: 왼쪽 벽에 창문 하나, 창 아래 침대, 오른쪽 문 옆에 책장"></textarea><small>문·창문 위치와 가구 배치를 적으면 이후 장면과 다음 편에서도 같은 장소를 참조해요. 사진에 없는 방이나 가구는 새로 만들지 않도록 요청합니다.</small></div>`;
+  )}${placeTypeCustomField("photo-type-custom")}<div class="field field-wide"><label for="photo-appearance">장소 특징 · 꼭 남길 것</label><textarea id="photo-appearance" required maxlength="500" placeholder="예: 창가에 작은 책장이 있고, 초록 소파 옆에 노란 쿠션이 있어요."></textarea><small>사진을 보며 장소의 특징을 직접 적어 주세요. 인물과 주소 등은 그림에서 제외하도록 요청합니다.</small></div><div class="field field-wide"><label for="photo-layout">고정할 배치 · 선택</label><textarea id="photo-layout" maxlength="1000" placeholder="예: 왼쪽 벽에 창문 하나, 창 아래 침대, 오른쪽 문 옆에 책장"></textarea><small>문·창문 위치와 가구 배치를 적으면 이후 장면과 다음 편에서도 같은 장소를 참조해요. 사진에 없는 방이나 가구는 새로 만들지 않도록 요청합니다.</small></div>`;
 }
 
 function openPhotoFlow(kind, mode = "photo") {
@@ -470,7 +469,7 @@ function readFields(session) {
     return {
       name,
       nameEn,
-      type: value("photo-type"),
+      type: readPlaceType(value("photo-type"), value("photo-type-custom")),
       description,
       features: description,
       layout: value("photo-layout"),

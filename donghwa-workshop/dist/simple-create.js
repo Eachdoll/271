@@ -81,6 +81,11 @@ import {
   openStopReport,
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
+import {
+  placeEmoji,
+  placeTypeLabel,
+  isPresetPlaceType,
+} from "./place-types.js";
 import { safeTopic } from "./engine.js";
 import {
   CUES,
@@ -369,10 +374,15 @@ export function placeKeywords(background = {}) {
       background.nameEn,
       background.description,
       background.type,
+      placeTypeLabel(background.type),
     ]
       .filter(Boolean)
       .join(" "),
-    words = new Set(nameWords(background.name));
+    // 2026-10-20: a typed kind ("도시") is itself a topic word.
+    words = new Set([
+      ...nameWords(background.name),
+      ...(isPresetPlaceType(background.type) ? [] : nameWords(background.type)),
+    ]);
   for (const [pattern, hints] of PLACE_HINTS)
     if (pattern.test(text)) hints.forEach((hint) => words.add(hint));
   return [...words].filter(Boolean);
@@ -936,7 +946,7 @@ function renderFrozenMaterials(ctx, w, job) {
     )}</div><p class="form-label">이야기 장소</p><div class="selection-grid simple-cards">${places
     .map((b) =>
       card(
-        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || "🌿"}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
+        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
       ),
     )
     .join(
@@ -972,7 +982,7 @@ function renderMaterialsStep(ctx, w) {
       const selected = w.backgroundIds.includes(b.id),
         home = isHomeBackground(b),
         rec = placeRec.has(b.id);
-      return `<button type="button" class="selection simple-card simple-place ${selected ? "selected" : ""}" data-simple-action="place" data-id="${esc(b.id)}" aria-pressed="${selected}"><span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || "🌿"}</span><strong>${esc(b.name)}</strong><small>${home ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${rec ? '<span class="simple-rec">추천</span>' : ""}</button>`;
+      return `<button type="button" class="selection simple-card simple-place ${selected ? "selected" : ""}" data-simple-action="place" data-id="${esc(b.id)}" aria-pressed="${selected}"><span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${home ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${rec ? '<span class="simple-rec">추천</span>' : ""}</button>`;
     })
     .join(
       "",
