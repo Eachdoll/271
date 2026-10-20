@@ -49,7 +49,8 @@ test('R13 review: ③ prices an existing job with its frozen text and picture mo
   const render = () => costLines(renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: job.id}))));
   const before = render();
   assert.match(before, /그림 12쪽 \+ 표지 요금 정보 없음/);
-  assert.match(before, /글 만들기 [^그]*(일부 요금 미확인|요금 정보 없음)/);
+  // R24: a job's text line is its budget (spent so far, the rest estimated).
+  assert.match(before, /글 · 남은 단계 예상 [^그]*(일부 요금 미확인|요금 정보 없음)/);
   // The parent picks priced models afterwards: the paused job still draws and
   // writes with its own, so its line must not show their prices.
   applySimpleTextModel(state.settings.textGeneration, 'openai', 'gpt-6-astra');

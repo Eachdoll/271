@@ -70,6 +70,7 @@ import {
   estimateStoryTextCost,
   reviewTierOf,
   REVIEW_TIER_UPPER,
+  jobTextBudget,
 } from "./text-generation/models.js";
 import { syncActiveWorldTextSettings } from "./world-variations.js";
 import {
@@ -91,6 +92,8 @@ import { councilSummaryLine } from "./story-generation/council.js";
 import {
   councilRoomBlock,
   renderCouncilBudget,
+  jobBudgetSummary,
+  budgetUsd,
   bindCouncilChoiceFeedback,
   renderCouncilRoom,
   liveCouncilRecord,
@@ -1162,9 +1165,14 @@ function renderGenerateStep(ctx, w) {
   // R13: a model outside the catalog has no price: '요금 정보 없음' for its part,
   // '일부 요금 미확인' on a total that leaves it out. R12 openings: before the
   // text exists the pictures are a range and the automatic repairs are listed.
-  const textCost = job?.demo
+  // R24: once a job exists the text money is one budget (spent so far, the
+  // unfinished steps' estimate) — the same numbers as the meeting panel.
+  const budget = job && !job.demo ? jobTextBudget(job) : null,
+    textCost = job?.demo
       ? "무료"
-      : textFee(cost.textUsd, cost.textPricingUnknown),
+      : budget
+        ? jobBudgetSummary(job)
+        : textFee(cost.textUsd, cost.textPricingUnknown),
     imagePriced = cost.imageUnitUsd > 0 || cost.imagePricingUnknown,
     imagesCost = cost.imagePricingUnknown
       ? "요금 정보 없음"
@@ -1178,7 +1186,7 @@ function renderGenerateStep(ctx, w) {
       : cost.repairs
         ? `약 ${usd(cost.repairs.typicalMinUsd)}~${usd(cost.repairs.typicalMaxUsd)} (최대 ${usd(cost.repairs.maxUsd)})`
         : "";
-  const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${textCost}</strong></li>`}<li><span>${cost.imageCountMax ? `그림 ${cost.imageCountMin}~${cost.imageCountMax}장 + 표지 (펼침면 수에 따라)` : `그림 ${cost.pageCount}쪽 + 표지`}</span><strong>${imagesCost}</strong></li>${cost.repairs && !job?.demo ? `<li><span>검사 후 자동 수정: 보통 ${cost.repairs.typicalMin}~${cost.repairs.typicalMax}회 · 최대 ${cost.repairs.max}회</span><strong>${repairsCost}</strong></li>` : ""}${imagePriced ? `<li><span>새 시트가 필요하면</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : `최대 ${usd(cost.sheetsUpperUsd)}`}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
+  const costLines = `<ul class="simple-costs">${text ? `<li class="simple-costs-done"><span>글 만들기 · 완료</span>${budget ? `<strong>쓴 금액 ${budgetUsd(budget.usedUsd, budget.usedUnknown, { empty: "아직 없음" })}</strong>` : ""}</li>` : budget ? `<li><span>글 · 지금까지 쓴 금액</span><strong>${budgetUsd(budget.usedUsd, budget.usedUnknown, { empty: "아직 없음" })}</strong></li><li><span>글 · 남은 단계 예상</span><strong>${budgetUsd(budget.remainingUsd, budget.remainingUnknown, { empty: "없음" })}</strong></li>` : `<li><span>글 만들기</span><strong>${textCost}</strong></li>`}<li><span>${cost.imageCountMax ? `그림 ${cost.imageCountMin}~${cost.imageCountMax}장 + 표지 (펼침면 수에 따라)` : `그림 ${cost.pageCount}쪽 + 표지`}</span><strong>${imagesCost}</strong></li>${cost.repairs && !job?.demo ? `<li><span>검사 후 자동 수정: 보통 ${cost.repairs.typicalMin}~${cost.repairs.typicalMax}회 · 최대 ${cost.repairs.max}회</span><strong>${repairsCost}</strong></li>` : ""}${imagePriced ? `<li><span>새 시트가 필요하면</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : `최대 ${usd(cost.sheetsUpperUsd)}`}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
   // R22 회의 결과 보고 진행: a parent setting, frozen on the job once it exists.
   const councilReview = job
       ? job.councilReview === true
@@ -1194,7 +1202,7 @@ function renderGenerateStep(ctx, w) {
       job?.demo || textEngine === "demo" || textEngine === "local"
         ? ""
         : renderActionSwitch({ id: "simple-review-switch", label: "검사는 최고 모델로", description: locked ? "이 이야기에 고정된 설정이에요." : "끄면(기본) 사건 연결 판정은 한 단계 낮은 모델로 해 요금을 줄여요. 글을 쓰고 고치는 모델은 그대로예요.", action: "toggle-review-tier", checked: reviewUpper, disabled: locked, className: "simple-distilled simple-review-tier" });
-  const distilledLine = renderActionSwitch({ id: "simple-distilled-switch", label: "증류 추가 예시", description: locked ? "이 이야기에 고정된 설정이에요." : "승인 예시를 더 참고해요. 꺼도 기본 9점 이상 예시는 유지돼요.", action: "toggle-distilled", checked: distilled, disabled: locked, className: "simple-distilled" });
+  const distilledLine = renderActionSwitch({ id: "simple-distilled-switch", label: "승인 예시 더 참고", description: locked ? "이 이야기에 고정된 설정이에요." : "부모님이 승인한 동화 예시를 더 참고해요. 꺼도 기본 9점 이상 예시는 유지돼요.", action: "toggle-distilled", checked: distilled, disabled: locked, className: "simple-distilled" });
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
   const checkFailed =
@@ -1226,7 +1234,7 @@ function renderGenerateStep(ctx, w) {
   }
   else
     status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${reviewLine}${job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}</details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${reviewLine}<div class="generation-options">${distilledLine}${job ? councilLine : ""}</div></details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(
@@ -1306,7 +1314,7 @@ function renderReviewStep(ctx, w) {
     kind = page?.kind === "spread" ? "spread" : "page";
   const art = image
     ? `${illustration(book, index)}${isPageTextEdited(page) ? '<p class="small-label simple-stale">글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요.</p>' : ""}`
-    : `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p>${sbtn("그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
+    : `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p>${sbtn(openings && kind === "spread" ? "이 펼침면 그림 만들기" : "이 쪽 그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
   const textOf = (lang) =>
     page[lang] ?? page[lang === "ko" ? "textKo" : "textEn"] ?? "";
   const rows = (lang) =>

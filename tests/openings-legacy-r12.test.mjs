@@ -746,7 +746,11 @@ const PINS = {
   // judgement on the medium model (글 약 $2.48 → $1.94 at 12 pages) and its folded
   // engine/cost details gain the '검사는 최고 모델로' switch; ④ and ⑤ are unchanged
   // (diffed against 0109553). 0109553: 564133de…a1b9.
-  review: 'a68b451fbcd7144ca785d8b6f181da4375ee41054bd141e43766a621e28754f2',
+  // Screen finish (R24): ④'s empty-art button reads '이 쪽 그림 만들기' and ③'s
+  // '승인 예시 더 참고' switch (renamed from '증류 추가 예시') moves into the folded
+  // engine/cost details; no text, price or request changed (diffed against
+  // 311e4df). 311e4df: a68b451f…54f2.
+  review: 'add2f529e4259bf90fd6b557b79c328ef2e8a268fd948d8d55cf8144a0ad5b80',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost

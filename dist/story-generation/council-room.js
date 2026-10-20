@@ -6,7 +6,7 @@
  * saved after every round) or from the finished outline, so the screen can
  * follow a live run and show the same room again later.
  */
-import { councilDecisionCosts } from "../text-generation/models.js";
+import { councilDecisionCosts, jobTextBudget } from "../text-generation/models.js";
 import { COUNCIL_ROLES, councilAvatar } from "./council-avatars.js";
 
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -228,9 +228,25 @@ export function readCouncilDirection(root = globalThis.document) {
   return str(root?.querySelector?.("#council-direction")?.value, 200);
 }
 
+/**
+ * R24: one money format for every text budget on screen — '$0.42' (three
+ * decimals under ten cents), '아직 없음' for nothing spent yet, and the R13
+ * wording when a model outside the catalog leaves part of it unpriced.
+ */
+export function budgetUsd(value, unknown = false, { empty = "" } = {}) {
+  const n = Math.max(0, Number(value) || 0),
+    text = n <= 0 ? "$0" : "$" + n.toFixed(n < 0.1 ? 3 : 2);
+  if (unknown) return n > 0 ? `약 ${text} · 일부 요금 미확인` : "요금 정보 없음";
+  if (n <= 0 && empty) return empty;
+  return `약 ${text}`;
+}
+/** R24: '쓴 금액 · 남은 예상' for a job, from the same jobTextBudget as the meeting panel. */
+export function jobBudgetSummary(job) {
+  const b = jobTextBudget(job);
+  return `쓴 금액 ${budgetUsd(b.usedUsd, b.usedUnknown, { empty: "아직 없음" })} · 남은 예상 ${budgetUsd(b.remainingUsd, b.remainingUnknown, { empty: "없음" })}`;
+}
 /** Separate prior estimated usage from each upcoming action. */
 export function renderCouncilBudget(job) {
   const c = councilDecisionCosts(job);
-  const money = (value, unknown) => unknown ? (value > 0 ? `약 $${value.toFixed(3)} · 일부 미확인` : "요금 정보 없음") : `약 $${value.toFixed(3)}`;
-  return `<div class="council-budget"><span>지금까지 글 요청 추정 <strong>${money(c.usedUsd, c.usedUnknown)}</strong></span><span>이 안으로 글 이어쓰기 예상 <strong>${money(c.continueUsd, c.continueUnknown)}</strong></span><span>다시 회의 추가 예상 <strong>${money(c.meetingUsd, c.meetingUnknown)}</strong></span><small>받은 회의 답은 다시 사지 않아요. 공급자 실제 청구액과 다를 수 있고 자동 수정·그림 비용은 별도예요.</small></div>`;
+  return `<div class="council-budget"><span>지금까지 쓴 글 요금 <strong>${budgetUsd(c.usedUsd, c.usedUnknown, { empty: "아직 없음" })}</strong></span><span>이 안으로 글 끝까지 <strong>${budgetUsd(c.continueUsd, c.continueUnknown)}</strong></span><span>다시 회의하면 더 <strong>${budgetUsd(c.meetingUsd, c.meetingUnknown)}</strong></span><small>받은 회의 답은 다시 사지 않아요. 공급자 실제 청구액과 다를 수 있고 그림 요금은 별도예요.</small></div>`;
 }

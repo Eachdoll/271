@@ -3701,6 +3701,18 @@ select:focus-visible {
   font-size: 12px;
   color: var(--text-2);
 }
+/* R24: the sticky save bar never covers what it saves — focus and jumps
+ * scroll clear of it, and the last panel ends above it. */
+html:has(.settings-save-bar) {
+  scroll-padding-bottom: 104px;
+}
+.settings-tab-content > :last-child,
+.settings-save-bar {
+  margin-bottom: 0;
+}
+.settings-tab-content {
+  padding-bottom: 12px;
+}
 .settings-tab-content {
   min-width: 0;
 }
@@ -3806,6 +3818,18 @@ select:focus-visible {
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 8px;
+}
+/* R24: one line per repeated note, a button per page. */
+.check-page-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.check-repeat {
+  color: var(--text-2);
+  margin-left: 4px;
 }
 .check-blocked {
   color: var(--danger);
@@ -4083,10 +4107,21 @@ select:focus-visible {
     flex: 1;
     padding: 8px 4px;
   }
+  /* R24: one short row on phones (the stacked bar hid two headings). */
   .settings-save-bar {
-    align-items: stretch;
-    flex-direction: column;
-    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+    align-items: center;
+    flex-direction: row;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+  .settings-save-bar span {
+    flex: 1;
+    min-width: 0;
+  }
+  .settings-save-bar .btn {
+    white-space: nowrap;
+  }
+  html:has(.settings-save-bar) {
+    scroll-padding-bottom: 150px;
   }
   .settings-jump {
     top: 76px;
@@ -5187,4 +5222,35 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 @media (max-width: 640px) {
   .council-keyboard-open .council-choice-actions { bottom: calc(var(--keyboard-inset, 0px) + 8px); }
   .council-keyboard-open .sidebar { visibility: hidden; }
+}
+
+/* R24: the library's storage note is one strip, not two cards. */
+.status-strip:has(> #cloud-status-slot > .library-storage-strip) {
+  display: block;
+}
+.library-storage-strip .btn {
+  min-height: 34px;
+  padding: 6px 12px;
+}
+.library-storage-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.library-storage-strip > span:first-child {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.library-storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
