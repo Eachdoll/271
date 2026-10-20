@@ -23,12 +23,45 @@ const SIDEKICK =
   "SIDEKICK: a companion character does at least one thing of its own that is funny or wrong (a wrong guess, a silly try), not only nodding or watching.";
 const SOUND_REFRAIN =
   "SOUND REFRAIN (required for this K1/K2 book): refrain.text is one short Korean sound line that the key object or event makes, written as onomatopoeia with an exclamation mark (e.g. '딸랑!', '바스락!', '똑똑!'), never a sentence and never a catchphrase. Plan it at exactly 3 beat indices (one early, one in the middle, one at the turn or resolution); refrain.variation may change one word. A child should be able to shout it on the third time.";
+/**
+ * 2026-10-20 variety: the parent may pick up to six companions and four
+ * places, and asked that they all take part. The same home test as the
+ * pipeline's isHomeBackground (kept here to avoid a module cycle).
+ */
+const isHomePlace = (background = {}) =>
+  /^(?:home|house|bedroom|livingroom|living_room|room|집|방|집·방)$/iu.test(
+    String(background.type || background.kind || "").trim(),
+  ) ||
+  /(?:집|침실|거실|주방|아이\s*방|의\s*방|우리\s*방|\b(?:home|house|bedroom|living\s*room|kitchen)\b)/iu.test(
+    [background.name, background.nameEn].filter(Boolean).join(" "),
+  );
+const companionCount = (input) =>
+  Math.max(0, (Array.isArray(input?.characters) ? input.characters : []).length - 1);
+const locationCount = (input) =>
+  (Array.isArray(input?.backgrounds) ? input.backgrounds : []).filter(
+    (b) => !isHomePlace(b),
+  ).length;
+/** Every supplied companion takes part; a big cast is spread over the beats. */
+export function castSpreadRule(input) {
+  const companions = companionCount(input);
+  if (!companions) return "";
+  return `CAST (${companions} companion${companions > 1 ? "s" : ""} supplied): every companion is listed in beat.characters of at least two beats and does one thing of its own that matters to the story (a wrong guess, a small help, a funny mistake), never only standing by. Spread the companions over the beats instead of crowding every scene${companions >= 3 ? ": some join on the way, one may wait at home" : ""}; one beat lists at most four characters.`;
+}
+/** With three or more places supplied, the middle beats use three (four in a 16-page book). */
+export function placeSpreadRule(input) {
+  const locations = locationCount(input),
+    want = Math.min(locations, Number(input?.pageCount) >= 16 ? 4 : 3);
+  if (want < 3) return "";
+  return `PLACES (${locations} non-home locations supplied): the middle beats visit at least ${want} distinct non-home locations, each visit changing what the protagonist knows or has; return to a place only when the story needs it.`;
+}
 /** Outline stage (app path, and the quality path's canon). */
 export function craftOutlineRules(input) {
   if (!hasCraftPolicy(input)) return "";
   return [
     SUSPENSE_OUTLINE,
     SIDEKICK,
+    castSpreadRule(input),
+    placeSpreadRule(input),
     soundRefrainRequired(input) ? SOUND_REFRAIN : "",
   ]
     .filter(Boolean)

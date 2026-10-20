@@ -1560,7 +1560,7 @@ function createPage() {
   const steps = ["재료 고르기", "주제와 분위기", "읽기와 형식", "만들기"];
   let inner = "";
   if (w.step === 1)
-    inner = `<h3>누구와 함께 떠날까요?</h3><p class="section-sub">첫 번째로 고른 친구가 주인공이에요. 조연은 최대 4명까지 함께할 수 있어요.</p><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">조연 자동생성하여 추가하기</button></div><div class="selection-grid">${activeCharacters(
+    inner = `<h3>누구와 함께 떠날까요?</h3><p class="section-sub">첫 번째로 고른 친구가 주인공이에요. 조연은 최대 6명까지 함께할 수 있고, 고른 친구는 모두 이야기에 나와요.</p><div class="material-add-actions"><button type="button" class="btn btn-outline" data-companion-action="open">조연 자동생성하여 추가하기</button></div><div class="selection-grid">${activeCharacters(
       state,
     )
       .map(
@@ -1569,7 +1569,7 @@ function createPage() {
       )
       .join(
         "",
-      )}</div>${renderBookVariantSelectors(state, w)}<label class="form-label">이야기가 펼쳐질 장소 <span class="count">선호 장소 최대 3곳 · 집과 다른 장소 2곳 이상 사용</span></label><div class="chips">${activeBackgrounds(
+      )}</div>${renderBookVariantSelectors(state, w)}<label class="form-label">이야기가 펼쳐질 장소 <span class="count">선호 장소 최대 5곳(집 포함) · 집과 다른 장소 2곳 이상 사용</span></label><div class="chips">${activeBackgrounds(
       state,
     )
       .map(
@@ -3166,8 +3166,8 @@ async function onAction(e) {
     if (!wizard) return;
     const ids = wizard.characterIds;
     if (ids.includes(id)) wizard.characterIds = ids.filter((v) => v !== id);
-    else if (ids.length < 5) ids.push(id);
-    else toast("주인공과 조연을 합해 최대 5명이에요.");
+    else if (ids.length < 7) ids.push(id);
+    else toast("주인공과 조연을 합해 최대 7명이에요.");
     render();
     return;
   }
@@ -3175,8 +3175,8 @@ async function onAction(e) {
     if (!wizard) return;
     const ids = wizard.backgroundIds;
     if (ids.includes(id)) wizard.backgroundIds = ids.filter((v) => v !== id);
-    else if (ids.length < 3) ids.push(id);
-    else toast("배경은 최대 3곳을 고를 수 있어요.");
+    else if (ids.length < 5) ids.push(id);
+    else toast("배경은 집을 포함해 최대 5곳을 고를 수 있어요.");
     render();
     return;
   }
