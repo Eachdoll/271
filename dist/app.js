@@ -91,6 +91,10 @@ import {
   keepRecoveryPoint,
   latestRecoveryPoint,
   decodeStoredLibrary,
+  readSpilledLibrary,
+  spillStoredLibrary,
+  libraryTextOf,
+  isSpilledLibrary,
 } from "./library-storage.js";
 import {
   seedState,
@@ -290,10 +294,16 @@ const defaults = {
   dailyLimit: 3,
   rate: 0.85,
 };
-const initialLibrary = readStoredLibrary(localStorage, KEY, {
+// R27: a library kept in the big store (IndexedDB) is read before anything else.
+const bootLibrary = await readSpilledLibrary(localStorage, KEY);
+const initialLibrary = readStoredLibrary(bootLibrary.storage, KEY, {
   validate: validateStoredLibrary,
   seed: seedState,
 });
+if (bootLibrary.error) {
+  initialLibrary.kind = "blocked";
+  initialLibrary.error = bootLibrary.error;
+}
 let state = initialLibrary.state,
   storageBlocked = initialLibrary.kind === "blocked",
   deviceTransferBusy = false,
@@ -434,16 +444,58 @@ const bookById = (id) => state.books.find((b) => b.id === id);
 const languageLabel = (l) =>
   ({ dual: "한·영", bilingual: "한영", ko: "한글", en: "영어" })[l] || "한·영";
 const appearance = (c) => ({ ...c, color: c.color || "#efc954" });
+// R27: when even the compressed library does not fit, it moves to the big
+// store in the background; saves made meanwhile run the spill again with the
+// latest state, so the pointer always ends on the newest library.
+let spillRunning = false,
+  spillWanted = false;
+function queueSpill() {
+  spillWanted = true;
+  if (spillRunning) return;
+  spillRunning = true;
+  (async () => {
+    try {
+      while (spillWanted) {
+        spillWanted = false;
+        await spillStoredLibrary(localStorage, KEY, state, {
+          invalidRecords: initialLibrary.invalidRecords || [],
+        });
+      }
+      initialLibrary.kind = "ready";
+    } catch (error) {
+      toast(
+        `책장이 이 기기의 저장 한도를 넘었고 큰 보관함에도 저장하지 못했어요. 지금 화면의 변경은 아직 저장되지 않았어요. 백업 후 오래된 작업 기록을 정리해 주세요. (${error?.message || error})`,
+      );
+    } finally {
+      spillRunning = false;
+    }
+  })();
+}
+/** Cloud pull and file import: the same write, spilling when it does not fit. */
+async function writeLibraryOrSpill(target) {
+  try {
+    writeStoredLibrary(localStorage, KEY, target);
+  } catch (error) {
+    if (error?.code !== "QUOTA") throw error;
+    await spillStoredLibrary(localStorage, KEY, target);
+  }
+}
 function save() {
   try {
     writeStoredLibrary(localStorage, KEY, state, {
       blocked: storageBlocked,
       invalidRecords: initialLibrary.invalidRecords || [],
     });
+    if (spillRunning) spillWanted = true;
     initialLibrary.kind = "ready";
     if (!applyingCloud) cloudSync?.changed();
     return true;
   } catch (error) {
+    if (error?.code === "QUOTA" && !storageBlocked) {
+      queueSpill();
+      if (!applyingCloud) cloudSync?.changed();
+      return true;
+    }
     toast(
       storageBlocked || error?.code === "QUOTA"
         ? error.message
@@ -884,7 +936,7 @@ async function applyCloudLibrary(candidate, meta) {
     if (meta.signal?.aborted)
       throw new DOMException("불러오기를 중지했어요.", "AbortError");
     if (raw) {
-      recovery = raw;
+      recovery = await libraryTextOf(raw);
       await keepRecoveryPoint(recovery, {
         reason: "before-cloud-pull",
         mediaDeferred: true,
@@ -910,7 +962,7 @@ async function applyCloudLibrary(candidate, meta) {
     syncActiveWorldTextSettings(state, { load: true });
     migratePrintSettings(state.settings);
     migrateReadingSettings(state.settings);
-    writeStoredLibrary(localStorage, KEY, state);
+    await writeLibraryOrSpill(state);
     storageBlocked = false;
     clearDirectBlobCache();
     initialLibrary.invalidRecords = [];
@@ -971,7 +1023,7 @@ async function showLibraryImport(file) {
         field.textContent = "현재 자료를 복구용 보관함에 남기고 있어요.";
         const raw = localStorage.getItem(KEY);
         if (raw) {
-          recoveryText = raw;
+          recoveryText = await libraryTextOf(raw);
           await keepRecoveryPoint(recoveryText, {
             mediaDeferred: true,
             reason: storageBlocked
@@ -996,7 +1048,7 @@ async function showLibraryImport(file) {
         syncActiveWorldTextSettings(state, { load: true });
         migratePrintSettings(state.settings);
         migrateReadingSettings(state.settings);
-        writeStoredLibrary(localStorage, KEY, state);
+        await writeLibraryOrSpill(state);
         storageBlocked = false;
         clearDirectBlobCache();
         initialLibrary.invalidRecords = [];
@@ -1461,7 +1513,7 @@ function libraryPage() {
           (state.daily[localDay()] || 0) >= state.settings.dailyLimit
         ? '<aside class="notice paper-book-notice"><h3>이제 종이책으로 읽자</h3><p>오늘은 화면으로 충분히 만났어요. 종이책에서 다음 모험을 이어가요.</p></aside>'
         : ""
-  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state, { rest: simpleJobs }) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY, state) / 1024 / 1024).toFixed(2)} MB${localStorage.getItem(KEY) === null ? " (저장 전 추정)" : ""} · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
+  }<section><div class="shelf-header"><div class="shelf-title">${childMode ? "읽고 싶은 이야기" : "나의 작은 책장"}<span class="count">${books.length}권의 이야기</span></div>${!childMode ? `<div class="shelf-options"><select id="sort" aria-label="책 정렬"><option value="recent" ${sort === "recent" ? "selected" : ""}>최근 만든 순</option><option value="popular" ${sort === "popular" ? "selected" : ""}>많이 읽은 순</option></select><span class="view-icon">${icon("grid")}</span></div>` : ""}</div>${!childMode ? `<div class="shelf-toolbar"><div class="tabs">${[["all", "전체", "book"], ["favorites", "즐겨찾기", "heart"], ["series", "시리즈", "folder"], ...(!childMode ? [["unprinted", "인쇄 전", "print"]] : [])].map(([id, label, ic]) => `<button class="tab ${tab === id ? "active" : ""}" data-action="tab" data-tab="${id}">${icon(ic)}${label}${id === "all" ? `<small>${state.books.filter((b) => b.approved !== false).length}</small>` : ""}</button>`).join("")}</div><label class="search">${icon("search")}<input id="search-books" placeholder="제목, 주제, 등장인물 검색" value="${esc(query)}" aria-label="책 검색"></label></div>` : ""}<div class="books-grid" id="books-grid">${cards || `<div class="empty"><h3>${query ? "찾는 이야기가 아직 없어요" : "이곳에 이야기를 쌓아 볼까요?"}</h3><p>${query ? "다른 검색어로 찾아보세요." : "한 번 만든 이야기는 언제든 다시 꺼내 읽을 수 있어요."}</p>${!childMode ? btn("새 이야기 만들기", "new-story", "soft", "plus") : ""}</div>`}</div></section>${!childMode ? renderFullAutoJobs(state, { rest: simpleJobs }) : ""}${!childMode ? `<section class="panel storage-panel"><h3>보관 공간</h3><p>이 기기의 글·설정 약 ${(estimateLibraryStorage(localStorage, KEY, state) / 1024 / 1024).toFixed(2)} MB${localStorage.getItem(KEY) === null ? " (저장 전 추정)" : isSpilledLibrary(localStorage.getItem(KEY)) ? " · 큰 보관함(IndexedDB) 사용 중" : ""} · 그림·음원은 별도 보관</p>${btn("오래된 작업 기록 정리", "cleanup-work-records", "outline")}</section>` : ""}`;
 }
 const managementButton = (label, action, id, kind = "outline") =>
   `<button type="button" class="btn btn-${kind} btn-small" data-management-action="${action}" data-id="${esc(id)}">${label}</button>`;
@@ -2983,7 +3035,7 @@ async function onAction(e) {
       const cleaned = cleanupOldWorkRecords(state);
       if (save()) {
         render();
-        toast(`완성된 책 ${cleaned}권의 중복 작업 기록을 정리했어요.`);
+        toast(`작업 기록 ${cleaned}건을 정리했어요. 완성된 책과 진행 중인 작업은 그대로예요.`);
       }
     });
     return;

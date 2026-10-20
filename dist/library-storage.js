@@ -73,6 +73,10 @@ export function encodeStoredLibrary(text) {
 }
 /** Storage string → JSON text. Plain JSON (no mark) is returned as is. */
 export function decodeStoredLibrary(raw) {
+  if (isSpilledLibrary(raw))
+    throw new Error(
+      "책장이 큰 보관함(IndexedDB)에 있어요. 큰 보관함을 먼저 읽어야 해요.",
+    );
   if (!isCompressedLibrary(raw)) return raw;
   const data = raw.slice(COMPRESSED_MARK.length);
   let pos = 0,
@@ -275,16 +279,8 @@ export function readStoredLibrary(storage, key, { validate, seed }) {
     };
   }
 }
-export function writeStoredLibrary(
-  storage,
-  key,
-  state,
-  { blocked = false, invalidRecords = [] } = {},
-) {
-  if (blocked)
-    throw new Error(
-      "기존 데이터를 읽지 못해 원본을 보호하고 있어요. 복구 파일을 가져온 뒤 저장해 주세요.",
-    );
+/** The saved JSON: the state plus the records this device could not read, in place. */
+export function storedLibraryText(state, invalidRecords = []) {
   const preserved = { ...state };
   for (const collection of new Set(
     invalidRecords.map((item) => item.collection),
@@ -299,14 +295,27 @@ export function writeStoredLibrary(
         item.record,
       );
   }
-  const text = JSON.stringify(preserved);
+  return JSON.stringify(preserved);
+}
+export function writeStoredLibrary(
+  storage,
+  key,
+  state,
+  { blocked = false, invalidRecords = [] } = {},
+) {
+  if (blocked)
+    throw new Error(
+      "기존 데이터를 읽지 못해 원본을 보호하고 있어요. 복구 파일을 가져온 뒤 저장해 주세요.",
+    );
+  const text = storedLibraryText(state, invalidRecords);
   // Plain JSON first (readable, cheap); compressed when the plain value does
   // not fit, and from then on (a compressed value is never tried plain again).
+  // R27: a library kept in IndexedDB tries only the compressed value here.
   let current = null;
   try {
     current = storage.getItem(key);
   } catch {}
-  const compressedFirst = isCompressedLibrary(current);
+  const compressedFirst = isCompressedLibrary(current) || isSpilledLibrary(current);
   let encoded = null,
     quota = null;
   for (const mode of compressedFirst ? ["compressed"] : ["plain", "compressed"]) {
@@ -411,4 +420,123 @@ export async function latestRecoveryPoint() {
       );
     r.onerror = () => reject(new Error("복구용 보관본을 읽지 못했어요."));
   });
+}
+
+/*
+ * R27 큰 보관함: when even the compressed library does not fit localStorage,
+ * the compressed value goes to IndexedDB and localStorage keeps a small
+ * pointer (SPILL_MARK + {savedAt, length}). Order matters: the full value is
+ * written to IndexedDB first, and only then does the pointer replace the old
+ * localStorage value, so a crash in between leaves the previous library
+ * readable. Boot resolves the pointer with readSpilledLibrary before
+ * readStoredLibrary; a pointer whose record cannot be read blocks saving
+ * (storageBlocked) instead of starting a sample library over it.
+ */
+export const SPILL_MARK = "\u0001dwidb1:";
+export function isSpilledLibrary(raw) {
+  return typeof raw === "string" && raw.startsWith(SPILL_MARK);
+}
+const SPILL_DB = "donghwa-workshop-library-spill",
+  SPILL_STORE = "library",
+  SPILL_ID = "current";
+let spillPending;
+function spillDatabase() {
+  if (!globalThis.indexedDB)
+    return Promise.reject(
+      new Error("이 브라우저에서 큰 보관함(IndexedDB)을 쓸 수 없어요."),
+    );
+  if (!spillPending)
+    spillPending = new Promise((resolve, reject) => {
+      const request = indexedDB.open(SPILL_DB, 1);
+      const timer = setTimeout(
+        () => reject(new Error("큰 보관함을 여는 시간이 초과됐어요.")),
+        8000,
+      );
+      request.onupgradeneeded = () =>
+        request.result.createObjectStore(SPILL_STORE, { keyPath: "id" });
+      request.onsuccess = () => {
+        clearTimeout(timer);
+        resolve(request.result);
+      };
+      request.onerror = request.onblocked = () => {
+        clearTimeout(timer);
+        reject(new Error("큰 보관함을 열지 못했어요."));
+      };
+    }).catch((error) => {
+      spillPending = null;
+      throw error;
+    });
+  return spillPending;
+}
+/** The IndexedDB record behind the pointer ({get, put}; tests pass a memory one). */
+export function indexedDbSpillStore() {
+  return {
+    async get() {
+      const db = await spillDatabase();
+      return new Promise((resolve, reject) => {
+        const r = db.transaction(SPILL_STORE, "readonly").objectStore(SPILL_STORE).get(SPILL_ID);
+        r.onsuccess = () => resolve(r.result?.text ?? null);
+        r.onerror = () => reject(new Error("큰 보관함을 읽지 못했어요."));
+      });
+    },
+    async put(text) {
+      const db = await spillDatabase();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(SPILL_STORE, "readwrite");
+        tx.objectStore(SPILL_STORE).put({ id: SPILL_ID, text, savedAt: new Date().toISOString() });
+        tx.oncomplete = resolve;
+        tx.onabort = tx.onerror = () =>
+          reject(new Error("큰 보관함에 저장하지 못했어요. 기기 저장 공간을 확인해 주세요."));
+      });
+    },
+  };
+}
+/**
+ * Write the library to the big store and point localStorage at it. Throws
+ * (leaving localStorage as it was) when IndexedDB refuses the value.
+ */
+export async function spillStoredLibrary(
+  storage,
+  key,
+  state,
+  { invalidRecords = [], store = indexedDbSpillStore(), now = () => new Date().toISOString() } = {},
+) {
+  const text = storedLibraryText(state, invalidRecords),
+    encoded = encodeStoredLibrary(text);
+  await store.put(encoded);
+  storage.setItem(key, SPILL_MARK + JSON.stringify({ savedAt: now(), length: encoded.length }));
+  return { length: encoded.length };
+}
+/**
+ * Boot: a localStorage stand-in whose getItem(key) is the library text — the
+ * big store's record when localStorage holds the pointer, else the plain
+ * value. `spilled` says which; `error` is set when the pointer's record could
+ * not be read (getItem then returns the pointer, which decodes to an error,
+ * so the app blocks saving rather than replacing the library).
+ */
+export async function readSpilledLibrary(storage, key, { store = indexedDbSpillStore() } = {}) {
+  let raw = null;
+  try {
+    raw = storage.getItem(key);
+  } catch {
+    return { storage, spilled: false };
+  }
+  if (!isSpilledLibrary(raw)) return { storage, spilled: false };
+  try {
+    const text = await store.get();
+    if (typeof text !== "string" || !text) throw new Error("큰 보관함에 책장이 없어요.");
+    return {
+      spilled: true,
+      storage: { getItem: (k) => (k === key ? text : storage.getItem(k)) },
+    };
+  } catch (error) {
+    return { storage, spilled: true, error: String(error?.message || error) };
+  }
+}
+/** Recovery copies and comparisons need the library text, never the pointer. */
+export async function libraryTextOf(raw, { store = indexedDbSpillStore() } = {}) {
+  if (!isSpilledLibrary(raw)) return raw;
+  const text = await store.get();
+  if (typeof text !== "string" || !text) throw new Error("큰 보관함에 책장이 없어요.");
+  return text;
 }
