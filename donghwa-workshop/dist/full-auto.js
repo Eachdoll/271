@@ -100,6 +100,42 @@ export function jobPictureTotal(job, fallback = job?.input?.pageCount) {
     ? `${pages}장`
     : `펼침 ${Number(job.input.pageCount) / 2}개 · ${job.input.pageCount}쪽`;
 }
+/**
+ * Delete an in-progress story the parent no longer wants (2026-10-20): the
+ * job and its unfinished working draft. A running job is refused (stop it
+ * first). A book already saved to the bookshelf, the characters and places in
+ * the drawers and the paid usage history of saved books are never touched;
+ * the draft stays when a saved book still points at it.
+ */
+export function deleteFullAutoJob(state, jobId) {
+  const job = state?.fullAutoJobs?.[jobId];
+  if (!job) throw Error("지울 이야기를 찾지 못했어요.");
+  if (job.status === "running")
+    throw Error("만드는 중인 이야기는 먼저 중지한 뒤 지울 수 있어요.");
+  const savedBook = (state.books || []).some(
+    (book) =>
+      book?.fullAutoRunId === jobId ||
+      (job.storyDraftId && book?.storyDraftId === job.storyDraftId),
+  );
+  const draft = state.storyDrafts?.[job.storyDraftId];
+  let draftRemoved = false;
+  if (
+    draft &&
+    !savedBook &&
+    draft.stage !== "final" &&
+    (!draft.fullAutoRunId || draft.fullAutoRunId === jobId)
+  ) {
+    delete state.storyDrafts[job.storyDraftId];
+    draftRemoved = true;
+  }
+  delete state.fullAutoJobs[jobId];
+  return {
+    jobId,
+    title: job.book?.title || job.input?.topic || job.wizard?.topic || "이야기",
+    draftRemoved,
+    keptSavedBook: savedBook,
+  };
+}
 /** The FULL AUTO job that built this book, if it still exists. Read-only lookup. */
 export function fullAutoJobForBook(state, book) {
   const id = book?.fullAutoRunId;
