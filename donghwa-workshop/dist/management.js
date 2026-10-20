@@ -17,6 +17,7 @@ const CHARACTER_FIELDS = new Set([
   "nameEn",
   "role",
   "kind",
+  "gender",
   "age",
   "color",
   "hairColor",
@@ -179,6 +180,7 @@ export function activeBackgrounds(state) {
 export const CHARACTER_APPEARANCE_FIELDS = Object.freeze(
   new Set([
     "kind",
+    "gender",
     "age",
     "color",
     "hairColor",
@@ -482,6 +484,10 @@ export function configureManagementUI(api) {
         ["adult", "어른"],
         ["dinosaur", "공룡"],
         ["rabbit", "토끼"],
+      ])}${select("gender", "성별 · 그림에 그대로 유지", character.gender || "", [
+        ["", "표시 안 함"],
+        ["남자아이", "남자아이"],
+        ["여자아이", "여자아이"],
       ])}${field("age", "나이", character.age || 4, { type: "number", required: true })}${field("color", "옷 · 몸 색상", character.color || "#efc954", { type: "color" })}${field("hairColor", "머리 색상", character.hairColor || "#3c3027", { type: "color" })}${field("skinColor", "피부 색상", character.skinColor || "#f1cfad", { type: "color" })}<div class="field field-wide"><label for="management-description">외모 · 옷 · 고정 특징</label><textarea id="management-description" name="description" maxlength="3000">${escape(character.description)}</textarea></div>${field("traits", "성격 · 좋아하는 것", Array.isArray(character.traits) ? character.traits.join(", ") : character.traits, { wide: true, max: 1000 })}${field("catchphrase", "말버릇 · 자주 하는 말", character.catchphrase || character.speechHabit, { wide: true, max: 500 })}${field("relationships", "친구·가족과의 관계", typeof character.relationships === "object" ? JSON.stringify(character.relationships) : character.relationships, { wide: true, max: 1000 })}</div><div class="modal-actions">${button("취소", "cancel-management")}<button type="submit" class="btn btn-primary">수정 내용 저장</button></div></form>`,
     );
     pending = null;

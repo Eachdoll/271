@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v50";
+const CACHE = "donghwa-shell-v51";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -51,6 +51,7 @@ const FILES = [
   "./story-generation/richness.js",
   "./story-generation/staging.js",
   "./image-generation/scene-prompt.js",
+  "./image-generation/identity.js",
   "./image-generation/image-diversity.js",
   "./story-generation/vocab/sensory_en.json",
   "./story-generation/vocab/sensory_ko.json",

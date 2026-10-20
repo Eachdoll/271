@@ -6,6 +6,7 @@ import { plotContextForPage } from "../story-generation/coherence.js";
 import { layoutOf } from "../book-layout.js";
 import { pictureCarriesPage } from "../page-rhythm.js";
 import { craftPictureRules } from "../story-generation/craft-rules.js";
+import { genderWord } from "./identity.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -109,7 +110,7 @@ export function buildScenePrompt({
     .filter(Boolean)
     .map(
       (sheet) =>
-        `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
+        `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
     )
     .join("; ");
   const currentNarrative = {

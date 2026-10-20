@@ -1,3 +1,4 @@
+import { genderWord } from "./identity.js";
 import { buildScenePrompt, sceneBriefText } from "./scene-prompt.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
@@ -752,6 +753,8 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
     character.name,
     character.nameEn,
     character.kind,
+    // 2026-10-20: the gender is said, so the clothes never decide the child.
+    genderWord(character) ? `a ${genderWord(character)}` : "",
     character.description,
     character.appearance,
     character.clothes,
@@ -842,7 +845,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   const cast = sheets
     .map(
       (sheet, index) =>
-        `${index + 1}: ${sheet.characterSnapshot?.name || sheet.characterSnapshot?.nameEn || sheet.characterId} (${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original storybook character"})`,
+        `${index + 1}: ${sheet.characterSnapshot?.name || sheet.characterSnapshot?.nameEn || sheet.characterId} (${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original storybook character"})`,
     )
     .join("; ");
   const scene =

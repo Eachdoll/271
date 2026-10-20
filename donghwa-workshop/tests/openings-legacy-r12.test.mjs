@@ -704,7 +704,10 @@ const PINS = {
   // Page rhythm: the new demo jobs' frozen specs carry `rhythm`. 23c3519: 6f236d08…cca8.
   // Craft rules: the new demo jobs' input carries craftPolicy. 25e3760: 0e922d9f…ec0f.
   fullAutoDemo: '063dc4a030d9eee0310a21f95c71c4e479e9b2d896983125d695d13f425f567c',
-  scene: '73b3552a1245eb29e27d8d527c0c83ad256231e07eabbdb36fe0be2031493a91',
+  // 2026-10-20 identity line: every scene request names a character's gender
+  // when the record has one (the seed protagonist does), so an outfit never
+  // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
+  scene: '34ee02d12bfcaf889a73d076089ff1e8194f9315581f10f06e6159dbeec85394',
   print: '637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654',
   // Re-pinned at the merge: R13 (6ccc895) renames the ③ text-engine options
   // ('GPT · OpenAI') and adds the ③ model selects (generate-K1/K2-en only;

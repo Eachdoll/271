@@ -21,6 +21,7 @@ import {
   deleteImageAsset,
 } from "./image-generation/assets.js";
 import { translateWardrobeWithGoogle } from "./wardrobe-translation.js";
+import { identityLine } from "./image-generation/identity.js";
 
 const esc = (value) =>
   String(value ?? "").replace(
@@ -414,7 +415,7 @@ export function createVariantGenerationRequest(
   const preset = getStylePreset(world.stylePresetId);
   return {
     forbiddenWordCheck,
-    prompt: `Create one ${view === "front" ? "front-facing head-and-shoulders portrait" : "front-facing full-body view"} of the same original character as the FIRST reference image. Identical face, age, body proportions and recognizable identity. Change only ${variant.type === "hair" ? "the requested hair styling" : variant.type === "accessory" ? "the requested accessory" : "the requested clothing"}: ${variant.description}. Do not copy another character from the style images. Keep all unrequested facial, hair and clothing details unchanged. The FIRST reference is identity; all remaining images define style. A clean neutral background, one character only, no labels, no text, no logos.`,
+    prompt: `Create one ${view === "front" ? "front-facing head-and-shoulders portrait" : "front-facing full-body view"} of the same original character as the FIRST reference image. Identical face, age, body proportions and recognizable identity.${identityLine(character) ? ` ${identityLine(character)}` : ""} Change only ${variant.type === "hair" ? "the requested hair styling" : variant.type === "accessory" ? "the requested accessory" : "the requested clothing"}: ${variant.description}. Do not copy another character from the style images. Keep all unrequested facial, hair and clothing details unchanged. The FIRST reference is identity; all remaining images define style. A clean neutral background, one character only, no labels, no text, no logos.`,
     stylePreset: clone(preset),
     referenceImages: [
       {

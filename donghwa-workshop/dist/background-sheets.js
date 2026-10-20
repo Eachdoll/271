@@ -225,7 +225,17 @@ export function configureBackgroundSheets(context) {
         return;
       }
       const s = flow;
-      if (!s || !current(s) || s.busy) return;
+      // 2026-10-20: never a dead button: a stale screen closes with a word,
+      // a click during a render says so.
+      if (!s || !current(s)) {
+        api.closeModal();
+        api.toast("배경 시트 창이 닫혔어요. 다시 열어 주세요.");
+        return;
+      }
+      if (s.busy) {
+        api.toast("배경 그림을 만드는 중이에요. 잠시만 기다려 주세요.");
+        return;
+      }
       if (action === "start") {
         await generate(s);
         return;

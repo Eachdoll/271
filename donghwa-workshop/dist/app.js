@@ -2082,6 +2082,7 @@ function openStudio() {
     nameEn: "",
     role: "주인공",
     kind: "child",
+    gender: "",
     age: 4,
     color: "#efc954",
     hairColor: "#3c3027",
@@ -2115,6 +2116,15 @@ function showStudioForm() {
         ["rabbit", "토끼"],
       ],
       studio.kind,
+    )}${selectField(
+      "c-gender",
+      "성별 · 그림에 그대로 유지",
+      [
+        ["", "표시 안 함"],
+        ["남자아이", "남자아이"],
+        ["여자아이", "여자아이"],
+      ],
+      studio.gender || "",
     )}<div class="field"><label for="c-age">나이</label><input id="c-age" type="number" min="1" max="99" value="${studio.age}" required></div><div class="field"><label for="c-color">옷 · 몸 색상</label><input id="c-color" type="color" value="${studio.color}" style="height:45px"></div><div class="field"><label for="c-hair">머리 색상</label><input id="c-hair" type="color" value="${studio.hairColor}" style="height:45px"></div><div class="field"><label for="c-skin">피부 색상</label><input id="c-skin" type="color" value="${studio.skinColor}" style="height:45px"></div><div class="field field-wide"><label for="c-description">외모 · 늘 입는 옷 · 고정 특징</label><textarea id="c-description" maxlength="200">${esc(studio.description)}</textarea><small>샘플 캐릭터에서 반영되는 모습은 종류와 색상입니다. 세부 외모는 시트 메모로 저장돼요.</small></div><div class="field field-wide"><label for="c-traits">성격 · 좋아하는 것</label><input id="c-traits" maxlength="120" value="${esc(studio.traits)}"></div><div class="field field-wide"><label for="c-catchphrase">말버릇 · 자주 하는 말</label><input id="c-catchphrase" maxlength="500" value="${esc(studio.catchphrase)}" placeholder="어디서 나는 소리지?"></div><div class="field field-wide"><label for="c-relationships">친구·가족과의 관계</label><input id="c-relationships" maxlength="1000" value="${esc(studio.relationships)}" placeholder="초록이와 함께 소풍하는 친구"></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${getActiveWorld(state).imageEngine === "sample" ? "무료 샘플 모습 살펴보기" : "선택한 화풍으로 시트 생성"}${icon("arrow")}</button></div></form>`,
   );
 }
@@ -3677,6 +3687,7 @@ document.addEventListener("submit", async (e) => {
       ["nameEn", "c-nameEn"],
       ["role", "c-role"],
       ["kind", "c-kind"],
+      ["gender", "c-gender"],
       ["age", "c-age"],
       ["color", "c-color"],
       ["hairColor", "c-hair"],
