@@ -79,6 +79,8 @@ const norm = (value) =>
     .trim()
     .toLowerCase();
 const rows = (value) => (Array.isArray(value) ? value : []);
+/** Protagonist + companions (picked or planned) in one story. */
+export const MAX_CAST = 7;
 export function inspectAutoMaterialPlan(
   plan,
   {
@@ -109,8 +111,9 @@ export function inspectAutoMaterialPlan(
   const charIds = [
     ...new Set([...pinnedCharacterIds, ...rows(plan.reuseCharacterIds)]),
   ];
-  if (charIds.length + rows(plan.newCharacters).length > 5)
-    errors.push("주인공을 포함해 등장인물은 5명 이하로 골라 주세요.");
+  // 2026-10-20 variety: up to seven (the parent picks six companions at most).
+  if (charIds.length + rows(plan.newCharacters).length > MAX_CAST)
+    errors.push(`주인공을 포함해 등장인물은 ${MAX_CAST}명 이하로 골라 주세요.`);
   if (
     rows(plan.newCharacters).length > 2 ||
     rows(plan.newBackgrounds).length > 3

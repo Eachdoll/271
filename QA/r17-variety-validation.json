@@ -1,0 +1,45 @@
+{
+  "source": "https://github.com/Eachdoll/271",
+  "branch": "claude/cross-owner-repo-constraint-j20lhz",
+  "codeCommit": "c0be4b1",
+  "documentCommit": "54ede6d",
+  "baseline": "18fa72287a5d95a78dac36f2745e1117eab6959a",
+  "files": {
+    "donghwa-workshop/CLAUDE.md": "9dbf87e6c848ec8a8357f10c7bb3ee6dca5903962ef72e30c3243af9b61e5d87",
+    "donghwa-workshop/CODEX_WORK_ORDER_R17_2026-10-20.md": "b633ea5db88a1d4ceee7bdabf178f4d7f06f680a3251888a1d1c693f140bd14b",
+    "donghwa-workshop/dist/app.js": "8350edf998e22cdd70e0300f9fb96f3b66d5efbc9cd147c285f61e0d5629100f",
+    "donghwa-workshop/dist/full-auto-ui.js": "64b8c9607383ea30126450d4a51f6ea6695ebf97691a7309839fcb3b5868222e",
+    "donghwa-workshop/dist/simple-create.js": "e9ea84d37ef7a3b01c967e2c48780591f5a032e7eab532af521d10d925058c05",
+    "donghwa-workshop/dist/story-generation/auto-materials.js": "3c9c4ef456e7615b88beae5f57e6e5a8c29c7146a5fa10a75c7246e230cc3f96",
+    "donghwa-workshop/dist/story-generation/craft-rules.js": "242441a570d5a74b7360febc54ab530c6f929317ad87663e98a30563a980aaec",
+    "donghwa-workshop/dist/story-generation/pipeline.js": "b91404b082dcd87c431ab96a66f402b4336eb890b9e7ef78f923327897a07814",
+    "donghwa-workshop/tests/material-variety.test.mjs": "c5d6d1d0a024575be112f90a87b8c5f3614b4360f3ec821233d1536c03cbb655",
+    "donghwa-workshop/tests/simple-create-actions.test.mjs": "ef92bd77d44845858fa2262647d889e58310fc28ebc48ab8fb1f9e5a210968f7"
+  },
+  "documentOnlyDifference": "removed blank final line for git diff --check",
+  "scope": "commit and source push only; no deployment",
+  "build": "passed",
+  "appTests": 873,
+  "qualityTests": 79,
+  "failures": 0,
+  "skipped": 0,
+  "qualityCopies": "identical",
+  "runtimeClient": "identical",
+  "ux": {
+    "proSameAsTable": true,
+    "errors": [],
+    "paidRequests": 0,
+    "maxStepButtons": 10
+  },
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "simpleSmoke": {
+    "widths": [
+      1280,
+      390
+    ],
+    "result": "passed",
+    "errors": 0,
+    "paidRequests": 0,
+    "imageBugSkipped": false
+  }
+}

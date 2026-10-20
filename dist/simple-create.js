@@ -244,8 +244,12 @@ const TEXT_ENGINE_NAMES = {
 };
 const HELD = ["text-review", "pages-ready", "review"];
 const RESUMABLE = ["ready", "running", "paused", "failed", ...HELD];
-const MAX_FRIENDS = 2,
-  MAX_PLACES = 4,
+// 2026-10-20 variety: the parent may pick six companions and four places
+// (plus the home); the topic still preselects only two of each.
+const MAX_FRIENDS = 6,
+  MAX_PLACES = 5,
+  PRESELECT_FRIENDS = 2,
+  PRESELECT_PLACES = 2,
   MAX_RESUME_CARDS = 2,
   /** R9-B2 rule 3: at most 12 visible buttons per simple step. */
   MAX_STEP_BUTTONS = 12;
@@ -406,6 +410,12 @@ export function recommendFriends(topic, characters = []) {
     .map((row) => row.id);
 }
 /** Fill the picks once per topic: protagonist + recommended friends, one home + 2 recommended places. */
+export const SIMPLE_MATERIAL_LIMITS = Object.freeze({
+  friends: MAX_FRIENDS,
+  places: MAX_PLACES,
+  preselectFriends: PRESELECT_FRIENDS,
+  preselectPlaces: PRESELECT_PLACES,
+});
 export function preselectMaterials(state, wizard) {
   const topic = String(wizard.topic || "").trim();
   if (wizard.simplePicksTouched || wizard.simplePickedFor === topic)
@@ -418,9 +428,9 @@ export function preselectMaterials(state, wizard) {
     friends = recommendFriends(
       topic,
       characters.filter((c) => c.id !== protagonist),
-    ).slice(0, MAX_FRIENDS),
+    ).slice(0, PRESELECT_FRIENDS),
     home = backgrounds.find(isHomeBackground),
-    places = recommendPlaces(topic, backgrounds).slice(0, 2);
+    places = recommendPlaces(topic, backgrounds).slice(0, PRESELECT_PLACES);
   wizard.characterIds = [protagonist, ...friends].filter(Boolean);
   wizard.backgroundIds = [home?.id, ...places].filter(Boolean);
   wizard.simplePickedFor = topic;
@@ -948,7 +958,7 @@ function renderMaterialsStep(ctx, w) {
     ),
     placeRec = new Set(recommendPlaces(w.topic, backgrounds)),
     portrait = ctx.materialPortrait || (() => "");
-  return `<section class="panel simple-panel"><h3>누구와 어디로 갈까요?</h3><p class="section-sub">주인공은 정해져 있어요. 친구는 2명까지, 장소는 집과 다른 장소 2곳을 골라요.</p><p class="form-label">함께할 친구 <span class="count">최대 ${MAX_FRIENDS}명</span></p><div class="selection-grid simple-cards">${characters
+  return `<section class="panel simple-panel"><h3>누구와 어디로 갈까요?</h3><p class="section-sub">주인공은 정해져 있어요. 친구는 ${MAX_FRIENDS}명까지, 장소는 집과 다른 장소 2~${MAX_PLACES - 1}곳을 골라요. 고른 친구와 장소는 모두 이야기에 나와요(친구마다 두 장면 이상).</p><p class="form-label">함께할 친구 <span class="count">최대 ${MAX_FRIENDS}명</span></p><div class="selection-grid simple-cards">${characters
     .map((c) => {
       const lead = c.id === protagonist,
         selected = w.characterIds.includes(c.id),
@@ -957,7 +967,7 @@ function renderMaterialsStep(ctx, w) {
     })
     .join(
       "",
-    )}</div><p class="form-label">이야기가 펼쳐질 장소 <span class="count">집 1곳 + 다른 장소 2곳</span></p><div class="selection-grid simple-cards">${backgrounds
+    )}</div><p class="form-label">이야기가 펼쳐질 장소 <span class="count">집 1곳 + 다른 장소 2~${MAX_PLACES - 1}곳</span></p><div class="selection-grid simple-cards">${backgrounds
     .map((b) => {
       const selected = w.backgroundIds.includes(b.id),
         home = isHomeBackground(b),
@@ -966,7 +976,7 @@ function renderMaterialsStep(ctx, w) {
     })
     .join(
       "",
-    )}</div><label class="audio-cache-check simple-allow"><input type="checkbox" id="simple-allow-new" ${w.allowNew !== false ? "checked" : ""}> 부족한 재료 자동 추가</label><p class="small-label">켜 두면 주제에 필요한 친구·장소를 자동으로 더해요(새 조연 최대 2명, 새 장소 최대 3곳). 끄면 고른 재료만 써요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">시트·옷장·사진 재료는 ‘이야기 재료’ 메뉴에 있어요.</span>${sbtn("다음", "next", "green")}</div>`;
+    )}</div><label class="audio-cache-check simple-allow"><input type="checkbox" id="simple-allow-new" ${w.allowNew !== false ? "checked" : ""}> 부족한 재료 자동 추가</label><p class="small-label">켜 두면 주제에 어울리는 친구·장소가 서랍에 없을 때 자동으로 더해요(새 조연 최대 2명, 새 장소 최대 3곳). 더한 재료는 ‘이야기 재료’ 서랍에 저장돼 다음 이야기에도 쓸 수 있어요. 끄면 고른 재료만 써요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">시트·옷장·사진 재료는 ‘이야기 재료’ 메뉴에 있어요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 function keyLabel(engine, config = {}) {
   if (engine === "local" || engine === "sample") return "키 필요 없음";

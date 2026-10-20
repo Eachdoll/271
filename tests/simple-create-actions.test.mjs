@@ -1691,7 +1691,8 @@ test('R11 이 주제로 새로 만들기 from ② stays on ②, keeps a forced (
     assert.equal(wizard.simpleJobId, undefined);
     assert.equal(wizard.simpleStep, 2, 'a fork from ② lands on ②');
     assert.equal(wizard.simpleForced, true, 'a forced story stays on the simple screen');
-    assert.deepEqual(wizard.characterIds, ['yuha', 'greenie', 'toto'], 'the run\'s own new friend and a deleted one are not carried over; 1 + 2 friends at most');
+    // 2026-10-20 variety: up to six friends carry over (was two).
+    assert.deepEqual(wizard.characterIds, ['yuha', 'greenie', 'toto', 'mom'], 'the run\'s own new friend and a deleted one are not carried over; the rest stay (1 + 6 friends at most)');
     assert.deepEqual(wizard.backgroundIds, ['home', 'forest'], 'the run\'s own new place is not carried over');
   } finally {
     state.characters.splice(state.characters.indexOf(friend), 1);
