@@ -811,6 +811,34 @@ function repairTargets(issues, outline, prose, pagination) {
     }),
   );
 }
+/**
+ * 2026-10-20: the review after its repair budget, kept as notes. Every error
+ * becomes a warning (the issue objects keep the reviewer's seven fields so
+ * isCoherenceCurrent still validates them), the report passes and records how
+ * many it settled, and stays bound to the reviewed text: an edit buys a fresh
+ * review as before.
+ */
+export function settleCoherenceReport(report) {
+  const issues = (report?.issues || []).map((issue) =>
+    issue.severity === "error" ? { ...issue, severity: "warning" } : issue,
+  );
+  return {
+    ...report,
+    passed: true,
+    issues,
+    unresolved: (report?.issues || []).filter((i) => i.severity === "error")
+      .length,
+  };
+}
+/** Notes a settled review left on a page (its pageNo, or its beat when the issue names no page). */
+export function coherenceNotesForPage(report, page) {
+  if (!report?.unresolved || !page) return [];
+  return (report.issues || []).filter((issue) =>
+    issue.pageNo != null
+      ? issue.pageNo === page.pageNo
+      : issue.beatIndex === page.beatIndex,
+  );
+}
 /** Whole-text review is content-bound; only evidenced failing beats/pages may be repaired. */
 export async function reviewStoryCoherence(
   outline,
@@ -893,7 +921,7 @@ export async function reviewStoryCoherence(
           "coherence",
           input,
           {
-            rules: coherenceReviewRules(stage),
+            rules: coherenceReviewRules(stage, input),
             data: {
               approvedOutline: outline,
               approvedOriginalProse: nextProse,
@@ -938,13 +966,43 @@ export async function reviewStoryCoherence(
             repairAttempts: attempts,
           },
         };
-      if (options.repair === false || attempts >= 2)
+      if (options.repair === false || attempts >= 2) {
+        // 2026-10-20: a caller that cannot put the parent in front of the text
+        // (FULL AUTO, the ④/editor page tools) keeps what the reviewer still
+        // flags as notes on the book instead of stopping it: the report stays
+        // bound to this exact text, the parent sees each note on its page.
+        if (options.acceptUnresolvedCoherence === true) {
+          const unresolved = report.issues.filter(
+            (i) => i.severity === "error",
+          ).length;
+          report = settleCoherenceReport(report);
+          await save();
+          notify(
+            options,
+            "coherence",
+            "unresolved",
+            `자동 수정 뒤에도 남은 사건 연결 지적 ${unresolved}곳은 참고로 남기고 글을 완성해요.`,
+            { unresolved },
+          );
+          return {
+            data: { prose: nextProse, pagination: nextPages },
+            usage: mergeStoryUsage(requests),
+            meta: {
+              stage: "coherence",
+              requests: requestCount(requests),
+              coherence: report,
+              repairAttempts: attempts,
+              unresolved,
+            },
+          };
+        }
         throw new StoryValidationError("coherence", [
           "이야기 사건의 모순이 남아 그림 생성을 멈췄어요. 표시된 비트·문장을 수정한 뒤 다시 검사해 주세요.",
           ...report.issues
             .filter((i) => i.severity === "error")
             .map((i) => i.suggestion),
         ]);
+      }
       const targets = repairTargets(
         report.issues,
         outline,
@@ -3057,19 +3115,52 @@ async function finishPaginationCoherence(
       !options.skipChildGate &&
       !demo(options)
     ) {
-      const child = await inspectChildStory(
-        outline,
-        prose,
-        result.data,
-        input,
-        options,
-        {
-          engineFor,
-          rewriteStoryPage,
-          rewriteParagraph,
-          repaginate: paginateStory,
-        },
-      );
+      let child;
+      try {
+        child = await inspectChildStory(
+          outline,
+          prose,
+          result.data,
+          input,
+          options,
+          {
+            engineFor,
+            rewriteStoryPage,
+            rewriteParagraph,
+            repaginate: paginateStory,
+          },
+        );
+      } catch (error) {
+        // 2026-10-20: the simulator is advisory. Answers that could not be
+        // read twice skip it with a note on the book; they never stop it.
+        if (!error?.childGateUnreadable) throw error;
+        const requests = Number(error.meta?.requests) || 0;
+        child = {
+          data: {
+            prose: error.prose || prose,
+            pagination: error.pagination || result.data,
+          },
+          usage: error.usage || {},
+          meta: {
+            stage: "childGate",
+            requests,
+            childGate: {
+              skipped: true,
+              reason: "unreadable",
+              check: error.childGateUnreadable,
+              message: String(error.message || ""),
+              requests,
+            },
+            childGateCheckpoint: error.childGateCheckpoint || null,
+          },
+        };
+        notify(
+          options,
+          "childGate",
+          "unreadable",
+          "아이 시뮬레이터의 답을 두 번 읽지 못해 이번에는 그 참고 없이 넘어가요.",
+        );
+      }
       prose = child.data.prose;
       result = {
         data: child.data.pagination,
@@ -3107,19 +3198,11 @@ async function finishPaginationCoherence(
               })
           : undefined,
       });
-    let reviewed;
-    try {
-      reviewed = await review(result);
-    } catch (error) {
-      // Editor round: the editor must never be why a book stops. When the page
-      // review still fails after its repairs on a revised book, the editor's
-      // pages are put back and the unrevised book is reviewed once more.
-      if (
-        !unrevised ||
-        error?.name !== "StoryValidationError" ||
-        error.stage !== "coherence"
-      )
-        throw error;
+    // Editor round: the editor must never be why a book stops or keeps a
+    // note. When the page review still fails (or settles with notes) after
+    // its repairs on a revised book, the editor's pages are put back and the
+    // unrevised book is reviewed once more.
+    const rollback = async (usage, requests) => {
       const revision = {
         ...result.meta.revision,
         rolledBack: true,
@@ -3128,15 +3211,15 @@ async function finishPaginationCoherence(
       };
       result = {
         data: unrevised.data,
-        usage: mergeStoryUsage([result, { usage: error.usage || {} }]),
+        usage: mergeStoryUsage([result, { usage: usage || {} }]),
         meta: {
           ...unrevised.meta,
           revision,
           requests:
-            (Number(result.meta?.requests) || 0) +
-            (Number(error.meta?.requests) || 0),
+            (Number(result.meta?.requests) || 0) + (Number(requests) || 0),
         },
       };
+      unrevised = null;
       if (options.onCheckpoint)
         await options.onCheckpoint({
           stage: "revision",
@@ -3158,6 +3241,22 @@ async function finishPaginationCoherence(
         "rollback",
         "다듬은 글이 사건 검사와 맞지 않아 원래 글로 다시 검사하고 있어요.",
       );
+    };
+    let reviewed;
+    try {
+      reviewed = await review(result);
+    } catch (error) {
+      if (
+        !unrevised ||
+        error?.name !== "StoryValidationError" ||
+        error.stage !== "coherence"
+      )
+        throw error;
+      await rollback(error.usage, error.meta?.requests);
+      reviewed = await review(result);
+    }
+    if (reviewed.meta?.unresolved && unrevised) {
+      await rollback(reviewed.usage, reviewed.meta.requests);
       reviewed = await review(result);
     }
     const next = reviewed.data.pagination;

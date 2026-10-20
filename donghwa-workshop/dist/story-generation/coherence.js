@@ -243,7 +243,20 @@ function reviewSourceTexts(issue, { outline, prose, pagination }) {
 
 /** Instructions deliberately separate semantic contradictions from style or
  * reading-level preferences so an invented concern never triggers a repair. */
-export function coherenceReviewRules(stage) {
+/**
+ * 2026-10-20 (craft-policy drafts only): the English of a beginning reader
+ * (E0/E1, one or two short sentences) may leave out a setup detail the
+ * Korean carries; the reviewer reports that as a warning, never an error.
+ * Legacy drafts send the previous text byte for byte.
+ */
+function readingLevelAllowance(input) {
+  if (!input?.craftPolicy || typeof input.craftPolicy !== "object") return "";
+  const level = input.specs?.en?.id;
+  if (level !== "E0" && level !== "E1") return "";
+  return `
+READING-LEVEL ALLOWANCE: The English is written for a beginning reader (${level}: one or two short sentences per page). It may omit a setup detail that the Korean carries (an object picked up, a second set of tracks, a sound, a count) as long as it states no different event, cause, or outcome; report such an omission as severity:warning, never error. A detail that only the picture (scene/staging) shows is not a contradiction with narration that leaves it out. Do not ask the English to restore Korean details.`;
+}
+export function coherenceReviewRules(stage, input = null) {
   const target =
     stage === "pages"
       ? "the page texts AND their scene/staging data"
@@ -252,7 +265,7 @@ export function coherenceReviewRules(stage) {
 Review the complete causal chain, not isolated keywords. An earlier result must make the next attempt or decision understandable; the protagonist's established goal must remain recognizable and resolve through an earned choice. Compare stateBefore/stateAfter and previously narrated events: character location, prop owner/location/condition, knowledge and unresolved promises must not contradict each other. Approved setupIds/payoffIds must connect; a resolution cannot depend on a device, power, character, doorway or structure introduced only at the solution.
 Korean and English are independently written for their reading levels, but MUST describe the same event facts, goals, outcomes and state changes. Different wording, sentence counts, omitted decorative sensory wording, and allowed vocabulary simplification are not plot errors. A page may depict one moment within a beat; its beat-scoped context does NOT require every page to depict all events or the beat's final state. A scene/staging description must match the event actually narrated on that page and the approved location geometry.
 Report ONLY a concrete contradiction or causally missing indispensable event that is evidenced by the supplied text. Do not invent concerns, alternate plot preferences, symbolism, or requirements not present in the approved contract. Do not fail for vocabulary, style, reading level, ordinary inferred movement, or a harmless supporting detail that changes no event or established state. Use severity:error only for an actual contradiction, a missing necessary causal link, an unsupported solution, a missing approved payoff, or an unresolved stated goal; optional clarity suggestions are warnings.
-Each issue must identify an existing beatIndex; use the existing pageNo for a page-specific issue and null otherwise. evidence MUST be one EXACT contiguous quotation without added commentary or invented text. For a page issue, copy evidence ONLY from that exact page's affected-language narration; text_scene_conflict may instead quote that page's scene/staging. For a whole-beat issue, quote the affected-language paragraphs labeled with that beat. A whole-beat setup_payoff or goal_drift omission may instead quote that beat's approved contract, required goal, or resolutionCriterion. Never quote another page, another beat, or the unaffected language to target a repair. Explain the contradiction and the smallest event-preserving correction in suggestion. Use the language of the affected story (ko, en, both). Preserve valid events and unaffected language. passed is false if and only if at least one error exists. If there is no evidenced problem, return {"passed":true,"issues":[]}.`;
+Each issue must identify an existing beatIndex; use the existing pageNo for a page-specific issue and null otherwise. evidence MUST be one EXACT contiguous quotation without added commentary or invented text. For a page issue, copy evidence ONLY from that exact page's affected-language narration; text_scene_conflict may instead quote that page's scene/staging. For a whole-beat issue, quote the affected-language paragraphs labeled with that beat. A whole-beat setup_payoff or goal_drift omission may instead quote that beat's approved contract, required goal, or resolutionCriterion. Never quote another page, another beat, or the unaffected language to target a repair. Explain the contradiction and the smallest event-preserving correction in suggestion. Use the language of the affected story (ko, en, both). Preserve valid events and unaffected language. passed is false if and only if at least one error exists. If there is no evidenced problem, return {"passed":true,"issues":[]}.${readingLevelAllowance(input)}`;
 }
 
 function canonical(value) {

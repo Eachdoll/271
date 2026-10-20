@@ -33,12 +33,25 @@ test('disabled child simulator never resolves an engine; valid and cached checks
   assert.deepEqual(before.prose,result.data.prose);assert.deepEqual(before.pagination,result.data.pagination);
 });
 
-test('malformed simulator output cannot exploit package defaults into a false pass and preserves both parallel-call usage',async()=>{
-  for(const settings of [{curiosityResults:[{}]},{retellResults:[{}]},{curiosityResults:[{...curiosity(),pages:[]}]},{retellResults:[{...retell(),coveredBeats:[1,3]}]}]){
-    const engine=childEngine(settings);
-    await assert.rejects(child(fixture(),{engine}),error=>error.usage?.input===20&&error.meta.requests===2&&/검사 결과/.test(error.message));
-    assert.equal(engine.calls.length,2);
+// 2026-10-20: an answer that cannot be read is asked for once more (the count is in the journal, so a
+// resumed run never pays a third time), and a self-inconsistent answer is read as the app recomputes it.
+test('malformed simulator output is asked for once more, then marked unreadable with its usage; it never becomes a false pass',async()=>{
+  for(const [settings,check] of [[{curiosityResults:[{}]},'curiosity'],[{retellResults:[{}]},'retell'],[{curiosityResults:[{...curiosity(),pages:[]}]},'curiosity']]){
+    const engine=childEngine(settings);let saved;
+    await assert.rejects(child(fixture(),{engine,onCheckpoint:value=>saved=clone(value)}),error=>error.childGateUnreadable===check&&error.usage?.input===30&&error.meta.requests===3&&/검사 결과/.test(error.message));
+    assert.equal(engine.calls.length,3);
+    assert.equal(saved.childGateCheckpoint.rounds['0'].unreadable[check],2);
+    const resumed=childEngine(settings);
+    await assert.rejects(child(fixture(),{engine:resumed,childGateCheckpoint:saved.childGateCheckpoint}),error=>error.childGateUnreadable===check);
+    assert.equal(resumed.calls.length,0,'the sibling answer is cached and the unreadable check is refused before any call');
   }
+  // missingCore says nothing is missing while the turn beat is not covered: the app's own recomputation wins.
+  const engine=childEngine({retellResults:[{...retell(),coveredBeats:[1,3]}]}),result=await child(fixture(),{engine});
+  assert.equal(engine.calls.length,2);assert.equal(result.meta.childGate.pass,false);assert.deepEqual(result.meta.childGate.retell.missingCore,['turn']);assert.equal(result.meta.childGate.turnRepairUnavailable,true);
+  // Numeric strings, an extra key, a four-line retell, an empty reason and an unknown page are read, not refused.
+  const loose=childEngine({curiosityResults:[{pages:[...curiosity().pages.map(row=>({...row,score:String(row.score),why:row.pageNo===2?'':row.why})),{pageNo:9,score:2,childQuestion:null,why:'없는 쪽'}],dropPages:[],overall:'8',extra:true}],retellResults:[{...retell(),retell:[...retell().retell,'네 번째 문장'],coveredBeats:['1','2',3,7],coherence:'2'}]});
+  const read=await child(fixture(),{engine:loose});
+  assert.equal(loose.calls.length,2);assert.equal(read.meta.childGate.pass,true);assert.equal(read.meta.childGate.retell.retell.length,3);assert.deepEqual(read.meta.childGate.retell.coveredBeats,[1,2,3]);assert.equal(read.meta.childGate.curiosity.pages.length,3);
 });
 
 test('only zero-score nonfinal endings change, other language and scene remain exact, and the gate reruns once',async()=>{

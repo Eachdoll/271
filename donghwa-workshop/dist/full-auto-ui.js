@@ -13,6 +13,10 @@ import {
   jobPictureTotal,
 } from "./full-auto.js";
 import {
+  openStopReport,
+  stopReportAvailable,
+} from "./story-generation/stop-report.js";
+import {
   isPageOperationBusy,
   isPageImageStale,
   pagesNeedingImages,
@@ -207,7 +211,7 @@ function renderSimpleJobs(state) {
   return `<section class="panel full-auto-jobs simple-jobs" id="full-auto-jobs" data-simple="true"><h3>제작 중인 이야기</h3><p class="section-sub">이어서 만들면 멈춘 단계에서 열려요. 여는 것만으로는 아무것도 새로 만들지 않아요.</p><div class="story-drafts">${jobs
     .map(
       (job) =>
-        `<article class="story-draft-card simple-job-card" data-auto-job="${esc(job.id)}"><span class="role-tag">${esc(simpleJobLabel(job))}</span><strong>${esc(job.book?.title || job.input?.topic || job.wizard?.topic || "이야기")}</strong>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${button("이어서 만들기", "simple-open", job.id, "green")}${job.status === "running" ? button("중지", "pause", job.id) : button("지우기", "delete", job.id, "plain")}</div></article>`,
+        `<article class="story-draft-card simple-job-card" data-auto-job="${esc(job.id)}"><span class="role-tag">${esc(simpleJobLabel(job))}</span><strong>${esc(job.book?.title || job.input?.topic || job.wizard?.topic || "이야기")}</strong>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${button("이어서 만들기", "simple-open", job.id, "green")}${job.status === "running" ? button("중지", "pause", job.id) : button("지우기", "delete", job.id, "plain")}${job.status !== "running" && stopReportAvailable(job) ? button("멈춤 리포트", "report", job.id, "plain") : ""}</div></article>`,
     )
     .join("")}</div></section>`;
 }
@@ -233,7 +237,7 @@ export function renderFullAutoJobs(state, { simple = false, rest = false } = {})
           pending?.nonce &&
           pending.nonce !== job.stopBaselineNonce &&
           job.status !== "paused";
-      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}</div></article>`;
+      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}${!live && job.status !== "running" && stopReportAvailable(job) ? button("멈춤 리포트", "report", job.id, "plain") : ""}</div></article>`;
     })
     .join("")}</div></section>`;
 }
@@ -273,7 +277,7 @@ function runScreen(job, busy) {
       )
       .join(
         "",
-      )}</ol>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${job.notes.map((n) => `<p class="small-label">${esc(n)}</p>`).join("")}<p class="small-label">완료한 재료·문단·그림은 저장됩니다. 이 창을 닫아도 제작은 계속됩니다. 브라우저를 완전히 종료하면 다음 접속에서 이어 만들어요. 최종 검토 전에는 아이 책장에 공개되지 않습니다.</p><div class="modal-actions">${busy ? button("닫고 둘러보기", "close", job.id) + button("중지 · 결과 보관", "pause", job.id) : job.status === "review" ? button("완성 초안 검토", "review", job.id, "primary") : isHeld(job) ? button("쪽마다 검수", "simple-review", job.id, "primary") : button("이어서 자동 생성", "resume", job.id, "primary")}${!busy ? button("닫기", "close", job.id) : ""}</div>`,
+      )}</ol>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${job.notes.map((n) => `<p class="small-label">${esc(n)}</p>`).join("")}${!busy && stopReportAvailable(job) ? `<p>${button("멈춤 리포트", "report", job.id, "plain")}</p>` : ""}<p class="small-label">완료한 재료·문단·그림은 저장됩니다. 이 창을 닫아도 제작은 계속됩니다. 브라우저를 완전히 종료하면 다음 접속에서 이어 만들어요. 최종 검토 전에는 아이 책장에 공개되지 않습니다.</p><div class="modal-actions">${busy ? button("닫고 둘러보기", "close", job.id) + button("중지 · 결과 보관", "pause", job.id) : job.status === "review" ? button("완성 초안 검토", "review", job.id, "primary") : isHeld(job) ? button("쪽마다 검수", "simple-review", job.id, "primary") : button("이어서 자동 생성", "resume", job.id, "primary")}${!busy ? button("닫기", "close", job.id) : ""}</div>`,
     "wide full-auto-workspace",
   );
 }
@@ -678,6 +682,11 @@ export function configureFullAutoUI(context) {
         }
         if (action === "status") {
           runScreen(job, currentJob?.id === job.id && !!controller);
+          return;
+        }
+        // 2026-10-20: why the run stopped (or what its checks left), to copy or save.
+        if (action === "report") {
+          openStopReport(api, job);
           return;
         }
         if (action === "resume") {

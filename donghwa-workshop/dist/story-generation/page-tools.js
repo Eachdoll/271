@@ -362,6 +362,9 @@ async function rewritePage(
       ...resolveStoryStageSettings(settings, "coherence"),
       signal,
     },
+    // 2026-10-20: a rewrite the reviewer still flags after its repairs keeps
+    // the note on the page instead of failing the rewrite.
+    acceptUnresolvedCoherence: true,
     sceneBriefs: book.sceneBriefs || undefined,
     bookId: book.id,
     stylePreset:
