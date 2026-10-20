@@ -688,7 +688,20 @@ function renderStatusStrip() {
     )
   )
     return "";
+  // R24: the ordinary library case (signed out, or the cloud unreachable) is
+  // one strip; conflicts, account changes and blocked storage keep the cards.
+  if (!exceptional) return `<div id="cloud-status-slot">${libraryStorageStrip()}</div>`;
   return `<div id="cloud-status-slot">${cloudStatusCard()}</div>${storageBlocked || view === "library" ? deviceStorageNotice() : ""}`;
+}
+function libraryStorageStrip() {
+  if (childMode) return "";
+  const c = cloudStatus,
+    note = c.authenticated
+      ? `${cloudPhaseLabel()}${c.error ? " · " + c.error : ""}`
+      : c.reason === "family-session-expired"
+        ? signedOutNote(c)
+        : "이 기기에 보관 중 · 로그인하면 다른 기기와 이어져요";
+  return `<aside class="library-storage-strip" role="status"><span>${esc(note)}</span><span class="library-storage-actions">${c.authenticated ? btn("클라우드 관리", "cloud-open", "outline", "settings") : `<button type="button" class="btn btn-green btn-small" data-action="family-login">가족 아이디로 로그인</button><button type="button" class="btn btn-plain btn-small" data-action="cloud-open">다른 로그인</button>`}<button type="button" class="btn btn-plain btn-small" data-action="device-transfer">기기 이동 · 복구</button></span></aside>`;
 }
 function cloudStatusCard() {
   if (childMode) return "";

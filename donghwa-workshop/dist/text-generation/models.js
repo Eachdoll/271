@@ -781,9 +781,30 @@ export function estimateStoryTextCost({
   };
 }
 
-/** UI estimate for continuing a parked council; it never changes engine settings. */
-export function councilDecisionCosts(job = {}) {
-  if (job.demo) return { usedUsd: 0, usedUnknown: false, continueUsd: 0, continueUnknown: false, meetingUsd: 0, meetingUnknown: false };
+// R24: which FULL AUTO step pays for each estimate row (the review row is
+// split between the prose check and the final page check).
+const BUDGET_STEP = {
+  council: "outline",
+  beatCandidates: "outline",
+  beatJudge: "outline",
+  outline: "outline",
+  sceneBriefs: "briefs",
+  proseDraft: "proseDraft",
+  prose: "prose",
+  simplification: "prose",
+  enrichment: "enrichment",
+  pagination: "pagination",
+  revision: "pagination",
+  childSimulator: "pagination",
+};
+/**
+ * R24: the one text budget the screens show for a job — what its saved calls
+ * cost so far and what the steps it has not finished are expected to cost.
+ * `parked` is a writers' room waiting for the parent: four meeting answers
+ * are saved and only the bible call remains. Read-only; never touches the job.
+ */
+export function jobTextBudget(job = {}, { parked = job?.status === "council-review" } = {}) {
+  if (job.demo) return { usedUsd: 0, usedUnknown: false, remainingUsd: 0, remainingUnknown: false, meetingUsd: 0, meetingUnknown: false, stages: [] };
   let usedUsd = 0, usedUnknown = false;
   for (const row of job.usage?.calls || []) {
     if (row.requests === 0) continue;
@@ -792,9 +813,38 @@ export function councilDecisionCosts(job = {}) {
     else usedUsd += Math.max(0, Number(raw));
   }
   const input = job.input || {},
-    estimate = estimateStoryTextCost({ settings: job.textSettings || {}, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: true }),
-    council = estimate.stages.find(row => row.stage === "council"),
-    // Four meeting calls are already saved; only the author's design pass remains.
-    continueUsd = estimate.stages.filter(row => row.stage !== "council").reduce((sum, row) => sum + row.costUsd, 0) + (council?.costUsd || 0) / Math.max(1, council?.requestCount || 1);
-  return { usedUsd, usedUnknown, continueUsd, continueUnknown: estimate.pricingUnknown === true, meetingUsd: council?.costUsd || 0, meetingUnknown: council?.pricingUnknown === true };
+    done = job.completed || {},
+    settings = job.textSettings || {},
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1 }),
+    council = estimate.stages.find((row) => row.stage === "council"),
+    rows = [];
+  for (const row of estimate.stages) {
+    let share = 1;
+    if (row.stage === "coherence") share = (done.proseCoherence ? 0 : 0.5) + (done.pagination ? 0 : 0.5);
+    else if (done[BUDGET_STEP[row.stage]]) share = 0;
+    else if (row.stage === "council" && parked) share = 1 / Math.max(1, row.requestCount);
+    if (share > 0) rows.push({ stage: row.stage, costUsd: row.costUsd * share, pricingUnknown: row.pricingUnknown === true });
+  }
+  // The paid material plan runs before the outline (never for a picked cast).
+  if (job.planMode === "auto" && !done.plan && !done.outline && !parked) {
+    const plan = resolveStoryStageSettings(settings, "outline"),
+      price = estimateTextCost({ ...plan, input: 11000, output: 5000, model: plan.config.model });
+    rows.unshift({ stage: "plan", costUsd: price.costUsd, pricingUnknown: price.pricingUnknown === true });
+  }
+  return {
+    usedUsd,
+    usedUnknown,
+    remainingUsd: rows.reduce((sum, row) => sum + row.costUsd, 0),
+    remainingUnknown: rows.some((row) => row.pricingUnknown),
+    meetingUsd: council?.costUsd || 0,
+    meetingUnknown: council?.pricingUnknown === true,
+    stages: rows,
+  };
+}
+
+/** UI estimate for continuing a parked council; it never changes engine settings. */
+export function councilDecisionCosts(job = {}) {
+  if (job.demo) return { usedUsd: 0, usedUnknown: false, continueUsd: 0, continueUnknown: false, meetingUsd: 0, meetingUnknown: false };
+  const b = jobTextBudget(job, { parked: true });
+  return { usedUsd: b.usedUsd, usedUnknown: b.usedUnknown, continueUsd: b.remainingUsd, continueUnknown: b.remainingUnknown, meetingUsd: b.meetingUsd, meetingUnknown: b.meetingUnknown };
 }

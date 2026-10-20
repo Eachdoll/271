@@ -75,6 +75,36 @@ export function collectBookChecks(book) {
     { id: "coherence", label: "연결", items: coherence },
   ];
 }
+const MAX_PAGE_BUTTONS = 6;
+/**
+ * R24: the same note on several pages is one line with a button per page
+ * (in page order, first seen first), instead of the same sentence repeated.
+ */
+export function groupCheckIssues(book, items = []) {
+  const groups = new Map();
+  for (const issue of items) {
+    const message = describeReadingViolation(issue),
+      severity = issue.severity === "error" ? "error" : "warning",
+      key = severity + "\u0000" + message,
+      pageNo = Number(
+        issue.pageNo ||
+          issue.page ||
+          (Array.isArray(issue.pages) ? issue.pages[0] : 1),
+      ),
+      index = Math.min(
+        Math.max(0, Number.isFinite(pageNo) ? pageNo - 1 : 0),
+        (book?.pages?.length || 1) - 1,
+      ),
+      exact = !!(issue.pageNo || issue.page);
+    if (!groups.has(key)) groups.set(key, { severity, message, pages: [] });
+    const group = groups.get(key);
+    if (!group.pages.some((page) => page.index === index))
+      group.pages.push({ index, exact });
+  }
+  for (const group of groups.values())
+    group.pages.sort((a, b) => a.index - b.index);
+  return [...groups.values()];
+}
 export function renderChecksPanel(
   book,
   { tab = "reading", details = {} } = {},
@@ -83,18 +113,11 @@ export function renderChecksPanel(
     active = groups.find((group) => group.id === tab) || groups[0];
   return `<section class="panel checks-panel"><h3>검사 결과</h3><nav class="check-tabs" role="tablist" aria-label="검사 종류">${groups.map((group) => `<button type="button" role="tab" aria-selected="${active.id === group.id}" data-action="check-tab" data-tab="${group.id}">${group.label}<span class="check-result-count">${group.items.length}</span></button>`).join("")}</nav><div role="tabpanel">${
     active.items.length
-      ? `<ul class="check-issues">${active.items
-          .map((issue) => {
-            const pageNo = Number(
-                issue.pageNo ||
-                  issue.page ||
-                  (Array.isArray(issue.pages) ? issue.pages[0] : 1),
-              ),
-              index = Math.min(
-                Math.max(0, Number.isFinite(pageNo) ? pageNo - 1 : 0),
-                (book.pages?.length || 1) - 1,
-              );
-            return `<li class="${issue.severity === "error" ? "check-blocked" : "check-advisory"}"><span>${issue.severity === "error" ? "수정 필요" : "확인 권장"} · ${escape(describeReadingViolation(issue))}</span><button class="btn btn-outline btn-small" data-action="edit-page" data-page="${index}">${escape(unitLabel(book, index))}${issue.pageNo || issue.page ? "으로" : "부터 확인"}</button></li>`;
+      ? `<ul class="check-issues">${groupCheckIssues(book, active.items)
+          .map((group) => {
+            const shown = group.pages.slice(0, MAX_PAGE_BUTTONS),
+              more = group.pages.length - shown.length;
+            return `<li class="${group.severity === "error" ? "check-blocked" : "check-advisory"}"><span>${group.severity === "error" ? "수정 필요" : "확인 권장"} · ${escape(group.message)}${group.pages.length > 1 ? ` <small class="check-repeat">${group.pages.length}곳</small>` : ""}</span><span class="check-page-buttons">${shown.map(({ index, exact }) => `<button class="btn btn-outline btn-small" data-action="edit-page" data-page="${index}">${escape(unitLabel(book, index))}${exact ? "으로" : "부터 확인"}</button>`).join("")}${more > 0 ? `<small>외 ${more}곳</small>` : ""}</span></li>`;
           })
           .join("")}</ul>`
       : '<p class="small-label">표시할 경고가 없어요. 자세한 검사 상태도 확인해 주세요.</p>'
