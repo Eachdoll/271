@@ -33,4 +33,3 @@
 - 배포 소스: `5ccaa7ad988acc65316b9fa76e723abdcb12d7fe`. 상태 `succeeded`.
 - DB 마이그레이션·서버 비밀값 변경 없음. 기존 D1·R2와 공개 범위를 유지했습니다.
 - 운영 원본 SHA는 GitHub [`codex/production-r27-source`](https://github.com/Eachdoll/271/tree/codex/production-r27-source)에 보존했습니다. 앱이 루트에 있는 원본 브랜치입니다. 다음 개발은 기존 `claude/cross-owner-repo-constraint-j20lhz`의 `donghwa-workshop/` 구조를 계속 사용하면 됩니다.
-
