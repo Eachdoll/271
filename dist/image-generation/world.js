@@ -1,3 +1,4 @@
+import { genderWord } from "./identity.js";
 import { buildScenePrompt, sceneBriefText } from "./scene-prompt.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
@@ -469,6 +470,36 @@ export function getActiveWorld(state) {
 }
 
 /** A shared place has a separately approved rendering in each World. */
+/** The fixed facts a place sheet was approved for (stored on the sheet as `settings`). */
+export function backgroundSheetFacts(background) {
+  return JSON.stringify({
+    name: background.name,
+    type: background.type,
+    description: background.description || background.features || "",
+    layout: background.layout || "",
+  });
+}
+/**
+ * 2026-10-20: a sheet depicts the place's type, description and layout, not
+ * its name; a renamed place keeps its approved picture. Older sheets stored
+ * the name inside the same JSON, so the comparison parses both sides.
+ */
+export function sameBackgroundLook(storedSettings, facts) {
+  if (storedSettings === facts) return true;
+  try {
+    const stored = JSON.parse(storedSettings),
+      current = JSON.parse(facts);
+    return (
+      !!stored &&
+      typeof stored === "object" &&
+      stored.type === current.type &&
+      String(stored.description ?? "") === String(current.description ?? "") &&
+      String(stored.layout ?? "") === String(current.layout ?? "")
+    );
+  } catch {
+    return false;
+  }
+}
 export function getWorldBackgroundSnapshot(
   state,
   background,
@@ -477,19 +508,14 @@ export function getWorldBackgroundSnapshot(
   const result = clone(background);
   delete result.backgroundHistory;
   delete result.backgroundSheets;
-  const facts = JSON.stringify({
-    name: background.name,
-    type: background.type,
-    description: background.description || background.features || "",
-    layout: background.layout || "",
-  });
+  const facts = backgroundSheetFacts(background);
   const matching = (sheet) =>
     sheet.confirmedAt &&
     sheet.meta?.worldId === world.id &&
     sheet.meta?.worldRevision === world.revision &&
     sheet.meta?.imageEngine === world.imageEngine &&
     sheet.meta?.stylePresetId === world.stylePresetId &&
-    sheet.settings === facts;
+    sameBackgroundLook(sheet.settings, facts);
   const sheet = [...(background.backgroundSheets || [])]
     .reverse()
     .find(matching);
@@ -727,6 +753,8 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
     character.name,
     character.nameEn,
     character.kind,
+    // 2026-10-20: the gender is said, so the clothes never decide the child.
+    genderWord(character) ? `a ${genderWord(character)}` : "",
     character.description,
     character.appearance,
     character.clothes,
@@ -817,7 +845,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   const cast = sheets
     .map(
       (sheet, index) =>
-        `${index + 1}: ${sheet.characterSnapshot?.name || sheet.characterSnapshot?.nameEn || sheet.characterId} (${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original storybook character"})`,
+        `${index + 1}: ${sheet.characterSnapshot?.name || sheet.characterSnapshot?.nameEn || sheet.characterId} (${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original storybook character"})`,
     )
     .join("; ");
   const scene =

@@ -45,7 +45,8 @@ test('Character edits keep input, prior sheets, old engine book snapshots, and o
 test('Repeated name and description edits keep the first book appearance and version history', () => {
   const first = updateCharacter(fixture(),'child',{description:'초록 옷'});
   const second = updateCharacter(first,'child',{name:'민아'});
-  assert.equal(second.characters[0].version,3);
+  // 2026-10-20: the version follows the look; the rename keeps version 2 (and its sheet).
+  assert.equal(second.characters[0].version,2);
   assert.equal(second.characters[0].characterHistory.length,2);
   assert.equal(second.characters[0].characterHistory[1].description,'초록 옷');
   assert.equal(second.books[1].characterSnapshots[0].description,'노란 옷');
@@ -117,7 +118,10 @@ test('World rename and book deletion leave other records and reading limit count
 test('Validation rejects invalid edits before changing the local library', () => {
   const state = freeze(fixture());
   for (const patch of [{name:''},{nameEn:' '},{age:0},{age:2.5},{color:'red'},{variant:100},{kind:'unknown'}]) assert.throws(() => updateCharacter(state,'child',patch));
-  assert.throws(() => updateBackground(state,'home',{type:'unknown'}));
+  // 2026-10-20: a typed kind ('도시') is allowed; empty, overlong or marked-up kinds are not.
+  assert.throws(() => updateBackground(state,'home',{type:''}));
+  assert.throws(() => updateBackground(state,'home',{type:'x'.repeat(40)}));
+  assert.throws(() => updateBackground(state,'home',{type:'<b>도시</b>'}));
   assert.throws(() => updateBackground(state,'home',{name:''}));
   assert.throws(() => archiveCharacter(state,'missing'));
   assert.throws(() => deleteBook(state,'missing'));

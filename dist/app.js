@@ -89,6 +89,7 @@ import {
   writeStoredLibrary,
   keepRecoveryPoint,
   latestRecoveryPoint,
+  decodeStoredLibrary,
 } from "./library-storage.js";
 import {
   seedState,
@@ -162,6 +163,12 @@ import {
   activeBackgrounds,
 } from "./management.js";
 import { configurePhotoUI, cleanupPhotoFlow } from "./photo-materials.js";
+import {
+  PLACE_TYPE_CHOICES,
+  readPlaceType,
+  placeTypeCustomField,
+  placeEmoji,
+} from "./place-types.js";
 import { configureCompanionUI, cleanupCompanionFlow } from "./companions.js";
 import {
   unlockVault,
@@ -437,7 +444,7 @@ function save() {
     return true;
   } catch (error) {
     toast(
-      storageBlocked
+      storageBlocked || error?.code === "QUOTA"
         ? error.message
         : "저장 공간이 부족하거나 저장 권한이 없어요. 백업 후 다시 시도해 주세요.",
     );
@@ -903,7 +910,7 @@ async function applyCloudLibrary(candidate, meta) {
     }
     if (recovery && !blocked) {
       try {
-        const old = validateImport(recovery, { allowStoredAssets: true });
+        const old = validateImport(decodeStoredLibrary(recovery), { allowStoredAssets: true });
         await restoreLibraryImages(old);
       } catch {}
     }
@@ -989,7 +996,7 @@ async function showLibraryImport(file) {
         setCustomStylePresets(state);
         if (recoveryText && !previousBlocked) {
           try {
-            const rollback = validateImport(recoveryText, {
+            const rollback = validateImport(decodeStoredLibrary(recoveryText), {
               allowStoredAssets: true,
             });
             await restoreLibraryImages(rollback);
@@ -1333,6 +1340,7 @@ function defaultWizard() {
     valueCustom: "",
     ending: "home",
     endingCustom: "",
+    direction: "",
     worldMemo: getActiveWorld(state).memo || "",
     series: "",
     previousBookId: null,
@@ -1455,7 +1463,7 @@ function materialsPage() {
   return `${heading("이야기 재료", "한 번 만든 친구와 장소를, 다음 이야기에도 그대로.", btn("설정으로 만들기", "new-character", "primary", "plus"))}<div class="material-add-actions"><button type="button" class="btn btn-outline btn-small" data-companion-action="open">조연 자동생성하여 추가하기</button>${photoButton("사진으로 캐릭터 만들기", "new-character")}${photoButton("완성된 캐릭터 그림 가져오기 · 무료", "import-character")}</div><div class="style-banner"><div><strong>${icon("leaf")} 우리 집 세계 · ${esc(state.settings.style)}</strong><small>${getActiveWorld(state).imageEngine === "sample" ? "무료 샘플은 고정 그림 템플릿이에요. 커버의 수채화는 AI 엔진 또는 완성 그림 가져오기를 사용해요." : "캐릭터의 외모는 유지하고, 그림의 질감은 선택한 실제 화풍 참조를 따라요."}</small></div>${btn("화풍 · 엔진 설정", "nav", "outline", "settings", 'data-view="settings"')}</div>${getActiveWorld(state).styleUpgradeNotice ? `<div class="notice" style="margin-top:15px">${esc(getActiveWorld(state).styleUpgradeNotice)}</div>` : ""}<div class="section-header"><h3>등장인물 서랍 <span class="count">${characters.length}명</span></h3><span class="small-label">설정 수정 · 삭제 · 시트 다시 생성</span></div><div class="character-grid">${characters.map((c) => `<article class="character-card"><div class="character-picture">${materialPortrait(c)}</div><span class="role-tag">${esc(c.role)}</span><h4>${esc(c.name)} <span class="count">${esc(c.nameEn)}</span></h4>${c.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${state.books.filter((b) => b.characterIds?.includes(c.id)).length}권에 등장 · ${esc(c.description || "우리 집 이야기 친구")}</p>${btn("캐릭터 시트 보기", "character-sheet", "outline", "characters", `data-id="${esc(c.id)}"`)}${renderCharacterImageControls(c, state)}${renderWardrobeCardActions(c)}<div class="material-card-actions">${managementButton("설정 수정", "edit-character", c.id)}${managementButton("삭제", "delete-character", c.id)}</div></article>`).join("") || `<div class="empty-state"><h3>이야기 친구를 만나볼까요?</h3><p>한 번 만든 친구는 다음 책에도 함께해요.</p>${btn("친구 만들기", "new-character", "green")}</div>`}</div><div class="section-header"><h3>배경 서랍 <span class="count">${backgrounds.length}곳</span></h3>${btn("설정으로 추가", "new-background", "outline", "plus")}</div><div class="material-add-actions">${photoButton("사진으로 배경 시트 만들기", "new-background")}${photoButton("완성된 배경 그림 가져오기 · 무료", "import-background")}</div><div class="background-grid">${backgrounds
     .map((raw) => {
       const b = getWorldBackgroundSnapshot(state, raw);
-      return `<article class="background-card">${b.imageAssetId && getImageURL(b.imageAssetId) ? `<img class="background-generated" src="${esc(getImageURL(b.imageAssetId))}" alt="${esc(b.name)} 배경">` : `<div class="background-emoji">${{ home: "🏡", school: "🏫", forest: "🌳", space: "🌙", sea: "🐚" }[b.type] || "🌿"}</div>`}<h4>${esc(b.name)}</h4>${raw.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${esc(b.description || b.features || "이야기가 시작되는 작은 장소")}</p><div class="material-card-actions">${managementButton("수정", "edit-background", b.id)}${managementButton("삭제", "delete-background", b.id)}</div>${renderBackgroundSheetActions(raw, state)}</article>`;
+      return `<article class="background-card">${b.imageAssetId && getImageURL(b.imageAssetId) ? `<img class="background-generated" src="${esc(getImageURL(b.imageAssetId))}" alt="${esc(b.name)} 배경">` : `<div class="background-emoji">${placeEmoji(b.type)}</div>`}<h4>${esc(b.name)}</h4>${raw.autoReviewPending ? '<span class="style-changed-badge">자동 생성 · 검토 필요</span>' : ""}<p>${esc(b.description || b.features || "이야기가 시작되는 작은 장소")}</p><div class="material-card-actions">${managementButton("수정", "edit-background", b.id)}${managementButton("삭제", "delete-background", b.id)}</div>${renderBackgroundSheetActions(raw, state)}</article>`;
     })
     .join(
       "",
@@ -1527,6 +1535,7 @@ function startStory(previous = null) {
     valueCustom: "",
     ending: "home",
     endingCustom: "",
+    direction: "",
     worldMemo: previous?.worldMemo || getActiveWorld(state).memo || "",
     series: previous?.series || "",
     previousBookId: previous?.id || null,
@@ -1622,7 +1631,7 @@ function createPage() {
         ["custom", "직접 입력"],
       ],
       w.ending,
-    )}<div class="field" id="ending-custom-field" ${w.ending === "custom" ? "" : "hidden"}><label for="endingCustom">직접 적는 이야기의 끝</label><textarea id="endingCustom" maxlength="1000" placeholder="집에 돌아온 뒤 어떤 행동과 말로 마칠까요?">${esc(w.endingCustom || "")}</textarea></div><div class="field"><label for="series">시리즈 이름 <span class="count">비워두면 새 시리즈</span></label><input id="series" maxlength="60" value="${esc(w.series)}" placeholder="예: 유하의 작은 모험" ${w.previousBookId ? "readonly" : ""}></div></div>`;
+    )}<div class="field" id="ending-custom-field" ${w.ending === "custom" ? "" : "hidden"}><label for="endingCustom">직접 적는 이야기의 끝</label><textarea id="endingCustom" maxlength="1000" placeholder="이야기가 어디서 어떤 행동과 말로 끝날까요? 예: 바닷가에서 친구들과 조개를 나눠 들고 노래하며 끝나요 (집으로 돌아오지 않아도 돼요)">${esc(w.endingCustom || "")}</textarea></div><details class="wizard-direction" ${w.direction ? "open" : ""}><summary>이 책의 방향 <span class="count">선택 · 기획 회의가 따를 한 줄</span></summary><div class="field"><input id="direction" maxlength="200" value="${esc(w.direction || "")}" placeholder="예: 절정에서 아이가 아기 여우의 두려움에 공감하게" aria-label="이 책의 방향"></div></details><div class="field"><label for="series">시리즈 이름 <span class="count">비워두면 새 시리즈</span></label><input id="series" maxlength="60" value="${esc(w.series)}" placeholder="예: 유하의 작은 모험" ${w.previousBookId ? "readonly" : ""}></div></div>`;
   if (w.step === 4)
     inner = `<h3>어떤 방식으로 만들까요?</h3><details class="story-start-options"><summary>구성 패턴 · 세계관 메모</summary><div class="field" style="margin-top:20px"><label for="worldMemo">세계관 메모 · 함께 지킬 설정</label><textarea id="worldMemo" maxlength="2000" placeholder="친구들의 관계, 장소의 특징, 다음 편에도 유지할 설정">${esc(w.worldMemo || "")}</textarea></div>${renderQualityPatternSelector(w, { state, id: "storyQualityPatternId" })}</details>${renderWizardTextSummary()}${renderFullAutoLauncher(state, w)}`;
 
@@ -1644,6 +1653,7 @@ function syncWizard() {
       "valueCustom",
       "ending",
       "endingCustom",
+      "direction",
       "series",
       "worldMemo",
       "storyQualityPatternId",
@@ -2082,6 +2092,7 @@ function openStudio() {
     nameEn: "",
     role: "주인공",
     kind: "child",
+    gender: "",
     age: 4,
     color: "#efc954",
     hairColor: "#3c3027",
@@ -2115,6 +2126,15 @@ function showStudioForm() {
         ["rabbit", "토끼"],
       ],
       studio.kind,
+    )}${selectField(
+      "c-gender",
+      "성별 · 그림에 그대로 유지",
+      [
+        ["", "표시 안 함"],
+        ["남자아이", "남자아이"],
+        ["여자아이", "여자아이"],
+      ],
+      studio.gender || "",
     )}<div class="field"><label for="c-age">나이</label><input id="c-age" type="number" min="1" max="99" value="${studio.age}" required></div><div class="field"><label for="c-color">옷 · 몸 색상</label><input id="c-color" type="color" value="${studio.color}" style="height:45px"></div><div class="field"><label for="c-hair">머리 색상</label><input id="c-hair" type="color" value="${studio.hairColor}" style="height:45px"></div><div class="field"><label for="c-skin">피부 색상</label><input id="c-skin" type="color" value="${studio.skinColor}" style="height:45px"></div><div class="field field-wide"><label for="c-description">외모 · 늘 입는 옷 · 고정 특징</label><textarea id="c-description" maxlength="200">${esc(studio.description)}</textarea><small>샘플 캐릭터에서 반영되는 모습은 종류와 색상입니다. 세부 외모는 시트 메모로 저장돼요.</small></div><div class="field field-wide"><label for="c-traits">성격 · 좋아하는 것</label><input id="c-traits" maxlength="120" value="${esc(studio.traits)}"></div><div class="field field-wide"><label for="c-catchphrase">말버릇 · 자주 하는 말</label><input id="c-catchphrase" maxlength="500" value="${esc(studio.catchphrase)}" placeholder="어디서 나는 소리지?"></div><div class="field field-wide"><label for="c-relationships">친구·가족과의 관계</label><input id="c-relationships" maxlength="1000" value="${esc(studio.relationships)}" placeholder="초록이와 함께 소풍하는 친구"></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${getActiveWorld(state).imageEngine === "sample" ? "무료 샘플 모습 살펴보기" : "선택한 화풍으로 시트 생성"}${icon("arrow")}</button></div></form>`,
   );
 }
@@ -2152,15 +2172,9 @@ function showBackgroundForm() {
     `${modalHeader("이야기가 머무는 장소")}<form id="background-form"><div class="form-grid"><div class="field"><label for="b-name">장소 이름</label><input id="b-name" required maxlength="50" placeholder="예: 유하네 놀이터"></div>${selectField(
       "b-type",
       "장소 종류",
-      [
-        ["home", "집"],
-        ["school", "유치원"],
-        ["forest", "숲 · 놀이터"],
-        ["sea", "바다"],
-        ["space", "우주 · 상상 세계"],
-      ],
+      PLACE_TYPE_CHOICES,
       "forest",
-    )}<div class="field field-wide"><label for="b-description">특징과 분위기</label><textarea id="b-description" maxlength="250" placeholder="큰 나무 아래 노란 미끄럼틀이 있는 아늑한 놀이터" required></textarea><small>장소 설정을 이야기 맥락으로 저장합니다. 사진으로 배경 추가는 이야기 재료의 ‘사진으로 배경 시트 만들기’에서 사용할 수 있어요.</small></div><div class="field field-wide"><label for="b-layout">고정 배치 · 문·창·가구·소품</label><textarea id="b-layout" maxlength="3000" placeholder="왼쪽 벽에 창문, 오른쪽 벽에 침대, 문 옆 노란 책장"></textarea></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${icon("check")}배경에 저장</button></div></form>`,
+    )}${placeTypeCustomField("b-type-custom")}<div class="field field-wide"><label for="b-description">특징과 분위기</label><textarea id="b-description" maxlength="250" placeholder="큰 나무 아래 노란 미끄럼틀이 있는 아늑한 놀이터" required></textarea><small>장소 설정을 이야기 맥락으로 저장합니다. 사진으로 배경 추가는 이야기 재료의 ‘사진으로 배경 시트 만들기’에서 사용할 수 있어요.</small></div><div class="field field-wide"><label for="b-layout">고정 배치 · 문·창·가구·소품</label><textarea id="b-layout" maxlength="3000" placeholder="왼쪽 벽에 창문, 오른쪽 벽에 침대, 문 옆 노란 책장"></textarea></div></div><div class="modal-actions"><button type="submit" class="btn btn-green">${icon("check")}배경에 저장</button></div></form>`,
   );
 }
 /**
@@ -2964,7 +2978,7 @@ async function onAction(e) {
   if (a === "download-original") {
     if (initialLibrary.raw)
       downloadFile(
-        initialLibrary.raw,
+        decodeStoredLibrary(initialLibrary.raw),
         "donghwa-workshop-original.json",
         "application/json",
       );
@@ -2976,8 +2990,8 @@ async function onAction(e) {
       if (!point) return toast("보관된 복구 파일이 아직 없어요.");
       downloadFile(
         point.mediaDeferred
-          ? (await createLibraryBackup(JSON.parse(point.text))).text
-          : point.text,
+          ? (await createLibraryBackup(JSON.parse(decodeStoredLibrary(point.text)))).text
+          : decodeStoredLibrary(point.text),
         "donghwa-workshop-recovery.json",
         "application/json",
       );
@@ -3677,6 +3691,7 @@ document.addEventListener("submit", async (e) => {
       ["nameEn", "c-nameEn"],
       ["role", "c-role"],
       ["kind", "c-kind"],
+      ["gender", "c-gender"],
       ["age", "c-age"],
       ["color", "c-color"],
       ["hairColor", "c-hair"],
@@ -3707,10 +3722,20 @@ document.addEventListener("submit", async (e) => {
     return;
   }
   if (f.id === "background-form") {
+    let type;
+    try {
+      type = readPlaceType(
+        document.getElementById("b-type").value,
+        document.getElementById("b-type-custom")?.value,
+      );
+    } catch (error) {
+      toast(error.message);
+      return;
+    }
     state.backgrounds.push({
       id: "bg-" + crypto.randomUUID(),
       name: document.getElementById("b-name").value.trim(),
-      type: document.getElementById("b-type").value,
+      type,
       description: document.getElementById("b-description").value.trim(),
       layout: document.getElementById("b-layout").value.trim(),
     });

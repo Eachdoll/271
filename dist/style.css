@@ -5039,3 +5039,71 @@ html:has(.simple-create) {
 .simple-check-note {
   color: var(--warn, #8a5a00);
 }
+
+/* R20 기획 회의 */
+/* The folded direction field stays out of the wizard step's field budget until the parent opens it. */
+.wizard-direction:not([open]) > .field { display: none; }
+.wizard-direction > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-2); }
+.wizard-direction[open] > summary { margin-bottom: 7px; }
+.simple-council-note { color: var(--ink-soft, #4a4a4a); }
+.story-council .council-pitches { padding-left: 1.2em; margin: 8px 0; }
+.story-council .council-pitches li { margin: 6px 0; }
+.story-council .council-chosen { background: rgba(120, 170, 110, 0.14); border-radius: 8px; padding: 4px 6px; }
+.story-council .council-spine { display: grid; grid-template-columns: 7em 1fr; gap: 4px 10px; margin: 8px 0; font-size: 0.95em; }
+.story-council .council-spine dt { font-weight: 700; color: var(--ink-soft, #4a4a4a); }
+.story-council .council-spine dd { margin: 0; }
+.story-council .council-log { padding-left: 1.2em; font-size: 0.9em; }
+
+/* R21 회의실 */
+.council-room-wrap { margin: var(--space-3) 0; }
+.council-room { border: 1px solid #e6e1d3; border-radius: 14px; padding: 12px; background: linear-gradient(180deg, #fffdf7, #f7f1e3); }
+.council-phases { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0 0 10px; font-size: 12px; }
+.council-phases li { padding: 3px 10px; border-radius: 999px; background: #eee8d8; color: #7a7261; }
+.council-phases li.active { background: var(--orange, #e8893a); color: #fff; }
+.council-phases li.done { background: #cfe6c8; color: #2e5a2a; }
+.council-table { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.council-seat { text-align: center; border-radius: 12px; padding: 6px 4px; transition: opacity .3s, transform .3s; }
+.council-seat.state-waiting { opacity: .55; }
+.council-seat.state-speaking { background: rgba(232, 137, 58, 0.1); }
+.council-seat.state-speaking .seat-avatar::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--orange, #e8893a); animation: council-pulse 1.3s ease-in-out infinite; }
+.council-room:not(.live) .council-seat.state-speaking .seat-avatar::after { animation: none; }
+.council-seat .seat-avatar { position: relative; width: 72px; height: 72px; margin: 0 auto 4px; }
+.council-seat .council-avatar { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,.12)); }
+.council-seat .seat-state { position: absolute; right: -2px; bottom: 0; min-width: 20px; height: 20px; border-radius: 10px; background: #fff; border: 1px solid #d6d0c0; font-size: 12px; line-height: 18px; color: #2e5a2a; }
+.council-seat.state-done .seat-state { background: #cfe6c8; border-color: #9cc893; }
+.council-seat.state-speaking .seat-state { color: var(--orange, #e8893a); }
+.council-seat .seat-age { position: absolute; left: -2px; top: 0; padding: 0 6px; border-radius: 10px; background: #fff; border: 1px solid #d6d0c0; font-size: 11px; line-height: 18px; color: #4a4a4a; }
+.council-seat .seat-name { font-weight: 700; font-size: 13px; }
+.council-seat .seat-title { font-size: 11px; color: #7a7261; }
+.council-seat .seat-bubble { margin-top: 6px; font-size: 12px; line-height: 1.35; color: #3b3630; background: #fff; border: 1px solid #e6e1d3; border-radius: 10px; padding: 6px 7px; min-height: 2.7em; position: relative; }
+.council-seat .seat-bubble::before { content: ""; position: absolute; top: -6px; left: 50%; width: 10px; height: 10px; background: #fff; border-left: 1px solid #e6e1d3; border-top: 1px solid #e6e1d3; transform: translateX(-50%) rotate(45deg); }
+.council-room-pitches { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.council-room-pitches li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid #e6e1d3; font-size: 13px; }
+.council-room-pitches li.council-chosen { border-color: #9cc893; background: #f3faf1; }
+.council-room-pitches li.council-vetoed { opacity: .7; }
+.council-room-pitches .pitch-logline { color: #3b3630; }
+.council-room-pitches .pitch-score { font-size: 12px; color: #7a7261; }
+.council-room-pitches .pitch-veto { font-size: 12px; color: #a83232; }
+.council-room-bible { margin: 10px 0 0; font-size: 12px; color: #3b3630; }
+.simple-council-details > summary { cursor: pointer; font-size: 13px; color: var(--text-2); margin-top: var(--space-2); }
+@keyframes council-pulse { 0%, 100% { opacity: .35; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+/* R22 회의 결과 보고 진행: the chair's recommendation and the parent's choice form. */
+.council-room-pitches li.council-recommended { border-color: #e8c27a; background: #fff9ec; }
+.pitch-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #f3d9a4; color: #5a3d00; font-size: 11px; font-weight: 600; vertical-align: middle; }
+.council-review { margin: var(--space-3) 0; padding: 12px; border: 1px solid #e6e1d3; border-radius: 14px; background: #fff; }
+.council-review-intro { margin: 0 0 8px; font-size: 14px; color: #3b3630; }
+.council-review-picks { border: 0; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.council-review-picks legend { font-weight: 700; font-size: 13px; padding: 0; margin-bottom: 4px; }
+.council-pick { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border: 1px solid #e6e1d3; border-radius: 10px; background: #fffdf7; cursor: pointer; }
+.council-pick:has(input:checked) { border-color: #9cc893; background: #f3faf1; }
+.council-pick input { margin-top: 3px; }
+.council-pick-body { display: grid; gap: 2px; font-size: 13px; min-width: 0; }
+.council-pick .pitch-logline { color: #3b3630; }
+.council-pick .pitch-score, .council-pick .pitch-turn { font-size: 12px; color: #7a7261; }
+.council-review .field textarea { min-height: 3.2em; }
+.council-redirect > summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
+.council-redirect .field { margin-top: 6px; }
+.full-auto-council-review { margin: var(--space-2) 0; }
+.story-council-review { display: block; margin-top: var(--space-2); font-size: 13px; }
+@media (max-width: 640px) { .council-table { grid-template-columns: repeat(3, minmax(0, 1fr)); } .council-seat .seat-avatar { width: 60px; height: 60px; } }
+@media (prefers-reduced-motion: reduce) { .council-seat.state-speaking .seat-avatar::after { animation: none; } }

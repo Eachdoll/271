@@ -547,6 +547,24 @@ function openingTextTokens(specs, openings) {
       (en.words ? Math.min(Math.max(enWords, en.words.min), en.words.max) : enWords) * 2.4;
   return Math.ceil(openings * (koTokens + enTokens));
 }
+/**
+ * R22 회의 결과 보고 진행: what one more writers' room costs on a job's or
+ * draft's frozen text settings (the five economy calls), for the
+ * 방향 고쳐 다시 회의 confirm. Takes {textSettings, wizard, input, demo}.
+ */
+export function estimateCouncilCost(job) {
+  if (!job || job.demo) return { costUsd: 0, pricingUnknown: false };
+  const text = estimateStoryTextCost({
+    settings: job.textSettings || {},
+    pageCount: job.wizard?.pageCount || job.input?.pageCount || 12,
+    council: true,
+  });
+  const row = (text.stages || []).find((stage) => stage.stage === "council");
+  return {
+    costUsd: Number(row?.costUsd) || 0,
+    pricingUnknown: row?.pricingUnknown === true,
+  };
+}
 export function estimateStoryTextCost({
   engine = "openai",
   engineId = engine,
@@ -561,6 +579,8 @@ export function estimateStoryTextCost({
   // Editor round (input.editorPolicy): the whole-book read-through, and the
   // quality path's simplify passes written by the author model.
   editor = false,
+  // R20 writers' room (input.councilPolicy): five economy-model calls before the outline.
+  council = false,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -646,6 +666,7 @@ export function estimateStoryTextCost({
     };
   };
   const stages = [];
+  if (council) stages.push(stageEstimate("council", 4000, 1200, 5, "cheap"));
   if (beam) {
     stages.push(
       stageEstimate("beatCandidates", 3500, 900, beats, "outline"),
@@ -728,9 +749,10 @@ export function estimateStoryTextCost({
     childSimulator,
     enrichment,
     ...(editor ? { editor: true } : {}),
+    ...(council ? { council: true } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `${council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }

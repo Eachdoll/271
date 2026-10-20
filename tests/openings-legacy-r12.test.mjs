@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, ...plain} = spec || {};
     return [lang, plain];
@@ -684,7 +684,13 @@ const PINS = {
   // (every language but E0/E1). 23c3519: 19904f80…7e67.
   // Craft rules (2026-10-20): a new draft's input also gains craftPolicy
   // {version: 1}. 25e3760: 55c71176…3f2d.
-  inputs: 'f3db9e82b8a2d4da80b4e4945e5246ea6eee87887315eaaa70ee0150657f3e24',
+  // Story spine (2026-10-20, R19): a new draft's input also gains arcPolicy
+  // {version: 1}; nothing else in the group changes (dump-diffed against
+  // 894ab59). 894ab59: f3db9e82…3e24.
+  // Writers' room (2026-10-20, R20): a new draft's input also gains
+  // councilPolicy {version: 1} (no other key: an unwritten direction is left
+  // out). Dump-diffed against a113ead. a113ead: 8208a679…3e15.
+  inputs: '770c6ce0a4247b8e10d02ed1f5b76984e663314c427e7e298d9bb0d9eef49ba0',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -703,8 +709,15 @@ const PINS = {
   // never buy the read-through). 8087d69: 12e9fc3d…e2b.
   // Page rhythm: the new demo jobs' frozen specs carry `rhythm`. 23c3519: 6f236d08…cca8.
   // Craft rules: the new demo jobs' input carries craftPolicy. 25e3760: 0e922d9f…ec0f.
-  fullAutoDemo: '063dc4a030d9eee0310a21f95c71c4e479e9b2d896983125d695d13f425f567c',
-  scene: '73b3552a1245eb29e27d8d527c0c83ad256231e07eabbdb36fe0be2031493a91',
+  // Story spine (R19): the new demo jobs' input carries arcPolicy (demo runs
+  // buy nothing; the pre-R12 job fixture is unchanged). 894ab59: 063dc4a0…567c.
+  // Writers' room (R20): the new demo jobs' input carries councilPolicy (the demo
+  // never meets; the pre-R12 job fixture is unchanged). a113ead: 700e54fb…4e95.
+  fullAutoDemo: 'f1752df63a878dcb7cadd96ef45c754a948c9970680c52693e77b1777ef1e662',
+  // 2026-10-20 identity line: every scene request names a character's gender
+  // when the record has one (the seed protagonist does), so an outfit never
+  // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
+  scene: '34ee02d12bfcaf889a73d076089ff1e8194f9315581f10f06e6159dbeec85394',
   print: '637653d97d300bb6c2d5f7b39f10ad741d070dda0f6b90f85b8856683699f654',
   // Re-pinned at the merge: R13 (6ccc895) renames the ③ text-engine options
   // ('GPT · OpenAI') and adds the ③ model selects (generate-K1/K2-en only;
@@ -712,12 +725,27 @@ const PINS = {
   // Editor round: ③ before any job prices the read-through and the
   // author-model simplify (글 만들기 $1.94 → $2.46 at 12 pages) and its model
   // note names 글 다듬기·책 전체 퇴고. 8087d69: f17c0136…dfc3.
-  review: 'e1255f42b32a88615ec884510654bd2d4ae24072ad50c2db70e0fdac72f1959d',
+  // Story spine (R19): ③'s '승인 예시 함께 쓰기' help text says the 9-point
+  // examples are always in as spine cards (title and aria-label only; buttons,
+  // prices and ④/⑤ are unchanged). 894ab59: e1255f42…959d.
+  // Writers' room (R20): ③ before any job prices the five council calls
+  // (글 만들기 $2.46 → $2.48 at 12 pages); nothing else on ③, ④ or ⑤ changes.
+  // a113ead: 21b16ee3…d5f6.
+  // 회의 결과 보고 진행 (R22): ③ before any job gains the '회의 결과 보고 진행 ·
+  // 켜짐' line (help text and its 끄기 button) under the 승인 예시 line; the
+  // prices, ④ and ⑤ are byte-identical (diffed against 15db614's dump).
+  // 15db614: b8f4af05…052a.
+  review: '520fc68c7960c4598b05017f4e13f81f68724dcb30e5c422ddd6bd74ef346f09',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
   // without `editor` and estimates of existing books are unchanged. 8087d69: b11df8a8…068f.
-  estimates: '6c157a3e898895146cc8bb35c7b9ef85173cdada10ba87ea73798ce1065b6d55',
+  // Writers' room (R20): FULL AUTO/simple estimates for a NEW job include the
+  // five economy-model council calls (+5 requests, textUsd/baseUsd/
+  // withMaterialsAndRetryUsd); estimates of existing jobs and books are
+  // unchanged (dump-diffed: only those four fields of fullAuto.* differ).
+  // a113ead: 6c157a3e…6d55.
+  estimates: 'bcdb6bbbc0f9b9fbca89d7521d168d8c86e913670cfc1d38aac6c6ceb0557f77',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

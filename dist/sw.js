@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v49";
+const CACHE = "donghwa-shell-v58";
 const FILES = [
   "./story-reading-context.js",
   "./story-quality/dist/patterns.js",
@@ -16,6 +16,10 @@ const FILES = [
   "./story-generation/outline-normalize.js",
   "./story-generation/book-revision.js",
   "./story-generation/craft-rules.js",
+  "./story-generation/arc-rules.js",
+  "./story-generation/council.js",
+  "./story-generation/council-avatars.js",
+  "./story-generation/council-room.js",
   "./story-generation/stop-report.js",
   "./story-generation/coherence.js",
   "./story-generation/book-coherence.js",
@@ -51,6 +55,8 @@ const FILES = [
   "./story-generation/richness.js",
   "./story-generation/staging.js",
   "./image-generation/scene-prompt.js",
+  "./image-generation/identity.js",
+  "./place-types.js",
   "./image-generation/image-diversity.js",
   "./story-generation/vocab/sensory_en.json",
   "./story-generation/vocab/sensory_ko.json",

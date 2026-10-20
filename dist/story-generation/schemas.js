@@ -286,6 +286,7 @@ export class StoryValidationError extends Error {
 /** Korean names for the stage token of a StoryValidationError message. */
 export const STORY_STAGE_LABELS = Object.freeze({
   outline: "줄거리",
+  council: "기획 회의",
   plotContract: "사건 장부",
   sceneBriefs: "장면 디테일",
   sceneBrief: "장면 디테일",
@@ -421,7 +422,7 @@ export function validateOutline(value, input = {}) {
     value.emotionArc.length !== beats?.length
   )
     errors.push("감정 흐름은 비트마다 하나씩 필요해요.");
-  if (!["home_sleep", "open"].includes(value.endingType))
+  if (!["home_sleep", "open", "custom"].includes(value.endingType))
     errors.push("결말 방식을 확인해 주세요.");
   if (input.endingType && value.endingType !== input.endingType)
     errors.push("선택한 결말 방식을 유지해 주세요.");
@@ -681,6 +682,7 @@ export const SOFT_OUTLINE_CODES = Object.freeze(
     "home_start_end",
     "middle_locations",
     "refrain_missing",
+    "arc_turn_planted",
   ]),
 );
 export const hardOutlineViolations = (report) =>

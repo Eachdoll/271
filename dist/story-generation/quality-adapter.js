@@ -11,6 +11,14 @@ import {
 import { LEVEL_SEED } from "../reading-levels.js";
 import { hasEditorPolicy } from "./book-revision.js";
 import { craftCanonRules, hasCraftPolicy } from "./craft-rules.js";
+import {
+  hasArcPolicy,
+  arcCanonRules,
+  arcSimplifyKeep,
+  ARC_EXAMPLE_STYLE,
+  ARC_EXAMPLE_MIN_RUBRIC,
+  ARC_EXAMPLE_TOKEN_BUDGET,
+} from "./arc-rules.js";
 import { plotContractRules } from "./plot-contract.js";
 import { applyOverlay } from "../story-quality/dist/expand.js";
 import { findWorld, worldCoreLines } from "../story-quality/dist/worlds.js";
@@ -489,7 +497,7 @@ function safeResponse(response) {
   };
 }
 const CHECK_RULES = 2;
-function ledger(kind, input, options, extra = {}) {
+export function ledger(kind, input, options, extra = {}, checkpointKey = "qualityCheckpoint") {
   const contextFingerprint = hash({
     version: 1,
     kind,
@@ -502,7 +510,7 @@ function ledger(kind, input, options, extra = {}) {
       ]),
     ),
   });
-  const prior = options.qualityCheckpoint;
+  const prior = options[checkpointKey];
   const checkpoint =
     prior?.version === 1 &&
     prior.kind === kind &&
@@ -525,7 +533,7 @@ function ledger(kind, input, options, extra = {}) {
     stage: kind,
     requests: requestCount(paid),
     resumedCalls: resumed,
-    qualityCheckpoint: clone(checkpoint),
+    [checkpointKey]: clone(checkpoint),
     engineId: paid[0]?.meta?.engineId || null,
     modelId: paid[0]?.meta?.modelId || paid[0]?.meta?.model || null,
     models: paid.map((row) => ({
@@ -539,7 +547,7 @@ function ledger(kind, input, options, extra = {}) {
     if (options.onCheckpoint)
       await options.onCheckpoint({
         stage: kind,
-        qualityCheckpoint: clone(checkpoint),
+        [checkpointKey]: clone(checkpoint),
         usage: mergeUsage(paid),
         meta: summary(),
       });
@@ -549,6 +557,7 @@ function ledger(kind, input, options, extra = {}) {
     legacyChecks: checkpoint.checkRules !== CHECK_RULES,
     paid,
     summary,
+    save,
     usage: () => mergeUsage(paid),
     get resumed() {
       return resumed;
@@ -573,9 +582,11 @@ function ledger(kind, input, options, extra = {}) {
         stage: kind,
         phase: "request",
         message:
-          kind === "qualityOutline"
-            ? "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요."
-            : "장면을 풍부하게 쓴 뒤 선택한 읽기 수준으로 다듬고 있어요.",
+          kind === "council"
+            ? "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요."
+            : kind === "qualityOutline"
+              ? "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요."
+              : "장면을 풍부하게 쓴 뒤 선택한 읽기 수준으로 다듬고 있어요.",
         qualityRole: role,
       });
       let response;
@@ -611,7 +622,7 @@ function ledger(kind, input, options, extra = {}) {
     },
     fail(error, details = {}) {
       error.usage = mergeUsage(paid);
-      error.qualityCheckpoint = clone(checkpoint);
+      error[checkpointKey] = clone(checkpoint);
       error.meta = { ...(error.meta || {}), ...summary(), ...details };
       return error;
     },
@@ -633,8 +644,20 @@ function catchphraseRules(input, services) {
       .map((character) => `${character.name} (${character.id})`);
   return `${String(services.baseSystem || "").includes(CATCHPHRASE_RULE_EN) ? "" : `CATCHPHRASES: ${CATCHPHRASE_RULE_EN} Never use a catchphrase as the refrain or repeating frame sentence.\n`}${names.length ? `CATCHPHRASE ROTATION: ${names.join(", ")} used a catchphrase in a recent book, so they use no catchphrase in this book.\n` : ""}`;
 }
+/**
+ * 2026-10-20: the quality path never saw the parent's typed ending (only the
+ * ending type in the JSON template), so the outline ended at home. New drafts
+ * with endingType "custom" get the ending as a binding canon block.
+ */
+export function endingCanonBlock(input, stage = "outline") {
+  const note = String(input?.endingNote || "").trim().replace(/\s+/gu, " ");
+  if (input?.endingType !== "custom" || !note) return "";
+  return stage === "prose"
+    ? `ENDING (the parent's own ending, binding): "${note}". The final paragraph enacts it as concrete action and words in the place where it happens; no return home, bedtime or sleep unless the ending says so.`
+    : `ENDING (the parent's own ending, binding): "${note}". The final beat enacts exactly this as a concrete action wherever it happens, and its settingKey is that place (any supplied background, home or not); do not add a return home, a bedtime or sleep unless the ending says so. The first beat still starts at the home background. endingType is "custom".`;
+}
 function canonicalWorldRules(input, services, bindTargetLevel = true, stage = "outline") {
-  const craft = craftCanonRules(input, stage);
+  const craft = [endingCanonBlock(input, stage), craftCanonRules(input, stage), arcCanonRules(input, stage)].filter(Boolean).join("\n");
   return `${craft ? `${craft}\n` : ""}${services.baseSystem || ""}\n${catchphraseRules(input, services)}${bindTargetLevel ? services.levelRules?.(input) || "" : "RICH DRAFT LEVEL: use the package richLevel ranges in this request. The selected target level applies only during the later simplify/fix pass."}\n${plotContractRules(input)}\nCATALOGUE ATMOSPHERE: ${JSON.stringify(input.storyWorldMood || null)}. Catalogue landmarks, portals and props are suggestions for new material planning only. Approved drawer backgrounds, fixed geometry and cast always prevail; never add a tunnel, structure or speaking character solely because a catalogue suggests it.\nAPP CANON: ${JSON.stringify({ characters: input.characters, backgrounds: input.backgrounds, previousStory: input.previousStory || null, endingType: input.endingType, endingNote: input.endingNote || "", moral: input.moral || "", topic: input.topic, pageCount: input.pageCount, ...(isOpeningsInput(input) ? { layout: layoutCanon(input) } : {}) })}\nUse exact selected character IDs in characters and plotContract, exact selected background IDs in settingKey/settings/state locations. Start and end at a supplied home background and use at least two selected non-home locations between them. Inventory sublocations are optional views inside those fixed places, never permission to create another permanent place or an unselected main character. A seed creature may be a small background observation; do not replace the pinned cast or give it a speaking role unless that character is selected. Preserve previous-story facts. ${bindTargetLevel ? "Frozen app levelSpec rules override conflicting generic package wording." : "For this rich draft use the supplied upper richLevel; preserve events for later simplification without binding the final target sentence/word ranges yet."} English is newly authored at its own E level, never a translation.`;
 }
 function enrichedOutlineSchema(input, pattern, services) {
@@ -1231,7 +1254,9 @@ export async function generateQualityOutline(
     const data =
         services.qualityData ||
         (await loadStoryQualityData(globalThis.fetch, {
-          includeDistilled: quality.useDistilledExamples === true,
+          // R19: arc drafts always draw on the distilled 9-point examples as spine cards.
+          includeDistilled:
+            quality.useDistilledExamples === true || hasArcPolicy(input),
         })),
       { world, mood } = resolveStoryWorld(input, data);
     input.storyWorldMood = mood;
@@ -1245,7 +1270,7 @@ export async function generateQualityOutline(
       referenceBooks = qualityReferenceBooks(
         data,
         input.topic,
-        quality.useDistilledExamples === true,
+        quality.useDistilledExamples === true || hasArcPolicy(input),
         catchphrases,
         {
           catchphraseFilter: r9,
@@ -1258,7 +1283,8 @@ export async function generateQualityOutline(
     for (let attempt = 0; attempt < Math.min(2, patterns.length); attempt++) {
       const pattern = patterns[attempt],
         schema = enrichedOutlineSchema(input, pattern, services),
-        canon = canonicalWorldRules(input, services);
+        // R20: the story bible settled by the writers' room binds every outline request.
+        canon = [canonicalWorldRules(input, services), options.storyBibleRules || ""].filter(Boolean).join("\n");
       let fixFallback = null,
         wrapRetried = false;
       const wrap = (role) => ({
@@ -1372,6 +1398,13 @@ export async function generateQualityOutline(
           referenceBooks,
           approvedBooks: asList(quality.approvedBooks),
           endingType: input.endingType,
+          ...(hasArcPolicy(input)
+            ? {
+                exampleStyle: ARC_EXAMPLE_STYLE,
+                exampleMinRubric: ARC_EXAMPLE_MIN_RUBRIC,
+                exampleTokenBudget: ARC_EXAMPLE_TOKEN_BUDGET,
+              }
+            : {}),
           legacyChecks: journal.legacyChecks,
           ...(Array.isArray(quality.rules)
             ? { rules: quality.rules.slice(0, 7) }
@@ -1775,6 +1808,9 @@ export async function generateQualityProse(
             : input.specs[lang].vocabSource ||
               input.specs[lang].vocab ||
               "frozen selected vocabulary",
+        ...(hasArcPolicy(input)
+          ? { keepLines: arcSimplifyKeep(input, lang) }
+          : {}),
         twoPass: !targetOnly,
       });
       let simplified = result.simplified,

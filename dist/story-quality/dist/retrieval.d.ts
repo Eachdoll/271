@@ -14,10 +14,16 @@ export interface ScoredRecord {
     record: BookRecord;
     score: number;
 }
+/** 2026-10-20 R19: 'arc' renders each example as a story-spine card (stakes, rising tries, low point, turn, payoff). */
+export type ExampleStyle = 'arc';
+export interface RetrieveOptions {
+    /** Keep only records whose rubricTotal is at least this (records without a score, e.g. gold, are kept). */
+    minRubric?: number;
+}
 export declare function scoreRecord(record: BookRecord, q: RetrievalQuery): number;
-export declare function retrieveExamples(records: BookRecord[], q: RetrievalQuery, k?: number): ScoredRecord[];
+export declare function retrieveExamples(records: BookRecord[], q: RetrievalQuery, k?: number, opts?: RetrieveOptions): ScoredRecord[];
 /**
  * 프롬프트용 렌더. 비트는 한 줄 요약(첫 문장)만 넣어 길이를 줄인다.
  * 라벨은 고정: 구조·리듬만 참고, 재사용 금지.
  */
-export declare function renderExamplesForPrompt(examples: ScoredRecord[], maxCharsEach?: number): string;
+export declare function renderExamplesForPrompt(examples: ScoredRecord[], maxCharsEach?: number, style?: ExampleStyle): string;

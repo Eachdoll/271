@@ -241,3 +241,29 @@ export function materialSignature(item) {
     archivedAt: item.archivedAt || null,
   });
 }
+/**
+ * 2026-10-20: a stored signature still matches a material whose name,
+ * English name or traits changed since: the pictures a run buys depend on the
+ * look (version, description, kind, type, layout, clothes), not the name.
+ * Signatures stored by earlier versions carry the name, so both sides are
+ * compared on the look fields only.
+ */
+const LOOK_FIELDS = ["version", "description", "kind", "type", "layout", "clothes", "archivedAt"];
+export function materialSignatureMatches(item, signature) {
+  if (!item) return false;
+  const current = materialSignature(item);
+  if (current === signature) return true;
+  try {
+    const stored = JSON.parse(signature),
+      now = JSON.parse(current);
+    return (
+      !!stored &&
+      typeof stored === "object" &&
+      LOOK_FIELDS.every(
+        (field) => JSON.stringify(stored[field] ?? null) === JSON.stringify(now[field] ?? null),
+      )
+    );
+  } catch {
+    return false;
+  }
+}

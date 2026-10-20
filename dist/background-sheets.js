@@ -1,3 +1,4 @@
+import { placeTypePrompt } from "./place-types.js";
 import {
   getActiveWorld,
   getWorldStyleReferences,
@@ -77,7 +78,7 @@ export function backgroundSheetRequest(
         background.layout,
       ]),
     ),
-    prompt: `Create a reusable environment reference sheet for ONE original children's picture-book location. Location name and requested facts: ${background.name}; type ${background.type || ""}; ${background.description || background.features || ""}; fixed layout ${background.layout || ""}. Show three complementary reference panels: a wide establishing view, a closer view from another useful angle, and a small detail view of the important fixed objects. All panels depict the SAME exact place and consistent geometry, wall/roof colors, window and door positions, furniture arrangement, materials, and recurring objects. For an interior show the same bed/table/window positions; for outdoors preserve path, tree and building shapes. ${existing ? "The first background reference defines this established place and its layout. Preserve it except explicit parent-requested changes in the facts above." : ""} Style images define painting medium only. Empty environment: no people, animals, faces, story action, words, captions, labels, arrows, watermarks, logos, or map text.`,
+    prompt: `Create a reusable environment reference sheet for ONE original children's picture-book location. Location name and requested facts: ${background.name}; type ${placeTypePrompt(background.type) || ""}; ${background.description || background.features || ""}; fixed layout ${background.layout || ""}. Show three complementary reference panels: a wide establishing view, a closer view from another useful angle, and a small detail view of the important fixed objects. All panels depict the SAME exact place and consistent geometry, wall/roof colors, window and door positions, furniture arrangement, materials, and recurring objects. For an interior show the same bed/table/window positions; for outdoors preserve path, tree and building shapes. ${existing ? "The first background reference defines this established place and its layout. Preserve it except explicit parent-requested changes in the facts above." : ""} Style images define painting medium only. Empty environment: no people, animals, faces, story action, words, captions, labels, arrows, watermarks, logos, or map text.`,
     stylePreset: clone(style),
     referenceImages: [
       ...(existing
@@ -225,7 +226,17 @@ export function configureBackgroundSheets(context) {
         return;
       }
       const s = flow;
-      if (!s || !current(s) || s.busy) return;
+      // 2026-10-20: never a dead button: a stale screen closes with a word,
+      // a click during a render says so.
+      if (!s || !current(s)) {
+        api.closeModal();
+        api.toast("배경 시트 창이 닫혔어요. 다시 열어 주세요.");
+        return;
+      }
+      if (s.busy) {
+        api.toast("배경 그림을 만드는 중이에요. 잠시만 기다려 주세요.");
+        return;
+      }
       if (action === "start") {
         await generate(s);
         return;

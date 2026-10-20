@@ -11,11 +11,21 @@ import {
   runFullAuto,
   FULL_AUTO_STOPS,
   jobPictureTotal,
+  COUNCIL_REVIEW_STATUS,
 } from "./full-auto.js";
+import { estimateCouncilCost } from "./text-generation/models.js";
 import {
   openStopReport,
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
+import {
+  renderCouncilRoom,
+  liveCouncilRecord,
+  emptyCouncilRecord,
+  renderCouncilReviewForm,
+  readCouncilChoice,
+  readCouncilDirection,
+} from "./story-generation/council-room.js";
 import {
   isPageOperationBusy,
   isPageImageStale,
@@ -27,8 +37,19 @@ import {
 const HOLD_LABELS = {
   "text-review": "글 검수 대기",
   "pages-ready": "그림 준비 완료",
+  // R22: parked after the writers' room for the parent's pitch or direction.
+  [COUNCIL_REVIEW_STATUS]: "기획 회의 결과 확인",
 };
 const isHeld = (job) => Object.hasOwn(HOLD_LABELS, job?.status);
+const councilHeld = (job) => job?.status === COUNCIL_REVIEW_STATUS;
+/** R22: '약 $0.02' for one more meeting on this job, or '요금 정보 없음'. */
+function councilFee(job) {
+  const cost = estimateCouncilCost(job);
+  if (cost.pricingUnknown) return "요금 정보 없음";
+  return cost.costUsd > 0 ? `회의 요금 약 $${cost.costUsd.toFixed(2)}` : "무료";
+}
+// A 방향 고쳐 다시 회의 waiting for its confirm (the typed direction survives the dialog).
+let pendingRedirect = null;
 const PAGE_BUSY_MESSAGE =
   "이 책의 쪽 글·그림 작업이 진행 중이에요. 끝난 뒤에 이어 만들어 주세요.";
 /** A page tool is rewriting or drawing this job's book in this tab. */
@@ -163,14 +184,19 @@ export function cleanupFullAuto(hide = false) {
 }
 export function renderFullAutoLauncher(state, wizard) {
   const estimate = estimateFullAutoCost(state, wizard);
-  return `<section class="full-auto-launcher" aria-label="FULL AUTO MODE"><div><span class="role-tag">FULL AUTO MODE</span><h3>주제만 적고, 한 권을 한 번에</h3><p>고른 친구를 주인공으로 유지해요. 필요한 친구·장소는 서랍에서 고르고, 부족하면 새 시트부터 본문 그림과 표지까지 자동으로 만들어요.</p></div><label class="audio-cache-check"><input id="full-auto-allow-new" type="checkbox" checked> 부족한 재료 자동 추가 · 새 조연 최대 2명, 새 배경 최대 3곳 (주제에 어울리는 재료가 서랍에 없을 때 더하고 서랍에 저장해요)</label><p class="small-label">${estimate.pageCount}쪽 · 부모 설정의 글·그림 엔진과 읽기 수준 사용<br>API 예상 약 $${estimate.baseUsd.toFixed(2)} · 새 시트 포함 약 $${estimate.withMaterialsAndRetryUsd.toFixed(2)}${estimate.textPricingUnknown || estimate.imagePricingUnknown ? " · 일부 요금 미확인 (목록에 없는 모델은 요금 정보 없음)" : ""}<br>참고 단가 추정이며 실제 한도가 아닙니다. 글 자동 수정·입력 참조 비용 별도.${estimate.imageEngine === "sample" ? "<br>현재 그림 엔진은 무료 고정 샘플입니다. AI 그림은 부모 설정에서 엔진을 변경해 주세요." : ""}</p><p class="small-label">완료 후 전체 초안을 검토해 책장에 저장해요. 제작 중에도 책장을 둘러볼 수 있어요. 브라우저를 완전히 종료하면 완료한 결과를 보관하고 다음 접속에서 이어 만들어요.</p><div class="story-start-actions"><button type="button" class="btn btn-green" data-action="wizard-next">줄거리부터 함께 만들기</button>${button("FULL AUTO로 한 번에", "start", null, "outline")}</div></section>`;
+  return `<section class="full-auto-launcher" aria-label="FULL AUTO MODE"><div><span class="role-tag">FULL AUTO MODE</span><h3>주제만 적고, 한 권을 한 번에</h3><p>고른 친구를 주인공으로 유지해요. 필요한 친구·장소는 서랍에서 고르고, 부족하면 새 시트부터 본문 그림과 표지까지 자동으로 만들어요.</p></div><label class="audio-cache-check"><input id="full-auto-allow-new" type="checkbox" checked> 부족한 재료 자동 추가 · 새 조연 최대 2명, 새 배경 최대 3곳 (주제에 어울리는 재료가 서랍에 없을 때 더하고 서랍에 저장해요)</label><label class="audio-cache-check"><input id="full-auto-council-review" type="checkbox" ${state.settings?.councilReview !== false ? "checked" : ""}> 기획 회의 결과를 보고 진행 · 봇들이 피치 3개를 판정하면 멈추고, 피치를 고르거나 한마디를 남기거나 방향을 고쳐 다시 회의할 수 있어요 (요금 없음)</label><p class="small-label">${estimate.pageCount}쪽 · 부모 설정의 글·그림 엔진과 읽기 수준 사용<br>API 예상 약 $${estimate.baseUsd.toFixed(2)} · 새 시트 포함 약 $${estimate.withMaterialsAndRetryUsd.toFixed(2)}${estimate.textPricingUnknown || estimate.imagePricingUnknown ? " · 일부 요금 미확인 (목록에 없는 모델은 요금 정보 없음)" : ""}<br>참고 단가 추정이며 실제 한도가 아닙니다. 글 자동 수정·입력 참조 비용 별도.${estimate.imageEngine === "sample" ? "<br>현재 그림 엔진은 무료 고정 샘플입니다. AI 그림은 부모 설정에서 엔진을 변경해 주세요." : ""}</p><p class="small-label">완료 후 전체 초안을 검토해 책장에 저장해요. 제작 중에도 책장을 둘러볼 수 있어요. 브라우저를 완전히 종료하면 완료한 결과를 보관하고 다음 접속에서 이어 만들어요.</p><div class="story-start-actions"><button type="button" class="btn btn-green" data-action="wizard-next">줄거리부터 함께 만들기</button>${button("FULL AUTO로 한 번에", "start", null, "outline")}</div></section>`;
 }
 /** Simple-mode card status: what the parent would call it, not the runner's phase. */
 function simpleJobLabel(job) {
   const book = job.book,
     total = book?.pages?.length || 0,
     drawn = book?.pages?.filter((p) => p?.imageAssetId).length || 0;
-  if (!book) return job.status === "running" ? "만드는 중" : "멈춤";
+  if (!book)
+    return job.status === "running"
+      ? "만드는 중"
+      : councilHeld(job)
+        ? "회의 결과 확인"
+        : "멈춤";
   // A run with its book is making pictures (sheets first, before any page lands).
   if (drawn || ["running", "pages-ready", "review"].includes(job.status))
     return `그림 ${drawn}/${total}`;
@@ -237,7 +263,7 @@ export function renderFullAutoJobs(state, { simple = false, rest = false } = {})
           pending?.nonce &&
           pending.nonce !== job.stopBaselineNonce &&
           job.status !== "paused";
-      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? button("쪽마다 검수", "simple-review", job.id, "green") : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}${!live && job.status !== "running" && stopReportAvailable(job) ? button("멈춤 리포트", "report", job.id, "plain") : ""}</div></article>`;
+      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? (councilHeld(job) ? button("회의 결과 보기", "status", job.id, "green") : button("쪽마다 검수", "simple-review", job.id, "green")) : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}${!live && job.status !== "running" && stopReportAvailable(job) ? button("멈춤 리포트", "report", job.id, "plain") : ""}</div></article>`;
     })
     .join("")}</div></section>`;
 }
@@ -251,6 +277,15 @@ function refreshCards() {
     });
 }
 
+/** R21: the writers' room in the status window (a live run follows it; a finished one keeps it). */
+function councilRoomHtml(job, busy) {
+  const record = liveCouncilRecord(job);
+  if (!record) {
+    const pending = job?.input?.councilPolicy?.version === 1 && !job?.demo && !job?.completed?.outline;
+    return busy && pending ? renderCouncilRoom(emptyCouncilRecord(job.input), { live: true }) : "";
+  }
+  return renderCouncilRoom(record, { live: busy && record.phase !== "done" });
+}
 function runScreen(job, busy) {
   inspectedId = job.id;
   const plan = job.plan,
@@ -261,7 +296,7 @@ function runScreen(job, busy) {
     ),
     imageCalls = Object.keys(job.imageUsage || {}).length;
   api.showModal(
-    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><p id="full-auto-count" class="small-label">그림 ${images} / ${jobPictureTotal(job)} · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
+    `${api.modalHeader("FULL AUTO · " + (job.status === "review" ? "완성 초안" : !busy && isHeld(job) ? HOLD_LABELS[job.status] : "이야기 만드는 중"))}<p class="modal-intro">${esc(job.input.topic)}</p><p id="full-auto-progress" class="notice" role="status" aria-live="polite">${esc(job.phase)}</p><div id="full-auto-council" class="council-room-wrap">${councilRoomHtml(job, busy)}</div>${!busy && councilHeld(job) ? `<div class="full-auto-council-review">${renderCouncilReviewForm(liveCouncilRecord(job), { direction: job.input?.direction || "", fee: councilFee(job) })}</div>` : ""}<p id="full-auto-count" class="small-label">그림 ${images} / ${jobPictureTotal(job)} · 글 요청 ${textCalls}회 · 저장된 생성 이미지 ${imageCalls}장</p>${plan ? `<details class="story-card"><summary>자동으로 고른 재료</summary><p>등장인물: ${plan.characterIds.map((id) => esc(api.getState().characters.find((c) => c.id === id)?.name || plan.newCharacters.find((c) => c.id === id)?.name)).join(" · ")}</p><p>장소: ${plan.backgroundIds.map((id) => esc(api.getState().backgrounds.find((b) => b.id === id)?.name || plan.newBackgrounds.find((b) => b.id === id)?.name)).join(" · ")}</p><p>${esc(plan.reason)}</p><p class="small-label">새 조연 ${plan.newCharacters.length}명 · 새 배경 ${plan.newBackgrounds.length}곳 · 자동 생성 시트는 완료 후 함께 검토해 주세요.</p></details>` : ""}<ol class="full-auto-steps">${[
       ["plan", "재료 선택"],
       ["input", "시트 준비"],
       ["outline", "줄거리"],
@@ -277,12 +312,44 @@ function runScreen(job, busy) {
       )
       .join(
         "",
-      )}</ol>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${job.notes.map((n) => `<p class="small-label">${esc(n)}</p>`).join("")}${!busy && stopReportAvailable(job) ? `<p>${button("멈춤 리포트", "report", job.id, "plain")}</p>` : ""}<p class="small-label">완료한 재료·문단·그림은 저장됩니다. 이 창을 닫아도 제작은 계속됩니다. 브라우저를 완전히 종료하면 다음 접속에서 이어 만들어요. 최종 검토 전에는 아이 책장에 공개되지 않습니다.</p><div class="modal-actions">${busy ? button("닫고 둘러보기", "close", job.id) + button("중지 · 결과 보관", "pause", job.id) : job.status === "review" ? button("완성 초안 검토", "review", job.id, "primary") : isHeld(job) ? button("쪽마다 검수", "simple-review", job.id, "primary") : button("이어서 자동 생성", "resume", job.id, "primary")}${!busy ? button("닫기", "close", job.id) : ""}</div>`,
+      )}</ol>${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${job.notes.map((n) => `<p class="small-label">${esc(n)}</p>`).join("")}${!busy && stopReportAvailable(job) ? `<p>${button("멈춤 리포트", "report", job.id, "plain")}</p>` : ""}<p class="small-label">완료한 재료·문단·그림은 저장됩니다. 이 창을 닫아도 제작은 계속됩니다. 브라우저를 완전히 종료하면 다음 접속에서 이어 만들어요. 최종 검토 전에는 아이 책장에 공개되지 않습니다.</p><div class="modal-actions">${busy ? button("닫고 둘러보기", "close", job.id) + button("중지 · 결과 보관", "pause", job.id) : job.status === "review" ? button("완성 초안 검토", "review", job.id, "primary") : councilHeld(job) ? button("이 피치로 계속", "council-continue", job.id, "primary") + button("방향 고쳐 다시 회의", "council-redirect", job.id) : isHeld(job) ? button("쪽마다 검수", "simple-review", job.id, "primary") : button("이어서 자동 생성", "resume", job.id, "primary")}${!busy ? button("닫기", "close", job.id) : ""}</div>`,
     "wide full-auto-workspace",
   );
 }
+/**
+ * R22: rewrite the direction of a parked job and forget its meeting, so the
+ * next run meets again (five new calls). The old meeting and the parent's
+ * reason stay in the next record's log (job.councilHistory). Saves nothing.
+ */
+export function redirectCouncil(job, direction) {
+  const next = String(direction || "").trim().slice(0, 200),
+    previous = String(job.input?.direction || "").trim();
+  const what = next
+    ? previous
+      ? `방향 고침: “${previous}” → “${next}”`
+      : `방향 적음: “${next}”`
+    : previous
+      ? `방향 지움: “${previous}” (수준·가치·끝맺음에서 정한 방향으로)`
+      : "같은 방향으로 다시 회의";
+  job.councilHistory = [
+    ...(Array.isArray(job.councilHistory) ? job.councilHistory : []),
+    { kind: "revised", what, why: "회의 결과를 보고 부모가 다시 회의를 요청", at: new Date().toISOString() },
+  ].slice(-20);
+  if (next) job.input.direction = next;
+  else delete job.input.direction;
+  if (job.wizard && typeof job.wizard === "object") {
+    if (next) job.wizard.direction = next;
+    else delete job.wizard.direction;
+  }
+  delete job.councilCheckpoint;
+  job.councilChoice = null;
+  job.updatedAt = new Date().toISOString();
+  return job;
+}
 /** Completion message for the status a run ended in; a hold is not a finished book. */
 function finishedToast(job, navigate) {
+  if (councilHeld(job))
+    return "기획 회의가 끝났어요. 피치를 고르거나 방향을 고쳐 이어 가 주세요.";
   if (job.status === "text-review")
     return "글이 완성됐어요. 쪽마다 글을 확인해 주세요.";
   if (job.status === "pages-ready")
@@ -379,8 +446,10 @@ async function execute(job, { navigate = true, onProgress, redraw = [] } = {}) {
         )
           return;
         const progress = document.querySelector("#full-auto-progress"),
-          count = document.querySelector("#full-auto-count");
+          count = document.querySelector("#full-auto-count"),
+          room = document.querySelector("#full-auto-council");
         if (progress) progress.textContent = message;
+        if (room) room.innerHTML = councilRoomHtml(job, true);
         if (count)
           count.textContent = `그림 ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job)} · 글 요청 ${job.usage.calls.reduce((n, c) => n + (Number(c.requests) || 0), 0)}회`;
       },
@@ -552,6 +621,7 @@ export async function startFullAutoJob(
     planMode = "auto",
     navigate = false,
     onProgress,
+    councilReview,
   } = {},
 ) {
   assertIdleRunner();
@@ -561,6 +631,7 @@ export async function startFullAutoJob(
       stopBefore,
       demo,
       planMode,
+      ...(councilReview === undefined ? {} : { councilReview }),
     });
   if (api.save() === false) {
     delete autoJobs(state)[job.id];
@@ -645,7 +716,10 @@ export function configureFullAutoUI(context) {
           const wizard = api.getWizard(),
             allowNew =
               document.querySelector("#full-auto-allow-new")?.checked !== false,
-            job = createFullAutoJob(state, wizard, { allowNew });
+            councilReview =
+              document.querySelector("#full-auto-council-review")?.checked !==
+              false,
+            job = createFullAutoJob(state, wizard, { allowNew, councilReview });
           if (api.save() === false) {
             delete autoJobs(state)[job.id];
             throw Error("자동 작업을 저장하지 못했어요.");
@@ -682,6 +756,42 @@ export function configureFullAutoUI(context) {
         }
         if (action === "status") {
           runScreen(job, currentJob?.id === job.id && !!controller);
+          return;
+        }
+        // R22 회의 결과 보고 진행: the parent's pitch (and note) go on the job;
+        // the resumed run replays the paid rounds and writes the bible.
+        if (action === "council-continue") {
+          if (!councilHeld(job)) throw Error("기획 회의 결과를 기다리는 작업이 아니에요.");
+          const choice = readCouncilChoice(document) || { pick: liveCouncilRecord(job)?.recommended || 1, note: "" };
+          job.councilChoice = { ...choice, at: new Date().toISOString() };
+          job.updatedAt = new Date().toISOString();
+          if (api.save() === false) {
+            job.councilChoice = null;
+            throw Error("선택을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+          }
+          api.closeModal();
+          await execute(job);
+          return;
+        }
+        if (action === "council-redirect") {
+          if (!councilHeld(job)) throw Error("기획 회의 결과를 기다리는 작업이 아니에요.");
+          const direction = readCouncilDirection(document),
+            previous = String(job.input?.direction || "").trim();
+          pendingRedirect = { jobId: job.id, direction };
+          api.showModal(
+            `${api.modalHeader("방향을 고쳐 다시 회의할까요?")}<p class="modal-intro">${direction ? `새 방향: “${esc(direction)}”` : previous ? `방향 없이(수준·가치·끝맺음에서 정한 방향으로) 다시 회의해요.` : "같은 방향으로 봇들을 다시 불러 새 피치를 받아요."}</p><p class="small-label">지금 피치 3개와 판정은 버리고 작가·편집자·그림 감독·독자 봇을 새로 불러요 · ${esc(councilFee(job))}.</p><div class="modal-actions">${button("취소", "status", job.id)}${button("다시 회의", "council-redirect-confirm", job.id, "primary")}</div>`,
+          );
+          return;
+        }
+        if (action === "council-redirect-confirm") {
+          const pending = pendingRedirect;
+          pendingRedirect = null;
+          if (!councilHeld(job) || pending?.jobId !== job.id)
+            throw Error("다시 회의할 작업을 찾지 못했어요. 상태 창을 다시 열어 주세요.");
+          redirectCouncil(job, pending.direction);
+          if (api.save() === false) throw Error("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+          api.closeModal();
+          await execute(job);
           return;
         }
         // 2026-10-20: why the run stopped (or what its checks left), to copy or save.

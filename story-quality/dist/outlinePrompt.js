@@ -20,7 +20,7 @@ export function buildOutlinePrompt(input) {
     const supporting = input.supporting
         .map((c, i) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.traits.slice(0, 2).join(', ')}${clauses[i + 1]}`)
         .join(' / ');
-    const examples = renderExamplesForPrompt(retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2));
+    const examples = renderExamplesForPrompt(retrieveExamples(input.approvedBooks, { topic: input.topic, patternId: p.id, levelKo: input.levelKo, excludeBookIds: input.excludeBookIds }, input.exampleCount ?? 2, { minRubric: input.exampleMinRubric }), input.exampleStyle === 'arc' ? 1300 : 420, input.exampleStyle);
     const rules = (input.rules ?? DEFAULT_RULES).slice(0, 7);
     const banExamples = (input.banExamples ?? DEFAULT_BAN_EXAMPLES).slice(0, 4);
     const user = fill(OUTLINE_USER, {

@@ -6,6 +6,7 @@ import type { BookRecord, GestureDictionary, Inventories, LevelSpecEn, LevelSpec
 import type { WorldCard } from './worlds.js';
 import { type BackgroundType, type StorySeed } from './composeSeed.js';
 import { type Character } from './outlinePrompt.js';
+import type { ExampleStyle } from './retrieval.js';
 import { plotCheck } from './plotCheck.js';
 import { type PageText } from './childSimulator.js';
 export interface Engines {
@@ -28,7 +29,7 @@ export interface OutlineStageInput {
     backgroundType: BackgroundType;
     inventories: Inventories;
     approvedBooks: BookRecord[];
-    endingType: 'home_sleep' | 'open';
+    endingType: 'home_sleep' | 'open' | 'custom';
     rules?: string[];
     banExamples?: string[];
     /** 보급형 모델로 줄거리를 만들 때 ON 권장 */
@@ -52,6 +53,11 @@ export interface OutlineStageInput {
      * 수정 호출에도 말버릇 항목이 없다. 말버릇 정책 없이 고정된 앱의 기존 초안이 완료한 유료 호출을 재결제하지 않게 한다.
      */
     legacyCatchphrasePrompt?: boolean;
+    /** R19 뼈대 카드 예시('arc')와 점수 하한. 없으면 예전 예시 문안 그대로. */
+    exampleStyle?: ExampleStyle;
+    exampleMinRubric?: number;
+    /** R19: 참고 예시를 줄이기 시작하는 대략 토큰 예산(기본 1,800). 뼈대 카드는 더 길어 앱이 올려 준다. */
+    exampleTokenBudget?: number;
     /**
      * true면 2026-10-19 견고성 수정 이전의 검사(plotCheck legacyChecks)를 쓴다. 앱이 그 이전에 저장된 유료 체크포인트를 이어 갈 때만 켠다:
      * 검사 결과가 바뀌면 수정 호출 요청이 달라져 이미 산 응답을 다시 쓰지 못하기 때문이다.
@@ -94,10 +100,14 @@ export interface ProseStageInput {
     condenseOverBudget?: boolean;
     /** true면 규칙 9(말버릇 한도)가 없는 r8 풍부 쓰기 문안을 쓴다(앱의 기존 초안 재결제 방지). */
     legacyCatchphrasePrompt?: boolean;
+    /** R19: 단순화·고침·압축 때 줄이지 말아야 할 줄(뼈대). 없으면 문안 그대로. */
+    keepLines?: string;
 }
 export declare function runProseStage(input: ProseStageInput): Promise<import("./richThenSimplify.js").RichSimplifyResult>;
 /** 쪽 나누기 뒤 게이트: 호기심 + 되말하기. 둘 다 보급형(하) 엔진. */
-export declare function runChildGate(engines: Engines, pages: PageText[], prose: string, outline: StoryOutline): Promise<{
+export declare function runChildGate(engines: Engines, pages: PageText[], prose: string, outline: StoryOutline, opts?: {
+    age?: string;
+}): Promise<{
     curiosity: import("./childSimulator.js").CuriosityResult;
     retell: import("./childSimulator.js").RetellResult;
     pass: boolean;

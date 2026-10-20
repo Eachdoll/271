@@ -59,7 +59,7 @@ export interface StoryOutline {
     };
     newWordsKo: string[];
     newWordsEn: string[];
-    endingType: 'home_sleep' | 'open';
+    endingType: 'home_sleep' | 'open' | 'custom';
 }
 /** 승인된 책 1권의 기록. 검색 few-shot과 금지 목록의 재료. */
 export interface BookRecord {

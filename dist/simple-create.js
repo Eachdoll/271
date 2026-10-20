@@ -13,11 +13,13 @@ import {
   isFullAutoRunning,
   keepEditedPictures,
   isSimpleJob,
+  redirectCouncil,
 } from "./full-auto-ui.js";
 import {
   estimateFullAutoCost,
   fullAutoProgress,
   jobImageModelConfig,
+  COUNCIL_REVIEW_STATUS,
 } from "./full-auto.js";
 import { readAutoStop } from "./full-auto-control.js";
 import {
@@ -60,6 +62,7 @@ import {
 } from "./image-generation/models.js";
 import { supportsModelList } from "./text-generation/model-list.js";
 import {
+  estimateCouncilCost,
   getTextModelInfo,
   resolveStoryStageSettings,
   resolveQualityStageSettings,
@@ -81,6 +84,21 @@ import {
   openStopReport,
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
+import { councilSummaryLine } from "./story-generation/council.js";
+import {
+  councilRoomBlock,
+  renderCouncilRoom,
+  liveCouncilRecord,
+  emptyCouncilRecord,
+  renderCouncilReviewForm,
+  readCouncilChoice,
+  readCouncilDirection,
+} from "./story-generation/council-room.js";
+import {
+  placeEmoji,
+  placeTypeLabel,
+  isPresetPlaceType,
+} from "./place-types.js";
 import { safeTopic } from "./engine.js";
 import {
   CUES,
@@ -243,7 +261,9 @@ const TEXT_ENGINE_NAMES = {
   demo: "데모 글 · 무료",
 };
 const HELD = ["text-review", "pages-ready", "review"];
-const RESUMABLE = ["ready", "running", "paused", "failed", ...HELD];
+// R22: parked after the writers' room (no text yet): ③ shows the choice.
+const councilHeld = (job) => job?.status === COUNCIL_REVIEW_STATUS;
+const RESUMABLE = ["ready", "running", "paused", "failed", COUNCIL_REVIEW_STATUS, ...HELD];
 // 2026-10-20 variety: the parent may pick six companions and four places
 // (plus the home); the topic still preselects only two of each.
 const MAX_FRIENDS = 6,
@@ -369,10 +389,15 @@ export function placeKeywords(background = {}) {
       background.nameEn,
       background.description,
       background.type,
+      placeTypeLabel(background.type),
     ]
       .filter(Boolean)
       .join(" "),
-    words = new Set(nameWords(background.name));
+    // 2026-10-20: a typed kind ("도시") is itself a topic word.
+    words = new Set([
+      ...nameWords(background.name),
+      ...(isPresetPlaceType(background.type) ? [] : nameWords(background.type)),
+    ]);
   for (const [pattern, hints] of PLACE_HINTS)
     if (pattern.test(text)) hints.forEach((hint) => words.add(hint));
   return [...words].filter(Boolean);
@@ -547,7 +572,7 @@ const canAbandon = (job) =>
   !!job &&
   !job.book &&
   !runIsLive(job) &&
-  ["paused", "failed", "ready", "running"].includes(job.status);
+  ["paused", "failed", "ready", "running", COUNCIL_REVIEW_STATUS].includes(job.status);
 
 /* ---------- moving between the five steps (R11) ---------- */
 const STEP_EDITING = "고치던 글을 저장하거나 취소해 주세요.",
@@ -840,6 +865,7 @@ function ideaState(state) {
     : { world: false };
 }
 function resumeLabel(job) {
+  if (councilHeld(job)) return "기획 회의 결과 확인";
   if (job.status === "text-review") return "글 검수 대기";
   if (job.status === "pages-ready") return "그림 준비 완료";
   if (job.status === "review") return "그림 완성 · 마지막 확인";
@@ -936,7 +962,7 @@ function renderFrozenMaterials(ctx, w, job) {
     )}</div><p class="form-label">이야기 장소</p><div class="selection-grid simple-cards">${places
     .map((b) =>
       card(
-        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || "🌿"}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
+        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
       ),
     )
     .join(
@@ -972,7 +998,7 @@ function renderMaterialsStep(ctx, w) {
       const selected = w.backgroundIds.includes(b.id),
         home = isHomeBackground(b),
         rec = placeRec.has(b.id);
-      return `<button type="button" class="selection simple-card simple-place ${selected ? "selected" : ""}" data-simple-action="place" data-id="${esc(b.id)}" aria-pressed="${selected}"><span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || "🌿"}</span><strong>${esc(b.name)}</strong><small>${home ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${rec ? '<span class="simple-rec">추천</span>' : ""}</button>`;
+      return `<button type="button" class="selection simple-card simple-place ${selected ? "selected" : ""}" data-simple-action="place" data-id="${esc(b.id)}" aria-pressed="${selected}"><span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${home ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${rec ? '<span class="simple-rec">추천</span>' : ""}</button>`;
     })
     .join(
       "",
@@ -1147,7 +1173,14 @@ function renderGenerateStep(ctx, w) {
         ? `약 ${usd(cost.repairs.typicalMinUsd)}~${usd(cost.repairs.typicalMaxUsd)} (최대 ${usd(cost.repairs.maxUsd)})`
         : "";
   const costLines = `<ul class="simple-costs">${text ? '<li class="simple-costs-done"><span>글 만들기 · 완료</span></li>' : `<li><span>글 만들기</span><strong>${textCost}</strong></li>`}<li><span>${cost.imageCountMax ? `그림 ${cost.imageCountMin}~${cost.imageCountMax}장 + 표지 (펼침면 수에 따라)` : `그림 ${cost.pageCount}쪽 + 표지`}</span><strong>${imagesCost}</strong></li>${cost.repairs && !job?.demo ? `<li><span>검사 후 자동 수정: 보통 ${cost.repairs.typicalMin}~${cost.repairs.typicalMax}회 · 최대 ${cost.repairs.max}회</span><strong>${repairsCost}</strong></li>` : ""}${imagePriced ? `<li><span>새 시트가 필요하면</span><strong>${cost.imagePricingUnknown ? "요금 정보 없음" : `최대 ${usd(cost.sheetsUpperUsd)}`}</strong></li>` : ""}<li class="simple-costs-note">그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.</li></ul>`;
-  const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요." aria-label="도움말: 부모가 승인한 예시 동화를 줄거리 참고로 함께 보내요. 기본은 꺼짐이에요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
+  // R22 회의 결과 보고 진행: a parent setting, frozen on the job once it exists.
+  const councilReview = job
+      ? job.councilReview === true
+      : state.settings?.councilReview !== false,
+    councilLine = job?.demo
+      ? ""
+      : `<div class="simple-distilled simple-council-review"><span>회의 결과 보고 진행 · <strong>${councilReview ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="봇들이 피치 3개를 판정하면 멈춰요. 피치를 고르거나 작가 봇에게 한마디를 남기거나 방향을 고쳐 다시 회의할 수 있어요. 요금은 없어요." aria-label="도움말: 봇들이 피치 3개를 판정하면 멈춰요. 피치를 고르거나 작가 봇에게 한마디를 남기거나 방향을 고쳐 다시 회의할 수 있어요. 요금은 없어요.">?</span>${sbtn(councilReview ? "끄기" : "켜기", "toggle-council-review", "plain", locked ? "disabled" : `aria-pressed="${councilReview}"`)}</div>`;
+  const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="자동 판정 9점 이상 예시는 새 이야기의 줄거리에 뼈대 카드로 늘 들어가요. 이 스위치는 8점 예시까지 함께 보낼지 정해요." aria-label="도움말: 자동 판정 9점 이상 예시는 새 이야기의 줄거리에 뼈대 카드로 늘 들어가요. 이 스위치는 8점 예시까지 함께 보낼지 정해요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
   const checkFailed =
@@ -1164,12 +1197,17 @@ function renderGenerateStep(ctx, w) {
         live ||
         (!!pageOp && pageOp.bookId === bookId) ||
         (!!bookId && isPageOperationBusy(bookId));
-    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
+    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${councilSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
   } else if (live)
-    status = `${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
+    status = `${councilRoomBlock(job, { live: true })}${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
+  else if (councilHeld(job)) {
+    // R22: the parked meeting with the parent's choice (nothing runs, nothing is bought here).
+    const fee = textFee(estimateCouncilCost(job).costUsd, estimateCouncilCost(job).pricingUnknown);
+    status = `${councilRoomBlock(job, { open: true })}${renderCouncilReviewForm(liveCouncilRecord(job), { direction: job.input?.direction || "", fee: `회의 요금 ${fee}` })}<div class="simple-start">${sbtn("이 피치로 계속", "council-continue", "primary")}${sbtn("방향 고쳐 다시 회의", "council-redirect", "outline")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}</div><p class="small-label">피치를 고르면 작가 봇이 바이블을 쓰고 줄거리 → 글 → 쪽 나누기를 이어서 만들어요. 다시 회의하면 봇들을 새로 불러요.</p>`;
+  }
   else
-    status = `${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
+    status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${councilLine}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(
@@ -1645,6 +1683,12 @@ function onRunProgress(event) {
     fraction: Number(event.fraction) || 0,
   };
   if (typeof document === "undefined" || !api.isSimpleView?.()) return;
+  // R21: the meeting room follows the run (the record is saved after every answer).
+  const room = document.querySelector("#simple-council-room");
+  if (room) {
+    const record = liveCouncilRecord(event.job);
+    room.innerHTML = renderCouncilRoom(record || emptyCouncilRecord(event.job.input), { live: !record || record.phase !== "done" });
+  }
   const text = document.querySelector("#simple-progress-text"),
     bar = document.querySelector("#simple-progress-bar"),
     stages = document.querySelector("#simple-stages"),
@@ -1727,6 +1771,8 @@ async function startText(ctx, { demo = false, onCreated } = {}) {
       demo,
       navigate: false,
       onProgress: onRunProgress,
+      // R22: ③'s '회의 결과 보고 진행' switch (a parent setting, on by default).
+      councilReview: state.settings?.councilReview !== false,
     });
   // The runner creates and saves the job synchronously before its first await.
   const job = Object.values(state.fullAutoJobs || {}).find(
@@ -2726,6 +2772,72 @@ async function handle(ctx, action, el) {
     ).useDistilledExamples;
     if (setStoryQualityOption(state, "useDistilledExamples", !on) === false)
       ctx.toast("설정을 저장하지 못했어요.");
+    ctx.render();
+    return;
+  }
+  if (action === "toggle-council-review") {
+    // R22: a parent setting (on unless turned off); locked once the story has its job.
+    if (jobOfWizard(state, w)) return;
+    const on = state.settings?.councilReview !== false,
+      had = Object.hasOwn(state.settings || {}, "councilReview"),
+      previous = state.settings?.councilReview;
+    state.settings ||= {};
+    state.settings.councilReview = !on;
+    if (ctx.save() === false) {
+      if (had) state.settings.councilReview = previous;
+      else delete state.settings.councilReview;
+      ctx.toast("설정을 저장하지 못했어요.");
+    }
+    ctx.render();
+    return;
+  }
+  if (action === "council-continue") {
+    // R22: the parent's pitch and note go on the job; the run replays the
+    // paid rounds from the journal and buys only the bible and what follows.
+    const job = jobOfWizard(state, w);
+    if (!councilHeld(job) || runIsLive(job)) return ctx.render();
+    if (!job.demo && (await stopForTextKey(ctx, job))) return;
+    const choice = readCouncilChoice(document) || {
+      pick: liveCouncilRecord(job)?.recommended || 1,
+      note: "",
+    };
+    job.councilChoice = { ...choice, at: new Date().toISOString() };
+    job.updatedAt = new Date().toISOString();
+    if (ctx.save() === false) {
+      job.councilChoice = null;
+      return ctx.toast("선택을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    }
+    const done = await runJob(ctx, job.id, "text", "text");
+    if (
+      done &&
+      HELD.includes(done.status) &&
+      done.book &&
+      ctx.isSimpleView() &&
+      ctx.getWizard()?.simpleJobId === done.id
+    )
+      return arriveAtReview(ctx, done);
+    ctx.render();
+    return;
+  }
+  if (action === "council-redirect") {
+    // R22: a rewritten direction (or the same one) and a new meeting, after a cost confirm.
+    const job = jobOfWizard(state, w);
+    if (!councilHeld(job) || runIsLive(job)) return ctx.render();
+    const direction = readCouncilDirection(document),
+      previous = String(job.input?.direction || "").trim(),
+      cost = estimateCouncilCost(job),
+      ok = await confirmModal(
+        ctx,
+        "방향을 고쳐 다시 회의할까요?",
+        `${direction ? `새 방향: “${esc(direction)}”` : previous ? "방향 없이(수준·가치·끝맺음에서 정한 방향으로) 다시 회의해요." : "같은 방향으로 봇들을 다시 불러 새 피치를 받아요."}<br>지금 피치 3개와 판정은 버려요. ${job.demo ? "데모라 요금이 없어요." : `회의 요금 ${textFee(cost.costUsd, cost.pricingUnknown)}.`}`,
+        "다시 회의",
+      );
+    if (!ok) return;
+    if (!job.demo && (await stopForTextKey(ctx, job))) return;
+    redirectCouncil(job, direction);
+    if (ctx.save() === false)
+      return ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    await runJob(ctx, job.id, "text", "text");
     ctx.render();
     return;
   }

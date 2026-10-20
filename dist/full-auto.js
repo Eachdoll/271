@@ -17,6 +17,7 @@ import {
   inspectAutoMaterialPlan,
   materializeAutoPlan,
   materialSignature,
+  materialSignatureMatches,
 } from "./story-generation/auto-materials.js";
 import {
   getActiveWorld,
@@ -68,6 +69,8 @@ import {
 import { safeTopic } from "./engine.js";
 import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
+import { hasArcPolicy } from "./story-generation/arc-rules.js";
+import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -78,6 +81,10 @@ const abort = (signal) => {
 };
 /** Where a run holds: 'text' before any sheet or image, 'pages' before page images, null runs to the end. */
 export const FULL_AUTO_STOPS = Object.freeze(["text", "pages", null]);
+/** R22: the job status and phase of a run parked after the writers' room. */
+export const COUNCIL_REVIEW_STATUS = "council-review";
+export const COUNCIL_REVIEW_PHASE = "기획 회의 결과 확인 · 피치를 고르거나 방향을 고쳐 주세요";
+
 const PLAN_MODES = ["auto", "selection"];
 function checkStopBefore(value) {
   if (value === undefined || value === null) return null;
@@ -206,7 +213,16 @@ export function selectionMaterialPlan(state, wizard = {}) {
 export function createFullAutoJob(
   state,
   wizard,
-  { allowNew = true, stopBefore = null, demo = false, planMode = "auto" } = {},
+  {
+    allowNew = true,
+    stopBefore = null,
+    demo = false,
+    planMode = "auto",
+    // R22 회의 결과 보고 진행: the run parks after the writers' room so the
+    // parent can pick a pitch or rewrite the direction. Defaults to the
+    // parent setting (on unless turned off); frozen on the job.
+    councilReview = state?.settings?.councilReview !== false,
+  } = {},
 ) {
   const hold = checkStopBefore(stopBefore);
   if (!PLAN_MODES.includes(planMode))
@@ -278,6 +294,10 @@ export function createFullAutoJob(
     stopBefore: hold,
     demo: isDemo,
     planMode: mode,
+    // R22: only a meeting that can happen is worth parking for (never the demo).
+    ...(councilReview === true && !isDemo && hasCouncilPolicy(prepared.input)
+      ? { councilReview: true }
+      : {}),
     completed: {},
     usage: { calls: [] },
     imageUsage: {},
@@ -360,6 +380,8 @@ export function estimateFullAutoCost(
       pageCount: wizard.pageCount || 12,
       // Editor round: new jobs (and jobs frozen with the policy) include it.
       ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
+      // R20: new jobs (and jobs frozen with the policy) include the writers' room.
+      ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : { council: true }),
       // R12: an openings wizard is sized from its v4 specs ({} for page books).
       ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
@@ -772,7 +794,8 @@ function assertJobWorld(state, job) {
     const item = [...state.characters, ...state.backgrounds].find(
       (x) => x.id === id,
     );
-    if (!item || materialSignature(item) !== signature)
+    // 2026-10-20: a renamed material (same look) does not stop the run.
+    if (!materialSignatureMatches(item, signature))
       throw Error(
         "사용 중인 기존 재료가 수정·삭제되었어요. 완성한 부분을 검토하거나 새 FULL AUTO를 시작해 주세요.",
       );
@@ -952,6 +975,16 @@ export async function runFullAuto(
         ]),
       ),
       qualityCheckpoint: job.qualityCheckpoint,
+      councilCheckpoint: job.councilCheckpoint,
+      // R22: park after the room for the parent's choice; a resumed run
+      // carries that choice and what the parent did to earlier meetings.
+      ...(job.councilReview === true
+        ? {
+            councilHold: true,
+            councilChoice: job.councilChoice || null,
+            councilHistory: job.councilHistory || [],
+          }
+        : {}),
       childGateCheckpoint: job.childGateCheckpoint,
       proseCoherence: job.proseCoherence,
       pageCoherence: job.pageCoherence,
@@ -978,6 +1011,8 @@ export async function runFullAuto(
       onCheckpoint: async (cp) => {
         if (cp.qualityCheckpoint)
           job.qualityCheckpoint = clone(cp.qualityCheckpoint);
+        if (cp.councilCheckpoint)
+          job.councilCheckpoint = clone(cp.councilCheckpoint);
         if (cp.childGateCheckpoint)
           job.childGateCheckpoint = clone(cp.childGateCheckpoint);
         if (cp.coherence) {
@@ -1017,6 +1052,8 @@ export async function runFullAuto(
       }
       if (error.qualityCheckpoint)
         job.qualityCheckpoint = clone(error.qualityCheckpoint);
+      if (error.councilCheckpoint)
+        job.councilCheckpoint = clone(error.councilCheckpoint);
       if (error.childGateCheckpoint)
         job.childGateCheckpoint = clone(error.childGateCheckpoint);
       if (error.prose) job.prose = clone(error.prose);
@@ -1187,6 +1224,8 @@ export async function runFullAuto(
       const {
         editorPolicy: _fresh,
         craftPolicy: _freshCraft,
+        arcPolicy: _freshArc,
+        councilPolicy: _freshCouncil,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1197,6 +1236,12 @@ export async function runFullAuto(
           : {}),
         ...(job.input?.craftPolicy?.version === 1
           ? { craftPolicy: clone(job.input.craftPolicy) }
+          : {}),
+        ...(hasArcPolicy(job.input)
+          ? { arcPolicy: clone(job.input.arcPolicy) }
+          : {}),
+        ...(hasCouncilPolicy(job.input)
+          ? { councilPolicy: clone(job.input.councilPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
@@ -1219,15 +1264,22 @@ export async function runFullAuto(
       job.completed.input = now();
       await persist();
     }
-    await step(
-      "outline",
-      "줄거리 만들기",
-      (opts) => ops.outline(job.input, opts("outline")),
-      (r) => {
-        job.outline = r.data;
-        job.input.title = r.data.titleCandidates[0];
-      },
-    );
+    try {
+      await step(
+        "outline",
+        "줄거리 만들기",
+        (opts) => ops.outline(job.input, opts("outline")),
+        (r) => {
+          job.outline = r.data;
+          job.input.title = r.data.titleCandidates[0];
+        },
+      );
+    } catch (error) {
+      // R22: the writers' room stopped for the parent (its rounds are saved in
+      // job.councilCheckpoint); the job parks like a text hold, not a failure.
+      if (!isCouncilHold(error)) throw error;
+      return await holdAt(COUNCIL_REVIEW_STATUS, COUNCIL_REVIEW_PHASE);
+    }
     await step(
       "briefs",
       "장면 디테일 만들기",

@@ -6,6 +6,8 @@ import { plotContextForPage } from "../story-generation/coherence.js";
 import { layoutOf } from "../book-layout.js";
 import { pictureCarriesPage } from "../page-rhythm.js";
 import { craftPictureRules } from "../story-generation/craft-rules.js";
+import { biblePictureRules } from "../story-generation/council.js";
+import { genderWord } from "./identity.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -109,7 +111,7 @@ export function buildScenePrompt({
     .filter(Boolean)
     .map(
       (sheet) =>
-        `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
+        `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
     )
     .join("; ");
   const currentNarrative = {
@@ -125,7 +127,9 @@ export function buildScenePrompt({
       currentNarrative.ko;
   const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover });
-  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}`;
+  // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
+  const bible = biblePictureRules({ book, page, cover });
+  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}`;
   const background = place.background;
   const facts = background
     ? {
