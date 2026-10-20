@@ -164,9 +164,9 @@ test('R22 방향 고쳐 다시 회의: the direction moves onto the input, the m
 
 test('R22 the pro launcher offers the option, the job cards name the parked meeting, the simple library opens it', () => {
   const {state, wizard} = setup();
-  assert.match(renderFullAutoLauncher(state, wizard), /<input id="full-auto-council-review" type="checkbox" checked> 기획 회의 결과를 보고 진행/u);
+  assert.match(renderFullAutoLauncher(state, wizard), /id="full-auto-council-review" type="checkbox" role="switch"[^>]* checked>/u);
   state.settings.councilReview = false;
-  assert.match(renderFullAutoLauncher(state, wizard), /<input id="full-auto-council-review" type="checkbox" > 기획 회의 결과를 보고 진행/u);
+  assert.match(renderFullAutoLauncher(state, wizard), /id="full-auto-council-review" type="checkbox" role="switch"[^>]*>/u);
   const job = {id: 'auto-r22', status: COUNCIL_REVIEW_STATUS, phase: COUNCIL_REVIEW_PHASE, stopBefore: null, input: {topic: '달토끼', pageCount: 12, councilPolicy: {version: 1}}, wizard: {topic: '달토끼'}, usage: {calls: []}, imageUsage: {}, notes: [], completed: {}, councilCheckpoint: {record: parkedRecord()}, updatedAt: '2026-10-20T00:00:00Z'};
   state.fullAutoJobs = {[job.id]: job};
   const pro = renderFullAutoJobs(state);
@@ -193,27 +193,28 @@ test('R22 ③ of a parked story: the open room, the choice form, 계속 and 다�
   const w = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: job.id});
   const html = renderSimpleCreate(ctx(w));
   assert.match(html, /<div class="council-room-wrap"><div class="council-room  phase-review">/u, 'the room is open, not folded, not pulsing');
-  assert.match(html, /<li class="active">부모 선택<\/li>/u);
+  assert.match(html, /<li class="active" aria-current="step">부모 선택<\/li>/u);
   assert.match(html, /<div class="council-review" id="council-review">/u);
   assert.equal((html.match(/<input type="radio" name="council-pick"/gu) || []).length, 3);
-  assert.match(html, /name="council-pick" value="2" checked/u);
+  assert.match(html, /name="council-pick" value="2"[^>]*checked/u);
   assert.match(html, /<textarea id="council-note"/u);
   assert.match(html, /<input id="council-direction" maxlength="200" value=""/u);
-  assert.match(html, /회의 요금 약 \$\d+\.\d{2,3}\./u);
-  assert.match(html, /data-simple-action="council-continue"[^>]*>이 피치로 계속<\/button><button[^>]*data-simple-action="council-redirect"[^>]*>방향 고쳐 다시 회의<\/button><button[^>]*data-simple-action="abandon"/u);
+  assert.match(html, /추가 예상 약 \$\d+\.\d{2,3}\./u);
+  assert.match(html, /council-choice-actions/u);
+  for (const action of ['council-continue', 'council-redirect', 'abandon']) assert.ok(html.includes(`data-simple-action="${action}"`));
+  assert.match(html, /data-simple-action="council-continue"[^>]*>이 안으로 계속<\/button>/u);
   assert.doesNotMatch(html, /data-simple-action="(retry|restart|start-text|start-demo|stop|open-review)"/u);
-  assert.doesNotMatch(html, /simple-progress/u, 'no progress bar: nothing runs');
-  assert.match(html, /회의 결과 보고 진행 · <strong>켜짐<\/strong>/u);
-  assert.match(html, /data-simple-action="toggle-council-review" disabled>끄기<\/button>/u, 'frozen on the job');
+  assert.doesNotMatch(html, /class="simple-progress"/u, 'no progress bar: nothing runs');
+  assert.match(html, /role="switch" aria-checked="true"[^>]*data-simple-action="toggle-council-review" disabled/u, 'frozen on the job');
   const buttons = [...html.matchAll(/<button\b[^>]*>/g)].map(m => m[0]).filter(tag => !/simple-card|data-simple-nav=/.test(tag));
   assert.ok(buttons.length <= 12, `${buttons.length} buttons: ${buttons.join(' ')}`);
   assert.equal(simpleStepAccess(state, w).find(r => r.step === 3)?.mode, 'status');
   // The setting line before any job: on by default, 끄기 enabled; off → 켜기.
   const fresh = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3});
   const before = renderSimpleCreate(ctx(fresh));
-  assert.match(before, /회의 결과 보고 진행 · <strong>켜짐<\/strong>[\s\S]*data-simple-action="toggle-council-review" aria-pressed="true">끄기<\/button>/u);
+  assert.match(before, /role="switch" aria-checked="true"[^>]*data-simple-action="toggle-council-review"/u);
   state.settings.councilReview = false;
-  assert.match(renderSimpleCreate(ctx(fresh)), /회의 결과 보고 진행 · <strong>꺼짐<\/strong>[\s\S]*data-simple-action="toggle-council-review" aria-pressed="false">켜기<\/button>/u);
+  assert.match(renderSimpleCreate(ctx(fresh)), /role="switch" aria-checked="false"[^>]*data-simple-action="toggle-council-review"/u);
   // A demo story has no meeting and no line.
   const demo = {...job, id: 'auto-demo', demo: true, status: 'paused', councilCheckpoint: undefined};
   delete demo.councilReview;

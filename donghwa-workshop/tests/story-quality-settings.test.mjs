@@ -15,7 +15,7 @@ function record(index){return {bookId:`book-${index}`,approved:true,createdAt:ne
 
 test('parent quality panel exposes six structural cards, stage roles and safe default toggles',()=>{
  const html=renderStoryQualitySettings(state),selector=renderQualityPatternSelector({storyQualityPatternId:'waiting'},{state});
- assert.match(html,/data-quality-flag="enabled" checked/);assert.match(html,/data-quality-flag="useBeamSearch" >/);for(const flag of ['twoPass','childSimulator','weeklyCoach'])assert.match(html,new RegExp(`data-quality-flag="${flag}" checked`));
+ assert.match(html,/data-quality-flag="enabled" checked/);assert.match(html,/data-quality-flag="useBeamSearch">/);for(const flag of ['twoPass','childSimulator','weeklyCoach'])assert.match(html,new RegExp(`data-quality-flag="${flag}" checked`));
  for(const role of ['outline','prose','cheap','coach'])assert.ok(html.includes(`data-quality-role-engine="${role}"`));
  assert.match(html,/패턴 카드 편집 · 6종/);assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);
  assert.doesNotMatch(html,/data-quality-pattern-field="(?:bookTitle|text|characters|author)"/);assert.match(html,/창을 닫은 동안에는 실행하지 않으며 API 요금/);

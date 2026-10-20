@@ -1,3 +1,4 @@
+import { renderActionSwitch } from "./ui-controls.js";
 /* 쉬운 만들기 (R9-B2): five steps on top of the app's shared wizard/draft.
  * ① 주제 넣기 → ② 재료 고르기 → ③ 글 만들기 (FULL AUTO, text hold) → ④ 쪽마다 검수 → ⑤ 동화책 만들기.
  * Runs, resumes, stops and per-page work go through the FULL AUTO runner and the
@@ -87,6 +88,8 @@ import {
 import { councilSummaryLine } from "./story-generation/council.js";
 import {
   councilRoomBlock,
+  renderCouncilBudget,
+  bindCouncilChoiceFeedback,
   renderCouncilRoom,
   liveCouncilRecord,
   emptyCouncilRecord,
@@ -1116,6 +1119,7 @@ function stageLine(job) {
     })
     .join('<span aria-hidden="true"> · </span>');
 }
+let lastCouncilFocus = null;
 function renderGenerateStep(ctx, w) {
   const state = ctx.getState(),
     job = jobOfWizard(state, w),
@@ -1149,7 +1153,7 @@ function renderGenerateStep(ctx, w) {
     quality = normalizeStoryQualitySettings(state.settings?.storyQuality),
     locked = !!job,
     live = runIsLive(job),
-    distilled = quality.useDistilledExamples === true;
+    distilled = (job?.input?.storyQuality || quality).useDistilledExamples === true;
   if (typeof document !== "undefined") queueMicrotask(() => refreshKeyStatus());
   const engineLine = `<div class="simple-engine-row"><div class="field"><label for="simple-text-engine">글 엔진</label><select id="simple-text-engine" ${locked ? "disabled" : ""}>${(textEngine === "demo" ? ["demo"] : TEXT_ENGINES).map((id) => `<option value="${id}" ${id === textEngine ? "selected" : ""}>${esc(TEXT_ENGINE_NAMES[id])}${id === "demo" ? "" : " · " + esc(keyLabel(id, settings.providers?.[id]))}</option>`).join("")}</select><small>${esc(model)}${locked ? " · 이 이야기에 고정됨" : ""}</small></div>${textModelField(job, settings, textEngine, locked)}${!locked && keyMissing(textEngine, textConfig) ? sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`) : ""}</div>${textEngine === "demo" ? "" : textOverrideNote(state)}<div class="simple-engine-row"><div class="simple-engine-name"><span class="small-label">그림 엔진</span><strong>${esc(imageMeta.name)}</strong><small>${esc(keyLabel(imageEngine, imageConfig))} · 그림은 다음 단계에서 써요</small></div>${imageModelField(job, world, imageEngine, locked)}${locked ? "" : sbtn("바꾸기", "image-settings", "plain", `data-engine="${esc(imageEngine)}"`)}${!locked && keyMissing(imageEngine, imageConfig) && imageMeta.requiresKey !== false ? sbtn("키 입력", "image-key", "outline", `data-engine="${esc(imageEngine)}"`) : ""}</div>`;
   const text = !!job && (!!job.book || HELD.includes(job.status));
@@ -1179,8 +1183,8 @@ function renderGenerateStep(ctx, w) {
       : state.settings?.councilReview !== false,
     councilLine = job?.demo
       ? ""
-      : `<div class="simple-distilled simple-council-review"><span>회의 결과 보고 진행 · <strong>${councilReview ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="봇들이 피치 3개를 판정하면 멈춰요. 피치를 고르거나 작가 봇에게 한마디를 남기거나 방향을 고쳐 다시 회의할 수 있어요. 요금은 없어요." aria-label="도움말: 봇들이 피치 3개를 판정하면 멈춰요. 피치를 고르거나 작가 봇에게 한마디를 남기거나 방향을 고쳐 다시 회의할 수 있어요. 요금은 없어요.">?</span>${sbtn(councilReview ? "끄기" : "켜기", "toggle-council-review", "plain", locked ? "disabled" : `aria-pressed="${councilReview}"`)}</div>`;
-  const distilledLine = `<div class="simple-distilled"><span>승인 예시 함께 쓰기 · <strong>${distilled ? "켜짐" : "꺼짐"}</strong></span><span class="simple-help" tabindex="0" title="자동 판정 9점 이상 예시는 새 이야기의 줄거리에 뼈대 카드로 늘 들어가요. 이 스위치는 8점 예시까지 함께 보낼지 정해요." aria-label="도움말: 자동 판정 9점 이상 예시는 새 이야기의 줄거리에 뼈대 카드로 늘 들어가요. 이 스위치는 8점 예시까지 함께 보낼지 정해요.">?</span>${sbtn(distilled ? "끄기" : "켜기", "toggle-distilled", "plain", locked ? "disabled" : `aria-pressed="${distilled}"`)}</div>`;
+      : renderActionSwitch({ id: "simple-council-switch", label: "회의 후 부모 확인", description: locked ? "이 이야기에 고정된 설정이에요." : "켜면 이야기 안을 직접 고르고, 끄면 봇 추천으로 자동 진행해요.", action: "toggle-council-review", checked: councilReview, disabled: locked, className: "simple-distilled simple-council-review" });
+  const distilledLine = renderActionSwitch({ id: "simple-distilled-switch", label: "증류 추가 예시", description: locked ? "이 이야기에 고정된 설정이에요." : "승인 예시를 더 참고해요. 꺼도 기본 9점 이상 예시는 유지돼요.", action: "toggle-distilled", checked: distilled, disabled: locked, className: "simple-distilled" });
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
   const checkFailed =
@@ -1202,12 +1206,17 @@ function renderGenerateStep(ctx, w) {
     status = `${councilRoomBlock(job, { live: true })}${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
   else if (councilHeld(job)) {
     // R22: the parked meeting with the parent's choice (nothing runs, nothing is bought here).
+    if (typeof document !== "undefined" && lastCouncilFocus !== job.id) {
+      lastCouncilFocus = job.id;
+      globalThis.requestAnimationFrame?.(() => document.querySelector("#council-choice-heading")?.focus?.());
+    }
     const fee = textFee(estimateCouncilCost(job).costUsd, estimateCouncilCost(job).pricingUnknown);
-    status = `${councilRoomBlock(job, { open: true })}${renderCouncilReviewForm(liveCouncilRecord(job), { direction: job.input?.direction || "", fee: `회의 요금 ${fee}` })}<div class="simple-start">${sbtn("이 피치로 계속", "council-continue", "primary")}${sbtn("방향 고쳐 다시 회의", "council-redirect", "outline")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}</div><p class="small-label">피치를 고르면 작가 봇이 바이블을 쓰고 줄거리 → 글 → 쪽 나누기를 이어서 만들어요. 다시 회의하면 봇들을 새로 불러요.</p>`;
+    const record = liveCouncilRecord(job), selected = record?.pitches?.[(record.recommended || 1) - 1]?.title || "추천 이야기";
+    status = `<div class="council-decision-heading"><strong>회의가 끝났어요. 이야기 안을 골라 주세요.</strong><p>받은 답은 보관돼요. 선택 후 설계서와 글을 이어서 만들어요.</p></div>${councilRoomBlock(job, { open: true })}${renderCouncilReviewForm(record, { direction: job.input?.direction || "", fee })}${renderCouncilBudget(job)}<div class="simple-start council-choice-actions"><div class="council-selection-summary"><small>선택한 이야기</small><strong data-council-selected-title>${esc(selected)}</strong></div>${sbtn("이 안으로 계속", "council-continue", "primary")}</div><div class="council-secondary-actions">${sbtn("방향 고쳐 다시 회의", "council-redirect", "outline")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "plain") : ""}</div>`;
   }
   else
     status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${engineLine}${costLines}${distilledLine}${councilLine}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${job ? `<div class="generation-options">${distilledLine}${councilLine}</div>` : ""}</details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(
@@ -1687,7 +1696,8 @@ function onRunProgress(event) {
   const room = document.querySelector("#simple-council-room");
   if (room) {
     const record = liveCouncilRecord(event.job);
-    room.innerHTML = renderCouncilRoom(record || emptyCouncilRecord(event.job.input), { live: !record || record.phase !== "done" });
+    const nextRoom = renderCouncilRoom(record || emptyCouncilRecord(event.job.input), { live: !record || record.phase !== "done" });
+    if (room.innerHTML !== nextRoom) room.innerHTML = nextRoom;
   }
   const text = document.querySelector("#simple-progress-text"),
     bar = document.querySelector("#simple-progress-bar"),
@@ -3040,6 +3050,8 @@ function onClick(event) {
         if (api.isSimpleView?.() && !api.getWizard()?.simpleEditing)
           api.render();
       }
+      if (action === "toggle-distilled" || action === "toggle-council-review")
+        globalThis.document?.querySelector?.(`[data-simple-action="${action}"]`)?.focus?.({ preventScroll: true });
     }
   });
 }
@@ -3242,6 +3254,7 @@ function onInput(event) {
 }
 /** Wire the simple screen once; ctx exposes the app's wizard/draft/editPage through getters and setters. */
 export function configureSimpleCreate(ctx) {
+  bindCouncilChoiceFeedback();
   api = ctx;
   if (configured || typeof document === "undefined") return;
   configured = true;

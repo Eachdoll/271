@@ -1,5 +1,7 @@
 # 동화공방
 
+최신 UI 변경: 증류·회의 슬라이드 스위치, 모노톤, 회의 선택 화면 단순화와 비용·저장 상태 개선은 [UI·UX 적용 보고](UI_UX_IMPLEMENTATION_2026-10-20.md)를 참고하세요.
+
 r11(쉬운 만들기 단계 자유 이동, 가족 아이디·비밀번호 로그인, 가족 공유 동기화 안정화)은 Claude가 구현했습니다. 내용과 검증은 [Claude r11 구현 보고](CLAUDE_R11_IMPLEMENTATION_2026-10-19.md), 반입·검증·배포 절차는 [Codex r11 지시서](CODEX_WORK_ORDER_R11_2026-10-19.md)에 있습니다.
 
 r9(말버릇 "같이 가자" 반복 해결, 쉬운 만들기 다섯 단계와 프로페셔널 모드)는 Claude가 구현했습니다. 내용과 검증은 [Claude r9 구현 보고](CLAUDE_R9_IMPLEMENTATION_2026-10-18.md), 반입·검증·배포 절차는 [Codex r10 지시서](CODEX_WORK_ORDER_R10_2026-10-18.md)에 있습니다. 원래 요구는 [r9 지시서](CODEX_WORK_ORDER_R9_2026-10-18.md)입니다.

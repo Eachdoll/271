@@ -4,7 +4,14 @@
   "lang": "ko",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#f8f7f3",
-  "theme_color": "#f0f2eb",
-  "icons": [{"src":"./assets/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+  "background_color": "#f5f5f5",
+  "theme_color": "#f5f5f5",
+  "icons": [
+    {
+      "src": "./assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }

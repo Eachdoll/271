@@ -756,3 +756,21 @@ export function estimateStoryTextCost({
     note: `${council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정 · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }
+
+/** UI estimate for continuing a parked council; it never changes engine settings. */
+export function councilDecisionCosts(job = {}) {
+  if (job.demo) return { usedUsd: 0, usedUnknown: false, continueUsd: 0, continueUnknown: false, meetingUsd: 0, meetingUnknown: false };
+  let usedUsd = 0, usedUnknown = false;
+  for (const row of job.usage?.calls || []) {
+    if (row.requests === 0) continue;
+    const raw = row.costUsdEstimated ?? row.costUsd;
+    if (raw == null || !Number.isFinite(Number(raw)) || row.pricingUnknown) usedUnknown = true;
+    else usedUsd += Math.max(0, Number(raw));
+  }
+  const input = job.input || {},
+    estimate = estimateStoryTextCost({ settings: job.textSettings || {}, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: true }),
+    council = estimate.stages.find(row => row.stage === "council"),
+    // Four meeting calls are already saved; only the author's design pass remains.
+    continueUsd = estimate.stages.filter(row => row.stage !== "council").reduce((sum, row) => sum + row.costUsd, 0) + (council?.costUsd || 0) / Math.max(1, council?.requestCount || 1);
+  return { usedUsd, usedUnknown, continueUsd, continueUnknown: estimate.pricingUnknown === true, meetingUsd: council?.costUsd || 0, meetingUnknown: council?.pricingUnknown === true };
+}
