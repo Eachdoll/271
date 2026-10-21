@@ -1,0 +1,322 @@
+{
+  "date": "2026-10-21",
+  "deployment": {
+    "version_number": 38,
+    "commit_sha": "2b49a3cefe5c679781f4ded0a2348123247e37e5",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_0ef0eafa62388191bfaa52bb2729d651",
+    "deployment_id": "appgdep_6ad86354bf648191aea881ccaf91416f",
+    "status": "succeeded",
+    "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "cache": "donghwa-shell-v71",
+    "env_set_revision": 1,
+    "upstream_base": "09bb65efef28811f17c87d8560699168b26a4386",
+    "upstream_code_end": "f15a97f86f370be948d41952f1e83699f9c8f6cc",
+    "upstream_work_order": "3004d137a9d48bdcd17e7fa21d14e56c4f04ae47",
+    "updated_at": "2026-10-21T07:02:02.348730+00:00"
+  },
+  "requiredGates": {
+    "validatedAt": "2026-10-21T15:59:48.181428+09:00",
+    "tests": {
+      "app": {
+        "tests": 969,
+        "pass": 969,
+        "fail": 0
+      },
+      "quality": {
+        "tests": 85,
+        "pass": 85,
+        "fail": 0
+      }
+    },
+    "build": "PASS",
+    "qualityCopiesIdentical": true,
+    "legacy": {
+      "readerSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+      "expected": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16"
+    },
+    "census": {
+      "proMatchesWorkOrderTable": true,
+      "textSettingsInputs": 102,
+      "outlineButtons": 121,
+      "errors": [],
+      "paidRequests": []
+    },
+    "smoke": {
+      "1280": "PASS",
+      "390": "PASS"
+    },
+    "predeploymentFreeChecks": "PASS at 1280 and 390",
+    "import": {
+      "upstreamBase": "09bb65efef28811f17c87d8560699168b26a4386",
+      "upstreamCodeEnd": "f15a97f86f370be948d41952f1e83699f9c8f6cc",
+      "method": "B: git diff --binary 09bb65e f15a97f -- donghwa-workshop; git apply --index -p2",
+      "filesChanged": 33,
+      "insertions": 2075,
+      "deletions": 93,
+      "coreFilesCompared": 495,
+      "different": [],
+      "patchSha256": "508e4ac38d8d4efeec49caad499cee0c3c595a57143c784348c850652f515e54"
+    },
+    "allRequiredGatesPassed": true
+  },
+  "localFreeChecks": [
+    {
+      "width": 1280,
+      "pageErrors": [],
+      "paidRequests": [],
+      "notice": {
+        "firstCount": 1,
+        "afterReloadCount": 0,
+        "text": "정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요. 새 이야기 12쪽 글 요금은 약 $2.11로 바뀌어요. 설정 › 글 엔진에서 끌 수 있어요."
+      },
+      "existingBook": {
+        "id": "seed-dinosaur",
+        "readerOpened": true,
+        "readerPages": "1 / 12쪽",
+        "pagesUnchanged": true
+      },
+      "settings": {
+        "orchestration": true,
+        "writerUpper": false,
+        "priceSummary": "12쪽 이야기 글 예상: 약 $2.110\n\n약 39회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회 + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 20회·중간 모델) + 기획 회의·편집자 통독 + 아이 시뮬레이터 2회 (7개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요."
+      },
+      "simple": {
+        "pageCount": 12,
+        "engine": "openai",
+        "orchestration": true,
+        "writerUpper": false,
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $2.18"
+      },
+      "beatPlace": {
+        "before": [
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "after": [
+          "forest",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "onlyFirstChanged": true
+      },
+      "release": {
+        "cache71": true,
+        "orchestrationPrecached": true,
+        "beatWriterPrecached": true,
+        "orchestrationModule": true,
+        "beatWriterModule": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "pageErrors": [],
+      "paidRequests": [],
+      "notice": {
+        "firstCount": 1,
+        "afterReloadCount": 0,
+        "text": "정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요. 새 이야기 12쪽 글 요금은 약 $2.11로 바뀌어요. 설정 › 글 엔진에서 끌 수 있어요."
+      },
+      "existingBook": {
+        "id": "seed-dinosaur",
+        "readerOpened": true,
+        "readerPages": "1 / 12쪽",
+        "pagesUnchanged": true
+      },
+      "settings": {
+        "orchestration": true,
+        "writerUpper": false,
+        "priceSummary": "12쪽 이야기 글 예상: 약 $2.110\n\n약 39회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회 + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 20회·중간 모델) + 기획 회의·편집자 통독 + 아이 시뮬레이터 2회 (7개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요."
+      },
+      "simple": {
+        "pageCount": 12,
+        "engine": "openai",
+        "orchestration": true,
+        "writerUpper": false,
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $2.18"
+      },
+      "beatPlace": {
+        "before": [
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "after": [
+          "forest",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "onlyFirstChanged": true
+      },
+      "release": {
+        "cache71": true,
+        "orchestrationPrecached": true,
+        "beatWriterPrecached": true,
+        "orchestrationModule": true,
+        "beatWriterModule": true
+      },
+      "status": "passed"
+    }
+  ],
+  "productionFreeChecks": [
+    {
+      "width": 1280,
+      "pageErrors": [],
+      "paidRequests": [],
+      "notice": {
+        "firstCount": 1,
+        "afterReloadCount": 0,
+        "text": "정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요. 새 이야기 12쪽 글 요금은 약 $2.11로 바뀌어요. 설정 › 글 엔진에서 끌 수 있어요."
+      },
+      "existingBook": {
+        "id": "seed-dinosaur",
+        "readerOpened": true,
+        "readerPages": "1 / 12쪽",
+        "pagesUnchanged": true
+      },
+      "settings": {
+        "orchestration": true,
+        "writerUpper": false,
+        "priceSummary": "12쪽 이야기 글 예상: 약 $2.110\n\n약 39회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회 + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 20회·중간 모델) + 기획 회의·편집자 통독 + 아이 시뮬레이터 2회 (7개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요."
+      },
+      "simple": {
+        "pageCount": 12,
+        "engine": "openai",
+        "orchestration": true,
+        "writerUpper": false,
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $2.18"
+      },
+      "beatPlace": {
+        "before": [
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "after": [
+          "forest",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "onlyFirstChanged": true
+      },
+      "release": {
+        "cache71": true,
+        "orchestrationPrecached": true,
+        "beatWriterPrecached": true,
+        "orchestrationModule": true,
+        "beatWriterModule": true
+      },
+      "status": "passed"
+    },
+    {
+      "width": 390,
+      "pageErrors": [],
+      "paidRequests": [],
+      "notice": {
+        "firstCount": 1,
+        "afterReloadCount": 0,
+        "text": "정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요. 새 이야기 12쪽 글 요금은 약 $2.11로 바뀌어요. 설정 › 글 엔진에서 끌 수 있어요."
+      },
+      "existingBook": {
+        "id": "seed-dinosaur",
+        "readerOpened": true,
+        "readerPages": "1 / 12쪽",
+        "pagesUnchanged": true
+      },
+      "settings": {
+        "orchestration": true,
+        "writerUpper": false,
+        "priceSummary": "12쪽 이야기 글 예상: 약 $2.110\n\n약 39회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회 + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 20회·중간 모델) + 기획 회의·편집자 통독 + 아이 시뮬레이터 2회 (7개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. 유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요."
+      },
+      "simple": {
+        "pageCount": 12,
+        "engine": "openai",
+        "orchestration": true,
+        "writerUpper": false,
+        "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $2.18"
+      },
+      "beatPlace": {
+        "before": [
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "after": [
+          "forest",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home",
+          "home"
+        ],
+        "onlyFirstChanged": true
+      },
+      "release": {
+        "cache71": true,
+        "orchestrationPrecached": true,
+        "beatWriterPrecached": true,
+        "orchestrationModule": true,
+        "beatWriterModule": true
+      },
+      "status": "passed"
+    }
+  ],
+  "serviceWorker": {
+    "active": "activated",
+    "cacheNames": [
+      "donghwa-shell-v71"
+    ],
+    "orchestrationBytes": 12216,
+    "beatWriterBytes": 21534
+  },
+  "pricingObservation": {
+    "workOrderExample": {
+      "textUsd": 1.937,
+      "requests": 37
+    },
+    "settingsObserved": {
+      "textUsd": 2.11,
+      "requests": 39
+    },
+    "noticeDisplayedUsd": 2.11,
+    "simpleStep3DisplayedUsd": 2.18,
+    "note": "The example and actual settings estimate differ; original provider/model/price code was preserved. These are estimates, not supplier charges."
+  },
+  "paidApiCalls": 0,
+  "limits": [
+    "Chromium desktop and mobile viewport tests, not physical iPhone Safari",
+    "Fresh test browser storage and isolated cloud API; no actual family library modified",
+    "No paid book generation or real model quality evaluation"
+  ]
+}
