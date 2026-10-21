@@ -1,0 +1,1882 @@
+{
+  "level": "K2",
+  "arm": "r31a",
+  "wizard": {
+    "characterIds": [
+      "yuha"
+    ],
+    "backgroundIds": [
+      "home",
+      "forest"
+    ],
+    "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+    "pageCount": 12,
+    "koreanLevel": "K2",
+    "englishLevel": "E2",
+    "value": "none",
+    "ending": "home",
+    "language": "bilingual",
+    "simpleFlow": true,
+    "allowNew": true
+  },
+  "planMode": "auto",
+  "status": "failed",
+  "error": "fetch failed",
+  "seconds": 72,
+  "input": {
+    "characters": [
+      {
+        "id": "yuha",
+        "name": "유하",
+        "nameEn": "Yuha",
+        "role": "주인공",
+        "kind": "child",
+        "age": 4,
+        "gender": "남자아이",
+        "description": "짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지",
+        "appearance": "짧은 검은 머리 · 동그란 얼굴",
+        "clothes": "노란 티셔츠 · 초록 반바지",
+        "color": "#e9bb4e",
+        "hairColor": "#393735",
+        "skinColor": "#f0cfb5",
+        "traits": [
+          "호기심 많음",
+          "씩씩함",
+          "다정함"
+        ],
+        "catchphrase": "내가 먼저 해 볼래!",
+        "likes": "공룡, 별, 딸기"
+      },
+      {
+        "id": "mom",
+        "name": "엄마",
+        "nameEn": "Mom",
+        "role": "가족",
+        "kind": "adult",
+        "description": "다정한 눈, 갈색 단발머리, 살구색 원피스",
+        "appearance": "갈색 단발머리 · 다정한 눈",
+        "clothes": "살구색 원피스",
+        "color": "#b88372",
+        "hairColor": "#493b34",
+        "skinColor": "#edceb3",
+        "traits": [
+          "다정함",
+          "차분함",
+          "잘 들어줌"
+        ],
+        "catchphrase": "천천히 해도 괜찮아.",
+        "likes": "산책, 따뜻한 포옹"
+      },
+      {
+        "id": "character-126f8bd5-b167-4043-a38a-18b6919c97ea",
+        "name": "해니",
+        "nameEn": "Haeni",
+        "role": "조연",
+        "kind": "child",
+        "description": "A four-year-old child with straight black hair, short bangs, warm brown eyes, a blue shirt, red trousers, and white shoes.",
+        "appearance": "A four-year-old child with straight black hair, short bangs, warm brown eyes, a blue shirt, red trousers, and white shoes.",
+        "clothes": "A four-year-old child with straight black hair, short bangs, warm brown eyes, a blue shirt, red trousers, and white shoes.",
+        "color": "#719FCB",
+        "hairColor": "#493b34",
+        "skinColor": "#edceb3",
+        "traits": [
+          "Playful",
+          "Observant",
+          "Kind",
+          "Enjoys little hand games"
+        ],
+        "catchphrase": "Can you do this?"
+      },
+      {
+        "id": "character-d68f7cf1-ebc1-487b-b5f6-fdc5e74d8a5d",
+        "name": "민 기사님",
+        "nameEn": "Driver Min",
+        "role": "조연",
+        "kind": "adult",
+        "description": "A school-bus driver with short brown hair, round glasses, a pale blue shirt, navy trousers, and flat black shoes.",
+        "appearance": "A school-bus driver with short brown hair, round glasses, a pale blue shirt, navy trousers, and flat black shoes.",
+        "clothes": "A school-bus driver with short brown hair, round glasses, a pale blue shirt, navy trousers, and flat black shoes.",
+        "color": "#59758E",
+        "hairColor": "#493b34",
+        "skinColor": "#edceb3",
+        "traits": [
+          "Calm",
+          "Attentive",
+          "Welcoming"
+        ],
+        "catchphrase": "All set?"
+      }
+    ],
+    "backgrounds": [
+      {
+        "id": "home",
+        "name": "유하네 집",
+        "kind": "집",
+        "description": "큰 창문, 노란 대문, 포근한 이불",
+        "mood": "아늑함",
+        "color": "#d8b995"
+      },
+      {
+        "id": "background-038816fe-ce9b-489c-98f9-410d6332515a",
+        "name": "노란 스쿨버스",
+        "nameEn": "Yellow School Bus",
+        "type": "vehicle interior",
+        "description": "A small yellow school bus with blue seats and lap belts. Yuha and Haeni can sit together, make small funny hand shapes, and keep their bags on their laps. Driver Min remains at the wheel during travel.",
+        "layout": "The driver sits at the front left. One rectangular folding glass entrance is at the front right, with two steps. A central aisle separates three rows of paired blue seats on each side. Three rectangular windows line each side beside the rows; one broad windshield faces forward. Yuha and Haeni share the first right-hand pair of seats. The bus stops fully before boarding or leaving."
+      },
+      {
+        "id": "background-0c853db4-a69f-4409-9f5e-0ce40e9ed500",
+        "name": "유치원 앞마당",
+        "nameEn": "Kindergarten Arrival Yard",
+        "type": "outdoor school entrance",
+        "description": "A quiet kindergarten arrival yard with a short walking path and a small flower bed. It provides space for the children to leave the stopped bus, finish their shared hand game, and enter kindergarten together.",
+        "layout": "The bus stopping area runs along the near edge of the yard. A straight gray path leads from it to one rectangular green wooden entrance door centered on the school wall. Two square windows sit on that wall, one on each side of the door. A low flower bed lies to the left of the path; open grass lies to the right. The final entrance action uses this same green door."
+      }
+    ],
+    "preferredBackgroundIds": [
+      "home",
+      "background-038816fe-ce9b-489c-98f9-410d6332515a",
+      "background-0c853db4-a69f-4409-9f5e-0ce40e9ed500"
+    ],
+    "worldNotes": "",
+    "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+    "storyDate": "2026-10-21T22:00:16.671Z",
+    "language": "bilingual",
+    "storyStructurePresetId": "auto",
+    "storyQuality": {
+      "enabled": true,
+      "useBeamSearch": false,
+      "useDistilledExamples": false,
+      "twoPass": true,
+      "childSimulator": true,
+      "weeklyCoach": true,
+      "engines": {},
+      "worldId": "drawer",
+      "season": "auto",
+      "timeOfDay": "auto",
+      "variantChance": 0.35,
+      "patternId": "auto",
+      "rules": [],
+      "banExamples": [],
+      "banWindow": 10,
+      "patternBanWindow": 3,
+      "approvedBooks": []
+    },
+    "qualitySeedOffset": 0,
+    "pageCount": 12,
+    "layoutPolicy": {
+      "version": 1,
+      "kind": "openings",
+      "spreadImageSize": "2048x880",
+      "pageImageSize": "1536x1024"
+    },
+    "outlineBeatCount": 6,
+    "endingType": "custom",
+    "moral": "",
+    "endingNote": "부모가 적은 주제대로 끝나요: \"4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기\". 이야기가 향하는 곳(예: 유치원에 가는 이야기는 유치원에 들어가는 장면)에서 그 행동으로 끝내고, 주제에 가는 곳이 없으면 집에서 편안히 끝내요.",
+    "previousSummary": "",
+    "previousStory": null,
+    "prosePolicy": {
+      "version": 1,
+      "condenseOverBudget": {
+        "ko": true,
+        "en": true
+      }
+    },
+    "specs": {
+      "ko": {
+        "label": "그림책 5~6세",
+        "sentencesPerPage": 6,
+        "eojeolPerSentence": [
+          5,
+          7
+        ],
+        "grammar": [
+          "연결어미 -서/-면/-는데",
+          "대화문",
+          "감정 어휘"
+        ],
+        "vocabGrade": 2,
+        "maxOutOfListRatio": 0.08,
+        "newWordsPerBook": 10,
+        "id": "K2",
+        "ruleVersion": 4,
+        "vocabularyPolicy": "blocking",
+        "storyWordsAllowed": false,
+        "allowOnomatopoeia": false,
+        "sentencesPerPageRange": {
+          "min": 5,
+          "max": 7
+        },
+        "wordsPerSentence": {
+          "min": 5,
+          "max": 7
+        },
+        "allowedGrammar": [
+          "연결어미 -서/-면/-는데",
+          "대화문",
+          "감정 어휘"
+        ],
+        "vocabList": [],
+        "vocabularyAvailable": false,
+        "vocabSource": null,
+        "maxOutOfVocabRatio": 0.08,
+        "newWordsPerBookRange": null,
+        "repetitionPattern": "Recycle important words and familiar scene patterns.",
+        "approxAR": null,
+        "approxARRange": null,
+        "approxLexile": null,
+        "approxLexileRange": null,
+        "maxConnectiveEndingsPerSentence": 2,
+        "layout": "openings",
+        "units": {
+          "page": {
+            "min": 5,
+            "max": 7,
+            "target": 6
+          },
+          "spread": {
+            "min": 10,
+            "max": 15,
+            "target": 12
+          },
+          "opening": {
+            "min": 10,
+            "max": 15,
+            "target": 12
+          }
+        },
+        "richLevel": {
+          "id": "K3",
+          "label": "저학년 동화 7~8세",
+          "sentencesPerPage": [
+            3,
+            5
+          ],
+          "eojeolPerSentence": [
+            7,
+            10
+          ],
+          "grammar": [
+            "복문",
+            "시간 순서 접속어",
+            "한자어 조금"
+          ],
+          "vocabGrade": 3,
+          "maxOutOfListRatio": 0.1,
+          "charsPerPage": [
+            60,
+            100
+          ]
+        },
+        "unitTolerance": {
+          "countBelow": 1,
+          "countAbove": 2,
+          "meanSlack": 0.5,
+          "longShareCeil": 0.3333333333333333,
+          "longOver": 3
+        },
+        "rhythm": {
+          "version": 1,
+          "bookTolerance": 0.2,
+          "pageMinShare": 0.3333333333333333,
+          "pageMaxFactor": 1.6
+        }
+      },
+      "en": {
+        "label": "리더스 (Step 1)",
+        "approxAR": 1.5,
+        "approxLexile": 325,
+        "sentencesPerPage": 2,
+        "wordsPerSentence": {
+          "min": 5,
+          "max": 9
+        },
+        "grammar": [
+          "simple past",
+          "dialogue",
+          "and/but"
+        ],
+        "vocab": "dolch_primer+first",
+        "maxOutOfListRatio": 0.15,
+        "newWordsPerBook": 10,
+        "id": "E2",
+        "ruleVersion": 4,
+        "vocabularyPolicy": "blocking",
+        "storyWordsAllowed": false,
+        "allowOnomatopoeia": false,
+        "sentencesPerPageRange": {
+          "min": 1,
+          "max": 2
+        },
+        "allowedGrammar": [
+          "simple past",
+          "dialogue",
+          "and/but"
+        ],
+        "vocabList": [
+          "a",
+          "and",
+          "away",
+          "big",
+          "blue",
+          "can",
+          "come",
+          "down",
+          "find",
+          "for",
+          "funny",
+          "go",
+          "help",
+          "here",
+          "i",
+          "in",
+          "is",
+          "it",
+          "jump",
+          "little",
+          "look",
+          "make",
+          "me",
+          "my",
+          "not",
+          "one",
+          "play",
+          "red",
+          "run",
+          "said",
+          "see",
+          "the",
+          "three",
+          "to",
+          "two",
+          "up",
+          "we",
+          "where",
+          "yellow",
+          "you",
+          "all",
+          "am",
+          "are",
+          "at",
+          "ate",
+          "be",
+          "black",
+          "brown",
+          "but",
+          "came",
+          "did",
+          "do",
+          "eat",
+          "four",
+          "get",
+          "good",
+          "have",
+          "he",
+          "into",
+          "like",
+          "must",
+          "new",
+          "no",
+          "now",
+          "on",
+          "our",
+          "out",
+          "please",
+          "pretty",
+          "ran",
+          "ride",
+          "saw",
+          "say",
+          "she",
+          "so",
+          "soon",
+          "that",
+          "there",
+          "they",
+          "this",
+          "too",
+          "under",
+          "want",
+          "was",
+          "well",
+          "went",
+          "what",
+          "white",
+          "who",
+          "will",
+          "with",
+          "yes",
+          "or",
+          "number",
+          "of",
+          "had",
+          "other",
+          "way",
+          "by",
+          "about",
+          "could",
+          "words",
+          "people",
+          "many",
+          "then",
+          "than",
+          "them",
+          "first",
+          "these",
+          "water",
+          "were",
+          "been",
+          "some",
+          "called",
+          "when",
+          "her",
+          "your",
+          "would",
+          "oil",
+          "sit",
+          "as",
+          "him",
+          "use",
+          "long",
+          "his",
+          "an",
+          "time",
+          "each",
+          "has",
+          "day",
+          "which",
+          "more",
+          "how",
+          "write",
+          "made",
+          "their",
+          "may",
+          "from",
+          "if",
+          "part",
+          "flower",
+          "tail",
+          "leaf",
+          "leaves",
+          "tree",
+          "stone",
+          "moon",
+          "star",
+          "rain",
+          "sea",
+          "sun",
+          "ball",
+          "bag",
+          "boots",
+          "glove",
+          "cloud",
+          "sand",
+          "wave",
+          "shell",
+          "crab",
+          "path",
+          "rocket",
+          "bird",
+          "marks",
+          "castle",
+          "picture",
+          "window",
+          "rainbow",
+          "woods",
+          "sky",
+          "gift",
+          "friend",
+          "home",
+          "dinosaur",
+          "rabbit",
+          "umbrella",
+          "bad",
+          "ban",
+          "bat",
+          "cab",
+          "cap",
+          "cat",
+          "dad",
+          "dam",
+          "fan",
+          "fat",
+          "gap",
+          "gas",
+          "ham",
+          "hat",
+          "jam",
+          "lad",
+          "lap",
+          "mad",
+          "man",
+          "map",
+          "mat",
+          "nap",
+          "pad",
+          "pan",
+          "pat",
+          "rag",
+          "ram",
+          "rat",
+          "sad",
+          "sat",
+          "tag",
+          "tan",
+          "tap",
+          "van",
+          "wag",
+          "wax",
+          "yam",
+          "zap",
+          "bed",
+          "beg",
+          "bet",
+          "den",
+          "fed",
+          "hem",
+          "hen",
+          "jet",
+          "keg",
+          "leg",
+          "let",
+          "men",
+          "met",
+          "net",
+          "peg",
+          "pen",
+          "pet",
+          "set",
+          "ten",
+          "vet",
+          "wet",
+          "bib",
+          "bid",
+          "bin",
+          "bit",
+          "dig",
+          "dim",
+          "dip",
+          "fig",
+          "fin",
+          "fit",
+          "fix",
+          "hid",
+          "hip",
+          "hit",
+          "jig",
+          "kid",
+          "kin",
+          "kit",
+          "lid",
+          "lip",
+          "lit",
+          "mix",
+          "nil",
+          "nip",
+          "pig",
+          "pin",
+          "pit",
+          "rib",
+          "rid",
+          "rim",
+          "rip",
+          "sin",
+          "sip",
+          "six",
+          "tin",
+          "tip",
+          "win",
+          "wit",
+          "zip",
+          "bob",
+          "bog",
+          "bop",
+          "box",
+          "cob",
+          "cod",
+          "cog",
+          "cop",
+          "cot",
+          "dog",
+          "dot",
+          "fog",
+          "fox",
+          "got",
+          "hog",
+          "hop",
+          "hot",
+          "job",
+          "jog",
+          "jot",
+          "log",
+          "lot",
+          "mob",
+          "mop",
+          "nod",
+          "pod",
+          "pop",
+          "pot",
+          "rob",
+          "rod",
+          "rot",
+          "sob",
+          "sod",
+          "son",
+          "top",
+          "tot",
+          "bud",
+          "bug",
+          "bun",
+          "bus",
+          "cup",
+          "cut",
+          "dug",
+          "fun",
+          "gum",
+          "gut",
+          "hub",
+          "hug",
+          "hum",
+          "hut",
+          "jug",
+          "lug",
+          "mud",
+          "mug",
+          "nub",
+          "nun",
+          "nut",
+          "pub",
+          "pug",
+          "pun",
+          "pup",
+          "rub",
+          "rug",
+          "sub",
+          "sum",
+          "tub",
+          "tug",
+          "after",
+          "again",
+          "any",
+          "ask",
+          "every",
+          "fly",
+          "give",
+          "giving",
+          "just",
+          "know",
+          "live",
+          "old",
+          "once",
+          "open",
+          "over",
+          "put",
+          "round",
+          "stop",
+          "take",
+          "thank",
+          "think",
+          "walk"
+        ],
+        "vocabularyAvailable": true,
+        "vocabSource": "dolch_primer+first",
+        "maxOutOfVocabRatio": 0.15,
+        "newWordsPerBookRange": [
+          8,
+          10
+        ],
+        "repetitionPattern": "Recycle important words and familiar scene patterns.",
+        "approxARRange": [
+          1,
+          2
+        ],
+        "approxLexileRange": "200-450L",
+        "maxConnectiveEndingsPerSentence": 0,
+        "layout": "openings",
+        "units": {
+          "page": {
+            "min": 1,
+            "max": 2,
+            "target": 2
+          },
+          "spread": {
+            "min": 2,
+            "max": 4,
+            "target": 4
+          },
+          "opening": {
+            "min": 2,
+            "max": 4,
+            "target": 4
+          }
+        },
+        "richLevel": {
+          "id": "E3",
+          "label": "얼리 챕터 (Step 2)",
+          "approxAR": [
+            2,
+            3
+          ],
+          "approxLexile": "400-600L",
+          "sentencesPerPage": [
+            2,
+            4
+          ],
+          "wordsPerSentence": [
+            8,
+            12
+          ],
+          "grammar": [
+            "compound sentences"
+          ],
+          "vocab": "fry_1000",
+          "maxOutOfListRatio": 0.15,
+          "wordsPerPage": [
+            40,
+            80
+          ]
+        },
+        "rhythm": {
+          "version": 1,
+          "bookTolerance": 0.2,
+          "pageMinShare": 0.3333333333333333,
+          "pageMaxFactor": 1.6
+        }
+      }
+    },
+    "variants": [],
+    "variantByCharacter": {
+      "yuha": null,
+      "mom": null,
+      "character-126f8bd5-b167-4043-a38a-18b6919c97ea": null,
+      "character-d68f7cf1-ebc1-487b-b5f6-fdc5e74d8a5d": null
+    },
+    "variantPageRanges": {
+      "yuha": [],
+      "mom": [],
+      "character-126f8bd5-b167-4043-a38a-18b6919c97ea": [],
+      "character-d68f7cf1-ebc1-487b-b5f6-fdc5e74d8a5d": []
+    },
+    "catchphrasePolicy": {
+      "version": 1,
+      "limit": 1,
+      "omit": [],
+      "phrases": {
+        "yuha": "내가 먼저 해 볼래!",
+        "mom": "천천히 해도 괜찮아.",
+        "character-126f8bd5-b167-4043-a38a-18b6919c97ea": "Can you do this?",
+        "character-d68f7cf1-ebc1-487b-b5f6-fdc5e74d8a5d": "All set?"
+      },
+      "recentBookIds": [
+        "seed-dinosaur",
+        "seed-moon"
+      ]
+    },
+    "editorPolicy": {
+      "version": 1
+    },
+    "craftPolicy": {
+      "version": 1
+    },
+    "arcPolicy": {
+      "version": 1
+    },
+    "councilPolicy": {
+      "version": 1
+    },
+    "promptPolicy": {
+      "version": 1
+    },
+    "councilRecent": {
+      "version": 1,
+      "planted": []
+    },
+    "orchestrationPolicy": {
+      "version": 1,
+      "writerTier": "medium"
+    },
+    "topicEndingPolicy": {
+      "version": 1
+    },
+    "bookId": "book-36e92db5-5002-4880-b908-8d2fb9551166"
+  },
+  "notes": [],
+  "usage": {
+    "calls": [
+      {
+        "input": 6834,
+        "output": 681,
+        "costUsdEstimated": 0.020478,
+        "stage": "materials",
+        "engineId": "openai",
+        "model": "gpt-6.1-sol",
+        "requests": 1,
+        "demo": false,
+        "modelId": "gpt-6.1-sol",
+        "repairAttempts": 0,
+        "callId": "auto-154f1a55-b8bb-4f83-9b9c-e75ab8ef7241:1",
+        "at": "2026-10-21T22:00:35.853Z"
+      },
+      {
+        "input": 22094,
+        "output": 5056,
+        "costUsdEstimated": 0.0546072,
+        "stage": "council",
+        "requests": 8,
+        "resumedCalls": 0,
+        "councilCheckpoint": {
+          "version": 1,
+          "kind": "council",
+          "contextFingerprint": "e111367d",
+          "completed": {
+            "4bc76a31": {
+              "role": "prose",
+              "response": {
+                "text": "{\n  \"growth\": {\n    \"want\": \"해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.\",\n    \"need\": \"혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.\",\n    \"flaw\": \"호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다.\"\n  },\n  \"theme\": \"주고받는 장난\",\n  \"lesson\": \"집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다.\"\n}",
+                "json": {
+                  "growth": {
+                    "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                    "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                    "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+                  },
+                  "theme": "주고받는 장난",
+                  "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다."
+                },
+                "usage": {
+                  "input": 1124,
+                  "output": 412,
+                  "costUsdEstimated": 0.006368
+                },
+                "meta": {
+                  "model": "gpt-6.1-sol",
+                  "requests": 1,
+                  "costUsdEstimated": 0.006368
+                }
+              }
+            },
+            "5b383a85": {
+              "role": "prose",
+              "response": {
+                "text": "{\n  \"pitch\": {\n    \"title\": \"해니 옆에서 삑!\",\n    \"logline\": \"네 살 유하는 해니를 웃기려고 장난을 챙겨 스쿨버스에 탄다. 그런데 자꾸 나는 작은 소리를 버스 소리라고 믿는다. 소리를 찾던 유하는 해니 손에서 낯익은 장난감을 발견한다.\",\n    \"stakes\": \"1비트 집에서 유하는 엄마 앞에 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니를 웃기지 못하면 유치원까지 함께 깔깔 웃으며 갈 시간이 지나가 버린다.\",\n    \"planted\": {\n      \"name\": \"노란 삑삑이 장난감\",\n      \"nameEn\": \"yellow squeaky toy\",\n      \"firstSeen\": \"1비트. 집에서 유하가 삑삑이를 손으로 누르고 볼을 부풀린다. 엄마가 웃는다. 유하가 해니에게도 보여 주겠다며 챙긴다. 소리말 한 줄: “삑삑!”\"\n    },\n    \"ladder\": [\n      \"3비트. 버스가 멈춰 있을 때 유하가 해니에게 삑삑이를 맡기고 볼을 부풀린다. 해니 손에서 소리가 나지만 유하는 버스가 방귀를 뀌었다고 정한다. 달리는 동안 앉아서 더 크게 볼을 부풀리느라 해니가 내미는 손을 놓친다. 소리말 한 줄: “삑삑!”\"\n    ],\n    \"lowPoint\": \"유치원 앞마당에 버스가 멈추자 유하는 볼을 풀고 장난을 그만두려는데, 바로 옆 해니의 손끝에 노란 삑삑이가 보인다.\",\n    \"turn\": {\n      \"seen\": \"4비트. 유하가 창밖을 보는 동안 해니가 노란 삑삑이를 누르는 손을 먼저 크게 보여 준다. 다음 장면에서 유하가 돌아본다. 해니가 볼을 부풀리고 다시 누른다.\",\n      \"realized\": \"“버스 방귀가 아니네! 해니가 나한테 장난친 거네!”\",\n      \"overturns\": \"유하는 자기가 해니를 웃겨야 한다고 생각했다. 그런데 해니는 벌써 유하를 웃기려고 장난을 보내고 있었다.\"\n    },\n    \"payoff\": \"5비트. 민 기사님이 버스를 세운 뒤 둘은 유치원 앞마당으로 내린다. 유하가 손을 내밀어 삑삑이를 받는다. 해니가 볼을 부풀리자 유하가 누른다. 소리말 한 줄: “삑삑!” 둘 다 볼의 바람을 풀며 웃는다.\",\n    \"echo\": \"6비트. 집에서는 혼자 누르던 삑삑이를 유하가 해니 손에 건넨다. 해니가 누르면 유하가 볼을 부풀린다. 이번에는 유하가 손을 내민다. 둘은 삑삑이를 주고받으며 앞마당을 지나 나란히 유치원으로 들어간다.\",\n    \"angle\": \"adventure\",\n    \"tension\": [0, 1, 3, 4, 1, 0]\n  }\n}",
+                "json": {
+                  "pitch": {
+                    "title": "해니 옆에서 삑!",
+                    "logline": "네 살 유하는 해니를 웃기려고 장난을 챙겨 스쿨버스에 탄다. 그런데 자꾸 나는 작은 소리를 버스 소리라고 믿는다. 소리를 찾던 유하는 해니 손에서 낯익은 장난감을 발견한다.",
+                    "stakes": "1비트 집에서 유하는 엄마 앞에 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니를 웃기지 못하면 유치원까지 함께 깔깔 웃으며 갈 시간이 지나가 버린다.",
+                    "planted": {
+                      "name": "노란 삑삑이 장난감",
+                      "nameEn": "yellow squeaky toy",
+                      "firstSeen": "1비트. 집에서 유하가 삑삑이를 손으로 누르고 볼을 부풀린다. 엄마가 웃는다. 유하가 해니에게도 보여 주겠다며 챙긴다. 소리말 한 줄: “삑삑!”"
+                    },
+                    "ladder": [
+                      "3비트. 버스가 멈춰 있을 때 유하가 해니에게 삑삑이를 맡기고 볼을 부풀린다. 해니 손에서 소리가 나지만 유하는 버스가 방귀를 뀌었다고 정한다. 달리는 동안 앉아서 더 크게 볼을 부풀리느라 해니가 내미는 손을 놓친다. 소리말 한 줄: “삑삑!”"
+                    ],
+                    "lowPoint": "유치원 앞마당에 버스가 멈추자 유하는 볼을 풀고 장난을 그만두려는데, 바로 옆 해니의 손끝에 노란 삑삑이가 보인다.",
+                    "turn": {
+                      "seen": "4비트. 유하가 창밖을 보는 동안 해니가 노란 삑삑이를 누르는 손을 먼저 크게 보여 준다. 다음 장면에서 유하가 돌아본다. 해니가 볼을 부풀리고 다시 누른다.",
+                      "realized": "“버스 방귀가 아니네! 해니가 나한테 장난친 거네!”",
+                      "overturns": "유하는 자기가 해니를 웃겨야 한다고 생각했다. 그런데 해니는 벌써 유하를 웃기려고 장난을 보내고 있었다."
+                    },
+                    "payoff": "5비트. 민 기사님이 버스를 세운 뒤 둘은 유치원 앞마당으로 내린다. 유하가 손을 내밀어 삑삑이를 받는다. 해니가 볼을 부풀리자 유하가 누른다. 소리말 한 줄: “삑삑!” 둘 다 볼의 바람을 풀며 웃는다.",
+                    "echo": "6비트. 집에서는 혼자 누르던 삑삑이를 유하가 해니 손에 건넨다. 해니가 누르면 유하가 볼을 부풀린다. 이번에는 유하가 손을 내민다. 둘은 삑삑이를 주고받으며 앞마당을 지나 나란히 유치원으로 들어간다.",
+                    "angle": "adventure",
+                    "tension": [
+                      0,
+                      1,
+                      3,
+                      4,
+                      1,
+                      0
+                    ]
+                  }
+                },
+                "usage": {
+                  "input": 1989,
+                  "output": 857,
+                  "costUsdEstimated": 0.012548
+                },
+                "meta": {
+                  "model": "gpt-6.1-sol",
+                  "requests": 1,
+                  "costUsdEstimated": 0.012548
+                }
+              }
+            },
+            "b633754f": {
+              "role": "prose",
+              "response": {
+                "text": "{\n  \"pitch\": {\n    \"title\": \"해니 손에서 삑!\",\n    \"logline\": \"4살 유하는 해니를 웃기려고 집에서 장난을 연습한다. 스쿨버스에서 들린 소리를 버스의 딸꾹질로 믿지만, 유치원 앞마당에서 해니 손에 든 삑삑이를 보고 웃음이 터진다. 이번에는 유하가 장난을 돌려준다.\",\n    \"stakes\": \"1비트에서 유하는 엄마 앞에서 볼을 부풀리며 해니에게 보여 줄 장난을 연습한다. 2비트에서는 해니 옆에 앉자마자 보여 주려 한다. 해니를 웃기지 못하면, 나란히 앉아 함께 웃을 버스 시간이 지나가 버린다.\",\n    \"planted\": {\n      \"name\": \"삑삑이 장난감\",\n      \"nameEn\": \"squeaky toy\",\n      \"firstSeen\": \"1비트·1~2쪽. 유하네 집에서 유하가 삑삑이를 누르고 볼을 부풀린다. 엄마가 웃자 가방에 챙긴다. 소리말 후렴 한 줄: ‘삑, 삑!’\"\n    },\n    \"ladder\": [\n      \"3비트·5~6쪽. 유하는 해니에게 삑삑이를 맡기고 볼을 부풀린다. ‘삑, 삑!’ 소리에 볼이 풀린다. 버스 딸꾹질이라 믿고 볼을 더 크게 부풀려 따라 한다. 해니가 손을 내밀어도 소리 나는 버스만 살핀다.\"\n    ],\n    \"lowPoint\": \"3비트 끝, 유하는 볼을 축 늘어뜨리고 장난을 그만두려는데, 바로 옆 해니의 오므린 손 틈으로 집에서 가져온 삑삑이가 살짝 보인다.\",\n    \"turn\": {\n      \"seen\": \"4비트·7~8쪽. 버스가 유치원 앞마당에 멈춘다. 해니가 손을 펴자 삑삑이가 먼저 또렷이 보인다. 다음 장면에서 눌린다. ‘삑, 삑!’ 유하는 아직 버스를 보다가 해니 쪽으로 고개를 돌린다.\",\n      \"realized\": \"“버스가 아니었네! 해니가 나한테 장난친 거네!”\",\n      \"overturns\": \"유하는 자기만 해니를 웃겨야 한다고 생각했다. 하지만 해니도 같은 삑삑이로 유하에게 장난을 건네고 있었다.\"\n    },\n    \"payoff\": \"5비트·9~10쪽. 유하는 웃으며 손바닥을 내민다. 해니가 삑삑이를 올려 주자 유하는 볼을 부풀린다. 이번에는 해니가 볼을 부풀릴 때까지 기다렸다가 누른다. 둘의 볼이 함께 풀린다. 민 기사님이 문을 열고, 둘은 앞마당으로 내린다.\",\n    \"echo\": \"6비트·11~12쪽. 집에서는 혼자 누르던 삑삑이를 유하가 해니 손에 다시 올려 준다. 해니가 누르자 유하는 볼을 부풀리고, 해니도 따라 한다. 둘은 웃으며 유치원 앞마당을 지나 나란히 유치원으로 들어간다.\",\n    \"angle\": \"heart\",\n    \"tension\": [0, 1, 3, 4, 1, 0]\n  }\n}",
+                "json": {
+                  "pitch": {
+                    "title": "해니 손에서 삑!",
+                    "logline": "4살 유하는 해니를 웃기려고 집에서 장난을 연습한다. 스쿨버스에서 들린 소리를 버스의 딸꾹질로 믿지만, 유치원 앞마당에서 해니 손에 든 삑삑이를 보고 웃음이 터진다. 이번에는 유하가 장난을 돌려준다.",
+                    "stakes": "1비트에서 유하는 엄마 앞에서 볼을 부풀리며 해니에게 보여 줄 장난을 연습한다. 2비트에서는 해니 옆에 앉자마자 보여 주려 한다. 해니를 웃기지 못하면, 나란히 앉아 함께 웃을 버스 시간이 지나가 버린다.",
+                    "planted": {
+                      "name": "삑삑이 장난감",
+                      "nameEn": "squeaky toy",
+                      "firstSeen": "1비트·1~2쪽. 유하네 집에서 유하가 삑삑이를 누르고 볼을 부풀린다. 엄마가 웃자 가방에 챙긴다. 소리말 후렴 한 줄: ‘삑, 삑!’"
+                    },
+                    "ladder": [
+                      "3비트·5~6쪽. 유하는 해니에게 삑삑이를 맡기고 볼을 부풀린다. ‘삑, 삑!’ 소리에 볼이 풀린다. 버스 딸꾹질이라 믿고 볼을 더 크게 부풀려 따라 한다. 해니가 손을 내밀어도 소리 나는 버스만 살핀다."
+                    ],
+                    "lowPoint": "3비트 끝, 유하는 볼을 축 늘어뜨리고 장난을 그만두려는데, 바로 옆 해니의 오므린 손 틈으로 집에서 가져온 삑삑이가 살짝 보인다.",
+                    "turn": {
+                      "seen": "4비트·7~8쪽. 버스가 유치원 앞마당에 멈춘다. 해니가 손을 펴자 삑삑이가 먼저 또렷이 보인다. 다음 장면에서 눌린다. ‘삑, 삑!’ 유하는 아직 버스를 보다가 해니 쪽으로 고개를 돌린다.",
+                      "realized": "“버스가 아니었네! 해니가 나한테 장난친 거네!”",
+                      "overturns": "유하는 자기만 해니를 웃겨야 한다고 생각했다. 하지만 해니도 같은 삑삑이로 유하에게 장난을 건네고 있었다."
+                    },
+                    "payoff": "5비트·9~10쪽. 유하는 웃으며 손바닥을 내민다. 해니가 삑삑이를 올려 주자 유하는 볼을 부풀린다. 이번에는 해니가 볼을 부풀릴 때까지 기다렸다가 누른다. 둘의 볼이 함께 풀린다. 민 기사님이 문을 열고, 둘은 앞마당으로 내린다.",
+                    "echo": "6비트·11~12쪽. 집에서는 혼자 누르던 삑삑이를 유하가 해니 손에 다시 올려 준다. 해니가 누르자 유하는 볼을 부풀리고, 해니도 따라 한다. 둘은 웃으며 유치원 앞마당을 지나 나란히 유치원으로 들어간다.",
+                    "angle": "heart",
+                    "tension": [
+                      0,
+                      1,
+                      3,
+                      4,
+                      1,
+                      0
+                    ]
+                  }
+                },
+                "usage": {
+                  "input": 2003,
+                  "output": 920,
+                  "costUsdEstimated": 0.013206
+                },
+                "meta": {
+                  "model": "gpt-6.1-sol",
+                  "requests": 1,
+                  "costUsdEstimated": 0.013206
+                }
+              }
+            },
+            "36e77e87": {
+              "role": "prose",
+              "response": {
+                "text": "{\n  \"pitch\": {\n    \"title\": \"삑! 누가 장난쳤지?\",\n    \"logline\": \"4살 유하는 해니를 웃기려고 스쿨버스에 오른다. 자꾸 나는 삑 소리에 엉뚱한 답만 붙이는데, 유하가 찾는 삑삑이는 해니 손에 있다! 장난을 알아챈 유하는 해니에게 장난을 돌려주고 함께 유치원에 들어간다.\",\n    \"stakes\": \"1비트 집에서 유하는 엄마 앞에서 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니가 웃으면 가는 길이 놀이가 된다. 소리만 찾다가는 해니와 장난칠 시간이 다 지나간다.\",\n    \"planted\": {\n      \"name\": \"노란 삑삑이\",\n      \"nameEn\": \"yellow squeaky toy\",\n      \"firstSeen\": \"1비트, 집. 유하가 노란 삑삑이를 등 뒤에서 누른다. 엄마가 뒤를 들여다보자 유하가 웃는다. 후렴 한 줄: “삑! 삑!” 유하는 해니에게도 해 보려고 삑삑이를 챙긴다.\"\n    },\n    \"ladder\": [\n      \"3비트, 버스. 유하는 장난을 준비하며 해니에게 삑삑이를 잠깐 맡긴다. 후렴: “삑! 삑!” 소리 찾기 한 번이 이어진다. 버스 딸꾹질? 내 배? 내 신발? 짚는 곳이 늘수록 해니 손은 못 보고, 도착할 때가 가까워진다.\"\n    ],\n    \"lowPoint\": \"버스가 유치원 앞마당에 멎자 유하는 “해니를 웃겨 주지도 못했네” 하며 어깨를 내리는데, 바로 옆 해니의 손가락 사이로 노란 삑삑이가 보인다.\",\n    \"turn\": {\n      \"seen\": \"4비트, 멈춘 버스. 그림은 해니 손의 삑삑이가 눌리는 모습을 먼저 보여 준다. 유하는 아직 자기 신발을 보고 있다. 후렴 한 줄: “삑! 삑!” 다음 장면에서야 유하가 고개를 든다.\",\n      \"realized\": \"“버스도 아니고, 내 배도 아니고, 신발도 아니네! 해니가 나한테 장난친 거야!” 유하가 웃으며 해니 손을 가리킨다.\",\n      \"overturns\": \"유하는 자기가 해니에게 장난을 보여 줄 차례라고만 생각했다. 그런데 해니는 벌써 유하에게 장난을 걸고 있었다. 이상한 소리는 고장도 딸꾹질도 아닌 삑삑이 소리였다.\"\n    },\n    \"payoff\": \"5비트, 유치원 앞마당. 민 기사님이 버스를 세운 뒤 둘은 내린다. 유하는 해니가 내민 삑삑이를 받아 등 뒤에서 한 번 누른다. 해니가 자기 신발을 들여다본다. 유하는 웃으며 삑삑이를 내민다.\",\n    \"echo\": \"6비트, 유치원 앞마당. 집에서는 혼자 등 뒤에 숨겼던 삑삑이를 이번에는 둘 사이에 둔다. 해니가 받아 숨기자 유하가 모르는 척 귀를 기울인다. 둘은 웃으며 나란히 유치원으로 들어간다.\",\n    \"angle\": \"humor\",\n    \"tension\": [0, 1, 3, 4, 2, 0]\n  }\n}",
+                "json": {
+                  "pitch": {
+                    "title": "삑! 누가 장난쳤지?",
+                    "logline": "4살 유하는 해니를 웃기려고 스쿨버스에 오른다. 자꾸 나는 삑 소리에 엉뚱한 답만 붙이는데, 유하가 찾는 삑삑이는 해니 손에 있다! 장난을 알아챈 유하는 해니에게 장난을 돌려주고 함께 유치원에 들어간다.",
+                    "stakes": "1비트 집에서 유하는 엄마 앞에서 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니가 웃으면 가는 길이 놀이가 된다. 소리만 찾다가는 해니와 장난칠 시간이 다 지나간다.",
+                    "planted": {
+                      "name": "노란 삑삑이",
+                      "nameEn": "yellow squeaky toy",
+                      "firstSeen": "1비트, 집. 유하가 노란 삑삑이를 등 뒤에서 누른다. 엄마가 뒤를 들여다보자 유하가 웃는다. 후렴 한 줄: “삑! 삑!” 유하는 해니에게도 해 보려고 삑삑이를 챙긴다."
+                    },
+                    "ladder": [
+                      "3비트, 버스. 유하는 장난을 준비하며 해니에게 삑삑이를 잠깐 맡긴다. 후렴: “삑! 삑!” 소리 찾기 한 번이 이어진다. 버스 딸꾹질? 내 배? 내 신발? 짚는 곳이 늘수록 해니 손은 못 보고, 도착할 때가 가까워진다."
+                    ],
+                    "lowPoint": "버스가 유치원 앞마당에 멎자 유하는 “해니를 웃겨 주지도 못했네” 하며 어깨를 내리는데, 바로 옆 해니의 손가락 사이로 노란 삑삑이가 보인다.",
+                    "turn": {
+                      "seen": "4비트, 멈춘 버스. 그림은 해니 손의 삑삑이가 눌리는 모습을 먼저 보여 준다. 유하는 아직 자기 신발을 보고 있다. 후렴 한 줄: “삑! 삑!” 다음 장면에서야 유하가 고개를 든다.",
+                      "realized": "“버스도 아니고, 내 배도 아니고, 신발도 아니네! 해니가 나한테 장난친 거야!” 유하가 웃으며 해니 손을 가리킨다.",
+                      "overturns": "유하는 자기가 해니에게 장난을 보여 줄 차례라고만 생각했다. 그런데 해니는 벌써 유하에게 장난을 걸고 있었다. 이상한 소리는 고장도 딸꾹질도 아닌 삑삑이 소리였다."
+                    },
+                    "payoff": "5비트, 유치원 앞마당. 민 기사님이 버스를 세운 뒤 둘은 내린다. 유하는 해니가 내민 삑삑이를 받아 등 뒤에서 한 번 누른다. 해니가 자기 신발을 들여다본다. 유하는 웃으며 삑삑이를 내민다.",
+                    "echo": "6비트, 유치원 앞마당. 집에서는 혼자 등 뒤에 숨겼던 삑삑이를 이번에는 둘 사이에 둔다. 해니가 받아 숨기자 유하가 모르는 척 귀를 기울인다. 둘은 웃으며 나란히 유치원으로 들어간다.",
+                    "angle": "humor",
+                    "tension": [
+                      0,
+                      1,
+                      3,
+                      4,
+                      2,
+                      0
+                    ]
+                  }
+                },
+                "usage": {
+                  "input": 1991,
+                  "output": 943,
+                  "costUsdEstimated": 0.013412
+                },
+                "meta": {
+                  "model": "gpt-6.1-sol",
+                  "requests": 1,
+                  "costUsdEstimated": 0.013412
+                }
+              }
+            },
+            "b3c47d87": {
+              "role": "cheap",
+              "response": {
+                "text": "{\"verdicts\":[{\"pitch\":1,\"stakes\":2,\"ladder\":2,\"lowPoint\":2,\"turn\":2,\"payoff\":2,\"direction\":2,\"veto\":false,\"vetoReason\":\"\",\"fixes\":[]},{\"pitch\":2,\"stakes\":2,\"ladder\":2,\"lowPoint\":2,\"turn\":2,\"payoff\":2,\"direction\":2,\"veto\":false,\"vetoReason\":\"\",\"fixes\":[]},{\"pitch\":3,\"stakes\":2,\"ladder\":2,\"lowPoint\":2,\"turn\":2,\"payoff\":2,\"direction\":2,\"veto\":false,\"vetoReason\":\"\",\"fixes\":[]}],\"pick\":3}",
+                "json": {
+                  "verdicts": [
+                    {
+                      "pitch": 1,
+                      "stakes": 2,
+                      "ladder": 2,
+                      "lowPoint": 2,
+                      "turn": 2,
+                      "payoff": 2,
+                      "direction": 2,
+                      "veto": false,
+                      "vetoReason": "",
+                      "fixes": []
+                    },
+                    {
+                      "pitch": 2,
+                      "stakes": 2,
+                      "ladder": 2,
+                      "lowPoint": 2,
+                      "turn": 2,
+                      "payoff": 2,
+                      "direction": 2,
+                      "veto": false,
+                      "vetoReason": "",
+                      "fixes": []
+                    },
+                    {
+                      "pitch": 3,
+                      "stakes": 2,
+                      "ladder": 2,
+                      "lowPoint": 2,
+                      "turn": 2,
+                      "payoff": 2,
+                      "direction": 2,
+                      "veto": false,
+                      "vetoReason": "",
+                      "fixes": []
+                    }
+                  ],
+                  "pick": 3
+                },
+                "usage": {
+                  "input": 4401,
+                  "output": 143,
+                  "costUsdEstimated": 0.0019892
+                },
+                "meta": {
+                  "model": "gpt-4.1-mini",
+                  "requests": 1,
+                  "costUsdEstimated": 0.0019892
+                }
+              }
+            },
+            "1b2277f": {
+              "role": "cheap",
+              "response": {
+                "text": "{\"reactions\":[{\"pitch\":1,\"nextQuestion\":1,\"retell\":\"유하가 버스 소리가 삑삑이인 줄 알았는데 해니가 장난친 거야!\",\"retellHasTurn\":true,\"scary\":\"\"},{\"pitch\":2,\"nextQuestion\":2,\"retell\":\"유하가 버스 방귀라고 생각했는데 해니 손에 삑삑이가 있었어!\",\"retellHasTurn\":true,\"scary\":\"\"},{\"pitch\":3,\"nextQuestion\":2,\"retell\":\"유하가 이상한 소리 찾다가 해니가 장난친 걸 알았어!\",\"retellHasTurn\":true,\"scary\":\"\"}],\"favorite\":3}",
+                "json": {
+                  "reactions": [
+                    {
+                      "pitch": 1,
+                      "nextQuestion": 1,
+                      "retell": "유하가 버스 소리가 삑삑이인 줄 알았는데 해니가 장난친 거야!",
+                      "retellHasTurn": true,
+                      "scary": ""
+                    },
+                    {
+                      "pitch": 2,
+                      "nextQuestion": 2,
+                      "retell": "유하가 버스 방귀라고 생각했는데 해니 손에 삑삑이가 있었어!",
+                      "retellHasTurn": true,
+                      "scary": ""
+                    },
+                    {
+                      "pitch": 3,
+                      "nextQuestion": 2,
+                      "retell": "유하가 이상한 소리 찾다가 해니가 장난친 걸 알았어!",
+                      "retellHasTurn": true,
+                      "scary": ""
+                    }
+                  ],
+                  "favorite": 3
+                },
+                "usage": {
+                  "input": 3342,
+                  "output": 154,
+                  "costUsdEstimated": 0.0015832000000000003
+                },
+                "meta": {
+                  "model": "gpt-4.1-mini",
+                  "requests": 1,
+                  "costUsdEstimated": 0.0015832000000000003
+                }
+              }
+            },
+            "70f7ecd4": {
+              "role": "cheap",
+              "response": {
+                "text": "{\"verdicts\":[{\"pitch\":1,\"drawableTurn\":2,\"plantedVisible\":2,\"lowPointVisible\":2,\"variety\":2,\"motifs\":[{\"ko\":\"노란 삑삑이 장난감\",\"en\":\"yellow squeaky toy\"},{\"ko\":\"볼 부풀리기\",\"en\":\"puffed cheeks\"},{\"ko\":\"스쿨버스\",\"en\":\"school bus\"}],\"veto\":false,\"vetoReason\":\"\",\"fixes\":[]},{\"pitch\":2,\"drawableTurn\":2,\"plantedVisible\":2,\"lowPointVisible\":2,\"variety\":2,\"motifs\":[{\"ko\":\"노란 삑삑이 장난감\",\"en\":\"yellow squeaky toy\"},{\"ko\":\"볼 부풀리기\",\"en\":\"puffed cheeks\"},{\"ko\":\"스쿨버스\",\"en\":\"school bus\"}],\"veto\":false,\"vetoReason\":\"\",\"fixes\":[]},{\"pitch\":3,\"drawableTurn\":2,\"plantedVisible\":2,\"lowPointVisible\":2,\"variety\":2,\"motifs\":[{\"ko\":\"노란 삑삑이\",\"en\":\"yellow squeaky toy\"},{\"ko\":\"볼 부풀리기\",\"en\":\"puffed cheeks\"},{\"ko\":\"스쿨버스\",\"en\":\"school bus\"}],\"veto\":false,\"vetoReason\":\"\",\"fixes\":[]}],\"pick\":3}",
+                "json": {
+                  "verdicts": [
+                    {
+                      "pitch": 1,
+                      "drawableTurn": 2,
+                      "plantedVisible": 2,
+                      "lowPointVisible": 2,
+                      "variety": 2,
+                      "motifs": [
+                        {
+                          "ko": "노란 삑삑이 장난감",
+                          "en": "yellow squeaky toy"
+                        },
+                        {
+                          "ko": "볼 부풀리기",
+                          "en": "puffed cheeks"
+                        },
+                        {
+                          "ko": "스쿨버스",
+                          "en": "school bus"
+                        }
+                      ],
+                      "veto": false,
+                      "vetoReason": "",
+                      "fixes": []
+                    },
+                    {
+                      "pitch": 2,
+                      "drawableTurn": 2,
+                      "plantedVisible": 2,
+                      "lowPointVisible": 2,
+                      "variety": 2,
+                      "motifs": [
+                        {
+                          "ko": "노란 삑삑이 장난감",
+                          "en": "yellow squeaky toy"
+                        },
+                        {
+                          "ko": "볼 부풀리기",
+                          "en": "puffed cheeks"
+                        },
+                        {
+                          "ko": "스쿨버스",
+                          "en": "school bus"
+                        }
+                      ],
+                      "veto": false,
+                      "vetoReason": "",
+                      "fixes": []
+                    },
+                    {
+                      "pitch": 3,
+                      "drawableTurn": 2,
+                      "plantedVisible": 2,
+                      "lowPointVisible": 2,
+                      "variety": 2,
+                      "motifs": [
+                        {
+                          "ko": "노란 삑삑이",
+                          "en": "yellow squeaky toy"
+                        },
+                        {
+                          "ko": "볼 부풀리기",
+                          "en": "puffed cheeks"
+                        },
+                        {
+                          "ko": "스쿨버스",
+                          "en": "school bus"
+                        }
+                      ],
+                      "veto": false,
+                      "vetoReason": "",
+                      "fixes": []
+                    }
+                  ],
+                  "pick": 3
+                },
+                "usage": {
+                  "input": 4330,
+                  "output": 281,
+                  "costUsdEstimated": 0.0021816
+                },
+                "meta": {
+                  "model": "gpt-4.1-mini",
+                  "requests": 1,
+                  "costUsdEstimated": 0.0021816
+                }
+              }
+            },
+            "679bde7d": {
+              "role": "cheap",
+              "response": {
+                "text": "{\"bible\":{\"title\":\"삑! 누가 장난쳤지?\",\"logline\":\"4살 유하는 해니를 웃기려고 스쿨버스에 오른다. 자꾸 나는 삑 소리에 엉뚱한 답만 붙이는데, 유하가 찾는 삑삑이는 해니 손에 있다! 장난을 알아챈 유하는 해니에게 장난을 돌려주고 함께 유치원에 들어간다.\",\"stakes\":\"1비트 집에서 유하는 엄마 앞에서 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니가 웃으면 가는 길이 놀이가 된다. 소리만 찾다가는 해니와 장난칠 시간이 다 지나간다.\",\"planted\":{\"name\":\"노란 삑삑이\",\"nameEn\":\"yellow squeaky toy\",\"firstSeen\":\"1비트, 집. 유하가 노란 삑삑이를 등 뒤에서 누른다. 엄마가 뒤를 들여다보자 유하가 웃는다. 후렴 한 줄: “삑! 삑!” 유하는 해니에게도 해 보려고 삑삑이를 챙긴다.\"},\"ladder\":[\"3비트, 버스. 유하는 장난을 준비하며 해니에게 삑삑이를 잠깐 맡긴다. 후렴: “삑! 삑!” 소리 찾기 한 번이 이어진다. 버스 딸꾹질? 내 배? 내 신발? 짚는 곳이 늘수록 해니 손은 못 보고, 도착할 때가 가까워진다.\"],\"lowPoint\":\"버스가 유치원 앞마당에 멎자 유하는 “해니를 웃겨 주지도 못했네” 하며 어깨를 내리는데, 바로 옆 해니의 손가락 사이로 노란 삑삑이가 보인다.\",\"turn\":{\"seen\":\"4비트, 멈춘 버스. 그림은 해니 손의 삑삑이가 눌리는 모습을 먼저 보여 준다. 유하는 아직 자기 신발을 보고 있다. 후렴 한 줄: “삑! 삑!” 다음 장면에서야 유하가 고개를 든다.\",\"realized\":\"“버스도 아니고, 내 배도 아니고, 신발도 아니네! 해니가 나한테 장난친 거야!” 유하가 웃으며 해니 손을 가리킨다.\",\"overturns\":\"유하는 자기가 해니에게 장난을 보여 줄 차례라고만 생각했다. 그런데 해니는 벌써 유하에게 장난을 걸고 있었다. 이상한 소리는 고장도 딸꾹질도 아닌 삑삑이 소리였다.\"},\"payoff\":\"5비트, 유치원 앞마당. 민 기사님이 버스를 세운 뒤 둘은 내린다. 유하는 해니가 내민 삑삑이를 받아 등 뒤에서 한 번 누른다. 해니가 자기 신발을 들여다본다. 유하는 웃으며 삑삑이를 내민다.\",\"echo\":\"6비트, 유치원 앞마당. 집에서는 혼자 등 뒤에 숨겼던 삑삑이를 이번에는 둘 사이에 둔다. 해니가 받아 숨기자 유하가 모르는 척 귀를 기울인다. 둘은 웃으며 나란히 유치원으로 들어간다.\",\"angle\":\"humor\",\"tension\":[0,1,3,4,2,0],\"visual\":{\"pictures\":[{\"beatIndex\":1,\"ko\":\"유하가 등 뒤에서 노란 삑삑이를 누른다.\",\"en\":\"Yuha presses the yellow squeaky toy behind her back.\"},{\"beatIndex\":2,\"ko\":\"버스 안에서 유하가 해니에게 삑삑이를 건넨다.\",\"en\":\"Inside the bus, Yuha hands the squeaky toy to Hani.\"},{\"beatIndex\":3,\"ko\":\"유하가 신발과 배를 만지며 삑 소리의 원인을 찾는다.\",\"en\":\"Yuha touches her shoes and belly, searching for the squeaky sound's source.\"},{\"beatIndex\":4,\"ko\":\"해니 손가락 사이에서 삑삑이가 눌린다.\",\"en\":\"The squeaky toy is pressed between Hani's fingers.\"},{\"beatIndex\":5,\"ko\":\"유하가 삑삑이를 눌러 해니를 놀린다.\",\"en\":\"Yuha squeezes the squeaky toy, teasing Hani.\"},{\"beatIndex\":6,\"ko\":\"유하와 해니가 삑삑이를 사이에 두고 웃으며 유치원으로 들어간다.\",\"en\":\"Yuha and Hani laugh together, entering kindergarten with the squeaky toy between them.\"}],\"motifs\":[{\"ko\":\"노란 삑삑이\",\"en\":\"yellow squeaky toy\"},{\"ko\":\"볼 부풀리기\",\"en\":\"puffed cheeks\"},{\"ko\":\"스쿨버스\",\"en\":\"school bus\"}],\"plantedPlacementEn\":\"In the first beat, the yellow squeaky toy is pressed behind Yuha's back.\"},\"growth\":{\"want\":\"해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.\",\"need\":\"혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.\",\"flaw\":\"호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다.\"},\"theme\":\"주고받는 장난\",\"lesson\":\"집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다.\"}}",
+                "json": {
+                  "bible": {
+                    "title": "삑! 누가 장난쳤지?",
+                    "logline": "4살 유하는 해니를 웃기려고 스쿨버스에 오른다. 자꾸 나는 삑 소리에 엉뚱한 답만 붙이는데, 유하가 찾는 삑삑이는 해니 손에 있다! 장난을 알아챈 유하는 해니에게 장난을 돌려주고 함께 유치원에 들어간다.",
+                    "stakes": "1비트 집에서 유하는 엄마 앞에서 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니가 웃으면 가는 길이 놀이가 된다. 소리만 찾다가는 해니와 장난칠 시간이 다 지나간다.",
+                    "planted": {
+                      "name": "노란 삑삑이",
+                      "nameEn": "yellow squeaky toy",
+                      "firstSeen": "1비트, 집. 유하가 노란 삑삑이를 등 뒤에서 누른다. 엄마가 뒤를 들여다보자 유하가 웃는다. 후렴 한 줄: “삑! 삑!” 유하는 해니에게도 해 보려고 삑삑이를 챙긴다."
+                    },
+                    "ladder": [
+                      "3비트, 버스. 유하는 장난을 준비하며 해니에게 삑삑이를 잠깐 맡긴다. 후렴: “삑! 삑!” 소리 찾기 한 번이 이어진다. 버스 딸꾹질? 내 배? 내 신발? 짚는 곳이 늘수록 해니 손은 못 보고, 도착할 때가 가까워진다."
+                    ],
+                    "lowPoint": "버스가 유치원 앞마당에 멎자 유하는 “해니를 웃겨 주지도 못했네” 하며 어깨를 내리는데, 바로 옆 해니의 손가락 사이로 노란 삑삑이가 보인다.",
+                    "turn": {
+                      "seen": "4비트, 멈춘 버스. 그림은 해니 손의 삑삑이가 눌리는 모습을 먼저 보여 준다. 유하는 아직 자기 신발을 보고 있다. 후렴 한 줄: “삑! 삑!” 다음 장면에서야 유하가 고개를 든다.",
+                      "realized": "“버스도 아니고, 내 배도 아니고, 신발도 아니네! 해니가 나한테 장난친 거야!” 유하가 웃으며 해니 손을 가리킨다.",
+                      "overturns": "유하는 자기가 해니에게 장난을 보여 줄 차례라고만 생각했다. 그런데 해니는 벌써 유하에게 장난을 걸고 있었다. 이상한 소리는 고장도 딸꾹질도 아닌 삑삑이 소리였다."
+                    },
+                    "payoff": "5비트, 유치원 앞마당. 민 기사님이 버스를 세운 뒤 둘은 내린다. 유하는 해니가 내민 삑삑이를 받아 등 뒤에서 한 번 누른다. 해니가 자기 신발을 들여다본다. 유하는 웃으며 삑삑이를 내민다.",
+                    "echo": "6비트, 유치원 앞마당. 집에서는 혼자 등 뒤에 숨겼던 삑삑이를 이번에는 둘 사이에 둔다. 해니가 받아 숨기자 유하가 모르는 척 귀를 기울인다. 둘은 웃으며 나란히 유치원으로 들어간다.",
+                    "angle": "humor",
+                    "tension": [
+                      0,
+                      1,
+                      3,
+                      4,
+                      2,
+                      0
+                    ],
+                    "visual": {
+                      "pictures": [
+                        {
+                          "beatIndex": 1,
+                          "ko": "유하가 등 뒤에서 노란 삑삑이를 누른다.",
+                          "en": "Yuha presses the yellow squeaky toy behind her back."
+                        },
+                        {
+                          "beatIndex": 2,
+                          "ko": "버스 안에서 유하가 해니에게 삑삑이를 건넨다.",
+                          "en": "Inside the bus, Yuha hands the squeaky toy to Hani."
+                        },
+                        {
+                          "beatIndex": 3,
+                          "ko": "유하가 신발과 배를 만지며 삑 소리의 원인을 찾는다.",
+                          "en": "Yuha touches her shoes and belly, searching for the squeaky sound's source."
+                        },
+                        {
+                          "beatIndex": 4,
+                          "ko": "해니 손가락 사이에서 삑삑이가 눌린다.",
+                          "en": "The squeaky toy is pressed between Hani's fingers."
+                        },
+                        {
+                          "beatIndex": 5,
+                          "ko": "유하가 삑삑이를 눌러 해니를 놀린다.",
+                          "en": "Yuha squeezes the squeaky toy, teasing Hani."
+                        },
+                        {
+                          "beatIndex": 6,
+                          "ko": "유하와 해니가 삑삑이를 사이에 두고 웃으며 유치원으로 들어간다.",
+                          "en": "Yuha and Hani laugh together, entering kindergarten with the squeaky toy between them."
+                        }
+                      ],
+                      "motifs": [
+                        {
+                          "ko": "노란 삑삑이",
+                          "en": "yellow squeaky toy"
+                        },
+                        {
+                          "ko": "볼 부풀리기",
+                          "en": "puffed cheeks"
+                        },
+                        {
+                          "ko": "스쿨버스",
+                          "en": "school bus"
+                        }
+                      ],
+                      "plantedPlacementEn": "In the first beat, the yellow squeaky toy is pressed behind Yuha's back."
+                    },
+                    "growth": {
+                      "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                      "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                      "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+                    },
+                    "theme": "주고받는 장난",
+                    "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다."
+                  }
+                },
+                "usage": {
+                  "input": 2914,
+                  "output": 1346,
+                  "costUsdEstimated": 0.0033192
+                },
+                "meta": {
+                  "model": "gpt-4.1-mini",
+                  "requests": 1,
+                  "costUsdEstimated": 0.0033192
+                }
+              }
+            }
+          },
+          "checkRules": 2,
+          "record": {
+            "version": 1,
+            "direction": "5~6세 독자가 절정에서 심은 물건이 다시 보이는 순간 '아!' 하고 반전을 스스로 알아차리고, 마지막은 부모가 적은 끝(부모가 적은 주제대로 끝나요: \"4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기\". 이야기가 향하는 곳(예: 유치원에 가)에 닿는다.",
+            "conditions": [
+              "독자: 5~6세 · 집중 8~10분 · 인과 두 단계 인과(그래서 → 그래서)와 간단한 동기 · 맞는 반전 믿었던 것이 다른 것이었음(역할 뒤바뀜, 작은 것이 해결) · 웃음 실수·엉뚱한 추측·과장 · 걱정은 되돌릴 수 있는 것만, 괴물·잔인함 없음 · 수 다섯까지, 순서와 되풀이를 좋아함",
+              "분량: 12쪽, 비트 6개 (setup · want · attempt×1 · turn · resolution · close). 한글 펼침면 10~15문장 · 낱쪽 5~7문장 / 영어 펼침면 2~4문장 · 낱쪽 1~2문장",
+              "끝맺음: 부모가 적은 끝 그대로 — 부모가 적은 주제대로 끝나요: \"4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기\". 이야기가 향하는 곳(예: 유치원에 가는 이야기는 유치원에 들어가는 장면)에서 그 행동으로 끝내고, 주제에 가는 곳이 없으면 집에서 편안히 끝내요.",
+              "가치: 없음 — 말로 하지 않고 행동으로만 보여 준다",
+              "등장인물(고정, 새 인물 금지): 유하(yuha: 호기심 많음·씩씩함), 엄마(mom: 다정함·차분함), 해니(character-126f8bd5-b167-4043-a38a-18b691: Playful·Observant), 민 기사님(character-d68f7cf1-ebc1-487b-b5f6-fdc5e7: Calm·Attentive)",
+              "장소(고정, 새 장소 금지): 유하네 집(home, 집), 노란 스쿨버스(background-038816fe-ce9b-489c-98f9-410d6), 유치원 앞마당(background-0c853db4-a69f-4409-9f5e-0ce40) — 처음은 집, 중간은 집 아닌 곳 2곳 이상",
+              "금지: 무서운 장면·벌주기·비교·놀림·잔인함. 교훈을 말로 하지 않는다.",
+              "소리말 후렴: 핵심 물건이나 사건이 내는 의성어 한 줄을 비트 3곳에 둔다."
+            ],
+            "reader": {
+              "id": "K2",
+              "age": "5~6세"
+            },
+            "pitches": [
+              {
+                "title": "해니 손에서 삑!",
+                "logline": "4살 유하는 해니를 웃기려고 집에서 장난을 연습한다. 스쿨버스에서 들린 소리를 버스의 딸꾹질로 믿지만, 유치원 앞마당에서 해니 손에 든 삑삑이를 보고 웃음이 터진다. 이번에는 유하가 장난을 돌려준다.",
+                "stakes": "1비트에서 유하는 엄마 앞에서 볼을 부풀리며 해니에게 보여 줄 장난을 연습한다. 2비트에서는 해니 옆에 앉자마자 보여 주려 한다. 해니를 웃기지 못하면, 나란히 앉아 함께 웃을 버스 시간이 지나가 버린다.",
+                "planted": {
+                  "name": "삑삑이 장난감",
+                  "nameEn": "squeaky toy",
+                  "firstSeen": "1비트·1~2쪽. 유하네 집에서 유하가 삑삑이를 누르고 볼을 부풀린다. 엄마가 웃자 가방에 챙긴다. 소리말 후렴 한 줄: ‘삑, 삑!’"
+                },
+                "ladder": [
+                  "3비트·5~6쪽. 유하는 해니에게 삑삑이를 맡기고 볼을 부풀린다. ‘삑, 삑!’ 소리에 볼이 풀린다. 버스 딸꾹질이라 믿고 볼을 더 크게 부풀려 따라 한다. 해니가 손을 내밀어도 소리 나는 버스만 살핀다."
+                ],
+                "lowPoint": "3비트 끝, 유하는 볼을 축 늘어뜨리고 장난을 그만두려는데, 바로 옆 해니의 오므린 손 틈으로 집에서 가져온 삑삑이가 살짝 보인다.",
+                "turn": {
+                  "seen": "4비트·7~8쪽. 버스가 유치원 앞마당에 멈춘다. 해니가 손을 펴자 삑삑이가 먼저 또렷이 보인다. 다음 장면에서 눌린다. ‘삑, 삑!’ 유하는 아직 버스를 보다가 해니 쪽으로 고개를 돌린다.",
+                  "realized": "“버스가 아니었네! 해니가 나한테 장난친 거네!”",
+                  "overturns": "유하는 자기만 해니를 웃겨야 한다고 생각했다. 하지만 해니도 같은 삑삑이로 유하에게 장난을 건네고 있었다."
+                },
+                "payoff": "5비트·9~10쪽. 유하는 웃으며 손바닥을 내민다. 해니가 삑삑이를 올려 주자 유하는 볼을 부풀린다. 이번에는 해니가 볼을 부풀릴 때까지 기다렸다가 누른다. 둘의 볼이 함께 풀린다. 민 기사님이 문을 열고, 둘은 앞마당으로 내린다.",
+                "echo": "6비트·11~12쪽. 집에서는 혼자 누르던 삑삑이를 유하가 해니 손에 다시 올려 준다. 해니가 누르자 유하는 볼을 부풀리고, 해니도 따라 한다. 둘은 웃으며 유치원 앞마당을 지나 나란히 유치원으로 들어간다.",
+                "growth": {
+                  "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                  "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                  "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+                },
+                "theme": "주고받는 장난",
+                "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다.",
+                "angle": "heart",
+                "tension": [
+                  0,
+                  1,
+                  3,
+                  4,
+                  1,
+                  0
+                ]
+              },
+              {
+                "title": "해니 옆에서 삑!",
+                "logline": "네 살 유하는 해니를 웃기려고 장난을 챙겨 스쿨버스에 탄다. 그런데 자꾸 나는 작은 소리를 버스 소리라고 믿는다. 소리를 찾던 유하는 해니 손에서 낯익은 장난감을 발견한다.",
+                "stakes": "1비트 집에서 유하는 엄마 앞에 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니를 웃기지 못하면 유치원까지 함께 깔깔 웃으며 갈 시간이 지나가 버린다.",
+                "planted": {
+                  "name": "노란 삑삑이 장난감",
+                  "nameEn": "yellow squeaky toy",
+                  "firstSeen": "1비트. 집에서 유하가 삑삑이를 손으로 누르고 볼을 부풀린다. 엄마가 웃는다. 유하가 해니에게도 보여 주겠다며 챙긴다. 소리말 한 줄: “삑삑!”"
+                },
+                "ladder": [
+                  "3비트. 버스가 멈춰 있을 때 유하가 해니에게 삑삑이를 맡기고 볼을 부풀린다. 해니 손에서 소리가 나지만 유하는 버스가 방귀를 뀌었다고 정한다. 달리는 동안 앉아서 더 크게 볼을 부풀리느라 해니가 내미는 손을 놓친다. 소리말 한 줄: “삑삑!”"
+                ],
+                "lowPoint": "유치원 앞마당에 버스가 멈추자 유하는 볼을 풀고 장난을 그만두려는데, 바로 옆 해니의 손끝에 노란 삑삑이가 보인다.",
+                "turn": {
+                  "seen": "4비트. 유하가 창밖을 보는 동안 해니가 노란 삑삑이를 누르는 손을 먼저 크게 보여 준다. 다음 장면에서 유하가 돌아본다. 해니가 볼을 부풀리고 다시 누른다.",
+                  "realized": "“버스 방귀가 아니네! 해니가 나한테 장난친 거네!”",
+                  "overturns": "유하는 자기가 해니를 웃겨야 한다고 생각했다. 그런데 해니는 벌써 유하를 웃기려고 장난을 보내고 있었다."
+                },
+                "payoff": "5비트. 민 기사님이 버스를 세운 뒤 둘은 유치원 앞마당으로 내린다. 유하가 손을 내밀어 삑삑이를 받는다. 해니가 볼을 부풀리자 유하가 누른다. 소리말 한 줄: “삑삑!” 둘 다 볼의 바람을 풀며 웃는다.",
+                "echo": "6비트. 집에서는 혼자 누르던 삑삑이를 유하가 해니 손에 건넨다. 해니가 누르면 유하가 볼을 부풀린다. 이번에는 유하가 손을 내민다. 둘은 삑삑이를 주고받으며 앞마당을 지나 나란히 유치원으로 들어간다.",
+                "growth": {
+                  "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                  "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                  "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+                },
+                "theme": "주고받는 장난",
+                "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다.",
+                "angle": "adventure",
+                "tension": [
+                  0,
+                  1,
+                  3,
+                  4,
+                  1,
+                  0
+                ]
+              },
+              {
+                "title": "삑! 누가 장난쳤지?",
+                "logline": "4살 유하는 해니를 웃기려고 스쿨버스에 오른다. 자꾸 나는 삑 소리에 엉뚱한 답만 붙이는데, 유하가 찾는 삑삑이는 해니 손에 있다! 장난을 알아챈 유하는 해니에게 장난을 돌려주고 함께 유치원에 들어간다.",
+                "stakes": "1비트 집에서 유하는 엄마 앞에서 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니가 웃으면 가는 길이 놀이가 된다. 소리만 찾다가는 해니와 장난칠 시간이 다 지나간다.",
+                "planted": {
+                  "name": "노란 삑삑이",
+                  "nameEn": "yellow squeaky toy",
+                  "firstSeen": "1비트, 집. 유하가 노란 삑삑이를 등 뒤에서 누른다. 엄마가 뒤를 들여다보자 유하가 웃는다. 후렴 한 줄: “삑! 삑!” 유하는 해니에게도 해 보려고 삑삑이를 챙긴다."
+                },
+                "ladder": [
+                  "3비트, 버스. 유하는 장난을 준비하며 해니에게 삑삑이를 잠깐 맡긴다. 후렴: “삑! 삑!” 소리 찾기 한 번이 이어진다. 버스 딸꾹질? 내 배? 내 신발? 짚는 곳이 늘수록 해니 손은 못 보고, 도착할 때가 가까워진다."
+                ],
+                "lowPoint": "버스가 유치원 앞마당에 멎자 유하는 “해니를 웃겨 주지도 못했네” 하며 어깨를 내리는데, 바로 옆 해니의 손가락 사이로 노란 삑삑이가 보인다.",
+                "turn": {
+                  "seen": "4비트, 멈춘 버스. 그림은 해니 손의 삑삑이가 눌리는 모습을 먼저 보여 준다. 유하는 아직 자기 신발을 보고 있다. 후렴 한 줄: “삑! 삑!” 다음 장면에서야 유하가 고개를 든다.",
+                  "realized": "“버스도 아니고, 내 배도 아니고, 신발도 아니네! 해니가 나한테 장난친 거야!” 유하가 웃으며 해니 손을 가리킨다.",
+                  "overturns": "유하는 자기가 해니에게 장난을 보여 줄 차례라고만 생각했다. 그런데 해니는 벌써 유하에게 장난을 걸고 있었다. 이상한 소리는 고장도 딸꾹질도 아닌 삑삑이 소리였다."
+                },
+                "payoff": "5비트, 유치원 앞마당. 민 기사님이 버스를 세운 뒤 둘은 내린다. 유하는 해니가 내민 삑삑이를 받아 등 뒤에서 한 번 누른다. 해니가 자기 신발을 들여다본다. 유하는 웃으며 삑삑이를 내민다.",
+                "echo": "6비트, 유치원 앞마당. 집에서는 혼자 등 뒤에 숨겼던 삑삑이를 이번에는 둘 사이에 둔다. 해니가 받아 숨기자 유하가 모르는 척 귀를 기울인다. 둘은 웃으며 나란히 유치원으로 들어간다.",
+                "growth": {
+                  "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                  "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                  "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+                },
+                "theme": "주고받는 장난",
+                "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다.",
+                "angle": "humor",
+                "tension": [
+                  0,
+                  1,
+                  3,
+                  4,
+                  2,
+                  0
+                ]
+              }
+            ],
+            "verdicts": {
+              "editor": [
+                {
+                  "pitch": 1,
+                  "stakes": 2,
+                  "ladder": 2,
+                  "lowPoint": 2,
+                  "turn": 2,
+                  "payoff": 2,
+                  "direction": 2,
+                  "veto": false,
+                  "vetoReason": "",
+                  "fixes": []
+                },
+                {
+                  "pitch": 2,
+                  "stakes": 2,
+                  "ladder": 2,
+                  "lowPoint": 2,
+                  "turn": 2,
+                  "payoff": 2,
+                  "direction": 2,
+                  "veto": false,
+                  "vetoReason": "",
+                  "fixes": []
+                },
+                {
+                  "pitch": 3,
+                  "stakes": 2,
+                  "ladder": 2,
+                  "lowPoint": 2,
+                  "turn": 2,
+                  "payoff": 2,
+                  "direction": 2,
+                  "veto": false,
+                  "vetoReason": "",
+                  "fixes": []
+                }
+              ],
+              "art": [
+                {
+                  "pitch": 1,
+                  "drawableTurn": 2,
+                  "plantedVisible": 2,
+                  "lowPointVisible": 2,
+                  "variety": 2,
+                  "motifs": [
+                    {
+                      "ko": "노란 삑삑이 장난감",
+                      "en": "yellow squeaky toy"
+                    },
+                    {
+                      "ko": "볼 부풀리기",
+                      "en": "puffed cheeks"
+                    },
+                    {
+                      "ko": "스쿨버스",
+                      "en": "school bus"
+                    }
+                  ],
+                  "veto": false,
+                  "vetoReason": "",
+                  "fixes": []
+                },
+                {
+                  "pitch": 2,
+                  "drawableTurn": 2,
+                  "plantedVisible": 2,
+                  "lowPointVisible": 2,
+                  "variety": 2,
+                  "motifs": [
+                    {
+                      "ko": "노란 삑삑이 장난감",
+                      "en": "yellow squeaky toy"
+                    },
+                    {
+                      "ko": "볼 부풀리기",
+                      "en": "puffed cheeks"
+                    },
+                    {
+                      "ko": "스쿨버스",
+                      "en": "school bus"
+                    }
+                  ],
+                  "veto": false,
+                  "vetoReason": "",
+                  "fixes": []
+                },
+                {
+                  "pitch": 3,
+                  "drawableTurn": 2,
+                  "plantedVisible": 2,
+                  "lowPointVisible": 2,
+                  "variety": 2,
+                  "motifs": [
+                    {
+                      "ko": "노란 삑삑이",
+                      "en": "yellow squeaky toy"
+                    },
+                    {
+                      "ko": "볼 부풀리기",
+                      "en": "puffed cheeks"
+                    },
+                    {
+                      "ko": "스쿨버스",
+                      "en": "school bus"
+                    }
+                  ],
+                  "veto": false,
+                  "vetoReason": "",
+                  "fixes": []
+                }
+              ],
+              "reader": [
+                {
+                  "pitch": 1,
+                  "nextQuestion": 1,
+                  "retell": "유하가 버스 소리가 삑삑이인 줄 알았는데 해니가 장난친 거야!",
+                  "retellHasTurn": true,
+                  "scary": ""
+                },
+                {
+                  "pitch": 2,
+                  "nextQuestion": 2,
+                  "retell": "유하가 버스 방귀라고 생각했는데 해니 손에 삑삑이가 있었어!",
+                  "retellHasTurn": true,
+                  "scary": ""
+                },
+                {
+                  "pitch": 3,
+                  "nextQuestion": 2,
+                  "retell": "유하가 이상한 소리 찾다가 해니가 장난친 걸 알았어!",
+                  "retellHasTurn": true,
+                  "scary": ""
+                }
+              ],
+              "picks": {
+                "editor": 3,
+                "art": 3,
+                "reader": 3
+              }
+            },
+            "scores": [
+              {
+                "pitch": 1,
+                "editor": 12,
+                "art": 8,
+                "reader": 3,
+                "score": 11.3,
+                "vetoes": []
+              },
+              {
+                "pitch": 2,
+                "editor": 12,
+                "art": 8,
+                "reader": 4,
+                "score": 12,
+                "vetoes": []
+              },
+              {
+                "pitch": 3,
+                "editor": 12,
+                "art": 8,
+                "reader": 4,
+                "score": 12,
+                "vetoes": []
+              }
+            ],
+            "chosen": 3,
+            "overrode": false,
+            "bible": {
+              "title": "삑! 누가 장난쳤지?",
+              "logline": "4살 유하는 해니를 웃기려고 스쿨버스에 오른다. 자꾸 나는 삑 소리에 엉뚱한 답만 붙이는데, 유하가 찾는 삑삑이는 해니 손에 있다! 장난을 알아챈 유하는 해니에게 장난을 돌려주고 함께 유치원에 들어간다.",
+              "stakes": "1비트 집에서 유하는 엄마 앞에서 장난을 연습한다. 2비트 버스에서 해니를 만나 바로 보여 주려 한다. 해니가 웃으면 가는 길이 놀이가 된다. 소리만 찾다가는 해니와 장난칠 시간이 다 지나간다.",
+              "planted": {
+                "name": "노란 삑삑이",
+                "nameEn": "yellow squeaky toy",
+                "firstSeen": "1비트, 집. 유하가 노란 삑삑이를 등 뒤에서 누른다. 엄마가 뒤를 들여다보자 유하가 웃는다. 후렴 한 줄: “삑! 삑!” 유하는 해니에게도 해 보려고 삑삑이를 챙긴다."
+              },
+              "ladder": [
+                "3비트, 버스. 유하는 장난을 준비하며 해니에게 삑삑이를 잠깐 맡긴다. 후렴: “삑! 삑!” 소리 찾기 한 번이 이어진다. 버스 딸꾹질? 내 배? 내 신발? 짚는 곳이 늘수록 해니 손은 못 보고, 도착할 때가 가까워진다."
+              ],
+              "lowPoint": "버스가 유치원 앞마당에 멎자 유하는 “해니를 웃겨 주지도 못했네” 하며 어깨를 내리는데, 바로 옆 해니의 손가락 사이로 노란 삑삑이가 보인다.",
+              "turn": {
+                "seen": "4비트, 멈춘 버스. 그림은 해니 손의 삑삑이가 눌리는 모습을 먼저 보여 준다. 유하는 아직 자기 신발을 보고 있다. 후렴 한 줄: “삑! 삑!” 다음 장면에서야 유하가 고개를 든다.",
+                "realized": "“버스도 아니고, 내 배도 아니고, 신발도 아니네! 해니가 나한테 장난친 거야!” 유하가 웃으며 해니 손을 가리킨다.",
+                "overturns": "유하는 자기가 해니에게 장난을 보여 줄 차례라고만 생각했다. 그런데 해니는 벌써 유하에게 장난을 걸고 있었다. 이상한 소리는 고장도 딸꾹질도 아닌 삑삑이 소리였다."
+              },
+              "payoff": "5비트, 유치원 앞마당. 민 기사님이 버스를 세운 뒤 둘은 내린다. 유하는 해니가 내민 삑삑이를 받아 등 뒤에서 한 번 누른다. 해니가 자기 신발을 들여다본다. 유하는 웃으며 삑삑이를 내민다.",
+              "echo": "6비트, 유치원 앞마당. 집에서는 혼자 등 뒤에 숨겼던 삑삑이를 이번에는 둘 사이에 둔다. 해니가 받아 숨기자 유하가 모르는 척 귀를 기울인다. 둘은 웃으며 나란히 유치원으로 들어간다.",
+              "angle": "humor",
+              "growth": {
+                "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+              },
+              "theme": "주고받는 장난",
+              "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다.",
+              "tension": [
+                0,
+                1,
+                3,
+                4,
+                2,
+                0
+              ],
+              "visual": {
+                "pictures": [
+                  {
+                    "beatIndex": 1,
+                    "ko": "유하가 등 뒤에서 노란 삑삑이를 누른다.",
+                    "en": "Yuha presses the yellow squeaky toy behind her back."
+                  },
+                  {
+                    "beatIndex": 2,
+                    "ko": "버스 안에서 유하가 해니에게 삑삑이를 건넨다.",
+                    "en": "Inside the bus, Yuha hands the squeaky toy to Hani."
+                  },
+                  {
+                    "beatIndex": 3,
+                    "ko": "유하가 신발과 배를 만지며 삑 소리의 원인을 찾는다.",
+                    "en": "Yuha touches her shoes and belly, searching for the squeaky sound's source."
+                  },
+                  {
+                    "beatIndex": 4,
+                    "ko": "해니 손가락 사이에서 삑삑이가 눌린다.",
+                    "en": "The squeaky toy is pressed between Hani's fingers."
+                  },
+                  {
+                    "beatIndex": 5,
+                    "ko": "유하가 삑삑이를 눌러 해니를 놀린다.",
+                    "en": "Yuha squeezes the squeaky toy, teasing Hani."
+                  },
+                  {
+                    "beatIndex": 6,
+                    "ko": "유하와 해니가 삑삑이를 사이에 두고 웃으며 유치원으로 들어간다.",
+                    "en": "Yuha and Hani laugh together, entering kindergarten with the squeaky toy between them."
+                  }
+                ],
+                "revealBeat": 4,
+                "motifs": [
+                  {
+                    "ko": "노란 삑삑이",
+                    "en": "yellow squeaky toy"
+                  },
+                  {
+                    "ko": "볼 부풀리기",
+                    "en": "puffed cheeks"
+                  },
+                  {
+                    "ko": "스쿨버스",
+                    "en": "school bus"
+                  }
+                ],
+                "plantedPlacementEn": "In the first beat, the yellow squeaky toy is pressed behind Yuha's back."
+              }
+            },
+            "decisions": [
+              {
+                "at": "2026-10-21T22:00:51.052Z",
+                "by": "작가 봇",
+                "kind": "proposed",
+                "what": "성장 설계: 해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다. → 혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                "why": "걸림돌 호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다. · 주제 주고받는 장난"
+              },
+              {
+                "at": "2026-10-21T22:01:16.698Z",
+                "by": "작가 봇",
+                "kind": "proposed",
+                "what": "피치 3개: 해니 손에서 삑! / 해니 옆에서 삑! / 삑! 누가 장난쳤지?",
+                "why": "방향·조건에 맞춘 첫 제안"
+              },
+              {
+                "at": "2026-10-21T22:01:19.040Z",
+                "by": "의장",
+                "kind": "reviewed",
+                "what": "피치 1: 편집자 12/12 · 그림 8/8 · 독자 3/4 → 11.3/12",
+                "why": ""
+              },
+              {
+                "at": "2026-10-21T22:01:19.040Z",
+                "by": "의장",
+                "kind": "reviewed",
+                "what": "피치 2: 편집자 12/12 · 그림 8/8 · 독자 4/4 → 12/12",
+                "why": ""
+              },
+              {
+                "at": "2026-10-21T22:01:19.040Z",
+                "by": "의장",
+                "kind": "reviewed",
+                "what": "피치 3: 편집자 12/12 · 그림 8/8 · 독자 4/4 → 12/12",
+                "why": ""
+              },
+              {
+                "at": "2026-10-21T22:01:19.041Z",
+                "by": "의장",
+                "kind": "dropped",
+                "what": "피치 1 '해니 손에서 삑!'",
+                "why": "점수 11.3 < 12"
+              },
+              {
+                "at": "2026-10-21T22:01:19.041Z",
+                "by": "의장",
+                "kind": "dropped",
+                "what": "피치 2 '해니 옆에서 삑!'",
+                "why": "점수 12 < 12"
+              },
+              {
+                "at": "2026-10-21T22:01:19.041Z",
+                "by": "의장",
+                "kind": "adopted",
+                "what": "피치 3 '삑! 누가 장난쳤지?'",
+                "why": "편집자 12/12 · 그림 8/8 · 독자 4/4"
+              },
+              {
+                "at": "2026-10-21T22:01:28.463Z",
+                "by": "작가 봇",
+                "kind": "revised",
+                "what": "바이블 확정 '삑! 누가 장난쳤지?'",
+                "why": "지적 없음"
+              }
+            ],
+            "phase": "done",
+            "roles": {
+              "chair": "done",
+              "author": "done",
+              "editor": "done",
+              "art": "done",
+              "reader": "done"
+            },
+            "recommended": 3,
+            "parentChoice": null,
+            "design": {
+              "growth": {
+                "want": "해니를 웃게 해서 유치원 가는 길을 신나는 놀이로 만들고 싶다. 첫 비트인 집에서 엄마 앞에 장난을 연습하고, 둘째 비트인 스쿨버스에서 해니를 만나 곧바로 보여 주려 한다.",
+                "need": "혼자 해니를 웃기는 대신, 해니가 건네는 장난도 알아차리고 받아 주며 함께 노는 즐거움을 얻는다.",
+                "flaw": "호기심이 앞서 작은 소리에도 엉뚱한 답을 자신 있게 정하느라, 해니가 보내는 장난 신호를 놓친다."
+              },
+              "theme": "주고받는 장난",
+              "lesson": "집에서 심어 둔 삑삑이 장난감이 절정에서 해니 손에 다시 보여 아이가 먼저 소리의 정체를 알아차리게 하고, 유하는 뒤늦게 웃으며 장난을 돌려준 뒤 유치원 앞마당에서 해니와 나란히 유치원으로 들어간다."
+            }
+          }
+        },
+        "engineId": "openai",
+        "modelId": "gpt-6.1-sol",
+        "models": [
+          {
+            "engineId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "callId": "auto-154f1a55-b8bb-4f83-9b9c-e75ab8ef7241:2",
+        "at": "2026-10-21T22:01:28.464Z"
+      }
+    ]
+  },
+  "measured": {
+    "rows": [],
+    "totals": {
+      "pages": 0,
+      "sentences": 0,
+      "rhythm": 0,
+      "eojeol": 0,
+      "averageEojeol": 0,
+      "longest": 0,
+      "quotes": 0,
+      "exclaims": 0,
+      "soundWords": [],
+      "pagesWithSounds": 0,
+      "enWords": 0,
+      "koIssuePages": 0,
+      "enIssuePages": 0
+    }
+  },
+  "usageSummary": {
+    "costUsd": 0.0750852,
+    "costUnknown": false,
+    "requests": 9,
+    "input": 28928,
+    "output": 5737,
+    "models": [
+      "gpt-6.1-sol"
+    ],
+    "stages": {
+      "materials": {
+        "requests": 1,
+        "input": 6834,
+        "output": 681,
+        "costUsd": 0.020478
+      },
+      "council": {
+        "requests": 8,
+        "input": 22094,
+        "output": 5056,
+        "costUsd": 0.0546072
+      }
+    }
+  },
+  "progress": [
+    "주제에 맞는 등장인물·배경 고르기",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "줄거리 만들기",
+    "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+    "기획 회의 · 작가 봇이 스토리 바이블을 확정하고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의를 마쳤어요. 바이블대로 줄거리를 씁니다.",
+    "fetch failed"
+  ]
+}

@@ -1,0 +1,4923 @@
+{
+  "level": "K1",
+  "arm": "diet",
+  "wizard": {
+    "characterIds": [
+      "yuha"
+    ],
+    "backgroundIds": [
+      "home",
+      "forest"
+    ],
+    "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+    "pageCount": 12,
+    "koreanLevel": "K1",
+    "englishLevel": "E0",
+    "value": "none",
+    "ending": "home",
+    "language": "bilingual",
+    "simpleFlow": true,
+    "allowNew": true
+  },
+  "planMode": "auto",
+  "status": "failed",
+  "error": "API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.",
+  "seconds": 420,
+  "input": {
+    "characters": [
+      {
+        "id": "yuha",
+        "name": "유하",
+        "nameEn": "Yuha",
+        "role": "주인공",
+        "kind": "child",
+        "age": 4,
+        "gender": "남자아이",
+        "description": "짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지",
+        "appearance": "짧은 검은 머리 · 동그란 얼굴",
+        "clothes": "노란 티셔츠 · 초록 반바지",
+        "color": "#e9bb4e",
+        "hairColor": "#393735",
+        "skinColor": "#f0cfb5",
+        "traits": [
+          "호기심 많음",
+          "씩씩함",
+          "다정함"
+        ],
+        "catchphrase": "내가 먼저 해 볼래!",
+        "likes": "공룡, 별, 딸기"
+      },
+      {
+        "id": "mom",
+        "name": "엄마",
+        "nameEn": "Mom",
+        "role": "가족",
+        "kind": "adult",
+        "description": "다정한 눈, 갈색 단발머리, 살구색 원피스",
+        "appearance": "갈색 단발머리 · 다정한 눈",
+        "clothes": "살구색 원피스",
+        "color": "#b88372",
+        "hairColor": "#493b34",
+        "skinColor": "#edceb3",
+        "traits": [
+          "다정함",
+          "차분함",
+          "잘 들어줌"
+        ],
+        "catchphrase": "천천히 해도 괜찮아.",
+        "likes": "산책, 따뜻한 포옹"
+      },
+      {
+        "id": "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9",
+        "name": "해니",
+        "nameEn": "Haeni",
+        "role": "조연",
+        "kind": "child",
+        "description": "유하와 같은 유치원에 다니는 네 살 친구. 짧은 갈색 머리와 둥근 볼, 밝은 살구빛 피부에 하늘색 멜빵바지와 흰 티셔츠를 입는다.",
+        "appearance": "유하와 같은 유치원에 다니는 네 살 친구. 짧은 갈색 머리와 둥근 볼, 밝은 살구빛 피부에 하늘색 멜빵바지와 흰 티셔츠를 입는다.",
+        "clothes": "유하와 같은 유치원에 다니는 네 살 친구. 짧은 갈색 머리와 둥근 볼, 밝은 살구빛 피부에 하늘색 멜빵바지와 흰 티셔츠를 입는다.",
+        "color": "#83BBD5",
+        "hairColor": "#493b34",
+        "skinColor": "#edceb3",
+        "traits": [
+          "명랑함",
+          "다정함",
+          "재미있는 표정을 잘 지음"
+        ],
+        "catchphrase": "이렇게 해 봐!"
+      }
+    ],
+    "backgrounds": [
+      {
+        "id": "home",
+        "name": "유하네 집",
+        "kind": "집",
+        "description": "큰 창문, 노란 대문, 포근한 이불",
+        "mood": "아늑함",
+        "color": "#d8b995"
+      },
+      {
+        "id": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+        "name": "노란 스쿨버스",
+        "nameEn": "Yellow School Bus",
+        "type": "탈것·실내",
+        "description": "유하가 해니를 만나는 노란 스쿨버스. 두 친구는 나란히 앉아 안전띠를 매고 볼을 부풀리거나 손가락 놀이를 한다.",
+        "layout": "차량 앞쪽 오른편에 직사각형 유리 접이문 하나와 낮은 계단 두 개가 있다. 앞쪽 왼편은 운전석이며, 가운데 통로 양옆으로 파란색 두 자리 좌석이 세 줄씩 놓인다. 각 좌석에는 안전띠가 있다. 양쪽 벽에는 둥근 모서리의 직사각형 창문이 세 개씩 있다. 바닥은 회색 고무, 벽은 연노랑 금속이다."
+      },
+      {
+        "id": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+        "name": "유치원 앞마당",
+        "nameEn": "Kindergarten Yard",
+        "type": "유치원·실외",
+        "description": "버스에서 내린 유하와 해니가 함께 걸어 유치원 안으로 들어가는 밝은 앞마당.",
+        "layout": "앞쪽의 낮은 나무 울타리 가운데 출입구 하나가 있고, 베이지색 벽돌길이 뒤쪽 단층 유치원 건물까지 곧게 이어진다. 건물 중앙에는 둥근 모서리의 노란 나무 문 하나가 있고, 문 양옆에는 정사각형 창문이 하나씩 있다. 길 왼쪽에는 낮은 꽃밭, 오른쪽에는 둥근 나무 한 그루가 있다. 버스는 울타리 바깥 왼쪽에 선다."
+      }
+    ],
+    "preferredBackgroundIds": [
+      "home",
+      "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+      "background-9cd974f4-dde3-4422-b2f3-03beb52a952e"
+    ],
+    "worldNotes": "",
+    "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+    "storyDate": "2026-10-21T21:53:16.221Z",
+    "language": "bilingual",
+    "storyStructurePresetId": "auto",
+    "storyQuality": {
+      "enabled": true,
+      "useBeamSearch": false,
+      "useDistilledExamples": false,
+      "twoPass": true,
+      "childSimulator": true,
+      "weeklyCoach": true,
+      "engines": {},
+      "worldId": "drawer",
+      "season": "auto",
+      "timeOfDay": "auto",
+      "variantChance": 0.35,
+      "patternId": "auto",
+      "rules": [],
+      "banExamples": [],
+      "banWindow": 10,
+      "patternBanWindow": 3,
+      "approvedBooks": []
+    },
+    "qualitySeedOffset": 0,
+    "pageCount": 12,
+    "outlineBeatCount": 7,
+    "endingType": "custom",
+    "moral": "",
+    "endingNote": "부모가 적은 주제대로 끝나요: \"4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기\". 이야기가 향하는 곳(예: 유치원에 가는 이야기는 유치원에 들어가는 장면)에서 그 행동으로 끝내고, 주제에 가는 곳이 없으면 집에서 편안히 끝내요.",
+    "previousSummary": "",
+    "previousStory": null,
+    "prosePolicy": {
+      "version": 1,
+      "condenseOverBudget": {
+        "ko": true,
+        "en": true
+      }
+    },
+    "specs": {
+      "ko": {
+        "label": "그림책 3~4세",
+        "sentencesPerPage": 2,
+        "eojeolPerSentence": [
+          3,
+          5
+        ],
+        "grammar": [
+          "단문",
+          "연결어미는 -고 정도"
+        ],
+        "vocabGrade": 1,
+        "maxOutOfListRatio": 0.05,
+        "newWordsPerBook": 3,
+        "devices": [
+          "반복",
+          "의성어",
+          "의태어"
+        ],
+        "id": "K1",
+        "ruleVersion": 3,
+        "vocabularyPolicy": "blocking",
+        "storyWordsAllowed": false,
+        "allowOnomatopoeia": false,
+        "sentencesPerPageRange": {
+          "min": 2,
+          "max": 3
+        },
+        "wordsPerSentence": {
+          "min": 3,
+          "max": 5
+        },
+        "allowedGrammar": [
+          "단문",
+          "연결어미는 -고 정도"
+        ],
+        "vocabList": [],
+        "vocabularyAvailable": false,
+        "vocabSource": null,
+        "maxOutOfVocabRatio": 0.05,
+        "newWordsPerBookRange": null,
+        "repetitionPattern": "반복, 의성어, 의태어",
+        "approxAR": null,
+        "approxARRange": null,
+        "approxLexile": null,
+        "approxLexileRange": null,
+        "maxConnectiveEndingsPerSentence": 1,
+        "rhythm": {
+          "version": 1,
+          "bookTolerance": 0.2,
+          "pageMinShare": 0.3333333333333333,
+          "pageMaxFactor": 1.6
+        },
+        "shortSentences": {
+          "version": 1,
+          "rhythmMaxWords": 2,
+          "rhythmMaxPerPage": 3,
+          "pageAverage": {
+            "min": 2.5,
+            "max": 5
+          },
+          "pageSentences": {
+            "min": 1,
+            "max": 4
+          }
+        }
+      },
+      "en": {
+        "label": "들려주기 (Step 0-A)",
+        "approxAR": 1,
+        "approxLexile": 100,
+        "sentencesPerPage": 1,
+        "wordsPerSentence": {
+          "min": 4,
+          "max": 8
+        },
+        "grammar": [
+          "present tense only",
+          "one repeating frame sentence"
+        ],
+        "vocab": "dolch_preprimer+primer+fry100+everyday_nouns",
+        "maxOutOfListRatio": 0.15,
+        "newWordsPerBook": 8,
+        "devices": [
+          "rhyme",
+          "onomatopoeia",
+          "repetition"
+        ],
+        "id": "E0",
+        "ruleVersion": 3,
+        "vocabularyPolicy": "warning",
+        "storyWordsAllowed": true,
+        "allowOnomatopoeia": true,
+        "sentencesPerPageRange": {
+          "min": 1,
+          "max": 2
+        },
+        "allowedGrammar": [
+          "present tense only",
+          "one repeating frame sentence"
+        ],
+        "vocabList": [
+          "a",
+          "and",
+          "away",
+          "big",
+          "blue",
+          "can",
+          "come",
+          "down",
+          "find",
+          "for",
+          "funny",
+          "go",
+          "help",
+          "here",
+          "i",
+          "in",
+          "is",
+          "it",
+          "jump",
+          "little",
+          "look",
+          "make",
+          "me",
+          "my",
+          "not",
+          "one",
+          "play",
+          "red",
+          "run",
+          "said",
+          "see",
+          "the",
+          "three",
+          "to",
+          "two",
+          "up",
+          "we",
+          "where",
+          "yellow",
+          "you",
+          "all",
+          "am",
+          "are",
+          "at",
+          "ate",
+          "be",
+          "black",
+          "brown",
+          "but",
+          "came",
+          "did",
+          "do",
+          "eat",
+          "four",
+          "get",
+          "good",
+          "have",
+          "he",
+          "into",
+          "like",
+          "must",
+          "new",
+          "no",
+          "now",
+          "on",
+          "our",
+          "out",
+          "please",
+          "pretty",
+          "ran",
+          "ride",
+          "saw",
+          "say",
+          "she",
+          "so",
+          "soon",
+          "that",
+          "there",
+          "they",
+          "this",
+          "too",
+          "under",
+          "want",
+          "was",
+          "well",
+          "went",
+          "what",
+          "white",
+          "who",
+          "will",
+          "with",
+          "yes",
+          "or",
+          "number",
+          "of",
+          "had",
+          "other",
+          "way",
+          "by",
+          "about",
+          "could",
+          "words",
+          "people",
+          "many",
+          "then",
+          "than",
+          "them",
+          "first",
+          "these",
+          "water",
+          "were",
+          "been",
+          "some",
+          "called",
+          "when",
+          "her",
+          "your",
+          "would",
+          "oil",
+          "sit",
+          "as",
+          "him",
+          "use",
+          "long",
+          "his",
+          "an",
+          "time",
+          "each",
+          "has",
+          "day",
+          "which",
+          "more",
+          "how",
+          "write",
+          "made",
+          "their",
+          "may",
+          "from",
+          "if",
+          "part",
+          "flower",
+          "tail",
+          "leaf",
+          "leaves",
+          "tree",
+          "stone",
+          "moon",
+          "star",
+          "rain",
+          "sea",
+          "sun",
+          "ball",
+          "bag",
+          "boots",
+          "glove",
+          "cloud",
+          "sand",
+          "wave",
+          "shell",
+          "crab",
+          "path",
+          "rocket",
+          "bird",
+          "marks",
+          "castle",
+          "picture",
+          "window",
+          "rainbow",
+          "woods",
+          "sky",
+          "gift",
+          "friend",
+          "home",
+          "dinosaur",
+          "rabbit",
+          "umbrella"
+        ],
+        "vocabularyAvailable": true,
+        "vocabSource": "dolch_preprimer+primer+fry100+everyday_nouns",
+        "maxOutOfVocabRatio": 0.15,
+        "newWordsPerBookRange": [
+          5,
+          8
+        ],
+        "repetitionPattern": "rhyme, onomatopoeia, repetition",
+        "approxARRange": [
+          0.5,
+          1.5
+        ],
+        "approxLexileRange": "AD/BR-200L",
+        "maxConnectiveEndingsPerSentence": 0
+      }
+    },
+    "variants": [],
+    "variantByCharacter": {
+      "yuha": null,
+      "mom": null,
+      "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+    },
+    "variantPageRanges": {
+      "yuha": [],
+      "mom": [],
+      "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": []
+    },
+    "catchphrasePolicy": {
+      "version": 1,
+      "limit": 1,
+      "omit": [],
+      "phrases": {
+        "yuha": "내가 먼저 해 볼래!",
+        "mom": "천천히 해도 괜찮아.",
+        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": "이렇게 해 봐!"
+      },
+      "recentBookIds": [
+        "seed-dinosaur",
+        "seed-moon"
+      ]
+    },
+    "editorPolicy": {
+      "version": 1
+    },
+    "craftPolicy": {
+      "version": 1
+    },
+    "promptPolicy": {
+      "version": 1
+    },
+    "orchestrationPolicy": {
+      "version": 1,
+      "writerTier": "medium"
+    },
+    "k1Policy": {
+      "version": 1
+    },
+    "topicEndingPolicy": {
+      "version": 1
+    },
+    "promptDiet": {
+      "version": 1
+    },
+    "bookId": "book-09b22976-a8c9-405c-a166-47e8589d4297",
+    "title": "유하랑 해니랑 볼 빵빵"
+  },
+  "outline": {
+    "titleCandidates": [
+      "유하랑 해니랑 볼 빵빵",
+      "노란 스쿨버스에서 만나요",
+      "작은 손이 안녕"
+    ],
+    "logline": "4살 유하가 스쿨버스에서 만난 해니에게 수줍게 손을 흔들고, 함께 재미있는 표정 놀이를 하며 유치원에 간다.",
+    "want": "유하는 스쿨버스에서 해니와 함께 장난치며 유치원에 가고 싶다.",
+    "problem": "유하는 해니를 만나니 조금 쑥스러워 먼저 인사하기가 어렵다.",
+    "beats": [
+      {
+        "index": 1,
+        "type": "setup",
+        "summary": "1~2쪽. 4살 유하가 집에서 가방을 멘다. 엄마는 가방끈을 바로잡고 노란 대문을 열어 준다.",
+        "characters": [
+          "yuha",
+          "mom"
+        ],
+        "settingKey": "home"
+      },
+      {
+        "index": 2,
+        "type": "want",
+        "summary": "3~4쪽. 유하가 노란 스쿨버스에 올라 해니 옆에 앉고 안전띠를 맨다. 해니는 반갑게 손을 흔들고, 함께 놀고 싶은 유하는 가방끈만 만지작거린다.",
+        "characters": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "settingKey": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "index": 3,
+        "type": "attempt",
+        "summary": "5~6쪽. 유하가 해니 쪽으로 고개를 돌리고 입을 살짝 연다. 인사는 나오지 않고 작은 미소만 번진다.",
+        "characters": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "settingKey": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "index": 4,
+        "type": "attempt",
+        "summary": "7~8쪽. 유하가 무릎 위에서 손가락 두 개를 작게 흔든다. 해니는 몸을 돌려 그 손을 보고 자기 손가락 두 개도 내민다.",
+        "characters": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "settingKey": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "index": 5,
+        "type": "turn",
+        "summary": "9~10쪽. 해니가 볼을 빵빵하게 부풀리자 유하도 볼을 부풀린다. 두 아이는 안전띠를 맨 채 서로의 동그란 얼굴을 보고 웃으며 표정 놀이를 시작한다.",
+        "characters": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "settingKey": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "index": 6,
+        "type": "resolution",
+        "summary": "11쪽. 버스에서 내린 유하와 해니가 유치원 앞마당에 나란히 선다. 유하가 이번에는 먼저 볼을 부풀리고, 해니가 따라 하며 둘이 손을 잡는다.",
+        "characters": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "settingKey": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e"
+      },
+      {
+        "index": 7,
+        "type": "close",
+        "summary": "12쪽. 유하와 해니가 손을 잡고 앞마당을 가로질러 유치원 문으로 걷는다. 두 아이는 편안한 미소를 나누며 열린 문 안으로 함께 들어간다.",
+        "characters": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "settingKey": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e"
+      }
+    ],
+    "twist": "해니가 유하의 작은 손인사를 따라 하자 둘의 표정 놀이가 시작된다.",
+    "newWordsKo": [
+      "스쿨버스",
+      "안전띠",
+      "볼",
+      "나란히"
+    ],
+    "newWordsEn": [
+      "bus",
+      "wave",
+      "cheeks",
+      "smile"
+    ],
+    "settings": [
+      {
+        "beatIndex": 1,
+        "backgroundId": "home"
+      },
+      {
+        "beatIndex": 2,
+        "backgroundId": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "beatIndex": 3,
+        "backgroundId": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "beatIndex": 4,
+        "backgroundId": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "beatIndex": 5,
+        "backgroundId": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633"
+      },
+      {
+        "beatIndex": 6,
+        "backgroundId": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e"
+      },
+      {
+        "beatIndex": 7,
+        "backgroundId": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e"
+      }
+    ],
+    "emotionArc": [
+      "기대",
+      "수줍음",
+      "망설임",
+      "반가움",
+      "즐거움",
+      "친근함",
+      "편안함"
+    ],
+    "endingType": "custom",
+    "tension": [
+      0,
+      1,
+      2,
+      2,
+      3,
+      1,
+      0
+    ]
+  },
+  "sceneBriefs": [
+    {
+      "beatIndex": 1,
+      "timeOfDay": "morning",
+      "weather": {
+        "ko": "맑은 바람이 살살 불어요.",
+        "en": "A mild breeze brushes the yellow gate."
+      },
+      "light": {
+        "ko": "큰 창문에 아침빛이 들어요.",
+        "en": "Morning light fills the large window."
+      },
+      "sounds": [
+        {
+          "ko": "가방끈이 사각사각 스쳐요.",
+          "en": "The bag straps softly rustle."
+        },
+        {
+          "ko": "노란 대문이 달칵 열려요.",
+          "en": "The yellow gate clicks open."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "가방끈이 어깨에 폭 닿아요.",
+        "en": "The soft straps rest on Yuha's shoulders."
+      },
+      "props": [
+        {
+          "ko": "가방",
+          "en": "bag"
+        },
+        {
+          "ko": "대문",
+          "en": "gate"
+        },
+        {
+          "ko": "이불",
+          "en": "quilt"
+        }
+      ],
+      "creature": {
+        "ko": "참새가 대문 밖에서 콩콩 뛰어요.",
+        "en": "A small sparrow hops outside the gate."
+      },
+      "pose": {
+        "ko": "엄마가 손으로 유하의 가방끈을 펴요.",
+        "en": "Mom straightens Yuha's bag strap with her hand."
+      },
+      "dialogueLine": "엄마가 말해요. “유하 가방이 딱 맞네.”",
+      "humor": "가방이 유하 등에 폭 붙어요."
+    },
+    {
+      "beatIndex": 2,
+      "timeOfDay": "morning",
+      "weather": {
+        "ko": "버스 밖은 맑고 포근해요.",
+        "en": "The air outside the bus stays clear and mild."
+      },
+      "light": {
+        "ko": "버스 창에 햇빛이 반짝여요.",
+        "en": "Sunlight shines across the bus window."
+      },
+      "sounds": [
+        {
+          "ko": "안전띠가 딸깍 잠겨요.",
+          "en": "The seat belt clicks shut."
+        },
+        {
+          "ko": "버스가 부릉부릉 울려요.",
+          "en": "The bus engine hums gently."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "가방끈이 손끝에 보들보들 닿아요.",
+        "en": "The bag strap feels soft beneath Yuha's fingers."
+      },
+      "props": [
+        {
+          "ko": "가방",
+          "en": "bag"
+        },
+        {
+          "ko": "안전띠",
+          "en": "seat belt"
+        },
+        {
+          "ko": "의자",
+          "en": "seat"
+        }
+      ],
+      "creature": {
+        "ko": "작은 나비가 창밖으로 날아요.",
+        "en": "A small butterfly flutters outside the window."
+      },
+      "pose": {
+        "ko": "유하가 앉아서 손가락으로 가방끈을 만져요.",
+        "en": "Yuha rubs his bag strap with his fingers, buckled beside Haeni."
+      },
+      "dialogueLine": "해니가 말해요. “나는 여기 있어!”",
+      "humor": "해니 손은 팔랑팔랑. 유하 손은 꼼지락꼼지락."
+    },
+    {
+      "beatIndex": 3,
+      "timeOfDay": "day",
+      "weather": {
+        "ko": "하늘에 작은 구름이 떠요.",
+        "en": "Small clouds drift through the clear sky."
+      },
+      "light": {
+        "ko": "햇빛이 두 볼에 닿아요.",
+        "en": "Soft daylight rests on both children's cheeks."
+      },
+      "sounds": [
+        {
+          "ko": "바퀴가 도르르 굴러가요.",
+          "en": "The wheels roll with a low rumble."
+        },
+        {
+          "ko": "가방끈이 사각 하고 스쳐요.",
+          "en": "The bag strap makes a tiny rustle."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "의자가 등을 포근히 받쳐요.",
+        "en": "The seat gently supports Yuha's back."
+      },
+      "props": [
+        {
+          "ko": "가방",
+          "en": "bag"
+        },
+        {
+          "ko": "안전띠",
+          "en": "seat belt"
+        },
+        {
+          "ko": "창문",
+          "en": "window"
+        }
+      ],
+      "creature": {
+        "ko": "참새가 먼 하늘을 날아요.",
+        "en": "A sparrow flies far beyond the bus window."
+      },
+      "pose": {
+        "ko": "유하가 해니 쪽으로 고개를 돌려요.",
+        "en": "Yuha turns his head toward Haeni, his lips slightly parted."
+      },
+      "dialogueLine": "해니가 말해요. “나는 네 옆이야.”",
+      "humor": "인사 대신 작은 미소가 쏙 나와요."
+    },
+    {
+      "beatIndex": 4,
+      "timeOfDay": "day",
+      "weather": {
+        "ko": "작은 구름이 천천히 흘러요.",
+        "en": "Small clouds continue drifting across the bright sky."
+      },
+      "light": {
+        "ko": "작은 손에 빛이 앉아요.",
+        "en": "Daylight catches the children's little fingers."
+      },
+      "sounds": [
+        {
+          "ko": "손가락이 살랑살랑 움직여요.",
+          "en": "Two little fingers sway gently."
+        },
+        {
+          "ko": "버스가 부릉부릉 달려요.",
+          "en": "The bus hums along the road."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "무릎에 작은 손이 닿아요.",
+        "en": "Yuha's hand rests lightly against his knee."
+      },
+      "props": [
+        {
+          "ko": "안전띠",
+          "en": "seat belt"
+        },
+        {
+          "ko": "의자",
+          "en": "seat"
+        },
+        {
+          "ko": "창문",
+          "en": "window"
+        }
+      ],
+      "creature": {
+        "ko": "나비가 창밖 풀 위를 날아요.",
+        "en": "A small butterfly floats above grass outside."
+      },
+      "pose": {
+        "ko": "유하가 무릎 위에서 손가락 둘을 흔들어요.",
+        "en": "Yuha wiggles two fingers above his knee while Haeni mirrors him, both buckled in."
+      },
+      "dialogueLine": "해니가 말해요. “내 손도 안녕!”",
+      "humor": "작은 손가락끼리 먼저 인사해요."
+    },
+    {
+      "beatIndex": 5,
+      "timeOfDay": "afternoon",
+      "weather": {
+        "ko": "맑은 하늘에 구름이 떠요.",
+        "en": "The sky stays clear with a few small clouds."
+      },
+      "light": {
+        "ko": "햇빛이 두 얼굴을 비춰요.",
+        "en": "Warm afternoon light touches two round faces."
+      },
+      "sounds": [
+        {
+          "ko": "두 입에서 푸 하고 새어요.",
+          "en": "Little puffs escape their rounded lips."
+        },
+        {
+          "ko": "작은 웃음이 히히 번져요.",
+          "en": "Soft giggles fill their paired seats."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "부푼 볼이 팽팽해져요.",
+        "en": "Their puffed cheeks feel round and taut."
+      },
+      "props": [
+        {
+          "ko": "가방",
+          "en": "bag"
+        },
+        {
+          "ko": "안전띠",
+          "en": "seat belt"
+        },
+        {
+          "ko": "의자",
+          "en": "seat"
+        }
+      ],
+      "creature": {
+        "ko": "참새가 창밖 풀밭에 앉아요.",
+        "en": "A sparrow rests in the grass beyond the window."
+      },
+      "pose": {
+        "ko": "유하가 해니처럼 볼을 빵빵 부풀려요.",
+        "en": "Yuha puffs his cheeks to match Haeni, both seated with seat belts fastened."
+      },
+      "dialogueLine": "해니가 말해요. “내 볼은 빵빵해!”",
+      "humor": "동그란 볼이 둘이에요. 빵빵!"
+    },
+    {
+      "beatIndex": 6,
+      "timeOfDay": "afternoon",
+      "weather": {
+        "ko": "앞마당에 바람이 살살 불어요.",
+        "en": "The same mild breeze moves through the kindergarten yard."
+      },
+      "light": {
+        "ko": "늦은 햇빛이 길게 누워요.",
+        "en": "Late afternoon sunlight stretches across the yard."
+      },
+      "sounds": [
+        {
+          "ko": "두 발이 톡톡 멈춰요.",
+          "en": "Small footsteps tap to a stop."
+        },
+        {
+          "ko": "웃음이 히히 새어 나와요.",
+          "en": "A pair of little giggles escapes."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "잡은 손이 따뜻해요.",
+        "en": "Their joined hands feel warm."
+      },
+      "props": [
+        {
+          "ko": "가방",
+          "en": "bag"
+        },
+        {
+          "ko": "버스",
+          "en": "bus"
+        },
+        {
+          "ko": "문",
+          "en": "door"
+        }
+      ],
+      "creature": {
+        "ko": "나비가 마당 끝을 팔랑 날아요.",
+        "en": "A small butterfly flutters along the edge of the yard."
+      },
+      "pose": {
+        "ko": "유하가 해니 앞에서 볼을 부풀려요.",
+        "en": "Yuha puffs his cheeks first, standing beside Haeni in the yard after leaving the bus."
+      },
+      "dialogueLine": "유하가 말해요. “내가 먼저 해 볼래!”",
+      "humor": "해니 볼도 금세 빵빵해져요."
+    },
+    {
+      "beatIndex": 7,
+      "timeOfDay": "evening",
+      "weather": {
+        "ko": "맑은 바람이 그대로 불어요.",
+        "en": "The clear weather holds, with a gentle breeze."
+      },
+      "light": {
+        "ko": "저녁빛이 마당을 노랗게 덮어요.",
+        "en": "Early evening light turns the yard golden."
+      },
+      "sounds": [
+        {
+          "ko": "발소리가 또각또각 나란히 가요.",
+          "en": "Two sets of footsteps patter together."
+        },
+        {
+          "ko": "가방이 살랑살랑 흔들려요.",
+          "en": "Their bags sway softly with each step."
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "작은 손이 꼭 맞닿아요.",
+        "en": "Their small hands fit snugly together."
+      },
+      "props": [
+        {
+          "ko": "가방",
+          "en": "bag"
+        },
+        {
+          "ko": "문",
+          "en": "door"
+        },
+        {
+          "ko": "신발",
+          "en": "shoes"
+        }
+      ],
+      "creature": {
+        "ko": "참새가 마당 끝에 앉아요.",
+        "en": "A small sparrow settles at the far edge of the yard."
+      },
+      "pose": {
+        "ko": "두 아이가 손잡고 문 안으로 걸어요.",
+        "en": "Yuha and Haeni step through the open kindergarten door, their hands joined and smiles relaxed."
+      },
+      "dialogueLine": "유하가 말해요. “우리는 같이 들어가!”",
+      "humor": "볼은 쏙 작아지고 미소는 커져요."
+    }
+  ],
+  "prose": {
+    "ko": "오늘은 유치원에 가는 날이에요. 유하 가방도 함께 가요. 밖에서 버스 소리가 들려요. 부릉부릉! 유하 발이 살짝 들썩여요.\n\n해니가 자리를 톡톡 두드려요. 유하 자리도 여기 있네요. 해니가 말해요. “여기!” 찰칵! 유하도 안전띠를 꼭 매요. 같이 놀고 싶은데 말이에요. 손은 가방끈만 조물조물 만져요.\n\n해니야, 하고 부르고 싶어요. 입이 아주 조금 열려요. 무슨 말이 먼저 나올까요? 인사는 아직 입 안에 있어요. 작은 웃음만 먼저 나와요.\n\n손가락 둘이 대신 인사해요. 무릎 위에서 살랑살랑 흔들려요. 해니도 이 인사를 볼까요?\n\n해니 손가락도 살랑살랑 인사해요. 이번에는 볼이 빵빵해져요. 어라, 작은 공이 됐네요! 유하 볼도 빵빵한 공이에요. 두 공이 서로 마주 봐요. 까르륵! 바람이 웃음으로 쏙 나와요.\n\n어느새 유치원에 다 왔어요. 발이 땅에 톡 닿아요. 볼 놀이도 함께 내렸을까요? 이번에는 유하가 먼저 해요. 볼 놀이도 따라왔네요! 유하가 손을 쏙 내밀어요.\n\n유하가 해니 손을 살짝 흔들어요. 해니도 손을 살짝 흔들어요. 작은 웃음 둘이 함께 들어가요.",
+    "en": "Here I go with my bag. Here I go to the gate.\n\nHere I go to my seat. Haeni says, “Come sit with me!” My belt goes click, click, click. I look down at my bag.\n\nI look up at my friend. My mouth opens just a little. No words come out just yet. A little smile comes out first.\n\nMy two little fingers say hello. Does Haeni see my little hello?\n\nHaeni waves two little fingers back. Now her cheeks look so big! My cheeks look so big, too. We let our giggles pop out.\n\nHere we go, off the bus. Can our little game come too? I make my cheeks big first. Haeni takes my hand in hers.\n\nHere we go, hand in hand. Our little smiles come in too.",
+    "usedRefrainAt": [],
+    "paragraphBeats": {
+      "ko": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "en": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    "pages": [
+      {
+        "pageNo": 1,
+        "beatIndex": 1,
+        "ko": "오늘은 유치원에 가는 날이에요. 유하 가방도 함께 가요.",
+        "en": "Here I go with my bag.",
+        "picture": "A child-height view shows Yuha slipping on a small backpack while Mom, with a brown bob and peach dress, kneels to straighten one strap. Soft morning light fills the cozy entryway; there is no lettering.",
+        "feeling": "ready",
+        "who": [
+          "yuha",
+          "mom"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "backpack"
+        ]
+      },
+      {
+        "pageNo": 2,
+        "beatIndex": 1,
+        "ko": "밖에서 버스 소리가 들려요. 부릉부릉! 유하 발이 살짝 들썩여요.",
+        "en": "Here I go to the gate.",
+        "picture": "Seen from behind Yuha, Mom holds the yellow gate open toward a yellow school bus waiting at the curb. Golden morning light falls across the path, and the bus has no lettering.",
+        "feeling": "eager",
+        "who": [
+          "yuha",
+          "mom"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "yellow gate",
+          "school bus",
+          "backpack"
+        ]
+      },
+      {
+        "pageNo": 3,
+        "beatIndex": 2,
+        "ko": "해니가 자리를 톡톡 두드려요. 유하 자리도 여기 있네요. 해니가 말해요. “여기!”",
+        "en": "Here I go to my seat. Haeni says, “Come sit with me!”",
+        "picture": "Inside the parked yellow bus, Haeni waves and pats the empty seat beside her while Yuha pauses at the top of the steps. The nearby driver supervises from the front, and warm light brightens the seats; no lettering is visible.",
+        "feeling": "welcome",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "school bus",
+          "bus seat",
+          "backpack",
+          "seat belts"
+        ]
+      },
+      {
+        "pageNo": 4,
+        "beatIndex": 2,
+        "ko": "찰칵! 유하도 안전띠를 꼭 매요. 같이 놀고 싶은데 말이에요. 손은 가방끈만 조물조물 만져요.",
+        "en": "My belt goes click, click, click. I look down at my bag.",
+        "picture": "A close two-shot shows both children safely buckled into adjacent bus seats, with Yuha's backpack on the lap and fingers curled around its strap. Haeni's hand rests after a wave, and soft yellow light fills the quiet scene; no lettering appears.",
+        "feeling": "shy",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "seat belts",
+          "backpack",
+          "bus seat"
+        ]
+      },
+      {
+        "pageNo": 5,
+        "beatIndex": 3,
+        "ko": "해니야, 하고 부르고 싶어요. 입이 아주 조금 열려요. 무슨 말이 먼저 나올까요?",
+        "en": "I look up at my friend. My mouth opens just a little.",
+        "picture": "From Haeni's side, Yuha turns the head toward Haeni with lips slightly parted and hands still on the backpack. Both seat belts remain fastened as pale morning scenery passes outside; there is no lettering.",
+        "feeling": "hesitant",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "seat belts",
+          "backpack",
+          "bus window"
+        ]
+      },
+      {
+        "pageNo": 6,
+        "beatIndex": 3,
+        "ko": "인사는 아직 입 안에 있어요. 작은 웃음만 먼저 나와요.",
+        "en": "No words come out just yet. A little smile comes out first.",
+        "picture": "A gentle close-up frames Yuha's small closed-mouth smile, with Haeni watching quietly at the edge of the picture. The backpack and fastened belts remain visible below their faces in warm reflected light; no lettering appears.",
+        "feeling": "gentle",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "backpack",
+          "seat belts"
+        ]
+      },
+      {
+        "pageNo": 7,
+        "beatIndex": 4,
+        "ko": "손가락 둘이 대신 인사해요. 무릎 위에서 살랑살랑 흔들려요. 해니도 이 인사를 볼까요?",
+        "en": "My two little fingers say hello. Does Haeni see my little hello?",
+        "picture": "A low close-up centers Yuha's two raised fingers making a tiny wave above the knees, while Haeni glances down toward them. Both children remain seated and buckled in the softly lit yellow bus; there is no lettering.",
+        "feeling": "hopeful",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "seat belts",
+          "backpack",
+          "bus seat"
+        ]
+      },
+      {
+        "pageNo": 8,
+        "beatIndex": 5,
+        "ko": "해니 손가락도 살랑살랑 인사해요. 이번에는 볼이 빵빵해져요. 어라, 작은 공이 됐네요!",
+        "en": "Haeni waves two little fingers back. Now her cheeks look so big!",
+        "picture": "In a medium two-shot, Haeni turns her head toward Yuha, holds up two fingers, and puffs out her round cheeks. Yuha watches with a widening smile; both belts stay fastened in the warm morning light, with no lettering.",
+        "feeling": "playful",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "seat belts",
+          "bus seat",
+          "backpack"
+        ]
+      },
+      {
+        "pageNo": 9,
+        "beatIndex": 5,
+        "ko": "유하 볼도 빵빵한 공이에요. 두 공이 서로 마주 봐요. 까르륵! 바람이 웃음으로 쏙 나와요.",
+        "en": "My cheeks look so big, too. We let our giggles pop out.",
+        "picture": "A close frontal view catches both children releasing puffed cheeks into bright giggles, hands resting safely on their laps. Their fastened belts are clear against the yellow seats, with soft green scenery beyond the window and no lettering.",
+        "feeling": "delighted",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "seat belts",
+          "bus seat",
+          "backpack",
+          "bus window"
+        ]
+      },
+      {
+        "pageNo": 10,
+        "beatIndex": 6,
+        "ko": "어느새 유치원에 다 왔어요. 발이 땅에 톡 닿아요. 볼 놀이도 함께 내렸을까요?",
+        "en": "Here we go, off the bus. Can our little game come too?",
+        "picture": "In a wide view of the kindergarten forecourt, Yuha and Haeni stand side by side after stepping off the parked bus, with the driver supervising from the doorway. A low fence and open kindergarten entrance glow in clear morning light; there is no lettering.",
+        "feeling": "curious",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "school bus",
+          "backpack",
+          "open doorway",
+          "low fence"
+        ]
+      },
+      {
+        "pageNo": 11,
+        "beatIndex": 6,
+        "ko": "이번에는 유하가 먼저 해요. 볼 놀이도 따라왔네요! 유하가 손을 쏙 내밀어요.",
+        "en": "I make my cheeks big first. Haeni takes my hand in hers.",
+        "picture": "At child height in the sunny forecourt, Yuha puffs out the cheeks first, and Haeni mirrors the round face as their hands meet. Their backpacks sit snugly on their shoulders, and the open kindergarten doorway waits behind them; no lettering appears.",
+        "feeling": "connected",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "backpacks",
+          "open doorway"
+        ]
+      },
+      {
+        "pageNo": 12,
+        "beatIndex": 7,
+        "ko": "유하가 해니 손을 살짝 흔들어요. 해니도 손을 살짝 흔들어요. 작은 웃음 둘이 함께 들어가요.",
+        "en": "Here we go, hand in hand. Our little smiles come in too.",
+        "picture": "A rear three-quarter view shows Yuha and Haeni walking hand in hand across the kindergarten threshold, turning small relaxed smiles toward each other. Warm indoor light meets the sunny forecourt through the wide-open door, with no lettering anywhere.",
+        "feeling": "content",
+        "who": [
+          "yuha",
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+        ],
+        "timeOfDay": "morning",
+        "props": [
+          "backpacks",
+          "open doorway"
+        ]
+      }
+    ],
+    "cover": "In warm morning light, Yuha, a round-faced child with short black hair, a yellow T-shirt, and green shorts, and Haeni, a rosy-cheeked child with short brown hair, pale peach skin, sky-blue overalls, and a white T-shirt, hold hands beside a yellow school bus, with no lettering."
+  },
+  "pagination": {
+    "cover": {
+      "title": "유하랑 해니랑 볼 빵빵",
+      "sceneAction": "In warm morning light, Yuha, a round-faced child with short black hair, a yellow T-shirt, and green shorts, and Haeni, a rosy-cheeked child with short brown hair, pale peach skin, sky-blue overalls, and a white T-shirt, hold hands beside a yellow school bus, with no lettering."
+    },
+    "pages": [
+      {
+        "pageNo": 1,
+        "beatIndex": 1,
+        "textKo": "오늘 유하는 유치원에 가요. 유하의 가방도 사각사각 함께 가요. 엄마가 “가방끈이 딱 맞네!” 해요.",
+        "textEn": "Here I go with my bag. Mom says, “Your soft straps rustle!”",
+        "scene": {
+          "who": [
+            "yuha",
+            "mom"
+          ],
+          "where": "home",
+          "action": "In the sunlit home entryway, Yuha slips on a small backpack while Mom kneels beside him and straightens its strap near the large window.",
+          "emotion": "ready",
+          "timeOfDay": "morning",
+          "props": [
+            "backpack"
+          ]
+        },
+        "staging": {
+          "shot": "wide",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the window",
+          "verb": "kneel",
+          "seed": 382182624
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 1,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "맑은 바람이 살살 불어요.",
+            "en": "A mild breeze brushes the yellow gate."
+          },
+          "light": {
+            "ko": "큰 창문에 아침빛이 들어요.",
+            "en": "Morning light fills the large window."
+          },
+          "sounds": [
+            {
+              "ko": "가방끈이 사각사각 스쳐요.",
+              "en": "The bag straps softly rustle."
+            },
+            {
+              "ko": "노란 대문이 달칵 열려요.",
+              "en": "The yellow gate clicks open."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "가방끈이 어깨에 폭 닿아요.",
+            "en": "The soft straps rest on Yuha's shoulders."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "대문",
+              "en": "gate"
+            },
+            {
+              "ko": "이불",
+              "en": "quilt"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 대문 밖에서 콩콩 뛰어요.",
+            "en": "A small sparrow hops outside the gate."
+          },
+          "pose": {
+            "ko": "엄마가 손으로 유하의 가방끈을 펴요.",
+            "en": "Mom straightens Yuha's bag strap with her hand."
+          },
+          "dialogueLine": "엄마가 말해요. “유하 가방이 딱 맞네.”",
+          "humor": "가방이 유하 등에 폭 붙어요."
+        },
+        "richnessCheck": {
+          "pageNo": 1,
+          "beatIndex": 1,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 1,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "2, 4번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "유하의 가방도 사각사각 함께 가요."
+                },
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 1,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go with my bag."
+                }
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "가방",
+                "엄마"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "유하의 가방도 사각사각 함께 가요."
+                },
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ],
+              "sentenceCount": 4,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "bag"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "rustle",
+                "soft"
+              ],
+              "sensoryCount": 2,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go with my bag."
+                }
+              ],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 1,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "2, 4번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "유하의 가방도 사각사각 함께 가요."
+                },
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 1,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go with my bag."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 2,
+        "beatIndex": 1,
+        "textKo": "밖에서 버스가 부릉부릉 울려요. 노란 대문이 달칵 열려요. 엄마가 “가방이 딱 맞네!” 해요. 유하 발이 살짝 들썩여요.",
+        "textEn": "Here I go to the gate. Mom says, “Your bag fits!”",
+        "scene": {
+          "who": [
+            "yuha",
+            "mom"
+          ],
+          "where": "home",
+          "action": "Seen from behind Yuha wearing his backpack, Mom holds the home's yellow gate open toward the yellow school bus waiting at the curb in morning light.",
+          "emotion": "eager",
+          "timeOfDay": "morning",
+          "props": [
+            "yellow gate",
+            "school bus",
+            "backpack"
+          ]
+        },
+        "staging": {
+          "shot": "medium",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the gate",
+          "verb": "hold",
+          "seed": 382182625
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 1,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "맑은 바람이 살살 불어요.",
+            "en": "A mild breeze brushes the yellow gate."
+          },
+          "light": {
+            "ko": "큰 창문에 아침빛이 들어요.",
+            "en": "Morning light fills the large window."
+          },
+          "sounds": [
+            {
+              "ko": "가방끈이 사각사각 스쳐요.",
+              "en": "The bag straps softly rustle."
+            },
+            {
+              "ko": "노란 대문이 달칵 열려요.",
+              "en": "The yellow gate clicks open."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "가방끈이 어깨에 폭 닿아요.",
+            "en": "The soft straps rest on Yuha's shoulders."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "대문",
+              "en": "gate"
+            },
+            {
+              "ko": "이불",
+              "en": "quilt"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 대문 밖에서 콩콩 뛰어요.",
+            "en": "A small sparrow hops outside the gate."
+          },
+          "pose": {
+            "ko": "엄마가 손으로 유하의 가방끈을 펴요.",
+            "en": "Mom straightens Yuha's bag strap with her hand."
+          },
+          "dialogueLine": "엄마가 말해요. “유하 가방이 딱 맞네.”",
+          "humor": "가방이 유하 등에 폭 붙어요."
+        },
+        "richnessCheck": {
+          "pageNo": 2,
+          "beatIndex": 1,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 2,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "4번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 2,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go to the gate."
+                }
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "가방",
+                "발",
+                "엄마",
+                "대문"
+              ],
+              "concreteNounCount": 4,
+              "sensoryWords": [
+                "노란 대문이 달칵 열려요."
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ],
+              "sentenceCount": 5,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "bag",
+                "gate"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go to the gate."
+                }
+              ],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 2,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "4번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 2,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go to the gate."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 3,
+        "beatIndex": 2,
+        "textKo": "부릉부릉, 해니가 자리를 톡톡 두드려요. 유하 자리도 여기 있네요. “여기!”",
+        "textEn": "Here I go to my seat. Haeni says, “Come sit with me!”",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Inside the parked yellow bus, Haeni waves and pats the empty seat beside her while Yuha pauses with his backpack at the top of the steps.",
+          "emotion": "welcome",
+          "timeOfDay": "morning",
+          "props": [
+            "school bus",
+            "bus seat",
+            "backpack",
+            "seat belts"
+          ]
+        },
+        "staging": {
+          "shot": "closeup",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "within the established location",
+          "verb": "wave",
+          "seed": 382182626
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "버스 밖은 맑고 포근해요.",
+            "en": "The air outside the bus stays clear and mild."
+          },
+          "light": {
+            "ko": "버스 창에 햇빛이 반짝여요.",
+            "en": "Sunlight shines across the bus window."
+          },
+          "sounds": [
+            {
+              "ko": "안전띠가 딸깍 잠겨요.",
+              "en": "The seat belt clicks shut."
+            },
+            {
+              "ko": "버스가 부릉부릉 울려요.",
+              "en": "The bus engine hums gently."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "가방끈이 손끝에 보들보들 닿아요.",
+            "en": "The bag strap feels soft beneath Yuha's fingers."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "의자",
+              "en": "seat"
+            }
+          ],
+          "creature": {
+            "ko": "작은 나비가 창밖으로 날아요.",
+            "en": "A small butterfly flutters outside the window."
+          },
+          "pose": {
+            "ko": "유하가 앉아서 손가락으로 가방끈을 만져요.",
+            "en": "Yuha rubs his bag strap with his fingers, buckled beside Haeni."
+          },
+          "dialogueLine": "해니가 말해요. “나는 여기 있어!”",
+          "humor": "해니 손은 팔랑팔랑. 유하 손은 꼼지락꼼지락."
+        },
+        "richnessCheck": {
+          "pageNo": 3,
+          "beatIndex": 2,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "ko",
+              "code": "concrete_nouns",
+              "message": "승인한 장면의 구체 명사를 1개 이상 사용해 주세요.",
+              "heuristic": true,
+              "actual": 0,
+              "expected": 1
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "2, 3번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "유하 자리도 여기 있네요."
+                },
+                {
+                  "sentenceIndex": 2,
+                  "sentence": "“여기!"
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go to my seat."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "en",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 세 문장 연속이에요. 수준에 맞는 질문·감탄·청유를 섞어 주세요.",
+              "heuristic": true,
+              "ending": "!"
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "2~3쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                2,
+                3
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [],
+              "concreteNounCount": 0,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "유하 자리도 여기 있네요."
+                },
+                {
+                  "sentenceIndex": 2,
+                  "sentence": "“여기!"
+                }
+              ],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "seat"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go to my seat."
+                }
+              ],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "ko",
+              "code": "concrete_nouns",
+              "message": "승인한 장면의 구체 명사를 1개 이상 사용해 주세요.",
+              "heuristic": true,
+              "actual": 0,
+              "expected": 1
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "2, 3번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "유하 자리도 여기 있네요."
+                },
+                {
+                  "sentenceIndex": 2,
+                  "sentence": "“여기!"
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "Here I go to my seat."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "en",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 세 문장 연속이에요. 수준에 맞는 질문·감탄·청유를 섞어 주세요.",
+              "heuristic": true,
+              "ending": "!"
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 3,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "2~3쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                2,
+                3
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 4,
+        "beatIndex": 2,
+        "textKo": "유하는 안전띠를 찰칵 매요! 유하는 해니랑 놀고 싶어요. 해니가 “나는 여기 있어!” 해요. 유하 손은 가방끈만 보들보들 만지네요.",
+        "textEn": "My belt clicks; I watch my bag. Haeni says, “I am right here!”",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Yuha fingers the backpack strap on his lap beside Haeni in adjacent bus seats, both belts fastened, while Haeni rests her hand in soft yellow light.",
+          "emotion": "shy",
+          "timeOfDay": "morning",
+          "props": [
+            "seat belts",
+            "backpack",
+            "bus seat"
+          ]
+        },
+        "staging": {
+          "shot": "high_angle",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "within the established location",
+          "verb": "rest",
+          "seed": 382182627
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "버스 밖은 맑고 포근해요.",
+            "en": "The air outside the bus stays clear and mild."
+          },
+          "light": {
+            "ko": "버스 창에 햇빛이 반짝여요.",
+            "en": "Sunlight shines across the bus window."
+          },
+          "sounds": [
+            {
+              "ko": "안전띠가 딸깍 잠겨요.",
+              "en": "The seat belt clicks shut."
+            },
+            {
+              "ko": "버스가 부릉부릉 울려요.",
+              "en": "The bus engine hums gently."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "가방끈이 손끝에 보들보들 닿아요.",
+            "en": "The bag strap feels soft beneath Yuha's fingers."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "의자",
+              "en": "seat"
+            }
+          ],
+          "creature": {
+            "ko": "작은 나비가 창밖으로 날아요.",
+            "en": "A small butterfly flutters outside the window."
+          },
+          "pose": {
+            "ko": "유하가 앉아서 손가락으로 가방끈을 만져요.",
+            "en": "Yuha rubs his bag strap with his fingers, buckled beside Haeni."
+          },
+          "dialogueLine": "해니가 말해요. “나는 여기 있어!”",
+          "humor": "해니 손은 팔랑팔랑. 유하 손은 꼼지락꼼지락."
+        },
+        "richnessCheck": {
+          "pageNo": 4,
+          "beatIndex": 2,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "4번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "My belt clicks; I watch my bag."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 세 문장 연속이에요. 수준에 맞는 질문·감탄·청유를 섞어 주세요.",
+              "heuristic": true,
+              "ending": "!"
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "3~4쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                3,
+                4
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "손",
+                "안전띠"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [
+                "보들보들"
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ],
+              "sentenceCount": 5,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "bag",
+                "belt"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "My belt clicks; I watch my bag."
+                }
+              ],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "4번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 3,
+                  "sentence": "해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "My belt clicks; I watch my bag."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 세 문장 연속이에요. 수준에 맞는 질문·감탄·청유를 섞어 주세요.",
+              "heuristic": true,
+              "ending": "!"
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "3~4쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                3,
+                4
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 5,
+        "beatIndex": 3,
+        "textKo": "가방끈 사각\n유하는 해니를 부르고 싶어요. 유하 입이 아주 조금 열려요. 무슨 말이 먼저 나올까요?",
+        "textEn": "I look up at my friend. My mouth opens just a little.",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Yuha turns toward Haeni with lips slightly parted, hands on the backpack in his lap, both seat belts fastened, as scenery passes outside the bus window.",
+          "emotion": "hesitant",
+          "timeOfDay": "day",
+          "props": [
+            "seat belts",
+            "backpack",
+            "bus window"
+          ]
+        },
+        "staging": {
+          "shot": "from_behind",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the window",
+          "verb": "turn",
+          "seed": 382182628
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 3,
+          "timeOfDay": "day",
+          "weather": {
+            "ko": "하늘에 작은 구름이 떠요.",
+            "en": "Small clouds drift through the clear sky."
+          },
+          "light": {
+            "ko": "햇빛이 두 볼에 닿아요.",
+            "en": "Soft daylight rests on both children's cheeks."
+          },
+          "sounds": [
+            {
+              "ko": "바퀴가 도르르 굴러가요.",
+              "en": "The wheels roll with a low rumble."
+            },
+            {
+              "ko": "가방끈이 사각 하고 스쳐요.",
+              "en": "The bag strap makes a tiny rustle."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "의자가 등을 포근히 받쳐요.",
+            "en": "The seat gently supports Yuha's back."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "창문",
+              "en": "window"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 먼 하늘을 날아요.",
+            "en": "A sparrow flies far beyond the bus window."
+          },
+          "pose": {
+            "ko": "유하가 해니 쪽으로 고개를 돌려요.",
+            "en": "Yuha turns his head toward Haeni, his lips slightly parted."
+          },
+          "dialogueLine": "해니가 말해요. “나는 네 옆이야.”",
+          "humor": "인사 대신 작은 미소가 쏙 나와요."
+        },
+        "richnessCheck": {
+          "pageNo": 5,
+          "beatIndex": 3,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 5,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "4~5쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                4,
+                5
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "입"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "mouth",
+                "friend"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 5,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "4~5쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                4,
+                5
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 6,
+        "beatIndex": 3,
+        "textKo": "바퀴 도르르!\n인사는 아직 입 안에 있어요. 작은 웃음만 먼저 나와요!",
+        "textEn": "My words stay in as my bag rustles. My little smile comes out first!",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Yuha gives Haeni a small closed-mouth smile on the bus seat, his backpack on his lap and both children's seat belts fastened.",
+          "emotion": "gentle",
+          "timeOfDay": "day",
+          "props": [
+            "backpack",
+            "seat belts"
+          ]
+        },
+        "staging": {
+          "shot": "over_shoulder",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "within the established location",
+          "verb": "smile",
+          "seed": 382182629
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 3,
+          "timeOfDay": "day",
+          "weather": {
+            "ko": "하늘에 작은 구름이 떠요.",
+            "en": "Small clouds drift through the clear sky."
+          },
+          "light": {
+            "ko": "햇빛이 두 볼에 닿아요.",
+            "en": "Soft daylight rests on both children's cheeks."
+          },
+          "sounds": [
+            {
+              "ko": "바퀴가 도르르 굴러가요.",
+              "en": "The wheels roll with a low rumble."
+            },
+            {
+              "ko": "가방끈이 사각 하고 스쳐요.",
+              "en": "The bag strap makes a tiny rustle."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "의자가 등을 포근히 받쳐요.",
+            "en": "The seat gently supports Yuha's back."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "창문",
+              "en": "window"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 먼 하늘을 날아요.",
+            "en": "A sparrow flies far beyond the bus window."
+          },
+          "pose": {
+            "ko": "유하가 해니 쪽으로 고개를 돌려요.",
+            "en": "Yuha turns his head toward Haeni, his lips slightly parted."
+          },
+          "dialogueLine": "해니가 말해요. “나는 네 옆이야.”",
+          "humor": "인사 대신 작은 미소가 쏙 나와요."
+        },
+        "richnessCheck": {
+          "pageNo": 6,
+          "beatIndex": 3,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 6,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "바퀴 도르르!"
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 6,
+              "language": "ko",
+              "code": "sensory_window",
+              "message": "5~6쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                5,
+                6
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 6,
+              "language": "en",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 세 문장 연속이에요. 수준에 맞는 질문·감탄·청유를 섞어 주세요.",
+              "heuristic": true,
+              "ending": "!"
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "입"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "바퀴 도르르!"
+                }
+              ],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "bag"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "rustle"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 6,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "바퀴 도르르!"
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 6,
+              "language": "ko",
+              "code": "sensory_window",
+              "message": "5~6쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                5,
+                6
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 6,
+              "language": "en",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 세 문장 연속이에요. 수준에 맞는 질문·감탄·청유를 섞어 주세요.",
+              "heuristic": true,
+              "ending": "!"
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 7,
+        "beatIndex": 4,
+        "textKo": "손가락 둘이 대신 인사해요. 손가락이 무릎 위에서 살랑살랑 흔들려요. 해니가 이 인사를 볼까요?",
+        "textEn": "My two little fingers say hello. Does Haeni see my little hello?",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Yuha wiggles two fingers above his knee beside his backpack on the bus seat as Haeni looks down, both children's seat belts fastened.",
+          "emotion": "hopeful",
+          "timeOfDay": "day",
+          "props": [
+            "seat belts",
+            "backpack",
+            "bus seat"
+          ]
+        },
+        "staging": {
+          "shot": "medium",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "gentle warm light and soft highlights; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "within the established location",
+          "verb": "shake",
+          "seed": 382182630
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 4,
+          "timeOfDay": "day",
+          "weather": {
+            "ko": "작은 구름이 천천히 흘러요.",
+            "en": "Small clouds continue drifting across the bright sky."
+          },
+          "light": {
+            "ko": "작은 손에 빛이 앉아요.",
+            "en": "Daylight catches the children's little fingers."
+          },
+          "sounds": [
+            {
+              "ko": "손가락이 살랑살랑 움직여요.",
+              "en": "Two little fingers sway gently."
+            },
+            {
+              "ko": "버스가 부릉부릉 달려요.",
+              "en": "The bus hums along the road."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "무릎에 작은 손이 닿아요.",
+            "en": "Yuha's hand rests lightly against his knee."
+          },
+          "props": [
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "의자",
+              "en": "seat"
+            },
+            {
+              "ko": "창문",
+              "en": "window"
+            }
+          ],
+          "creature": {
+            "ko": "나비가 창밖 풀 위를 날아요.",
+            "en": "A small butterfly floats above grass outside."
+          },
+          "pose": {
+            "ko": "유하가 무릎 위에서 손가락 둘을 흔들어요.",
+            "en": "Yuha wiggles two fingers above his knee while Haeni mirrors him, both buckled in."
+          },
+          "dialogueLine": "해니가 말해요. “내 손도 안녕!”",
+          "humor": "작은 손가락끼리 먼저 인사해요."
+        },
+        "richnessCheck": {
+          "pageNo": 7,
+          "beatIndex": 4,
+          "valid": true,
+          "issues": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "손가락"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "살랑살랑"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "finger"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "pageNo": 8,
+        "beatIndex": 5,
+        "textKo": "해니의 손가락도 살랑살랑 인사해요. 이번에는 해니 볼이 빵빵해져요. 어라, 해니 볼이 작은 공이네요!",
+        "textEn": "Haeni waves two little fingers back. Now her cheeks look so big—puff!",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Beside Yuha on the bus seat, Haeni raises two fingers and puffs her cheeks, both seat belts fastened and Yuha's backpack on his lap.",
+          "emotion": "playful",
+          "timeOfDay": "afternoon",
+          "props": [
+            "seat belts",
+            "bus seat",
+            "backpack"
+          ]
+        },
+        "staging": {
+          "shot": "closeup",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "within the established location",
+          "verb": "lift",
+          "seed": 382182631
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 5,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "맑은 하늘에 구름이 떠요.",
+            "en": "The sky stays clear with a few small clouds."
+          },
+          "light": {
+            "ko": "햇빛이 두 얼굴을 비춰요.",
+            "en": "Warm afternoon light touches two round faces."
+          },
+          "sounds": [
+            {
+              "ko": "두 입에서 푸 하고 새어요.",
+              "en": "Little puffs escape their rounded lips."
+            },
+            {
+              "ko": "작은 웃음이 히히 번져요.",
+              "en": "Soft giggles fill their paired seats."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "부푼 볼이 팽팽해져요.",
+            "en": "Their puffed cheeks feel round and taut."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "의자",
+              "en": "seat"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 창밖 풀밭에 앉아요.",
+            "en": "A sparrow rests in the grass beyond the window."
+          },
+          "pose": {
+            "ko": "유하가 해니처럼 볼을 빵빵 부풀려요.",
+            "en": "Yuha puffs his cheeks to match Haeni, both seated with seat belts fastened."
+          },
+          "dialogueLine": "해니가 말해요. “내 볼은 빵빵해!”",
+          "humor": "동그란 볼이 둘이에요. 빵빵!"
+        },
+        "richnessCheck": {
+          "pageNo": 8,
+          "beatIndex": 5,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 8,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "해니의 손가락도 살랑살랑 인사해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 8,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "7~8쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                7,
+                8
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "손가락"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "살랑살랑"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "해니의 손가락도 살랑살랑 인사해요."
+                }
+              ],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "finger"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 8,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "해니의 손가락도 살랑살랑 인사해요."
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 8,
+              "language": "en",
+              "code": "sensory_window",
+              "message": "7~8쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                7,
+                8
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 9,
+        "beatIndex": 5,
+        "textKo": "유하의 볼도 빵빵한 공이네요! 두 공이 의자에서 마주 봐요. 둘이 까르륵!\n바람이 웃음으로 쏙 나와요.",
+        "textEn": "My cheeks look so big, too. We let giggles pop on our seat!",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "action": "Yuha and Haeni release their puffed cheeks into giggles on the bus seat by the window, seat belts fastened and backpack on Yuha's lap.",
+          "emotion": "delighted",
+          "timeOfDay": "afternoon",
+          "props": [
+            "seat belts",
+            "bus seat",
+            "backpack",
+            "bus window"
+          ]
+        },
+        "staging": {
+          "shot": "low_angle",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the window",
+          "verb": "Yuha and Haeni release their puffed cheeks into giggles on the bus seat by the window, seat belts fastened and backpack on Yuha's lap.",
+          "seed": 382182632
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 5,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "맑은 하늘에 구름이 떠요.",
+            "en": "The sky stays clear with a few small clouds."
+          },
+          "light": {
+            "ko": "햇빛이 두 얼굴을 비춰요.",
+            "en": "Warm afternoon light touches two round faces."
+          },
+          "sounds": [
+            {
+              "ko": "두 입에서 푸 하고 새어요.",
+              "en": "Little puffs escape their rounded lips."
+            },
+            {
+              "ko": "작은 웃음이 히히 번져요.",
+              "en": "Soft giggles fill their paired seats."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "부푼 볼이 팽팽해져요.",
+            "en": "Their puffed cheeks feel round and taut."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "안전띠",
+              "en": "seat belt"
+            },
+            {
+              "ko": "의자",
+              "en": "seat"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 창밖 풀밭에 앉아요.",
+            "en": "A sparrow rests in the grass beyond the window."
+          },
+          "pose": {
+            "ko": "유하가 해니처럼 볼을 빵빵 부풀려요.",
+            "en": "Yuha puffs his cheeks to match Haeni, both seated with seat belts fastened."
+          },
+          "dialogueLine": "해니가 말해요. “내 볼은 빵빵해!”",
+          "humor": "동그란 볼이 둘이에요. 빵빵!"
+        },
+        "richnessCheck": {
+          "pageNo": 9,
+          "beatIndex": 5,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 9,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "유하의 볼도 빵빵한 공이네요!"
+                }
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "의자",
+                "바람",
+                "공"
+              ],
+              "concreteNounCount": 3,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "유하의 볼도 빵빵한 공이네요!"
+                }
+              ],
+              "sentenceCount": 4,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "seat"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "giggle"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 9,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "유하의 볼도 빵빵한 공이네요!"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 10,
+        "beatIndex": 6,
+        "textKo": "둘은 버스에서 내려 유치원에 왔어요. 둘의 발이 땅에 톡톡 닿아요. 둘의 볼 놀이도 함께 내렸을까요?",
+        "textEn": "We go off the bus. Can our little game come too?",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+          "action": "Yuha and Haeni stand side by side with backpacks in the kindergarten yard beside the parked bus, near the low fence and open doorway.",
+          "emotion": "curious",
+          "timeOfDay": "afternoon",
+          "props": [
+            "school bus",
+            "backpack",
+            "open doorway",
+            "low fence"
+          ]
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "staging": {
+          "shot": "medium",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the doorway",
+          "verb": "stand",
+          "seed": 382182633
+        },
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 6,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "앞마당에 바람이 살살 불어요.",
+            "en": "The same mild breeze moves through the kindergarten yard."
+          },
+          "light": {
+            "ko": "늦은 햇빛이 길게 누워요.",
+            "en": "Late afternoon sunlight stretches across the yard."
+          },
+          "sounds": [
+            {
+              "ko": "두 발이 톡톡 멈춰요.",
+              "en": "Small footsteps tap to a stop."
+            },
+            {
+              "ko": "웃음이 히히 새어 나와요.",
+              "en": "A pair of little giggles escapes."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "잡은 손이 따뜻해요.",
+            "en": "Their joined hands feel warm."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "버스",
+              "en": "bus"
+            },
+            {
+              "ko": "문",
+              "en": "door"
+            }
+          ],
+          "creature": {
+            "ko": "나비가 마당 끝을 팔랑 날아요.",
+            "en": "A small butterfly flutters along the edge of the yard."
+          },
+          "pose": {
+            "ko": "유하가 해니 앞에서 볼을 부풀려요.",
+            "en": "Yuha puffs his cheeks first, standing beside Haeni in the yard after leaving the bus."
+          },
+          "dialogueLine": "유하가 말해요. “내가 먼저 해 볼래!”",
+          "humor": "해니 볼도 금세 빵빵해져요."
+        },
+        "richnessCheck": {
+          "pageNo": 10,
+          "beatIndex": 6,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 10,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "3번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 2,
+                  "sentence": "둘의 볼 놀이도 함께 내렸을까요?"
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 10,
+              "language": "ko",
+              "code": "sensory_window",
+              "message": "9~10쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                9,
+                10
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "발",
+                "버스"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 2,
+                  "sentence": "둘의 볼 놀이도 함께 내렸을까요?"
+                }
+              ],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "bus"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 10,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "3번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 2,
+                  "sentence": "둘의 볼 놀이도 함께 내렸을까요?"
+                }
+              ]
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 10,
+              "language": "ko",
+              "code": "sensory_window",
+              "message": "9~10쪽 중 한 곳에 감각어 또는 의성어가 필요해요.",
+              "heuristic": true,
+              "window": [
+                9,
+                10
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 11,
+        "beatIndex": 6,
+        "textKo": "이번에는 유하가 먼저 볼을 부풀려요. 히히, 둘의 볼 놀이도 따라왔네요! 유하가 따뜻한 손을 쏙 내밀어요.",
+        "textEn": "I make my cheeks big first. Haeni takes my warm hand in hers!",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+          "action": "In the kindergarten yard near the open doorway, Yuha puffs his cheeks first; Haeni copies him and takes his hand, both wearing backpacks.",
+          "emotion": "connected",
+          "timeOfDay": "afternoon",
+          "props": [
+            "backpacks",
+            "open doorway"
+          ]
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "mom": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "staging": {
+          "shot": "from_behind",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "within the established location",
+          "verb": "open",
+          "seed": 382182634
+        },
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 6,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "앞마당에 바람이 살살 불어요.",
+            "en": "The same mild breeze moves through the kindergarten yard."
+          },
+          "light": {
+            "ko": "늦은 햇빛이 길게 누워요.",
+            "en": "Late afternoon sunlight stretches across the yard."
+          },
+          "sounds": [
+            {
+              "ko": "두 발이 톡톡 멈춰요.",
+              "en": "Small footsteps tap to a stop."
+            },
+            {
+              "ko": "웃음이 히히 새어 나와요.",
+              "en": "A pair of little giggles escapes."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "잡은 손이 따뜻해요.",
+            "en": "Their joined hands feel warm."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "버스",
+              "en": "bus"
+            },
+            {
+              "ko": "문",
+              "en": "door"
+            }
+          ],
+          "creature": {
+            "ko": "나비가 마당 끝을 팔랑 날아요.",
+            "en": "A small butterfly flutters along the edge of the yard."
+          },
+          "pose": {
+            "ko": "유하가 해니 앞에서 볼을 부풀려요.",
+            "en": "Yuha puffs his cheeks first, standing beside Haeni in the yard after leaving the bus."
+          },
+          "dialogueLine": "유하가 말해요. “내가 먼저 해 볼래!”",
+          "humor": "해니 볼도 금세 빵빵해져요."
+        },
+        "richnessCheck": {
+          "pageNo": 11,
+          "beatIndex": 6,
+          "valid": false,
+          "issues": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 11,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "2번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "히히, 둘의 볼 놀이도 따라왔네요!"
+                }
+              ]
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "손"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "따뜻한"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "히히, 둘의 볼 놀이도 따라왔네요!"
+                }
+              ],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "hand"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [
+                "warm"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": false,
+          "violations": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 11,
+              "language": "ko",
+              "code": "missing_subject",
+              "message": "2번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "히히, 둘의 볼 놀이도 따라왔네요!"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "pageNo": 12,
+        "beatIndex": 7,
+        "textKo": "유하가 해니 손을 살랑살랑 흔들어요. 해니가 손을 살짝 흔드네요! 작은 웃음 둘이 문으로 들어가요.",
+        "textEn": "We go, hand in hand! Our little smiles come in too.",
+        "scene": {
+          "who": [
+            "yuha",
+            "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+          ],
+          "where": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+          "action": "Yuha and Haeni gently swing their joined hands and smile as they step through the open kindergarten door, backpacks on their shoulders in evening light.",
+          "emotion": "content",
+          "timeOfDay": "evening",
+          "props": [
+            "backpacks",
+            "open doorway"
+          ]
+        },
+        "variantByCharacter": {
+          "yuha": null,
+          "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9": null
+        },
+        "isRefrainPage": false,
+        "staging": {
+          "shot": "wide",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft dusk light and gentle shadows; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the door",
+          "verb": "step",
+          "seed": 382182635
+        },
+        "stagingManual": {},
+        "stagingRegeneration": 0,
+        "sceneBrief": {
+          "beatIndex": 7,
+          "timeOfDay": "evening",
+          "weather": {
+            "ko": "맑은 바람이 그대로 불어요.",
+            "en": "The clear weather holds, with a gentle breeze."
+          },
+          "light": {
+            "ko": "저녁빛이 마당을 노랗게 덮어요.",
+            "en": "Early evening light turns the yard golden."
+          },
+          "sounds": [
+            {
+              "ko": "발소리가 또각또각 나란히 가요.",
+              "en": "Two sets of footsteps patter together."
+            },
+            {
+              "ko": "가방이 살랑살랑 흔들려요.",
+              "en": "Their bags sway softly with each step."
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "작은 손이 꼭 맞닿아요.",
+            "en": "Their small hands fit snugly together."
+          },
+          "props": [
+            {
+              "ko": "가방",
+              "en": "bag"
+            },
+            {
+              "ko": "문",
+              "en": "door"
+            },
+            {
+              "ko": "신발",
+              "en": "shoes"
+            }
+          ],
+          "creature": {
+            "ko": "참새가 마당 끝에 앉아요.",
+            "en": "A small sparrow settles at the far edge of the yard."
+          },
+          "pose": {
+            "ko": "두 아이가 손잡고 문 안으로 걸어요.",
+            "en": "Yuha and Haeni step through the open kindergarten door, their hands joined and smiles relaxed."
+          },
+          "dialogueLine": "유하가 말해요. “우리는 같이 들어가!”",
+          "humor": "볼은 쏙 작아지고 미소는 커져요."
+        },
+        "richnessCheck": {
+          "pageNo": 12,
+          "beatIndex": 7,
+          "valid": true,
+          "issues": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "문",
+                "손"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [
+                "살랑살랑"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 3,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "hand"
+              ],
+              "concreteNounCount": 1,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      }
+    ],
+    "stagingWarnings": [
+      {
+        "pageNo": 8,
+        "code": "location_repeated",
+        "message": "배경 안의 다른 위치를 확인할 수 없어 기존 장소를 유지했어요. 새로운 구조물은 추가하지 않았어요."
+      },
+      {
+        "pageNo": 9,
+        "code": "action_ungrounded",
+        "message": "제안된 동작이 이 쪽 본문에 없어 본문 동작으로 맞췄어요."
+      },
+      {
+        "pageNo": 9,
+        "code": "action_unresolved",
+        "message": "이 쪽의 핵심 동작을 자동으로 구분하기 어려워요. 승인한 장면 동작을 유지해 주세요."
+      }
+    ],
+    "sceneBriefs": [
+      {
+        "beatIndex": 1,
+        "timeOfDay": "morning",
+        "weather": {
+          "ko": "맑은 바람이 살살 불어요.",
+          "en": "A mild breeze brushes the yellow gate."
+        },
+        "light": {
+          "ko": "큰 창문에 아침빛이 들어요.",
+          "en": "Morning light fills the large window."
+        },
+        "sounds": [
+          {
+            "ko": "가방끈이 사각사각 스쳐요.",
+            "en": "The bag straps softly rustle."
+          },
+          {
+            "ko": "노란 대문이 달칵 열려요.",
+            "en": "The yellow gate clicks open."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "가방끈이 어깨에 폭 닿아요.",
+          "en": "The soft straps rest on Yuha's shoulders."
+        },
+        "props": [
+          {
+            "ko": "가방",
+            "en": "bag"
+          },
+          {
+            "ko": "대문",
+            "en": "gate"
+          },
+          {
+            "ko": "이불",
+            "en": "quilt"
+          }
+        ],
+        "creature": {
+          "ko": "참새가 대문 밖에서 콩콩 뛰어요.",
+          "en": "A small sparrow hops outside the gate."
+        },
+        "pose": {
+          "ko": "엄마가 손으로 유하의 가방끈을 펴요.",
+          "en": "Mom straightens Yuha's bag strap with her hand."
+        },
+        "dialogueLine": "엄마가 말해요. “유하 가방이 딱 맞네.”",
+        "humor": "가방이 유하 등에 폭 붙어요."
+      },
+      {
+        "beatIndex": 2,
+        "timeOfDay": "morning",
+        "weather": {
+          "ko": "버스 밖은 맑고 포근해요.",
+          "en": "The air outside the bus stays clear and mild."
+        },
+        "light": {
+          "ko": "버스 창에 햇빛이 반짝여요.",
+          "en": "Sunlight shines across the bus window."
+        },
+        "sounds": [
+          {
+            "ko": "안전띠가 딸깍 잠겨요.",
+            "en": "The seat belt clicks shut."
+          },
+          {
+            "ko": "버스가 부릉부릉 울려요.",
+            "en": "The bus engine hums gently."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "가방끈이 손끝에 보들보들 닿아요.",
+          "en": "The bag strap feels soft beneath Yuha's fingers."
+        },
+        "props": [
+          {
+            "ko": "가방",
+            "en": "bag"
+          },
+          {
+            "ko": "안전띠",
+            "en": "seat belt"
+          },
+          {
+            "ko": "의자",
+            "en": "seat"
+          }
+        ],
+        "creature": {
+          "ko": "작은 나비가 창밖으로 날아요.",
+          "en": "A small butterfly flutters outside the window."
+        },
+        "pose": {
+          "ko": "유하가 앉아서 손가락으로 가방끈을 만져요.",
+          "en": "Yuha rubs his bag strap with his fingers, buckled beside Haeni."
+        },
+        "dialogueLine": "해니가 말해요. “나는 여기 있어!”",
+        "humor": "해니 손은 팔랑팔랑. 유하 손은 꼼지락꼼지락."
+      },
+      {
+        "beatIndex": 3,
+        "timeOfDay": "day",
+        "weather": {
+          "ko": "하늘에 작은 구름이 떠요.",
+          "en": "Small clouds drift through the clear sky."
+        },
+        "light": {
+          "ko": "햇빛이 두 볼에 닿아요.",
+          "en": "Soft daylight rests on both children's cheeks."
+        },
+        "sounds": [
+          {
+            "ko": "바퀴가 도르르 굴러가요.",
+            "en": "The wheels roll with a low rumble."
+          },
+          {
+            "ko": "가방끈이 사각 하고 스쳐요.",
+            "en": "The bag strap makes a tiny rustle."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "의자가 등을 포근히 받쳐요.",
+          "en": "The seat gently supports Yuha's back."
+        },
+        "props": [
+          {
+            "ko": "가방",
+            "en": "bag"
+          },
+          {
+            "ko": "안전띠",
+            "en": "seat belt"
+          },
+          {
+            "ko": "창문",
+            "en": "window"
+          }
+        ],
+        "creature": {
+          "ko": "참새가 먼 하늘을 날아요.",
+          "en": "A sparrow flies far beyond the bus window."
+        },
+        "pose": {
+          "ko": "유하가 해니 쪽으로 고개를 돌려요.",
+          "en": "Yuha turns his head toward Haeni, his lips slightly parted."
+        },
+        "dialogueLine": "해니가 말해요. “나는 네 옆이야.”",
+        "humor": "인사 대신 작은 미소가 쏙 나와요."
+      },
+      {
+        "beatIndex": 4,
+        "timeOfDay": "day",
+        "weather": {
+          "ko": "작은 구름이 천천히 흘러요.",
+          "en": "Small clouds continue drifting across the bright sky."
+        },
+        "light": {
+          "ko": "작은 손에 빛이 앉아요.",
+          "en": "Daylight catches the children's little fingers."
+        },
+        "sounds": [
+          {
+            "ko": "손가락이 살랑살랑 움직여요.",
+            "en": "Two little fingers sway gently."
+          },
+          {
+            "ko": "버스가 부릉부릉 달려요.",
+            "en": "The bus hums along the road."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "무릎에 작은 손이 닿아요.",
+          "en": "Yuha's hand rests lightly against his knee."
+        },
+        "props": [
+          {
+            "ko": "안전띠",
+            "en": "seat belt"
+          },
+          {
+            "ko": "의자",
+            "en": "seat"
+          },
+          {
+            "ko": "창문",
+            "en": "window"
+          }
+        ],
+        "creature": {
+          "ko": "나비가 창밖 풀 위를 날아요.",
+          "en": "A small butterfly floats above grass outside."
+        },
+        "pose": {
+          "ko": "유하가 무릎 위에서 손가락 둘을 흔들어요.",
+          "en": "Yuha wiggles two fingers above his knee while Haeni mirrors him, both buckled in."
+        },
+        "dialogueLine": "해니가 말해요. “내 손도 안녕!”",
+        "humor": "작은 손가락끼리 먼저 인사해요."
+      },
+      {
+        "beatIndex": 5,
+        "timeOfDay": "afternoon",
+        "weather": {
+          "ko": "맑은 하늘에 구름이 떠요.",
+          "en": "The sky stays clear with a few small clouds."
+        },
+        "light": {
+          "ko": "햇빛이 두 얼굴을 비춰요.",
+          "en": "Warm afternoon light touches two round faces."
+        },
+        "sounds": [
+          {
+            "ko": "두 입에서 푸 하고 새어요.",
+            "en": "Little puffs escape their rounded lips."
+          },
+          {
+            "ko": "작은 웃음이 히히 번져요.",
+            "en": "Soft giggles fill their paired seats."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "부푼 볼이 팽팽해져요.",
+          "en": "Their puffed cheeks feel round and taut."
+        },
+        "props": [
+          {
+            "ko": "가방",
+            "en": "bag"
+          },
+          {
+            "ko": "안전띠",
+            "en": "seat belt"
+          },
+          {
+            "ko": "의자",
+            "en": "seat"
+          }
+        ],
+        "creature": {
+          "ko": "참새가 창밖 풀밭에 앉아요.",
+          "en": "A sparrow rests in the grass beyond the window."
+        },
+        "pose": {
+          "ko": "유하가 해니처럼 볼을 빵빵 부풀려요.",
+          "en": "Yuha puffs his cheeks to match Haeni, both seated with seat belts fastened."
+        },
+        "dialogueLine": "해니가 말해요. “내 볼은 빵빵해!”",
+        "humor": "동그란 볼이 둘이에요. 빵빵!"
+      },
+      {
+        "beatIndex": 6,
+        "timeOfDay": "afternoon",
+        "weather": {
+          "ko": "앞마당에 바람이 살살 불어요.",
+          "en": "The same mild breeze moves through the kindergarten yard."
+        },
+        "light": {
+          "ko": "늦은 햇빛이 길게 누워요.",
+          "en": "Late afternoon sunlight stretches across the yard."
+        },
+        "sounds": [
+          {
+            "ko": "두 발이 톡톡 멈춰요.",
+            "en": "Small footsteps tap to a stop."
+          },
+          {
+            "ko": "웃음이 히히 새어 나와요.",
+            "en": "A pair of little giggles escapes."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "잡은 손이 따뜻해요.",
+          "en": "Their joined hands feel warm."
+        },
+        "props": [
+          {
+            "ko": "가방",
+            "en": "bag"
+          },
+          {
+            "ko": "버스",
+            "en": "bus"
+          },
+          {
+            "ko": "문",
+            "en": "door"
+          }
+        ],
+        "creature": {
+          "ko": "나비가 마당 끝을 팔랑 날아요.",
+          "en": "A small butterfly flutters along the edge of the yard."
+        },
+        "pose": {
+          "ko": "유하가 해니 앞에서 볼을 부풀려요.",
+          "en": "Yuha puffs his cheeks first, standing beside Haeni in the yard after leaving the bus."
+        },
+        "dialogueLine": "유하가 말해요. “내가 먼저 해 볼래!”",
+        "humor": "해니 볼도 금세 빵빵해져요."
+      },
+      {
+        "beatIndex": 7,
+        "timeOfDay": "evening",
+        "weather": {
+          "ko": "맑은 바람이 그대로 불어요.",
+          "en": "The clear weather holds, with a gentle breeze."
+        },
+        "light": {
+          "ko": "저녁빛이 마당을 노랗게 덮어요.",
+          "en": "Early evening light turns the yard golden."
+        },
+        "sounds": [
+          {
+            "ko": "발소리가 또각또각 나란히 가요.",
+            "en": "Two sets of footsteps patter together."
+          },
+          {
+            "ko": "가방이 살랑살랑 흔들려요.",
+            "en": "Their bags sway softly with each step."
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "작은 손이 꼭 맞닿아요.",
+          "en": "Their small hands fit snugly together."
+        },
+        "props": [
+          {
+            "ko": "가방",
+            "en": "bag"
+          },
+          {
+            "ko": "문",
+            "en": "door"
+          },
+          {
+            "ko": "신발",
+            "en": "shoes"
+          }
+        ],
+        "creature": {
+          "ko": "참새가 마당 끝에 앉아요.",
+          "en": "A small sparrow settles at the far edge of the yard."
+        },
+        "pose": {
+          "ko": "두 아이가 손잡고 문 안으로 걸어요.",
+          "en": "Yuha and Haeni step through the open kindergarten door, their hands joined and smiles relaxed."
+        },
+        "dialogueLine": "유하가 말해요. “우리는 같이 들어가!”",
+        "humor": "볼은 쏙 작아지고 미소는 커져요."
+      }
+    ]
+  },
+  "storyCheck": {
+    "passed": false,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": false,
+        "violations": [
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 2,
+            "language": "ko",
+            "message": "한글 문장 수 5 (허용 1~4)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 4,
+            "language": "ko",
+            "message": "한글 문장 수 5 (허용 1~4)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 2,
+            "language": "ko",
+            "message": "한글 책 전체 문장 43개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 2.5개)."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 4,
+            "language": "ko",
+            "message": "한글 책 전체 문장 43개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 2.5개)."
+          }
+        ]
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.25,
+        "max": 0.15,
+        "words": [
+          "soft",
+          "straps",
+          "rustle"
+        ],
+        "severity": "warning",
+        "pageNo": 1
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.18181818181818182,
+        "max": 0.15,
+        "words": [
+          "gate",
+          "fits"
+        ],
+        "severity": "warning",
+        "pageNo": 2
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.3076923076923077,
+        "max": 0.15,
+        "words": [
+          "belt",
+          "clicks",
+          "watch",
+          "right"
+        ],
+        "severity": "warning",
+        "pageNo": 4
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.25,
+        "max": 0.15,
+        "words": [
+          "mouth",
+          "opens",
+          "just"
+        ],
+        "severity": "warning",
+        "pageNo": 5
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.3333333333333333,
+        "max": 0.15,
+        "words": [
+          "fingers",
+          "hello",
+          "does"
+        ],
+        "severity": "warning",
+        "pageNo": 7
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.23076923076923078,
+        "max": 0.15,
+        "words": [
+          "fingers",
+          "back",
+          "puff"
+        ],
+        "severity": "warning",
+        "pageNo": 8
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.23076923076923078,
+        "max": 0.15,
+        "words": [
+          "let",
+          "giggles",
+          "seat"
+        ],
+        "severity": "warning",
+        "pageNo": 9
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.18181818181818182,
+        "max": 0.15,
+        "words": [
+          "off",
+          "game"
+        ],
+        "severity": "warning",
+        "pageNo": 10
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.23076923076923078,
+        "max": 0.15,
+        "words": [
+          "takes",
+          "warm",
+          "hand"
+        ],
+        "severity": "warning",
+        "pageNo": 11
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.18181818181818182,
+        "max": 0.15,
+        "words": [
+          "hand"
+        ],
+        "severity": "warning",
+        "pageNo": 12
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "props": [
+          "bag"
+        ],
+        "message": "1쪽 글에 나온 bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "props": [
+          "bag"
+        ],
+        "message": "2쪽 글에 나온 bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "props": [
+          "bag",
+          "seat belt"
+        ],
+        "message": "4쪽 글에 나온 bag, seat belt이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "props": [
+          "bag"
+        ],
+        "message": "5쪽 글에 나온 bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "props": [
+          "bag"
+        ],
+        "message": "6쪽 글에 나온 bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      }
+    ],
+    "violations": [
+      {
+        "type": "level",
+        "kind": "page",
+        "pageNo": 2,
+        "language": "ko",
+        "message": "한글 문장 수 5 (허용 1~4)"
+      },
+      {
+        "type": "level",
+        "kind": "page",
+        "pageNo": 4,
+        "language": "ko",
+        "message": "한글 문장 수 5 (허용 1~4)"
+      },
+      {
+        "type": "level",
+        "kind": "page",
+        "pageNo": 2,
+        "language": "ko",
+        "message": "한글 책 전체 문장 43개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 2.5개)."
+      },
+      {
+        "type": "level",
+        "kind": "page",
+        "pageNo": 4,
+        "language": "ko",
+        "message": "한글 책 전체 문장 43개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 2.5개)."
+      }
+    ],
+    "failedPageNos": [
+      2,
+      4
+    ],
+    "needsRepagination": false
+  },
+  "notes": [],
+  "usage": {
+    "calls": [
+      {
+        "input": 2721,
+        "output": 683,
+        "costUsdEstimated": 0.012272,
+        "stage": "materials",
+        "engineId": "openai",
+        "model": "gpt-6.1-sol",
+        "requests": 1,
+        "demo": false,
+        "modelId": "gpt-6.1-sol",
+        "repairAttempts": 0,
+        "callId": "auto-b4177602-3f12-4ed0-8f27-939eb8b7900e:1",
+        "at": "2026-10-21T21:53:31.924Z"
+      },
+      {
+        "input": 8979,
+        "output": 4404,
+        "costUsdEstimated": 0.061998000000000004,
+        "stage": "outline",
+        "engineId": "openai",
+        "model": "gpt-6.1-sol",
+        "requests": 3,
+        "demo": false,
+        "modelId": "gpt-6.1-sol",
+        "repairAttempts": 2,
+        "checks": {
+          "valid": false,
+          "errors": [
+            "비트에 주제 키워드 ‘만나’가 없어요."
+          ],
+          "violations": [
+            {
+              "code": "topic_keyword_missing",
+              "message": "비트에 주제 키워드 ‘만나’가 없어요.",
+              "keyword": "만나",
+              "partial": true
+            }
+          ],
+          "topicKeywords": [
+            "4살",
+            "유하",
+            "스쿨버스",
+            "해니",
+            "만나",
+            "유치원"
+          ],
+          "homeBackgroundIds": [
+            "home"
+          ]
+        },
+        "softIssues": [
+          "비트에 주제 키워드 ‘만나’가 없어요."
+        ],
+        "tensionCheck": {
+          "passed": true,
+          "problems": []
+        },
+        "callId": "auto-b4177602-3f12-4ed0-8f27-939eb8b7900e:2",
+        "at": "2026-10-21T21:54:53.861Z"
+      },
+      {
+        "input": 3338,
+        "output": 2861,
+        "costUsdEstimated": 0.035286,
+        "stage": "sceneBriefs",
+        "engineId": "openai",
+        "requests": 1,
+        "checks": {
+          "valid": true,
+          "passed": true,
+          "issues": [],
+          "advisories": [],
+          "errors": [],
+          "softIssues": [],
+          "notes": [],
+          "failedBeatIndexes": [],
+          "hardBeatIndexes": []
+        },
+        "demo": false,
+        "callId": "auto-b4177602-3f12-4ed0-8f27-939eb8b7900e:3",
+        "at": "2026-10-21T21:55:42.789Z"
+      },
+      {
+        "input": 1813,
+        "output": 2382,
+        "costUsdEstimated": 0.027446,
+        "stage": "prose",
+        "requests": 1,
+        "resumedCalls": 0,
+        "writerCheckpoint": {
+          "version": 1,
+          "kind": "k1Book",
+          "contextFingerprint": "a344aaac",
+          "completed": {
+            "dec56d52": {
+              "role": "beatWriter",
+              "response": {
+                "text": "{\n  \"cover\": \"In warm morning light, Yuha, a round-faced child with short black hair, a yellow T-shirt, and green shorts, and Haeni, a rosy-cheeked child with short brown hair, pale peach skin, sky-blue overalls, and a white T-shirt, hold hands beside a yellow school bus, with no lettering.\",\n  \"pages\": [\n    {\n      \"pageNo\": 1,\n      \"ko\": \"오늘은 유치원에 가는 날이에요.\\n유하 가방도 함께 가요.\",\n      \"en\": \"Here I go with my bag.\",\n      \"picture\": \"A child-height view shows Yuha slipping on a small backpack while Mom, with a brown bob and peach dress, kneels to straighten one strap. Soft morning light fills the cozy entryway; there is no lettering.\",\n      \"feeling\": \"ready\",\n      \"who\": [\"yuha\", \"mom\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"backpack\"]\n    },\n    {\n      \"pageNo\": 2,\n      \"ko\": \"밖에서 버스 소리가 들려요.\\n부릉부릉!\\n유하 발이 살짝 들썩여요.\",\n      \"en\": \"Here I go to the gate.\",\n      \"picture\": \"Seen from behind Yuha, Mom holds the yellow gate open toward a yellow school bus waiting at the curb. Golden morning light falls across the path, and the bus has no lettering.\",\n      \"feeling\": \"eager\",\n      \"who\": [\"yuha\", \"mom\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"yellow gate\", \"school bus\", \"backpack\"]\n    },\n    {\n      \"pageNo\": 3,\n      \"ko\": \"해니가 자리를 톡톡 두드려요.\\n유하 자리도 여기 있네요.\\n해니가 말해요.\\n“여기!”\",\n      \"en\": \"Here I go to my seat.\\nHaeni says, “Come sit with me!”\",\n      \"picture\": \"Inside the parked yellow bus, Haeni waves and pats the empty seat beside her while Yuha pauses at the top of the steps. The nearby driver supervises from the front, and warm light brightens the seats; no lettering is visible.\",\n      \"feeling\": \"welcome\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"school bus\", \"bus seat\", \"backpack\", \"seat belts\"]\n    },\n    {\n      \"pageNo\": 4,\n      \"ko\": \"찰칵!\\n유하도 안전띠를 꼭 매요.\\n같이 놀고 싶은데 말이에요.\\n손은 가방끈만 조물조물 만져요.\",\n      \"en\": \"My belt goes click, click, click.\\nI look down at my bag.\",\n      \"picture\": \"A close two-shot shows both children safely buckled into adjacent bus seats, with Yuha's backpack on the lap and fingers curled around its strap. Haeni's hand rests after a wave, and soft yellow light fills the quiet scene; no lettering appears.\",\n      \"feeling\": \"shy\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"seat belts\", \"backpack\", \"bus seat\"]\n    },\n    {\n      \"pageNo\": 5,\n      \"ko\": \"해니야, 하고 부르고 싶어요.\\n입이 아주 조금 열려요.\\n무슨 말이 먼저 나올까요?\",\n      \"en\": \"I look up at my friend.\\nMy mouth opens just a little.\",\n      \"picture\": \"From Haeni's side, Yuha turns the head toward Haeni with lips slightly parted and hands still on the backpack. Both seat belts remain fastened as pale morning scenery passes outside; there is no lettering.\",\n      \"feeling\": \"hesitant\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"seat belts\", \"backpack\", \"bus window\"]\n    },\n    {\n      \"pageNo\": 6,\n      \"ko\": \"인사는 아직 입 안에 있어요.\\n작은 웃음만 먼저 나와요.\",\n      \"en\": \"No words come out just yet.\\nA little smile comes out first.\",\n      \"picture\": \"A gentle close-up frames Yuha's small closed-mouth smile, with Haeni watching quietly at the edge of the picture. The backpack and fastened belts remain visible below their faces in warm reflected light; no lettering appears.\",\n      \"feeling\": \"gentle\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"backpack\", \"seat belts\"]\n    },\n    {\n      \"pageNo\": 7,\n      \"ko\": \"손가락 둘이 대신 인사해요.\\n무릎 위에서 살랑살랑 흔들려요.\\n해니도 이 인사를 볼까요?\",\n      \"en\": \"My two little fingers say hello.\\nDoes Haeni see my little hello?\",\n      \"picture\": \"A low close-up centers Yuha's two raised fingers making a tiny wave above the knees, while Haeni glances down toward them. Both children remain seated and buckled in the softly lit yellow bus; there is no lettering.\",\n      \"feeling\": \"hopeful\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"seat belts\", \"backpack\", \"bus seat\"]\n    },\n    {\n      \"pageNo\": 8,\n      \"ko\": \"해니 손가락도 살랑살랑 인사해요.\\n이번에는 볼이 빵빵해져요.\\n어라, 작은 공이 됐네요!\",\n      \"en\": \"Haeni waves two little fingers back.\\nNow her cheeks look so big!\",\n      \"picture\": \"In a medium two-shot, Haeni turns her head toward Yuha, holds up two fingers, and puffs out her round cheeks. Yuha watches with a widening smile; both belts stay fastened in the warm morning light, with no lettering.\",\n      \"feeling\": \"playful\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"seat belts\", \"bus seat\", \"backpack\"]\n    },\n    {\n      \"pageNo\": 9,\n      \"ko\": \"유하 볼도 빵빵한 공이에요.\\n두 공이 서로 마주 봐요.\\n까르륵!\\n바람이 웃음으로 쏙 나와요.\",\n      \"en\": \"My cheeks look so big, too.\\nWe let our giggles pop out.\",\n      \"picture\": \"A close frontal view catches both children releasing puffed cheeks into bright giggles, hands resting safely on their laps. Their fastened belts are clear against the yellow seats, with soft green scenery beyond the window and no lettering.\",\n      \"feeling\": \"delighted\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"seat belts\", \"bus seat\", \"backpack\", \"bus window\"]\n    },\n    {\n      \"pageNo\": 10,\n      \"ko\": \"어느새 유치원에 다 왔어요.\\n발이 땅에 톡 닿아요.\\n볼 놀이도 함께 내렸을까요?\",\n      \"en\": \"Here we go, off the bus.\\nCan our little game come too?\",\n      \"picture\": \"In a wide view of the kindergarten forecourt, Yuha and Haeni stand side by side after stepping off the parked bus, with the driver supervising from the doorway. A low fence and open kindergarten entrance glow in clear morning light; there is no lettering.\",\n      \"feeling\": \"curious\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"school bus\", \"backpack\", \"open doorway\", \"low fence\"]\n    },\n    {\n      \"pageNo\": 11,\n      \"ko\": \"이번에는 유하가 먼저 해요.\\n볼 놀이도 따라왔네요!\\n유하가 손을 쏙 내밀어요.\",\n      \"en\": \"I make my cheeks big first.\\nHaeni takes my hand in hers.\",\n      \"picture\": \"At child height in the sunny forecourt, Yuha puffs out the cheeks first, and Haeni mirrors the round face as their hands meet. Their backpacks sit snugly on their shoulders, and the open kindergarten doorway waits behind them; no lettering appears.\",\n      \"feeling\": \"connected\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"backpacks\", \"open doorway\"]\n    },\n    {\n      \"pageNo\": 12,\n      \"ko\": \"유하가 해니 손을 살짝 흔들어요.\\n해니도 손을 살짝 흔들어요.\\n작은 웃음 둘이 함께 들어가요.\",\n      \"en\": \"Here we go, hand in hand.\\nOur little smiles come in too.\",\n      \"picture\": \"A rear three-quarter view shows Yuha and Haeni walking hand in hand across the kindergarten threshold, turning small relaxed smiles toward each other. Warm indoor light meets the sunny forecourt through the wide-open door, with no lettering anywhere.\",\n      \"feeling\": \"content\",\n      \"who\": [\"yuha\", \"character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9\"],\n      \"timeOfDay\": \"morning\",\n      \"props\": [\"backpacks\", \"open doorway\"]\n    }\n  ]\n}",
+                "json": {
+                  "cover": "In warm morning light, Yuha, a round-faced child with short black hair, a yellow T-shirt, and green shorts, and Haeni, a rosy-cheeked child with short brown hair, pale peach skin, sky-blue overalls, and a white T-shirt, hold hands beside a yellow school bus, with no lettering.",
+                  "pages": [
+                    {
+                      "pageNo": 1,
+                      "ko": "오늘은 유치원에 가는 날이에요.\n유하 가방도 함께 가요.",
+                      "en": "Here I go with my bag.",
+                      "picture": "A child-height view shows Yuha slipping on a small backpack while Mom, with a brown bob and peach dress, kneels to straighten one strap. Soft morning light fills the cozy entryway; there is no lettering.",
+                      "feeling": "ready",
+                      "who": [
+                        "yuha",
+                        "mom"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "backpack"
+                      ]
+                    },
+                    {
+                      "pageNo": 2,
+                      "ko": "밖에서 버스 소리가 들려요.\n부릉부릉!\n유하 발이 살짝 들썩여요.",
+                      "en": "Here I go to the gate.",
+                      "picture": "Seen from behind Yuha, Mom holds the yellow gate open toward a yellow school bus waiting at the curb. Golden morning light falls across the path, and the bus has no lettering.",
+                      "feeling": "eager",
+                      "who": [
+                        "yuha",
+                        "mom"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "yellow gate",
+                        "school bus",
+                        "backpack"
+                      ]
+                    },
+                    {
+                      "pageNo": 3,
+                      "ko": "해니가 자리를 톡톡 두드려요.\n유하 자리도 여기 있네요.\n해니가 말해요.\n“여기!”",
+                      "en": "Here I go to my seat.\nHaeni says, “Come sit with me!”",
+                      "picture": "Inside the parked yellow bus, Haeni waves and pats the empty seat beside her while Yuha pauses at the top of the steps. The nearby driver supervises from the front, and warm light brightens the seats; no lettering is visible.",
+                      "feeling": "welcome",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "school bus",
+                        "bus seat",
+                        "backpack",
+                        "seat belts"
+                      ]
+                    },
+                    {
+                      "pageNo": 4,
+                      "ko": "찰칵!\n유하도 안전띠를 꼭 매요.\n같이 놀고 싶은데 말이에요.\n손은 가방끈만 조물조물 만져요.",
+                      "en": "My belt goes click, click, click.\nI look down at my bag.",
+                      "picture": "A close two-shot shows both children safely buckled into adjacent bus seats, with Yuha's backpack on the lap and fingers curled around its strap. Haeni's hand rests after a wave, and soft yellow light fills the quiet scene; no lettering appears.",
+                      "feeling": "shy",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "seat belts",
+                        "backpack",
+                        "bus seat"
+                      ]
+                    },
+                    {
+                      "pageNo": 5,
+                      "ko": "해니야, 하고 부르고 싶어요.\n입이 아주 조금 열려요.\n무슨 말이 먼저 나올까요?",
+                      "en": "I look up at my friend.\nMy mouth opens just a little.",
+                      "picture": "From Haeni's side, Yuha turns the head toward Haeni with lips slightly parted and hands still on the backpack. Both seat belts remain fastened as pale morning scenery passes outside; there is no lettering.",
+                      "feeling": "hesitant",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "seat belts",
+                        "backpack",
+                        "bus window"
+                      ]
+                    },
+                    {
+                      "pageNo": 6,
+                      "ko": "인사는 아직 입 안에 있어요.\n작은 웃음만 먼저 나와요.",
+                      "en": "No words come out just yet.\nA little smile comes out first.",
+                      "picture": "A gentle close-up frames Yuha's small closed-mouth smile, with Haeni watching quietly at the edge of the picture. The backpack and fastened belts remain visible below their faces in warm reflected light; no lettering appears.",
+                      "feeling": "gentle",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "backpack",
+                        "seat belts"
+                      ]
+                    },
+                    {
+                      "pageNo": 7,
+                      "ko": "손가락 둘이 대신 인사해요.\n무릎 위에서 살랑살랑 흔들려요.\n해니도 이 인사를 볼까요?",
+                      "en": "My two little fingers say hello.\nDoes Haeni see my little hello?",
+                      "picture": "A low close-up centers Yuha's two raised fingers making a tiny wave above the knees, while Haeni glances down toward them. Both children remain seated and buckled in the softly lit yellow bus; there is no lettering.",
+                      "feeling": "hopeful",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "seat belts",
+                        "backpack",
+                        "bus seat"
+                      ]
+                    },
+                    {
+                      "pageNo": 8,
+                      "ko": "해니 손가락도 살랑살랑 인사해요.\n이번에는 볼이 빵빵해져요.\n어라, 작은 공이 됐네요!",
+                      "en": "Haeni waves two little fingers back.\nNow her cheeks look so big!",
+                      "picture": "In a medium two-shot, Haeni turns her head toward Yuha, holds up two fingers, and puffs out her round cheeks. Yuha watches with a widening smile; both belts stay fastened in the warm morning light, with no lettering.",
+                      "feeling": "playful",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "seat belts",
+                        "bus seat",
+                        "backpack"
+                      ]
+                    },
+                    {
+                      "pageNo": 9,
+                      "ko": "유하 볼도 빵빵한 공이에요.\n두 공이 서로 마주 봐요.\n까르륵!\n바람이 웃음으로 쏙 나와요.",
+                      "en": "My cheeks look so big, too.\nWe let our giggles pop out.",
+                      "picture": "A close frontal view catches both children releasing puffed cheeks into bright giggles, hands resting safely on their laps. Their fastened belts are clear against the yellow seats, with soft green scenery beyond the window and no lettering.",
+                      "feeling": "delighted",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "seat belts",
+                        "bus seat",
+                        "backpack",
+                        "bus window"
+                      ]
+                    },
+                    {
+                      "pageNo": 10,
+                      "ko": "어느새 유치원에 다 왔어요.\n발이 땅에 톡 닿아요.\n볼 놀이도 함께 내렸을까요?",
+                      "en": "Here we go, off the bus.\nCan our little game come too?",
+                      "picture": "In a wide view of the kindergarten forecourt, Yuha and Haeni stand side by side after stepping off the parked bus, with the driver supervising from the doorway. A low fence and open kindergarten entrance glow in clear morning light; there is no lettering.",
+                      "feeling": "curious",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "school bus",
+                        "backpack",
+                        "open doorway",
+                        "low fence"
+                      ]
+                    },
+                    {
+                      "pageNo": 11,
+                      "ko": "이번에는 유하가 먼저 해요.\n볼 놀이도 따라왔네요!\n유하가 손을 쏙 내밀어요.",
+                      "en": "I make my cheeks big first.\nHaeni takes my hand in hers.",
+                      "picture": "At child height in the sunny forecourt, Yuha puffs out the cheeks first, and Haeni mirrors the round face as their hands meet. Their backpacks sit snugly on their shoulders, and the open kindergarten doorway waits behind them; no lettering appears.",
+                      "feeling": "connected",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "backpacks",
+                        "open doorway"
+                      ]
+                    },
+                    {
+                      "pageNo": 12,
+                      "ko": "유하가 해니 손을 살짝 흔들어요.\n해니도 손을 살짝 흔들어요.\n작은 웃음 둘이 함께 들어가요.",
+                      "en": "Here we go, hand in hand.\nOur little smiles come in too.",
+                      "picture": "A rear three-quarter view shows Yuha and Haeni walking hand in hand across the kindergarten threshold, turning small relaxed smiles toward each other. Warm indoor light meets the sunny forecourt through the wide-open door, with no lettering anywhere.",
+                      "feeling": "content",
+                      "who": [
+                        "yuha",
+                        "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+                      ],
+                      "timeOfDay": "morning",
+                      "props": [
+                        "backpacks",
+                        "open doorway"
+                      ]
+                    }
+                  ]
+                },
+                "usage": {
+                  "input": 1813,
+                  "output": 2382,
+                  "costUsdEstimated": 0.027446
+                },
+                "meta": {
+                  "model": "gpt-6.1-sol",
+                  "requests": 1,
+                  "costUsdEstimated": 0.027446
+                }
+              }
+            }
+          },
+          "checkRules": 2
+        },
+        "engineId": "openai",
+        "modelId": "gpt-6.1-sol",
+        "models": [
+          {
+            "engineId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "k1Book": {
+          "pages": 12,
+          "fixed": false,
+          "warnings": []
+        },
+        "callId": "auto-b4177602-3f12-4ed0-8f27-939eb8b7900e:4",
+        "at": "2026-10-21T21:56:35.552Z"
+      },
+      {
+        "input": 223520,
+        "output": 8432,
+        "costUsdEstimated": 0.53136,
+        "stage": "pagination",
+        "requests": 24,
+        "childGateCheckpoint": {
+          "version": 2,
+          "language": "ko",
+          "initialFingerprint": "coherence-v1-pages-5e77574b",
+          "contentFingerprint": "coherence-v1-pages-5e77574b",
+          "phase": "initial-check",
+          "rounds": {
+            "0": {
+              "fingerprint": "coherence-v1-pages-5e77574b",
+              "raw": {}
+            }
+          },
+          "repairs": {
+            "turns": [],
+            "pages": [],
+            "repagination": {
+              "status": "pending",
+              "attempts": 0
+            }
+          },
+          "repairPasses": 0,
+          "repairedPages": [],
+          "repairedTurnParagraphs": [],
+          "proseRevised": false,
+          "turnRepairUnavailable": false,
+          "advisory": true
+        },
+        "failed": true,
+        "callId": "auto-b4177602-3f12-4ed0-8f27-939eb8b7900e:5",
+        "at": "2026-10-21T22:00:16.481Z"
+      }
+    ]
+  },
+  "measured": {
+    "rows": [
+      {
+        "pageNo": 1,
+        "ko": "오늘 유하는 유치원에 가요. 유하의 가방도 사각사각 함께 가요. 엄마가 “가방끈이 딱 맞네!” 해요.",
+        "en": "Here I go with my bag. Mom says, “Your soft straps rustle!”",
+        "sentences": 4,
+        "rhythm": 0,
+        "eojeol": 14,
+        "average": 3.5,
+        "longest": 5,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [
+          "사각사각"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 12
+      },
+      {
+        "pageNo": 2,
+        "ko": "밖에서 버스가 부릉부릉 울려요. 노란 대문이 달칵 열려요. 엄마가 “가방이 딱 맞네!” 해요. 유하 발이 살짝 들썩여요.",
+        "en": "Here I go to the gate. Mom says, “Your bag fits!”",
+        "sentences": 5,
+        "rhythm": 0,
+        "eojeol": 17,
+        "average": 3.4,
+        "longest": 4,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [
+          "부릉부릉"
+        ],
+        "koIssues": [
+          "한글 문장 수 5 (허용 1~4)"
+        ],
+        "enIssues": [],
+        "enWords": 11
+      },
+      {
+        "pageNo": 3,
+        "ko": "부릉부릉, 해니가 자리를 톡톡 두드려요. 유하 자리도 여기 있네요. “여기!”",
+        "en": "Here I go to my seat. Haeni says, “Come sit with me!”",
+        "sentences": 3,
+        "rhythm": 1,
+        "eojeol": 10,
+        "average": 4.5,
+        "longest": 5,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [
+          "부릉부릉"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 12
+      },
+      {
+        "pageNo": 4,
+        "ko": "유하는 안전띠를 찰칵 매요! 유하는 해니랑 놀고 싶어요. 해니가 “나는 여기 있어!” 해요. 유하 손은 가방끈만 보들보들 만지네요.",
+        "en": "My belt clicks; I watch my bag. Haeni says, “I am right here!”",
+        "sentences": 5,
+        "rhythm": 0,
+        "eojeol": 18,
+        "average": 3.6,
+        "longest": 5,
+        "quotes": 1,
+        "exclaims": 2,
+        "sounds": [
+          "보들보들"
+        ],
+        "koIssues": [
+          "한글 문장 수 5 (허용 1~4)"
+        ],
+        "enIssues": [],
+        "enWords": 13
+      },
+      {
+        "pageNo": 5,
+        "ko": "가방끈 사각\n유하는 해니를 부르고 싶어요. 유하 입이 아주 조금 열려요. 무슨 말이 먼저 나올까요?",
+        "en": "I look up at my friend. My mouth opens just a little.",
+        "sentences": 4,
+        "rhythm": 0,
+        "eojeol": 15,
+        "average": 3.8,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 12
+      },
+      {
+        "pageNo": 6,
+        "ko": "바퀴 도르르!\n인사는 아직 입 안에 있어요. 작은 웃음만 먼저 나와요!",
+        "en": "My words stay in as my bag rustles. My little smile comes out first!",
+        "sentences": 3,
+        "rhythm": 1,
+        "eojeol": 11,
+        "average": 4.5,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 2,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 14
+      },
+      {
+        "pageNo": 7,
+        "ko": "손가락 둘이 대신 인사해요. 손가락이 무릎 위에서 살랑살랑 흔들려요. 해니가 이 인사를 볼까요?",
+        "en": "My two little fingers say hello. Does Haeni see my little hello?",
+        "sentences": 3,
+        "rhythm": 0,
+        "eojeol": 13,
+        "average": 4.3,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 0,
+        "sounds": [
+          "살랑살랑"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 12
+      },
+      {
+        "pageNo": 8,
+        "ko": "해니의 손가락도 살랑살랑 인사해요. 이번에는 해니 볼이 빵빵해져요. 어라, 해니 볼이 작은 공이네요!",
+        "en": "Haeni waves two little fingers back. Now her cheeks look so big—puff!",
+        "sentences": 3,
+        "rhythm": 0,
+        "eojeol": 13,
+        "average": 4.3,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 1,
+        "sounds": [
+          "살랑살랑"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 12
+      },
+      {
+        "pageNo": 9,
+        "ko": "유하의 볼도 빵빵한 공이네요! 두 공이 의자에서 마주 봐요. 둘이 까르륵!\n바람이 웃음으로 쏙 나와요.",
+        "en": "My cheeks look so big, too. We let giggles pop on our seat!",
+        "sentences": 4,
+        "rhythm": 1,
+        "eojeol": 15,
+        "average": 4.3,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 2,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 13
+      },
+      {
+        "pageNo": 10,
+        "ko": "둘은 버스에서 내려 유치원에 왔어요. 둘의 발이 땅에 톡톡 닿아요. 둘의 볼 놀이도 함께 내렸을까요?",
+        "en": "We go off the bus. Can our little game come too?",
+        "sentences": 3,
+        "rhythm": 0,
+        "eojeol": 15,
+        "average": 5,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 11
+      },
+      {
+        "pageNo": 11,
+        "ko": "이번에는 유하가 먼저 볼을 부풀려요. 히히, 둘의 볼 놀이도 따라왔네요! 유하가 따뜻한 손을 쏙 내밀어요.",
+        "en": "I make my cheeks big first. Haeni takes my warm hand in hers!",
+        "sentences": 3,
+        "rhythm": 0,
+        "eojeol": 15,
+        "average": 5,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 1,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 13
+      },
+      {
+        "pageNo": 12,
+        "ko": "유하가 해니 손을 살랑살랑 흔들어요. 해니가 손을 살짝 흔드네요! 작은 웃음 둘이 문으로 들어가요.",
+        "en": "We go, hand in hand! Our little smiles come in too.",
+        "sentences": 3,
+        "rhythm": 0,
+        "eojeol": 14,
+        "average": 4.7,
+        "longest": 5,
+        "quotes": 0,
+        "exclaims": 1,
+        "sounds": [
+          "살랑살랑"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 11
+      }
+    ],
+    "totals": {
+      "pages": 12,
+      "sentences": 43,
+      "rhythm": 3,
+      "eojeol": 170,
+      "averageEojeol": 4.1,
+      "longest": 5,
+      "quotes": 4,
+      "exclaims": 12,
+      "soundWords": [
+        "사각사각",
+        "부릉부릉",
+        "보들보들",
+        "살랑살랑"
+      ],
+      "pagesWithSounds": 7,
+      "enWords": 146,
+      "koIssuePages": 2,
+      "enIssuePages": 0
+    }
+  },
+  "usageSummary": {
+    "costUsd": 0.6683620000000001,
+    "costUnknown": false,
+    "requests": 30,
+    "input": 240371,
+    "output": 18762,
+    "models": [
+      "gpt-6.1-sol"
+    ],
+    "stages": {
+      "materials": {
+        "requests": 1,
+        "input": 2721,
+        "output": 683,
+        "costUsd": 0.012272
+      },
+      "outline": {
+        "requests": 3,
+        "input": 8979,
+        "output": 4404,
+        "costUsd": 0.061998000000000004
+      },
+      "sceneBriefs": {
+        "requests": 1,
+        "input": 3338,
+        "output": 2861,
+        "costUsd": 0.035286
+      },
+      "prose": {
+        "requests": 1,
+        "input": 1813,
+        "output": 2382,
+        "costUsd": 0.027446
+      },
+      "pagination": {
+        "requests": 24,
+        "input": 223520,
+        "output": 8432,
+        "costUsd": 0.53136
+      }
+    }
+  },
+  "progress": [
+    "주제에 맞는 등장인물·배경 고르기",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "줄거리 만들기",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (2/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "장면 디테일 만들기",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "한글·영어 전문 쓰기",
+    "그림책 작가가 쪽마다 글과 그림을 한 번에 쓰고 있어요.",
+    "쪽 나누기와 본문 검사",
+    "이야기 검사 결과를 고치고 있어요 (1/2).",
+    "1/2차 수정 · 1쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 2쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 3쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 4쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 5쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 6쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 7쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 8쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 9쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 10쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 11쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/2차 수정 · 12쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "이야기 검사 결과를 고치고 있어요 (2/2).",
+    "2/2차 수정 · 3쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "2/2차 수정 · 5쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "2쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "4쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "6쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "7쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "8쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "9쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "10쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "11쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "12쪽의 글 디테일을 다듬고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+    "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+    "API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요."
+  ]
+}

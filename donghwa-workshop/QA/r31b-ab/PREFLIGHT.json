@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-21T21:45:13.335Z",
+  "engine": "openai",
+  "expectedModels": [
+    "gpt-6.1-sol",
+    "gpt-6-astra",
+    "gpt-4.1-mini"
+  ],
+  "billedGenerationCalls": 0,
+  "status": 200,
+  "authenticationAccepted": true,
+  "availableExpected": [
+    "gpt-6.1-sol",
+    "gpt-6-astra",
+    "gpt-4.1-mini"
+  ],
+  "missingExpected": [],
+  "modelListCount": 133
+}

@@ -1,0 +1,2909 @@
+{
+  "date": "2026-10-21",
+  "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+  "sourceCommit": "23ad38dfaf07330e37cdbd4cb719952b1b93867b",
+  "fixes": [
+    "a9af49502f830f367eac1615e6e931458f093cd4",
+    "eb41ce4"
+  ],
+  "costMethod": "Reported token usage × app model price table. Not a provider invoice. Original failed-attempt usage is retained in resumed arms; archives must not be added again.",
+  "experimentLimitations": [
+    "One independently generated story per arm and level, no fixed sampling seed.",
+    "Automatic material planning can choose different casts/backgrounds.",
+    "K1 retained completed writing/repairs and resumed only post-pagination checks.",
+    "K2 baseline retained materials; its original council was charged but not serialized by the original runner, so it was regenerated.",
+    "Workflow completion is distinct from deterministic full-book validation passing.",
+    "Original runner page counts are entries and its per-page validation ignores spread ranges. This summary recomputes violations with the app's unitSpec/unitKind and storyWords, without changing raw results.",
+    "No paid images; final state is text review, before illustration."
+  ],
+  "runs": [
+    {
+      "level": "K1",
+      "arm": "r31a",
+      "status": "text-review",
+      "error": null,
+      "workflowComplete": true,
+      "seconds": 521,
+      "requestedPrintedPages": 12,
+      "entries": 12,
+      "printedPages": 12,
+      "measured": {
+        "pages": 12,
+        "sentences": 38,
+        "rhythm": 1,
+        "eojeol": 145,
+        "averageEojeol": 3.9,
+        "longest": 5,
+        "quotes": 4,
+        "exclaims": 11,
+        "soundWords": [
+          "부릉부릉",
+          "동글동글",
+          "사박사박"
+        ],
+        "pagesWithSounds": 3,
+        "enWords": 148,
+        "koIssuePages": 0,
+        "enIssuePages": 0
+      },
+      "originalRunnerMeasured": {
+        "pages": 12,
+        "sentences": 38,
+        "rhythm": 1,
+        "eojeol": 145,
+        "averageEojeol": 3.9,
+        "longest": 5,
+        "quotes": 4,
+        "exclaims": 11,
+        "soundWords": [
+          "부릉부릉",
+          "동글동글",
+          "사박사박"
+        ],
+        "pagesWithSounds": 3,
+        "enWords": 148,
+        "koIssuePages": 0,
+        "enIssuePages": 0
+      },
+      "layoutAwareRows": [
+        {
+          "pageNo": 1,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 2,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 3,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 4,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 5,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 6,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 7,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 8,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 9,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 10,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 11,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 12,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        }
+      ],
+      "usage": {
+        "costUsd": 1.7334752000000007,
+        "costUnknown": false,
+        "requests": 34,
+        "input": 652445,
+        "output": 24892,
+        "models": [
+          "gpt-6.1-sol"
+        ],
+        "stages": {
+          "materials": {
+            "requests": 1,
+            "input": 5935,
+            "output": 838,
+            "costUsd": 0.02025
+          },
+          "outline": {
+            "requests": 1,
+            "input": 9465,
+            "output": 8474,
+            "costUsd": 0.10367
+          },
+          "sceneBriefs": {
+            "requests": 1,
+            "input": 13436,
+            "output": 2521,
+            "costUsd": 0.052082
+          },
+          "prose": {
+            "requests": 2,
+            "input": 4860,
+            "output": 2805,
+            "costUsd": 0.03777
+          },
+          "coherence": {
+            "requests": 1,
+            "input": 18627,
+            "output": 53,
+            "costUsd": 0.037784
+          },
+          "pagination": {
+            "requests": 28,
+            "input": 600122,
+            "output": 10201,
+            "costUsd": 1.4819192000000005
+          }
+        }
+      },
+      "fullBookChecks": {
+        "passed": false,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": false,
+            "violations": [
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 2,
+                "language": "ko",
+                "message": "한글 책 전체 문장 38개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 3,
+                "language": "ko",
+                "message": "한글 책 전체 문장 38개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+              }
+            ]
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": false,
+            "violations": [
+              {
+                "type": "drawable_scene",
+                "kind": "scene",
+                "pageNo": 7,
+                "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+              },
+              {
+                "type": "drawable_scene",
+                "kind": "scene",
+                "pageNo": 10,
+                "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+              }
+            ]
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.38461538461538464,
+            "max": 0.15,
+            "words": [
+              "share",
+              "smooth",
+              "seat",
+              "gives",
+              "finger"
+            ],
+            "severity": "warning",
+            "pageNo": 2
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.42857142857142855,
+            "max": 0.15,
+            "words": [
+              "bye",
+              "again",
+              "door",
+              "shuts"
+            ],
+            "severity": "warning",
+            "pageNo": 3
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.2857142857142857,
+            "max": 0.15,
+            "words": [
+              "goes",
+              "street",
+              "hum",
+              "walk"
+            ],
+            "severity": "warning",
+            "pageNo": 4
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "step"
+            ],
+            "severity": "warning",
+            "pageNo": 5
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.18181818181818182,
+            "max": 0.15,
+            "words": [
+              "goes",
+              "round"
+            ],
+            "severity": "warning",
+            "pageNo": 6
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "mouth",
+              "o"
+            ],
+            "severity": "warning",
+            "pageNo": 7
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.18181818181818182,
+            "max": 0.15,
+            "words": [
+              "hello",
+              "giggles"
+            ],
+            "severity": "warning",
+            "pageNo": 9
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "bow",
+              "stops"
+            ],
+            "severity": "warning",
+            "pageNo": 10
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.25,
+            "max": 0.15,
+            "words": [
+              "takes",
+              "side"
+            ],
+            "severity": "warning",
+            "pageNo": 12
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 11,
+            "props": [
+              "gray path"
+            ],
+            "message": "11쪽 글에 나온 gray path이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 12,
+            "props": [
+              "gray path"
+            ],
+            "message": "12쪽 글에 나온 gray path이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          }
+        ],
+        "violations": [
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 2,
+            "language": "ko",
+            "message": "한글 책 전체 문장 38개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 3,
+            "language": "ko",
+            "message": "한글 책 전체 문장 38개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+          },
+          {
+            "type": "drawable_scene",
+            "kind": "scene",
+            "pageNo": 7,
+            "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "kind": "scene",
+            "pageNo": 10,
+            "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+          }
+        ],
+        "failedPageNos": [
+          2,
+          3,
+          7,
+          10
+        ],
+        "needsRepagination": false
+      },
+      "pageCoherence": {
+        "version": 1,
+        "stage": "pages",
+        "contentFingerprint": "coherence-v1-pages-966c7206",
+        "passed": true,
+        "issues": [],
+        "repairAttempts": 0
+      },
+      "resume": {
+        "fromStatus": "failed",
+        "fromError": "API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.",
+        "previousRequests": 30,
+        "previousCostUsd": 1.4057460000000006,
+        "skippedPaidStages": [
+          "materials",
+          "outline",
+          "sceneBriefs",
+          "prose",
+          "readabilityRepairs",
+          "richnessRepairs"
+        ]
+      },
+      "characters": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "nameEn": "Yuha"
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "nameEn": "Mom"
+        },
+        {
+          "id": "character-17620a12-b674-4855-a084-9ee251a4fdf6",
+          "name": "해니",
+          "nameEn": "Haeni"
+        },
+        {
+          "id": "character-d1487691-45a4-4979-b4e6-a70d2b796bfa",
+          "name": "버스 기사님",
+          "nameEn": "Bus Driver"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "home",
+          "name": "유하네 집"
+        },
+        {
+          "id": "background-efdb2457-4464-43ad-b467-83e32de20223",
+          "name": "노란 스쿨버스"
+        },
+        {
+          "id": "background-f3ea7bae-83da-4d43-a505-c0ce95c8ad10",
+          "name": "유치원 입구"
+        }
+      ],
+      "ending": [
+        {
+          "pageNo": 11,
+          "ko": "기사님이 한 명씩 도와주세요. 유하가 먼저 보도에 서요! 유하는 따뜻한 손바닥을 펴고 기다려요.",
+          "en": "The driver helps them down, one by one. Yuha holds out his warm hand.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-17620a12-b674-4855-a084-9ee251a4fdf6",
+              "character-d1487691-45a4-4979-b4e6-a70d2b796bfa"
+            ],
+            "where": "background-f3ea7bae-83da-4d43-a505-c0ce95c8ad10",
+            "action": "On the gray sidewalk beside the stopped yellow bus, Yuha offers his open palm as the driver helps Haeni down the last of two steps.",
+            "emotion": "welcoming",
+            "timeOfDay": "evening",
+            "props": [
+              "yellow school bus",
+              "two bus steps",
+              "gray sidewalk",
+              "green rectangular door"
+            ]
+          }
+        },
+        {
+          "pageNo": 12,
+          "ko": "해니가 유하 손을 꼭 잡아요. 두 아이가 보도를 사박사박 걸어요! 두 아이가 함께 들어가요.",
+          "en": "Haeni takes his hand in hers. They go in, side by side.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-17620a12-b674-4855-a084-9ee251a4fdf6",
+              "character-d1487691-45a4-4979-b4e6-a70d2b796bfa"
+            ],
+            "where": "background-f3ea7bae-83da-4d43-a505-c0ce95c8ad10",
+            "action": "Yuha and Haeni hold hands and step from the gray sidewalk through the central green rectangular door while the driver watches nearby.",
+            "emotion": "together",
+            "timeOfDay": "evening",
+            "props": [
+              "green rectangular door",
+              "gray sidewalk"
+            ]
+          }
+        }
+      ],
+      "readingRepairMessages": [
+        "1/2차 수정 · 1쪽을 고치고 있어요.",
+        "1/2차 수정 · 2쪽을 고치고 있어요.",
+        "1/2차 수정 · 3쪽을 고치고 있어요.",
+        "1/2차 수정 · 4쪽을 고치고 있어요.",
+        "1/2차 수정 · 5쪽을 고치고 있어요.",
+        "1/2차 수정 · 6쪽을 고치고 있어요.",
+        "1/2차 수정 · 7쪽을 고치고 있어요.",
+        "1/2차 수정 · 8쪽을 고치고 있어요.",
+        "1/2차 수정 · 9쪽을 고치고 있어요.",
+        "1/2차 수정 · 10쪽을 고치고 있어요.",
+        "1/2차 수정 · 11쪽을 고치고 있어요.",
+        "1/2차 수정 · 12쪽을 고치고 있어요.",
+        "2/2차 수정 · 5쪽을 고치고 있어요.",
+        "2/2차 수정 · 10쪽을 고치고 있어요."
+      ],
+      "richnessRepairMessages": [
+        "1쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "2쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "3쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "4쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "6쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "7쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "8쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "9쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "11쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "12쪽의 글 디테일을 다듬고 있어요 (1/2)."
+      ],
+      "sceneTimes": [
+        {
+          "pageNo": 1,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 2,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 3,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 4,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 5,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 6,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 7,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 8,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 9,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 10,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 11,
+          "timeOfDay": "evening"
+        },
+        {
+          "pageNo": 12,
+          "timeOfDay": "evening"
+        }
+      ],
+      "progress": [
+        "주제에 맞는 등장인물·배경 고르기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "줄거리 만들기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "장면 디테일 만들기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "한글·영어 전문 쓰기",
+        "그림책 작가가 쪽마다 글과 그림을 한 번에 쓰고 있어요.",
+        "전문 인과관계·상태 검사",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽 나누기와 본문 검사",
+        "이야기 검사 결과를 고치고 있어요 (1/2).",
+        "1/2차 수정 · 1쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 2쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 3쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 4쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 5쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 6쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 7쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 8쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 9쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 10쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 11쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 12쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "이야기 검사 결과를 고치고 있어요 (2/2).",
+        "2/2차 수정 · 5쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2/2차 수정 · 10쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "3쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "4쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "6쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "7쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "8쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "9쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "11쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "12쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.",
+        "쪽 나누기와 본문 검사",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "그림을 만들기 전 전체 쪽의 사건·상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "글 완성 · 쪽 검수"
+      ]
+    },
+    {
+      "level": "K1",
+      "arm": "diet",
+      "status": "text-review",
+      "error": null,
+      "workflowComplete": true,
+      "seconds": 529,
+      "requestedPrintedPages": 12,
+      "entries": 12,
+      "printedPages": 12,
+      "measured": {
+        "pages": 12,
+        "sentences": 39,
+        "rhythm": 5,
+        "eojeol": 144,
+        "averageEojeol": 4.1,
+        "longest": 5,
+        "quotes": 1,
+        "exclaims": 6,
+        "soundWords": [
+          "부릉부릉",
+          "조물조물",
+          "살랑살랑"
+        ],
+        "pagesWithSounds": 4,
+        "enWords": 135,
+        "koIssuePages": 0,
+        "enIssuePages": 0
+      },
+      "originalRunnerMeasured": {
+        "pages": 12,
+        "sentences": 39,
+        "rhythm": 5,
+        "eojeol": 144,
+        "averageEojeol": 4.1,
+        "longest": 5,
+        "quotes": 1,
+        "exclaims": 6,
+        "soundWords": [
+          "부릉부릉",
+          "조물조물",
+          "살랑살랑"
+        ],
+        "pagesWithSounds": 4,
+        "enWords": 135,
+        "koIssuePages": 0,
+        "enIssuePages": 0
+      },
+      "layoutAwareRows": [
+        {
+          "pageNo": 1,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 2,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 3,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 4,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 5,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 6,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 7,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 8,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 9,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 10,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 11,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 12,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        }
+      ],
+      "usage": {
+        "costUsd": 0.8800228000000001,
+        "costUnknown": false,
+        "requests": 38,
+        "input": 270504,
+        "output": 25635,
+        "models": [
+          "gpt-6.1-sol"
+        ],
+        "stages": {
+          "materials": {
+            "requests": 1,
+            "input": 2721,
+            "output": 683,
+            "costUsd": 0.012272
+          },
+          "outline": {
+            "requests": 3,
+            "input": 8979,
+            "output": 4404,
+            "costUsd": 0.061998000000000004
+          },
+          "sceneBriefs": {
+            "requests": 1,
+            "input": 3338,
+            "output": 2861,
+            "costUsd": 0.035286
+          },
+          "prose": {
+            "requests": 1,
+            "input": 1813,
+            "output": 2382,
+            "costUsd": 0.027446
+          },
+          "pagination": {
+            "requests": 32,
+            "input": 253653,
+            "output": 15305,
+            "costUsd": 0.7430208
+          }
+        }
+      },
+      "fullBookChecks": {
+        "passed": false,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": false,
+            "violations": [
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 3,
+                "language": "ko",
+                "message": "한글 책 전체 문장 39개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 4,
+                "language": "ko",
+                "message": "한글 책 전체 문장 39개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+              }
+            ]
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": false,
+            "violations": [
+              {
+                "type": "drawable_scene",
+                "kind": "scene",
+                "pageNo": 4,
+                "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+              }
+            ]
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "gate"
+            ],
+            "severity": "warning",
+            "pageNo": 2
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.4166666666666667,
+            "max": 0.15,
+            "words": [
+              "belt",
+              "goes",
+              "click"
+            ],
+            "severity": "warning",
+            "pageNo": 4
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.25,
+            "max": 0.15,
+            "words": [
+              "mouth",
+              "opens",
+              "just"
+            ],
+            "severity": "warning",
+            "pageNo": 5
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "just",
+              "yet"
+            ],
+            "severity": "warning",
+            "pageNo": 6
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.38461538461538464,
+            "max": 0.15,
+            "words": [
+              "fingers",
+              "above",
+              "knee",
+              "does",
+              "hello"
+            ],
+            "severity": "warning",
+            "pageNo": 7
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "fingers",
+              "back"
+            ],
+            "severity": "warning",
+            "pageNo": 8
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "let",
+              "giggles"
+            ],
+            "severity": "warning",
+            "pageNo": 9
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "off",
+              "game"
+            ],
+            "severity": "warning",
+            "pageNo": 10
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.35714285714285715,
+            "max": 0.15,
+            "words": [
+              "puff",
+              "reach",
+              "puffs",
+              "takes",
+              "hand"
+            ],
+            "severity": "warning",
+            "pageNo": 11
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "hand"
+            ],
+            "severity": "warning",
+            "pageNo": 12
+          }
+        ],
+        "violations": [
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 3,
+            "language": "ko",
+            "message": "한글 책 전체 문장 39개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 4,
+            "language": "ko",
+            "message": "한글 책 전체 문장 39개가 목표 24~36개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 2.5개)."
+          },
+          {
+            "type": "drawable_scene",
+            "kind": "scene",
+            "pageNo": 4,
+            "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+          }
+        ],
+        "failedPageNos": [
+          3,
+          4
+        ],
+        "needsRepagination": false
+      },
+      "pageCoherence": null,
+      "resume": {
+        "fromStatus": "failed",
+        "fromError": "API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.",
+        "previousRequests": 30,
+        "previousCostUsd": 0.6683620000000001,
+        "skippedPaidStages": [
+          "materials",
+          "outline",
+          "sceneBriefs",
+          "prose",
+          "readabilityRepairs",
+          "richnessRepairs"
+        ]
+      },
+      "characters": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "nameEn": "Yuha"
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "nameEn": "Mom"
+        },
+        {
+          "id": "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9",
+          "name": "해니",
+          "nameEn": "Haeni"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "home",
+          "name": "유하네 집"
+        },
+        {
+          "id": "background-50e1885b-23dc-4c56-9e00-3b55ce73e633",
+          "name": "노란 스쿨버스"
+        },
+        {
+          "id": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+          "name": "유치원 앞마당"
+        }
+      ],
+      "ending": [
+        {
+          "pageNo": 11,
+          "ko": "유하가 먼저 볼을 부풀려요. 해니도 볼을 빵빵 부풀려요. 유하가 손을 쏙 내밀어요. 해니가 유하 손을 잡아요.",
+          "en": "I puff my cheeks and reach out. Haeni puffs hers and takes my hand.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+            ],
+            "where": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+            "action": "Yuha puffs his cheeks and offers his hand as Haeni mirrors him and takes it near the open kindergarten door.",
+            "emotion": "connected",
+            "timeOfDay": "afternoon",
+            "props": [
+              "bags",
+              "open door",
+              "school bus"
+            ]
+          }
+        },
+        {
+          "pageNo": 12,
+          "ko": "유하가 해니 손을 살짝 흔들어요. 해니도 손을 살짝 흔들어요. 작은 웃음 둘이 함께 들어가요.",
+          "en": "Here we go, hand in hand. Our little smiles come in too.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-d0872404-c119-4bc5-adfc-2cc6fe04ddb9"
+            ],
+            "where": "background-9cd974f4-dde3-4422-b2f3-03beb52a952e",
+            "action": "Yuha and Haeni gently swing their joined hands and step through the open kindergarten door with bags swaying on their backs.",
+            "emotion": "content",
+            "timeOfDay": "evening",
+            "props": [
+              "bags",
+              "open door",
+              "shoes"
+            ]
+          }
+        }
+      ],
+      "readingRepairMessages": [
+        "1/2차 수정 · 1쪽을 고치고 있어요.",
+        "1/2차 수정 · 2쪽을 고치고 있어요.",
+        "1/2차 수정 · 3쪽을 고치고 있어요.",
+        "1/2차 수정 · 4쪽을 고치고 있어요.",
+        "1/2차 수정 · 5쪽을 고치고 있어요.",
+        "1/2차 수정 · 6쪽을 고치고 있어요.",
+        "1/2차 수정 · 7쪽을 고치고 있어요.",
+        "1/2차 수정 · 8쪽을 고치고 있어요.",
+        "1/2차 수정 · 9쪽을 고치고 있어요.",
+        "1/2차 수정 · 10쪽을 고치고 있어요.",
+        "1/2차 수정 · 11쪽을 고치고 있어요.",
+        "1/2차 수정 · 12쪽을 고치고 있어요.",
+        "2/2차 수정 · 3쪽을 고치고 있어요.",
+        "2/2차 수정 · 5쪽을 고치고 있어요."
+      ],
+      "richnessRepairMessages": [
+        "1쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "2쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "4쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "6쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "7쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "8쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "9쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "10쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "11쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "12쪽의 글 디테일을 다듬고 있어요 (1/2)."
+      ],
+      "sceneTimes": [
+        {
+          "pageNo": 1,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 2,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 3,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 4,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 5,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 6,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 7,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 8,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 9,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 10,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 11,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 12,
+          "timeOfDay": "evening"
+        }
+      ],
+      "progress": [
+        "주제에 맞는 등장인물·배경 고르기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "줄거리 만들기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (2/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "장면 디테일 만들기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "한글·영어 전문 쓰기",
+        "그림책 작가가 쪽마다 글과 그림을 한 번에 쓰고 있어요.",
+        "쪽 나누기와 본문 검사",
+        "이야기 검사 결과를 고치고 있어요 (1/2).",
+        "1/2차 수정 · 1쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 2쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 3쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 4쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 5쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 6쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 7쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 8쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 9쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 10쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 11쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 12쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "이야기 검사 결과를 고치고 있어요 (2/2).",
+        "2/2차 수정 · 3쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2/2차 수정 · 5쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "4쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "6쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "7쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "8쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "9쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "10쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "11쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "12쪽의 글 디테일을 다듬고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "API 키 저장소를 읽을 수 없어요. 브라우저의 사이트 저장 권한을 확인해 주세요.",
+        "쪽 나누기와 본문 검사",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "글 완성 · 쪽 검수"
+      ]
+    },
+    {
+      "level": "K2",
+      "arm": "r31a",
+      "status": "text-review",
+      "error": null,
+      "workflowComplete": true,
+      "seconds": 942,
+      "requestedPrintedPages": 12,
+      "entries": 8,
+      "printedPages": 12,
+      "measured": {
+        "pages": 8,
+        "sentences": 86,
+        "rhythm": 0,
+        "eojeol": 480,
+        "averageEojeol": 5.6,
+        "longest": 7,
+        "quotes": 8,
+        "exclaims": 9,
+        "soundWords": [],
+        "pagesWithSounds": 0,
+        "enWords": 206,
+        "koIssuePages": 0,
+        "enIssuePages": 5
+      },
+      "originalRunnerMeasured": {
+        "pages": 8,
+        "sentences": 86,
+        "rhythm": 0,
+        "eojeol": 480,
+        "averageEojeol": 5.6,
+        "longest": 7,
+        "quotes": 8,
+        "exclaims": 9,
+        "soundWords": [],
+        "pagesWithSounds": 0,
+        "enWords": 206,
+        "koIssuePages": 4,
+        "enIssuePages": 5
+      },
+      "layoutAwareRows": [
+        {
+          "pageNo": 1,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 2,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 3,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 25% (최대 15%)"
+          ]
+        },
+        {
+          "pageNo": 4,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 18.8% (최대 15%)"
+          ]
+        },
+        {
+          "pageNo": 5,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 6,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 문장 길이 2 (허용 5~9)",
+            "영어 문장 길이 4 (허용 5~9)",
+            "영어 등급 외 어휘 비율 22.9% (최대 15%)"
+          ]
+        },
+        {
+          "pageNo": 7,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 41.2% (최대 15%)"
+          ]
+        },
+        {
+          "pageNo": 8,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 26.5% (최대 15%)"
+          ]
+        }
+      ],
+      "usage": {
+        "costUsd": 4.0638068,
+        "costUnknown": false,
+        "requests": 70,
+        "input": 862232,
+        "output": 59398,
+        "models": [
+          "gpt-6.1-sol"
+        ],
+        "stages": {
+          "materials": {
+            "requests": 1,
+            "input": 6834,
+            "output": 681,
+            "costUsd": 0.020478
+          },
+          "council": {
+            "requests": 8,
+            "input": 22094,
+            "output": 5056,
+            "costUsd": 0.0546072
+          },
+          "outline": {
+            "requests": 10,
+            "input": 47888,
+            "output": 23603,
+            "costUsd": 1.2277372
+          },
+          "sceneBriefs": {
+            "requests": 1,
+            "input": 23215,
+            "output": 2844,
+            "costUsd": 0.07487
+          },
+          "prose": {
+            "requests": 28,
+            "input": 128749,
+            "output": 8833,
+            "costUsd": 0.532118
+          },
+          "coherence": {
+            "requests": 5,
+            "input": 129174,
+            "output": 2276,
+            "costUsd": 0.70542
+          },
+          "pagination": {
+            "requests": 17,
+            "input": 504278,
+            "output": 16105,
+            "costUsd": 1.4485764
+          }
+        }
+      },
+      "fullBookChecks": {
+        "passed": false,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": false,
+            "violations": [
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 3,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 25% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 4,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 18.8% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 6,
+                "language": "en",
+                "message": "영어 문장 길이 2 (허용 5~9)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 6,
+                "language": "en",
+                "message": "영어 문장 길이 4 (허용 5~9)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 6,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 22.9% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 7,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 41.2% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 8,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 26.5% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 1,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 2,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 3,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 4,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 5,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 6,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 7,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 8,
+                "language": "en",
+                "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+              }
+            ]
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 2,
+            "mean": 5.29,
+            "sentenceCount": 7,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 1
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 1,
+            "mean": 5.71,
+            "sentenceCount": 7,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 2
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 5.69,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 3
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 2,
+            "mean": 5.29,
+            "sentenceCount": 7,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 4
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 2,
+            "mean": 5.22,
+            "sentenceCount": 9,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 5
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.27,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 6
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 5.87,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 7
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 1,
+            "props": [
+              "new squeaky shoes"
+            ],
+            "message": "1쪽 글에 나온 new squeaky shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 2,
+            "props": [
+              "new squeaky shoes"
+            ],
+            "message": "2쪽 글에 나온 new squeaky shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 3,
+            "props": [
+              "new shoes"
+            ],
+            "message": "3쪽 글에 나온 new shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 4,
+            "props": [
+              "lap belt"
+            ],
+            "message": "4쪽 글에 나온 lap belt이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 5,
+            "props": [
+              "new shoes"
+            ],
+            "message": "5쪽 글에 나온 new shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 6,
+            "props": [
+              "new shoes"
+            ],
+            "message": "6쪽 글에 나온 new shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 7,
+            "props": [
+              "lap belt"
+            ],
+            "message": "7쪽 글에 나온 lap belt이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 8,
+            "props": [
+              "new shoes",
+              "flower",
+              "green door"
+            ],
+            "message": "8쪽 글에 나온 new shoes, flower, green door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          }
+        ],
+        "violations": [
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 3,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 25% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 4,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 18.8% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 6,
+            "language": "en",
+            "message": "영어 문장 길이 2 (허용 5~9)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 6,
+            "language": "en",
+            "message": "영어 문장 길이 4 (허용 5~9)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 6,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 22.9% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 7,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 41.2% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 8,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 26.5% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 1,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 2,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 3,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 4,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 5,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 6,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 7,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 8,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 29개가 허용 10개를 넘었어요."
+          }
+        ],
+        "failedPageNos": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "needsRepagination": false
+      },
+      "pageCoherence": {
+        "version": 1,
+        "stage": "pages",
+        "contentFingerprint": "coherence-v1-pages-bf6ee6c9",
+        "passed": true,
+        "issues": [],
+        "repairAttempts": 0
+      },
+      "resume": {
+        "fromStatus": "failed",
+        "fromError": "fetch failed",
+        "previousRequests": 9,
+        "previousCostUsd": 0.0750852,
+        "skippedPaidStages": [
+          "materials"
+        ],
+        "repeatedPaidStages": [
+          "council"
+        ],
+        "reason": "Original runner did not serialize councilCheckpoint; previous council usage is retained and a new council is required.",
+        "runnerFix": "CLI reads local quality JSON before any paid step"
+      },
+      "characters": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "nameEn": "Yuha"
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "nameEn": "Mom"
+        },
+        {
+          "id": "character-126f8bd5-b167-4043-a38a-18b6919c97ea",
+          "name": "해니",
+          "nameEn": "Haeni"
+        },
+        {
+          "id": "character-d68f7cf1-ebc1-487b-b5f6-fdc5e74d8a5d",
+          "name": "민 기사님",
+          "nameEn": "Driver Min"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "home",
+          "name": "유하네 집"
+        },
+        {
+          "id": "background-038816fe-ce9b-489c-98f9-410d6332515a",
+          "name": "노란 스쿨버스"
+        },
+        {
+          "id": "background-0c853db4-a69f-4409-9f5e-0ce40e9ed500",
+          "name": "유치원 앞마당"
+        }
+      ],
+      "ending": [
+        {
+          "pageNo": 7,
+          "ko": "유하는 한 손을 자기 무릎에 가볍게 얹었어요. 유하는 다른 손을 해니 쪽으로 내밀었지요. 유하는 해니를 보며 폭신한 뒤꿈치를 눌렀어요. 해니는 유하 앞에서 양어깨를 높이 올렸어요. 해니는 햇빛이 닿은 볼을 벌리며 웃었지요! 유하도 해니를 보며 입을 크게 벌렸어요. 해니는 이번에 먼저 두 어깨를 올렸어요. 유하는 해니의 어깨가 내려갈 때까지 기다렸지요. 유하는 바닥에 신발 뒤꿈치를 꾹 눌렀어요. 민 기사님은 유치원 앞에서 버스를 완전히 멈췄어요. 민 기사님이 “너희는 이제 내려도 돼.”라고 말했지요. 유하와 해니는 무릎 위의 안전띠를 풀었어요. 두 아이는 버스 계단을 차례로 내려왔어요. 유하와 해니는 유치원 앞마당에 나란히 섰지요.",
+          "en": "Yuha pressed his soft shoe; Haeni's shoulders went up! They laughed; he waited and pressed at her turn. Min stopped; they undid their belts and came out. They stood together by the school path.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-126f8bd5-b167-4043-a38a-18b6919c97ea",
+              "character-d68f7cf1-ebc1-487b-b5f6-fdc5e74d8a5d"
+            ],
+            "where": "background-0c853db4-a69f-4409-9f5e-0ce40e9ed500",
+            "action": "Yuha and Haeni stand beside the stopped bus's two entrance steps, their new shoes and bags visible near the gray path.",
+            "emotion": "delighted",
+            "timeOfDay": "afternoon",
+            "props": [
+              "new shoes",
+              "bags",
+              "stopped yellow school bus"
+            ]
+          }
+        },
+        {
+          "pageNo": 8,
+          "ko": "따뜻한 저녁 햇빛이 회색 길을 비추었어요. 유하와 해니는 작은 꽃밭 옆에 섰지요. 유하는 새 신발 뒤꿈치를 꾹 눌렀어요. 해니는 유하 앞에서 두 어깨를 들썩였어요. 해니는 꽃밭 옆에서 한쪽 발을 들었지요. 유하는 해니의 들린 발을 가만히 보았어요. 유하도 해니처럼 한쪽 발을 조금 들었어요. 두 아이의 발이 바닥에 나란히 내려왔지요. 유하와 해니는 서로의 얼굴을 보며 웃었어요! 유하는 해니 옆에서 발을 가지런히 모았어요. 해니의 발도 유하의 신발 옆에 놓였지요. 두 아이는 짧은 길을 나란히 걸었어요. 유하와 해니는 초록 문 안으로 들어갔어요.",
+          "en": "Yuha pressed his shoe; Haeni's shoulders went up! Haeni put one foot up; Yuha did that too. Their feet came down with a tap; they laughed. They walked the path through the green door.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-126f8bd5-b167-4043-a38a-18b6919c97ea"
+            ],
+            "where": "background-0c853db4-a69f-4409-9f5e-0ce40e9ed500",
+            "action": "Yuha and Haeni step together through the centered rectangular green wooden door, their shoes side by side at the threshold.",
+            "emotion": "content",
+            "timeOfDay": "evening",
+            "props": [
+              "new shoes",
+              "bags",
+              "green wooden door",
+              "flowers"
+            ]
+          }
+        }
+      ],
+      "readingRepairMessages": [
+        "1/2차 수정 · 1번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 2번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 4번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 5번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 6번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 7번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 8번째 쪽을 고치고 있어요.",
+        "2/2차 수정 · 1번째 쪽을 고치고 있어요.",
+        "2/2차 수정 · 2번째 쪽을 고치고 있어요.",
+        "2/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "2/2차 수정 · 4번째 쪽을 고치고 있어요."
+      ],
+      "richnessRepairMessages": [],
+      "sceneTimes": [
+        {
+          "pageNo": 1,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 2,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 3,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 4,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 5,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 6,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 7,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 8,
+          "timeOfDay": "evening"
+        }
+      ],
+      "progress": [
+        "주제에 맞는 등장인물·배경 고르기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "줄거리 만들기",
+        "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+        "기획 회의 · 작가 봇이 스토리 바이블을 확정하고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의를 마쳤어요. 바이블대로 줄거리를 씁니다.",
+        "fetch failed",
+        "줄거리 만들기",
+        "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+        "기획 회의 · 작가 봇이 스토리 바이블을 확정하고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의를 마쳤어요. 바이블대로 줄거리를 씁니다.",
+        "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요.",
+        "장면 디테일 만들기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "한글·영어 전문 쓰기",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 1/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 2/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 3/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 4/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 5/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 6/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "전문 인과관계·상태 검사",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "모순이 확인된 비트의 문단만 수정하고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "모순이 확인된 비트의 문단만 수정하고 있어요 (2/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽 나누기와 본문 검사",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "이야기 검사 결과를 고치고 있어요 (1/2).",
+        "1/2차 수정 · 1번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 2번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 4번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 5번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 6번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 7번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 8번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "이야기 검사 결과를 고치고 있어요 (2/2).",
+        "2/2차 수정 · 1번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2/2차 수정 · 2번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2/2차 수정 · 4번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "그림을 만들기 전 전체 쪽의 사건·상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "글 완성 · 쪽 검수"
+      ]
+    },
+    {
+      "level": "K2",
+      "arm": "diet",
+      "status": "text-review",
+      "error": null,
+      "workflowComplete": true,
+      "seconds": 724,
+      "requestedPrintedPages": 12,
+      "entries": 10,
+      "printedPages": 12,
+      "measured": {
+        "pages": 10,
+        "sentences": 79,
+        "rhythm": 0,
+        "eojeol": 494,
+        "averageEojeol": 6.3,
+        "longest": 8,
+        "quotes": 7,
+        "exclaims": 5,
+        "soundWords": [
+          "사락사락",
+          "부릉부릉",
+          "살랑살랑",
+          "팔랑팔랑",
+          "또각또각"
+        ],
+        "pagesWithSounds": 7,
+        "enWords": 166,
+        "koIssuePages": 0,
+        "enIssuePages": 0
+      },
+      "originalRunnerMeasured": {
+        "pages": 10,
+        "sentences": 79,
+        "rhythm": 0,
+        "eojeol": 494,
+        "averageEojeol": 6.3,
+        "longest": 8,
+        "quotes": 7,
+        "exclaims": 5,
+        "soundWords": [
+          "사락사락",
+          "부릉부릉",
+          "살랑살랑",
+          "팔랑팔랑",
+          "또각또각"
+        ],
+        "pagesWithSounds": 7,
+        "enWords": 166,
+        "koIssuePages": 1,
+        "enIssuePages": 0
+      },
+      "layoutAwareRows": [
+        {
+          "pageNo": 1,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 2,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 3,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 4,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 5,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 6,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 7,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 8,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 9,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": []
+        },
+        {
+          "pageNo": 10,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": []
+        }
+      ],
+      "usage": {
+        "costUsd": 2.5864772,
+        "costUnknown": false,
+        "requests": 60,
+        "input": 650384,
+        "output": 40305,
+        "models": [
+          "gpt-6.1-sol"
+        ],
+        "stages": {
+          "materials": {
+            "requests": 1,
+            "input": 3348,
+            "output": 705,
+            "costUsd": 0.013746
+          },
+          "outline": {
+            "requests": 10,
+            "input": 31013,
+            "output": 15901,
+            "costUsd": 0.1832708
+          },
+          "sceneBriefs": {
+            "requests": 1,
+            "input": 14144,
+            "output": 2705,
+            "costUsd": 0.055338
+          },
+          "prose": {
+            "requests": 25,
+            "input": 90090,
+            "output": 5579,
+            "costUsd": 0.35590600000000006
+          },
+          "coherence": {
+            "requests": 5,
+            "input": 87268,
+            "output": 1273,
+            "costUsd": 0.45667399999999997
+          },
+          "pagination": {
+            "requests": 18,
+            "input": 424521,
+            "output": 14142,
+            "costUsd": 1.5215424
+          }
+        }
+      },
+      "fullBookChecks": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 2,
+            "mean": 5.33,
+            "sentenceCount": 6,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 1
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 2,
+            "mean": 7.33,
+            "sentenceCount": 6,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 2
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 1,
+            "mean": 5.86,
+            "sentenceCount": 7,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 6
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "page",
+            "offSentences": 1,
+            "mean": 6.57,
+            "sentenceCount": 7,
+            "expected": {
+              "min": 5,
+              "max": 7
+            },
+            "pageNo": 9
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 1,
+            "props": [
+              "handkerchief with a yellow tip"
+            ],
+            "message": "1쪽 글에 나온 handkerchief with a yellow tip이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 2,
+            "props": [
+              "handkerchief with a yellow tip"
+            ],
+            "message": "2쪽 글에 나온 handkerchief with a yellow tip이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 3,
+            "props": [
+              "handkerchief with a yellow tip",
+              "seat belt"
+            ],
+            "message": "3쪽 글에 나온 handkerchief with a yellow tip, seat belt이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 4,
+            "props": [
+              "handkerchief with a yellow tip"
+            ],
+            "message": "4쪽 글에 나온 handkerchief with a yellow tip이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 5,
+            "props": [
+              "handkerchief with a yellow tip",
+              "seat belt"
+            ],
+            "message": "5쪽 글에 나온 handkerchief with a yellow tip, seat belt이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 7,
+            "props": [
+              "handkerchief with a yellow tip",
+              "seat belt"
+            ],
+            "message": "7쪽 글에 나온 handkerchief with a yellow tip, seat belt이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 8,
+            "props": [
+              "handkerchief with a yellow tip",
+              "school bus",
+              "shoes"
+            ],
+            "message": "8쪽 글에 나온 handkerchief with a yellow tip, school bus, shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 9,
+            "props": [
+              "handkerchief with a yellow tip"
+            ],
+            "message": "9쪽 글에 나온 handkerchief with a yellow tip이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 10,
+            "props": [
+              "handkerchief with a yellow tip",
+              "shoes"
+            ],
+            "message": "10쪽 글에 나온 handkerchief with a yellow tip, shoes이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          }
+        ],
+        "violations": [],
+        "failedPageNos": [],
+        "needsRepagination": false
+      },
+      "pageCoherence": {
+        "version": 1,
+        "stage": "pages",
+        "contentFingerprint": "coherence-v1-pages-4e9644a6",
+        "passed": true,
+        "issues": [],
+        "repairAttempts": 1
+      },
+      "resume": null,
+      "characters": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "nameEn": "Yuha"
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "nameEn": "Mom"
+        },
+        {
+          "id": "character-61b95a02-bba9-4871-8d74-ab868896243a",
+          "name": "해니",
+          "nameEn": "Haeni"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "home",
+          "name": "유하네 집"
+        },
+        {
+          "id": "background-edbe080d-880c-45af-88eb-dcec943079cd",
+          "name": "노란 스쿨버스"
+        },
+        {
+          "id": "background-cb3cb3b8-676d-4473-928f-0227eeb5fe47",
+          "name": "유치원 앞마당"
+        }
+      ],
+      "ending": [
+        {
+          "pageNo": 9,
+          "ko": "부드러운 바람이 두 아이의 볼을 살짝 스쳤어요. 앞마당 가장자리에서는 작은 나비가 팔랑팔랑 날았어요. 해니가 엉덩이 뒤로 손을 내밀며 말했어요. “유하야, 내 꼬리도 같이 흔들어 볼까?” 해니는 손 꼬리를 두 번 흔들었어요. 유하도 손목을 움직여 손수건 꼬리를 두 번 흔들었어요. 두 아이는 서로 마주 보며 깔깔 웃었어요.",
+          "en": "Haeni made her tail go swish, swish. Yuha made his tail go that way, too.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-61b95a02-bba9-4871-8d74-ab868896243a"
+            ],
+            "where": "background-cb3cb3b8-676d-4473-928f-0227eeb5fe47",
+            "action": "Facing Haeni's waving hand-tail in the yard, Yuha swings the yellow-tipped handkerchief behind his bottom beside the parked bus.",
+            "emotion": "joyful",
+            "timeOfDay": "afternoon",
+            "props": [
+              "yellow-tipped handkerchief",
+              "parked school bus",
+              "shoes"
+            ]
+          }
+        },
+        {
+          "pageNo": 10,
+          "ko": "유하와 해니는 앞마당을 나란히 걸어갔어요. 또각또각, 두 아이의 신발 소리가 이어졌어요. 아침 햇빛이 열린 유치원 문 앞을 비췄어요. 해니가 뒤에서 손 꼬리를 한 번 흔들었어요. 유하도 노란 끝을 뒤에서 한 번 흔들었어요. 유하가 해니를 보며 웃는 얼굴로 말했어요. “해니야, 내 꼬리가 네 꼬리를 따라가!” 해니는 웃으며 손 꼬리를 다시 살랑 흔들었어요. 유하도 보드라운 손수건을 꼭 쥐고 살랑 흔들었어요. 손수건은 머리 위가 아니라 뒤에서 살랑거렸어요. 두 아이는 꼬리를 흔들며 문턱을 나란히 넘었어요. 유하와 해니가 유치원 문 안으로 함께 들어갔어요.",
+          "en": "Haeni made her tail go whoosh just once. Yuha made his yellow tail go whoosh, too! Then Yuha and Haeni went in.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-61b95a02-bba9-4871-8d74-ab868896243a"
+            ],
+            "where": "background-cb3cb3b8-676d-4473-928f-0227eeb5fe47",
+            "action": "Yuha and Haeni step across the open kindergarten doorway together, his yellow-tipped handkerchief and her hand-tail waving behind their bottoms.",
+            "emotion": "content",
+            "timeOfDay": "morning",
+            "props": [
+              "yellow-tipped handkerchief",
+              "shoes",
+              "open kindergarten door"
+            ]
+          }
+        }
+      ],
+      "readingRepairMessages": [
+        "1/2차 수정 · 2번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 4번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 5번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 6번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 7번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 8번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 9번째 쪽을 고치고 있어요.",
+        "1/2차 수정 · 10번째 쪽을 고치고 있어요.",
+        "2/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "2/2차 수정 · 5번째 쪽을 고치고 있어요."
+      ],
+      "richnessRepairMessages": [],
+      "sceneTimes": [
+        {
+          "pageNo": 1,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 2,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 3,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 4,
+          "timeOfDay": "morning"
+        },
+        {
+          "pageNo": 5,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 6,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 7,
+          "timeOfDay": "day"
+        },
+        {
+          "pageNo": 8,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 9,
+          "timeOfDay": "afternoon"
+        },
+        {
+          "pageNo": 10,
+          "timeOfDay": "morning"
+        }
+      ],
+      "progress": [
+        "주제에 맞는 등장인물·배경 고르기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "줄거리 만들기",
+        "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+        "기획 회의 · 작가 봇이 스토리 바이블을 확정하고 있어요.",
+        "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+        "기획 회의를 마쳤어요. 바이블대로 줄거리를 씁니다.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "장면 디테일 만들기",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "한글·영어 전문 쓰기",
+        "정성 모드 · 1/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 2/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 3/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 4/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 5/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "정성 모드 · 6/6비트를 쓰고 있어요.",
+        "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "전문 인과관계·상태 검사",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "모순이 확인된 비트의 문단만 수정하고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "모순이 확인된 비트의 문단만 수정하고 있어요 (2/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "자동 수정 뒤에도 남은 사건 연결 지적 1곳은 참고로 남기고 글을 완성해요.",
+        "쪽 나누기와 본문 검사",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "이야기 검사 결과를 고치고 있어요 (1/2).",
+        "1/2차 수정 · 2번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 4번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 5번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 6번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 7번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 8번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 9번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "1/2차 수정 · 10번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "이야기 검사 결과를 고치고 있어요 (2/2).",
+        "2/2차 수정 · 3번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "2/2차 수정 · 5번째 쪽을 고치고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+        "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+        "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "그림을 만들기 전 전체 쪽의 사건·상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "모순이 확인된 쪽만 수정하고 있어요 (1/2).",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "그림을 만들기 전 전체 쪽의 사건·상태를 검사하고 있어요.",
+        "이야기 글을 생성하고 있어요.",
+        "이야기 생성 응답을 받았어요.",
+        "글 완성 · 쪽 검수"
+      ]
+    }
+  ],
+  "completed": 4,
+  "attempted": 4,
+  "totalCostUsdFromTokens": 9.263782,
+  "totalRequests": 202
+}
