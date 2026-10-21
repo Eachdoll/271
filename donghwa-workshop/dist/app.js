@@ -54,6 +54,10 @@ import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
   bookPricingUnknown,
   estimatedCostText,
+  canAlignEnglish,
+  estimateAlignEnglish,
+  requestPageEnglish,
+  recordPageTextUsage,
 } from "./story-generation/page-tools.js";
 import {
   createCloudSync,
@@ -1748,7 +1752,7 @@ function editorPage() {
     return libraryPage();
   }
   const p = draft.pages[editPage];
-  return `${heading("이야기 다듬기", "한 쪽씩 살펴보고, 우리 아이에게 어울리는 말로 바꿔 주세요.", `<span class="small-label">부모 미확정 · 초안</span>`)}${renderGenerationControls(draft)}${renderChecksPanel(draft, { tab: checksTab, details: { reading: renderReadingCheck(draft), events: renderStoryQuality(draft), richness: renderRichnessQuality(draft), coherence: renderStoryCoherence(draft.pageCoherence, { dirty: !isCoherenceCurrent(draft.pageCoherence, { outline: draft.outline, prose: draft.prose, pagination: currentBookPagination(draft), stage: "pages" }) }) } })}<div class="editor-title"><input id="book-title" maxlength="80" aria-label="책 제목" value="${esc(draft.title)}"></div><div class="editor-layout"><div class="page-rail">${draft.pages.map((p, i) => `<button class="page-thumb ${i === editPage ? "active" : ""}" data-action="edit-page" data-page="${i}" aria-label="${esc(unitLabel(draft, i))} 편집">${illustration(draft, i)}<span>${esc(unitLabel(draft, i))}</span></button>`).join("")}</div><section class="panel"><div class="editor-main"><div class="editor-art"><div class="editor-picturebook text-below">${illustration(draft, editPage)}<div class="page-typeset-preview" aria-label="그림 아래 본문 미리보기">${draft.language !== "en" ? `<p lang="ko" data-typeset="ko">${esc(p.ko ?? p.textKo ?? "")}</p>` : ""}${draft.language !== "ko" ? `<p lang="en" data-typeset="en">${esc(p.en ?? p.textEn ?? "")}</p>` : ""}</div></div><div class="editor-tools">${btn("샘플 그림 변형", "regenerate-art", "outline", "refresh")}${btn("글 포함 인쇄 미리보기", "preview-draft-print", "outline", "print")}</div></div><div class="editor-text"><div class="field"><label for="page-ko">${esc(unitLabel(draft, editPage))} · 한글</label><textarea id="page-ko">${esc(p.ko)}</textarea></div><div class="field"><label for="page-en">English · ${editPage + 1}</label><textarea id="page-en">${esc(p.en)}</textarea></div>${btn("이야기 글 다시 다듬기", "regenerate-text", "outline", "refresh")}<span class="small-label">${p.imageAssetId ? "World 엔진으로 만든 그림입니다." : "현재 그림은 SVG 샘플입니다. 커버 화풍은 World 엔진으로 장면을 생성해 주세요."}</span></div></div><div class="editor-bottom"><span>${icon("check")}그림 아래에 본문이 인쇄됩니다. 확정 전에도 인쇄 미리보기를 볼 수 있어요.</span><label class="audio-cache-check"><input type="checkbox" id="cache-audio-approval" checked>확정 시 쪽별 음원 저장 · OpenAI 키가 있을 때만 · 예상 $${estimateBookAudio(draft).costUsd.toFixed(3)}</label>${btn("확정하고 책장에 저장", "approve-book", "primary", "check")}</div></section></div>`;
+  return `${heading("이야기 다듬기", "한 쪽씩 살펴보고, 우리 아이에게 어울리는 말로 바꿔 주세요.", `<span class="small-label">부모 미확정 · 초안</span>`)}${renderGenerationControls(draft)}${renderChecksPanel(draft, { tab: checksTab, details: { reading: renderReadingCheck(draft), events: renderStoryQuality(draft), richness: renderRichnessQuality(draft), coherence: renderStoryCoherence(draft.pageCoherence, { dirty: !isCoherenceCurrent(draft.pageCoherence, { outline: draft.outline, prose: draft.prose, pagination: currentBookPagination(draft), stage: "pages" }) }) } })}<div class="editor-title"><input id="book-title" maxlength="80" aria-label="책 제목" value="${esc(draft.title)}"></div><div class="editor-layout"><div class="page-rail">${draft.pages.map((p, i) => `<button class="page-thumb ${i === editPage ? "active" : ""}" data-action="edit-page" data-page="${i}" aria-label="${esc(unitLabel(draft, i))} 편집">${illustration(draft, i)}<span>${esc(unitLabel(draft, i))}</span></button>`).join("")}</div><section class="panel"><div class="editor-main"><div class="editor-art"><div class="editor-picturebook text-below">${illustration(draft, editPage)}<div class="page-typeset-preview" aria-label="그림 아래 본문 미리보기">${draft.language !== "en" ? `<p lang="ko" data-typeset="ko">${esc(p.ko ?? p.textKo ?? "")}</p>` : ""}${draft.language !== "ko" ? `<p lang="en" data-typeset="en">${esc(p.en ?? p.textEn ?? "")}</p>` : ""}</div></div><div class="editor-tools">${btn("샘플 그림 변형", "regenerate-art", "outline", "refresh")}${btn("글 포함 인쇄 미리보기", "preview-draft-print", "outline", "print")}</div></div><div class="editor-text"><div class="field"><label for="page-ko">${esc(unitLabel(draft, editPage))} · 한글</label><textarea id="page-ko">${esc(p.ko)}</textarea></div><div class="field"><label for="page-en">English · ${editPage + 1}</label><textarea id="page-en">${esc(p.en)}</textarea></div>${btn("이야기 글 다시 다듬기", "regenerate-text", "outline", "refresh")}${canAlignEnglish(draft) ? btn(`영어를 한글에 맞추기 · ${estimatedCostText(estimateAlignEnglish(state, draft).usd, estimateAlignEnglish(state, draft).pricingUnknown)}`, "align-english", "outline", "refresh") : ""}<span class="small-label">${p.imageAssetId ? "World 엔진으로 만든 그림입니다." : "현재 그림은 SVG 샘플입니다. 커버 화풍은 World 엔진으로 장면을 생성해 주세요."}</span></div></div><div class="editor-bottom"><span>${icon("check")}그림 아래에 본문이 인쇄됩니다. 확정 전에도 인쇄 미리보기를 볼 수 있어요.</span><label class="audio-cache-check"><input type="checkbox" id="cache-audio-approval" checked>확정 시 쪽별 음원 저장 · OpenAI 키가 있을 때만 · 예상 $${estimateBookAudio(draft).costUsd.toFixed(3)}</label>${btn("확정하고 책장에 저장", "approve-book", "primary", "check")}</div></section></div>`;
 }
 function buildStoryResultBook(result) {
   const same =
@@ -3375,6 +3379,44 @@ async function onAction(e) {
       (draft.pages[editPage].artVariant || 0) + 1;
     render();
     toast("이 쪽의 그림 구도를 바꿨어요.");
+    return;
+  }
+  if (a === "align-english") {
+    // R30.1 영어 맞추기: this page's English rewritten to match its Korean (the price is on the button).
+    syncDraft();
+    const target = draft,
+      index = editPage;
+    if (!canAlignEnglish(target)) {
+      toast("이 책은 영어 맞추기를 할 수 없어요. 영어 칸을 직접 고쳐 주세요.");
+      return;
+    }
+    el.disabled = true;
+    toast("영어를 한글에 맞추고 있어요…");
+    try {
+      const result = await requestPageEnglish(state, target, index);
+      recordPageTextUsage(state, target, result.row);
+      const page = target.pages[index];
+      page.en = result.en;
+      if (target.pagination) {
+        page.textEn = result.en;
+        if (target.pagination.pages[index]) target.pagination.pages[index].textEn = result.en;
+      }
+      target.readingCheck = null;
+      save();
+      render();
+      toast(
+        result.warnings?.length
+          ? `영어를 맞췄어요 · 참고: ${result.warnings[0]}`
+          : "영어를 한글에 맞췄어요.",
+      );
+    } catch (error) {
+      if (error?.usageRow) {
+        recordPageTextUsage(state, target, error.usageRow);
+        save();
+      }
+      el.disabled = false;
+      toast(error?.message || String(error));
+    }
     return;
   }
   if (a === "regenerate-text") {

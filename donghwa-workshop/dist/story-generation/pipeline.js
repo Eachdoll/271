@@ -83,7 +83,7 @@ import {
   inspectArc,
 } from "./arc-rules.js";
 import { hasPromptPolicy } from "./prompt-policy.js";
-import { writeProseByBeat } from "./beat-writer.js";
+import { writeProseByBeat, checkBeatText, hasRefrain, beatBudgets } from "./beat-writer.js";
 import {
   hasOrchestrationPolicy,
   orchestrationPolicy,
@@ -2473,6 +2473,203 @@ function beatWriterRules(input, outline) {
     ko: `FROZEN KOREAN LEVEL (binding): ${JSON.stringify(ko)}. Character proper names are exempt.`,
     en: `FROZEN ENGLISH LEVEL (binding): ${JSON.stringify(en)}. ${en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence. " : ""}English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, outline))}. Character proper names are exempt.`,
   };
+}
+const ALIGN_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["en"],
+  properties: { en: { type: "string", maxLength: 4000 } },
+});
+const ALIGN_ATTEMPTS = 2;
+const fold = (text, max = 4000) =>
+  String(text ?? "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, max);
+/**
+ * R30.1 영어 맞추기: the parent edited the Korean of one page (or one prose
+ * paragraph); rewrite ONLY its English so it tells the same events at the
+ * frozen English level. The Korean is never sent back or changed. Context:
+ * the text before the edit (what changed), the neighbouring English (flow),
+ * the beat and its scene brief, the names, and the refrain line when the old
+ * English carried it. One more try when the deterministic check (sentence
+ * count in `range`, long sentences, the refrain) fails; after that the
+ * closer attempt is returned with its notes (meta.warnings), never an error.
+ * request: {ko, previousKo?, previousEn?, before?: string[], after?: string[],
+ * beatIndex?, brief?, range: {min, max, target}, refrainEn?}.
+ */
+export async function alignEnglishText(request = {}, outline, source, options = {}) {
+  const input = normalizeStoryInput(source),
+    spec = input.specs?.en || {},
+    ko = fold(request.ko),
+    previousKo = fold(request.previousKo),
+    previousEn = fold(request.previousEn),
+    range = request.range || { min: 1, max: 4, target: 2 };
+  if (!ko) throw new Error("맞출 한글 글이 비어 있어요.");
+  abort(options.signal);
+  if (demo(options))
+    throw new Error("데모 글은 영어를 다시 쓰지 않아요. 영어 칸을 직접 고쳐 주세요.");
+  const rules = beatWriterRules(input, outline),
+    beat = (outline?.beats || []).find((row) => row.index === request.beatIndex),
+    refrainEn = fold(request.refrainEn, 150),
+    needsRefrain = !!refrainEn && hasRefrain(previousEn, refrainEn),
+    cast = (input.characters || [])
+      .filter((c) => c?.name)
+      .map((c) => `${c.name} = ${c.nameEn || c.name}`)
+      .join(", ");
+  const system = `You are the English author of this bilingual picture book. Rewrite ONLY the English text of one passage so it tells exactly the same events, characters, objects, dialogue turns and feelings as the supplied Korean, which the parent has just edited and is final. Write natural original English at ${spec.id || "the frozen level"}, not a word-for-word translation; keep each character's English name. Never add or drop an event, never change the Korean, no notes or labels. Reply in JSON only.\n${rules.common}\n${rules.en}`;
+  const engine = await engineFor(options);
+  abort(options.signal);
+  const requests = [];
+  let best = null,
+    retry = null,
+    meta = {};
+  for (let attempt = 0; attempt < ALIGN_ATTEMPTS; attempt++) {
+    const user = [
+      `[Korean — final, match this]\n${ko}`,
+      previousKo && previousKo !== ko
+        ? `[Before the parent's edit]\nKorean: ${previousKo}\nEnglish: ${previousEn || "(none)"}\nKeep what still matches; change what the Korean edit changed.`
+        : previousEn
+          ? `[Current English — out of date]\n${previousEn}`
+          : "",
+      (request.before || []).filter(Boolean).length
+        ? `[English just before]\n${request.before.filter(Boolean).map((row) => fold(row, 1200)).join("\n")}`
+        : "",
+      (request.after || []).filter(Boolean).length
+        ? `[English right after]\n${request.after.filter(Boolean).map((row) => fold(row, 1200)).join("\n")}`
+        : "",
+      beat ? `[Beat ${beat.index} ${beat.type}] ${fold(beat.summary, 400)}` : "",
+      request.brief ? `[Scene details] ${fold(JSON.stringify(request.brief), 800)}` : "",
+      cast ? `[Names] ${cast}` : "",
+      `[Length] about ${range.target} sentences (${range.min}-${range.max}), each about ${spec.wordsPerSentence?.max || 8} words or fewer.`,
+      needsRefrain ? `[Refrain — keep this exact line once] ${refrainEn}` : "",
+      retry
+        ? `[Problems with the last try — fix them]\n${retry.problems.join("\n")}\n[Last try]\n${retry.en}`
+        : "",
+      `[Output] JSON only. {"en":"the English text"}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    let response;
+    try {
+      response = await engine.complete({
+        system,
+        user,
+        jsonSchema: ALIGN_SCHEMA,
+        temperature: 0.4,
+        maxTokens: 1500,
+        signal: options.signal,
+      });
+    } catch (error) {
+      if (requests.length && !error.usage)
+        error.usage = mergeStoryUsage(requests);
+      throw error;
+    }
+    meta = {
+      engineId: engine.id || options.engineId || "unknown",
+      model: response.meta?.model || null,
+      ...(typeof (response.meta?.modelId || response.meta?.model) === "string"
+        ? { modelId: String(response.meta.modelId || response.meta.model).slice(0, 200) }
+        : {}),
+    };
+    requests.push({ usage: usageOf(response), meta: { requests: response.meta?.requests || 1 } });
+    const data =
+      response.json !== undefined ? response.json : parseJsonLenient(response.text);
+    const en = fold(data && typeof data === "object" ? data.en : response.text);
+    if (!en) continue;
+    const check = checkBeatText(en, "en", range, spec, {
+      refrain: refrainEn,
+      needsRefrain,
+    });
+    if (!best || check.distance < best.check.distance) best = { en, check };
+    if (!check.problems.length) break;
+    retry = { problems: check.problems, en };
+  }
+  const usage = mergeStoryUsage(requests),
+    count = requests.reduce((sum, r) => sum + (Number(r.meta.requests) || 1), 0);
+  if (!best) {
+    const error = new StoryValidationError("alignEnglish", [
+      "영어 글을 받지 못했어요. 다시 시도해 주세요.",
+    ]);
+    error.usage = usage;
+    error.meta = { stage: "alignEnglish", ...meta, requests: count };
+    throw error;
+  }
+  return {
+    data: { en: best.en },
+    usage,
+    meta: {
+      stage: "alignEnglish",
+      ...meta,
+      requests: count,
+      demo: false,
+      attempts: requests.length,
+      warnings: [...best.check.problems],
+    },
+  };
+}
+/**
+ * R30.1 영어 맞추기 for the prose stage: the English of the beat whose Korean
+ * paragraph `index` belongs to is rewritten to match that beat's Korean (all
+ * its Korean paragraphs); the beat's English becomes one paragraph. Model:
+ * the beat writer's (정성 모드) or the quality 'prose' role.
+ */
+export async function alignProseParagraph(prose, index, outline, source, options = {}) {
+  const input = normalizeStoryInput(source);
+  if (demo(options))
+    throw new Error("데모 글은 영어를 다시 쓰지 않아요. 영어 문단을 직접 고쳐 주세요.");
+  const koRows = paragraphs(prose?.ko),
+    enRows = paragraphs(prose?.en),
+    koLabels = paragraphBeatLabels(prose, "ko", outline),
+    enLabels = paragraphBeatLabels(prose, "en", outline),
+    beatIndex = koLabels[index];
+  if (!Number.isInteger(index) || !koRows[index] || beatIndex === undefined)
+    throw new Error("맞출 한글 문단을 골라 주세요.");
+  const enAt = enLabels.flatMap((label, i) => (label === beatIndex ? [i] : [])),
+    first = enAt.length ? enAt[0] : enLabels.findIndex((label) => label > beatIndex),
+    beats = outline?.beats || [],
+    position = beats.findIndex((beat) => beat.index === beatIndex),
+    budget = position >= 0 ? beatBudgets(outline, input)[position]?.en : null,
+    selected = options.qualityEngines?.beatWriter || options.qualityEngines?.prose,
+    engineOptions = selected?.complete
+      ? { ...options, engine: selected }
+      : selected
+        ? { ...options, ...selected, engine: undefined }
+        : options;
+  const result = await alignEnglishText(
+    {
+      ko: koRows.filter((_, i) => koLabels[i] === beatIndex).join(" "),
+      previousEn: enAt.map((i) => enRows[i]).join(" "),
+      before: enRows.slice(Math.max(0, (first < 0 ? enRows.length : first) - 2), first < 0 ? enRows.length : first),
+      after: enAt.length ? enRows.slice(enAt.at(-1) + 1, enAt.at(-1) + 2) : [],
+      beatIndex,
+      brief: (sceneBriefRows(options.sceneBriefs) || []).find((row) => Number(row?.beatIndex) === Number(beatIndex)),
+      range: budget || { min: 1, max: 6, target: 3 },
+      refrainEn: options.refrainEn || "",
+    },
+    outline,
+    input,
+    engineOptions,
+  );
+  const nextRows = [],
+    nextLabels = [];
+  enRows.forEach((row, i) => {
+    if (enAt.includes(i)) {
+      if (i !== enAt[0]) return;
+      nextRows.push(result.data.en);
+    } else nextRows.push(row);
+    nextLabels.push(enLabels[i]);
+  });
+  if (!enAt.length) {
+    const at = first < 0 ? nextRows.length : first;
+    nextRows.splice(at, 0, result.data.en);
+    nextLabels.splice(at, 0, beatIndex);
+  }
+  const next = clone(prose);
+  next.en = nextRows.join("\n\n");
+  next.paragraphBeats = { ...(clone(prose.paragraphBeats) || {}), ko: koLabels, en: nextLabels };
+  result.data = assertValid("prose", next, input, outline);
+  return result;
 }
 async function writeBeatProse(outline, input, options) {
   const result = await writeProseByBeat(
