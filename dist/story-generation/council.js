@@ -196,7 +196,7 @@ export function conditionBlock(input) {
     `등장인물(고정, 새 인물 금지): ${cast.join(", ") || "없음"}`,
     `장소(고정, 새 장소 금지): ${places.join(", ") || "없음"} — 처음은 집${custom ? "" : ", 끝도 집"}, 중간은 집 아닌 곳 2곳 이상`,
     "금지: 무서운 장면·벌주기·비교·놀림·잔인함. 교훈을 말로 하지 않는다.",
-    /^K[12]$/u.test(koLevel) && input?.language !== "en"
+    /^K[12]$/u.test(koLevel) && input?.language !== "en" && input?.promptDiet?.version !== 1
       ? "소리말 후렴: 핵심 물건이나 사건이 내는 의성어 한 줄을 비트 3곳에 둔다."
       : "",
   ].filter(Boolean);

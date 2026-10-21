@@ -372,6 +372,7 @@ export function newStoryTextEstimate(settings, { k1Book = false } = {}) {
       settings,
       pageCount: 12,
       editor: true,
+      diet: true,
       k1Book: true,
       writerTier: settings.writerTier === "upper" ? "upper" : "medium",
     });
@@ -380,6 +381,7 @@ export function newStoryTextEstimate(settings, { k1Book = false } = {}) {
     pageCount: 12,
     editor: true,
     council: true,
+    diet: true,
     ...(settings.orchestration !== false
       ? {
           orchestration: true,
@@ -396,7 +398,9 @@ function priceSummary(settings) {
       .reduce((n, stage) => n + stage.requestCount, 0);
   const prose = estimate.orchestration
     ? ` + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 ${writer}회·${settings.writerTier === "upper" ? "최고" : "중간"} 모델) + 기획 회의·편집자 통독`
-    : estimate.quality
+    : estimate.diet
+      ? " + 한글·영어 전문 1회 + 기획 회의·편집자 통독"
+      : estimate.quality
     ? estimate.twoPass
       ? " + 한글·영어 풍부화·단순화 4회"
       : " + 한글·영어 목표 수준 전문 2회"

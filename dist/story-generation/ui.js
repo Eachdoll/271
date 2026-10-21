@@ -43,6 +43,7 @@ import { withPageRhythm } from "../page-rhythm.js";
 import { withShortSentences } from "../short-sentences.js";
 import { k1Policy, isK1Draft } from "./k1-book.js";
 import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
+import { promptDiet } from "./prompt-diet.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -981,6 +982,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       ...(orchestrationPolicyFor(state) ? { orchestrationPolicy: orchestrationPolicyFor(state) } : {}),
       // R23: tidier requests (default rules back, bible over seed, lean canon).
       promptPolicy: promptPolicy(),
+      // R31b: lean requests — no counters, no spec JSON, no plot formula.
+      promptDiet: promptDiet(),
     },
     readingLevels,
     world,
@@ -2199,6 +2202,7 @@ async function writeProse(s, { hybridFinal = false } = {}) {
     d.input.storyQuality?.enabled ||
     hasOrchestrationPolicy(d.input) ||
     d.input?.k1Policy?.version === 1 ||
+    d.input?.promptDiet?.version === 1 ||
     d.textSettings.storyEnrichment === false
   ) {
     saveDraft(s);

@@ -93,8 +93,9 @@ test('estimates count per-language paragraphs, mandatory brief, and additional r
  assert.ok(disabled.costUsd<estimateStoryTextCost().costUsd);
  const local=estimateStoryTextCost({settings:{engine:'local'}});assert.equal(local.costUsd,0);assert.equal(local.requestCount,20);
  // R30: the summary prices a new story as it is frozen (writers' room, editor round, 정성 모드 while on).
- const html=renderTextSettings({settings:{textGeneration:{orchestration:false}}});assert.match(html,/장면 브리프 1회/);assert.match(html,/한글·영어 풍부화·단순화 4회/);assert.match(html,/전체 일관성 검사 2회/);assert.match(html,/아이 시뮬레이터 2회/);assert.match(html,/최대 2회 재작성/);assert.match(html,/이미지 요금이 별도/);
- assert.match(renderTextSettings({settings:{textGeneration:{orchestration:false},storyQuality:{enabled:false}}}),/문단 풍부화 14회 포함/);
+ // R31b: a new story is on the prompt diet — with 정성 모드 off its prose is the one app-path call, not the package's 4 passes.
+ const html=renderTextSettings({settings:{textGeneration:{orchestration:false}}});assert.match(html,/장면 브리프 1회/);assert.match(html,/한글·영어 전문 1회/);assert.doesNotMatch(html,/풍부화·단순화 4회/);assert.match(html,/전체 일관성 검사 2회/);assert.match(html,/아이 시뮬레이터 2회/);assert.match(html,/최대 2회 재작성/);assert.match(html,/이미지 요금이 별도/);
+ assert.match(renderTextSettings({settings:{textGeneration:{orchestration:false},storyQuality:{enabled:false}}}),/한글·영어 전문 1회/, 'R31b: no per-paragraph enrichment pass on the diet');
  const r30=renderTextSettings({settings:{}});assert.match(r30,/정성 모드\(성장 설계·줄거리 후보 3개, 비트별 작가 약 20회·중간 모델\)/);assert.doesNotMatch(r30,/풍부화·단순화/);
  assert.match(renderTextSettings({settings:{textGeneration:{writerTier:'upper'}}}),/비트별 작가 약 20회·최고 모델/);
 });

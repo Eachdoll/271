@@ -91,13 +91,15 @@ export const REVISION_SCHEMA = {
 
 /** R19: the story-spine aspects only for drafts frozen with the arc policy. */
 export function revisionAspects(input) {
+  // R31b: a diet draft's read-through looks for no suspense and no spine aspects.
+  if (input?.promptDiet?.version === 1) return REVISION_ASPECTS.filter((aspect) => aspect !== "suspense");
   return hasArcPolicy(input)
     ? [...REVISION_ASPECTS, ...ARC_REVISION_ASPECTS]
     : [...REVISION_ASPECTS];
 }
 /** The request schema for a draft; byte-identical to REVISION_SCHEMA without the arc policy. */
 export function revisionSchema(input) {
-  if (!hasArcPolicy(input)) return REVISION_SCHEMA;
+  if (!hasArcPolicy(input) && input?.promptDiet?.version !== 1) return REVISION_SCHEMA;
   const schema = structuredClone(REVISION_SCHEMA);
   schema.properties.report.properties.issues.items.properties.aspect.enum =
     revisionAspects(input);
