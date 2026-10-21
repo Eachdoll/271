@@ -593,6 +593,11 @@ export async function inspectChildStory(
       };
   const cheapOptions = {
     ...(options.qualityEngines?.cheap || options),
+    // A selected role carries its model, but not the caller's headless key source.
+    // Retain that source instead of falling back to the browser PIN vault.
+    ...(typeof options.credentialFor === "function"
+      ? { credentialFor: options.credentialFor }
+      : {}),
     signal: options.signal,
   };
   let enginePromise;
