@@ -5254,3 +5254,25 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
   flex-wrap: wrap;
   gap: 6px;
 }
+/* 2026-10-21: a beat's other drawer places, folded under the usual ones. */
+.story-place-more {
+  margin-top: 8px;
+}
+.story-place-more > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+
+/* R29 정성 모드: candidate angle and tension bars in the parent's choice. */
+.pitch-tension {
+  display: block;
+  font-size: 12px;
+  color: var(--text-2);
+  letter-spacing: 1px;
+}
+.council-design {
+  font-size: 13px;
+  margin: 4px 0 8px;
+}

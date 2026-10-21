@@ -31,6 +31,7 @@ export function finalizeBookRecords(state, book) {
 export const TEXT_JOURNALS = Object.freeze([
   "qualityCheckpoint",
   "councilCheckpoint",
+  "writerCheckpoint",
   "enrichmentCheckpoint",
   "revisionCheckpoint",
   "childGateCheckpoint",

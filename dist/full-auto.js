@@ -43,6 +43,7 @@ import { getTextGenerationSettings } from "./text-generation/settings-ui.js";
 import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  resolveBeatWriterSettings,
   estimateStoryTextCost,
   estimateTextCost,
   freezeReviewTier,
@@ -74,6 +75,7 @@ import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
+import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -389,6 +391,15 @@ export function estimateFullAutoCost(
       ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
       // R20: new jobs (and jobs frozen with the policy) include the writers' room.
       ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : { council: true }),
+      // R29: 정성 모드 jobs (and a new one while the parent setting is on).
+      // R30: priced with the beat writer's frozen (or chosen) model.
+      ...(job
+        ? hasOrchestrationPolicy(job.input)
+          ? { orchestration: true, writerTier: job.input.orchestrationPolicy.writerTier }
+          : {}
+        : orchestrationPolicyFor(state)
+          ? { orchestration: true, writerTier: orchestrationPolicyFor(state).writerTier }
+          : {}),
       // R12: an openings wizard is sized from its v4 specs ({} for page books).
       ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
@@ -469,7 +480,7 @@ export function estimateFullAutoCost(
     ...pricingFlags,
   };
 }
-export async function preflightFullAuto(state, job) {
+export async function preflightFullAuto(state, job, { credentials = getCredential } = {}) {
   if (!job.allowNew) {
     const places = preflightOutlineLocations({
       backgrounds: active(state.backgrounds),
@@ -508,7 +519,7 @@ export async function preflightFullAuto(state, job) {
       config.transport === "proxy"
     )
       continue;
-    if (!(await getCredential(engine)))
+    if (!(await credentials(engine)))
       throw Error(`${engine} 글 엔진의 API 키를 부모 설정에 저장해 주세요.`);
   }
   // A text-only hold buys no sheet or image, so it needs no image key yet.
@@ -519,7 +530,7 @@ export async function preflightFullAuto(state, job) {
     !["local", "sample"].includes(job.imageEngine) &&
     !config.proxyEndpoint &&
     config.transport !== "proxy" &&
-    !(await getCredential(job.imageEngine))
+    !(await credentials(job.imageEngine))
   )
     throw Error("이미지 엔진의 API 키를 부모 설정에 저장해 주세요.");
   if (job.imageEngine === "local" && (!config.endpoint || !config.workflow))
@@ -530,7 +541,7 @@ export async function preflightFullAuto(state, job) {
 async function generateAutoBackground(
   state,
   background,
-  { signal, frozenImageModel } = {},
+  { signal, frozenImageModel, credentials = getCredential } = {},
 ) {
   const world = getActiveWorld(state),
     config = {
@@ -543,7 +554,7 @@ async function generateAutoBackground(
   if (frozenImageModel) config.model = frozenImageModel;
   else if (frozenImageModel === null) delete config.model;
   if (!config.proxyEndpoint && config.transport !== "proxy")
-    config.apiKey = await getCredential(world.imageEngine);
+    config.apiKey = await credentials(world.imageEngine);
   const request = backgroundSheetRequest(state, background, {
       quality: "final",
     }),
@@ -925,9 +936,13 @@ export async function runFullAuto(
     onProgress = () => {},
     buildBook,
     operations = {},
+    // S1: where API keys come from (the PIN vault by default). A server
+    // runner passes its own source; the browser's requests are unchanged.
+    credentials,
   } = {},
 ) {
   const ops = { ...DEFAULT_OPS, ...operations };
+  const keySource = credentials ? { credentials } : {};
   if (job.status === "running")
     throw Error("이 자동 작업이 이미 실행 중이에요.");
   // An unknown hold must never fall through to buying images.
@@ -979,10 +994,27 @@ export async function runFullAuto(
                 role,
                 job.input.storyQuality || {},
               ),
-        ]),
+        ]).concat(
+          // R30 정성 모드: the beat writer (medium unless the job froze "upper").
+          hasOrchestrationPolicy(job.input)
+            ? [
+                [
+                  "beatWriter",
+                  job.demo
+                    ? demoEngine()
+                    : resolveBeatWriterSettings(
+                        job.textSettings,
+                        job.input.storyQuality || {},
+                        job.input.orchestrationPolicy.writerTier,
+                      ),
+                ],
+              ]
+            : [],
+        ),
       ),
       qualityCheckpoint: job.qualityCheckpoint,
       councilCheckpoint: job.councilCheckpoint,
+      ...(job.writerCheckpoint ? { writerCheckpoint: job.writerCheckpoint } : {}),
       // R22: park after the room for the parent's choice; a resumed run
       // carries that choice and what the parent did to earlier meetings.
       ...(job.councilReview === true
@@ -1018,12 +1050,15 @@ export async function runFullAuto(
       storyEnrichment: job.textSettings.storyEnrichment !== false,
       richness: job.textSettings.storyEnrichment !== false,
       enrichmentCheckpoint: job.enrichmentCheckpoint,
+      ...(credentials ? { credentialFor: credentials } : {}),
       onProgress: (p) => report(p.message || label),
       onCheckpoint: async (cp) => {
         if (cp.qualityCheckpoint)
           job.qualityCheckpoint = clone(cp.qualityCheckpoint);
         if (cp.councilCheckpoint)
           job.councilCheckpoint = clone(cp.councilCheckpoint);
+        if (cp.writerCheckpoint)
+          job.writerCheckpoint = clone(cp.writerCheckpoint);
         if (cp.childGateCheckpoint)
           job.childGateCheckpoint = clone(cp.childGateCheckpoint);
         if (cp.coherence) {
@@ -1065,6 +1100,8 @@ export async function runFullAuto(
         job.qualityCheckpoint = clone(error.qualityCheckpoint);
       if (error.councilCheckpoint)
         job.councilCheckpoint = clone(error.councilCheckpoint);
+      if (error.writerCheckpoint)
+        job.writerCheckpoint = clone(error.writerCheckpoint);
       if (error.childGateCheckpoint)
         job.childGateCheckpoint = clone(error.childGateCheckpoint);
       if (error.prose) job.prose = clone(error.prose);
@@ -1084,7 +1121,7 @@ export async function runFullAuto(
   try {
     assertJobWorld(state, job);
     abort(signal);
-    await ops.preflight(state, job);
+    await ops.preflight(state, job, keySource);
     // A stop pressed during the preflight's key reads ends the run here, 'paused'.
     abort(signal);
     job.status = "running";
@@ -1185,6 +1222,7 @@ export async function runFullAuto(
           ops.backgroundSheet(state, background, {
             signal,
             ...frozenModelOption(job),
+            ...keySource,
           }),
         (result) => {
           const world = getActiveWorld(state),
@@ -1239,6 +1277,7 @@ export async function runFullAuto(
         councilPolicy: _freshCouncil,
         promptPolicy: _freshPrompt,
         councilRecent: _freshRecent,
+        orchestrationPolicy: _freshOrchestration,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1261,6 +1300,9 @@ export async function runFullAuto(
           : {}),
         ...(job.input?.councilRecent
           ? { councilRecent: clone(job.input.councilRecent) }
+          : {}),
+        ...(job.input?.orchestrationPolicy
+          ? { orchestrationPolicy: clone(job.input.orchestrationPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
@@ -1324,11 +1366,17 @@ export async function runFullAuto(
           },
           opts("prose"),
         ),
-      (r) => (job.prose = r.data),
+      (r) => {
+        job.prose = r.data;
+        // R30: the beat writer's report (attempts, anchor, voice card, notes).
+        if (r.meta?.writer) job.writerReport = clone(r.meta.writer);
+      },
     );
     if (
       job.textSettings.storyEnrichment !== false &&
-      !job.input.storyQuality?.enabled
+      !job.input.storyQuality?.enabled &&
+      // R30: the beat writer already wrote each beat with its brief.
+      !hasOrchestrationPolicy(job.input)
     )
       await step(
         "enrichment",

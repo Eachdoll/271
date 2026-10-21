@@ -83,6 +83,15 @@ import {
   inspectArc,
 } from "./arc-rules.js";
 import { hasPromptPolicy } from "./prompt-policy.js";
+import { writeProseByBeat } from "./beat-writer.js";
+import {
+  hasOrchestrationPolicy,
+  orchestrationPolicy,
+  outlineTensionSchema,
+  outlineTensionRule,
+  settleOutlineTension,
+  tensionRange,
+} from "./orchestration.js";
 import {
   hasCouncilPolicy,
   runStoryCouncil,
@@ -362,6 +371,10 @@ function modelVisibleInput(source) {
     const { councilRecent, ...rest } = input;
     input = rest;
   }
+  if (input?.orchestrationPolicy) {
+    const { orchestrationPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -492,6 +505,10 @@ export function normalizeStoryInput(input = {}) {
     ...(hasArcPolicy(input) ? { arcPolicy: { version: 1 } } : {}),
     ...(hasCouncilPolicy(input) ? { councilPolicy: { version: 1 } } : {}),
     ...(hasPromptPolicy(input) ? { promptPolicy: { version: 1 } } : {}),
+    // R29: 정성 모드 (and the beat writer's tier).
+    ...(hasOrchestrationPolicy(input)
+      ? { orchestrationPolicy: orchestrationPolicy(input.orchestrationPolicy) }
+      : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -589,8 +606,13 @@ async function resolveEngine(options) {
     !config.proxyUrl &&
     config.transport !== "proxy"
   ) {
-    const { getCredential } = await import("../image-generation/vault.js");
-    config.apiKey = await getCredential(options.engineId);
+    // S1: a caller outside the browser (a server runner) supplies its own key
+    // source; the browser keeps reading the PIN vault as before.
+    const credentialFor =
+      typeof options.credentialFor === "function"
+        ? options.credentialFor
+        : (await import("../image-generation/vault.js")).getCredential;
+    config.apiKey = await credentialFor(options.engineId);
     if (!config.apiKey)
       throw missingCredentialError(
         "부모 설정에서 이야기 엔진의 API 비밀 키를 입력해 주세요.",
@@ -2122,6 +2144,11 @@ function outlineRequestSchema(input) {
   // 2026-10-20: a typed ending is a third ending type (new drafts only).
   if (input.endingType === "custom")
     schema.properties.endingType.enum = ["home_sleep", "open", "custom"];
+  // R29.1 정성 모드: the formal outline carries the per-beat tension curve.
+  if (hasOrchestrationPolicy(input)) {
+    schema.properties.tension = outlineTensionSchema(frozenBeatCount(input));
+    schema.required.push("tension");
+  }
   return schema;
 }
 export async function generateOutline(source, options = {}) {
@@ -2148,7 +2175,33 @@ export async function generateOutline(source, options = {}) {
   const council = hasCouncilPolicy(input)
     ? await runStoryCouncil(input, options, qualityServices())
     : null;
-  const bibleRules = council ? bibleOutlineRules(council.record.bible, input) : "";
+  const bibleRules = [
+    council ? bibleOutlineRules(council.record.bible, input) : "",
+    hasOrchestrationPolicy(input)
+      ? outlineTensionRule(frozenBeatCount(input), tensionRange(input), council?.record.bible)
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  // R29.1: the curve is checked again on the expanded outline.
+  const settleTension = (result) => {
+    if (!hasOrchestrationPolicy(input)) return result;
+    const check = settleOutlineTension(result.data, frozenBeatCount(input), tensionRange(input), council?.record.bible);
+    if (!check) return result;
+    result.meta = {
+      ...result.meta,
+      tensionCheck: check,
+      ...(check.passed
+        ? {}
+        : {
+            softIssues: [
+              ...(result.meta?.softIssues || []),
+              `긴장 곡선: ${check.problems.join(" / ")}${check.restored ? " (설계서 곡선으로 바꿈)" : ""}`,
+            ],
+          }),
+    };
+    return result;
+  };
   const withCouncil = (result) => {
     if (!council) return result;
     attachCouncil(result.data, council);
@@ -2164,12 +2217,12 @@ export async function generateOutline(source, options = {}) {
     const result = await generateQualityOutline(
       input,
       // R23: the bible itself too, so the seed's planted object and turn follow it.
-      bibleRules ? { ...options, storyBibleRules: bibleRules, storyBible: council.record.bible } : options,
+      bibleRules ? { ...options, storyBibleRules: bibleRules, ...(council ? { storyBible: council.record.bible } : {}) } : options,
       qualityServices(),
     );
     result.data.quality = clone(result.meta.quality || {});
     result.data = assertValid("outline", result.data, input);
-    return withCouncil(result);
+    return withCouncil(settleTension(result));
   }
   const count = frozenBeatCount(input),
     attempts = count - 5;
@@ -2259,7 +2312,7 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
           ? {}
           : { softIssues: report.violations.map((row) => row.message) }),
       };
-      return result;
+      return settleTension(result);
     }
     violations = report.violations;
   }
@@ -2410,6 +2463,36 @@ async function fitOpeningsProse(result, outline, input, options, requests) {
   }
   return report;
 }
+/** The beat writer's binding rules: the prose stage's craft lines and each language's frozen level. */
+function beatWriterRules(input, outline) {
+  const { vocabList: _ko, ...ko } = input.specs.ko || {},
+    { vocabList: _en, ...en } = input.specs.en || {},
+    mood = outline?.quality?.worldMood;
+  return {
+    common: `EVERY sentence has an explicit grammatical subject (a name, an unambiguous pronoun or a concrete object); never omit the Korean subject. Attribute every quoted dialogue turn to a named speaker. Include at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture) and a concrete observation → attempt → visible consequence from this beat's event. Show feelings through actions; never end with an appraisal or an explicit lesson. Never repeat an identical sentence except the fixed refrain. Keep the approved event, place, props and ending; never add a different event.${mood ? ` FROZEN STORY ATMOSPHERE: ${JSON.stringify(mood)}.` : ""}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${arcProseRules(input) ? `\n${arcProseRules(input)}` : ""}`,
+    ko: `FROZEN KOREAN LEVEL (binding): ${JSON.stringify(ko)}. Character proper names are exempt.`,
+    en: `FROZEN ENGLISH LEVEL (binding): ${JSON.stringify(en)}. ${en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence. " : ""}English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, outline))}. Character proper names are exempt.`,
+  };
+}
+async function writeBeatProse(outline, input, options) {
+  const result = await writeProseByBeat(
+    outline,
+    input,
+    { ...options, writerRules: beatWriterRules(input, outline) },
+    qualityServices(),
+  );
+  result.data = assertValid("prose", result.data, input, outline);
+  // Openings keep their length-fit pass (one call per language when a beat is out of band).
+  if (isOpeningsInput(input) && input.prosePolicy) {
+    const requests = [result];
+    result.meta.lengthFit = await fitOpeningsProse(result, outline, input, options, requests);
+    if (requests.length > 1) {
+      result.usage = mergeStoryUsage(requests);
+      result.meta.requests = requests.reduce((sum, r) => sum + (Number(r.meta?.requests) || 1), 0);
+    }
+  }
+  return result;
+}
 export async function generateProse(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -2421,6 +2504,8 @@ export async function generateProse(outline, source, options = {}) {
       assertValid("prose", demoProse(outline, input), input, outline),
       input,
     );
+  // R30 정성 모드: beat after beat at the frozen level (beat-writer.js).
+  if (hasOrchestrationPolicy(input)) return writeBeatProse(outline, input, options);
   if (input.storyQuality?.enabled)
     return generateQualityProse(outline, input, options, qualityServices());
   const koSpec = input.specs.ko,

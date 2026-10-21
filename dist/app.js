@@ -187,6 +187,7 @@ import {
   renderTextSettings,
   renderTextEngineQuick,
   getTextGenerationSettings,
+  newStoryTextEstimate,
 } from "./text-generation/settings-ui.js";
 import {
   configureStoryUI,
@@ -232,6 +233,7 @@ import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
   getTextModelInfo,
+  freezeReviewTier,
 } from "./text-generation/models.js";
 import {
   configureReadingUI,
@@ -4319,6 +4321,23 @@ configureStoryQualityUI({
   },
 });
 render();
+// R30: once per device after the 정성 모드 beat writer ships, say what changed
+// and what a new story's text now costs (settings show the same estimate).
+try {
+  const settings = getTextGenerationSettings(state);
+  if (
+    settings.orchestration !== false &&
+    !localStorage.getItem("donghwa-notice-r30")
+  ) {
+    localStorage.setItem("donghwa-notice-r30", "1");
+    const estimate = newStoryTextEstimate(freezeReviewTier(settings));
+    toast(
+      `정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요. 새 이야기 12쪽 글 요금은 약 $${estimate.costUsd.toFixed(2)}${estimate.pricingUnknown ? "(일부 미확인)" : ""}로 바뀌어요. 설정 › 글 엔진에서 끌 수 있어요.`,
+    );
+  }
+} catch {
+  // Storage blocked: no notice.
+}
 hydrateImageAssets(state)
   .then((result) => {
     initialHydrationDone = true;

@@ -282,6 +282,29 @@ function modelLine(job) {
 }
 
 /** The report as Markdown text. */
+/** R30: the beat writer's attempts, anchor, voice card and the notes it kept. */
+function writerSection(job) {
+  const report = object(job?.writerReport) ? job.writerReport : null;
+  if (!report) return [];
+  const rows = ["### 정성 모드 비트별 작가"],
+    retried = Object.entries(object(report.attempts) ? report.attempts : {}).filter(([, n]) => Number(n) > 1);
+  rows.push(
+    `- 호출 ${Number(report.calls) || 0}회(예산 ${Number(report.budget) || 0}회)${retried.length ? ` · 다시 쓴 비트: ${retried.map(([key, n]) => `${key} ${n}번`).join(", ")}` : " · 다시 쓴 비트 없음"}${report.summarized ? " · 긴 책이라 앞부분은 줄거리 요약으로 넘김" : ""}`,
+  );
+  const anchor = object(report.anchor) ? report.anchor : {};
+  for (const lang of ["ko", "en"])
+    if (object(anchor[lang]))
+      rows.push(
+        `- 첫 비트(${lang === "ko" ? "한글" : "영어"}) 기준 글: 초안 ${anchor[lang].pick}${anchor[lang].judged ? ` · 편집자 선택${anchor[lang].reason ? `: ${str(anchor[lang].reason, 200)}` : ""}` : " · 검사 결과로 선택"}`,
+      );
+  const voice = object(report.refrain?.voiceCard) ? report.refrain.voiceCard : null;
+  if (voice && (voice.ko || voice.en))
+    rows.push(`- 되풀이 말 카드: "${str(voice.ko, 150)}" / "${str(voice.en, 150)}" · 비트 ${list(report.refrain.beats).join(", ")}`);
+  if (report.dialogue_ko !== undefined || report.dialogue_en !== undefined)
+    rows.push(`- 대화 비율(책 전체): 한글 ${Math.round((Number(report.dialogue_ko) || 0) * 100)}% · 영어 ${Math.round((Number(report.dialogue_en) || 0) * 100)}%`);
+  for (const warning of list(report.warnings).slice(0, 20)) rows.push(`  - ${str(warning, 400)}`);
+  return rows;
+}
 export function buildStopReport(job, { now = new Date() } = {}) {
   if (!object(job)) return "";
   const input = object(job.input) ? job.input : {},
@@ -329,6 +352,7 @@ export function buildStopReport(job, { now = new Date() } = {}) {
     ...briefSection(job),
     ...storyCheckSection(job),
   ];
+  checkRows.push(...writerSection(job));
   if (job.revision) {
     checkRows.push("### 편집자 통독");
     checkRows.push(
@@ -392,7 +416,8 @@ export function stopReportAvailable(job) {
       !!job.error ||
       !!job.failure ||
       (Number(job.pageCoherence?.unresolved) || 0) > 0 ||
-      job.childGate?.reason === "unreadable")
+      job.childGate?.reason === "unreadable" ||
+      list(job.writerReport?.warnings).length > 0)
   );
 }
 /** ASCII only: a browser drops a download name with Korean in it. */

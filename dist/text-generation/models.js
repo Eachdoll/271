@@ -510,6 +510,23 @@ export function resolveQualityStageSettings(
     },
   };
 }
+/**
+ * R30 정성 모드 비트별 작가: the medium model (the quality 'prose' role)
+ * unless the draft froze writerTier "upper" — then that engine's upper model.
+ */
+export function resolveBeatWriterSettings(
+  settings = {},
+  qualitySettings = {},
+  writerTier = "medium",
+) {
+  const base = resolveQualityStageSettings(settings, "prose", qualitySettings);
+  if (writerTier !== "upper" || base.engineId === "local") return base;
+  const models = getStoryStageModels(
+    base.engineId,
+    settings.providers?.[base.engineId] || {},
+  );
+  return { ...base, config: { ...base.config, model: models.upper } };
+}
 export function estimateTextCost({
   engine,
   engineId = engine,
@@ -576,15 +593,18 @@ function openingTextTokens(specs, openings) {
  */
 export function estimateCouncilCost(job) {
   if (!job || job.demo) return { costUsd: 0, pricingUnknown: false };
+  const orchestration = job.input?.orchestrationPolicy?.version === 1;
   const text = estimateStoryTextCost({
     settings: job.textSettings || {},
     pageCount: job.wizard?.pageCount || job.input?.pageCount || 12,
     council: true,
+    ...(orchestration ? { orchestration: true } : {}),
   });
-  const row = (text.stages || []).find((stage) => stage.stage === "council");
+  // R29: a 정성 모드 meeting also buys the growth design and three candidates again.
+  const rows = (text.stages || []).filter((stage) => stage.stage === "council" || stage.stage === "plotCandidates");
   return {
-    costUsd: Number(row?.costUsd) || 0,
-    pricingUnknown: row?.pricingUnknown === true,
+    costUsd: rows.reduce((sum, row) => sum + (Number(row.costUsd) || 0), 0),
+    pricingUnknown: rows.some((row) => row.pricingUnknown === true),
   };
 }
 export function estimateStoryTextCost({
@@ -603,6 +623,12 @@ export function estimateStoryTextCost({
   editor = false,
   // R20 writers' room (input.councilPolicy): five economy-model calls before the outline.
   council = false,
+  // R29 정성 모드 (input.orchestrationPolicy): the growth design and three
+  // candidates on the author (prose role) model; the critics and the bible
+  // stay on the economy model.
+  orchestration = false,
+  // R30: the beat writer's model ("medium" | "upper", frozen on the draft).
+  writerTier = "medium",
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -628,7 +654,8 @@ export function estimateStoryTextCost({
         ),
       ),
     ),
-    enrichment = settings.storyEnrichment !== false && !quality;
+    enrichment =
+      settings.storyEnrichment !== false && !quality && !orchestration;
   const input =
       6000 + Math.ceil(Math.max(0, Number(previousTextLength) || 0) / 2),
     baseOutput = openings
@@ -660,9 +687,12 @@ export function estimateStoryTextCost({
     requestCount = 1,
     qualityRole,
   ) => {
-    const { engineId, config } = qualityRole
-        ? resolveQualityStageSettings(snapshot, qualityRole, qualitySettings)
-        : resolveStoryStageSettings(snapshot, stage),
+    const { engineId, config } =
+        qualityRole === "beatWriter"
+          ? resolveBeatWriterSettings(snapshot, qualitySettings, writerTier)
+          : qualityRole
+            ? resolveQualityStageSettings(snapshot, qualityRole, qualitySettings)
+            : resolveStoryStageSettings(snapshot, stage),
       reasoningFactor =
         getTextModelInfo(engineId, config.model, config).reasoning.profile ===
         "none"
@@ -688,7 +718,12 @@ export function estimateStoryTextCost({
     };
   };
   const stages = [];
-  if (council) stages.push(stageEstimate("council", 4000, 1200, 5, "cheap"));
+  if (council && orchestration)
+    stages.push(
+      stageEstimate("plotCandidates", 4500, 1400, 4, "prose"),
+      stageEstimate("council", 4000, 1200, 4, "cheap"),
+    );
+  else if (council) stages.push(stageEstimate("council", 4000, 1200, 5, "cheap"));
   if (beam) {
     stages.push(
       stageEstimate("beatCandidates", 3500, 900, beats, "outline"),
@@ -705,7 +740,23 @@ export function estimateStoryTextCost({
     ),
     stageEstimate("sceneBriefs", input, beats * 500),
   );
-  if (quality) {
+  if (orchestration) {
+    // R30 비트별 작가: one call per beat per language (+ beat 1's second
+    // draft per language), about one retry in four, and the voice card and
+    // two anchor sniffs on the economy model.
+    const beatOutput = Math.ceil(baseOutput / 2 / beats) + 150;
+    stages.push(
+      stageEstimate("prose", 5000, beatOutput, beats * 2 + 2, "beatWriter"),
+      stageEstimate(
+        "beatRetries",
+        5500,
+        beatOutput,
+        Math.ceil((beats * 2) / 4),
+        "beatWriter",
+      ),
+      stageEstimate("beatVoice", 1500, 150, 3, "cheap"),
+    );
+  } else if (quality) {
     stages.push(
       stageEstimate(
         "prose",
@@ -774,16 +825,19 @@ export function estimateStoryTextCost({
     enrichment,
     ...(editor ? { editor: true } : {}),
     ...(council ? { council: true } : {}),
+    ...(orchestration ? { orchestration: true } : {}),
+    ...(orchestration && writerTier === "upper" ? { writerTier } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `${council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `${council && orchestration ? "정성 모드 기획 회의(성장 설계·플롯 후보 3개·편집자·그림 감독·독자·바이블), " : council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${orchestration ? `, 정성 모드 비트별 작가(한글·영어 비트마다 1회 ${beats * 2}회, 첫 비트 두 안·되풀이 말 카드, 예상 재작성 ${Math.ceil((beats * 2) / 4)}회 — 비트마다 최대 3번)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }
 
 // R24: which FULL AUTO step pays for each estimate row (the review row is
 // split between the prose check and the final page check).
 const BUDGET_STEP = {
+  plotCandidates: "outline",
   council: "outline",
   beatCandidates: "outline",
   beatJudge: "outline",
@@ -791,6 +845,8 @@ const BUDGET_STEP = {
   sceneBriefs: "briefs",
   proseDraft: "proseDraft",
   prose: "prose",
+  beatRetries: "prose",
+  beatVoice: "prose",
   simplification: "prose",
   enrichment: "enrichment",
   pagination: "pagination",
@@ -815,7 +871,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1 }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}) }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {
@@ -823,6 +879,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
     if (row.stage === "coherence") share = (done.proseCoherence ? 0 : 0.5) + (done.pagination ? 0 : 0.5);
     else if (done[BUDGET_STEP[row.stage]]) share = 0;
     else if (row.stage === "council" && parked) share = 1 / Math.max(1, row.requestCount);
+    else if (row.stage === "plotCandidates" && parked) share = 0;
     if (share > 0) rows.push({ stage: row.stage, costUsd: row.costUsd * share, pricingUnknown: row.pricingUnknown === true });
   }
   // The paid material plan runs before the outline (never for a picked cast).

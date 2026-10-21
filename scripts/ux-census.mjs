@@ -87,10 +87,14 @@ await browser.close();
 // sample) has no model select, so its numbers are unchanged.
 const table = {
   // R26: +1 input, the '검사는 최고 모델로' box on the text settings page.
-  '02-settings-text': { buttons: 10, inputs: 100, selects: 64 },
+  // R29: +2 inputs, the '정성 모드' and '정성 모드 작가는 최고 모델로' boxes.
+  '02-settings-text': { buttons: 10, inputs: 102, selects: 64 },
   '02-settings-image': { buttons: 16, inputs: 10, selects: 4 },
   '03-materials': { buttons: 43, inputs: 0, selects: 0 },
-  '07-outline': { buttons: 108, inputs: 21, selects: 0 },
+  // 2026-10-21 (deliberate): each beat also offers the drawer's other places
+  // (folded '다른 장소'): +4 on the start and end beats, +1 on the five middle
+  // beats of the demo outline (108 → 121).
+  '07-outline': { buttons: 121, inputs: 21, selects: 0 },
   '10-pages': { buttons: 162, inputs: 75, selects: 25 },
   '11-editor': { buttons: 35, inputs: 4, selects: 0 },
 };

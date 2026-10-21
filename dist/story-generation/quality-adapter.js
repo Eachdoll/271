@@ -505,7 +505,13 @@ export function ledger(kind, input, options, extra = {}, checkpointKey = "qualit
     input,
     extra,
     engines: Object.fromEntries(
-      ["outline", "prose", "cheap"].map((role) => [
+      // R30: the beat writer's ledger also keys on the writer model (other kinds unchanged).
+      [
+        "outline",
+        "prose",
+        "cheap",
+        ...(kind === "beatWriter" ? ["beatWriter"] : []),
+      ].map((role) => [
         role,
         modelIdentity(roleOptions(options, role)),
       ]),
@@ -585,7 +591,9 @@ export function ledger(kind, input, options, extra = {}, checkpointKey = "qualit
         message:
           kind === "council"
             ? "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요."
-            : kind === "qualityOutline"
+            : kind === "beatWriter"
+              ? "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요."
+              : kind === "qualityOutline"
               ? "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요."
               : "장면을 풍부하게 쓴 뒤 선택한 읽기 수준으로 다듬고 있어요.",
         qualityRole: role,

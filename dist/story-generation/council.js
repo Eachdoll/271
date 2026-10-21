@@ -18,6 +18,21 @@ import { isOpeningsInput } from "./opening-prose.js";
 import { renderCouncilRoom } from "./council-room.js";
 import { hasPromptPolicy, readerVocabularyLine } from "./prompt-policy.js";
 import { headNoun } from "../story-quality/dist/banList.js";
+import {
+  hasOrchestrationPolicy,
+  PLOT_ANGLES,
+  tensionRange,
+  checkTensionCurve,
+  growthSchemaProperties,
+  candidateSchemaProperties,
+  normalizeCandidate,
+  GROWTH_DESIGN_SCHEMA,
+  growthDesignInstructions,
+  normalizeGrowthDesign,
+  candidateInstructions,
+  growthOutlineLines,
+  GROWTH_CHECKLIST,
+} from "./orchestration.js";
 
 /*
  * R25 (council ban list): a new draft freezes the planted objects of the
@@ -279,10 +294,11 @@ const READER_SCHEMA = strict({
   ),
   favorite: { type: "integer", minimum: 1, maximum: 3 },
 });
-const BIBLE_SCHEMA = (beats, attempts) =>
+const BIBLE_SCHEMA = (beats, attempts, growth = false) =>
   strict({
     bible: strict({
       ...pitchSchema(attempts).properties,
+      ...(growth ? candidateSchemaProperties(beats) : {}),
       visual: strict({
         pictures: arr(
           strict({ beatIndex: { type: "integer", minimum: 1, maximum: 8 }, ko: s(200), en: s(240) }),
@@ -356,7 +372,7 @@ export function bibleOutlineRules(bible, input = {}) {
     .map((m) => m.en || m.ko)
     .filter(Boolean)
     .join(", ");
-  return `STORY BIBLE (binding; settled by the writers' room — author, editor, art director and a ${card.age} reader — before this outline). Follow it beat for beat in the beat summaries, plan, want/problem, twist and plotContract; keep the supplied IDs and the rules above where they conflict and keep the bible's intent.\n${lines.join("\n")}${pictures ? `\nPicture promises (what the child sees, one per beat): ${pictures}` : ""}${motifs ? `\nRecurring visual motifs: ${motifs}` : ""}`;
+  return `STORY BIBLE (binding; settled by the writers' room — author, editor, art director and a ${card.age} reader — before this outline). Follow it beat for beat in the beat summaries, plan, want/problem, twist and plotContract; keep the supplied IDs and the rules above where they conflict and keep the bible's intent.\n${lines.join("\n")}${pictures ? `\nPicture promises (what the child sees, one per beat): ${pictures}` : ""}${motifs ? `\nRecurring visual motifs: ${motifs}` : ""}${bible.growth ? `\n${growthOutlineLines(bible)}` : ""}`;
 }
 /** Scene briefs: the picture promises become pose and props; the planted thing is a beat-1 prop. */
 export function bibleBriefRules(outline) {
@@ -548,8 +564,8 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     await journal.save();
     options.onProgress?.({ stage: "council", phase, message, council: clone(record) });
   };
-  const ask = async (label, system, user, jsonSchema, temperature, maxTokens) => {
-    const response = await journal.call("cheap", { system, user, jsonSchema, temperature, maxTokens }, services);
+  const ask = async (label, system, user, jsonSchema, temperature, maxTokens, role = "cheap") => {
+    const response = await journal.call(role, { system, user, jsonSchema, temperature, maxTokens }, services);
     const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));
     if (!object(data)) throw journal.fail(councilError(`${label} 봇의 답을 읽을 수 없어요.`));
     return data;
@@ -561,7 +577,25 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
   ].join("\n\n");
   const recentPlanted = councilRecentPlanted(input);
   const pitchInstructions = `[피치 3개 쓰기] 서로 다른 반전으로 피치 3개. 피치마다: title(제목), logline(한 줄 줄거리), stakes(못 하면 잃는 것, 구체적인 물건·순간·얼굴), planted{name(심은 물건, 한글), nameEn(영어 명사구), firstSeen(1비트에서 처음 보이는 자리)}, ladder(시도 ${attempts}개, 차례로 더 큰 대가와 다른 방법), lowPoint(마지막 시도 끝, 포기 직전의 한 문장 — 단서가 바로 옆에 있다), turn{seen(아이가 보거나 듣는 것), realized(주인공이 제 말로 알아차리는 말), overturns(뒤집히는 믿음)}, payoff(주인공이 손으로 해내는 해결), echo(처음의 물건이나 말이 달라진 모습으로 돌아오는 끝).${hasPromptPolicy(input) ? `\n${readerVocabularyLine(card)}` : ""}${recentPlanted.length ? `\n[최근 책에서 심은 물건 — 이번에는 심지 않는다] ${recentPlanted.join(", ")} (같은 종류의 다른 색·크기도 같은 물건으로 본다).` : ""}`;
+  const orchestrated = hasOrchestrationPolicy(input),
+    range = tensionRange(input),
+    CANDIDATE_SCHEMA = orchestrated
+      ? strict({ pitch: strict({ ...pitchSchema(attempts).properties, ...candidateSchemaProperties(beats) }) })
+      : null,
+    singlePitchInstructions = pitchInstructions.replace("[피치 3개 쓰기] 서로 다른 반전으로 피치 3개. 피치마다:", "[피치 1개 쓰기] 아래 각도로 피치 1개:");
   try {
+    // R29 정성 모드, step 1: the growth design every candidate shares.
+    let design = null;
+    if (orchestrated) {
+      record.roles = { chair: "speaking", author: "speaking", editor: "waiting", art: "waiting", reader: "waiting" };
+      await snapshot("pitches", PROGRESS.pitches);
+      design = normalizeGrowthDesign(
+        await ask("작가", PERSONA.author, `${context}\n\n${growthDesignInstructions()}\n\n[출력] JSON만.`, GROWTH_DESIGN_SCHEMA, 0.7, 900, "prose"),
+      );
+      if (!design) throw journal.fail(councilError("작가 봇이 성장 설계를 내지 못했어요."));
+      record.design = design;
+      log({ by: "작가 봇", kind: "proposed", what: `성장 설계: ${design.growth.want} → ${design.growth.need}`, why: `걸림돌 ${design.growth.flaw}${design.theme ? ` · 주제 ${design.theme}` : ""}` });
+    }
     // Round A: the author's three pitches (a second round only if every pitch is vetoed).
     let pitches = [],
       verdicts = null,
@@ -575,15 +609,42 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         round && verdicts
           ? `\n\n[이전 피치의 거부 사유 — 같은 실수를 되풀이하지 않는다]\n${scores.map((row) => `피치 ${row.pitch}: ${row.vetoes.join(" / ")}`).join("\n")}`
           : "";
-      const proposed = await ask(
-        "작가",
-        PERSONA.author,
-        `${context}\n\n${pitchInstructions}${vetoNote}\n\n[출력] JSON만. {"pitches":[{...},{...},{...}]}`,
-        PITCHES_SCHEMA(attempts),
-        0.8,
-        3000,
-      );
-      pitches = list(proposed.pitches).map((row) => normalizePitch(row, attempts)).filter(Boolean).slice(0, 3);
+      if (orchestrated) {
+        // R29 정성 모드: three candidates from three angles in parallel (the
+        // author model), each with its growth and tension curve; a candidate
+        // whose curve fails the check is asked once more with the problems.
+        const candidate = async (angle) => {
+          const base = `${context}\n\n${singlePitchInstructions}\n${candidateInstructions(angle, beats, range, design)}${vetoNote}`;
+          let raw = await ask("작가", PERSONA.author, `${base}\n\n[출력] JSON만. {"pitch":{...}}`, CANDIDATE_SCHEMA, 0.95, 2200, "prose");
+          let pitch = normalizePitch(raw.pitch, attempts),
+            extra = normalizeCandidate(raw.pitch, beats),
+            problems = pitch ? checkTensionCurve(extra?.tension, beats, range) : ["피치를 읽을 수 없어요."];
+          if (problems.length) {
+            log({ by: "의장", kind: "reviewed", what: `${angle.ko} 후보의 긴장 곡선`, why: problems.join(" / ") });
+            raw = await ask("작가", PERSONA.author, `${base}\n\n[이전 답의 문제 — 고쳐서 다시]\n${problems.join("\n")}\n\n[출력] JSON만. {"pitch":{...}}`, CANDIDATE_SCHEMA, 0.8, 2200, "prose");
+            const retry = normalizePitch(raw.pitch, attempts);
+            if (retry) {
+              pitch = retry;
+              extra = normalizeCandidate(raw.pitch, beats);
+              problems = checkTensionCurve(extra?.tension, beats, range);
+            }
+          }
+          // Still failing after the one retry: kept with its notes (the chair
+          // ranks it as it is; never a third request).
+          return pitch ? { ...pitch, ...design, ...extra, angle: angle.id, ...(problems.length ? { curveNotes: problems } : {}) } : null;
+        };
+        pitches = (await Promise.all(PLOT_ANGLES.map(candidate))).filter(Boolean);
+      } else {
+        const proposed = await ask(
+          "작가",
+          PERSONA.author,
+          `${context}\n\n${pitchInstructions}${vetoNote}\n\n[출력] JSON만. {"pitches":[{...},{...},{...}]}`,
+          PITCHES_SCHEMA(attempts),
+          0.8,
+          3000,
+        );
+        pitches = list(proposed.pitches).map((row) => normalizePitch(row, attempts)).filter(Boolean).slice(0, 3);
+      }
       if (!pitches.length) throw journal.fail(councilError("작가 봇이 쓸 수 있는 피치를 내지 못했어요."));
       log({ by: "작가 봇", kind: "proposed", what: `피치 ${pitches.length}개: ${pitches.map((p) => p.title || p.logline).join(" / ")}`, why: round ? "거부된 피치를 대신해 다시 제안" : "방향·조건에 맞춘 첫 제안" });
       record.pitches = pitches;
@@ -605,7 +666,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         critic("editor", "editor", (d) => byPitch(d.verdicts, pitches.length),
           "편집자",
           PERSONA.editor,
-          `${context}\n\n[점검표 — 항목마다 0(없음)·1(약함)·2(분명함)]\n${SPINE_CHECKLIST.map((row, i) => `${i + 1} ${row}`).join("\n")}${recentPlanted.length ? `\n[최근 책의 심은 물건] ${recentPlanted.join(", ")} — 피치의 planted가 이 가운데 하나(머리 낱말이 같으면 같은 물건)이면 fixes에 '최근 책과 같은 심은 물건'을 적고 direction을 1 낮춘다.` : ""}${references.length ? `\n\n[참조 — 좋은 책의 뼈대 카드. 인물·물건·사건 재사용 금지]\n${references.join("\n")}` : ""}\n\n${shown}\n\n[출력] JSON만. 피치마다 verdict{pitch, stakes, ladder, lowPoint, turn, payoff, direction, veto(뼈대 결격이면 true), vetoReason, fixes(고칠 점 최대 2개)}와 pick(방향에 가장 잘 도달하는 피치 번호).`,
+          `${context}\n\n[점검표 — 항목마다 0(없음)·1(약함)·2(분명함)]\n${(orchestrated ? [...SPINE_CHECKLIST, ...GROWTH_CHECKLIST] : SPINE_CHECKLIST).map((row, i) => `${i + 1} ${row}`).join("\n")}${recentPlanted.length ? `\n[최근 책의 심은 물건] ${recentPlanted.join(", ")} — 피치의 planted가 이 가운데 하나(머리 낱말이 같으면 같은 물건)이면 fixes에 '최근 책과 같은 심은 물건'을 적고 direction을 1 낮춘다.` : ""}${references.length ? `\n\n[참조 — 좋은 책의 뼈대 카드. 인물·물건·사건 재사용 금지]\n${references.join("\n")}` : ""}\n\n${shown}\n\n[출력] JSON만. 피치마다 verdict{pitch, stakes, ladder, lowPoint, turn, payoff, direction, veto(뼈대 결격이면 true), vetoReason, fixes(고칠 점 최대 2개)}와 pick(방향에 가장 잘 도달하는 피치 번호).`,
           EDITOR_SCHEMA,
           0.2,
           1600,
@@ -685,12 +746,24 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     const bibleReply = await ask(
       "작가",
       PERSONA.author,
-      `${context}\n\n[고른 피치]\n${JSON.stringify(chosen)}\n\n[고칠 점]\n${fixes.length ? fixes.map((row, i) => `${i + 1} ${row}`).join("\n") : "없음"}\n\n[아트 디렉터의 모티프 제안]\n${JSON.stringify(motifs)}\n\n[독자 되말하기] ${str(r?.retell, 300) || "없음"}${parentNote}\n\n[바이블 확정] 고친 점을 반영해 피치의 모든 필드를 다시 쓰고, visual{pictures: 비트 ${beats}개마다 {beatIndex, ko(아이가 보는 것 한 문장), en(그릴 수 있는 영어 한 문장: 8~25단어, 물리적 동사와 보이는 소품)}, motifs(2~3개, ko/en), plantedPlacementEn(1비트 그림에서 심은 물건이 놓인 자리, 영어)}를 붙인다. 비트 순서: ${beatLabels(beats).map((l, i) => `${i + 1} ${l}`).join(", ")}.\n\n[출력] JSON만. {"bible":{...}}`,
-      BIBLE_SCHEMA(beats, attempts),
+      `${context}\n\n[고른 피치]\n${JSON.stringify(chosen)}\n\n[고칠 점]\n${fixes.length ? fixes.map((row, i) => `${i + 1} ${row}`).join("\n") : "없음"}\n\n[아트 디렉터의 모티프 제안]\n${JSON.stringify(motifs)}\n\n[독자 되말하기] ${str(r?.retell, 300) || "없음"}${parentNote}\n\n[바이블 확정] 고친 점을 반영해 피치의 모든 필드를 다시 쓰고, visual{pictures: 비트 ${beats}개마다 {beatIndex, ko(아이가 보는 것 한 문장), en(그릴 수 있는 영어 한 문장: 8~25단어, 물리적 동사와 보이는 소품)}, motifs(2~3개, ko/en), plantedPlacementEn(1비트 그림에서 심은 물건이 놓인 자리, 영어)}를 붙인다.${orchestrated ? ` angle·tension(비트 ${beats}개)은 고른 피치를 바탕으로 고칠 점을 반영해 다시 쓰고(곡선: 절정은 전환 비트 근처, 끝은 풀림), growth{want,need,flaw}·theme·lesson은 공통 성장 설계 그대로 쓴다.` : ""} 비트 순서: ${beatLabels(beats).map((l, i) => `${i + 1} ${l}`).join(", ")}.\n\n[출력] JSON만. {"bible":{...}}`,
+      BIBLE_SCHEMA(beats, attempts, orchestrated),
       0.5,
       3500,
     );
     const bible = normalizePitch(bibleReply.bible, attempts) || chosen;
+    if (orchestrated) {
+      const grown = normalizeCandidate(bibleReply.bible, beats);
+      // The shared growth design is fixed; the tension curve comes from the
+      // bible when it passes the check, else from the chosen candidate.
+      Object.assign(bible, {
+        angle: chosen.angle || grown.angle || "",
+        growth: { ...design.growth },
+        theme: design.theme,
+        lesson: design.lesson,
+        tension: grown.tension.length === beats && !checkTensionCurve(grown.tension, beats, range).length ? grown.tension : list(chosen.tension),
+      });
+    }
     const visual = object(bibleReply.bible?.visual) ? bibleReply.bible.visual : {};
     const pictures = [];
     for (let n = 1; n <= beats; n++) {
