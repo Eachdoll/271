@@ -28,7 +28,7 @@ import { editorPolicy, revisionSummary } from "./book-revision.js";
 import { craftPolicy } from "./craft-rules.js";
 import { arcPolicy } from "./arc-rules.js";
 import { promptPolicy } from "./prompt-policy.js";
-import { orchestrationPolicyFor } from "./orchestration.js";
+import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./orchestration.js";
 import { councilRecentFor, councilPolicy, recordParentDecision, renderCouncilCard, isCouncilHold } from "./council.js";
 import {
   renderCouncilRoom,
@@ -55,6 +55,7 @@ import {
   resolveTextModel,
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  resolveBeatWriterSettings,
   registeredModelIds,
 } from "../text-generation/models.js";
 import {
@@ -194,6 +195,8 @@ export function applyStoryCheckpoint(d, checkpoint) {
     d.qualityCheckpoint = clone(checkpoint.qualityCheckpoint);
   if (checkpoint?.councilCheckpoint)
     d.councilCheckpoint = clone(checkpoint.councilCheckpoint);
+  if (checkpoint?.writerCheckpoint)
+    d.writerCheckpoint = clone(checkpoint.writerCheckpoint);
   if (checkpoint?.childGateCheckpoint) {
     d.childGateCheckpoint = clone(checkpoint.childGateCheckpoint);
     if (
@@ -601,10 +604,27 @@ function options(s, stage, forceApi = false) {
           role,
           d.input.storyQuality || settings.storyQuality || {},
         ),
-      ]),
+      ]).concat(
+        // R30 정성 모드: the beat writer (medium unless the draft froze "upper").
+        hasOrchestrationPolicy(d.input)
+          ? [
+              [
+                "beatWriter",
+                d.demo && !forceApi
+                  ? { engineId: "demo" }
+                  : resolveBeatWriterSettings(
+                      settings,
+                      d.input.storyQuality || settings.storyQuality || {},
+                      d.input.orchestrationPolicy.writerTier,
+                    ),
+              ],
+            ]
+          : [],
+      ),
     ),
     qualityCheckpoint: d.qualityCheckpoint,
     councilCheckpoint: d.councilCheckpoint,
+    ...(d.writerCheckpoint ? { writerCheckpoint: d.writerCheckpoint } : {}),
     // R22 회의 결과 보고 진행 (frozen on the draft at 줄거리 생성).
     ...(d.councilReview === true
       ? {
@@ -1803,6 +1823,8 @@ async function run(s, label, fn, done) {
     }
     if (session === s && err.qualityCheckpoint)
       s.draft.qualityCheckpoint = clone(err.qualityCheckpoint);
+    if (session === s && err.writerCheckpoint)
+      s.draft.writerCheckpoint = clone(err.writerCheckpoint);
     if (session === s && err.childGateCheckpoint)
       s.draft.childGateCheckpoint = clone(err.childGateCheckpoint);
     if (session === s && (err.coherence || err.prose || err.pagination)) {
@@ -2145,6 +2167,14 @@ async function writeProse(s, { hybridFinal = false } = {}) {
   snapshot(s, "prose");
   invalidateStoryDetails(d, { prose: true });
   d.prose = result.data;
+  // R30: the beat writer's report (its notes are shown once, never a stop).
+  if (result.meta?.writer) {
+    d.writerReport = clone(result.meta.writer);
+    if (d.writerReport.warnings?.length)
+      api.toast(
+        `정성 모드 작가 참고 ${d.writerReport.warnings.length}건: ${d.writerReport.warnings[0]}`,
+      );
+  } else delete d.writerReport;
   recordCoherence(d, result);
   d.hybridFinal = !hybrid || hybridFinal;
   d.stage = "prose_draft";
@@ -2153,6 +2183,7 @@ async function writeProse(s, { hybridFinal = false } = {}) {
     !d.hybridFinal ||
     d.demo ||
     d.input.storyQuality?.enabled ||
+    hasOrchestrationPolicy(d.input) ||
     d.textSettings.storyEnrichment === false
   ) {
     saveDraft(s);

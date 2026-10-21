@@ -766,7 +766,10 @@ const PINS = {
   // and three candidates (글 약 $1.94 → $2.08 at 12 pages) and its folded
   // engine/cost details gain the '정성 모드' and '작가는 최고 모델로' switches;
   // ④ and ⑤ are unchanged (diffed against 035107a). 035107a: add2f529…5b80.
-  review: 'f9cd8ef4ec257cbfe851df2afde5e85da97c7449658c4d0771debfb63e74f25e',
+  // 비트별 작가 (R30): ③ prices the new story with the beat writer in place of
+  // the rich/simplify prose passes (12쪽 글 약 $2.08 → $2.18, 16쪽 $2.30 → $2.41);
+  // nothing else changed (dump-diffed against 0157814). 0157814: f9cd8ef4…f25e.
+  review: 'bbc64451ec4034982b6fdfa854f8523f20a6f405866a142b9fee74f837a6c85b',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -784,7 +787,12 @@ const PINS = {
   // author-model calls for the growth design and candidates, one economy
   // pitch call fewer; text $1.717 → $1.862); jobs and legacy rows are the same
   // (diffed against 035107a). 035107a: 7e95b83e…ee38.
-  estimates: '20cde0549758c89631601a2baeb4b0069644d833590f0042bac64a6c70fc833b',
+  // 비트별 작가 (R30): only a NEW job's estimate changed (requests/textUsd/
+  // baseUsd/withMaterialsAndRetryUsd: 21 → 37 requests, text $1.862 → $1.937 —
+  // beat writer 16 + expected retries 4 + voice card and anchor sniffs 3 in
+  // place of 2 rich + 2 simplify); jobs and legacy rows are the same
+  // (dump-diffed against 0157814). 0157814: 20cde054…833b.
+  estimates: 'e47fe78c6cdc9edb49106a67f0aab25a64c6e1b749fbad0c2a34a4804f406784',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

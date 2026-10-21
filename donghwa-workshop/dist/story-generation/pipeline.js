@@ -83,6 +83,7 @@ import {
   inspectArc,
 } from "./arc-rules.js";
 import { hasPromptPolicy } from "./prompt-policy.js";
+import { writeProseByBeat } from "./beat-writer.js";
 import {
   hasOrchestrationPolicy,
   orchestrationPolicy,
@@ -2462,6 +2463,36 @@ async function fitOpeningsProse(result, outline, input, options, requests) {
   }
   return report;
 }
+/** The beat writer's binding rules: the prose stage's craft lines and each language's frozen level. */
+function beatWriterRules(input, outline) {
+  const { vocabList: _ko, ...ko } = input.specs.ko || {},
+    { vocabList: _en, ...en } = input.specs.en || {},
+    mood = outline?.quality?.worldMood;
+  return {
+    common: `EVERY sentence has an explicit grammatical subject (a name, an unambiguous pronoun or a concrete object); never omit the Korean subject. Attribute every quoted dialogue turn to a named speaker. Include at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture) and a concrete observation → attempt → visible consequence from this beat's event. Show feelings through actions; never end with an appraisal or an explicit lesson. Never repeat an identical sentence except the fixed refrain. Keep the approved event, place, props and ending; never add a different event.${mood ? ` FROZEN STORY ATMOSPHERE: ${JSON.stringify(mood)}.` : ""}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${arcProseRules(input) ? `\n${arcProseRules(input)}` : ""}`,
+    ko: `FROZEN KOREAN LEVEL (binding): ${JSON.stringify(ko)}. Character proper names are exempt.`,
+    en: `FROZEN ENGLISH LEVEL (binding): ${JSON.stringify(en)}. ${en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence. " : ""}English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, outline))}. Character proper names are exempt.`,
+  };
+}
+async function writeBeatProse(outline, input, options) {
+  const result = await writeProseByBeat(
+    outline,
+    input,
+    { ...options, writerRules: beatWriterRules(input, outline) },
+    qualityServices(),
+  );
+  result.data = assertValid("prose", result.data, input, outline);
+  // Openings keep their length-fit pass (one call per language when a beat is out of band).
+  if (isOpeningsInput(input) && input.prosePolicy) {
+    const requests = [result];
+    result.meta.lengthFit = await fitOpeningsProse(result, outline, input, options, requests);
+    if (requests.length > 1) {
+      result.usage = mergeStoryUsage(requests);
+      result.meta.requests = requests.reduce((sum, r) => sum + (Number(r.meta?.requests) || 1), 0);
+    }
+  }
+  return result;
+}
 export async function generateProse(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -2473,6 +2504,8 @@ export async function generateProse(outline, source, options = {}) {
       assertValid("prose", demoProse(outline, input), input, outline),
       input,
     );
+  // R30 정성 모드: beat after beat at the frozen level (beat-writer.js).
+  if (hasOrchestrationPolicy(input)) return writeBeatProse(outline, input, options);
   if (input.storyQuality?.enabled)
     return generateQualityProse(outline, input, options, qualityServices());
   const koSpec = input.specs.ko,

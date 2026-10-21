@@ -1099,6 +1099,10 @@ export function checkNotes(job) {
     );
   if (job?.childGate?.skipped && job.childGate.reason === "unreadable")
     notes.push("아이 시뮬레이터의 답을 읽지 못해 이번에는 그 참고 없이 넘어갔어요");
+  // R30: what the beat writer kept with a note (never a stop).
+  const writer = Array.isArray(job?.writerReport?.warnings) ? job.writerReport.warnings : [];
+  if (writer.length)
+    notes.push(`정성 모드 작가 참고 ${writer.length}건 · 검사 리포트에서 볼 수 있어요`);
   return notes;
 }
 const checkNotesLine = (job) =>

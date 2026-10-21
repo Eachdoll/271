@@ -43,6 +43,7 @@ import { getTextGenerationSettings } from "./text-generation/settings-ui.js";
 import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  resolveBeatWriterSettings,
   estimateStoryTextCost,
   estimateTextCost,
   freezeReviewTier,
@@ -391,9 +392,14 @@ export function estimateFullAutoCost(
       // R20: new jobs (and jobs frozen with the policy) include the writers' room.
       ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : { council: true }),
       // R29: 정성 모드 jobs (and a new one while the parent setting is on).
+      // R30: priced with the beat writer's frozen (or chosen) model.
       ...(job
-        ? hasOrchestrationPolicy(job.input) ? { orchestration: true } : {}
-        : orchestrationPolicyFor(state) ? { orchestration: true } : {}),
+        ? hasOrchestrationPolicy(job.input)
+          ? { orchestration: true, writerTier: job.input.orchestrationPolicy.writerTier }
+          : {}
+        : orchestrationPolicyFor(state)
+          ? { orchestration: true, writerTier: orchestrationPolicyFor(state).writerTier }
+          : {}),
       // R12: an openings wizard is sized from its v4 specs ({} for page books).
       ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
@@ -988,10 +994,27 @@ export async function runFullAuto(
                 role,
                 job.input.storyQuality || {},
               ),
-        ]),
+        ]).concat(
+          // R30 정성 모드: the beat writer (medium unless the job froze "upper").
+          hasOrchestrationPolicy(job.input)
+            ? [
+                [
+                  "beatWriter",
+                  job.demo
+                    ? demoEngine()
+                    : resolveBeatWriterSettings(
+                        job.textSettings,
+                        job.input.storyQuality || {},
+                        job.input.orchestrationPolicy.writerTier,
+                      ),
+                ],
+              ]
+            : [],
+        ),
       ),
       qualityCheckpoint: job.qualityCheckpoint,
       councilCheckpoint: job.councilCheckpoint,
+      ...(job.writerCheckpoint ? { writerCheckpoint: job.writerCheckpoint } : {}),
       // R22: park after the room for the parent's choice; a resumed run
       // carries that choice and what the parent did to earlier meetings.
       ...(job.councilReview === true
@@ -1034,6 +1057,8 @@ export async function runFullAuto(
           job.qualityCheckpoint = clone(cp.qualityCheckpoint);
         if (cp.councilCheckpoint)
           job.councilCheckpoint = clone(cp.councilCheckpoint);
+        if (cp.writerCheckpoint)
+          job.writerCheckpoint = clone(cp.writerCheckpoint);
         if (cp.childGateCheckpoint)
           job.childGateCheckpoint = clone(cp.childGateCheckpoint);
         if (cp.coherence) {
@@ -1075,6 +1100,8 @@ export async function runFullAuto(
         job.qualityCheckpoint = clone(error.qualityCheckpoint);
       if (error.councilCheckpoint)
         job.councilCheckpoint = clone(error.councilCheckpoint);
+      if (error.writerCheckpoint)
+        job.writerCheckpoint = clone(error.writerCheckpoint);
       if (error.childGateCheckpoint)
         job.childGateCheckpoint = clone(error.childGateCheckpoint);
       if (error.prose) job.prose = clone(error.prose);
@@ -1339,11 +1366,17 @@ export async function runFullAuto(
           },
           opts("prose"),
         ),
-      (r) => (job.prose = r.data),
+      (r) => {
+        job.prose = r.data;
+        // R30: the beat writer's report (attempts, anchor, voice card, notes).
+        if (r.meta?.writer) job.writerReport = clone(r.meta.writer);
+      },
     );
     if (
       job.textSettings.storyEnrichment !== false &&
-      !job.input.storyQuality?.enabled
+      !job.input.storyQuality?.enabled &&
+      // R30: the beat writer already wrote each beat with its brief.
+      !hasOrchestrationPolicy(job.input)
     )
       await step(
         "enrichment",

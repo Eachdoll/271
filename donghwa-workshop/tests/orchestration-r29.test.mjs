@@ -124,9 +124,11 @@ test('R29 estimates: the growth design and three candidates on the author model;
   assert.equal(row(plain, 'council').requestCount, 5);
   assert.equal(row(rich, 'council').requestCount, 4);
   assert.equal(row(rich, 'plotCandidates').requestCount, 4);
-  assert.equal(rich.requestCount, plain.requestCount + 3);
+  // R30 replaced the prose rows of a 정성 모드 estimate with the beat writer's (tests/beat-writer-r30.test.mjs).
+  const meeting = (e) => e.stages.filter((r) => r.stage === 'council' || r.stage === 'plotCandidates').reduce((n, r) => n + r.requestCount, 0);
+  assert.equal(meeting(rich), meeting(plain) + 3);
   assert.ok(rich.costUsd > plain.costUsd);
-  assert.equal(estimateStoryTextCost({settings, pageCount: 12, orchestration: true}).requestCount, estimateStoryTextCost({settings, pageCount: 12}).requestCount, 'no meeting, no candidates');
+  assert.equal(row(estimateStoryTextCost({settings, pageCount: 12, orchestration: true}), 'plotCandidates'), undefined, 'no meeting, no candidates');
   const job = {input: {pageCount: 12, councilPolicy: {version: 1}, orchestrationPolicy: {version: 1, writerTier: 'medium'}}, textSettings: settings, usage: {calls: []}};
   const parked = councilDecisionCosts(job);
   assert.ok(Math.abs(parked.continueUsd - (rich.costUsd - row(rich, 'plotCandidates').costUsd - row(rich, 'council').costUsd * 3 / 4)) < 1e-9);

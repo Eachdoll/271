@@ -600,7 +600,12 @@ const PRE_R13_ENGINE_SHA256 = 'e2ce53ee825cc53496cc286babb2f923b6df04c209e471450
 // job changed (growth design + three candidates on the author model, +3
 // requests); every request and model of a pre-R13 snapshot is the same.
 // 035107a: a70f345e…5b9b.
-const PRE_R13_APP_SHA256 = '79912a452bea1e8bd4ef17d30c8379bd9b1e23e08fca7a00b316ad2afe51b063';
+// Re-pinned for the beat writer (2026-10-21, R30): only estimateFullAutoCost of
+// a NEW job changed (requests/textUsd/baseUsd/withMaterialsAndRetryUsd: the beat
+// writer rows replace the rich/simplify prose rows); every request and model
+// of a pre-R13 snapshot is the same (diffed with PRE_R13_APP_ROOT=0157814).
+// 0157814: 79912a45…b063.
+const PRE_R13_APP_SHA256 = 'b16dbb33ae0d673e50a84c6ed384f6b51c980a51294ba3d86ec2f2f65562aaa7';
 test('R13 legacy: settings saved before R13 send byte-identical requests, models and estimates', async () => {
   const root = new URL('../', import.meta.url);
   const engine = await legacyEngineSnapshot(root), app = await legacyAppSnapshot(root);

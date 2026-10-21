@@ -360,10 +360,34 @@ function hybridLocalFields(settings) {
     ? ""
     : `<h4>하이브리드 로컬 줄거리·초안</h4>${providerPanel(settings, "local", "tg-hybrid")}`;
 }
+/**
+ * R30: what a new 12-page story's text costs on these settings — the writers'
+ * room, the editor round and (while 정성 모드 is on) the beat writer on the
+ * chosen model, as a new draft freezes them.
+ */
+export function newStoryTextEstimate(settings) {
+  return estimateStoryTextCost({
+    settings,
+    pageCount: 12,
+    editor: true,
+    council: true,
+    ...(settings.orchestration !== false
+      ? {
+          orchestration: true,
+          writerTier: settings.writerTier === "upper" ? "upper" : "medium",
+        }
+      : {}),
+  });
+}
 function priceSummary(settings) {
-  const estimate = estimateStoryTextCost({ settings, pageCount: 12 }),
-    enrichment = estimate.stages.find((stage) => stage.stage === "enrichment");
-  const prose = estimate.quality
+  const estimate = newStoryTextEstimate(settings),
+    enrichment = estimate.stages.find((stage) => stage.stage === "enrichment"),
+    writer = estimate.stages
+      .filter((stage) => stage.qualityRole === "beatWriter")
+      .reduce((n, stage) => n + stage.requestCount, 0);
+  const prose = estimate.orchestration
+    ? ` + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 ${writer}회·${settings.writerTier === "upper" ? "최고" : "중간"} 모델) + 기획 회의·편집자 통독`
+    : estimate.quality
     ? estimate.twoPass
       ? " + 한글·영어 풍부화·단순화 4회"
       : " + 한글·영어 목표 수준 전문 2회"
