@@ -64,7 +64,7 @@ import {
   unitLabel,
   validateOpenings,
 } from "./book-layout.js";
-import { freezeReadingLevels } from "./reading-levels.js";
+import { freezeReadingLevels, normalizeReadingLevels } from "./reading-levels.js";
 import {
   applySeriesContinuity,
   bindSeriesBackgrounds,
@@ -76,6 +76,8 @@ import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
+import { hasK1Policy, isK1Draft } from "./story-generation/k1-book.js";
+import { hasTopicEnding } from "./story-generation/topic-ending.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -381,6 +383,14 @@ export function estimateFullAutoCost(
 ) {
   // R13: once a job exists, its estimate uses the job's frozen text settings
   // and picture model, never a model chosen since (or its price).
+  // R31a: a K1 book (frozen on a job, or what a new job would freeze).
+  const k1Book = job
+    ? hasK1Policy(job.input)
+    : isK1Draft({
+        koreanLevel: normalizeReadingLevels(wizard, state.settings).koreanLevel,
+        language: wizard.language,
+        layout: layoutFor(wizard),
+      });
   const world = getActiveWorld(state),
     // R26: a new job will freeze its review tier, so it is priced with it.
     settings = job?.textSettings || freezeReviewTier(getTextGenerationSettings(state)),
@@ -390,7 +400,14 @@ export function estimateFullAutoCost(
       // Editor round: new jobs (and jobs frozen with the policy) include it.
       ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
       // R20: new jobs (and jobs frozen with the policy) include the writers' room.
-      ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : { council: true }),
+      ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : k1Book ? {} : { council: true }),
+      ...(k1Book
+        ? {
+            k1Book: true,
+            writerTier:
+              (job ? job.input.orchestrationPolicy?.writerTier : orchestrationPolicyFor(state)?.writerTier) || "medium",
+          }
+        : {}),
       // R29: 정성 모드 jobs (and a new one while the parent setting is on).
       // R30: priced with the beat writer's frozen (or chosen) model.
       ...(job
@@ -996,7 +1013,7 @@ export async function runFullAuto(
               ),
         ]).concat(
           // R30 정성 모드: the beat writer (medium unless the job froze "upper").
-          hasOrchestrationPolicy(job.input)
+          hasOrchestrationPolicy(job.input) || hasK1Policy(job.input)
             ? [
                 [
                   "beatWriter",
@@ -1005,7 +1022,7 @@ export async function runFullAuto(
                     : resolveBeatWriterSettings(
                         job.textSettings,
                         job.input.storyQuality || {},
-                        job.input.orchestrationPolicy.writerTier,
+                        job.input.orchestrationPolicy?.writerTier || "medium",
                       ),
                 ],
               ]
@@ -1278,8 +1295,15 @@ export async function runFullAuto(
         promptPolicy: _freshPrompt,
         councilRecent: _freshRecent,
         orchestrationPolicy: _freshOrchestration,
+        k1Policy: _freshK1,
+        topicEndingPolicy: _freshTopicEnding,
         ...preparedInput
       } = prepared.input;
+      // R31a: a job saved before the topic ending keeps its own ending.
+      if (_freshTopicEnding && !hasTopicEnding(job.input)) {
+        preparedInput.endingType = job.input?.endingType || "home_sleep";
+        preparedInput.endingNote = job.input?.endingNote || "";
+      }
       job.input = {
         ...preparedInput,
         ...(frozenLayout ? { layoutPolicy: clone(frozenLayout) } : {}),
@@ -1303,6 +1327,10 @@ export async function runFullAuto(
           : {}),
         ...(job.input?.orchestrationPolicy
           ? { orchestrationPolicy: clone(job.input.orchestrationPolicy) }
+          : {}),
+        ...(hasK1Policy(job.input) ? { k1Policy: clone(job.input.k1Policy) } : {}),
+        ...(hasTopicEnding(job.input)
+          ? { topicEndingPolicy: clone(job.input.topicEndingPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
@@ -1376,7 +1404,8 @@ export async function runFullAuto(
       job.textSettings.storyEnrichment !== false &&
       !job.input.storyQuality?.enabled &&
       // R30: the beat writer already wrote each beat with its brief.
-      !hasOrchestrationPolicy(job.input)
+      !hasOrchestrationPolicy(job.input) &&
+      !hasK1Policy(job.input)
     )
       await step(
         "enrichment",

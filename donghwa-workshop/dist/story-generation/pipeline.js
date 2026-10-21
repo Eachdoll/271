@@ -69,6 +69,7 @@ import {
 } from "./quality-adapter.js";
 import { inspectChildStory } from "./quality-gates.js";
 import { rhythmPromptLine } from "../page-rhythm.js";
+import { shortSentencePromptLine } from "../short-sentences.js";
 import {
   craftOutlineRules,
   craftProseRules,
@@ -84,6 +85,8 @@ import {
 } from "./arc-rules.js";
 import { hasPromptPolicy } from "./prompt-policy.js";
 import { writeProseByBeat, checkBeatText, hasRefrain, beatBudgets } from "./beat-writer.js";
+import { hasK1Policy, k1OutlineRules, writeK1Book, k1Pagination } from "./k1-book.js";
+import { hasTopicEnding } from "./topic-ending.js";
 import {
   hasOrchestrationPolicy,
   orchestrationPolicy,
@@ -375,6 +378,15 @@ function modelVisibleInput(source) {
     const { orchestrationPolicy, ...rest } = input;
     input = rest;
   }
+  // R31a: the K1 book and topic-ending switches (the ending itself stays in endingNote).
+  if (input?.k1Policy) {
+    const { k1Policy, ...rest } = input;
+    input = rest;
+  }
+  if (input?.topicEndingPolicy) {
+    const { topicEndingPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -509,6 +521,9 @@ export function normalizeStoryInput(input = {}) {
     ...(hasOrchestrationPolicy(input)
       ? { orchestrationPolicy: orchestrationPolicy(input.orchestrationPolicy) }
       : {}),
+    // R31a: the K1 book (arc, one-call page writer) and the simple-mode topic ending.
+    ...(hasK1Policy(input) ? { k1Policy: { version: 1 } } : {}),
+    ...(hasTopicEnding(input) ? { topicEndingPolicy: { version: 1 } } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -647,7 +662,7 @@ function baseSystemFor(input) {
     : baseSystem;
 }
 function levelRules(input) {
-  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.${isOpeningsInput(input) ? `\n${layoutRuleLine(input)}` : ""}${rhythmPromptLine(input.specs) ? `\n${rhythmPromptLine(input.specs)}` : ""}`;
+  return `FROZEN_LEVEL_SPECS (binding writing constraints, not plotting simplifications):\n${JSON.stringify(input.specs)}\nKorean eojeolPerSentence/wordsPerSentence and English wordsPerSentence are independent. The eventual per-page sentence counts must satisfy each language's range. Respect allowed grammar, vocabulary, and book-wide new-word budgets. Character proper names are exempt. ${input.specs.en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence." : ""} English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, input.approvedOutline))}. E0 vocabulary deviations are advisory; sentence and present-tense rules remain binding. AR/Lexile are estimates only.${isOpeningsInput(input) ? `\n${layoutRuleLine(input)}` : ""}${rhythmPromptLine(input.specs) ? `\n${rhythmPromptLine(input.specs)}` : ""}${shortSentencePromptLine(input.specs) ? `\n${shortSentencePromptLine(input.specs)}` : ""}`;
 }
 function continuityMeta(input) {
   return input.previousStory
@@ -2213,7 +2228,9 @@ export async function generateOutline(source, options = {}) {
     };
     return result;
   };
-  if (input.storyQuality?.enabled) {
+  // R31a: a K1 book's outline takes the app path with the K1 arc (the quality
+  // package's planted-object/twist patterns are not for three-year-olds).
+  if (input.storyQuality?.enabled && !hasK1Policy(input)) {
     const result = await generateQualityOutline(
       input,
       // R23: the bible itself too, so the seed's planted object and turn follow it.
@@ -2231,7 +2248,7 @@ Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> clo
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
 Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. ${customEnding(input) ? "The first beat uses a supplied home background ID from homeBackgroundIds; the final beat takes place wherever the parent's ending puts it (any supplied ID, home or not)." : "The first and final beat use the SAME supplied home background ID from homeBackgroundIds."} Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
 Beat.characters must be supplied character IDs. Every selected character's Korean name must appear explicitly somewhere in the beat summaries, and every supplied topic keyword must occur in those summaries. Invent original events from the actual input; these instructions describe structure only and supply no example story. Optional refrain is one sentence planned at no more than 3 beat indices.
-${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}${arcOutlineRules(input) ? `\n${arcOutlineRules(input)}` : ""}${bibleRules ? `\n${bibleRules}` : ""}`;
+${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}. Close calmly at home; open ending additionally hints at a new adventure through an action or dialogue. Respect the parent's endingNote through a concrete final action at home.`} A requested moral must be shown through actions and never spoken as a lesson.${craftOutlineRules(input) ? `\n${craftOutlineRules(input)}` : ""}${arcOutlineRules(input) ? `\n${arcOutlineRules(input)}` : ""}${bibleRules ? `\n${bibleRules}` : ""}${k1OutlineRules(input) ? `\n${k1OutlineRules(input)}` : ""}`;
   const results = [];
   let violations = [],
     normalized = [];
@@ -2470,7 +2487,7 @@ function beatWriterRules(input, outline) {
     mood = outline?.quality?.worldMood;
   return {
     common: `EVERY sentence has an explicit grammatical subject (a name, an unambiguous pronoun or a concrete object); never omit the Korean subject. Attribute every quoted dialogue turn to a named speaker. Include at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture) and a concrete observation → attempt → visible consequence from this beat's event. Show feelings through actions; never end with an appraisal or an explicit lesson. Never repeat an identical sentence except the fixed refrain. Keep the approved event, place, props and ending; never add a different event.${mood ? ` FROZEN STORY ATMOSPHERE: ${JSON.stringify(mood)}.` : ""}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${arcProseRules(input) ? `\n${arcProseRules(input)}` : ""}`,
-    ko: `FROZEN KOREAN LEVEL (binding): ${JSON.stringify(ko)}. Character proper names are exempt.`,
+    ko: `FROZEN KOREAN LEVEL (binding): ${JSON.stringify(ko)}. Character proper names are exempt.${shortSentencePromptLine(input.specs) ? ` ${shortSentencePromptLine(input.specs)}` : ""}`,
     en: `FROZEN ENGLISH LEVEL (binding): ${JSON.stringify(en)}. ${en.id === "E0" ? "Use says, not said. Use present tense for every narration sentence. " : ""}English allowed vocabulary: ${englishVocabularyPrompt(input.specs.en, buildStoryWords(input, outline))}. Character proper names are exempt.`,
   };
 }
@@ -2701,6 +2718,21 @@ export async function generateProse(outline, source, options = {}) {
       assertValid("prose", demoProse(outline, input), input, outline),
       input,
     );
+  // R31a: a K1 book is written whole, page by page, in one call (k1-book.js).
+  if (hasK1Policy(input)) {
+    const result = await writeK1Book(
+      outline,
+      input,
+      { ...options, writerRules: beatWriterRules(input, outline) },
+      qualityServices(),
+    );
+    const pages = result.data.pages,
+      cover = result.data.cover;
+    result.data = assertValid("prose", result.data, input, outline);
+    result.data.pages = pages;
+    if (cover) result.data.cover = cover;
+    return result;
+  }
   // R30 정성 모드: beat after beat at the frozen level (beat-writer.js).
   if (hasOrchestrationPolicy(input)) return writeBeatProse(outline, input, options);
   if (input.storyQuality?.enabled)
@@ -3014,6 +3046,14 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
       ),
       input,
     );
+  // R31a: a K1 book's pages were written as pages; take them as they are.
+  const k1 = hasK1Policy(input) && !violations.length ? k1Pagination(prose, outline, input) : null;
+  if (k1)
+    return {
+      data: validateGeneratedPagination(applyStaging(k1, outline, input, options), input, outline),
+      usage: mergeStoryUsage([]),
+      meta: { stage: "pagination", engineId: options.engineId || "k1Book", model: null, requests: 0, demo: false, k1Pages: true },
+    };
   const pagePlan = buildBeatPagePlan(outline, input.pageCount),
     schema = clone(PAGINATION_SCHEMA);
   schema.properties.pages.minItems = input.pageCount;

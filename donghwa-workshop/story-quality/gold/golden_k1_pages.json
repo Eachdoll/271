@@ -1,0 +1,89 @@
+{
+  "version": "2026-10-21",
+  "id": "k1-yuha-haeni-bus",
+  "description": "K1 골든 원고 후보 1편 ('유하와 해니, 노란 버스', 12쪽). 부모가 다른 AI(Dola)로 만든 원고를 제공했고 6쪽 맞춤법(쑥쓰러워요 → 쑥스러워요)만 고쳤다. 작성 AI의 자가 검증 수치·점수(평균 5.2어절, 약 200어절, 루브릭 4.5~4.7)는 실측과 달라 버렸다. 아래 measured 값은 앱 K1 검사기(reading-checker.js)로 잰 것이다. 루브릭 점수는 아직 없음(유료 rubricJudge 실행 필요). 작가 프롬프트의 예시로는 넣지 않는다(모든 K1 책이 버스 이야기를 닮지 않게); 평가 기준·회귀 테스트(tests/k1-short-sentences-r31a.test.mjs)로만 쓴다.",
+  "request": "4살 유하가 스쿨버스를 타고 해니를 만나서 장난치며 유치원에 가는 이야기를 12쪽 내외로 만들어줘 k1수준",
+  "levelKo": "K1",
+  "design": {
+    "want": "재미있게 놀고 싶어요(처음엔 혼자서도)",
+    "need": "친구와 함께 놀면 두 배로 재미있어요",
+    "flaw": "낯가림 — 해니를 처음 보고 고개를 숙여요",
+    "lesson": "말하지 않고 마지막 쪽에서 손잡는 행동으로만"
+  },
+  "measured": {
+    "eojeol": 102,
+    "sentences": 34,
+    "meanEojeolPerSentence": 3.0,
+    "longestSentence": 6,
+    "oldK1CheckFailedPages": [
+      3,
+      5,
+      6,
+      10
+    ],
+    "r31aK1CheckFailedPages": []
+  },
+  "rubric": null,
+  "pages": [
+    {
+      "pageNo": 1,
+      "ko": "오늘은 유치원 가는 날. 유하가 노란 모자를 써요. 분홍 가방도 메요.",
+      "picture": "Child Yuha in a yellow bucket hat and pink backpack standing at the front door, morning sun streaming in, red sneakers on, smiling excitedly."
+    },
+    {
+      "pageNo": 2,
+      "ko": "유하가 정류장에 섰어요. 두리번두리번. 노란 버스가 안 와요.",
+      "picture": "Yuha at a small bus stop, looking left and right, empty road, soft morning light, a little backpack hanging down."
+    },
+    {
+      "pageNo": 3,
+      "ko": "부릉부릉! 띠리릭! 노란 스쿨버스가 왔어요. 버스가 웃고 있어요.",
+      "picture": "A big bright yellow school bus with a smiling face and round headlights pulling up to the stop, door opening, Yuha's eyes wide with delight."
+    },
+    {
+      "pageNo": 4,
+      "ko": "유하가 버스에 올라타요. 빈자리에 앉아 창밖을 보아요.",
+      "picture": "Yuha sitting by a bus window, small hands on the glass, watching houses and trees go by, warm interior light."
+    },
+    {
+      "pageNo": 5,
+      "ko": "뒤에서 \"안녕!\" 해니가 왔어요. 초록 공룡 가방이 아주 커요.",
+      "picture": "Haeni with curly brown hair and a big green dinosaur backpack standing in the bus aisle waving, blue overalls, gap-toothed smile."
+    },
+    {
+      "pageNo": 6,
+      "ko": "처음엔 쑥스러워요. 유하가 고개를 숙여요. 해니도 고개를 숙여요.",
+      "picture": "Both children sitting next to each other, heads shyly bowed, peeking at each other from the corners of their eyes, tiny smiles."
+    },
+    {
+      "pageNo": 7,
+      "ko": "유하가 창문에 손을 대요. 우와, 토끼 그림자! 해니가 까르륵 웃어요.",
+      "picture": "Yuha's hand making a rabbit shadow on the bus window, sunlight casting the shadow, Haeni laughing with mouth open."
+    },
+    {
+      "pageNo": 8,
+      "ko": "까마귀도 하고, 강아지도 해요. 둘이서 손그림자 놀이!",
+      "picture": "Two pairs of hands making bird and dog shadows on the sunny window, both children leaning in, giggling."
+    },
+    {
+      "pageNo": 9,
+      "ko": "콩닥콩닥 손뼉 놀이. \"하나, 둘, 셋!\" 둘이서 같이 웃어요.",
+      "picture": "Two children clapping hands together in their seats, eyes crinkled with laughter, bus seats softly blurred behind."
+    },
+    {
+      "pageNo": 10,
+      "ko": "띠리리릿! 유치원이 코앞. 아직 놀고 싶은데… 유하가 해니를 보아요.",
+      "picture": "The bus slowing down, kindergarten with a playground visible through the window, both children turning to look at each other, not wanting the ride to end."
+    },
+    {
+      "pageNo": 11,
+      "ko": "유하가 손을 내밀어요. \"해니야, 같이 가자!\" 해니가 손을 잡아요.",
+      "picture": "Yuha holding out a hand to Haeni at the bus door, Haeni taking it, both smiling, bus steps behind them."
+    },
+    {
+      "pageNo": 12,
+      "ko": "둘이 손잡고 유치원에 들어가요. \"내일도 같이 타요!\"",
+      "picture": "Two children holding hands walking into a cheerful kindergarten gate, yellow school bus behind them, morning sun, other children in the playground."
+    }
+  ]
+}

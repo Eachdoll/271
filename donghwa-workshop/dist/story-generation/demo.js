@@ -445,7 +445,7 @@ function spreadProse(text, count) {
   }
   return result;
 }
-function wardrobeFor(input, pageNo) {
+export function wardrobeFor(input, pageNo) {
   const result = {};
   for (const c of input.characters) {
     let id = input.variantByCharacter?.[c.id] || null;

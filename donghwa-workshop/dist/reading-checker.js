@@ -2,6 +2,12 @@ import { splitSentences as sharedSplitSentences } from "./story-quality/dist/uti
 import { VOCAB_DATA, ENGLISH_ONOMATOPOEIA } from "./reading-vocab.js";
 import { unitKind, unitSpec } from "./book-layout.js";
 import { rhythmBand, bookBudget } from "./page-rhythm.js";
+import {
+  hasShortSentences,
+  splitAtEllipsis,
+  rhythmSentenceIndices,
+  shortSentenceViolations,
+} from "./short-sentences.js";
 /* Browser-local FK, Revised Spache, Dale–Chall and Korean pattern estimates.
  * These are not certified AR, Lexile or KReaD scores. No Python dependency. */
 const round = (n) => Math.round(n * 100) / 100;
@@ -380,7 +386,8 @@ const unitRulesApply = (spec, lang) =>
   !!spec.sentencesPerPageRange;
 function violations(metrics, spec, lang) {
   if (unitRulesApply(spec, lang)) return unitViolations(metrics, spec);
-  const out = [],
+  const short = lang === "ko" && hasShortSentences(spec);
+  const out = short ? shortSentenceViolations(metrics, spec) : [],
     // Page rhythm: a frozen rhythm spec judges each page by its wide band.
     expected =
       rhythmBand(spec) ||
@@ -389,8 +396,9 @@ function violations(metrics, spec, lang) {
         ? { min: spec.sentencesPerPage, max: spec.sentencesPerPage }
         : spec.sentencesPerPage);
   if (
-    metrics.sentenceCount < number(expected?.min, 1) ||
-    metrics.sentenceCount > number(expected?.max, expected?.min)
+    !short &&
+    (metrics.sentenceCount < number(expected?.min, 1) ||
+      metrics.sentenceCount > number(expected?.max, expected?.min))
   )
     out.push({
       code: "sentence-count",
@@ -398,7 +406,7 @@ function violations(metrics, spec, lang) {
       actual: metrics.sentenceCount,
       expected,
     });
-  metrics.wordsPerSentence.forEach((count, index) => {
+  if (!short) metrics.wordsPerSentence.forEach((count, index) => {
     if (
       (count < spec.wordsPerSentence.min &&
         !metrics.minimumLengthExemptSentenceIndices.includes(index)) ||
@@ -483,7 +491,11 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
     spec.vocabList = options.koVocabulary;
     spec.vocabularyAvailable = options.koVocabulary.length > 0;
   }
-  const sentences = splitSentences(text),
+  // R31a: a K1 short-sentence spec also ends a sentence at an ellipsis.
+  const shortPolicy = lang === "ko" && hasShortSentences(spec),
+    sentences = shortPolicy
+      ? splitAtEllipsis(splitSentences(text))
+      : splitSentences(text),
     tokenize = lang === "en" ? enWords : koWords,
     words = sentences.flatMap(tokenize),
     allowed = allowedSet(
@@ -518,6 +530,9 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
       isSoundOnlySentence(sentence, spec.id, lang) ? [index] : [],
     ),
     averageWordsPerSentence: round(count / Math.max(1, sentences.length)),
+    ...(shortPolicy
+      ? { rhythmSentenceIndices: rhythmSentenceIndices(sentences, lengths, spec) }
+      : {}),
     averageSyllablesPerEojeol:
       lang === "ko"
         ? round(

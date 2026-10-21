@@ -40,6 +40,9 @@ import {
   readCouncilDirection,
 } from "./council-room.js";
 import { withPageRhythm } from "../page-rhythm.js";
+import { withShortSentences } from "../short-sentences.js";
+import { k1Policy, isK1Draft } from "./k1-book.js";
+import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -607,7 +610,7 @@ function options(s, stage, forceApi = false) {
         ),
       ]).concat(
         // R30 정성 모드: the beat writer (medium unless the draft froze "upper").
-        hasOrchestrationPolicy(d.input)
+        hasOrchestrationPolicy(d.input) || d.input?.k1Policy?.version === 1
           ? [
               [
                 "beatWriter",
@@ -616,7 +619,7 @@ function options(s, stage, forceApi = false) {
                   : resolveBeatWriterSettings(
                       settings,
                       d.input.storyQuality || settings.storyQuality || {},
-                      d.input.orchestrationPolicy.writerTier,
+                      d.input.orchestrationPolicy?.writerTier || "medium",
                     ),
               ],
             ]
@@ -850,6 +853,11 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
   // Page rhythm: new drafts judge the book's sentence total (±20%) and let
   // each page vary; frozen here in the specs (and the job's readingLevels).
   readingLevels.specs = withPageRhythm(readingLevels.specs);
+  // R31a: a new K1 draft's Korean spec judges short rhythm lines and page averages.
+  readingLevels.specs = withShortSentences(readingLevels.specs);
+  const k1 = isK1Draft({ koreanLevel: readingLevels.koreanLevel, language: wizard.language, layout }),
+    // R31a: a simple-mode story (no ending choice there) ends where its topic goes.
+    topicEnding = wizard.simpleFlow === true && wizard.ending !== "open" && wizard.ending !== "custom";
   const variants = (wizard.characterIds || [])
     .map((id) => state.characters.find((c) => c.id === id))
     .filter(Boolean)
@@ -925,7 +933,7 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       endingType:
         wizard.ending === "open"
           ? "open"
-          : wizard.ending === "custom" && String(wizard.endingCustom || "").trim()
+          : (wizard.ending === "custom" && String(wizard.endingCustom || "").trim()) || topicEnding
             ? "custom"
             : "home_sleep",
       moral:
@@ -937,7 +945,10 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       endingNote:
         wizard.ending === "custom"
           ? String(wizard.endingCustom || "").trim()
-          : "",
+          : topicEnding
+            ? topicEndingNote(wizard.topic)
+            : "",
+      ...(topicEnding ? { topicEndingPolicy: topicEndingPolicy() } : {}),
       previousSummary:
         previous?.summaryForNext || previous?.outline?.logline || "",
       previousStory: inherited.previousStory,
@@ -959,11 +970,13 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       editorPolicy: editorPolicy(),
       // Picture-book craft rules (suspense, sound refrain, key props, camera).
       craftPolicy: craftPolicy(),
-      arcPolicy: arcPolicy(),
+      // R31a: a K1 book takes the K1 arc and the one-call page writer instead
+      // of the story spine and the writers' room.
+      ...(k1 ? { k1Policy: k1Policy() } : { arcPolicy: arcPolicy() }),
       // The writers' room before the outline (pitches, verdicts, bible, decision log).
-      councilPolicy: councilPolicy(),
+      ...(k1 ? {} : { councilPolicy: councilPolicy() }),
       // R25: the latest approved books' planted objects, frozen for the meeting.
-      councilRecent: councilRecentFor(storyQualityBookRecords(state)),
+      ...(k1 ? {} : { councilRecent: councilRecentFor(storyQualityBookRecords(state)) }),
       // R29 정성 모드: on unless the parent turned it off; the beat writer's tier frozen with it.
       ...(orchestrationPolicyFor(state) ? { orchestrationPolicy: orchestrationPolicyFor(state) } : {}),
       // R23: tidier requests (default rules back, bible over seed, lean canon).
@@ -2185,6 +2198,7 @@ async function writeProse(s, { hybridFinal = false } = {}) {
     d.demo ||
     d.input.storyQuality?.enabled ||
     hasOrchestrationPolicy(d.input) ||
+    d.input?.k1Policy?.version === 1 ||
     d.textSettings.storyEnrichment === false
   ) {
     saveDraft(s);

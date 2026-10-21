@@ -463,9 +463,9 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
-    const {rhythm, ...plain} = spec || {};
+    const {rhythm, shortSentences, ...plain} = spec || {};
     return [lang, plain];
   }));
   return {...rest, specs};
@@ -699,7 +699,10 @@ const PINS = {
   // 정성 모드 (R29): a new draft's input also gains orchestrationPolicy
   // {version: 1, writerTier: "medium"} (wizard and normalized); nothing else
   // differs (diffed against 035107a). 035107a: c80208e9…ec74.
-  inputs: '674fb65e10b0c13712a341ebfa5545b5831710fa902cbdeaf822524839dd41ee',
+  // K1 그림책 (R31a): a new K1 draft's input gains k1Policy and the K1
+  // short-sentence spec and drops arcPolicy/councilPolicy/councilRecent; every
+  // other level is unchanged (dump-diffed against 653b704). 653b704: 674fb65e…41ee.
+  inputs: 'ae3bb68667b28c232ccdfcbe3dd6d9f89922ad361389390203e4d7530525b24f',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -729,7 +732,8 @@ const PINS = {
   // 정성 모드 (R29): the demo jobs' input carries orchestrationPolicy (a demo
   // never meets, so no request changes); nothing else differs (diffed against
   // 035107a). 035107a: 3b7c0695…fa92.
-  fullAutoDemo: '78059d1cacf529d8e8b275bae0dd65cbf178c572312bb2e11ac51041001df150',
+  // K1 그림책 (R31a): the K1 demo job's input as above (dump-diffed against 653b704). 653b704: 78059d1c…f150.
+  fullAutoDemo: 'f1ccd7ece94f3764e75f492458f2be02297d61858ab6ff3a7b94c53cae4f0440',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -769,7 +773,10 @@ const PINS = {
   // 비트별 작가 (R30): ③ prices the new story with the beat writer in place of
   // the rich/simplify prose passes (12쪽 글 약 $2.08 → $2.18, 16쪽 $2.30 → $2.41);
   // nothing else changed (dump-diffed against 0157814). 0157814: f9cd8ef4…f25e.
-  review: 'bbc64451ec4034982b6fdfa854f8523f20a6f405866a142b9fee74f837a6c85b',
+  // K1 그림책 (R31a): ③ prices a new K1 book without the room, with one writer
+  // call and no pagination request (글 약 $2.18 → $0.99); nothing else changed
+  // (dump-diffed against 653b704). 653b704: bbc64451…c85b.
+  review: '823730df739af399782d8c9c5b9ecea3b23b9047144db301674c69dd1beee987',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -792,7 +799,10 @@ const PINS = {
   // beat writer 16 + expected retries 4 + voice card and anchor sniffs 3 in
   // place of 2 rich + 2 simplify); jobs and legacy rows are the same
   // (dump-diffed against 0157814). 0157814: 20cde054…833b.
-  estimates: 'e47fe78c6cdc9edb49106a67f0aab25a64c6e1b749fbad0c2a34a4804f406784',
+  // K1 그림책 (R31a): only NEW K1 jobs' estimates changed (37 → 10 requests,
+  // text $1.937 → $0.875); K2+ and existing jobs are the same (dump-diffed
+  // against 653b704). 653b704: e47fe78c…6784.
+  estimates: 'a91a4f439cdd4ed7c97fc1487e04bc6705480dd704e3f126fd4120ab87e1cc53',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

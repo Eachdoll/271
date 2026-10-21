@@ -14,9 +14,14 @@ export const hasCraftPolicy = (input) =>
   input?.craftPolicy?.version === CRAFT_POLICY_VERSION;
 const koLevel = (input) => String(input?.specs?.ko?.id || "");
 const hasKorean = (input) => input?.language !== "en";
+// R31a: a K1 book (input.k1Policy) has no mystery and no fixed sound refrain;
+// k1-book.js gives its own arc and sound line (inline test: no module cycle).
+const k1Book = (input) => input?.k1Policy?.version === 1;
+const K1_SOUNDS =
+  "K1 SOUNDS: use at least five different sound or movement words across the book (for example 부릉부릉, 까르륵, 콩닥콩닥), spread over different pages where they happen, never piled on one page. No fixed refrain is required.";
 /** K1/K2 Korean books: a sound-word refrain is part of the story's design. */
 export const soundRefrainRequired = (input) =>
-  hasCraftPolicy(input) && hasKorean(input) && /^K[12]$/u.test(koLevel(input));
+  hasCraftPolicy(input) && hasKorean(input) && /^K[12]$/u.test(koLevel(input)) && !k1Book(input);
 
 const SUSPENSE_OUTLINE =
   "SUSPENSE: the story asks one question (what makes the sound, where the thing went, who did it). Beat summaries before the turn show clues, wrong guesses and small failures but never state the answer or its cause; the turn beat reveals it and the resolution uses it. plan.twistReveal belongs to the turn, never to setup or want.";
@@ -67,11 +72,12 @@ export function placeSpreadRule(input) {
 export function craftOutlineRules(input) {
   if (!hasCraftPolicy(input)) return "";
   return [
-    SUSPENSE_OUTLINE,
+    k1Book(input) ? "" : SUSPENSE_OUTLINE,
     SIDEKICK,
     castSpreadRule(input),
     placeSpreadRule(input),
     soundRefrainRequired(input) ? SOUND_REFRAIN : "",
+    k1Book(input) ? K1_SOUNDS : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -80,7 +86,7 @@ export function craftOutlineRules(input) {
 export function craftProseRules(input) {
   if (!hasCraftPolicy(input)) return "";
   return [
-    "SUSPENSE IN PROSE: keep the answer of the story's question hidden until the turn beat's paragraph. Earlier paragraphs may show the clue (a sound, a glimpse, a wrong guess) but never explain what causes it; narration before the turn does not name the cause.",
+    k1Book(input) ? "" : "SUSPENSE IN PROSE: keep the answer of the story's question hidden until the turn beat's paragraph. Earlier paragraphs may show the clue (a sound, a glimpse, a wrong guess) but never explain what causes it; narration before the turn does not name the cause.",
     "SOUND WORDS: when something makes a sound, write the sound itself as onomatopoeia ('딸랑!') instead of describing it ('가는 소리가 났어요'); one or two sound words per beat, the same word for the same source every time.",
     /^K[12]$/u.test(koLevel(input))
       ? "ONE ACTION PER SENTENCE: at this level a sentence shows one thing a character does or one thing that happens; why or how goes into its own short sentence or is left to the picture."
@@ -95,7 +101,7 @@ export function craftProseRules(input) {
 /** Pagination (page and openings books). */
 export function craftPaginationRules(input) {
   if (!hasCraftPolicy(input)) return "";
-  return "SUSPENSE ON PAGES: a page before the turn never states the answer of the story's question; keep the clue sentences and the wrong guesses there. KEY PROP: when a page's words name a small object (a tag, a ring, a leaf), scene.action names that object and where it is (in a hand, on the floor) so the picture shows it large enough to recognise. CAMERA: three or more consecutive pages at the same place differ in distance and side (one wide, one close on the hands or the object, one from behind or from above).";
+  return `${k1Book(input) ? "" : "SUSPENSE ON PAGES: a page before the turn never states the answer of the story's question; keep the clue sentences and the wrong guesses there. "}KEY PROP: when a page's words name a small object (a tag, a ring, a leaf), scene.action names that object and where it is (in a hand, on the floor) so the picture shows it large enough to recognise. CAMERA: three or more consecutive pages at the same place differ in distance and side (one wide, one close on the hands or the object, one from behind or from above).`;
 }
 /** The quality package's canon block: outline or prose rules by stage. */
 export function craftCanonRules(input, stage = "outline") {

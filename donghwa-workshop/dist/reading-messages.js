@@ -66,6 +66,7 @@ export function describeReadingViolation(violation) {
     "connective-endings": "연결어미 수",
     "new-word-budget": "새 어휘 수",
     "book-sentence-total": "책 전체 문장 수",
+    "sentence-average": "쪽 문장 평균 어절",
   };
   const prefix =
     violation.language === "ko"

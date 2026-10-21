@@ -1,3 +1,6 @@
+// R31a: K1 books skip the writers' room and story spine (k1-book.js); these
+// fixtures test the room and the editor round, so they use a K2 page book.
+globalThis.__DONGHWA_R12_OPENINGS__ = false;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {seedState} from '../dist/engine.js';
@@ -23,7 +26,7 @@ function setup() {
   const state = seedState();
   migrateWorldState(state);
   migrateReadingSettings(state.settings);
-  const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '유하와 달토끼의 별 찾기', pageCount: 12, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
+  const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '유하와 달토끼의 별 찾기', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
   return {state, wizard};
 }
 const result = (data, stage) => ({data, usage: {input: 10, output: 20, costUsdEstimated: .01}, meta: {stage, requests: 1, model: 'mock'}});
@@ -186,7 +189,7 @@ test('R22 the pro launcher offers the option, the job cards name the parked meet
 test('R22 ③ of a parked story: the open room, the choice form, 계속 and 다시 회의, within the button limit; the setting line', () => {
   const {state, wizard} = setup();
   const job = {id: 'auto-r22', status: COUNCIL_REVIEW_STATUS, phase: COUNCIL_REVIEW_PHASE, stopBefore: 'text', allowNew: true, planMode: 'auto', councilReview: true,
-    wizard: {simpleFlow: true, topic: wizard.topic, characterIds: ['yuha'], backgroundIds: ['home'], language: 'bilingual', pageCount: 12, koreanLevel: 'K1', englishLevel: 'E0'},
+    wizard: {simpleFlow: true, topic: wizard.topic, characterIds: ['yuha'], backgroundIds: ['home'], language: 'bilingual', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0'},
     input: {topic: wizard.topic, pageCount: 12, councilPolicy: {version: 1}}, completed: {plan: 'x', input: 'x'}, usage: {calls: []}, imageUsage: {}, notes: [], councilCheckpoint: {record: parkedRecord()}, updatedAt: '2026-10-20T00:00:00Z'};
   state.fullAutoJobs = {[job.id]: job};
   const ctx = (w, d = null) => ({getState: () => state, getWizard: () => w, setWizard() {}, getDraft: () => d, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: c => `<svg aria-label="${c.name}"></svg>`, cover: () => '', illustration: () => ''});

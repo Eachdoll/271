@@ -365,7 +365,16 @@ function hybridLocalFields(settings) {
  * room, the editor round and (while 정성 모드 is on) the beat writer on the
  * chosen model, as a new draft freezes them.
  */
-export function newStoryTextEstimate(settings) {
+export function newStoryTextEstimate(settings, { k1Book = false } = {}) {
+  // R31a: a K1 book has no writers' room and one page-first writer call.
+  if (k1Book)
+    return estimateStoryTextCost({
+      settings,
+      pageCount: 12,
+      editor: true,
+      k1Book: true,
+      writerTier: settings.writerTier === "upper" ? "upper" : "medium",
+    });
   return estimateStoryTextCost({
     settings,
     pageCount: 12,
