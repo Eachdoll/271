@@ -5254,3 +5254,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
   flex-wrap: wrap;
   gap: 6px;
 }
+/* 2026-10-21: a beat's other drawer places, folded under the usual ones. */
+.story-place-more {
+  margin-top: 8px;
+}
+.story-place-more > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}

@@ -1,5 +1,5 @@
 import { renderCheckboxSwitch } from "../ui-controls.js";
-import { beatCountFor } from "./schemas.js";
+import { beatCountFor, hardOutlineViolations } from "./schemas.js";
 import { describeReadingViolation } from "../reading-messages.js";
 import { buildStoryWords } from "../story-reading-context.js";
 import {
@@ -14,6 +14,7 @@ import {
   inspectOutlineRules,
   preflightOutlineLocations,
   isHomeBackground,
+  customEnding,
   paragraphBeatLabels,
   generateSceneBriefs,
   rewriteSceneBrief,
@@ -1245,24 +1246,48 @@ export function selectableBeatBackgrounds(input, index, total) {
       : !isHomeBackground(background),
   );
 }
+/**
+ * 2026-10-21: the parent may set any drawer place on any beat. The usual
+ * places come first (home for the start and the end, the other places in
+ * between); the rest follow under '다른 장소'. A start or an end away from
+ * home is the parent's choice and only a note at approval.
+ */
+export function beatPlaceChoices(input, index, total) {
+  const usual = selectableBeatBackgrounds(input, index, total),
+    others = (input.backgrounds || []).filter(
+      (background) => !usual.some((item) => item.id === background.id),
+    );
+  return { usual, others };
+}
 /** Setting chips change both representations and keep the return-home pair together. */
 export function updateStoryBeatLocation(outline, input, index, backgroundId) {
   if (!outline?.beats?.[index])
     throw new Error("장소를 바꿀 비트를 찾지 못했어요.");
-  if (
-    !selectableBeatBackgrounds(input, index, outline.beats.length).some(
-      (background) => background.id === backgroundId,
-    )
-  )
-    throw new Error(
-      index === 0 || index === outline.beats.length - 1
-        ? "시작과 마무리는 집 배경을 골라 주세요."
-        : "배경 서랍의 다른 장소를 골라 주세요.",
-    );
+  const chosen = (input.backgrounds || []).find(
+    (background) => background.id === backgroundId,
+  );
+  if (!chosen) throw new Error("배경 서랍의 장소를 골라 주세요.");
+  const last = outline.beats.length - 1,
+    placeOf = (i) =>
+      outline.settings?.find(
+        (setting) => Number(setting.beatIndex) === Number(outline.beats[i].index),
+      )?.backgroundId || outline.beats[i].settingKey,
+    homeIds = new Set(
+      (input.backgrounds || []).filter(isHomeBackground).map((b) => b.id),
+    ),
+    endpoint = index === 0 || index === last,
+    other = index === 0 ? last : 0;
+  // The return-home pair moves together only while both ends are home and
+  // the new place is a home too; any other choice changes this beat alone.
   const next = clone(outline),
     indices =
-      index === 0 || index === outline.beats.length - 1
-        ? [0, outline.beats.length - 1]
+      endpoint &&
+      last > 0 &&
+      !customEnding(input) &&
+      homeIds.has(backgroundId) &&
+      homeIds.has(placeOf(index)) &&
+      homeIds.has(placeOf(other))
+        ? [0, last]
         : [index];
   if (
     next.plotContract &&
@@ -1318,11 +1343,14 @@ export function renderStoryBeatCard(draft, index, { open = false } = {}) {
       outline.settings?.find(
         (setting) => Number(setting.beatIndex) === Number(beat.index),
       )?.backgroundId || beat.settingKey;
-  const backgrounds = selectableBeatBackgrounds(
-    draft.input,
-    index,
-    outline.beats.length,
-  );
+  const { usual, others } = beatPlaceChoices(
+      draft.input,
+      index,
+      outline.beats.length,
+    ),
+    backgrounds = [...usual, ...others],
+    chip = (background) =>
+      `<button type="button" class="story-chip ${place === background.id ? "selected" : ""}" aria-pressed="${place === background.id}" data-story-action="set-beat-location" data-index="${index}" data-background-id="${esc(background.id)}">${esc(background.name || background.nameEn || background.id)}</button>`;
   // R12 openings: one beat is one opening (two facing printed pages).
   const pagesLabel = openingsDraft(draft)
     ? `펼침 ${index + 1} · ${2 * index + 1}–${2 * index + 2}쪽`
@@ -1330,7 +1358,7 @@ export function renderStoryBeatCard(draft, index, { open = false } = {}) {
         .filter((page) => page.beatIndex === beat.index)
         .map((page) => page.pageNo)
         .join("·")}쪽`;
-  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${pagesLabel}</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "집" : "배경 서랍"}</legend><div class="story-chip-row">${backgrounds.map((background) => `<button type="button" class="story-chip ${place === background.id ? "selected" : ""}" aria-pressed="${place === background.id}" data-story-action="set-beat-location" data-index="${index}" data-background-id="${esc(background.id)}">${esc(background.name || background.nameEn || background.id)}</button>`).join("") || '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>'}</div>${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
+  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${pagesLabel}</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "보통은 집" : "배경 서랍"}</legend><div class="story-chip-row">${usual.map(chip).join("") || (others.length ? "" : '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>')}</div>${others.length ? `<details class="story-place-more" ${others.some((background) => background.id === place) ? "open" : ""}><summary>다른 장소 ${others.length}곳</summary><div class="story-chip-row">${others.map(chip).join("")}</div></details>` : ""}${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
 }
 function renderOutline(s) {
   const o = s.draft.outline;
@@ -1817,7 +1845,14 @@ function acceptOutline(s, { allowDirty = false } = {}) {
       delete checked.plotContractDirty;
     }
     const rules = inspectOutlineRules(checked, s.draft.input);
-    if (!rules.valid) throw new Error(rules.errors.join("\n"));
+    // 2026-10-21: the parent's own edits win over the quality rules (home
+    // start/end, middle places, topic words…): those are notes, structure and
+    // forbidden content still block.
+    const hard = hardOutlineViolations(rules);
+    if (hard.length) throw new Error(hard.map((row) => row.message).join("\n"));
+    const soft = (rules.violations || []).filter((row) => !hard.includes(row));
+    if (soft.length)
+      api.toast(`참고로 남겨요: ${[...new Set(soft.map((row) => row.message))].join(" · ")}`);
   }
   if (o.refrain?.usedAtBeats?.length > 3)
     throw new Error("후렴은 최대 3개 비트에서 사용해 주세요.");

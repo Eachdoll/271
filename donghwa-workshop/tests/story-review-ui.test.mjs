@@ -17,8 +17,13 @@ test('drawer chips restrict home endpoints and the paired endpoint keeps the sam
  const changed=updateStoryBeatLocation(d.outline,d.input,6,'home2');
  for(const index of [0,6]){assert.equal(changed.beats[index].settingKey,'home2');assert.equal(changed.settings.find(setting=>setting.beatIndex===index+1).backgroundId,'home2');}
  assert.equal(changed.beats[3].settingKey,'forest');assert.deepEqual(d,before);
- assert.throws(()=>updateStoryBeatLocation(d.outline,d.input,0,'forest'),/집/);
- assert.throws(()=>updateStoryBeatLocation(d.outline,d.input,2,'home'),/다른 장소/);
+ // 2026-10-21: the parent may move any beat anywhere in the drawer; only that beat moves.
+ const away=updateStoryBeatLocation(d.outline,d.input,0,'forest');
+ assert.equal(away.beats[0].settingKey,'forest');assert.equal(away.beats[6].settingKey,d.outline.beats[6].settingKey);
+ assert.equal(updateStoryBeatLocation(d.outline,d.input,2,'home').beats[2].settingKey,'home');
+ assert.throws(()=>updateStoryBeatLocation(d.outline,d.input,2,'nowhere'),/배경 서랍/);
+ // Back home from away: the start alone (the end is already home).
+ assert.equal(updateStoryBeatLocation(away,d.input,0,'home2').beats[6].settingKey,d.outline.beats[6].settingKey);
  const legacy=structuredClone(d.outline);legacy.settings[2]={beatIndex:3,newPlace:'옛 설명'};
  const repaired=updateStoryBeatLocation(legacy,d.input,2,'garden');assert.deepEqual(repaired.settings[2],{beatIndex:3,backgroundId:'garden'});
 });
@@ -27,7 +32,9 @@ test('beat reviews collapse, show one-line event and emotion, and use drawer chi
  const d=fixture(),html=renderStoryBeatCard(d,2);
  assert.match(html,/<details[^>]+data-beat-details="2"[^>]*>/);assert.doesNotMatch(html,/<details[^>]+\bopen\b/);
  assert.match(html,/story-beat-preview/);assert.match(html,/story-emotion-badge/);assert.match(html,/aria-pressed="true"[^>]+data-story-action="set-beat-location"[^>]+data-background-id="garden"/);
- assert.match(html,/data-story-action="set-beat-emotion"/);assert.doesNotMatch(html,/data-beat-field="settingKey"|data-emotion-index=|data-background-id="home"/);
+ assert.match(html,/data-story-action="set-beat-emotion"/);assert.doesNotMatch(html,/data-beat-field="settingKey"|data-emotion-index=/);
+ // The usual places first; home under the folded '다른 장소'.
+ assert.match(html,/data-background-id="garden"[\s\S]*<details class="story-place-more" ><summary>다른 장소 2곳<\/summary>[\s\S]*data-background-id="home"/);
  assert.match(renderStoryBeatCard(d,0,{open:true}),/<details[^>]+\bopen\b/);
  d.outline.beats[2].summary='<img src=x onerror=bad>';d.input.backgrounds[2].name='<script>bad</script>';
  assert.doesNotMatch(renderStoryBeatCard(d,2),/<script>|<img/);
