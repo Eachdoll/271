@@ -22,20 +22,20 @@
 | 항목 | 값 |
 | --- | --- |
 | 저장소·브랜치 | https://github.com/Eachdoll/271 · `claude/cross-owner-repo-constraint-j20lhz` |
-| 코드 커밋 | **`92dce12`** (캐시 `donghwa-shell-v74`) |
+| 코드 커밋 | **`92dce12`**(앱, 캐시 `donghwa-shell-v74`) + **`aa28d88`**(A/B 러너 `scripts/r31b-ab.mjs`) |
 
 지금 운영 상태에 따라 범위를 고릅니다.
 
 | 운영 상태 | 반입 범위 | 운영 버전 |
 | --- | --- | --- |
-| v37 / v66 (r28~r31a 미반입) | **`09bb65e..92dce12`**를 한 번에. 통합 지시서 `CODEX_WORK_ORDER_R28_TO_R30_2026-10-21.md`의 절차를 따르되 `npm test` **988**, 캐시 **v74**로 읽기 | v38 |
-| v71 (r28~r30 배포) | **`f15a97f..92dce12`** (r30.1·r31a 포함) | 다음 번호 |
-| v72 (r30.1까지 배포) | **`354eda7..92dce12`** (r31a 포함) | 다음 번호 |
-| v73 (r31a까지 배포) | **`327dede..92dce12`** | 다음 번호 |
+| v37 / v66 (r28~r31a 미반입) | **`09bb65e..aa28d88`**를 한 번에. 통합 지시서 `CODEX_WORK_ORDER_R28_TO_R30_2026-10-21.md`의 절차를 따르되 `npm test` **990**, 캐시 **v74**로 읽기 | v38 |
+| v71 (r28~r30 배포) | **`f15a97f..aa28d88`** (r30.1·r31a 포함) | 다음 번호 |
+| v72 (r30.1까지 배포) | **`354eda7..aa28d88`** (r31a 포함) | 다음 번호 |
+| v73 (r31a까지 배포) | **`327dede..aa28d88`** | 다음 번호 |
 
 | 구분 | 파일 |
 | --- | --- |
-| 새 파일 | `dist/story-generation/prompt-diet.js`, `tests/prompt-diet-r31b.test.mjs` |
+| 새 파일 | `dist/story-generation/prompt-diet.js`, `tests/prompt-diet-r31b.test.mjs`, `scripts/r31b-ab.mjs`, `tests/r31b-ab-script.test.mjs` |
 | 바뀐 코드 | `dist/full-auto.js`, `dist/sw.js`(v74), `dist/story-generation/{arc-rules,book-revision,council,craft-rules,k1-book,pipeline,ui}.js`, `dist/text-generation/{models,settings-ui}.js` |
 | 바뀐 테스트 | `tests/{catchphrase-r9,k1-book-r31a,openings-legacy-r12,openings-policy-r12,prompt-policy-r23,story-stage-models}.test.mjs` |
 | 문서 | `CLAUDE.md` |
@@ -62,7 +62,7 @@
 
 | 명령 | 기대값 |
 | --- | --- |
-| `npm test` | **988/988**. 새 테스트 6개: `prompt-diet-r31b` |
+| `npm test` | **990/990**. 새 테스트 8개: `prompt-diet-r31b` 6, `r31b-ab-script` 2(데모 엔진, 무료) |
 | `npm run test:quality` | **85/85**, `diff -rq story-quality/dist dist/story-quality/dist` 출력 없음 |
 | `scripts/r12-legacy-dom.mjs --check` (포트 4960) | `0e5035cf…` 그대로 |
 | `scripts/ux-census.mjs` | `PRO SAME AS TABLE true`, `ERRORS []`, `PAID 0` |
@@ -88,10 +88,23 @@ git push origin <운영 브랜치>
 - 쉬운 ③에서 K2 16쪽 새 이야기 요금이 약 $1.66으로 나오는지 봅니다(K1 12쪽은 약 $0.99 그대로).
 - 데모로 한 권을 만들어 기존 흐름(④ 글 고치기·그림)이 그대로인지 봅니다.
 
-**유료(부모님 승인 뒤에만)**
-- 같은 요청으로 r31a와 r31b 원고를 나란히 비교합니다: "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기, 12쪽" — K1 1권(글 약 $0.9), K2 1권(글 약 $1.5).
-- 확인할 것: 의성어가 문맥에 맞는지, 쪽마다 넘기고 싶은 재미가 있는지, 끝이 유치원 장면인지, 검사 리포트의 문장 항목이 통과하는지.
-- 원고의 숫자는 모델이 말한 값이 아니라 검사기 실측값으로만 적습니다.
+**유료 A/B(부모님이 승인했습니다 · 2026-10-21 "진행해") — 코드 커밋 `aa28d88` 반입 뒤**
+
+클라우드 세션에는 부모님 키가 없어 Claude가 직접 돌리지 못했습니다. 부모님 PC에서 Codex가 돌립니다. 키는 그 셸의 환경 변수에만 두고(아래 한 줄), 파일·소스·커밋·로그 어디에도 적지 않습니다.
+
+```bash
+cd donghwa-workshop
+# 글 엔진이 OpenAI(기본)면 OPENAI_API_KEY, Anthropic이면 ANTHROPIC_API_KEY, Google이면 GOOGLE_API_KEY
+export OPENAI_API_KEY='<부모님이 직접 입력>'
+node scripts/r31b-ab.mjs K1 both QA/r31b-ab --paid     # K1 12쪽 × 2편 (r31a 프롬프트, r31b 다이어트) · 추정 약 0.9달러 × 2
+node scripts/r31b-ab.mjs K2 both QA/r31b-ab --paid     # K2 12쪽 × 2편 · 추정 약 2.2달러 + 1.5달러
+unset OPENAI_API_KEY
+```
+
+- 같은 요청("4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기", 12쪽)을 ③과 같은 글 단계로 씁니다(글 멈춤, 그림 없음, 회의는 의장이 고름, 부족한 재료 자동 추가). 실제 요금은 사용 기록의 토큰 × 단가표로 합산되어 각 `.md` 첫 줄에 적힙니다. 추정보다 적게 나오는 것이 보통입니다.
+- 결과: `QA/r31b-ab/K1-r31a.md`, `K1-diet.md`, `K1-compare.md`(Dola 골든 열 포함), `K2-*.md`와 같은 이름의 `.json`. 한 편이 중단되면 그 편의 `.md`에 중단 사유와 진행 단계가 남고 종료 코드 1입니다. 다시 돌리면 새로 씁니다(같은 요금).
+- 확인할 것: 의성어가 문맥에 맞는지, 쪽마다 넘기고 싶은 재미가 있는지, 끝이 유치원 장면인지, `compare.md`의 검사 걸린 쪽 수. 원고의 숫자는 모델이 말한 값이 아니라 검사기 실측값(표)만 씁니다.
+- `QA/r31b-ab/`를 커밋에 포함합니다(원고·실측·요금만 들어 있고 키는 없습니다. 커밋 전에 `grep -ril "sk-" QA/r31b-ab` 가 비어 있는지 한 번 봅니다).
 
 ## 5. 완료 보고
 
