@@ -26,6 +26,9 @@ import { readAutoStop } from "./full-auto-control.js";
 import {
   rewriteBookPage,
   applyPageText,
+  alignPageEnglish,
+  canAlignEnglish,
+  estimateAlignEnglish,
   setPageReviewed,
   estimateSimpleCosts,
   generateBookPageImage,
@@ -1361,7 +1364,7 @@ function renderReviewStep(ctx, w) {
   const ownOp = pageOp && pageOp.bookId === book.id ? pageOp : null,
     running =
       live || ownOp
-        ? `${progressBlock(job, ownOp ? `${pageName(book, ownOp.index)} ${ownOp.kind === "rewrite" ? "글" : "그림"} 만드는 중` : "그림 만드는 중")}`
+        ? `${progressBlock(job, ownOp ? `${pageName(book, ownOp.index)} ${ownOp.label || `${ownOp.kind === "rewrite" ? "글" : "그림"} 만드는 중`}` : "그림 만드는 중")}`
         : "",
     topAction = interrupted
       ? sbtn(
@@ -2063,7 +2066,10 @@ async function saveText(ctx) {
     index = ctx.getEditPage();
   if (!book) return;
   const ko = document.querySelector("#page-ko")?.value,
-    en = document.querySelector("#page-en")?.value;
+    en = document.querySelector("#page-en")?.value,
+    before = book.pages?.[index] || {},
+    beforeKo = before.ko ?? before.textKo ?? "",
+    beforeEn = before.en ?? before.textEn ?? "";
   let result = null;
   try {
     result = await applyPageText(state, book, index, {
@@ -2092,8 +2098,55 @@ async function saveText(ctx) {
   ctx.render();
   if (!result.changed) return ctx.toast("바뀐 글이 없어요.");
   ctx.toast(`${pageName(book, index)} 글을 저장했어요.`);
-  if (result.imageStale) await askRedraw(ctx, book, index);
+  // R30.1: only the Korean changed — offer to match the English to it.
+  const page = book.pages?.[index] || {};
+  if (
+    canAlignEnglish(book) &&
+    needsEn(book) &&
+    (page.ko ?? page.textKo ?? "") !== beforeKo &&
+    (page.en ?? page.textEn ?? "") === beforeEn &&
+    String(beforeEn).trim()
+  )
+    await offerAlignEnglish(ctx, book, index, { previousKo: beforeKo, previousEn: beforeEn });
+  if (isPageImageStale(book.pages?.[index])) await askRedraw(ctx, book, index);
   void refreshReading(ctx);
+}
+/**
+ * R30.1 영어 맞추기: after a Korean-only edit, ask (with the price) and
+ * rewrite only that page's English to match. The Korean stays as saved; the
+ * picture is asked about afterwards, as after any text edit.
+ */
+async function offerAlignEnglish(ctx, book, index, { previousKo, previousEn }) {
+  const state = ctx.getState(),
+    cost = estimateAlignEnglish(state, book);
+  const ok = await confirmModal(
+    ctx,
+    "영어도 이 한글에 맞출까요?",
+    `고친 한글은 그대로 두고, ${pageName(book, index)}의 영어만 같은 내용으로 다시 써요. 글 엔진 요금 ${textFee(cost.usd, cost.pricingUnknown)}. 영어를 직접 고치려면 ‘취소’를 누르세요.`,
+    "영어 맞추기",
+  );
+  if (!ok) return;
+  const controller = new AbortController();
+  pageOp = { kind: "rewrite", label: "영어 맞추는 중", index, controller, bookId: book.id };
+  ctx.render();
+  try {
+    const result = await alignPageEnglish(state, book, index, {
+      signal: controller.signal,
+      save: ctx.save,
+      previousKo,
+      previousEn,
+    });
+    ctx.toast(
+      result.warnings?.length
+        ? `${pageName(book, index)} 영어를 맞췄어요 · 참고: ${result.warnings[0]}`
+        : `${pageName(book, index)} 영어를 한글에 맞췄어요.`,
+    );
+  } catch (error) {
+    ctx.toast(error?.name === "AbortError" ? "영어 맞추기를 멈췄어요." : error);
+  } finally {
+    pageOp = null;
+    ctx.render();
+  }
 }
 async function rewriteText(ctx) {
   const state = ctx.getState(),

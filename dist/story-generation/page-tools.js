@@ -1,6 +1,7 @@
 /* Per-page tools for a built picture book (FULL AUTO or story workflow). State functions only: no DOM.
  * Text edits never buy an image: they mark the page image stale and the caller asks before redrawing. */
-import { rewriteStoryPage } from "./pipeline.js";
+import { rewriteStoryPage, alignEnglishText } from "./pipeline.js";
+import { hasOrchestrationPolicy } from "./orchestration.js";
 import { checkStory } from "./checker.js";
 import { checkRichness } from "./richness.js";
 import { currentBookPagination } from "./book-coherence.js";
@@ -15,6 +16,7 @@ import {
 import {
   resolveStoryStageSettings,
   resolveQualityStageSettings,
+  resolveBeatWriterSettings,
   estimateStoryTextCost,
   estimateTextCost,
 } from "../text-generation/models.js";
@@ -468,6 +470,159 @@ async function rewritePage(
     storyCheck: book.storyCheck || null,
     imageStale: !!page.imageStale,
   };
+}
+
+/**
+ * R30.1 영어 맞추기: the model that rewrites a page's English after a Korean
+ * edit — the beat writer's model for a 정성 모드 book, else the quality
+ * 'prose' (medium) role.
+ */
+function alignSelection(state, book) {
+  const settings = textSettingsOf(state, book),
+    input = book.storyInput || {},
+    quality = input.storyQuality || settings.storyQuality || {};
+  return hasOrchestrationPolicy(input)
+    ? resolveBeatWriterSettings(settings, quality, input.orchestrationPolicy.writerTier)
+    : resolveQualityStageSettings(settings, "prose", quality);
+}
+/** What one 영어 맞추기 costs (one request; a second only when the first misses its length). */
+export function estimateAlignEnglish(state, book) {
+  try {
+    const selection = alignSelection(state, book),
+      price = estimateTextCost({ ...selection, input: 4500, output: 900 });
+    return { usd: Number(price.costUsd) || 0, ...(price.pricingUnknown ? { pricingUnknown: true } : {}) };
+  } catch {
+    return { usd: 0 };
+  }
+}
+/** Whether a page offers 영어 맞추기: a real (non-demo) story book with English. */
+export function canAlignEnglish(book) {
+  return (
+    !!book &&
+    !book.textDemo &&
+    book.language !== "ko" &&
+    !!book.outline &&
+    !!(book.storyInput?.specs?.en || book.readingLevelSnapshot?.specs?.en)
+  );
+}
+/** The sentence band of one page's English (an openings entry by its kind; a rhythm spec's wide band). */
+function pageEnglishRange(book, page, spec) {
+  const unit = spec?.units ? spec.units[page?.kind === "spread" ? "spread" : "page"] : null,
+    base = unit || spec?.sentencesPerPageRange || { min: 1, max: 3 },
+    target = unit?.target ?? Math.round((base.min + base.max) / 2),
+    wide = spec?.rhythm?.version === 1;
+  return {
+    min: wide ? Math.max(1, Math.floor(base.min * (spec.rhythm.pageMinShare ?? 1 / 3))) : base.min,
+    max: wide ? Math.max(base.max, Math.ceil(base.max * (spec.rhythm.pageMaxFactor ?? 1.6))) : base.max,
+    target,
+  };
+}
+/**
+ * Ask for one page's English matched to its (edited) Korean, without
+ * writing anything. `previousKo`/`previousEn` are the page before the edit.
+ * Returns {en, warnings, row} (row: the usage row to record), or throws with
+ * the billed usage on error.usage.
+ */
+export async function requestPageEnglish(
+  state,
+  book,
+  pageIndex,
+  { signal, previousKo, previousEn, engine, align = alignEnglishText } = {},
+) {
+  const index = pageIndexOf(book, pageIndex);
+  if (!canAlignEnglish(book))
+    throw Error("이 책은 영어 맞추기를 할 수 없어요. 영어 칸을 직접 고쳐 주세요.");
+  const page = book.pages[index],
+    input = book.storyInput || fullAutoJobForBook(state, book)?.input || {},
+    specs = book.readingLevelSnapshot?.specs || input.specs || {},
+    job = fullAutoJobForBook(state, book),
+    text = (row, lang) => (row ? (row[lang] ?? row[lang === "ko" ? "textKo" : "textEn"] ?? "") : ""),
+    beatIndex = page.beatIndex ?? page.scene?.beatIndex,
+    brief = (book.sceneBriefs || []).find((row) => Number(row?.beatIndex) === Number(beatIndex));
+  const selection = alignSelection(state, book),
+    extra = { action: "align-english", pageNo: page.pageNo ?? index + 1 };
+  let result;
+  try {
+    result = await align(
+      {
+        ko: text(page, "ko"),
+        previousKo: previousKo ?? "",
+        previousEn: previousEn ?? text(page, "en"),
+        before: book.pages.slice(Math.max(0, index - 2), index).map((row) => text(row, "en")),
+        after: book.pages.slice(index + 1, index + 2).map((row) => text(row, "en")),
+        beatIndex,
+        brief,
+        range: pageEnglishRange(book, page, specs.en),
+        refrainEn: job?.writerReport?.refrain?.voiceCard?.en || book.writerReport?.refrain?.voiceCard?.en || "",
+      },
+      book.outline,
+      { ...input, specs: { ...(input.specs || {}), ...specs } },
+      { ...selection, ...(engine ? { engine } : {}), signal },
+    );
+  } catch (error) {
+    if (error?.usage) error.usageRow = usageRow({ usage: error.usage, meta: error.meta }, { ...extra, failed: true });
+    throw error;
+  }
+  return {
+    en: result.data.en,
+    warnings: result.meta?.warnings || [],
+    row: usageRow(result, extra),
+  };
+}
+/** Record a paid text row on a book (the pro editor's own 영어 맞추기). */
+export function recordPageTextUsage(state, book, row) {
+  if (row) recordTextUsage(state, book, row);
+}
+/**
+ * R30.1: rewrite page i's English to match its Korean and save it (the
+ * Korean is untouched). Same locks and bookkeeping as a page rewrite: the
+ * cost is recorded even when the answer cannot be used, and the picture is
+ * only marked stale (the caller asks before redrawing).
+ */
+export async function alignPageEnglish(state, book, pageIndex, options = {}) {
+  const index = pageIndexOf(book, pageIndex);
+  assertNotRunning(state, book);
+  return exclusive(book, async () => {
+    await otherTabRunCheck(state, book);
+    let answer;
+    try {
+      answer = await requestPageEnglish(state, book, index, options);
+    } catch (error) {
+      if (error?.usageRow) {
+        recordTextUsage(state, book, error.usageRow);
+        try {
+          await commit(state, book, options.save);
+        } catch {
+          /* Report the request failure, not the follow-up save. */
+        }
+      }
+      throw error;
+    }
+    recordTextUsage(state, book, answer.row);
+    if (runOwnsBook(state, book)) {
+      try {
+        await saveOnly(options.save);
+      } catch {
+        /* Report the refusal, not the follow-up save. */
+      }
+      throw Error(
+        "FULL AUTO가 이 책을 만들기 시작해서 맞춘 영어를 적용하지 않았어요. 사용한 요청 비용은 기록했어요.",
+      );
+    }
+    const page = book.pages[index],
+      ko = page.ko ?? page.textKo ?? "",
+      changed = writePageText(state, book, index, ko, answer.en);
+    await commit(state, book, options.save);
+    return {
+      changed,
+      page,
+      en: answer.en,
+      warnings: answer.warnings,
+      usage: answer.row,
+      storyCheck: book.storyCheck || null,
+      imageStale: !!page.imageStale,
+    };
+  });
 }
 
 /** Apply the parent's own text for one page: same bookkeeping as a rewrite, no request. */

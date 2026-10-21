@@ -298,6 +298,7 @@ export const STORY_STAGE_LABELS = Object.freeze({
   coherence: "일관성 검사",
   coherenceRepair: "일관성 수정",
   materials: "재료 고르기",
+  alignEnglish: "영어 맞추기",
 });
 /**
  * Display form of a stage error ('이야기 sceneBriefs 결과를 확인해 주세요: …' →

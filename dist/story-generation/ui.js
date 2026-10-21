@@ -7,6 +7,7 @@ import {
   rewriteBeat,
   generateProse,
   rewriteParagraph,
+  alignProseParagraph,
   paginateStory,
   rewriteStoryPage,
   repairPagination,
@@ -1401,7 +1402,7 @@ function renderOutline(s) {
       )}</div></div>${renderStoryQualityPlan(s.draft)}${renderStoryPlotContract(s.draft)}${o.beats.map((beat, index) => renderStoryBeatCard(s.draft, index, { open: s.openBeats?.has(index) || false })).join("")}<details class="story-card story-tools"><summary>후렴·새 단어·다시 쓰기</summary><div class="story-review-grid"><div class="field"><label>후렴</label><input id="story-refrain" value="${esc(o.refrain?.text || "")}" maxlength="150"></div><div class="field"><label>후렴 비트 · 최대 3곳</label><input id="story-refrain-beats" value="${esc(o.refrain?.usedAtBeats?.join(", ") || "")}"></div><div class="field"><label>새 한글 단어</label><input data-outline-words="newWordsKo" value="${esc(o.newWordsKo?.join(", ") || "")}"></div><div class="field"><label>새 영어 단어</label><input data-outline-words="newWordsEn" value="${esc(o.newWordsEn?.join(", ") || "")}"></div></div>${button("줄거리 전체 다시 쓰기", "regenerate-outline")}${s.draft.demo ? button("실제 엔진으로 새 줄거리 생성", "replace-demo-with-api") : ""}</details>${renderSceneBriefs(s.draft, { open: s.briefsOpen, openBeats: s.openBriefs })}${note()}<div class="modal-actions">${button("저장하고 닫기", "close")}${s.draft.sceneBriefs?.length && !o.plotContractDirty ? button("장면 확인 · 전문 생성", "generate-prose", "", "primary") : button(o.plotContractDirty ? "수정한 줄거리 승인 · 장면 다시 생성" : "줄거리 승인 · 장면 디테일 생성", "approve-outline", "", "primary")}</div>`,
   );
 }
-export function renderStoryProseParagraphs(prose, language, outline) {
+export function renderStoryProseParagraphs(prose, language, outline, { alignEn = false } = {}) {
   const paragraphs = String(prose[language] || "")
       .split(/\n\s*\n/)
       .map((part) => part.trim())
@@ -1410,7 +1411,7 @@ export function renderStoryProseParagraphs(prose, language, outline) {
   return paragraphs
     .map(
       (paragraph, index) =>
-        `<article class="story-card story-paragraph"><div class="story-card-head"><label class="story-beat-heading" for="story-paragraph-${language}-${index}">비트 ${labels[index]} · ${esc(BEAT_LABELS[outline?.beats?.find((beat) => beat.index === labels[index])?.type] || "이야기")}</label>${button("↻", "rewrite-paragraph", `data-index="${index}" data-language="${language}" aria-label="${index + 1}번째 문단 다시 쓰기"`)}</div><textarea id="story-paragraph-${language}-${index}" class="story-prose-paragraph" data-prose-paragraph="${index}" data-beat-index="${labels[index]}" data-language="${language}" maxlength="12000">${esc(paragraph)}</textarea></article>`,
+        `<article class="story-card story-paragraph"><div class="story-card-head"><label class="story-beat-heading" for="story-paragraph-${language}-${index}">비트 ${labels[index]} · ${esc(BEAT_LABELS[outline?.beats?.find((beat) => beat.index === labels[index])?.type] || "이야기")}</label>${alignEn ? button("EN", "align-paragraph-en", `data-index="${index}" aria-label="${index + 1}번째 문단에 맞춰 영어 다시 쓰기" title="이 비트의 영어를 이 한글에 맞춰 다시 써요"`) : ""}${button("↻", "rewrite-paragraph", `data-index="${index}" data-language="${language}" aria-label="${index + 1}번째 문단 다시 쓰기"`)}</div><textarea id="story-paragraph-${language}-${index}" class="story-prose-paragraph" data-prose-paragraph="${index}" data-beat-index="${labels[index]}" data-language="${language}" maxlength="12000">${esc(paragraph)}</textarea></article>`,
     )
     .join("");
 }
@@ -1424,7 +1425,7 @@ function renderProse(s) {
       !s.draft.hybridFinal;
   show(
     s,
-    `${header(s, "이야기 전문")}<p class="modal-intro">비트별 사건·대화·감각 묘사를 읽고 고쳐 주세요.</p>${renderStoryCoherence(s.draft.proseCoherence, { dirty: s.draft.proseCoherenceDirty })}${needsFinal ? '<div class="notice">로컬 초안을 최종 전문 모델로 다듬어 주세요.</div>' : ""}<div class="story-prose-tabs">${button("한글", "prose-tab", 'data-language="ko"', language === "ko" ? "green" : "outline")}${button("English", "prose-tab", 'data-language="en"', language === "en" ? "green" : "outline")}</div>${renderStoryProseParagraphs(p, language, s.draft.outline)}<details class="story-card story-tools"><summary>이전 단계·다시 쓰기</summary><div class="story-inline-actions">${button("줄거리로 돌아가기", "back-outline")}${button("전문 다시 쓰기", "regenerate-prose")}</div></details>${note()}<div class="modal-actions">${button("저장하고 닫기", "close")}${s.draft.enrichmentPending ? button("글 풍부화 이어 만들기", "resume-enrichment", "", "primary") : needsFinal ? button("최종 전문 다듬기", "hybrid-final", "", "primary") : button("전문 승인 · 쪽 나누기", "approve-prose", "", "primary")}</div>`,
+    `${header(s, "이야기 전문")}<p class="modal-intro">비트별 사건·대화·감각 묘사를 읽고 고쳐 주세요.</p>${renderStoryCoherence(s.draft.proseCoherence, { dirty: s.draft.proseCoherenceDirty })}${needsFinal ? '<div class="notice">로컬 초안을 최종 전문 모델로 다듬어 주세요.</div>' : ""}<div class="story-prose-tabs">${button("한글", "prose-tab", 'data-language="ko"', language === "ko" ? "green" : "outline")}${button("English", "prose-tab", 'data-language="en"', language === "en" ? "green" : "outline")}</div>${renderStoryProseParagraphs(p, language, s.draft.outline, { alignEn: language === "ko" && !s.draft.demo && s.draft.input.language !== "ko" })}<details class="story-card story-tools"><summary>이전 단계·다시 쓰기</summary><div class="story-inline-actions">${button("줄거리로 돌아가기", "back-outline")}${button("전문 다시 쓰기", "regenerate-prose")}</div></details>${note()}<div class="modal-actions">${button("저장하고 닫기", "close")}${s.draft.enrichmentPending ? button("글 풍부화 이어 만들기", "resume-enrichment", "", "primary") : needsFinal ? button("최종 전문 다듬기", "hybrid-final", "", "primary") : button("전문 승인 · 쪽 나누기", "approve-prose", "", "primary")}</div>`,
   );
 }
 
@@ -2251,6 +2252,7 @@ async function handleClick(event) {
     "regenerate-prose",
     "hybrid-final",
     "rewrite-paragraph",
+    "align-paragraph-en",
   ].includes(action)
     ? "prose"
     : ["approve-prose", "repaginate", "repair-pages", "rewrite-page"].includes(
@@ -2583,6 +2585,25 @@ async function handleClick(event) {
           d.enrichmentPending = false;
           d.stage = "prose_draft";
           s.mode = "prose";
+        },
+      );
+    // R30.1 영어 맞추기: this Korean paragraph's beat gets its English rewritten to match.
+    if (action === "align-paragraph-en")
+      return run(
+        s,
+        "이 한글에 맞춰 영어를 다시 쓰고 있어요",
+        () =>
+          alignProseParagraph(d.prose, Number(el.dataset.index), d.outline, d.input, {
+            ...options(s, d.hybridFinal ? "prose" : "proseDraft"),
+            sceneBriefs: d.sceneBriefs || undefined,
+            refrainEn: d.writerReport?.refrain?.voiceCard?.en || "",
+          }),
+        (r) => {
+          snapshot(s, "prose");
+          invalidateStoryDetails(d, { prose: true });
+          d.prose = r.data;
+          d.stage = "prose_draft";
+          if (r.meta?.warnings?.length) api.toast(`영어를 맞췄어요 · 참고: ${r.meta.warnings[0]}`);
         },
       );
     if (action === "rewrite-paragraph")

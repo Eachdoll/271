@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v71";
+const CACHE = "donghwa-shell-v72";
 const FILES = [
   "./ui-controls.js",
   "./assets/council/watercolor-portraits.webp",
