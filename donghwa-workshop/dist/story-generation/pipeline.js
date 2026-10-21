@@ -605,8 +605,13 @@ async function resolveEngine(options) {
     !config.proxyUrl &&
     config.transport !== "proxy"
   ) {
-    const { getCredential } = await import("../image-generation/vault.js");
-    config.apiKey = await getCredential(options.engineId);
+    // S1: a caller outside the browser (a server runner) supplies its own key
+    // source; the browser keeps reading the PIN vault as before.
+    const credentialFor =
+      typeof options.credentialFor === "function"
+        ? options.credentialFor
+        : (await import("../image-generation/vault.js")).getCredential;
+    config.apiKey = await credentialFor(options.engineId);
     if (!config.apiKey)
       throw missingCredentialError(
         "부모 설정에서 이야기 엔진의 API 비밀 키를 입력해 주세요.",

@@ -474,7 +474,7 @@ export function estimateFullAutoCost(
     ...pricingFlags,
   };
 }
-export async function preflightFullAuto(state, job) {
+export async function preflightFullAuto(state, job, { credentials = getCredential } = {}) {
   if (!job.allowNew) {
     const places = preflightOutlineLocations({
       backgrounds: active(state.backgrounds),
@@ -513,7 +513,7 @@ export async function preflightFullAuto(state, job) {
       config.transport === "proxy"
     )
       continue;
-    if (!(await getCredential(engine)))
+    if (!(await credentials(engine)))
       throw Error(`${engine} 글 엔진의 API 키를 부모 설정에 저장해 주세요.`);
   }
   // A text-only hold buys no sheet or image, so it needs no image key yet.
@@ -524,7 +524,7 @@ export async function preflightFullAuto(state, job) {
     !["local", "sample"].includes(job.imageEngine) &&
     !config.proxyEndpoint &&
     config.transport !== "proxy" &&
-    !(await getCredential(job.imageEngine))
+    !(await credentials(job.imageEngine))
   )
     throw Error("이미지 엔진의 API 키를 부모 설정에 저장해 주세요.");
   if (job.imageEngine === "local" && (!config.endpoint || !config.workflow))
@@ -535,7 +535,7 @@ export async function preflightFullAuto(state, job) {
 async function generateAutoBackground(
   state,
   background,
-  { signal, frozenImageModel } = {},
+  { signal, frozenImageModel, credentials = getCredential } = {},
 ) {
   const world = getActiveWorld(state),
     config = {
@@ -548,7 +548,7 @@ async function generateAutoBackground(
   if (frozenImageModel) config.model = frozenImageModel;
   else if (frozenImageModel === null) delete config.model;
   if (!config.proxyEndpoint && config.transport !== "proxy")
-    config.apiKey = await getCredential(world.imageEngine);
+    config.apiKey = await credentials(world.imageEngine);
   const request = backgroundSheetRequest(state, background, {
       quality: "final",
     }),
@@ -930,9 +930,13 @@ export async function runFullAuto(
     onProgress = () => {},
     buildBook,
     operations = {},
+    // S1: where API keys come from (the PIN vault by default). A server
+    // runner passes its own source; the browser's requests are unchanged.
+    credentials,
   } = {},
 ) {
   const ops = { ...DEFAULT_OPS, ...operations };
+  const keySource = credentials ? { credentials } : {};
   if (job.status === "running")
     throw Error("이 자동 작업이 이미 실행 중이에요.");
   // An unknown hold must never fall through to buying images.
@@ -1023,6 +1027,7 @@ export async function runFullAuto(
       storyEnrichment: job.textSettings.storyEnrichment !== false,
       richness: job.textSettings.storyEnrichment !== false,
       enrichmentCheckpoint: job.enrichmentCheckpoint,
+      ...(credentials ? { credentialFor: credentials } : {}),
       onProgress: (p) => report(p.message || label),
       onCheckpoint: async (cp) => {
         if (cp.qualityCheckpoint)
@@ -1089,7 +1094,7 @@ export async function runFullAuto(
   try {
     assertJobWorld(state, job);
     abort(signal);
-    await ops.preflight(state, job);
+    await ops.preflight(state, job, keySource);
     // A stop pressed during the preflight's key reads ends the run here, 'paused'.
     abort(signal);
     job.status = "running";
@@ -1190,6 +1195,7 @@ export async function runFullAuto(
           ops.backgroundSheet(state, background, {
             signal,
             ...frozenModelOption(job),
+            ...keySource,
           }),
         (result) => {
           const world = getActiveWorld(state),
