@@ -31,6 +31,7 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { preloadQualityDataForNode } from "./r31b-node-data.mjs";
 import { seedState } from "../dist/engine.js";
 import { migrateWorldState } from "../dist/image-generation/world.js";
 import { migrateReadingSettings } from "../dist/reading-ui.js";
@@ -304,6 +305,8 @@ function compareReport(results, golden) {
   return lines.join("\n");
 }
 
+// Fail on missing local assets before purchasing material plans or a council.
+await preloadQualityDataForNode();
 const results = [];
 for (const arm of arms) {
   const run = await runArm(arm);
@@ -333,6 +336,15 @@ for (const arm of arms) {
         revision: run.job.revision,
         storyCheck: run.job.storyCheck,
         pageCoherence: run.job.pageCoherence,
+        qualityCheckpoint: run.job.qualityCheckpoint,
+        councilCheckpoint: run.job.councilCheckpoint,
+        writerCheckpoint: run.job.writerCheckpoint,
+        childGateCheckpoint: run.job.childGateCheckpoint,
+        revisionCheckpoint: run.job.revisionCheckpoint,
+        enrichmentCheckpoint: run.job.enrichmentCheckpoint,
+        briefRepairs: run.job.briefRepairs,
+        proseCoherence: run.job.proseCoherence,
+        richnessCheck: run.job.richnessCheck,
         notes: run.job.notes,
         usage: run.job.usage,
         measured,

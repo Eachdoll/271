@@ -5,6 +5,23 @@ import {existsSync, readFileSync, mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {preloadQualityDataForNode} from '../scripts/r31b-node-data.mjs';
+import {loadStoryQualityData} from '../dist/story-generation/quality-adapter.js';
+
+test('R31b Node runner loads baseline quality assets without an HTTP or file fetch', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () => { throw Error('Unexpected network fetch'); };
+  try {
+    const loaded = await preloadQualityDataForNode();
+    const cached = await loadStoryQualityData(globalThis.fetch, {includeDistilled: true});
+    assert.ok(loaded.goldBooks.length > 0);
+    assert.ok(loaded.worldLibrary.worlds.length > 0);
+    assert.deepEqual(cached, loaded);
+    await assert.rejects(fetch(new URL('file:///unrelated-private-file')), /only reads local quality assets/u);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 
 /**
  * 2026-10-21 R31b A/B runner (scripts/r31b-ab.mjs): the same request written
