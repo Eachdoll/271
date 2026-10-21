@@ -1,0 +1,119 @@
+{
+  "deployment": {
+    "version_number": 42,
+    "commit_sha": "665ab3d46df540e1d857a38e348a7241e4255800",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_0d07cadcded08191af6ba1611b5248c2",
+    "deployment_id": "appgdep_6ad92fdeda048191ba9bba4a2be04332",
+    "status": "succeeded",
+    "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "cache": "donghwa-shell-v74",
+    "env_set_revision": 1,
+    "upstream_code_end": "aa28d88dd996afd37a8bf2546a6828ed57c4e028",
+    "upstream_work_order": "23ad38dfaf07330e37cdbd4cb719952b1b93867b",
+    "updated_at": "2026-10-21T21:34:38.327808+00:00"
+  },
+  "validation": {
+    "validatedAt": "2026-10-21T21:33:25.323083+00:00",
+    "upstreamBase": "92dce127c3421f25331f437784da7a65429b2c7a",
+    "upstreamCodeCommit": "aa28d88dd996afd37a8bf2546a6828ed57c4e028",
+    "upstreamWorkOrder": "23ad38dfaf07330e37cdbd4cb719952b1b93867b",
+    "tests": {
+      "app": {
+        "tests": 990,
+        "pass": 990,
+        "fail": 0
+      },
+      "quality": {
+        "tests": 85,
+        "pass": 85,
+        "fail": 0
+      }
+    },
+    "sourceMatches": {
+      "CLAUDE.md": true,
+      "CODEX_WORK_ORDER_R31B_2026-10-21.md": true,
+      "scripts/r31b-ab.mjs": true,
+      "tests/r31b-ab-script.test.mjs": true
+    },
+    "attachments": {
+      "scriptMatchesAttachment": true,
+      "orderMatchesAttachment": true
+    },
+    "demoRuns": [
+      {
+        "level": "K1",
+        "requestedPages": 12,
+        "status": [
+          "text-review",
+          "text-review"
+        ],
+        "measuredEntries": [
+          12,
+          12
+        ],
+        "costUsd": 0,
+        "recordedDemoRequests": [
+          3,
+          3
+        ],
+        "paidApiCalls": 0,
+        "policiesDifferOnlyByPromptDiet": true,
+        "compareReport": "K1-compare.md"
+      },
+      {
+        "level": "K2",
+        "requestedPages": 12,
+        "status": [
+          "text-review",
+          "text-review"
+        ],
+        "measuredEntries": [
+          9,
+          9
+        ],
+        "costUsd": 0,
+        "recordedDemoRequests": [
+          3,
+          3
+        ],
+        "paidApiCalls": 0,
+        "policiesDifferOnlyByPromptDiet": true,
+        "compareReport": "K2-compare.md"
+      }
+    ],
+    "runtimeReuse": {
+      "unchangedRuntimeAndBuildInputs": {
+        "dist": true,
+        "server": true,
+        "cloud-runtime": true,
+        "story-quality": true,
+        "scripts/build-cloud.mjs": true,
+        "package.json": true,
+        ".openai/hosting.json": true
+      },
+      "priorValidation": "/workspace/artifacts/r31b/required-gates.json",
+      "priorProductionValidation": "/workspace/artifacts/r31b/production/results.json",
+      "browserChecksReused": true,
+      "buildReused": true,
+      "serviceWorker": "donghwa-shell-v74"
+    },
+    "priorBrowserGates": {
+      "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+      "census": {
+        "proMatchesWorkOrderTable": true,
+        "simpleStepsWithinLimit": true,
+        "pageErrors": [],
+        "paidRequests": []
+      },
+      "smoke": {
+        "1280": "PASS",
+        "390": "PASS"
+      }
+    },
+    "patchSha256": "8dcb9ab8c2f44434c666898be8f96e0a16d35165b7cdb7da5992faab0e09bf63",
+    "paidApiCalls": 0,
+    "paidAB": "Not run: no paid engine API key in this execution environment.",
+    "allRequiredGatesPassed": true
+  }
+}

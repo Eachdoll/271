@@ -1,0 +1,3840 @@
+{
+  "level": "K2",
+  "arm": "r31a",
+  "wizard": {
+    "characterIds": [
+      "yuha"
+    ],
+    "backgroundIds": [
+      "home",
+      "forest"
+    ],
+    "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+    "pageCount": 12,
+    "koreanLevel": "K2",
+    "englishLevel": "E2",
+    "value": "none",
+    "ending": "home",
+    "language": "bilingual",
+    "simpleFlow": true,
+    "allowNew": true
+  },
+  "planMode": "selection",
+  "status": "text-review",
+  "error": null,
+  "seconds": 1,
+  "input": {
+    "characters": [
+      {
+        "id": "yuha",
+        "name": "유하",
+        "nameEn": "Yuha",
+        "role": "주인공",
+        "kind": "child",
+        "age": 4,
+        "gender": "남자아이",
+        "description": "짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지",
+        "appearance": "짧은 검은 머리 · 동그란 얼굴",
+        "clothes": "노란 티셔츠 · 초록 반바지",
+        "color": "#e9bb4e",
+        "hairColor": "#393735",
+        "skinColor": "#f0cfb5",
+        "traits": [
+          "호기심 많음",
+          "씩씩함",
+          "다정함"
+        ],
+        "catchphrase": "내가 먼저 해 볼래!",
+        "likes": "공룡, 별, 딸기"
+      }
+    ],
+    "backgrounds": [
+      {
+        "id": "home",
+        "name": "유하네 집",
+        "kind": "집",
+        "description": "큰 창문, 노란 대문, 포근한 이불",
+        "mood": "아늑함",
+        "color": "#d8b995"
+      },
+      {
+        "id": "forest",
+        "name": "초록빛 숲",
+        "kind": "숲·바다",
+        "description": "둥근 나무, 작은 꽃, 햇살 드는 숲길",
+        "mood": "모험",
+        "color": "#9ab783"
+      },
+      {
+        "id": "moon",
+        "name": "반짝이는 달",
+        "kind": "우주·상상 세계",
+        "description": "말랑한 달 언덕과 반짝이는 작은 별",
+        "mood": "밤",
+        "color": "#a8adca"
+      }
+    ],
+    "preferredBackgroundIds": [
+      "home",
+      "forest",
+      "moon"
+    ],
+    "worldNotes": "",
+    "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+    "storyDate": "2026-10-21T21:30:54.931Z",
+    "language": "bilingual",
+    "storyStructurePresetId": "auto",
+    "storyQuality": {
+      "enabled": true,
+      "useBeamSearch": false,
+      "useDistilledExamples": false,
+      "twoPass": true,
+      "childSimulator": true,
+      "weeklyCoach": true,
+      "engines": {},
+      "worldId": "drawer",
+      "season": "auto",
+      "timeOfDay": "auto",
+      "variantChance": 0.35,
+      "patternId": "auto",
+      "rules": [],
+      "banExamples": [],
+      "banWindow": 10,
+      "patternBanWindow": 3,
+      "approvedBooks": []
+    },
+    "qualitySeedOffset": 0,
+    "pageCount": 12,
+    "layoutPolicy": {
+      "version": 1,
+      "kind": "openings",
+      "spreadImageSize": "2048x880",
+      "pageImageSize": "1536x1024"
+    },
+    "outlineBeatCount": 6,
+    "endingType": "custom",
+    "moral": "",
+    "endingNote": "부모가 적은 주제대로 끝나요: \"4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기\". 이야기가 향하는 곳(예: 유치원에 가는 이야기는 유치원에 들어가는 장면)에서 그 행동으로 끝내고, 주제에 가는 곳이 없으면 집에서 편안히 끝내요.",
+    "previousSummary": "",
+    "previousStory": null,
+    "prosePolicy": {
+      "version": 1,
+      "condenseOverBudget": {
+        "ko": true,
+        "en": true
+      }
+    },
+    "specs": {
+      "ko": {
+        "label": "그림책 5~6세",
+        "sentencesPerPage": 6,
+        "eojeolPerSentence": [
+          5,
+          7
+        ],
+        "grammar": [
+          "연결어미 -서/-면/-는데",
+          "대화문",
+          "감정 어휘"
+        ],
+        "vocabGrade": 2,
+        "maxOutOfListRatio": 0.08,
+        "newWordsPerBook": 10,
+        "id": "K2",
+        "ruleVersion": 4,
+        "vocabularyPolicy": "blocking",
+        "storyWordsAllowed": false,
+        "allowOnomatopoeia": false,
+        "sentencesPerPageRange": {
+          "min": 5,
+          "max": 7
+        },
+        "wordsPerSentence": {
+          "min": 5,
+          "max": 7
+        },
+        "allowedGrammar": [
+          "연결어미 -서/-면/-는데",
+          "대화문",
+          "감정 어휘"
+        ],
+        "vocabList": [],
+        "vocabularyAvailable": false,
+        "vocabSource": null,
+        "maxOutOfVocabRatio": 0.08,
+        "newWordsPerBookRange": null,
+        "repetitionPattern": "Recycle important words and familiar scene patterns.",
+        "approxAR": null,
+        "approxARRange": null,
+        "approxLexile": null,
+        "approxLexileRange": null,
+        "maxConnectiveEndingsPerSentence": 2,
+        "layout": "openings",
+        "units": {
+          "page": {
+            "min": 5,
+            "max": 7,
+            "target": 6
+          },
+          "spread": {
+            "min": 10,
+            "max": 15,
+            "target": 12
+          },
+          "opening": {
+            "min": 10,
+            "max": 15,
+            "target": 12
+          }
+        },
+        "richLevel": {
+          "id": "K3",
+          "label": "저학년 동화 7~8세",
+          "sentencesPerPage": [
+            3,
+            5
+          ],
+          "eojeolPerSentence": [
+            7,
+            10
+          ],
+          "grammar": [
+            "복문",
+            "시간 순서 접속어",
+            "한자어 조금"
+          ],
+          "vocabGrade": 3,
+          "maxOutOfListRatio": 0.1,
+          "charsPerPage": [
+            60,
+            100
+          ]
+        },
+        "unitTolerance": {
+          "countBelow": 1,
+          "countAbove": 2,
+          "meanSlack": 0.5,
+          "longShareCeil": 0.3333333333333333,
+          "longOver": 3
+        },
+        "rhythm": {
+          "version": 1,
+          "bookTolerance": 0.2,
+          "pageMinShare": 0.3333333333333333,
+          "pageMaxFactor": 1.6
+        }
+      },
+      "en": {
+        "label": "리더스 (Step 1)",
+        "approxAR": 1.5,
+        "approxLexile": 325,
+        "sentencesPerPage": 2,
+        "wordsPerSentence": {
+          "min": 5,
+          "max": 9
+        },
+        "grammar": [
+          "simple past",
+          "dialogue",
+          "and/but"
+        ],
+        "vocab": "dolch_primer+first",
+        "maxOutOfListRatio": 0.15,
+        "newWordsPerBook": 10,
+        "id": "E2",
+        "ruleVersion": 4,
+        "vocabularyPolicy": "blocking",
+        "storyWordsAllowed": false,
+        "allowOnomatopoeia": false,
+        "sentencesPerPageRange": {
+          "min": 1,
+          "max": 2
+        },
+        "allowedGrammar": [
+          "simple past",
+          "dialogue",
+          "and/but"
+        ],
+        "vocabList": [
+          "a",
+          "and",
+          "away",
+          "big",
+          "blue",
+          "can",
+          "come",
+          "down",
+          "find",
+          "for",
+          "funny",
+          "go",
+          "help",
+          "here",
+          "i",
+          "in",
+          "is",
+          "it",
+          "jump",
+          "little",
+          "look",
+          "make",
+          "me",
+          "my",
+          "not",
+          "one",
+          "play",
+          "red",
+          "run",
+          "said",
+          "see",
+          "the",
+          "three",
+          "to",
+          "two",
+          "up",
+          "we",
+          "where",
+          "yellow",
+          "you",
+          "all",
+          "am",
+          "are",
+          "at",
+          "ate",
+          "be",
+          "black",
+          "brown",
+          "but",
+          "came",
+          "did",
+          "do",
+          "eat",
+          "four",
+          "get",
+          "good",
+          "have",
+          "he",
+          "into",
+          "like",
+          "must",
+          "new",
+          "no",
+          "now",
+          "on",
+          "our",
+          "out",
+          "please",
+          "pretty",
+          "ran",
+          "ride",
+          "saw",
+          "say",
+          "she",
+          "so",
+          "soon",
+          "that",
+          "there",
+          "they",
+          "this",
+          "too",
+          "under",
+          "want",
+          "was",
+          "well",
+          "went",
+          "what",
+          "white",
+          "who",
+          "will",
+          "with",
+          "yes",
+          "or",
+          "number",
+          "of",
+          "had",
+          "other",
+          "way",
+          "by",
+          "about",
+          "could",
+          "words",
+          "people",
+          "many",
+          "then",
+          "than",
+          "them",
+          "first",
+          "these",
+          "water",
+          "were",
+          "been",
+          "some",
+          "called",
+          "when",
+          "her",
+          "your",
+          "would",
+          "oil",
+          "sit",
+          "as",
+          "him",
+          "use",
+          "long",
+          "his",
+          "an",
+          "time",
+          "each",
+          "has",
+          "day",
+          "which",
+          "more",
+          "how",
+          "write",
+          "made",
+          "their",
+          "may",
+          "from",
+          "if",
+          "part",
+          "flower",
+          "tail",
+          "leaf",
+          "leaves",
+          "tree",
+          "stone",
+          "moon",
+          "star",
+          "rain",
+          "sea",
+          "sun",
+          "ball",
+          "bag",
+          "boots",
+          "glove",
+          "cloud",
+          "sand",
+          "wave",
+          "shell",
+          "crab",
+          "path",
+          "rocket",
+          "bird",
+          "marks",
+          "castle",
+          "picture",
+          "window",
+          "rainbow",
+          "woods",
+          "sky",
+          "gift",
+          "friend",
+          "home",
+          "dinosaur",
+          "rabbit",
+          "umbrella",
+          "bad",
+          "ban",
+          "bat",
+          "cab",
+          "cap",
+          "cat",
+          "dad",
+          "dam",
+          "fan",
+          "fat",
+          "gap",
+          "gas",
+          "ham",
+          "hat",
+          "jam",
+          "lad",
+          "lap",
+          "mad",
+          "man",
+          "map",
+          "mat",
+          "nap",
+          "pad",
+          "pan",
+          "pat",
+          "rag",
+          "ram",
+          "rat",
+          "sad",
+          "sat",
+          "tag",
+          "tan",
+          "tap",
+          "van",
+          "wag",
+          "wax",
+          "yam",
+          "zap",
+          "bed",
+          "beg",
+          "bet",
+          "den",
+          "fed",
+          "hem",
+          "hen",
+          "jet",
+          "keg",
+          "leg",
+          "let",
+          "men",
+          "met",
+          "net",
+          "peg",
+          "pen",
+          "pet",
+          "set",
+          "ten",
+          "vet",
+          "wet",
+          "bib",
+          "bid",
+          "bin",
+          "bit",
+          "dig",
+          "dim",
+          "dip",
+          "fig",
+          "fin",
+          "fit",
+          "fix",
+          "hid",
+          "hip",
+          "hit",
+          "jig",
+          "kid",
+          "kin",
+          "kit",
+          "lid",
+          "lip",
+          "lit",
+          "mix",
+          "nil",
+          "nip",
+          "pig",
+          "pin",
+          "pit",
+          "rib",
+          "rid",
+          "rim",
+          "rip",
+          "sin",
+          "sip",
+          "six",
+          "tin",
+          "tip",
+          "win",
+          "wit",
+          "zip",
+          "bob",
+          "bog",
+          "bop",
+          "box",
+          "cob",
+          "cod",
+          "cog",
+          "cop",
+          "cot",
+          "dog",
+          "dot",
+          "fog",
+          "fox",
+          "got",
+          "hog",
+          "hop",
+          "hot",
+          "job",
+          "jog",
+          "jot",
+          "log",
+          "lot",
+          "mob",
+          "mop",
+          "nod",
+          "pod",
+          "pop",
+          "pot",
+          "rob",
+          "rod",
+          "rot",
+          "sob",
+          "sod",
+          "son",
+          "top",
+          "tot",
+          "bud",
+          "bug",
+          "bun",
+          "bus",
+          "cup",
+          "cut",
+          "dug",
+          "fun",
+          "gum",
+          "gut",
+          "hub",
+          "hug",
+          "hum",
+          "hut",
+          "jug",
+          "lug",
+          "mud",
+          "mug",
+          "nub",
+          "nun",
+          "nut",
+          "pub",
+          "pug",
+          "pun",
+          "pup",
+          "rub",
+          "rug",
+          "sub",
+          "sum",
+          "tub",
+          "tug",
+          "after",
+          "again",
+          "any",
+          "ask",
+          "every",
+          "fly",
+          "give",
+          "giving",
+          "just",
+          "know",
+          "live",
+          "old",
+          "once",
+          "open",
+          "over",
+          "put",
+          "round",
+          "stop",
+          "take",
+          "thank",
+          "think",
+          "walk"
+        ],
+        "vocabularyAvailable": true,
+        "vocabSource": "dolch_primer+first",
+        "maxOutOfVocabRatio": 0.15,
+        "newWordsPerBookRange": [
+          8,
+          10
+        ],
+        "repetitionPattern": "Recycle important words and familiar scene patterns.",
+        "approxARRange": [
+          1,
+          2
+        ],
+        "approxLexileRange": "200-450L",
+        "maxConnectiveEndingsPerSentence": 0,
+        "layout": "openings",
+        "units": {
+          "page": {
+            "min": 1,
+            "max": 2,
+            "target": 2
+          },
+          "spread": {
+            "min": 2,
+            "max": 4,
+            "target": 4
+          },
+          "opening": {
+            "min": 2,
+            "max": 4,
+            "target": 4
+          }
+        },
+        "richLevel": {
+          "id": "E3",
+          "label": "얼리 챕터 (Step 2)",
+          "approxAR": [
+            2,
+            3
+          ],
+          "approxLexile": "400-600L",
+          "sentencesPerPage": [
+            2,
+            4
+          ],
+          "wordsPerSentence": [
+            8,
+            12
+          ],
+          "grammar": [
+            "compound sentences"
+          ],
+          "vocab": "fry_1000",
+          "maxOutOfListRatio": 0.15,
+          "wordsPerPage": [
+            40,
+            80
+          ]
+        },
+        "rhythm": {
+          "version": 1,
+          "bookTolerance": 0.2,
+          "pageMinShare": 0.3333333333333333,
+          "pageMaxFactor": 1.6
+        }
+      }
+    },
+    "variants": [],
+    "variantByCharacter": {
+      "yuha": null
+    },
+    "variantPageRanges": {
+      "yuha": []
+    },
+    "catchphrasePolicy": {
+      "version": 1,
+      "limit": 1,
+      "omit": [],
+      "phrases": {
+        "yuha": "내가 먼저 해 볼래!"
+      },
+      "recentBookIds": [
+        "seed-dinosaur",
+        "seed-moon"
+      ]
+    },
+    "editorPolicy": {
+      "version": 1
+    },
+    "craftPolicy": {
+      "version": 1
+    },
+    "arcPolicy": {
+      "version": 1
+    },
+    "councilPolicy": {
+      "version": 1
+    },
+    "promptPolicy": {
+      "version": 1
+    },
+    "councilRecent": {
+      "version": 1,
+      "planted": []
+    },
+    "orchestrationPolicy": {
+      "version": 1,
+      "writerTier": "medium"
+    },
+    "topicEndingPolicy": {
+      "version": 1
+    },
+    "bookId": "book-8d9fa60d-41da-4d2e-b95c-9ad4436d9ba5",
+    "title": "바람이 부는 도시락 통"
+  },
+  "outline": {
+    "titleCandidates": [
+      "바람이 부는 도시락 통",
+      "노래하는 돌은 어디에?",
+      "숲길에서 찾은 작은 노래"
+    ],
+    "logline": "노래하는 돌을 찾던 두 친구가 바람을 담은 도시락 통으로 직접 노래를 만들어요.",
+    "want": "숲길에서 노래하는 돌을 찾고 싶어요.",
+    "problem": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+    "beats": [
+      {
+        "index": 1,
+        "type": "setup",
+        "summary": "유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+        "characters": [
+          "yuha"
+        ],
+        "settingKey": "home"
+      },
+      {
+        "index": 2,
+        "type": "want",
+        "summary": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+        "characters": [
+          "yuha"
+        ],
+        "settingKey": "home"
+      },
+      {
+        "index": 3,
+        "type": "attempt",
+        "summary": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+        "characters": [
+          "yuha"
+        ],
+        "settingKey": "home"
+      },
+      {
+        "index": 4,
+        "type": "turn",
+        "summary": "바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+        "characters": [
+          "yuha"
+        ],
+        "settingKey": "home"
+      },
+      {
+        "index": 5,
+        "type": "resolution",
+        "summary": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+        "characters": [
+          "yuha"
+        ],
+        "settingKey": "home"
+      },
+      {
+        "index": 6,
+        "type": "close",
+        "summary": "두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
+        "characters": [
+          "yuha"
+        ],
+        "settingKey": "home"
+      }
+    ],
+    "twist": "노래하는 돌 소리는 돌 틈에 낀 빈 도시락 통에 바람이 들어가는 소리였어요.",
+    "newWordsKo": [
+      "도시락",
+      "가장자리",
+      "바람"
+    ],
+    "newWordsEn": [
+      "stone",
+      "box",
+      "wind"
+    ],
+    "settings": [
+      {
+        "beatIndex": 1,
+        "backgroundId": "home"
+      },
+      {
+        "beatIndex": 2,
+        "backgroundId": "home"
+      },
+      {
+        "beatIndex": 3,
+        "backgroundId": "home"
+      },
+      {
+        "beatIndex": 4,
+        "backgroundId": "home"
+      },
+      {
+        "beatIndex": 5,
+        "backgroundId": "home"
+      },
+      {
+        "beatIndex": 6,
+        "backgroundId": "home"
+      }
+    ],
+    "emotionArc": [
+      "기대",
+      "호기심",
+      "궁금",
+      "놀람",
+      "기쁨",
+      "편안"
+    ],
+    "endingType": "custom",
+    "plotContract": {
+      "version": 1,
+      "protagonistId": "yuha",
+      "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+      "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+      "beats": [
+        {
+          "beatIndex": 1,
+          "becauseOfBeatIndex": null,
+          "trigger": "이야기의 시작 상황이에요: 유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+          "attempt": "유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+          "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+          "result": "유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+          "nextDecision": "이 결과에서 다음 행동으로 이어가요: 주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": []
+        },
+        {
+          "beatIndex": 2,
+          "becauseOfBeatIndex": 1,
+          "trigger": "앞 사건의 결과를 받아요: 유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+          "attempt": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+          "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+          "result": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+          "nextDecision": "이 결과에서 다음 행동으로 이어가요: 큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [
+            "goal-resolution"
+          ],
+          "payoffIds": []
+        },
+        {
+          "beatIndex": 3,
+          "becauseOfBeatIndex": 2,
+          "trigger": "앞 사건의 결과를 받아요: 주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+          "attempt": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+          "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+          "result": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+          "nextDecision": "이 결과에서 다음 행동으로 이어가요: 바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [],
+          "payoffIds": []
+        },
+        {
+          "beatIndex": 4,
+          "becauseOfBeatIndex": 3,
+          "trigger": "앞 사건의 결과를 받아요: 큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+          "attempt": "바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+          "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+          "result": "바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+          "nextDecision": "이 결과에서 다음 행동으로 이어가요: 둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [],
+          "payoffIds": []
+        },
+        {
+          "beatIndex": 5,
+          "becauseOfBeatIndex": 4,
+          "trigger": "앞 사건의 결과를 받아요: 바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+          "attempt": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+          "obstacle": "앞선 문제를 해결한 결과가 유지되는지 확인해요.",
+          "result": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+          "nextDecision": "이 결과에서 다음 행동으로 이어가요: 두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": [
+            "goal-resolution"
+          ]
+        },
+        {
+          "beatIndex": 6,
+          "becauseOfBeatIndex": 5,
+          "trigger": "앞 사건의 결과를 받아요: 둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+          "attempt": "두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
+          "obstacle": "앞선 문제를 해결한 결과가 유지되는지 확인해요.",
+          "result": "두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
+          "nextDecision": "처음 목표가 해결된 것을 확인하고 선택한 결말로 마무리해요.",
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": []
+        }
+      ]
+    }
+  },
+  "sceneBriefs": [
+    {
+      "beatIndex": 1,
+      "timeOfDay": "morning",
+      "weather": {
+        "ko": "잔잔한 바람",
+        "en": "gentle breeze"
+      },
+      "light": {
+        "ko": "부드러운 햇빛",
+        "en": "soft daylight"
+      },
+      "sounds": [
+        {
+          "ko": "휘잉",
+          "en": "whoosh"
+        },
+        {
+          "ko": "살랑살랑",
+          "en": "rustle"
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "보들보들한 잎",
+        "en": "soft leaf texture"
+      },
+      "props": [
+        {
+          "ko": "넓은 잎",
+          "en": "broad leaf"
+        },
+        {
+          "ko": "가는 풀",
+          "en": "slender grass"
+        },
+        {
+          "ko": "작은 돌",
+          "en": "small pebble"
+        }
+      ],
+      "creature": {
+        "ko": "작은 새",
+        "en": "small bird"
+      },
+      "pose": {
+        "ko": "손으로 잎을 살펴보기",
+        "en": "holding a leaf in one hand"
+      },
+      "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+      "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+    },
+    {
+      "beatIndex": 2,
+      "timeOfDay": "morning",
+      "weather": {
+        "ko": "잔잔한 바람",
+        "en": "gentle breeze"
+      },
+      "light": {
+        "ko": "부드러운 햇빛",
+        "en": "soft daylight"
+      },
+      "sounds": [
+        {
+          "ko": "휘잉",
+          "en": "whoosh"
+        },
+        {
+          "ko": "사뿐사뿐",
+          "en": "tiptoe"
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "보들보들한 잎",
+        "en": "soft leaf texture"
+      },
+      "props": [
+        {
+          "ko": "작은 잎",
+          "en": "small leaf"
+        },
+        {
+          "ko": "매끈한 돌",
+          "en": "smooth pebble"
+        },
+        {
+          "ko": "풀줄기",
+          "en": "grass stem"
+        }
+      ],
+      "creature": {
+        "ko": "작은 달팽이",
+        "en": "small snail"
+      },
+      "pose": {
+        "ko": "손으로 잎을 살펴보기",
+        "en": "holding a leaf in one hand"
+      },
+      "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+      "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+    },
+    {
+      "beatIndex": 3,
+      "timeOfDay": "day",
+      "weather": {
+        "ko": "잔잔한 바람",
+        "en": "gentle breeze"
+      },
+      "light": {
+        "ko": "부드러운 햇빛",
+        "en": "soft daylight"
+      },
+      "sounds": [
+        {
+          "ko": "휘잉",
+          "en": "whoosh"
+        },
+        {
+          "ko": "살랑살랑",
+          "en": "rustle"
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "보들보들한 잎",
+        "en": "soft leaf texture"
+      },
+      "props": [
+        {
+          "ko": "넓은 잎",
+          "en": "broad leaf"
+        },
+        {
+          "ko": "가는 풀",
+          "en": "slender grass"
+        },
+        {
+          "ko": "작은 돌",
+          "en": "small pebble"
+        }
+      ],
+      "creature": {
+        "ko": "작은 새",
+        "en": "small bird"
+      },
+      "pose": {
+        "ko": "손으로 잎을 살펴보기",
+        "en": "holding a leaf in one hand"
+      },
+      "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+      "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+    },
+    {
+      "beatIndex": 4,
+      "timeOfDay": "afternoon",
+      "weather": {
+        "ko": "잔잔한 바람",
+        "en": "gentle breeze"
+      },
+      "light": {
+        "ko": "부드러운 햇빛",
+        "en": "soft daylight"
+      },
+      "sounds": [
+        {
+          "ko": "휘잉",
+          "en": "whoosh"
+        },
+        {
+          "ko": "사뿐사뿐",
+          "en": "tiptoe"
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "보들보들한 잎",
+        "en": "soft leaf texture"
+      },
+      "props": [
+        {
+          "ko": "작은 잎",
+          "en": "small leaf"
+        },
+        {
+          "ko": "매끈한 돌",
+          "en": "smooth pebble"
+        },
+        {
+          "ko": "풀줄기",
+          "en": "grass stem"
+        }
+      ],
+      "creature": {
+        "ko": "작은 달팽이",
+        "en": "small snail"
+      },
+      "pose": {
+        "ko": "손으로 잎을 살펴보기",
+        "en": "holding a leaf in one hand"
+      },
+      "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+      "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+    },
+    {
+      "beatIndex": 5,
+      "timeOfDay": "afternoon",
+      "weather": {
+        "ko": "잔잔한 바람",
+        "en": "gentle breeze"
+      },
+      "light": {
+        "ko": "부드러운 햇빛",
+        "en": "soft daylight"
+      },
+      "sounds": [
+        {
+          "ko": "휘잉",
+          "en": "whoosh"
+        },
+        {
+          "ko": "살랑살랑",
+          "en": "rustle"
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "보들보들한 잎",
+        "en": "soft leaf texture"
+      },
+      "props": [
+        {
+          "ko": "넓은 잎",
+          "en": "broad leaf"
+        },
+        {
+          "ko": "가는 풀",
+          "en": "slender grass"
+        },
+        {
+          "ko": "작은 돌",
+          "en": "small pebble"
+        }
+      ],
+      "creature": {
+        "ko": "작은 새",
+        "en": "small bird"
+      },
+      "pose": {
+        "ko": "손으로 잎을 살펴보기",
+        "en": "holding a leaf in one hand"
+      },
+      "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+      "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+    },
+    {
+      "beatIndex": 6,
+      "timeOfDay": "night",
+      "weather": {
+        "ko": "잔잔한 바람",
+        "en": "gentle breeze"
+      },
+      "light": {
+        "ko": "따뜻한 작은 불빛",
+        "en": "soft warm light"
+      },
+      "sounds": [
+        {
+          "ko": "휘잉",
+          "en": "whoosh"
+        },
+        {
+          "ko": "사뿐사뿐",
+          "en": "tiptoe"
+        }
+      ],
+      "smellOrTouch": {
+        "ko": "보들보들한 잎",
+        "en": "soft leaf texture"
+      },
+      "props": [
+        {
+          "ko": "작은 잎",
+          "en": "small leaf"
+        },
+        {
+          "ko": "매끈한 돌",
+          "en": "smooth pebble"
+        },
+        {
+          "ko": "풀줄기",
+          "en": "grass stem"
+        }
+      ],
+      "creature": {
+        "ko": "작은 달팽이",
+        "en": "small snail"
+      },
+      "pose": {
+        "ko": "손으로 잎을 살펴보기",
+        "en": "holding a leaf in one hand"
+      },
+      "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+      "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+    }
+  ],
+  "prose": {
+    "ko": "아침 햇살이 숲길 위에 반짝 내려요. 두 친구가 작은 가방을 메고 나와요. 가방 안에는 빈 도시락 통이 있어요. 친구가 통을 손가락으로 톡톡 두드려요. 길가의 나뭇잎이 바람에 살랑살랑 흔들려요. 두 친구는 나란히 숲으로 걸어가요. 새 한 마리가 나무 위에서 노래해요. “오늘은 숲에서 멋진 걸 찾자!” 친구가 손을 흔들며 크게 외쳐요. 다른 친구도 활짝 웃으며 고개를 끄덕여요. 두 친구의 발소리가 사뿐사뿐 울려요. 숲길 끝에서 시원한 바람이 불어와요.\n\n숲 입구에 커다란 나무가 서 있어요. 나무 옆에 작은 팻말이 붙어 있어요. 팻말에는 노래하는 돌 그림이 있어요. “노래하는 돌을 꼭 찾고 싶어!” 친구가 팻말을 손으로 가리켜요. 다른 친구가 팻말을 가만히 들여다봐요. 두 친구는 귀를 쫑긋 세워요. 멀리서 후우 하는 소리가 들려요. 소리는 금방 다시 조용해져요. 친구가 가방 끈을 꼭 잡아요. 두 친구는 소리 나는 쪽으로 걸어요. 발밑의 흙이 촉촉하고 부드러워요.\n\n길 위에 큰 돌 하나가 있어요. 친구가 막대기로 돌을 톡톡 쳐요. 돌에서는 쿵쿵 낮은 소리만 나요. “이 돌은 노래를 안 해.” 친구가 작은 돌 하나를 들어 올려요. 돌 아래에서 개미들이 줄줄이 나와요. 다른 친구가 돌을 살며시 내려놓아요. 친구가 빈 나뭇가지에 입을 대고 불어요. 나뭇가지에서는 아무 소리도 나지 않아요. 그때 바위 틈에서 후우 소리가 들려요. 두 친구는 서로 눈을 맞춰요. 두 친구는 살금살금 바위로 다가가요.\n\n바위 사이에 무언가 반짝 빛나요. 친구가 바위 틈을 가만히 들여다봐요. 바위 틈에 빈 도시락 통이 끼어 있어요. 통 뚜껑이 조금 열려 있어요. 바람이 통 안으로 후우 들어가요. 통이 휘이 하고 노래를 불러요. “아하, 통이 노래하고 있었어!” 다른 친구가 입을 동그랗게 벌려요. 노래하는 것은 돌이 아니었어요. 두 친구는 통을 한참 바라봐요. 바람이 멈추자 노래도 뚝 그쳐요. 친구가 통을 두 손으로 살살 당겨요.\n\n두 친구가 통을 바위에서 꺼내요. 통은 차갑고 조금 무거워요. 통을 꺼내자 노래가 멈춰요. “이제 우리가 노래를 만들어 보자.” 친구가 통 가장자리에 입을 대요. 친구가 통에 후우 바람을 불어요. 통에서 휘이 노래가 다시 나와요. 다른 친구도 차례로 통을 불어요. 두 친구의 노래가 숲에 퍼져요. 새들이 나뭇가지 위에서 짹짹 따라 해요. 친구가 통 뚜껑을 살며시 닫아요. 두 친구는 통을 가방에 넣어요.\n\n해가 숲 너머로 천천히 내려가요. 두 친구가 집으로 걸어와요. 하늘이 주황빛으로 곱게 물들어요. 친구가 현관문을 살며시 열어요. 집 안에서 따뜻한 빵 냄새가 나요. 친구가 통을 침대 옆에 놓아요. 창밖으로 둥근 달이 떠올라요. “잘 자, 노래하는 도시락 통아.” 친구가 작은 베개를 꼭 안아요. 다른 친구는 이불을 폭신폭신 덮어요. 방 안이 조용하고 포근해져요. 두 친구는 스르르 눈을 감아요.",
+    "en": "The sun is up over the woods. We put a little box in my bag. “We will look for a stone,” I said. The wind makes a whoosh in the tree.\n\nA picture is on the big tree. It is a picture of a little stone. “I want to find that stone,” my friend said. A song comes from the woods.\n\nMy friend hits a big stone with a stick. Little ants come out from under a stone. My friend said, “Where is the song?” The soft rain is on the big stones.\n\nA wet box is in the big stones. It is an old box with an open lid. “The box sings a song,” my friend said. The wind comes into the box.\n\nWe take the box out of the stones. My friend puts the box to her lips. We blow, and a song comes out. “We can make it again,” I said.\n\nWe walk home under the red sky. I put the box by my soft bed. “Thank you, little box,” I said. The moon is up over my home.",
+    "usedRefrainAt": [],
+    "paragraphBeats": {
+      "ko": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "en": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "pagination": {
+    "cover": {
+      "title": "바람이 부는 도시락 통",
+      "sceneAction": "The two friends hold a metal lunch box beside forest stones beneath swaying leaves."
+    },
+    "pages": [
+      {
+        "beatIndex": 1,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "아침 햇살이 숲길 위에 반짝 내려요. 두 친구가 작은 가방을 메고 나와요. 가방 안에는 빈 도시락 통이 있어요. 친구가 통을 손가락으로 톡톡 두드려요. 길가의 나뭇잎이 바람에 살랑살랑 흔들려요. 두 친구는 나란히 숲으로 걸어가요. 새 한 마리가 나무 위에서 노래해요. “오늘은 숲에서 멋진 걸 찾자!” 친구가 손을 흔들며 크게 외쳐요. 다른 친구도 활짝 웃으며 고개를 끄덕여요. 두 친구의 발소리가 사뿐사뿐 울려요. 숲길 끝에서 시원한 바람이 불어와요.",
+        "textEn": "The sun is up over the woods. We put a little box in my bag. “We will look for a stone,” I said. The wind makes a whoosh in the tree.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The two friends walk along the sunny forest path while one carries a small picnic bag.",
+          "emotion": "curious",
+          "timeOfDay": "morning",
+          "props": [
+            "metal lunch box",
+            "stone"
+          ]
+        },
+        "cue": "arrival",
+        "pageNo": 1,
+        "kind": "spread",
+        "side": "spread",
+        "openingNo": 1,
+        "entryId": "b1-spread",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 1,
+          "causeBeatIndex": null,
+          "event": {
+            "trigger": "이야기의 시작 상황이에요: 유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+            "attempt": "유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+            "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+            "result": "유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "wide",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the tree",
+          "verb": "walk",
+          "seed": 177510078
+        },
+        "sceneBrief": {
+          "beatIndex": 1,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "살랑살랑",
+              "en": "rustle"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "넓은 잎",
+              "en": "broad leaf"
+            },
+            {
+              "ko": "가는 풀",
+              "en": "slender grass"
+            },
+            {
+              "ko": "작은 돌",
+              "en": "small pebble"
+            }
+          ],
+          "creature": {
+            "ko": "작은 새",
+            "en": "small bird"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 1,
+          "beatIndex": 1,
+          "openingNo": 1,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "가방",
+                "손",
+                "손가락",
+                "나무",
+                "나뭇잎",
+                "바람",
+                "통",
+                "새",
+                "친구"
+              ],
+              "concreteNounCount": 9,
+              "sensoryWords": [
+                "살랑살랑",
+                "사뿐사뿐",
+                "반짝"
+              ],
+              "sensoryCount": 3,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 11,
+              "sentenceCount": 12,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "bag",
+                "tree",
+                "stone",
+                "sun",
+                "wind",
+                "box"
+              ],
+              "concreteNounCount": 6,
+              "sensoryWords": [
+                "whoosh"
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 3,
+              "sentenceCount": 4,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 2,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "숲 입구에 커다란 나무가 서 있어요. 나무 옆에 작은 팻말이 붙어 있어요. 팻말에는 노래하는 돌 그림이 있어요. “노래하는 돌을 꼭 찾고 싶어!” 친구가 팻말을 손으로 가리켜요. 다른 친구가 팻말을 가만히 들여다봐요.",
+        "textEn": "A picture is on the big tree. It is a picture of a little stone.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The companion points at a small wooden sign nailed beside a big tree trunk.",
+          "emotion": "curious",
+          "timeOfDay": "morning",
+          "props": [
+            "metal lunch box",
+            "stone"
+          ]
+        },
+        "cue": "two-moments",
+        "pageNo": 2,
+        "kind": "page",
+        "side": "left",
+        "openingNo": 2,
+        "entryId": "b2-left",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 2,
+          "causeBeatIndex": 1,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+            "attempt": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+            "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+            "result": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [
+            "goal-resolution"
+          ],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "medium",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the stone",
+          "verb": "point",
+          "seed": 177510079
+        },
+        "sceneBrief": {
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "사뿐사뿐",
+              "en": "tiptoe"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "작은 잎",
+              "en": "small leaf"
+            },
+            {
+              "ko": "매끈한 돌",
+              "en": "smooth pebble"
+            },
+            {
+              "ko": "풀줄기",
+              "en": "grass stem"
+            }
+          ],
+          "creature": {
+            "ko": "작은 달팽이",
+            "en": "small snail"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 2,
+          "beatIndex": 2,
+          "openingNo": 2,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "손",
+                "나무",
+                "돌",
+                "친구"
+              ],
+              "concreteNounCount": 4,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 5,
+              "sentenceCount": 6,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "tree",
+                "stone"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 2,
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 2,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "두 친구는 귀를 쫑긋 세워요. 멀리서 후우 하는 소리가 들려요. 소리는 금방 다시 조용해져요. 친구가 가방 끈을 꼭 잡아요. 두 친구는 소리 나는 쪽으로 걸어요. 발밑의 흙이 촉촉하고 부드러워요.",
+        "textEn": "“I want to find that stone,” my friend said. A song comes from the woods.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The two friends lift their heads and listen while walking toward the distant sound.",
+          "emotion": "curious",
+          "timeOfDay": "morning",
+          "props": [
+            "metal lunch box",
+            "stone"
+          ]
+        },
+        "cue": "two-moments",
+        "pageNo": 3,
+        "kind": "page",
+        "side": "right",
+        "openingNo": 2,
+        "entryId": "b2-right",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 2,
+          "causeBeatIndex": 1,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 유하의 소풍날이에요. 아침에 두 친구가 도시락 통을 챙겨 숲길로 소풍을 가요. 바람이 나뭇잎을 흔들어요.",
+            "attempt": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+            "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+            "result": "주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [
+            "goal-resolution"
+          ],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "closeup",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the grass",
+          "verb": "lift",
+          "seed": 177510080
+        },
+        "sceneBrief": {
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "사뿐사뿐",
+              "en": "tiptoe"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "작은 잎",
+              "en": "small leaf"
+            },
+            {
+              "ko": "매끈한 돌",
+              "en": "smooth pebble"
+            },
+            {
+              "ko": "풀줄기",
+              "en": "grass stem"
+            }
+          ],
+          "creature": {
+            "ko": "작은 달팽이",
+            "en": "small snail"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 3,
+          "beatIndex": 2,
+          "openingNo": 2,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "가방",
+                "귀",
+                "흙",
+                "친구"
+              ],
+              "concreteNounCount": 4,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 6,
+              "sentenceCount": 6,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "stone",
+                "friend"
+              ],
+              "concreteNounCount": 2,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 1,
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 3,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "길 위에 큰 돌 하나가 있어요. 친구가 막대기로 돌을 톡톡 쳐요. 돌에서는 쿵쿵 낮은 소리만 나요. “이 돌은 노래를 안 해.” 친구가 작은 돌 하나를 들어 올려요. 돌 아래에서 개미들이 줄줄이 나와요.",
+        "textEn": "My friend hits a big stone with a stick. Little ants come out from under a stone.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The child taps a large stone with a stick while ants walk from a small stone.",
+          "emotion": "curious",
+          "timeOfDay": "day",
+          "props": [
+            "metal lunch box",
+            "stone"
+          ]
+        },
+        "cue": "two-moments",
+        "pageNo": 4,
+        "kind": "page",
+        "side": "left",
+        "openingNo": 3,
+        "entryId": "b3-left",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 3,
+          "causeBeatIndex": 2,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+            "attempt": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+            "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+            "result": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "high_angle",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the leaf",
+          "verb": "walk",
+          "seed": 177510081
+        },
+        "sceneBrief": {
+          "beatIndex": 3,
+          "timeOfDay": "day",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "살랑살랑",
+              "en": "rustle"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "넓은 잎",
+              "en": "broad leaf"
+            },
+            {
+              "ko": "가는 풀",
+              "en": "slender grass"
+            },
+            {
+              "ko": "작은 돌",
+              "en": "small pebble"
+            }
+          ],
+          "creature": {
+            "ko": "작은 새",
+            "en": "small bird"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 4,
+          "beatIndex": 3,
+          "openingNo": 3,
+          "valid": true,
+          "issues": [],
+          "advisories": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "ko",
+              "code": "repeated_ending",
+              "message": "같은 종결 방식이 네 문장 이상 이어져요. 질문·감탄·청유를 섞으면 좋아요.",
+              "heuristic": true,
+              "ending": "요",
+              "advisory": true,
+              "severity": "warning"
+            },
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 4,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "1번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "My friend hits a big stone with a stick."
+                }
+              ],
+              "advisory": true,
+              "severity": "warning"
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "돌",
+                "해",
+                "길",
+                "개미",
+                "친구"
+              ],
+              "concreteNounCount": 5,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 5,
+              "sentenceCount": 6,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "stone",
+                "ant",
+                "friend"
+              ],
+              "concreteNounCount": 3,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 0,
+                  "sentence": "My friend hits a big stone with a stick."
+                }
+              ],
+              "narrationSentences": 2,
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 3,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "다른 친구가 돌을 살며시 내려놓아요. 친구가 빈 나뭇가지에 입을 대고 불어요. 나뭇가지에서는 아무 소리도 나지 않아요. 그때 바위 틈에서 후우 소리가 들려요. 두 친구는 서로 눈을 맞춰요. 두 친구는 살금살금 바위로 다가가요.",
+        "textEn": "My friend said, “Where is the song?” The soft rain is on the big stones.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The companion blows into a hollow stick and both friends tiptoe toward the rocks.",
+          "emotion": "curious",
+          "timeOfDay": "day",
+          "props": [
+            "metal lunch box",
+            "stone"
+          ]
+        },
+        "cue": "two-moments",
+        "pageNo": 5,
+        "kind": "page",
+        "side": "right",
+        "openingNo": 3,
+        "entryId": "b3-right",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 3,
+          "causeBeatIndex": 2,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 주인공은 숲에 있다는 노래하는 돌을 찾고 싶어요. 친구가 돌을 살펴보자고 해요.",
+            "attempt": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+            "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+            "result": "큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "from_behind",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the rock",
+          "verb": "blow",
+          "seed": 177510082
+        },
+        "sceneBrief": {
+          "beatIndex": 3,
+          "timeOfDay": "day",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "살랑살랑",
+              "en": "rustle"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "넓은 잎",
+              "en": "broad leaf"
+            },
+            {
+              "ko": "가는 풀",
+              "en": "slender grass"
+            },
+            {
+              "ko": "작은 돌",
+              "en": "small pebble"
+            }
+          ],
+          "creature": {
+            "ko": "작은 새",
+            "en": "small bird"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 5,
+          "beatIndex": 3,
+          "openingNo": 3,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "눈",
+                "입",
+                "돌",
+                "바위",
+                "친구"
+              ],
+              "concreteNounCount": 5,
+              "sensoryWords": [
+                "살금살금"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 6,
+              "sentenceCount": 6,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "stone",
+                "rain",
+                "friend"
+              ],
+              "concreteNounCount": 3,
+              "sensoryWords": [
+                "soft"
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 1,
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 4,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "바위 사이에 무언가 반짝 빛나요. 친구가 바위 틈을 가만히 들여다봐요. 바위 틈에 빈 도시락 통이 끼어 있어요. 통 뚜껑이 조금 열려 있어요. 바람이 통 안으로 후우 들어가요. 통이 휘이 하고 노래를 불러요. “아하, 통이 노래하고 있었어!” 다른 친구가 입을 동그랗게 벌려요. 노래하는 것은 돌이 아니었어요. 두 친구는 통을 한참 바라봐요. 바람이 멈추자 노래도 뚝 그쳐요. 친구가 통을 두 손으로 살살 당겨요.",
+        "textEn": "A wet box is in the big stones. It is an old box with an open lid. “The box sings a song,” my friend said. The wind comes into the box.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The friends kneel by the big rocks and find a metal lunch box wedged between them.",
+          "emotion": "surprised",
+          "timeOfDay": "afternoon",
+          "props": [
+            "metal lunch box",
+            "yellow leaf"
+          ]
+        },
+        "cue": "turn",
+        "pageNo": 6,
+        "kind": "spread",
+        "side": "spread",
+        "openingNo": 4,
+        "entryId": "b4-spread",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 4,
+          "causeBeatIndex": 3,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 큰 돌을 톡톡 두드리지만 쿵쿵 소리만 나요. 친구는 돌에 코를 대다가 먼지 때문에 에취 재채기를 해요. 작은 돌을 들자 개미들만 줄줄이 나와요. 둘은 돌을 다시 놓고 개미에게 길을 내줘요. 빈 나뭇가지를 불어 보아도 소리가 나지 않아요. 둘이 바람을 따라 듣자 돌 틈에서 후우 소리가 나요.",
+            "attempt": "바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+            "obstacle": "돌과 나뭇가지를 살펴보아도 노래가 나지 않아요.",
+            "result": "바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "setupIds": [],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "medium",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "clear gentle contrast, slightly cooler light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the stone",
+          "verb": "kneel",
+          "seed": 177510083
+        },
+        "sceneBrief": {
+          "beatIndex": 4,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "사뿐사뿐",
+              "en": "tiptoe"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "작은 잎",
+              "en": "small leaf"
+            },
+            {
+              "ko": "매끈한 돌",
+              "en": "smooth pebble"
+            },
+            {
+              "ko": "풀줄기",
+              "en": "grass stem"
+            }
+          ],
+          "creature": {
+            "ko": "작은 달팽이",
+            "en": "small snail"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 6,
+          "beatIndex": 4,
+          "openingNo": 4,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "손",
+                "입",
+                "돌",
+                "바위",
+                "바람",
+                "통",
+                "친구"
+              ],
+              "concreteNounCount": 7,
+              "sensoryWords": [
+                "반짝"
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 11,
+              "sentenceCount": 12,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "stone",
+                "wind",
+                "box",
+                "friend"
+              ],
+              "concreteNounCount": 4,
+              "sensoryWords": [
+                "wet"
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 3,
+              "sentenceCount": 4,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 5,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "두 친구가 통을 바위에서 꺼내요. 통은 차갑고 조금 무거워요. 통을 꺼내자 노래가 멈춰요. “이제 우리가 노래를 만들어 보자.” 친구가 통 가장자리에 입을 대요. 친구가 통에 후우 바람을 불어요.",
+        "textEn": "We take the box out of the stones. My friend puts the box to her lips.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The two friends pull the metal lunch box out from between the rocks together.",
+          "emotion": "surprised",
+          "timeOfDay": "afternoon",
+          "props": [
+            "metal lunch box",
+            "yellow leaf"
+          ]
+        },
+        "cue": "two-moments",
+        "pageNo": 7,
+        "kind": "page",
+        "side": "left",
+        "openingNo": 5,
+        "entryId": "b5-left",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 5,
+          "causeBeatIndex": 4,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+            "attempt": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+            "obstacle": "앞선 문제를 해결한 결과가 유지되는지 확인해요.",
+            "result": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": [
+            "goal-resolution"
+          ],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "wide",
+          "characterSide": "left",
+          "textSide": "right",
+          "lightMood": "clear gentle contrast, slightly cooler light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the grass",
+          "verb": "pull",
+          "seed": 177510084
+        },
+        "sceneBrief": {
+          "beatIndex": 5,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "살랑살랑",
+              "en": "rustle"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "넓은 잎",
+              "en": "broad leaf"
+            },
+            {
+              "ko": "가는 풀",
+              "en": "slender grass"
+            },
+            {
+              "ko": "작은 돌",
+              "en": "small pebble"
+            }
+          ],
+          "creature": {
+            "ko": "작은 새",
+            "en": "small bird"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 7,
+          "beatIndex": 5,
+          "openingNo": 5,
+          "valid": true,
+          "issues": [],
+          "advisories": [
+            {
+              "type": "richness",
+              "kind": "page",
+              "pageNo": 7,
+              "language": "en",
+              "code": "missing_subject",
+              "message": "2번째 문장의 주어를 확인해 주세요. 이름·대명사·사물 주어를 명시해 주세요.",
+              "heuristic": true,
+              "sentences": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "My friend puts the box to her lips."
+                }
+              ],
+              "advisory": true,
+              "severity": "warning"
+            }
+          ],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "입",
+                "바위",
+                "바람",
+                "통",
+                "친구"
+              ],
+              "concreteNounCount": 5,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 5,
+              "sentenceCount": 6,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "stone",
+                "box",
+                "friend"
+              ],
+              "concreteNounCount": 3,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [
+                {
+                  "sentenceIndex": 1,
+                  "sentence": "My friend puts the box to her lips."
+                }
+              ],
+              "narrationSentences": 2,
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 5,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "통에서 휘이 노래가 다시 나와요. 다른 친구도 차례로 통을 불어요. 두 친구의 노래가 숲에 퍼져요. 새들이 나뭇가지 위에서 짹짹 따라 해요. 친구가 통 뚜껑을 살며시 닫아요. 두 친구는 통을 가방에 넣어요.",
+        "textEn": "We blow, and a song comes out. “We can make it again,” I said.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "home",
+          "action": "The child blows across the lunch box rim while birds sit on a branch above.",
+          "emotion": "surprised",
+          "timeOfDay": "afternoon",
+          "props": [
+            "metal lunch box",
+            "yellow leaf"
+          ]
+        },
+        "cue": "two-moments",
+        "pageNo": 8,
+        "kind": "page",
+        "side": "right",
+        "openingNo": 5,
+        "entryId": "b5-right",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 5,
+          "causeBeatIndex": 4,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 바람이 돌 틈에 낀 빈 도시락 통으로 들어가요. 노래하는 것은 돌이 아니라 도시락 통이었어요.",
+            "attempt": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+            "obstacle": "앞선 문제를 해결한 결과가 유지되는지 확인해요.",
+            "result": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+            "nextDecision": "이 결과에서 다음 행동으로 이어가요: 두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": [
+              "goal-resolution"
+            ]
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": [
+            "goal-resolution"
+          ],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "closeup",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "clear gentle contrast, slightly cooler light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the leaf",
+          "verb": "sit",
+          "seed": 177510085
+        },
+        "sceneBrief": {
+          "beatIndex": 5,
+          "timeOfDay": "afternoon",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "부드러운 햇빛",
+            "en": "soft daylight"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "살랑살랑",
+              "en": "rustle"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "넓은 잎",
+              "en": "broad leaf"
+            },
+            {
+              "ko": "가는 풀",
+              "en": "slender grass"
+            },
+            {
+              "ko": "작은 돌",
+              "en": "small pebble"
+            }
+          ],
+          "creature": {
+            "ko": "작은 새",
+            "en": "small bird"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 8,
+          "beatIndex": 5,
+          "openingNo": 5,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "가방",
+                "통",
+                "새",
+                "친구"
+              ],
+              "concreteNounCount": 4,
+              "sensoryWords": [
+                "짹짹"
+              ],
+              "sensoryCount": 1,
+              "dialogue": false,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 6,
+              "sentenceCount": 6,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [],
+              "concreteNounCount": 0,
+              "sensoryWords": [],
+              "sensoryCount": 0,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 1,
+              "sentenceCount": 2,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      },
+      {
+        "beatIndex": 6,
+        "variantByCharacter": {
+          "yuha": null
+        },
+        "isRefrainPage": false,
+        "textKo": "해가 숲 너머로 천천히 내려가요. 두 친구가 집으로 걸어와요. 하늘이 주황빛으로 곱게 물들어요. 친구가 현관문을 살며시 열어요. 집 안에서 따뜻한 빵 냄새가 나요. 친구가 통을 침대 옆에 놓아요. 창밖으로 둥근 달이 떠올라요. “잘 자, 노래하는 도시락 통아.” 친구가 작은 베개를 꼭 안아요. 다른 친구는 이불을 폭신폭신 덮어요. 방 안이 조용하고 포근해져요. 두 친구는 스르르 눈을 감아요.",
+        "textEn": "We walk home under the red sky. I put the box by my soft bed. “Thank you, little box,” I said. The moon is up over my home.",
+        "scene": {
+          "who": [
+            "yuha"
+          ],
+          "where": "A quiet bedroom at home",
+          "action": "The child places the lunch box beside the bed and hugs a soft pillow under moonlight.",
+          "emotion": "calm",
+          "timeOfDay": "night",
+          "props": [
+            "metal lunch box",
+            "soft pillow"
+          ]
+        },
+        "cue": "ending",
+        "pageNo": 9,
+        "kind": "spread",
+        "side": "spread",
+        "openingNo": 6,
+        "entryId": "b6-spread",
+        "plotContext": {
+          "version": 1,
+          "scope": "beat",
+          "beatIndex": 6,
+          "causeBeatIndex": 5,
+          "event": {
+            "trigger": "앞 사건의 결과를 받아요: 둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요.",
+            "attempt": "두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
+            "obstacle": "앞선 문제를 해결한 결과가 유지되는지 확인해요.",
+            "result": "두 친구가 직접 만든 노랫소리와 함께 집으로 돌아와요. 통을 침대 옆에 놓고 작은 베개를 안고 잠들어요.",
+            "nextDecision": "처음 목표가 해결된 것을 확인하고 선택한 결말로 마무리해요."
+          },
+          "stateBefore": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "stateAfter": {
+            "characters": [
+              {
+                "characterId": "yuha",
+                "locationId": "home",
+                "knows": []
+              }
+            ],
+            "props": [],
+            "openPromises": []
+          },
+          "setupIds": [],
+          "payoffIds": [],
+          "goal": "숲길에서 노래하는 돌을 찾고 싶어요.",
+          "resolutionCriterion": "둘이 통을 꺼내자 노래가 멈춰요. 주인공이 통 가장자리에 입을 대고 불자 같은 소리가 나요."
+        },
+        "staging": {
+          "shot": "wide",
+          "characterSide": "right",
+          "textSide": "left",
+          "lightMood": "quiet evening shadows and a gentle warm light, clearly visible faces; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness",
+          "subLocation": "near the bed",
+          "verb": "place",
+          "seed": 177510086
+        },
+        "sceneBrief": {
+          "beatIndex": 6,
+          "timeOfDay": "night",
+          "weather": {
+            "ko": "잔잔한 바람",
+            "en": "gentle breeze"
+          },
+          "light": {
+            "ko": "따뜻한 작은 불빛",
+            "en": "soft warm light"
+          },
+          "sounds": [
+            {
+              "ko": "휘잉",
+              "en": "whoosh"
+            },
+            {
+              "ko": "사뿐사뿐",
+              "en": "tiptoe"
+            }
+          ],
+          "smellOrTouch": {
+            "ko": "보들보들한 잎",
+            "en": "soft leaf texture"
+          },
+          "props": [
+            {
+              "ko": "작은 잎",
+              "en": "small leaf"
+            },
+            {
+              "ko": "매끈한 돌",
+              "en": "smooth pebble"
+            },
+            {
+              "ko": "풀줄기",
+              "en": "grass stem"
+            }
+          ],
+          "creature": {
+            "ko": "작은 달팽이",
+            "en": "small snail"
+          },
+          "pose": {
+            "ko": "손으로 잎을 살펴보기",
+            "en": "holding a leaf in one hand"
+          },
+          "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+          "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+        },
+        "richnessCheck": {
+          "pageNo": 9,
+          "beatIndex": 6,
+          "openingNo": 6,
+          "valid": true,
+          "issues": [],
+          "advisories": [],
+          "metrics": {
+            "ko": {
+              "concreteNouns": [
+                "집",
+                "방",
+                "침대",
+                "베개",
+                "이불",
+                "눈",
+                "빵",
+                "해",
+                "달",
+                "통",
+                "친구"
+              ],
+              "concreteNounCount": 11,
+              "sensoryWords": [
+                "폭신폭신",
+                "따뜻한"
+              ],
+              "sensoryCount": 2,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 11,
+              "sentenceCount": 12,
+              "exemptFragments": 0
+            },
+            "en": {
+              "concreteNouns": [
+                "home",
+                "bed",
+                "moon",
+                "box"
+              ],
+              "concreteNounCount": 4,
+              "sensoryWords": [
+                "soft"
+              ],
+              "sensoryCount": 1,
+              "dialogue": true,
+              "directEmotionWords": [],
+              "missingSubjects": [],
+              "narrationSentences": 3,
+              "sentenceCount": 4,
+              "exemptFragments": 0
+            }
+          },
+          "passed": true,
+          "violations": []
+        }
+      }
+    ],
+    "openingAdjustments": [],
+    "mixNote": null,
+    "stagingWarnings": [
+      {
+        "pageNo": 2,
+        "code": "side_adjacent",
+        "message": "앞쪽과 인물 위치가 같아요. 선택한 위치를 유지했어요."
+      },
+      {
+        "pageNo": 4,
+        "code": "action_repeated",
+        "message": "같은 동작이 다른 쪽에도 있어요. 본문에 없는 행동을 추가하지 않고 유지했어요."
+      },
+      {
+        "pageNo": 6,
+        "code": "side_adjacent",
+        "message": "앞쪽과 인물 위치가 같아요. 선택한 위치를 유지했어요."
+      },
+      {
+        "pageNo": 9,
+        "code": "side_adjacent",
+        "message": "앞쪽과 인물 위치가 같아요. 선택한 위치를 유지했어요."
+      }
+    ],
+    "sceneBriefs": [
+      {
+        "beatIndex": 1,
+        "timeOfDay": "morning",
+        "weather": {
+          "ko": "잔잔한 바람",
+          "en": "gentle breeze"
+        },
+        "light": {
+          "ko": "부드러운 햇빛",
+          "en": "soft daylight"
+        },
+        "sounds": [
+          {
+            "ko": "휘잉",
+            "en": "whoosh"
+          },
+          {
+            "ko": "살랑살랑",
+            "en": "rustle"
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "보들보들한 잎",
+          "en": "soft leaf texture"
+        },
+        "props": [
+          {
+            "ko": "넓은 잎",
+            "en": "broad leaf"
+          },
+          {
+            "ko": "가는 풀",
+            "en": "slender grass"
+          },
+          {
+            "ko": "작은 돌",
+            "en": "small pebble"
+          }
+        ],
+        "creature": {
+          "ko": "작은 새",
+          "en": "small bird"
+        },
+        "pose": {
+          "ko": "손으로 잎을 살펴보기",
+          "en": "holding a leaf in one hand"
+        },
+        "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+        "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+      },
+      {
+        "beatIndex": 2,
+        "timeOfDay": "morning",
+        "weather": {
+          "ko": "잔잔한 바람",
+          "en": "gentle breeze"
+        },
+        "light": {
+          "ko": "부드러운 햇빛",
+          "en": "soft daylight"
+        },
+        "sounds": [
+          {
+            "ko": "휘잉",
+            "en": "whoosh"
+          },
+          {
+            "ko": "사뿐사뿐",
+            "en": "tiptoe"
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "보들보들한 잎",
+          "en": "soft leaf texture"
+        },
+        "props": [
+          {
+            "ko": "작은 잎",
+            "en": "small leaf"
+          },
+          {
+            "ko": "매끈한 돌",
+            "en": "smooth pebble"
+          },
+          {
+            "ko": "풀줄기",
+            "en": "grass stem"
+          }
+        ],
+        "creature": {
+          "ko": "작은 달팽이",
+          "en": "small snail"
+        },
+        "pose": {
+          "ko": "손으로 잎을 살펴보기",
+          "en": "holding a leaf in one hand"
+        },
+        "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+        "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+      },
+      {
+        "beatIndex": 3,
+        "timeOfDay": "day",
+        "weather": {
+          "ko": "잔잔한 바람",
+          "en": "gentle breeze"
+        },
+        "light": {
+          "ko": "부드러운 햇빛",
+          "en": "soft daylight"
+        },
+        "sounds": [
+          {
+            "ko": "휘잉",
+            "en": "whoosh"
+          },
+          {
+            "ko": "살랑살랑",
+            "en": "rustle"
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "보들보들한 잎",
+          "en": "soft leaf texture"
+        },
+        "props": [
+          {
+            "ko": "넓은 잎",
+            "en": "broad leaf"
+          },
+          {
+            "ko": "가는 풀",
+            "en": "slender grass"
+          },
+          {
+            "ko": "작은 돌",
+            "en": "small pebble"
+          }
+        ],
+        "creature": {
+          "ko": "작은 새",
+          "en": "small bird"
+        },
+        "pose": {
+          "ko": "손으로 잎을 살펴보기",
+          "en": "holding a leaf in one hand"
+        },
+        "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+        "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+      },
+      {
+        "beatIndex": 4,
+        "timeOfDay": "afternoon",
+        "weather": {
+          "ko": "잔잔한 바람",
+          "en": "gentle breeze"
+        },
+        "light": {
+          "ko": "부드러운 햇빛",
+          "en": "soft daylight"
+        },
+        "sounds": [
+          {
+            "ko": "휘잉",
+            "en": "whoosh"
+          },
+          {
+            "ko": "사뿐사뿐",
+            "en": "tiptoe"
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "보들보들한 잎",
+          "en": "soft leaf texture"
+        },
+        "props": [
+          {
+            "ko": "작은 잎",
+            "en": "small leaf"
+          },
+          {
+            "ko": "매끈한 돌",
+            "en": "smooth pebble"
+          },
+          {
+            "ko": "풀줄기",
+            "en": "grass stem"
+          }
+        ],
+        "creature": {
+          "ko": "작은 달팽이",
+          "en": "small snail"
+        },
+        "pose": {
+          "ko": "손으로 잎을 살펴보기",
+          "en": "holding a leaf in one hand"
+        },
+        "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+        "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+      },
+      {
+        "beatIndex": 5,
+        "timeOfDay": "afternoon",
+        "weather": {
+          "ko": "잔잔한 바람",
+          "en": "gentle breeze"
+        },
+        "light": {
+          "ko": "부드러운 햇빛",
+          "en": "soft daylight"
+        },
+        "sounds": [
+          {
+            "ko": "휘잉",
+            "en": "whoosh"
+          },
+          {
+            "ko": "살랑살랑",
+            "en": "rustle"
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "보들보들한 잎",
+          "en": "soft leaf texture"
+        },
+        "props": [
+          {
+            "ko": "넓은 잎",
+            "en": "broad leaf"
+          },
+          {
+            "ko": "가는 풀",
+            "en": "slender grass"
+          },
+          {
+            "ko": "작은 돌",
+            "en": "small pebble"
+          }
+        ],
+        "creature": {
+          "ko": "작은 새",
+          "en": "small bird"
+        },
+        "pose": {
+          "ko": "손으로 잎을 살펴보기",
+          "en": "holding a leaf in one hand"
+        },
+        "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+        "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+      },
+      {
+        "beatIndex": 6,
+        "timeOfDay": "night",
+        "weather": {
+          "ko": "잔잔한 바람",
+          "en": "gentle breeze"
+        },
+        "light": {
+          "ko": "따뜻한 작은 불빛",
+          "en": "soft warm light"
+        },
+        "sounds": [
+          {
+            "ko": "휘잉",
+            "en": "whoosh"
+          },
+          {
+            "ko": "사뿐사뿐",
+            "en": "tiptoe"
+          }
+        ],
+        "smellOrTouch": {
+          "ko": "보들보들한 잎",
+          "en": "soft leaf texture"
+        },
+        "props": [
+          {
+            "ko": "작은 잎",
+            "en": "small leaf"
+          },
+          {
+            "ko": "매끈한 돌",
+            "en": "smooth pebble"
+          },
+          {
+            "ko": "풀줄기",
+            "en": "grass stem"
+          }
+        ],
+        "creature": {
+          "ko": "작은 달팽이",
+          "en": "small snail"
+        },
+        "pose": {
+          "ko": "손으로 잎을 살펴보기",
+          "en": "holding a leaf in one hand"
+        },
+        "dialogueLine": "유하는 “나는 이 소리를 들어!”라고 말해요.",
+        "humor": "잎이 살짝 흔들리며 손끝을 간질여요."
+      }
+    ]
+  },
+  "storyCheck": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 1,
+        "mean": 5.17,
+        "sentenceCount": 6,
+        "expected": {
+          "min": 5,
+          "max": 7
+        },
+        "pageNo": 2
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 2,
+        "mean": 4.83,
+        "sentenceCount": 6,
+        "expected": {
+          "min": 5,
+          "max": 7
+        },
+        "pageNo": 3
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 5.08,
+        "sentenceCount": 12,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 6
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 2,
+        "mean": 4.67,
+        "sentenceCount": 6,
+        "expected": {
+          "min": 5,
+          "max": 7
+        },
+        "pageNo": 7
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 5,
+        "mean": 4.67,
+        "sentenceCount": 12,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 9
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "props": [
+          "broad leaf"
+        ],
+        "message": "1쪽 글에 나온 broad leaf이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "props": [
+          "smooth pebble"
+        ],
+        "message": "2쪽 글에 나온 smooth pebble이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "props": [
+          "small pebble"
+        ],
+        "message": "4쪽 글에 나온 small pebble이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "props": [
+          "small pebble"
+        ],
+        "message": "5쪽 글에 나온 small pebble이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "props": [
+          "smooth pebble"
+        ],
+        "message": "6쪽 글에 나온 smooth pebble이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      }
+    ],
+    "violations": [],
+    "failedPageNos": [],
+    "needsRepagination": false
+  },
+  "pageCoherence": null,
+  "notes": [],
+  "usage": {
+    "calls": [
+      {
+        "input": 0,
+        "output": 0,
+        "costUsd": 0,
+        "costUsdEstimated": 0,
+        "stage": "outline",
+        "engineId": "demo",
+        "demo": true,
+        "demoNotice": "고정된 바람 피리 줄거리의 데모예요. AI 생성이 아닙니다.",
+        "callId": "auto-3dba7ce1-b2f7-45de-b121-0f4e235204bd:2",
+        "at": "2026-10-21T21:30:54.941Z"
+      },
+      {
+        "input": 0,
+        "output": 0,
+        "costUsd": 0,
+        "costUsdEstimated": 0,
+        "stage": "sceneBriefs",
+        "engineId": "demo",
+        "demo": true,
+        "demoNotice": "고정된 바람 피리 줄거리의 데모예요. AI 생성이 아닙니다.",
+        "checks": {
+          "valid": true,
+          "passed": true,
+          "issues": [],
+          "advisories": [],
+          "errors": [],
+          "softIssues": [],
+          "notes": [],
+          "failedBeatIndexes": [],
+          "hardBeatIndexes": []
+        },
+        "callId": "auto-3dba7ce1-b2f7-45de-b121-0f4e235204bd:3",
+        "at": "2026-10-21T21:30:54.952Z"
+      },
+      {
+        "input": 0,
+        "output": 0,
+        "costUsd": 0,
+        "costUsdEstimated": 0,
+        "stage": "prose",
+        "engineId": "demo",
+        "demo": true,
+        "demoNotice": "고정된 바람 피리 줄거리의 데모예요. AI 생성이 아닙니다.",
+        "callId": "auto-3dba7ce1-b2f7-45de-b121-0f4e235204bd:4",
+        "at": "2026-10-21T21:30:54.957Z"
+      }
+    ]
+  },
+  "measured": {
+    "rows": [
+      {
+        "pageNo": 1,
+        "ko": "아침 햇살이 숲길 위에 반짝 내려요. 두 친구가 작은 가방을 메고 나와요. 가방 안에는 빈 도시락 통이 있어요. 친구가 통을 손가락으로 톡톡 두드려요. 길가의 나뭇잎이 바람에 살랑살랑 흔들려요. 두 친구는 나란히 숲으로 걸어가요. 새 한 마리가 나무 위에서 노래해요. “오늘은 숲에서 멋진 걸 찾자!” 친구가 손을 흔들며 크게 외쳐요. 다른 친구도 활짝 웃으며 고개를 끄덕여요. 두 친구의 발소리가 사뿐사뿐 울려요. 숲길 끝에서 시원한 바람이 불어와요.",
+        "en": "The sun is up over the woods. We put a little box in my bag. “We will look for a stone,” I said. The wind makes a whoosh in the tree.",
+        "sentences": 12,
+        "rhythm": 0,
+        "eojeol": 65,
+        "average": 5.4,
+        "longest": 6,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [
+          "살랑살랑",
+          "사뿐사뿐"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 31
+      },
+      {
+        "pageNo": 2,
+        "ko": "숲 입구에 커다란 나무가 서 있어요. 나무 옆에 작은 팻말이 붙어 있어요. 팻말에는 노래하는 돌 그림이 있어요. “노래하는 돌을 꼭 찾고 싶어!” 친구가 팻말을 손으로 가리켜요. 다른 친구가 팻말을 가만히 들여다봐요.",
+        "en": "A picture is on the big tree. It is a picture of a little stone.",
+        "sentences": 6,
+        "rhythm": 0,
+        "eojeol": 31,
+        "average": 5.2,
+        "longest": 6,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 15
+      },
+      {
+        "pageNo": 3,
+        "ko": "두 친구는 귀를 쫑긋 세워요. 멀리서 후우 하는 소리가 들려요. 소리는 금방 다시 조용해져요. 친구가 가방 끈을 꼭 잡아요. 두 친구는 소리 나는 쪽으로 걸어요. 발밑의 흙이 촉촉하고 부드러워요.",
+        "en": "“I want to find that stone,” my friend said. A song comes from the woods.",
+        "sentences": 6,
+        "rhythm": 0,
+        "eojeol": 29,
+        "average": 4.8,
+        "longest": 6,
+        "quotes": 0,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 15
+      },
+      {
+        "pageNo": 4,
+        "ko": "길 위에 큰 돌 하나가 있어요. 친구가 막대기로 돌을 톡톡 쳐요. 돌에서는 쿵쿵 낮은 소리만 나요. “이 돌은 노래를 안 해.” 친구가 작은 돌 하나를 들어 올려요. 돌 아래에서 개미들이 줄줄이 나와요.",
+        "en": "My friend hits a big stone with a stick. Little ants come out from under a stone.",
+        "sentences": 6,
+        "rhythm": 0,
+        "eojeol": 32,
+        "average": 5.3,
+        "longest": 6,
+        "quotes": 1,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 17
+      },
+      {
+        "pageNo": 5,
+        "ko": "다른 친구가 돌을 살며시 내려놓아요. 친구가 빈 나뭇가지에 입을 대고 불어요. 나뭇가지에서는 아무 소리도 나지 않아요. 그때 바위 틈에서 후우 소리가 들려요. 두 친구는 서로 눈을 맞춰요. 두 친구는 살금살금 바위로 다가가요.",
+        "en": "My friend said, “Where is the song?” The soft rain is on the big stones.",
+        "sentences": 6,
+        "rhythm": 0,
+        "eojeol": 32,
+        "average": 5.3,
+        "longest": 6,
+        "quotes": 0,
+        "exclaims": 0,
+        "sounds": [
+          "살금살금"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 15
+      },
+      {
+        "pageNo": 6,
+        "ko": "바위 사이에 무언가 반짝 빛나요. 친구가 바위 틈을 가만히 들여다봐요. 바위 틈에 빈 도시락 통이 끼어 있어요. 통 뚜껑이 조금 열려 있어요. 바람이 통 안으로 후우 들어가요. 통이 휘이 하고 노래를 불러요. “아하, 통이 노래하고 있었어!” 다른 친구가 입을 동그랗게 벌려요. 노래하는 것은 돌이 아니었어요. 두 친구는 통을 한참 바라봐요. 바람이 멈추자 노래도 뚝 그쳐요. 친구가 통을 두 손으로 살살 당겨요.",
+        "en": "A wet box is in the big stones. It is an old box with an open lid. “The box sings a song,” my friend said. The wind comes into the box.",
+        "sentences": 12,
+        "rhythm": 0,
+        "eojeol": 61,
+        "average": 5.1,
+        "longest": 7,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 31
+      },
+      {
+        "pageNo": 7,
+        "ko": "두 친구가 통을 바위에서 꺼내요. 통은 차갑고 조금 무거워요. 통을 꺼내자 노래가 멈춰요. “이제 우리가 노래를 만들어 보자.” 친구가 통 가장자리에 입을 대요. 친구가 통에 후우 바람을 불어요.",
+        "en": "We take the box out of the stones. My friend puts the box to her lips.",
+        "sentences": 6,
+        "rhythm": 0,
+        "eojeol": 28,
+        "average": 4.7,
+        "longest": 5,
+        "quotes": 1,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 16
+      },
+      {
+        "pageNo": 8,
+        "ko": "통에서 휘이 노래가 다시 나와요. 다른 친구도 차례로 통을 불어요. 두 친구의 노래가 숲에 퍼져요. 새들이 나뭇가지 위에서 짹짹 따라 해요. 친구가 통 뚜껑을 살며시 닫아요. 두 친구는 통을 가방에 넣어요.",
+        "en": "We blow, and a song comes out. “We can make it again,” I said.",
+        "sentences": 6,
+        "rhythm": 0,
+        "eojeol": 31,
+        "average": 5.2,
+        "longest": 6,
+        "quotes": 0,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 14
+      },
+      {
+        "pageNo": 9,
+        "ko": "해가 숲 너머로 천천히 내려가요. 두 친구가 집으로 걸어와요. 하늘이 주황빛으로 곱게 물들어요. 친구가 현관문을 살며시 열어요. 집 안에서 따뜻한 빵 냄새가 나요. 친구가 통을 침대 옆에 놓아요. 창밖으로 둥근 달이 떠올라요. “잘 자, 노래하는 도시락 통아.” 친구가 작은 베개를 꼭 안아요. 다른 친구는 이불을 폭신폭신 덮어요. 방 안이 조용하고 포근해져요. 두 친구는 스르르 눈을 감아요.",
+        "en": "We walk home under the red sky. I put the box by my soft bed. “Thank you, little box,” I said. The moon is up over my home.",
+        "sentences": 12,
+        "rhythm": 0,
+        "eojeol": 56,
+        "average": 4.7,
+        "longest": 6,
+        "quotes": 1,
+        "exclaims": 0,
+        "sounds": [
+          "폭신폭신"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "enWords": 28
+      }
+    ],
+    "totals": {
+      "pages": 9,
+      "sentences": 72,
+      "rhythm": 0,
+      "eojeol": 365,
+      "averageEojeol": 5.1,
+      "longest": 7,
+      "quotes": 6,
+      "exclaims": 3,
+      "soundWords": [
+        "살랑살랑",
+        "사뿐사뿐",
+        "살금살금",
+        "폭신폭신"
+      ],
+      "pagesWithSounds": 3,
+      "enWords": 182,
+      "koIssuePages": 0,
+      "enIssuePages": 0
+    }
+  },
+  "usageSummary": {
+    "costUsd": 0,
+    "costUnknown": false,
+    "requests": 3,
+    "input": 0,
+    "output": 0,
+    "models": [],
+    "stages": {
+      "outline": {
+        "requests": 1,
+        "input": 0,
+        "output": 0,
+        "costUsd": 0
+      },
+      "sceneBriefs": {
+        "requests": 1,
+        "input": 0,
+        "output": 0,
+        "costUsd": 0
+      },
+      "prose": {
+        "requests": 1,
+        "input": 0,
+        "output": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  "progress": [
+    "고른 등장인물·배경 확인",
+    "줄거리 만들기",
+    "장면 디테일 만들기",
+    "한글·영어 전문 쓰기",
+    "전문 인과관계·상태 검사",
+    "쪽 나누기와 본문 검사",
+    "글 완성 · 쪽 검수"
+  ]
+}
