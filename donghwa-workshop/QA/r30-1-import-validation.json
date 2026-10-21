@@ -1,0 +1,130 @@
+{
+  "date": "2026-10-21",
+  "deployment": {
+    "version_number": 39,
+    "commit_sha": "bc4364723eb51ca06072b137b8d18456fb2839d6",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_4f744b41a2e8819186b149b55682effd",
+    "deployment_id": "appgdep_6ad8777f3fd48191b8df9052be5f08f8",
+    "status": "succeeded",
+    "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "cache": "donghwa-shell-v72",
+    "env_set_revision": 1,
+    "upstream_base": "f15a97f86f370be948d41952f1e83699f9c8f6cc",
+    "upstream_code_end": "354eda7ad9525314869f97581813779dfa1d40af",
+    "upstream_work_order": "653b7048a8fbb1b2f699d16f5d7bb2896b834a22",
+    "updated_at": "2026-10-21T08:28:04.141011+00:00"
+  },
+  "requiredGates": {
+    "validatedAt": "2026-10-21T08:26:42.655590+00:00",
+    "case": "B",
+    "tests": {
+      "app": {
+        "tests": 972,
+        "pass": 972,
+        "fail": 0
+      },
+      "quality": {
+        "tests": 85,
+        "pass": 85,
+        "fail": 0
+      }
+    },
+    "build": "PASS",
+    "qualityCopiesIdentical": true,
+    "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+    "census": {
+      "proMatchesWorkOrderTable": true,
+      "simpleStepsWithinLimit": true,
+      "pageErrors": [],
+      "paidRequests": []
+    },
+    "smoke": {
+      "1280": "PASS",
+      "390": "PASS"
+    },
+    "localFreeChecks": "PASS at 1280 and 390",
+    "source": {
+      "case": "B",
+      "upstreamBase": "f15a97f86f370be948d41952f1e83699f9c8f6cc",
+      "upstreamCodeEnd": "354eda7ad9525314869f97581813779dfa1d40af",
+      "sourceFilesCompared": 492,
+      "different": [],
+      "patchSha256": "a1bab03e204583a29d9b8e221a1bd4f4a85161220f196c420779044ad2d776c4"
+    },
+    "allRequiredGatesPassed": true
+  },
+  "localFreeChecks": {
+    "base": "http://127.0.0.1:4960",
+    "runs": [
+      {
+        "width": 1280,
+        "pageErrors": [],
+        "paidRequests": [],
+        "demo": {
+          "bookId": "book-bf2e3630-fdae-4f1b-9d05-cb3635ab8946",
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "alignmentPromptCount": 0
+        },
+        "cache": "donghwa-shell-v72",
+        "status": "passed"
+      },
+      {
+        "width": 390,
+        "pageErrors": [],
+        "paidRequests": [],
+        "demo": {
+          "bookId": "book-c3c0d895-3efb-405f-a956-2b491408102e",
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "alignmentPromptCount": 0
+        },
+        "cache": "donghwa-shell-v72",
+        "status": "passed"
+      }
+    ],
+    "status": "passed"
+  },
+  "productionFreeChecks": {
+    "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "runs": [
+      {
+        "width": 1280,
+        "pageErrors": [],
+        "paidRequests": [],
+        "demo": {
+          "bookId": "book-90ff23b5-6761-48d1-8fbc-861136c3ec69",
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "alignmentPromptCount": 0
+        },
+        "cache": "donghwa-shell-v72",
+        "status": "passed"
+      },
+      {
+        "width": 390,
+        "pageErrors": [],
+        "paidRequests": [],
+        "demo": {
+          "bookId": "book-143e4d57-5353-47b1-8262-74fc356a4ca4",
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "alignmentPromptCount": 0
+        },
+        "cache": "donghwa-shell-v72",
+        "status": "passed"
+      }
+    ],
+    "worker": {
+      "active": "activated",
+      "cacheNames": [
+        "donghwa-shell-v72"
+      ],
+      "alignmentCached": true
+    },
+    "status": "passed"
+  },
+  "paidApiCalls": 0,
+  "paidVerification": "Not run; requires a separate parent-approved real-engine check."
+}
