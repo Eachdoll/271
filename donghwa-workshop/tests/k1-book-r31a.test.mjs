@@ -36,9 +36,11 @@ test('R31a a new K1 book freezes k1Policy (no room, no spine); K2 and English-on
   assert.equal('k1Policy' in k2, false);
   assert.ok(k2.arcPolicy && k2.councilPolicy);
   assert.equal('k1Policy' in inputFromWizard(state, wiz({language: 'en'})).input, false);
+  // R31b: on the prompt diet the craft block carries no suspense, refrain or sound quota at all.
   const rules = craftOutlineRules(normalizeStoryInput(k1));
-  assert.match(rules, /K1 SOUNDS/u);
-  assert.doesNotMatch(rules, /SUSPENSE|SOUND REFRAIN/u);
+  assert.doesNotMatch(rules, /SUSPENSE|SOUND REFRAIN|K1 SOUNDS|at least/u);
+  const {promptDiet, ...undieted} = normalizeStoryInput(k1);
+  assert.match(craftOutlineRules(normalizeStoryInput(undieted)), /K1 SOUNDS/u, 'without the diet the K1 sound line stays');
 });
 
 test('R31a a simple-mode story ends where its topic goes; a pro story keeps its chosen ending; an old simple job keeps its own ending on resume', async () => {
@@ -72,8 +74,16 @@ test('R31a the K1 outline takes the app path with the K1 arc: no room, no spine,
   await generateOutline(input, {engine}).catch(() => {});
   assert.ok(calls.length >= 1);
   const sys = calls[0].system;
-  assert.match(sys, /K1 STORY \(ages 3-4\)/u);
-  assert.match(sys, /No mystery, no hidden clue, no planted-object reveal/u);
+  // R31b: a new K1 draft carries the prompt diet — the K1 shape in one paragraph, not the K1 STORY block.
+  assert.match(sys, /A small, warm want and ONE small obstacle/u);
+  assert.match(sys, /no mystery and no hidden clue/u);
+  assert.doesNotMatch(sys, /K1 STORY \(ages 3-4\)/u);
+  // A K1 draft saved before R31b (no promptDiet) still gets the R31a K1 STORY block.
+  const {promptDiet, ...rest} = input, old = normalizeStoryInput(rest), oldCalls = [];
+  await generateOutline(old, {engine: {id: 'openai', async complete(req) { oldCalls.push(req); return reply(outlineFor(old)); }}}).catch(() => {});
+  assert.match(oldCalls[0].system, /K1 STORY \(ages 3-4\)/u);
+  assert.match(oldCalls[0].system, /No mystery, no hidden clue, no planted-object reveal/u);
+  assert.doesNotMatch(oldCalls[0].system, /STORY SPINE/u);
   assert.doesNotMatch(sys, /STORY SPINE/u);
   assert.match(sys, /endingType=custom/u, 'the topic ending');
   assert.match(sys, /K1 SHORT LINES/u);
@@ -89,8 +99,10 @@ test('R31a the K1 book: one call writes every page; one more call for the flagge
   }};
   const result = await generateProse(outline, input, {engine, qualityEngines: {beatWriter: engine}});
   assert.equal(calls.length, 2, 'the book, then one fix call');
-  assert.match(calls[0].system, /만 3~4세\(K1\) 그림책 작가/u);
-  assert.match(calls[0].system, /쪽 넘김을 설계한다/u);
+  assert.match(calls[0].system, /만 3~4세 아이에게 읽어 주는 그림책 작가/u);
+  assert.match(calls[0].system, /쪽을 넘기고 싶게 써요/u);
+  assert.doesNotMatch(calls[0].system, /다섯 개 이상|한 번 이상|FROZEN|vocabGrade|ruleVersion/u, 'no counters, no spec JSON');
+  assert.match(calls[0].system, /Korean K1 \(/u);
   assert.ok(calls[0].user.includes(`[쪽 배치 — 그대로] ${plan.map((r) => `${r.pageNo}쪽 → 비트 ${r.beatIndex}`).join(', ')}`));
   assert.match(calls[1].user, /\[고칠 쪽\]\n4쪽: /u);
   assert.doesNotMatch(calls[1].user, /\[고칠 쪽\][^[]*\n3쪽:/u, 'only the flagged page');

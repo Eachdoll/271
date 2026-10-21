@@ -43,7 +43,7 @@ function policyInput(state, extra = {}) {
   const {input} = inputFromWizard(state, wizard, {layout: layoutFor(wizard)});
   return normalizeStoryInput({...input, storyQuality: {enabled: true, useBeamSearch: false, twoPass: true, patternId: 'mystery_sound', approvedBooks: [], rules: [], banExamples: []}, ...extra});
 }
-const legacyOf = (input) => { const {promptPolicy: _p, ...rest} = input; return normalizeStoryInput(rest); };
+const legacyOf = (input) => { const {promptPolicy: _p, promptDiet: _d, ...rest} = input; return normalizeStoryInput(rest); };
 
 test('R23 the wizard freezes promptPolicy; normalize keeps it; the model never sees it; a FULL AUTO job keeps only its own', () => {
   const state = setup();
@@ -106,10 +106,13 @@ test('R23 PLACES counts the places the parent chose; without chosen places or wi
   assert.equal(input.backgrounds.length, 5, 'the whole drawer is supplied');
   assert.deepEqual(input.preferredBackgroundIds, ['home', 'forest']);
   assert.doesNotMatch(craftOutlineRules(input), /PLACES \(/u, 'one chosen non-home place: no spread rule');
+  // R31b: a new draft is on the prompt diet (one soft sentence); the PLACES command is for drafts without it.
   const three = normalizeStoryInput({...input, preferredBackgroundIds: ['home', 'forest', 'moon', 'beach']});
-  assert.match(craftOutlineRules(three), /PLACES \(3 non-home locations supplied\): the middle beats visit at least 3 distinct/u);
+  assert.match(craftOutlineRules(three), /The parent chose 3 places besides home; let the story visit 3 of them/u);
+  const {promptDiet, ...undieted} = three;
+  assert.match(craftOutlineRules(normalizeStoryInput(undieted)), /PLACES \(3 non-home locations supplied\): the middle beats visit at least 3 distinct/u);
   assert.match(craftOutlineRules(legacyOf(input)), /PLACES \(4 non-home locations supplied\): the middle beats visit at least 4 distinct/u, 'legacy counts the drawer, byte for byte');
-  assert.match(craftOutlineRules(normalizeStoryInput({...input, preferredBackgroundIds: []})), /PLACES \(4 non-home locations supplied\)/u);
+  assert.match(craftOutlineRules(normalizeStoryInput({...input, preferredBackgroundIds: []})), /The parent chose 4 places besides home/u);
 });
 
 test('R23 the picture request of a policy book: three-line event, two pages of continuity, two-sentence lock; a legacy book is unchanged', () => {

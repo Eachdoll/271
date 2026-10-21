@@ -12,6 +12,10 @@ export const ARC_POLICY_VERSION = 1;
 export const arcPolicy = () => ({ version: ARC_POLICY_VERSION });
 export const hasArcPolicy = (input) =>
   input?.arcPolicy?.version === ARC_POLICY_VERSION;
+// R31b 프롬프트 다이어트: a diet draft keeps the arc policy for its reference
+// examples but sends none of the spine commands below (inline test: no cycle).
+const dieted = (input) => input?.promptDiet?.version === 1;
+const spineRules = (input) => hasArcPolicy(input) && !dieted(input);
 
 /** Reference examples for the quality path: story-spine cards, 9-point examples, a wider budget. */
 export const ARC_EXAMPLE_STYLE = "arc";
@@ -28,7 +32,7 @@ const OUTLINE_RULES = [
 ];
 /** Outline stage (app path, and the quality path's canon). */
 export function arcOutlineRules(input) {
-  if (!hasArcPolicy(input)) return "";
+  if (!spineRules(input)) return "";
   return `STORY SPINE (picture-book arc):\n${OUTLINE_RULES.join("\n")}`;
 }
 
@@ -40,7 +44,7 @@ const PROSE_RULES = [
 ];
 /** Prose stages (app prose, enrichment, the quality path's rich/simplify/fix canon). */
 export function arcProseRules(input) {
-  if (!hasArcPolicy(input)) return "";
+  if (!spineRules(input)) return "";
   return `STORY SPINE IN PROSE:\n${PROSE_RULES.join("\n")}`;
 }
 
@@ -55,7 +59,7 @@ export function arcCanonRules(input, stage = "outline") {
  * ones cut to fit the level.
  */
 export function arcSimplifyKeep(input, lang = "ko") {
-  if (!hasArcPolicy(input)) return "";
+  if (!spineRules(input)) return "";
   return lang === "en"
     ? "- Keep the spine when shortening: the want beat's one line of what is at stake, the quietest last sentence of the final attempt (near giving up), the turn's three steps (a sight or sound of the planted thing → the protagonist's own words of realization → what it means) and the resolution sentence where the protagonist's hands do the solving. Cut side description and repetition first."
     : "- 뼈대는 줄이지 않는다: want 비트의 '못 하면 어떻게 되는지' 한 문장, 마지막 attempt 끝의 가장 조용한 한 문장(포기 직전), turn 비트의 세 걸음(심은 물건을 보거나 듣는 문장 → 주인공이 제 말로 알아차리는 문장 → 그래서 어떻게 되는지), resolution에서 주인공이 손으로 해내는 문장. 줄여야 하면 곁가지 묘사와 반복을 먼저 줄인다.";
@@ -64,7 +68,7 @@ export function arcSimplifyKeep(input, lang = "ko") {
 /** The editor's read-through: extra aspects and what to restage, wording only. */
 export const ARC_REVISION_ASPECTS = Object.freeze(["stakes", "lowPoint", "turn"]);
 export function arcRevisionRules(input) {
-  if (!hasArcPolicy(input)) return "";
+  if (!spineRules(input)) return "";
   return " Also, for the story spine (wording only, the events stay): a turn page where the narrator explains the answer before the protagonist sees it (restage the same event as a sight or sound of the planted thing → the protagonist's own words → what it means, inside the page's sentence range); the page just before the turn that does not read as the lowest moment (end it on the protagonist's quietest line, not a question); a want page that never says what is at stake; a closing page that does not echo one image or line from the opening. Report these under the aspects stakes, lowPoint and turn.";
 }
 
@@ -85,7 +89,7 @@ export function plantedHeadNoun(planted) {
  * path, where only the SUSPENSE rule mentioned the planted object.
  */
 export function inspectArc(outline, input) {
-  if (!hasArcPolicy(input)) return [];
+  if (!spineRules(input)) return [];
   const planted = outline?.plan?.planted;
   const turn = (Array.isArray(outline?.beats) ? outline.beats : []).find(
     (beat) => beat?.type === "turn",

@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, ...plain} = spec || {};
     return [lang, plain];
@@ -702,7 +702,9 @@ const PINS = {
   // K1 그림책 (R31a): a new K1 draft's input gains k1Policy and the K1
   // short-sentence spec and drops arcPolicy/councilPolicy/councilRecent; every
   // other level is unchanged (dump-diffed against 653b704). 653b704: 674fb65e…41ee.
-  inputs: 'ae3bb68667b28c232ccdfcbe3dd6d9f89922ad361389390203e4d7530525b24f',
+  // 프롬프트 다이어트 (R31b): every new draft's input carries promptDiet {version: 1};
+  // nothing else differs (dump-diffed against a3f361e). a3f361e: ae3bb686…b24f.
+  inputs: '287d578508e546dc5aeb19f295629536f5b9d9480fd5a2b569e0930b914e1a26',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -733,7 +735,10 @@ const PINS = {
   // never meets, so no request changes); nothing else differs (diffed against
   // 035107a). 035107a: 3b7c0695…fa92.
   // K1 그림책 (R31a): the K1 demo job's input as above (dump-diffed against 653b704). 653b704: 78059d1c…f150.
-  fullAutoDemo: 'f1ccd7ece94f3764e75f492458f2be02297d61858ab6ff3a7b94c53cae4f0440',
+  // 프롬프트 다이어트 (R31b): the demo jobs' input carries promptDiet (the demo engine
+  // sends no prompt; the pre-R12 job fixture is unchanged; dump-diffed against
+  // a3f361e). a3f361e: f1ccd7ec…0440.
+  fullAutoDemo: 'efcb84650eece968c90161fc99fa70556e05d3e5abd665966451070a09ba582e',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -776,7 +781,10 @@ const PINS = {
   // K1 그림책 (R31a): ③ prices a new K1 book without the room, with one writer
   // call and no pagination request (글 약 $2.18 → $0.99); nothing else changed
   // (dump-diffed against 653b704). 653b704: bbc64451…c85b.
-  review: '823730df739af399782d8c9c5b9ecea3b23b9047144db301674c69dd1beee987',
+  // 프롬프트 다이어트 (R31b): ③ prices a new K2 book with the outline on the stage
+  // model and without the quality prose passes (16쪽 글 약 .41 → .66); the K1
+  // line and everything else are unchanged (dump-diffed against a3f361e). a3f361e: 823730df…e987.
+  review: 'd8e779d91d5fe4024a21282a3b01cfc8d8171464b3fb1e41b32af19e0c85719e',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -802,7 +810,11 @@ const PINS = {
   // K1 그림책 (R31a): only NEW K1 jobs' estimates changed (37 → 10 requests,
   // text $1.937 → $0.875); K2+ and existing jobs are the same (dump-diffed
   // against 653b704). 653b704: e47fe78c…6784.
-  estimates: 'a91a4f439cdd4ed7c97fc1487e04bc6705480dd704e3f126fd4120ab87e1cc53',
+  // 프롬프트 다이어트 (R31b): only NEW K2+ jobs' text estimate changed (16쪽 .407 →
+  // .655, 8쪽 .937 → .361; the request count is the same — the outline on the
+  // stage model, no quality prose rows); K1 and existing jobs are the same
+  // (dump-diffed against a3f361e). a3f361e: a91a4f43…cc53.
+  estimates: 'fa6bbbcd6a3e3b8f20ac0c0e5e48cfdd7aca6e588ae7422a35b0a506704f6bbd',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

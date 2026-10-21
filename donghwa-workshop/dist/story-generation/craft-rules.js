@@ -17,11 +17,15 @@ const hasKorean = (input) => input?.language !== "en";
 // R31a: a K1 book (input.k1Policy) has no mystery and no fixed sound refrain;
 // k1-book.js gives its own arc and sound line (inline test: no module cycle).
 const k1Book = (input) => input?.k1Policy?.version === 1;
+// R31b 프롬프트 다이어트: no suspense formula, no sound-refrain quota, no
+// one-action-per-sentence, no per-beat sound counts; the cast and place lines
+// stay as one soft sentence each (the parent asked that everyone take part).
+const dieted = (input) => input?.promptDiet?.version === 1;
 const K1_SOUNDS =
   "K1 SOUNDS: use at least five different sound or movement words across the book (for example 부릉부릉, 까르륵, 콩닥콩닥), spread over different pages where they happen, never piled on one page. No fixed refrain is required.";
 /** K1/K2 Korean books: a sound-word refrain is part of the story's design. */
 export const soundRefrainRequired = (input) =>
-  hasCraftPolicy(input) && hasKorean(input) && /^K[12]$/u.test(koLevel(input)) && !k1Book(input);
+  hasCraftPolicy(input) && hasKorean(input) && /^K[12]$/u.test(koLevel(input)) && !k1Book(input) && !dieted(input);
 
 const SUSPENSE_OUTLINE =
   "SUSPENSE: the story asks one question (what makes the sound, where the thing went, who did it). Beat summaries before the turn show clues, wrong guesses and small failures but never state the answer or its cause; the turn beat reveals it and the resolution uses it. plan.twistReveal belongs to the turn, never to setup or want.";
@@ -59,6 +63,8 @@ const locationCount = (input) => {
 export function castSpreadRule(input) {
   const companions = companionCount(input);
   if (!companions) return "";
+  if (dieted(input))
+    return `The ${companions} chosen companion${companions > 1 ? "s" : ""} each take part somewhere and do something of their own; not everyone needs to be in every scene.`;
   return `CAST (${companions} companion${companions > 1 ? "s" : ""} supplied): every companion is listed in beat.characters of at least two beats and does one thing of its own that matters to the story (a wrong guess, a small help, a funny mistake), never only standing by. Spread the companions over the beats instead of crowding every scene${companions >= 3 ? ": some join on the way, one may wait at home" : ""}; one beat lists at most four characters.`;
 }
 /** With three or more places supplied, the middle beats use three (four in a 16-page book). */
@@ -66,11 +72,14 @@ export function placeSpreadRule(input) {
   const locations = locationCount(input),
     want = Math.min(locations, Number(input?.pageCount) >= 16 ? 4 : 3);
   if (want < 3) return "";
+  if (dieted(input))
+    return `The parent chose ${locations} places besides home; let the story visit ${want} of them where it naturally goes.`;
   return `PLACES (${locations} non-home locations supplied): the middle beats visit at least ${want} distinct non-home locations, each visit changing what the protagonist knows or has; return to a place only when the story needs it.`;
 }
 /** Outline stage (app path, and the quality path's canon). */
 export function craftOutlineRules(input) {
   if (!hasCraftPolicy(input)) return "";
+  if (dieted(input)) return [castSpreadRule(input), placeSpreadRule(input)].filter(Boolean).join("\n");
   return [
     k1Book(input) ? "" : SUSPENSE_OUTLINE,
     SIDEKICK,
@@ -85,6 +94,7 @@ export function craftOutlineRules(input) {
 /** Prose stages (app prose, quality rich/simplify/fix, enrichment). */
 export function craftProseRules(input) {
   if (!hasCraftPolicy(input)) return "";
+  if (dieted(input)) return "";
   return [
     k1Book(input) ? "" : "SUSPENSE IN PROSE: keep the answer of the story's question hidden until the turn beat's paragraph. Earlier paragraphs may show the clue (a sound, a glimpse, a wrong guess) but never explain what causes it; narration before the turn does not name the cause.",
     "SOUND WORDS: when something makes a sound, write the sound itself as onomatopoeia ('딸랑!') instead of describing it ('가는 소리가 났어요'); one or two sound words per beat, the same word for the same source every time.",

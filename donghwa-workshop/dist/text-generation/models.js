@@ -632,6 +632,9 @@ export function estimateStoryTextCost({
   // R31a: a K1 book (input.k1Policy): the app outline, the whole book in one
   // writer call (+ one expected fix call), its pages taken as written.
   k1Book = false,
+  // R31b: a diet draft's outline and prose go through the app path (the stage
+  // models), never the package's quality roles.
+  diet = false,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -658,7 +661,7 @@ export function estimateStoryTextCost({
       ),
     ),
     enrichment =
-      settings.storyEnrichment !== false && !quality && !orchestration;
+      settings.storyEnrichment !== false && !quality && !orchestration && !diet;
   const input =
       6000 + Math.ceil(Math.max(0, Number(previousTextLength) || 0) / 2),
     baseOutput = openings
@@ -741,7 +744,7 @@ export function estimateStoryTextCost({
       input + (beam ? beats * 300 : 0),
       outlineOutput,
       1,
-      quality && !k1Book ? (beam ? "cheap" : "outline") : undefined,
+      quality && !k1Book && !diet ? (beam ? "cheap" : "outline") : undefined,
     ),
     stageEstimate("sceneBriefs", input, beats * 500),
   );
@@ -768,7 +771,7 @@ export function estimateStoryTextCost({
       ),
       stageEstimate("beatVoice", 1500, 150, 3, "cheap"),
     );
-  } else if (quality) {
+  } else if (quality && !diet) {
     stages.push(
       stageEstimate(
         "prose",
@@ -841,10 +844,11 @@ export function estimateStoryTextCost({
     ...(orchestration && !k1Book ? { orchestration: true } : {}),
     ...((orchestration || k1Book) && writerTier === "upper" ? { writerTier } : {}),
     ...(k1Book ? { k1Book: true } : {}),
+    ...(diet ? { diet: true } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `${council && orchestration ? "정성 모드 기획 회의(성장 설계·플롯 후보 3개·편집자·그림 감독·독자·바이블), " : council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${k1Book ? `, K1 그림책 작가(책 전체 한 번 + 걸린 쪽 고치기 한 번, 쪽 나누기 요청 없음)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : orchestration ? `, 정성 모드 비트별 작가(한글·영어 비트마다 1회 ${beats * 2}회, 첫 비트 두 안·되풀이 말 카드, 예상 재작성 ${Math.ceil((beats * 2) / 4)}회 — 비트마다 최대 3번)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `${council && orchestration ? "정성 모드 기획 회의(성장 설계·플롯 후보 3개·편집자·그림 감독·독자·바이블), " : council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${diet && !k1Book && !orchestration ? ", 한글·영어 전문 1회" : k1Book ? `, K1 그림책 작가(책 전체 한 번 + 걸린 쪽 고치기 한 번, 쪽 나누기 요청 없음)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : orchestration ? `, 정성 모드 비트별 작가(한글·영어 비트마다 1회 ${beats * 2}회, 첫 비트 두 안·되풀이 말 카드, 예상 재작성 ${Math.ceil((beats * 2) / 4)}회 — 비트마다 최대 3번)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }
 
@@ -886,7 +890,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}) }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}) }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {

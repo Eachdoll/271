@@ -95,6 +95,7 @@ test('R9-A1 general path: the system prompt limits catchphrases and the model ne
  delete prepared.input.orchestrationPolicy;
  delete prepared.input.k1Policy;
  delete prepared.input.topicEndingPolicy;
+ delete prepared.input.promptDiet;
  const requests=[];const engine={id:'fake',async complete(request){requests.push(request);return {text:'not json',usage:{input:0,output:0}};}};
  await assert.rejects(generateOutline(prepared.input,{engine}));
  assert.ok(requests.length>=1);

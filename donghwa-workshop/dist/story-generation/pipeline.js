@@ -88,6 +88,18 @@ import { writeProseByBeat, checkBeatText, hasRefrain, beatBudgets } from "./beat
 import { hasK1Policy, k1OutlineRules, writeK1Book, k1Pagination } from "./k1-book.js";
 import { hasTopicEnding } from "./topic-ending.js";
 import {
+  hasPromptDiet,
+  leanBaseSystem,
+  leanLevelRules,
+  leanVisibleInput,
+  leanOutlineRules,
+  LEAN_PLOT_CONTRACT,
+  leanBibleBlock,
+  LEAN_TENSION_RULE,
+  leanBeatWriterRules,
+  leanProseRules,
+} from "./prompt-diet.js";
+import {
   hasOrchestrationPolicy,
   orchestrationPolicy,
   outlineTensionSchema,
@@ -387,6 +399,10 @@ function modelVisibleInput(source) {
     const { topicEndingPolicy, ...rest } = input;
     input = rest;
   }
+  if (input?.promptDiet) {
+    const { promptDiet, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -524,6 +540,8 @@ export function normalizeStoryInput(input = {}) {
     // R31a: the K1 book (arc, one-call page writer) and the simple-mode topic ending.
     ...(hasK1Policy(input) ? { k1Policy: { version: 1 } } : {}),
     ...(hasTopicEnding(input) ? { topicEndingPolicy: { version: 1 } } : {}),
+    // R31b: the prompt diet (lean requests, no counters, no spec JSON).
+    ...(hasPromptDiet(input) ? { promptDiet: { version: 1 } } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -679,9 +697,14 @@ async function complete(stage, input, payload, schema, options = {}) {
   notify(options, stage, "request", "이야기 글을 생성하고 있어요.");
   const engine = await engineFor(options);
   abort(options.signal);
+  // R31b: a diet draft's request is the short base, the level in a sentence
+  // per language, the stage's own (lean) rules, and a compact input.
+  const diet = hasPromptDiet(input);
   const response = await engine.complete({
-    system: `${baseSystemFor(input)}\n${levelRules({ ...input, approvedOutline: payload.data?.approvedOutline })}\n${payload.rules}\n${payload.data?.approvedOutline?.quality?.worldMood ? `FROZEN STORY ATMOSPHERE: ${JSON.stringify(payload.data.approvedOutline.quality.worldMood)}. Use compatible weather, light and seasonal sensory details; scene time progression and fixed drawer geometry remain authoritative. Never add catalogue landmarks or portals absent from approved places.` : ""}\n${payload.data?.approvedOutline?.plotContract ? "FROZEN EVENT CONTRACT: the approvedOutline.plotContract is authoritative. Preserve every causal event, setup/payoff and character/prop state change. Brief details are optional rendering details, not new actions. For one page depict only its current event; beat stateAfter may occur on a later page." : ""}`,
-    user: JSON.stringify({ input: modelVisibleInput(input), ...payload.data }),
+    system: diet
+      ? `${leanBaseSystem(input)}\n${leanLevelRules(input, { vocab: !["outline", "sceneBriefs", "sceneBrief", "plotContract"].includes(stage) })}\n${payload.rules}${payload.data?.approvedOutline?.quality?.worldMood ? `\nAtmosphere of this story: ${JSON.stringify(payload.data.approvedOutline.quality.worldMood)}.` : ""}${payload.data?.approvedOutline?.plotContract ? "\nThe approvedOutline and its plotContract are the agreed events: keep them; brief details are optional colour, not new actions." : ""}`
+      : `${baseSystemFor(input)}\n${levelRules({ ...input, approvedOutline: payload.data?.approvedOutline })}\n${payload.rules}\n${payload.data?.approvedOutline?.quality?.worldMood ? `FROZEN STORY ATMOSPHERE: ${JSON.stringify(payload.data.approvedOutline.quality.worldMood)}. Use compatible weather, light and seasonal sensory details; scene time progression and fixed drawer geometry remain authoritative. Never add catalogue landmarks or portals absent from approved places.` : ""}\n${payload.data?.approvedOutline?.plotContract ? "FROZEN EVENT CONTRACT: the approvedOutline.plotContract is authoritative. Preserve every causal event, setup/payoff and character/prop state change. Brief details are optional rendering details, not new actions. For one page depict only its current event; beat stateAfter may occur on a later page." : ""}`,
+    user: JSON.stringify({ input: diet ? leanVisibleInput(input, stage) : modelVisibleInput(input), ...payload.data }),
     jsonSchema: schema,
     temperature: temperature[stage],
     maxTokens: budgetFor(stage, input),
@@ -2155,7 +2178,9 @@ function outlineRequestSchema(input) {
   delete setting.properties.newPlace;
   setting.properties.backgroundId.enum = ids;
   schema.properties.beats.items.properties.settingKey.enum = ids;
-  schema.required.push("plotContract");
+  // R31b: a K1 book on the diet has no event ledger (nothing downstream needs it).
+  if (!(hasPromptDiet(input) && hasK1Policy(input))) schema.required.push("plotContract");
+  else delete schema.properties.plotContract;
   // 2026-10-20: a typed ending is a third ending type (new drafts only).
   if (input.endingType === "custom")
     schema.properties.endingType.enum = ["home_sleep", "open", "custom"];
@@ -2190,10 +2215,13 @@ export async function generateOutline(source, options = {}) {
   const council = hasCouncilPolicy(input)
     ? await runStoryCouncil(input, options, qualityServices())
     : null;
+  const diet = hasPromptDiet(input);
   const bibleRules = [
-    council ? bibleOutlineRules(council.record.bible, input) : "",
+    council ? (diet ? leanBibleBlock(council.record.bible, input) : bibleOutlineRules(council.record.bible, input)) : "",
     hasOrchestrationPolicy(input)
-      ? outlineTensionRule(frozenBeatCount(input), tensionRange(input), council?.record.bible)
+      ? diet
+        ? LEAN_TENSION_RULE(frozenBeatCount(input), tensionRange(input))
+        : outlineTensionRule(frozenBeatCount(input), tensionRange(input), council?.record.bible)
       : "",
   ]
     .filter(Boolean)
@@ -2230,7 +2258,9 @@ export async function generateOutline(source, options = {}) {
   };
   // R31a: a K1 book's outline takes the app path with the K1 arc (the quality
   // package's planted-object/twist patterns are not for three-year-olds).
-  if (input.storyQuality?.enabled && !hasK1Policy(input)) {
+  // R31b: a diet draft's outline is the author's own, from the request and the
+  // room's pitch — not the package's plot-pattern seed.
+  if (input.storyQuality?.enabled && !hasK1Policy(input) && !diet) {
     const result = await generateQualityOutline(
       input,
       // R23: the bible itself too, so the seed's planted object and turn follow it.
@@ -2243,7 +2273,17 @@ export async function generateOutline(source, options = {}) {
   }
   const count = frozenBeatCount(input),
     attempts = count - 5;
-  const rules = `${plotContractRules(input)}\nDesign the complete StoryOutline, not page text. Exactly ${count} beats for ${input.pageCount} pages, with indexes 1..${count}.
+  const rules = diet
+    ? [
+        leanOutlineRules(input, { count, attempts, k1: hasK1Policy(input), custom: customEnding(input) }),
+        customEnding(input) ? endingRuleLine(input) : "",
+        hasK1Policy(input) ? "" : LEAN_PLOT_CONTRACT,
+        craftOutlineRules(input),
+        bibleRules,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : `${plotContractRules(input)}\nDesign the complete StoryOutline, not page text. Exactly ${count} beats for ${input.pageCount} pages, with indexes 1..${count}.
 Order: setup -> want -> ${attempts} attempt beat(s) -> turn -> resolution -> close. Pack the three-attempt pattern into these available attempt beats: two small funny failures, with the last attempt leading to the turn. Every beat changes the situation; summaries have 2–3 concrete sentences.
 Return exactly 3 Korean title candidates, one-sentence logline, concrete want/problem, one surprising twist, 3–5 Korean new words, appropriate English new words, one emotion per beat, and one setting record per beat.
 Use only supplied drawer background IDs: settings[].backgroundId and the matching beat.settingKey must be identical. Do not create newPlace or invent locations. ${customEnding(input) ? "The first beat uses a supplied home background ID from homeBackgroundIds; the final beat takes place wherever the parent's ending puts it (any supplied ID, home or not)." : "The first and final beat use the SAME supplied home background ID from homeBackgroundIds."} Middle beats visit at least TWO DISTINCT non-home IDs from locationBackgroundIds. Prefer the parent's preferredBackgroundIds when compatible with these location rules. Repeated places preserve their fixed geometry.
@@ -2301,7 +2341,7 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
     result.data = shaped.outline;
     normalized = shaped.notes;
     const report = inspectOutlineRules(result.data, input);
-    if (!result.data?.plotContract) {
+    if (!result.data?.plotContract && !(diet && hasK1Policy(input))) {
       report.valid = false;
       report.violations.push({
         code: "plot_contract_missing",
@@ -2482,6 +2522,11 @@ async function fitOpeningsProse(result, outline, input, options, requests) {
 }
 /** The beat writer's binding rules: the prose stage's craft lines and each language's frozen level. */
 function beatWriterRules(input, outline) {
+  if (hasPromptDiet(input)) {
+    const lean = leanBeatWriterRules(input, outline),
+      craft = craftProseRules(input);
+    return { ...lean, common: `${lean.common}${craft ? `\n${craft}` : ""}` };
+  }
   const { vocabList: _ko, ...ko } = input.specs.ko || {},
     { vocabList: _en, ...en } = input.specs.en || {},
     mood = outline?.quality?.worldMood;
@@ -2735,7 +2780,7 @@ export async function generateProse(outline, source, options = {}) {
   }
   // R30 정성 모드: beat after beat at the frozen level (beat-writer.js).
   if (hasOrchestrationPolicy(input)) return writeBeatProse(outline, input, options);
-  if (input.storyQuality?.enabled)
+  if (input.storyQuality?.enabled && !hasPromptDiet(input))
     return generateQualityProse(outline, input, options, qualityServices());
   const koSpec = input.specs.ko,
     sentenceRange = koSpec.sentencesPerPageRange || {
@@ -2750,7 +2795,9 @@ export async function generateProse(outline, source, options = {}) {
   const guidance = `${range[0] * input.pageCount}–${range[1] * input.pageCount} Korean sentences in total, each ${words[0]}–${words[1]} eojeol`;
   const schema = clone(PROSE_SCHEMA);
   schema.required.push("paragraphBeats");
-  const rules = `Write full Korean and English prose in paragraphs, WITHOUT page divisions. Follow every approved beat in order, preserve the causal sequence and explicitly reveal the approved twist. When sceneBriefs are supplied, use each beat's sounds, concrete props, dialogue and drawable action without changing the approved event or adding unsupported geometry.
+  const rules = hasPromptDiet(input)
+    ? `${leanProseRules(input)}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}`
+    : `Write full Korean and English prose in paragraphs, WITHOUT page divisions. Follow every approved beat in order, preserve the causal sequence and explicitly reveal the approved twist. When sceneBriefs are supplied, use each beat's sounds, concrete props, dialogue and drawable action without changing the approved event or adding unsupported geometry.
 EVERY sentence must have an explicit grammatical subject in both languages. Use a character name, an unambiguous pronoun, or a concrete object as the subject; never omit the Korean subject. Attribute every quoted dialogue turn to a named speaker, and give each sentence within dialogue its own explicit subject. Vary subjects naturally rather than repeating the protagonist's name at every sentence start.
 Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least two sound/movement words. EACH approved beat must contain at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture), distributed within the beat's paragraphs. Expand each approved beat into concrete observation → attempt → visible consequence, including small gestures and specific reactions. At the earliest levels distribute these details over short permitted sentences. Never repeat an identical sentence except the approved refrain at planned beat positions, maximum 3.
 Return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with exactly one approved beat index for every blank-line-separated paragraph of the corresponding language. Each language must cover every approved beat in order; split paragraphs at beat boundaries. These paragraph labels are metadata ONLY: never place beat numbers, labels or headings into the ko/en story text or printable prose.

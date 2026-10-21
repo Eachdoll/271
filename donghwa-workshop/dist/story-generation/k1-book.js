@@ -24,6 +24,7 @@ import { describeReadingViolation } from "../reading-messages.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { wardrobeFor } from "./demo.js";
 import { StoryValidationError } from "./schemas.js";
+import { leanLevelLine } from "./prompt-diet.js";
 
 export const K1_POLICY_VERSION = 1;
 export const k1Policy = () => ({ version: K1_POLICY_VERSION });
@@ -93,17 +94,20 @@ const FIX_SCHEMA = (count) => {
   return schema;
 };
 
-/** The writer's craft lines (the golden manuscript's devices, as rules). */
+/**
+ * What a good K1 book feels like, in the writer's own terms (R31b: the
+ * golden manuscript's devices as a feel, not as counters — no "five sound
+ * words", no "one repetition"; the checks measure what can be measured).
+ */
 const CRAFT = [
-  "한 쪽 = 한 장면 = 한 감정 = 그림 한 장. 먼저 그 쪽 그림(picture)을 정하고, 글은 그 그림 안에서 쓴다.",
-  "쪽 넘김을 설계한다: 기다림·궁금함으로 끝나는 쪽 다음 쪽이 답을 준다(예: \"버스가 안 와요.\" → \"부릉부릉!\").",
-  "소리말·흉내말을 책 전체에서 다섯 개 이상, 그 일이 일어나는 쪽에 나눠 쓴다. 한 쪽에 몰지 않는다.",
-  "짧은 되풀이를 한 번 이상 쓴다(예: \"유하가 고개를 숙여요. 해니도 고개를 숙여요.\").",
-  "대사는 마음이 바뀌는 쪽에만, 짧게, 누가 말했는지 보이게.",
-  "감정은 행동으로 보여 준다(\"속상했어요\" 대신 \"고개를 숙여요\"). 교훈은 말하지 않고 마지막 행동으로만.",
-  "무서움·눈물·혼남·경쟁·다침이 없다. 안전한 행동만.",
-  "영어(en)는 같은 사건을 그 단계의 영어로 새로 쓴다(번역이 아니다). 이름은 영어 이름.",
-  "picture는 영어 한두 문장: 구도, 인물(이름), 자세, 빛과 색 분위기. 그림 속 글자는 없다.",
+  "한 쪽은 그림 한 장이에요. 그 쪽의 그림(picture)을 먼저 떠올리고, 글은 그 그림이 말하지 못하는 것만 짧게 써요.",
+  "쪽을 넘기고 싶게 써요 — 기다리거나 궁금한 채로 끝난 쪽은 다음 쪽이 받아 줘요.",
+  "소리가 나는 자리에서는 그 소리를 그대로 써요(부릉부릉, 까르륵). 억지로 넣지는 않아요.",
+  "마음은 행동으로 보여 줘요(고개를 숙여요, 손을 내밀어요). 교훈은 말하지 않고 마지막 행동이 말하게 해요.",
+  "아이가 따라 말하고 싶은 되풀이와 짧은 대사가 생기면 살려요. 누가 말했는지는 보이게.",
+  "무서움·눈물·혼남·경쟁·다침은 없어요. 모두 안전하게.",
+  "영어(en)는 같은 이야기를 그 단계의 영어로 새로 써요(번역이 아니에요). 이름은 영어 이름.",
+  "picture는 영어 한두 문장: 구도, 누가, 어떤 자세, 빛과 색. 그림 속에 글자는 없어요.",
 ];
 
 function pageChecks(page, input, allowedNames) {
@@ -148,7 +152,6 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     beats = list(outline.beats),
     plan = buildBeatPagePlan(outline, input.pageCount),
     briefs = list(options.sceneBriefs?.briefs || options.sceneBriefs),
-    rules = object(options.writerRules) ? options.writerRules : {},
     allowedNames = list(input.characters).flatMap((c) => [c.name, c.nameEn].filter(Boolean)),
     cast = list(input.characters)
       .map((c) => `${c.id} = ${c.name}${c.nameEn ? ` / ${c.nameEn}` : ""}${c.description ? ` (${str(c.description, 120)})` : ""}`)
@@ -161,7 +164,8 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     })
     .join("\n");
   const pagesLine = plan.map((row) => `${row.pageNo}쪽 → 비트 ${row.beatIndex}`).join(", ");
-  const system = `너는 만 3~4세(K1) 그림책 작가다. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 쓴다. 다정한 이야기꾼 말투('~요'). JSON으로만 답한다.\n${CRAFT.map((line, i) => `${i + 1}. ${line}`).join("\n")}${rules.ko ? `\n${rules.ko}` : ""}${rules.en ? `\n${rules.en}` : ""}`;
+  // R31b: the level lines are sentences (leanLevelLine), never the spec JSON.
+  const system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}`;
   const user = [
     `[부모 요청] ${str(input.topic, 300)}`,
     `[줄거리 지도]\n${map}`,

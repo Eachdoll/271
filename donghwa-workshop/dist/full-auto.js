@@ -401,6 +401,8 @@ export function estimateFullAutoCost(
       ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
       // R20: new jobs (and jobs frozen with the policy) include the writers' room.
       ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : k1Book ? {} : { council: true }),
+      // R31b: diet drafts price the app-path outline/prose on the stage models.
+      ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
       ...(k1Book
         ? {
             k1Book: true,
@@ -1297,6 +1299,7 @@ export async function runFullAuto(
         orchestrationPolicy: _freshOrchestration,
         k1Policy: _freshK1,
         topicEndingPolicy: _freshTopicEnding,
+        promptDiet: _freshDiet,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1331,6 +1334,9 @@ export async function runFullAuto(
         ...(hasK1Policy(job.input) ? { k1Policy: clone(job.input.k1Policy) } : {}),
         ...(hasTopicEnding(job.input)
           ? { topicEndingPolicy: clone(job.input.topicEndingPolicy) }
+          : {}),
+        ...(job.input?.promptDiet?.version === 1
+          ? { promptDiet: clone(job.input.promptDiet) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
@@ -1405,7 +1411,9 @@ export async function runFullAuto(
       !job.input.storyQuality?.enabled &&
       // R30: the beat writer already wrote each beat with its brief.
       !hasOrchestrationPolicy(job.input) &&
-      !hasK1Policy(job.input)
+      !hasK1Policy(job.input) &&
+      // R31b: no per-paragraph "enrichment" pass on the diet (that stuffing is the point).
+      job.input?.promptDiet?.version !== 1
     )
       await step(
         "enrichment",
