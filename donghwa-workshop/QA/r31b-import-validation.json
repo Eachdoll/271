@@ -1,0 +1,275 @@
+{
+  "date": "2026-10-21",
+  "deployment": {
+    "version_number": 41,
+    "commit_sha": "eaaaa57631963771d48ee87ca2ff0e3008ab79cd",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_9fec6e3d14408191857d2d6086254b38",
+    "deployment_id": "appgdep_6ad927a36ff48191ad9b01fb168a20ef",
+    "status": "succeeded",
+    "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "cache": "donghwa-shell-v74",
+    "env_set_revision": 1,
+    "upstream_base": "327dede96db7459894c249d873c70304a3b470b1",
+    "upstream_code_end": "92dce127c3421f25331f437784da7a65429b2c7a",
+    "upstream_work_order": "f3a99a0adbe42ca9ad2132b8158c92edf5936cfe",
+    "scope": "App-only first; A/B runner aa28d88 deferred per latest user request",
+    "updated_at": "2026-10-21T20:59:34.455510+00:00"
+  },
+  "requiredGates": {
+    "validatedAt": "2026-10-21T20:58:28.710946+00:00",
+    "baseline": "v40 / v73 (r31a applied)",
+    "tests": {
+      "app": {
+        "tests": 988,
+        "pass": 988,
+        "fail": 0
+      },
+      "quality": {
+        "tests": 85,
+        "pass": 85,
+        "fail": 0
+      }
+    },
+    "build": "PASS",
+    "qualityCopiesIdentical": true,
+    "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+    "census": {
+      "proMatchesWorkOrderTable": true,
+      "simpleStepsWithinLimit": true,
+      "pageErrors": [],
+      "paidRequests": []
+    },
+    "smoke": {
+      "1280": "PASS",
+      "390": "PASS"
+    },
+    "localFreeChecks": "Demo and estimate consistency PASS at 1280 and 390; K2 price example differs (recorded)",
+    "priceDiagnostic": {
+      "before": {
+        "auto": 2.4742608,
+        "selection": 2.4022608
+      },
+      "after": {
+        "auto": 1.7222608,
+        "selection": 1.6502607999999999
+      },
+      "materialPlanningUsd": 0.07200000000000006,
+      "reductionUsd": 0.7520000000000002,
+      "workOrderExampleUsd": 1.66,
+      "configuration": {
+        "koreanLevel": "K2",
+        "englishLevel": "E0",
+        "pageCount": 16,
+        "language": "dual",
+        "engine": "openai",
+        "materialPlan": "auto"
+      }
+    },
+    "source": {
+      "upstreamBase": "327dede96db7459894c249d873c70304a3b470b1",
+      "upstreamCodeEnd": "92dce127c3421f25331f437784da7a65429b2c7a",
+      "method": "git diff --binary 327dede..92dce12 -- donghwa-workshop; git apply --index -p2",
+      "filesChanged": 21,
+      "insertions": 606,
+      "deletions": 54,
+      "sourceFilesCompared": 500,
+      "different": [],
+      "patchSha256": "7196f59d5804d1120686293fd9ab0ef1d6b656104a43dc011392aadecdf8b7b3",
+      "scope": "App-only first, per latest user request; aa28d88 A/B runner excluded"
+    },
+    "allRequiredGatesPassed": true
+  },
+  "localFreeChecks": {
+    "base": "http://127.0.0.1:4960",
+    "runs": [
+      {
+        "width": 1280,
+        "pageErrors": [],
+        "paidRequests": [],
+        "notice": {
+          "firstCount": 1,
+          "afterReloadCount": 0,
+          "text": "K1 그림책이 새로워졌어요: 작가가 12쪽을 쪽마다 한 번에 쓰고(짧은 소리말·쪽 넘김), 끝은 주제가 가는 곳에서 맺어요. 새 이야기 12쪽 글 요금은 약 $0.92로 바뀌어요."
+        },
+        "price": {
+          "pageCount": 12,
+          "level": "K1",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $0.99"
+        },
+        "k2Price": {
+          "pageCount": 16,
+          "level": "K2",
+          "englishLevel": "E0",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $1.72",
+          "estimateUsd": 1.7222608,
+          "workOrderExampleUsd": 1.66,
+          "workOrderExampleMatched": false
+        },
+        "demo": {
+          "bookId": "book-04b35958-dd58-469d-9d10-b1280bc8c7d1",
+          "printedPages": 16,
+          "entries": 13,
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "samplePageImageSaved": true,
+          "promptDiet": true,
+          "topicEndingPolicy": true
+        },
+        "cache": "donghwa-shell-v74",
+        "status": "passed_with_price_variance"
+      },
+      {
+        "width": 390,
+        "pageErrors": [],
+        "paidRequests": [],
+        "notice": {
+          "firstCount": 1,
+          "afterReloadCount": 0,
+          "text": "K1 그림책이 새로워졌어요: 작가가 12쪽을 쪽마다 한 번에 쓰고(짧은 소리말·쪽 넘김), 끝은 주제가 가는 곳에서 맺어요. 새 이야기 12쪽 글 요금은 약 $0.92로 바뀌어요."
+        },
+        "price": {
+          "pageCount": 12,
+          "level": "K1",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $0.99"
+        },
+        "k2Price": {
+          "pageCount": 16,
+          "level": "K2",
+          "englishLevel": "E0",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $1.72",
+          "estimateUsd": 1.7222608,
+          "workOrderExampleUsd": 1.66,
+          "workOrderExampleMatched": false
+        },
+        "demo": {
+          "bookId": "book-80fb2247-b188-4948-854f-e412110aa019",
+          "printedPages": 16,
+          "entries": 13,
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "samplePageImageSaved": true,
+          "promptDiet": true,
+          "topicEndingPolicy": true
+        },
+        "cache": "donghwa-shell-v74",
+        "status": "passed_with_price_variance"
+      }
+    ],
+    "status": "passed_with_price_variance"
+  },
+  "productionFreeChecks": {
+    "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "runs": [
+      {
+        "width": 1280,
+        "pageErrors": [],
+        "paidRequests": [],
+        "notice": {
+          "firstCount": 1,
+          "afterReloadCount": 0,
+          "text": "K1 그림책이 새로워졌어요: 작가가 12쪽을 쪽마다 한 번에 쓰고(짧은 소리말·쪽 넘김), 끝은 주제가 가는 곳에서 맺어요. 새 이야기 12쪽 글 요금은 약 $0.92로 바뀌어요."
+        },
+        "price": {
+          "pageCount": 12,
+          "level": "K1",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $0.99"
+        },
+        "k2Price": {
+          "pageCount": 16,
+          "level": "K2",
+          "englishLevel": "E0",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $1.72",
+          "estimateUsd": 1.7222608,
+          "workOrderExampleUsd": 1.66,
+          "workOrderExampleMatched": false
+        },
+        "demo": {
+          "bookId": "book-bd99c18d-6b34-4f4f-9d78-cb0bd1d70676",
+          "printedPages": 16,
+          "entries": 13,
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "samplePageImageSaved": true,
+          "promptDiet": true,
+          "topicEndingPolicy": true
+        },
+        "cache": "donghwa-shell-v74",
+        "status": "passed_with_price_variance"
+      },
+      {
+        "width": 390,
+        "pageErrors": [],
+        "paidRequests": [],
+        "notice": {
+          "firstCount": 1,
+          "afterReloadCount": 0,
+          "text": "K1 그림책이 새로워졌어요: 작가가 12쪽을 쪽마다 한 번에 쓰고(짧은 소리말·쪽 넘김), 끝은 주제가 가는 곳에서 맺어요. 새 이야기 12쪽 글 요금은 약 $0.92로 바뀌어요."
+        },
+        "price": {
+          "pageCount": 12,
+          "level": "K1",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $0.99"
+        },
+        "k2Price": {
+          "pageCount": 16,
+          "level": "K2",
+          "englishLevel": "E0",
+          "summary": "엔진·예상 요금\nGPT · OpenAI · 글 약 $1.72",
+          "estimateUsd": 1.7222608,
+          "workOrderExampleUsd": 1.66,
+          "workOrderExampleMatched": false
+        },
+        "demo": {
+          "bookId": "book-c0b742df-e7a8-4f03-b1f2-efa4d3ef6dff",
+          "printedPages": 16,
+          "entries": 13,
+          "koreanSaved": true,
+          "englishUnchanged": true,
+          "samplePageImageSaved": true,
+          "promptDiet": true,
+          "topicEndingPolicy": true
+        },
+        "cache": "donghwa-shell-v74",
+        "status": "passed_with_price_variance"
+      }
+    ],
+    "worker": {
+      "active": "activated",
+      "cacheNames": [
+        "donghwa-shell-v74"
+      ],
+      "entries": {
+        "/short-sentences.js": 4868,
+        "/story-generation/k1-book.js": 14783,
+        "/story-generation/topic-ending.js": 1154,
+        "/story-generation/prompt-diet.js": 12821
+      }
+    },
+    "status": "passed_with_price_variance"
+  },
+  "priceExampleMatched": false,
+  "priceDiagnostic": {
+    "before": {
+      "auto": 2.4742608,
+      "selection": 2.4022608
+    },
+    "after": {
+      "auto": 1.7222608,
+      "selection": 1.6502607999999999
+    },
+    "materialPlanningUsd": 0.07200000000000006,
+    "reductionUsd": 0.7520000000000002,
+    "workOrderExampleUsd": 1.66,
+    "configuration": {
+      "koreanLevel": "K2",
+      "englishLevel": "E0",
+      "pageCount": 16,
+      "language": "dual",
+      "engine": "openai",
+      "materialPlan": "auto"
+    }
+  },
+  "paidApiCalls": 0,
+  "abRunner": "aa28d88 not imported or executed; latest user requested app code 92dce12 first."
+}
