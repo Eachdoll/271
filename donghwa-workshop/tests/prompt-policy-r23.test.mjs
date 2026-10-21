@@ -148,11 +148,15 @@ test('R23 the author bot pitches in the reader\'s words for a policy draft only'
   const {input: raw} = inputFromWizard(state, {...wizard, topic: '바람 피리 찾기'}, {layout: layoutFor(wizard)});
   const input = normalizeStoryInput({...raw, storyQuality: {enabled: false}});
   const calls = [];
-  const engine = {id: 'openai', async complete(req) { calls.push(req); throw new Error('captured'); }};
+  // R29: answer the growth-design step so the room goes on to its pitch requests.
+  const designReply = {json: {growth: {want: '피리 찾기', need: '친구와 함께하기', flaw: '혼자 하려 함'}, theme: '함께', lesson: '같이 찾으면 들려요'}, usage: {input: 1, output: 1}, meta: {requests: 1}};
+  const engine = {id: 'openai', async complete(req) { calls.push(req); if (/\[성장 설계 — 후보를 쓰기 전에/u.test(req.user)) return structuredClone(designReply); throw new Error('captured'); }};
   await generateOutline(input, {engine}).catch(() => {});
-  assert.match(calls[0].user, /\[독자 어휘\] 5~6세 아이가 듣고 되말할 수 있는 말로 쓴다: 한 문장은 짧게, 어려운 낱말·어른 표현·비유 없이, 보이는 물건과 행동으로\./u);
+  // R29: a 정성 모드 room asks for the growth design first; the pitch request is the one that matters here.
+  const pitch = (list) => list.find((c) => /\[피치 [13]개 쓰기\]/u.test(c.user));
+  assert.match(pitch(calls).user, /\[독자 어휘\] 5~6세 아이가 듣고 되말할 수 있는 말로 쓴다: 한 문장은 짧게, 어려운 낱말·어른 표현·비유 없이, 보이는 물건과 행동으로\./u);
   const legacyCalls = [];
-  const legacyEngine = {id: 'openai', async complete(req) { legacyCalls.push(req); throw new Error('captured'); }};
+  const legacyEngine = {id: 'openai', async complete(req) { legacyCalls.push(req); if (/\[성장 설계 — 후보를 쓰기 전에/u.test(req.user)) return structuredClone(designReply); throw new Error('captured'); }};
   await generateOutline(legacyOf(input), {engine: legacyEngine}).catch(() => {});
-  assert.doesNotMatch(legacyCalls[0].user, /\[독자 어휘\]/u);
+  assert.doesNotMatch(pitch(legacyCalls).user, /\[독자 어휘\]/u);
 });

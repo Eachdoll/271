@@ -74,6 +74,7 @@ import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
+import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
@@ -389,6 +390,10 @@ export function estimateFullAutoCost(
       ...(job ? (hasEditorPolicy(job.input) ? { editor: true } : {}) : { editor: true }),
       // R20: new jobs (and jobs frozen with the policy) include the writers' room.
       ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : { council: true }),
+      // R29: 정성 모드 jobs (and a new one while the parent setting is on).
+      ...(job
+        ? hasOrchestrationPolicy(job.input) ? { orchestration: true } : {}
+        : orchestrationPolicyFor(state) ? { orchestration: true } : {}),
       // R12: an openings wizard is sized from its v4 specs ({} for page books).
       ...textEstimateArgs(wizard, freezeReadingLevels),
     }),
@@ -1239,6 +1244,7 @@ export async function runFullAuto(
         councilPolicy: _freshCouncil,
         promptPolicy: _freshPrompt,
         councilRecent: _freshRecent,
+        orchestrationPolicy: _freshOrchestration,
         ...preparedInput
       } = prepared.input;
       job.input = {
@@ -1261,6 +1267,9 @@ export async function runFullAuto(
           : {}),
         ...(job.input?.councilRecent
           ? { councilRecent: clone(job.input.councilRecent) }
+          : {}),
+        ...(job.input?.orchestrationPolicy
+          ? { orchestrationPolicy: clone(job.input.orchestrationPolicy) }
           : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),

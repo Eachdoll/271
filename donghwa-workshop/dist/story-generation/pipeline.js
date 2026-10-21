@@ -83,6 +83,7 @@ import {
   inspectArc,
 } from "./arc-rules.js";
 import { hasPromptPolicy } from "./prompt-policy.js";
+import { hasOrchestrationPolicy, orchestrationPolicy } from "./orchestration.js";
 import {
   hasCouncilPolicy,
   runStoryCouncil,
@@ -362,6 +363,10 @@ function modelVisibleInput(source) {
     const { councilRecent, ...rest } = input;
     input = rest;
   }
+  if (input?.orchestrationPolicy) {
+    const { orchestrationPolicy, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -492,6 +497,10 @@ export function normalizeStoryInput(input = {}) {
     ...(hasArcPolicy(input) ? { arcPolicy: { version: 1 } } : {}),
     ...(hasCouncilPolicy(input) ? { councilPolicy: { version: 1 } } : {}),
     ...(hasPromptPolicy(input) ? { promptPolicy: { version: 1 } } : {}),
+    // R29: 정성 모드 (and the beat writer's tier).
+    ...(hasOrchestrationPolicy(input)
+      ? { orchestrationPolicy: orchestrationPolicy(input.orchestrationPolicy) }
+      : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }

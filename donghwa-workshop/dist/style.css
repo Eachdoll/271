@@ -5264,3 +5264,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
   color: var(--text-2);
   margin-bottom: 6px;
 }
+
+/* R29 정성 모드: candidate angle and tension bars in the parent's choice. */
+.pitch-tension {
+  display: block;
+  font-size: 12px;
+  color: var(--text-2);
+  letter-spacing: 1px;
+}
+.council-design {
+  font-size: 13px;
+  margin: 4px 0 8px;
+}

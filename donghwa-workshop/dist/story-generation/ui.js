@@ -28,6 +28,7 @@ import { editorPolicy, revisionSummary } from "./book-revision.js";
 import { craftPolicy } from "./craft-rules.js";
 import { arcPolicy } from "./arc-rules.js";
 import { promptPolicy } from "./prompt-policy.js";
+import { orchestrationPolicyFor } from "./orchestration.js";
 import { councilRecentFor, councilPolicy, recordParentDecision, renderCouncilCard, isCouncilHold } from "./council.js";
 import {
   renderCouncilRoom,
@@ -942,6 +943,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       councilPolicy: councilPolicy(),
       // R25: the latest approved books' planted objects, frozen for the meeting.
       councilRecent: councilRecentFor(storyQualityBookRecords(state)),
+      // R29 정성 모드: on unless the parent turned it off; the beat writer's tier frozen with it.
+      ...(orchestrationPolicyFor(state) ? { orchestrationPolicy: orchestrationPolicyFor(state) } : {}),
       // R23: tidier requests (default rules back, bible over seed, lean canon).
       promptPolicy: promptPolicy(),
     },

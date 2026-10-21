@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, ...plain} = spec || {};
     return [lang, plain];
@@ -696,7 +696,10 @@ const PINS = {
   // {version: 1, planted: []} (wizard and normalized; no approved books in the
   // fixture, so no request changes); nothing else differs (diffed against
   // 38cc8de). 38cc8de: 6eea4aab…a4cd.
-  inputs: 'c80208e9037f141b8856fbf074746c59c53fb56b35afa23457f3a86c8dc0ec74',
+  // 정성 모드 (R29): a new draft's input also gains orchestrationPolicy
+  // {version: 1, writerTier: "medium"} (wizard and normalized); nothing else
+  // differs (diffed against 035107a). 035107a: c80208e9…ec74.
+  inputs: '674fb65e10b0c13712a341ebfa5545b5831710fa902cbdeaf822524839dd41ee',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -723,7 +726,10 @@ const PINS = {
   // engine sends no prompt; the pre-R12 job fixture is unchanged). 9b7bd4b: f1752df6…e662.
   // Council ban list (R25): the demo jobs' input carries councilRecent (empty
   // list); nothing else differs (diffed against 38cc8de). 38cc8de: 06aaf633…82ab.
-  fullAutoDemo: '3b7c0695bcaad512c6c69668429f5dbea5b028b65839e5623c71ec938182fa92',
+  // 정성 모드 (R29): the demo jobs' input carries orchestrationPolicy (a demo
+  // never meets, so no request changes); nothing else differs (diffed against
+  // 035107a). 035107a: 3b7c0695…fa92.
+  fullAutoDemo: '78059d1cacf529d8e8b275bae0dd65cbf178c572312bb2e11ac51041001df150',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -756,7 +762,11 @@ const PINS = {
   // '승인 예시 더 참고' switch (renamed from '증류 추가 예시') moves into the folded
   // engine/cost details; no text, price or request changed (diffed against
   // 311e4df). 311e4df: a68b451f…54f2.
-  review: 'add2f529e4259bf90fd6b557b79c328ef2e8a268fd948d8d55cf8144a0ad5b80',
+  // 정성 모드 (R29): ③ before any job prices the new story with the growth design
+  // and three candidates (글 약 $1.94 → $2.08 at 12 pages) and its folded
+  // engine/cost details gain the '정성 모드' and '작가는 최고 모델로' switches;
+  // ④ and ⑤ are unchanged (diffed against 035107a). 035107a: add2f529…5b80.
+  review: 'f9cd8ef4ec257cbfe851df2afde5e85da97c7449658c4d0771debfb63e74f25e',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -770,7 +780,11 @@ const PINS = {
   // coherence reviews on the medium model (textUsd/baseUsd/withMaterialsAndRetryUsd
   // only); estimateStoryTextCost of a snapshot without reviewTier, and estimates
   // of existing jobs and books, are unchanged. 0109553: bcdb6bbb…7f77.
-  estimates: '7e95b83e7b7cc0ebf5922ede1df0ee64ae7fe57dfd70d4539e5a7320e793ee38',
+  // 정성 모드 (R29): only a NEW job's estimate changed (+3 requests: four
+  // author-model calls for the growth design and candidates, one economy
+  // pitch call fewer; text $1.717 → $1.862); jobs and legacy rows are the same
+  // (diffed against 035107a). 035107a: 7e95b83e…ee38.
+  estimates: '20cde0549758c89631601a2baeb4b0069644d833590f0042bac64a6c70fc833b',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';
