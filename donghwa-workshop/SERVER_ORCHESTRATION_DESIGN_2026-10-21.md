@@ -62,3 +62,11 @@
 참고: OpenAI Sites 자체가 예약 실행이나 Durable Objects를 지원하는지는 OpenAI 지원 문서·문의로 확인할 가치가 있습니다. 지원된다면 B를 별도 계정 없이 Sites 안에서 할 수 있습니다.
 
 출처: [Cloudflare Workflows limits](https://developers.cloudflare.com/workflows/reference/limits/index.md) · [Workflows 단계 한도 상향(2026-03)](https://developers.cloudflare.com/changelog/post/2026-03-03-step-limits-to-25k/) · [Workflows 한도 상향(2026-04)](https://developers.cloudflare.com/changelog/post/2026-04-15-workflows-limits-raised/) · [Workflows V2(InfoQ)](https://infoq.com/news/2026/05/cloudflare-workflows-v2-release/) · [OpenAI–Cloudflare: Sites on Workers with D1·R2](https://pasqualepillitteri.it/en/news/4197/openai-cloudflare-codex-sites-d1-r2) · [What is ChatGPT Sites (Stacktree)](https://stacktr.ee/blog/what-is-chatgpt-sites) · [ChatGPT Sites explained (PlayCode)](https://playcode.io/blog/chatgpt-sites-explained)
+
+
+## 6. 3차 검토 반영 (2026-10-21)
+
+- **시기**: 서버 작업(S2~S4)은 정성 모드 품질 검증(r31 + 평가 게이트) 뒤. S1(코어 분리, 브라우저 동작 바이트 동일)만 r30과 함께.
+- **부모 선택 대기**: Workflow가 며칠 잠자며 기다리지 않습니다. 후보 제출에서 인스턴스를 끝내고 상태를 R2/D1에 저장, 부모의 선택 이벤트가 이어하기 인스턴스를 새로 시작합니다.
+- **이식성**: 글 단계 모듈에 Node 전용 API 없음(grep 확인: `Buffer`·`process`·`require`·`XMLHttpRequest`·`node:` 0건; `structuredClone`·`crypto.randomUUID`·`fetch`·`TextEncoder`만 사용). `full-auto.js`가 화면·그림·키 보관함 모듈을 가져오는 것은 S1에서 분리.
+- **남용 방지**: 계정별 하루 권수 상한 + 월 금액 상한 + 비정상 사용률 알림을 출시 전 필수로.

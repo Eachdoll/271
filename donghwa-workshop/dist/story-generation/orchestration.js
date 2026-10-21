@@ -206,3 +206,41 @@ export const GROWTH_CHECKLIST = Object.freeze([
   "growth: want와 need가 다르고, 끝에서 want가 바뀌거나 내려놓이며 주인공의 행동으로 need를 얻는가(못하면 direction을 1 낮춘다)",
   "lesson: 교훈을 말로 하지 않고 행동·마지막 그림으로 보여 주는가",
 ]);
+
+/**
+ * R29.1: the formal outline returns the curve too (`tension`, one integer
+ * per beat, required by the request schema of a policy draft), and it is
+ * checked again right after the expansion. A curve that fails is replaced by
+ * the bible's (already checked) curve, so the beat writer never gets a broken
+ * target; the replacement and the problems are reported, never a paid retry.
+ */
+export function outlineTensionSchema(beats) {
+  return {
+    type: "array",
+    items: { type: "integer", minimum: 0, maximum: 5 },
+    minItems: beats,
+    maxItems: beats,
+  };
+}
+export function outlineTensionRule(beats, range, bible) {
+  return `TENSION ARRAY: return tension[] with exactly ${beats} integers ${range.min}-${range.max}, one per beat in order${list(bible?.tension).length === beats ? ", following the bible's TENSION per beat" : ""}: rising through the attempts, highest at or near the turn (not before beat ${Math.ceil((beats - 1) * 0.55) + 1}), calmer at the last beat. The beats and the emotionArc follow it.`;
+}
+export function settleOutlineTension(outline, beats, range, bible) {
+  if (!object(outline)) return null;
+  const given = list(outline.tension)
+    .map((v) => Math.round(Number(v)))
+    .filter((v) => Number.isFinite(v));
+  const problems = checkTensionCurve(given, beats, range),
+    fallback = list(bible?.tension);
+  if (!problems.length) {
+    outline.tension = given;
+    return { passed: true, problems: [] };
+  }
+  if (fallback.length === beats && !checkTensionCurve(fallback, beats, range).length) {
+    outline.tension = [...fallback];
+    return { passed: false, problems, restored: "bible" };
+  }
+  if (given.length === beats) outline.tension = given;
+  else delete outline.tension;
+  return { passed: false, problems };
+}

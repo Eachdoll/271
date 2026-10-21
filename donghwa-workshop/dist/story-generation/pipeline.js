@@ -83,7 +83,14 @@ import {
   inspectArc,
 } from "./arc-rules.js";
 import { hasPromptPolicy } from "./prompt-policy.js";
-import { hasOrchestrationPolicy, orchestrationPolicy } from "./orchestration.js";
+import {
+  hasOrchestrationPolicy,
+  orchestrationPolicy,
+  outlineTensionSchema,
+  outlineTensionRule,
+  settleOutlineTension,
+  tensionRange,
+} from "./orchestration.js";
 import {
   hasCouncilPolicy,
   runStoryCouncil,
@@ -2131,6 +2138,11 @@ function outlineRequestSchema(input) {
   // 2026-10-20: a typed ending is a third ending type (new drafts only).
   if (input.endingType === "custom")
     schema.properties.endingType.enum = ["home_sleep", "open", "custom"];
+  // R29.1 정성 모드: the formal outline carries the per-beat tension curve.
+  if (hasOrchestrationPolicy(input)) {
+    schema.properties.tension = outlineTensionSchema(frozenBeatCount(input));
+    schema.required.push("tension");
+  }
   return schema;
 }
 export async function generateOutline(source, options = {}) {
@@ -2157,7 +2169,33 @@ export async function generateOutline(source, options = {}) {
   const council = hasCouncilPolicy(input)
     ? await runStoryCouncil(input, options, qualityServices())
     : null;
-  const bibleRules = council ? bibleOutlineRules(council.record.bible, input) : "";
+  const bibleRules = [
+    council ? bibleOutlineRules(council.record.bible, input) : "",
+    hasOrchestrationPolicy(input)
+      ? outlineTensionRule(frozenBeatCount(input), tensionRange(input), council?.record.bible)
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  // R29.1: the curve is checked again on the expanded outline.
+  const settleTension = (result) => {
+    if (!hasOrchestrationPolicy(input)) return result;
+    const check = settleOutlineTension(result.data, frozenBeatCount(input), tensionRange(input), council?.record.bible);
+    if (!check) return result;
+    result.meta = {
+      ...result.meta,
+      tensionCheck: check,
+      ...(check.passed
+        ? {}
+        : {
+            softIssues: [
+              ...(result.meta?.softIssues || []),
+              `긴장 곡선: ${check.problems.join(" / ")}${check.restored ? " (설계서 곡선으로 바꿈)" : ""}`,
+            ],
+          }),
+    };
+    return result;
+  };
   const withCouncil = (result) => {
     if (!council) return result;
     attachCouncil(result.data, council);
@@ -2173,12 +2211,12 @@ export async function generateOutline(source, options = {}) {
     const result = await generateQualityOutline(
       input,
       // R23: the bible itself too, so the seed's planted object and turn follow it.
-      bibleRules ? { ...options, storyBibleRules: bibleRules, storyBible: council.record.bible } : options,
+      bibleRules ? { ...options, storyBibleRules: bibleRules, ...(council ? { storyBible: council.record.bible } : {}) } : options,
       qualityServices(),
     );
     result.data.quality = clone(result.meta.quality || {});
     result.data = assertValid("outline", result.data, input);
-    return withCouncil(result);
+    return withCouncil(settleTension(result));
   }
   const count = frozenBeatCount(input),
     attempts = count - 5;
@@ -2268,7 +2306,7 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
           ? {}
           : { softIssues: report.violations.map((row) => row.message) }),
       };
-      return result;
+      return settleTension(result);
     }
     violations = report.violations;
   }

@@ -4,11 +4,13 @@ import {getLevelSpec} from '../dist/reading-levels.js';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {normalizeStoryInput} from '../dist/story-generation/pipeline.js';
+import {normalizeStoryInput, generateOutline} from '../dist/story-generation/pipeline.js';
+import {demoOutline} from '../dist/story-generation/demo.js';
+import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {runStoryCouncil, bibleOutlineRules} from '../dist/story-generation/council.js';
 import {renderCouncilReviewForm} from '../dist/story-generation/council-room.js';
-import {orchestrationPolicy, orchestrationPolicyFor, hasOrchestrationPolicy, checkTensionCurve, tensionRange, PLOT_ANGLES, tensionBars} from '../dist/story-generation/orchestration.js';
+import {orchestrationPolicy, orchestrationPolicyFor, hasOrchestrationPolicy, checkTensionCurve, tensionRange, PLOT_ANGLES, tensionBars, settleOutlineTension} from '../dist/story-generation/orchestration.js';
 import {estimateStoryTextCost, councilDecisionCosts} from '../dist/text-generation/models.js';
 import {getTextGenerationSettings} from '../dist/text-generation/settings-ui.js';
 
@@ -70,6 +72,7 @@ function room({flatAngle = 'humor', fixOnRetry = false} = {}) {
     if (/그림책 편집자/u.test(system)) return reply({verdicts: [1, 2, 3].map((p) => ({pitch: p, stakes: 2, ladder: 2, lowPoint: 2, turn: 2, payoff: 2, direction: p === 2 ? 2 : 1, veto: false, vetoReason: '', fixes: []})), pick: 2});
     if (/아트 디렉터/u.test(system)) return reply({verdicts: [1, 2, 3].map((p) => ({pitch: p, drawableTurn: 2, plantedVisible: 2, lowPointVisible: 2, variety: 2, motifs: [], veto: false, vetoReason: '', fixes: []})), pick: 2});
     if (/세 아이다/u.test(system)) return reply({reactions: [1, 2, 3].map((p) => ({pitch: p, nextQuestion: 2, retell: '장화 속에 있었어', retellHasTurn: true, scary: ''})), favorite: 2});
+    if (this.outline) { const o = structuredClone(demoOutline(this.input)); o.plotContract = demoPlotContract(o, this.input); if (this.outline !== true) o.tension = this.outline; return reply(o); }
     throw new Error(`unexpected request: ${user.slice(0, 60)}`);
   }};
 }
@@ -127,4 +130,38 @@ test('R29 estimates: the growth design and three candidates on the author model;
   const job = {input: {pageCount: 12, councilPolicy: {version: 1}, orchestrationPolicy: {version: 1, writerTier: 'medium'}}, textSettings: settings, usage: {calls: []}};
   const parked = councilDecisionCosts(job);
   assert.ok(Math.abs(parked.continueUsd - (rich.costUsd - row(rich, 'plotCandidates').costUsd - row(rich, 'council').costUsd * 3 / 4)) < 1e-9);
+});
+
+test('R29.1 the formal outline returns its tension curve, checked again after the expansion', async () => {
+  const range = {min: 0, max: 4, spread: 2};
+  // The checks: a good curve stays; a broken one becomes the bible's; no usable curve, no key.
+  const ok = {tension: ['1', 2, 3, 3, 4, 2, 1]};
+  assert.deepEqual(settleOutlineTension(ok, 7, range, {tension: good}), {passed: true, problems: []});
+  assert.deepEqual(ok.tension, good);
+  const broken = {tension: flat};
+  const restored = settleOutlineTension(broken, 7, range, {tension: [1, 2, 2, 3, 4, 2, 0]});
+  assert.equal(restored.restored, 'bible'); assert.deepEqual(broken.tension, [1, 2, 2, 3, 4, 2, 0]);
+  const none = {tension: [1, 2]};
+  assert.equal(settleOutlineTension(none, 7, range, null).passed, false); assert.equal('tension' in none, false);
+  // End to end (app path): the request schema requires tension; a flat outline curve is replaced by the bible's.
+  const input = baseInput({topic: '바람 피리 찾기'}), engine = room({flatAngle: 'none'});
+  engine.input = input; engine.outline = flat;
+  const result = await generateOutline(input, {engine});
+  const request = engine.calls.at(-1);
+  assert.deepEqual(request.jsonSchema.properties.tension, {type: 'array', items: {type: 'integer', minimum: 0, maximum: 5}, minItems: 7, maxItems: 7});
+  assert.ok(request.jsonSchema.required.includes('tension'));
+  assert.match(String(request.system) + String(request.user), /TENSION ARRAY: return tension\[\] with exactly 7 integers/u);
+  assert.deepEqual(result.data.tension, [1, 2, 2, 3, 4, 2, 0]);
+  assert.equal(result.meta.tensionCheck.restored, 'bible');
+  assert.match(result.meta.softIssues.join(' '), /긴장 곡선: .*설계서 곡선으로 바꿈/u);
+  // A good outline curve is kept as written.
+  const fine = room({flatAngle: 'none'}); fine.input = input; fine.outline = good;
+  const kept = await generateOutline(input, {engine: fine});
+  assert.deepEqual(kept.data.tension, good); assert.equal(kept.meta.tensionCheck.passed, true);
+  // A draft without the policy: no tension field is asked for.
+  const legacy = baseInput({topic: '바람 피리 찾기', orchestrationPolicy: undefined, councilPolicy: undefined});
+  const plain = room(); plain.input = legacy; plain.outline = true;
+  const old = await generateOutline(legacy, {engine: plain});
+  assert.equal('tension' in plain.calls.at(-1).jsonSchema.properties, false);
+  assert.equal(old.meta.tensionCheck, undefined);
 });
