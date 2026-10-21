@@ -629,6 +629,9 @@ export function estimateStoryTextCost({
   orchestration = false,
   // R30: the beat writer's model ("medium" | "upper", frozen on the draft).
   writerTier = "medium",
+  // R31a: a K1 book (input.k1Policy): the app outline, the whole book in one
+  // writer call (+ one expected fix call), its pages taken as written.
+  k1Book = false,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -718,12 +721,14 @@ export function estimateStoryTextCost({
     };
   };
   const stages = [];
-  if (council && orchestration)
+  if (k1Book);
+  else if (council && orchestration)
     stages.push(
       stageEstimate("plotCandidates", 4500, 1400, 4, "prose"),
       stageEstimate("council", 4000, 1200, 4, "cheap"),
     );
   else if (council) stages.push(stageEstimate("council", 4000, 1200, 5, "cheap"));
+  // (a K1 book has no writers' room.)
   if (beam) {
     stages.push(
       stageEstimate("beatCandidates", 3500, 900, beats, "outline"),
@@ -736,11 +741,18 @@ export function estimateStoryTextCost({
       input + (beam ? beats * 300 : 0),
       outlineOutput,
       1,
-      quality ? (beam ? "cheap" : "outline") : undefined,
+      quality && !k1Book ? (beam ? "cheap" : "outline") : undefined,
     ),
     stageEstimate("sceneBriefs", input, beats * 500),
   );
-  if (orchestration) {
+  if (k1Book) {
+    // The whole book in one call, and one call for the pages the checks flag.
+    const bookOutput = pages * 220 + 400;
+    stages.push(
+      stageEstimate("prose", 7000, bookOutput, 1, "beatWriter"),
+      stageEstimate("k1Fix", 7500, Math.ceil(bookOutput / 2), 1, "beatWriter"),
+    );
+  } else if (orchestration) {
     // R30 비트별 작가: one call per beat per language (+ beat 1's second
     // draft per language), about one retry in four, and the voice card and
     // two anchor sniffs on the economy model.
@@ -780,11 +792,12 @@ export function estimateStoryTextCost({
     if (hybrid) stages.push(stageEstimate("proseDraft", input, baseOutput));
     stages.push(stageEstimate("prose", input, baseOutput));
   }
-  if (enrichment && paragraphs.ko + paragraphs.en)
+  if (enrichment && paragraphs.ko + paragraphs.en && !k1Book)
     stages.push(
       stageEstimate("enrichment", 3000, 800, paragraphs.ko + paragraphs.en),
     );
-  stages.push(stageEstimate("pagination", input, baseOutput));
+  // A K1 book's pages were written as pages (no pagination request).
+  if (!k1Book) stages.push(stageEstimate("pagination", input, baseOutput));
   if (editor)
     stages.push({
       ...stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2)),
@@ -825,12 +838,13 @@ export function estimateStoryTextCost({
     enrichment,
     ...(editor ? { editor: true } : {}),
     ...(council ? { council: true } : {}),
-    ...(orchestration ? { orchestration: true } : {}),
-    ...(orchestration && writerTier === "upper" ? { writerTier } : {}),
+    ...(orchestration && !k1Book ? { orchestration: true } : {}),
+    ...((orchestration || k1Book) && writerTier === "upper" ? { writerTier } : {}),
+    ...(k1Book ? { k1Book: true } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
-    note: `${council && orchestration ? "정성 모드 기획 회의(성장 설계·플롯 후보 3개·편집자·그림 감독·독자·바이블), " : council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${orchestration ? `, 정성 모드 비트별 작가(한글·영어 비트마다 1회 ${beats * 2}회, 첫 비트 두 안·되풀이 말 카드, 예상 재작성 ${Math.ceil((beats * 2) / 4)}회 — 비트마다 최대 3번)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
+    note: `${council && orchestration ? "정성 모드 기획 회의(성장 설계·플롯 후보 3개·편집자·그림 감독·독자·바이블), " : council ? "기획 회의 5회(작가 피치·편집자·그림 감독·독자·바이블), " : ""}인과·상태표가 포함된 줄거리${beam ? `(비트 후보 생성·심사 ${beats * 2}회 + 마무리 1회)` : ""}, 장면 브리프 1회${k1Book ? `, K1 그림책 작가(책 전체 한 번 + 걸린 쪽 고치기 한 번, 쪽 나누기 요청 없음)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : orchestration ? `, 정성 모드 비트별 작가(한글·영어 비트마다 1회 ${beats * 2}회, 첫 비트 두 안·되풀이 말 카드, 예상 재작성 ${Math.ceil((beats * 2) / 4)}회 — 비트마다 최대 3번)${writerTier === "upper" ? "·최고 모델" : "·중간 모델"}` : twoPass ? ", 한글·영어 풍부화·단순화 각 2회" : quality ? ", 한글·영어 목표 수준 전문 각 1회" : enrichment ? "와 한글·영어 문단별 풍부화" : ""}, 전문·최종 쪽의 일관성 검사 총 2회${childSimulator ? ", 아이 시뮬레이터 2회" : ""}${editor ? ", 책 전체 편집자 통독 1회" : ""}를 포함한 단계별 모델 단가 추정${snapshot.reviewTier === REVIEW_TIER_MEDIUM ? "(사건 연결 판정은 한 단계 낮은 모델, 수정·통독은 상위 모델)" : ""} · 줄거리 지적 비트 수정·보조 패턴 재생성, 감정 직설어 수정, 아이 시뮬레이터 지적 쪽 수정, 수기로 수정한 줄거리의 인과·상태표 재생성, 검사 단계별 최대 2회 재작성 및 재검사, 주간 코치, 실제 문단 수·추론 토큰·이전 원문 길이에 따른 추가 요금은 별도예요`,
   };
 }
 
@@ -846,6 +860,7 @@ const BUDGET_STEP = {
   proseDraft: "proseDraft",
   prose: "prose",
   beatRetries: "prose",
+  k1Fix: "prose",
   beatVoice: "prose",
   simplification: "prose",
   enrichment: "enrichment",
@@ -871,7 +886,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}) }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}) }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {

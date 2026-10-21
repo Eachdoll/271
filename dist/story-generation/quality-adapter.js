@@ -510,7 +510,7 @@ export function ledger(kind, input, options, extra = {}, checkpointKey = "qualit
         "outline",
         "prose",
         "cheap",
-        ...(kind === "beatWriter" ? ["beatWriter"] : []),
+        ...(kind === "beatWriter" || kind === "k1Book" ? ["beatWriter"] : []),
       ].map((role) => [
         role,
         modelIdentity(roleOptions(options, role)),
@@ -593,6 +593,8 @@ export function ledger(kind, input, options, extra = {}, checkpointKey = "qualit
             ? "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요."
             : kind === "beatWriter"
               ? "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요."
+              : kind === "k1Book"
+                ? "그림책 작가가 쪽마다 글과 그림을 한 번에 쓰고 있어요."
               : kind === "qualityOutline"
               ? "정해진 재료와 플롯 패턴으로 줄거리를 구성하고 있어요."
               : "장면을 풍부하게 쓴 뒤 선택한 읽기 수준으로 다듬고 있어요.",

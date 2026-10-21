@@ -186,6 +186,7 @@ import {
   setVaultPin,
   getCredential,
 } from "./image-generation/vault.js";
+import { normalizeReadingLevels } from "./reading-levels.js";
 import {
   configureTextSettingsUI,
   renderTextSettings,
@@ -4372,9 +4373,12 @@ try {
     !localStorage.getItem("donghwa-notice-r30")
   ) {
     localStorage.setItem("donghwa-notice-r30", "1");
-    const estimate = newStoryTextEstimate(freezeReviewTier(settings));
+    // R31a: the default reading level decides which writer a new story gets.
+    const k1Book =
+      normalizeReadingLevels({}, state.settings).koreanLevel === "K1",
+      estimate = newStoryTextEstimate(freezeReviewTier(settings), { k1Book });
     toast(
-      `정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요. 새 이야기 12쪽 글 요금은 약 $${estimate.costUsd.toFixed(2)}${estimate.pricingUnknown ? "(일부 미확인)" : ""}로 바뀌어요. 설정 › 글 엔진에서 끌 수 있어요.`,
+      `${k1Book ? "K1 그림책이 새로워졌어요: 작가가 12쪽을 쪽마다 한 번에 쓰고(짧은 소리말·쪽 넘김), 끝은 주제가 가는 곳에서 맺어요." : "정성 모드가 새로워졌어요: 작가가 비트마다 한 장면씩 쓰고, 첫 장면은 두 안 중 더 좋은 쪽을 골라 책 전체의 목소리로 삼아요."} 새 이야기 12쪽 글 요금은 약 $${estimate.costUsd.toFixed(2)}${estimate.pricingUnknown ? "(일부 미확인)" : ""}로 바뀌어요.${k1Book ? "" : " 설정 › 글 엔진에서 끌 수 있어요."}`,
     );
   }
 } catch {

@@ -1,3 +1,6 @@
+// R31a: K1 books skip the writers' room and story spine (k1-book.js); these
+// fixtures test the room and the editor round, so they use a K2 page book.
+globalThis.__DONGHWA_R12_OPENINGS__ = false;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -261,7 +264,7 @@ function jobState() {
   const state = seedState();
   migrateWorldState(state);
   migrateReadingSettings(state.settings);
-  return {state, wizard: {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'}};
+  return {state, wizard: {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'}};
 }
 const stageResult = (data, stage) => ({data, usage: {input: 10, output: 20, costUsdEstimated: 0.01}, meta: {stage, requests: 1, model: 'mock'}});
 const buildBook = p => ({id: p.bookId, title: p.outline.titleCandidates[0], characterIds: p.wizard.characterIds, backgroundIds: p.wizard.backgroundIds, pages: p.pagination.pages.map(page => ({...page, ko: page.textKo, en: page.textEn})), sceneBriefs: p.sceneBriefs, revision: p.revision, storyDraftId: p.id, textGenerationSettings: p.textSettings});

@@ -1,3 +1,6 @@
+// R31a: K1 books skip the writers' room and story spine (k1-book.js); these
+// fixtures test the room and the editor round, so they use a K2 page book.
+globalThis.__DONGHWA_R12_OPENINGS__ = false;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {getLevelSpec} from '../dist/reading-levels.js';
@@ -195,7 +198,7 @@ import {getTextGenerationSettings} from '../dist/text-generation/settings-ui.js'
 
 test('R30 FULL AUTO hands the beat writer its model and journal, keeps the journal across a stop, and prices a new job with the writer', async () => {
   const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings);
-  const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
+  const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
   const job = createFullAutoJob(state, wizard, {stopBefore: 'text', planMode: 'selection'});
   assert.deepEqual(job.input.orchestrationPolicy, {version: 1, writerTier: 'medium'});
   const res = (data, stage) => ({data, usage: {input: 10, output: 20}, meta: {stage, requests: 1, model: 'mock'}});
