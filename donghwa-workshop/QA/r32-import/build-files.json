@@ -1,0 +1,62 @@
+[
+  {
+    "path": "dist/app.js",
+    "sha256": "63543194af8908bea884a66581dc31617ea577d022bdb2a09bea10e20c8aec68",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/eco-mode.js",
+    "sha256": "e12a7a8017883c79162fe70396518c3ddc1b1f81b4d93302dc76bbea68ffbdcb",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/full-auto-ui.js",
+    "sha256": "672048762f05b604152e57d686b634e3e8e65669d6d8bffc358d1656e98b056d",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/full-auto.js",
+    "sha256": "52b83673d83ca93e52e433662fa5963e2183bab12504f2ea19ed2033814328e0",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/simple-create.js",
+    "sha256": "04d2b3f695a5e4f2d9299c1b74d23e8cafbc2361f9f2c935c9b129c807842ee5",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/beat-writer.js",
+    "sha256": "9851bf2007ad37ef37a5787cfa9ff13edcfe5ffe6da12a72bde392b51723612b",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/page-tools.js",
+    "sha256": "aaadc4eb7e1d4e442a7632e60077f2dca0aac367604a40e94b0ac01b3eeafa97",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/pipeline.js",
+    "sha256": "8dbd3b597de76687c28abd723af477d776a84005e0ca16ae33df87883fea0767",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/prompt-diet.js",
+    "sha256": "425598a18b9a9f3c588dd6c37729eac4d79cfb721f8c7c4044d5940255e5b31d",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/style.css",
+    "sha256": "d7adf28a4781c0128ab4a1dcf38ef8c2f44c4bb45a479f5fc61990c5b472c05c",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/sw.js",
+    "sha256": "aaa9605b9d5c12ad32270ec5c0f48b81e59da18b6f859c22d8464ef9b247ce20",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/text-generation/models.js",
+    "sha256": "f3191f8ac5f5574861a7420d5f0d35d8310e4e9e0d26fe2aae61e17f7e37e4c0",
+    "matchesBuilt": true
+  }
+]

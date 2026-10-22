@@ -1,0 +1,328 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "author": "Codex-written JSON; no paid API or demo story generation",
+  "pageErrors": [],
+  "paidRequests": [],
+  "cloudWritesBlocked": 0,
+  "steps": [
+    {
+      "step": "01-invalid-outline",
+      "screenshot": "eco-local-01-invalid-outline.png"
+    },
+    {
+      "step": "02-pages-prompt",
+      "screenshot": "eco-local-02-pages-prompt.png"
+    },
+    {
+      "step": "03-invalid-pages",
+      "screenshot": "eco-local-03-invalid-pages.png"
+    },
+    {
+      "step": "04-level-fix",
+      "screenshot": "eco-local-04-level-fix.png"
+    },
+    {
+      "step": "05-review",
+      "screenshot": "eco-local-05-review.png"
+    },
+    {
+      "step": "06-all-uploaded",
+      "screenshot": "eco-local-06-all-uploaded.png"
+    },
+    {
+      "step": "07-no-cover",
+      "screenshot": "eco-local-07-no-cover.png"
+    },
+    {
+      "step": "08-library",
+      "screenshot": "eco-local-08-library.png"
+    }
+  ],
+  "jobId": "auto-6bd23b80-74bf-4605-bb03-d8bbd73db576",
+  "initialUsageCalls": 0,
+  "outlineClipboardMatches": true,
+  "invalidOutlineReasons": "AI의 답에서 JSON을 찾지 못했어요. 답 전체(여는 중괄호 { 부터 닫는 중괄호 } 까지)를 붙여 넣어 주세요.",
+  "pagesClipboardMatches": true,
+  "invalidPagesReasons": "줄거리 비트와 쪽이 모두 있어야 해요. 쪽을 다시 나눠 주세요.\n1번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.\n2번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.\n3번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.\n4번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.\n5번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.\n6번 비트가 본문에서 빠졌어요. 쪽을 다시 나눠 주세요.\n펼침 6개에는 쪽 항목이 6~12개 필요해요. 지금 0개예요. 펼침이 0개예요. 6개가 필요해요. 인쇄 쪽 수가 0쪽이에요. 12쪽이 필요해요.",
+  "levelFindings": "1번 · 영어 · 영어 펼침면 문장 평균 29단어 (허용 4.5~9.5단어)\n1번 · 영어 · 영어 펼침면 긴 문장 1개 · 가장 긴 문장 29단어 (9단어 넘는 문장은 1개까지, 12단어 넘는 문장은 없어야 해요)",
+  "fixPrompt": "Some entries of the book you wrote did not pass the app's reading checks. Fix ONLY the entries listed below (both languages of each listed entry; keep its event, beat, cast and voice) and leave every other entry exactly as it was.\n\nREADING LEVEL (the checks measure this; write naturally inside it):\nKorean K2 (그림책 5~6세): about 10–15 sentences per opening (two facing pages), 5–7 eojeol each; 연결어미 -서/-면/-는데, 대화문, 감정 어휘. Simple words a child this age already knows.\nEnglish E2 (리더스 (Step 1)): about 2–4 sentences per opening (two facing pages), 5–9 words each; simple past, dialogue, and/but. Use mostly these words (names, sound words and the story's own new words are fine): a, and, away, big, blue, can, come, down, find, for, funny, go, help, here, i, in, is, it, jump, little, look, make, me, my, not, one, play, red, run, said, see, the, three, to, two, up, we, where, yellow, you, all, am, are, at, ate, be, black, brown, but, came, did, do, eat, four, get, good, have, he, into, like, must, new, no, now, on, our, out, please, pretty, ran, ride, saw, say, she, so, soon, that, there, they, this, too, under, want, was, well, went, what, white, who, will, with, yes, or, number, of, had, other, way, by, about, could, words, people, many, then, than, them, first, these, water, were, been, some, called, when, her, your, would, oil, sit, as, him, use, long, his, an, time, each, has, day, which, more, how, write, made, their, may, from, if, part, flower, tail, leaf, leaves, tree, stone, moon, star, rain, sea, sun, ball, bag, boots, glove, cloud, sand, wave, shell, crab, path, rocket, bird, marks, castle, picture, window, rainbow, woods, sky, gift, friend, home, dinosaur, rabbit, umbrella, bad, ban, bat, cab, cap, cat, dad, dam, fan, fat, gap, gas, ham, hat, jam, lad, lap, mad, man, map, mat, nap, pad, pan, pat, rag, ram, rat, sad, sat, tag, tan, tap, van, wag, wax, yam, zap, bed, beg, bet, den, fed, hem, hen, jet, keg, leg, let, men, met, net, peg, pen, pet, set, ten, vet, wet, bib, bid, bin, bit, dig, dim, dip, fig, fin, fit, fix, hid, hip, hit, jig, kid, kin, kit, lid, lip, lit, mix, nil, nip, pig, pin, pit, rib, rid, rim, rip, sin, sip, six, tin, tip, win, wit, zip, bob, bog, bop, box, cob, cod, cog, cop, cot, dog, dot, fog, fox, got, hog, hop, hot, job, jog, jot, log, lot, mob, mop, nod, pod, pop, pot, rob, rod, rot, sob, sod, son, top, tot, bud, bug, bun, bus, cup, cut, dug, fun, gum, gut, hub, hug, hum, hut, jug, lug, mud, mug, nub, nun, nut, pub, pug, pun, pup, rub, rug, sub, sum, tub, tug, after, again, any, ask, every, fly, give, giving, just, know, live, old, once, open, over, put, round, stop, take, thank, think, walk.\nPage rhythm: a page whose picture tells the moment may be shorter, a page where words must carry it a little longer; the book as a whole stays around its usual length.\n\nWHAT FAILED (entry · field · the checker's finding):\n- entry 1 · textEn (English): 영어 펼침면 문장 평균 29단어 (허용 4.5~9.5단어)\n- entry 1 · textEn (English): 영어 펼침면 긴 문장 1개 · 가장 긴 문장 29단어 (9단어 넘는 문장은 1개까지, 12단어 넘는 문장은 없어야 해요)\n\nCURRENT TEXT OF THOSE ENTRIES:\n[{\"pageNo\":1,\"beatIndex\":1,\"kind\":\"spread\",\"textKo\":\"집에서 유하가 작은 빨간 공을 꺼냈어요. 유하는 두 손으로 공을 꼭 안았어요. 유하가 공을 살짝 위로 던져 보았어요. 빨간 공이 유하의 두 손으로 돌아왔어요. 유하는 작은 가방을 의자 위에 놓았어요. 유하가 가방 안에 빨간 공을 넣었어요. 가방 안에서 공이 동그랗게 자리를 잡았어요. 유하는 가방의 열린 입구를 한번 보았어요. 유하가 가방끈을 어깨에 단단히 걸쳐 보았어요. 유하는 정원에서 공을 굴리려고 문으로 걸었어요. 유하가 문 앞에서 소리 내어 말했어요. “유하는 숲길을 지나 정원으로 갈 거야.”\",\"textEn\":\"Yuha carries his little red ball with both of his hands while he slowly walks through the forest and looks around at every small thing along the winding path.\"}]\n\nOUTPUT: exactly one JSON object {\"pages\":[{\"pageNo\":number,\"textKo\":string,\"textEn\":string}]} with the listed entries only — no other fields, no explanation, no code fence.",
+  "preSaveUsageCalls": 0,
+  "bookCheck": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.3103448275862069,
+        "max": 0.15,
+        "words": [
+          "moves",
+          "hands",
+          "cone",
+          "ground",
+          "small",
+          "track",
+          "leads",
+          "garden"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "message": "영어 등급 외 어휘 31% · 참고 (목록 밖: moves, hands, cone, ground, small, track, leads, garden)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.21428571428571427,
+        "max": 0.15,
+        "words": [
+          "ahead",
+          "hears",
+          "sound",
+          "inside",
+          "kneels"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "message": "영어 등급 외 어휘 21.4% · 참고 (목록 밖: ahead, hears, sound, inside, kneels)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.1724137931034483,
+        "max": 0.15,
+        "words": [
+          "picks",
+          "both",
+          "hands",
+          "hand",
+          "holds"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "message": "영어 등급 외 어휘 17.2% · 참고 (목록 밖: picks, both, hands, hand, holds)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.27586206896551724,
+        "max": 0.15,
+        "words": [
+          "small",
+          "stays",
+          "close",
+          "beside",
+          "blanket",
+          "lies",
+          "closes",
+          "eyes"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "message": "영어 등급 외 어휘 27.6% · 참고 (목록 밖: small, stays, close, beside, blanket, lies, closes, eyes)"
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      }
+    ],
+    "violations": [],
+    "failedPageNos": [],
+    "needsRepagination": false
+  },
+  "entries": 6,
+  "printedPages": 12,
+  "picturePrompts": [
+    {
+      "entry": 1,
+      "prompt": "Illustrate spread entry 1 of 6 of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 유하네 집 (집) — 큰 창문, 노란 대문, 포근한 이불; mood 아늑함.\nThe moment to draw: Yuha puts a red ball into an open bag at home.. Feeling: joy. Time of day: day. Show these things: red ball, small bag.\nThe entry reads — Korean: 「집에서 유하가 작은 빨간 공을 꺼냈어요. 유하는 두 손으로 공을 꼭 안았어요. 유하가 공을 살짝 위로 던져 보았어요. 빨간 공이 유하의 두 손으로 돌아왔어요. 유하는 작은 가방을 의자 위에 놓았어요. 유하가 가방 안에 빨간 공을 넣었어요. 가방 안에서 공이 동그랗게 자리를 잡았어요. 유하는 가방의 열린 입구를 한번 보았어요. 유하가 가방끈을 어깨에 단단히 걸쳐 보았어요. 유하는 정원에서 공을 굴리려고 문으로 걸었어요. 유하가 문 앞에서 소리 내어 말했어요. “유하는 숲길을 지나 정원으로 갈 거야.”」 English: “Yuha puts his red ball in a bag. He wants to play in the garden. He holds the bag with both hands. Then Yuha walks out of his home.”. Draw the moment, not the words.\nWide panoramic picture, aspect ratio 21:9 (about 2048×880 pixels): one scene across two facing pages — keep the most important things away from the exact centre (the fold).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture.\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture."
+    },
+    {
+      "entry": 2,
+      "prompt": "Illustrate spread entry 2 of 6 of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 초록빛 숲 (숲·바다) — 둥근 나무, 작은 꽃, 햇살 드는 숲길; mood 모험.\nThe moment to draw: Yuha stops on a forest path as a red ball rolls beneath leaves.. Feeling: surprise. Time of day: day. Show these things: red ball, small bag.\nThe entry reads — Korean: 「유하가 숲길 위로 가볍게 발을 옮겼어요. 작은 가방이 유하의 등에서 살짝 흔들렸어요. 가방 입구로 빨간 공이 조금 나왔어요. 유하가 돌을 피해 옆으로 몸을 돌렸어요. 빨간 공이 가방 밖으로 툭 떨어졌어요. 공이 낙엽 위를 통통 튀며 굴러갔어요. 유하는 그 자리에 멈춰 공을 바라보았어요. 유하가 열린 가방을 앞으로 돌려 보았어요. 가방 안에는 빨간 공이 보이지 않았어요. 유하가 낙엽 쪽으로 천천히 한 걸음 다가갔어요. 낙엽 아래에서 작은 바스락 소리가 들렸어요. 유하는 소리 나는 곳을 손으로 가리켰어요.」 English: “Yuha walks on the little forest path. His red ball drops out of the bag. It rolls away under the dry leaves. Yuha stops and looks for his ball.”. Draw the moment, not the words.\nWide panoramic picture, aspect ratio 21:9 (about 2048×880 pixels): one scene across two facing pages — keep the most important things away from the exact centre (the fold).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture. The previous entry showed: Yuha puts a red ball into an open bag at home..\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture."
+    },
+    {
+      "entry": 3,
+      "prompt": "Illustrate spread entry 3 of 6 of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 초록빛 숲 (숲·바다) — 둥근 나무, 작은 꽃, 햇살 드는 숲길; mood 모험.\nThe moment to draw: Yuha lifts a pine cone from leaves beside a small track.. Feeling: curiosity. Time of day: day. Show these things: red ball, small bag.\nThe entry reads — Korean: 「유하가 숲길 옆에 몸을 낮춰 앉았어요. 유하는 두 손으로 낙엽을 살짝 밀었어요. 낙엽 아래에 작은 둥근 것이 보였어요. 유하가 둥근 것을 손끝으로 조심히 굴렸어요. 작은 솔방울이 낙엽 밖으로 또르르 나왔어요. 유하는 솔방울을 두 손에 올려 보았어요. 솔방울의 작은 조각들이 손바닥에 까슬하게 닿았어요. 유하는 솔방울을 원래 자리로 살짝 내려놓았어요. 유하가 고개를 돌려 땅을 자세히 보았어요. 흙 위에 가느다란 자국이 길게 이어졌어요. 유하는 정원으로 향하는 자국을 손가락으로 따라갔어요. “유하는 이 자국을 따라가 볼 거야.”」 English: “Yuha moves the leaves with his hands. He finds a little cone, not his ball. He puts the cone on the ground. A small track leads to the garden.”. Draw the moment, not the words.\nWide panoramic picture, aspect ratio 21:9 (about 2048×880 pixels): one scene across two facing pages — keep the most important things away from the exact centre (the fold).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture. The previous entry showed: Yuha stops on a forest path as a red ball rolls beneath leaves..\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture."
+    },
+    {
+      "entry": 4,
+      "prompt": "Illustrate spread entry 4 of 6 of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 빗방울 정원 (동네·놀이터) — 물웅덩이와 꽃밭, 무지개가 뜨는 산책길; mood 포근함.\nThe moment to draw: Yuha kneels beside a basket near a red flower in the garden.. Feeling: hope. Time of day: day. Show these things: red ball, small bag.\nThe entry reads — Korean: 「유하가 정원 입구에서 걸음을 잠깐 멈췄어요. 유하는 빨간 꽃을 보고 눈을 크게 떴어요. 둥근 꽃이 빨간 공처럼 멀리서 보였어요. 유하가 꽃 가까이 천천히 얼굴을 가져갔어요. 유하는 꽃을 만지지 않고 두 손을 내렸어요. 꽃 아래에는 가느다란 줄기가 곧게 서 있었어요. 유하가 고개를 돌리자 작은 바구니가 보였어요. 바구니 안에서 작은 통통 소리가 났어요. 유하는 바구니 쪽으로 귀를 가까이 기울였어요. 바구니 옆에 공이 굴러간 자국이 이어졌어요. 유하가 바구니 앞에 두 무릎을 굽혔어요. 유하는 바구니 안을 천천히 들여다보기 시작했어요.」 English: “Yuha sees a round red flower ahead. It looks like his little red ball. He hears a sound inside a basket. Yuha kneels down and looks inside it.”. Draw the moment, not the words.\nWide panoramic picture, aspect ratio 21:9 (about 2048×880 pixels): one scene across two facing pages — keep the most important things away from the exact centre (the fold).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture. The previous entry showed: Yuha lifts a pine cone from leaves beside a small track..\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture."
+    },
+    {
+      "entry": 5,
+      "prompt": "Illustrate spread entry 5 of 6 of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 빗방울 정원 (동네·놀이터) — 물웅덩이와 꽃밭, 무지개가 뜨는 산책길; mood 포근함.\nThe moment to draw: Yuha takes his red ball from the basket and puts it in a pocket.. Feeling: joy. Time of day: day. Show these things: red ball, small bag.\nThe entry reads — Korean: 「유하가 작은 바구니의 손잡이를 살짝 들었어요. 바구니 안에서 빨간 공이 옆으로 굴렀어요. 유하는 두 손을 바구니 안으로 넣었어요. 유하가 빨간 공을 손바닥으로 가만히 감쌌어요. 공의 매끈한 표면이 손끝에 닿았어요. 유하는 공을 들고 작은 소리로 말했어요. “유하가 찾던 빨간 공이 여기 있었네.” 유하가 가방 입구를 두 손으로 모았어요. 유하는 공을 작은 주머니 안에 넣었어요. 유하가 주머니 위를 손으로 가볍게 눌렀어요. 주머니 속 공이 둥글게 모양을 드러냈어요. 유하는 공을 누르며 집으로 돌아가기 시작했어요.」 English: “The red ball is in the basket. Yuha picks it up with both hands. He puts the ball in his pocket. His hand holds it all the way home.”. Draw the moment, not the words.\nWide panoramic picture, aspect ratio 21:9 (about 2048×880 pixels): one scene across two facing pages — keep the most important things away from the exact centre (the fold).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture. The previous entry showed: Yuha kneels beside a basket near a red flower in the garden..\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture."
+    },
+    {
+      "entry": 6,
+      "prompt": "Illustrate spread entry 6 of 6 of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 유하네 집 (집) — 큰 창문, 노란 대문, 포근한 이불; mood 아늑함.\nThe moment to draw: Yuha lies beside a blanket and a small box containing the red ball at home.. Feeling: calm. Time of day: evening. Show these things: red ball, small bag.\nThe entry reads — Korean: 「유하가 집 안으로 천천히 발을 들였어요. 유하는 작은 가방을 의자 위에 내려놓았어요. 유하가 주머니에서 빨간 공을 꺼내 들었어요. 공이 두 손 안에서 가만히 멈췄어요. 유하는 작은 상자를 바닥에 가져다 놓았어요. 유하가 상자 안에 빨간 공을 내려놓았어요. 상자 안의 공이 벽에 기대어 멈췄어요. 유하는 상자 옆으로 작은 이불을 폈어요. 유하가 이불 위에 두 다리를 쭉 뻗었어요. 유하는 빨간 공을 바라보며 고개를 기울였어요. 유하가 두 눈을 천천히 감았어요. 작은 상자와 빨간 공이 유하 곁에 남았어요.」 English: “Yuha puts his ball in a small box. The ball stays close beside his blanket. Yuha lies down and closes his eyes. His little red ball is home too.”. Draw the moment, not the words.\nWide panoramic picture, aspect ratio 21:9 (about 2048×880 pixels): one scene across two facing pages — keep the most important things away from the exact centre (the fold).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture. The previous entry showed: Yuha takes his red ball from the basket and puts it in a pocket..\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture."
+    }
+  ],
+  "coverPrompt": "Illustrate the front cover of an original children's picture book titled 「빨간 공은 어디에」.\nStyle: soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.. Palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d. Avoid: text, letters, captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features.\nCharacters (draw them exactly like this): 유하 (Yuha); a boy, 4 years old; 짧은 검은 머리 · 동그란 얼굴; wearing 노란 티셔츠 · 초록 반바지; hair colour #393735; skin tone #f0cfb5.\nPlace: 유하네 집 (집) — 큰 창문, 노란 대문, 포근한 이불; mood 아늑함.\nThe cover shows: Yuha holds a small red ball beside a basket.. Calm, inviting, the main character clearly visible; leave quiet space near the top where the app will print the title.\nLandscape picture, aspect ratio 3:2 (about 1536×1024 pixels).\nContinuity: one book, one style — the same characters, faces, colours and drawing style in every picture.\nNo text, letters, numbers, logos, speech bubbles or watermarks anywhere in the picture.",
+  "saved": {
+    "id": "book-15bb9f04-1d89-4b96-b858-861d28a3a960",
+    "title": "빨간 공은 어디에",
+    "eco": true,
+    "approved": true,
+    "pages": [
+      {
+        "imageAssetId": "image-e81fe1cb-043a-4e07-9051-6b71be8b7c5f",
+        "engine": "upload",
+        "quality": "final"
+      },
+      {
+        "imageAssetId": "image-76469d07-9ba4-4ce9-b55f-89d0ba35df8a",
+        "engine": "upload",
+        "quality": "final"
+      },
+      {
+        "imageAssetId": "image-13c18400-6956-4421-b906-c804c437a4dd",
+        "engine": "upload",
+        "quality": "final"
+      },
+      {
+        "imageAssetId": "image-e5e7b0ac-14f6-4646-abee-f23bc2503f96",
+        "engine": "upload",
+        "quality": "final"
+      },
+      {
+        "imageAssetId": "image-158a487e-2d71-4973-b6b9-7045d4e390f8",
+        "engine": "upload",
+        "quality": "final"
+      },
+      {
+        "imageAssetId": "image-0b121473-5610-4c9a-934d-de3b65f57713",
+        "engine": "upload",
+        "quality": "final"
+      }
+    ],
+    "cover": {
+      "imageAssetId": "image-2ead77ec-8bfb-4be3-ac09-a2858d56dfe2",
+      "imageUrl": "asset:image-2ead77ec-8bfb-4be3-ac09-a2858d56dfe2",
+      "seed": null,
+      "meta": {
+        "engine": "upload",
+        "quality": "final",
+        "size": "upload",
+        "prompt": null,
+        "fileName": "test-upload.png",
+        "bytes": 675,
+        "type": "image/png",
+        "eco": true,
+        "generatedAt": "2026-10-22T23:11:25.757Z"
+      }
+    },
+    "textCosts": {
+      "requestCount": 0,
+      "estimatedUsd": 0,
+      "actualUsd": null,
+      "actualAvailable": false
+    },
+    "bookTextUsageCalls": 0,
+    "storyDraftUsageCalls": 0,
+    "usageCallRows": 0,
+    "remainingEcoJobs": 0,
+    "coverCopiedAsSeparateAsset": true
+  },
+  "shelfHasBook": true,
+  "persistedAfterReload": true,
+  "cache": "donghwa-shell-v78",
+  "passed": true
+}
