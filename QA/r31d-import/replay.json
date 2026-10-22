@@ -1,0 +1,79 @@
+{
+  "source": "QA/r31c-ab/K2-diet.json",
+  "originalPaidCostUsd": 1.3371744,
+  "newPaidRequests": 0,
+  "englishViolationsWithR31D": [],
+  "englishViolationsWithoutPolicy": [
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 1,
+      "language": "en",
+      "message": "영어 등급 외 어휘 비율 21.9% (최대 15%)"
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 2,
+      "language": "en",
+      "message": "영어 등급 외 어휘 비율 20.7% (최대 15%)"
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 5,
+      "language": "en",
+      "message": "영어 등급 외 어휘 비율 26.7% (최대 15%)"
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 6,
+      "language": "en",
+      "message": "영어 등급 외 어휘 비율 26.1% (최대 15%)"
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 1,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 18개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 2,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 18개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 3,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 18개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 4,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 18개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 5,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 18개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 6,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 18개가 허용 10개를 넘었어요."
+    }
+  ],
+  "historicalR31CEnglishViolationEntries": 3
+}

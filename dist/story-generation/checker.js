@@ -525,8 +525,8 @@ export function checkStory(
           textOf(page, language),
           // R31c: on the diet the story's own English words (the outline's new
           // words, the cast, the world) are fine at every level, as at E0.
-          lean && language === "en" && unit && !unit.storyWordsAllowed
-            ? { ...unit, storyWordsAllowed: true }
+          lean && language === "en" && unit
+            ? { ...unit, storyWordsAllowed: true, inflections: true }
             : unit,
           { language, allowedNames, storyWords },
         );

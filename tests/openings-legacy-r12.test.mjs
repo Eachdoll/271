@@ -741,7 +741,10 @@ const PINS = {
   // 검사 다이어트 (R31c): the demo K2 job's story check carries the whole-book
   // total and new-word notes instead of violations (the demo jobs are diet
   // drafts); nothing else differs (dump-diffed against 36fa25a). 36fa25a: efcb8465…582e.
-  fullAutoDemo: 'e9526fe1125cdabbdc221ac8e48556f91512759b387acda46435b4a8ab95aa21',
+  // 영어 어휘 허용 (R31d): the demo K2 job's story check has fewer new-word notes
+  // (inflections folded, the briefs' props and the backgrounds' English names
+  // are story words); nothing else differs (dump-diffed against ac45fbc). ac45fbc: e9526fe1…aa21.
+  fullAutoDemo: 'ba0173e42c67cb65e69479461fdc74313c2e5599e432916aafafb2575e467d53',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

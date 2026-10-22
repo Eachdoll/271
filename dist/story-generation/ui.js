@@ -2085,7 +2085,7 @@ async function approvePages(
     specs: d.input.specs,
     lean: d.input?.promptDiet?.version === 1,
     catchphrases: storyCatchphrases(d.input),
-    storyWords: buildStoryWords(d.input, d.outline),
+    storyWords: buildStoryWords(d.input, d.outline, [], { briefs: d.sceneBriefs || [], lean: d.input?.promptDiet?.version === 1 }),
     allowedNames: d.input.characters
       .flatMap((c) => [c.name, c.nameEn])
       .filter(Boolean),
@@ -2380,7 +2380,7 @@ async function handleClick(event) {
         specs: d.input.specs,
         lean: d.input?.promptDiet?.version === 1,
         catchphrases: storyCatchphrases(d.input),
-        storyWords: buildStoryWords(d.input, d.outline),
+        storyWords: buildStoryWords(d.input, d.outline, [], { briefs: d.sceneBriefs || [], lean: d.input?.promptDiet?.version === 1 }),
         allowedNames: d.input.characters
           .flatMap((c) => [c.name, c.nameEn])
           .filter(Boolean),

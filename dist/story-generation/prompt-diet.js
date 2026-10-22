@@ -151,23 +151,23 @@ export const LEAN_TENSION_RULE = (beats, range) =>
   `tension[]: ${beats} integers ${range.min}–${range.max}, one per beat, how exciting that beat feels to a child (calm → high); usually it builds and then settles at the end.`;
 
 /** R31c: the story's own English words (the outline's new words, the cast, the world) a blocking level may use. */
-export function leanStoryWordsLine(input, outline) {
+export function leanStoryWordsLine(input, outline, briefs = []) {
   const spec = input?.specs?.en;
   if (!spec || input?.language === "ko") return "";
   const blocking = spec.vocabularyPolicy !== "warning" && list(spec.vocabList).length > 0 && list(spec.vocabList).length <= 400;
   if (!blocking) return "";
   let words = [];
   try {
-    words = buildStoryWords(input, outline);
+    words = buildStoryWords(input, outline, [], { briefs, lean: true });
   } catch {
     words = [];
   }
   return words.length ? `Story words that are fine at this level: ${[...new Set(words)].slice(0, 40).join(", ")}.` : "";
 }
 /** The beat writer's system lines (K2 and up): voice, not counters. */
-export function leanBeatWriterRules(input, outline) {
+export function leanBeatWriterRules(input, outline, briefs = []) {
   const mood = outline?.quality?.worldMood;
-  const storyWords = leanStoryWordsLine(input, outline);
+  const storyWords = leanStoryWordsLine(input, outline, briefs);
   return {
     common: `Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; a line of dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. Keep the approved events, place and ending of this beat; no spoken lesson.${mood ? ` Atmosphere: ${str(JSON.stringify(mood), 200)}.` : ""}`,
     ko: leanLevelLine(input, "ko"),

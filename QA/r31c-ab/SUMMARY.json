@@ -1,0 +1,2531 @@
+{
+  "date": "2026-10-22",
+  "timezone": "Asia/Seoul",
+  "runtimeSource": "9cd6594",
+  "checkoutSource": "ca351b5bd9e9b5f15dba48c3ea471f3d21539897",
+  "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+  "paidImages": 0,
+  "completed": 2,
+  "totalCostUsdFromTokens": 1.3371744,
+  "totalRequests": 52,
+  "costMethod": "Reported provider token usage multiplied by the app price catalogue, not the provider invoice.",
+  "limitations": [
+    "One new story per level; independent automatic material plans and model sampling differ from the r31b baseline.",
+    "R31c changes which checks are advisory. Compare violations and texts, not just overall pass rates.",
+    "Canonical page checks use the story words and spread unit range, which the raw runner does not fully pass to its page analyzer. Raw JSON and reports are retained unchanged.",
+    "writerOriginal is the generateProse return snapshot; it can already include the writer stage own level fix. For K1 the first cached twelve-page response is compared separately in initialWriterComparison. K2 paragraphs are compared with final entries grouped by beat, not fabricated page-level edit counts.",
+    "No paid illustrations or real-child comprehension study."
+  ],
+  "runs": [
+    {
+      "level": "K1",
+      "englishLevel": "E0",
+      "status": "text-review",
+      "error": null,
+      "workflowComplete": true,
+      "seconds": 205,
+      "printedPages": 12,
+      "entries": 12,
+      "rawRunnerMeasured": {
+        "pages": 12,
+        "sentences": 31,
+        "rhythm": 6,
+        "eojeol": 100,
+        "averageEojeol": 3.7,
+        "longest": 5,
+        "quotes": 6,
+        "exclaims": 6,
+        "soundWords": [
+          "부릉부릉"
+        ],
+        "pagesWithSounds": 1,
+        "enWords": 130,
+        "koIssuePages": 0,
+        "enIssuePages": 0
+      },
+      "canonicalPageChecks": [
+        {
+          "pageNo": 1,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 2,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 3,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": [
+            {
+              "code": "out-of-vocabulary",
+              "language": "en",
+              "actual": 0.2727272727272727,
+              "max": 0.15,
+              "words": [
+                "hello",
+                "very",
+                "small"
+              ],
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "pageNo": 4,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 5,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": [
+            {
+              "code": "out-of-vocabulary",
+              "language": "en",
+              "actual": 0.4166666666666667,
+              "max": 0.15,
+              "words": [
+                "checks",
+                "both",
+                "belts",
+                "side"
+              ],
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "pageNo": 6,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": [
+            {
+              "code": "out-of-vocabulary",
+              "language": "en",
+              "actual": 0.2727272727272727,
+              "max": 0.15,
+              "words": [
+                "hello",
+                "hear"
+              ],
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "pageNo": 7,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 8,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": [
+            {
+              "code": "out-of-vocabulary",
+              "language": "en",
+              "actual": 0.3,
+              "max": 0.15,
+              "words": [
+                "puts",
+                "hands",
+                "face"
+              ],
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "pageNo": 9,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 10,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 11,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": [
+            {
+              "code": "out-of-vocabulary",
+              "language": "en",
+              "actual": 0.16666666666666666,
+              "max": 0.15,
+              "words": [
+                "opens",
+                "door"
+              ],
+              "severity": "warning"
+            }
+          ]
+        },
+        {
+          "pageNo": 12,
+          "kind": "page",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [],
+          "enWarnings": []
+        }
+      ],
+      "canonicalIssueEntries": {
+        "ko": 0,
+        "en": 0
+      },
+      "fullBookChecks": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.2727272727272727,
+            "max": 0.15,
+            "words": [
+              "hello",
+              "very",
+              "small"
+            ],
+            "severity": "warning",
+            "pageNo": 3
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.4166666666666667,
+            "max": 0.15,
+            "words": [
+              "checks",
+              "both",
+              "belts",
+              "side"
+            ],
+            "severity": "warning",
+            "pageNo": 5
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.2727272727272727,
+            "max": 0.15,
+            "words": [
+              "hello",
+              "hear"
+            ],
+            "severity": "warning",
+            "pageNo": 6
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.3,
+            "max": 0.15,
+            "words": [
+              "puts",
+              "hands",
+              "face"
+            ],
+            "severity": "warning",
+            "pageNo": 8
+          },
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16666666666666666,
+            "max": 0.15,
+            "words": [
+              "opens",
+              "door"
+            ],
+            "severity": "warning",
+            "pageNo": 11
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 1,
+            "props": [
+              "A little backpack"
+            ],
+            "message": "1쪽 글에 나온 A little backpack이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 5,
+            "props": [
+              "Two fastened seat belts"
+            ],
+            "message": "5쪽 글에 나온 Two fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 11,
+            "props": [
+              "The open bus doors"
+            ],
+            "message": "11쪽 글에 나온 The open bus doors이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          }
+        ],
+        "violations": [],
+        "failedPageNos": [],
+        "needsRepagination": false
+      },
+      "usage": {
+        "costUsd": 0.1354912,
+        "costUnknown": false,
+        "requests": 9,
+        "input": 18738,
+        "output": 10498,
+        "models": [
+          "gpt-6.1-sol"
+        ],
+        "stages": {
+          "materials": {
+            "requests": 1,
+            "input": 2721,
+            "output": 839,
+            "costUsd": 0.013832
+          },
+          "outline": {
+            "requests": 2,
+            "input": 6103,
+            "output": 3193,
+            "costUsd": 0.044135999999999995
+          },
+          "sceneBriefs": {
+            "requests": 1,
+            "input": 3345,
+            "output": 2592,
+            "costUsd": 0.03261
+          },
+          "prose": {
+            "requests": 2,
+            "input": 4421,
+            "output": 3454,
+            "costUsd": 0.043382000000000004
+          },
+          "pagination": {
+            "requests": 3,
+            "input": 2148,
+            "output": 420,
+            "costUsd": 0.0015312000000000004
+          }
+        }
+      },
+      "originalComparison": {
+        "unit": "page",
+        "rows": [
+          {
+            "pageNo": 1,
+            "koBefore": "오늘도 가방을 메요. 해니에게 무슨 말을 할까요?",
+            "koAfter": "오늘도 가방을 메요. 해니에게 무슨 말을 할까요?",
+            "enBefore": "Yuha is all set to go. What can he say to Haeni?",
+            "enAfter": "Yuha is all set to go. What can he say to Haeni?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 2,
+            "koBefore": "유하가 작게 말해요. “해니야, 같이 가자!”",
+            "koAfter": "유하가 작게 말해요. “해니야, 같이 가자!”",
+            "enBefore": "Yuha says, “Come on, Haeni!” Here we go together.",
+            "enAfter": "Yuha says, “Come on, Haeni!” Here we go together.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 3,
+            "koBefore": "버스에 해니가 있어요. 연습한 말이 쏙 들어가요.",
+            "koAfter": "버스에 해니가 있어요. 연습한 말이 쏙 들어가요.",
+            "enBefore": "Yuha sees Haeni on the bus. His hello is very small.",
+            "enAfter": "Yuha sees Haeni on the bus. His hello is very small.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 4,
+            "koBefore": "유하가 옆자리를 콕 가리켜요. “나도 여기 앉을래.”",
+            "koAfter": "유하가 옆자리를 콕 가리켜요. “나도 여기 앉을래.”",
+            "enBefore": "Yuha says, “Can I sit here?” Haeni pats the seat for him.",
+            "enAfter": "Yuha says, “Can I sit here?” Haeni pats the seat for him.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 5,
+            "koBefore": "딸깍! 기사님이 안전띠를 살펴봐요. 이제 나란히 갈 수 있어요.",
+            "koAfter": "딸깍! 기사님이 안전띠를 살펴봐요. 이제 나란히 갈 수 있어요.",
+            "enBefore": "The driver checks both seat belts. The two sit side by side.",
+            "enAfter": "The driver checks both seat belts. The two sit side by side.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 6,
+            "koBefore": "유하가 입을 조금 열어요. “안녕.” 인사가 아주 작게 나와요.",
+            "koAfter": "유하가 입을 조금 열어요. “안녕.” 인사가 아주 작게 나와요.",
+            "enBefore": "Yuha says a little hello. Can Haeni hear his little hello?",
+            "enAfter": "Yuha says a little hello. Can Haeni hear his little hello?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 7,
+            "koBefore": "부릉부릉! 해니가 유하의 눈을 봐요. 유하의 작은 인사가 닿아요.",
+            "koAfter": "부릉부릉! 해니가 유하의 눈을 봐요. 유하의 작은 인사가 닿아요.",
+            "enBefore": "Haeni sees his little wave. Here we go together.",
+            "enAfter": "Haeni sees his little wave. Here we go together.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 8,
+            "koBefore": "해니가 얼굴을 꼭 가려요. 해니는 어디 갔을까요?",
+            "koAfter": "해니가 얼굴을 꼭 가려요. 해니는 어디 갔을까요?",
+            "enBefore": "Haeni puts her hands up. Where is her little face?",
+            "enAfter": "Haeni puts her hands up. Where is her little face?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 9,
+            "koBefore": "해니가 두 손을 펼쳐요. “까꿍!” 유하도 해 보고 싶어요.",
+            "koAfter": "해니가 두 손을 펼쳐요. “까꿍!” 유하도 해 보고 싶어요.",
+            "enBefore": "Haeni says, “Peekaboo, here I am!” Yuha can do it too.",
+            "enAfter": "Haeni says, “Peekaboo, here I am!” Yuha can do it too.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 10,
+            "koBefore": "이번에는 유하가 얼굴을 내밀어요. “까꿍!” 까르륵, 웃음이 함께 나와요.",
+            "koAfter": "이번에는 유하가 얼굴을 내밀어요. “까꿍!” 까르륵, 웃음이 함께 나와요.",
+            "enBefore": "Yuha says, “Peekaboo, here I am!” Haeni has a big laugh.",
+            "enAfter": "Yuha says, “Peekaboo, here I am!” Haeni has a big laugh.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 11,
+            "koBefore": "버스가 유치원에 멈춰요. 기사님이 문을 활짝 열어요. 까꿍 놀이는 벌써 끝일까요?",
+            "koAfter": "버스가 유치원에 멈춰요. 기사님이 문을 활짝 열어요. 까꿍 놀이는 벌써 끝일까요?",
+            "enBefore": "The driver opens the bus door. Is it time for one more?",
+            "enAfter": "The driver opens the bus door. Is it time for one more?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 12,
+            "koBefore": "톡톡, 신발을 털어요. 유하가 한 손으로 눈을 가려요. “해니야, 까꿍!”",
+            "koAfter": "톡톡, 신발을 털어요. 유하가 한 손으로 눈을 가려요. “해니야, 까꿍!”",
+            "enBefore": "Yuha says, “Peekaboo, here I am!” Here we go together.",
+            "enAfter": "Yuha says, “Peekaboo, here I am!” Here we go together.",
+            "koChanged": false,
+            "enChanged": false
+          }
+        ],
+        "koChanged": [],
+        "enChanged": [],
+        "anyChanged": []
+      },
+      "initialWriterComparison": {
+        "unit": "page",
+        "rows": [
+          {
+            "pageNo": 1,
+            "koBefore": "오늘도 가방을 메요.\n해니에게 무슨 말을 할까요?",
+            "koAfter": "오늘도 가방을 메요. 해니에게 무슨 말을 할까요?",
+            "enBefore": "Yuha is all set to go.\nWhat can he say to Haeni?",
+            "enAfter": "Yuha is all set to go. What can he say to Haeni?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 2,
+            "koBefore": "유하가 작게 말해요.\n“해니야, 같이 가자!”",
+            "koAfter": "유하가 작게 말해요. “해니야, 같이 가자!”",
+            "enBefore": "Yuha says, “Come on, Haeni!”\nHere we go together.",
+            "enAfter": "Yuha says, “Come on, Haeni!” Here we go together.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 3,
+            "koBefore": "버스에 해니가 있어요.\n연습한 말이 쏙 들어가요.",
+            "koAfter": "버스에 해니가 있어요. 연습한 말이 쏙 들어가요.",
+            "enBefore": "Yuha sees Haeni on the bus.\nHis hello is very small.",
+            "enAfter": "Yuha sees Haeni on the bus. His hello is very small.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 4,
+            "koBefore": "유하가 옆자리를 콕 가리켜요.\n“나도 여기 앉을래.”",
+            "koAfter": "유하가 옆자리를 콕 가리켜요. “나도 여기 앉을래.”",
+            "enBefore": "Yuha says, “Can I sit here?”\nHaeni pats the seat for him.",
+            "enAfter": "Yuha says, “Can I sit here?” Haeni pats the seat for him.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 5,
+            "koBefore": "딸깍!\n기사님이 안전띠를 살펴봐요.\n이제 나란히 갈 수 있어요.",
+            "koAfter": "딸깍! 기사님이 안전띠를 살펴봐요. 이제 나란히 갈 수 있어요.",
+            "enBefore": "The driver checks both seat belts.\nThe two sit side by side.",
+            "enAfter": "The driver checks both seat belts. The two sit side by side.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 6,
+            "koBefore": "유하가 입을 조금 열어요.\n“안녕.”\n인사가 아주 작게 나와요.",
+            "koAfter": "유하가 입을 조금 열어요. “안녕.” 인사가 아주 작게 나와요.",
+            "enBefore": "Yuha says a little hello.\nCan Haeni hear his little hello?",
+            "enAfter": "Yuha says a little hello. Can Haeni hear his little hello?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 7,
+            "koBefore": "부릉부릉!\n해니가 유하의 눈을 봐요.\n유하의 작은 인사가 닿아요.",
+            "koAfter": "부릉부릉! 해니가 유하의 눈을 봐요. 유하의 작은 인사가 닿아요.",
+            "enBefore": "Haeni sees his little wave.\nHere we go together.",
+            "enAfter": "Haeni sees his little wave. Here we go together.",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 8,
+            "koBefore": "해니가 얼굴을 꼭 가려요.\n해니는 어디 갔을까요?",
+            "koAfter": "해니가 얼굴을 꼭 가려요. 해니는 어디 갔을까요?",
+            "enBefore": "Haeni puts her hands up.\nWhere is her little face?",
+            "enAfter": "Haeni puts her hands up. Where is her little face?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 9,
+            "koBefore": "해니가 두 손을 펼쳐요.\n“까꿍!”\n유하도 해 보고 싶어요.",
+            "koAfter": "해니가 두 손을 펼쳐요. “까꿍!” 유하도 해 보고 싶어요.",
+            "enBefore": "Haeni says, “Peekaboo! Here I am!”\nYuha can do it too.",
+            "enAfter": "Haeni says, “Peekaboo, here I am!” Yuha can do it too.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "pageNo": 10,
+            "koBefore": "이번에는 유하가 얼굴을 내밀어요.\n“까꿍!”\n까르륵, 웃음이 함께 나와요.",
+            "koAfter": "이번에는 유하가 얼굴을 내밀어요. “까꿍!” 까르륵, 웃음이 함께 나와요.",
+            "enBefore": "Yuha says, “Peekaboo! Here I am!”\nHaeni has a big laugh.",
+            "enAfter": "Yuha says, “Peekaboo, here I am!” Haeni has a big laugh.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "pageNo": 11,
+            "koBefore": "버스가 유치원에 멈춰요.\n기사님이 문을 활짝 열어요.\n까꿍 놀이는 벌써 끝일까요?",
+            "koAfter": "버스가 유치원에 멈춰요. 기사님이 문을 활짝 열어요. 까꿍 놀이는 벌써 끝일까요?",
+            "enBefore": "The driver opens the bus door.\nIs it time for one more?",
+            "enAfter": "The driver opens the bus door. Is it time for one more?",
+            "koChanged": false,
+            "enChanged": false
+          },
+          {
+            "pageNo": 12,
+            "koBefore": "톡톡, 신발을 털어요.\n유하가 한 손으로 눈을 가려요.\n“해니야, 까꿍!”",
+            "koAfter": "톡톡, 신발을 털어요. 유하가 한 손으로 눈을 가려요. “해니야, 까꿍!”",
+            "enBefore": "Yuha says, “Peekaboo! Here I am!”\nHere we go together.",
+            "enAfter": "Yuha says, “Peekaboo, here I am!” Here we go together.",
+            "koChanged": false,
+            "enChanged": true
+          }
+        ],
+        "koChanged": [],
+        "enChanged": [
+          9,
+          10,
+          12
+        ],
+        "anyChanged": [
+          9,
+          10,
+          12
+        ]
+      },
+      "sceneTimes": [
+        {
+          "entryNo": 1,
+          "beatIndex": 1,
+          "timeOfDay": "morning",
+          "action": "Inside Yuha’s sunny entryway, Mom gently straightens one strap of his small backpack. Yuha has short black hair, a round face, a yellow T-shirt and green shorts. Mom has a brown bob and wears a peach dress. The yellow front gate is visible through the open doorway.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 2,
+          "beatIndex": 1,
+          "timeOfDay": "morning",
+          "action": "Yuha walks toward the yellow gate with his backpack snug on his shoulders. Mom stands in the doorway behind him. Beyond the gate, the open door of a parked yellow school bus is visible, promising the next part of the morning.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 3,
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "action": "From inside the stationary school bus, Yuha appears at the top step with one hand on the rail. The driver, wearing round glasses and a light blue shirt, raises a welcoming hand. Farther inside, Haeni smiles from a seat, with short brown curls, a sky-blue T-shirt, navy overalls and a small orange backpack.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 4,
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "action": "Inside the parked bus, Yuha points to the empty seat beside Haeni. Haeni pats that seat with an open hand. Their faces are close enough to see each other clearly, with Yuha’s chin slightly tucked and his eyes bright.",
+          "lightMood": "gentle warm light and soft highlights; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 5,
+          "beatIndex": 3,
+          "timeOfDay": "morning",
+          "action": "With the bus still parked, the driver stands beside Yuha and Haeni and gently checks their fastened seat belts. Both children sit upright in adjacent seats. Their small bags are secured neatly in the storage space beneath the seat.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 6,
+          "beatIndex": 3,
+          "timeOfDay": "morning",
+          "action": "A close, quiet view of the two safely buckled children. Yuha’s lips are barely parted, his hands rest together on his lap, and his chin is lowered slightly. Haeni leans an ear a little closer without leaving the seat.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 7,
+          "beatIndex": 4,
+          "timeOfDay": "morning",
+          "action": "The school bus travels along a calm neighborhood street. Safely buckled, Yuha holds his hands lightly against his cheeks and smiles at Haeni, who turns her face toward him. The driver is visible ahead, seated and looking at the road. Houses pass beyond the windows.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 8,
+          "beatIndex": 5,
+          "timeOfDay": "morning",
+          "action": "Haeni sits securely buckled with both hands covering her face, her brown curls peeking above her fingers. Beside her, Yuha watches with his hands still near his cheeks and a small, growing smile. Keep the scene close and focused on their hands.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 9,
+          "beatIndex": 5,
+          "timeOfDay": "morning",
+          "action": "Inside the yellow school bus, Haeni opens both hands to reveal her smiling face. She has short brown curls, round cheeks, a sky-blue T-shirt, and navy overalls. Beside her, Yuha watches with a smile, his hands ready to rise. He has short black hair, a yellow T-shirt, and green shorts. Both remain seated with seat belts fastened.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 10,
+          "beatIndex": 6,
+          "timeOfDay": "morning",
+          "action": "Yuha reveals his round face between his open hands, grinning at Haeni. Haeni laughs beside him, her short brown curls framing her cheeks. Both children sit securely in their seat belts inside the yellow school bus as it reaches the kindergarten courtyard.",
+          "lightMood": "gentle warm light and soft highlights; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 11,
+          "beatIndex": 6,
+          "timeOfDay": "morning",
+          "action": "The bus is fully parked in the kindergarten yard. The driver stands beside the open door and gives a friendly farewell wave. With their belts now unfastened and bags on, Yuha and Haeni wait together at the top of the steps, one hand each on the rail.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 12,
+          "beatIndex": 7,
+          "timeOfDay": "morning",
+          "action": "At the open kindergarten entrance beside a small flower bed, Yuha and Haeni tap their shoes on the mat and step inside together. Yuha playfully holds one hand over his eyes, peeking toward Haeni. She smiles back, wearing her small orange backpack. Warm morning light fills the doorway.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        }
+      ],
+      "ending": [
+        {
+          "entryNo": 11,
+          "ko": "버스가 유치원에 멈춰요. 기사님이 문을 활짝 열어요. 까꿍 놀이는 벌써 끝일까요?",
+          "en": "The driver opens the bus door. Is it time for one more?",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-74485d46-6acb-41a5-a2ed-525e2c600f39",
+              "character-649c3541-f3b5-4eed-95c1-466d2cf10c5a"
+            ],
+            "where": "background-2aea6383-5625-47b3-bafd-3938917ffa9f",
+            "action": "The bus is fully parked in the kindergarten yard. The driver stands beside the open door and gives a friendly farewell wave. With their belts now unfastened and bags on, Yuha and Haeni wait together at the top of the steps, one hand each on the rail.",
+            "emotion": "expectant",
+            "timeOfDay": "morning",
+            "props": [
+              "yellow school bus",
+              "handrail",
+              "backpack",
+              "orange backpack"
+            ]
+          }
+        },
+        {
+          "entryNo": 12,
+          "ko": "톡톡, 신발을 털어요. 유하가 한 손으로 눈을 가려요. “해니야, 까꿍!”",
+          "en": "Yuha says, “Peekaboo, here I am!” Here we go together.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-74485d46-6acb-41a5-a2ed-525e2c600f39"
+            ],
+            "where": "background-2aea6383-5625-47b3-bafd-3938917ffa9f",
+            "action": "At the open kindergarten entrance beside a small flower bed, Yuha and Haeni tap their shoes on the mat and step inside together. Yuha playfully holds one hand over his eyes, peeking toward Haeni. She smiles back, wearing her small orange backpack. Warm morning light fills the doorway.",
+            "emotion": "playful",
+            "timeOfDay": "morning",
+            "props": [
+              "door mat",
+              "shoes",
+              "orange backpack",
+              "flower bed",
+              "kindergarten door"
+            ]
+          }
+        }
+      ],
+      "repairHistory": [
+        {
+          "requests": 0,
+          "failedPageNos": [],
+          "violations": [],
+          "notes": 8
+        }
+      ],
+      "repairViolationTypes": [],
+      "richnessRepairMessages": [],
+      "revision": null,
+      "childGate": {
+        "version": 2,
+        "language": "ko",
+        "initialFingerprint": "coherence-v1-pages-070df797",
+        "contentFingerprint": "coherence-v1-pages-070df797",
+        "phase": "complete",
+        "rounds": {
+          "0": {
+            "fingerprint": "coherence-v1-pages-070df797",
+            "raw": {
+              "retell": {
+                "retell": [
+                  "유하가 해니랑 같이 가자고 말했어요.",
+                  "버스에서 해니 옆자리에 앉았어요.",
+                  "까꿍 놀이를 했어요."
+                ],
+                "coveredBeats": [
+                  2,
+                  3,
+                  5
+                ],
+                "missingCore": [
+                  "resolution"
+                ],
+                "confusions": [],
+                "coherence": 2
+              },
+              "curiosity": {
+                "pages": [
+                  {
+                    "pageNo": 1,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "말을 할까요? 궁금해함"
+                  },
+                  {
+                    "pageNo": 2,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "같이 가자! 궁금증 유발"
+                  },
+                  {
+                    "pageNo": 3,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "연습한 말 궁금해함"
+                  },
+                  {
+                    "pageNo": 4,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "옆자리 가리켜 궁금"
+                  },
+                  {
+                    "pageNo": 5,
+                    "score": 1,
+                    "childQuestion": null,
+                    "why": "안전띠 확인, 약간 흥미"
+                  },
+                  {
+                    "pageNo": 6,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "작은 인사 궁금해함"
+                  },
+                  {
+                    "pageNo": 7,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "눈 맞춤 궁금증 자극"
+                  },
+                  {
+                    "pageNo": 8,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "어디 갔을까? 궁금"
+                  },
+                  {
+                    "pageNo": 9,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "까꿍 놀이 궁금"
+                  },
+                  {
+                    "pageNo": 10,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "웃음과 까꿍 궁금"
+                  },
+                  {
+                    "pageNo": 11,
+                    "score": 1,
+                    "childQuestion": null,
+                    "why": "놀이는 끝? 약간 궁금"
+                  },
+                  {
+                    "pageNo": 12,
+                    "score": 2,
+                    "childQuestion": null,
+                    "why": "편안한 마무리"
+                  }
+                ],
+                "dropPages": [],
+                "overall": 8.5
+              }
+            },
+            "unreadable": {}
+          }
+        },
+        "repairs": {
+          "turns": [],
+          "pages": [],
+          "repagination": {
+            "status": "pending",
+            "attempts": 0
+          }
+        },
+        "repairPasses": 0,
+        "repairedPages": [],
+        "repairedTurnParagraphs": [],
+        "proseRevised": false,
+        "turnRepairUnavailable": false,
+        "advisory": true,
+        "raw": {
+          "retell": {
+            "retell": [
+              "유하가 해니랑 같이 가자고 말했어요.",
+              "버스에서 해니 옆자리에 앉았어요.",
+              "까꿍 놀이를 했어요."
+            ],
+            "coveredBeats": [
+              2,
+              3,
+              5
+            ],
+            "missingCore": [
+              "resolution"
+            ],
+            "confusions": [],
+            "coherence": 2
+          },
+          "curiosity": {
+            "pages": [
+              {
+                "pageNo": 1,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "말을 할까요? 궁금해함"
+              },
+              {
+                "pageNo": 2,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "같이 가자! 궁금증 유발"
+              },
+              {
+                "pageNo": 3,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "연습한 말 궁금해함"
+              },
+              {
+                "pageNo": 4,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "옆자리 가리켜 궁금"
+              },
+              {
+                "pageNo": 5,
+                "score": 1,
+                "childQuestion": null,
+                "why": "안전띠 확인, 약간 흥미"
+              },
+              {
+                "pageNo": 6,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "작은 인사 궁금해함"
+              },
+              {
+                "pageNo": 7,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "눈 맞춤 궁금증 자극"
+              },
+              {
+                "pageNo": 8,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "어디 갔을까? 궁금"
+              },
+              {
+                "pageNo": 9,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "까꿍 놀이 궁금"
+              },
+              {
+                "pageNo": 10,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "웃음과 까꿍 궁금"
+              },
+              {
+                "pageNo": 11,
+                "score": 1,
+                "childQuestion": null,
+                "why": "놀이는 끝? 약간 궁금"
+              },
+              {
+                "pageNo": 12,
+                "score": 2,
+                "childQuestion": null,
+                "why": "편안한 마무리"
+              }
+            ],
+            "dropPages": [],
+            "overall": 8.5
+          }
+        },
+        "curiosity": {
+          "pages": [
+            {
+              "pageNo": 1,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "말을 할까요? 궁금해함"
+            },
+            {
+              "pageNo": 2,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "같이 가자! 궁금증 유발"
+            },
+            {
+              "pageNo": 3,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "연습한 말 궁금해함"
+            },
+            {
+              "pageNo": 4,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "옆자리 가리켜 궁금"
+            },
+            {
+              "pageNo": 5,
+              "score": 1,
+              "childQuestion": null,
+              "why": "안전띠 확인, 약간 흥미"
+            },
+            {
+              "pageNo": 6,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "작은 인사 궁금해함"
+            },
+            {
+              "pageNo": 7,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "눈 맞춤 궁금증 자극"
+            },
+            {
+              "pageNo": 8,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "어디 갔을까? 궁금"
+            },
+            {
+              "pageNo": 9,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "까꿍 놀이 궁금"
+            },
+            {
+              "pageNo": 10,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "웃음과 까꿍 궁금"
+            },
+            {
+              "pageNo": 11,
+              "score": 1,
+              "childQuestion": null,
+              "why": "놀이는 끝? 약간 궁금"
+            },
+            {
+              "pageNo": 12,
+              "score": 2,
+              "childQuestion": null,
+              "why": "편안한 마무리"
+            }
+          ],
+          "dropPages": [],
+          "overall": 9.2,
+          "modelOverall": 8.5,
+          "pass": true,
+          "quietFinalPageExempt": true
+        },
+        "retell": {
+          "retell": [
+            "유하가 해니랑 같이 가자고 말했어요.",
+            "버스에서 해니 옆자리에 앉았어요.",
+            "까꿍 놀이를 했어요."
+          ],
+          "coveredBeats": [
+            2,
+            3,
+            5
+          ],
+          "missingCore": [
+            "resolution"
+          ],
+          "confusions": [],
+          "coherence": 2,
+          "pass": false,
+          "recommendTurnRewrite": false
+        },
+        "pass": false,
+        "rewritePages": [],
+        "rewriteTurnParagraph": false,
+        "checkedAt": "2026-10-22T07:44:37.144Z"
+      },
+      "writerReport": null,
+      "pageCoherence": null,
+      "storyWords": [
+        "yuha",
+        "mom",
+        "haeni",
+        "bus",
+        "driver",
+        "seat",
+        "peekaboo",
+        "together"
+      ],
+      "outlineNewWordsEn": [
+        "bus",
+        "seat",
+        "peekaboo",
+        "together"
+      ],
+      "englishWordSearch": {
+        "rag": 0,
+        "handkerchief": 0,
+        "hanky": 0
+      },
+      "characters": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "nameEn": "Yuha"
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "nameEn": "Mom"
+        },
+        {
+          "id": "character-74485d46-6acb-41a5-a2ed-525e2c600f39",
+          "name": "해니",
+          "nameEn": "Haeni"
+        },
+        {
+          "id": "character-649c3541-f3b5-4eed-95c1-466d2cf10c5a",
+          "name": "버스 기사님",
+          "nameEn": "Bus Driver"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "home",
+          "name": "유하네 집"
+        },
+        {
+          "id": "background-fdd132ae-78b3-4bd6-99b0-114bc3c86f52",
+          "name": "노란 스쿨버스"
+        },
+        {
+          "id": "background-2aea6383-5625-47b3-bafd-3938917ffa9f",
+          "name": "유치원 앞마당"
+        }
+      ],
+      "baseline": {
+        "source": "r31b paid diet manuscript",
+        "usage": {
+          "costUsd": 0.8800228000000001,
+          "costUnknown": false,
+          "requests": 38,
+          "input": 270504,
+          "output": 25635,
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "stages": {
+            "materials": {
+              "requests": 1,
+              "input": 2721,
+              "output": 683,
+              "costUsd": 0.012272
+            },
+            "outline": {
+              "requests": 3,
+              "input": 8979,
+              "output": 4404,
+              "costUsd": 0.061998000000000004
+            },
+            "sceneBriefs": {
+              "requests": 1,
+              "input": 3338,
+              "output": 2861,
+              "costUsd": 0.035286
+            },
+            "prose": {
+              "requests": 1,
+              "input": 1813,
+              "output": 2382,
+              "costUsd": 0.027446
+            },
+            "pagination": {
+              "requests": 32,
+              "input": 253653,
+              "output": 15305,
+              "costUsd": 0.7430208
+            }
+          }
+        },
+        "costUsd": 0.8800228000000001,
+        "requests": 38,
+        "seconds": 529,
+        "measured": {
+          "pages": 12,
+          "sentences": 39,
+          "rhythm": 5,
+          "eojeol": 144,
+          "averageEojeol": 4.1,
+          "longest": 5,
+          "quotes": 1,
+          "exclaims": 6,
+          "soundWords": [
+            "부릉부릉",
+            "조물조물",
+            "살랑살랑"
+          ],
+          "pagesWithSounds": 4,
+          "enWords": 135,
+          "koIssuePages": 0,
+          "enIssuePages": 0
+        },
+        "originalChecksPassed": false,
+        "costReductionPercent": 84.60367163214408
+      }
+    },
+    {
+      "level": "K2",
+      "englishLevel": "E2",
+      "status": "text-review",
+      "error": null,
+      "workflowComplete": true,
+      "seconds": 612,
+      "printedPages": 12,
+      "entries": 6,
+      "rawRunnerMeasured": {
+        "pages": 6,
+        "sentences": 85,
+        "rhythm": 0,
+        "eojeol": 514,
+        "averageEojeol": 6.1,
+        "longest": 9,
+        "quotes": 8,
+        "exclaims": 7,
+        "soundWords": [
+          "팔랑팔랑",
+          "부릉부릉",
+          "사락사락",
+          "소곤소곤",
+          "살랑살랑",
+          "또박또박"
+        ],
+        "pagesWithSounds": 5,
+        "enWords": 175,
+        "koIssuePages": 0,
+        "enIssuePages": 4
+      },
+      "canonicalPageChecks": [
+        {
+          "pageNo": 1,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [
+            {
+              "code": "unit-length-note",
+              "language": "ko",
+              "severity": "warning",
+              "advisory": true,
+              "unit": "spread",
+              "offSentences": 3,
+              "mean": 5.5,
+              "sentenceCount": 14,
+              "expected": {
+                "min": 10,
+                "max": 15
+              }
+            }
+          ],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 2,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 17.2% (최대 15%)"
+          ],
+          "koWarnings": [
+            {
+              "code": "unit-length-note",
+              "language": "ko",
+              "severity": "warning",
+              "advisory": true,
+              "unit": "spread",
+              "offSentences": 7,
+              "mean": 5.8,
+              "sentenceCount": 15,
+              "expected": {
+                "min": 10,
+                "max": 15
+              }
+            }
+          ],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 3,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [
+            {
+              "code": "unit-length-note",
+              "language": "ko",
+              "severity": "warning",
+              "advisory": true,
+              "unit": "spread",
+              "offSentences": 3,
+              "mean": 7.08,
+              "sentenceCount": 13,
+              "expected": {
+                "min": 10,
+                "max": 15
+              }
+            }
+          ],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 4,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [],
+          "koWarnings": [
+            {
+              "code": "unit-length-note",
+              "language": "ko",
+              "severity": "warning",
+              "advisory": true,
+              "unit": "spread",
+              "offSentences": 1,
+              "mean": 6.25,
+              "sentenceCount": 16,
+              "expected": {
+                "min": 10,
+                "max": 15
+              }
+            }
+          ],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 5,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 16.7% (최대 15%)"
+          ],
+          "koWarnings": [
+            {
+              "code": "unit-length-note",
+              "language": "ko",
+              "severity": "warning",
+              "advisory": true,
+              "unit": "spread",
+              "offSentences": 3,
+              "mean": 5.93,
+              "sentenceCount": 15,
+              "expected": {
+                "min": 10,
+                "max": 15
+              }
+            }
+          ],
+          "enWarnings": []
+        },
+        {
+          "pageNo": 6,
+          "kind": "spread",
+          "koIssues": [],
+          "enIssues": [
+            "영어 등급 외 어휘 비율 17.4% (최대 15%)"
+          ],
+          "koWarnings": [
+            {
+              "code": "unit-length-note",
+              "language": "ko",
+              "severity": "warning",
+              "advisory": true,
+              "unit": "spread",
+              "offSentences": 2,
+              "mean": 5.75,
+              "sentenceCount": 12,
+              "expected": {
+                "min": 10,
+                "max": 15
+              }
+            }
+          ],
+          "enWarnings": []
+        }
+      ],
+      "canonicalIssueEntries": {
+        "ko": 0,
+        "en": 3
+      },
+      "fullBookChecks": {
+        "passed": false,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": false,
+            "violations": [
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 2,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 17.2% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 5,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 16.7% (최대 15%)"
+              },
+              {
+                "type": "level",
+                "kind": "page",
+                "pageNo": 6,
+                "language": "en",
+                "message": "영어 등급 외 어휘 비율 17.4% (최대 15%)"
+              }
+            ]
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.5,
+            "sentenceCount": 14,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 1
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 7,
+            "mean": 5.8,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 2
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 7.08,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 3
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 6.25,
+            "sentenceCount": 16,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 4
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.93,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 5
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 5.75,
+            "sentenceCount": 12,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 6
+          },
+          {
+            "type": "level",
+            "code": "book-new-words",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 1,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 14개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "code": "book-new-words",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 2,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 14개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "code": "book-new-words",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 3,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 14개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "code": "book-new-words",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 4,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 14개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "code": "book-new-words",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 5,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 14개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "level",
+            "code": "book-new-words",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 6,
+            "language": "en",
+            "message": "영어 책 전체 새 단어 14개가 허용 10개를 넘었어요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 1,
+            "props": [
+              "a big window",
+              "Haeni's waving yellow handkerchief"
+            ],
+            "message": "1쪽 글에 나온 a big window, Haeni's waving yellow handkerchief이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 2,
+            "props": [
+              "the yellow handkerchief on Haeni's lap"
+            ],
+            "message": "2쪽 글에 나온 the yellow handkerchief on Haeni's lap이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 3,
+            "props": [
+              "the yellow handkerchief",
+              "two fastened seat belts"
+            ],
+            "message": "3쪽 글에 나온 the yellow handkerchief, two fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 4,
+            "props": [
+              "the yellow handkerchief shaped into rabbit ears",
+              "two fastened seat belts"
+            ],
+            "message": "4쪽 글에 나온 the yellow handkerchief shaped into rabbit ears, two fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 5,
+            "props": [
+              "the yellow handkerchief on Haeni's head",
+              "the stopped yellow school bus",
+              "the kindergarten entrance door"
+            ],
+            "message": "5쪽 글에 나온 the yellow handkerchief on Haeni's head, the stopped yellow school bus, the kindergarten entrance door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 6,
+            "props": [
+              "the yellow handkerchief ears",
+              "the open entrance door"
+            ],
+            "message": "6쪽 글에 나온 the yellow handkerchief ears, the open entrance door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          }
+        ],
+        "violations": [
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 2,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 17.2% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 5,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 16.7% (최대 15%)"
+          },
+          {
+            "type": "level",
+            "kind": "page",
+            "pageNo": 6,
+            "language": "en",
+            "message": "영어 등급 외 어휘 비율 17.4% (최대 15%)"
+          }
+        ],
+        "failedPageNos": [
+          2,
+          5,
+          6
+        ],
+        "needsRepagination": false
+      },
+      "usage": {
+        "costUsd": 1.2016832000000002,
+        "costUnknown": false,
+        "requests": 43,
+        "input": 358621,
+        "output": 35003,
+        "models": [
+          "gpt-6.1-sol"
+        ],
+        "stages": {
+          "materials": {
+            "requests": 1,
+            "input": 3355,
+            "output": 757,
+            "costUsd": 0.01428
+          },
+          "outline": {
+            "requests": 10,
+            "input": 31553,
+            "output": 17607,
+            "costUsd": 0.1999992
+          },
+          "sceneBriefs": {
+            "requests": 1,
+            "input": 14883,
+            "output": 3294,
+            "costUsd": 0.062706
+          },
+          "prose": {
+            "requests": 19,
+            "input": 55471,
+            "output": 4044,
+            "costUsd": 0.1491216
+          },
+          "coherence": {
+            "requests": 1,
+            "input": 19907,
+            "output": 50,
+            "costUsd": 0.040314
+          },
+          "pagination": {
+            "requests": 11,
+            "input": 233452,
+            "output": 9251,
+            "costUsd": 0.7352624000000001
+          }
+        }
+      },
+      "originalComparison": {
+        "unit": "beat",
+        "limitation": "The writer produced beat paragraphs before pagination, so changed printed-page counts cannot be inferred. Compare the same beat with its final entries instead.",
+        "rows": [
+          {
+            "beatIndex": 1,
+            "entryNos": [
+              1
+            ],
+            "koBefore": "큰 창문으로 아침 햇살이 집 안에 들어왔어요. 유하는 따뜻한 두 손으로 얼굴을 꼭 가렸어요. 엄마가 유하 앞에서 고개를 살짝 기울였어요. “우리 유하, 어디 숨었나?” 엄마가 물었어요. “까꿍!” 유하가 두 손을 활짝 폈어요. 이번에는 엄마가 두 손으로 얼굴을 가렸어요. 유하는 엄마 손 가까이 얼굴을 쏙 내밀었어요. 엄마가 손을 펴자 유하가 까르르 웃었어요. 엄마도 웃으며 유하의 두 손을 잡았어요. 큰 창문 너머에는 스쿨버스가 멈춰 서 있었어요. 버스 안에서 해니가 노란 손수건을 팔랑팔랑 흔들었어요. 유하는 창밖을 보지 않고 엄마만 바라보았어요.",
+            "koAfter": "큰 창문으로 아침 햇살이 집 안에 들어왔어요. 유하는 따뜻한 두 손으로 얼굴을 꼭 가렸어요. 엄마가 유하 앞에서 고개를 살짝 기울였어요. “우리 유하, 어디 숨었나?” 엄마가 물었어요. “까꿍!” 유하가 두 손을 활짝 폈어요. 이번에는 엄마가 두 손으로 얼굴을 가렸어요. 유하는 엄마 손 가까이 얼굴을 쏙 내밀었어요. 엄마가 손을 펴자 유하가 까르르 웃었어요. 엄마도 웃으며 유하의 두 손을 잡았어요. 큰 창문 너머에는 스쿨버스가 멈춰 서 있었어요. 버스 안에서 해니가 노란 손수건을 팔랑팔랑 흔들었어요. 유하는 창밖을 보지 않고 엄마만 바라보았어요.",
+            "enBefore": "Yuha hid his face, then peeked at Mom. Mom peeked too, and they laughed at home. A school bus sat beyond the big window. Inside, Haeni waved a yellow handkerchief at Yuha.",
+            "enAfter": "Yuha hid his face, then peeked at Mom. Mom peeked too, and they laughed at home. A school bus sat by the big window. Inside, Haeni waved a yellow handkerchief at Yuha.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "beatIndex": 2,
+            "entryNos": [
+              2
+            ],
+            "koBefore": "유하는 스쿨버스에 올라 해니를 보고 손을 흔들었어요. “유하야, 여기 앉아!” 해니가 옆자리를 톡톡 두드렸어요. 유하는 해니 옆에 엉덩이를 쏙 붙이고 앉았어요. 따뜻한 아침 햇살이 나란한 두 자리에 내려앉았어요. 딸깍, 딸깍! 둘은 안전띠를 하나씩 꼭 잠갔어요. 안전띠가 두 아이 몸에 포근하게 붙었어요. 창밖 파란 하늘 아래 길가에 참새가 보였어요. 부르릉! 버스가 두 아이 발밑에서 낮게 울렸어요. 해니는 노란 손수건을 펴서 무릎 위에 놓았어요. 유하는 엄마와 하던 까꿍 놀이가 생각나서 입꼬리를 올렸어요. 유치원에 닿기 전에 해니도 깜짝 웃게 해 주고 싶었어요. 유하는 해니를 보며 두 손을 얼굴 앞으로 올렸어요.",
+            "koAfter": "유하는 스쿨버스에 올라 해니를 보고 손을 흔들었어요. “유하야, 여기 앉아!” 해니가 옆자리를 톡톡 두드렸어요. 유하는 해니 옆에 엉덩이를 쏙 붙이고 앉았어요. 따뜻한 아침 햇살이 나란한 두 자리에 내려앉았어요. 딸깍, 딸깍! 둘은 안전띠를 하나씩 꼭 잠갔어요. 안전띠가 두 아이 몸에 포근하게 붙었어요. 창밖 파란 하늘 아래 길가에 참새가 보였어요. 부르릉! 버스가 두 아이 발밑에서 낮게 울렸어요. 해니는 노란 손수건을 펴서 무릎 위에 놓았어요. 유하는 엄마와 하던 까꿍 놀이가 생각나서 입꼬리를 올렸어요. 유치원에 닿기 전에 해니도 깜짝 웃게 해 주고 싶었어요. 유하는 해니를 보며 두 손을 얼굴 앞으로 올렸어요.",
+            "enBefore": "Yuha got on and sat by Haeni. Click, click went their two seat belts. Haeni put the yellow handkerchief on her lap. Yuha hid his face to make Haeni laugh.",
+            "enAfter": "Yuha got on and sat by Haeni. Click, click went their two seat belts. Haeni put the yellow handkerchief on her lap. “I can make you laugh,” said Yuha.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "beatIndex": 3,
+            "entryNos": [
+              3
+            ],
+            "koBefore": "부릉부릉, 버스 창밖으로 맑은 하늘 아래 나무들이 지나갔어요. 작은 나비가 길가 풀 위를 날아갔어요. 유하는 앉은 채 두 손으로 얼굴을 가렸어요. 손가락 틈으로 가느다란 햇빛이 쏙 들어왔어요. 유하는 그 틈으로 해니의 어깨가 움찔하는 걸 보았어요. 벌써 놀랐나 싶어서 유하는 입꼬리를 살짝 올렸어요. “조금만 더 숨어야지” 하고 유하가 작게 속삭였어요. 유하는 손가락을 붙이고 얼굴을 더 꼭 가렸어요. 사락사락, 해니가 무릎에서 노란 손수건을 집어 들었어요. 해니는 보드라운 손수건을 자기 머리 위에 얹었어요. 해니는 손수건 양 끝으로 귀 두 개를 세웠어요. 해니는 노란 귀 아래로 고개를 푹 숙였어요. 두 아이의 안전띠는 그대로 꼭 잠겨 있었어요.",
+            "koAfter": "부릉부릉, 버스 창밖으로 맑은 하늘 아래 나무들이 지나갔어요. 작은 나비가 길가 풀 위를 날아갔어요. 유하는 앉은 채 두 손으로 얼굴을 가렸어요. 손가락 틈으로 가느다란 햇빛이 쏙 들어왔어요. 유하는 그 틈으로 해니의 어깨가 움찔하는 걸 보았어요. 벌써 놀랐나 싶어서 유하는 입꼬리를 살짝 올렸어요. “조금만 더 숨어야지” 하고 유하가 작게 속삭였어요. 유하는 손가락을 붙이고 얼굴을 더 꼭 가렸어요. 사락사락, 해니가 무릎에서 노란 손수건을 집어 들었어요. 해니는 보드라운 손수건을 자기 머리 위에 얹었어요. 해니는 손수건 양 끝으로 귀 두 개를 세웠어요. 해니는 노란 귀 아래로 고개를 푹 숙였어요. 두 아이의 안전띠는 그대로 꼭 잠겨 있었어요.",
+            "enBefore": "Yuha peeked through his fingers; Haeni's shoulders jumped. Yuha thought Haeni was surprised and hid longer. Haeni put her yellow handkerchief on her head. She made two ears and bent down low.",
+            "enAfter": "Yuha peeked and saw Haeni jump a little. “Haeni is surprised, so I will not come out!” Haeni made two ears with her yellow handkerchief. She put them on and then looked down.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "beatIndex": 4,
+            "entryNos": [
+              4
+            ],
+            "koBefore": "“까꿍!” 하며 유하가 두 손을 활짝 폈어요. 그런데 옆자리 해니의 얼굴이 보이지 않았어요. 유하는 벌렸던 입을 다물고 해니를 가만히 보았어요. 숙인 머리 위로 노란 귀만 삐죽 보였어요. 손수건 귀 두 개 끝에 햇살이 닿았어요. 유하는 손을 편 채 고개를 살짝 기울였어요. 그때 해니가 숙였던 고개를 번쩍 들어 올렸어요. 머리 위의 노란 손수건 귀가 팔랑팔랑 흔들렸어요. 해니는 두 손을 앞발처럼 가슴 앞에 모았어요. “나는 토끼야” 하고 해니가 유하에게 말했어요. 유하의 두 눈이 동그랗게 커졌어요. 푸훗, 유하의 입에서 웃음이 새어 나왔어요. 해니는 놀란 게 아니라 토끼가 되고 있었어요. 유하는 웃으며 따뜻한 손바닥으로 볼을 살짝 쓸었어요. 둘의 안전띠는 나란한 자리에서 꼭 잠겨 있었어요.",
+            "koAfter": "“까꿍!” 하며 유하가 두 손을 활짝 폈어요. 그런데 옆자리 해니의 얼굴이 보이지 않았어요. 유하는 벌렸던 입을 다물고 해니를 가만히 보았어요. 숙인 머리 위로 노란 귀만 삐죽 보였어요. 손수건 귀 두 개 끝에 햇살이 닿았어요. 유하는 손을 편 채 고개를 살짝 기울였어요. 그때 해니가 숙였던 고개를 번쩍 들어 올렸어요. 머리 위의 노란 손수건 귀가 팔랑팔랑 흔들렸어요. 해니는 두 손을 앞발처럼 가슴 앞에 모았어요. “나는 토끼야” 하고 해니가 유하에게 말했어요. 유하의 두 눈이 동그랗게 커졌어요. 푸훗, 유하의 입에서 웃음이 새어 나왔어요. 해니는 놀란 게 아니라 토끼가 되고 있었어요. 유하는 웃으며 따뜻한 손바닥으로 볼을 살짝 쓸었어요. 둘의 안전띠는 나란한 자리에서 꼭 잠겨 있었어요.",
+            "enBefore": "Yuha opened his hands, but Haeni stayed down. Only two yellow ears peeked over her head. Haeni looked up, her hands like rabbit paws. Yuha’s eyes went big, and he laughed.",
+            "enAfter": "Yuha came out, but Haeni was down. He saw two yellow ears on her. Haeni looked up like a little rabbit. Yuha’s eyes went big, and he laughed.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "beatIndex": 5,
+            "entryNos": [
+              5
+            ],
+            "koBefore": "유하도 두 손을 머리 위에 쫑긋 세웠어요. “나도 토끼야!” 유하가 해니를 보며 말했어요. 해니가 고개를 기울이면 노란 손수건 귀가 까딱했어요. 유하는 안전띠를 맨 채 손 귀를 까딱했어요. 둘은 서로 따라 하며 어깨를 살짝 들썩였어요. 노란 스쿨버스가 햇살 유치원 앞에 멈춰 섰어요. 딸깍, 딸깍! 유하와 해니가 안전띠를 하나씩 풀었어요. 둘은 버스에서 차례로 내려 앞마당에 나란히 섰어요. 밝은 햇살 아래 두 그림자가 나란히 놓였어요. 앞마당 가장자리 풀잎에는 작은 무당벌레가 붙어 있었어요. 살랑바람이 불어서 두 친구의 볼을 간질였어요. 해니는 현관문 앞에서 노란 귀를 살짝 까딱했어요. 유하도 손 귀를 까딱하며 해니와 소곤소곤 웃었어요.",
+            "koAfter": "유하도 두 손을 머리 위에 쫑긋 세웠어요. “나도 토끼야!” 유하가 해니를 보며 말했어요. 해니가 고개를 기울이면 노란 손수건 귀가 까딱했어요. 유하는 안전띠를 맨 채 손 귀를 까딱했어요. 둘은 서로 따라 하며 어깨를 살짝 들썩였어요. 노란 스쿨버스가 햇살 유치원 앞에 멈춰 섰어요. 딸깍, 딸깍! 유하와 해니가 안전띠를 하나씩 풀었어요. 둘은 버스에서 차례로 내려 앞마당에 나란히 섰어요. 밝은 햇살 아래 두 그림자가 나란히 놓였어요. 앞마당 가장자리 풀잎에는 작은 무당벌레가 붙어 있었어요. 살랑바람이 불어서 두 친구의 볼을 간질였어요. 해니는 현관문 앞에서 노란 귀를 살짝 까딱했어요. 유하도 손 귀를 까딱하며 해니와 소곤소곤 웃었어요.",
+            "enBefore": "Yuha made hand ears and wiggled them like Haeni. The bus stopped; their belts went click, click! They got off in the sunny kindergarten courtyard. They looked at each other's ears and laughed again.",
+            "enAfter": "Yuha made ears and waved them like Haeni. The bus stopped; their belts went click, click! They got down by the kindergarten. They saw their funny ears and laughed again.",
+            "koChanged": false,
+            "enChanged": true
+          },
+          {
+            "beatIndex": 6,
+            "entryNos": [
+              6
+            ],
+            "koBefore": "유하는 해니의 노란 손수건 귀를 바라보았어요. 아침 바람에 손수건 끝이 살랑살랑 흔들렸어요. 유하는 두 손을 머리 위에 다시 세웠어요. “토끼야, 같이 가자.” 유하가 해니에게 말했어요. 해니는 웃으며 노란 귀를 작게 까딱했어요. 유하도 손 귀를 까딱이며 발을 내디뎠어요. 둘은 앞마당을 지나 나란히 현관문으로 걸어갔어요. 또박또박, 두 친구의 발소리가 함께 이어졌어요. 열린 현관문 앞에는 햇빛이 환하게 비쳤어요. 문 앞에서 바람이 둘의 볼을 살짝 스쳤어요. 둘은 귀를 작게 까딱이며 현관문 안으로 들어갔어요.",
+            "koAfter": "유하는 해니의 노란 손수건 귀를 바라보았어요. 아침 바람에 손수건 끝이 살랑살랑 흔들렸어요. 유하는 두 손을 머리 위에 다시 세웠어요. “토끼야, 같이 가자.” 유하가 해니에게 말했어요. 해니는 웃으며 노란 귀를 작게 까딱했어요. 유하도 손 귀를 까딱이며 발을 내디뎠어요. 둘은 앞마당을 지나 나란히 현관문으로 걸어갔어요. 또박또박, 두 친구의 발소리가 함께 이어졌어요. 열린 현관문 앞에는 햇빛이 환하게 비쳤어요. 문 앞에서 바람이 둘의 볼을 살짝 스쳤어요. 둘은 귀를 작게 까딱이며 현관문 안으로 들어갔어요.",
+            "enBefore": "Yuha saw Haeni's yellow ears and raised his again. Side by side, they walked across the courtyard. Their ears wiggled as they went in the door.",
+            "enAfter": "Yuha saw Haeni's ears and put his up. Side by side, they went to the door. Their ears wiggled as they went in.",
+            "koChanged": false,
+            "enChanged": true
+          }
+        ],
+        "koChanged": [],
+        "enChanged": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "anyChanged": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "initialWriterComparison": null,
+      "sceneTimes": [
+        {
+          "entryNo": 1,
+          "beatIndex": 1,
+          "timeOfDay": "morning",
+          "action": "Yuha opens his hands and laughs with Mom, who peeks from behind her palms on the left. Through the big window on the right, Haeni waves a yellow handkerchief inside the stopped school bus. Yuha looks only at Mom. Keep faces and the waving cloth clear of the centre fold.",
+          "lightMood": "gentle warm light and soft highlights; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 2,
+          "beatIndex": 2,
+          "timeOfDay": "morning",
+          "action": "In a wide view of the bus interior, Yuha sits beside Haeni, both securely buckled. Haeni's yellow handkerchief lies open on her lap. Yuha smiles and raises his palms toward his face while Haeni watches. Place the pair to the right of the fold, with sunlit windows extending left.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 3,
+          "beatIndex": 3,
+          "timeOfDay": "morning",
+          "action": "Yuha keeps his face hidden behind closed fingers, a small smile visible below his palms. Beside him Haeni bows her head after arranging two yellow handkerchief ears. Both remain seated and buckled. The reader can see the secret ears that Yuha cannot. Keep hands, faces and ears away from the fold.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 4,
+          "beatIndex": 4,
+          "timeOfDay": "morning",
+          "action": "Use two sequential vignettes across the spread: at left, Yuha opens his palms and quietly studies Haeni's bowed head with two yellow ear tips; at right, Haeni lifts her head and gathers her hands like rabbit paws as wide-eyed Yuha laughs. Both stay buckled in both moments. Leave the centre fold clear.",
+          "lightMood": "clear gentle contrast, slightly cooler light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 5,
+          "beatIndex": 5,
+          "timeOfDay": "morning",
+          "action": "In the sunny courtyard, Yuha holds up hand ears and tilts them toward Haeni, who tips her yellow cloth ears back at him. They laugh together with parallel shadows below. The stopped school bus stands behind them and the entrance is ahead. Keep both children and their ears right of the centre fold.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        },
+        {
+          "entryNo": 6,
+          "beatIndex": 6,
+          "timeOfDay": "morning",
+          "action": "Seen from the courtyard, Yuha and Haeni step side by side through the open kindergarten doorway at the right of the spread. Yuha holds his hands as ears; Haeni's yellow handkerchief ears tilt gently toward him. Their feet cross the threshold together. Keep the doorway, faces and ears clear of the centre fold.",
+          "lightMood": "soft neutral light; use only the approved preset palette: #f5eedc, #8ca481, #ddb07b, #a4bbc6, #60584d; no new colors or frightening darkness"
+        }
+      ],
+      "ending": [
+        {
+          "entryNo": 5,
+          "ko": "유하도 두 손을 머리 위에 쫑긋 세웠어요. “나도 토끼야!” 유하가 해니를 보며 말했어요. 해니가 고개를 기울이면 노란 손수건 귀가 까딱했어요. 유하는 안전띠를 맨 채 손 귀를 까딱했어요. 둘은 서로 따라 하며 어깨를 살짝 들썩였어요. 노란 스쿨버스가 햇살 유치원 앞에 멈춰 섰어요. 딸깍, 딸깍! 유하와 해니가 안전띠를 하나씩 풀었어요. 둘은 버스에서 차례로 내려 앞마당에 나란히 섰어요. 밝은 햇살 아래 두 그림자가 나란히 놓였어요. 앞마당 가장자리 풀잎에는 작은 무당벌레가 붙어 있었어요. 살랑바람이 불어서 두 친구의 볼을 간질였어요. 해니는 현관문 앞에서 노란 귀를 살짝 까딱했어요. 유하도 손 귀를 까딱하며 해니와 소곤소곤 웃었어요.",
+          "en": "Yuha made ears and waved them like Haeni. The bus stopped; their belts went click, click! They got down by the kindergarten. They saw their funny ears and laughed again.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-a979f876-dc89-4dcc-8681-d1c67c040201"
+            ],
+            "where": "background-a0a7d126-f24c-43d4-95b1-e59363bb4b29",
+            "action": "In the sunny courtyard, Yuha holds up hand ears and tilts them toward Haeni, who tips her yellow cloth ears back at him. They laugh together with parallel shadows below. The stopped school bus stands behind them and the entrance is ahead. Keep both children and their ears right of the centre fold.",
+            "emotion": "delighted",
+            "timeOfDay": "morning",
+            "props": [
+              "yellow handkerchief rabbit ears",
+              "stopped yellow school bus",
+              "kindergarten entrance door"
+            ]
+          }
+        },
+        {
+          "entryNo": 6,
+          "ko": "유하는 해니의 노란 손수건 귀를 바라보았어요. 아침 바람에 손수건 끝이 살랑살랑 흔들렸어요. 유하는 두 손을 머리 위에 다시 세웠어요. “토끼야, 같이 가자.” 유하가 해니에게 말했어요. 해니는 웃으며 노란 귀를 작게 까딱했어요. 유하도 손 귀를 까딱이며 발을 내디뎠어요. 둘은 앞마당을 지나 나란히 현관문으로 걸어갔어요. 또박또박, 두 친구의 발소리가 함께 이어졌어요. 열린 현관문 앞에는 햇빛이 환하게 비쳤어요. 문 앞에서 바람이 둘의 볼을 살짝 스쳤어요. 둘은 귀를 작게 까딱이며 현관문 안으로 들어갔어요.",
+          "en": "Yuha saw Haeni's ears and put his up. Side by side, they went to the door. Their ears wiggled as they went in.",
+          "scene": {
+            "who": [
+              "yuha",
+              "character-a979f876-dc89-4dcc-8681-d1c67c040201"
+            ],
+            "where": "background-a0a7d126-f24c-43d4-95b1-e59363bb4b29",
+            "action": "Seen from the courtyard, Yuha and Haeni step side by side through the open kindergarten doorway at the right of the spread. Yuha holds his hands as ears; Haeni's yellow handkerchief ears tilt gently toward him. Their feet cross the threshold together. Keep the doorway, faces and ears clear of the centre fold.",
+            "emotion": "content",
+            "timeOfDay": "morning",
+            "props": [
+              "yellow handkerchief rabbit ears",
+              "open entrance door",
+              "entrance door handle"
+            ]
+          }
+        }
+      ],
+      "repairHistory": [
+        {
+          "requests": 1,
+          "failedPageNos": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "violations": [
+            "level@1",
+            "level@2",
+            "level@3",
+            "level@4",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 2,
+          "failedPageNos": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@3",
+            "level@4",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 3,
+          "failedPageNos": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@3",
+            "level@4",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 4,
+          "failedPageNos": [
+            2,
+            4,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@4",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 5,
+          "failedPageNos": [
+            2,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 6,
+          "failedPageNos": [
+            2,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 7,
+          "failedPageNos": [
+            2,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        },
+        {
+          "requests": 10,
+          "failedPageNos": [
+            2,
+            5,
+            6
+          ],
+          "violations": [
+            "level@2",
+            "level@5",
+            "level@6"
+          ],
+          "notes": 18
+        }
+      ],
+      "repairViolationTypes": [
+        "level"
+      ],
+      "richnessRepairMessages": [],
+      "revision": {
+        "version": 1,
+        "accepted": [],
+        "rejected": [
+          {
+            "pageNo": 3,
+            "reason": "check",
+            "problems": [
+              "level|page|en|3|"
+            ]
+          }
+        ],
+        "report": {
+          "overall": "엄마와 시작한 까꿍 놀이가 해니의 토끼 장난으로 이어져, 두 친구가 함께 웃는 반전이 즐겁습니다. 유치원에 들어가는 따뜻한 끝맺음과 원래의 리듬은 그대로 두고, 영어 대사 한 곳만 짧게 다듬어 말하는 이를 분명히 했습니다.",
+          "strengths": [
+            "노란 손수건이 토끼 귀로 다시 나타나 반전을 눈으로 알아볼 수 있습니다.",
+            "버스가 멈춘 뒤 안전띠를 풀고 내리는 순서가 일관됩니다.",
+            "얼굴을 가리던 손이 토끼 귀가 되어 마지막 장면까지 자연스럽게 이어집니다."
+          ],
+          "issues": [
+            {
+              "pageNo": 3,
+              "aspect": "dialogue",
+              "note": "영어 대사가 권장 문장 길이를 넘고 화자가 명시되지 않아, 유하의 말임을 밝히며 줄였습니다."
+            }
+          ]
+        }
+      },
+      "childGate": {
+        "version": 2,
+        "language": "ko",
+        "initialFingerprint": "coherence-v1-pages-472bd8eb",
+        "contentFingerprint": "coherence-v1-pages-472bd8eb",
+        "phase": "complete",
+        "rounds": {
+          "0": {
+            "fingerprint": "coherence-v1-pages-472bd8eb",
+            "raw": {
+              "retell": {
+                "retell": [
+                  "유하는 엄마랑 까꿍 놀이를 했어요.",
+                  "스쿨버스에서 해니가 노란 손수건을 흔들었어요.",
+                  "유하는 해니랑 같이 토끼 놀이를 했어요."
+                ],
+                "coveredBeats": [
+                  1,
+                  2,
+                  4
+                ],
+                "missingCore": [
+                  "resolution"
+                ],
+                "confusions": [],
+                "coherence": 2
+              },
+              "curiosity": {
+                "pages": [
+                  {
+                    "pageNo": 1,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "까꿍 놀이가 재미있어 다음이 궁금함"
+                  },
+                  {
+                    "pageNo": 2,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "해니와 함께 버스 타는 장면이 흥미로움"
+                  },
+                  {
+                    "pageNo": 3,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "숨바꼭질 놀이 계속되어 궁금증 유발"
+                  },
+                  {
+                    "pageNo": 4,
+                    "score": 2,
+                    "childQuestion": "다음엔?",
+                    "why": "해니가 토끼로 변해 웃음과 호기심 자극"
+                  },
+                  {
+                    "pageNo": 5,
+                    "score": 1,
+                    "childQuestion": null,
+                    "why": "토끼 놀이 마무리, 다음 내용 덜 궁금해함"
+                  },
+                  {
+                    "pageNo": 6,
+                    "score": 2,
+                    "childQuestion": null,
+                    "why": "따뜻하고 안전한 마무리로 편안함"
+                  }
+                ],
+                "dropPages": [],
+                "overall": 7.5
+              }
+            },
+            "unreadable": {}
+          }
+        },
+        "repairs": {
+          "turns": [],
+          "pages": [],
+          "repagination": {
+            "status": "pending",
+            "attempts": 0
+          }
+        },
+        "repairPasses": 0,
+        "repairedPages": [],
+        "repairedTurnParagraphs": [],
+        "proseRevised": false,
+        "turnRepairUnavailable": false,
+        "advisory": true,
+        "raw": {
+          "retell": {
+            "retell": [
+              "유하는 엄마랑 까꿍 놀이를 했어요.",
+              "스쿨버스에서 해니가 노란 손수건을 흔들었어요.",
+              "유하는 해니랑 같이 토끼 놀이를 했어요."
+            ],
+            "coveredBeats": [
+              1,
+              2,
+              4
+            ],
+            "missingCore": [
+              "resolution"
+            ],
+            "confusions": [],
+            "coherence": 2
+          },
+          "curiosity": {
+            "pages": [
+              {
+                "pageNo": 1,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "까꿍 놀이가 재미있어 다음이 궁금함"
+              },
+              {
+                "pageNo": 2,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "해니와 함께 버스 타는 장면이 흥미로움"
+              },
+              {
+                "pageNo": 3,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "숨바꼭질 놀이 계속되어 궁금증 유발"
+              },
+              {
+                "pageNo": 4,
+                "score": 2,
+                "childQuestion": "다음엔?",
+                "why": "해니가 토끼로 변해 웃음과 호기심 자극"
+              },
+              {
+                "pageNo": 5,
+                "score": 1,
+                "childQuestion": null,
+                "why": "토끼 놀이 마무리, 다음 내용 덜 궁금해함"
+              },
+              {
+                "pageNo": 6,
+                "score": 2,
+                "childQuestion": null,
+                "why": "따뜻하고 안전한 마무리로 편안함"
+              }
+            ],
+            "dropPages": [],
+            "overall": 7.5
+          }
+        },
+        "curiosity": {
+          "pages": [
+            {
+              "pageNo": 1,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "까꿍 놀이가 재미있어 다음이 궁금함"
+            },
+            {
+              "pageNo": 2,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "해니와 함께 버스 타는 장면이 흥미로움"
+            },
+            {
+              "pageNo": 3,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "숨바꼭질 놀이 계속되어 궁금증 유발"
+            },
+            {
+              "pageNo": 4,
+              "score": 2,
+              "childQuestion": "다음엔?",
+              "why": "해니가 토끼로 변해 웃음과 호기심 자극"
+            },
+            {
+              "pageNo": 5,
+              "score": 1,
+              "childQuestion": null,
+              "why": "토끼 놀이 마무리, 다음 내용 덜 궁금해함"
+            },
+            {
+              "pageNo": 6,
+              "score": 2,
+              "childQuestion": null,
+              "why": "따뜻하고 안전한 마무리로 편안함"
+            }
+          ],
+          "dropPages": [],
+          "overall": 9.2,
+          "modelOverall": 7.5,
+          "pass": true,
+          "quietFinalPageExempt": true
+        },
+        "retell": {
+          "retell": [
+            "유하는 엄마랑 까꿍 놀이를 했어요.",
+            "스쿨버스에서 해니가 노란 손수건을 흔들었어요.",
+            "유하는 해니랑 같이 토끼 놀이를 했어요."
+          ],
+          "coveredBeats": [
+            1,
+            2,
+            4
+          ],
+          "missingCore": [
+            "resolution"
+          ],
+          "confusions": [],
+          "coherence": 2,
+          "pass": false,
+          "recommendTurnRewrite": false
+        },
+        "pass": false,
+        "rewritePages": [],
+        "rewriteTurnParagraph": false,
+        "checkedAt": "2026-10-22T07:54:32.038Z"
+      },
+      "writerReport": {
+        "attempts": {
+          "ko:1": 1,
+          "en:1": 1,
+          "ko:2": 1,
+          "en:2": 1,
+          "en:3": 1,
+          "ko:3": 2,
+          "en:4": 1,
+          "ko:4": 3,
+          "ko:5": 1,
+          "en:5": 1,
+          "en:6": 1,
+          "ko:6": 1
+        },
+        "warnings": [
+          "한글 4비트: 문장이 16개로 많아요(목표 15, 범위 10~15). (세 번 써서 가장 가까운 글을 썼어요)",
+          "한글 대화 비율 9% (책 전체 기준 25% 이상 권장)",
+          "영어 대화 비율 17% (책 전체 기준 25% 이상 권장)"
+        ],
+        "anchor": {
+          "ko": {
+            "pick": 2,
+            "reason": "리듬감이 자연스럽고 대화가 살아있으며, 구체적인 장면 묘사와 목표 분량에 가깝다.",
+            "judged": true
+          },
+          "en": {
+            "pick": 1,
+            "reason": "리듬이 자연스럽고, 'school bus'와 'yellow handkerchief'라는 구체적 이미지가 생생하며, 문장 길이도 적절하다.",
+            "judged": true
+          }
+        },
+        "summarized": false,
+        "calls": 19,
+        "budget": 41,
+        "refrain": {
+          "voiceCard": {
+            "ko": "",
+            "en": ""
+          },
+          "beats": []
+        },
+        "dialogue_ko": 0.09,
+        "dialogue_en": 0.17
+      },
+      "pageCoherence": {
+        "version": 1,
+        "stage": "pages",
+        "contentFingerprint": "coherence-v1-pages-472bd8eb",
+        "passed": true,
+        "issues": [],
+        "repairAttempts": 0
+      },
+      "storyWords": [
+        "yuha",
+        "mom",
+        "haeni",
+        "peek",
+        "ears",
+        "rabbit",
+        "wave",
+        "laugh"
+      ],
+      "outlineNewWordsEn": [
+        "peek",
+        "ears",
+        "rabbit",
+        "wave",
+        "laugh"
+      ],
+      "englishWordSearch": {
+        "rag": 0,
+        "handkerchief": 3,
+        "hanky": 0
+      },
+      "characters": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "nameEn": "Yuha"
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "nameEn": "Mom"
+        },
+        {
+          "id": "character-a979f876-dc89-4dcc-8681-d1c67c040201",
+          "name": "해니",
+          "nameEn": "Haeni"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "home",
+          "name": "유하네 집"
+        },
+        {
+          "id": "background-b8d4319a-3b8e-47e6-a4a3-0861ff81444e",
+          "name": "노란 스쿨버스 안"
+        },
+        {
+          "id": "background-a0a7d126-f24c-43d4-95b1-e59363bb4b29",
+          "name": "햇살 유치원 앞마당"
+        }
+      ],
+      "baseline": {
+        "source": "r31b paid diet manuscript",
+        "usage": {
+          "costUsd": 2.5864772,
+          "costUnknown": false,
+          "requests": 60,
+          "input": 650384,
+          "output": 40305,
+          "models": [
+            "gpt-6.1-sol"
+          ],
+          "stages": {
+            "materials": {
+              "requests": 1,
+              "input": 3348,
+              "output": 705,
+              "costUsd": 0.013746
+            },
+            "outline": {
+              "requests": 10,
+              "input": 31013,
+              "output": 15901,
+              "costUsd": 0.1832708
+            },
+            "sceneBriefs": {
+              "requests": 1,
+              "input": 14144,
+              "output": 2705,
+              "costUsd": 0.055338
+            },
+            "prose": {
+              "requests": 25,
+              "input": 90090,
+              "output": 5579,
+              "costUsd": 0.35590600000000006
+            },
+            "coherence": {
+              "requests": 5,
+              "input": 87268,
+              "output": 1273,
+              "costUsd": 0.45667399999999997
+            },
+            "pagination": {
+              "requests": 18,
+              "input": 424521,
+              "output": 14142,
+              "costUsd": 1.5215424
+            }
+          }
+        },
+        "costUsd": 2.5864772,
+        "requests": 60,
+        "seconds": 724,
+        "measured": {
+          "pages": 10,
+          "sentences": 79,
+          "rhythm": 0,
+          "eojeol": 494,
+          "averageEojeol": 6.3,
+          "longest": 8,
+          "quotes": 7,
+          "exclaims": 5,
+          "soundWords": [
+            "사락사락",
+            "부릉부릉",
+            "살랑살랑",
+            "팔랑팔랑",
+            "또각또각"
+          ],
+          "pagesWithSounds": 7,
+          "enWords": 166,
+          "koIssuePages": 1,
+          "enIssuePages": 0
+        },
+        "originalChecksPassed": true,
+        "costReductionPercent": 53.53977216578596
+      }
+    }
+  ]
+}

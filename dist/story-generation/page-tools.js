@@ -171,7 +171,7 @@ function recheckBook(state, book) {
     input = storyInput || {};
   book.storyCheck = checkStory(book.outline, book.pagination, {
     specs: book.readingLevelSnapshot?.specs || input.specs,
-    storyWords: buildStoryWords(book, book.outline),
+    storyWords: buildStoryWords(book, book.outline, [], { briefs: book.sceneBriefs || [], lean: input.promptDiet?.version === 1 }),
     allowedNames: (input.characters || [])
       .flatMap((c) => [c.name, c.nameEn])
       .filter(Boolean),

@@ -1,0 +1,178 @@
+[
+  {
+    "path": "CLAUDE.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "CODEX_R31C_COMPLETION_2026-10-22.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "CODEX_R31C_PAID_EVAL_2026-10-22.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "CODEX_WORK_ORDER_R31D_2026-10-22.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/COMPARISON.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/K1-compare.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/K1-diet.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/K1-diet.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/K2-diet.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/K2-diet.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/ORIGINAL_VS_FINAL.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/PREFLIGHT.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/README.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/SUMMARY.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/VALIDATION.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-ab/tools/summarize.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/build-files.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/census.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/demo/K1-compare.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/demo/K1-diet.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/demo/K1-diet.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/demo/K1-r31a.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/demo/K1-r31a.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/deployment.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/free-production.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/price-diagnostic.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/smoke.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/source-comparison.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/tools/free-browser-check.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31c-import/validation.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/app.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/reading-checker.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/beat-writer.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/checker.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/page-tools.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/pipeline.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/prompt-diet.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/ui.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-reading-context.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/sw.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "scripts/r31b-ab.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/openings-legacy-r12.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/r31b-ab-script.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/vocab-lean-r31d.test.mjs",
+    "matchesUpstream": true
+  }
+]
