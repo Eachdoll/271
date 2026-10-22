@@ -1,0 +1,183 @@
+{
+  "baseline": "21d9e98",
+  "target": "12c5982",
+  "paths": [
+    {
+      "path": "CLAUDE.md",
+      "status": "M"
+    },
+    {
+      "path": "CODEX_R31C_COMPLETION_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "CODEX_R31C_PAID_EVAL_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "CODEX_WORK_ORDER_R31D_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/COMPARISON.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/K1-compare.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/K1-diet.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/K1-diet.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/K2-diet.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/K2-diet.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/ORIGINAL_VS_FINAL.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/PREFLIGHT.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/README.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/SUMMARY.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/VALIDATION.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-ab/tools/summarize.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/build-files.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/census.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/demo/K1-compare.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/demo/K1-diet.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/demo/K1-diet.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/demo/K1-r31a.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/demo/K1-r31a.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/deployment.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/free-production.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/price-diagnostic.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/smoke.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/source-comparison.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/tools/free-browser-check.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31c-import/validation.json",
+      "status": "A"
+    },
+    {
+      "path": "dist/app.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/reading-checker.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/beat-writer.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/checker.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/page-tools.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/pipeline.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/prompt-diet.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/ui.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-reading-context.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/sw.js",
+      "status": "M"
+    },
+    {
+      "path": "scripts/r31b-ab.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/openings-legacy-r12.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/r31b-ab-script.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/vocab-lean-r31d.test.mjs",
+      "status": "A"
+    }
+  ],
+  "conflicts": []
+}

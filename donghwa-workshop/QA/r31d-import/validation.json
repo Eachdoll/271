@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-22",
+  "sourceBefore": "2fae2ad5e1bb21ca681b175a09a8b2113ae3be12",
+  "upstreamCode": "4b4228894ea54bc9750d0c24853f8fd148a58944",
+  "upstreamWorkOrder": "12c5982",
+  "requestedCodeRange": "ac45fbc..4b42288",
+  "actualAppFilesRange": "21d9e98..12c5982",
+  "reasonForBroaderFiles": "Sites source did not yet contain the r31c paid QA/report commits; imported unchanged historical evidence required by replay tests. Runtime code is exactly 4b42288.",
+  "appTests": 1003,
+  "qualityTests": 85,
+  "mirrorEqual": true,
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "smokePassed": true,
+  "buildPassed": true,
+  "runtimeFilesByteEqual": 10,
+  "allRuntimeAndTestFilesByteEqual": 319,
+  "replayEnglishFlagsHistorical": 3,
+  "replayEnglishFlagsR31D": 0,
+  "newPaidRequests": 0,
+  "dbChanges": false,
+  "serverChanges": false,
+  "secretChanges": false,
+  "cache": "donghwa-shell-v76",
+  "paidR31DStatus": "Not run; separate approval required by work order section 4"
+}
