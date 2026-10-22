@@ -1,0 +1,29 @@
+{
+  "dateUTC": "2026-10-22",
+  "source": "2b1ccf3",
+  "checkout": "66923d3",
+  "approvedNewPaidBooks": 1,
+  "completedNewPaidBooks": 1,
+  "printedPages": 12,
+  "entries": 6,
+  "paidImages": 0,
+  "tokenPriceCostUsd": 0.5568248,
+  "requests": 34,
+  "seconds": 312,
+  "writerEnglishRetries": 0,
+  "writerKoreanRetries": 2,
+  "pageLevelRepairRequests": 0,
+  "editorAcceptedEntries": 1,
+  "bookPassed": true,
+  "rawAndAppIssueCountsMatch": true,
+  "secretPatternHitFiles": [],
+  "appCodeChanged": false,
+  "pageRepairBeforeAfterRealCaseVerified": false,
+  "reason": "No level repair occurred; empty violation/text arrays cannot prove populated repair data.",
+  "outlineRepairProgressCount": 1,
+  "outlineRepairReasonsRecorded": 0,
+  "sha256": {
+    "K2-diet.json": "41a26c31966bd00a2d362b7401d4dd49acdd9ec7fbe51a2498d4c0236840feae",
+    "K2-diet.md": "4e07002619ae8b6240edefe67ce0f9ca4a764033b936ee8b1549fab8bd00e6dc"
+  }
+}

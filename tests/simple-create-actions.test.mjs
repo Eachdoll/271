@@ -7,7 +7,9 @@ import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview, renderFullAutoJobs} from '../dist/full-auto-ui.js';
-import {createFullAutoJob, estimateFullAutoCost} from '../dist/full-auto.js';
+import {createFullAutoJob, estimateFullAutoCost, runFullAuto} from '../dist/full-auto.js';
+import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
+import {normalizeStoryInput} from '../dist/story-generation/pipeline.js';
 import {configureStoryUI, renderStoryDrafts} from '../dist/story-generation/ui.js';
 import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
 import {
@@ -100,6 +102,8 @@ const ctx = {
   showModal: html => { modal = {html, buttons: {}}; }, closeModal: () => { document.dispatchEvent({type: 'donghwa:modal-closed'}); modal = null; },
   modalHeader: t => `<h2>${t}</h2>`, protectedAction: f => (lastAction = f()), heading: (t, s, a) => `<h2>${t}</h2>${a}`,
   approveBook: async () => { approvals.push(draft?.id); },
+  // R32 에코 모드: the pasted story becomes a book through the same builder the runner uses.
+  buildBook,
   openCredentialSettings: (kind, engine) => credentialLinks.push([kind, engine]),
   // The image pipeline needs IndexedDB; this stand-in records which book was drawn.
   generateScene: async (_state, book, index) => {
@@ -1941,4 +1945,168 @@ test('줄거리 새로 만들기 on a story stopped by a failed check confirms, 
   assert.equal(old.simpleReplacedBy, fresh.id);
   assert.equal(JSON.stringify({...old, simpleReplacedBy: undefined, updatedAt: undefined}), oldJson, 'the old job is otherwise untouched');
   assert.ok(Object.keys(state.fullAutoJobs).length >= createdBefore + 2);
+});
+
+/* ---------- R32 에코 모드 (2026-10-22): the whole book through paste and upload, nothing bought ---------- */
+const ecoWizard = (level = 'K2') => ({step: 1, characterIds: ['yuha'], backgroundIds: ['home', 'forest', 'garden'], topic: `유하가 유치원에 가요 ${level}`, language: 'bilingual', pageCount: 12, koreanLevel: level, englishLevel: level === 'K1' ? 'E1' : 'E2', value: 'none', ending: 'home', simpleStep: 3, simplePicksTouched: true, allowNew: true});
+const pagesJson = (job) => {
+  const input = normalizeStoryInput(job.input), pag = demoPagination(job.outline, demoProse(job.outline, input), input);
+  return JSON.stringify({cover: pag.cover, pages: pag.pages.map(p => ({pageNo: p.pageNo, beatIndex: p.beatIndex, textKo: p.textKo, textEn: p.textEn, scene: p.scene, variantByCharacter: p.variantByCharacter || {}, isRefrainPage: !!p.isRefrainPage, ...(p.cue ? {cue: p.cue} : {})}))});
+};
+const pngFile = (name) => Object.assign(new Blob([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])], {type: 'image/png'}), {name});
+async function changeUpload(file, {cover = false, index = 0} = {}) {
+  lastAction = null;
+  for (const fn of listeners.change) fn({target: {id: 'eco-upload-input', files: [file], dataset: {cover: cover ? '1' : '', index: String(index)}, value: ''}});
+  await (lastAction || Promise.resolve());
+}
+
+test('R32 에코 모드: ③ start → paste the outline → paste the pages → ④ upload → ⑤ save, with no run and no network', async () => {
+  reset();
+  const before = networkCalls;
+  wizard = ecoWizard('K2');
+  await click('start-eco');
+  const job = state.fullAutoJobs[wizard.simpleJobId];
+  assert.ok(job, 'an eco job was created');
+  assert.equal(job.status, 'eco');
+  assert.equal(job.eco.step, 'outline');
+  assert.equal(job.planMode, 'selection', 'no paid material plan');
+  assert.match(renderSimpleCreate(ctx), /id="eco-prompt"/);
+  // The runner refuses an eco job on every path.
+  await runFullAutoJob(job.id);
+  assert.equal(job.status, 'eco');
+  assert.ok(toasts.some(t => /에코 모드 이야기는/.test(t.message)));
+  await assert.rejects(runFullAuto(state, job, {}), /에코 모드/);
+  // An empty box, then a non-answer, then the outline.
+  await click('eco-accept');
+  assert.ok(toasts.some(t => /붙여 넣어 주세요/.test(t.message)));
+  fields['#eco-reply'] = 'Sorry, I cannot.';
+  await click('eco-accept');
+  assert.equal(job.eco.step, 'outline');
+  assert.equal(job.eco.errors.length, 1);
+  assert.match(renderSimpleCreate(ctx), /id="eco-fix"/);
+  fields['#eco-reply'] = '```json\n' + JSON.stringify(demoOutline(normalizeStoryInput(job.input))) + '\n```';
+  await click('eco-accept');
+  assert.equal(job.eco.step, 'pages', JSON.stringify(job.eco.errors));
+  assert.ok(job.outline?.beats?.length);
+  assert.deepEqual(job.eco.errors, []);
+  assert.equal(job.completed.outline, true);
+  // The pages: checked, the book built, ④ opened on it.
+  fields['#eco-reply'] = pagesJson(job);
+  await click('eco-accept');
+  assert.equal(job.status, 'text-review', JSON.stringify(job.eco.errors));
+  assert.equal(job.eco.step, 'done');
+  assert.ok(job.book, 'the book was built');
+  assert.equal(job.book.eco, true);
+  assert.equal(job.book.fullAutoRunId, job.id);
+  assert.equal(state.storyDrafts[job.storyDraftId]?.pictureBook, job.book);
+  assert.equal(job.completed.pagination, true);
+  assert.equal(job.prose?.paragraphBeats?.ko?.length, job.outline.beats.length);
+  assert.equal(wizard.simpleStep, 4);
+  assert.equal(draft, job.book);
+  const review = renderSimpleCreate(ctx);
+  assert.match(review, /data-simple-action="eco-upload"/);
+  assert.doesNotMatch(review, /data-simple-action="draw-all"/);
+  // Paid page tools are refused on an eco book.
+  await click('draw-page');
+  await click('rewrite-text');
+  assert.equal(drawn.length, 0);
+  assert.ok(toasts.filter(t => /에코 모드 책은/.test(t.message)).length >= 2);
+  // The picture request dialog and the upload of one page.
+  await click('eco-prompt', {index: '0'});
+  assert.match(modal.html, /그림 프롬프트/);
+  assert.match(modal.html, /No text, letters, numbers/);
+  modal = null;
+  await changeUpload({type: 'text/plain', size: 3}, {index: 0});
+  assert.ok(toasts.some(t => /PNG/.test(t.message)));
+  assert.equal(job.book.pages[0].imageAssetId, undefined);
+  await changeUpload(pngFile('one.png'), {index: 0});
+  const page = job.book.pages[0];
+  assert.ok(page.imageAssetId, 'the picture was stored');
+  assert.equal(page.imageMeta.quality, 'final');
+  assert.equal(page.imageMeta.engine, 'upload');
+  assert.equal(page.imageMeta.fileName, 'one.png');
+  assert.match(renderSimpleCreate(ctx), /그림 다시 올리기/);
+  // ⑤ refuses to save while pictures are missing, then takes entry 1's picture as the cover.
+  wizard.simpleStep = 5;
+  await click('save-book');
+  assert.equal(approvals.length, 0);
+  assert.ok(toasts.some(t => /그림이 아직 없어요/.test(t.message)));
+  for (let i = 1; i < job.book.pages.length; i++) await changeUpload(pngFile(`p${i + 1}.png`), {index: i});
+  assert.ok(job.book.pages.every(p => p.imageAssetId && p.imageMeta?.quality === 'final'));
+  assert.equal(imageWork(job.book).needsRun, true, 'the cover is still missing');
+  const pending = click('save-book');
+  await answer('simple-confirm-yes');
+  await pending;
+  assert.ok(job.book.cover?.imageAssetId, 'the cover was made from entry 1 without a request');
+  assert.notEqual(job.book.cover.imageAssetId, job.book.pages[0].imageAssetId, 'its own asset, never shared');
+  assert.equal(job.book.autoGenerationComplete, true);
+  assert.equal(job.status, 'review');
+  assert.deepEqual(approvals, [job.book.id]);
+  assert.equal(networkCalls, before, 'nothing touched the network');
+  assert.equal(drawn.length, 0, 'nothing was drawn');
+  assert.deepEqual(job.usage.calls, [], 'no paid call was recorded');
+});
+
+test('R32 에코 모드: a K1 answer the checker flags goes to the fix step; 이대로 검수로 builds the book with a note; 줄거리부터 다시 clears it', async () => {
+  reset();
+  wizard = ecoWizard('K1');
+  await click('start-eco');
+  const job = state.fullAutoJobs[wizard.simpleJobId];
+  fields['#eco-reply'] = JSON.stringify(demoOutline(normalizeStoryInput(job.input)));
+  await click('eco-accept');
+  assert.equal(job.eco.step, 'pages', JSON.stringify(job.eco.errors));
+  fields['#eco-reply'] = pagesJson(job);
+  await click('eco-accept');
+  assert.equal(job.eco.step, 'fix', JSON.stringify(job.eco.errors));
+  assert.ok(job.eco.pagination && job.eco.report);
+  assert.equal(job.book, undefined);
+  const fix = renderSimpleCreate(ctx);
+  assert.match(fix, /data-simple-action="eco-force"/);
+  assert.match(fix, /Fix ONLY the entries listed/);
+  // A refused fix answer keeps the step; a cancelled 다시 keeps everything.
+  fields['#eco-reply'] = 'not json';
+  await click('eco-accept');
+  assert.equal(job.eco.step, 'fix');
+  assert.equal(job.eco.errors.length, 1);
+  const cancelled = click('eco-redo');
+  await answer('simple-confirm-no');
+  await cancelled;
+  assert.equal(job.eco.step, 'fix');
+  assert.ok(job.outline);
+  // The parent keeps the text as it is.
+  await click('eco-force');
+  assert.equal(job.status, 'text-review');
+  assert.ok(job.book);
+  assert.ok(job.notes.some(n => /읽기 검사 지적 \d+곳을 참고로/.test(n)));
+  assert.equal(job.eco.pagination, undefined);
+  assert.equal(wizard.simpleStep, 4);
+  // A second eco story can start over from its first step.
+  reset();
+  wizard = ecoWizard('K1');
+  wizard.topic = '유하가 소풍을 가요';
+  await click('start-eco');
+  const second = state.fullAutoJobs[wizard.simpleJobId];
+  fields['#eco-reply'] = JSON.stringify(demoOutline(normalizeStoryInput(second.input)));
+  await click('eco-accept');
+  assert.equal(second.eco.step, 'pages');
+  const redo = click('eco-redo');
+  await answer('simple-confirm-yes');
+  await redo;
+  assert.equal(second.eco.step, 'outline');
+  assert.equal(second.outline, undefined);
+  assert.deepEqual(second.completed, {});
+});
+
+test('R32 에코 모드: the pro job list opens an eco story in the simple steps and never offers 중지 or a resume run', async () => {
+  reset();
+  wizard = ecoWizard('K2');
+  wizard.topic = '유하와 해니의 버스';
+  await click('start-eco');
+  const job = state.fullAutoJobs[wizard.simpleJobId];
+  const html = renderFullAutoJobs(state);
+  const card = html.slice(html.indexOf(job.id), html.indexOf('</article>', html.indexOf(job.id)));
+  assert.match(card, /에코 모드/);
+  assert.match(card, /data-full-auto-action="simple-open"/);
+  assert.doesNotMatch(card, /data-full-auto-action="resume"|data-full-auto-action="pause"/);
+  assert.ok(simpleJobs(state).some(j => j.id === job.id), 'listed among the stories to continue');
 });

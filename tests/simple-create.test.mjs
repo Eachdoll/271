@@ -9,8 +9,12 @@ import {
   missingPageText, pageTextProblemMessage, carryFullAutoFields,
   recommendPlaces, recommendFriends, preselectMaterials,
   simpleJobs, simpleStepForJob, jobWizardFrom, isSimpleJob,
-  topicStepButtonCount, approvalImageWork, simpleStepAccess,
+  topicStepButtonCount, approvalImageWork, simpleStepAccess, imageWork,
 } from '../dist/simple-create.js';
+import {createFullAutoJob} from '../dist/full-auto.js';
+import {ecoJobInit, ecoAcceptOutline, ecoAcceptPages} from '../dist/eco-mode.js';
+import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
+import {normalizeStoryInput} from '../dist/story-generation/pipeline.js';
 import {renderFullAutoJobs} from '../dist/full-auto-ui.js';
 import {setStoryQualityOption} from '../dist/story-generation/quality-settings.js';
 import {renderTextEngineQuick} from '../dist/text-generation/settings-ui.js';
@@ -609,4 +613,103 @@ test('a stopped story shows its error once: below the bar, not again as the prog
   assert.doesNotMatch(html, /무료로 다시 검사/);
   Object.assign(job, {error: '클라우드에 연결하지 못했어요.', phase: '클라우드에 연결하지 못했어요.'});
   assert.doesNotMatch(renderSimpleCreate(ctxFor(state, w)), /줄거리 새로 만들기/, 'a network error only offers 다시 시도');
+});
+
+/* ---------- R32 에코 모드 (2026-10-22): ③ paste panel, ④ prompt/upload, ⑤ save without a run ---------- */
+const ecoWizard = () => ({step: 1, characterIds: ['yuha'], backgroundIds: ['home', 'forest', 'garden'], topic: '유하가 유치원에 가요', language: 'bilingual', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', simplePicksTouched: true});
+function ecoJobFor(state) {
+  const w = ecoWizard();
+  return ecoJobInit(createFullAutoJob(state, {...w, simpleFlow: true, allowNew: false}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
+}
+const ecoRender = (state, job, step, draft = null) => renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...ecoWizard(), simpleStep: step, simpleJobId: job.id}), draft));
+
+test('R32 ③ offers 에코 모드 next to 글 만들기 and 데모, within the button cap', () => {
+  const {state} = setup();
+  const html = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...ecoWizard(), simpleStep: 3})));
+  assert.match(html, /data-simple-action="start-eco"/);
+  assert.match(html, /data-simple-action="start-text"/);
+  assert.ok(stepButtons(html).length <= 12, `③: ${stepButtons(html).length}`);
+});
+
+test('R32 ③ of an eco job is the paste panel: the request, a copy button, the answer box, no engine or price lines, every step within the cap', () => {
+  const {state} = setup(), job = ecoJobFor(state);
+  const outline = ecoRender(state, job, 3);
+  assert.match(outline, /id="eco-prompt"/);
+  assert.match(outline, /id="eco-reply"/);
+  assert.match(outline, /data-simple-action="eco-copy"/);
+  assert.match(outline, /data-simple-action="eco-accept"/);
+  assert.match(outline, /data-simple-action="abandon"/);
+  assert.match(outline, /요금 없음/);
+  assert.doesNotMatch(outline, /start-text|start-demo|simple-text-engine|글 엔진 요금|쓴 금액/);
+  assert.doesNotMatch(outline, /data-simple-action="eco-redo"/, 'nothing to go back to at the first step');
+  assert.ok(stepButtons(outline).length <= 12, `outline step: ${stepButtons(outline).length}`);
+  // After a refused answer: the errors and the retry note, still within the cap.
+  job.eco.errors = ['줄거리 JSON의 모양이 달라요.'];
+  const refused = ecoRender(state, job, 3);
+  assert.match(refused, /simple-eco-errors/);
+  assert.match(refused, /id="eco-fix"/);
+  assert.ok(stepButtons(refused).length <= 12, `refused: ${stepButtons(refused).length}`);
+  // The pages step shows the accepted outline and the way back.
+  job.eco.errors = [];
+  const input = normalizeStoryInput(job.input);
+  job.outline = ecoAcceptOutline(JSON.stringify(demoOutline(input)), job.input).outline;
+  job.eco.step = 'pages';
+  const pages = ecoRender(state, job, 3);
+  assert.match(pages, /simple-eco-outline/);
+  assert.match(pages, /data-simple-action="eco-redo"/);
+  assert.match(pages, /ECO MODE: there is no separate prose stage/);
+  assert.ok(stepButtons(pages).length <= 12, `pages: ${stepButtons(pages).length}`);
+  // The fix step lists the findings and offers 이대로 검수로.
+  const k1 = ecoJobInit(createFullAutoJob(state, {...ecoWizard(), koreanLevel: 'K1', englishLevel: 'E1', simpleFlow: true, allowNew: false}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
+  const k1Input = normalizeStoryInput(k1.input);
+  k1.outline = ecoAcceptOutline(JSON.stringify(demoOutline(k1Input)), k1.input).outline;
+  const pag = demoPagination(k1.outline, demoProse(k1.outline, k1Input), k1Input);
+  const result = ecoAcceptPages(JSON.stringify({cover: pag.cover, pages: pag.pages.map(p => ({pageNo: p.pageNo, beatIndex: p.beatIndex, textKo: p.textKo, textEn: p.textEn, scene: p.scene, variantByCharacter: p.variantByCharacter || {}, isRefrainPage: !!p.isRefrainPage}))}), k1.outline, k1.input, {bookId: k1.bookId});
+  assert.equal(result.ok, true);
+  assert.equal(result.passed, false);
+  Object.assign(k1.eco, {step: 'fix', pagination: result.pagination, report: result.report});
+  const fix = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...ecoWizard(), koreanLevel: 'K1', englishLevel: 'E1', simpleStep: 3, simpleJobId: k1.id})));
+  assert.match(fix, /data-simple-action="eco-force"/);
+  assert.match(fix, /simple-eco-findings/);
+  assert.match(fix, /Fix ONLY the entries listed/);
+  assert.ok(stepButtons(fix).length <= 12, `fix: ${stepButtons(fix).length}`);
+  // The job is a resumable simple job and says so on its ① card.
+  assert.ok(simpleJobs(state).some(j => j.id === job.id));
+  assert.equal(simpleStepForJob(job), 3);
+  const first = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...ecoWizard(), simpleStep: 1})));
+  assert.match(first, /에코 모드 · 2단계 · 쪽 글/);
+});
+
+test('R32 ④/⑤ of an eco book: picture request and upload instead of any drawing, no rewrite or restart, the cover from ⑤, save needs every picture', () => {
+  const {state} = setup(), job = ecoJobFor(state);
+  const draft = {...book(job.id, {language: 'bilingual', pages: 6}), eco: true};
+  job.book = draft;
+  job.status = 'text-review';
+  job.eco.step = 'done';
+  const review = ecoRender(state, job, 4, draft);
+  assert.match(review, /data-simple-action="eco-prompt"/);
+  assert.match(review, /data-simple-action="eco-upload"/);
+  assert.match(review, /data-simple-action="eco-prompts"/);
+  assert.match(review, /id="eco-upload-input"/);
+  assert.match(review, /data-simple-action="edit-text"/);
+  for (const paid of ['rewrite-text', 'draw-page', 'redraw-page', 'draw-all', 'restart']) assert.doesNotMatch(review, new RegExp(`data-simple-action="${paid}"`), paid);
+  assert.ok(stepButtons(review).length <= 12, `④: ${stepButtons(review).length}`);
+  draft.pages[0].imageAssetId = 'image-up-1';
+  draft.pages[0].imageMeta = {quality: 'final', engine: 'upload'};
+  assert.match(ecoRender(state, job, 4, draft), /그림 다시 올리기/);
+  assert.equal(imageWork(draft).needsRun, true, 'pictures still missing');
+  const finish = ecoRender(state, job, 5, draft);
+  assert.match(finish, /표지 프롬프트/);
+  assert.match(finish, /표지 그림 올리기/);
+  assert.match(finish, /그림을 ④에서 올린 뒤 저장할 수 있어요/);
+  assert.ok(stepButtons(finish).length <= 12, `⑤: ${stepButtons(finish).length}`);
+  for (const page of draft.pages) Object.assign(page, {imageAssetId: 'image-up', imageMeta: {quality: 'final', engine: 'upload'}});
+  assert.equal(imageWork(draft).needsRun, true, 'the cover is still missing');
+  assert.match(ecoRender(state, job, 5, draft), /1쪽 그림을 표지로 쓸 수 있어요/);
+  draft.cover = {imageAssetId: 'image-cover', meta: {quality: 'final'}};
+  assert.equal(imageWork(draft).needsRun, false, 'an uploaded book needs no run');
+  assert.equal(approvalImageWork(draft, 'openai').finalize, true, 'until it is saved, the app would still count it as unfinished');
+  draft.autoGenerationComplete = true;
+  assert.equal(approvalImageWork(draft, 'openai').finalize, false, 'saved with every picture: nothing is bought');
+  assert.match(ecoRender(state, job, 5, draft), /그림이 모두 준비됐어요/);
 });

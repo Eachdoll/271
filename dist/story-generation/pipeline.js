@@ -2189,7 +2189,8 @@ export function paragraphBeatLabels(prose, language, outline) {
       ] || i + 1,
   );
 }
-function outlineRequestSchema(input) {
+/** Exported for 에코 모드 (R32): the same schema text the paid request carries. */
+export function outlineRequestSchema(input) {
   const schema = clone(OUTLINE_SCHEMA),
     ids = input.backgrounds.map((b) => b.id),
     setting = schema.properties.settings.items;
@@ -3157,6 +3158,17 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
     outline,
   );
   return result;
+}
+/**
+ * 에코 모드 (R32): a pasted pagination through the same free checks a model
+ * reply gets — openings are normalized and settled, a page book is validated
+ * (count/order left to inspectStory); hard errors throw StoryValidationError.
+ * No briefs, no staging, no request: nothing paid can start from here.
+ */
+export function acceptEcoPagination(data, outline, source, options = {}) {
+  const input = normalizeStoryInput(source);
+  if (isOpeningsInput(input)) return settleOpenings(data, outline, input, options);
+  return validateGeneratedPagination(applyStaging(data, outline, input, options), input, outline);
 }
 export function inspectStory(outline, pagination, input) {
   const report = checkStory(outline, pagination, {

@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-22",
+  "sourceBefore": "7ec3aa5488d19fbe3136d1bf303f38b8e2bfad77",
+  "upstreamCode": "ccf9e06454c4c82773d106c0a725835aa57b005c",
+  "upstreamWorkOrder": "d7c7edd55e81f9deace5f9d5e6ff24be104f1a9f",
+  "requestedCodeRange": "b928880..ccf9e06",
+  "actualAppFilesRange": "21890dd..d7c7edd",
+  "broaderFilesReason": "Imported existing r31e completion report and paid QA unchanged; Sites lacked them and new tests replay that manuscript.",
+  "appTests": 1024,
+  "qualityTests": 85,
+  "mirrorEqual": true,
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "smokePassed": true,
+  "buildPassed": true,
+  "runtimeFilesByteEqual": 12,
+  "allRuntimeAndTestFilesByteEqual": 322,
+  "ecoLocalPassed": true,
+  "ecoPrintedPages": 12,
+  "ecoCalls": 0,
+  "newPaidRequests": 0,
+  "dbChanges": false,
+  "serverChanges": false,
+  "secretChanges": false,
+  "cache": "donghwa-shell-v78",
+  "paidR32Status": "Not run: no paid execution authorized in this task.",
+  "testRerun": {
+    "initialPass": 1023,
+    "initialFail": 1,
+    "cause": "Build ran concurrently and temporarily added untracked dist/story-quality/gold/golden_k1_pages.json to the source tree.",
+    "resolution": "After build completion, moved generated file outside source and reran the entire app test suite separately. No test or app code was modified.",
+    "finalPass": 1024,
+    "finalFail": 0
+  }
+}

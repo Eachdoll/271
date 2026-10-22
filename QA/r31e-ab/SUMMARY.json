@@ -1,0 +1,2159 @@
+{
+  "date": "2026-10-22",
+  "source": "2b1ccf3",
+  "checkoutSource": "66923d3",
+  "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+  "levels": {
+    "ko": "K2",
+    "en": "E2"
+  },
+  "complete": true,
+  "status": "text-review",
+  "error": null,
+  "seconds": 312,
+  "entries": 6,
+  "printedPages": 12,
+  "paidImages": 0,
+  "usage": {
+    "costUsd": 0.5568248,
+    "costUnknown": false,
+    "requests": 34,
+    "input": 107025,
+    "output": 20609,
+    "models": [
+      "gpt-6.1-sol"
+    ],
+    "stages": {
+      "materials": {
+        "requests": 1,
+        "input": 3355,
+        "output": 749,
+        "costUsd": 0.0142
+      },
+      "outline": {
+        "requests": 10,
+        "input": 28679,
+        "output": 8088,
+        "costUsd": 0.0997712
+      },
+      "sceneBriefs": {
+        "requests": 1,
+        "input": 3263,
+        "output": 3084,
+        "costUsd": 0.037366
+      },
+      "prose": {
+        "requests": 18,
+        "input": 50666,
+        "output": 4210,
+        "costUsd": 0.231536
+      },
+      "pagination": {
+        "requests": 4,
+        "input": 21062,
+        "output": 4478,
+        "costUsd": 0.1739516
+      }
+    }
+  },
+  "writerAttempts": {
+    "ko:1": 1,
+    "en:1": 1,
+    "ko:2": 1,
+    "en:2": 1,
+    "en:3": 1,
+    "ko:3": 1,
+    "en:4": 1,
+    "ko:4": 2,
+    "en:5": 1,
+    "ko:5": 2,
+    "en:6": 1,
+    "ko:6": 1
+  },
+  "writerAttemptLog": {
+    "en:1": [
+      {
+        "draft": 1,
+        "sentences": 5,
+        "words": [
+          9,
+          1,
+          7,
+          7,
+          8
+        ],
+        "problems": []
+      },
+      {
+        "draft": 2,
+        "sentences": 5,
+        "words": [
+          8,
+          1,
+          7,
+          7,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "ko:1": [
+      {
+        "draft": 1,
+        "sentences": 16,
+        "words": [
+          6,
+          6,
+          6,
+          4,
+          1,
+          6,
+          6,
+          7,
+          4,
+          1,
+          7,
+          2,
+          3,
+          2,
+          7,
+          7
+        ],
+        "problems": [
+          "문장이 16개로 많아요(목표 10, 범위 10~15)."
+        ]
+      },
+      {
+        "draft": 2,
+        "sentences": 15,
+        "words": [
+          7,
+          6,
+          4,
+          1,
+          8,
+          6,
+          7,
+          6,
+          4,
+          1,
+          6,
+          2,
+          3,
+          7,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "ko:2": [
+      {
+        "sentences": 12,
+        "words": [
+          7,
+          7,
+          7,
+          1,
+          6,
+          7,
+          6,
+          7,
+          8,
+          6,
+          6,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "en:2": [
+      {
+        "sentences": 4,
+        "words": [
+          8,
+          6,
+          7,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "en:3": [
+      {
+        "sentences": 4,
+        "words": [
+          8,
+          7,
+          8,
+          6
+        ],
+        "problems": []
+      }
+    ],
+    "ko:3": [
+      {
+        "sentences": 15,
+        "words": [
+          7,
+          7,
+          7,
+          7,
+          6,
+          7,
+          7,
+          6,
+          7,
+          7,
+          7,
+          7,
+          4,
+          5,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "en:4": [
+      {
+        "sentences": 5,
+        "words": [
+          8,
+          7,
+          1,
+          7,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "ko:4": [
+      {
+        "sentences": 16,
+        "words": [
+          7,
+          6,
+          6,
+          6,
+          6,
+          5,
+          6,
+          6,
+          1,
+          6,
+          7,
+          6,
+          4,
+          1,
+          6,
+          6
+        ],
+        "problems": [
+          "문장이 16개로 많아요(목표 15, 범위 10~15)."
+        ]
+      },
+      {
+        "retry": true,
+        "sentences": 15,
+        "words": [
+          7,
+          6,
+          6,
+          6,
+          6,
+          5,
+          6,
+          1,
+          6,
+          7,
+          6,
+          4,
+          1,
+          6,
+          6
+        ],
+        "problems": []
+      }
+    ],
+    "ko:5": [
+      {
+        "sentences": 17,
+        "words": [
+          7,
+          1,
+          5,
+          6,
+          6,
+          6,
+          6,
+          7,
+          6,
+          7,
+          5,
+          1,
+          6,
+          2,
+          5,
+          1,
+          6
+        ],
+        "problems": [
+          "문장이 17개로 많아요(목표 13, 범위 10~15)."
+        ]
+      },
+      {
+        "retry": true,
+        "sentences": 13,
+        "words": [
+          7,
+          6,
+          6,
+          7,
+          6,
+          7,
+          8,
+          6,
+          1,
+          7,
+          6,
+          2,
+          6
+        ],
+        "problems": []
+      }
+    ],
+    "en:5": [
+      {
+        "sentences": 4,
+        "words": [
+          8,
+          7,
+          7,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "en:6": [
+      {
+        "sentences": 5,
+        "words": [
+          8,
+          1,
+          7,
+          8,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "ko:6": [
+      {
+        "sentences": 15,
+        "words": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          2,
+          7,
+          6,
+          1,
+          6,
+          6,
+          2,
+          1,
+          7,
+          7
+        ],
+        "problems": []
+      }
+    ]
+  },
+  "writerEnglishRetryCount": 0,
+  "writerKoreanRetryCount": 2,
+  "writerEnglishRetries": [],
+  "writerReport": {
+    "attempts": {
+      "ko:1": 1,
+      "en:1": 1,
+      "ko:2": 1,
+      "en:2": 1,
+      "en:3": 1,
+      "ko:3": 1,
+      "en:4": 1,
+      "ko:4": 2,
+      "en:5": 1,
+      "ko:5": 2,
+      "en:6": 1,
+      "ko:6": 1
+    },
+    "warnings": [
+      "한글 대화 비율 15% (책 전체 기준 25% 이상 권장)",
+      "영어 대화 비율 21% (책 전체 기준 25% 이상 권장)"
+    ],
+    "anchor": {
+      "ko": {
+        "pick": 2,
+        "judged": false
+      },
+      "en": {
+        "pick": 2,
+        "reason": "리듬이 자연스럽고 구체적이며 목표 분량에 가깝다.",
+        "judged": true
+      }
+    },
+    "summarized": false,
+    "calls": 17,
+    "budget": 41,
+    "attemptLog": {
+      "en:1": [
+        {
+          "draft": 1,
+          "sentences": 5,
+          "words": [
+            9,
+            1,
+            7,
+            7,
+            8
+          ],
+          "problems": []
+        },
+        {
+          "draft": 2,
+          "sentences": 5,
+          "words": [
+            8,
+            1,
+            7,
+            7,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "ko:1": [
+        {
+          "draft": 1,
+          "sentences": 16,
+          "words": [
+            6,
+            6,
+            6,
+            4,
+            1,
+            6,
+            6,
+            7,
+            4,
+            1,
+            7,
+            2,
+            3,
+            2,
+            7,
+            7
+          ],
+          "problems": [
+            "문장이 16개로 많아요(목표 10, 범위 10~15)."
+          ]
+        },
+        {
+          "draft": 2,
+          "sentences": 15,
+          "words": [
+            7,
+            6,
+            4,
+            1,
+            8,
+            6,
+            7,
+            6,
+            4,
+            1,
+            6,
+            2,
+            3,
+            7,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "ko:2": [
+        {
+          "sentences": 12,
+          "words": [
+            7,
+            7,
+            7,
+            1,
+            6,
+            7,
+            6,
+            7,
+            8,
+            6,
+            6,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "en:2": [
+        {
+          "sentences": 4,
+          "words": [
+            8,
+            6,
+            7,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "en:3": [
+        {
+          "sentences": 4,
+          "words": [
+            8,
+            7,
+            8,
+            6
+          ],
+          "problems": []
+        }
+      ],
+      "ko:3": [
+        {
+          "sentences": 15,
+          "words": [
+            7,
+            7,
+            7,
+            7,
+            6,
+            7,
+            7,
+            6,
+            7,
+            7,
+            7,
+            7,
+            4,
+            5,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "en:4": [
+        {
+          "sentences": 5,
+          "words": [
+            8,
+            7,
+            1,
+            7,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "ko:4": [
+        {
+          "sentences": 16,
+          "words": [
+            7,
+            6,
+            6,
+            6,
+            6,
+            5,
+            6,
+            6,
+            1,
+            6,
+            7,
+            6,
+            4,
+            1,
+            6,
+            6
+          ],
+          "problems": [
+            "문장이 16개로 많아요(목표 15, 범위 10~15)."
+          ]
+        },
+        {
+          "retry": true,
+          "sentences": 15,
+          "words": [
+            7,
+            6,
+            6,
+            6,
+            6,
+            5,
+            6,
+            1,
+            6,
+            7,
+            6,
+            4,
+            1,
+            6,
+            6
+          ],
+          "problems": []
+        }
+      ],
+      "ko:5": [
+        {
+          "sentences": 17,
+          "words": [
+            7,
+            1,
+            5,
+            6,
+            6,
+            6,
+            6,
+            7,
+            6,
+            7,
+            5,
+            1,
+            6,
+            2,
+            5,
+            1,
+            6
+          ],
+          "problems": [
+            "문장이 17개로 많아요(목표 13, 범위 10~15)."
+          ]
+        },
+        {
+          "retry": true,
+          "sentences": 13,
+          "words": [
+            7,
+            6,
+            6,
+            7,
+            6,
+            7,
+            8,
+            6,
+            1,
+            7,
+            6,
+            2,
+            6
+          ],
+          "problems": []
+        }
+      ],
+      "en:5": [
+        {
+          "sentences": 4,
+          "words": [
+            8,
+            7,
+            7,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "en:6": [
+        {
+          "sentences": 5,
+          "words": [
+            8,
+            1,
+            7,
+            8,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "ko:6": [
+        {
+          "sentences": 15,
+          "words": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            2,
+            7,
+            6,
+            1,
+            6,
+            6,
+            2,
+            1,
+            7,
+            7
+          ],
+          "problems": []
+        }
+      ]
+    },
+    "refrain": {
+      "voiceCard": {
+        "ko": "",
+        "en": ""
+      },
+      "beats": []
+    },
+    "dialogue_ko": 0.15,
+    "dialogue_en": 0.21
+  },
+  "canonicalPageChecks": [
+    {
+      "entryNo": 1,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 15,
+          "wordCount": 75,
+          "characterCount": 305,
+          "wordsPerSentence": [
+            7,
+            6,
+            4,
+            1,
+            8,
+            6,
+            7,
+            6,
+            4,
+            1,
+            6,
+            2,
+            3,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 5,
+          "averageSyllablesPerEojeol": 2.8,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          "connectiveEndings": 5,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 7,
+            "mean": 5,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 30,
+          "characterCount": 145,
+          "wordsPerSentence": [
+            8,
+            7,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.5,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 1,
+          "outOfVocabRatio": 0.03333333333333333,
+          "outOfVocabWords": [
+            "behind"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.1,
+          "spache": 2.11,
+          "daleChall": 0.37,
+          "syllablesPerWord": 1.17,
+          "spacheDifficultPercent": 6.67,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 2,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 12,
+          "wordCount": 75,
+          "characterCount": 302,
+          "wordsPerSentence": [
+            7,
+            7,
+            7,
+            1,
+            6,
+            7,
+            6,
+            7,
+            8,
+            6,
+            6,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.25,
+          "averageSyllablesPerEojeol": 2.83,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            0,
+            0
+          ],
+          "connectiveEndings": 6,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6.25,
+            "sentenceCount": 12,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 29,
+          "characterCount": 154,
+          "wordsPerSentence": [
+            8,
+            6,
+            7,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.25,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 4,
+          "outOfVocabRatio": 0.13793103448275862,
+          "outOfVocabWords": [
+            "click",
+            "ears",
+            "fingers"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.89,
+          "spache": 2.95,
+          "daleChall": 0.36,
+          "syllablesPerWord": 1.24,
+          "spacheDifficultPercent": 17.24,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 3,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 15,
+          "wordCount": 98,
+          "characterCount": 391,
+          "wordsPerSentence": [
+            7,
+            7,
+            7,
+            7,
+            6,
+            7,
+            7,
+            6,
+            7,
+            7,
+            7,
+            7,
+            4,
+            5,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.53,
+          "averageSyllablesPerEojeol": 2.79,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            2,
+            0
+          ],
+          "connectiveEndings": 3,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 6.53,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 30,
+          "characterCount": 147,
+          "wordsPerSentence": [
+            8,
+            7,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.5,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 2,
+          "outOfVocabRatio": 0.06666666666666667,
+          "outOfVocabWords": [
+            "empty",
+            "cannot"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.1,
+          "spache": 2.93,
+          "daleChall": 0.37,
+          "syllablesPerWord": 1.17,
+          "spacheDifficultPercent": 16.67,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 4,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 15,
+          "wordCount": 79,
+          "characterCount": 326,
+          "wordsPerSentence": [
+            7,
+            6,
+            6,
+            6,
+            6,
+            5,
+            6,
+            1,
+            6,
+            7,
+            6,
+            4,
+            1,
+            6,
+            6
+          ],
+          "minimumLengthExemptSentenceIndices": [
+            12
+          ],
+          "averageWordsPerSentence": 5.27,
+          "averageSyllablesPerEojeol": 2.9,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1
+          ],
+          "connectiveEndings": 5,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 5.57,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 5,
+          "wordCount": 31,
+          "characterCount": 165,
+          "wordsPerSentence": [
+            8,
+            7,
+            1,
+            7,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.2,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 5,
+          "outOfVocabRatio": 0.16129032258064516,
+          "outOfVocabWords": [
+            "face",
+            "felt",
+            "behind",
+            "back"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 0.89,
+          "spache": 2.08,
+          "daleChall": 0.26,
+          "syllablesPerWord": 1.23,
+          "spacheDifficultPercent": 9.68,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "out-of-vocabulary",
+            "language": "en",
+            "actual": 0.16129032258064516,
+            "max": 0.15,
+            "words": [
+              "face",
+              "felt",
+              "behind",
+              "back"
+            ],
+            "severity": "warning",
+            "advisory": true
+          }
+        ]
+      }
+    },
+    {
+      "entryNo": 5,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 13,
+          "wordCount": 75,
+          "characterCount": 312,
+          "wordsPerSentence": [
+            7,
+            6,
+            6,
+            7,
+            6,
+            7,
+            8,
+            6,
+            1,
+            7,
+            6,
+            2,
+            6
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 5.77,
+          "averageSyllablesPerEojeol": 2.93,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          "connectiveEndings": 4,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.77,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 29,
+          "characterCount": 164,
+          "wordsPerSentence": [
+            8,
+            7,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.25,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 4,
+          "outOfVocabRatio": 0.13793103448275862,
+          "outOfVocabWords": [
+            "left",
+            "back",
+            "behind",
+            "both"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.73,
+          "spache": 1.93,
+          "daleChall": 0.83,
+          "syllablesPerWord": 1.28,
+          "spacheDifficultPercent": 6.9,
+          "daleChallDifficultPercent": 3.45,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 6,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 15,
+          "wordCount": 80,
+          "characterCount": 328,
+          "wordsPerSentence": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            2,
+            7,
+            6,
+            1,
+            6,
+            6,
+            2,
+            1,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [
+            8,
+            12
+          ],
+          "averageWordsPerSentence": 5.33,
+          "averageSyllablesPerEojeol": 2.88,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          "connectiveEndings": 5,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 5,
+          "wordCount": 31,
+          "characterCount": 174,
+          "wordsPerSentence": [
+            8,
+            1,
+            7,
+            7,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.2,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 2,
+          "outOfVocabRatio": 0.06451612903225806,
+          "outOfVocabWords": [
+            "end",
+            "through"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.67,
+          "spache": 2.47,
+          "daleChall": 4.96,
+          "syllablesPerWord": 1.26,
+          "spacheDifficultPercent": 12.9,
+          "daleChallDifficultPercent": 6.45,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    }
+  ],
+  "bookCheck": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 7,
+        "mean": 5,
+        "sentenceCount": 15,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 1,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 7개 · 평균 5어절 · 문장 15개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 6.25,
+        "sentenceCount": 12,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 2,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 1,
+        "mean": 6.53,
+        "sentenceCount": 15,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 3,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.5어절 · 문장 15개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 5.57,
+        "sentenceCount": 15,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 4,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 5.6어절 · 문장 15개(권장 10~15)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.16129032258064516,
+        "max": 0.15,
+        "words": [
+          "face",
+          "felt",
+          "behind",
+          "back"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "message": "영어 등급 외 어휘 16.1% · 참고 (목록 밖: face, felt, behind, back)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 3,
+        "mean": 5.77,
+        "sentenceCount": 13,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 5,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.8어절 · 문장 13개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 6,
+        "sentenceCount": 15,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 6,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6어절 · 문장 15개(권장 10~15)"
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 13개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 13개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 13개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 13개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 13개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 13개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "props": [
+          "a small red scarf"
+        ],
+        "message": "1쪽 글에 나온 a small red scarf이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "props": [
+          "a small red scarf",
+          "Yuha's bag",
+          "two fastened seat belts"
+        ],
+        "message": "2쪽 글에 나온 a small red scarf, Yuha's bag, two fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "props": [
+          "the red scarf on the seat",
+          "fastened seat belts"
+        ],
+        "message": "3쪽 글에 나온 the red scarf on the seat, fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "props": [
+          "the red scarf in Haeni's hands"
+        ],
+        "message": "4쪽 글에 나온 the red scarf in Haeni's hands이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "props": [
+          "the returned red scarf",
+          "Yuha's bag",
+          "the open bus door"
+        ],
+        "message": "5쪽 글에 나온 the returned red scarf, Yuha's bag, the open bus door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "props": [
+          "the red scarf held between them",
+          "the open entrance door"
+        ],
+        "message": "6쪽 글에 나온 the red scarf held between them, the open entrance door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      }
+    ],
+    "violations": [],
+    "failedPageNos": [],
+    "needsRepagination": false
+  },
+  "rawRunnerMeasured": {
+    "rows": [
+      {
+        "pageNo": 1,
+        "kind": "spread",
+        "ko": "엄마와 유하가 집에서 포근한 이불 위에 앉았어요. 엄마가 빨간 손수건으로 얼굴을 쏙 가렸어요. 손수건을 내리며 엄마가 말했어요. “까꿍!” 유하는 소리 내어 웃으며 두 발을 동동 굴렀어요. 유하도 빨간 손수건을 받아 얼굴을 가렸어요. 그런데 웃는 입이 손수건 아래로 빼꼼 나왔어요. 엄마가 고개를 숙여 유하의 입을 들여다봤어요. 유하가 손수건을 내리며 외쳤어요. “까꿍!” 엄마도 입을 크게 벌리고 활짝 웃었어요. “엄마도 웃었네. 해니한테도 보여 줄래.” 유하는 빨간 손수건을 두 손으로 꼭 쥐었어요. 그리고 옆에 열린 가방 안에 쏙 넣었어요.",
+        "en": "Mom peeked out from behind the red scarf. Yuha did it too, and Mom laughed. Yuha held the scarf in his little hands. Then he put it into his bag.",
+        "sentences": 15,
+        "rhythm": 0,
+        "eojeol": 75,
+        "average": 5,
+        "longest": 8,
+        "quotes": 4,
+        "exclaims": 2,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 7개 · 평균 5어절 · 문장 15개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 30
+      },
+      {
+        "pageNo": 2,
+        "kind": "spread",
+        "ko": "부르릉, 노란 스쿨버스에 유하가 가방을 메고 올라탔어요. 해니가 유하를 보고 옆자리를 손으로 톡톡 두드렸어요. 유하는 해니 옆에 앉아 가방을 무릎에 올렸어요. 찰칵! 유하와 해니가 나란히 앉아 안전띠를 맸어요. 해니가 손가락 두 개를 토끼 귀처럼 세웠어요. 손가락 토끼가 귀 하나만 까딱 움직였어요. 유하는 입술을 꼭 다물고 웃음을 꾹 참았어요. 유하도 엄마처럼 해니를 깜짝 웃게 해 주고 싶었어요. 유하가 가방을 끌어안고 해니에게 작게 말했어요. “해니야, 나도 아주 재미있는 거 있어.” 유하는 가방에서 빨간 손수건 끝을 살짝 꺼냈어요.",
+        "en": "Yuha sat by Haeni on the yellow bus. Their seat belts went click, click! Haeni made rabbit ears with two fingers. Yuha slipped the red scarf from his bag.",
+        "sentences": 12,
+        "rhythm": 0,
+        "eojeol": 75,
+        "average": 6.3,
+        "longest": 8,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 29
+      },
+      {
+        "pageNo": 3,
+        "kind": "spread",
+        "ko": "도르르, 버스가 가는 동안 해니가 고개를 숙였어요. 유하는 손수건을 쥔 손을 얼른 뒤로 뺐어요. ‘어, 해니가 내 빨간 손수건을 봤나 봐.’ 유하는 손수건을 등 뒤로 더 깊이 감췄어요. 그런데 손가락 사이로 손수건이 스르르 빠져나갔어요. 빨간 손수건이 유하의 등 뒤 자리에 떨어졌어요. 유하는 빈손을 앞으로 가져와 손바닥을 쫙 폈어요. 손을 뒤집어 보아도 손수건은 보이지 않았어요. 그사이 해니가 자리 위로 손을 살짝 뻗었어요. 안전띠를 맨 해니는 손수건의 빨간 끝을 집었어요. 해니가 빨간 손수건을 자기 무릎에 살포시 올렸어요. 유하는 해니의 무릎을 못 보고 빈손만 내려다봤어요. 유하가 작은 목소리로 말했어요. “손수건이 없으면 까꿍 못 하는데.” 유하는 펼쳤던 두 손을 천천히 아래로 내렸어요.",
+        "en": "Yuha hid the scarf, but it slipped down. He looked at his two empty hands. Haeni put the red scarf on her lap. “I cannot play peek now,” Yuha said.",
+        "sentences": 15,
+        "rhythm": 0,
+        "eojeol": 98,
+        "average": 6.5,
+        "longest": 7,
+        "quotes": 1,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.5어절 · 문장 15개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 30
+      },
+      {
+        "pageNo": 4,
+        "kind": "spread",
+        "ko": "해니가 무릎에 놓인 빨간 손수건을 집어 들었어요. 해니는 두 손으로 손수건을 쫙 폈어요. 그러고는 빨간 손수건으로 얼굴을 쏙 가렸어요. 유하는 고개를 숙이고 등 뒤만 더듬었어요. 손바닥으로 자리 위를 이리저리 쓸어 보았어요. 손끝에 닿는 건 푹신한 자리뿐이었어요. 그때 해니가 손수건을 팔랑 내리며 외쳤어요. “까꿍!” 유하가 고개를 번쩍 들어 해니를 보았어요. 해니의 웃는 얼굴 아래 빨간 손수건이 있었어요. 유하는 손수건과 해니 얼굴을 번갈아 보았어요. “내 손수건으로 네가 까꿍했네!” 하하! 유하가 입을 크게 벌리고 웃음을 터뜨렸어요. 해니도 손수건을 꼭 쥐고 함께 웃었어요.",
+        "en": "Haeni hid her face with the red scarf. Yuha felt for it behind his back. “Peek!” said Haeni, and the scarf came down. “You hid behind my scarf!” Yuha said, laughing.",
+        "sentences": 15,
+        "rhythm": 0,
+        "eojeol": 79,
+        "average": 5.3,
+        "longest": 7,
+        "quotes": 2,
+        "exclaims": 3,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 5.6어절 · 문장 15개(권장 10~15)"
+        ],
+        "enNotes": [
+          "영어 등급 외 어휘 16.1% · 참고 (목록 밖: face, felt, behind, back)"
+        ],
+        "enWords": 31
+      },
+      {
+        "pageNo": 5,
+        "kind": "spread",
+        "ko": "노란 스쿨버스가 유치원 앞마당에 천천히 멈춰 섰어요. 쉬익, 멈춘 버스 문이 활짝 열렸어요. 유하와 해니는 안전띠를 풀고 자리에서 일어났어요. 가방을 멘 유하와 해니가 버스에서 조심조심 내려왔어요. 해니가 유하에게 빨간 손수건을 쏙 내밀었어요. 유하는 손수건을 받아 한 손에 꼭 쥐었어요. 손수건이 손 아래로 늘어졌는데도 두 손바닥으로 얼굴을 가렸어요. 유하가 두 손을 벌리며 얼굴을 내밀었어요. “까꿍!” 해니도 두 손바닥으로 자기 얼굴을 쏙 가렸어요. 해니가 손바닥 뒤에서 얼굴을 내밀며 외쳤어요. “나도 까꿍!” 둘은 마주 보고 마당에서 하하 웃었어요.",
+        "en": "They left the bus in the kindergarten yard. Haeni gave Yuha the red scarf back. “Peek!” said Yuha from behind his hands. Haeni peeked out, and both friends laughed.",
+        "sentences": 13,
+        "rhythm": 0,
+        "eojeol": 75,
+        "average": 5.8,
+        "longest": 8,
+        "quotes": 2,
+        "exclaims": 2,
+        "sounds": [
+          "조심조심"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.8어절 · 문장 13개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 29
+      },
+      {
+        "pageNo": 6,
+        "kind": "spread",
+        "ko": "유하와 해니가 유치원 현관 앞에 나란히 섰어요. 유하는 빨간 손수건 한쪽 끝을 꼭 잡았어요. 해니도 다른 쪽 끝을 잡고 손수건을 올렸어요. 둘은 빨간 손수건 뒤로 얼굴을 쏙 숨겼어요. 해니가 손수건 옆으로 얼굴을 빼꼼 내밀며 말했어요. “여기도 까꿍!” 유하도 반대쪽으로 고개를 기울여 얼굴을 빼꼼 내밀었어요. 손수건 양쪽에 웃는 얼굴이 하나씩 나왔어요. 하하! 둘은 마주 보며 손수건을 아래로 내렸어요. 유하가 열린 현관문을 보며 해니에게 말했어요. “같이 들어가자.” 또각또각! 둘은 나란히 웃으며 유치원 현관문 안으로 들어갔어요. 둘이 잡은 빨간 손수건이 사이에서 살랑 흔들렸어요.",
+        "en": "Each held one end of the red scarf. “Peek!” said Haeni, and Yuha peeked out too. They lowered the scarf and laughed together. Then they went in through the kindergarten door.",
+        "sentences": 15,
+        "rhythm": 0,
+        "eojeol": 80,
+        "average": 5.3,
+        "longest": 7,
+        "quotes": 2,
+        "exclaims": 3,
+        "sounds": [
+          "또각또각"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6어절 · 문장 15개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 31
+      }
+    ],
+    "totals": {
+      "pages": 6,
+      "sentences": 85,
+      "rhythm": 0,
+      "eojeol": 482,
+      "averageEojeol": 5.7,
+      "longest": 8,
+      "quotes": 12,
+      "exclaims": 11,
+      "soundWords": [
+        "조심조심",
+        "또각또각"
+      ],
+      "pagesWithSounds": 2,
+      "enWords": 180,
+      "koIssuePages": 0,
+      "enIssuePages": 0
+    }
+  },
+  "rawAndAppIssueCountsMatch": true,
+  "englishSearch": {
+    "semicolons": 0,
+    "outByTheSide": 0,
+    "rag": 0,
+    "wasDown": 0
+  },
+  "weatherKeywordSentences": {
+    "pattern": "햇살|햇빛|바람|꽃|나비",
+    "current": [],
+    "baselineR31D": [
+      {
+        "entryNo": 1,
+        "text": "큰 창문으로 아침 햇살이 환하게 들어왔어요."
+      },
+      {
+        "entryNo": 1,
+        "text": "창밖 참새 곁으로 바람이 살랑 불었어요."
+      },
+      {
+        "entryNo": 2,
+        "text": "창문 햇살이 두 친구의 무릎에 내려앉았어요."
+      },
+      {
+        "entryNo": 3,
+        "text": "쉬익, 버스 문이 열리고 햇살이 들어왔어요."
+      },
+      {
+        "entryNo": 4,
+        "text": "아침 햇살이 유치원 앞마당을 환하게 비췄어요."
+      },
+      {
+        "entryNo": 4,
+        "text": "작은 노란 꽃에 나비가 앉아 있었어요."
+      },
+      {
+        "entryNo": 4,
+        "text": "산들바람이 유하의 볼을 살짝 간질이고 지나갔어요."
+      },
+      {
+        "entryNo": 5,
+        "text": "햇빛을 받은 노란 손수건 가장자리가 환했어요."
+      },
+      {
+        "entryNo": 5,
+        "text": "꽃밭의 작은 노란 꽃들이 바람에 살랑 흔들렸어요."
+      },
+      {
+        "entryNo": 5,
+        "text": "나비가 두 친구 곁에서 꽃밭 위로 날아갔어요."
+      },
+      {
+        "entryNo": 6,
+        "text": "열린 유치원 문으로 아침 바람이 살랑 불었어요."
+      },
+      {
+        "entryNo": 6,
+        "text": "입구 바닥에는 밝은 햇살이 길게 놓였어요."
+      },
+      {
+        "entryNo": 6,
+        "text": "문 옆 노란 꽃에 나비가 내려앉았어요."
+      }
+    ],
+    "limitation": "Keyword screening, not a semantic judgment of redundant description."
+  },
+  "dialogue": {
+    "writerKoreanShare": 0.15,
+    "writerEnglishShare": 0.21,
+    "measuredKoreanQuoteSentences": 12,
+    "measuredKoreanSentences": 85
+  },
+  "paginationMeta": [
+    {
+      "repairAttempts": 0,
+      "repairRequestCount": 0,
+      "repairBudget": {
+        "used": 0,
+        "max": 12
+      },
+      "richnessRepairAttempts": 0,
+      "coherence": null,
+      "revision": {
+        "version": 1,
+        "accepted": [
+          {
+            "pageNo": 5,
+            "languages": [
+              "en"
+            ],
+            "reason": "영어 마지막 문장의 어색한 표현만 고치고, 얼굴을 내민 뒤 함께 웃는 장면은 유지했어요."
+          }
+        ],
+        "rejected": [],
+        "report": {
+          "overall": "빨간 손수건을 따라 까꿍 놀이가 이어지고, 해니가 먼저 얼굴을 내미는 반전이 즐겁게 살아 있어요. 유치원에 함께 들어가는 마무리도 자연스러우며, 영어 한 문장의 어색한 표현만 바로잡았어요.",
+          "strengths": [
+            "손수건의 위치가 일관되어 아이가 그림을 보며 이야기를 따라가기 좋아요.",
+            "까꿍과 웃음소리가 반복되어 소리 내어 읽는 재미가 있어요.",
+            "두 친구의 장난이 함께 웃고 들어가는 따뜻한 결말로 이어져요."
+          ],
+          "issues": [
+            {
+              "pageNo": 5,
+              "aspect": "bilingual",
+              "note": "영어의 ‘peeked from her hands’는 손 뒤에서 얼굴을 내미는 동작을 나타내기에 어색해 자연스러운 표현으로 고쳤어요."
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "repairHistory": [
+    {
+      "requests": 1,
+      "stage": "pagination",
+      "failedPageNos": [],
+      "violations": [],
+      "notes": 19,
+      "noteMessages": [
+        "1: 한글 펼침면 참고 · 짧거나 긴 문장 7개 · 평균 5어절 · 문장 15개(권장 10~15)",
+        "2: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)",
+        "3: 한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.5어절 · 문장 15개(권장 10~15)",
+        "4: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 5.6어절 · 문장 15개(권장 10~15)",
+        "4: 영어 등급 외 어휘 16.1% · 참고 (목록 밖: face, felt, behind, back)",
+        "5: 한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.8어절 · 문장 13개(권장 10~15)",
+        "6: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6어절 · 문장 15개(권장 10~15)",
+        "1: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "2: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "3: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "4: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "5: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "6: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "1: 1쪽 글에 나온 a small red scarf이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "2: 2쪽 글에 나온 a small red scarf, Yuha's bag, two fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "3: 3쪽 글에 나온 the red scarf on the seat, fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "4: 4쪽 글에 나온 the red scarf in Haeni's hands이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "5: 5쪽 글에 나온 the returned red scarf, Yuha's bag, the open bus door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "6: 6쪽 글에 나온 the red scarf held between them, the open entrance door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      ],
+      "texts": []
+    },
+    {
+      "requests": 4,
+      "stage": "revision",
+      "failedPageNos": [],
+      "violations": [],
+      "notes": 19,
+      "noteMessages": [
+        "1: 한글 펼침면 참고 · 짧거나 긴 문장 7개 · 평균 5어절 · 문장 15개(권장 10~15)",
+        "2: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)",
+        "3: 한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.5어절 · 문장 15개(권장 10~15)",
+        "4: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 5.6어절 · 문장 15개(권장 10~15)",
+        "4: 영어 등급 외 어휘 16.1% · 참고 (목록 밖: face, felt, behind, back)",
+        "5: 한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.8어절 · 문장 13개(권장 10~15)",
+        "6: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6어절 · 문장 15개(권장 10~15)",
+        "1: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "2: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "3: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "4: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "5: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "6: 영어 책 전체 새 단어 13개가 허용 10개를 넘었어요.",
+        "1: 1쪽 글에 나온 a small red scarf이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "2: 2쪽 글에 나온 a small red scarf, Yuha's bag, two fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "3: 3쪽 글에 나온 the red scarf on the seat, fastened seat belts이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "4: 4쪽 글에 나온 the red scarf in Haeni's hands이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "5: 5쪽 글에 나온 the returned red scarf, Yuha's bag, the open bus door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "6: 6쪽 글에 나온 the red scarf held between them, the open entrance door이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      ],
+      "texts": []
+    }
+  ],
+  "repairTransitions": [
+    {
+      "fromRequests": 1,
+      "toRequests": 4,
+      "stage": "revision",
+      "changes": []
+    }
+  ],
+  "repairViolationCount": 0,
+  "outlineRepairProgressCount": 1,
+  "repairRecordHasLanguageMessageAndTexts": true,
+  "outlineRepairs": [],
+  "hasPlotContract": false,
+  "pageCoherence": null,
+  "revision": {
+    "version": 1,
+    "accepted": [
+      {
+        "pageNo": 5,
+        "languages": [
+          "en"
+        ],
+        "reason": "영어 마지막 문장의 어색한 표현만 고치고, 얼굴을 내민 뒤 함께 웃는 장면은 유지했어요."
+      }
+    ],
+    "rejected": [],
+    "report": {
+      "overall": "빨간 손수건을 따라 까꿍 놀이가 이어지고, 해니가 먼저 얼굴을 내미는 반전이 즐겁게 살아 있어요. 유치원에 함께 들어가는 마무리도 자연스러우며, 영어 한 문장의 어색한 표현만 바로잡았어요.",
+      "strengths": [
+        "손수건의 위치가 일관되어 아이가 그림을 보며 이야기를 따라가기 좋아요.",
+        "까꿍과 웃음소리가 반복되어 소리 내어 읽는 재미가 있어요.",
+        "두 친구의 장난이 함께 웃고 들어가는 따뜻한 결말로 이어져요."
+      ],
+      "issues": [
+        {
+          "pageNo": 5,
+          "aspect": "bilingual",
+          "note": "영어의 ‘peeked from her hands’는 손 뒤에서 얼굴을 내미는 동작을 나타내기에 어색해 자연스러운 표현으로 고쳤어요."
+        }
+      ]
+    }
+  },
+  "originalComparison": [
+    {
+      "beatIndex": 1,
+      "entryNos": [
+        1
+      ],
+      "koBefore": "엄마와 유하가 집에서 포근한 이불 위에 앉았어요. 엄마가 빨간 손수건으로 얼굴을 쏙 가렸어요. 손수건을 내리며 엄마가 말했어요. “까꿍!” 유하는 소리 내어 웃으며 두 발을 동동 굴렀어요. 유하도 빨간 손수건을 받아 얼굴을 가렸어요. 그런데 웃는 입이 손수건 아래로 빼꼼 나왔어요. 엄마가 고개를 숙여 유하의 입을 들여다봤어요. 유하가 손수건을 내리며 외쳤어요. “까꿍!” 엄마도 입을 크게 벌리고 활짝 웃었어요. “엄마도 웃었네. 해니한테도 보여 줄래.” 유하는 빨간 손수건을 두 손으로 꼭 쥐었어요. 그리고 옆에 열린 가방 안에 쏙 넣었어요.",
+      "koAfter": "엄마와 유하가 집에서 포근한 이불 위에 앉았어요. 엄마가 빨간 손수건으로 얼굴을 쏙 가렸어요. 손수건을 내리며 엄마가 말했어요. “까꿍!” 유하는 소리 내어 웃으며 두 발을 동동 굴렀어요. 유하도 빨간 손수건을 받아 얼굴을 가렸어요. 그런데 웃는 입이 손수건 아래로 빼꼼 나왔어요. 엄마가 고개를 숙여 유하의 입을 들여다봤어요. 유하가 손수건을 내리며 외쳤어요. “까꿍!” 엄마도 입을 크게 벌리고 활짝 웃었어요. “엄마도 웃었네. 해니한테도 보여 줄래.” 유하는 빨간 손수건을 두 손으로 꼭 쥐었어요. 그리고 옆에 열린 가방 안에 쏙 넣었어요.",
+      "enBefore": "Mom peeked out from behind the red scarf. Yuha did it too, and Mom laughed. Yuha held the scarf in his little hands. Then he put it into his bag.",
+      "enAfter": "Mom peeked out from behind the red scarf. Yuha did it too, and Mom laughed. Yuha held the scarf in his little hands. Then he put it into his bag.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 2,
+      "entryNos": [
+        2
+      ],
+      "koBefore": "부르릉, 노란 스쿨버스에 유하가 가방을 메고 올라탔어요. 해니가 유하를 보고 옆자리를 손으로 톡톡 두드렸어요. 유하는 해니 옆에 앉아 가방을 무릎에 올렸어요. 찰칵! 유하와 해니가 나란히 앉아 안전띠를 맸어요. 해니가 손가락 두 개를 토끼 귀처럼 세웠어요. 손가락 토끼가 귀 하나만 까딱 움직였어요. 유하는 입술을 꼭 다물고 웃음을 꾹 참았어요. 유하도 엄마처럼 해니를 깜짝 웃게 해 주고 싶었어요. 유하가 가방을 끌어안고 해니에게 작게 말했어요. “해니야, 나도 아주 재미있는 거 있어.” 유하는 가방에서 빨간 손수건 끝을 살짝 꺼냈어요.",
+      "koAfter": "부르릉, 노란 스쿨버스에 유하가 가방을 메고 올라탔어요. 해니가 유하를 보고 옆자리를 손으로 톡톡 두드렸어요. 유하는 해니 옆에 앉아 가방을 무릎에 올렸어요. 찰칵! 유하와 해니가 나란히 앉아 안전띠를 맸어요. 해니가 손가락 두 개를 토끼 귀처럼 세웠어요. 손가락 토끼가 귀 하나만 까딱 움직였어요. 유하는 입술을 꼭 다물고 웃음을 꾹 참았어요. 유하도 엄마처럼 해니를 깜짝 웃게 해 주고 싶었어요. 유하가 가방을 끌어안고 해니에게 작게 말했어요. “해니야, 나도 아주 재미있는 거 있어.” 유하는 가방에서 빨간 손수건 끝을 살짝 꺼냈어요.",
+      "enBefore": "Yuha sat by Haeni on the yellow bus. Their seat belts went click, click! Haeni made rabbit ears with two fingers. Yuha slipped the red scarf from his bag.",
+      "enAfter": "Yuha sat by Haeni on the yellow bus. Their seat belts went click, click! Haeni made rabbit ears with two fingers. Yuha slipped the red scarf from his bag.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 3,
+      "entryNos": [
+        3
+      ],
+      "koBefore": "도르르, 버스가 가는 동안 해니가 고개를 숙였어요. 유하는 손수건을 쥔 손을 얼른 뒤로 뺐어요. ‘어, 해니가 내 빨간 손수건을 봤나 봐.’ 유하는 손수건을 등 뒤로 더 깊이 감췄어요. 그런데 손가락 사이로 손수건이 스르르 빠져나갔어요. 빨간 손수건이 유하의 등 뒤 자리에 떨어졌어요. 유하는 빈손을 앞으로 가져와 손바닥을 쫙 폈어요. 손을 뒤집어 보아도 손수건은 보이지 않았어요. 그사이 해니가 자리 위로 손을 살짝 뻗었어요. 안전띠를 맨 해니는 손수건의 빨간 끝을 집었어요. 해니가 빨간 손수건을 자기 무릎에 살포시 올렸어요. 유하는 해니의 무릎을 못 보고 빈손만 내려다봤어요. 유하가 작은 목소리로 말했어요. “손수건이 없으면 까꿍 못 하는데.” 유하는 펼쳤던 두 손을 천천히 아래로 내렸어요.",
+      "koAfter": "도르르, 버스가 가는 동안 해니가 고개를 숙였어요. 유하는 손수건을 쥔 손을 얼른 뒤로 뺐어요. ‘어, 해니가 내 빨간 손수건을 봤나 봐.’ 유하는 손수건을 등 뒤로 더 깊이 감췄어요. 그런데 손가락 사이로 손수건이 스르르 빠져나갔어요. 빨간 손수건이 유하의 등 뒤 자리에 떨어졌어요. 유하는 빈손을 앞으로 가져와 손바닥을 쫙 폈어요. 손을 뒤집어 보아도 손수건은 보이지 않았어요. 그사이 해니가 자리 위로 손을 살짝 뻗었어요. 안전띠를 맨 해니는 손수건의 빨간 끝을 집었어요. 해니가 빨간 손수건을 자기 무릎에 살포시 올렸어요. 유하는 해니의 무릎을 못 보고 빈손만 내려다봤어요. 유하가 작은 목소리로 말했어요. “손수건이 없으면 까꿍 못 하는데.” 유하는 펼쳤던 두 손을 천천히 아래로 내렸어요.",
+      "enBefore": "Yuha hid the scarf, but it slipped down. He looked at his two empty hands. Haeni put the red scarf on her lap. “I cannot play peek now,” Yuha said.",
+      "enAfter": "Yuha hid the scarf, but it slipped down. He looked at his two empty hands. Haeni put the red scarf on her lap. “I cannot play peek now,” Yuha said.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 4,
+      "entryNos": [
+        4
+      ],
+      "koBefore": "해니가 무릎에 놓인 빨간 손수건을 집어 들었어요. 해니는 두 손으로 손수건을 쫙 폈어요. 그러고는 빨간 손수건으로 얼굴을 쏙 가렸어요. 유하는 고개를 숙이고 등 뒤만 더듬었어요. 손바닥으로 자리 위를 이리저리 쓸어 보았어요. 손끝에 닿는 건 푹신한 자리뿐이었어요. 그때 해니가 손수건을 팔랑 내리며 외쳤어요. “까꿍!” 유하가 고개를 번쩍 들어 해니를 보았어요. 해니의 웃는 얼굴 아래 빨간 손수건이 있었어요. 유하는 손수건과 해니 얼굴을 번갈아 보았어요. “내 손수건으로 네가 까꿍했네!” 하하! 유하가 입을 크게 벌리고 웃음을 터뜨렸어요. 해니도 손수건을 꼭 쥐고 함께 웃었어요.",
+      "koAfter": "해니가 무릎에 놓인 빨간 손수건을 집어 들었어요. 해니는 두 손으로 손수건을 쫙 폈어요. 그러고는 빨간 손수건으로 얼굴을 쏙 가렸어요. 유하는 고개를 숙이고 등 뒤만 더듬었어요. 손바닥으로 자리 위를 이리저리 쓸어 보았어요. 손끝에 닿는 건 푹신한 자리뿐이었어요. 그때 해니가 손수건을 팔랑 내리며 외쳤어요. “까꿍!” 유하가 고개를 번쩍 들어 해니를 보았어요. 해니의 웃는 얼굴 아래 빨간 손수건이 있었어요. 유하는 손수건과 해니 얼굴을 번갈아 보았어요. “내 손수건으로 네가 까꿍했네!” 하하! 유하가 입을 크게 벌리고 웃음을 터뜨렸어요. 해니도 손수건을 꼭 쥐고 함께 웃었어요.",
+      "enBefore": "Haeni hid her face with the red scarf. Yuha felt for it behind his back. “Peek!” said Haeni, and the scarf came down. “You hid behind my scarf!” Yuha said, laughing.",
+      "enAfter": "Haeni hid her face with the red scarf. Yuha felt for it behind his back. “Peek!” said Haeni, and the scarf came down. “You hid behind my scarf!” Yuha said, laughing.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 5,
+      "entryNos": [
+        5
+      ],
+      "koBefore": "노란 스쿨버스가 유치원 앞마당에 천천히 멈춰 섰어요. 쉬익, 멈춘 버스 문이 활짝 열렸어요. 유하와 해니는 안전띠를 풀고 자리에서 일어났어요. 가방을 멘 유하와 해니가 버스에서 조심조심 내려왔어요. 해니가 유하에게 빨간 손수건을 쏙 내밀었어요. 유하는 손수건을 받아 한 손에 꼭 쥐었어요. 손수건이 손 아래로 늘어졌는데도 두 손바닥으로 얼굴을 가렸어요. 유하가 두 손을 벌리며 얼굴을 내밀었어요. “까꿍!” 해니도 두 손바닥으로 자기 얼굴을 쏙 가렸어요. 해니가 손바닥 뒤에서 얼굴을 내밀며 외쳤어요. “나도 까꿍!” 둘은 마주 보고 마당에서 하하 웃었어요.",
+      "koAfter": "노란 스쿨버스가 유치원 앞마당에 천천히 멈춰 섰어요. 쉬익, 멈춘 버스 문이 활짝 열렸어요. 유하와 해니는 안전띠를 풀고 자리에서 일어났어요. 가방을 멘 유하와 해니가 버스에서 조심조심 내려왔어요. 해니가 유하에게 빨간 손수건을 쏙 내밀었어요. 유하는 손수건을 받아 한 손에 꼭 쥐었어요. 손수건이 손 아래로 늘어졌는데도 두 손바닥으로 얼굴을 가렸어요. 유하가 두 손을 벌리며 얼굴을 내밀었어요. “까꿍!” 해니도 두 손바닥으로 자기 얼굴을 쏙 가렸어요. 해니가 손바닥 뒤에서 얼굴을 내밀며 외쳤어요. “나도 까꿍!” 둘은 마주 보고 마당에서 하하 웃었어요.",
+      "enBefore": "They left the bus in the kindergarten yard. Haeni gave Yuha the red scarf back. “Peek!” said Yuha from behind his hands. Haeni peeked from her hands, and both laughed.",
+      "enAfter": "They left the bus in the kindergarten yard. Haeni gave Yuha the red scarf back. “Peek!” said Yuha from behind his hands. Haeni peeked out, and both friends laughed.",
+      "koChanged": false,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 6,
+      "entryNos": [
+        6
+      ],
+      "koBefore": "유하와 해니가 유치원 현관 앞에 나란히 섰어요. 유하는 빨간 손수건 한쪽 끝을 꼭 잡았어요. 해니도 다른 쪽 끝을 잡고 손수건을 올렸어요. 둘은 빨간 손수건 뒤로 얼굴을 쏙 숨겼어요. 해니가 손수건 옆으로 얼굴을 빼꼼 내밀며 말했어요. “여기도 까꿍!” 유하도 반대쪽으로 고개를 기울여 얼굴을 빼꼼 내밀었어요. 손수건 양쪽에 웃는 얼굴이 하나씩 나왔어요. 하하! 둘은 마주 보며 손수건을 아래로 내렸어요. 유하가 열린 현관문을 보며 해니에게 말했어요. “같이 들어가자.” 또각또각! 둘은 나란히 웃으며 유치원 현관문 안으로 들어갔어요. 둘이 잡은 빨간 손수건이 사이에서 살랑 흔들렸어요.",
+      "koAfter": "유하와 해니가 유치원 현관 앞에 나란히 섰어요. 유하는 빨간 손수건 한쪽 끝을 꼭 잡았어요. 해니도 다른 쪽 끝을 잡고 손수건을 올렸어요. 둘은 빨간 손수건 뒤로 얼굴을 쏙 숨겼어요. 해니가 손수건 옆으로 얼굴을 빼꼼 내밀며 말했어요. “여기도 까꿍!” 유하도 반대쪽으로 고개를 기울여 얼굴을 빼꼼 내밀었어요. 손수건 양쪽에 웃는 얼굴이 하나씩 나왔어요. 하하! 둘은 마주 보며 손수건을 아래로 내렸어요. 유하가 열린 현관문을 보며 해니에게 말했어요. “같이 들어가자.” 또각또각! 둘은 나란히 웃으며 유치원 현관문 안으로 들어갔어요. 둘이 잡은 빨간 손수건이 사이에서 살랑 흔들렸어요.",
+      "enBefore": "Each held one end of the red scarf. “Peek!” said Haeni, and Yuha peeked out too. They lowered the scarf and laughed together. Then they went in through the kindergarten door.",
+      "enAfter": "Each held one end of the red scarf. “Peek!” said Haeni, and Yuha peeked out too. They lowered the scarf and laughed together. Then they went in through the kindergarten door.",
+      "koChanged": false,
+      "enChanged": false
+    }
+  ],
+  "baselineR31D": {
+    "costUsd": 1.1351356,
+    "requests": 45,
+    "seconds": 511,
+    "writerEnglishRetryCount": 9,
+    "pageRepairRequests": 2,
+    "writerKoreanDialogue": 0.13,
+    "writerEnglishDialogue": 0.24,
+    "measured": {
+      "pages": 6,
+      "sentences": 83,
+      "rhythm": 0,
+      "eojeol": 490,
+      "averageEojeol": 5.9,
+      "longest": 9,
+      "quotes": 11,
+      "exclaims": 11,
+      "soundWords": [
+        "팔랑팔랑",
+        "부릉부릉",
+        "꼼지락꼼지락",
+        "또각또각"
+      ],
+      "pagesWithSounds": 4,
+      "enWords": 146,
+      "koIssuePages": 0,
+      "enIssuePages": 2
+    }
+  },
+  "limitations": [
+    "One independently sampled story per version; different material plans and model randomness.",
+    "Token usage multiplied by catalogue rates is not the provider invoice.",
+    "writerOriginal is the writer-stage return, after any internal retries.",
+    "Weather keyword counts and quoted-sentence shares are screening metrics, not human quality scores.",
+    "No illustrations or real-child comprehension study."
+  ]
+}

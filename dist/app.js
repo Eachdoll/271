@@ -4164,6 +4164,8 @@ const simpleCtx = {
   illustration,
   checkBook: (book) => checkBookAtLevel(book, { rewrite: false }),
   approveBook: () => approveDraft(),
+  // 에코 모드 (R32): the pasted story becomes a book the same way a run's does.
+  buildBook: (payload) => buildStoryResultBook(payload),
   openCredentialSettings,
   // Browser Back past the simple screen's first entry: the same guarded way
   // as 책장으로 (the kept dialog while a book is under review). Leaving inside

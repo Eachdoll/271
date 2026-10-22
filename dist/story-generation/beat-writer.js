@@ -142,13 +142,28 @@ function leanEnglishProblems(clean, metrics, budget, spec) {
     out.push(`긴 문장이 ${long.length}개예요(한 문장 ${wps.max}단어 안팎, ${hardLimit}단어를 넘는 문장은 안 돼요). 긴 문장: ${quote(long)}`);
   return out;
 }
+/**
+ * R31f: the sentence-count band a beat is judged by. On the diet a Korean
+ * openings beat takes its page's unit tolerance (count −1/+2) and an E2+
+ * English beat the same band (checkStory judges the page that way, so what
+ * passes here passes there); otherwise the beat's own range, as before.
+ */
+export function beatBand(lang, spec, budget, lean = false) {
+  if (lean && lang === "en" && leanEnglishLevel(spec)) return { min: Math.max(1, budget.min - 1), max: budget.max + 2, lean: "en" };
+  if (lean && lang === "ko" && object(spec?.unitTolerance)) {
+    const below = Number(spec.unitTolerance.countBelow), above = Number(spec.unitTolerance.countAbove);
+    return { min: Math.max(1, budget.min - (Number.isFinite(below) ? below : 1)), max: budget.max + (Number.isFinite(above) ? above : 2), lean: "ko" };
+  }
+  return { min: budget.min, max: budget.max, lean: "" };
+}
 /** The per-beat deterministic checks (count, length, the fixed refrain). */
 export function checkBeatText(text, lang, budget, spec, { refrain = "", needsRefrain = false, lean = false } = {}) {
   const problems = [],
     clean = String(text || "").trim();
   if (!clean) return { problems: ["글이 비어 있어요."], sentences: 0, distance: Infinity };
   // R31e: the lean English rule (E2 and up on the diet); everything else as before.
-  const leanEn = lean && lang === "en" && leanEnglishLevel(spec);
+  const leanEn = lean && lang === "en" && leanEnglishLevel(spec),
+    band = beatBand(lang, spec, budget, lean);
   let metrics = null;
   try {
     metrics = analyzeEstimatedPage(clean, leanEn ? { ...spec, dialogueTags: true } : spec, { language: lang }).metrics;
@@ -158,8 +173,9 @@ export function checkBeatText(text, lang, budget, spec, { refrain = "", needsRef
   const sentences = leanEn && metrics ? metrics.sentenceCount : splitSentences(clean).length;
   if (leanEn && metrics) problems.push(...leanEnglishProblems(clean, metrics, budget, spec));
   else {
-    if (sentences < budget.min) problems.push(`문장이 ${sentences}개로 적어요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
-    if (sentences > budget.max) problems.push(`문장이 ${sentences}개로 많아요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
+    // R31f: a lean Korean beat is told its band, not a target to hit exactly.
+    if (sentences < band.min) problems.push(band.lean ? `문장이 ${sentences}개로 적어요(이 비트는 ${budget.min}~${budget.max}문장, ${band.min}개부터 괜찮아요).` : `문장이 ${sentences}개로 적어요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
+    if (sentences > band.max) problems.push(band.lean ? `문장이 ${sentences}개로 많아요(이 비트는 ${budget.min}~${budget.max}문장, ${band.max}개까지 괜찮아요).` : `문장이 ${sentences}개로 많아요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
     const limit = maxWords(spec) + 1,
       long = list(metrics?.wordsPerSentence).filter((n) => n > limit).length;
     if (long > Math.max(1, Math.floor(sentences / 3)))
@@ -287,12 +303,13 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     return { text, check };
   };
   // R31e: a lean English retry is told to split (up to the band), never to keep the count.
-  const deltaOf = (check, budget, leanEn = false) =>
-    check.sentences > (leanEn ? budget.max + 2 : budget.max)
+  // R31f: the thresholds are the beat's band (beatBand), for Korean too.
+  const deltaOf = (check, budget, band) =>
+    check.sentences > band.max
       ? `[고칠 양] 지금 ${check.sentences}문장 → ${budget.target}문장으로 ${check.sentences - budget.target}문장 줄여 주세요(목표 대비 −${Math.round(((check.sentences - budget.target) / Math.max(1, check.sentences)) * 100)}%).`
-      : check.sentences < (leanEn ? Math.max(1, budget.min - 1) : budget.min)
+      : check.sentences < band.min
         ? `[고칠 양] 지금 ${check.sentences}문장 → ${budget.target}문장으로 ${budget.target - check.sentences}문장 늘려 주세요.`
-        : leanEn
+        : band.lean === "en"
           ? `[고칠 양] 긴 문장은 짧은 문장 여러 개로 나누세요(이 비트는 ${budget.max}문장까지 괜찮아요). 영어는 한글보다 덜 말해도 돼요 — 그림이 보여 주는 순간만 쓰세요.`
           : "[고칠 양] 문장 수는 그대로 두고 위 문제만 고쳐 주세요.";
   // One beat: up to three attempts; after that the attempt closest to its budget, with a warning.
@@ -302,7 +319,7 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       current = first,
       attempts = 1;
     while (current.check.problems.length && attempts < BEAT_WRITER_ATTEMPTS && spent() < budgetLimit) {
-      current = await write(lang, beat, i, { ...ctx, retry: { problems: current.check.problems, delta: deltaOf(current.check, budget, lean && lang === "en" && leanEnglishLevel(input.specs?.[lang])), text: current.text } });
+      current = await write(lang, beat, i, { ...ctx, retry: { problems: current.check.problems, delta: deltaOf(current.check, budget, beatBand(lang, input.specs?.[lang] || {}, budget, lean)), text: current.text } });
       attempts++;
       if (current.check.distance < best.check.distance) best = current;
     }

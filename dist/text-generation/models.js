@@ -633,7 +633,9 @@ export function estimateStoryTextCost({
   // writer call (+ one expected fix call), its pages taken as written.
   k1Book = false,
   // R31b: a diet draft's outline and prose go through the app path (the stage
-  // models), never the package's quality roles.
+  // models), never the package's quality roles. R31f: its rows are sized from
+  // the measured R31e runs (per-request tokens, with headroom), never from the
+  // pre-diet request shapes; a draft without the policy keeps the old rows.
   diet = false,
   // R31e: a diet outline has no event ledger, so the two ledger-based coherence
   // reviews are not bought (a diet job made before R31e keeps its ledger's rows).
@@ -730,10 +732,19 @@ export function estimateStoryTextCost({
   if (k1Book);
   else if (council && orchestration)
     stages.push(
-      stageEstimate("plotCandidates", 4500, 1400, 4, "prose"),
-      stageEstimate("council", 4000, 1200, 4, "cheap"),
+      diet
+        ? stageEstimate("plotCandidates", 3500, 450, 4, "prose")
+        : stageEstimate("plotCandidates", 4500, 1400, 4, "prose"),
+      diet
+        ? stageEstimate("council", 3000, 250, 4, "cheap")
+        : stageEstimate("council", 4000, 1200, 4, "cheap"),
     );
-  else if (council) stages.push(stageEstimate("council", 4000, 1200, 5, "cheap"));
+  else if (council)
+    stages.push(
+      diet
+        ? stageEstimate("council", 3000, 250, 5, "cheap")
+        : stageEstimate("council", 4000, 1200, 5, "cheap"),
+    );
   // (a K1 book has no writers' room.)
   if (beam) {
     stages.push(
@@ -742,21 +753,32 @@ export function estimateStoryTextCost({
     );
   }
   stages.push(
+    // R31f: the diet rows are sized to the recorded stage costs of the R31e
+    // K2 and R31c K1 runs plus about a third of headroom (a lean outline has
+    // no ledger; one repair is inside the row).
     stageEstimate(
       "outline",
-      input + (beam ? beats * 300 : 0),
-      outlineOutput,
+      diet ? 5000 : input + (beam ? beats * 300 : 0),
+      diet ? beats * 350 : outlineOutput,
       1,
       quality && !k1Book && !diet ? (beam ? "cheap" : "outline") : undefined,
     ),
-    stageEstimate("sceneBriefs", input, beats * 500),
+    diet
+      ? stageEstimate("sceneBriefs", 3500, beats * 300)
+      : stageEstimate("sceneBriefs", input, beats * 500),
   );
   if (k1Book) {
     // The whole book in one call, and one call for the pages the checks flag.
     const bookOutput = pages * 220 + 400;
     stages.push(
-      stageEstimate("prose", 7000, bookOutput, 1, "beatWriter"),
-      stageEstimate("k1Fix", 7500, Math.ceil(bookOutput / 2), 1, "beatWriter"),
+      // R31f: on the diet the K1 writer writes the whole book in one short
+      // call and fixes it in one more (sized to the recorded R31c run).
+      diet
+        ? stageEstimate("prose", 3000, 1200, 1, "beatWriter")
+        : stageEstimate("prose", 7000, bookOutput, 1, "beatWriter"),
+      diet
+        ? stageEstimate("k1Fix", 3500, 800, 1, "beatWriter")
+        : stageEstimate("k1Fix", 7500, Math.ceil(bookOutput / 2), 1, "beatWriter"),
     );
   } else if (orchestration) {
     // R30 비트별 작가: one call per beat per language (+ beat 1's second
@@ -764,14 +786,20 @@ export function estimateStoryTextCost({
     // two anchor sniffs on the economy model.
     const beatOutput = Math.ceil(baseOutput / 2 / beats) + 150;
     stages.push(
-      stageEstimate("prose", 5000, beatOutput, beats * 2 + 2, "beatWriter"),
-      stageEstimate(
-        "beatRetries",
-        5500,
-        beatOutput,
-        Math.ceil((beats * 2) / 4),
-        "beatWriter",
-      ),
+      // R31f: a diet beat call is one beat with a short brief; the rows are
+      // sized to the recorded writer-stage cost of the R31e run (17 calls).
+      diet
+        ? stageEstimate("prose", 5000, 380, beats * 2 + 2, "beatWriter")
+        : stageEstimate("prose", 5000, beatOutput, beats * 2 + 2, "beatWriter"),
+      diet
+        ? stageEstimate("beatRetries", 5500, 380, Math.ceil((beats * 2) / 4), "beatWriter")
+        : stageEstimate(
+            "beatRetries",
+            5500,
+            beatOutput,
+            Math.ceil((beats * 2) / 4),
+            "beatWriter",
+          ),
       stageEstimate("beatVoice", 1500, 150, 3, "cheap"),
     );
   } else if (quality && !diet) {
@@ -803,13 +831,29 @@ export function estimateStoryTextCost({
       stageEstimate("enrichment", 3000, 800, paragraphs.ko + paragraphs.en),
     );
   // A K1 book's pages were written as pages (no pagination request).
-  if (!k1Book) stages.push(stageEstimate("pagination", input, baseOutput));
+  // R31f: the diet pagination request shows the lean outline and the prose
+  // (measured about 5.5k in, 2k out); the pre-diet row stays for other drafts.
+  if (!k1Book)
+    stages.push(
+      diet
+        ? stageEstimate("pagination", 5500, 600 + pages * 45)
+        : stageEstimate("pagination", input, baseOutput),
+    );
   // R31c: about two page fixes after the checks on the diet (measured 11–24
   // before the loop was put on a diet); a diet K1 book skips the editor.
-  if (diet) stages.push({ ...stageEstimate("pagination", 6000, 700, 2), stage: "pageFix" });
+  // R31f: a fix shows one lean page (K1 pages are shorter still).
+  if (diet)
+    stages.push({
+      ...(k1Book ? stageEstimate("pagination", 2500, 200, 2) : stageEstimate("pagination", 5000, 350, 2)),
+      stage: "pageFix",
+    });
   if (editor && !(k1Book && diet))
     stages.push({
-      ...stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2)),
+      // R31f: the diet read-through shows lean views and returns only the
+      // entries it changed (sized to the recorded R31e pagination stage).
+      ...(diet
+        ? stageEstimate("coherence", 5000 + pages * 125, 800)
+        : stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2))),
       stage: "revision",
     });
   // R26: the review rows are priced on the review model (the same row as before
@@ -817,7 +861,11 @@ export function estimateStoryTextCost({
   if (ledger)
     stages.push({ ...stageEstimate("coherenceReview", reviewInput, 1600, 2), stage: "coherence" });
   if (childSimulator)
-    stages.push(stageEstimate("childSimulator", reviewInput, 1000, 2, "cheap"));
+    stages.push(
+      diet
+        ? stageEstimate("childSimulator", 6000, 400, 2, "cheap")
+        : stageEstimate("childSimulator", reviewInput, 1000, 2, "cheap"),
+    );
   const final = stages.find((row) => row.stage === "prose"),
     unknown = stages.filter((row) => row.pricingUnknown);
   return {
