@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-22",
+  "sourceCommit": "ca351b5bd9e9b5f15dba48c3ea471f3d21539897",
+  "runtimeCommit": "9cd6594",
+  "engine": "openai",
+  "commands": [
+    "node scripts/r31b-ab.mjs K1 diet QA/r31c-ab --paid",
+    "node scripts/r31b-ab.mjs K2 diet QA/r31c-ab --paid"
+  ],
+  "exitCodes": {
+    "K1": 0,
+    "K2": 0
+  },
+  "completed": 2,
+  "paidImageRequests": 0,
+  "totalCostUsdFromTokens": 1.3371744,
+  "totalRequests": 52,
+  "restartedPaidRuns": 0,
+  "canonicalRulesPassed": 1,
+  "allPrintedPageCounts12": true,
+  "allSceneTimesMorning": true,
+  "costSumsValidated": true,
+  "duplicateCallIds": 0,
+  "appSourceModified": false,
+  "previousTestsReused": {
+    "appPassed": 999,
+    "qualityPassed": 85,
+    "source": "ca351b5 r31c deployment validation"
+  },
+  "analysisToolSyntaxPassed": true,
+  "costMethod": "Reported provider token usage multiplied by the app price catalogue, not the provider invoice.",
+  "secretScan": {
+    "filesScanned": 14,
+    "exactCredentialMatches": 0,
+    "keyPatternMatches": 0,
+    "passed": true
+  }
+}
