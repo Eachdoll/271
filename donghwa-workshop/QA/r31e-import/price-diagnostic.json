@@ -1,0 +1,44 @@
+[
+  {
+    "planMode": "auto",
+    "koreanLevel": "K1",
+    "englishLevel": "E0",
+    "pageCount": 12,
+    "textUsd": 0.5097999999999999
+  },
+  {
+    "planMode": "auto",
+    "koreanLevel": "K2",
+    "englishLevel": "E0",
+    "pageCount": 16,
+    "textUsd": 1.6290768
+  },
+  {
+    "planMode": "auto",
+    "koreanLevel": "K2",
+    "englishLevel": "E2",
+    "pageCount": 16,
+    "textUsd": 1.6622924000000001
+  },
+  {
+    "planMode": "selection",
+    "koreanLevel": "K1",
+    "englishLevel": "E0",
+    "pageCount": 12,
+    "textUsd": 0.43779999999999997
+  },
+  {
+    "planMode": "selection",
+    "koreanLevel": "K2",
+    "englishLevel": "E0",
+    "pageCount": 16,
+    "textUsd": 1.5570768
+  },
+  {
+    "planMode": "selection",
+    "koreanLevel": "K2",
+    "englishLevel": "E2",
+    "pageCount": 16,
+    "textUsd": 1.5902924
+  }
+]

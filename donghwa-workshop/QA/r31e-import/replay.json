@@ -1,0 +1,128 @@
+{
+  "source": "QA/r31d-ab/K2-diet.json",
+  "newPaidRequests": 0,
+  "writerEnglishBeats": 6,
+  "writerPassAsWritten": 5,
+  "writerChecks": [
+    {
+      "beatIndex": 1,
+      "problems": [
+        "문장이 평균 16단어로 길어요(한 문장 5~9단어). 긴 문장: \"Mom hid behind the yellow handkerchief and peeked out; Yuha did it too\"(16단어), \"“For Haeni,” said Yuha, taking the handkerchief beside his open bag wi\"(16단어)"
+      ],
+      "sentences": 2,
+      "distance": 0.5,
+      "words": [
+        16,
+        16
+      ]
+    },
+    {
+      "beatIndex": 2,
+      "problems": [],
+      "sentences": 3,
+      "distance": 0,
+      "words": [
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "beatIndex": 3,
+      "problems": [],
+      "sentences": 4,
+      "distance": 1,
+      "words": [
+        9,
+        9,
+        9,
+        9
+      ]
+    },
+    {
+      "beatIndex": 4,
+      "problems": [],
+      "sentences": 4,
+      "distance": 0,
+      "words": [
+        9,
+        8,
+        8,
+        8
+      ]
+    },
+    {
+      "beatIndex": 5,
+      "problems": [],
+      "sentences": 3,
+      "distance": 0,
+      "words": [
+        8,
+        8,
+        10
+      ]
+    },
+    {
+      "beatIndex": 6,
+      "problems": [],
+      "sentences": 4,
+      "distance": 2,
+      "words": [
+        8,
+        7,
+        7,
+        9
+      ]
+    }
+  ],
+  "originalPageEnglishBlockingEntries": [
+    1
+  ],
+  "originalVocabularyNotes": [
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.18518518518518517,
+      "max": 0.15,
+      "words": [
+        "click",
+        "puffed",
+        "cheeks",
+        "spread",
+        "underneath"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 2,
+      "message": "영어 등급 외 어휘 18.5% · 참고 (목록 밖: click, puffed, cheeks, spread, underneath)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.2222222222222222,
+      "max": 0.15,
+      "words": [
+        "grabbed",
+        "caught",
+        "only",
+        "slid",
+        "held",
+        "pouted",
+        "stood",
+        "arm"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 3,
+      "message": "영어 등급 외 어휘 22.2% · 참고 (목록 밖: grabbed, caught, only, slid, held, pouted, stood, arm)"
+    }
+  ],
+  "finalBookPassed": true,
+  "finalEnglishBlockingEntries": [],
+  "requestSizes": {
+    "outlineBefore": 26165,
+    "outlineAfter": 2637,
+    "pageBefore": 5036,
+    "pageAfter": 1023
+  }
+}

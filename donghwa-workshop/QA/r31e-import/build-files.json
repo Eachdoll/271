@@ -1,0 +1,47 @@
+[
+  {
+    "path": "dist/full-auto.js",
+    "sha256": "80ae862f0c78a3bf94b43b92dba07e866c48ceede504661a9c66c10acb8ffd48",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/reading-checker.js",
+    "sha256": "2a46f6864f8ead266ed36cc0648fab110e3e55c24f2e3f9fd6fda7730a77543d",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/reading-messages.js",
+    "sha256": "882f3985e43d5492d0e70e31c911b9cb18390167577821abf96a88513fd4b22f",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/beat-writer.js",
+    "sha256": "b2b2bbf8c90066f9ad134de4cb432bcf5d8f1d6b85e4a30aa375eea0f7b83818",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/checker.js",
+    "sha256": "0ba63edcb815d2f5f9300836acbb284d0daebf0f40835de028bf5830beeb6605",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/pipeline.js",
+    "sha256": "26d80950c0453f3afccb670c529bd0b4bc2750e14879e71d4fc92d9d8d58716b",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/prompt-diet.js",
+    "sha256": "17f30e45d2452a49d2982d732750a3ed30f43398efab46c8a8e71052123c746c",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/sw.js",
+    "sha256": "511b3554527d1c12528218dcd08f3e0aadd2a83df4f203f973e39a643038f814",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/text-generation/models.js",
+    "sha256": "013c5b1e58f33368a1d90441ba2a1e13f75cf3cdad90075e5049e3ccaa240825",
+    "matchesBuilt": true
+  }
+]
