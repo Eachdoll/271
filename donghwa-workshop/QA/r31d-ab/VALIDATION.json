@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-22",
+  "approvedNewPaidBooks": 1,
+  "completedNewPaidBooks": 1,
+  "paidImages": 0,
+  "status": "text-review",
+  "printedPages": 12,
+  "entries": 6,
+  "englishViolationEntries": 0,
+  "koreanViolationEntries": 0,
+  "bookPassed": true,
+  "tokenPriceCostUsd": 1.1351356,
+  "requests": 45,
+  "writerExtraEnglishAttempts": 9,
+  "paginationRepairRequests": 2,
+  "paginationRepairLanguage": "Not recorded by this runner; exact English-only count cannot be recovered.",
+  "secretPatternHitFiles": [],
+  "appCodeChanged": false,
+  "source": "4b42288",
+  "sha256": {
+    "K2-diet.json": "ba0900bfc3e51e5c396536639a453740c89566b5d42ba2c369c338853fe78900",
+    "K2-diet.md": "aade5c0aa10f5bc987664a19002bea9344670714e3a7c0f5c61d31bb880f2cb5"
+  }
+}

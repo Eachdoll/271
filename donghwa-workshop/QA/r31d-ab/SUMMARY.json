@@ -1,0 +1,1552 @@
+{
+  "date": "2026-10-22",
+  "source": "4b42288",
+  "checkoutSource": "d6eb9cf",
+  "topic": "4살 유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기",
+  "levels": {
+    "ko": "K2",
+    "en": "E2"
+  },
+  "status": "text-review",
+  "error": null,
+  "complete": true,
+  "seconds": 511,
+  "entries": 6,
+  "printedPages": 12,
+  "usage": {
+    "costUsd": 1.1351356,
+    "costUnknown": false,
+    "requests": 45,
+    "input": 284763,
+    "output": 31961,
+    "models": [
+      "gpt-6.1-sol"
+    ],
+    "stages": {
+      "materials": {
+        "requests": 1,
+        "input": 3355,
+        "output": 696,
+        "costUsd": 0.01367
+      },
+      "outline": {
+        "requests": 10,
+        "input": 31872,
+        "output": 17908,
+        "costUsd": 0.20522479999999999
+      },
+      "sceneBriefs": {
+        "requests": 1,
+        "input": 14835,
+        "output": 2915,
+        "costUsd": 0.05882
+      },
+      "prose": {
+        "requests": 25,
+        "input": 81392,
+        "output": 5137,
+        "costUsd": 0.336354
+      },
+      "coherence": {
+        "requests": 1,
+        "input": 19788,
+        "output": 55,
+        "costUsd": 0.040126
+      },
+      "pagination": {
+        "requests": 7,
+        "input": 133521,
+        "output": 5250,
+        "costUsd": 0.4809408
+      }
+    }
+  },
+  "paidImages": 0,
+  "canonicalPageChecks": [
+    {
+      "entryNo": 1,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 15,
+          "wordCount": 84,
+          "characterCount": 339,
+          "wordsPerSentence": [
+            6,
+            6,
+            7,
+            6,
+            5,
+            1,
+            6,
+            7,
+            6,
+            1,
+            6,
+            6,
+            6,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 5.6,
+          "averageSyllablesPerEojeol": 2.77,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "connectiveEndings": 3,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.6,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 28,
+          "characterCount": 141,
+          "wordsPerSentence": [
+            7,
+            7,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": 0,
+          "outOfVocabWords": [],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 2.31,
+          "spache": 1.8,
+          "daleChall": 0.35,
+          "syllablesPerWord": 1.29,
+          "spacheDifficultPercent": 3.57,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 2,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 13,
+          "wordCount": 81,
+          "characterCount": 336,
+          "wordsPerSentence": [
+            6,
+            1,
+            5,
+            7,
+            6,
+            7,
+            6,
+            7,
+            7,
+            7,
+            9,
+            7,
+            6
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.23,
+          "averageSyllablesPerEojeol": 2.94,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1
+          ],
+          "connectiveEndings": 5,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6.23,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 27,
+          "characterCount": 137,
+          "wordsPerSentence": [
+            7,
+            7,
+            6,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.75,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 1,
+          "outOfVocabRatio": 0.037037037037037035,
+          "outOfVocabWords": [
+            "click"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 2.78,
+          "spache": 2.39,
+          "daleChall": 0.33,
+          "syllablesPerWord": 1.33,
+          "spacheDifficultPercent": 11.11,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 3,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 14,
+          "wordCount": 91,
+          "characterCount": 354,
+          "wordsPerSentence": [
+            6,
+            6,
+            6,
+            7,
+            6,
+            6,
+            6,
+            6,
+            6,
+            7,
+            8,
+            6,
+            7,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.5,
+          "averageSyllablesPerEojeol": 2.67,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            1,
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          "connectiveEndings": 5,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6.5,
+            "sentenceCount": 14,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 27,
+          "characterCount": 136,
+          "wordsPerSentence": [
+            7,
+            7,
+            6,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.75,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": 0,
+          "outOfVocabWords": [],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.03,
+          "spache": 1.78,
+          "daleChall": 0.33,
+          "syllablesPerWord": 1.19,
+          "spacheDifficultPercent": 3.7,
+          "daleChallDifficultPercent": 0,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 4,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 15,
+          "wordCount": 80,
+          "characterCount": 326,
+          "wordsPerSentence": [
+            6,
+            6,
+            6,
+            7,
+            7,
+            6,
+            1,
+            5,
+            6,
+            6,
+            5,
+            6,
+            6,
+            2,
+            5
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 5.33,
+          "averageSyllablesPerEojeol": 2.85,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0
+          ],
+          "connectiveEndings": 4,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 5.33,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 3,
+          "wordCount": 22,
+          "characterCount": 102,
+          "wordsPerSentence": [
+            7,
+            7,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.33,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 1,
+          "outOfVocabRatio": 0.045454545454545456,
+          "outOfVocabWords": [
+            "peekaboo"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.22,
+          "spache": 1.92,
+          "daleChall": 1.08,
+          "syllablesPerWord": 1.18,
+          "spacheDifficultPercent": 4.55,
+          "daleChallDifficultPercent": 4.55,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 5,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 13,
+          "wordCount": 76,
+          "characterCount": 321,
+          "wordsPerSentence": [
+            7,
+            6,
+            6,
+            6,
+            7,
+            6,
+            6,
+            6,
+            1,
+            5,
+            6,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 5.85,
+          "averageSyllablesPerEojeol": 3.04,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "connectiveEndings": 3,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 5.85,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 3,
+          "wordCount": 21,
+          "characterCount": 113,
+          "wordsPerSentence": [
+            6,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 2,
+          "outOfVocabRatio": 0.09523809523809523,
+          "outOfVocabWords": [
+            "peekaboo",
+            "side"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 3.44,
+          "spache": 2.29,
+          "daleChall": 5.49,
+          "syllablesPerWord": 1.38,
+          "spacheDifficultPercent": 9.52,
+          "daleChallDifficultPercent": 9.52,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 6,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 13,
+          "wordCount": 78,
+          "characterCount": 317,
+          "wordsPerSentence": [
+            7,
+            6,
+            6,
+            7,
+            7,
+            1,
+            5,
+            6,
+            6,
+            7,
+            7,
+            6,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6,
+          "averageSyllablesPerEojeol": 2.86,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1
+          ],
+          "connectiveEndings": 3,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 6,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 3,
+          "wordCount": 22,
+          "characterCount": 123,
+          "wordsPerSentence": [
+            8,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.33,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": 0,
+          "outOfVocabWords": [],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 3.36,
+          "spache": 2.29,
+          "daleChall": 1.08,
+          "syllablesPerWord": 1.36,
+          "spacheDifficultPercent": 9.09,
+          "daleChallDifficultPercent": 4.55,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    }
+  ],
+  "fullBookCheck": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 3,
+        "mean": 5.6,
+        "sentenceCount": 15,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 1
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 6.23,
+        "sentenceCount": 13,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 2
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 6.5,
+        "sentenceCount": 14,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 3
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 5.33,
+        "sentenceCount": 15,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 4
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 1,
+        "mean": 5.85,
+        "sentenceCount": 13,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 5
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 1,
+        "mean": 6,
+        "sentenceCount": 13,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 6
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "props": [
+          "a yellow handkerchief",
+          "an open bag",
+          "a little ball inside the bag"
+        ],
+        "message": "1쪽 글에 나온 a yellow handkerchief, an open bag, a little ball inside the bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "props": [
+          "a yellow handkerchief with a small bump",
+          "the children's fastened seat belts",
+          "Yuha's bag beside him"
+        ],
+        "message": "2쪽 글에 나온 a yellow handkerchief with a small bump, the children's fastened seat belts, Yuha's bag beside him이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "props": [
+          "the yellow handkerchief resting on Yuha's hands",
+          "Yuha's open bag on his back",
+          "the open door of the parked bus"
+        ],
+        "message": "3쪽 글에 나온 the yellow handkerchief resting on Yuha's hands, Yuha's open bag on his back, the open door of the parked bus이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "props": [
+          "the yellow handkerchief with fingertips peeking out",
+          "the open bag",
+          "the little ball still inside the bag"
+        ],
+        "message": "4쪽 글에 나온 the yellow handkerchief with fingertips peeking out, the open bag, the little ball still inside the bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "props": [
+          "the yellow handkerchief hiding Yuha's face",
+          "small yellow flowers in the flower bed"
+        ],
+        "message": "5쪽 글에 나온 the yellow handkerchief hiding Yuha's face, small yellow flowers in the flower bed이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "props": [
+          "the yellow handkerchief tucked into the bag",
+          "Yuha's bag on his back"
+        ],
+        "message": "6쪽 글에 나온 the yellow handkerchief tucked into the bag, Yuha's bag on his back이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      }
+    ],
+    "violations": [],
+    "failedPageNos": [],
+    "needsRepagination": false
+  },
+  "storyWords": [
+    "yuha",
+    "mom",
+    "haeni",
+    "peek",
+    "hide",
+    "hand",
+    "ball",
+    "bus",
+    "the",
+    "yellow",
+    "school",
+    "kindergarten",
+    "yard",
+    "and",
+    "door",
+    "a",
+    "handkerchief",
+    "an",
+    "open",
+    "bag",
+    "little",
+    "inside",
+    "cloth",
+    "fluttered",
+    "up",
+    "down",
+    "giggled",
+    "together",
+    "sparrow",
+    "sat",
+    "outside",
+    "window",
+    "with",
+    "small",
+    "bump",
+    "children",
+    "s",
+    "fastened",
+    "seat",
+    "belts",
+    "beside",
+    "him",
+    "clicked",
+    "shut",
+    "hummed",
+    "along",
+    "road",
+    "distant",
+    "flew",
+    "beyond",
+    "resting",
+    "on",
+    "hands",
+    "his",
+    "back",
+    "of",
+    "parked",
+    "rustled",
+    "between",
+    "opened",
+    "hiss",
+    "ant",
+    "crawled",
+    "flower",
+    "bed",
+    "fingertips",
+    "peeking",
+    "out",
+    "still",
+    "one",
+    "corner",
+    "lifted",
+    "let",
+    "gasp",
+    "butterfly",
+    "rested",
+    "hiding",
+    "face",
+    "flowers",
+    "in",
+    "fingers",
+    "wiggled",
+    "tiny",
+    "hello",
+    "both",
+    "friends",
+    "burst",
+    "into",
+    "happy",
+    "giggles",
+    "drifted",
+    "above",
+    "tucked",
+    "slipped",
+    "their",
+    "footsteps",
+    "tapped",
+    "settled"
+  ],
+  "originalComparison": [
+    {
+      "beatIndex": 1,
+      "entryNos": [
+        1
+      ],
+      "koBefore": "큰 창문으로 아침 햇살이 환하게 들어왔어요. 창밖 참새 곁으로 바람이 살랑 불었어요. 엄마가 노란 손수건 뒤로 얼굴을 쏙 숨겼어요. 손수건이 팔랑팔랑, 엄마 얼굴이 빼꼼 나왔어요. 엄마가 두 눈을 마주치며 말했어요. “까꿍!” 유하는 하하 웃으며 두 손을 뻗었어요. 엄마가 건넨 손수건이 유하 볼에 보드랍게 닿았어요. 유하도 노란 손수건으로 제 얼굴을 가렸어요. “까꿍!” 유하가 얼굴을 내밀자 엄마도 하하 웃었어요. 유하는 손수건을 쥐고 엄마에게 바짝 다가갔어요. “엄마, 해니한테도 내가 까꿍 해 줄래요!” 유하는 가져갈 노란 손수건을 두 손으로 꼭 쥐었어요. 곁에 열린 가방 안에는 작은 공이 보였어요.",
+      "koAfter": "큰 창문으로 아침 햇살이 환하게 들어왔어요. 창밖 참새 곁으로 바람이 살랑 불었어요. 엄마가 노란 손수건 뒤로 얼굴을 쏙 숨겼어요. 손수건이 팔랑팔랑, 엄마 얼굴이 빼꼼 나왔어요. 엄마가 두 눈을 마주치며 “까꿍!” 했어요. 유하는 하하 웃으며 두 손을 뻗었어요. 엄마가 건넨 손수건이 유하 볼에 보드랍게 닿았어요. 유하도 노란 손수건으로 제 얼굴을 가렸어요. “까꿍!” 유하가 얼굴을 내밀자 엄마도 하하 웃었어요. 유하는 손수건을 쥐고 엄마에게 바짝 다가갔어요. “엄마, 해니한테도 내가 까꿍 해 줄래요!” 유하는 가져갈 노란 손수건을 두 손으로 꼭 쥐었어요. 곁에 열린 가방 안에는 작은 공이 보였어요.",
+      "enBefore": "Mom hid behind the yellow handkerchief and peeked out; Yuha did it too, and they giggled. “For Haeni,” said Yuha, taking the handkerchief beside his open bag with a little ball inside.",
+      "enAfter": "Mom hid, and Yuha peeked out too. “I can play with Haeni,” said Yuha. He had the yellow handkerchief for Haeni. A little ball was in his bag.",
+      "koChanged": true,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 2,
+      "entryNos": [
+        2
+      ],
+      "koBefore": "유하는 스쿨버스에서 해니를 만나 나란히 앉았어요. 찰칵! 유하와 해니가 안전띠를 꼭 맸어요. 부릉부릉, 버스가 달리자 창밖으로 맑은 하늘이 보였어요. 창문 햇살이 두 친구의 무릎에 내려앉았어요. 유하는 곁에 가방을 놓고 노란 손수건을 폈어요. 보드라운 손수건이 유하의 무릎을 살포시 덮었어요. 해니가 유하를 보며 두 볼을 빵빵하게 부풀렸어요. 유하는 하하 웃으며 손수건 양 끝을 잡았어요. “해니야, 이번에는 내가 보여 줄 게 있어!” 유하가 손수건을 얼굴 쪽으로 들려는데, 해니가 슬쩍 손을 넣었어요. 노란 손수건 한쪽이 작은 언덕처럼 불룩 솟았어요. 유하는 손을 멈추고 불룩한 곳을 내려다보았어요.",
+      "koAfter": "유하는 스쿨버스에서 해니를 만나 나란히 앉았어요. 찰칵! 유하와 해니가 안전띠를 꼭 맸어요. 부릉부릉, 버스가 달리자 창밖으로 맑은 하늘이 보였어요. 창문 햇살이 두 친구의 무릎에 내려앉았어요. 유하는 곁에 가방을 놓고 노란 손수건을 폈어요. 보드라운 손수건이 유하의 무릎을 살포시 덮었어요. 해니가 유하를 보며 두 볼을 빵빵하게 부풀렸어요. 유하는 하하 웃으며 손수건 양 끝을 잡았어요. “해니야, 이번에는 내가 보여 줄 게 있어!” 유하가 손수건을 얼굴 쪽으로 들려는데, 해니가 슬쩍 손을 넣었어요. 노란 손수건 한쪽이 작은 언덕처럼 불룩 솟았어요. 유하는 손을 멈추고 불룩한 곳을 내려다보았어요.",
+      "enBefore": "On the bus, their seat belts went click! Haeni puffed his cheeks; Yuha spread the yellow handkerchief. Yuha lifted it, but Haeni’s hand made a bump underneath.",
+      "enAfter": "Click went their belts on the bus. Haeni made a funny face for Yuha. Yuha had his yellow handkerchief out. But Haeni put a hand under it.",
+      "koChanged": false,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 3,
+      "entryNos": [
+        3
+      ],
+      "koBefore": "유하는 불룩한 곳으로 두 손을 가져갔어요. “내 공이 여기로 쏙 들어갔나 봐!” 유하는 손수건 위로 두 손을 오므렸어요. 해니의 손이 천 아래에서 옆으로 쏙 빠졌어요. 바스락, 유하의 손에는 얇은 천만 잡혔어요. 유하는 고개를 갸웃하며 다시 손을 벌렸어요. 그사이 버스가 유치원 앞에 가만히 멈췄어요. 쉬익, 버스 문이 열리고 햇살이 들어왔어요. 유하와 해니는 안전띠를 풀고 자리에서 일어났어요. 유하는 열린 가방을 메고 손수건을 받쳐 들었어요. 해니도 손을 천 아래에 둔 채 함께 내렸어요. 밝은 앞마당에 선 유하는 입을 삐죽했어요. “아직 까꿍도 못 했는데, 벌써 다 왔네.” 옆에 선 해니의 팔은 손수건 아래로 이어져 있었어요.",
+      "koAfter": "유하는 불룩한 곳으로 두 손을 가져갔어요. “내 공이 여기로 쏙 들어갔나 봐!” 유하는 손수건 위로 두 손을 오므렸어요. 해니의 손이 천 아래에서 옆으로 쏙 빠졌어요. 바스락, 유하의 손에는 얇은 천만 잡혔어요. 유하는 고개를 갸웃하며 다시 손을 벌렸어요. 그사이 버스가 유치원 앞에 가만히 멈췄어요. 쉬익, 버스 문이 열리고 햇살이 들어왔어요. 유하와 해니는 안전띠를 풀고 자리에서 일어났어요. 유하는 열린 가방을 메고 손수건을 받쳐 들었어요. 해니도 손을 천 아래에 둔 채 함께 내렸어요. 밝은 앞마당에 선 유하는 입을 삐죽했어요. “아직 까꿍도 못 했는데, 벌써 다 왔네.” 옆에 선 해니의 팔은 손수건 아래로 이어져 있었어요.",
+      "enBefore": "Yuha grabbed for his ball, but caught only cloth. The bump slid away; hiss, the bus door opened. Outside at kindergarten, Yuha held the handkerchief and pouted. Haeni stood beside him, his arm still under it.",
+      "enAfter": "Yuha got the cloth, but no ball. Hiss went the bus door, now open. They went out with the handkerchief. Yuha said, “But I did not play!”",
+      "koChanged": false,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 4,
+      "entryNos": [
+        4
+      ],
+      "koBefore": "아침 햇살이 유치원 앞마당을 환하게 비췄어요. 작은 노란 꽃에 나비가 앉아 있었어요. 산들바람이 유하의 볼을 살짝 간질이고 지나갔어요. 유하가 받쳐 든 손수건 끝이 살랑 들렸어요. 그 끝으로 해니의 작은 손가락이 삐죽 나왔어요. 유하는 그제야 고개를 숙여 아래를 내려다보았어요. “아!” 유하가 손가락을 보고 소리를 냈어요. 유하는 고개를 돌려 열린 가방도 들여다보았어요. 가방 안에는 작은 공이 그대로 있었어요. 유하의 두 눈이 동그랗게 커졌어요. 해니는 입술을 꾹 다물고 웃음을 참았어요. 유하가 해니를 보며 소리 내어 말했어요. “공이 아니네! 해니가 나한테 까꿍 하는 거네!”",
+      "koAfter": "아침 햇살이 유치원 앞마당을 환하게 비췄어요. 작은 노란 꽃에 나비가 앉아 있었어요. 산들바람이 유하의 볼을 살짝 간질이고 지나갔어요. 유하가 받쳐 든 손수건 끝이 살랑 들렸어요. 그 끝으로 해니의 작은 손가락이 삐죽 나왔어요. 유하는 그제야 고개를 숙여 아래를 내려다보았어요. “아!” 유하가 손가락을 보고 소리를 냈어요. 유하는 고개를 돌려 열린 가방도 들여다보았어요. 가방 안에는 작은 공이 그대로 있었어요. 유하의 두 눈이 동그랗게 커졌어요. 해니는 입술을 꾹 다물고 웃음을 참았어요. 유하가 해니를 보며 소리 내어 말했어요. “공이 아니네! 해니가 나한테 까꿍 하는 거네!”",
+      "enBefore": "In the yard, Haeni’s fingers peeked from the handkerchief. Yuha looked down, then into his open bag. His ball was there; his eyes went round. “Not my ball—you’re playing peekaboo!” said Yuha.",
+      "enAfter": "A little hand came out to play. Yuha saw his ball in the bag. “Not my ball—you came to play peekaboo!”",
+      "koChanged": false,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 5,
+      "entryNos": [
+        5
+      ],
+      "koBefore": "유하가 노란 손수건을 두 손으로 살짝 들었어요. 해니가 손가락을 꼼지락꼼지락 움직이며 인사를 했어요. 유하는 하하 웃으며 해니의 손을 바라보았어요. 햇빛을 받은 노란 손수건 가장자리가 환했어요. 유하는 손수건을 올려 제 얼굴을 쏙 가렸어요. 보드라운 손수건이 유하의 코끝에 살짝 닿았어요. 해니가 몸을 기울여 손수건 뒤를 들여다보았어요. 유하는 손수건 옆으로 얼굴을 빼꼼 내밀었어요. “까꿍!” 유하가 외치자 해니도 까르르 웃었어요. 유하도 해니와 눈을 맞추며 까르르 웃었어요. 꽃밭의 작은 노란 꽃들이 바람에 살랑 흔들렸어요. 나비가 두 친구 곁에서 꽃밭 위로 날아갔어요.",
+      "koAfter": "유하가 노란 손수건을 두 손으로 살짝 들었어요. 해니가 손가락을 꼼지락꼼지락 움직이며 인사를 했어요. 유하는 하하 웃으며 해니의 손을 바라보았어요. 햇빛을 받은 노란 손수건 가장자리가 환했어요. 유하는 손수건을 올려 제 얼굴을 쏙 가렸어요. 보드라운 손수건이 유하의 코끝에 살짝 닿았어요. 해니가 몸을 기울여 손수건 뒤를 들여다보았어요. 유하는 손수건 옆으로 얼굴을 빼꼼 내밀었어요. “까꿍!” 유하가 외치자 해니도 까르르 웃었어요. 유하도 해니와 눈을 맞추며 까르르 웃었어요. 꽃밭의 작은 노란 꽃들이 바람에 살랑 흔들렸어요. 나비가 두 친구 곁에서 꽃밭 위로 날아갔어요.",
+      "enBefore": "Yuha lifted the cloth; Haeni’s fingers wiggled hello. Yuha giggled and hid his face behind it. Haeni peeked in; Yuha peeked out sideways, and both giggled.",
+      "enAfter": "Yuha saw Haeni's little hand wave. Then Yuha hid, and Haeni came to look. “Peekaboo,” said Yuha, out by the side.",
+      "koChanged": false,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 6,
+      "entryNos": [
+        6
+      ],
+      "koBefore": "열린 유치원 문으로 아침 바람이 살랑 불었어요. 입구 바닥에는 밝은 햇살이 길게 놓였어요. 문 옆 노란 꽃에 나비가 내려앉았어요. 유하는 해니 얼굴 앞에 노란 손수건을 들었어요. 유하가 손수건을 내리자 해니가 얼굴을 쏙 내밀었어요. “까꿍!” 해니가 외치자 유하도 하하 웃었어요. 유하는 등에 멘 가방을 앞으로 돌렸어요. 사르륵, 노란 손수건이 가방 안으로 들어갔어요. 유하는 가방을 다시 메고 해니의 손을 잡았어요. 맞잡은 해니의 손이 따뜻해서 유하는 꼭 쥐었어요. 또각또각, 두 친구의 발소리가 나란히 났어요. 유하와 해니는 웃으며 열린 유치원 문으로 들어갔어요.",
+      "koAfter": "열린 유치원 문으로 아침 바람이 살랑 불었어요. 입구 바닥에는 밝은 햇살이 길게 놓였어요. 문 옆 노란 꽃에 나비가 내려앉았어요. 유하는 해니 얼굴 앞에 노란 손수건을 들었어요. 유하가 손수건을 내리자 해니가 얼굴을 쏙 내밀었어요. “까꿍!” 해니가 외치자 유하도 하하 웃었어요. 유하는 등에 멘 가방을 앞으로 돌렸어요. 사르륵, 노란 손수건이 가방 안으로 들어갔어요. 유하는 가방을 다시 메고 해니의 손을 잡았어요. 맞잡은 해니의 손이 따뜻해서 유하는 꼭 쥐었어요. 또각또각, 두 친구의 발소리가 나란히 났어요. 유하와 해니는 웃으며 열린 유치원 문으로 들어갔어요.",
+      "enBefore": "Yuha lifted the handkerchief, then down it came. Haeni peeked out at the kindergarten door. Yuha put the handkerchief in his bag. They held hands and giggled as they went inside.",
+      "enAfter": "Down came the cloth, and Haeni peeked out. Yuha put the handkerchief in his bag. Hand in hand, they went into kindergarten.",
+      "koChanged": false,
+      "enChanged": true
+    }
+  ],
+  "englishSearch": {
+    "rag": 0,
+    "wasDown": 0,
+    "handkerchief": 4
+  },
+  "seatbeltMentions": {
+    "finalEntries": [
+      2,
+      3
+    ],
+    "writerBeats": [
+      2,
+      3
+    ],
+    "baselineR31CEntries": [
+      2,
+      3,
+      4,
+      5
+    ],
+    "note": "Term occurrence is a screening measure, not proof of redundant state narration. Read the text in context."
+  },
+  "writerStageExtraAttempts": {
+    "ko": 1,
+    "en": 9
+  },
+  "rawRunnerMeasured": {
+    "pages": 6,
+    "sentences": 83,
+    "rhythm": 0,
+    "eojeol": 490,
+    "averageEojeol": 5.9,
+    "longest": 9,
+    "quotes": 11,
+    "exclaims": 11,
+    "soundWords": [
+      "팔랑팔랑",
+      "부릉부릉",
+      "꼼지락꼼지락",
+      "또각또각"
+    ],
+    "pagesWithSounds": 4,
+    "enWords": 146,
+    "koIssuePages": 0,
+    "enIssuePages": 2
+  },
+  "paginationRepairMeta": [
+    {
+      "repairAttempts": 1,
+      "repairRequestCount": 2,
+      "repairBudget": {
+        "used": 2,
+        "max": 12
+      },
+      "richnessRepairAttempts": 0,
+      "checks": {
+        "passed": true,
+        "checks": [
+          {
+            "id": "duplicate_pages",
+            "label": "중복 쪽",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "repeated_suffix",
+            "label": "꼬리말 반복",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "beat_mapping",
+            "label": "비트 누락·순서",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "refrain",
+            "label": "후렴 횟수·위치",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "level",
+            "label": "읽기 수준 범위",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "drawable_scene",
+            "label": "그릴 수 있는 장면",
+            "passed": true,
+            "violations": []
+          },
+          {
+            "id": "moral_tail",
+            "label": "교훈 꼬리말",
+            "passed": true,
+            "violations": []
+          }
+        ],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.6,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 1
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6.23,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 2
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6.5,
+            "sentenceCount": 14,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 3
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 5.33,
+            "sentenceCount": 15,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 4
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 5.85,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 5
+          },
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 6,
+            "sentenceCount": 13,
+            "expected": {
+              "min": 10,
+              "max": 15
+            },
+            "pageNo": 6
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 1,
+            "props": [
+              "a yellow handkerchief",
+              "an open bag",
+              "a little ball inside the bag"
+            ],
+            "message": "1쪽 글에 나온 a yellow handkerchief, an open bag, a little ball inside the bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 2,
+            "props": [
+              "a yellow handkerchief with a small bump",
+              "the children's fastened seat belts",
+              "Yuha's bag beside him"
+            ],
+            "message": "2쪽 글에 나온 a yellow handkerchief with a small bump, the children's fastened seat belts, Yuha's bag beside him이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 3,
+            "props": [
+              "the yellow handkerchief resting on Yuha's hands",
+              "Yuha's open bag on his back",
+              "the open door of the parked bus"
+            ],
+            "message": "3쪽 글에 나온 the yellow handkerchief resting on Yuha's hands, Yuha's open bag on his back, the open door of the parked bus이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 4,
+            "props": [
+              "the yellow handkerchief with fingertips peeking out",
+              "the open bag",
+              "the little ball still inside the bag"
+            ],
+            "message": "4쪽 글에 나온 the yellow handkerchief with fingertips peeking out, the open bag, the little ball still inside the bag이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 5,
+            "props": [
+              "the yellow handkerchief hiding Yuha's face",
+              "small yellow flowers in the flower bed"
+            ],
+            "message": "5쪽 글에 나온 the yellow handkerchief hiding Yuha's face, small yellow flowers in the flower bed이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          },
+          {
+            "type": "drawable_scene",
+            "code": "key-prop-missing",
+            "severity": "warning",
+            "advisory": true,
+            "pageNo": 6,
+            "props": [
+              "the yellow handkerchief tucked into the bag",
+              "Yuha's bag on his back"
+            ],
+            "message": "6쪽 글에 나온 the yellow handkerchief tucked into the bag, Yuha's bag on his back이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+          }
+        ],
+        "violations": [],
+        "failedPageNos": [],
+        "needsRepagination": false
+      },
+      "revision": {
+        "version": 1,
+        "accepted": [],
+        "rejected": [],
+        "report": {
+          "overall": "손수건 아래의 공인 줄 알았던 것이 해니의 손이라는 반전이 또렷하고, 두 친구가 까꿍을 주고받는 즐거움이 잘 살아 있어요. 한국어와 영어가 같은 장면을 보여 주며, 손잡고 유치원에 들어가는 끝맺음도 자연스러워 수정 없이 유지했습니다.",
+          "strengths": [
+            "가방 속 공이 뒤에 다시 보여 반전을 이해하는 단서가 됩니다.",
+            "삐죽, 꼼지락꼼지락, 빼꼼 같은 말이 장난의 움직임을 생생하게 전합니다.",
+            "집에서 시작한 까꿍이 친구와의 놀이로 이어지며 따뜻하게 마무리됩니다."
+          ],
+          "issues": []
+        }
+      }
+    }
+  ],
+  "repairHistory": [
+    {
+      "requests": 1,
+      "failedPageNos": [
+        3,
+        5
+      ],
+      "violations": [
+        "level@3",
+        "level@5"
+      ],
+      "notes": 12
+    },
+    {
+      "requests": 2,
+      "failedPageNos": [
+        5
+      ],
+      "violations": [
+        "level@5"
+      ],
+      "notes": 12
+    },
+    {
+      "requests": 3,
+      "failedPageNos": [],
+      "violations": [],
+      "notes": 12
+    },
+    {
+      "requests": 6,
+      "failedPageNos": [],
+      "violations": [],
+      "notes": 12
+    }
+  ],
+  "progress": [
+    "주제에 맞는 등장인물·배경 고르기",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "줄거리 만들기",
+    "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의 · 작가 봇이 피치 3개를 쓰고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의 · 편집자·그림 감독·독자 봇이 피치를 살피고 있어요.",
+    "기획 회의 · 작가 봇이 스토리 바이블을 확정하고 있어요.",
+    "기획 회의 · 작가·편집자·그림 감독·독자 봇이 의논하고 있어요.",
+    "기획 회의를 마쳤어요. 바이블대로 줄거리를 씁니다.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "주제·등장인물·장소를 맞춰 줄거리를 다시 만들고 있어요 (1/2).",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "장면 디테일 만들기",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "한글·영어 전문 쓰기",
+    "정성 모드 · 1/6비트를 쓰고 있어요.",
+    "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+    "정성 모드 · 2/6비트를 쓰고 있어요.",
+    "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+    "정성 모드 · 3/6비트를 쓰고 있어요.",
+    "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+    "정성 모드 · 4/6비트를 쓰고 있어요.",
+    "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+    "정성 모드 · 5/6비트를 쓰고 있어요.",
+    "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+    "정성 모드 · 6/6비트를 쓰고 있어요.",
+    "정성 모드 · 비트마다 작가가 한 장면씩 쓰고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "전문 인과관계·상태 검사",
+    "전체 전문의 원인·결과와 인물·소품 상태를 검사하고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "쪽 나누기와 본문 검사",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "이야기 검사 결과를 고치고 있어요 (1/1).",
+    "1/1차 수정 · 3번째 쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "1/1차 수정 · 5번째 쪽을 고치고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "쪽별 호기심과 조용한 마무리를 살펴보고 있어요.",
+    "아이의 세 문장 되말하기로 이야기 연결을 살펴보고 있어요.",
+    "책 전체를 처음부터 끝까지 읽고 글을 다듬고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "그림을 만들기 전 전체 쪽의 사건·상태를 검사하고 있어요.",
+    "이야기 글을 생성하고 있어요.",
+    "이야기 생성 응답을 받았어요.",
+    "글 완성 · 쪽 검수"
+  ],
+  "writerReport": {
+    "attempts": {
+      "ko:1": 1,
+      "en:1": 3,
+      "ko:2": 1,
+      "en:2": 3,
+      "ko:3": 1,
+      "en:3": 3,
+      "en:4": 3,
+      "ko:4": 2,
+      "ko:5": 1,
+      "en:5": 2,
+      "en:6": 1,
+      "ko:6": 1
+    },
+    "warnings": [
+      "영어 1비트: 긴 문장이 2개예요(한 문장 9단어 안팎). (세 번 써서 가장 가까운 글을 썼어요)",
+      "영어 4비트: 문장이 5개로 많아요(목표 4, 범위 2~4). (세 번 써서 가장 가까운 글을 썼어요)",
+      "한글 대화 비율 13% (책 전체 기준 25% 이상 권장)",
+      "영어 대화 비율 24% (책 전체 기준 25% 이상 권장)"
+    ],
+    "anchor": {
+      "ko": {
+        "pick": 1,
+        "judged": false
+      },
+      "en": {
+        "pick": 1,
+        "judged": false
+      }
+    },
+    "summarized": false,
+    "calls": 24,
+    "budget": 41,
+    "refrain": {
+      "voiceCard": {
+        "ko": "",
+        "en": ""
+      },
+      "beats": []
+    },
+    "dialogue_ko": 0.13,
+    "dialogue_en": 0.24
+  },
+  "revision": {
+    "version": 1,
+    "accepted": [],
+    "rejected": [],
+    "report": {
+      "overall": "손수건 아래의 공인 줄 알았던 것이 해니의 손이라는 반전이 또렷하고, 두 친구가 까꿍을 주고받는 즐거움이 잘 살아 있어요. 한국어와 영어가 같은 장면을 보여 주며, 손잡고 유치원에 들어가는 끝맺음도 자연스러워 수정 없이 유지했습니다.",
+      "strengths": [
+        "가방 속 공이 뒤에 다시 보여 반전을 이해하는 단서가 됩니다.",
+        "삐죽, 꼼지락꼼지락, 빼꼼 같은 말이 장난의 움직임을 생생하게 전합니다.",
+        "집에서 시작한 까꿍이 친구와의 놀이로 이어지며 따뜻하게 마무리됩니다."
+      ],
+      "issues": []
+    }
+  },
+  "pageCoherence": {
+    "version": 1,
+    "stage": "pages",
+    "contentFingerprint": "coherence-v1-pages-6cca7f33",
+    "passed": true,
+    "issues": [],
+    "repairAttempts": 0
+  },
+  "baselineR31C": {
+    "costUsd": 1.2016832000000002,
+    "requests": 43,
+    "seconds": 612,
+    "englishLevelRewrites": 6,
+    "remainingEnglishFlags": 3
+  },
+  "limitations": [
+    "One independently sampled story per version, with independently generated materials; not a controlled statistical comparison.",
+    "Token usage multiplied by catalogue rates is not the provider invoice.",
+    "writerOriginal is the writer-stage return; it can already include writer-stage fixes.",
+    "Repair history omits violation language; do not infer an exact English-only count from page repair totals unless there were no page repairs.",
+    "No paid images or real-child comprehension study."
+  ]
+}
