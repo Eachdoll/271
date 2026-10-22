@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-21",
+  "sourceCommit": "23ad38dfaf07330e37cdbd4cb719952b1b93867b",
+  "credentialFixCommit": "a9af49502f830f367eac1615e6e931458f093cd4",
+  "nodeAssetsFixCommit": "eb41ce4",
+  "nodeVersion": "v24.19.0",
+  "tests": {
+    "app": {
+      "command": "npm test",
+      "passed": 992,
+      "failed": 0
+    },
+    "quality": {
+      "command": "npm run test:quality",
+      "passed": 85,
+      "failed": 0
+    },
+    "packageCopies": {
+      "command": "diff -rq story-quality/dist dist/story-quality/dist",
+      "equal": true
+    },
+    "demoAndNoPaidFlag": {
+      "passed": true
+    },
+    "nodeQualityAssetPreload": {
+      "passed": true
+    },
+    "recoveryToolsSyntax": {
+      "passed": true
+    }
+  },
+  "imagesPurchased": 0,
+  "deployed": false,
+  "costMethod": "Provider usage tokens x app price catalogue; not a provider invoice",
+  "secretScan": {
+    "filesScanned": 28,
+    "exactCredentialMatches": 0,
+    "keyPatternMatches": 0,
+    "passed": true
+  }
+}

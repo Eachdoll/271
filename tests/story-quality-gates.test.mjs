@@ -22,6 +22,23 @@ function childEngine({curiosityResults=[curiosity()],retellResults=[retell()]}={
 }
 const child=(source,options={},services={})=>inspectChildStory(source.outline,source.prose,source.pagination,source.input,{now:at,...options},services);
 
+test('child simulator forwards the caller credential source when a cheap role selects a model',async()=>{
+  const source=fixture(),engine=childEngine();
+  const credentialFor=async id=>{assert.equal(id,'openai');return 'test-credential-placeholder';};
+  let resolved=0;
+  const result=await child(source,{engineId:'openai',credentialFor,qualityEngines:{cheap:{engineId:'openai',config:{model:'gpt-4.1-mini'}}}},{async engineFor(options){
+    resolved++;
+    assert.equal(options.credentialFor,credentialFor,'headless calls must retain the injected key source');
+    assert.equal(options.config.model,'gpt-4.1-mini');
+    assert.equal(await options.credentialFor(options.engineId),'test-credential-placeholder');
+    return engine;
+  }});
+  assert.equal(resolved,1);
+  assert.equal(engine.calls.length,2);
+  assert.equal(result.meta.childGate.pass,true);
+  assert.doesNotMatch(JSON.stringify(result),/test-credential-placeholder|credentialFor/);
+});
+
 test('disabled child simulator never resolves an engine; valid and cached checks make exactly two then zero calls',async()=>{
   const source=fixture(),before=clone(source),engine=childEngine();
   const disabled=await child({...source,input:{storyQuality:{enabled:true,childSimulator:false}}},{},{engineFor(){throw Error('should not resolve');}});

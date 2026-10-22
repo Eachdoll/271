@@ -66,9 +66,9 @@ test('R31b the level in a sentence: the vocabulary list only for blocking levels
   const k2 = normalizeStoryInput(inputFromWizard(state, wiz()).input), k1 = normalizeStoryInput(inputFromWizard(state, wiz({koreanLevel: 'K1', englishLevel: 'E0'})).input);
   const ko = leanLevelLine(k2, 'ko'), en = leanLevelLine(k2, 'en'), en0 = leanLevelLine(k1, 'en');
   assert.match(ko, /^Korean K2 \(.+\): about \d+–\d+ sentences per page, \d+–\d+ eojeol each/u);
-  assert.match(en, /Use only these words/u, 'E2 blocks out-of-list words: the list is given');
-  assert.doesNotMatch(leanLevelLine(k2, 'en', {vocab: false}), /Use only these words/u);
-  assert.match(en0, /Very simple everyday words/u); assert.doesNotMatch(en0, /Use only these words/u, 'E0 is advisory: no list');
+  assert.match(en, /Use mostly these words/u, 'E2 blocks out-of-list words: the list is given');
+  assert.doesNotMatch(leanLevelLine(k2, 'en', {vocab: false}), /Use mostly these words/u);
+  assert.match(en0, /Very simple everyday words/u); assert.doesNotMatch(en0, /Use mostly these words/u, 'E0 is advisory: no list');
   assert.match(en0, /Present tense; says, not said/u);
   assert.match(leanLevelLine(k1, 'ko'), /K1 SHORT LINES/u);
   for (const line of [ko, en, en0]) assert.doesNotMatch(line, /vocabGrade|ruleVersion|maxOutOfListRatio|approxLexile/u);
@@ -123,7 +123,7 @@ test('R31b the K1 outline of a diet draft has no ledger and the K1 shape once; �
   assert.equal((calls[0].system.match(/No villain/gu) || []).length, 1, 'the K1 shape is stated once');
   assert.equal(calls[0].jsonSchema.required.includes('plotContract'), false);
   assert.equal(result.data.plotContract, undefined);
-  assert.doesNotMatch(calls[0].system, /Use only these words/u, 'no vocabulary list at the outline stage');
+  assert.doesNotMatch(calls[0].system, /Use mostly these words/u, 'no vocabulary list at the outline stage');
 });
 
 test('R31b the beat writer and the app prose path of a diet draft: voice, not counters; the level in a sentence', async () => {

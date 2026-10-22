@@ -609,7 +609,11 @@ const PRE_R13_ENGINE_SHA256 = 'e2ce53ee825cc53496cc286babb2f923b6df04c209e471450
 // NEW K1 job changed (no room, one writer call, no pagination request); every
 // request and model of a pre-R13 snapshot is the same (diffed with
 // PRE_R13_APP_ROOT=653b704). 653b704: b16dbb33…aaa7.
-const PRE_R13_APP_SHA256 = '9999512827021ccddebf6b51976ee18a2f25c1eb5dab937d4343469f45683447';
+// Re-pinned for 검사 다이어트 (2026-10-22, R31c): only estimateFullAutoCost of a
+// NEW job changed (a diet K1 book skips the editor and prices two page fixes,
+// a diet K2 book prices two page fixes); the legacy requests and models are
+// the same (PRE_R13_APP_ROOT diff). Previous: 99995128…3447.
+const PRE_R13_APP_SHA256 = '739bb63345ae77405c32f11ec954d5ce10b32a49e3cb539ecac90fb26b356173';
 test('R13 legacy: settings saved before R13 send byte-identical requests, models and estimates', async () => {
   const root = new URL('../', import.meta.url);
   const engine = await legacyEngineSnapshot(root), app = await legacyAppSnapshot(root);

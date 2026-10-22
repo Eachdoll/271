@@ -1,3 +1,4 @@
+import { leanPaginationRules, leanOpeningsPaginationRules, leanPageRewriteRules, leanStoryWordsLine } from "./prompt-diet.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -1309,6 +1310,16 @@ async function briefCheckpoint(options, briefs, requests, report, repairs) {
  * are kept as notes (meta.softIssues) once repairs run out; advisories are
  * never repaired or billed.
  */
+const trimBriefCounts = (rows) =>
+  rows.map((b) =>
+    b && typeof b === "object"
+      ? {
+          ...b,
+          ...(Array.isArray(b.props) && b.props.length > 4 ? { props: b.props.slice(0, 4) } : {}),
+          ...(Array.isArray(b.sounds) && b.sounds.length > 3 ? { sounds: b.sounds.slice(0, 3) } : {}),
+        }
+      : b,
+  );
 export async function generateSceneBriefs(outline, source, options = {}) {
   const input = normalizeStoryInput(source);
   assertValid("outline", outline, { ...input, pageCount: undefined });
@@ -1341,12 +1352,14 @@ export async function generateSceneBriefs(outline, source, options = {}) {
       const result = await complete(
         "sceneBriefs",
         input,
-        { rules: `${sceneBriefRules()}${bibleBriefRules(outline)}`, data: { approvedOutline: outline } },
+        { rules: `${sceneBriefRules(input)}${hasPromptDiet(input) ? "" : bibleBriefRules(outline)}`, data: { approvedOutline: outline } },
         schema,
         options,
       );
       requests.push(result);
       briefs = normalizeSceneBriefs(result.data);
+      // R31c: a brief with a prop or a sound too many is trimmed, not bought again.
+      if (hasPromptDiet(input)) briefs = trimBriefCounts(briefs);
     }
     // Unknown IDs are not allowed to displace approved beats.
     briefs = briefs.filter((b) => allowed.has(b?.beatIndex));
@@ -1385,7 +1398,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
             "sceneBrief",
             input,
             {
-              rules: `${sceneBriefRules()}\nReturn ONLY the target beat as one SceneBrief; keep beatIndex=${beatIndex}. Other briefs are already approved and cannot be modified. Fix all listed violations while respecting preceding/following times.`,
+              rules: `${sceneBriefRules(input)}\nReturn ONLY the target beat as one SceneBrief; keep beatIndex=${beatIndex}. Other briefs are already approved and cannot be modified. Fix all listed violations while respecting preceding/following times.`,
               data: {
                 approvedOutline: outline,
                 targetBeatIndex: beatIndex,
@@ -1486,7 +1499,7 @@ export async function rewriteSceneBrief(
         "sceneBrief",
         input,
         {
-          rules: `${sceneBriefRules()}\nRewrite ONLY beat ${beatIndex}. Return one SceneBrief with beatIndex=${beatIndex}. Preserve other beats and their continuity.`,
+          rules: `${sceneBriefRules(input)}\nRewrite ONLY beat ${beatIndex}. Return one SceneBrief with beatIndex=${beatIndex}. Preserve other beats and their continuity.`,
           data: {
             approvedOutline: outline,
             targetBeatIndex: beatIndex,
@@ -2796,7 +2809,7 @@ export async function generateProse(outline, source, options = {}) {
   const schema = clone(PROSE_SCHEMA);
   schema.required.push("paragraphBeats");
   const rules = hasPromptDiet(input)
-    ? `${leanProseRules(input)}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}`
+    ? `${leanProseRules(input)}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${leanStoryWordsLine(input, outline) ? `\n${leanStoryWordsLine(input, outline)}` : ""}`
     : `Write full Korean and English prose in paragraphs, WITHOUT page divisions. Follow every approved beat in order, preserve the causal sequence and explicitly reveal the approved twist. When sceneBriefs are supplied, use each beat's sounds, concrete props, dialogue and drawable action without changing the approved event or adding unsupported geometry.
 EVERY sentence must have an explicit grammatical subject in both languages. Use a character name, an unambiguous pronoun, or a concrete object as the subject; never omit the Korean subject. Attribute every quoted dialogue turn to a named speaker, and give each sentence within dialogue its own explicit subject. Vary subjects naturally rather than repeating the protagonist's name at every sentence start.
 Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least two sound/movement words. EACH approved beat must contain at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture), distributed within the beat's paragraphs. Expand each approved beat into concrete observation → attempt → visible consequence, including small gestures and specific reactions. At the earliest levels distribute these details over short permitted sentences. Never repeat an identical sentence except the approved refrain at planned beat positions, maximum 3.
@@ -2944,6 +2957,8 @@ export async function rewriteParagraph(
   return result;
 }
 function paginationRules(input) {
+  // R31c: on the diet the request is the structure and the shape, no quotas.
+  if (hasPromptDiet(input)) return leanPaginationRules(input, { custom: customEnding(input) });
   return `Paginate the supplied APPROVED prose into exactly ${input.pageCount} pages. Do not rewrite the prose stage, omit events, invent a different plot, or change its approved ending. Light sentence smoothing and splitting/merging adjacent page blocks are allowed.
 One page = one drawable scene. Keep all beats mapped to ascending pageNo; pageNo=1..${input.pageCount}. All approved beat IDs appear in order. Start the turn at ${Math.floor((input.pageCount * 2) / 3)}–${Math.floor((input.pageCount * 2) / 3) + 1}; the final page maps to close.
 Apply Korean and English frozen sentence/word limits independently on every page. Preserve quoted dialogue, sensory details, causal attempts and twist from the original prose.
@@ -2957,6 +2972,8 @@ Use only supplied wardrobe IDs; variantByCharacter maps selected character IDs t
  * place, staging, cast, wardrobe and cover rules stay as for page books.
  */
 function openingsPaginationRules(input, options = {}) {
+  if (hasPromptDiet(input))
+    return leanOpeningsPaginationRules(input, { cues: MODEL_CUES, openingKinds: options.openingKinds || "", custom: customEnding(input) });
   const count = input.pageCount / 2,
     ko = input.specs.ko.units,
     en = input.specs.en.units,
@@ -3022,7 +3039,7 @@ async function paginateOpeningsOnce(outline, prose, input, options, violations) 
       "pagination",
       input,
       {
-        rules: `${openingsPaginationRules(input, options)}${biblePaginationRules(outline, input)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
+        rules: `${openingsPaginationRules(input, options)}${hasPromptDiet(input) ? "" : biblePaginationRules(outline, input)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
         data: {
           approvedOutline: outline,
           approvedOriginalProse: prose,
@@ -3058,6 +3075,7 @@ function applyStaging(pagination, outline, input, options) {
       stylePreset: options.stylePreset,
       backgrounds: input.backgrounds,
       ...(isOpeningsInput(input) ? { openings: true } : {}),
+      lean: hasPromptDiet(input),
     });
   next.sceneBriefs = clone(briefs);
   for (const page of next.pages || []) {
@@ -3109,7 +3127,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
     "pagination",
     input,
     {
-      rules: `${paginationRules(input)}${biblePaginationRules(outline, input)}\nThe ${outline.beats.length} outline beats are NOT pages. Expand them into exactly ${input.pageCount} pages by splitting events across pages. Never return one page per beat. Follow the supplied pagePlan (pageNo -> beatIndex); retain the approved prose and ending.${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
+      rules: `${paginationRules(input)}${hasPromptDiet(input) ? "" : biblePaginationRules(outline, input)}\nThe ${outline.beats.length} outline beats are NOT pages. Expand them into exactly ${input.pageCount} pages by splitting events across pages. Never return one page per beat. Follow the supplied pagePlan (pageNo -> beatIndex); retain the approved prose and ending.${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
       data: {
         approvedOutline: outline,
         approvedOriginalProse: prose,
@@ -3139,6 +3157,7 @@ export function inspectStory(outline, pagination, input) {
       [c.name, c.nameEn].filter(Boolean),
     ),
     craftPolicy: input.craftPolicy || null,
+    lean: hasPromptDiet(input),
   });
   // R12 openings: the opening structure (validateOpenings) replaces the entry count.
   const structure = isOpeningsInput(input)
@@ -3199,7 +3218,10 @@ export async function rewriteStoryPage(
       },
     };
   }
-  const rules = sceneOnly
+  const rules = hasPromptDiet(input)
+    ? // R31c: fix what is listed, keep the voice; a scene is "what the picture shows".
+      `${leanPageRewriteRules(pageNo, original, { sceneOnly })}${sceneOnly ? "" : openingEntryRule(input, pagination, index)}`
+    : sceneOnly
     ? `Rewrite ONLY the drawable English scene.action for page ${pageNo}, 8–30 words containing a visible verb, location and props. Do not change any text, cast, wardrobe, beat or other scene fields. Return {action:string}.`
     : `Rewrite only story page ${pageNo}, preserving pageNo=${pageNo}, beatIndex=${original.beatIndex}, cast and allowed wardrobe IDs. Preserve its concrete event and all ORIGINAL prose facts, adjacent continuity and the approved twist. Repair the listed violations only. Other pages must stay unchanged. If a violation names only one language, keep the other language byte-for-byte unchanged. Return one StoryPage. Do not invent a new event or lesson. ${options.richness ? richnessPromptRules() : ""}${openingEntryRule(input, pagination, index)}`;
   const result = await complete(
@@ -3483,7 +3505,8 @@ async function finishPaginationRichness(
     const budget = isOpeningsInput(input) ? openingBudget(options, input) : null;
     for (
       let pass = 0;
-      pass < 2 && !report.passed && options.repair !== false && !demo(options);
+      // R31c: on the diet the richness report is a note, never a rewrite.
+      pass < 2 && !report.passed && options.repair !== false && !demo(options) && !hasPromptDiet(input);
       pass++
     ) {
       attempts++;
@@ -3643,7 +3666,8 @@ async function finishPaginationCoherence(
     if (options.skipCoherence)
       return { ...result, meta: { ...result.meta, coherence: undefined } };
     let unrevised = null;
-    if (options.revise === true && hasEditorPolicy(input) && !demo(options)) {
+    // R31c: a diet K1 book (written whole, in one call) is not read through by the editor.
+    if (options.revise === true && hasEditorPolicy(input) && !demo(options) && !(hasPromptDiet(input) && hasK1Policy(input))) {
       unrevised = result;
       result = await reviseStoryBook(result, outline, input, options);
       if (!result.meta?.revision?.accepted?.length) unrevised = null;
@@ -3800,6 +3824,8 @@ export async function repairPagination(
     report = inspectStory(outline, next, input),
     attempts = 0;
   const requests = [];
+  // R31c: one repair pass on the diet (what the first pass could not fix is a note).
+  const passes = hasPromptDiet(input) ? 1 : 2;
   // Demo has no hidden API or content replacement; expose its genuine checks.
   if (demo(options))
     return finishPaginationRichness(
@@ -3819,13 +3845,13 @@ export async function repairPagination(
   if (openings && !demo(options))
     return repairOpeningsPagination(outline, prose, next, input, options);
   try {
-    for (let pass = 0; pass < 2 && !report.passed; pass++) {
+    for (let pass = 0; pass < passes && !report.passed; pass++) {
       attempts++;
       notify(
         options,
         "pagination",
         "repair",
-        `이야기 검사 결과를 고치고 있어요 (${pass + 1}/2).`,
+        `이야기 검사 결과를 고치고 있어요 (${pass + 1}/${passes}).`,
         { attempt: pass + 1, failedPageNos: report.failedPageNos },
       );
       if (report.needsRepagination) {
@@ -3852,7 +3878,7 @@ export async function repairPagination(
             options,
             "pagination",
             "repair-page",
-            `${pass + 1}/2차 수정 · ${pageNo}쪽을 고치고 있어요.`,
+            `${pass + 1}/${passes}차 수정 · ${pageNo}쪽을 고치고 있어요.`,
             { attempt: pass + 1, pageNo },
           );
           const violations = report.violations.filter(
@@ -3920,7 +3946,7 @@ async function repairOpeningsPagination(outline, prose, pagination, input, optio
     requests = [];
   let next = pagination,
     report = inspectStory(outline, next, input),
-    richness = options.richness
+    richness = options.richness && !hasPromptDiet(input)
       ? checkRichness(next, input, outline, briefs)
       : null,
     attempts = 0;
@@ -3933,10 +3959,12 @@ async function repairOpeningsPagination(outline, prose, pagination, input, optio
             ...(richness?.failedPageNos || []),
           ]),
         ].sort((a, b) => a - b);
+  // R31c: one repair pass on the diet.
+  const passes = hasPromptDiet(input) ? 1 : 2;
   try {
     for (
       let pass = 0;
-      pass < 2 && (report.needsRepagination || failing().length);
+      pass < passes && (report.needsRepagination || failing().length);
       pass++
     ) {
       attempts++;
@@ -3987,7 +4015,7 @@ async function repairOpeningsPagination(outline, prose, pagination, input, optio
           await checkpoint(options, next, inspectStory(outline, next, input), attempts, requests);
         }
       report = inspectStory(outline, next, input);
-      richness = options.richness
+      richness = options.richness && !hasPromptDiet(input)
         ? checkRichness(next, input, outline, briefs)
         : null;
       if (budget.used >= budget.max && !report.needsRepagination) break;

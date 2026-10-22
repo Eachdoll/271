@@ -1,0 +1,13 @@
+{
+  "dist/story-generation/book-revision.js": true,
+  "dist/story-generation/checker.js": true,
+  "dist/story-generation/k1-book.js": true,
+  "dist/story-generation/pipeline.js": true,
+  "dist/story-generation/prompt-diet.js": true,
+  "dist/story-generation/quality-gates.js": true,
+  "dist/story-generation/scene-briefs.js": true,
+  "dist/story-generation/staging.js": true,
+  "dist/story-generation/ui.js": true,
+  "dist/sw.js": true,
+  "dist/text-generation/models.js": true
+}

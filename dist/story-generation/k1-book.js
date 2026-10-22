@@ -107,7 +107,6 @@ const CRAFT = [
   "아이가 따라 말하고 싶은 되풀이와 짧은 대사가 생기면 살려요. 누가 말했는지는 보이게.",
   "무서움·눈물·혼남·경쟁·다침은 없어요. 모두 안전하게.",
   "영어(en)는 같은 이야기를 그 단계의 영어로 새로 써요(번역이 아니에요). 이름은 영어 이름.",
-  "picture는 영어 한두 문장: 구도, 누가, 어떤 자세, 빛과 색. 그림 속에 글자는 없어요.",
 ];
 
 function pageChecks(page, input, allowedNames) {
@@ -172,7 +171,7 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     `[바람·걸림돌·작은 변화] ${str(outline.want, 200)} / ${str(outline.problem, 200)} / ${str(outline.twist, 200)}`,
     `[등장인물 — who에는 이 ID만]\n${cast}`,
     `[쪽 배치 — 그대로] ${pagesLine}`,
-    `[출력] JSON만. {"cover":"표지 그림 영어 한 문장(글자 없음)","pages":[{"pageNo":1,"ko":"한글","en":"English","picture":"English picture","feeling":"one English word","who":["id"],"timeOfDay":"morning","props":["English prop"]}, …]}`,
+    `[출력] JSON만. {"cover":"표지 그림을 영어로","pages":[{"pageNo":1,"ko":"한글","en":"English","picture":"그 쪽 그림을 영어로","feeling":"one English word","who":["id"],"timeOfDay":"morning","props":["English prop"]}, …]}`,
   ].join("\n\n");
   const read = (response) => {
     const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));

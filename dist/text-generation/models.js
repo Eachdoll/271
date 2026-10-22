@@ -801,7 +801,10 @@ export function estimateStoryTextCost({
     );
   // A K1 book's pages were written as pages (no pagination request).
   if (!k1Book) stages.push(stageEstimate("pagination", input, baseOutput));
-  if (editor)
+  // R31c: about two page fixes after the checks on the diet (measured 11–24
+  // before the loop was put on a diet); a diet K1 book skips the editor.
+  if (diet) stages.push({ ...stageEstimate("pagination", 6000, 700, 2), stage: "pageFix" });
+  if (editor && !(k1Book && diet))
     stages.push({
       ...stageEstimate("coherence", reviewInput, Math.ceil(baseOutput / 2)),
       stage: "revision",
@@ -865,6 +868,7 @@ const BUDGET_STEP = {
   prose: "prose",
   beatRetries: "prose",
   k1Fix: "prose",
+  pageFix: "pagination",
   beatVoice: "prose",
   simplification: "prose",
   enrichment: "enrichment",
