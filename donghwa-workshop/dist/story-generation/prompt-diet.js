@@ -127,7 +127,7 @@ export function leanOutlineRules(input, { count, attempts, k1 = false, custom = 
 ${shape}
 Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. ${custom ? "The first beat uses a home ID from homeBackgroundIds; the last beat happens wherever the parent's ending puts it." : "The first and last beat use the same home ID from homeBackgroundIds."} Middle beats go out to other supplied places (two or more different ones when there are enough).
 People: beat.characters are supplied IDs; every chosen character appears by name somewhere and does something of their own. Use the supplied topic keywords.
-Return 3 Korean title candidates, a one-sentence logline, want and problem, the twist in one sentence, 3–5 new Korean words, new English words, one emotion per beat, one setting record per beat. A refrain is optional (one short line, at most 3 beats) — only if the story naturally has one.`;
+Return 3 Korean title candidates, a one-sentence logline, want and problem, the twist in one sentence, 3–5 new Korean words, new English words, one emotion per beat, one setting record per beat. newWordsEn are the everyday English for the same things, games and sounds the Korean names (손수건 → handkerchief, 까꿍 → peekaboo), never a different object or a shortened word. A refrain is optional (one short line, at most 3 beats) — only if the story naturally has one.`;
 }
 /** The writers' room's pitch, offered as the plan (not bound beat for beat). */
 export function leanBibleBlock(bible, input = {}) {

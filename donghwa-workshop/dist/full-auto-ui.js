@@ -36,6 +36,9 @@ import {
   claimBookForRun,
   releaseBookForRun,
 } from "./story-generation/page-tools.js";
+import { ECO_STEP_LABELS } from "./eco-mode.js";
+/** 에코 모드 (R32): a job the parent fills by pasting; the runner is never started for it. */
+const isEco = (job) => job?.eco?.version === 1;
 /** Jobs parked by a hold: nothing is running and nothing is bought until a caller releases them. */
 const HOLD_LABELS = {
   "text-review": "글 검수 대기",
@@ -197,9 +200,11 @@ function simpleJobLabel(job) {
   if (!book)
     return job.status === "running"
       ? "만드는 중"
-      : councilHeld(job)
-        ? "회의 결과 확인"
-        : "멈춤";
+      : isEco(job)
+        ? `에코 모드 · ${ECO_STEP_LABELS[job.eco.step] || "붙여넣기"}`
+        : councilHeld(job)
+          ? "회의 결과 확인"
+          : "멈춤";
   // A run with its book is making pictures (sheets first, before any page lands).
   if (drawn || ["running", "pages-ready", "review"].includes(job.status))
     return `그림 ${drawn}/${total}`;
@@ -266,7 +271,7 @@ export function renderFullAutoJobs(state, { simple = false, rest = false } = {})
           pending?.nonce &&
           pending.nonce !== job.stopBaselineNonce &&
           job.status !== "paused";
-      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">FULL AUTO · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? (councilHeld(job) ? button("회의 결과 보기", "status", job.id, "green") : button("쪽마다 검수", "simple-review", job.id, "green")) : live ? button("진행 상황", "status", job.id) : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}${!live && job.status !== "running" && stopReportAvailable(job) ? button("멈춤 리포트", "report", job.id, "plain") : ""}</div></article>`;
+      return `<article class="story-draft-card" data-auto-job="${esc(job.id)}"><span class="role-tag">${isEco(job) ? "에코 모드" : "FULL AUTO"} · ${job.status === "review" ? "완성 초안" : held ? HOLD_LABELS[job.status] : isEco(job) ? ECO_STEP_LABELS[job.eco.step] || "붙여넣기" : requested ? "중지 요청됨" : live ? "제작 중" : job.status === "running" ? "마지막 저장 내역" : "대기"}</span><strong>${esc(job.book?.title || job.input?.topic)}</strong><p>${esc(job.phase || "준비")} · ${job.book?.pages?.filter((p) => p.imageAssetId).length || 0} / ${jobPictureTotal(job, job.input?.pageCount || 12)} 그림</p>${job.status === "running" && !live ? '<p class="small-label">이 화면에서는 실행 중이 아닙니다. 이어 만들거나 중지할 수 있어요.</p>' : ""}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="story-inline-actions">${job.status === "review" ? button("완성 초안 검토", "review", job.id, "green") : held ? (councilHeld(job) ? button("회의 결과 보기", "status", job.id, "green") : button("쪽마다 검수", "simple-review", job.id, "green")) : live ? button("진행 상황", "status", job.id) : isEco(job) ? button("이어서 만들기", "simple-open", job.id, "green") : button("이어서 만들기", "resume", job.id, "green")}${job.status !== "review" && !held && !isEco(job) ? button("중지", "pause", job.id) : ""}${job.book && job.status !== "review" && !held && !live ? button("완료된 부분 검토", "review", job.id) : ""}${!live && job.status !== "running" ? button("지우기", "delete", job.id, "plain") : ""}${!live && job.status !== "running" && stopReportAvailable(job) ? button("멈춤 리포트", "report", job.id, "plain") : ""}</div></article>`;
     })
     .join("")}</div></section>`;
 }
@@ -373,6 +378,11 @@ function finishedToast(job, navigate) {
  * records its end here, with no key or World preflight.
  */
 async function execute(job, { navigate = true, onProgress, redraw = [] } = {}) {
+  // 에코 모드 (R32): nothing runs or is bought for a pasted story; it continues in ③.
+  if (isEco(job)) {
+    api.toast("에코 모드 이야기는 쉬운 만들기 ③에서 복사·붙여넣기로 이어 가요.");
+    return;
+  }
   if (controller) {
     api.toast(
       "이미 제작 중인 작업이 있어요. 책장에서 진행 상태를 확인해 주세요.",

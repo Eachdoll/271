@@ -190,9 +190,11 @@ async function runArm(arm) {
           progress.push(message);
           log(`[${arm}] ${message}`);
         }
-        // R31e: why an outline was bought again (the app's own check items).
-        if (p.stage === "outline" && p.phase === "repair" && Array.isArray(p.violations))
-          outlineRepairs.push({ attempt: p.attempt ?? null, violations: p.violations.map((v) => ({ code: v.code || null, message: v.message || String(v) })) });
+        // R31e: why an outline was bought again (the app's own check items);
+        // R31f: FULL AUTO forwards the stage's details under `detail`.
+        const d = p.detail || p;
+        if (d.stage === "outline" && d.phase === "repair" && Array.isArray(d.violations))
+          outlineRepairs.push({ attempt: d.attempt ?? null, violations: d.violations.map((v) => ({ code: v.code || null, message: v.message || String(v) })) });
       },
     });
   } catch (e) {

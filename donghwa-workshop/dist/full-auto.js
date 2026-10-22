@@ -966,6 +966,9 @@ export async function runFullAuto(
   const keySource = credentials ? { credentials } : {};
   if (job.status === "running")
     throw Error("이 자동 작업이 이미 실행 중이에요.");
+  // 에코 모드 (R32): the parent pastes every answer; this runner never buys for it.
+  if (job.eco?.version === 1)
+    throw Error("에코 모드 이야기는 자동으로 만들지 않아요. 쉬운 만들기 ③에서 복사·붙여넣기로 이어 가요.");
   // An unknown hold must never fall through to buying images.
   let hold = checkStopBefore(job.stopBefore);
   const persist = async () => {
@@ -973,8 +976,26 @@ export async function runFullAuto(
     if ((await save()) === false)
       throw Error("자동 작업을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
   };
-  const report = (message) =>
-    onProgress({ job, message, phase: job.phase, ...fullAutoProgress(job) });
+  // R31f: a stage's own event details (its stage, phase, attempt and the
+  // violations it is repairing) ride along under `detail`, so a runner can
+  // record why an outline was bought again; message and job fields as before.
+  const report = (message, detail = null) =>
+    onProgress({
+      job,
+      message,
+      phase: job.phase,
+      ...fullAutoProgress(job),
+      ...(detail && typeof detail === "object"
+        ? {
+            detail: {
+              stage: detail.stage,
+              phase: detail.phase,
+              ...(detail.attempt !== undefined ? { attempt: detail.attempt } : {}),
+              ...(Array.isArray(detail.violations) ? { violations: clone(detail.violations) } : {}),
+            },
+          }
+        : {}),
+    });
   // A stop that lands during the preflight or a save is honoured here too, not
   // only at the next step: the job ends 'paused', never in a hold a page tool may buy from.
   const holdAt = async (status, message) => {
@@ -1072,7 +1093,7 @@ export async function runFullAuto(
       richness: job.textSettings.storyEnrichment !== false,
       enrichmentCheckpoint: job.enrichmentCheckpoint,
       ...(credentials ? { credentialFor: credentials } : {}),
-      onProgress: (p) => report(p.message || label),
+      onProgress: (p) => report(p.message || label, p),
       onCheckpoint: async (cp) => {
         if (cp.qualityCheckpoint)
           job.qualityCheckpoint = clone(cp.qualityCheckpoint);

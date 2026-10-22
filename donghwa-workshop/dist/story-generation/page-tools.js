@@ -324,7 +324,8 @@ async function commit(state, book, save) {
 export async function rewriteBookPage(state, book, pageIndex, options = {}) {
   const index = pageIndexOf(book, pageIndex);
   assertNotRunning(state, book);
-  if (book.textDemo) return { changed: false, demo: true };
+  // 에코 모드 (R32): the parent's own AI wrote the book; nothing is bought for it.
+  if (book.textDemo || book.eco === true) return { changed: false, demo: true };
   // The book is busy from the call on, so its page buttons are disabled while
   // the lock query is still pending.
   return exclusive(book, async () => {
@@ -500,6 +501,7 @@ export function canAlignEnglish(book) {
   return (
     !!book &&
     !book.textDemo &&
+    book.eco !== true &&
     book.language !== "ko" &&
     !!book.outline &&
     !!(book.storyInput?.specs?.en || book.readingLevelSnapshot?.specs?.en)

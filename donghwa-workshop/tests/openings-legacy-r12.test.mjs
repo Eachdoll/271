@@ -801,7 +801,11 @@ const PINS = {
   // 영어 허용 범위·장부 없음 (R31e): ③ prices a new book without the two ledger
   // reviews (③ K1 12쪽 글 약 $0.65 → $0.51, K2 16쪽 영어 $1.71 → $1.56); nothing
   // else changed (dump-diffed against 071ba58). 071ba58: 72bd3a0f…61b0.
-  review: '75314338885ab90e41c7c0eda58c2b4676949629da4774e2310dfd812650f875',
+  // 추정 보정·에코 모드 (R31f/R32): ③ prices a new diet book from the recorded
+  // R31e/R31c runs (K1 12쪽 글 약 $0.51 → $0.26, K2 16쪽 영어 $1.56 → $0.88) and
+  // its start row gains the '에코 모드 · 복사·붙여넣기' button; ④ and ⑤ and every
+  // other group are unchanged (dump-diffed against b928880). b928880: 75314338…f875.
+  review: '2004a7812b152e8378cd381b14693f1fe909e9cda8d85010f131b0b7e3d40cb4',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -840,7 +844,12 @@ const PINS = {
   // 11 → 9 requests, $0.579 → $0.450; K2 16쪽 39 → 37, $1.413 → $1.284); jobs
   // whose outline carries a ledger are the same (dump-diffed against 071ba58).
   // 071ba58: d19686db…dd47.
-  estimates: '8b673b905788d400a759831728fc0a149dada73ed6292edf13568e1c8b821736',
+  // 추정 보정 (R31f): only NEW diet jobs' amounts changed — the diet rows are
+  // sized to the recorded stage costs of the R31e K2 and R31c K1 runs plus about
+  // a third (K1 12쪽 $0.450 → $0.244; K2 16쪽 $1.284 → $0.752; request counts
+  // the same); jobs without the policy are the same (dump-diffed against
+  // b928880). b928880: 8b673b90…1736.
+  estimates: 'ae79788cc43ccae1b2976069bdc0e9b3c78c2317647afd8f908849d4978f5e6b',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

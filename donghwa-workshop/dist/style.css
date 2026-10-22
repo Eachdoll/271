@@ -4489,6 +4489,48 @@ html:has(.settings-save-bar) {
 .simple-stale {
   color: var(--warn);
 }
+/* 에코 모드 (R32): the paste panel in ③ and the picture-request dialogs. */
+.simple-eco .field {
+  margin-top: var(--space-4);
+}
+.simple-eco-text,
+.simple-eco-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+.simple-eco-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.simple-eco-flow li {
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #dbdbdb;
+  font-size: 0.9rem;
+}
+.simple-eco-flow li.active {
+  border-color: var(--text-1);
+  font-weight: 600;
+}
+.simple-eco-flow li.done {
+  opacity: 0.7;
+}
+.simple-eco-outline summary {
+  cursor: pointer;
+}
+.simple-eco-outline ol {
+  padding-left: 1.4em;
+}
+.simple-eco-errors li {
+  color: var(--warn);
+}
 .simple-page-text {
   display: flex;
   flex-direction: column;

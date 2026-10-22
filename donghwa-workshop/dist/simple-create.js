@@ -21,7 +21,31 @@ import {
   fullAutoProgress,
   jobImageModelConfig,
   COUNCIL_REVIEW_STATUS,
+  createFullAutoJob,
+  fullAutoPayload,
 } from "./full-auto.js";
+import {
+  ECO_STATUS,
+  ECO_STEP_LABELS,
+  isEcoJob,
+  isEcoBook,
+  ecoJobInit,
+  ecoOutlinePrompt,
+  ecoAcceptOutline,
+  ecoRetryPrompt,
+  ecoPagesPrompt,
+  ecoAcceptPages,
+  ecoFixPrompt,
+  ecoMergeFix,
+  ecoProseFromPages,
+  ecoFindings,
+  ecoPicturePrompt,
+  ecoPicturePrompts,
+  ecoUploadCheck,
+  ecoAttachUpload,
+  ecoMissingPictures,
+} from "./eco-mode.js";
+import { saveImage } from "./image-generation/assets.js";
 import { readAutoStop } from "./full-auto-control.js";
 import {
   rewriteBookPage,
@@ -274,7 +298,7 @@ const TEXT_ENGINE_NAMES = {
 const HELD = ["text-review", "pages-ready", "review"];
 // R22: parked after the writers' room (no text yet): ③ shows the choice.
 const councilHeld = (job) => job?.status === COUNCIL_REVIEW_STATUS;
-const RESUMABLE = ["ready", "running", "paused", "failed", COUNCIL_REVIEW_STATUS, ...HELD];
+const RESUMABLE = ["ready", "running", "paused", "failed", COUNCIL_REVIEW_STATUS, ECO_STATUS, ...HELD];
 // 2026-10-20 variety: the parent may pick six companions and four places
 // (plus the home); the topic still preselects only two of each.
 const MAX_FRIENDS = 6,
@@ -583,7 +607,395 @@ const canAbandon = (job) =>
   !!job &&
   !job.book &&
   !runIsLive(job) &&
-  ["paused", "failed", "ready", "running", COUNCIL_REVIEW_STATUS].includes(job.status);
+  ["paused", "failed", "ready", "running", COUNCIL_REVIEW_STATUS, ECO_STATUS].includes(job.status);
+
+/* ---------- 에코 모드 (R32): copy a request, paste the answer, upload the pictures ---------- */
+const ECO_NO_BUY =
+  "에코 모드 책은 글도 그림도 사지 않아요. ‘글 고치기’로 직접 고치고, ‘그림 프롬프트’로 만든 그림을 ‘그림 올리기’로 넣어 주세요.";
+const ECO_UPLOAD_INPUT =
+  '<input type="file" id="eco-upload-input" accept="image/*" hidden aria-hidden="true" tabindex="-1">';
+/** The answer pasted in this tab for a job, kept across redraws until it is accepted (never saved). */
+const ecoReplies = new Map();
+/** What ③ shows for an eco job: the request to copy, the retry note after errors, and the step's title and help. */
+function ecoPanelTexts(job) {
+  const eco = job.eco || {},
+    step = eco.step,
+    errors = Array.isArray(eco.errors) ? eco.errors : [];
+  try {
+    if (step === "outline")
+      return {
+        prompt: ecoOutlinePrompt(job.input),
+        fix: errors.length ? ecoRetryPrompt(errors, "outline") : "",
+        title: "1단계 · 줄거리를 부탁하는 글",
+        help: "아래 글을 복사해 AI(챗GPT 등) 대화창에 붙여 넣고, 받은 답(JSON)을 그대로 붙여 넣어요.",
+      };
+    if (step === "pages")
+      return {
+        prompt: ecoPagesPrompt(job.input, job.outline),
+        fix: errors.length ? ecoRetryPrompt(errors, "pages") : "",
+        title: "2단계 · 쪽마다 글을 부탁하는 글",
+        help: "줄거리를 검토했어요. 아래 글을 같은 대화에 붙여 넣어 쪽마다 글을 받고, 답(JSON)을 그대로 붙여 넣어요.",
+      };
+    if (step === "fix")
+      return {
+        prompt: ecoFixPrompt(job.input, job.outline, eco.pagination, eco.report),
+        fix: "",
+        title: "2단계 · 걸린 쪽만 고쳐 달라는 글",
+        help: `읽기 검사에서 ${ecoFindings(eco.report).length}곳이 걸렸어요. 아래 글을 같은 대화에 붙여 넣고, 고친 쪽(JSON)을 붙여 넣어요. 그대로 두고 검수로 갈 수도 있어요.`,
+      };
+  } catch (error) {
+    return { prompt: "", fix: "", title: "요청을 만들지 못했어요", help: String(error?.message || error) };
+  }
+  return { prompt: "", fix: "", title: "", help: "" };
+}
+function renderEcoStep(ctx, w, job) {
+  const eco = job.eco || {},
+    step = eco.step,
+    topic = job.input?.topic || job.wizard?.topic || w.topic || "";
+  if (job.book) {
+    const pages = job.book.pages?.length || 0;
+    return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p><div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""} · 요금 없음</div>${checkNotesLine(job)}${(job.notes || []).map((note) => `<p class="small-label simple-check-note">${esc(note)}</p>`).join("")}<p class="small-label">④에서 쪽마다 글을 확인하고, 그림 프롬프트로 만든 그림을 올려요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 올려요.</span>${sbtn("검수로 가기", "open-review", "green")}</div>`;
+  }
+  const texts = ecoPanelTexts(job),
+    errors = Array.isArray(eco.errors) ? eco.errors : [],
+    notes = Array.isArray(eco.notes) ? eco.notes : [],
+    findings = step === "fix" ? ecoFindings(eco.report) : [],
+    beats = Array.isArray(job.outline?.beats) ? job.outline.beats : [],
+    flow = [
+      ["줄거리", step === "outline" ? "active" : "done"],
+      ["쪽 글", step === "outline" ? "" : "active"],
+      ["그림 (④)", ""],
+    ]
+      .map(([label, cls]) => `<li class="${cls}">${label}</li>`)
+      .join(""),
+    outlineBlock = job.outline
+      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p><ol>${beats.map((b) => `<li>${esc(b.summary || "")}</li>`).join("")}</ol></details>`
+      : "",
+    errorList = errors.length
+      ? `<ul class="check-issues simple-eco-errors">${errors.map((e) => `<li class="check-violation">${esc(e)}</li>`).join("")}</ul>`
+      : "",
+    findingList = findings.length
+      ? `<ul class="check-issues simple-eco-findings">${findings
+          .slice(0, 12)
+          .map((f) => `<li class="check-advisory">${esc(`${f.pageNo ? `${f.pageNo}번 · ` : ""}${f.language === "en" ? "영어 · " : f.language === "ko" ? "한글 · " : ""}${f.message}`)}</li>`)
+          .join("")}${findings.length > 12 ? `<li class="check-advisory">… 외 ${findings.length - 12}곳</li>` : ""}</ul>`
+      : "",
+    busy = actionBusy ? "disabled" : "";
+  return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p><p class="small-label">앱이 AI를 부르지 않아요 · 요금 없음. 글을 복사해 물어보고, 답을 붙여 넣으면 앱이 검사해요.</p><ol class="simple-eco-flow">${flow}</ol>${outlineBlock}${notes.length ? `<p class="small-label simple-check-note">참고: ${esc(notes.join(" · "))}</p>` : ""}<div class="field"><label for="eco-prompt">${esc(texts.title)}</label><p class="small-label">${esc(texts.help)}</p><textarea id="eco-prompt" class="simple-eco-text" readonly rows="10">${esc(texts.prompt)}</textarea></div><div class="simple-start">${sbtn("이 글 복사", "eco-copy", "outline", 'data-target="prompt"')}</div>${errorList}${texts.fix ? `<div class="field"><label for="eco-fix">AI에게 고쳐 달라고 할 때 붙일 글</label><textarea id="eco-fix" class="simple-eco-text" readonly rows="5">${esc(texts.fix)}</textarea></div><div class="simple-start">${sbtn("고침 요청 복사", "eco-copy", "outline", 'data-target="fix"')}</div>` : ""}${findingList}<div class="field"><label for="eco-reply">AI의 답을 여기에 붙여 넣어요</label><textarea id="eco-reply" class="simple-eco-text" rows="8" placeholder="답 전체를 그대로 붙여 넣어요 (JSON)">${esc(ecoReplies.get(job.id) || "")}</textarea></div><div class="simple-start">${sbtn("답 확인하고 다음으로", "eco-accept", "primary", busy)}${step === "fix" ? sbtn("이대로 검수로", "eco-force", "green", busy) : ""}${step !== "outline" ? sbtn("줄거리부터 다시", "eco-redo", "plain", busy) : ""}${sbtn("그만두기", "abandon", "plain", busy)}</div></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">답을 붙여 넣으면 앱이 같은 검사를 해요.</span><span></span></div>`;
+}
+/** ③ 에코 모드: a job the parent fills; the picks must stand on their own (nothing is planned by a model). */
+async function startEco(ctx) {
+  const state = ctx.getState(),
+    w = ctx.getWizard();
+  if (!w || jobOfWizard(state, w)) return;
+  const check = safeTopic(w.topic);
+  if (!check.ok) {
+    w.simpleStep = 1;
+    ctx.render();
+    ctx.toast(check.message || "이야기 주제를 입력해 주세요.");
+    return;
+  }
+  const materials = validateMaterials(state, { ...w, allowNew: false });
+  if (materials)
+    return ctx.toast("에코 모드는 재료를 자동으로 더하지 않아요. ②에서 집 1곳과 다른 장소 2곳을 골라 주세요.");
+  const token =
+    globalThis.crypto?.randomUUID?.() ||
+    String(Date.now()) + Math.random().toString(16).slice(2);
+  let job = null;
+  try {
+    job = ecoJobInit(
+      createFullAutoJob(state, jobWizardFrom({ ...w, allowNew: false }, token), {
+        allowNew: false,
+        stopBefore: "text",
+        planMode: "selection",
+        councilReview: false,
+      }),
+    );
+    // The first request must be buildable now (places, levels); otherwise no job is left behind.
+    ecoOutlinePrompt(job.input);
+  } catch (error) {
+    if (job && state.fullAutoJobs?.[job.id]) delete state.fullAutoJobs[job.id];
+    return ctx.toast(error);
+  }
+  if (ctx.save() === false) {
+    delete state.fullAutoJobs[job.id];
+    return ctx.toast("자동 작업을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+  }
+  w.simpleJobId = job.id;
+  w.allowNew = false;
+  ctx.render();
+  globalThis.scrollTo?.(0, 0);
+  ctx.toast("에코 모드로 시작했어요. 1단계 글을 복사해 AI에게 물어보세요.");
+}
+/** The pasted answer through the step's checks; errors stay on the job, the answer stays in the box. */
+async function ecoAccept(ctx, job) {
+  const field = document.querySelector("#eco-reply"),
+    reply = String(field?.value ?? ecoReplies.get(job.id) ?? "").trim();
+  if (!reply) return ctx.toast("AI의 답을 붙여 넣어 주세요.");
+  ecoReplies.set(job.id, reply);
+  const step = job.eco.step,
+    result =
+      step === "outline"
+        ? ecoAcceptOutline(reply, job.input)
+        : step === "pages"
+          ? ecoAcceptPages(reply, job.outline, job.input, { bookId: job.bookId })
+          : step === "fix"
+            ? ecoMergeFix(reply, job.eco.pagination, job.outline, job.input)
+            : null;
+  if (!result) return;
+  job.updatedAt = new Date().toISOString();
+  if (!result.ok) {
+    job.eco.errors = result.errors;
+    if (ctx.save() === false) ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    ctx.render();
+    ctx.toast(`확인할 곳 ${result.errors.length}곳 · 고침 요청을 복사해 AI에게 보내고, 새 답을 붙여 넣어 주세요.`);
+    return;
+  }
+  ecoReplies.delete(job.id);
+  job.eco.errors = [];
+  if (step === "outline") {
+    job.outline = result.outline;
+    job.completed = { ...(job.completed || {}), outline: true };
+    job.eco.notes = result.notes;
+    job.eco.step = "pages";
+    job.phase = ECO_STEP_LABELS.pages;
+    if (ctx.save() === false) ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    ctx.render();
+    globalThis.scrollTo?.(0, 0);
+    ctx.toast("줄거리를 받았어요. 2단계 글을 복사해 AI에게 물어보세요.");
+    return;
+  }
+  if (result.passed) return ecoFinish(ctx, job, result.pagination, result.report);
+  job.eco.pagination = result.pagination;
+  job.eco.report = result.report;
+  job.eco.step = "fix";
+  job.phase = ECO_STEP_LABELS.fix;
+  if (ctx.save() === false) ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+  ctx.render();
+  globalThis.scrollTo?.(0, 0);
+  ctx.toast(`읽기 검사에서 ${ecoFindings(result.report).length}곳이 걸렸어요. 고침 요청을 복사해 물어보고, 답을 붙여 넣어요.`);
+}
+/** The checked pages become the job's text and its book, held at the text like every simple story. */
+async function ecoFinish(ctx, job, pagination, report) {
+  const state = ctx.getState();
+  if (typeof ctx.buildBook !== "function") return ctx.toast("책 편집 연결을 확인해 주세요.");
+  job.pagination = clone(pagination);
+  job.prose = ecoProseFromPages(job.outline, pagination);
+  job.sceneBriefs = [];
+  job.storyCheck = clone(report || {});
+  job.completed = { ...(job.completed || {}), outline: true, briefs: true, prose: true, pagination: true };
+  const payload = { ...fullAutoPayload(job), textEngineId: "eco", textModelId: null };
+  state.storyDrafts ||= {};
+  state.storyDrafts[job.storyDraftId] = {
+    ...clone(payload),
+    stage: "paged",
+    reviewMode: "pages",
+    selectedTitle: payload.pagination.cover?.title,
+    createdAt: job.createdAt,
+    fullAutoRunId: job.id,
+  };
+  const book = await ctx.buildBook(payload);
+  book.fullAutoRunId = job.id;
+  book.autoReviewPending = true;
+  book.eco = true;
+  delete book.generationSnapshot;
+  delete book.sheetSetupNotice;
+  job.book = book;
+  state.storyDrafts[job.storyDraftId].pictureBook = book;
+  if (report && report.passed !== true) {
+    const note = `읽기 검사 지적 ${ecoFindings(report).length}곳을 참고로 두고 검수로 넘어갔어요 · ④에서 쪽마다 확인할 수 있어요`;
+    job.notes = [...(job.notes || []), note];
+  }
+  delete job.eco.pagination;
+  delete job.eco.report;
+  job.eco.step = "done";
+  job.eco.errors = [];
+  ecoReplies.delete(job.id);
+  job.status = "text-review";
+  job.phase = "글 완성 · 쪽 검수";
+  job.updatedAt = new Date().toISOString();
+  if (ctx.save() === false) ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+  ctx.toast("글이 완성됐어요. ④에서 쪽마다 확인하고 그림을 올려요.");
+  return arriveAtReview(ctx, job);
+}
+/** Back to the first step of the same eco story (the picks and the topic stay). */
+async function ecoRedo(ctx, job) {
+  if (!job || !isEcoJob(job) || job.book) return;
+  const ok = await confirmModal(
+    ctx,
+    "줄거리부터 다시 받을까요?",
+    "받은 줄거리와 쪽 글을 지우고 1단계 글부터 다시 물어봐요. 요금은 들지 않아요.",
+    "다시 받기",
+  );
+  if (!ok) return;
+  delete job.outline;
+  delete job.eco.pagination;
+  delete job.eco.report;
+  job.completed = {};
+  job.eco.step = "outline";
+  job.eco.errors = [];
+  job.eco.notes = [];
+  job.phase = ECO_STEP_LABELS.outline;
+  job.updatedAt = new Date().toISOString();
+  ecoReplies.delete(job.id);
+  if (ctx.save() === false) ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+  ctx.render();
+}
+/** Copy to the clipboard, or say how to copy by hand when the browser refuses. */
+async function copyText(ctx, value) {
+  const text = String(value || "");
+  if (!text) return ctx.toast("복사할 글이 없어요.");
+  try {
+    if (globalThis.navigator?.clipboard?.writeText) {
+      await globalThis.navigator.clipboard.writeText(text);
+      ctx.toast("복사했어요. AI 대화창에 붙여 넣어 주세요.");
+      return true;
+    }
+  } catch {
+    /* fall through to the selection copy */
+  }
+  try {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand?.("copy");
+    area.remove();
+    if (ok) {
+      ctx.toast("복사했어요. AI 대화창에 붙여 넣어 주세요.");
+      return true;
+    }
+  } catch {
+    /* no clipboard here */
+  }
+  ctx.toast("복사하지 못했어요. 글을 길게 눌러 직접 복사해 주세요.");
+  return false;
+}
+function ecoDialog(ctx, title, intro, text) {
+  ctx.showModal(
+    `${ctx.modalHeader(title)}<p class="modal-intro">${intro}</p><div class="simple-eco-dialog"><textarea id="eco-dialog-text" readonly rows="12">${esc(text)}</textarea></div><div class="modal-actions"><button type="button" class="btn btn-primary" id="eco-dialog-copy">복사</button><button type="button" class="btn btn-outline" id="eco-dialog-close">닫기</button></div>`,
+  );
+  const copy = document.querySelector("#eco-dialog-copy");
+  if (copy) copy.onclick = () => void copyText(ctx, text);
+  const close = document.querySelector("#eco-dialog-close");
+  if (close) close.onclick = () => ctx.closeModal();
+}
+/** ④/⑤: one entry's (or the cover's) picture request, to copy into a picture AI. */
+function openEcoPrompt(ctx, book, index, { cover = false } = {}) {
+  let text;
+  try {
+    text = ecoPicturePrompt(ctx.getState(), book, index, { cover });
+  } catch (error) {
+    return ctx.toast(error);
+  }
+  ecoDialog(
+    ctx,
+    cover ? "표지 그림 프롬프트" : `${pageName(book, index)} 그림 프롬프트`,
+    "그림 AI에게 이 글을 그대로 붙여 넣어 그림을 받고, 그 파일을 ‘그림 올리기’로 넣어요.",
+    text,
+  );
+}
+/** ④: every entry's request and the cover's in one box. */
+function openEcoPrompts(ctx, book) {
+  let rows;
+  try {
+    rows = ecoPicturePrompts(ctx.getState(), book);
+  } catch (error) {
+    return ctx.toast(error);
+  }
+  const text = rows
+    .map((row) => `=== ${row.cover ? "표지" : pageName(book, row.index)} ===\n${row.prompt}`)
+    .join("\n\n");
+  ecoDialog(ctx, "그림 프롬프트 모두 보기", "쪽마다 한 장씩 만들어 ④에서 올려요. 표지는 ⑤에서 올려요.", text);
+}
+/** A chosen picture file goes to the asset store and into its entry (or the cover). */
+function ecoUploadChange(target) {
+  const file = target.files?.[0],
+    cover = target.dataset?.cover === "1",
+    index = cover ? 0 : Number(target.dataset?.index ?? api.getEditPage() ?? 0) || 0;
+  api.protectedAction(async () => {
+    const state = api.getState(),
+      book = api.getDraft();
+    if (!book || !isEcoBook(book)) return;
+    const problem = ecoUploadCheck(file);
+    if (problem) return api.toast(problem);
+    if (!cover && !book.pages?.[index]) return api.toast("그림을 올릴 쪽을 찾지 못했어요.");
+    if (actionBusy) return api.toast("지금 하는 일이 끝난 뒤 다시 올려 주세요.");
+    actionBusy = true;
+    api.render();
+    try {
+      const saved = await saveImage(file);
+      let prompt = null;
+      try {
+        prompt = ecoPicturePrompt(state, book, index, { cover });
+      } catch {
+        prompt = null;
+      }
+      ecoAttachUpload(book, cover ? { cover: true } : { index }, saved, {
+        fileName: file.name || null,
+        bytes: file.size,
+        type: file.type || null,
+        prompt,
+      });
+      if (book.storyDraftId) syncStoryDraft(book, state);
+      const job = jobOfBook(state, book);
+      if (job) job.updatedAt = new Date().toISOString();
+      if (api.save() === false) api.toast("그림을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+      else api.toast(cover ? "표지 그림을 올렸어요." : `${pageName(book, index)} 그림을 올렸어요.`);
+    } catch (error) {
+      api.toast(error);
+    } finally {
+      actionBusy = false;
+      try {
+        target.value = "";
+      } catch {
+        /* a file input may refuse the reset */
+      }
+      api.render();
+    }
+  });
+}
+/** ⑤ 에코 모드: to the shelf once every entry has its picture; a missing cover may take entry 1's picture. */
+async function saveEcoBook(ctx, book, job) {
+  const state = ctx.getState();
+  if (job && runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
+  const missing = ecoMissingPictures(book);
+  if (missing.length)
+    return ctx.toast(`${pageList(missing)} 그림이 아직 없어요. ④에서 그림을 올린 뒤 저장해 주세요.`);
+  if (!book.cover?.imageAssetId) {
+    const choice = await choiceModal(
+      ctx,
+      "표지 그림이 아직 없어요",
+      "⑤의 ‘표지 프롬프트’로 만든 그림을 올리거나, 1쪽 그림을 표지로 써서 지금 저장할 수 있어요.",
+      [{ value: "first", label: "1쪽 그림을 표지로 쓰고 저장" }],
+    );
+    if (choice !== "first") return;
+    if (ctx.getDraft() !== book) return ctx.toast(OTHER_BOOK_OPEN);
+    const first = book.pages[0],
+      saved = await saveImage(`asset:${first.imageAssetId}`);
+    ecoAttachUpload(book, { cover: true }, saved, {
+      fileName: first.imageMeta?.fileName || null,
+      bytes: first.imageMeta?.bytes,
+      type: first.imageMeta?.type || null,
+      size: first.imageMeta?.size,
+      prompt: null,
+    });
+  }
+  if (ctx.getDraft() !== book) return ctx.toast(OTHER_BOOK_OPEN);
+  // Every picture is in place: the book is complete the way a finished run's is.
+  book.autoGenerationComplete = true;
+  if (job) {
+    job.status = "review";
+    job.phase = "그림 완성 · 마지막 확인";
+    job.updatedAt = new Date().toISOString();
+  }
+  if (book.storyDraftId) syncStoryDraft(book, state);
+  if (ctx.save() === false) ctx.toast("변경을 저장하지 못했어요. 저장 공간을 확인해 주세요.");
+  await ctx.approveBook();
+}
 
 /* ---------- moving between the five steps (R11) ---------- */
 const STEP_EDITING = "고치던 글을 저장하거나 취소해 주세요.",
@@ -740,10 +1152,11 @@ export function imageWork(book) {
     missing,
     stale,
     coverMissing,
+    // 에코 모드 (R32): no run ever finishes an uploaded book; only its pictures count.
     needsRun: !!(
       missing.length ||
       coverMissing ||
-      !book?.autoGenerationComplete
+      (!book?.autoGenerationComplete && !isEcoBook(book))
     ),
   };
 }
@@ -876,6 +1289,7 @@ function ideaState(state) {
     : { world: false };
 }
 function resumeLabel(job) {
+  if (isEcoJob(job) && !job.book) return `에코 모드 · ${ECO_STEP_LABELS[job.eco.step] || "붙여넣기"}`;
   if (councilHeld(job)) return "기획 회의 결과 확인";
   if (job.status === "text-review") return "글 검수 대기";
   if (job.status === "pages-ready") return "그림 준비 완료";
@@ -1134,8 +1548,10 @@ function stageLine(job) {
 let lastCouncilFocus = null;
 function renderGenerateStep(ctx, w) {
   const state = ctx.getState(),
-    job = jobOfWizard(state, w),
-    settings = getTextGenerationSettings(state),
+    job = jobOfWizard(state, w);
+  // 에코 모드 (R32): the paste panel replaces ③ for a story the parent fills.
+  if (isEcoJob(job)) return renderEcoStep(ctx, w, job);
+  const settings = getTextGenerationSettings(state),
     textEngine = job
       ? job.demo
         ? "demo"
@@ -1232,7 +1648,7 @@ function renderGenerateStep(ctx, w) {
     /결과를 확인해 주세요/u.test(String(job?.error || ""));
   let status = "";
   if (!job)
-    status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
+    status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}${sbtn("에코 모드 · 복사·붙여넣기", "start-eco", "outline")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
   else if (text) {
     const pages = job.book?.pages?.length || 0,
       bookId = job.book?.id,
@@ -1333,9 +1749,12 @@ function renderReviewStep(ctx, w) {
     // R12 openings: entry names, the kind's art box, a sentence counter, a cue chip.
     openings = layoutOf(book) === "openings",
     kind = page?.kind === "spread" ? "spread" : "page";
+  const eco = isEcoBook(book);
   const art = image
-    ? `${illustration(book, index)}${isPageTextEdited(page) ? '<p class="small-label simple-stale">글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요.</p>' : ""}`
-    : `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p>${sbtn(openings && kind === "spread" ? "이 펼침면 그림 만들기" : "이 쪽 그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
+    ? `${illustration(book, index)}${isPageTextEdited(page) ? `<p class="small-label simple-stale">${eco ? "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 올리기’로 바꿀 수 있어요." : "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요."}</p>` : ""}`
+    : eco
+      ? `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p><p class="small-label">‘그림 프롬프트’를 복사해 그림 AI에게 만들게 하고, 받은 그림을 ‘그림 올리기’로 넣어요.</p></div>`
+      : `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p>${sbtn(openings && kind === "spread" ? "이 펼침면 그림 만들기" : "이 쪽 그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;
   const textOf = (lang) =>
     page[lang] ?? page[lang === "ko" ? "textKo" : "textEn"] ?? "";
   const rows = (lang) =>
@@ -1360,26 +1779,30 @@ function renderReviewStep(ctx, w) {
       `<div class="simple-pager${extra}"><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-prev" data-simple-nav="prev" aria-label="이전 쪽" ${index === 0 || editing ? "disabled" : ""}>‹</button><span class="simple-page-no"${extra ? "" : ' aria-live="polite"'}>${index + 1} / ${total}${openings ? ` · ${esc(pageLabel)}` : ""}</span><button type="button" class="btn btn-outline simple-arrow" data-simple-action="page-next" data-simple-nav="next" aria-label="다음 쪽" ${index === total - 1 || editing ? "disabled" : ""}>›</button></div>`;
   const pageActions = editing
     ? `${sbtn("저장", "save-text", "green")}${sbtn("취소", "cancel-text")}`
-    : `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("글 다시 만들기", "rewrite-text", "outline", off)}${image ? sbtn("그림 다시 만들기", "redraw-page", "outline", off) : ""}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`;
+    : eco
+      ? `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("그림 프롬프트", "eco-prompt", "outline", `${off} data-index="${index}"`)}${sbtn(image ? "그림 다시 올리기" : "그림 올리기", "eco-upload", image ? "outline" : "green", `${off} data-index="${index}"`)}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`
+      : `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("글 다시 만들기", "rewrite-text", "outline", off)}${image ? sbtn("그림 다시 만들기", "redraw-page", "outline", off) : ""}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`;
   const ownOp = pageOp && pageOp.bookId === book.id ? pageOp : null,
     running =
       live || ownOp
         ? `${progressBlock(job, ownOp ? `${pageName(book, ownOp.index)} ${ownOp.label || `${ownOp.kind === "rewrite" ? "글" : "그림"} 만드는 중`}` : "그림 만드는 중")}`
         : "",
-    topAction = interrupted
-      ? sbtn(
-          "이어서 만들기",
-          "resume-run",
-          "green",
-          busy || editing ? "disabled" : "",
-        )
-      : sbtn(
-          openings ? "모든 그림 만들기" : "모든 쪽 그림 만들기",
-          "draw-all",
-          "green",
-          busy || editing ? "disabled" : "",
-        );
-  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span>${openings ? `<span class="small-label simple-openings-mix">${esc(openingsMix(book))}<br>AI가 펼침마다 펼침면/낱쪽을 골랐어요</span>` : ""}</div><div class="simple-review-actions">${topAction}${sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${pager()}<div class="simple-page${openings ? ` simple-page-${kind}` : ""}"><div class="simple-page-art">${art}${cue}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${pageLabel} · 한글`) : ""}${counter}${needsEn(book) ? text("en", `English · ${openings ? pageLabel : index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div>${openings ? pager(" simple-pager-bottom") : ""}</section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">글을 고쳐도 그림은 묻고 나서만 다시 만들어요.</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
+    topAction = eco
+      ? sbtn("그림 프롬프트 모두 보기", "eco-prompts", "outline", busy || editing ? "disabled" : "")
+      : interrupted
+        ? sbtn(
+            "이어서 만들기",
+            "resume-run",
+            "green",
+            busy || editing ? "disabled" : "",
+          )
+        : sbtn(
+            openings ? "모든 그림 만들기" : "모든 쪽 그림 만들기",
+            "draw-all",
+            "green",
+            busy || editing ? "disabled" : "",
+          );
+  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span>${openings ? `<span class="small-label simple-openings-mix">${esc(openingsMix(book))}<br>AI가 펼침마다 펼침면/낱쪽을 골랐어요</span>` : ""}</div><div class="simple-review-actions">${topAction}${eco ? "" : sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${eco ? ECO_UPLOAD_INPUT : ""}${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${pager()}<div class="simple-page${openings ? ` simple-page-${kind}` : ""}"><div class="simple-page-art">${art}${cue}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${pageLabel} · 한글`) : ""}${counter}${needsEn(book) ? text("en", `English · ${openings ? pageLabel : index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div>${openings ? pager(" simple-pager-bottom") : ""}</section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">${eco ? "그림은 쪽마다 직접 올려요 · 요금 없음" : "글을 고쳐도 그림은 묻고 나서만 다시 만들어요."}</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
 }
 function renderFinishStep(ctx, w) {
   const state = ctx.getState(),
@@ -1399,14 +1822,22 @@ function renderFinishStep(ctx, w) {
     cover = ctx.cover || (() => ""),
     work = imageWork(book),
     coverReady = !work.coverMissing,
-    saveNote = work.needsRun
+    eco = isEcoBook(book),
+    ecoMissing = eco ? ecoMissingPictures(book) : [],
+    saveNote = eco
+      ? ecoMissing.length
+        ? ` · ${pageList(ecoMissing)} 그림을 ④에서 올린 뒤 저장할 수 있어요.`
+        : coverReady
+          ? " · 그림이 모두 준비됐어요. 저장하면 책장에 넣어요."
+          : " · 표지 그림을 올리거나, 저장할 때 1쪽 그림을 표지로 쓸 수 있어요."
+      : work.needsRun
       ? work.missing.length || work.coverMissing
         ? " · 저장할 때 남은 그림을 묻고 만들어요."
         : " · 남은 그림이 없어요. 저장하면 마무리해요."
       : work.stale.length
         ? " · 글을 고친 쪽 그림은 저장할 때 그대로 둘지 물어요."
         : "";
-  return `<section class="panel simple-panel simple-finish"><div class="simple-finish-grid"><div class="simple-cover">${cover(book)}</div><div class="simple-finish-body"><h3>동화책으로 엮어요</h3><fieldset class="simple-titles"><legend>제목 고르기</legend>${titles.map((title, i) => `<label><input type="radio" name="simple-title" value="${esc(title)}" ${title === book.title ? "checked" : ""} id="simple-title-${i}"> ${esc(title)}</label>`).join("")}</fieldset>${openingsSummary(book) ? `<p class="small-label simple-openings-summary">${esc(openingsSummary(book))} + 표지</p>` : ""}<p class="small-label">${esc(imageCountLabel(book))} · 표지 ${coverReady ? "준비됨" : "아직 없음"}${saveNote}</p>${live ? progressBlock(job, "남은 그림 만드는 중") : ""}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-finish-actions"><button type="button" class="btn btn-outline" data-action="preview-draft-print" ${busy ? "disabled" : ""}>인쇄 미리보기</button>${interrupted ? sbtn("이어서 만들기", "resume-run", "green", busy ? "disabled" : "") : ""}${sbtn("책장에 저장", "save-book", "primary", busy || interrupted ? "disabled" : "")}</div></div></div></section><div class="wizard-actions">${live ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", busy ? "disabled" : "")}<span class="wizard-hint">저장하면 책 상세 화면으로 가요.</span>${interrupted ? sbtn("중지", "stop") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel simple-finish"><div class="simple-finish-grid"><div class="simple-cover">${cover(book)}</div><div class="simple-finish-body"><h3>동화책으로 엮어요</h3><fieldset class="simple-titles"><legend>제목 고르기</legend>${titles.map((title, i) => `<label><input type="radio" name="simple-title" value="${esc(title)}" ${title === book.title ? "checked" : ""} id="simple-title-${i}"> ${esc(title)}</label>`).join("")}</fieldset>${openingsSummary(book) ? `<p class="small-label simple-openings-summary">${esc(openingsSummary(book))} + 표지</p>` : ""}<p class="small-label">${esc(imageCountLabel(book))} · 표지 ${coverReady ? "준비됨" : "아직 없음"}${saveNote}</p>${eco ? `<div class="simple-start">${sbtn("표지 프롬프트", "eco-prompt", "outline", `data-cover="1" ${busy ? "disabled" : ""}`)}${sbtn(coverReady ? "표지 그림 다시 올리기" : "표지 그림 올리기", "eco-upload", coverReady ? "outline" : "green", `data-cover="1" ${busy ? "disabled" : ""}`)}</div>${ECO_UPLOAD_INPUT}` : ""}${live ? progressBlock(job, "남은 그림 만드는 중") : ""}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}<div class="simple-finish-actions"><button type="button" class="btn btn-outline" data-action="preview-draft-print" ${busy ? "disabled" : ""}>인쇄 미리보기</button>${interrupted ? sbtn("이어서 만들기", "resume-run", "green", busy ? "disabled" : "") : ""}${sbtn("책장에 저장", "save-book", "primary", busy || interrupted ? "disabled" : "")}</div></div></div></section><div class="wizard-actions">${live ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", busy ? "disabled" : "")}<span class="wizard-hint">저장하면 책 상세 화면으로 가요.</span>${interrupted ? sbtn("중지", "stop") : "<span></span>"}</div>`;
 }
 /** The whole simple create page for the app's shared wizard/draft. */
 export function renderSimpleCreate(ctx = api) {
@@ -1951,6 +2382,7 @@ async function drawPage(
   const state = ctx.getState(),
     job = jobOfBook(state, book);
   if (!book || !job) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
+  if (isEcoBook(book)) return ctx.toast(ECO_NO_BUY);
   // A stop asked for after this click (here, in the library or another tab) wins.
   const stops = stopMark(state, job.id);
   if (runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
@@ -2153,6 +2585,7 @@ async function rewriteText(ctx) {
     book = ctx.getDraft(),
     index = ctx.getEditPage();
   if (!book) return;
+  if (isEcoBook(book)) return ctx.toast(ECO_NO_BUY);
   if (book.textDemo)
     return ctx.toast(
       "데모 이야기는 쪽 글을 새로 쓰지 않아요. ‘글 고치기’로 직접 고쳐 주세요.",
@@ -2279,6 +2712,10 @@ async function drawAll(
 ) {
   const state = ctx.getState();
   job ||= jobOfBook(state, book);
+  if (book && isEcoBook(book)) {
+    ctx.toast(ECO_NO_BUY);
+    return null;
+  }
   if (!book || !job) {
     ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
     return null;
@@ -2561,6 +2998,8 @@ async function saveBook(ctx) {
     book = ctx.getDraft();
   if (!book) return;
   const job = jobOfBook(state, book);
+  // 에코 모드 (R32): every picture was uploaded; nothing is bought on the way to the shelf.
+  if (isEcoBook(book)) return saveEcoBook(ctx, book, job);
   if (job) {
     if (runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
     const work = imageWork(book);
@@ -2994,6 +3433,53 @@ async function handle(ctx, action, el) {
     await startText(ctx, { demo: action === "start-demo" });
     return;
   }
+  // 에코 모드 (R32): the paste flow in ③ and the picture requests/uploads in ④/⑤.
+  if (action === "start-eco") return startEco(ctx);
+  if (action === "eco-copy") {
+    const job = jobOfWizard(state, w);
+    if (!job || !isEcoJob(job)) return;
+    const texts = ecoPanelTexts(job);
+    return copyText(ctx, el.dataset.target === "fix" ? texts.fix : texts.prompt);
+  }
+  if (action === "eco-accept") {
+    const job = jobOfWizard(state, w);
+    if (job && isEcoJob(job) && !job.book) await ecoAccept(ctx, job);
+    return;
+  }
+  if (action === "eco-force") {
+    const job = jobOfWizard(state, w);
+    if (job && isEcoJob(job) && !job.book && job.eco.step === "fix" && job.eco.pagination)
+      await ecoFinish(ctx, job, job.eco.pagination, job.eco.report);
+    return;
+  }
+  if (action === "eco-redo") return ecoRedo(ctx, jobOfWizard(state, w));
+  if (action === "eco-prompt") {
+    const book = ctx.getDraft();
+    if (!book || !isEcoBook(book)) return;
+    const cover = el.dataset.cover === "1",
+      index = cover ? 0 : Number(el.dataset.index ?? ctx.getEditPage()) || 0;
+    return openEcoPrompt(ctx, book, index, { cover });
+  }
+  if (action === "eco-prompts") {
+    const book = ctx.getDraft();
+    if (book && isEcoBook(book)) openEcoPrompts(ctx, book);
+    return;
+  }
+  if (action === "eco-upload") {
+    const book = ctx.getDraft();
+    if (!book || !isEcoBook(book)) return;
+    const input = document.querySelector("#eco-upload-input");
+    if (!input) return ctx.toast("그림 파일 선택 칸을 찾지 못했어요. 화면을 새로 고쳐 주세요.");
+    input.dataset.cover = el.dataset.cover === "1" ? "1" : "";
+    input.dataset.index = String(el.dataset.index ?? ctx.getEditPage() ?? 0);
+    try {
+      input.value = "";
+    } catch {
+      /* a file input may refuse the reset */
+    }
+    input.click?.();
+    return;
+  }
   if (action === "retry") {
     const job = jobOfWizard(state, w);
     if (!job) return;
@@ -3167,6 +3653,11 @@ const QUIET = new Set([
   "text-key",
   "image-key",
   "image-settings",
+  // 에코 모드 (R32): copying and opening a picture request never redraw or wait.
+  "eco-copy",
+  "eco-prompt",
+  "eco-prompts",
+  "eco-upload",
 ]);
 function onClick(event) {
   const el = event.target.closest?.("[data-simple-action]");
@@ -3220,6 +3711,8 @@ function onChange(event) {
   const target = event.target,
     w = api.getWizard();
   if (!w) return;
+  // 에코 모드 (R32): a picture file chosen for a page or the cover.
+  if (target.id === "eco-upload-input") return ecoUploadChange(target);
   // A story with a job keeps its frozen format and picks (see '이 주제로 새로 만들기').
   if (
     jobOfWizard(api.getState(), w) &&
