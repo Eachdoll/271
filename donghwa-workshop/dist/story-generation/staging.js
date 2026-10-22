@@ -546,6 +546,8 @@ export function stagePagination(pagination, context = {}) {
     preserveManual = context.preserveManual !== false,
     // R12 openings (frozen layout passed by the caller): spread and pair rules.
     openings = context.openings === true,
+    // R31c: a diet draft's day is the story's own (no forced morning or evening).
+    lean = context.lean === true,
     shots = planShots(pages, context.outline, warnings, preserveManual, openings),
     usedVerbs = new Set(),
     locations = new Map();
@@ -573,7 +575,7 @@ export function stagePagination(pagination, context = {}) {
       ];
     let timeIndex = TIMES_OF_DAY.indexOf(wantedTime);
     if (timeIndex < 0) timeIndex = previousTime;
-    if (index === 0 && brief && timeIndex !== 0) {
+    if (!lean && index === 0 && brief && timeIndex !== 0) {
       warn("time_opening", "장면 브리프의 첫 시간대를 아침으로 맞췄어요.");
       timeIndex = 0;
     }
@@ -585,6 +587,7 @@ export function stagePagination(pagination, context = {}) {
       timeIndex = previousTime;
     }
     if (
+      !lean &&
       index === pages.length - 1 &&
       pages.length > 1 &&
       brief &&

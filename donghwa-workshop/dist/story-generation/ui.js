@@ -166,6 +166,7 @@ function stagingContext(d) {
     backgrounds: d.input.backgrounds,
     preserveManual: true,
     ...(openingsDraft(d) ? { openings: true } : {}),
+    lean: d.input?.promptDiet?.version === 1,
   };
 }
 /** A completed request survives cancellation; only dependent products are invalidated. */
@@ -2082,6 +2083,7 @@ async function approvePages(
   }
   const checked = checkStory(d.outline, d.pagination, {
     specs: d.input.specs,
+    lean: d.input?.promptDiet?.version === 1,
     catchphrases: storyCatchphrases(d.input),
     storyWords: buildStoryWords(d.input, d.outline),
     allowedNames: d.input.characters
@@ -2376,6 +2378,7 @@ async function handleClick(event) {
       d.pagination = fitted;
       d.storyCheck = checkStory(d.outline, fitted, {
         specs: d.input.specs,
+        lean: d.input?.promptDiet?.version === 1,
         catchphrases: storyCatchphrases(d.input),
         storyWords: buildStoryWords(d.input, d.outline),
         allowedNames: d.input.characters

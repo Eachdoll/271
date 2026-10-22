@@ -239,7 +239,10 @@ export function checkStory(
     storyWords = [],
     storyInput = null,
     catchphrases = storyInput ? storyCatchphrases(storyInput) : [],
-    craftPolicy = null
+    craftPolicy = null,
+    // R31c 검사 다이어트: a diet draft's checks ask for a (paid) rewrite only
+    // for the reading level, the structure and safety; the rest is reported.
+    lean = storyInput?.promptDiet?.version === 1
   } = {},
 ) {
   const rawPages = Array.isArray(pagination)
@@ -266,6 +269,17 @@ export function checkStory(
     byId.get(type).passed = false;
     byId.get(type).violations.push(violation);
   };
+  const warnings = [];
+  const soft = (type, code, message, pageNo, language) =>
+    warnings.push({
+      type,
+      code,
+      severity: "warning",
+      advisory: true,
+      ...(pageNo != null ? { pageNo } : {}),
+      ...(language ? { language } : {}),
+      message,
+    });
   const readingSpecs = resolvedSpecs(
     Array.isArray(pagination) ? {} : pagination,
     specs,
@@ -329,13 +343,16 @@ export function checkStory(
   for (const [suffix, affected] of suffixes)
     if (affected.size >= 3) {
       for (const pageNo of affected)
-        add(
-          "repeated_suffix",
-          "page",
-          `문장 끝 “${suffix}”가 ${affected.size}쪽에서 반복돼요.`,
-          pageNo,
-          "ko",
-        );
+        if (lean)
+          soft("repeated_suffix", "repeated-suffix", `문장 끝 “${suffix}”가 ${affected.size}쪽에서 반복돼요.`, pageNo, "ko");
+        else
+          add(
+            "repeated_suffix",
+            "page",
+            `문장 끝 “${suffix}”가 ${affected.size}쪽에서 반복돼요.`,
+            pageNo,
+            "ko",
+          );
     }
 
   const beats = Array.isArray(outline?.beats) ? outline.beats : [];
@@ -407,26 +424,32 @@ export function checkStory(
     if (
       firstTurn &&
       (firstTurn.page.openingNo < low || firstTurn.page.openingNo > high)
-    )
-      add(
-        "beat_mapping",
-        "pagination",
-        `반전은 펼침 ${low}~${high}에서 시작해야 해요.`,
-        firstTurn.pageNo,
-      );
+    ) {
+      if (lean) soft("beat_mapping", "turn-window", `반전은 보통 펼침 ${low}~${high}에서 시작해요.`, firstTurn.pageNo);
+      else
+        add(
+          "beat_mapping",
+          "pagination",
+          `반전은 펼침 ${low}~${high}에서 시작해야 해요.`,
+          firstTurn.pageNo,
+        );
+    }
   } else if (turn && pages.length) {
     const firstTurn = pages.find(
       ({ page }) => indexOf(page?.beatIndex) === indexOf(turn.index),
     );
     const low = Math.max(1, Math.floor((pages.length * 2) / 3)),
       high = Math.min(pages.length, low + 1);
-    if (firstTurn && (firstTurn.pageNo < low || firstTurn.pageNo > high))
-      add(
-        "beat_mapping",
-        "pagination",
-        `반전은 ${low}~${high}쪽에서 시작해야 해요.`,
-        firstTurn.pageNo,
-      );
+    if (firstTurn && (firstTurn.pageNo < low || firstTurn.pageNo > high)) {
+      if (lean) soft("beat_mapping", "turn-window", `반전은 보통 ${low}~${high}쪽에서 시작해요.`, firstTurn.pageNo);
+      else
+        add(
+          "beat_mapping",
+          "pagination",
+          `반전은 ${low}~${high}쪽에서 시작해야 해요.`,
+          firstTurn.pageNo,
+        );
+    }
   }
   if (pages.length && beats.length) {
     const lastBeat = beats.find(
@@ -466,35 +489,45 @@ export function checkStory(
             occurrences++;
         for (let i = 0; i < occurrences; i++) {
           count++;
-          if (!planned.includes(indexOf(page?.beatIndex)))
-            add(
-              "refrain",
-              "page",
-              "계획에 없는 비트에 후렴이 있어요.",
-              pageNo,
-              language,
-            );
-          if (count > 3)
-            add(
-              "refrain",
-              "page",
-              "후렴은 한 책에 최대 세 번만 쓸 수 있어요.",
-              pageNo,
-              language,
-            );
+          if (!planned.includes(indexOf(page?.beatIndex))) {
+            if (lean) soft("refrain", "refrain-unplanned", "계획에 없는 비트에 후렴이 있어요.", pageNo, language);
+            else
+              add(
+                "refrain",
+                "page",
+                "계획에 없는 비트에 후렴이 있어요.",
+                pageNo,
+                language,
+              );
+          }
+          if (count > 3) {
+            if (lean) soft("refrain", "refrain-count", "후렴이 한 책에 네 번 이상 나와요.", pageNo, language);
+            else
+              add(
+                "refrain",
+                "page",
+                "후렴은 한 책에 최대 세 번만 쓸 수 있어요.",
+                pageNo,
+                language,
+              );
+          }
         }
       }
   }
 
-  const warnings = [];
   const levelResults = { ko: [], en: [] };
   for (const { page, pageNo } of pages)
     for (const language of ["ko", "en"]) {
       try {
         // R12: an openings spec is judged per unit (spread or page).
+        const unit = unitSpec(readingSpecs[language], unitKind(page));
         const result = analyzeEstimatedPage(
           textOf(page, language),
-          unitSpec(readingSpecs[language], unitKind(page)),
+          // R31c: on the diet the story's own English words (the outline's new
+          // words, the cast, the world) are fine at every level, as at E0.
+          lean && language === "en" && unit && !unit.storyWordsAllowed
+            ? { ...unit, storyWordsAllowed: true }
+            : unit,
           { language, allowedNames, storyWords },
         );
         levelResults[language].push({ pageNo, result });
@@ -545,14 +578,12 @@ export function checkStory(
       .filter((row) => (over ? row.gap > 0 : row.gap < 0))
       .sort((a, b) => (over ? b.gap - a.gap : a.gap - b.gap))
       .slice(0, 2);
-    for (const row of chosen.length ? chosen : rows.slice(0, 1))
-      add(
-        "level",
-        "page",
-        `${language === "ko" ? "한글" : "영어"} 책 전체 문장 ${total}개가 목표 ${budget.min}~${budget.max}개를 ${over ? "넘었어요. 이 쪽의 문장을 줄여 주세요" : "밑돌아요. 이 쪽에 문장을 더해 주세요"}(이 쪽 ${row.count}개, 보통 ${row.usual}개).`,
-        row.pageNo,
-        language,
-      );
+    for (const row of chosen.length ? chosen : rows.slice(0, 1)) {
+      const message = `${language === "ko" ? "한글" : "영어"} 책 전체 문장 ${total}개가 목표 ${budget.min}~${budget.max}개를 ${over ? "넘었어요. 이 쪽의 문장을 줄여 주세요" : "밑돌아요. 이 쪽에 문장을 더해 주세요"}(이 쪽 ${row.count}개, 보통 ${row.usual}개).`;
+      // R31c: the whole-book total is a note on the diet; pages are judged one by one.
+      if (lean) soft("level", "book-sentence-total", message, row.pageNo, language);
+      else add("level", "page", message, row.pageNo, language);
+    }
   }
   for (const language of ["ko", "en"]) {
     const results = levelResults[language],
@@ -567,14 +598,11 @@ export function checkStory(
       outside.length > max
     )
       for (const { pageNo, result } of results) {
-        if (result.metrics.outOfVocabWords.length)
-          add(
-            "level",
-            "page",
-            `${language === "ko" ? "한글" : "영어"} 책 전체 새 단어 ${outside.length}개가 허용 ${max}개를 넘었어요.`,
-            pageNo,
-            language,
-          );
+        if (result.metrics.outOfVocabWords.length) {
+          const message = `${language === "ko" ? "한글" : "영어"} 책 전체 새 단어 ${outside.length}개가 허용 ${max}개를 넘었어요.`;
+          if (lean) soft("level", "book-new-words", message, pageNo, language);
+          else add("level", "page", message, pageNo, language);
+        }
       }
   }
 
@@ -603,20 +631,25 @@ export function checkStory(
   for (const { page, pageNo } of pages) {
     const action = String(page?.scene?.action || ""),
       tokens = englishWords(action);
-    if (tokens.length < 8 || tokens.length > 30)
+    // R31c: no length rule on the diet — a picture description is as long as it
+    // needs to be, and it never sends the page's text back to be rewritten.
+    if (!lean && (tokens.length < 8 || tokens.length > 30))
       add(
         "drawable_scene",
         "scene",
         `장면 설명은 영어 8~30단어여야 해요. 현재 ${tokens.length}단어예요.`,
         pageNo,
       );
-    if (!tokens.some(drawableVerb))
-      add(
-        "drawable_scene",
-        "scene",
-        "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요.",
-        pageNo,
-      );
+    if (!tokens.some(drawableVerb)) {
+      if (lean) soft("drawable_scene", "no-drawable-verb", "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요.", pageNo);
+      else
+        add(
+          "drawable_scene",
+          "scene",
+          "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요.",
+          pageNo,
+        );
+    }
   }
 
   const moralPages = [];

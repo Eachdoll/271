@@ -27,6 +27,11 @@
  * real run), --demo (free demo engine), --selection (the parent's picks only,
  * no paid material plan; the default mirrors ③: 부족한 재료 자동 추가).
  * Output: <outDir>/<level>-<arm>.md and .json, <outDir>/<level>-compare.md.
+ *
+ * R31c: pages are measured with the unit spec of their kind (a spread is not a
+ * page), the writer's original prose is kept beside the final book, and every
+ * checkpoint of the pagination stage records which violations it was fixing
+ * (the repair history), so the next reading needs no replay.
  */
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -41,6 +46,8 @@ import {
   estimateFullAutoCost,
 } from "../dist/full-auto.js";
 import { jobTextBudget } from "../dist/text-generation/models.js";
+import { unitSpec, unitKind } from "../dist/book-layout.js";
+import { generateProse, paginateStory, repairPagination } from "../dist/story-generation/pipeline.js";
 import {
   analyzeEstimatedPage,
   splitSentences,
@@ -124,7 +131,20 @@ async function runArm(arm) {
   if (arm === "r31a") delete job.input.promptDiet;
   const estimate = demo ? null : estimateFullAutoCost(state, wizard, { job });
   log(`[${arm}] 시작 · ${level} ${wizard.pageCount}쪽 · 재료 계획 ${job.planMode} · 추정 글 요금 ${estimate ? money(estimate.textUsd) : "무료(데모)"}`);
-  const progress = [];
+  const progress = [], history = [], snapshot = {};
+  const withHistory = (opts) => ({
+    ...opts,
+    onCheckpoint: async (cp) => {
+      if (cp?.checks)
+        history.push({
+          requests: cp.meta?.requests ?? null,
+          failedPageNos: cp.checks.failedPageNos || [],
+          violations: (cp.checks.violations || []).map((v) => `${v.type || v.code}@${v.pageNo ?? "-"}`),
+          notes: (cp.checks.warnings || []).length,
+        });
+      return opts.onCheckpoint?.(cp);
+    },
+  });
   const started = Date.now();
   let error = null;
   try {
@@ -132,6 +152,15 @@ async function runArm(arm) {
       credentials,
       buildBook,
       save: () => true,
+      operations: {
+        prose: async (outline, input, opts) => {
+          const r = await generateProse(outline, input, opts);
+          snapshot.prose = structuredClone(r.data);
+          return r;
+        },
+        pagination: (outline, prose, input, opts) => paginateStory(outline, prose, input, withHistory(opts)),
+        repairPagination: (outline, prose, pagination, input, opts) => repairPagination(outline, prose, pagination, input, withHistory(opts)),
+      },
       onProgress: (p) => {
         const message = p.message || p.phase;
         if (message && message !== progress.at(-1)) {
@@ -146,7 +175,7 @@ async function runArm(arm) {
   }
   const seconds = Math.round((Date.now() - started) / 1000);
   log(`[${arm}] ${error ? "실패" : "완료"} · ${job.status} · ${seconds}초`);
-  return { arm, state, job, estimate, progress, error, seconds };
+  return { arm, state, job, estimate, progress, error, seconds, history, snapshot };
 }
 
 // ---------- measurement (the checker, never a model's own numbers) ----------
@@ -158,19 +187,22 @@ const sentencesOf = (text, spec) => {
 // Reduplicated Korean sound/movement words (부릉부릉, 콩닥콩닥, 두리번두리번): a
 // heuristic count, labelled as such.
 const soundWords = (text) => [...new Set((String(text || "").match(/([가-힣]{2,3})\1/gu) || []))];
+const unitOf = (spec, page) => (spec ? unitSpec(spec, unitKind(page)) : spec);
 function measurePages(pages, specs, allowedNames) {
   const rows = pages.map((page, i) => {
     const ko = String(page.textKo ?? page.ko ?? ""),
       en = String(page.textEn ?? page.en ?? "");
-    const kor = analyzeEstimatedPage(ko, specs.ko, { language: "ko", allowedNames }),
-      eng = en && specs.en ? analyzeEstimatedPage(en, specs.en, { language: "en", allowedNames }) : null;
-    const sentences = sentencesOf(ko, specs.ko),
+    const koSpec = unitOf(specs.ko, page), enSpec = unitOf(specs.en, page);
+    const kor = analyzeEstimatedPage(ko, koSpec, { language: "ko", allowedNames }),
+      eng = en && enSpec ? analyzeEstimatedPage(en, enSpec, { language: "en", allowedNames }) : null;
+    const sentences = sentencesOf(ko, koSpec),
       rhythm = new Set(kor.metrics?.rhythmSentenceIndices || []),
       lengths = sentences.map(eojeol),
       ordinary = lengths.filter((_, j) => !rhythm.has(j)),
       average = ordinary.length ? ordinary.reduce((a, b) => a + b, 0) / ordinary.length : 0;
     return {
       pageNo: page.pageNo ?? i + 1,
+      kind: unitKind(page),
       ko,
       en,
       sentences: sentences.length,
@@ -273,6 +305,19 @@ function armReport(run, measured, usage) {
   for (const n of job.notes || []) notes.push(`메모: ${n}`);
   if (job.failure) notes.push(`실패 구조: ${cell(JSON.stringify(job.failure)).slice(0, 400)}`);
   if (notes.length) lines.push("", "## 작가·편집 메모", "", ...notes.map((n) => `- ${n}`));
+  // R31c: the writer's own pages (K1) or paragraphs (K2+) before any check rewrote them.
+  const original = run.snapshot?.prose;
+  if (original?.pages?.length) {
+    const changed = original.pages.filter((p, i) => String(p.ko) !== String(measured.rows[i]?.ko)).map((p) => p.pageNo);
+    lines.push("", `## 작가 원문 (수정 전 · 바뀐 쪽 ${changed.length ? changed.join(", ") : "없음"})`, "", "| 쪽 | 한글 | 영어 |", "| --- | --- | --- |");
+    for (const p of original.pages) lines.push(`| ${p.pageNo} | ${cell(p.ko)} | ${cell(p.en)} |`);
+  } else if (original?.ko) {
+    lines.push("", "## 작가 원문 (비트 문단, 수정 전)", "", ...String(original.ko).split(/\n\s*\n/u).map((para, i) => `${i + 1}. ${cell(para)}`));
+  }
+  if (run.history?.length) {
+    lines.push("", "## 수정 기록 (쪽 나누기 단계의 검사 결과마다)", "");
+    for (const h of run.history) lines.push(`- 요청 ${h.requests ?? "?"}회까지 · 걸린 쪽 [${h.failedPageNos.join(", ")}] · 위반 ${h.violations.length ? h.violations.join(" ") : "없음"} · 참고 ${h.notes}`);
+  }
   lines.push("", "## 진행", "", ...progress.map((p) => `- ${p}`), "");
   return lines.join("\n");
 }
@@ -347,6 +392,8 @@ for (const arm of arms) {
         richnessCheck: run.job.richnessCheck,
         notes: run.job.notes,
         usage: run.job.usage,
+        writerOriginal: run.snapshot?.prose || null,
+        repairHistory: run.history,
         measured,
         usageSummary: usage,
         progress: run.progress,

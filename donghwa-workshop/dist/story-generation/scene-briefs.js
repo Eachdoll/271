@@ -100,6 +100,9 @@ const ABSTRACT =
  * variety, rain props, pose detail) because repairing it for variety alone
  * changes approved props or scenes.
  */
+import { hasPromptDiet, leanSceneBriefRules } from "./prompt-diet.js";
+// R31c: on the diet the day's clock and the pose/prop style are notes, not fix calls.
+const LEAN_ADVISORY = new Set(["first_time", "last_time", "time_backwards", "pose", "abstract_prop"]);
 export const SCENE_BRIEF_SEVERITY = Object.freeze({
   unknown_beat: "hard",
   missing_brief: "hard",
@@ -209,12 +212,13 @@ export function inspectSceneBriefs(value, outline, source = {}) {
   const briefs = sceneBriefRows(value),
     beats = outline?.beats || [],
     issues = [],
+    lean = hasPromptDiet(source),
     add = (beatIndex, code, message) =>
       issues.push({
         beatIndex,
         code,
         message,
-        severity: SCENE_BRIEF_SEVERITY[code] || "hard",
+        severity: lean && LEAN_ADVISORY.has(code) ? "advisory" : SCENE_BRIEF_SEVERITY[code] || "hard",
       });
   const allowed = new Set(beats.map((b) => b.index));
   for (const brief of briefs)
@@ -368,7 +372,8 @@ export function inspectSceneBriefs(value, outline, source = {}) {
     hardBeatIndexes: [...new Set(hard.map((i) => i.beatIndex))],
   };
 }
-export function sceneBriefRules() {
+export function sceneBriefRules(input = null) {
+  if (hasPromptDiet(input)) return leanSceneBriefRules();
   return `Create one bilingual SceneBrief per approved beat. All fields are required. These details are shared by prose and illustrations.
 Preserve the approved event, character identity/speech habits and fixed background geometry FIRST. Never invent a permanent structure, new room, speaking character, or action that contradicts the outline merely for variety. Creatures are small background life appropriate to the supplied place and time, never additional speaking cast.
 Time progresses monotonically morning -> day -> afternoon -> evening -> night (stages may repeat or be skipped); first beat morning, final beat evening or night. Weather follows the topic and remains continuous. A rain topic includes rain, puddle and umbrella in appropriate middle beats.

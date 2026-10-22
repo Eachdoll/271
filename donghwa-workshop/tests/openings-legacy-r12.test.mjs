@@ -738,7 +738,10 @@ const PINS = {
   // 프롬프트 다이어트 (R31b): the demo jobs' input carries promptDiet (the demo engine
   // sends no prompt; the pre-R12 job fixture is unchanged; dump-diffed against
   // a3f361e). a3f361e: f1ccd7ec…0440.
-  fullAutoDemo: 'efcb84650eece968c90161fc99fa70556e05d3e5abd665966451070a09ba582e',
+  // 검사 다이어트 (R31c): the demo K2 job's story check carries the whole-book
+  // total and new-word notes instead of violations (the demo jobs are diet
+  // drafts); nothing else differs (dump-diffed against 36fa25a). 36fa25a: efcb8465…582e.
+  fullAutoDemo: 'e9526fe1125cdabbdc221ac8e48556f91512759b387acda46435b4a8ab95aa21',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -784,7 +787,10 @@ const PINS = {
   // 프롬프트 다이어트 (R31b): ③ prices a new K2 book with the outline on the stage
   // model and without the quality prose passes (16쪽 글 약 .41 → .66); the K1
   // line and everything else are unchanged (dump-diffed against a3f361e). a3f361e: 823730df…e987.
-  review: 'd8e779d91d5fe4024a21282a3b01cfc8d8171464b3fb1e41b32af19e0c85719e',
+  // 검사 다이어트 (R31c): ③ prices a new K1 book without the editor and with two
+  // page fixes (글 약 $0.99 → $0.65), a new K2 book with two page fixes ($1.66 →
+  // $1.71); nothing else changed (dump-diffed against 36fa25a). 36fa25a: d8e779d9…719e.
+  review: '72bd3a0fb139e27ce1ff954f099729e501e41e848ba2f6855e21203acf4561b0',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -814,7 +820,11 @@ const PINS = {
   // .655, 8쪽 .937 → .361; the request count is the same — the outline on the
   // stage model, no quality prose rows); K1 and existing jobs are the same
   // (dump-diffed against a3f361e). a3f361e: a91a4f43…cc53.
-  estimates: 'fa6bbbcd6a3e3b8f20ac0c0e5e48cfdd7aca6e588ae7422a35b0a506704f6bbd',
+  // 검사 다이어트 (R31c): only NEW jobs' estimates changed — K1 10 → 11 requests,
+  // text $0.875 → $0.579 (no editor, two page fixes); K2 16쪽 42 → 44, $1.655 →
+  // $1.707 (two page fixes); existing jobs are the same (dump-diffed against
+  // 36fa25a). 36fa25a: fa6bbbcd…6bbd.
+  estimates: 'd19686db208b75cf89b4d789bd6a241ce4249651594db389df6653b283dadd47',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';
