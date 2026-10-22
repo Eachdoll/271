@@ -2021,7 +2021,7 @@ function syncDraft() {
       draft.storyCheck = checkStory(draft.outline, draft.pagination, {
         storyInput: draft.storyInput,
         specs: draft.readingLevelSnapshot.specs,
-        storyWords: buildStoryWords(draft, draft.outline),
+        storyWords: buildStoryWords(draft, draft.outline, [], { briefs: draft.sceneBriefs || [], lean: draft.storyInput?.promptDiet?.version === 1 }),
         allowedNames: draft.storyInput.characters.flatMap((c) => [
           c.name,
           c.nameEn,

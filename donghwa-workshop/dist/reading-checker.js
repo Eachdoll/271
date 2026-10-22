@@ -115,7 +115,27 @@ const irregular = {
   feet: "foot",
   leaves: "leaf",
 };
-function familiar(word, allowed) {
+// R31d: a lean spec (spec.inflections) also folds the regular forms the list
+// check missed — a doubled consonant (stopped, wagging, bigger), -es (boxes),
+// -er/-est, a possessive with a curly apostrophe — and a base form whose past
+// is in the list (hid → hide). Other specs keep the old variants exactly.
+// Common picture-book verbs whose past form a reader list may carry instead of
+// the base (hid but not hide), checked both ways on a lean spec.
+const LEAN_PAST = {
+  hide: "hid", run: "ran", sit: "sat", stand: "stood", sleep: "slept", hold: "held", throw: "threw",
+  blow: "blew", sing: "sang", eat: "ate", drink: "drank", ride: "rode", swim: "swam", fly: "flew",
+  wear: "wore", leave: "left", bend: "bent", catch: "caught", bring: "brought", buy: "bought",
+  fall: "fell", begin: "began", break: "broke", wake: "woke", draw: "drew", shake: "shook", dig: "dug",
+  hang: "hung", lose: "lost", meet: "met", win: "won", write: "wrote", forget: "forgot", swing: "swung",
+  spin: "spun", creep: "crept", sweep: "swept", feed: "fed", lead: "led", light: "lit", bite: "bit",
+  slide: "slid", stick: "stuck", tear: "tore", wake: "woke", ring: "rang", sink: "sank", shine: "shone",
+};
+const irregularBase = Object.fromEntries([
+  ...Object.entries(irregular).map(([past, base]) => [base, past]),
+  ...Object.entries(LEAN_PAST),
+]);
+const leanBase = Object.fromEntries(Object.entries(LEAN_PAST).map(([base, past]) => [past, base]));
+function familiar(word, allowed, inflections = false) {
   if (allowed.has(word)) return true;
   const value = word.replace(/'s$/, "");
   if (allowed.has(value) || allowed.has(irregular[value])) return true;
@@ -127,7 +147,21 @@ function familiar(word, allowed) {
     value.replace(/ing$/, ""),
     value.replace(/ing$/, "e"),
   ];
-  return variants.some((variant) => allowed.has(variant));
+  if (inflections) {
+    const plain = value.replace(/’s$/, "");
+    variants.push(
+      plain,
+      plain.replace(/([b-df-hj-np-tv-z])\1(?:ed|ing|er|est)$/, "$1"),
+      plain.replace(/es$/, ""),
+      plain.replace(/er$/, ""),
+      plain.replace(/est$/, ""),
+      plain.replace(/ier$/, "y"),
+      plain.replace(/iest$/, "y"),
+      irregularBase[plain],
+      leanBase[plain],
+    );
+  }
+  return variants.some((variant) => variant && allowed.has(variant));
 }
 export function readabilityMetrics(text, names = []) {
   const sentences = splitSentences(text),
@@ -517,7 +551,7 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
   const outside = vocabularySkipped
       ? []
       : words.filter((word) =>
-          lang === "ko" ? !koAllowed(word, allowed) : !familiar(word, allowed),
+          lang === "ko" ? !koAllowed(word, allowed) : !familiar(word, allowed, spec.inflections === true),
         ),
     lengths = sentences.map((sentence) => tokenize(sentence).length),
     count = words.length;

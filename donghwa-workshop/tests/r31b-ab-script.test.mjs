@@ -46,7 +46,7 @@ test('R31b A/B the demo run writes both arms, the compare table and the golden c
   assert.equal(diet.measured.totals.pages, 12);
   assert.equal(diet.usageSummary.costUsd, 0, 'the demo buys nothing');
   const compare = readFileSync(join(out, 'K1-compare.md'), 'utf8');
-  assert.match(compare, /\| 항목 \| r31a \| r31b 다이어트 \| Dola 골든\(K1\) \|/u);
+  assert.match(compare, /\| 항목 \| r31a \| 다이어트 · 현재 코드 \| Dola 골든\(K1\) \|/u);
   assert.match(compare, /두리번두리번 부릉부릉 콩닥콩닥/u, 'the golden manuscript measured the same way');
   assert.doesNotMatch(readFileSync(join(out, 'K1-diet.json'), 'utf8'), /apiKey|api_key|secret|password|authorization/iu);
   assert.doesNotMatch(result.stdout, /sk-|key=/iu);

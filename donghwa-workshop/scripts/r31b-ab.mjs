@@ -278,7 +278,7 @@ function armReport(run, measured, usage) {
   const { arm, job, estimate, progress, error, seconds } = run;
   const o = job.outline || {};
   const lines = [];
-  lines.push(`# ${level} · ${arm === "diet" ? "r31b 프롬프트 다이어트" : "r31a 프롬프트"} · ${o.titleCandidates?.[0] || "(줄거리 없음)"}`, "");
+  lines.push(`# ${level} · ${arm === "diet" ? "다이어트 · 현재 코드" : "r31a 프롬프트"} · ${o.titleCandidates?.[0] || "(줄거리 없음)"}`, "");
   lines.push(`- 요청: "${TOPIC}" · ${wizard.pageCount}쪽 · ${wizard.koreanLevel}/${wizard.englishLevel} · 재료 계획 ${job.planMode}${demo ? " · 데모 엔진" : ""}`);
   lines.push(`- 정책: ${["promptDiet", "k1Policy", "orchestrationPolicy", "councilPolicy", "arcPolicy", "topicEndingPolicy"].filter((k) => job.input?.[k]).join(", ") || "(없음)"}`);
   lines.push(`- 상태: ${job.status}${error ? ` · 중단: ${error.message}` : ""} · ${seconds}초`);
@@ -324,7 +324,7 @@ function armReport(run, measured, usage) {
 
 function compareReport(results, golden) {
   const lines = [`# ${level} A/B · 같은 요청, 두 프롬프트`, "", `요청: "${TOPIC}" · ${wizard.pageCount}쪽 · ${demo ? "데모 엔진(배선 점검)" : "실제 모델"}`, ""];
-  const cols = results.map((r) => ({ name: r.arm === "diet" ? "r31b 다이어트" : "r31a", m: r.measured.totals, u: r.usage, ok: !r.error }));
+  const cols = results.map((r) => ({ name: r.arm === "diet" ? "다이어트 · 현재 코드" : "r31a", m: r.measured.totals, u: r.usage, ok: !r.error }));
   if (golden) cols.push({ name: "Dola 골든(K1)", m: golden.totals, u: null, ok: true });
   lines.push(`| 항목 | ${cols.map((c) => c.name).join(" | ")} |`, `| --- | ${cols.map(() => "---").join(" | ")} |`);
   const row = (label, f) => lines.push(`| ${label} | ${cols.map((c) => f(c)).join(" | ")} |`);

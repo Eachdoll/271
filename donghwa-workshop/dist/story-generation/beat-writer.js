@@ -41,6 +41,7 @@ import { isOpeningsInput } from "./opening-prose.js";
 import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { tensionRange } from "./orchestration.js";
+import { hasPromptDiet } from "./prompt-diet.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -139,14 +140,18 @@ export function dialogueShare(texts) {
 }
 const DIALOGUE_MIN = (input) => (/^K[34]/u.test(String(input.specs?.ko?.id || "")) ? 0.3 : 0.25);
 
-function mapLines(outline, briefs) {
+// R31d: on the diet the map carries events and results in words; the ledger's
+// state JSON made the writer narrate states (a seat belt five times).
+function mapLines(outline, briefs, lean = false) {
   const contract = list(outline.plotContract?.beats),
     tension = list(outline.tension);
   return list(outline.beats)
     .map((beat, i) => {
       const row = contract.find((c) => Number(c.beatIndex) === Number(beat.index)) || {},
-        e = object(row.event) ? row.event : {};
-      return `${beat.index} ${beat.type}${tension[i] !== undefined ? ` (긴장 ${tension[i]})` : ""}: ${str(beat.summary, 300)}${e.result ? ` → 결과: ${str(e.result, 160)}` : ""}${row.stateAfter ? ` / 상태: ${str(JSON.stringify(row.stateAfter), 200)}` : ""}`;
+        e = object(row.event) ? row.event : {},
+        // R31d: a lean ledger keeps its result on the row itself.
+        result = lean ? (e.result ?? row.result) : e.result;
+      return `${beat.index} ${beat.type}${tension[i] !== undefined ? ` (긴장 ${tension[i]})` : ""}: ${str(beat.summary, 300)}${result ? ` → 결과: ${str(result, 160)}` : ""}${!lean && row.stateAfter ? ` / 상태: ${str(JSON.stringify(row.stateAfter), 200)}` : ""}`;
     })
     .join("\n");
 }
@@ -172,10 +177,11 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     refrainText = str(outline.refrain?.text, 150),
     refrainBeats = new Set(list(outline.refrain?.usedAtBeats).map(Number)),
     bible = object(outline.bible) ? outline.bible : null,
-    map = mapLines(outline, briefs),
+    lean = hasPromptDiet(input),
+    map = mapLines(outline, briefs, lean),
     last = beats.at(-1),
     lastRow = list(outline.plotContract?.beats).find((c) => Number(c.beatIndex) === Number(last?.index)) || {},
-    ending = `${str(last?.summary, 300)}${lastRow.stateAfter ? ` / 끝 상태: ${str(JSON.stringify(lastRow.stateAfter), 300)}` : ""}`,
+    ending = `${str(last?.summary, 300)}${!lean && lastRow.stateAfter ? ` / 끝 상태: ${str(JSON.stringify(lastRow.stateAfter), 300)}` : ""}`,
     styleSamples = list(input.storyQuality?.styleSamples)
       .map((row) => str(typeof row === "string" ? row : row?.text || row?.ko, 600))
       .filter(Boolean)

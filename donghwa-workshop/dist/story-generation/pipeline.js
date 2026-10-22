@@ -2534,9 +2534,9 @@ async function fitOpeningsProse(result, outline, input, options, requests) {
   return report;
 }
 /** The beat writer's binding rules: the prose stage's craft lines and each language's frozen level. */
-function beatWriterRules(input, outline) {
+function beatWriterRules(input, outline, briefs = []) {
   if (hasPromptDiet(input)) {
-    const lean = leanBeatWriterRules(input, outline),
+    const lean = leanBeatWriterRules(input, outline, briefs),
       craft = craftProseRules(input);
     return { ...lean, common: `${lean.common}${craft ? `\n${craft}` : ""}` };
   }
@@ -2584,7 +2584,7 @@ export async function alignEnglishText(request = {}, outline, source, options = 
   abort(options.signal);
   if (demo(options))
     throw new Error("데모 글은 영어를 다시 쓰지 않아요. 영어 칸을 직접 고쳐 주세요.");
-  const rules = beatWriterRules(input, outline),
+  const rules = beatWriterRules(input, outline, options.sceneBriefs),
     beat = (outline?.beats || []).find((row) => row.index === request.beatIndex),
     refrainEn = fold(request.refrainEn, 150),
     needsRefrain = !!refrainEn && hasRefrain(previousEn, refrainEn),
@@ -2750,7 +2750,7 @@ async function writeBeatProse(outline, input, options) {
   const result = await writeProseByBeat(
     outline,
     input,
-    { ...options, writerRules: beatWriterRules(input, outline) },
+    { ...options, writerRules: beatWriterRules(input, outline, options.sceneBriefs) },
     qualityServices(),
   );
   result.data = assertValid("prose", result.data, input, outline);
@@ -2781,7 +2781,7 @@ export async function generateProse(outline, source, options = {}) {
     const result = await writeK1Book(
       outline,
       input,
-      { ...options, writerRules: beatWriterRules(input, outline) },
+      { ...options, writerRules: beatWriterRules(input, outline, options.sceneBriefs) },
       qualityServices(),
     );
     const pages = result.data.pages,
@@ -2809,7 +2809,7 @@ export async function generateProse(outline, source, options = {}) {
   const schema = clone(PROSE_SCHEMA);
   schema.required.push("paragraphBeats");
   const rules = hasPromptDiet(input)
-    ? `${leanProseRules(input)}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${leanStoryWordsLine(input, outline) ? `\n${leanStoryWordsLine(input, outline)}` : ""}`
+    ? `${leanProseRules(input)}${craftProseRules(input) ? `\n${craftProseRules(input)}` : ""}${leanStoryWordsLine(input, outline, options.sceneBriefs) ? `\n${leanStoryWordsLine(input, outline, options.sceneBriefs)}` : ""}`
     : `Write full Korean and English prose in paragraphs, WITHOUT page divisions. Follow every approved beat in order, preserve the causal sequence and explicitly reveal the approved twist. When sceneBriefs are supplied, use each beat's sounds, concrete props, dialogue and drawable action without changing the approved event or adding unsupported geometry.
 EVERY sentence must have an explicit grammatical subject in both languages. Use a character name, an unambiguous pronoun, or a concrete object as the subject; never omit the Korean subject. Attribute every quoted dialogue turn to a named speaker, and give each sentence within dialogue its own explicit subject. Vary subjects naturally rather than repeating the protagonist's name at every sentence start.
 Include at least THREE directly quoted dialogue turns PER LANGUAGE and at least two sound/movement words. EACH approved beat must contain at least ONE specific sensory detail (sound, smell, touch, taste, or visible light/color/texture), distributed within the beat's paragraphs. Expand each approved beat into concrete observation → attempt → visible consequence, including small gestures and specific reactions. At the earliest levels distribute these details over short permitted sentences. Never repeat an identical sentence except the approved refrain at planned beat positions, maximum 3.
@@ -3152,7 +3152,11 @@ export function inspectStory(outline, pagination, input) {
   const report = checkStory(outline, pagination, {
     specs: input.specs,
     catchphrases: storyCatchphrases(input),
-    storyWords: buildStoryWords(input, outline),
+    // R31d: on the diet the story's own things (briefs, backgrounds) are fine at every level.
+    storyWords: buildStoryWords(input, outline, [], {
+      briefs: pagination?.sceneBriefs || [],
+      lean: hasPromptDiet(input),
+    }),
     allowedNames: (input.characters || []).flatMap((c) =>
       [c.name, c.nameEn].filter(Boolean),
     ),
@@ -3972,7 +3976,7 @@ async function repairOpeningsPagination(outline, prose, pagination, input, optio
         options,
         "pagination",
         "repair",
-        `이야기 검사 결과를 고치고 있어요 (${pass + 1}/2).`,
+        `이야기 검사 결과를 고치고 있어요 (${pass + 1}/${passes}).`,
         { attempt: pass + 1, failedPageNos: report.failedPageNos },
       );
       if (report.needsRepagination) {
@@ -4002,7 +4006,7 @@ async function repairOpeningsPagination(outline, prose, pagination, input, optio
             options,
             "pagination",
             "repair-page",
-            `${pass + 1}/2차 수정 · ${pageNo}번째 쪽을 고치고 있어요.`,
+            `${pass + 1}/${passes}차 수정 · ${pageNo}번째 쪽을 고치고 있어요.`,
             { attempt: pass + 1, pageNo },
           );
           const result = await rewriteStoryPage(next, pageNo, outline, prose, input, {
