@@ -1,0 +1,180 @@
+{
+  "baseline": "12c5982",
+  "target": "21890dd",
+  "runtimeRange": "071ba58..2b1ccf3",
+  "paths": [
+    {
+      "path": "CLAUDE.md",
+      "status": "M"
+    },
+    {
+      "path": "CODEX_R31D_COMPLETION_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "CODEX_R31D_PAID_EVAL_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "CODEX_WORK_ORDER_R31E_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/K2-diet.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/K2-diet.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/ORIGINAL_VS_FINAL.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/PREFLIGHT.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/README.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/SUMMARY.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/VALIDATION.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-ab/tools/summarize.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/build-files.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/census.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/demo/K2-diet.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/demo/K2-diet.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/deployment.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/free-local.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/free-production.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/full-code-comparison.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/import-plan.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/package.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/replay.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/smoke.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/source-comparison.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/tools/free-browser-check.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r31d-import/validation.json",
+      "status": "A"
+    },
+    {
+      "path": "dist/full-auto.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/reading-checker.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/reading-messages.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/beat-writer.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/checker.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/pipeline.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/prompt-diet.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/sw.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/text-generation/models.js",
+      "status": "M"
+    },
+    {
+      "path": "scripts/r31b-ab.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/editor-round.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/engine-model-choice-r13.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/english-tolerance-r31e.test.mjs",
+      "status": "A"
+    },
+    {
+      "path": "tests/openings-legacy-r12.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/prompt-diet-r31b.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/review-model-r26.test.mjs",
+      "status": "M"
+    }
+  ],
+  "conflicts": []
+}

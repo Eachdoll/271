@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-22",
+  "sourceBefore": "2eb847aabd9ca5f67c3f8b2fd303b18710219b2f",
+  "upstreamCode": "2b1ccf3",
+  "upstreamWorkOrder": "21890dd",
+  "requestedCodeRange": "071ba58..2b1ccf3",
+  "actualAppFilesRange": "12c5982..21890dd",
+  "broaderFilesReason": "Sites source lacked the r31d completion report and paid QA, imported unchanged for replay tests. Runtime matches 2b1ccf3 exactly.",
+  "appTests": 1010,
+  "qualityTests": 85,
+  "mirrorEqual": true,
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "smokePassed": true,
+  "buildPassed": true,
+  "runtimeFilesByteEqual": 9,
+  "allRuntimeAndTestFilesByteEqual": 320,
+  "writerEnglishOriginalsPassing": 5,
+  "writerEnglishOriginalsTotal": 6,
+  "remainingOriginalEnglishBlockingBeat": [
+    1
+  ],
+  "newPaidRequests": 0,
+  "dbChanges": false,
+  "serverChanges": false,
+  "secretChanges": false,
+  "cache": "donghwa-shell-v77",
+  "paidR31EStatus": "Not run: work order section 4 requires separate approval."
+}

@@ -129,10 +129,6 @@ Places: settings[].backgroundId and beat.settingKey are supplied background IDs 
 People: beat.characters are supplied IDs; every chosen character appears by name somewhere and does something of their own. Use the supplied topic keywords.
 Return 3 Korean title candidates, a one-sentence logline, want and problem, the twist in one sentence, 3–5 new Korean words, new English words, one emotion per beat, one setting record per beat. A refrain is optional (one short line, at most 3 beats) — only if the story naturally has one.`;
 }
-/** The event ledger, asked for in two sentences. */
-export const LEAN_PLOT_CONTRACT =
-  "plotContract is the story's event ledger for the checks: one event per beat (trigger, attempt, result, next decision) with the state of each character and important object before and after, and which earlier beat caused it. Fill it from the story you designed; it is bookkeeping, not the story.";
-
 /** The writers' room's pitch, offered as the plan (not bound beat for beat). */
 export function leanBibleBlock(bible, input = {}) {
   if (!object(bible) || !bible.turn) return "";
@@ -171,7 +167,8 @@ export function leanBeatWriterRules(input, outline, briefs = []) {
   return {
     common: `Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; a line of dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. Keep the approved events, place and ending of this beat; no spoken lesson.${mood ? ` Atmosphere: ${str(JSON.stringify(mood), 200)}.` : ""}`,
     ko: leanLevelLine(input, "ko"),
-    en: `${leanLevelLine(input, "en")}${storyWords ? ` ${storyWords}` : ""}`,
+    // R31e: what the English is for (the paid K2 writer packed every Korean event into two 16-word sentences).
+    en: `${leanLevelLine(input, "en")} The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons.${storyWords ? ` ${storyWords}` : ""}`,
   };
 }
 /** The app prose path (whole book at once) when no beat writer is used. */
@@ -198,7 +195,7 @@ const sceneLines = (custom) =>
   `scene.who = selected character IDs; scene.where = the beat's supplied background ID (a home ID at the beginning${custom ? "" : " and end"}); scene.action = what the picture shows, in English; scene.emotion = one English word; timeOfDay as the story has it; props = an English list. Use only supplied wardrobe IDs: variantByCharacter maps selected character IDs to an allowed variant or null, honouring per-book defaults and page ranges. isRefrainPage is true only where the refrain text actually appears. cover.sceneAction = the cover picture, in English.`;
 /** The page book's pagination request on the diet: structure and shape, no quotas. */
 export function leanPaginationRules(input, { custom = false } = {}) {
-  return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above).
+  return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
 ${sceneLines(custom)}`;
 }
 /** The openings book's pagination request on the diet (the R12 mechanics, no quotas). */
@@ -208,7 +205,7 @@ export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "
     en = input.specs?.en?.units,
     range = (unit) => (unit ? `${unit.min}-${unit.max}` : "?");
   return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own moment and its part of the beat text) — a spread for a highlight, a reveal, a new place, the turn or the ending; two pages when the beat has two distinct moments. Copy the beat paragraph; for two pages split where the moment changes; light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${cues.join(", ")}. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko?.spread)}, English ${range(en?.spread)}; a single page Korean ${range(ko?.page)}, English ${range(en?.page)}.${openingKinds ? ` Keep opening kinds ${openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
-Keep the approved events, dialogue and ending; each entry keeps its language's reading level (the lines above).
+Keep the approved events, dialogue and ending; each entry keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
 ${sceneLines(custom)}`;
 }
 /** One page rewritten on the diet: fix what is listed, keep the voice. */
@@ -229,3 +226,56 @@ export function leanRevisionRules(input, pageCount) {
 Change a page only when something is actually wrong: a grammar or spelling mistake; a sentence outside its reading level (the lines above); a name, prop or fact that contradicts another page; dialogue with no clear speaker${both ? "; Korean and English that show different moments on the same page (fix only the language that strayed)" : ""}. Keep the writer's voice, rhythm, sound words and short lines; do not polish, lengthen, add detail or add an event. Never change the events, the ending, the cast, the places, the refrain wording, or which beat and number a page has. Change at most ${limit} pages.
 Return JSON {report:{overall,strengths,issues:[{pageNo,aspect,note}]},pages:[{pageNo,textKo,textEn,reason}]}. report.overall is two or three Korean sentences for the parent; notes and reasons are short Korean. For a changed page return both texts; a language you did not change is returned byte-for-byte. Return pages:[] when nothing is wrong.`;
 }
+
+/*
+ * R31e (2026-10-22): what the stages after the outline are shown. The paid K2
+ * run sent the whole outline (26,165 characters: the writers' room record
+ * 9,572, the ledger 12,016, the bible 1,904) to the briefs, the pagination,
+ * every page fix and the read-through, and each page fix carried three page
+ * objects of ~6,000 characters whose text was 484. On the diet these views go
+ * instead. A diet outline has no ledger at all (the ledger-based reviews are
+ * not run for it); the beat writer sees the brief's story-carrying fields.
+ */
+const LEAN_OUTLINE_KEYS = [
+  "titleCandidates",
+  "logline",
+  "want",
+  "problem",
+  "beats",
+  "twist",
+  "newWordsKo",
+  "newWordsEn",
+  "settings",
+  "emotionArc",
+  "endingType",
+  "refrain",
+  "tension",
+  "plan",
+];
+const LEAN_PAGE_KEYS = [
+  "pageNo",
+  "beatIndex",
+  "kind",
+  "openingNo",
+  "side",
+  "entryId",
+  "cue",
+  "textKo",
+  "textEn",
+  "scene",
+  "variantByCharacter",
+  "isRefrainPage",
+];
+const WRITER_BRIEF_KEYS = ["sounds", "props", "pose", "dialogueLine", "humor"];
+const pick = (value, keys) => {
+  if (!object(value)) return value;
+  const out = {};
+  for (const key of keys) if (value[key] !== undefined) out[key] = value[key];
+  return out;
+};
+/** The outline as the writing stages need it: no writers' room record, no bible, no ledger. */
+export const leanOutlineView = (outline) => pick(outline, LEAN_OUTLINE_KEYS);
+/** A page as a rewrite request needs it: text, scene, layout and wardrobe, none of the app's annotations. */
+export const leanPageView = (page) => pick(page, LEAN_PAGE_KEYS);
+/** What the beat writer takes from a scene brief; light, weather, creatures and smell are the picture's. */
+export const writerBriefView = (brief) => pick(brief, WRITER_BRIEF_KEYS);

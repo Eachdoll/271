@@ -1,5 +1,10 @@
 import { describeReadingViolation } from "../reading-messages.js";
-import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
+import {
+  analyzeEstimatedPage,
+  splitSentences,
+  leanEnglishLevel,
+  LEAN_UNIT_TOLERANCE,
+} from "../reading-checker.js";
 import { getLevelSpec } from "../reading-levels.js";
 import { unitKind, unitSpec } from "../book-layout.js";
 import { bookBudget, usualSentences } from "../page-rhythm.js";
@@ -224,6 +229,33 @@ function resolvedSpecs(pagination, supplied) {
 }
 function levelMessage(language, violation) {
   return describeReadingViolation({ ...violation, language });
+}
+/**
+ * The spec one page (unit) is judged by, exactly as checkStory builds it — so
+ * a script measuring a manuscript measures it the way the app does. R31c: on
+ * the diet the story's own English words (the outline's new words, the cast,
+ * the world, the briefs' things) are fine at every level, as at E0, and the
+ * list check folds inflections. R31e: E2 and up on the diet take the Korean
+ * unit tolerance (a count band, a mean length, a share of long sentences),
+ * count a speech tag with its quote and report the out-of-list share as a
+ * note. E0/E1 and drafts without the policy are unchanged.
+ */
+export function pageReadingSpec(readingSpecs, language, page, { lean = false } = {}) {
+  const unit = unitSpec(readingSpecs?.[language], unitKind(page));
+  if (!lean || language !== "en" || !unit) return unit;
+  return {
+    ...unit,
+    storyWordsAllowed: true,
+    inflections: true,
+    ...(leanEnglishLevel(unit)
+      ? {
+          leanTolerance: true,
+          dialogueTags: true,
+          vocabularyAdvisory: true,
+          unitTolerance: readingSpecs?.ko?.unitTolerance || LEAN_UNIT_TOLERANCE,
+        }
+      : {}),
+  };
 }
 
 /** Return all seven checks and targeted repair instructions, without mutation.
@@ -519,20 +551,21 @@ export function checkStory(
   for (const { page, pageNo } of pages)
     for (const language of ["ko", "en"]) {
       try {
-        // R12: an openings spec is judged per unit (spread or page).
-        const unit = unitSpec(readingSpecs[language], unitKind(page));
+        // R12: an openings spec is judged per unit (spread or page); R31c/R31e:
+        // the lean English spec on the diet (pageReadingSpec).
         const result = analyzeEstimatedPage(
           textOf(page, language),
-          // R31c: on the diet the story's own English words (the outline's new
-          // words, the cast, the world) are fine at every level, as at E0.
-          lean && language === "en" && unit
-            ? { ...unit, storyWordsAllowed: true, inflections: true }
-            : unit,
+          pageReadingSpec(readingSpecs, language, page, { lean }),
           { language, allowedNames, storyWords },
         );
         levelResults[language].push({ pageNo, result });
         warnings.push(
-          ...result.warnings.map((warning) => ({ ...warning, pageNo })),
+          ...result.warnings.map((warning) =>
+            // R31e: a lean note carries its text (the badges and reports read it).
+            lean && !warning.message
+              ? { ...warning, pageNo, message: levelMessage(language, warning) }
+              : { ...warning, pageNo },
+          ),
         );
         for (const violation of result.violations)
           add(

@@ -1,0 +1,174 @@
+[
+  {
+    "path": "CLAUDE.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "CODEX_R31D_COMPLETION_2026-10-22.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "CODEX_R31D_PAID_EVAL_2026-10-22.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "CODEX_WORK_ORDER_R31E_2026-10-22.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/K2-diet.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/K2-diet.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/ORIGINAL_VS_FINAL.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/PREFLIGHT.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/README.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/SUMMARY.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/VALIDATION.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-ab/tools/summarize.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/build-files.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/census.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/demo/K2-diet.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/demo/K2-diet.md",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/deployment.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/free-local.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/free-production.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/full-code-comparison.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/import-plan.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/package.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/replay.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/smoke.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/source-comparison.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/tools/free-browser-check.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "QA/r31d-import/validation.json",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/full-auto.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/reading-checker.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/reading-messages.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/beat-writer.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/checker.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/pipeline.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/story-generation/prompt-diet.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/sw.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "dist/text-generation/models.js",
+    "matchesUpstream": true
+  },
+  {
+    "path": "scripts/r31b-ab.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/editor-round.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/engine-model-choice-r13.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/english-tolerance-r31e.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/openings-legacy-r12.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/prompt-diet-r31b.test.mjs",
+    "matchesUpstream": true
+  },
+  {
+    "path": "tests/review-model-r26.test.mjs",
+    "matchesUpstream": true
+  }
+]

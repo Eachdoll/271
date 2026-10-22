@@ -38,10 +38,10 @@
 import { ledger } from "./quality-adapter.js";
 import { buildBeatPagePlan } from "./pagination.js";
 import { isOpeningsInput } from "./opening-prose.js";
-import { analyzeEstimatedPage, splitSentences } from "../reading-checker.js";
+import { analyzeEstimatedPage, splitSentences, mergeDialogueTags, leanEnglishLevel } from "../reading-checker.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { tensionRange } from "./orchestration.js";
-import { hasPromptDiet } from "./prompt-diet.js";
+import { hasPromptDiet, writerBriefView } from "./prompt-diet.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -110,27 +110,64 @@ const matchable = (text) =>
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 export const hasRefrain = (text, refrain) => !!matchable(refrain) && ` ${matchable(text)} `.includes(` ${matchable(refrain)} `);
+/*
+ * R31e: on the diet an E2+ English beat is judged the way its page will be
+ * (checkStory's lean unit rule): the count inside a band (−1/+2 around the
+ * beat's range), the mean length not over the level's maximum, at most a
+ * third of the sentences long and none far over, a speech tag counted with its
+ * quote. The retry names the long sentences with their word counts, so the
+ * writer knows what to split. The paid K2 book had five of six beats retried
+ * nine times under the strict rule and still rewritten at pagination.
+ */
+function leanEnglishProblems(clean, metrics, budget, spec) {
+  const out = [],
+    n = metrics.sentenceCount,
+    band = { min: Math.max(1, budget.min - 1), max: budget.max + 2 },
+    wps = object(spec.wordsPerSentence) ? spec.wordsPerSentence : { min: 4, max: maxWords(spec) };
+  if (n < band.min) out.push(`문장이 ${n}개로 적어요(이 비트는 ${budget.min}~${budget.max}문장, ${band.min}개부터 괜찮아요).`);
+  if (n > band.max) out.push(`문장이 ${n}개로 많아요(이 비트는 ${budget.min}~${budget.max}문장, ${band.max}개까지 괜찮아요).`);
+  const exempt = new Set(list(metrics.minimumLengthExemptSentenceIndices)),
+    texts = mergeDialogueTags(splitSentences(clean)),
+    rows = list(metrics.wordsPerSentence)
+      .map((count, index) => ({ count, index, text: str(texts[index], 70) }))
+      .filter((row) => !exempt.has(row.index)),
+    mean = rows.length ? rows.reduce((sum, row) => sum + row.count, 0) / rows.length : 0,
+    long = rows.filter((row) => row.count > wps.max),
+    allowedLong = Math.ceil(rows.length / 3 - 1e-9),
+    hardLimit = wps.max + 3,
+    quote = (list) => list.map((row) => `"${row.text}"(${row.count}단어)`).join(", ");
+  if (rows.length && mean > wps.max + 0.5)
+    out.push(`문장이 평균 ${Math.round(mean * 10) / 10}단어로 길어요(한 문장 ${wps.min}~${wps.max}단어). 긴 문장: ${quote(long)}`);
+  else if (long.length > allowedLong || long.some((row) => row.count > hardLimit))
+    out.push(`긴 문장이 ${long.length}개예요(한 문장 ${wps.max}단어 안팎, ${hardLimit}단어를 넘는 문장은 안 돼요). 긴 문장: ${quote(long)}`);
+  return out;
+}
 /** The per-beat deterministic checks (count, length, the fixed refrain). */
-export function checkBeatText(text, lang, budget, spec, { refrain = "", needsRefrain = false } = {}) {
+export function checkBeatText(text, lang, budget, spec, { refrain = "", needsRefrain = false, lean = false } = {}) {
   const problems = [],
     clean = String(text || "").trim();
   if (!clean) return { problems: ["글이 비어 있어요."], sentences: 0, distance: Infinity };
-  const sentences = splitSentences(clean).length;
-  if (sentences < budget.min) problems.push(`문장이 ${sentences}개로 적어요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
-  if (sentences > budget.max) problems.push(`문장이 ${sentences}개로 많아요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
+  // R31e: the lean English rule (E2 and up on the diet); everything else as before.
+  const leanEn = lean && lang === "en" && leanEnglishLevel(spec);
   let metrics = null;
   try {
-    metrics = analyzeEstimatedPage(clean, spec, { language: lang }).metrics;
+    metrics = analyzeEstimatedPage(clean, leanEn ? { ...spec, dialogueTags: true } : spec, { language: lang }).metrics;
   } catch {
     metrics = null;
   }
-  const limit = maxWords(spec) + 1,
-    long = list(metrics?.wordsPerSentence).filter((n) => n > limit).length;
-  if (long > Math.max(1, Math.floor(sentences / 3)))
-    problems.push(`긴 문장이 ${long}개예요(한 문장 ${limit - 1}${lang === "ko" ? "어절" : "단어"} 안팎).`);
+  const sentences = leanEn && metrics ? metrics.sentenceCount : splitSentences(clean).length;
+  if (leanEn && metrics) problems.push(...leanEnglishProblems(clean, metrics, budget, spec));
+  else {
+    if (sentences < budget.min) problems.push(`문장이 ${sentences}개로 적어요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
+    if (sentences > budget.max) problems.push(`문장이 ${sentences}개로 많아요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
+    const limit = maxWords(spec) + 1,
+      long = list(metrics?.wordsPerSentence).filter((n) => n > limit).length;
+    if (long > Math.max(1, Math.floor(sentences / 3)))
+      problems.push(`긴 문장이 ${long}개예요(한 문장 ${limit - 1}${lang === "ko" ? "어절" : "단어"} 안팎).`);
+  }
   if (needsRefrain && refrain && !hasRefrain(clean, refrain))
     problems.push(`되풀이 말 "${refrain}"이 이 비트에 그대로 있어야 해요.`);
-  return { problems, sentences, distance: Math.abs(sentences - budget.target) + (problems.length ? 0.5 : 0) };
+  return { problems, sentences, distance: Math.abs(sentences - budget.target) + (problems.length ? 0.5 : 0), words: list(metrics?.wordsPerSentence) };
 }
 /** Book-level dialogue share per language (reported, never a per-beat retry). */
 export function dialogueShare(texts) {
@@ -192,7 +229,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       .filter(Boolean)
       .join(", "),
     budgetLimit = WRITER_BUDGET_PER_LANGUAGE(beats.length) * languages.length + 1; // + the voice card
-  const report = { attempts: {}, warnings: [], anchor: {}, summarized: false, calls: 0, budget: budgetLimit };
+  // R31e: on the diet every attempt is logged (sentences, words per sentence, problems), so a paid run shows why it retried.
+  const report = { attempts: {}, warnings: [], anchor: {}, summarized: false, calls: 0, budget: budgetLimit, ...(lean ? { attemptLog: {} } : {}) };
   const spent = () => journal.paid.length;
   const write = async (lang, beat, i, { written, anchor, retry = null, draft = 0 }) => {
     const spec = input.specs?.[lang] || {},
@@ -213,8 +251,16 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       `[결말 상태] ${ending}`,
       bible?.growth ? `[성장 설계] want ${bible.growth.want} → need ${bible.growth.need} (걸림돌 ${bible.growth.flaw}); 교훈은 말하지 않고 행동으로: ${bible.lesson || ""}` : "",
       `[이번 비트] ${beat.index} ${beat.type}: ${str(beat.summary, 500)}${list(outline.tension)[i] !== undefined ? ` · 목표 긴장 ${outline.tension[i]}` : ""}`,
-      brief ? `[장면 디테일(그림과 같아야 함)] ${str(JSON.stringify(brief), 900)}` : "",
-      `[분량] 이 비트는 ${budget.target}문장 안팎(범위 ${budget.min}~${budget.max}). 한 문장 ${maxWords(spec)}${ko ? "어절" : " words"} 안팎.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`,
+      // R31e: on the diet the writer gets the brief's story-carrying fields; light, weather and creatures are the picture's.
+      brief
+        ? lean
+          ? `[장면 디테일 — 글에 쓸 것: 소리·소품·동작·대사·웃음 포인트. 빛·날씨·작은 생물은 그림이 보여 줘요] ${str(JSON.stringify(writerBriefView(brief)), 900)}`
+          : `[장면 디테일(그림과 같아야 함)] ${str(JSON.stringify(brief), 900)}`
+        : "",
+      // R31e: the English of a diet draft gets its range (no tension-scaled target) — the target pushed two-sentence beats into 16-word sentences.
+      lean && !ko
+        ? `[분량] 이 비트의 영어는 ${budget.min}~${budget.max}문장, 한 문장 ${object(spec.wordsPerSentence) ? spec.wordsPerSentence.min : 4}~${maxWords(spec)} words.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`
+        : `[분량] 이 비트는 ${budget.target}문장 안팎(범위 ${budget.min}~${budget.max}). 한 문장 ${maxWords(spec)}${ko ? "어절" : " words"} 안팎.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`,
       needsRefrain ? (ko ? `[되풀이 말 — 글자 그대로 한 번] ${refrain}` : `[Refrain — use this exact line once] ${refrain}`) : "",
       prior.text ? `[앞 비트까지 쓴 글${prior.summarized ? "(앞부분은 줄거리 요약)" : ""}]\n${prior.text}` : "[앞 비트] 없음 — 이 비트가 책의 첫 장면이에요.",
       anchor ? `[문체 기준 — 이 책의 첫 비트. 같은 목소리·리듬으로]\n${anchor}` : "",
@@ -229,14 +275,26 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));
     // One paragraph per beat: any line breaks the model adds are folded away.
     const text = str(object(data) ? data.text : response?.text, 4000);
-    return { text, check: checkBeatText(text, lang, budget, spec, { refrain, needsRefrain }) };
+    const check = checkBeatText(text, lang, budget, spec, { refrain, needsRefrain, lean });
+    if (report.attemptLog)
+      (report.attemptLog[`${lang}:${beat.index}`] ||= []).push({
+        ...(draft ? { draft } : {}),
+        ...(retry ? { retry: true } : {}),
+        sentences: check.sentences,
+        words: check.words,
+        problems: check.problems,
+      });
+    return { text, check };
   };
-  const deltaOf = (check, budget) =>
-    check.sentences > budget.max
+  // R31e: a lean English retry is told to split (up to the band), never to keep the count.
+  const deltaOf = (check, budget, leanEn = false) =>
+    check.sentences > (leanEn ? budget.max + 2 : budget.max)
       ? `[고칠 양] 지금 ${check.sentences}문장 → ${budget.target}문장으로 ${check.sentences - budget.target}문장 줄여 주세요(목표 대비 −${Math.round(((check.sentences - budget.target) / Math.max(1, check.sentences)) * 100)}%).`
-      : check.sentences < budget.min
+      : check.sentences < (leanEn ? Math.max(1, budget.min - 1) : budget.min)
         ? `[고칠 양] 지금 ${check.sentences}문장 → ${budget.target}문장으로 ${budget.target - check.sentences}문장 늘려 주세요.`
-        : "[고칠 양] 문장 수는 그대로 두고 위 문제만 고쳐 주세요.";
+        : leanEn
+          ? `[고칠 양] 긴 문장은 짧은 문장 여러 개로 나누세요(이 비트는 ${budget.max}문장까지 괜찮아요). 영어는 한글보다 덜 말해도 돼요 — 그림이 보여 주는 순간만 쓰세요.`
+          : "[고칠 양] 문장 수는 그대로 두고 위 문제만 고쳐 주세요.";
   // One beat: up to three attempts; after that the attempt closest to its budget, with a warning.
   const settle = async (lang, beat, i, ctx, first) => {
     const budget = budgets[i][lang];
@@ -244,7 +302,7 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       current = first,
       attempts = 1;
     while (current.check.problems.length && attempts < BEAT_WRITER_ATTEMPTS && spent() < budgetLimit) {
-      current = await write(lang, beat, i, { ...ctx, retry: { problems: current.check.problems, delta: deltaOf(current.check, budget), text: current.text } });
+      current = await write(lang, beat, i, { ...ctx, retry: { problems: current.check.problems, delta: deltaOf(current.check, budget, lean && lang === "en" && leanEnglishLevel(input.specs?.[lang])), text: current.text } });
       attempts++;
       if (current.check.distance < best.check.distance) best = current;
     }
