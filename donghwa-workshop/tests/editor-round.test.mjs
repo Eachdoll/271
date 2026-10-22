@@ -311,7 +311,12 @@ test('FULL AUTO: a new job freezes the policy, asks for the read-through with th
   delete old.input.editorPolicy;
   const without = estimateFullAutoCost(state, wizard, {job: old});
   assert.ok(withPolicy.textUsd > without.textUsd);
-  assert.equal(estimateFullAutoCost(state, wizard).textUsd, withPolicy.textUsd);
+  // R31e: this mock job's outline carries a ledger (the mock wrote one), so it is
+  // priced with the two ledger reviews; a new diet job has no ledger and none.
+  assert.ok(withPolicy.textUsd > estimateFullAutoCost(state, wizard).textUsd);
+  const noLedger = clone(job);
+  delete noLedger.outline.plotContract;
+  assert.equal(estimateFullAutoCost(state, wizard).textUsd, estimateFullAutoCost(state, wizard, {job: noLedger}).textUsd);
 });
 
 test('simple ③ names the read-through once the text is done', async () => {

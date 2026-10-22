@@ -97,10 +97,12 @@ test('R31b the K2 outline of a diet draft: the app path with the lean prompt and
   assert.match(outlineCall.system, /THE WRITERS' ROOM CHOSE THIS PITCH — write the outline from it, in your own way/u);
   assert.doesNotMatch(outlineCall.system, /binding|beat for beat/u);
   assert.match(outlineCall.system, /tension\[\]: 7 integers 0–4/u);
-  assert.match(outlineCall.system, /plotContract is the story's event ledger/u, 'K2 keeps the ledger (two sentences)');
+  // R31e: no diet draft carries the event ledger (K2 too); a volunteered one is dropped.
+  assert.doesNotMatch(outlineCall.system, /plotContract/u, 'no ledger asked for on the diet');
+  assert.equal(outlineCall.jsonSchema.required.includes('plotContract'), false);
   assert.match(outlineCall.system, /Surprise is welcome; a formula is not/u);
   assert.doesNotMatch(outlineCall.user, /vocabList|"specs"/u);
-  assert.ok(result.data.plotContract, 'the K2 outline carries its ledger');
+  assert.equal(result.data.plotContract, undefined, 'the mock reply volunteered a ledger; the diet outline drops it');
   assert.match(outlineCall.system, /The parent chose|chosen companion|^Design the StoryOutline/mu);
   // The room's condition block carries no refrain line for a diet draft.
   const pitchCall = calls.find((c) => /\[피치 1개 쓰기\]/u.test(c.user));

@@ -21,6 +21,48 @@ const strip = (text) =>
 export function splitSentences(text) {
   return sharedSplitSentences(text);
 }
+/*
+ * R31e (2026-10-22) lean English (E2 and up on the diet). The paid K2 books
+ * showed the strict English rules refusing what a picture book wants: a
+ * one-word "Peekaboo!" (too short), a speech tag after a quote ("…!" said
+ * Yuha.) counted as a two-word sentence, one 10-word line among three, and
+ * ordinary words (puffed, cheeks, pouted) over a 15% list cap — and every one
+ * of them bought a rewrite that read worse. A lean English unit spec (set by
+ * checkStory's pageReadingSpec) takes the Korean unit tolerance instead
+ * (leanTolerance), counts a speech tag with its quote (dialogueTags) and
+ * reports the out-of-list share as a note (vocabularyAdvisory). E0/E1 and
+ * every spec without these flags are checked exactly as before.
+ */
+export const leanEnglishLevel = (spec) => /^E[2-9]/u.test(String(spec?.id || ""));
+export const LEAN_UNIT_TOLERANCE = Object.freeze({
+  countBelow: 1,
+  countAbove: 2,
+  meanSlack: 0.5,
+  longShareCeil: 1 / 3,
+  longOver: 3,
+});
+const TAG_VERBS =
+  /^(?:said|says|asked|asks|cried|cries|called|calls|shouted|shouts|whispered|whispers|laughed|laughs|giggled|giggles|yelled|yells|answered|answers|replied|replies|sang|sings|added|adds|gasped|gasps|thought|thinks|sighed|sighs|squealed|squeals|cheered|cheers|mumbled|mumbles|muttered|mutters|told|tells)$/u;
+const PRONOUNS = new Set(["he", "she", "they", "we", "i", "you", "it", "mom", "dad"]);
+const plainWord = (word) => String(word || "").replace(/[^A-Za-z]/gu, "").toLowerCase();
+/** A short speech tag after a closing quote ("…!" said Yuha. / "…?" Yuha asked.) belongs to that sentence. */
+export function mergeDialogueTags(sentences) {
+  const out = [];
+  for (const sentence of sentences) {
+    const previous = out.at(-1),
+      words = String(sentence || "").trim().split(/\s+/u).filter(Boolean),
+      first = plainWord(words[0]),
+      second = plainWord(words[1]),
+      tag =
+        words.length > 0 &&
+        words.length <= 6 &&
+        (TAG_VERBS.test(first) ||
+          (TAG_VERBS.test(second) && (PRONOUNS.has(first) || /^[A-Z]/u.test(words[0] || ""))));
+    if (previous && tag && /[.!?…]["”’']+$/u.test(previous)) out[out.length - 1] = `${previous} ${String(sentence).trim()}`;
+    else out.push(sentence);
+  }
+  return out;
+}
 
 const enWords = (text) =>
   (strip(text).match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) || []).map((w) =>
@@ -329,7 +371,7 @@ const ADJECTIVE_CUES = new Set([
  * per unit with tolerances; single off-range sentences become ONE advisory note.
  * Returns { blocking, note }. English and every pre-R12 spec never come here.
  */
-function unitLengthRules(metrics, spec) {
+function unitLengthRules(metrics, spec, lang = "ko") {
   const tol = spec.unitTolerance,
     range = spec.sentencesPerPageRange,
     wps = spec.wordsPerSentence,
@@ -337,14 +379,18 @@ function unitLengthRules(metrics, spec) {
     n = metrics.sentenceCount,
     blocking = [];
   // Page rhythm: the wide per-unit band; the book total is judged elsewhere.
+  // R31e: an English unit never asks for fewer than one sentence.
   const band = rhythmBand(spec) || {
-    min: range.min - number(tol.countBelow, 1),
+    min:
+      lang === "en"
+        ? Math.max(1, range.min - number(tol.countBelow, 1))
+        : range.min - number(tol.countBelow, 1),
     max: range.max + number(tol.countAbove, 2),
   };
   if (n < band.min || n > band.max)
     blocking.push({
       code: "unit-sentence-count",
-      language: "ko",
+      language: lang,
       unit,
       actual: n,
       expected: { min: range.min, max: range.max },
@@ -356,10 +402,15 @@ function unitLengthRules(metrics, spec) {
       ? round(lengths.reduce((sum, value) => sum + value, 0) / lengths.length)
       : null,
     slack = number(tol.meanSlack, 0.5);
-  if (mean != null && (mean < wps.min - slack || mean > wps.max + slack))
+  // R31e: English is never asked to lengthen its sentences (short lines read
+  // easily); only a long mean blocks there.
+  if (
+    mean != null &&
+    ((lang !== "en" && mean < wps.min - slack) || mean > wps.max + slack)
+  )
     blocking.push({
       code: "unit-mean-length",
-      language: "ko",
+      language: lang,
       unit,
       actual: mean,
       expected: { min: wps.min - slack, max: wps.max + slack },
@@ -372,7 +423,7 @@ function unitLengthRules(metrics, spec) {
   if (long > allowedLong || longest > hardLimit)
     blocking.push({
       code: "unit-long-sentences",
-      language: "ko",
+      language: lang,
       unit,
       actual: long,
       max: allowedLong,
@@ -381,7 +432,7 @@ function unitLengthRules(metrics, spec) {
       hardLimit,
     });
   const offSentences = lengths.filter(
-      (value) => value < wps.min || value > wps.max,
+      (value) => (lang !== "en" && value < wps.min) || value > wps.max,
     ).length,
     countOff = !rhythmBand(spec) && (n < range.min || n > range.max),
     chars = spec.advisoryCharsPerPage,
@@ -392,7 +443,7 @@ function unitLengthRules(metrics, spec) {
     offSentences || countOff || charsOff
       ? {
           code: "unit-length-note",
-          language: "ko",
+          language: lang,
           severity: "warning",
           advisory: true,
           unit,
@@ -414,12 +465,17 @@ function unitLengthRules(metrics, spec) {
   return { blocking, note };
 }
 const unitRulesApply = (spec, lang) =>
-  lang === "ko" &&
-  spec?.layout === "openings" &&
-  !!spec.unitTolerance &&
-  !!spec.sentencesPerPageRange;
+  (lang === "ko" &&
+    spec?.layout === "openings" &&
+    !!spec.unitTolerance &&
+    !!spec.sentencesPerPageRange) ||
+  // R31e: a lean English spec (E2 and up on the diet) takes the same unit rules.
+  (lang === "en" &&
+    spec?.leanTolerance === true &&
+    !!spec.unitTolerance &&
+    !!spec.sentencesPerPageRange);
 function violations(metrics, spec, lang) {
-  if (unitRulesApply(spec, lang)) return unitViolations(metrics, spec);
+  if (unitRulesApply(spec, lang)) return unitViolations(metrics, spec, lang);
   const short = lang === "ko" && hasShortSentences(spec);
   const out = short ? shortSentenceViolations(metrics, spec) : [],
     // Page rhythm: a frozen rhythm spec judges each page by its wide band.
@@ -490,21 +546,21 @@ function violations(metrics, spec, lang) {
     });
   return out;
 }
-/** Openings Korean: unit length rules plus today's vocabulary and connective checks. */
-function unitViolations(metrics, spec) {
-  const out = [...unitLengthRules(metrics, spec).blocking];
+/** Openings Korean (and R31e lean English): unit length rules plus today's vocabulary and connective checks. */
+function unitViolations(metrics, spec, lang = "ko") {
+  const out = [...unitLengthRules(metrics, spec, lang).blocking];
   if (
     !metrics.vocabularySkipped &&
     metrics.outOfVocabRatio > number(spec.maxOutOfVocabRatio, 0.1)
   )
     out.push({
       code: "out-of-vocabulary",
-      language: "ko",
+      language: lang,
       actual: metrics.outOfVocabRatio,
       max: spec.maxOutOfVocabRatio,
       words: metrics.outOfVocabWords,
     });
-  metrics.connectiveEndingsPerSentence.forEach((count, index) => {
+  if (lang === "ko") metrics.connectiveEndingsPerSentence.forEach((count, index) => {
     if (count > number(spec.maxConnectiveEndingsPerSentence, 1))
       out.push({
         code: "connective-endings",
@@ -527,9 +583,14 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
   }
   // R31a: a K1 short-sentence spec also ends a sentence at an ellipsis.
   const shortPolicy = lang === "ko" && hasShortSentences(spec),
-    sentences = shortPolicy
+    split = shortPolicy
       ? splitAtEllipsis(splitSentences(text))
       : splitSentences(text),
+    // R31e: a lean English spec counts a speech tag with its quote.
+    sentences =
+      lang === "en" && spec.dialogueTags === true
+        ? mergeDialogueTags(split)
+        : split,
     tokenize = lang === "en" ? enWords : koWords,
     words = sentences.flatMap(tokenize),
     allowed = allowedSet(
@@ -638,17 +699,24 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
         expected: "현재형",
       });
   }
+  // R31e: a lean English spec reports the out-of-list share (advisory) instead of blocking on it.
+  const advisory =
+    spec.vocabularyPolicy !== "warning" && spec.vocabularyAdvisory === true;
   const warnings =
-    spec.vocabularyPolicy === "warning"
+    spec.vocabularyPolicy === "warning" || advisory
       ? issues
           .filter((issue) => issue.code === "out-of-vocabulary")
-          .map((issue) => ({ ...issue, severity: "warning" }))
+          .map((issue) => ({
+            ...issue,
+            severity: "warning",
+            ...(advisory ? { advisory: true } : {}),
+          }))
       : [];
   issues = issues.filter(
     (issue) => !warnings.some((warning) => warning.code === issue.code),
   );
   if (unitRulesApply(spec, lang)) {
-    const note = unitLengthRules(metrics, spec).note;
+    const note = unitLengthRules(metrics, spec, lang).note;
     if (note) warnings.push(note);
   }
   return {

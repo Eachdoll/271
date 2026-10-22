@@ -8,19 +8,23 @@ const valueText = (value) => {
   return JSON.stringify(value);
 };
 const UNIT_NAMES = { spread: "펼침면", page: "낱쪽", opening: "펼침" };
-const eojeol = (value) =>
-  Number.isFinite(Number(value)) ? `${Number(Number(value).toFixed(1))}어절` : "—";
-/** R12 openings (Korean unit rules): the three blocking codes and the one combined note. */
+const measure = (value, word) =>
+  Number.isFinite(Number(value)) ? `${Number(Number(value).toFixed(1))}${word}` : "—";
+/** R12 openings (Korean unit rules; R31e lean English too): the three blocking codes and the one combined note. */
 function describeUnitViolation(violation) {
   const unit = UNIT_NAMES[violation.unit] || "쪽",
+    en = violation.language === "en",
+    lang = en ? "영어" : "한글",
+    word = en ? "단어" : "어절",
+    eojeol = (value) => measure(value, word),
     range = (value) => `${value?.min ?? "—"}~${value?.max ?? "—"}`;
   switch (violation.code) {
     case "unit-sentence-count":
-      return `한글 ${unit} 문장 ${violation.actual}개 (권장 ${range(violation.expected)} · ${range(violation.band)}개를 벗어나면 고쳐 써요)`;
+      return `${lang} ${unit} 문장 ${violation.actual}개 (권장 ${range(violation.expected)} · ${range(violation.band)}개를 벗어나면 고쳐 써요)`;
     case "unit-mean-length":
-      return `한글 ${unit} 문장 평균 ${eojeol(violation.actual)} (허용 ${range(violation.expected)}어절)`;
+      return `${lang} ${unit} 문장 평균 ${eojeol(violation.actual)} (허용 ${range(violation.expected)}${word})`;
     case "unit-long-sentences":
-      return `한글 ${unit} 긴 문장 ${violation.actual}개 · 가장 긴 문장 ${eojeol(violation.longest)} (${violation.limit}어절 넘는 문장은 ${violation.max}개까지, ${violation.hardLimit}어절 넘는 문장은 없어야 해요)`;
+      return `${lang} ${unit} 긴 문장 ${violation.actual}개 · 가장 긴 문장 ${eojeol(violation.longest)} (${violation.limit}${word} 넘는 문장은 ${violation.max}개까지, ${violation.hardLimit}${word} 넘는 문장은 없어야 해요)`;
     case "unit-length-note": {
       const parts = [
         ...(violation.offSentences
@@ -34,7 +38,7 @@ function describeUnitViolation(violation) {
             ]
           : []),
       ];
-      return `한글 ${unit} 참고 · ${parts.join(" · ")}`;
+      return `${lang} ${unit} 참고 · ${parts.join(" · ")}`;
     }
     default:
       return "";
@@ -51,6 +55,9 @@ export function describeReadingViolation(violation) {
     return violation.suggestion;
   const unitMessage = describeUnitViolation(violation);
   if (unitMessage) return unitMessage;
+  // R31e: on the diet an E2+ page's out-of-list share is a note with the words themselves.
+  if (violation.code === "out-of-vocabulary" && violation.advisory === true)
+    return `${violation.language === "ko" ? "한글" : "영어"} 등급 외 어휘 ${Math.round(violation.actual * 1000) / 10}% · 참고${Array.isArray(violation.words) && violation.words.length ? ` (목록 밖: ${violation.words.slice(0, 8).join(", ")}${violation.words.length > 8 ? " …" : ""})` : ""}`;
   if (
     violation.code === "out-of-vocabulary" &&
     violation.severity === "warning"

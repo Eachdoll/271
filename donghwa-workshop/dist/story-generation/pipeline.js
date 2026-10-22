@@ -94,11 +94,12 @@ import {
   leanLevelRules,
   leanVisibleInput,
   leanOutlineRules,
-  LEAN_PLOT_CONTRACT,
   leanBibleBlock,
   LEAN_TENSION_RULE,
   leanBeatWriterRules,
   leanProseRules,
+  leanOutlineView,
+  leanPageView,
 } from "./prompt-diet.js";
 import {
   hasOrchestrationPolicy,
@@ -565,6 +566,11 @@ function abort(signal) {
 function notify(options, stage, phase, message, extra = {}) {
   options.onProgress?.({ stage, phase, message, ...extra });
 }
+/** R31e: what a diet request shows of the outline and of a page (never the app's own records). */
+const outlineView = (outline, input) =>
+  hasPromptDiet(input) ? leanOutlineView(outline) : outline;
+const pageView = (page, input) =>
+  page && hasPromptDiet(input) ? leanPageView(page) : page;
 export function usageOf(result = {}) {
   const source = result.usage || {},
     usage = {
@@ -1352,7 +1358,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
       const result = await complete(
         "sceneBriefs",
         input,
-        { rules: `${sceneBriefRules(input)}${hasPromptDiet(input) ? "" : bibleBriefRules(outline)}`, data: { approvedOutline: outline } },
+        { rules: `${sceneBriefRules(input)}${hasPromptDiet(input) ? "" : bibleBriefRules(outline)}`, data: { approvedOutline: outlineView(outline, input) } },
         schema,
         options,
       );
@@ -1400,7 +1406,7 @@ export async function generateSceneBriefs(outline, source, options = {}) {
             {
               rules: `${sceneBriefRules(input)}\nReturn ONLY the target beat as one SceneBrief; keep beatIndex=${beatIndex}. Other briefs are already approved and cannot be modified. Fix all listed violations while respecting preceding/following times.`,
               data: {
-                approvedOutline: outline,
+                approvedOutline: outlineView(outline, input),
                 targetBeatIndex: beatIndex,
                 existingBriefs: briefs,
                 violations: violations.map(requestViolation),
@@ -2191,8 +2197,9 @@ function outlineRequestSchema(input) {
   delete setting.properties.newPlace;
   setting.properties.backgroundId.enum = ids;
   schema.properties.beats.items.properties.settingKey.enum = ids;
-  // R31b: a K1 book on the diet has no event ledger (nothing downstream needs it).
-  if (!(hasPromptDiet(input) && hasK1Policy(input))) schema.required.push("plotContract");
+  // R31b: a K1 book on the diet has no event ledger; R31e: no diet draft has one
+  // (the ledger-based reviews are not run for them).
+  if (!hasPromptDiet(input)) schema.required.push("plotContract");
   else delete schema.properties.plotContract;
   // 2026-10-20: a typed ending is a third ending type (new drafts only).
   if (input.endingType === "custom")
@@ -2290,7 +2297,6 @@ export async function generateOutline(source, options = {}) {
     ? [
         leanOutlineRules(input, { count, attempts, k1: hasK1Policy(input), custom: customEnding(input) }),
         customEnding(input) ? endingRuleLine(input) : "",
-        hasK1Policy(input) ? "" : LEAN_PLOT_CONTRACT,
         craftOutlineRules(input),
         bibleRules,
       ]
@@ -2353,8 +2359,11 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
     const shaped = normalizeOutlineResponse(result.data, input);
     result.data = shaped.outline;
     normalized = shaped.notes;
+    // R31e: a diet outline carries no ledger, even when the model volunteers one
+    // (an unasked-for ledger must never fail the outline or buy a review).
+    if (diet && result.data && typeof result.data === "object") delete result.data.plotContract;
     const report = inspectOutlineRules(result.data, input);
-    if (!result.data?.plotContract && !(diet && hasK1Policy(input))) {
+    if (!result.data?.plotContract && !diet) {
       report.valid = false;
       report.violations.push({
         code: "plot_contract_missing",
@@ -2655,6 +2664,7 @@ export async function alignEnglishText(request = {}, outline, source, options = 
     const check = checkBeatText(en, "en", range, spec, {
       refrain: refrainEn,
       needsRefrain,
+      lean: hasPromptDiet(input),
     });
     if (!best || check.distance < best.check.distance) best = { en, check };
     if (!check.problems.length) break;
@@ -3041,7 +3051,7 @@ async function paginateOpeningsOnce(outline, prose, input, options, violations) 
       {
         rules: `${openingsPaginationRules(input, options)}${hasPromptDiet(input) ? "" : biblePaginationRules(outline, input)}${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
         data: {
-          approvedOutline: outline,
+          approvedOutline: outlineView(outline, input),
           approvedOriginalProse: prose,
           openingPlan: buildOpeningPlan(outline, count),
           ...(options.sceneBriefs
@@ -3129,7 +3139,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
     {
       rules: `${paginationRules(input)}${hasPromptDiet(input) ? "" : biblePaginationRules(outline, input)}\nThe ${outline.beats.length} outline beats are NOT pages. Expand them into exactly ${input.pageCount} pages by splitting events across pages. Never return one page per beat. Follow the supplied pagePlan (pageNo -> beatIndex); retain the approved prose and ending.${violations.length ? "\nRepair the listed structural violations while preserving this same ORIGINAL prose." : ""}`,
       data: {
-        approvedOutline: outline,
+        approvedOutline: outlineView(outline, input),
         approvedOriginalProse: prose,
         pagePlan,
         ...(options.sceneBriefs
@@ -3234,15 +3244,15 @@ export async function rewriteStoryPage(
     {
       rules: `${rules}\n${isOpeningsInput(input) ? openingsPaginationRules(input) : paginationRules(input)}\n${options.qualityInstruction || ""}${options.keepEndingOnly ? " Preserve all earlier sentences byte-for-byte; change only the final sentence without adding a new event, object or place. Respect the allowed level grammar." : ""}${hasEditorPolicy(input) ? CURRENT_BOOK_RULE : ""}`,
       data: {
-        approvedOutline: outline,
+        approvedOutline: outlineView(outline, input),
         approvedOriginalProse: prose,
         sceneBrief:
           sceneBriefRows(options.sceneBriefs).find(
             (b) => b.beatIndex === original.beatIndex,
           ) || null,
-        targetPage: original,
-        previousPage: pagination.pages[index - 1] || null,
-        nextPage: pagination.pages[index + 1] || null,
+        targetPage: pageView(original, input),
+        previousPage: pageView(pagination.pages[index - 1] || null, input),
+        nextPage: pageView(pagination.pages[index + 1] || null, input),
         violations,
         // Editor round: every page as it reads now (earlier repairs included).
         ...(hasEditorPolicy(input) ? { currentBook: bookPages(pagination) } : {}),
@@ -3317,7 +3327,7 @@ async function reviseStoryBook(result, outline, input, options) {
         {
           rules: revisionRules(input, pagination.pages.length),
           data: revisionData(
-            outline,
+            outlineView(outline, input),
             pagination,
             sceneBriefRows(options.sceneBriefs),
           ),

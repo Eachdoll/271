@@ -403,6 +403,8 @@ export function estimateFullAutoCost(
       ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : k1Book ? {} : { council: true }),
       // R31b: diet drafts price the app-path outline/prose on the stage models.
       ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
+      // R31e: the ledger-based coherence rows only when the job's outline has a ledger.
+      ...(job?.outline ? { ledger: !!job.outline.plotContract } : {}),
       ...(k1Book
         ? {
             k1Book: true,

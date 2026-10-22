@@ -744,7 +744,12 @@ const PINS = {
   // 영어 어휘 허용 (R31d): the demo K2 job's story check has fewer new-word notes
   // (inflections folded, the briefs' props and the backgrounds' English names
   // are story words); nothing else differs (dump-diffed against ac45fbc). ac45fbc: e9526fe1…aa21.
-  fullAutoDemo: 'ba0173e42c67cb65e69479461fdc74313c2e5599e432916aafafb2575e467d53',
+  // 영어 허용 범위 (R31e): the demo jobs are diet drafts — the demo K2 job's
+  // English is judged by the unit rules (its per-sentence violations are gone,
+  // its out-of-list shares are notes) and lean notes carry their message (the
+  // K1 demo's E0 vocabulary notes too); the demo outline keeps its ledger;
+  // nothing else differs (dump-diffed against 071ba58). 071ba58: ba0173e4…7d53.
+  fullAutoDemo: 'c20447c5c64b058fb41fa1af68c5fd11b497750bc3a9fc7391767fdcf22c624c',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -793,7 +798,10 @@ const PINS = {
   // 검사 다이어트 (R31c): ③ prices a new K1 book without the editor and with two
   // page fixes (글 약 $0.99 → $0.65), a new K2 book with two page fixes ($1.66 →
   // $1.71); nothing else changed (dump-diffed against 36fa25a). 36fa25a: d8e779d9…719e.
-  review: '72bd3a0fb139e27ce1ff954f099729e501e41e848ba2f6855e21203acf4561b0',
+  // 영어 허용 범위·장부 없음 (R31e): ③ prices a new book without the two ledger
+  // reviews (③ K1 12쪽 글 약 $0.65 → $0.51, K2 16쪽 영어 $1.71 → $1.56); nothing
+  // else changed (dump-diffed against 071ba58). 071ba58: 72bd3a0f…61b0.
+  review: '75314338885ab90e41c7c0eda58c2b4676949629da4774e2310dfd812650f875',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -827,7 +835,12 @@ const PINS = {
   // text $0.875 → $0.579 (no editor, two page fixes); K2 16쪽 42 → 44, $1.655 →
   // $1.707 (two page fixes); existing jobs are the same (dump-diffed against
   // 36fa25a). 36fa25a: fa6bbbcd…6bbd.
-  estimates: 'd19686db208b75cf89b4d789bd6a241ce4249651594db389df6653b283dadd47',
+  // 영어 허용 범위·장부 없음 (R31e): only NEW jobs' estimates changed — a diet
+  // outline has no ledger, so the two coherence-review rows are gone (K1 12쪽
+  // 11 → 9 requests, $0.579 → $0.450; K2 16쪽 39 → 37, $1.413 → $1.284); jobs
+  // whose outline carries a ledger are the same (dump-diffed against 071ba58).
+  // 071ba58: d19686db…dd47.
+  estimates: '8b673b905788d400a759831728fc0a149dada73ed6292edf13568e1c8b821736',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

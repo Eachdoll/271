@@ -32,6 +32,11 @@
  * page), the writer's original prose is kept beside the final book, and every
  * checkpoint of the pagination stage records which violations it was fixing
  * (the repair history), so the next reading needs no replay.
+ * R31e: pages are measured with the very spec and story words the app's
+ * checkStory uses (pageReadingSpec), so the table and the app agree; the
+ * repair history keeps each violation's language, type and message and the
+ * failed pages' text before and after; the writer's attempt log and the
+ * outline's rewrite reasons are kept too.
  */
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -46,8 +51,11 @@ import {
   estimateFullAutoCost,
 } from "../dist/full-auto.js";
 import { jobTextBudget } from "../dist/text-generation/models.js";
-import { unitSpec, unitKind } from "../dist/book-layout.js";
+import { unitKind } from "../dist/book-layout.js";
 import { generateProse, paginateStory, repairPagination } from "../dist/story-generation/pipeline.js";
+import { pageReadingSpec } from "../dist/story-generation/checker.js";
+import { hasPromptDiet } from "../dist/story-generation/prompt-diet.js";
+import { buildStoryWords } from "../dist/story-reading-context.js";
 import {
   analyzeEstimatedPage,
   splitSentences,
@@ -131,17 +139,32 @@ async function runArm(arm) {
   if (arm === "r31a") delete job.input.promptDiet;
   const estimate = demo ? null : estimateFullAutoCost(state, wizard, { job });
   log(`[${arm}] 시작 · ${level} ${wizard.pageCount}쪽 · 재료 계획 ${job.planMode} · 추정 글 요금 ${estimate ? money(estimate.textUsd) : "무료(데모)"}`);
-  const progress = [], history = [], snapshot = {};
+  const progress = [], history = [], snapshot = {}, outlineRepairs = [];
+  // R31e: each checks checkpoint keeps the violations in full and the text of
+  // the pages that failed now or at the previous checkpoint (before → after).
   const withHistory = (opts) => ({
     ...opts,
     onCheckpoint: async (cp) => {
-      if (cp?.checks)
+      if (cp?.checks) {
+        const failed = cp.checks.failedPageNos || [],
+          previous = history.at(-1)?.failedPageNos || [],
+          watch = new Set([...failed, ...previous]),
+          pages = (cp.pagination?.pages || []).filter((p) => watch.has(p.pageNo));
         history.push({
           requests: cp.meta?.requests ?? null,
-          failedPageNos: cp.checks.failedPageNos || [],
-          violations: (cp.checks.violations || []).map((v) => `${v.type || v.code}@${v.pageNo ?? "-"}`),
+          stage: cp.stage || cp.meta?.stage || null,
+          failedPageNos: failed,
+          violations: (cp.checks.violations || []).map((v) => ({
+            pageNo: v.pageNo ?? null,
+            language: v.language || null,
+            type: v.type || v.code || null,
+            message: v.message || "",
+          })),
           notes: (cp.checks.warnings || []).length,
+          noteMessages: (cp.checks.warnings || []).map((w) => `${w.pageNo != null ? `${w.pageNo}: ` : ""}${w.message || w.code || ""}`).slice(0, 30),
+          texts: pages.map((p) => ({ pageNo: p.pageNo, ko: p.textKo, en: p.textEn })),
         });
+      }
       return opts.onCheckpoint?.(cp);
     },
   });
@@ -167,6 +190,9 @@ async function runArm(arm) {
           progress.push(message);
           log(`[${arm}] ${message}`);
         }
+        // R31e: why an outline was bought again (the app's own check items).
+        if (p.stage === "outline" && p.phase === "repair" && Array.isArray(p.violations))
+          outlineRepairs.push({ attempt: p.attempt ?? null, violations: p.violations.map((v) => ({ code: v.code || null, message: v.message || String(v) })) });
       },
     });
   } catch (e) {
@@ -175,7 +201,7 @@ async function runArm(arm) {
   }
   const seconds = Math.round((Date.now() - started) / 1000);
   log(`[${arm}] ${error ? "실패" : "완료"} · ${job.status} · ${seconds}초`);
-  return { arm, state, job, estimate, progress, error, seconds, history, snapshot };
+  return { arm, state, job, estimate, progress, error, seconds, history, snapshot, outlineRepairs };
 }
 
 // ---------- measurement (the checker, never a model's own numbers) ----------
@@ -187,14 +213,25 @@ const sentencesOf = (text, spec) => {
 // Reduplicated Korean sound/movement words (부릉부릉, 콩닥콩닥, 두리번두리번): a
 // heuristic count, labelled as such.
 const soundWords = (text) => [...new Set((String(text || "").match(/([가-힣]{2,3})\1/gu) || []))];
-const unitOf = (spec, page) => (spec ? unitSpec(spec, unitKind(page)) : spec);
-function measurePages(pages, specs, allowedNames) {
+// R31e: the spec and the story words exactly as the app's checkStory uses them
+// (the lean English spec on the diet: story words, inflections, E2+ unit tolerance).
+function measurePages(pages, input, outline = null, briefs = []) {
+  const specs = input?.specs || {},
+    lean = hasPromptDiet(input),
+    allowedNames = [...(input?.characters || []).flatMap((c) => [c.name, c.nameEn]).filter(Boolean)];
+  let storyWords = [];
+  try {
+    storyWords = outline ? buildStoryWords(input, outline, [], { briefs, lean }) : [];
+  } catch {
+    storyWords = [];
+  }
   const rows = pages.map((page, i) => {
     const ko = String(page.textKo ?? page.ko ?? ""),
       en = String(page.textEn ?? page.en ?? "");
-    const koSpec = unitOf(specs.ko, page), enSpec = unitOf(specs.en, page);
-    const kor = analyzeEstimatedPage(ko, koSpec, { language: "ko", allowedNames }),
-      eng = en && enSpec ? analyzeEstimatedPage(en, enSpec, { language: "en", allowedNames }) : null;
+    const koSpec = specs.ko ? pageReadingSpec(specs, "ko", page, { lean }) : null,
+      enSpec = specs.en ? pageReadingSpec(specs, "en", page, { lean }) : null;
+    const kor = analyzeEstimatedPage(ko, koSpec, { language: "ko", allowedNames, storyWords }),
+      eng = en && enSpec ? analyzeEstimatedPage(en, enSpec, { language: "en", allowedNames, storyWords }) : null;
     const sentences = sentencesOf(ko, koSpec),
       rhythm = new Set(kor.metrics?.rhythmSentenceIndices || []),
       lengths = sentences.map(eojeol),
@@ -215,6 +252,8 @@ function measurePages(pages, specs, allowedNames) {
       sounds: soundWords(ko),
       koIssues: (kor.violations || []).map(describeReadingViolation),
       enIssues: (eng?.violations || []).map(describeReadingViolation),
+      koNotes: (kor.warnings || []).map(describeReadingViolation),
+      enNotes: (eng?.warnings || []).map(describeReadingViolation),
       enWords: en ? en.trim().split(/\s+/u).filter(Boolean).length : 0,
     };
   });
@@ -295,7 +334,8 @@ function armReport(run, measured, usage) {
   lines.push("", "## 원고", "", "| 쪽 | 한글 | 영어 |", "| --- | --- | --- |");
   for (const r of measured.rows) lines.push(`| ${r.pageNo} | ${cell(r.ko)} | ${cell(r.en)} |`);
   lines.push("", "## 실측 (검사기)", "", "| 쪽 | 문장 | 리듬 | 어절 | 평균 어절 | 최장 | 대사 문장 | ! | 소리말 | 한글 검사 | 영어 검사 |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
-  for (const r of measured.rows) lines.push(`| ${r.pageNo} | ${r.sentences} | ${r.rhythm} | ${r.eojeol} | ${r.average} | ${r.longest} | ${r.quotes} | ${r.exclaims} | ${r.sounds.join(" ") || "-"} | ${cell(r.koIssues.join(" / ")) || "통과"} | ${cell(r.enIssues.join(" / ")) || (r.en ? "통과" : "-")} |`);
+  const verdict = (issues, notes, text) => `${cell(issues.join(" / ")) || (text ? "통과" : "-")}${notes.length ? ` · 참고: ${cell(notes.join(" / "))}` : ""}`;
+  for (const r of measured.rows) lines.push(`| ${r.pageNo} | ${r.sentences} | ${r.rhythm} | ${r.eojeol} | ${r.average} | ${r.longest} | ${r.quotes} | ${r.exclaims} | ${r.sounds.join(" ") || "-"} | ${verdict(r.koIssues, r.koNotes, true)} | ${verdict(r.enIssues, r.enNotes, r.en)} |`);
   const t = measured.totals;
   lines.push("", `책 전체: ${t.pages}쪽 · 문장 ${t.sentences}(리듬 ${t.rhythm}) · 어절 ${t.eojeol} · 보통 문장 평균 ${t.averageEojeol}어절 · 최장 ${t.longest} · 대사 문장 ${t.quotes} · 느낌표 ${t.exclaims} · 반복형 소리말 ${t.soundWords.length}종/${t.pagesWithSounds}쪽 (${t.soundWords.join(" ") || "-"}) · 영어 ${t.enWords}단어 · 검사 걸린 쪽 한글 ${t.koIssuePages} / 영어 ${t.enIssuePages}`);
   const notes = [];
@@ -316,7 +356,22 @@ function armReport(run, measured, usage) {
   }
   if (run.history?.length) {
     lines.push("", "## 수정 기록 (쪽 나누기 단계의 검사 결과마다)", "");
-    for (const h of run.history) lines.push(`- 요청 ${h.requests ?? "?"}회까지 · 걸린 쪽 [${h.failedPageNos.join(", ")}] · 위반 ${h.violations.length ? h.violations.join(" ") : "없음"} · 참고 ${h.notes}`);
+    for (const h of run.history) {
+      const violation = (v) => (typeof v === "string" ? v : `${v.pageNo ?? "-"}쪽 ${v.language || ""} ${v.type || ""}: ${v.message || ""}`);
+      lines.push(`- 요청 ${h.requests ?? "?"}회까지${h.stage ? ` · ${h.stage}` : ""} · 걸린 쪽 [${h.failedPageNos.join(", ")}] · 위반 ${h.violations.length ? cell(h.violations.map(violation).join(" / ")) : "없음"} · 참고 ${h.notes}`);
+      for (const t of h.texts || []) lines.push(`  - ${t.pageNo}쪽 한글: ${cell(t.ko)}`, `  - ${t.pageNo}쪽 영어: ${cell(t.en)}`);
+    }
+  }
+  // R31e: every writer attempt (sentences, words per sentence, problems) and the outline's rewrite reasons.
+  const attemptLog = job.writerReport?.attemptLog;
+  if (attemptLog && Object.keys(attemptLog).length) {
+    lines.push("", "## 작가 시도 기록 (비트·언어마다)", "");
+    for (const [key, attempts] of Object.entries(attemptLog))
+      lines.push(`- ${key}: ${attempts.map((a, i) => `${i + 1}${a.draft ? `(초안 ${a.draft})` : a.retry ? "(재시도)" : ""} ${a.sentences}문장 [${(a.words || []).join(",")}]${a.problems?.length ? ` → ${cell(a.problems.join(" / "))}` : " → 통과"}`).join(" · ")}`);
+  }
+  if (run.outlineRepairs?.length) {
+    lines.push("", "## 줄거리 재작성 사유", "");
+    for (const r of run.outlineRepairs) lines.push(`- ${r.attempt ?? "?"}번째: ${cell(r.violations.map((v) => `${v.code || ""} ${v.message}`).join(" / "))}`);
   }
   lines.push("", "## 진행", "", ...progress.map((p) => `- ${p}`), "");
   return lines.join("\n");
@@ -356,8 +411,7 @@ const results = [];
 for (const arm of arms) {
   const run = await runArm(arm);
   const input = run.job.input || {};
-  const allowedNames = [...(input.characters || []).flatMap((c) => [c.name, c.nameEn]).filter(Boolean)];
-  const measured = measurePages(run.job.pagination?.pages || [], input.specs || {}, allowedNames);
+  const measured = measurePages(run.job.pagination?.pages || [], input, run.job.outline || null, run.job.pagination?.sceneBriefs || run.job.sceneBriefs || []);
   const usage = usageSummary(run.job);
   results.push({ ...run, measured, usage });
   writeFileSync(resolve(outDir, `${level}-${arm}.md`), armReport(run, measured, usage));
@@ -394,6 +448,7 @@ for (const arm of arms) {
         usage: run.job.usage,
         writerOriginal: run.snapshot?.prose || null,
         repairHistory: run.history,
+        outlineRepairs: run.outlineRepairs,
         measured,
         usageSummary: usage,
         progress: run.progress,
@@ -410,7 +465,7 @@ if (level === "K1") {
   const specs = results.find((r) => r.job.input?.specs)?.job.input.specs;
   if (existsSync(file) && specs) {
     const gold = JSON.parse(readFileSync(file, "utf8"));
-    golden = measurePages(gold.pages.map((p, i) => ({ pageNo: i + 1, textKo: p.ko, textEn: p.en || "" })), { ko: specs.ko }, ["유하", "해니", "Yuha", "Haeni"]);
+    golden = measurePages(gold.pages.map((p, i) => ({ pageNo: i + 1, textKo: p.ko, textEn: p.en || "" })), { specs: { ko: specs.ko }, characters: [{ name: "유하", nameEn: "Yuha" }, { name: "해니", nameEn: "Haeni" }] });
   }
 }
 if (results.length > 1 || golden) writeFileSync(resolve(outDir, `${level}-compare.md`), compareReport(results, golden));

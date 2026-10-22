@@ -65,14 +65,20 @@ test('R26 a new job freezes the tier (medium by default, upper when the parent c
   state.settings.textGeneration = {...(state.settings.textGeneration || {}), reviewTier: 'upper'};
   assert.equal(getTextGenerationSettings(state).reviewTier, 'upper');
   assert.equal(createFullAutoJob(state, wizard).textSettings.reviewTier, 'upper');
-  // The new-story estimate follows the parent's choice; an existing job's estimate follows the job.
+  // R31e: a new diet job buys no ledger review, so the tier does not change its
+  // estimate; a job whose outline carries a ledger is priced with the tier, as before.
   const upperCost = estimateFullAutoCost(state, wizard).textUsd;
+  const ledgerJob = () => { const job = createFullAutoJob(state, wizard); job.outline = {plotContract: {beats: []}}; return job; };
+  const upperLedger = estimateFullAutoCost(state, wizard, {job: ledgerJob()}).textUsd;
   delete state.settings.textGeneration.reviewTier;
   const mediumCost = estimateFullAutoCost(state, wizard).textUsd;
-  assert.ok(upperCost > mediumCost, `${upperCost} > ${mediumCost}`);
-  const oldJob = createFullAutoJob(state, wizard);
+  const mediumLedger = estimateFullAutoCost(state, wizard, {job: ledgerJob()}).textUsd;
+  assert.equal(upperCost, mediumCost, 'no ledger reviews on a new diet job');
+  assert.ok(upperLedger > mediumLedger, `${upperLedger} > ${mediumLedger}`);
+  assert.ok(upperLedger > upperCost, 'the ledger reviews cost something');
+  const oldJob = ledgerJob();
   delete oldJob.textSettings.reviewTier;
-  assert.equal(estimateFullAutoCost(state, wizard, {job: oldJob}).textUsd, upperCost, 'a pre-R26 job is priced as before');
+  assert.equal(estimateFullAutoCost(state, wizard, {job: oldJob}).textUsd, upperLedger, 'a pre-R26 job is priced as before');
 });
 
 test('R26 reviewStoryCoherence: the judgement uses coherenceOptions, the repair coherenceRepairOptions', async () => {
