@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, ...plain} = spec || {};
     return [lang, plain];
@@ -708,7 +708,10 @@ const PINS = {
   // name} chosen from its topic (wizard and normalized); the fixture topics
   // name no stage category, so no stageCategory key; nothing else differs
   // (dump-diffed against 8f15876). 8f15876: 287d5785…1a26.
-  inputs: '5b0447718560b23519632eb1f0cba48822da96872d2b02d3cfb5b6c11d74436d',
+  // 목소리 카드 (R34): every new draft's input carries storyVoice {version, cards}
+  // (wizard and normalized); nothing else differs (dump-diffed against ae40cf5).
+  // ae40cf5: 5b044771…436d.
+  inputs: '1b7d0372bd7393c24226a76b8aaeb635296a2965940bc741dc5644abc6c13c67',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -756,7 +759,10 @@ const PINS = {
   // 이야기 모양 (R33-2): the two demo jobs' inputs carry storyShape (the demo
   // outline itself gets no shape, so the demo stays as it was); nothing else
   // differs (dump-diffed against 8f15876). 8f15876: c20447c5…624c.
-  fullAutoDemo: '1365c1de5391cf4c4dfddc4e679bece6f607c4694204c90a942ce7513765e589',
+  // 목소리 카드 (R34): the two demo jobs' inputs carry storyVoice (the demo text
+  // itself is fixed); nothing else differs (dump-diffed against ae40cf5).
+  // ae40cf5: 1365c1de…6589.
+  fullAutoDemo: '1f61571a26d5f5bf7196e6b17b078bc4fcce3dde18c56a77828e04c0d1ec2ac3',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

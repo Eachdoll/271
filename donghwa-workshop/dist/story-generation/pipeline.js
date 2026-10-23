@@ -2,6 +2,7 @@ import { leanPaginationRules, leanOpeningsPaginationRules, leanPageRewriteRules,
 import { topicPlaceIds, topicPlaceNames } from "./topic-places.js";
 import { storyShapeRef } from "./story-shapes.js";
 import { stageRef, stagePlanLine } from "./stage-categories.js";
+import { voiceRef } from "./voice-deck.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -417,6 +418,11 @@ function modelVisibleInput(source) {
     const { stageCategory, ...rest } = input;
     input = rest;
   }
+  // R34: the voice cards are writer rules, not story data.
+  if (input?.storyVoice) {
+    const { storyVoice, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -561,6 +567,8 @@ export function normalizeStoryInput(input = {}) {
     ...(stageRef(input.stageCategory, input.stageCategory?.from)
       ? { stageCategory: stageRef(input.stageCategory, input.stageCategory?.from) }
       : {}),
+    // R34: the book's voice cards (이 책의 목소리), chosen once in the wizard.
+    ...(voiceRef(input.storyVoice) ? { storyVoice: voiceRef(input.storyVoice) } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }

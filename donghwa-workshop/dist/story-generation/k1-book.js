@@ -24,7 +24,9 @@ import { describeReadingViolation } from "../reading-messages.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { wardrobeFor } from "./demo.js";
 import { StoryValidationError } from "./schemas.js";
-import { leanLevelLine } from "./prompt-diet.js";
+import { leanLevelLine, hasPromptDiet } from "./prompt-diet.js";
+import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
+import { styleReport } from "./style-report.js";
 
 export const K1_POLICY_VERSION = 1;
 export const k1Policy = () => ({ version: K1_POLICY_VERSION });
@@ -164,7 +166,9 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     .join("\n");
   const pagesLine = plan.map((row) => `${row.pageNo}쪽 → 비트 ${row.beatIndex}`).join(", ");
   // R31b: the level lines are sentences (leanLevelLine), never the spec JSON.
-  const system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}`;
+  // R34: a diet draft's own voice cards and the prose palette (a spark, never counted).
+  const voiced = hasPromptDiet(input) && voiceBlock(input, "ko"),
+    system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}${voiced ? `\n${VOICE_PALETTE}\n${voiced}\n${voiceBlock(input, "en")}` : ""}`;
   const user = [
     `[부모 요청] ${str(input.topic, 300)}`,
     `[줄거리 지도]\n${map}`,
@@ -223,6 +227,8 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
         ...journal.summary(),
         stage: "prose",
         k1Book: { pages: pages.length, fixed: journal.paid.length > 1, warnings },
+        // R34: the free style numbers of the Korean pages (advisory).
+        ...(hasPromptDiet(input) ? { style: styleReport(pages.map((p) => p.ko), { names: list(input.characters).map((c) => c?.name) }) } : {}),
         ...(warnings.length ? { softIssues: warnings } : {}),
       },
     };

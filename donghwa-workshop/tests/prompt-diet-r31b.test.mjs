@@ -135,7 +135,8 @@ test('R31b the beat writer and the app prose path of a diet draft: voice, not co
   const writer = {id: 'openai', async complete(req) { calls.push(req); const n = Number(/이 비트는 (\d+)문장/u.exec(req.user)?.[1] || 3); const ko = !/original English/u.test(req.system); return reply({text: Array.from({length: n}, (_, i) => ko ? `유하가 젖은 잎을 ${i + 1}번 살짝 만져요.` : `Yuha taps the wet leaf ${i + 1} times.`).join(' '), pick: 1, reason: 'x'}); }};
   await generateProse(o, input, {engineId: 'openai', engine: writer, qualityEngines: {beatWriter: writer, cheap: writer}});
   const beat = calls.find((c) => /\[이번 비트\] 3 /u.test(c.user) && !/original English/u.test(c.system));
-  assert.ok(beat.system.length <= 1200, `${beat.system.length} chars`);
+  // R31b measured 659; R34 adds the prose palette and this book's five voice cards with examples (≈ 800 chars, a spark, no counters).
+  assert.ok(beat.system.length <= 2000, `${beat.system.length} chars`);
   assert.doesNotMatch(beat.system, QUOTA);
   assert.doesNotMatch(beat.system, /EVERY sentence|Never repeat/u);
   assert.match(beat.system, /the way a good picture book sounds read aloud/u);

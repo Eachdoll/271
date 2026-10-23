@@ -46,6 +46,7 @@ import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
 import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
+import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -454,19 +455,21 @@ export function renderStoryCoherence(report, { dirty = false } = {}) {
 }
 
 /** R33: the shape and stage an outline was written to (diet drafts). */
-function shapeStageNote(outline) {
+function shapeStageNote(outline, input = null) {
   const shape = outline?.storyShape,
     stage = outline?.stageCategory;
   const rows = [
     shape?.name ? `이야기 모양 · ${esc(shape.name)}${shapeById(shape.id)?.shape ? ` — ${esc(shapeById(shape.id).shape)}` : ""}` : "",
     stage?.name ? `무대 · ${esc(stage.name)}${stageById(stage.id)?.ko ? ` — ${esc(stageById(stage.id).ko)}` : ""}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
+    // R34: the voice the writer was given (a draft with a shape is a diet draft).
+    shape?.name && voiceSummary(input?.storyVoice) ? esc(voiceSummary(input.storyVoice)) : "",
   ].filter(Boolean);
   return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
 }
 export function renderStoryQualityPlan(draft) {
   const metadata = draft.outline?.quality,
     plan = draft.outline?.plan,
-    note = shapeStageNote(draft.outline);
+    note = shapeStageNote(draft.outline, draft.input);
   if (!metadata && !plan) return note ? `<section class="story-card quality-seed"><strong>이야기 모양과 무대</strong>${note}</section>` : "";
   const chips = String(metadata?.seedSummary || "")
       .split(" · ")
@@ -845,6 +848,15 @@ export function storyShapeFor(state, wizard = {}, { level = "K2" } = {}) {
     }),
   );
 }
+/** R34: the book's voice cards (이 책의 목소리), chosen once from the topic's seed, skipping the latest books' cards, leaning to the shape. */
+export function storyVoiceFor(state, wizard = {}, { level = "K2", shapeId = "" } = {}) {
+  return chooseVoice({
+    seed: `${String(wizard.topic || "").trim()}:${Number(wizard.qualitySeedOffset) || 0}`,
+    level,
+    recentIds: recentVoiceIds(storyQualityBookRecords(state)),
+    shapeId,
+  });
+}
 /** R33: the stage of a new draft — the parent's pick, else the chosen world card's category, else the topic's. */
 export function draftStageFor(state, wizard = {}) {
   const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
@@ -920,7 +932,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       world.stylePresetId;
   }
   // R33: the stage of this draft (the pick, the chosen world card's category, or the topic's).
-  const stageCategory = draftStageFor(state, wizard);
+  const stageCategory = draftStageFor(state, wizard),
+    storyShape = storyShapeFor(state, wizard, { level: readingLevels.koreanLevel });
   return {
     input: {
       characters,
@@ -1030,8 +1043,10 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // R31b: lean requests — no counters, no spec JSON, no plot formula.
       promptDiet: promptDiet(),
       // R33: the story's shape and stage, chosen once here and frozen with the draft.
-      storyShape: storyShapeFor(state, wizard, { level: readingLevels.koreanLevel }),
+      storyShape,
       ...(stageCategory ? { stageCategory } : {}),
+      // R34: the book's voice cards, chosen once here (never on resume).
+      storyVoice: storyVoiceFor(state, wizard, { level: readingLevels.koreanLevel, shapeId: storyShape.id }),
     },
     readingLevels,
     world,
@@ -2898,11 +2913,16 @@ function handleChange(event) {
     if (event.target.matches?.("[data-quality-pattern-choice]")) {
       s.draft.input.storyQuality.patternId = event.target.value;
       s.draft.wizard.storyQualityPatternId = event.target.value;
-      // R33: a diet draft's frozen shape follows the pick.
-      if (hasPromptDiet(s.draft.input))
+      // R33: a diet draft's frozen shape follows the pick (R34: and its voice leans to the shape).
+      if (hasPromptDiet(s.draft.input)) {
         s.draft.input.storyShape = storyShapeFor(s.state, s.draft.wizard, {
           level: s.draft.readingLevels?.koreanLevel,
         });
+        s.draft.input.storyVoice = storyVoiceFor(s.state, s.draft.wizard, {
+          level: s.draft.readingLevels?.koreanLevel,
+          shapeId: s.draft.input.storyShape.id,
+        });
+      }
       s.draft.qualityCheckpoint = null;
       s.draft.councilCheckpoint = null;
       saveDraft(s);

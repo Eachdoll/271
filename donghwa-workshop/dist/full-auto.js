@@ -1355,6 +1355,7 @@ export async function runFullAuto(
         promptDiet: _freshDiet,
         storyShape: _freshShape,
         stageCategory: _freshStage,
+        storyVoice: _freshVoice,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1396,6 +1397,7 @@ export async function runFullAuto(
         // R33: the job's own shape and stage (never re-chosen on resume).
         ...(job.input?.storyShape ? { storyShape: clone(job.input.storyShape) } : {}),
         ...(job.input?.stageCategory ? { stageCategory: clone(job.input.stageCategory) } : {}),
+        ...(job.input?.storyVoice ? { storyVoice: clone(job.input.storyVoice) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),
@@ -1462,6 +1464,8 @@ export async function runFullAuto(
         job.prose = r.data;
         // R30: the beat writer's report (attempts, anchor, voice card, notes).
         if (r.meta?.writer) job.writerReport = clone(r.meta.writer);
+        // R34: the writer's style numbers (advisory), from the beat writer or the K1 writer.
+        if (r.meta?.style) job.styleReport = clone(r.meta.style);
       },
     );
     if (

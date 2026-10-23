@@ -5,6 +5,8 @@ import { renderActionSwitch } from "./ui-controls.js";
  * page tools; no pipeline logic lives here. Nothing paid starts without a confirm
  * that names the cost, and completed paid steps are never bought again. */
 import { revisionSummary } from "./story-generation/book-revision.js";
+import { voiceSummary } from "./story-generation/voice-deck.js";
+import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
   startFullAutoJob,
@@ -762,6 +764,11 @@ async function ecoFinish(ctx, job, pagination, report) {
   job.prose = ecoProseFromPages(job.outline, pagination);
   job.sceneBriefs = [];
   job.storyCheck = clone(report || {});
+  // R34: the pasted text's style numbers (free, advisory).
+  job.styleReport = styleReport(
+    (pagination.pages || pagination.entries || []).map((p) => p?.textKo ?? p?.ko ?? ""),
+    { names: (job.input?.characters || []).map((c) => c?.name) },
+  );
   job.completed = { ...(job.completed || {}), outline: true, briefs: true, prose: true, pagination: true };
   const payload = { ...fullAutoPayload(job), textEngineId: "eco", textModelId: null };
   state.storyDrafts ||= {};
@@ -1279,6 +1286,8 @@ function shapeStageLine(job) {
   return [
     shape?.name ? `이야기 모양 · ${shape.name}` : "",
     stage?.name ? `무대 · ${stage.name}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
+    // R34: the voice the writer was given (the demo's fixed text has none).
+    !job?.demo ? voiceSummary(job?.input?.storyVoice) : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1522,6 +1531,8 @@ export function checkNotes(job) {
   const writer = Array.isArray(job?.writerReport?.warnings) ? job.writerReport.warnings : [];
   if (writer.length)
     notes.push(`정성 모드 작가 참고 ${writer.length}건 · 검사 리포트에서 볼 수 있어요`);
+  // R34: the free style numbers (advisory — nothing is rewritten over them).
+  if (job?.styleReport?.sentences) notes.push(styleSummaryLine(job.styleReport));
   return notes;
 }
 const checkNotesLine = (job) =>
