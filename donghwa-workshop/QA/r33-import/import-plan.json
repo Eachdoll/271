@@ -1,0 +1,260 @@
+{
+  "baseline": "d7c7edd",
+  "target": "a4e655f",
+  "runtimeRange": "8f15876..ae40cf5",
+  "paths": [
+    {
+      "path": "CLAUDE.md",
+      "status": "M"
+    },
+    {
+      "path": "CODEX_R32_COMPLETION_2026-10-22.md",
+      "status": "A"
+    },
+    {
+      "path": "CODEX_WORK_ORDER_R33_2026-10-23.md",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/build-files.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/census.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/deployment.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-author-offline.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-local.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-production-fix-prompt.txt",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-production-outline-answer.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-production-outline-prompt.txt",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-production-pages-answer.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-production-pages-prompt.txt",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/eco-production.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/free-local.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/free-production.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/full-code-comparison.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/import-plan.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/package.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/price-diagnostic.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/screenshots/eco-production-01-invalid-outline.png",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/screenshots/eco-production-04-level-fix.png",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/screenshots/eco-production-06-all-uploaded.png",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/screenshots/eco-production-08-library.png",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/smoke.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/source-comparison.json",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/tools/eco-author.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/tools/eco-browser-check.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/tools/free-browser-check.mjs",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/tools/test-upload.png",
+      "status": "A"
+    },
+    {
+      "path": "QA/r32-import/validation.json",
+      "status": "A"
+    },
+    {
+      "path": "dist/app.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/eco-mode.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/full-auto.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/simple-create.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/auto-materials.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/council.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/craft-rules.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/pipeline.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/prompt-diet.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/quality-gates.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/quality-settings.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/schemas.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/story-generation/stage-categories.js",
+      "status": "A"
+    },
+    {
+      "path": "dist/story-generation/story-shapes.js",
+      "status": "A"
+    },
+    {
+      "path": "dist/story-generation/topic-places.js",
+      "status": "A"
+    },
+    {
+      "path": "dist/story-generation/ui.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/sw.js",
+      "status": "M"
+    },
+    {
+      "path": "dist/text-generation/settings-ui.js",
+      "status": "M"
+    },
+    {
+      "path": "scripts/ux-census.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/full-auto.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/material-variety.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/openings-legacy-r12.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/openings-policy-r12.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/prompt-diet-r31b.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/prompt-policy-r23.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/simple-create-actions.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/simple-create.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/stage-categories-r33.test.mjs",
+      "status": "A"
+    },
+    {
+      "path": "tests/story-quality-settings.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/story-shapes-r33.test.mjs",
+      "status": "A"
+    },
+    {
+      "path": "tests/story-world-ui.test.mjs",
+      "status": "M"
+    },
+    {
+      "path": "tests/topic-places-r33.test.mjs",
+      "status": "A"
+    }
+  ],
+  "conflicts": []
+}

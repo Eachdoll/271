@@ -1,0 +1,112 @@
+{
+  "titleCandidates": [
+    "조개가 반짝이는 곳",
+    "유하의 바닷가",
+    "모래 위 작은 반짝임"
+  ],
+  "logline": "유하가 바닷가에서 조개를 찾아 모래 위에 조개 모양을 남기는 이야기예요.",
+  "want": "유하가 작은 조개를 찾고 싶어요.",
+  "problem": "모래 속의 돌과 조개가 비슷하게 보여요.",
+  "beats": [
+    {
+      "index": 1,
+      "type": "setup",
+      "summary": "유하가 바닷가에서 작은 조개를 찾으려고 모래 위에 앉아요.",
+      "characters": [
+        "yuha"
+      ],
+      "settingKey": "beach"
+    },
+    {
+      "index": 2,
+      "type": "want",
+      "summary": "유하가 파도 소리 옆에서 둥근 자국을 따라가요.",
+      "characters": [
+        "yuha"
+      ],
+      "settingKey": "beach"
+    },
+    {
+      "index": 3,
+      "type": "attempt",
+      "summary": "유하가 모래를 살펴보지만 작은 돌만 발견해요.",
+      "characters": [
+        "yuha"
+      ],
+      "settingKey": "beach"
+    },
+    {
+      "index": 4,
+      "type": "turn",
+      "summary": "유하가 뒤집힌 조개 안쪽의 반짝이는 빛을 발견해요.",
+      "characters": [
+        "yuha"
+      ],
+      "settingKey": "beach"
+    },
+    {
+      "index": 5,
+      "type": "resolution",
+      "summary": "유하가 바닷가의 조개를 제자리에 놓고 손으로 모양을 따라 그려요.",
+      "characters": [
+        "yuha"
+      ],
+      "settingKey": "beach"
+    },
+    {
+      "index": 6,
+      "type": "close",
+      "summary": "유하가 바닷가에 나란히 난 조개 자국을 바라보며 조용히 쉬어요.",
+      "characters": [
+        "yuha"
+      ],
+      "settingKey": "beach"
+    }
+  ],
+  "twist": "작은 돌인 줄 알았던 것은 안쪽이 반짝이는 조개였어요.",
+  "newWordsKo": [
+    "조개",
+    "모래",
+    "물결"
+  ],
+  "newWordsEn": [
+    "shell",
+    "sand",
+    "wave"
+  ],
+  "settings": [
+    {
+      "beatIndex": 1,
+      "backgroundId": "beach"
+    },
+    {
+      "beatIndex": 2,
+      "backgroundId": "beach"
+    },
+    {
+      "beatIndex": 3,
+      "backgroundId": "beach"
+    },
+    {
+      "beatIndex": 4,
+      "backgroundId": "beach"
+    },
+    {
+      "beatIndex": 5,
+      "backgroundId": "beach"
+    },
+    {
+      "beatIndex": 6,
+      "backgroundId": "beach"
+    }
+  ],
+  "emotionArc": [
+    "설렘",
+    "궁금함",
+    "기대",
+    "놀람",
+    "기쁨",
+    "편안함"
+  ],
+  "endingType": "custom"
+}

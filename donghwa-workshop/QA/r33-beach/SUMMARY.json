@@ -1,0 +1,1866 @@
+{
+  "date": "2026-10-23",
+  "source": "ae40cf5 + 0e7b02e + 9d815a0",
+  "checkoutSource": "9d815a0",
+  "topic": "유하가 바닷가에서 조개를 찾아요",
+  "levels": {
+    "ko": "K2",
+    "en": "E2"
+  },
+  "complete": true,
+  "status": "text-review",
+  "error": null,
+  "seconds": 238,
+  "entries": 6,
+  "printedPages": 12,
+  "paidImages": 0,
+  "usage": {
+    "costUsd": 0.4168284,
+    "costUnknown": false,
+    "requests": 31,
+    "input": 86911,
+    "output": 15067,
+    "models": [
+      "gpt-6.1-sol"
+    ],
+    "stages": {
+      "outline": {
+        "requests": 9,
+        "input": 22661,
+        "output": 5393,
+        "costUsd": 0.0640828
+      },
+      "sceneBriefs": {
+        "requests": 1,
+        "input": 2433,
+        "output": 3189,
+        "costUsd": 0.036756
+      },
+      "prose": {
+        "requests": 17,
+        "input": 42516,
+        "output": 3099,
+        "costUsd": 0.18496120000000002
+      },
+      "pagination": {
+        "requests": 4,
+        "input": 19301,
+        "output": 3386,
+        "costUsd": 0.1310284
+      }
+    }
+  },
+  "writerAttempts": {
+    "en:1": 1,
+    "ko:1": 1,
+    "en:2": 1,
+    "ko:2": 1,
+    "en:3": 1,
+    "ko:3": 1,
+    "en:4": 1,
+    "ko:4": 1,
+    "ko:5": 1,
+    "en:5": 1,
+    "en:6": 1,
+    "ko:6": 1
+  },
+  "writerAttemptLog": {
+    "en:1": [
+      {
+        "draft": 1,
+        "sentences": 4,
+        "words": [
+          8,
+          8,
+          8,
+          9
+        ],
+        "problems": []
+      },
+      {
+        "draft": 2,
+        "sentences": 4,
+        "words": [
+          8,
+          8,
+          8,
+          6
+        ],
+        "problems": []
+      }
+    ],
+    "ko:1": [
+      {
+        "draft": 1,
+        "sentences": 11,
+        "words": [
+          7,
+          6,
+          7,
+          6,
+          5,
+          4,
+          6,
+          6,
+          6,
+          8,
+          6
+        ],
+        "problems": []
+      },
+      {
+        "draft": 2,
+        "sentences": 12,
+        "words": [
+          7,
+          6,
+          7,
+          6,
+          6,
+          2,
+          6,
+          7,
+          7,
+          8,
+          7,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "en:2": [
+      {
+        "sentences": 4,
+        "words": [
+          7,
+          8,
+          8,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "ko:2": [
+      {
+        "sentences": 13,
+        "words": [
+          7,
+          6,
+          7,
+          6,
+          7,
+          6,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          6
+        ],
+        "problems": []
+      }
+    ],
+    "en:3": [
+      {
+        "sentences": 4,
+        "words": [
+          7,
+          8,
+          8,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "ko:3": [
+      {
+        "sentences": 14,
+        "words": [
+          6,
+          6,
+          5,
+          7,
+          6,
+          7,
+          6,
+          6,
+          7,
+          6,
+          6,
+          6,
+          7,
+          9
+        ],
+        "problems": []
+      }
+    ],
+    "en:4": [
+      {
+        "sentences": 4,
+        "words": [
+          8,
+          8,
+          8,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "ko:4": [
+      {
+        "sentences": 16,
+        "words": [
+          7,
+          6,
+          6,
+          7,
+          6,
+          8,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          1,
+          2,
+          1
+        ],
+        "problems": []
+      }
+    ],
+    "ko:5": [
+      {
+        "sentences": 12,
+        "words": [
+          7,
+          6,
+          6,
+          8,
+          7,
+          7,
+          5,
+          7,
+          4,
+          5,
+          8,
+          7
+        ],
+        "problems": []
+      }
+    ],
+    "en:5": [
+      {
+        "sentences": 4,
+        "words": [
+          8,
+          8,
+          7,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "en:6": [
+      {
+        "sentences": 4,
+        "words": [
+          6,
+          8,
+          8,
+          8
+        ],
+        "problems": []
+      }
+    ],
+    "ko:6": [
+      {
+        "sentences": 14,
+        "words": [
+          8,
+          7,
+          7,
+          6,
+          7,
+          6,
+          4,
+          2,
+          6,
+          7,
+          7,
+          8,
+          7,
+          6
+        ],
+        "problems": []
+      }
+    ]
+  },
+  "writerEnglishRetryCount": 0,
+  "writerKoreanRetryCount": 0,
+  "writerEnglishRetries": [],
+  "writerReport": {
+    "attempts": {
+      "en:1": 1,
+      "ko:1": 1,
+      "en:2": 1,
+      "ko:2": 1,
+      "en:3": 1,
+      "ko:3": 1,
+      "en:4": 1,
+      "ko:4": 1,
+      "ko:5": 1,
+      "en:5": 1,
+      "en:6": 1,
+      "ko:6": 1
+    },
+    "warnings": [
+      "한글 대화 비율 15% (책 전체 기준 25% 이상 권장)",
+      "영어 대화 비율 23% (책 전체 기준 25% 이상 권장)"
+    ],
+    "anchor": {
+      "en": {
+        "pick": 1,
+        "reason": "리듬이 자연스럽고 'patterns'와 'big steps past it by the water'가 구체적이며 말맛이 살아 있다.",
+        "judged": true
+      },
+      "ko": {
+        "pick": 2,
+        "reason": "리듬감이 자연스럽고 구체적인 소리와 행동이 살아 있으며 문장 수가 목표에 가깝다.",
+        "judged": true
+      }
+    },
+    "summarized": false,
+    "calls": 16,
+    "budget": 41,
+    "attemptLog": {
+      "en:1": [
+        {
+          "draft": 1,
+          "sentences": 4,
+          "words": [
+            8,
+            8,
+            8,
+            9
+          ],
+          "problems": []
+        },
+        {
+          "draft": 2,
+          "sentences": 4,
+          "words": [
+            8,
+            8,
+            8,
+            6
+          ],
+          "problems": []
+        }
+      ],
+      "ko:1": [
+        {
+          "draft": 1,
+          "sentences": 11,
+          "words": [
+            7,
+            6,
+            7,
+            6,
+            5,
+            4,
+            6,
+            6,
+            6,
+            8,
+            6
+          ],
+          "problems": []
+        },
+        {
+          "draft": 2,
+          "sentences": 12,
+          "words": [
+            7,
+            6,
+            7,
+            6,
+            6,
+            2,
+            6,
+            7,
+            7,
+            8,
+            7,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "en:2": [
+        {
+          "sentences": 4,
+          "words": [
+            7,
+            8,
+            8,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "ko:2": [
+        {
+          "sentences": 13,
+          "words": [
+            7,
+            6,
+            7,
+            6,
+            7,
+            6,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            6
+          ],
+          "problems": []
+        }
+      ],
+      "en:3": [
+        {
+          "sentences": 4,
+          "words": [
+            7,
+            8,
+            8,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "ko:3": [
+        {
+          "sentences": 14,
+          "words": [
+            6,
+            6,
+            5,
+            7,
+            6,
+            7,
+            6,
+            6,
+            7,
+            6,
+            6,
+            6,
+            7,
+            9
+          ],
+          "problems": []
+        }
+      ],
+      "en:4": [
+        {
+          "sentences": 4,
+          "words": [
+            8,
+            8,
+            8,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "ko:4": [
+        {
+          "sentences": 16,
+          "words": [
+            7,
+            6,
+            6,
+            7,
+            6,
+            8,
+            6,
+            6,
+            6,
+            6,
+            6,
+            6,
+            5,
+            1,
+            2,
+            1
+          ],
+          "problems": []
+        }
+      ],
+      "ko:5": [
+        {
+          "sentences": 12,
+          "words": [
+            7,
+            6,
+            6,
+            8,
+            7,
+            7,
+            5,
+            7,
+            4,
+            5,
+            8,
+            7
+          ],
+          "problems": []
+        }
+      ],
+      "en:5": [
+        {
+          "sentences": 4,
+          "words": [
+            8,
+            8,
+            7,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "en:6": [
+        {
+          "sentences": 4,
+          "words": [
+            6,
+            8,
+            8,
+            8
+          ],
+          "problems": []
+        }
+      ],
+      "ko:6": [
+        {
+          "sentences": 14,
+          "words": [
+            8,
+            7,
+            7,
+            6,
+            7,
+            6,
+            4,
+            2,
+            6,
+            7,
+            7,
+            8,
+            7,
+            6
+          ],
+          "problems": []
+        }
+      ]
+    },
+    "refrain": {
+      "voiceCard": {
+        "ko": "",
+        "en": ""
+      },
+      "beats": []
+    },
+    "dialogue_ko": 0.15,
+    "dialogue_en": 0.23
+  },
+  "canonicalPageChecks": [
+    {
+      "entryNo": 1,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 12,
+          "wordCount": 76,
+          "characterCount": 287,
+          "wordsPerSentence": [
+            7,
+            6,
+            7,
+            6,
+            6,
+            2,
+            6,
+            7,
+            7,
+            8,
+            7,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.33,
+          "averageSyllablesPerEojeol": 2.58,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            1,
+            0,
+            0,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          "connectiveEndings": 6,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 2,
+            "mean": 6.33,
+            "sentenceCount": 12,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 29,
+          "characterCount": 145,
+          "wordsPerSentence": [
+            7,
+            8,
+            8,
+            6
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.25,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 2,
+          "outOfVocabRatio": 0.06896551724137931,
+          "outOfVocabWords": [
+            "held",
+            "hand"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.48,
+          "spache": 2.1,
+          "daleChall": 0.9,
+          "syllablesPerWord": 1.21,
+          "spacheDifficultPercent": 6.9,
+          "daleChallDifficultPercent": 3.45,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 2,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 13,
+          "wordCount": 87,
+          "characterCount": 332,
+          "wordsPerSentence": [
+            7,
+            6,
+            7,
+            6,
+            7,
+            6,
+            7,
+            7,
+            7,
+            7,
+            7,
+            7,
+            6
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.69,
+          "averageSyllablesPerEojeol": 2.59,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "connectiveEndings": 6,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": []
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 30,
+          "characterCount": 169,
+          "wordsPerSentence": [
+            7,
+            8,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.5,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 4,
+          "outOfVocabRatio": 0.13333333333333333,
+          "outOfVocabWords": [
+            "crouched",
+            "bright",
+            "shone",
+            "reaching"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.3,
+          "spache": 2.21,
+          "daleChall": 5.51,
+          "syllablesPerWord": 1.23,
+          "spacheDifficultPercent": 10,
+          "daleChallDifficultPercent": 10,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 3,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 14,
+          "wordCount": 90,
+          "characterCount": 351,
+          "wordsPerSentence": [
+            6,
+            6,
+            5,
+            7,
+            6,
+            7,
+            6,
+            6,
+            7,
+            6,
+            6,
+            6,
+            7,
+            9
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.43,
+          "averageSyllablesPerEojeol": 2.62,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          "connectiveEndings": 7,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 1,
+            "mean": 6.43,
+            "sentenceCount": 14,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 31,
+          "characterCount": 162,
+          "wordsPerSentence": [
+            7,
+            8,
+            8,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.75,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 2,
+          "outOfVocabRatio": 0.06451612903225806,
+          "outOfVocabWords": [
+            "only",
+            "shook"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 1.52,
+          "spache": 2.65,
+          "daleChall": 0.89,
+          "syllablesPerWord": 1.19,
+          "spacheDifficultPercent": 12.9,
+          "daleChallDifficultPercent": 3.23,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 4,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 16,
+          "wordCount": 85,
+          "characterCount": 316,
+          "wordsPerSentence": [
+            7,
+            6,
+            6,
+            7,
+            6,
+            8,
+            6,
+            6,
+            6,
+            6,
+            6,
+            6,
+            5,
+            1,
+            2,
+            1
+          ],
+          "minimumLengthExemptSentenceIndices": [
+            13
+          ],
+          "averageWordsPerSentence": 5.31,
+          "averageSyllablesPerEojeol": 2.49,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "connectiveEndings": 4,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 5.6,
+            "sentenceCount": 16,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 31,
+          "characterCount": 169,
+          "wordsPerSentence": [
+            8,
+            8,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.75,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 3,
+          "outOfVocabRatio": 0.0967741935483871,
+          "outOfVocabWords": [
+            "shook",
+            "turned",
+            "bent"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 0.91,
+          "spache": 2.2,
+          "daleChall": 4.96,
+          "syllablesPerWord": 1.19,
+          "spacheDifficultPercent": 9.68,
+          "daleChallDifficultPercent": 6.45,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 5,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 12,
+          "wordCount": 77,
+          "characterCount": 301,
+          "wordsPerSentence": [
+            7,
+            6,
+            6,
+            8,
+            7,
+            7,
+            5,
+            7,
+            4,
+            5,
+            8,
+            7
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.42,
+          "averageSyllablesPerEojeol": 2.7,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            1,
+            1
+          ],
+          "connectiveEndings": 5,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 3,
+            "mean": 6.42,
+            "sentenceCount": 12,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 31,
+          "characterCount": 169,
+          "wordsPerSentence": [
+            8,
+            8,
+            7,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.75,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 4,
+          "outOfVocabRatio": 0.12903225806451613,
+          "outOfVocabWords": [
+            "lifted",
+            "onto",
+            "leaned",
+            "close"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 2.66,
+          "spache": 2.92,
+          "daleChall": 6.06,
+          "syllablesPerWord": 1.29,
+          "spacheDifficultPercent": 16.13,
+          "daleChallDifficultPercent": 12.9,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    },
+    {
+      "entryNo": 6,
+      "kind": "spread",
+      "ko": {
+        "metrics": {
+          "sentenceCount": 14,
+          "wordCount": 88,
+          "characterCount": 332,
+          "wordsPerSentence": [
+            8,
+            7,
+            7,
+            6,
+            7,
+            6,
+            4,
+            2,
+            6,
+            7,
+            7,
+            8,
+            7,
+            6
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 6.29,
+          "averageSyllablesPerEojeol": 2.58,
+          "outOfVocabCount": 0,
+          "outOfVocabRatio": null,
+          "outOfVocabWords": [],
+          "vocabularySkipped": true,
+          "connectiveEndingsPerSentence": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          "connectiveEndings": 4,
+          "fkGrade": null,
+          "spache": null,
+          "daleChall": null,
+          "fkEstimated": false
+        },
+        "violations": [],
+        "warnings": [
+          {
+            "code": "unit-length-note",
+            "language": "ko",
+            "severity": "warning",
+            "advisory": true,
+            "unit": "spread",
+            "offSentences": 4,
+            "mean": 6.29,
+            "sentenceCount": 14,
+            "expected": {
+              "min": 10,
+              "max": 15
+            }
+          }
+        ]
+      },
+      "en": {
+        "metrics": {
+          "sentenceCount": 4,
+          "wordCount": 30,
+          "characterCount": 161,
+          "wordsPerSentence": [
+            6,
+            8,
+            8,
+            8
+          ],
+          "minimumLengthExemptSentenceIndices": [],
+          "averageWordsPerSentence": 7.5,
+          "averageSyllablesPerEojeol": null,
+          "outOfVocabCount": 3,
+          "outOfVocabRatio": 0.1,
+          "outOfVocabWords": [
+            "crouched",
+            "smiled",
+            "lifted"
+          ],
+          "vocabularySkipped": false,
+          "connectiveEndingsPerSentence": [],
+          "connectiveEndings": null,
+          "fkGrade": 2.28,
+          "spache": 2.66,
+          "daleChall": 5.59,
+          "syllablesPerWord": 1.27,
+          "spacheDifficultPercent": 13.33,
+          "daleChallDifficultPercent": 10,
+          "spacheFormula": "revised-1974",
+          "fkEstimated": true
+        },
+        "violations": [],
+        "warnings": []
+      }
+    }
+  ],
+  "bookCheck": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 2,
+        "mean": 6.33,
+        "sentenceCount": 12,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 1,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 1,
+        "mean": 6.43,
+        "sentenceCount": 14,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 3,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.4어절 · 문장 14개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 3,
+        "mean": 5.6,
+        "sentenceCount": 16,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 4,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.6어절 · 문장 16개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 3,
+        "mean": 6.42,
+        "sentenceCount": 12,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 5,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 6.4어절 · 문장 12개(권장 10~15)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "spread",
+        "offSentences": 4,
+        "mean": 6.29,
+        "sentenceCount": 14,
+        "expected": {
+          "min": 10,
+          "max": 15
+        },
+        "pageNo": 6,
+        "message": "한글 펼침면 참고 · 짧거나 긴 문장 4개 · 평균 6.3어절 · 문장 14개(권장 10~15)"
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 15개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 15개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 15개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 15개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 15개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 15개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "props": [
+          "A sandy little shell that looked like a stone",
+          "Footprints in the wet sand",
+          "A flat stone near the water"
+        ],
+        "message": "1쪽 글에 나온 A sandy little shell that looked like a stone, Footprints in the wet sand, A flat stone near the water이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "props": [
+          "Shallow water washing over sand",
+          "A spot of sunlight on the water",
+          "The sandy shell beside his footprints behind him"
+        ],
+        "message": "2쪽 글에 나온 Shallow water washing over sand, A spot of sunlight on the water, The sandy shell beside his footprints behind him이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 3,
+        "props": [
+          "Water dripping from his hands",
+          "The little shell beside his foot, touched by a wave"
+        ],
+        "message": "3쪽 글에 나온 Water dripping from his hands, The little shell beside his foot, touched by a wave이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "props": [
+          "The little shell with its fine pattern showing",
+          "Sand washed away from the shell",
+          "Footprints from his first big steps"
+        ],
+        "message": "4쪽 글에 나온 The little shell with its fine pattern showing, Sand washed away from the shell, Footprints from his first big steps이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 5,
+        "props": [
+          "A little shell with fine lines",
+          "Wet sand brushed aside by his fingers",
+          "Water drops falling from the shell"
+        ],
+        "message": "5쪽 글에 나온 A little shell with fine lines, Wet sand brushed aside by his fingers, Water drops falling from the shell이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      },
+      {
+        "type": "drawable_scene",
+        "code": "key-prop-missing",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "props": [
+          "The little shell resting briefly on the sand",
+          "A palm print beside the shell",
+          "The footprints where he first strode past"
+        ],
+        "message": "6쪽 글에 나온 The little shell resting briefly on the sand, A palm print beside the shell, The footprints where he first strode past이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      }
+    ],
+    "violations": [],
+    "failedPageNos": [],
+    "needsRepagination": false
+  },
+  "rawRunnerMeasured": {
+    "rows": [
+      {
+        "pageNo": 1,
+        "kind": "spread",
+        "ko": "유하가 조개빛 바닷가에 두 발을 딛고 서요. 찰랑찰랑, 작은 파도가 모래 위로 밀려와요. 유하는 빈 손바닥을 눈앞에 활짝 펴 보여요. 손바닥을 코앞에 대 보는데, 손금만 보여요. 유하가 손가락으로 손금을 따라가며 히히 웃어요. 유하가 말해요. “조개를 찾아서 무늬를 가까이 볼 거야!” 유하가 폭신한 모래를 밟자 사박사박 소리가 나요. 젖은 모래 위에 유하의 발자국이 콕 남아요. 발 옆에는 모래 덮인 작고 둥근 것이 있어요. 유하는 작은 돌인가 보다 하고 힐끗 봐요. 유하는 그 옆을 성큼 지나 물가로 걸어가요.",
+        "en": "Yuha held his hand over the sand. “I want a shell with patterns,” he said. A sandy little shell looked like a stone. Yuha took big steps past it.",
+        "sentences": 12,
+        "rhythm": 0,
+        "eojeol": 76,
+        "average": 6.3,
+        "longest": 8,
+        "quotes": 1,
+        "exclaims": 1,
+        "sounds": [
+          "찰랑찰랑",
+          "사박사박"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 29
+      },
+      {
+        "pageNo": 2,
+        "kind": "spread",
+        "ko": "유하는 파도가 모래를 씻는 자리에 쪼그려 앉아요. 스르르, 얕은 물이 발끝 앞으로 올라와요. 유하는 두 무릎 위에 손을 얹고 내려다봐요. 물이 빠지면서 자잘한 모래가 사르르 움직여요. 물에 씻긴 모래가 유하 앞에 매끈하게 누워요. 유하가 물결을 보며 혼자 작게 말해요. “조개도 파도가 씻어 주면 무늬가 잘 보이겠다.” 유하는 무릎에서 손을 떼고 고개를 쏙 내밀어요. 그때 얕은 물 위에 반짝이는 점이 나타나요. 유하는 눈을 크게 뜨며 물어요, “어, 조개야?” 유하가 반짝이는 점을 향해 한 손을 뻗어요. 찰랑, 물이 흔들리자 반짝이는 점도 옆으로 가요. 유하의 손이 그 뒤를 졸졸 따라가요.",
+        "en": "Yuha crouched where waves washed the sand. “Waves will help me see patterns,” said Yuha. A bright spot shone in the shallow water. “A shell?” said Yuha, reaching for it.",
+        "sentences": 13,
+        "rhythm": 0,
+        "eojeol": 87,
+        "average": 6.7,
+        "longest": 7,
+        "quotes": 2,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [],
+        "enNotes": [],
+        "enWords": 30
+      },
+      {
+        "pageNo": 3,
+        "kind": "spread",
+        "ko": "유하가 반짝이는 곳을 손끝으로 콕 짚어요. 손을 오므려 보지만 물만 손안에 고여요. 졸졸, 손가락 사이로 물이 빠져나가요. 유하가 빈 손바닥을 들여다보며 말해요, “물만 있네.” 이번에는 물가에 둥글게 솟은 모래가 보여요. 유하는 조개인 줄 알고 두 손으로 감싸요. 손을 들어 올리는데, 모래가 사르르 무너져요. 손바닥 두 개가 모래 옷을 입었어요. 유하가 손을 뒤집어 보며 물어요, “이것도 모래야?” 손등에도 젖은 모래가 잔뜩 붙어 있어요. 유하는 입을 조금 내밀고 빈손을 털어요. 유하가 작게 중얼거려요, “이제 그만 찾을까.” 유하는 모래 묻은 두 손을 털며 일어나요. 찰랑, 파도가 발 옆의 작은 돌 같은 것에 닿아요.",
+        "en": "Only water ran through Yuha’s open fingers. The round sand crumbled in his two hands. He shook his sandy hands and stood up. A wave touched the shell by his foot.",
+        "sentences": 14,
+        "rhythm": 0,
+        "eojeol": 90,
+        "average": 6.4,
+        "longest": 9,
+        "quotes": 3,
+        "exclaims": 0,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.4어절 · 문장 14개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 31
+      },
+      {
+        "pageNo": 4,
+        "kind": "spread",
+        "ko": "쏴아, 파도가 작은 돌 같은 것을 씻어요. 덮여 있던 모래가 물을 따라 흘러내려요. 모래 아래에서 가느다란 조개 무늬가 드러나요. 유하는 아직 모래 묻은 제 손만 내려다봐요. 손가락을 쫙 펴고 손등도 뒤집어 봐요. 탈탈, 유하가 두 손을 한 번 더 털어요. 유하는 손을 내리고 옆으로 고개를 돌려요. 조금 전 제 발이 있던 자리예요. 커다란 발자국 곁에 작은 조개가 보여요. 유하의 눈이 동그래지고 두 발이 멈춰요. 유하는 무릎을 굽혀 다시 몸을 낮춰요. 조개 위 가는 줄을 가만히 들여다봐요. 유하가 입을 동그랗게 벌리며 말해요. “어? 돌이 아니네! 조개였네!”",
+        "en": "The wave washed sand off the shell’s pattern. Yuha looked down and shook his sandy hands. Yuha turned, saw the pattern, and bent down. “A shell, not a stone!” said Yuha.",
+        "sentences": 16,
+        "rhythm": 0,
+        "eojeol": 85,
+        "average": 5.3,
+        "longest": 8,
+        "quotes": 2,
+        "exclaims": 2,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.6어절 · 문장 16개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 31
+      },
+      {
+        "pageNo": 5,
+        "kind": "spread",
+        "ko": "유하는 작은 조개 둘레에 손끝을 살짝 대요. 손끝으로 젖은 모래를 살살 밀어 내요. 모래가 옆으로 밀리면서 조개 둘레가 드러나요. 찰랑, 작은 파도가 조개를 한 번 더 씻어요. 물이 빠지자 유하는 조개 밑으로 손가락을 넣어요. 작은 조개를 들어 손바닥 위에 살며시 올려요. 조개 끝에서 물방울이 똑똑 떨어져요. 유하는 고개를 가까이 대고 가는 줄을 살펴봐요. 유하가 웃으며 말해요, “찾았다! 작은 줄이 여기에도, 여기에도 있네.” 조개를 더 가까이 보려는데 코끝에 물방울이 콕 묻어요. 유하는 코를 찡긋하고 조개 무늬를 다시 들여다봐요.",
+        "en": "Yuha gently brushed sand away from the shell. One more wave washed over the little shell. He lifted the shell onto his palm. Yuha leaned close and looked at its pattern.",
+        "sentences": 12,
+        "rhythm": 0,
+        "eojeol": 77,
+        "average": 6.4,
+        "longest": 8,
+        "quotes": 2,
+        "exclaims": 1,
+        "sounds": [],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 6.4어절 · 문장 12개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 31
+      },
+      {
+        "pageNo": 6,
+        "kind": "spread",
+        "ko": "유하는 처음 성큼 지나친 자리에 쪼그려 앉아 있어요. 발자국 곁 젖은 모래에 조개를 잠깐 내려놓아요. 조개 옆에 손바닥을 나란히 살짝 대 봐요. 유하가 손을 떼자 손바닥 자국이 남아요. 손바닥 자국은 커다랗고, 작은 조개는 쏙 작아요. 유하가 손과 조개를 번갈아 보며 말해요. “내 손보다 훨씬 작네. 여기서 찾았다!” 찰랑찰랑, 곁에서 작은 파도가 소리를 내요. 큰 것만 덥석 잡던 손을 살며시 펴요. 유하는 조개 밑으로 손가락을 넣어 들어 올려요. 손을 살짝 오므리면 조개가 그 안에 쏙 들어가요. 유하는 조개를 감싼 손을 보며 방긋 웃어요. 유하가 조개빛 바닷가에서 작은 조개를 찾았어요.",
+        "en": "Yuha crouched by his first footprints. He put the shell on the wet sand. He put his palm beside the little shell. Yuha smiled and gently lifted the little shell.",
+        "sentences": 14,
+        "rhythm": 0,
+        "eojeol": 88,
+        "average": 6.3,
+        "longest": 8,
+        "quotes": 2,
+        "exclaims": 1,
+        "sounds": [
+          "찰랑찰랑"
+        ],
+        "koIssues": [],
+        "enIssues": [],
+        "koNotes": [
+          "한글 펼침면 참고 · 짧거나 긴 문장 4개 · 평균 6.3어절 · 문장 14개(권장 10~15)"
+        ],
+        "enNotes": [],
+        "enWords": 30
+      }
+    ],
+    "totals": {
+      "pages": 6,
+      "sentences": 81,
+      "rhythm": 0,
+      "eojeol": 503,
+      "averageEojeol": 6.2,
+      "longest": 9,
+      "quotes": 12,
+      "exclaims": 5,
+      "soundWords": [
+        "찰랑찰랑",
+        "사박사박"
+      ],
+      "pagesWithSounds": 2,
+      "enWords": 182,
+      "koIssuePages": 0,
+      "enIssuePages": 0
+    }
+  },
+  "rawAndAppIssueCountsMatch": true,
+  "englishSearch": {
+    "semicolons": 0,
+    "outByTheSide": 0,
+    "rag": 0,
+    "wasDown": 0
+  },
+  "weatherKeywordSentences": {
+    "pattern": "햇살|햇빛|바람|꽃|나비",
+    "current": [],
+    "baselineR31E": [],
+    "limitation": "Keyword screening, not a semantic judgment of redundant description."
+  },
+  "dialogue": {
+    "writerKoreanShare": 0.15,
+    "writerEnglishShare": 0.23,
+    "measuredKoreanQuoteSentences": 12,
+    "measuredKoreanSentences": 81
+  },
+  "paginationMeta": [
+    {
+      "repairAttempts": 0,
+      "repairRequestCount": 0,
+      "repairBudget": {
+        "used": 0,
+        "max": 12
+      },
+      "richnessRepairAttempts": 0,
+      "coherence": null,
+      "revision": {
+        "version": 1,
+        "accepted": [],
+        "rejected": [],
+        "report": {
+          "overall": "반짝이는 물과 둥근 모래를 따라가던 유하가 처음 지나친 조개를 발견하는 흐름이 자연스러워요. 한국어의 소리말과 영어의 짧은 문장이 같은 장면을 잘 보여 주며, 고쳐야 할 뚜렷한 오류는 없어 원문을 유지했어요.",
+          "strengths": [
+            "처음 등장한 발 옆의 조개가 발견 장면으로 이어져, 그림 속 단서를 찾는 재미가 있어요.",
+            "찰랑찰랑, 사르르, 탈탈 같은 소리말이 물과 모래의 느낌을 살려요.",
+            "유하의 실망과 놀라움, 기쁨이 표정과 손동작으로 자연스럽게 드러나요.",
+            "조개를 살며시 들어 올리는 마지막 장면이 찾기의 기쁨을 따뜻하게 남겨요."
+          ],
+          "issues": []
+        }
+      }
+    }
+  ],
+  "repairHistory": [
+    {
+      "requests": 1,
+      "stage": "pagination",
+      "failedPageNos": [],
+      "violations": [],
+      "notes": 17,
+      "noteMessages": [
+        "1: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)",
+        "3: 한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.4어절 · 문장 14개(권장 10~15)",
+        "4: 한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.6어절 · 문장 16개(권장 10~15)",
+        "5: 한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 6.4어절 · 문장 12개(권장 10~15)",
+        "6: 한글 펼침면 참고 · 짧거나 긴 문장 4개 · 평균 6.3어절 · 문장 14개(권장 10~15)",
+        "1: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "2: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "3: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "4: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "5: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "6: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "1: 1쪽 글에 나온 A sandy little shell that looked like a stone, Footprints in the wet sand, A flat stone near the water이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "2: 2쪽 글에 나온 Shallow water washing over sand, A spot of sunlight on the water, The sandy shell beside his footprints behind him이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "3: 3쪽 글에 나온 Water dripping from his hands, The little shell beside his foot, touched by a wave이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "4: 4쪽 글에 나온 The little shell with its fine pattern showing, Sand washed away from the shell, Footprints from his first big steps이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "5: 5쪽 글에 나온 A little shell with fine lines, Wet sand brushed aside by his fingers, Water drops falling from the shell이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "6: 6쪽 글에 나온 The little shell resting briefly on the sand, A palm print beside the shell, The footprints where he first strode past이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      ],
+      "texts": []
+    },
+    {
+      "requests": 4,
+      "stage": "revision",
+      "failedPageNos": [],
+      "violations": [],
+      "notes": 17,
+      "noteMessages": [
+        "1: 한글 펼침면 참고 · 짧거나 긴 문장 2개 · 평균 6.3어절 · 문장 12개(권장 10~15)",
+        "3: 한글 펼침면 참고 · 짧거나 긴 문장 1개 · 평균 6.4어절 · 문장 14개(권장 10~15)",
+        "4: 한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 5.6어절 · 문장 16개(권장 10~15)",
+        "5: 한글 펼침면 참고 · 짧거나 긴 문장 3개 · 평균 6.4어절 · 문장 12개(권장 10~15)",
+        "6: 한글 펼침면 참고 · 짧거나 긴 문장 4개 · 평균 6.3어절 · 문장 14개(권장 10~15)",
+        "1: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "2: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "3: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "4: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "5: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "6: 영어 책 전체 새 단어 15개가 허용 10개를 넘었어요.",
+        "1: 1쪽 글에 나온 A sandy little shell that looked like a stone, Footprints in the wet sand, A flat stone near the water이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "2: 2쪽 글에 나온 Shallow water washing over sand, A spot of sunlight on the water, The sandy shell beside his footprints behind him이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "3: 3쪽 글에 나온 Water dripping from his hands, The little shell beside his foot, touched by a wave이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "4: 4쪽 글에 나온 The little shell with its fine pattern showing, Sand washed away from the shell, Footprints from his first big steps이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "5: 5쪽 글에 나온 A little shell with fine lines, Wet sand brushed aside by his fingers, Water drops falling from the shell이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요.",
+        "6: 6쪽 글에 나온 The little shell resting briefly on the sand, A palm print beside the shell, The footprints where he first strode past이(가) 장면 설명에 없어요. 그림에 보이도록 장면 설명에 적어 주세요."
+      ],
+      "texts": []
+    }
+  ],
+  "repairTransitions": [
+    {
+      "fromRequests": 1,
+      "toRequests": 4,
+      "stage": "revision",
+      "changes": []
+    }
+  ],
+  "repairViolationCount": 0,
+  "outlineRepairProgressCount": 0,
+  "repairRecordHasLanguageMessageAndTexts": true,
+  "outlineRepairs": [],
+  "hasPlotContract": false,
+  "pageCoherence": null,
+  "revision": {
+    "version": 1,
+    "accepted": [],
+    "rejected": [],
+    "report": {
+      "overall": "반짝이는 물과 둥근 모래를 따라가던 유하가 처음 지나친 조개를 발견하는 흐름이 자연스러워요. 한국어의 소리말과 영어의 짧은 문장이 같은 장면을 잘 보여 주며, 고쳐야 할 뚜렷한 오류는 없어 원문을 유지했어요.",
+      "strengths": [
+        "처음 등장한 발 옆의 조개가 발견 장면으로 이어져, 그림 속 단서를 찾는 재미가 있어요.",
+        "찰랑찰랑, 사르르, 탈탈 같은 소리말이 물과 모래의 느낌을 살려요.",
+        "유하의 실망과 놀라움, 기쁨이 표정과 손동작으로 자연스럽게 드러나요.",
+        "조개를 살며시 들어 올리는 마지막 장면이 찾기의 기쁨을 따뜻하게 남겨요."
+      ],
+      "issues": []
+    }
+  },
+  "originalComparison": [
+    {
+      "beatIndex": 1,
+      "entryNos": [
+        1
+      ],
+      "koBefore": "유하가 조개빛 바닷가에 두 발을 딛고 서요. 찰랑찰랑, 작은 파도가 모래 위로 밀려와요. 유하는 빈 손바닥을 눈앞에 활짝 펴 보여요. 손바닥을 코앞에 대 보는데, 손금만 보여요. 유하가 손가락으로 손금을 따라가며 히히 웃어요. 유하가 말해요. “조개를 찾아서 무늬를 가까이 볼 거야!” 유하가 폭신한 모래를 밟자 사박사박 소리가 나요. 젖은 모래 위에 유하의 발자국이 콕 남아요. 발 옆에는 모래 덮인 작고 둥근 것이 있어요. 유하는 작은 돌인가 보다 하고 힐끗 봐요. 유하는 그 옆을 성큼 지나 물가로 걸어가요.",
+      "koAfter": "유하가 조개빛 바닷가에 두 발을 딛고 서요. 찰랑찰랑, 작은 파도가 모래 위로 밀려와요. 유하는 빈 손바닥을 눈앞에 활짝 펴 보여요. 손바닥을 코앞에 대 보는데, 손금만 보여요. 유하가 손가락으로 손금을 따라가며 히히 웃어요. 유하가 말해요. “조개를 찾아서 무늬를 가까이 볼 거야!” 유하가 폭신한 모래를 밟자 사박사박 소리가 나요. 젖은 모래 위에 유하의 발자국이 콕 남아요. 발 옆에는 모래 덮인 작고 둥근 것이 있어요. 유하는 작은 돌인가 보다 하고 힐끗 봐요. 유하는 그 옆을 성큼 지나 물가로 걸어가요.",
+      "enBefore": "Yuha held his empty hand over the sand. “I want a shell with patterns,” he said. A sandy little shell looked like a stone. Yuha took big steps past it by the water.",
+      "enAfter": "Yuha held his hand over the sand. “I want a shell with patterns,” he said. A sandy little shell looked like a stone. Yuha took big steps past it.",
+      "koChanged": false,
+      "enChanged": true
+    },
+    {
+      "beatIndex": 2,
+      "entryNos": [
+        2
+      ],
+      "koBefore": "유하는 파도가 모래를 씻는 자리에 쪼그려 앉아요. 스르르, 얕은 물이 발끝 앞으로 올라와요. 유하는 두 무릎 위에 손을 얹고 내려다봐요. 물이 빠지면서 자잘한 모래가 사르르 움직여요. 물에 씻긴 모래가 유하 앞에 매끈하게 누워요. 유하가 물결을 보며 혼자 작게 말해요. “조개도 파도가 씻어 주면 무늬가 잘 보이겠다.” 유하는 무릎에서 손을 떼고 고개를 쏙 내밀어요. 그때 얕은 물 위에 반짝이는 점이 나타나요. 유하는 눈을 크게 뜨며 물어요, “어, 조개야?” 유하가 반짝이는 점을 향해 한 손을 뻗어요. 찰랑, 물이 흔들리자 반짝이는 점도 옆으로 가요. 유하의 손이 그 뒤를 졸졸 따라가요.",
+      "koAfter": "유하는 파도가 모래를 씻는 자리에 쪼그려 앉아요. 스르르, 얕은 물이 발끝 앞으로 올라와요. 유하는 두 무릎 위에 손을 얹고 내려다봐요. 물이 빠지면서 자잘한 모래가 사르르 움직여요. 물에 씻긴 모래가 유하 앞에 매끈하게 누워요. 유하가 물결을 보며 혼자 작게 말해요. “조개도 파도가 씻어 주면 무늬가 잘 보이겠다.” 유하는 무릎에서 손을 떼고 고개를 쏙 내밀어요. 그때 얕은 물 위에 반짝이는 점이 나타나요. 유하는 눈을 크게 뜨며 물어요, “어, 조개야?” 유하가 반짝이는 점을 향해 한 손을 뻗어요. 찰랑, 물이 흔들리자 반짝이는 점도 옆으로 가요. 유하의 손이 그 뒤를 졸졸 따라가요.",
+      "enBefore": "Yuha crouched where waves washed the sand. “Waves will help me see patterns,” said Yuha. A bright spot shone in the shallow water. “A shell?” said Yuha, reaching for it.",
+      "enAfter": "Yuha crouched where waves washed the sand. “Waves will help me see patterns,” said Yuha. A bright spot shone in the shallow water. “A shell?” said Yuha, reaching for it.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 3,
+      "entryNos": [
+        3
+      ],
+      "koBefore": "유하가 반짝이는 곳을 손끝으로 콕 짚어요. 손을 오므려 보지만 물만 손안에 고여요. 졸졸, 손가락 사이로 물이 빠져나가요. 유하가 빈 손바닥을 들여다보며 말해요, “물만 있네.” 이번에는 물가에 둥글게 솟은 모래가 보여요. 유하는 조개인 줄 알고 두 손으로 감싸요. 손을 들어 올리는데, 모래가 사르르 무너져요. 손바닥 두 개가 모래 옷을 입었어요. 유하가 손을 뒤집어 보며 물어요, “이것도 모래야?” 손등에도 젖은 모래가 잔뜩 붙어 있어요. 유하는 입을 조금 내밀고 빈손을 털어요. 유하가 작게 중얼거려요, “이제 그만 찾을까.” 유하는 모래 묻은 두 손을 털며 일어나요. 찰랑, 파도가 발 옆의 작은 돌 같은 것에 닿아요.",
+      "koAfter": "유하가 반짝이는 곳을 손끝으로 콕 짚어요. 손을 오므려 보지만 물만 손안에 고여요. 졸졸, 손가락 사이로 물이 빠져나가요. 유하가 빈 손바닥을 들여다보며 말해요, “물만 있네.” 이번에는 물가에 둥글게 솟은 모래가 보여요. 유하는 조개인 줄 알고 두 손으로 감싸요. 손을 들어 올리는데, 모래가 사르르 무너져요. 손바닥 두 개가 모래 옷을 입었어요. 유하가 손을 뒤집어 보며 물어요, “이것도 모래야?” 손등에도 젖은 모래가 잔뜩 붙어 있어요. 유하는 입을 조금 내밀고 빈손을 털어요. 유하가 작게 중얼거려요, “이제 그만 찾을까.” 유하는 모래 묻은 두 손을 털며 일어나요. 찰랑, 파도가 발 옆의 작은 돌 같은 것에 닿아요.",
+      "enBefore": "Only water ran through Yuha’s open fingers. The round sand crumbled in his two hands. He shook his sandy hands and stood up. A wave touched the shell by his foot.",
+      "enAfter": "Only water ran through Yuha’s open fingers. The round sand crumbled in his two hands. He shook his sandy hands and stood up. A wave touched the shell by his foot.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 4,
+      "entryNos": [
+        4
+      ],
+      "koBefore": "쏴아, 파도가 작은 돌 같은 것을 씻어요. 덮여 있던 모래가 물을 따라 흘러내려요. 모래 아래에서 가느다란 조개 무늬가 드러나요. 유하는 아직 모래 묻은 제 손만 내려다봐요. 손가락을 쫙 펴고 손등도 뒤집어 봐요. 탈탈, 유하가 두 손을 한 번 더 털어요. 유하는 손을 내리고 옆으로 고개를 돌려요. 조금 전 제 발이 있던 자리예요. 커다란 발자국 곁에 작은 조개가 보여요. 유하의 눈이 동그래지고 두 발이 멈춰요. 유하는 무릎을 굽혀 다시 몸을 낮춰요. 조개 위 가는 줄을 가만히 들여다봐요. 유하가 입을 동그랗게 벌리며 말해요. “어? 돌이 아니네! 조개였네!”",
+      "koAfter": "쏴아, 파도가 작은 돌 같은 것을 씻어요. 덮여 있던 모래가 물을 따라 흘러내려요. 모래 아래에서 가느다란 조개 무늬가 드러나요. 유하는 아직 모래 묻은 제 손만 내려다봐요. 손가락을 쫙 펴고 손등도 뒤집어 봐요. 탈탈, 유하가 두 손을 한 번 더 털어요. 유하는 손을 내리고 옆으로 고개를 돌려요. 조금 전 제 발이 있던 자리예요. 커다란 발자국 곁에 작은 조개가 보여요. 유하의 눈이 동그래지고 두 발이 멈춰요. 유하는 무릎을 굽혀 다시 몸을 낮춰요. 조개 위 가는 줄을 가만히 들여다봐요. 유하가 입을 동그랗게 벌리며 말해요. “어? 돌이 아니네! 조개였네!”",
+      "enBefore": "The wave washed sand off the shell’s pattern. Yuha looked down and shook his sandy hands. Yuha turned, saw the pattern, and bent down. “A shell, not a stone!” said Yuha.",
+      "enAfter": "The wave washed sand off the shell’s pattern. Yuha looked down and shook his sandy hands. Yuha turned, saw the pattern, and bent down. “A shell, not a stone!” said Yuha.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 5,
+      "entryNos": [
+        5
+      ],
+      "koBefore": "유하는 작은 조개 둘레에 손끝을 살짝 대요. 손끝으로 젖은 모래를 살살 밀어 내요. 모래가 옆으로 밀리면서 조개 둘레가 드러나요. 찰랑, 작은 파도가 조개를 한 번 더 씻어요. 물이 빠지자 유하는 조개 밑으로 손가락을 넣어요. 작은 조개를 들어 손바닥 위에 살며시 올려요. 조개 끝에서 물방울이 똑똑 떨어져요. 유하는 고개를 가까이 대고 가는 줄을 살펴봐요. 유하가 웃으며 말해요, “찾았다! 작은 줄이 여기에도, 여기에도 있네.” 조개를 더 가까이 보려는데 코끝에 물방울이 콕 묻어요. 유하는 코를 찡긋하고 조개 무늬를 다시 들여다봐요.",
+      "koAfter": "유하는 작은 조개 둘레에 손끝을 살짝 대요. 손끝으로 젖은 모래를 살살 밀어 내요. 모래가 옆으로 밀리면서 조개 둘레가 드러나요. 찰랑, 작은 파도가 조개를 한 번 더 씻어요. 물이 빠지자 유하는 조개 밑으로 손가락을 넣어요. 작은 조개를 들어 손바닥 위에 살며시 올려요. 조개 끝에서 물방울이 똑똑 떨어져요. 유하는 고개를 가까이 대고 가는 줄을 살펴봐요. 유하가 웃으며 말해요, “찾았다! 작은 줄이 여기에도, 여기에도 있네.” 조개를 더 가까이 보려는데 코끝에 물방울이 콕 묻어요. 유하는 코를 찡긋하고 조개 무늬를 다시 들여다봐요.",
+      "enBefore": "Yuha gently brushed sand away from the shell. One more wave washed over the little shell. He lifted the shell onto his palm. Yuha leaned close and looked at its pattern.",
+      "enAfter": "Yuha gently brushed sand away from the shell. One more wave washed over the little shell. He lifted the shell onto his palm. Yuha leaned close and looked at its pattern.",
+      "koChanged": false,
+      "enChanged": false
+    },
+    {
+      "beatIndex": 6,
+      "entryNos": [
+        6
+      ],
+      "koBefore": "유하는 처음 성큼 지나친 자리에 쪼그려 앉아 있어요. 발자국 곁 젖은 모래에 조개를 잠깐 내려놓아요. 조개 옆에 손바닥을 나란히 살짝 대 봐요. 유하가 손을 떼자 손바닥 자국이 남아요. 손바닥 자국은 커다랗고, 작은 조개는 쏙 작아요. 유하가 손과 조개를 번갈아 보며 말해요. “내 손보다 훨씬 작네. 여기서 찾았다!” 찰랑찰랑, 곁에서 작은 파도가 소리를 내요. 큰 것만 덥석 잡던 손을 살며시 펴요. 유하는 조개 밑으로 손가락을 넣어 들어 올려요. 손을 살짝 오므리면 조개가 그 안에 쏙 들어가요. 유하는 조개를 감싼 손을 보며 방긋 웃어요. 유하가 조개빛 바닷가에서 작은 조개를 찾았어요.",
+      "koAfter": "유하는 처음 성큼 지나친 자리에 쪼그려 앉아 있어요. 발자국 곁 젖은 모래에 조개를 잠깐 내려놓아요. 조개 옆에 손바닥을 나란히 살짝 대 봐요. 유하가 손을 떼자 손바닥 자국이 남아요. 손바닥 자국은 커다랗고, 작은 조개는 쏙 작아요. 유하가 손과 조개를 번갈아 보며 말해요. “내 손보다 훨씬 작네. 여기서 찾았다!” 찰랑찰랑, 곁에서 작은 파도가 소리를 내요. 큰 것만 덥석 잡던 손을 살며시 펴요. 유하는 조개 밑으로 손가락을 넣어 들어 올려요. 손을 살짝 오므리면 조개가 그 안에 쏙 들어가요. 유하는 조개를 감싼 손을 보며 방긋 웃어요. 유하가 조개빛 바닷가에서 작은 조개를 찾았어요.",
+      "enBefore": "Yuha crouched by his first footprints. He put the shell on the wet sand. He put his palm beside the little shell. Yuha smiled and gently lifted the little shell.",
+      "enAfter": "Yuha crouched by his first footprints. He put the shell on the wet sand. He put his palm beside the little shell. Yuha smiled and gently lifted the little shell.",
+      "koChanged": false,
+      "enChanged": false
+    }
+  ],
+  "baselineR31E": {
+    "costUsd": 0.5568248,
+    "requests": 34,
+    "seconds": 312,
+    "writerEnglishRetryCount": 0,
+    "pageRepairRequests": 0,
+    "writerKoreanDialogue": 0.15,
+    "writerEnglishDialogue": 0.21,
+    "measured": {
+      "pages": 6,
+      "sentences": 85,
+      "rhythm": 0,
+      "eojeol": 482,
+      "averageEojeol": 5.7,
+      "longest": 8,
+      "quotes": 12,
+      "exclaims": 11,
+      "soundWords": [
+        "조심조심",
+        "또각또각"
+      ],
+      "pagesWithSounds": 2,
+      "enWords": 180,
+      "koIssuePages": 0,
+      "enIssuePages": 0
+    }
+  },
+  "limitations": [
+    "One independently sampled story per version; different material plans and model randomness.",
+    "Token usage multiplied by catalogue rates is not the provider invoice.",
+    "writerOriginal is the writer-stage return, after any internal retries.",
+    "Weather keyword counts and quoted-sentence shares are screening metrics, not human quality scores.",
+    "No illustrations or real-child comprehension study."
+  ]
+}

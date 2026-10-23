@@ -1,0 +1,127 @@
+{
+  "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "lastAction": "[data-simple-action=\"eco-accept\"]",
+  "settingsShapeCount": 29,
+  "defaultStageOnNewStory": "city",
+  "proStageCount": 11,
+  "seaWorldOptions": [
+    {
+      "value": "drawer",
+      "text": "기존 배경 서랍 사용"
+    },
+    {
+      "value": "jeju_sea",
+      "text": "제주 바다"
+    },
+    {
+      "value": "australia_reef",
+      "text": "호주 산호초 바다"
+    },
+    {
+      "value": "greece_island",
+      "text": "그리스 하얀 섬"
+    },
+    {
+      "value": "norway_fjord",
+      "text": "노르웨이 피오르"
+    },
+    {
+      "value": "busan_harbor",
+      "text": "부산 항구 마을"
+    },
+    {
+      "value": "hawaii_volcano_beach",
+      "text": "하와이 화산 해변"
+    },
+    {
+      "value": "undersea_city",
+      "text": "바닷속 돔 도시"
+    },
+    {
+      "value": "underwater_volcano_lab",
+      "text": "바닷속 화산 연구소"
+    },
+    {
+      "value": "ocean_cleanup_ship",
+      "text": "바다 청소 배"
+    }
+  ],
+  "cityWorldOptions": [
+    {
+      "value": "drawer",
+      "text": "기존 배경 서랍 사용"
+    },
+    {
+      "value": "paris_bakery",
+      "text": "파리 빵집 골목"
+    },
+    {
+      "value": "venice_canals",
+      "text": "베네치아 물길"
+    },
+    {
+      "value": "seoul_hangang",
+      "text": "서울 한강 공원"
+    },
+    {
+      "value": "netherlands_canal_town",
+      "text": "운하 자전거 마을"
+    },
+    {
+      "value": "robot_city",
+      "text": "로봇 도시"
+    },
+    {
+      "value": "sky_train_city",
+      "text": "하늘 열차 도시"
+    },
+    {
+      "value": "solar_glass_city",
+      "text": "햇빛 유리 도시"
+    }
+  ],
+  "proShapeCount": 29,
+  "autoDefaultAfterReload": "auto",
+  "autoDefaultResetPassed": true,
+  "simpleShapeCount": 29,
+  "simpleStageCount": 11,
+  "simpleFormatSummary": "K2 · E2 · 12쪽 · 한 쪽에 한글 + 영어 · 소리 모험형 · 자연 · 바다",
+  "beachRecommended": true,
+  "missingCityMessage": "무대(도시·거리)에 맞는 장소가 재료 서랍에 없어요 · 자동 추가가 켜져 있으면 만들어 쓰고, 꺼져 있으면 재료에서 먼저 추가해 주세요.",
+  "promptLines": [
+    "STORY SHAPE — 찾기-오답형: Looking for one thing and finding the wrong things that look or sound like it (a shell that is a flower); each miss teaches something; found in a surprising place that was there all along. Refrain idea: 'Is it this? No, it is a …' once per beat. Lean on this shape; it is a spark, not a checklist.",
+    "STAGE — 자연 · 바다: The sea — sand, waves, shells, gulls, a lighthouse, rock pools; wet feet and salt wind. The supplied places that fit this stage carry the story; name no real city or country unless the topic does.",
+    "Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. The story happens where the topic puts it — here 조개빛 바닷가: open there (a home ID only when the topic begins at home or names no place) and stay as long as the story wants; move to another supplied place only when the story needs it, never to show every place in the drawer. The last beat happens wherever the parent's ending puts it."
+  ],
+  "noHomeFirstRule": true,
+  "ecoInput": {
+    "backgroundIds": [
+      "beach"
+    ],
+    "storyShape": {
+      "version": 1,
+      "id": "search_wrong_answers",
+      "name": "찾기-오답형"
+    },
+    "stageCategory": {
+      "version": 1,
+      "id": "nature_sea",
+      "name": "자연 · 바다",
+      "from": "topic"
+    }
+  },
+  "ecoAccepted": true,
+  "ecoErrors": [],
+  "firstBeatPlace": "beach",
+  "ecoUsageCalls": 0,
+  "shapeStageLine": [
+    "이야기 모양 · 찾기-오답형 · 무대 · 자연 · 바다 (주제에서)"
+  ],
+  "shapeStageLineAlsoInPagePrompt": false,
+  "cache": "donghwa-shell-v79",
+  "otherChecksPassed": true,
+  "passed": true
+}

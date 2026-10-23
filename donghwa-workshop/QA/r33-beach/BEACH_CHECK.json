@@ -1,0 +1,101 @@
+{
+  "inputBackgroundIds": [
+    "beach"
+  ],
+  "firstBeatPlace": "beach",
+  "beatPlaces": [
+    {
+      "index": 1,
+      "settingKey": "beach"
+    },
+    {
+      "index": 2,
+      "settingKey": "beach"
+    },
+    {
+      "index": 3,
+      "settingKey": "beach"
+    },
+    {
+      "index": 4,
+      "settingKey": "beach"
+    },
+    {
+      "index": 5,
+      "settingKey": "beach"
+    },
+    {
+      "index": 6,
+      "settingKey": "beach"
+    }
+  ],
+  "pagePlaces": [
+    {
+      "entry": 1,
+      "where": "beach"
+    },
+    {
+      "entry": 2,
+      "where": "beach"
+    },
+    {
+      "entry": 3,
+      "where": "beach"
+    },
+    {
+      "entry": 4,
+      "where": "beach"
+    },
+    {
+      "entry": 5,
+      "where": "beach"
+    },
+    {
+      "entry": 6,
+      "where": "beach"
+    }
+  ],
+  "shape": {
+    "version": 1,
+    "id": "search_wrong_answers",
+    "name": "찾기-오답형"
+  },
+  "inputShape": {
+    "version": 1,
+    "id": "search_wrong_answers",
+    "name": "찾기-오답형"
+  },
+  "stage": {
+    "version": 1,
+    "id": "nature_sea",
+    "name": "자연 · 바다",
+    "from": "topic"
+  },
+  "outlineRepairReasons": [],
+  "mainOutlineHttpRequests": [
+    {
+      "sequence": 9,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "titleCandidates",
+        "logline",
+        "want",
+        "problem",
+        "beats",
+        "twist",
+        "newWordsKo",
+        "newWordsEn",
+        "settings",
+        "emotionArc",
+        "endingType",
+        "tension"
+      ],
+      "isMainOutline": true,
+      "status": 200
+    }
+  ],
+  "mainOutlineSuccessfulResponses": 1,
+  "allGenerationHttpRequests": 31,
+  "materialsStageRequests": 0,
+  "offTopicLocationMentions": []
+}

@@ -1,0 +1,7 @@
+{
+  "priorStage": "city",
+  "normalizedAutoHasStage": false,
+  "normalizedAutoValue": null,
+  "resultAfterCurrentSaveMerge": "city",
+  "expected": "auto or absent"
+}

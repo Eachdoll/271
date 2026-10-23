@@ -1,0 +1,109 @@
+diff --git a/donghwa-workshop/dist/eco-mode.js b/donghwa-workshop/dist/eco-mode.js
+index 7b2a1ba..88dbece 100644
+--- a/donghwa-workshop/dist/eco-mode.js
++++ b/donghwa-workshop/dist/eco-mode.js
+@@ -184,6 +184,7 @@ export function ecoAcceptOutline(reply, source) {
+   // R33: the shape and stage the request asked for, kept with the outline.
+   if (input.storyShape) accepted.storyShape = structuredClone(input.storyShape);
+   if (input.stageCategory) accepted.stageCategory = structuredClone(input.stageCategory);
++  if (input.storyShape) accepted.storyShape = clone(input.storyShape);
+   return {
+     ok: true,
+     outline: accepted,
+diff --git a/donghwa-workshop/dist/simple-create.js b/donghwa-workshop/dist/simple-create.js
+index 888979d..2a740d2 100644
+--- a/donghwa-workshop/dist/simple-create.js
++++ b/donghwa-workshop/dist/simple-create.js
+@@ -626,7 +626,7 @@ function renderEcoStep(ctx, w, job) {
+     topic = job.input?.topic || job.wizard?.topic || w.topic || "";
+   if (job.book) {
+     const pages = job.book.pages?.length || 0;
+-    return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p><div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""} · 요금 없음</div>${checkNotesLine(job)}${(job.notes || []).map((note) => `<p class="small-label simple-check-note">${esc(note)}</p>`).join("")}<p class="small-label">④에서 쪽마다 글을 확인하고, 그림 프롬프트로 만든 그림을 올려요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 올려요.</span>${sbtn("검수로 가기", "open-review", "green")}</div>`;
++    return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p>${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""} · 요금 없음</div>${checkNotesLine(job)}${(job.notes || []).map((note) => `<p class="small-label simple-check-note">${esc(note)}</p>`).join("")}<p class="small-label">④에서 쪽마다 글을 확인하고, 그림 프롬프트로 만든 그림을 올려요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 올려요.</span>${sbtn("검수로 가기", "open-review", "green")}</div>`;
+   }
+   const texts = ecoPanelTexts(job),
+     errors = Array.isArray(eco.errors) ? eco.errors : [],
+@@ -653,7 +653,7 @@ function renderEcoStep(ctx, w, job) {
+           .join("")}${findings.length > 12 ? `<li class="check-advisory">… 외 ${findings.length - 12}곳</li>` : ""}</ul>`
+       : "",
+     busy = actionBusy ? "disabled" : "";
+-  return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p><p class="small-label">앱이 AI를 부르지 않아요 · 요금 없음. 글을 복사해 물어보고, 답을 붙여 넣으면 앱이 검사해요.</p><ol class="simple-eco-flow">${flow}</ol>${outlineBlock}${notes.length ? `<p class="small-label simple-check-note">참고: ${esc(notes.join(" · "))}</p>` : ""}<div class="field"><label for="eco-prompt">${esc(texts.title)}</label><p class="small-label">${esc(texts.help)}</p><textarea id="eco-prompt" class="simple-eco-text" readonly rows="10">${esc(texts.prompt)}</textarea></div><div class="simple-start">${sbtn("이 글 복사", "eco-copy", "outline", 'data-target="prompt"')}</div>${errorList}${texts.fix ? `<div class="field"><label for="eco-fix">AI에게 고쳐 달라고 할 때 붙일 글</label><textarea id="eco-fix" class="simple-eco-text" readonly rows="5">${esc(texts.fix)}</textarea></div><div class="simple-start">${sbtn("고침 요청 복사", "eco-copy", "outline", 'data-target="fix"')}</div>` : ""}${findingList}<div class="field"><label for="eco-reply">AI의 답을 여기에 붙여 넣어요</label><textarea id="eco-reply" class="simple-eco-text" rows="8" placeholder="답 전체를 그대로 붙여 넣어요 (JSON)">${esc(ecoReplies.get(job.id) || "")}</textarea></div><div class="simple-start">${sbtn("답 확인하고 다음으로", "eco-accept", "primary", busy)}${step === "fix" ? sbtn("이대로 검수로", "eco-force", "green", busy) : ""}${step !== "outline" ? sbtn("줄거리부터 다시", "eco-redo", "plain", busy) : ""}${sbtn("그만두기", "abandon", "plain", busy)}</div></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">답을 붙여 넣으면 앱이 같은 검사를 해요.</span><span></span></div>`;
++  return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p>${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}<p class="small-label">앱이 AI를 부르지 않아요 · 요금 없음. 글을 복사해 물어보고, 답을 붙여 넣으면 앱이 검사해요.</p><ol class="simple-eco-flow">${flow}</ol>${outlineBlock}${notes.length ? `<p class="small-label simple-check-note">참고: ${esc(notes.join(" · "))}</p>` : ""}<div class="field"><label for="eco-prompt">${esc(texts.title)}</label><p class="small-label">${esc(texts.help)}</p><textarea id="eco-prompt" class="simple-eco-text" readonly rows="10">${esc(texts.prompt)}</textarea></div><div class="simple-start">${sbtn("이 글 복사", "eco-copy", "outline", 'data-target="prompt"')}</div>${errorList}${texts.fix ? `<div class="field"><label for="eco-fix">AI에게 고쳐 달라고 할 때 붙일 글</label><textarea id="eco-fix" class="simple-eco-text" readonly rows="5">${esc(texts.fix)}</textarea></div><div class="simple-start">${sbtn("고침 요청 복사", "eco-copy", "outline", 'data-target="fix"')}</div>` : ""}${findingList}<div class="field"><label for="eco-reply">AI의 답을 여기에 붙여 넣어요</label><textarea id="eco-reply" class="simple-eco-text" rows="8" placeholder="답 전체를 그대로 붙여 넣어요 (JSON)">${esc(ecoReplies.get(job.id) || "")}</textarea></div><div class="simple-start">${sbtn("답 확인하고 다음으로", "eco-accept", "primary", busy)}${step === "fix" ? sbtn("이대로 검수로", "eco-force", "green", busy) : ""}${step !== "outline" ? sbtn("줄거리부터 다시", "eco-redo", "plain", busy) : ""}${sbtn("그만두기", "abandon", "plain", busy)}</div></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">답을 붙여 넣으면 앱이 같은 검사를 해요.</span><span></span></div>`;
+ }
+ /** ③ 에코 모드: a job the parent fills; the picks must stand on their own (nothing is planned by a model). */
+ async function startEco(ctx) {
+diff --git a/donghwa-workshop/dist/story-generation/quality-settings.js b/donghwa-workshop/dist/story-generation/quality-settings.js
+index e249a5e..f4d9ab1 100644
+--- a/donghwa-workshop/dist/story-generation/quality-settings.js
++++ b/donghwa-workshop/dist/story-generation/quality-settings.js
+@@ -701,6 +701,8 @@ export function configureStoryQualityUI(context) {
+         ...(state.settings.storyQuality || {}),
+         ...next,
+       };
++      // Auto normalizes to an absent key; do not restore the previous stage by merging.
++      if (!next.stageCategoryId) delete state.settings.storyQuality.stageCategoryId;
+       if (api.save() === false)
+         throw Error("글 품질 설정을 저장하지 못했어요.");
+       api.render();
+diff --git a/donghwa-workshop/tests/eco-mode.test.mjs b/donghwa-workshop/tests/eco-mode.test.mjs
+index e72c9a8..ee3130e 100644
+--- a/donghwa-workshop/tests/eco-mode.test.mjs
++++ b/donghwa-workshop/tests/eco-mode.test.mjs
+@@ -70,6 +70,7 @@ test('R32 outline request: the lean head, the level, the outline rules, the inpu
+ 
+ test('R32 outline answer: not JSON is named, a fenced answer is accepted with notes, a volunteered ledger is dropped, a wrong place is refused', () => {
+   const state = setup(), job = ecoJob(state, 'K2'), input = normalizeStoryInput(job.input), outline = demoOutline(input);
++  job.input.storyShape = {version: 1, id: 'sound_adventure', name: '소리 모험형'};
+   const bad = ecoAcceptOutline('I cannot help with that.', job.input);
+   assert.equal(bad.ok, false);
+   assert.match(bad.errors[0], /JSON/);
+@@ -77,6 +78,7 @@ test('R32 outline answer: not JSON is named, a fenced answer is accepted with no
+   assert.equal(ok.ok, true, JSON.stringify(ok.errors));
+   assert.equal(ok.outline.plotContract, undefined);
+   assert.equal(ok.outline.beats.length, outline.beats.length);
++  assert.deepEqual(ok.outline.storyShape, job.input.storyShape, 'eco preserves the frozen story shape like the paid path');
+   assert.ok(ok.notes.length >= 1, 'soft rule findings become notes');
+   const wrongPlace = {...outline, settings: outline.settings.map((s, i) => (i === 1 ? {...s, backgroundId: 'nowhere'} : s)), beats: outline.beats.map((b, i) => (i === 1 ? {...b, settingKey: 'nowhere'} : b))};
+   const refused = ecoAcceptOutline(JSON.stringify(wrongPlace), job.input);
+diff --git a/donghwa-workshop/tests/simple-create.test.mjs b/donghwa-workshop/tests/simple-create.test.mjs
+index 23db3a6..ced2500 100644
+--- a/donghwa-workshop/tests/simple-create.test.mjs
++++ b/donghwa-workshop/tests/simple-create.test.mjs
+@@ -652,11 +652,16 @@ test('R32 ③ of an eco job is the paste panel: the request, a copy button, the
+   assert.ok(stepButtons(refused).length <= 12, `refused: ${stepButtons(refused).length}`);
+   // The pages step shows the accepted outline and the way back.
+   job.eco.errors = [];
++  job.input.storyShape = {version: 1, id: 'sound_adventure', name: '소리 모험형'};
++  job.input.stageCategory = {version: 1, id: 'home_town', name: '집·동네', from: 'topic'};
+   const input = normalizeStoryInput(job.input);
+   job.outline = ecoAcceptOutline(JSON.stringify(demoOutline(input)), job.input).outline;
+   job.eco.step = 'pages';
+   const pages = ecoRender(state, job, 3);
+   assert.match(pages, /simple-eco-outline/);
++  assert.match(pages, /simple-shape-note/);
++  assert.match(pages, /이야기 모양 ·/);
++  assert.match(pages, /무대 · 집·동네/);
+   assert.match(pages, /data-simple-action="eco-redo"/);
+   assert.match(pages, /ECO MODE: there is no separate prose stage/);
+   assert.ok(stepButtons(pages).length <= 12, `pages: ${stepButtons(pages).length}`);
+diff --git a/donghwa-workshop/tests/story-quality-settings.test.mjs b/donghwa-workshop/tests/story-quality-settings.test.mjs
+index 35a6255..226eccf 100644
+--- a/donghwa-workshop/tests/story-quality-settings.test.mjs
++++ b/donghwa-workshop/tests/story-quality-settings.test.mjs
+@@ -49,4 +49,16 @@ test('seed chips and folded writer plan stay separate from printable prose; simu
+  const report=renderStoryChildGate({pass:true,curiosity:{overall:8},retell:{retell:['유하가 소리를 찾아요.','유하가 통을 살펴봐요.','유하가 직접 소리를 내요.'],missingCore:[]}});assert.match(report,/모의검사/);assert.match(report,/실제 아이의 평가나 공식 읽기 점수가 아닙니다/);assert.match(report,/약 8\/10/);
+ });
+ 
++test('R33 saving a stage then auto clears the old default through the actual submit handler',()=>{
++ state={settings:{storyQuality:{futureOption:'keep'}}};
++ const form=(stage)=>({id:'story-quality-form',querySelector:selector=>selector==='#quality-default-stageCategoryId'?{value:stage}:null,querySelectorAll:()=>[]});
++ const before=saves;
++ handlers.submit({target:form('city'),preventDefault(){}});
++ assert.equal(state.settings.storyQuality.stageCategoryId,'city');
++ handlers.submit({target:form('auto'),preventDefault(){}});
++ assert.equal(saves,before+2,'both changes saved');
++ assert.equal(Object.hasOwn(state.settings.storyQuality,'stageCategoryId'),false,'auto removes the previous explicit stage');
++ assert.equal(state.settings.storyQuality.futureOption,'keep','unrelated forward-compatible settings survive');
++});
++
+ test.after(()=>{cleanupStoryQualityUI();globalThis.document=originalDocument;});

@@ -1,0 +1,310 @@
+{
+  "source": "ae40cf5",
+  "requests": [
+    {
+      "sequence": 1,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "growth",
+        "theme",
+        "lesson"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 2,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "pitch"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 3,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "pitch"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 4,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "pitch"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 5,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "verdicts",
+        "pick"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 6,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "verdicts",
+        "pick"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 7,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "reactions",
+        "favorite"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 8,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "bible"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 9,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "titleCandidates",
+        "logline",
+        "want",
+        "problem",
+        "beats",
+        "twist",
+        "newWordsKo",
+        "newWordsEn",
+        "settings",
+        "emotionArc",
+        "endingType",
+        "tension"
+      ],
+      "isMainOutline": true,
+      "status": 200
+    },
+    {
+      "sequence": 10,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "briefs"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 11,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 12,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 13,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 14,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 15,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "pick",
+        "reason"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 16,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "pick",
+        "reason"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 17,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 18,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 19,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 20,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 21,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 22,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 23,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 24,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 25,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 26,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "text"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 27,
+      "model": "gpt-6-astra",
+      "required": [
+        "paragraphs"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 28,
+      "model": "gpt-6.1-sol",
+      "required": [
+        "cover",
+        "pages"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 29,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "pages",
+        "dropPages",
+        "overall"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 30,
+      "model": "gpt-4.1-mini",
+      "required": [
+        "retell",
+        "coveredBeats",
+        "missingCore",
+        "confusions",
+        "coherence"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    },
+    {
+      "sequence": 31,
+      "model": "gpt-6-astra",
+      "required": [
+        "report",
+        "pages"
+      ],
+      "isMainOutline": false,
+      "status": 200
+    }
+  ]
+}
