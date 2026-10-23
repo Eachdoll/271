@@ -701,6 +701,8 @@ export function configureStoryQualityUI(context) {
         ...(state.settings.storyQuality || {}),
         ...next,
       };
+      // Auto normalizes to an absent key; do not restore the previous stage by merging.
+      if (!next.stageCategoryId) delete state.settings.storyQuality.stageCategoryId;
       if (api.save() === false)
         throw Error("글 품질 설정을 저장하지 못했어요.");
       api.render();

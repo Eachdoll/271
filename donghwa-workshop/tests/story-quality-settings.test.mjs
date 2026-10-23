@@ -49,4 +49,16 @@ test('seed chips and folded writer plan stay separate from printable prose; simu
  const report=renderStoryChildGate({pass:true,curiosity:{overall:8},retell:{retell:['유하가 소리를 찾아요.','유하가 통을 살펴봐요.','유하가 직접 소리를 내요.'],missingCore:[]}});assert.match(report,/모의검사/);assert.match(report,/실제 아이의 평가나 공식 읽기 점수가 아닙니다/);assert.match(report,/약 8\/10/);
 });
 
+test('R33 saving a stage then auto clears the old default through the actual submit handler',()=>{
+ state={settings:{storyQuality:{futureOption:'keep'}}};
+ const form=(stage)=>({id:'story-quality-form',querySelector:selector=>selector==='#quality-default-stageCategoryId'?{value:stage}:null,querySelectorAll:()=>[]});
+ const before=saves;
+ handlers.submit({target:form('city'),preventDefault(){}});
+ assert.equal(state.settings.storyQuality.stageCategoryId,'city');
+ handlers.submit({target:form('auto'),preventDefault(){}});
+ assert.equal(saves,before+2,'both changes saved');
+ assert.equal(Object.hasOwn(state.settings.storyQuality,'stageCategoryId'),false,'auto removes the previous explicit stage');
+ assert.equal(state.settings.storyQuality.futureOption,'keep','unrelated forward-compatible settings survive');
+});
+
 test.after(()=>{cleanupStoryQualityUI();globalThis.document=originalDocument;});
