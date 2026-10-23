@@ -105,6 +105,7 @@ import {
   storyWorldTopic,
 } from "./story-generation/quality-settings.js";
 import { isCoherenceCurrent } from "./story-generation/coherence.js";
+import { loadStoryQualityData, resolveStoryWorld } from "./story-generation/quality-adapter.js";
 import { currentBookPagination } from "./story-generation/book-coherence.js";
 import { syncStoryDraft } from "./story-generation/ui.js";
 import {
@@ -135,6 +136,23 @@ import {
   isPresetPlaceType,
 } from "./place-types.js";
 import { safeTopic } from "./engine.js";
+// R33: the topic-place scorer is shared with the outline rules and checks.
+import {
+  placeKeywords,
+  nameWords,
+  topicScore,
+  topicPlaceIds,
+  missingTopicPlaces,
+} from "./story-generation/topic-places.js";
+import { STORY_SHAPE_OPTIONS, storyShapeLabel } from "./story-generation/story-shapes.js";
+import {
+  STAGE_OPTIONS,
+  isStageId,
+  stageLabel,
+  stagePlaceIds,
+  stageMissing,
+} from "./story-generation/stage-categories.js";
+export { placeKeywords };
 import {
   CUES,
   heldPageCount,
@@ -385,74 +403,15 @@ export function carryFullAutoFields(state, book, prior) {
 }
 
 /* ---------- recommendations (a plain keyword match, no model call) ---------- */
-const PLACE_HINTS = [
-  [/달|별|우주|space|moon/i, ["달", "별", "우주", "로켓", "밤하늘", "행성"]],
-  [
-    /바다|바닷|조개|해변|sea|beach/i,
-    ["바다", "바닷", "조개", "물고기", "파도", "보물", "고래", "모래"],
-  ],
-  [/숲|나무|forest/i, ["숲", "나무", "공룡", "소풍", "산책", "곤충"]],
-  [
-    /빗방울|정원|웅덩이|rain|garden/i,
-    ["비 오는", "빗", "우산", "무지개", "장화", "웅덩이", "정원"],
-  ],
-  [/유치원|학교|school/i, ["유치원", "학교", "선생님", "교실"]],
-  [/놀이터|공원|park/i, ["놀이터", "공원", "그네", "미끄럼"]],
-  [/생일|파티|party/i, ["생일", "파티", "케이크"]],
-];
 const KIND_WORDS = {
   dinosaur: ["공룡"],
   rabbit: ["토끼"],
   cat: ["고양이"],
   dog: ["강아지"],
 };
-const ADJECTIVE_END = /(?:는|한|은|운|인|던|된|진|울)$/u;
-function nameWords(text) {
-  return String(text || "")
-    .split(/[\s,·/()]+/u)
-    .map((word) =>
-      word.replace(
-        /(?:으로|에서|이랑|에게|와|과|의|이|가|을|를|은|는|에|로)$/u,
-        "",
-      ),
-    )
-    .filter((word) => word && !ADJECTIVE_END.test(word));
-}
-export function placeKeywords(background = {}) {
-  const text = [
-      background.name,
-      background.nameEn,
-      background.description,
-      background.type,
-      placeTypeLabel(background.type),
-    ]
-      .filter(Boolean)
-      .join(" "),
-    // 2026-10-20: a typed kind ("도시") is itself a topic word.
-    words = new Set([
-      ...nameWords(background.name),
-      ...(isPresetPlaceType(background.type) ? [] : nameWords(background.type)),
-    ]);
-  for (const [pattern, hints] of PLACE_HINTS)
-    if (pattern.test(text)) hints.forEach((hint) => words.add(hint));
-  return [...words].filter(Boolean);
-}
-function topicScore(topic, keywords) {
-  const text = String(topic || "");
-  return keywords.filter((word) => word && text.includes(word)).length;
-}
 /** Non-home places whose name/description shares a keyword with the topic, best first. */
 export function recommendPlaces(topic, backgrounds = []) {
-  return backgrounds
-    .filter((b) => !isHomeBackground(b))
-    .map((b, order) => ({
-      id: b.id,
-      order,
-      score: topicScore(topic, placeKeywords(b)),
-    }))
-    .filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score || a.order - b.order)
-    .map((row) => row.id);
+  return topicPlaceIds(topic, backgrounds.filter((b) => !isHomeBackground(b)));
 }
 export function recommendFriends(topic, characters = []) {
   return characters
@@ -477,8 +436,11 @@ export const SIMPLE_MATERIAL_LIMITS = Object.freeze({
   preselectPlaces: PRESELECT_PLACES,
 });
 export function preselectMaterials(state, wizard) {
-  const topic = String(wizard.topic || "").trim();
-  if (wizard.simplePicksTouched || wizard.simplePickedFor === topic)
+  const topic = String(wizard.topic || "").trim(),
+    // R33: a chosen stage is part of the picks' key, so changing it fills ② again.
+    stage = isStageId(wizard.stageCategoryId) ? wizard.stageCategoryId : "",
+    pickKey = stage ? `${topic}|${stage}` : topic;
+  if (wizard.simplePicksTouched || wizard.simplePickedFor === pickKey)
     return wizard;
   const characters = activeCharacters(state),
     backgrounds = activeBackgrounds(state),
@@ -490,10 +452,15 @@ export function preselectMaterials(state, wizard) {
       characters.filter((c) => c.id !== protagonist),
     ).slice(0, PRESELECT_FRIENDS),
     home = backgrounds.find(isHomeBackground),
-    places = recommendPlaces(topic, backgrounds).slice(0, PRESELECT_PLACES);
+    places = [
+      ...new Set([
+        ...recommendPlaces(topic, backgrounds),
+        ...stagePlaceIds(stage, backgrounds.filter((b) => !isHomeBackground(b))),
+      ]),
+    ].slice(0, PRESELECT_PLACES);
   wizard.characterIds = [protagonist, ...friends].filter(Boolean);
   wizard.backgroundIds = [home?.id, ...places].filter(Boolean);
-  wizard.simplePickedFor = topic;
+  wizard.simplePickedFor = pickKey;
   return wizard;
 }
 
@@ -504,6 +471,11 @@ export function formatSummary(wizard = {}) {
   if (wizard.language !== "ko") parts.push(wizard.englishLevel || "E0");
   parts.push(`${Number(wizard.pageCount) || 12}쪽`);
   parts.push(LANGUAGE_LABELS[wizard.language] || LANGUAGE_LABELS.dual);
+  // R33: a chosen story shape and stage are part of the format line.
+  if (wizard.storyShapeId && wizard.storyShapeId !== "auto")
+    parts.push(storyShapeLabel(wizard.storyShapeId) || "이야기 모양");
+  if (wizard.stageCategoryId && wizard.stageCategoryId !== "auto")
+    parts.push(stageLabel(wizard.stageCategoryId) || "무대");
   return parts.join(" · ");
 }
 /** Fill the simple-only fields without touching anything the pro wizard set. */
@@ -654,7 +626,7 @@ function renderEcoStep(ctx, w, job) {
     topic = job.input?.topic || job.wizard?.topic || w.topic || "";
   if (job.book) {
     const pages = job.book.pages?.length || 0;
-    return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p><div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""} · 요금 없음</div>${checkNotesLine(job)}${(job.notes || []).map((note) => `<p class="small-label simple-check-note">${esc(note)}</p>`).join("")}<p class="small-label">④에서 쪽마다 글을 확인하고, 그림 프롬프트로 만든 그림을 올려요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 올려요.</span>${sbtn("검수로 가기", "open-review", "green")}</div>`;
+    return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p>${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""} · 요금 없음</div>${checkNotesLine(job)}${(job.notes || []).map((note) => `<p class="small-label simple-check-note">${esc(note)}</p>`).join("")}<p class="small-label">④에서 쪽마다 글을 확인하고, 그림 프롬프트로 만든 그림을 올려요.</p></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 올려요.</span>${sbtn("검수로 가기", "open-review", "green")}</div>`;
   }
   const texts = ecoPanelTexts(job),
     errors = Array.isArray(eco.errors) ? eco.errors : [],
@@ -681,7 +653,7 @@ function renderEcoStep(ctx, w, job) {
           .join("")}${findings.length > 12 ? `<li class="check-advisory">… 외 ${findings.length - 12}곳</li>` : ""}</ul>`
       : "",
     busy = actionBusy ? "disabled" : "";
-  return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p><p class="small-label">앱이 AI를 부르지 않아요 · 요금 없음. 글을 복사해 물어보고, 답을 붙여 넣으면 앱이 검사해요.</p><ol class="simple-eco-flow">${flow}</ol>${outlineBlock}${notes.length ? `<p class="small-label simple-check-note">참고: ${esc(notes.join(" · "))}</p>` : ""}<div class="field"><label for="eco-prompt">${esc(texts.title)}</label><p class="small-label">${esc(texts.help)}</p><textarea id="eco-prompt" class="simple-eco-text" readonly rows="10">${esc(texts.prompt)}</textarea></div><div class="simple-start">${sbtn("이 글 복사", "eco-copy", "outline", 'data-target="prompt"')}</div>${errorList}${texts.fix ? `<div class="field"><label for="eco-fix">AI에게 고쳐 달라고 할 때 붙일 글</label><textarea id="eco-fix" class="simple-eco-text" readonly rows="5">${esc(texts.fix)}</textarea></div><div class="simple-start">${sbtn("고침 요청 복사", "eco-copy", "outline", 'data-target="fix"')}</div>` : ""}${findingList}<div class="field"><label for="eco-reply">AI의 답을 여기에 붙여 넣어요</label><textarea id="eco-reply" class="simple-eco-text" rows="8" placeholder="답 전체를 그대로 붙여 넣어요 (JSON)">${esc(ecoReplies.get(job.id) || "")}</textarea></div><div class="simple-start">${sbtn("답 확인하고 다음으로", "eco-accept", "primary", busy)}${step === "fix" ? sbtn("이대로 검수로", "eco-force", "green", busy) : ""}${step !== "outline" ? sbtn("줄거리부터 다시", "eco-redo", "plain", busy) : ""}${sbtn("그만두기", "abandon", "plain", busy)}</div></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">답을 붙여 넣으면 앱이 같은 검사를 해요.</span><span></span></div>`;
+  return `<section class="panel simple-panel simple-eco"><h3>글을 만들어요 · 에코 모드</h3><p class="section-sub">${esc(topic)}</p>${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}<p class="small-label">앱이 AI를 부르지 않아요 · 요금 없음. 글을 복사해 물어보고, 답을 붙여 넣으면 앱이 검사해요.</p><ol class="simple-eco-flow">${flow}</ol>${outlineBlock}${notes.length ? `<p class="small-label simple-check-note">참고: ${esc(notes.join(" · "))}</p>` : ""}<div class="field"><label for="eco-prompt">${esc(texts.title)}</label><p class="small-label">${esc(texts.help)}</p><textarea id="eco-prompt" class="simple-eco-text" readonly rows="10">${esc(texts.prompt)}</textarea></div><div class="simple-start">${sbtn("이 글 복사", "eco-copy", "outline", 'data-target="prompt"')}</div>${errorList}${texts.fix ? `<div class="field"><label for="eco-fix">AI에게 고쳐 달라고 할 때 붙일 글</label><textarea id="eco-fix" class="simple-eco-text" readonly rows="5">${esc(texts.fix)}</textarea></div><div class="simple-start">${sbtn("고침 요청 복사", "eco-copy", "outline", 'data-target="fix"')}</div>` : ""}${findingList}<div class="field"><label for="eco-reply">AI의 답을 여기에 붙여 넣어요</label><textarea id="eco-reply" class="simple-eco-text" rows="8" placeholder="답 전체를 그대로 붙여 넣어요 (JSON)">${esc(ecoReplies.get(job.id) || "")}</textarea></div><div class="simple-start">${sbtn("답 확인하고 다음으로", "eco-accept", "primary", busy)}${step === "fix" ? sbtn("이대로 검수로", "eco-force", "green", busy) : ""}${step !== "outline" ? sbtn("줄거리부터 다시", "eco-redo", "plain", busy) : ""}${sbtn("그만두기", "abandon", "plain", busy)}</div></section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">답을 붙여 넣으면 앱이 같은 검사를 해요.</span><span></span></div>`;
 }
 /** ③ 에코 모드: a job the parent fills; the picks must stand on their own (nothing is planned by a model). */
 async function startEco(ctx) {
@@ -697,7 +669,7 @@ async function startEco(ctx) {
   }
   const materials = validateMaterials(state, { ...w, allowNew: false });
   if (materials)
-    return ctx.toast("에코 모드는 재료를 자동으로 더하지 않아요. ②에서 집 1곳과 다른 장소 2곳을 골라 주세요.");
+    return ctx.toast("에코 모드는 재료를 자동으로 더하지 않아요. ②에서 장소를 1곳 이상 골라 주세요.");
   const token =
     globalThis.crypto?.randomUUID?.() ||
     String(Date.now()) + Math.random().toString(16).slice(2);
@@ -711,6 +683,13 @@ async function startEco(ctx) {
         councilReview: false,
       }),
     );
+    // R33: a chosen world card's own sights reach the eco request too (the data file, no paid call).
+    if (job.input.storyQuality?.worldId && job.input.storyQuality.worldId !== "drawer")
+      try {
+        job.input.storyWorld = resolveStoryWorld(job.input, await loadStoryQualityData()).world;
+      } catch {
+        /* The STAGE line falls back to the stage category. */
+      }
     // The first request must be buildable now (places, levels); otherwise no job is left behind.
     ecoOutlinePrompt(job.input);
   } catch (error) {
@@ -1279,7 +1258,12 @@ function renderFormatPanel(w) {
     "쪽 수",
     pageCountOptions(w),
     w.pageCount,
-  )}${renderReadingSelectors(w)}</div>`;
+  )}${renderReadingSelectors(w)}${selectField(
+    "storyShapeId",
+    "이야기 모양",
+    STORY_SHAPE_OPTIONS,
+    w.storyShapeId || "auto",
+  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}</div>`;
 }
 /** A story world chosen in pro mode gives world ideas; otherwise the built-in list is used. */
 function ideaState(state) {
@@ -1287,6 +1271,17 @@ function ideaState(state) {
   return quality.worldId && quality.worldId !== "drawer"
     ? { world: true, worldId: quality.worldId, quality }
     : { world: false };
+}
+/** R33: the shape and stage a job's story was written to, for ③. */
+function shapeStageLine(job) {
+  const shape = job?.outline?.storyShape,
+    stage = job?.input?.stageCategory;
+  return [
+    shape?.name ? `이야기 모양 · ${shape.name}` : "",
+    stage?.name ? `무대 · ${stage.name}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 function resumeLabel(job) {
   if (isEcoJob(job) && !job.book) return `에코 모드 · ${ECO_STEP_LABELS[job.eco.step] || "붙여넣기"}`;
@@ -1387,7 +1382,7 @@ function renderFrozenMaterials(ctx, w, job) {
     )}</div><p class="form-label">이야기 장소</p><div class="selection-grid simple-cards">${places
     .map((b) =>
       card(
-        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
+        `<span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${isHomeBackground(b) ? "집" : esc(b.description || "이야기 장소")}</small>${newPlaces.has(b.id) ? auto : ""}`,
       ),
     )
     .join(
@@ -1400,6 +1395,10 @@ function renderMaterialsStep(ctx, w) {
   const state = ctx.getState(),
     characters = activeCharacters(state),
     backgrounds = activeBackgrounds(state),
+    // R33: a place the topic names that the drawer lacks is said here, not forced later.
+    missingPlaces = missingTopicPlaces(w.topic, backgrounds),
+    // R33: a chosen stage with no fitting drawer place is said here too.
+    missingStage = stageMissing(w.stageCategoryId, backgrounds) ? stageLabel(w.stageCategoryId) : "",
     protagonist = w.characterIds[0],
     friendRec = new Set(
       recommendFriends(
@@ -1407,9 +1406,12 @@ function renderMaterialsStep(ctx, w) {
         characters.filter((c) => c.id !== protagonist),
       ),
     ),
-    placeRec = new Set(recommendPlaces(w.topic, backgrounds)),
+    placeRec = new Set([
+      ...recommendPlaces(w.topic, backgrounds),
+      ...stagePlaceIds(w.stageCategoryId, backgrounds.filter((b) => !isHomeBackground(b))),
+    ]),
     portrait = ctx.materialPortrait || (() => "");
-  return `<section class="panel simple-panel"><h3>누구와 어디로 갈까요?</h3><p class="section-sub">주인공은 정해져 있어요. 친구는 ${MAX_FRIENDS}명까지, 장소는 집과 다른 장소 2~${MAX_PLACES - 1}곳을 골라요. 고른 친구와 장소는 모두 이야기에 나와요(친구마다 두 장면 이상).</p><p class="form-label">함께할 친구 <span class="count">최대 ${MAX_FRIENDS}명</span></p><div class="selection-grid simple-cards">${characters
+  return `<section class="panel simple-panel"><h3>누구와 어디로 갈까요?</h3><p class="section-sub">주인공은 정해져 있어요. 친구는 ${MAX_FRIENDS}명까지, 장소는 주제가 향하는 곳 위주로 1~${MAX_PLACES}곳을 골라요. 고른 친구와 장소는 모두 이야기에 나와요(친구마다 두 장면 이상).</p><p class="form-label">함께할 친구 <span class="count">최대 ${MAX_FRIENDS}명</span></p><div class="selection-grid simple-cards">${characters
     .map((c) => {
       const lead = c.id === protagonist,
         selected = w.characterIds.includes(c.id),
@@ -1418,12 +1420,12 @@ function renderMaterialsStep(ctx, w) {
     })
     .join(
       "",
-    )}</div><p class="form-label">이야기가 펼쳐질 장소 <span class="count">집 1곳 + 다른 장소 2~${MAX_PLACES - 1}곳</span></p><div class="selection-grid simple-cards">${backgrounds
+    )}</div><p class="form-label">이야기가 펼쳐질 장소 <span class="count">주제가 향하는 곳 위주로 1~${MAX_PLACES}곳</span></p>${missingPlaces.length ? `<p class="small-label simple-topic-place-note">주제의 장소(${esc(missingPlaces.join(", "))})가 재료 서랍에 없어요 · 자동 추가가 켜져 있으면 만들어 쓰고, 꺼져 있으면 재료에서 먼저 추가해 주세요.</p>` : ""}${missingStage ? `<p class="small-label simple-topic-place-note">무대(${esc(missingStage)})에 맞는 장소가 재료 서랍에 없어요 · 자동 추가가 켜져 있으면 만들어 쓰고, 꺼져 있으면 재료에서 먼저 추가해 주세요.</p>` : ""}<div class="selection-grid simple-cards">${backgrounds
     .map((b) => {
       const selected = w.backgroundIds.includes(b.id),
         home = isHomeBackground(b),
         rec = placeRec.has(b.id);
-      return `<button type="button" class="selection simple-card simple-place ${selected ? "selected" : ""}" data-simple-action="place" data-id="${esc(b.id)}" aria-pressed="${selected}"><span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${home ? "집 · 시작과 마무리" : esc(b.description || "이야기 장소")}</small>${rec ? '<span class="simple-rec">추천</span>' : ""}</button>`;
+      return `<button type="button" class="selection simple-card simple-place ${selected ? "selected" : ""}" data-simple-action="place" data-id="${esc(b.id)}" aria-pressed="${selected}"><span class="simple-place-emoji" aria-hidden="true">${PLACE_EMOJI[b.type] || placeEmoji(b.type)}</span><strong>${esc(b.name)}</strong><small>${home ? "집" : esc(b.description || "이야기 장소")}</small>${rec ? '<span class="simple-rec">추천</span>' : ""}</button>`;
     })
     .join(
       "",
@@ -1656,7 +1658,7 @@ function renderGenerateStep(ctx, w) {
         live ||
         (!!pageOp && pageOp.bookId === bookId) ||
         (!!bookId && isPageOperationBusy(bookId));
-    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${councilSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
+    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}${councilSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
   } else if (live)
     status = `${councilRoomBlock(job, { live: true })}${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
   else if (councilHeld(job)) {
@@ -3128,10 +3130,9 @@ function validateMaterials(state, w) {
   );
   if (!w.characterIds.length) return "주인공을 확인해 주세요.";
   if (w.allowNew !== false) return null;
-  const homes = backgrounds.filter(isHomeBackground).length,
-    places = backgrounds.length - homes;
-  if (!homes || places < 2)
-    return "부족한 재료 자동 추가를 껐다면 집 1곳과 다른 장소 2곳을 골라 주세요.";
+  // R33: the story goes where the topic puts it; one place is enough.
+  if (!backgrounds.length)
+    return "부족한 재료 자동 추가를 껐다면 장소를 1곳 이상 골라 주세요.";
   return null;
 }
 /**
@@ -3721,12 +3722,14 @@ function onChange(event) {
       "pageCount",
       "koreanLevel",
       "englishLevel",
+      "storyShapeId",
+      "stageCategoryId",
       "simple-allow-new",
     ].includes(target.id)
   )
     return;
   if (
-    ["language", "pageCount", "koreanLevel", "englishLevel"].includes(target.id)
+    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId"].includes(target.id)
   ) {
     const before = layoutFor(w);
     w[target.id] =

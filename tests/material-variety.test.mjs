@@ -71,8 +71,9 @@ test('the simple steps allow six friends and four places but still preselect two
   assert.ok(wizard.backgroundIds.length <= 3, 'home and two places preselected at most');
   const w = ensureSimpleWizard(state, {...wizard, step: 2, simpleStep: 2});
   const html = renderSimpleCreate({getState: () => state, getWizard: () => w, setWizard() {}, getDraft: () => null, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''});
-  assert.match(html, /친구는 6명까지, 장소는 집과 다른 장소 2~4곳을 골라요/);
+  // R33: the places follow the topic; one is enough, five at most.
+  assert.match(html, /친구는 6명까지, 장소는 주제가 향하는 곳 위주로 1~5곳을 골라요/);
   assert.match(html, /최대 6명/);
-  assert.match(html, /집 1곳 \+ 다른 장소 2~4곳/);
+  assert.match(html, /주제가 향하는 곳 위주로 1~5곳/);
   assert.match(html, /서랍에 저장돼 다음 이야기에도 쓸 수 있어요/);
 });

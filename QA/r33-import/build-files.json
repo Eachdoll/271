@@ -1,0 +1,92 @@
+[
+  {
+    "path": "dist/app.js",
+    "sha256": "7e8ddddda04a61680e46e9116d2a98e33f81c0f1b23057db5bf921d7f91c2e0d",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/eco-mode.js",
+    "sha256": "760759fb623c5727386372a0726730a26a37308ca4959d4a0a35e95c585c7fa9",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/full-auto.js",
+    "sha256": "9a1bd932c9679925a00a9682c2c817de6ae1d8c7b153f094c88328d688afaf03",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/simple-create.js",
+    "sha256": "9c768ff2df6e08148c78590ae1b5852e24bf0b5abc069d70cd9de02ae89e9381",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/auto-materials.js",
+    "sha256": "54aa7bf536097bfcbeb63e4fa43c7b420cfe495d97ab7cee1e422998fa1406c1",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/council.js",
+    "sha256": "753d8202fdbd1db9497bff9c92169281bc9b9b6ebafe2ea2e6fb8c86831157b1",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/craft-rules.js",
+    "sha256": "e36c19762398a5a27d636a23180ec54b2221f5ebbe2b1ee6558069a2b0204ced",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/pipeline.js",
+    "sha256": "88652c5111300a09f020bdd5f9f1c4ee7d798b67eb8553edb3b2223362ab6e99",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/prompt-diet.js",
+    "sha256": "bba9139abad00a74ac12478b9722387300dcc230e377d444beb1fcf8af8230e4",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/quality-gates.js",
+    "sha256": "21786ce8d38cdc62155a9495ee1f1bcbb2d9df79211ec0d34c00250e7e2ecaad",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/quality-settings.js",
+    "sha256": "ce5c41ca482002847f26a77c474d4322d0c7ea2056ae7d234b44e273d7ed9fac",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/schemas.js",
+    "sha256": "8e88314fa468d77fae5521a345e2b4805a9552e0e9c5db0e86737c75c13a22cc",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/stage-categories.js",
+    "sha256": "46bc0f9d0f4eeeb4c9350579434a15b8459f6dd557c429fadb3055883ec170c8",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/story-shapes.js",
+    "sha256": "9b5e8a8536962c2585fd9024443b19d1d665b6cbe053e50eb02bb3de6545be61",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/topic-places.js",
+    "sha256": "ac34ce5142331d0b1eec8892745917495f91c7c4fde5c132af2d9c953562abb2",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/story-generation/ui.js",
+    "sha256": "cc9802f136ad30469d5523b5c13301d6befdd3ca7e36173c1d87a17782429e42",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/sw.js",
+    "sha256": "dd1d699106c905d93374d7aefd7db98f3651552a3a47a05541cb68c0bf66d679",
+    "matchesBuilt": true
+  },
+  {
+    "path": "dist/text-generation/settings-ui.js",
+    "sha256": "b46d61fe259408828853a7a530e04b35dfb54dd96150d385c285f9f5eaa313c8",
+    "matchesBuilt": true
+  }
+]

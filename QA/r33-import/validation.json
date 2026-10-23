@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-23",
+  "upstreamRuntimeRange": "8f15876..ae40cf5",
+  "upstreamDoc": "a4e655f",
+  "actualImportRange": "d7c7edd..a4e655f",
+  "additionalHotfixCommits": [
+    "0e7b02e",
+    "9d815a0"
+  ],
+  "verifiedCodeSource": "9d815a0cbad3aff89ce0bf095a0fa6d76130dac9",
+  "appTests": 1044,
+  "originalRequestedTests": 1043,
+  "qualityTests": 85,
+  "reasonExtraTest": "Actual settings submit regression for explicit stage to auto. Existing eco tests additionally check frozen shape preservation and summary.",
+  "mirrorEqual": true,
+  "readerSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "smokePassed": true,
+  "smokeScope": "Original import; isolated hotfixes additionally verified by full 1044 tests and targeted browser flow.",
+  "browserLocalPassed": true,
+  "buildPassed": true,
+  "allCodeFilesMatched": 328,
+  "changedRuntimeBuiltFilesMatched": 18,
+  "cache": "donghwa-shell-v79",
+  "newPaidRequestsDuringImport": 0,
+  "paidBeachStatus": "Current user approved one K2/E2 beach book; execute after production deployment.",
+  "dbChanges": false,
+  "serverChanges": false,
+  "secretChanges": false
+}

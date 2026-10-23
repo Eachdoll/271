@@ -1,0 +1,258 @@
+[
+  {
+    "path": "CLAUDE.md",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "CODEX_R32_COMPLETION_2026-10-22.md",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "CODEX_WORK_ORDER_R33_2026-10-23.md",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/build-files.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/census.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/deployment.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-author-offline.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-local.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-production-fix-prompt.txt",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-production-outline-answer.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-production-outline-prompt.txt",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-production-pages-answer.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-production-pages-prompt.txt",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/eco-production.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/free-local.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/free-production.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/full-code-comparison.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/import-plan.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/package.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/price-diagnostic.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/screenshots/eco-production-01-invalid-outline.png",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/screenshots/eco-production-04-level-fix.png",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/screenshots/eco-production-06-all-uploaded.png",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/screenshots/eco-production-08-library.png",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/smoke.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/source-comparison.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/tools/eco-author.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/tools/eco-browser-check.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/tools/free-browser-check.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/tools/test-upload.png",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "QA/r32-import/validation.json",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/app.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/eco-mode.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/full-auto.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/simple-create.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/auto-materials.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/council.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/craft-rules.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/pipeline.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/prompt-diet.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/quality-gates.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/quality-settings.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/schemas.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/stage-categories.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/story-shapes.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/topic-places.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/story-generation/ui.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/sw.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "dist/text-generation/settings-ui.js",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "scripts/ux-census.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/eco-mode.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/full-auto.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/material-variety.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/openings-legacy-r12.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/openings-policy-r12.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/prompt-diet-r31b.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/prompt-policy-r23.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/simple-create-actions.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/simple-create.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/stage-categories-r33.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/story-quality-settings.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/story-shapes-r33.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/story-world-ui.test.mjs",
+    "matchesVerifiedSource": true
+  },
+  {
+    "path": "tests/topic-places-r33.test.mjs",
+    "matchesVerifiedSource": true
+  }
+]

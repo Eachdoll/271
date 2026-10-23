@@ -112,14 +112,15 @@ test('R31b the K2 outline of a diet draft: the app path with the lean prompt and
   assert.equal(leanBibleBlock(null, input), '');
 });
 
-test('R31b the K1 outline of a diet draft has no ledger and the K1 shape once; ≤ 3,500 characters', async () => {
+test('R31b the K1 outline of a diet draft has no ledger and the K1 shape once; ≤ 4,000 characters (R33 adds the STORY SHAPE and STAGE lines)', async () => {
   const state = setup(), input = normalizeStoryInput({...inputFromWizard(state, wiz({koreanLevel: 'K1', englishLevel: 'E0'})).input, bookId: 'k'});
   const o = outlineOf(input); delete o.plotContract;
   const calls = [];
   const engine = {id: 'openai', async complete(req) { calls.push(req); return reply(o); }};
   const result = await generateOutline(input, {engine});
   assert.equal(calls.length, 1, 'no repair call for a missing ledger');
-  assert.ok(calls[0].system.length <= 3500, `${calls[0].system.length} chars`);
+  // R31b measured 3,169; R33 adds one STORY SHAPE line and one STAGE line (≈ 500 chars, a spark each, no counters).
+  assert.ok(calls[0].system.length <= 4000, `${calls[0].system.length} chars`);
   assert.doesNotMatch(calls[0].system, QUOTA);
   assert.doesNotMatch(calls[0].system, /plotContract/u);
   assert.equal((calls[0].system.match(/No villain/gu) || []).length, 1, 'the K1 shape is stated once');

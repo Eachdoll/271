@@ -463,7 +463,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, ...plain} = spec || {};
     return [lang, plain];
@@ -704,7 +704,11 @@ const PINS = {
   // other level is unchanged (dump-diffed against 653b704). 653b704: 674fb65e…41ee.
   // 프롬프트 다이어트 (R31b): every new draft's input carries promptDiet {version: 1};
   // nothing else differs (dump-diffed against a3f361e). a3f361e: ae3bb686…b24f.
-  inputs: '287d578508e546dc5aeb19f295629536f5b9d9480fd5a2b569e0930b914e1a26',
+  // 이야기 모양 (R33-2): every new draft's input carries storyShape {version, id,
+  // name} chosen from its topic (wizard and normalized); the fixture topics
+  // name no stage category, so no stageCategory key; nothing else differs
+  // (dump-diffed against 8f15876). 8f15876: 287d5785…1a26.
+  inputs: '5b0447718560b23519632eb1f0cba48822da96872d2b02d3cfb5b6c11d74436d',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -749,7 +753,10 @@ const PINS = {
   // its out-of-list shares are notes) and lean notes carry their message (the
   // K1 demo's E0 vocabulary notes too); the demo outline keeps its ledger;
   // nothing else differs (dump-diffed against 071ba58). 071ba58: ba0173e4…7d53.
-  fullAutoDemo: 'c20447c5c64b058fb41fa1af68c5fd11b497750bc3a9fc7391767fdcf22c624c',
+  // 이야기 모양 (R33-2): the two demo jobs' inputs carry storyShape (the demo
+  // outline itself gets no shape, so the demo stays as it was); nothing else
+  // differs (dump-diffed against 8f15876). 8f15876: c20447c5…624c.
+  fullAutoDemo: '1365c1de5391cf4c4dfddc4e679bece6f607c4694204c90a942ce7513765e589',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

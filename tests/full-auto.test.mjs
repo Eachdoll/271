@@ -127,14 +127,18 @@ test('selection plan pins the picked cast and places without a model call',async
  const capturing=p=>{const book=richBuildBook(p);captureBookGenerationSnapshot(state,book);captured=!!book.generationSnapshot;return book;};
  await runFullAuto(state,job,{operations:ops,buildBook:capturing});
  assert.equal(calls.plan,0);assert.equal(job.status,'text-review');
- assert.deepEqual(job.plan.characterIds,['yuha','greenie']);assert.deepEqual(job.plan.backgroundIds,['moon','beach','home']);
+ // R33: a diet story keeps the parent's places as picked (no home filled in).
+ assert.deepEqual(job.plan.characterIds,['yuha','greenie']);assert.deepEqual(job.plan.backgroundIds,['moon','beach']);
  assert.deepEqual([job.plan.newCharacters,job.plan.newBackgrounds],[[],[]]);
- assert.deepEqual(job.input.backgrounds.map(b=>b.id).sort(),['beach','home','moon']);
- assert.match(job.plan.reason,/유하네 집/);assert.equal(job.usage.calls.some(c=>c.stage==='materials'),false);
+ assert.deepEqual(job.input.backgrounds.map(b=>b.id).sort(),['beach','moon']);
+ assert.doesNotMatch(job.plan.reason,/채웠어요/,'R33: no filler place');assert.equal(job.usage.calls.some(c=>c.stage==='materials'),false);
  assert.ok(captured,'the stub froze a snapshot as the real builder does');assert.equal(job.book.generationSnapshot,undefined);
  const before=Object.keys(state.fullAutoJobs).length;
  for(const b of state.backgrounds)if(!['home','forest'].includes(b.id))b.archivedAt=new Date().toISOString();
- assert.throws(()=>createFullAutoJob(state,wizard,{planMode:'selection'}),/서로 다른 배경 2곳/);
+ // R33: a diet story runs with the active places that remain (no home-plus-two rule); archived places stay out.
+ const remaining=createFullAutoJob(state,wizard,{planMode:'selection',stopBefore:'text'});
+ assert.ok(remaining.input.backgrounds.every(b=>!b.archivedAt)&&remaining.input.backgrounds.length>=1);
+ delete state.fullAutoJobs[remaining.id];
  assert.equal(Object.keys(state.fullAutoJobs).length,before,'refused before any job or paid call');
 });
 

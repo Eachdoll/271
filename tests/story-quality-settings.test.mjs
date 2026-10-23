@@ -17,7 +17,7 @@ test('parent quality panel exposes six structural cards, stage roles and safe de
  const html=renderStoryQualitySettings(state),selector=renderQualityPatternSelector({storyQualityPatternId:'waiting'},{state});
  assert.match(html,/data-quality-flag="enabled" checked/);assert.match(html,/data-quality-flag="useBeamSearch">/);for(const flag of ['twoPass','childSimulator','weeklyCoach'])assert.match(html,new RegExp(`data-quality-flag="${flag}" checked`));
  for(const role of ['outline','prose','cheap','coach'])assert.ok(html.includes(`data-quality-role-engine="${role}"`));
- assert.match(html,/패턴 카드 편집 · 6종/);assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);
+ assert.match(html,/패턴 카드 편집 · 6종/);assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);assert.match(selector,/value="sound_adventure"/);assert.match(selector,/value="answer_pile"/);assert.equal((selector.match(/<option /g)||[]).length,29,'R33: 자동 + 28 story shapes');
  assert.doesNotMatch(html,/data-quality-pattern-field="(?:bookTitle|text|characters|author)"/);assert.match(html,/창을 닫은 동안에는 실행하지 않으며 API 요금/);
  assert.equal(validateQualityPatternCards(plotPatterns).valid,true);
  const bad=structuredClone(plotPatterns);bad[0].bookTitle='레퍼런스 본문';assert.equal(validateQualityPatternCards(bad).valid,false);bad[0]=structuredClone(plotPatterns[0]);bad[0].beats[1].text='책의 실제 문장';assert.equal(validateQualityPatternCards(bad).valid,false);
@@ -47,6 +47,18 @@ test('seed chips and folded writer plan stay separate from printable prose; simu
  const html=renderStoryQualityPlan({outline:{quality:{seedSummary:'작은 통 · 바람의 비밀 · 달팽이'},plan:{pattern:'mystery_sound',planted:'작은 통',twistReveal:'바람이 통을 울려요.',funnyMoment:'통이 데굴데굴',failureReasons:['wrong_method']}}});
  assert.match(html,/심은 물건 · 작은 통/);assert.match(html,/data-story-action="reroll-quality-seed"/);assert.match(html,/<details class="quality-plan">/);assert.match(html,/방법이 맞지 않음/);
  const report=renderStoryChildGate({pass:true,curiosity:{overall:8},retell:{retell:['유하가 소리를 찾아요.','유하가 통을 살펴봐요.','유하가 직접 소리를 내요.'],missingCore:[]}});assert.match(report,/모의검사/);assert.match(report,/실제 아이의 평가나 공식 읽기 점수가 아닙니다/);assert.match(report,/약 8\/10/);
+});
+
+test('R33 saving a stage then auto clears the old default through the actual submit handler',()=>{
+ state={settings:{storyQuality:{futureOption:'keep'}}};
+ const form=(stage)=>({id:'story-quality-form',querySelector:selector=>selector==='#quality-default-stageCategoryId'?{value:stage}:null,querySelectorAll:()=>[]});
+ const before=saves;
+ handlers.submit({target:form('city'),preventDefault(){}});
+ assert.equal(state.settings.storyQuality.stageCategoryId,'city');
+ handlers.submit({target:form('auto'),preventDefault(){}});
+ assert.equal(saves,before+2,'both changes saved');
+ assert.equal(Object.hasOwn(state.settings.storyQuality,'stageCategoryId'),false,'auto removes the previous explicit stage');
+ assert.equal(state.settings.storyQuality.futureOption,'keep','unrelated forward-compatible settings survive');
 });
 
 test.after(()=>{cleanupStoryQualityUI();globalThis.document=originalDocument;});

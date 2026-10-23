@@ -410,10 +410,11 @@ test('R11 access matrix: no job, a job without text, a held job, editing and ⑤
   assert.deepEqual(open(rows(strict)), [1, 2, 3], 'untouched picks: home + two recommended places fill them first');
   assert.deepEqual(strict.backgroundIds, [], 'the access check never changes the wizard');
   assert.equal(strict.simplePickedFor, undefined);
-  assert.deepEqual(open(rows({...strict, topic: '달에 놀러 간 날'})), [1, 2], 'one recommended place is not enough');
+  // R33: one place is enough — the story goes where the topic puts it.
+  assert.deepEqual(open(rows({...strict, topic: '달에 놀러 간 날'})), [1, 2, 3], 'one recommended place is enough');
   const touched = {...strict, simplePicksTouched: true};
   assert.deepEqual(open(rows(touched)), [1, 2]);
-  assert.match(rows(touched)[2].reason, /집 1곳과 다른 장소 2곳/);
+  assert.match(rows(touched)[2].reason, /장소를 1곳 이상/);
   // A job without text (stopped before the text): ①② frozen, ③ status, ④⑤ closed.
   const paused = heldJob(state, 'auto-paused', {text: false});
   const bound = {...structuredClone(wizard), simpleJobId: paused.id, simpleStep: 3};
@@ -651,11 +652,16 @@ test('R32 ③ of an eco job is the paste panel: the request, a copy button, the 
   assert.ok(stepButtons(refused).length <= 12, `refused: ${stepButtons(refused).length}`);
   // The pages step shows the accepted outline and the way back.
   job.eco.errors = [];
+  job.input.storyShape = {version: 1, id: 'sound_adventure', name: '소리 모험형'};
+  job.input.stageCategory = {version: 1, id: 'home_town', name: '집·동네', from: 'topic'};
   const input = normalizeStoryInput(job.input);
   job.outline = ecoAcceptOutline(JSON.stringify(demoOutline(input)), job.input).outline;
   job.eco.step = 'pages';
   const pages = ecoRender(state, job, 3);
   assert.match(pages, /simple-eco-outline/);
+  assert.match(pages, /simple-shape-note/);
+  assert.match(pages, /이야기 모양 ·/);
+  assert.match(pages, /무대 · 집·동네/);
   assert.match(pages, /data-simple-action="eco-redo"/);
   assert.match(pages, /ECO MODE: there is no separate prose stage/);
   assert.ok(stepButtons(pages).length <= 12, `pages: ${stepButtons(pages).length}`);

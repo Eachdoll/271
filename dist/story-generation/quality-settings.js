@@ -17,6 +17,8 @@ import {
   rollbackQualityRules,
 } from "./quality-gates.js";
 import { buildBanList } from "../story-quality/dist/banList.js";
+import { STORY_SHAPE_OPTIONS } from "./story-shapes.js";
+import { STAGE_CATEGORIES, stageWorlds } from "./stage-categories.js";
 
 const esc = (value) =>
   String(value ?? "").replace(
@@ -91,13 +93,18 @@ export function renderQualityPatternSelector(
       input.storyQuality?.patternId ||
       (state ? quality(state).patternId : "auto") ||
       "auto",
-    patterns = state ? patternsFor(state) : list(qualityData?.plotPatterns);
-  return `<div class="field story-structure-choice"><label class="story-label" for="${esc(id)}">이야기 구성 패턴</label><select id="${esc(id)}" data-quality-pattern-choice ${disabled ? "disabled" : ""}><option value="auto" ${selected === "auto" ? "selected" : ""}>주제·최근 사용 패턴을 보고 자동 선택</option>${patterns.map((pattern) => `<option value="${esc(pattern.id)}" ${selected === pattern.id ? "selected" : ""}>${esc(pattern.name)}</option>`).join("")}</select><p class="story-note">반복 여정·누적·찾기·기다림·확장·소리 찾기의 구성 원리를 참고합니다. 사건과 문장은 새로 만들어요.</p></div>`;
+    // R33: the 28 story shapes; a parent's own pattern cards stay listed after them.
+    shapeIds = new Set(STORY_SHAPE_OPTIONS.map(([value]) => value)),
+    custom = (state ? list(quality(state).patterns) : []).filter((pattern) => pattern?.id && !shapeIds.has(pattern.id));
+  return `<div class="field story-structure-choice"><label class="story-label" for="${esc(id)}">이야기 모양</label><select id="${esc(id)}" data-quality-pattern-choice ${disabled ? "disabled" : ""}>${STORY_SHAPE_OPTIONS.map(([value, label]) => `<option value="${esc(value)}" ${selected === value ? "selected" : ""}>${esc(label)}</option>`).join("")}${custom.length ? `<optgroup label="직접 만든 패턴">${custom.map((pattern) => `<option value="${esc(pattern.id)}" ${selected === pattern.id ? "selected" : ""}>${esc(pattern.name)}</option>`).join("")}</optgroup>` : ""}</select><p class="story-note">${STORY_SHAPE_OPTIONS.length - 1}가지 모양 가운데 하나가 이야기의 불씨가 돼요(점검표가 아니에요). 자동은 주제에 맞는 모양을 고르고 최근 책 세 권의 모양은 피해요.</p></div>`;
 }
 function worldChoices(input = {}, state) {
   const defaults = state ? quality(state) : normalizeStoryQualitySettings(),
     snapshot = input.storyQuality || {};
   return {
+    // R33: the stage category above the world cards.
+    stageCategoryId:
+      input.stageCategoryId || snapshot.stageCategoryId || defaults.stageCategoryId || "auto",
     worldId:
       input.storyWorldId || snapshot.worldId || defaults.worldId || "drawer",
     season: input.storySeason || snapshot.season || defaults.season || "auto",
@@ -123,12 +130,33 @@ function worldHint(id) {
     );
   return `${world.name?.ko || world.name} · ${world.arrival || world.region || ""}${noSeason ? " · 계절이 없는 무대예요." : ""} 기존 재료의 인물·집·출입구 구조를 유지하고 무대의 분위기를 더해요.`;
 }
+/** R33: the world-card options of a stage (every card for 자동), the chosen card kept even outside it. */
+function worldOptionsHtml(stageCategoryId, worldId) {
+  const all = list(qualityData?.worldLibrary?.worlds),
+    worlds = stageWorlds(stageCategoryId, all),
+    chosen = all.find((world) => world.id === worldId);
+  if (chosen && !worlds.includes(chosen)) worlds.push(chosen);
+  return `<option value="drawer" ${worldId === "drawer" ? "selected" : ""}>기존 배경 서랍 사용</option>${Object.entries(
+    ERAS,
+  )
+    .map(([era, label]) => {
+      const rows = worlds.filter((world) => world.era === era);
+      return rows.length
+        ? `<optgroup label="${label}">${rows
+            .map(
+              (world) =>
+                `<option value="${esc(world.id)}" ${worldId === world.id ? "selected" : ""}>${esc(world.name?.ko || world.name || world.id)}</option>`,
+            )
+            .join("")}</optgroup>`
+        : "";
+    })
+    .join("")}`;
+}
 export function renderQualityWorldSelectors(
   input = {},
   { state, prefix = "", topicButton = true, disabled = false } = {},
 ) {
   const selected = worldChoices(input, state),
-    worlds = list(qualityData?.worldLibrary?.worlds),
     select = (field, label, values, value) =>
       `<label class="field"><span>${label}</span><select id="${esc(prefix + field)}" data-quality-world-field="${field}" ${disabled ? "disabled" : ""}>${Object.entries(
         values,
@@ -138,22 +166,7 @@ export function renderQualityWorldSelectors(
             `<option value="${id}" ${value === id ? "selected" : ""}>${name}</option>`,
         )
         .join("")}</select></label>`;
-  return `<section class="quality-world-selectors" data-quality-world-prefix="${esc(prefix)}"><div class="quality-world-grid"><label class="field quality-world-pick"><span>모험 무대</span><select id="${esc(prefix + "storyWorldId")}" data-quality-world-field="storyWorldId" ${disabled ? "disabled" : ""}><option value="drawer" ${selected.worldId === "drawer" ? "selected" : ""}>기존 배경 서랍 사용</option>${Object.entries(
-    ERAS,
-  )
-    .map(
-      ([era, label]) =>
-        `<optgroup label="${label}">${worlds
-          .filter((world) => world.era === era)
-          .map(
-            (world) =>
-              `<option value="${esc(world.id)}" ${selected.worldId === world.id ? "selected" : ""}>${esc(world.name?.ko || world.name || world.id)}</option>`,
-          )
-          .join("")}</optgroup>`,
-    )
-    .join(
-      "",
-    )}</select></label>${select("storySeason", "계절", SEASONS, selected.season)}${select("storyTimeOfDay", "시간", TIMES, selected.timeOfDay)}</div><p class="story-note" data-quality-world-hint>${esc(worldHint(selected.worldId))}</p><p class="story-note">엔진과 화풍은 현재 월드 설정을 사용합니다.</p>${topicButton ? `<button type="button" class="btn btn-outline btn-small" data-quality-action="world-topic" ${disabled || selected.worldId === "drawer" ? "disabled" : ""}>주제 아이디어 뽑기</button><span class="story-note" data-quality-topic-status role="status" aria-live="polite">${selected.worldId === "drawer" ? "모험 무대를 고르면 주제 아이디어를 뽑을 수 있어요." : ""}</span>` : ""}</section>`;
+  return `<section class="quality-world-selectors" data-quality-world-prefix="${esc(prefix)}"><div class="quality-world-grid"><label class="field quality-stage-pick"><span>무대</span><select id="${esc(prefix + "stageCategoryId")}" data-quality-world-field="stageCategoryId" ${disabled ? "disabled" : ""}><option value="auto" ${selected.stageCategoryId === "auto" ? "selected" : ""}>자동 · 주제대로</option>${STAGE_CATEGORIES.map((category) => `<option value="${esc(category.id)}" ${selected.stageCategoryId === category.id ? "selected" : ""}>${esc(category.name)}</option>`).join("")}</select></label><label class="field quality-world-pick"><span>세계 카드 · 무대 안에서</span><select id="${esc(prefix + "storyWorldId")}" data-quality-world-field="storyWorldId" ${disabled ? "disabled" : ""}>${worldOptionsHtml(selected.stageCategoryId, selected.worldId)}</select></label>${select("storySeason", "계절", SEASONS, selected.season)}${select("storyTimeOfDay", "시간", TIMES, selected.timeOfDay)}</div><p class="story-note" data-quality-world-hint>${esc(worldHint(selected.worldId))}</p><p class="story-note">엔진과 화풍은 현재 월드 설정을 사용합니다.</p>${topicButton ? `<button type="button" class="btn btn-outline btn-small" data-quality-action="world-topic" ${disabled || selected.worldId === "drawer" ? "disabled" : ""}>주제 아이디어 뽑기</button><span class="story-note" data-quality-topic-status role="status" aria-live="polite">${selected.worldId === "drawer" ? "모험 무대를 고르면 주제 아이디어를 뽑을 수 있어요." : ""}</span>` : ""}</section>`;
 }
 /** Explicit theme requests only. Rendering/changing a world never edits a written topic. */
 export async function storyWorldTopic(
@@ -511,6 +524,9 @@ function readSettings(form, state) {
     q.engines[role] = { engine: id, ...(model ? { model } : {}) };
   }
   q.patternId = form.querySelector("#quality-default-pattern")?.value || "auto";
+  // R33: the default stage (자동 is stored as "auto" and normalizes to no key).
+  q.stageCategoryId =
+    form.querySelector("#quality-default-stageCategoryId")?.value || "auto";
   q.worldId =
     form.querySelector("#quality-default-storyWorldId")?.value ||
     q.worldId ||
@@ -685,6 +701,8 @@ export function configureStoryQualityUI(context) {
         ...(state.settings.storyQuality || {}),
         ...next,
       };
+      // Auto normalizes to an absent key; do not restore the previous stage by merging.
+      if (!next.stageCategoryId) delete state.settings.storyQuality.stageCategoryId;
       if (api.save() === false)
         throw Error("글 품질 설정을 저장하지 못했어요.");
       api.render();
@@ -694,6 +712,17 @@ export function configureStoryQualityUI(context) {
     }
   });
   document.addEventListener("change", (event) => {
+    // R33: a stage pick narrows the world cards offered (the chosen card stays).
+    if (
+      event.target.dataset?.qualityWorldField === "stageCategoryId" &&
+      api.isParent()
+    ) {
+      const worldSelect = event.target
+        .closest(".quality-world-selectors")
+        ?.querySelector('[data-quality-world-field="storyWorldId"]');
+      if (worldSelect)
+        worldSelect.innerHTML = worldOptionsHtml(event.target.value, worldSelect.value || "drawer");
+    }
     if (
       event.target.dataset?.qualityWorldField === "storyWorldId" &&
       api.isParent()

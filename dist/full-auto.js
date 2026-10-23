@@ -14,6 +14,8 @@ import {
   preflightOutlineLocations,
   isHomeBackground,
 } from "./story-generation/pipeline.js";
+import { hasPromptDiet } from "./story-generation/prompt-diet.js";
+import { topicPlaceIds } from "./story-generation/topic-places.js";
 import {
   inspectAutoMaterialPlan,
   materializeAutoPlan,
@@ -162,7 +164,7 @@ export function fullAutoJobForBook(state, book) {
  * non-home place from the drawer in drawer order. Throws a Korean error when
  * the drawer cannot satisfy inspectAutoMaterialPlan.
  */
-export function selectionMaterialPlan(state, wizard = {}) {
+export function selectionMaterialPlan(state, wizard = {}, { lean = false } = {}) {
   const characters = active(state.characters),
     backgrounds = active(state.backgrounds),
     pinned = [...new Set(wizard.characterIds || [])],
@@ -170,30 +172,53 @@ export function selectionMaterialPlan(state, wizard = {}) {
       .map((id) => backgrounds.find((b) => b.id === id))
       .filter(Boolean),
     filled = [],
-    places = () => chosen.filter((b) => !isHomeBackground(b)).length;
-  if (!chosen.some(isHomeBackground)) {
-    const home = backgrounds.find(isHomeBackground);
-    if (home) {
-      chosen.push(home);
-      filled.push(home);
+    places = () => chosen.filter((b) => !isHomeBackground(b)).length,
+    errors = [];
+  if (lean) {
+    // R33 (diet drafts): the parent's picks are the places. Nothing picked:
+    // the places the topic names, else the home. Never a filler place.
+    if (!chosen.length) {
+      for (const id of topicPlaceIds(wizard.topic, backgrounds).slice(0, 2)) {
+        const background = backgrounds.find((b) => b.id === id);
+        if (background && !chosen.includes(background)) {
+          chosen.push(background);
+          filled.push(background);
+        }
+      }
+      if (!chosen.length) {
+        const home = backgrounds.find(isHomeBackground);
+        if (home) {
+          chosen.push(home);
+          filled.push(home);
+        }
+      }
     }
-  }
-  for (const background of backgrounds) {
-    if (places() >= 2) break;
-    if (!isHomeBackground(background) && !chosen.includes(background)) {
-      chosen.push(background);
-      filled.push(background);
+    if (!chosen.length)
+      errors.push("이야기에 쓸 장소를 배경 서랍에서 1곳 이상 골라 주세요.");
+  } else {
+    if (!chosen.some(isHomeBackground)) {
+      const home = backgrounds.find(isHomeBackground);
+      if (home) {
+        chosen.push(home);
+        filled.push(home);
+      }
     }
+    for (const background of backgrounds) {
+      if (places() >= 2) break;
+      if (!isHomeBackground(background) && !chosen.includes(background)) {
+        chosen.push(background);
+        filled.push(background);
+      }
+    }
+    if (!chosen.some(isHomeBackground))
+      errors.push(
+        "시작과 마무리에 사용할 집·방 배경을 배경 서랍에 추가해 주세요.",
+      );
+    if (places() < 2)
+      errors.push(
+        "집·방 외에 이야기 중간에 사용할 서로 다른 배경 2곳이 필요해요. 배경 서랍에 장소를 추가해 주세요.",
+      );
   }
-  const errors = [];
-  if (!chosen.some(isHomeBackground))
-    errors.push(
-      "시작과 마무리에 사용할 집·방 배경을 배경 서랍에 추가해 주세요.",
-    );
-  if (places() < 2)
-    errors.push(
-      "집·방 외에 이야기 중간에 사용할 서로 다른 배경 2곳이 필요해요. 배경 서랍에 장소를 추가해 주세요.",
-    );
   if (chosen.length > 5)
     errors.push("장소는 집·방을 포함해 최대 5곳까지 골라 주세요.");
   if (errors.length) throw Error(errors.join("\n"));
@@ -213,6 +238,7 @@ export function selectionMaterialPlan(state, wizard = {}) {
       backgrounds,
       pinnedCharacterIds: pinned,
       allowNew: false,
+      lean,
     });
   if (!checked.valid) throw Error(checked.errors.join("\n"));
   return { plan, filledBackgroundIds: filled.map((b) => b.id) };
@@ -251,8 +277,10 @@ export function createFullAutoJob(
   // Demo never asks a model to plan; the parent's picks become the plan.
   const isDemo = demo === true,
     mode = isDemo ? "selection" : planMode;
+  // R33: a new (diet) story keeps the parent's places as they are; the demo
+  // still fills a home and two places for its fixed story.
   if (mode === "selection")
-    selectionMaterialPlan(state, { ...wizard, characterIds: selected });
+    selectionMaterialPlan(state, { ...wizard, characterIds: selected }, { lean: !isDemo });
   // R12: the layout is decided once, here, and frozen in job.input.
   const prepared = inputFromWizard(
       state,
@@ -1179,7 +1207,7 @@ export async function runFullAuto(
       (opts) =>
         selectionPlan
           ? {
-              data: selectionMaterialPlan(state, job.wizard).plan,
+              data: selectionMaterialPlan(state, job.wizard, { lean: hasPromptDiet(job.input) && !job.demo }).plan,
               usage: { input: 0, output: 0, costUsd: 0, costUsdEstimated: 0 },
               meta: { stage: "materials", requests: 0, selection: true },
             }
@@ -1198,6 +1226,8 @@ export async function runFullAuto(
             backgrounds: active(state.backgrounds),
             pinnedCharacterIds: job.wizard.characterIds,
             allowNew: job.allowNew,
+            // R33: a diet story needs the places it uses, not a home plus two.
+            lean: hasPromptDiet(job.input) && !job.demo,
           },
           checked = inspectAutoMaterialPlan(result.data, catalog);
         if (!checked.valid) throw Error(checked.errors.join("\n"));
@@ -1323,6 +1353,8 @@ export async function runFullAuto(
         k1Policy: _freshK1,
         topicEndingPolicy: _freshTopicEnding,
         promptDiet: _freshDiet,
+        storyShape: _freshShape,
+        stageCategory: _freshStage,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1361,6 +1393,9 @@ export async function runFullAuto(
         ...(job.input?.promptDiet?.version === 1
           ? { promptDiet: clone(job.input.promptDiet) }
           : {}),
+        // R33: the job's own shape and stage (never re-chosen on resume).
+        ...(job.input?.storyShape ? { storyShape: clone(job.input.storyShape) } : {}),
+        ...(job.input?.stageCategory ? { stageCategory: clone(job.input.stageCategory) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

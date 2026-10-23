@@ -17,6 +17,8 @@ import { parseJsonLenient } from "./outline-normalize.js";
 import { isOpeningsInput } from "./opening-prose.js";
 import { renderCouncilRoom } from "./council-room.js";
 import { hasPromptPolicy, readerVocabularyLine } from "./prompt-policy.js";
+import { storyShapeDirection } from "./story-shapes.js";
+import { stageDirection } from "./stage-categories.js";
 import { headNoun } from "../story-quality/dist/banList.js";
 import {
   hasOrchestrationPolicy,
@@ -142,11 +144,19 @@ const customEnding = (input) =>
 /** One sentence every bot receives: the reader range first, then where the climax must land. */
 export function directionLine(input) {
   const card = readerCard(input),
-    parent = str(input?.direction, 200);
-  if (parent) return `${card.age} 독자. ${parent}`;
+    parent = str(input?.direction, 200),
+    // R33: on the diet the room also hears the story's shape and stage.
+    extra =
+      input?.promptDiet?.version === 1
+        ? [storyShapeDirection(input?.storyShape), stageDirection(input)]
+            .filter(Boolean)
+            .map((line) => ` ${line}${/[.!?]$/u.test(line) ? "" : "."}`)
+            .join("")
+        : "";
+  if (parent) return `${card.age} 독자. ${parent}${extra}`;
   const moral = str(input?.moral, 80),
     ending = customEnding(input) ? str(input.endingNote, 80) : "";
-  return `${card.age} 독자가 절정에서 ${moral ? `'${moral}'을(를) 말이 아니라 사건으로 느끼고` : "심은 물건이 다시 보이는 순간 '아!' 하고 반전을 스스로 알아차리고"}, ${ending ? `마지막은 부모가 적은 끝(${ending})에 닿는다` : "마지막에는 처음의 물건이나 말이 달라진 모습으로 돌아온다"}.`;
+  return `${card.age} 독자가 절정에서 ${moral ? `'${moral}'을(를) 말이 아니라 사건으로 느끼고` : "심은 물건이 다시 보이는 순간 '아!' 하고 반전을 스스로 알아차리고"}, ${ending ? `마지막은 부모가 적은 끝(${ending})에 닿는다` : "마지막에는 처음의 물건이나 말이 달라진 모습으로 돌아온다"}.${extra}`;
 }
 const sentenceRule = (spec, lang) => {
   if (!object(spec)) return "";
@@ -194,7 +204,7 @@ export function conditionBlock(input) {
     `끝맺음: ${custom ? `부모가 적은 끝 그대로 — ${str(input.endingNote, 200)}` : input?.endingType === "open" ? "집에서 차분히, 행동이나 말로 다음 모험을 암시" : "집에 돌아와 차분히"}`,
     `가치: ${moral || "없음"} — 말로 하지 않고 행동으로만 보여 준다`,
     `등장인물(고정, 새 인물 금지): ${cast.join(", ") || "없음"}`,
-    `장소(고정, 새 장소 금지): ${places.join(", ") || "없음"} — 처음은 집${custom ? "" : ", 끝도 집"}, 중간은 집 아닌 곳 2곳 이상`,
+    `장소(고정, 새 장소 금지): ${places.join(", ") || "없음"} — ${input?.promptDiet?.version === 1 ? `이야기가 향하는 곳에서 시작하고 필요한 곳만 간다${custom ? "" : ", 끝은 집"}` : `처음은 집${custom ? "" : ", 끝도 집"}, 중간은 집 아닌 곳 2곳 이상`}`,
     "금지: 무서운 장면·벌주기·비교·놀림·잔인함. 교훈을 말로 하지 않는다.",
     /^K[12]$/u.test(koLevel) && input?.language !== "en" && input?.promptDiet?.version !== 1
       ? "소리말 후렴: 핵심 물건이나 사건이 내는 의성어 한 줄을 비트 3곳에 둔다."

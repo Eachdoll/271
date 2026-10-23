@@ -70,6 +70,7 @@ test('R32 outline request: the lean head, the level, the outline rules, the inpu
 
 test('R32 outline answer: not JSON is named, a fenced answer is accepted with notes, a volunteered ledger is dropped, a wrong place is refused', () => {
   const state = setup(), job = ecoJob(state, 'K2'), input = normalizeStoryInput(job.input), outline = demoOutline(input);
+  job.input.storyShape = {version: 1, id: 'sound_adventure', name: '소리 모험형'};
   const bad = ecoAcceptOutline('I cannot help with that.', job.input);
   assert.equal(bad.ok, false);
   assert.match(bad.errors[0], /JSON/);
@@ -77,6 +78,7 @@ test('R32 outline answer: not JSON is named, a fenced answer is accepted with no
   assert.equal(ok.ok, true, JSON.stringify(ok.errors));
   assert.equal(ok.outline.plotContract, undefined);
   assert.equal(ok.outline.beats.length, outline.beats.length);
+  assert.deepEqual(ok.outline.storyShape, job.input.storyShape, 'eco preserves the frozen story shape like the paid path');
   assert.ok(ok.notes.length >= 1, 'soft rule findings become notes');
   const wrongPlace = {...outline, settings: outline.settings.map((s, i) => (i === 1 ? {...s, backgroundId: 'nowhere'} : s)), beats: outline.beats.map((b, i) => (i === 1 ? {...b, settingKey: 'nowhere'} : b))};
   const refused = ecoAcceptOutline(JSON.stringify(wrongPlace), job.input);
