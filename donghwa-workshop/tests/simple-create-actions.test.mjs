@@ -1015,10 +1015,11 @@ test('R11 ①→③ before any text checks the topic and the materials and fills
     // With 자동 추가 off, the parent's own picks must hold home and two places.
     fields = {};
     wizard.simpleStep = 2;
-    Object.assign(wizard, {allowNew: false, simplePicksTouched: true, backgroundIds: ['home', 'forest']});
+    // R33: with 자동 추가 off one picked place is enough; none at all is refused.
+    Object.assign(wizard, {allowNew: false, simplePicksTouched: true, backgroundIds: []});
     await goto(3);
     assert.equal(wizard.simpleStep, 2);
-    assert.match(toasts.at(-1).message, /집 1곳과 다른 장소 2곳/);
+    assert.match(toasts.at(-1).message, /장소를 1곳 이상/);
     await click('next');
     assert.equal(wizard.simpleStep, 2);
     wizard.backgroundIds.push('beach');

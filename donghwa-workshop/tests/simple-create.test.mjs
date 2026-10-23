@@ -410,10 +410,11 @@ test('R11 access matrix: no job, a job without text, a held job, editing and ⑤
   assert.deepEqual(open(rows(strict)), [1, 2, 3], 'untouched picks: home + two recommended places fill them first');
   assert.deepEqual(strict.backgroundIds, [], 'the access check never changes the wizard');
   assert.equal(strict.simplePickedFor, undefined);
-  assert.deepEqual(open(rows({...strict, topic: '달에 놀러 간 날'})), [1, 2], 'one recommended place is not enough');
+  // R33: one place is enough — the story goes where the topic puts it.
+  assert.deepEqual(open(rows({...strict, topic: '달에 놀러 간 날'})), [1, 2, 3], 'one recommended place is enough');
   const touched = {...strict, simplePicksTouched: true};
   assert.deepEqual(open(rows(touched)), [1, 2]);
-  assert.match(rows(touched)[2].reason, /집 1곳과 다른 장소 2곳/);
+  assert.match(rows(touched)[2].reason, /장소를 1곳 이상/);
   // A job without text (stopped before the text): ①② frozen, ③ status, ④⑤ closed.
   const paused = heldJob(state, 'auto-paused', {text: false});
   const bound = {...structuredClone(wizard), simpleJobId: paused.id, simpleStep: 3};

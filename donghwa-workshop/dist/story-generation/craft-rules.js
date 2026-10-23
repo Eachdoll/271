@@ -69,11 +69,11 @@ export function castSpreadRule(input) {
 }
 /** With three or more places supplied, the middle beats use three (four in a 16-page book). */
 export function placeSpreadRule(input) {
+  // R33: on the diet the places follow the story; no visiting quota at all.
+  if (dieted(input)) return "";
   const locations = locationCount(input),
     want = Math.min(locations, Number(input?.pageCount) >= 16 ? 4 : 3);
   if (want < 3) return "";
-  if (dieted(input))
-    return `The parent chose ${locations} places besides home; let the story visit ${want} of them where it naturally goes.`;
   return `PLACES (${locations} non-home locations supplied): the middle beats visit at least ${want} distinct non-home locations, each visit changing what the protagonist knows or has; return to a place only when the story needs it.`;
 }
 /** Outline stage (app path, and the quality path's canon). */

@@ -1656,7 +1656,7 @@ function createPage() {
       )
       .join(
         "",
-      )}</div>${renderBookVariantSelectors(state, w)}<label class="form-label">이야기가 펼쳐질 장소 <span class="count">선호 장소 최대 5곳(집 포함) · 집과 다른 장소 2곳 이상 사용</span></label><div class="chips">${activeBackgrounds(
+      )}</div>${renderBookVariantSelectors(state, w)}<label class="form-label">이야기가 펼쳐질 장소 <span class="count">선호 장소 최대 5곳(집 포함) · 이야기가 향하는 곳 위주로</span></label><div class="chips">${activeBackgrounds(
       state,
     )
       .map(
@@ -1735,6 +1735,7 @@ function syncWizard() {
       "series",
       "worldMemo",
       "storyQualityPatternId",
+      "stageCategoryId",
       "storyWorldId",
       "storySeason",
       "storyTimeOfDay",

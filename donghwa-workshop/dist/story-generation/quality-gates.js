@@ -1044,6 +1044,8 @@ export function approvedBookRecord(book) {
     briefs = briefRows(book.sceneBriefs),
     previous = book.usedElements || {};
   const patternId =
+    // R33: a diet book's outline names its story shape.
+    book.outline.storyShape?.id ||
     quality.patternId ||
     seed.patternId ||
     plan.pattern ||

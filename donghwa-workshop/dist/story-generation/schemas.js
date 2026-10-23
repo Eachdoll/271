@@ -682,6 +682,8 @@ export const SOFT_OUTLINE_CODES = Object.freeze(
     "character_name_missing",
     "home_start_end",
     "middle_locations",
+    // R33: the topic's place never used (diet drafts).
+    "topic_place",
     "refrain_missing",
     "arc_turn_planted",
   ]),

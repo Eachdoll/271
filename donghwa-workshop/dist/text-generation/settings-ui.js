@@ -98,6 +98,10 @@ export function normalizeStoryQualitySettings(value = {}) {
     timeOfDay,
     variantChance,
     patternId: text(source.patternId, 100) || "auto",
+    // R33: the default stage category; 자동 stores no key (older settings unchanged).
+    ...(text(source.stageCategoryId, 40) && source.stageCategoryId !== "auto"
+      ? { stageCategoryId: text(source.stageCategoryId, 40) }
+      : {}),
     rules: list(source.rules, 7, 1000),
     banExamples: list(source.banExamples, 4, 1000),
     banWindow: Math.min(

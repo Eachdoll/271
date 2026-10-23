@@ -35,7 +35,7 @@ test('world selection never replaces a typed topic, image engine, style or custo
 test('world labels and hints are escaped, while disabled selectors stay read only',()=>{
  const malicious=structuredClone(qualityData);malicious.worldLibrary.worlds[0].name.ko='<img src=x onerror=bad>';malicious.worldLibrary.worlds[0].arrival='<script>bad</script>';
  configureStoryQualityUI({qualityData:malicious,getState:()=>state,isParent:()=>true});
- try{const html=renderQualityWorldSelectors({storyWorldId:malicious.worldLibrary.worlds[0].id},{state,disabled:true});assert.doesNotMatch(html,/<img|<script>/);assert.equal((html.match(/data-quality-world-field="[^"]+" disabled/g)||[]).length,3);assert.match(html,/&lt;script/);}
+ try{const html=renderQualityWorldSelectors({storyWorldId:malicious.worldLibrary.worlds[0].id},{state,disabled:true});assert.doesNotMatch(html,/<img|<script>/);assert.equal((html.match(/data-quality-world-field="[^"]+" disabled/g)||[]).length,4,'R33: stage, world card, season, time');assert.match(html,/&lt;script/);}
  finally{configureStoryQualityUI({qualityData,getState:()=>state,isParent:()=>true,save:()=>true,render:()=>{},toast:()=>{},setWizardTopic:value=>{topic=value;topicChanges++;}});}
 });
 

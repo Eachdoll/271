@@ -92,6 +92,12 @@ export function ecoJobInit(job) {
   if (!job || job.book || (job.usage?.calls || []).length)
     throw Error("에코 모드는 새 이야기에서만 시작할 수 있어요.");
   job.input = ecoInput(job.input);
+  // R33: like the selection plan, the parent's picks are the story's places.
+  const picked = Array.isArray(job.input.preferredBackgroundIds) ? job.input.preferredBackgroundIds : [];
+  if (picked.length && Array.isArray(job.input.backgrounds)) {
+    const kept = job.input.backgrounds.filter((b) => picked.includes(b?.id));
+    if (kept.length) job.input.backgrounds = kept;
+  }
   delete job.councilReview;
   job.eco = { version: ECO_VERSION, step: "outline", errors: [], notes: [] };
   job.status = ECO_STATUS;
@@ -175,6 +181,9 @@ export function ecoAcceptOutline(reply, source) {
     if (error instanceof StoryValidationError) return fail(error.violations);
     throw error;
   }
+  // R33: the shape and stage the request asked for, kept with the outline.
+  if (input.storyShape) accepted.storyShape = structuredClone(input.storyShape);
+  if (input.stageCategory) accepted.stageCategory = structuredClone(input.stageCategory);
   return {
     ok: true,
     outline: accepted,

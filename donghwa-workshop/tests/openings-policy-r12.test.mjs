@@ -635,6 +635,9 @@ function legacyInputOf(state, job) {
   delete prepared.input.k1Policy;
   delete prepared.input.topicEndingPolicy;
   delete prepared.input.promptDiet;
+  // R33: the shape and stage are the job's own too (a pre-R33 job gains none).
+  delete prepared.input.storyShape;
+  delete prepared.input.stageCategory;
   return {...prepared.input, backgrounds: prepared.input.backgrounds.filter(b => job.plan.backgroundIds.includes(b.id)), preferredBackgroundIds: clone(job.plan.backgroundIds), specs: clone(job.readingLevels.specs), bookId: job.bookId, storyDate: job.input.storyDate || job.createdAt};
 }
 test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the byte-identical page input, with openings on', async () => {

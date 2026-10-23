@@ -23,6 +23,9 @@
 import { hasShortSentences, shortSentencePromptLine } from "../short-sentences.js";
 import { compactCanonCharacter, compactCanonBackground } from "./prompt-policy.js";
 import { buildStoryWords } from "../story-reading-context.js";
+import { topicPlaceNames } from "./topic-places.js";
+import { storyShapeRule } from "./story-shapes.js";
+import { stageRule } from "./stage-categories.js";
 
 export const PROMPT_DIET_VERSION = 1;
 export const promptDiet = () => ({ version: PROMPT_DIET_VERSION });
@@ -120,12 +123,14 @@ export function leanVisibleInput(input, stage = "outline") {
 
 /** What a good outline of this kind feels like: a few lines, no counters. */
 export function leanOutlineRules(input, { count, attempts, k1 = false, custom = false } = {}) {
+  // R33: the drawer places the topic names, by name, so the story opens there.
+  const topicPlaces = topicPlaceNames(input?.topic, list(input?.backgrounds)).slice(0, 3).map((name) => str(name, 40));
   const shape = k1
     ? "A small, warm want and ONE small obstacle a three-year-old knows (being shy, waiting, a little mishap); solved together or with a little help; ends in joy. No villain, no danger, no tears, no mystery and no hidden clue — the 'turn' is simply the small change of heart or the moment play begins, and 'twist' names it in one plain sentence."
     : "Give the protagonist something they want and a reason it matters to them; let them try in ways that change what happens next; let the story turn at a moment the child can see; end warmly and a little differently from how it began. Surprise is welcome; a formula is not. Humor comes from what the characters do.";
   return `Design the StoryOutline (not page text) with ${count} beats for ${input.pageCount} pages, indexes 1..${count}, in the order setup → want → ${attempts} attempt beat(s) → turn → resolution → close. Each beat summary is two or three concrete sentences a picture could show; every beat changes the situation.
-${shape}
-Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. ${custom ? "The first beat uses a home ID from homeBackgroundIds; the last beat happens wherever the parent's ending puts it." : "The first and last beat use the same home ID from homeBackgroundIds."} Middle beats go out to other supplied places (two or more different ones when there are enough).
+${[shape, storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
+Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. The story happens where the topic puts it${topicPlaces.length ? ` — here ${topicPlaces.join(", ")}` : ""}: open there (a home ID only when the topic begins at home or names no place) and stay as long as the story wants; move to another supplied place only when the story needs it, never to show every place in the drawer. ${custom ? "The last beat happens wherever the parent's ending puts it." : "The last beat ends at a home ID (the parent chose a calm ending at home)."}
 People: beat.characters are supplied IDs; every chosen character appears by name somewhere and does something of their own. Use the supplied topic keywords.
 Return 3 Korean title candidates, a one-sentence logline, want and problem, the twist in one sentence, 3–5 new Korean words, new English words, one emotion per beat, one setting record per beat. newWordsEn are the everyday English for the same things, games and sounds the Korean names (손수건 → handkerchief, 까꿍 → peekaboo), never a different object or a shortened word. A refrain is optional (one short line, at most 3 beats) — only if the story naturally has one.`;
 }
@@ -192,7 +197,7 @@ Write it the way a good picture book sounds read aloud: concrete things a child 
  * structure or safety. Drafts without the policy are unchanged.
  */
 const sceneLines = (custom) =>
-  `scene.who = selected character IDs; scene.where = the beat's supplied background ID (a home ID at the beginning${custom ? "" : " and end"}); scene.action = what the picture shows, in English; scene.emotion = one English word; timeOfDay as the story has it; props = an English list. Use only supplied wardrobe IDs: variantByCharacter maps selected character IDs to an allowed variant or null, honouring per-book defaults and page ranges. isRefrainPage is true only where the refrain text actually appears. cover.sceneAction = the cover picture, in English.`;
+  `scene.who = selected character IDs; scene.where = the beat's supplied background ID (its settingKey${custom ? "" : "; a home ID at the end"}); scene.action = what the picture shows, in English; scene.emotion = one English word; timeOfDay as the story has it; props = an English list. Use only supplied wardrobe IDs: variantByCharacter maps selected character IDs to an allowed variant or null, honouring per-book defaults and page ranges. isRefrainPage is true only where the refrain text actually appears. cover.sceneAction = the cover picture, in English.`;
 /** The page book's pagination request on the diet: structure and shape, no quotas. */
 export function leanPaginationRules(input, { custom = false } = {}) {
   return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.

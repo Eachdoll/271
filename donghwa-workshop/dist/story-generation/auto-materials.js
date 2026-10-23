@@ -88,6 +88,8 @@ export function inspectAutoMaterialPlan(
     backgrounds = [],
     pinnedCharacterIds = [],
     allowNew = true,
+    // R33: a diet story needs the places it uses (one at least), not a home plus two.
+    lean = false,
   } = {},
 ) {
   const errors = [],
@@ -159,10 +161,15 @@ export function inspectAutoMaterialPlan(
     .filter(Boolean)
     .concat(rows(plan.newBackgrounds).filter(Boolean));
   if (selected.length > 5) errors.push("사용할 배경은 최대 5곳이에요.");
-  if (!selected.some(isHomeBackground))
-    errors.push("출발과 귀가에 사용할 집·방 배경을 골라 주세요.");
-  if (selected.filter((b) => !isHomeBackground(b)).length < 2)
-    errors.push("집·방 외에 주제에 맞는 서로 다른 배경 2곳이 필요해요.");
+  // R33 (diet drafts, catalog.lean): the places the story needs, one at least.
+  if (lean === true) {
+    if (!selected.length) errors.push("이야기에 쓸 장소를 1곳 이상 골라 주세요.");
+  } else {
+    if (!selected.some(isHomeBackground))
+      errors.push("출발과 귀가에 사용할 집·방 배경을 골라 주세요.");
+    if (selected.filter((b) => !isHomeBackground(b)).length < 2)
+      errors.push("집·방 외에 주제에 맞는 서로 다른 배경 2곳이 필요해요.");
+  }
   return { valid: errors.length === 0, errors: [...new Set(errors)] };
 }
 export function materializeAutoPlan(

@@ -108,11 +108,12 @@ test('R23 PLACES counts the places the parent chose; without chosen places or wi
   assert.doesNotMatch(craftOutlineRules(input), /PLACES \(/u, 'one chosen non-home place: no spread rule');
   // R31b: a new draft is on the prompt diet (one soft sentence); the PLACES command is for drafts without it.
   const three = normalizeStoryInput({...input, preferredBackgroundIds: ['home', 'forest', 'moon', 'beach']});
-  assert.match(craftOutlineRules(three), /The parent chose 3 places besides home; let the story visit 3 of them/u);
+  // R33: on the diet the places follow the story — no visiting quota at all.
+  assert.doesNotMatch(craftOutlineRules(three), /PLACES|places besides home/u);
   const {promptDiet, ...undieted} = three;
   assert.match(craftOutlineRules(normalizeStoryInput(undieted)), /PLACES \(3 non-home locations supplied\): the middle beats visit at least 3 distinct/u);
   assert.match(craftOutlineRules(legacyOf(input)), /PLACES \(4 non-home locations supplied\): the middle beats visit at least 4 distinct/u, 'legacy counts the drawer, byte for byte');
-  assert.match(craftOutlineRules(normalizeStoryInput({...input, preferredBackgroundIds: []})), /The parent chose 4 places besides home/u);
+  assert.doesNotMatch(craftOutlineRules(normalizeStoryInput({...input, preferredBackgroundIds: []})), /PLACES|places besides home/u, 'R33: the diet has no place quota either way');
 });
 
 test('R23 the picture request of a policy book: three-line event, two pages of continuity, two-sentence lock; a legacy book is unchanged', () => {

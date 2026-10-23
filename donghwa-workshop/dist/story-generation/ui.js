@@ -43,7 +43,9 @@ import { withPageRhythm } from "../page-rhythm.js";
 import { withShortSentences } from "../short-sentences.js";
 import { k1Policy, isK1Draft } from "./k1-book.js";
 import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
-import { promptDiet } from "./prompt-diet.js";
+import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
+import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
+import { stageFor, stageById } from "./stage-categories.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -451,15 +453,26 @@ export function renderStoryCoherence(report, { dirty = false } = {}) {
   return `<details class="story-card story-coherence" ${failed && !dirty ? "open" : ""}><summary>플롯 일관성 검사 <span class="story-check-badge ${failed || dirty ? "fail" : ""}">${dirty ? "수정 후 재검사 필요" : pending ? "수정 내용 검사 이어가기" : failed ? "연결 수정 필요" : "검사 완료"}</span></summary><p class="story-note">목표·원인과 결과·인물과 소품의 상태·한영 사건 일치를 검사합니다.${dirty ? " 그림 생성 전에 최신 내용으로 다시 검사합니다." : hard ? " 오류가 해결되어야 그림 단계로 진행할 수 있어요." : ""}</p>${issues.length ? `<ol class="story-coherence-issues">${issues.map((issue) => `<li><strong>${issue.pageNo ? `${Number(issue.pageNo)}쪽 · ` : ""}${issue.beatIndex ? `비트 ${Number(issue.beatIndex)} · ` : ""}${issue.language ? `${esc({ ko: "한글", en: "English", both: "한영" }[issue.language] || issue.language)} · ` : ""}${esc({ goal_drift: "주인공 목표", causal_gap: "사건의 원인과 결과", unearned_solution: "해결 과정", prop_state: "소품 상태", state_conflict: "인물·소품 상태", unsupported_event: "승인한 사건 유지", text_scene_conflict: "글과 그림 장면 일치", character_state: "인물 상태", knowledge_state: "알게 된 정보", bilingual_mismatch: "한영 사건 일치", setup_payoff: "단서 심기와 회수", scene_mismatch: "글과 그림 장면 일치" }[issue.code] || "사건 연결 확인")}</strong>${issue.evidence ? `<blockquote>${esc(issue.evidence)}</blockquote>` : ""}${issue.suggestion ? `<p>${esc(issue.suggestion)}</p>` : ""}</li>`).join("")}</ol>` : pending ? '<p class="story-note">완료한 수정은 보관했어요. 최신 글의 검사를 이어서 진행해 주세요.</p>' : '<p class="story-note">발견된 플롯 연결 오류가 없습니다.</p>'}</details>`;
 }
 
+/** R33: the shape and stage an outline was written to (diet drafts). */
+function shapeStageNote(outline) {
+  const shape = outline?.storyShape,
+    stage = outline?.stageCategory;
+  const rows = [
+    shape?.name ? `이야기 모양 · ${esc(shape.name)}${shapeById(shape.id)?.shape ? ` — ${esc(shapeById(shape.id).shape)}` : ""}` : "",
+    stage?.name ? `무대 · ${esc(stage.name)}${stageById(stage.id)?.ko ? ` — ${esc(stageById(stage.id).ko)}` : ""}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
+  ].filter(Boolean);
+  return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
+}
 export function renderStoryQualityPlan(draft) {
   const metadata = draft.outline?.quality,
-    plan = draft.outline?.plan;
-  if (!metadata && !plan) return "";
+    plan = draft.outline?.plan,
+    note = shapeStageNote(draft.outline);
+  if (!metadata && !plan) return note ? `<section class="story-card quality-seed"><strong>이야기 모양과 무대</strong>${note}</section>` : "";
   const chips = String(metadata?.seedSummary || "")
       .split(" · ")
       .filter(Boolean),
     labels = ["심은 물건", "반전", "생물"];
-  return `<section class="story-card quality-seed"><strong>이번 이야기 재료</strong><div class="quality-seed-chips">${chips.map((text, index) => `<span>${labels[index] ? `${labels[index]} · ` : ""}${esc(text)}</span>`).join("")}</div>${!draft.demo ? button("재료 다시 뽑기", "reroll-quality-seed") : ""}${
+  return `<section class="story-card quality-seed"><strong>이번 이야기 재료</strong>${note}<div class="quality-seed-chips">${chips.map((text, index) => `<span>${labels[index] ? `${labels[index]} · ` : ""}${esc(text)}</span>`).join("")}</div>${!draft.demo ? button("재료 다시 뽑기", "reroll-quality-seed") : ""}${
     plan
       ? `<details class="quality-plan"><summary>작가 메모 · 구성 계획</summary><dl class="story-causal-list">${[
           ["pattern", "패턴"],
@@ -470,7 +483,7 @@ export function renderStoryQualityPlan(draft) {
         ]
           .map(
             ([key, label]) =>
-              `<dt>${label}</dt><dd>${esc(key === "pattern" ? { journey_repeat: "반복 여정형", accumulate: "누적형", search_wrong_answers: "찾기-오답형", waiting: "기다림형", escalation: "경쟁-확장형", mystery_sound: "소리의 정체형" }[plan[key]] || plan[key] : Array.isArray(plan[key]) ? plan[key].map((value) => ({ wrong_place: "장소가 맞지 않음", wrong_method: "방법이 맞지 않음", interrupted: "작은 방해" })[value] || value).join(" → ") : plan[key] || "—")}</dd>`,
+              `<dt>${label}</dt><dd>${esc(key === "pattern" ? storyShapeLabel(plan[key]) || plan[key] : Array.isArray(plan[key]) ? plan[key].map((value) => ({ wrong_place: "장소가 맞지 않음", wrong_method: "방법이 맞지 않음", interrupted: "작은 방해" })[value] || value).join(" → ") : plan[key] || "—")}</dd>`,
           )
           .join("")}</dl></details>`
       : ""
@@ -816,6 +829,31 @@ function drawerBackgrounds(state, existing = []) {
  * and the openings prose length policy; it accepts only 12 or 16 printed pages and
  * throws before any paid call otherwise (it never snaps silently).
  */
+/**
+ * R33: the story's shape (이야기 모양), chosen once for a new draft — the
+ * parent's pick when it names a shape, else the topic's best fit skipping the
+ * latest approved books' shapes — and frozen in the input.
+ */
+export function storyShapeFor(state, wizard = {}, { level = "K2" } = {}) {
+  const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
+  return storyShapeRef(
+    chooseStoryShape(wizard.topic, {
+      pick: wizard.storyShapeId || wizard.storyQualityPatternId || defaults.patternId || "auto",
+      level,
+      recentIds: recentShapeIds(storyQualityBookRecords(state)),
+      seed: `${String(wizard.topic || "").trim()}:${Number(wizard.qualitySeedOffset) || 0}`,
+    }),
+  );
+}
+/** R33: the stage of a new draft — the parent's pick, else the chosen world card's category, else the topic's. */
+export function draftStageFor(state, wizard = {}) {
+  const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
+  return stageFor({
+    pick: wizard.stageCategoryId || defaults.stageCategoryId || "auto",
+    worldId: wizard.storyWorldId || defaults.worldId || "drawer",
+    topic: wizard.topic,
+  });
+}
 export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
   if (layout !== "pages" && layout !== "openings")
     throw new Error("책 구성은 pages 또는 openings여야 해요.");
@@ -881,6 +919,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       previous.stylePresetId ||
       world.stylePresetId;
   }
+  // R33: the stage of this draft (the pick, the chosen world card's category, or the topic's).
+  const stageCategory = draftStageFor(state, wizard);
   return {
     input: {
       characters,
@@ -916,6 +956,10 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
           normalizeStoryQualitySettings(state.settings?.storyQuality)
             .timeOfDay ||
           "auto",
+        // R33: the parent's stage pick (a chosen one only; auto adds no key).
+        ...(wizard.stageCategoryId && wizard.stageCategoryId !== "auto"
+          ? { stageCategoryId: String(wizard.stageCategoryId).slice(0, 40) }
+          : {}),
         approvedBooks: storyQualityBookRecords(state),
       },
       qualitySeedOffset: Math.min(
@@ -985,6 +1029,9 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       promptPolicy: promptPolicy(),
       // R31b: lean requests — no counters, no spec JSON, no plot formula.
       promptDiet: promptDiet(),
+      // R33: the story's shape and stage, chosen once here and frozen with the draft.
+      storyShape: storyShapeFor(state, wizard, { level: readingLevels.koreanLevel }),
+      ...(stageCategory ? { stageCategory } : {}),
     },
     readingLevels,
     world,
@@ -1281,6 +1328,8 @@ const EMOTIONS = [
   "뿌듯함",
 ];
 export function selectableBeatBackgrounds(input, index, total) {
+  // R33: a diet draft has no usual place per beat; every drawer place is usual.
+  if (hasPromptDiet(input)) return [...(input.backgrounds || [])];
   return (input.backgrounds || []).filter((background) =>
     index === 0 || index === total - 1
       ? isHomeBackground(background)
@@ -2828,11 +2877,18 @@ function handleChange(event) {
         storyWorldId: "worldId",
         storySeason: "season",
         storyTimeOfDay: "timeOfDay",
+        stageCategoryId: "stageCategoryId",
       }[event.target.dataset.qualityWorldField];
       if (key) {
         s.draft.input.storyQuality[key] = event.target.value;
         s.draft.wizard[event.target.dataset.qualityWorldField] =
           event.target.value;
+        // R33: a diet draft's frozen stage follows the stage and world picks.
+        if (hasPromptDiet(s.draft.input)) {
+          const stage = draftStageFor(s.state, s.draft.wizard);
+          if (stage) s.draft.input.stageCategory = stage;
+          else delete s.draft.input.stageCategory;
+        }
         s.draft.qualityCheckpoint = null;
         s.draft.councilCheckpoint = null;
         saveDraft(s);
@@ -2842,6 +2898,11 @@ function handleChange(event) {
     if (event.target.matches?.("[data-quality-pattern-choice]")) {
       s.draft.input.storyQuality.patternId = event.target.value;
       s.draft.wizard.storyQualityPatternId = event.target.value;
+      // R33: a diet draft's frozen shape follows the pick.
+      if (hasPromptDiet(s.draft.input))
+        s.draft.input.storyShape = storyShapeFor(s.state, s.draft.wizard, {
+          level: s.draft.readingLevels?.koreanLevel,
+        });
       s.draft.qualityCheckpoint = null;
       s.draft.councilCheckpoint = null;
       saveDraft(s);
