@@ -184,6 +184,7 @@ export function ecoAcceptOutline(reply, source) {
   // R33: the shape and stage the request asked for, kept with the outline.
   if (input.storyShape) accepted.storyShape = structuredClone(input.storyShape);
   if (input.stageCategory) accepted.stageCategory = structuredClone(input.stageCategory);
+  if (input.storyShape) accepted.storyShape = clone(input.storyShape);
   return {
     ok: true,
     outline: accepted,

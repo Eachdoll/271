@@ -652,11 +652,16 @@ test('R32 ③ of an eco job is the paste panel: the request, a copy button, the 
   assert.ok(stepButtons(refused).length <= 12, `refused: ${stepButtons(refused).length}`);
   // The pages step shows the accepted outline and the way back.
   job.eco.errors = [];
+  job.input.storyShape = {version: 1, id: 'sound_adventure', name: '소리 모험형'};
+  job.input.stageCategory = {version: 1, id: 'home_town', name: '집·동네', from: 'topic'};
   const input = normalizeStoryInput(job.input);
   job.outline = ecoAcceptOutline(JSON.stringify(demoOutline(input)), job.input).outline;
   job.eco.step = 'pages';
   const pages = ecoRender(state, job, 3);
   assert.match(pages, /simple-eco-outline/);
+  assert.match(pages, /simple-shape-note/);
+  assert.match(pages, /이야기 모양 ·/);
+  assert.match(pages, /무대 · 집·동네/);
   assert.match(pages, /data-simple-action="eco-redo"/);
   assert.match(pages, /ECO MODE: there is no separate prose stage/);
   assert.ok(stepButtons(pages).length <= 12, `pages: ${stepButtons(pages).length}`);
