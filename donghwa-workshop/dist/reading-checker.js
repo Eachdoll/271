@@ -286,6 +286,17 @@ const EN_SOUND_WORDS = new Set([
   "ouch",
   "shh",
 ]);
+/** R35: the tokens of a sentence with each run of a repeated token (따각, 따각 / tap, tap, tap) kept once. */
+export function withoutSoundRuns(tokens) {
+  const out = [];
+  let last = null;
+  for (const token of tokens) {
+    const key = String(token).toLowerCase();
+    if (key !== last) out.push(token);
+    last = key;
+  }
+  return out;
+}
 /** A transparent sound-word/repeated-syllable heuristic, not morphological analysis. */
 export function isSoundOnlySentence(text, levelId, language) {
   if (language === "ko") {
@@ -397,16 +408,25 @@ function unitLengthRules(metrics, spec, lang = "ko") {
       band,
     });
   const exempt = new Set(metrics.minimumLengthExemptSentenceIndices),
-    lengths = metrics.wordsPerSentence.filter((_, index) => !exempt.has(index)),
+    // R35 그림책 결: the lengths with sound runs counted once (the metric is there for a picture-led spec only).
+    lengths = (metrics.lengthsWithoutSoundRuns || metrics.wordsPerSentence).filter((_, index) => !exempt.has(index)),
     mean = lengths.length
       ? round(lengths.reduce((sum, value) => sum + value, 0) / lengths.length)
       : null,
-    slack = number(tol.meanSlack, 0.5);
+    slack = number(tol.meanSlack, 0.5),
+    // R35 그림책 결: one short line is the point — the mean is judged only from
+    // a few sentences on and only against its upper bound; a long sentence is
+    // blocked only past the hard cap; the share of long sentences is a book note.
+    picture = spec.pictureLed?.version === 1,
+    meanJudged =
+      !picture || lengths.length >= number(spec.pictureLed.meanFromSentences, 3);
   // R31e: English is never asked to lengthen its sentences (short lines read
   // easily); only a long mean blocks there.
   if (
     mean != null &&
-    ((lang !== "en" && mean < wps.min - slack) || mean > wps.max + slack)
+    meanJudged &&
+    ((lang !== "en" && !picture && mean < wps.min - slack) ||
+      mean > wps.max + slack)
   )
     blocking.push({
       code: "unit-mean-length",
@@ -420,7 +440,7 @@ function unitLengthRules(metrics, spec, lang = "ko") {
     // ceil(n/3) long sentences are fine; the epsilon keeps 12 × (1/3) at 4.
     allowedLong = Math.ceil(n * number(tol.longShareCeil, 1 / 3) - 1e-9),
     hardLimit = wps.max + number(tol.longOver, 3);
-  if (long > allowedLong || longest > hardLimit)
+  if ((!picture && long > allowedLong) || longest > hardLimit)
     blocking.push({
       code: "unit-long-sentences",
       language: lang,
@@ -430,9 +450,11 @@ function unitLengthRules(metrics, spec, lang = "ko") {
       longest,
       limit: wps.max,
       hardLimit,
+      ...(picture ? { pictureLed: true } : {}),
     });
   const offSentences = lengths.filter(
-      (value) => (lang !== "en" && value < wps.min) || value > wps.max,
+      (value) =>
+        (lang !== "en" && !picture && value < wps.min) || value > wps.max,
     ).length,
     countOff = !rhythmBand(spec) && (n < range.min || n > range.max),
     chars = spec.advisoryCharsPerPage,
@@ -582,10 +604,13 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
     spec.vocabularyAvailable = options.koVocabulary.length > 0;
   }
   // R31a: a K1 short-sentence spec also ends a sentence at an ellipsis.
+  // R35 그림책 결: so does a picture-led Korean spec (a "…" pause is read as a beat).
   const shortPolicy = lang === "ko" && hasShortSentences(spec),
-    split = shortPolicy
-      ? splitAtEllipsis(splitSentences(text))
-      : splitSentences(text),
+    picture = spec.pictureLed?.version === 1,
+    split =
+      shortPolicy || (picture && lang === "ko")
+        ? splitAtEllipsis(splitSentences(text))
+        : splitSentences(text),
     // R31e: a lean English spec counts a speech tag with its quote.
     sentences =
       lang === "en" && spec.dialogueTags === true
@@ -624,6 +649,10 @@ export function analyzeEstimatedPage(text, levelSpec, options = {}) {
     minimumLengthExemptSentenceIndices: sentences.flatMap((sentence, index) =>
       isSoundOnlySentence(sentence, spec.id, lang) ? [index] : [],
     ),
+    // R35 그림책 결: a run of the same sound word counts once for the length rules.
+    ...(picture
+      ? { lengthsWithoutSoundRuns: sentences.map((sentence) => withoutSoundRuns(tokenize(sentence)).length) }
+      : {}),
     averageWordsPerSentence: round(count / Math.max(1, sentences.length)),
     ...(shortPolicy
       ? { rhythmSentenceIndices: rhythmSentenceIndices(sentences, lengths, spec) }

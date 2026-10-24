@@ -1356,6 +1356,7 @@ export async function runFullAuto(
         storyShape: _freshShape,
         stageCategory: _freshStage,
         storyVoice: _freshVoice,
+        bookFormat: _freshFormat,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1398,6 +1399,8 @@ export async function runFullAuto(
         ...(job.input?.storyShape ? { storyShape: clone(job.input.storyShape) } : {}),
         ...(job.input?.stageCategory ? { stageCategory: clone(job.input.stageCategory) } : {}),
         ...(job.input?.storyVoice ? { storyVoice: clone(job.input.storyVoice) } : {}),
+        // R35: the job's own format; its frozen specs below already carry it.
+        ...(job.input?.bookFormat ? { bookFormat: clone(job.input.bookFormat) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

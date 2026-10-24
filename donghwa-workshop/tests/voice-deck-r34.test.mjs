@@ -107,6 +107,7 @@ test('R34 the writers hear the palette and the cards on the diet only; the voice
   const ko = calls.find((c) => /그림책 작가다/u.test(c.system));
   assert.ok(ko, 'a Korean beat request was made');
   assert.match(ko.system, /\[이 책의 목소리 — 불씨예요/);
+  // (R35: this is a page-layout draft, so the R34 line holds; an openings draft's picture-led line is in picture-led-r35.)
   assert.match(ko.user, /\[분량\] 이 비트는 \d+~\d+문장\. 짧은 문장과 긴 문장을 섞어요\(한 단어 문장도 좋아요\); 평균이 5~7어절 안이면 되고, 8어절을 넘는 문장은 셋에 하나까지\./);
   const en = calls.find((c) => /writing original English/u.test(c.system));
   assert.match(en.system, /This book's voice/);

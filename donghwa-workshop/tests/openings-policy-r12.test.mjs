@@ -1,4 +1,5 @@
 import {withPageRhythm} from '../dist/page-rhythm.js';
+import {withPictureLed} from '../dist/book-format.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -191,9 +192,15 @@ test('R12-P1 inputFromWizard with an explicit openings layout freezes the policy
       assert.equal(openings.input.pageCount, pageCount);
       assert.deepEqual(openings.input.prosePolicy, {version: 1, condenseOverBudget: {ko: true, en: true}});
       // Page rhythm (2026-10-19): new drafts add `rhythm` to the frozen specs.
+      // R35 책 결: the default draft is picture-led (the units, the wide tolerance and the marker on top of
+      // the same frozen specs); 글이 많은 책 freezes exactly the R12 specs.
       const frozen = freezeReadingLevels({...wizard, koVocabulary: []}, seed().settings, {layout: 'openings'});
-      assert.deepEqual(openings.readingLevels, {...frozen, specs: withPageRhythm(frozen.specs)});
+      assert.deepEqual(openings.readingLevels, {...frozen, specs: withPictureLed(withPageRhythm(frozen.specs), {layout: 'openings'})});
       assert.deepEqual(openings.input.specs, openings.readingLevels.specs);
+      assert.deepEqual(openings.input.bookFormat, {version: 1, id: 'pictureLed'});
+      const wordy = inputFromWizard(seed(), {...wizard, bookFormatId: 'wordy'}, {layout: 'openings'});
+      assert.deepEqual(wordy.readingLevels, {...frozen, specs: withPageRhythm(frozen.specs)});
+      assert.deepEqual(wordy.input.bookFormat, {version: 1, id: 'wordy'});
       assert.deepEqual(Object.keys(openings.input).slice(Object.keys(openings.input).indexOf('pageCount'), Object.keys(openings.input).indexOf('pageCount') + 3), ['pageCount', 'layoutPolicy', 'outlineBeatCount']);
       // Everything else is the page input, byte for byte.
       const rest = value => JSON.stringify(without(value.input, ['layoutPolicy', 'outlineBeatCount', 'prosePolicy', 'specs']));
@@ -639,6 +646,8 @@ function legacyInputOf(state, job) {
   delete prepared.input.storyShape;
   delete prepared.input.stageCategory;
   delete prepared.input.storyVoice;
+  // R35: the format is the job's own too (a pre-R35 job gains none; its specs are its own).
+  delete prepared.input.bookFormat;
   return {...prepared.input, backgrounds: prepared.input.backgrounds.filter(b => job.plan.backgroundIds.includes(b.id)), preferredBackgroundIds: clone(job.plan.backgroundIds), specs: clone(job.readingLevels.specs), bookId: job.bookId, storyDate: job.input.storyDate || job.createdAt};
 }
 test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the byte-identical page input, with openings on', async () => {

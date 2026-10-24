@@ -19,6 +19,7 @@ import { renderCouncilRoom } from "./council-room.js";
 import { hasPromptPolicy, readerVocabularyLine } from "./prompt-policy.js";
 import { storyShapeDirection } from "./story-shapes.js";
 import { stageDirection } from "./stage-categories.js";
+import { compositionDirection } from "../book-format.js";
 import { headNoun } from "../story-quality/dist/banList.js";
 import {
   hasOrchestrationPolicy,
@@ -148,7 +149,8 @@ export function directionLine(input) {
     // R33: on the diet the room also hears the story's shape and stage.
     extra =
       input?.promptDiet?.version === 1
-        ? [storyShapeDirection(input?.storyShape), stageDirection(input)]
+        ? // R35: and the book's format (그림책 결).
+          [storyShapeDirection(input?.storyShape), stageDirection(input), compositionDirection(input)]
             .filter(Boolean)
             .map((line) => ` ${line}${/[.!?]$/u.test(line) ? "" : "."}`)
             .join("")

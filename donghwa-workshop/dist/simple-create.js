@@ -6,6 +6,7 @@ import { renderActionSwitch } from "./ui-controls.js";
  * that names the cost, and completed paid steps are never bought again. */
 import { revisionSummary } from "./story-generation/book-revision.js";
 import { voiceSummary } from "./story-generation/voice-deck.js";
+import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
@@ -478,6 +479,8 @@ export function formatSummary(wizard = {}) {
     parts.push(storyShapeLabel(wizard.storyShapeId) || "이야기 모양");
   if (wizard.stageCategoryId && wizard.stageCategoryId !== "auto")
     parts.push(stageLabel(wizard.stageCategoryId) || "무대");
+  // R35: 글이 많은 책 is named; the default 그림책 결 is the select's own label.
+  if (formatFor(wizard) === "wordy") parts.push(BOOK_FORMAT_LABELS.wordy);
   return parts.join(" · ");
 }
 /** Fill the simple-only fields without touching anything the pro wizard set. */
@@ -1270,7 +1273,7 @@ function renderFormatPanel(w) {
     "이야기 모양",
     STORY_SHAPE_OPTIONS,
     w.storyShapeId || "auto",
-  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}</div>`;
+  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}${selectField("bookFormatId", "책 결", BOOK_FORMAT_OPTIONS, formatFor(w))}</div>`;
 }
 /** A story world chosen in pro mode gives world ideas; otherwise the built-in list is used. */
 function ideaState(state) {
@@ -1284,6 +1287,8 @@ function shapeStageLine(job) {
   const shape = job?.outline?.storyShape,
     stage = job?.input?.stageCategory;
   return [
+    // R35: the book's format (그림책 결 / 글이 많은 책).
+    bookFormatLabel(job?.input) ? `책 결 · ${bookFormatLabel(job.input)}` : "",
     shape?.name ? `이야기 모양 · ${shape.name}` : "",
     stage?.name ? `무대 · ${stage.name}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
     // R34: the voice the writer was given (the demo's fixed text has none).
@@ -3735,12 +3740,13 @@ function onChange(event) {
       "englishLevel",
       "storyShapeId",
       "stageCategoryId",
+      "bookFormatId",
       "simple-allow-new",
     ].includes(target.id)
   )
     return;
   if (
-    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId"].includes(target.id)
+    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId", "bookFormatId"].includes(target.id)
   ) {
     const before = layoutFor(w);
     w[target.id] =

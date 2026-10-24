@@ -26,6 +26,7 @@ import { wardrobeFor } from "./demo.js";
 import { StoryValidationError } from "./schemas.js";
 import { leanLevelLine, hasPromptDiet } from "./prompt-diet.js";
 import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
+import { pictureLedK1Line } from "../book-format.js";
 import { styleReport } from "./style-report.js";
 
 export const K1_POLICY_VERSION = 1;
@@ -168,7 +169,7 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
   // R31b: the level lines are sentences (leanLevelLine), never the spec JSON.
   // R34: a diet draft's own voice cards and the prose palette (a spark, never counted).
   const voiced = hasPromptDiet(input) && voiceBlock(input, "ko"),
-    system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}${voiced ? `\n${VOICE_PALETTE}\n${voiced}\n${voiceBlock(input, "en")}` : ""}`;
+    system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}${voiced ? `\n${VOICE_PALETTE}\n${voiced}\n${voiceBlock(input, "en")}` : ""}${pictureLedK1Line(input) ? `\n${pictureLedK1Line(input)}` : ""}`;
   const user = [
     `[부모 요청] ${str(input.topic, 300)}`,
     `[줄거리 지도]\n${map}`,

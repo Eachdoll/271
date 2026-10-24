@@ -1,6 +1,7 @@
 import { frozenBeatCount } from "./schemas.js";
 import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
 import { splitSentences } from "../story-quality/dist/util.js";
+import { isPictureLed } from "../book-format.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -331,6 +332,47 @@ const OPENING_DEMO = Object.freeze({
     "We walk home under the red sky. I put the box by my soft bed. “Thank you, little box,” I said. The moon is up over my home.",
   ],
 });
+/*
+ * R35 그림책 결 demo: the same singing-stone story told the picture-led way —
+ * one to four Korean sentences per opening (one of them a single sound), one
+ * to four short English lines, three stones each bigger than the last, the
+ * turn carried by the picture. The demo is free and is not a quality claim.
+ */
+const PICTURE_LED_DEMO = Object.freeze({
+  setup: [
+    "아침이에요. 두 친구가 작은 가방을 메고 숲으로 가요.",
+    "Morning. We walk into the woods with a little bag.",
+  ],
+  want: [
+    "큰 나무에 팻말이 붙어 있어요. 노래하는 돌! “꼭 찾고 싶어.”",
+    "A sign is on the big tree. A singing stone! “I want to find it,” I said.",
+  ],
+  attempt1: [
+    "큰 돌이 있어요. 톡톡. “노래 안 해.”",
+    "A big stone. Tap, tap. No song.",
+  ],
+  attempt2: [
+    "더 큰 돌이 있어요. 쿵쿵! 개미들이 줄줄이 나와요. “미안해, 개미야.”",
+    "A bigger stone. Thump! Little ants run out. “Sorry, ants,” I said.",
+  ],
+  attempt3: [
+    "가장 큰 바위예요. 두 친구가 귀를 대요. 후우… 바위 뒤에서 소리가 나요!",
+    "The biggest rock. We put our ears on it. Whoo… a song is behind the rock!",
+  ],
+  attempts: [
+    "큰 돌은 톡톡. 더 큰 돌은 쿵쿵. 가장 큰 바위에서 후우… 소리가 나요!",
+    "Tap, tap. Thump, thump. Whoo… a song is in the big rock!",
+  ],
+  turn: ["휘이이!", "Whoo!"],
+  resolution: [
+    "바위 틈에 빈 도시락 통이 끼어 있었어요. 바람이 통 속으로 들어가 노래해요. “통이 노래하고 있었어!” 두 친구도 후우 불어요.",
+    "Our lunch box is in the rocks! The wind sings in it. We blow too. Whoo!",
+  ],
+  close: [
+    "집으로 가는 길, 가방 속 통이 달그락 노래해요. “잘 자, 노래하는 통아.”",
+    "We walk home. The box sings in my bag. Good night, little box.",
+  ],
+});
 /** The demo paragraph key of every beat: attempts in order, or one combined attempt. */
 function openingDemoKeys(outline) {
   const attempts = outline.beats.filter((beat) => beat.type === "attempt").length;
@@ -349,8 +391,10 @@ function openingDemoKeys(outline) {
 function demoOpeningsProse(outline, input) {
   const baseline = demoOutline(input),
     keys = openingDemoKeys(outline),
-    ko = keys.map((key) => OPENING_DEMO[key][0]),
-    en = keys.map((key) => OPENING_DEMO[key][1]);
+    // R35: a picture-led draft shows the short demo (a few sentences per opening).
+    set = isPictureLed(input) ? PICTURE_LED_DEMO : OPENING_DEMO,
+    ko = keys.map((key) => set[key][0]),
+    en = keys.map((key) => set[key][1]);
   // A parent's beat edit is quoted verbatim into that beat, as in page demos.
   outline.beats.forEach((beat, index) => {
     if (

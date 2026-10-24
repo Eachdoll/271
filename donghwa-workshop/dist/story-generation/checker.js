@@ -258,6 +258,52 @@ export function pageReadingSpec(readingSpecs, language, page, { lean = false } =
   };
 }
 
+/**
+ * R35 그림책 결: what a picture-led spec judges over the whole book, as notes
+ * (never a rewrite) — the share of long sentences (the unit check only caps
+ * the longest) and the number of one-word sound units, each on the page that
+ * carries most of it. rows: [{pageNo, metrics}] from analyzeEstimatedPage.
+ */
+export function pictureLedBookNotes(rows, spec, language = "ko") {
+  const policy = spec?.pictureLed;
+  if (policy?.version !== 1 || !Array.isArray(rows) || !rows.length) return [];
+  const max = Number(spec.wordsPerSentence?.max) || 7,
+    name = language === "ko" ? "한글" : "영어",
+    word = language === "ko" ? "어절" : "단어",
+    perPage = rows.map(({ pageNo, metrics }) => {
+      const exempt = new Set(metrics?.minimumLengthExemptSentenceIndices || []),
+        lengths = (metrics?.lengthsWithoutSoundRuns || metrics?.wordsPerSentence || []).filter((_, i) => !exempt.has(i)),
+        count = Number(metrics?.sentenceCount) || 0;
+      return {
+        pageNo,
+        total: lengths.length,
+        long: lengths.filter((value) => value > max).length,
+        sound: count === 1 && (Number(metrics?.wordCount) || 0) <= 2,
+      };
+    }),
+    total = perPage.reduce((sum, row) => sum + row.total, 0),
+    long = perPage.reduce((sum, row) => sum + row.long, 0),
+    allowed = Math.ceil(total * Number(policy.longShareCeil ?? 1 / 3) - 1e-9),
+    out = [];
+  if (total >= 6 && long > allowed) {
+    const worst = [...perPage].sort((a, b) => b.long - a.long)[0];
+    out.push({
+      code: "book-long-share",
+      pageNo: worst.pageNo,
+      message: `${name} 책 전체에서 ${max}${word}를 넘는 문장이 ${long}개예요(전체 ${total}개 중 ${allowed}개까지가 읽어 주기 좋아요; 이 쪽에 ${worst.long}개).`,
+    });
+  }
+  const sounds = perPage.filter((row) => row.sound),
+    soundMax = Number(policy.soundUnitsMax ?? 3);
+  if (sounds.length > soundMax)
+    out.push({
+      code: "book-sound-units",
+      pageNo: sounds.at(-1).pageNo,
+      message: `${name} 소리 한 단어로만 된 쪽·펼침면이 ${sounds.length}개예요(책에 ${soundMax}개까지가 보통).`,
+    });
+  return out;
+}
+
 /** Return all seven checks and targeted repair instructions, without mutation.
  * Catchphrase repetition is advisory: it is reported in `warnings` only, so it
  * never fails a check or asks for a (paid) page rewrite. Pass `catchphrases`,
@@ -617,6 +663,14 @@ export function checkStory(
       if (lean) soft("level", "book-sentence-total", message, row.pageNo, language);
       else add("level", "page", message, row.pageNo, language);
     }
+  }
+  // R35 그림책 결: the lengths are judged over the book — notes, never a rewrite.
+  for (const language of ["ko", "en"]) {
+    const spec = readingSpecs[language];
+    if (spec?.pictureLed?.version !== 1) continue;
+    const rows = levelResults[language].map(({ pageNo, result }) => ({ pageNo, metrics: result.metrics }));
+    for (const note of pictureLedBookNotes(rows, spec, language))
+      soft("level", note.code, note.message, note.pageNo, language);
   }
   for (const language of ["ko", "en"]) {
     const results = levelResults[language],

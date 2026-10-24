@@ -47,6 +47,7 @@ import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
 import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
+import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -459,6 +460,8 @@ function shapeStageNote(outline, input = null) {
   const shape = outline?.storyShape,
     stage = outline?.stageCategory;
   const rows = [
+    // R35: the book's format (그림책 결 / 글이 많은 책), frozen with the draft.
+    bookFormatLabel(input) ? `책 결 · ${esc(bookFormatLabel(input))}${input.bookFormat.id === "pictureLed" ? " — 글은 짧게, 그림이 말해요" : ""}` : "",
     shape?.name ? `이야기 모양 · ${esc(shape.name)}${shapeById(shape.id)?.shape ? ` — ${esc(shapeById(shape.id).shape)}` : ""}` : "",
     stage?.name ? `무대 · ${esc(stage.name)}${stageById(stage.id)?.ko ? ` — ${esc(stageById(stage.id).ko)}` : ""}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
     // R34: the voice the writer was given (a draft with a shape is a diet draft).
@@ -907,6 +910,10 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
   readingLevels.specs = withPageRhythm(readingLevels.specs);
   // R31a: a new K1 draft's Korean spec judges short rhythm lines and page averages.
   readingLevels.specs = withShortSentences(readingLevels.specs);
+  // R35 책 결: the default new book is picture-led (few sentences per opening,
+  // the three-step composition); 글이 많은 책 keeps today's budgets.
+  const formatId = formatFor(wizard);
+  if (formatId === "pictureLed") readingLevels.specs = withPictureLed(readingLevels.specs, { layout });
   const k1 = isK1Draft({ koreanLevel: readingLevels.koreanLevel, language: wizard.language, layout }),
     // R31a: a simple-mode story (no ending choice there) ends where its topic goes.
     topicEnding = wizard.simpleFlow === true && wizard.ending !== "open" && wizard.ending !== "custom";
@@ -1047,6 +1054,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       ...(stageCategory ? { stageCategory } : {}),
       // R34: the book's voice cards, chosen once here (never on resume).
       storyVoice: storyVoiceFor(state, wizard, { level: readingLevels.koreanLevel, shapeId: storyShape.id }),
+      // R35: the book's format (책 결), decided once here and frozen with the specs above.
+      bookFormat: bookFormat(formatId),
     },
     readingLevels,
     world,

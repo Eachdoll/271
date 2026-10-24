@@ -32,8 +32,8 @@ const legacy = (input) => { const copy = structuredClone(input); delete copy.pro
 const plotPatterns = JSON.parse(await readFile(new URL('../dist/story-quality/data/plot_patterns.json', import.meta.url), 'utf8'));
 
 test('R33 the catalog: 28 shapes with unique ids, the six package patterns among them by id and name, each with a level list and a one-line spark', () => {
-  assert.equal(STORY_SHAPES.length, 28);
-  assert.equal(new Set(STORY_SHAPES.map(s => s.id)).size, 28);
+  assert.equal(STORY_SHAPES.length, 29);
+  assert.equal(new Set(STORY_SHAPES.map(s => s.id)).size, 29);
   for (const card of plotPatterns) {
     const shape = shapeById(card.id);
     assert.ok(shape, `package pattern ${card.id} is a shape`);
@@ -44,7 +44,7 @@ test('R33 the catalog: 28 shapes with unique ids, the six package patterns among
     assert.ok(shape.line.length > 40 && shape.shape.length > 8 && shape.bestFor.length >= 3, shape.id);
   }
   assert.ok(isStoryShapeId('sound_adventure') && isStoryShapeId('answer_pile'));
-  assert.equal(STORY_SHAPE_OPTIONS.length, 29);
+  assert.equal(STORY_SHAPE_OPTIONS.length, 30);
   assert.equal(STORY_SHAPE_OPTIONS[0][0], 'auto');
   assert.deepEqual(storyShapeRef(shapeById('answer_pile')), {version: 1, id: 'answer_pile', name: '정답 누적형'});
   assert.equal(storyShapeRef({id: 'nope'}), null);
@@ -97,7 +97,8 @@ test('R33 the lean outline request carries one STORY SHAPE line and the writers\
   assert.equal((rules.match(/STORY SHAPE/g) || []).length, 1);
   const bare = normalizeStoryInput({...input, storyShape: undefined});
   assert.doesNotMatch(leanOutlineRules(bare, {count: 6, attempts: 1, custom: false}), /STORY SHAPE/);
-  assert.match(directionLine(input), /돌아온다\. 이야기 모양: 소리 모험형 — 소리를 내며·따라가며 떠나는 모험\. 쪽마다 새 소리말이 생겨요\. 무대: 자연 · 바다 — [^.]+\.$/);
+  // R35: the room also hears the book's format after the stage.
+  assert.match(directionLine(input), /돌아온다\. 이야기 모양: 소리 모험형 — 소리를 내며·따라가며 떠나는 모험\. 쪽마다 새 소리말이 생겨요\. 무대: 자연 · 바다 — [^.]+\. 책 결: 그림책 결 — [^\n]+\.$/);
   assert.match(directionLine({...input, direction: '웃기게'}), /^5~6세 독자\. 웃기게 이야기 모양: 소리 모험형/);
   assert.equal(directionLine(legacy(input)), directionLine(legacy(bare)), 'off the diet the shape is silent');
   assert.doesNotMatch(directionLine(legacy(input)), /이야기 모양/);
@@ -144,14 +145,14 @@ test('R33 the book record remembers the shape and the next auto pick avoids it; 
   assert.notEqual(inputFromWizard(state, wizardOf({topic: '유하가 북 소리를 따라 모험을 떠나요'})).input.storyShape.id, 'sound_adventure', 'the latest book\'s shape is skipped');
   assert.equal(inputFromWizard(state, wizardOf({topic: '유하가 북 소리를 따라 모험을 떠나요', storyQualityPatternId: 'sound_adventure'})).input.storyShape.id, 'sound_adventure', 'a pick is never skipped');
   const selector = renderQualityPatternSelector({storyQualityPatternId: 'answer_pile'}, {state});
-  assert.equal((selector.match(/<option /g) || []).length, 29);
+  assert.equal((selector.match(/<option /g) || []).length, 30);
   assert.match(selector, /value="answer_pile" selected/);
   assert.match(selector, /이야기 모양/);
   assert.doesNotMatch(selector, /직접 만든 패턴/);
   state.settings.storyQuality.patterns = [...plotPatterns, {...plotPatterns[0], id: 'my_pattern', name: '우리 집 패턴'}];
   const withCustom = renderQualityPatternSelector({}, {state});
   assert.match(withCustom, /<optgroup label="직접 만든 패턴"><option value="my_pattern" >우리 집 패턴<\/option><\/optgroup>/);
-  assert.equal((withCustom.match(/<option /g) || []).length, 30, 'package ids are not listed twice');
+  assert.equal((withCustom.match(/<option /g) || []).length, 31, 'package ids are not listed twice');
   const card = renderStoryQualityPlan({outline: {storyShape: {version: 1, id: 'sound_adventure', name: '소리 모험형'}}});
   assert.match(card, /이야기 모양과 무대/);
   assert.match(card, /이야기 모양 · 소리 모험형 — 소리를 내며/);
@@ -165,7 +166,7 @@ test('R33 the simple screen offers the shape in ①, the format line names a cho
   const ctx = {getState: () => state, getWizard: () => w, setWizard() {}, getDraft: () => null, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''};
   const html = renderSimpleCreate(ctx);
   const select = html.match(/<select id="storyShapeId">([\s\S]*?)<\/select>/)?.[1] || '';
-  assert.equal((select.match(/<option /g) || []).length, 29);
+  assert.equal((select.match(/<option /g) || []).length, 30);
   assert.match(select, /value="answer_pile" selected/);
   assert.match(html, /<label for="storyShapeId">이야기 모양<\/label>/);
   assert.match(formatSummary({...w, stageCategoryId: 'nature_sea'}), /K2 · E2 · 12쪽 · 한 쪽에 한글 \+ 영어 · 정답 누적형 · 자연 · 바다$/);
