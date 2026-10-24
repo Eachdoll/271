@@ -4,6 +4,7 @@ import { storyShapeRef } from "./story-shapes.js";
 import { stageRef, stagePlanLine } from "./stage-categories.js";
 import { voiceRef } from "./voice-deck.js";
 import { bookFormatRef } from "../book-format.js";
+import { withPicturePlanSchema } from "./picture-plan.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -2279,7 +2280,8 @@ export function outlineRequestSchema(input) {
     schema.properties.tension = outlineTensionSchema(frozenBeatCount(input));
     schema.required.push("tension");
   }
-  return schema;
+  // R36: a picture-led diet draft plans who tells each beat (words or picture) and how.
+  return withPicturePlanSchema(schema, input);
 }
 export async function generateOutline(source, options = {}) {
   const input = normalizeStoryInput(source);

@@ -8,6 +8,7 @@ import { pictureCarriesPage } from "../page-rhythm.js";
 import { craftPictureRules } from "../story-generation/craft-rules.js";
 import { biblePictureRules } from "../story-generation/council.js";
 import { genderWord } from "./identity.js";
+import { planOf, picturePlanPictureLine, picturePlanText } from "../story-generation/picture-plan.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
@@ -73,6 +74,12 @@ export function sceneBriefText(book, page) {
     text(staging.subLocation),
   ].filter(Boolean);
 }
+/** R36: the planned picture of the entry's beat, or null. */
+export function pagePlan(book, page) {
+  return planOf(book?.outline, page?.beatIndex ?? page?.scene?.beatIndex);
+}
+/** R36: the plan text a picture request carries (model-written, lenient scope). */
+export const scenePlanText = (book, page) => picturePlanText(pagePlan(book, page));
 export function buildScenePrompt({
   book,
   page,
@@ -84,7 +91,9 @@ export function buildScenePrompt({
   cover = false,
 }) {
   const brief = sceneBriefForPage(book, page),
-    staging = page.staging || {},
+    planned = cover ? null : pagePlan(book, page),
+    // R36: a planned shot replaces the staging shot, so the request never asks for two cameras.
+    staging = planned?.shot ? { ...(page.staging || {}), shot: { wide: "wide", middle: "medium", close: "closeup" }[planned.shot] } : page.staging || {},
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -130,7 +139,9 @@ export function buildScenePrompt({
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });
-  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}`;
+  // R36: the composition planned with the story (picture-led books only; empty otherwise).
+  const plan = picturePlanPictureLine(planned);
+  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan ? ` ${plan}` : ""}`;
   const background = place.background;
   const facts = background
     ? {

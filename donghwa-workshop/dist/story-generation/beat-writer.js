@@ -44,6 +44,7 @@ import { parseJsonLenient } from "./outline-normalize.js";
 import { tensionRange } from "./orchestration.js";
 import { hasPromptDiet, writerBriefView } from "./prompt-diet.js";
 import { pictureLedBudgetLine } from "../book-format.js";
+import { planOf, picturePlanWriterLine } from "./picture-plan.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -290,6 +291,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       `[결말 상태] ${ending}`,
       bible?.growth ? `[성장 설계] want ${bible.growth.want} → need ${bible.growth.need} (걸림돌 ${bible.growth.flaw}); 교훈은 말하지 않고 행동으로: ${bible.lesson || ""}` : "",
       `[이번 비트] ${beat.index} ${beat.type}: ${str(beat.summary, 500)}${list(outline.tension)[i] !== undefined ? ` · 목표 긴장 ${outline.tension[i]}` : ""}`,
+      // R36: who tells this beat (a picture-led diet draft's plan) — permission to leave the picture's part unsaid.
+      lean ? picturePlanWriterLine(planOf(outline, beat.index), lang) : "",
       // R31e: on the diet the writer gets the brief's story-carrying fields; light, weather and creatures are the picture's.
       brief
         ? lean

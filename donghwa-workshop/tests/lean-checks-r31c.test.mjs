@@ -132,7 +132,8 @@ test('R31c staging on the diet: the last page keeps the brief’s morning; witho
 test('R31c the diet prompts for pagination, page rewrites and the editor are short and carry no quotas; the undieted ones are unchanged', () => {
   const input = dietInput(), plain = undiet(input);
   const rules = leanPaginationRules(input, {custom: true});
-  assert.ok(rules.length < 1300, `${rules.length} chars`);
+  // R35/R36: a picture-led draft adds the PICTURE-LED and PICTURE PLAN lines (measured 1,362).
+  assert.ok(rules.length < 1500, `${rules.length} chars`);
   assert.doesNotMatch(rules, /8–30|physical verb|Never|MUST|camera|architecture/u);
   assert.match(rules, /scene\.action = what the picture shows, in English/u);
   const openings = leanOpeningsPaginationRules({...input, pageCount: 16, specs: {ko: {units: {spread: {min: 4, max: 7}, page: {min: 2, max: 4}}}, en: {units: {spread: {min: 2, max: 4}, page: {min: 1, max: 2}}}}}, {cues: ['reveal', 'calm']});

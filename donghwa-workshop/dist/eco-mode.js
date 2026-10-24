@@ -55,6 +55,7 @@ import {
 } from "./book-layout.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
+import { planOf, picturePlanPictureLine } from "./story-generation/picture-plan.js";
 
 export const ECO_VERSION = 1;
 /** The job status while the parent is still pasting (③); a built book is held at 'text-review' like every simple story. */
@@ -457,6 +458,8 @@ export function ecoPicturePrompt(state, book, index = 0, { cover = false } = {})
     cover
       ? `The cover shows: ${action}. Calm, inviting, the main character clearly visible; leave quiet space near the top where the app will print the title.`
       : `The moment to draw: ${action}.${scene.emotion ? ` Feeling: ${text(scene.emotion)}.` : ""}${scene.timeOfDay ? ` Time of day: ${text(scene.timeOfDay)}.` : ""}${Array.isArray(scene.props) && scene.props.length ? ` Show these things: ${scene.props.map(text).filter(Boolean).join(", ")}.` : ""}`,
+    // R36: the composition planned with the story (shown to the parent, who draws or prompts it).
+    cover ? "" : picturePlanPictureLine(planOf(book.outline, page.beatIndex)),
     cover ? "" : `The entry reads — Korean: 「${text(page.ko ?? page.textKo)}」 English: “${text(page.en ?? page.textEn)}”. Draw the moment, not the words.`,
     SIZE_TEXT[size] || `Picture size about ${size} pixels.`,
     `Continuity: one book, one style — the same characters, faces, colours and drawing style in every picture.${prev?.scene?.action ? ` The previous entry showed: ${text(prev.scene.action)}.` : ""}`,

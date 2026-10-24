@@ -7,6 +7,7 @@ import { renderActionSwitch } from "./ui-controls.js";
 import { revisionSummary } from "./story-generation/book-revision.js";
 import { voiceSummary } from "./story-generation/voice-deck.js";
 import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
+import { picturePlanNote } from "./story-generation/picture-plan.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
@@ -646,7 +647,7 @@ function renderEcoStep(ctx, w, job) {
       .map(([label, cls]) => `<li class="${cls}">${label}</li>`)
       .join(""),
     outlineBlock = job.outline
-      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p><ol>${beats.map((b) => `<li>${esc(b.summary || "")}</li>`).join("")}</ol></details>`
+      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p><ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
       : "",
     errorList = errors.length
       ? `<ul class="check-issues simple-eco-errors">${errors.map((e) => `<li class="check-violation">${esc(e)}</li>`).join("")}</ul>`

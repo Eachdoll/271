@@ -127,6 +127,13 @@ export function demoOutline(input) {
     settingKey: background || "forest-path",
   }));
   beats[0].summary = `${input.characters.map((c) => c.name).join(", ")}의 소풍날이에요. ${beats[0].summary}`;
+  // R36: a picture-led openings demo carries the planned split between words and picture.
+  if (isPictureLed(input) && input.promptDiet?.version === 1 && input.layoutPolicy?.kind === "openings") {
+    const keys = openingDemoKeys({ beats });
+    beats.forEach((beat, i) => {
+      if (DEMO_PLANS[keys[i]]) beat.picturePlan = { version: 1, ...DEMO_PLANS[keys[i]] };
+    });
+  }
   if (input.endingType === "open")
     beats.at(-1).summary +=
       " 잠들기 전에 “내일은 노래하는 나무를 찾아보자!”라고 말해요.";
@@ -372,6 +379,18 @@ const PICTURE_LED_DEMO = Object.freeze({
     "집으로 가는 길, 가방 속 통이 달그락 노래해요. “잘 자, 노래하는 통아.”",
     "We walk home. The box sings in my bag. Good night, little box.",
   ],
+});
+/* R36: the demo's picture plan per paragraph key (spreads where the demo paginates spreads). */
+const DEMO_PLANS = Object.freeze({
+  setup: { carrier: "both", words: "아침, 소풍 가는 길", picture: "two tiny friends at the edge of a huge green forest, a lunch box swinging from the bag", shot: "wide", space: "airy", hook: "", unit: "spread" },
+  want: { carrier: "words", words: "\"꼭 찾고 싶어\" 하는 바람", picture: "a hand-drawn sign of a stone with music notes nailed to the tree", shot: "middle", space: "full", hook: "a faint whoo drifting in from the right edge", unit: "pages" },
+  attempt1: { carrier: "picture", words: "톡톡 소리와 한마디", picture: "a small stone, the stick tapping it, the friend's ear pressed close", shot: "close", space: "airy", hook: "", unit: "pages" },
+  attempt2: { carrier: "picture", words: "쿵쿵, 개미에게 미안해", picture: "a bigger stone lifted and a line of ants marching out", shot: "middle", space: "full", hook: "", unit: "pages" },
+  attempt3: { carrier: "contrast", words: "후우 소리가 바위 뒤에서", picture: "the biggest rock, and behind it, half hidden, the corner of a lunch box", shot: "wide", space: "airy", hook: "the sound comes from something the child can already spot", unit: "pages" },
+  attempts: { carrier: "picture", words: "톡톡·쿵쿵·후우, 세 번", picture: "three stones in a row, each bigger, the last one humming", shot: "wide", space: "airy", hook: "", unit: "pages" },
+  turn: { carrier: "picture", words: "휘이이! 한 단어", picture: "the lunch box wedged in the rock with wind pouring in, the friends' mouths wide open", shot: "close", space: "airy", hook: "", unit: "spread" },
+  resolution: { carrier: "both", words: "통이 노래하고 있었다는 말", picture: "the two friends blowing across the box rim, birds joining in", shot: "middle", space: "full", hook: "", unit: "pages" },
+  close: { carrier: "words", words: "\"잘 자, 노래하는 통아\"", picture: "the box by the bed under moonlight, the same lunch box from the first picture", shot: "wide", space: "airy", hook: "", unit: "spread" },
 });
 /** The demo paragraph key of every beat: attempts in order, or one combined attempt. */
 function openingDemoKeys(outline) {

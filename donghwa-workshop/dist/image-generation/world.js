@@ -1,5 +1,5 @@
 import { genderWord } from "./identity.js";
-import { buildScenePrompt, sceneBriefText } from "./scene-prompt.js";
+import { buildScenePrompt, sceneBriefText, scenePlanText } from "./scene-prompt.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
 import { characterSVG } from "../engine.js";
@@ -982,6 +982,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
             page.en ?? page.textEn,
           ],
       usesScenePrompt ? sceneBriefText(book, page) : null,
+      usesScenePrompt && !options.cover ? scenePlanText(book, page) : null,
     ],
     names: bookCastNames(state, book, snapshot),
   });

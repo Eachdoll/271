@@ -27,6 +27,7 @@ import { StoryValidationError } from "./schemas.js";
 import { leanLevelLine, hasPromptDiet } from "./prompt-diet.js";
 import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
 import { pictureLedK1Line } from "../book-format.js";
+import { planOf, picturePlanMapSuffix } from "./picture-plan.js";
 import { styleReport } from "./style-report.js";
 
 export const K1_POLICY_VERSION = 1;
@@ -162,7 +163,7 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
   const map = beats
     .map((beat) => {
       const brief = briefs.find((row) => Number(row?.beatIndex) === Number(beat.index));
-      return `${beat.index} ${beat.type} @${places[beat.settingKey] || beat.settingKey || "?"}: ${str(beat.summary, 300)}${brief ? ` / 장면: ${str(brief.action || brief.actionEn, 160)}` : ""}`;
+      return `${beat.index} ${beat.type} @${places[beat.settingKey] || beat.settingKey || "?"}: ${str(beat.summary, 300)}${brief ? ` / 장면: ${str(brief.action || brief.actionEn, 160)}` : ""}${hasPromptDiet(input) ? picturePlanMapSuffix(planOf(outline, beat.index)) : ""}`;
     })
     .join("\n");
   const pagesLine = plan.map((row) => `${row.pageNo}쪽 → 비트 ${row.beatIndex}`).join(", ");
