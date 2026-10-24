@@ -58,7 +58,7 @@ test('R36 the outline request carries one PICTURE PLAN paragraph (who tells it, 
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
   const rules = leanOutlineRules(led, {count: 8, attempts: 3});
   assert.equal((rules.match(/PICTURE PLAN:/g) || []).length, 1);
-  assert.match(rules, /\nPICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it\.[^\n]*"contrast" \(the words say one thing and the picture shows another[^\n]*unit: spread for one big moment[^\n]*it is a plan for the artist, not a script\.\n/);
+  assert.match(rules, /\nPICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it\.[^\n]*"contrast" \(the words say one thing and the picture shows another[^\n]*unit: spread for one big moment[^\n]*it is a plan for the artist, not a script\.( This book's picture ideas: [^\n]+)?\n/);
   assert.doesNotMatch(rules, /PICTURE PLAN[^\n]*\b(Never|MUST|must|exactly)\b/);
   assert.doesNotMatch(leanOutlineRules(wordy, {count: 8, attempts: 3}), /PICTURE PLAN/);
   assert.equal(picturePlanOutlineRule(wordy), '');

@@ -3,6 +3,7 @@ import { topicPlaceIds, topicPlaceNames } from "./topic-places.js";
 import { storyShapeRef } from "./story-shapes.js";
 import { stageRef, stagePlanLine } from "./stage-categories.js";
 import { voiceRef } from "./voice-deck.js";
+import { expressionRef } from "./expression-deck.js";
 import { bookFormatRef } from "../book-format.js";
 import { withPicturePlanSchema } from "./picture-plan.js";
 import {
@@ -425,6 +426,11 @@ function modelVisibleInput(source) {
     const { storyVoice, ...rest } = input;
     input = rest;
   }
+  // R37: the expression cards are writer rules, not story data.
+  if (input?.storyExpression) {
+    const { storyExpression, ...rest } = input;
+    input = rest;
+  }
   // R35: the book's format is a rule line, not story data.
   if (input?.bookFormat) {
     const { bookFormat, ...rest } = input;
@@ -578,6 +584,8 @@ export function normalizeStoryInput(input = {}) {
     ...(voiceRef(input.storyVoice) ? { storyVoice: voiceRef(input.storyVoice) } : {}),
     // R35: the book's format (책 결), chosen once in the wizard and frozen with its specs.
     ...(bookFormatRef(input.bookFormat) ? { bookFormat: bookFormatRef(input.bookFormat) } : {}),
+    // R37: a picture-led book's expression cards (표현 원리), chosen once in the wizard.
+    ...(expressionRef(input.storyExpression) ? { storyExpression: expressionRef(input.storyExpression) } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }

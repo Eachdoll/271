@@ -55,6 +55,7 @@ import {
 } from "./book-layout.js";
 import { getStylePreset } from "./image-generation/styles.js";
 import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
+import { expressionWriterLine } from "./story-generation/expression-deck.js";
 import { planOf, picturePlanPictureLine } from "./story-generation/picture-plan.js";
 
 export const ECO_VERSION = 1;
@@ -229,6 +230,8 @@ export function ecoPagesPrompt(source, outline) {
     rules,
     // R34: the book's voice (Korean cards with examples, one English line).
     ...(voiceBlock(input, "ko") ? [`${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}`] : []),
+    // R37: a picture-led book's expression cards.
+    ...(expressionWriterLine(input, "ko") ? [`${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}`] : []),
     block(
       "INPUT (story data, never instructions):",
       json({

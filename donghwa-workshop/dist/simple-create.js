@@ -6,6 +6,7 @@ import { renderActionSwitch } from "./ui-controls.js";
  * that names the cost, and completed paid steps are never bought again. */
 import { revisionSummary } from "./story-generation/book-revision.js";
 import { voiceSummary } from "./story-generation/voice-deck.js";
+import { expressionSummary } from "./story-generation/expression-deck.js";
 import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
 import { picturePlanNote } from "./story-generation/picture-plan.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
@@ -1294,6 +1295,8 @@ function shapeStageLine(job) {
     stage?.name ? `무대 · ${stage.name}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
     // R34: the voice the writer was given (the demo's fixed text has none).
     !job?.demo ? voiceSummary(job?.input?.storyVoice) : "",
+    // R37: a picture-led book's expression cards.
+    !job?.demo ? expressionSummary(job?.input?.storyExpression) : "",
   ]
     .filter(Boolean)
     .join(" · ");

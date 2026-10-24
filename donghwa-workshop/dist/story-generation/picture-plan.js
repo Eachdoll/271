@@ -14,6 +14,7 @@
  * one composition line. Nothing is counted or checked against it, a missing
  * or odd plan is dropped silently and never costs a call. Pure module. */
 import { isPictureLed } from "../book-format.js";
+import { expressionOf, expressionFrameLine } from "./expression-deck.js";
 
 export const PICTURE_PLAN_VERSION = 1;
 export const CARRIERS = Object.freeze(["words", "picture", "both", "contrast"]);
@@ -94,8 +95,10 @@ export const planOf = (outline, beatIndex) => {
 /** The outline request's PICTURE PLAN paragraph (English, the writers' language there). */
 export function picturePlanOutlineRule(input) {
   if (!wantsPicturePlan(input)) return "";
-  const openings = openingsOf(input);
-  return `PICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it. carrier: "words" (only words can carry it: a line, a thought, a sound, time passing), "picture" (the picture alone tells it; the words are a line or a sound), "both", or "contrast" (the words say one thing and the picture shows another — calm words over a huge wave). words: in Korean, the part only the words carry. picture: in English, what the picture alone shows (faces, size against the world, what is hidden or coming closer); the words will not repeat it. shot: wide (small figures, big world), middle, or close (faces and hands). space: full or airy (lots of empty space). hook: what makes the child turn the page here (a sentence left open, something entering at the edge), or "" when nothing.${openings ? " unit: spread for one big moment (a reveal, the turn, a new place), pages when the beat has two moments." : ""} Vary them across the book; one short phrase per field — it is a plan for the artist, not a script.`;
+  const openings = openingsOf(input),
+    // R37: with expression cards the example is general and the book's frame cards follow.
+    expressed = !!expressionOf(input);
+  return `PICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it. carrier: "words" (only words can carry it: a line, a thought, a sound, time passing), "picture" (the picture alone tells it; the words are a line or a sound), "both", or "contrast" (the words say one thing and the picture shows another${expressed ? "" : " — calm words over a huge wave"}). words: in Korean, the part only the words carry. picture: in English, what the picture alone shows (faces, size against the world, what is hidden or coming closer); the words will not repeat it. shot: wide (small figures, big world), middle, or close (faces and hands). space: full or airy (lots of empty space). hook: what makes the child turn the page here (a sentence left open, something entering at the edge), or "" when nothing.${openings ? " unit: spread for one big moment (a reveal, the turn, a new place), pages when the beat has two moments." : ""} Vary them across the book; one short phrase per field — it is a plan for the artist, not a script.${expressed ? ` ${expressionFrameLine(input)}` : ""}`;
 }
 /** The beat writer's line for one beat (Korean writer, then English). Permission, never a ban. */
 export function picturePlanWriterLine(plan, lang = "ko") {

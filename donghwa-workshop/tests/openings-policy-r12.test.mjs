@@ -648,6 +648,8 @@ function legacyInputOf(state, job) {
   delete prepared.input.storyVoice;
   // R35: the format is the job's own too (a pre-R35 job gains none; its specs are its own).
   delete prepared.input.bookFormat;
+  // R37: and the expression cards.
+  delete prepared.input.storyExpression;
   return {...prepared.input, backgrounds: prepared.input.backgrounds.filter(b => job.plan.backgroundIds.includes(b.id)), preferredBackgroundIds: clone(job.plan.backgroundIds), specs: clone(job.readingLevels.specs), bookId: job.bookId, storyDate: job.input.storyDate || job.createdAt};
 }
 test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the byte-identical page input, with openings on', async () => {

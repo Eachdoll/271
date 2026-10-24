@@ -1357,6 +1357,7 @@ export async function runFullAuto(
         stageCategory: _freshStage,
         storyVoice: _freshVoice,
         bookFormat: _freshFormat,
+        storyExpression: _freshExpression,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1401,6 +1402,8 @@ export async function runFullAuto(
         ...(job.input?.storyVoice ? { storyVoice: clone(job.input.storyVoice) } : {}),
         // R35: the job's own format; its frozen specs below already carry it.
         ...(job.input?.bookFormat ? { bookFormat: clone(job.input.bookFormat) } : {}),
+        // R37: the job's own expression cards (never re-chosen on resume).
+        ...(job.input?.storyExpression ? { storyExpression: clone(job.input.storyExpression) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

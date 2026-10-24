@@ -97,7 +97,8 @@ test('R34 the writers hear the palette and the cards on the diet only; the voice
   assert.match(rules.ko, /가능성이지 점검표가 아니에요/);
   assert.match(rules.ko, /\[이 책의 목소리 — 불씨예요, 점검표가 아니에요\]/);
   assert.match(rules.en, /This book's voice \(a spark, not a checklist\)/);
-  const bare = normalizeStoryInput({...input, storyVoice: undefined});
+  // (R37: the picture-led expression cards are left out here; expression-deck-r37 covers them.)
+  const bare = normalizeStoryInput({...input, storyVoice: undefined, storyExpression: undefined});
   assert.doesNotMatch(leanBeatWriterRules(bare, demoOutline(bare)).ko, /목소리|점검표/);
   assert.match(leanProseRules(input), /\[이 책의 목소리/);
   assert.doesNotMatch(leanProseRules(bare), /\[이 책의 목소리/);

@@ -47,6 +47,7 @@ import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
 import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
+import { chooseExpression, recentExpressionIds, expressionSummary } from "./expression-deck.js";
 import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
 import { picturePlanNote } from "./picture-plan.js";
 import {
@@ -467,6 +468,8 @@ function shapeStageNote(outline, input = null) {
     stage?.name ? `무대 · ${esc(stage.name)}${stageById(stage.id)?.ko ? ` — ${esc(stageById(stage.id).ko)}` : ""}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
     // R34: the voice the writer was given (a draft with a shape is a diet draft).
     shape?.name && voiceSummary(input?.storyVoice) ? esc(voiceSummary(input.storyVoice)) : "",
+    // R37: a picture-led book's expression principles (표현 원리 카드).
+    expressionSummary(input?.storyExpression) ? esc(expressionSummary(input.storyExpression)) : "",
   ].filter(Boolean);
   return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
 }
@@ -861,6 +864,13 @@ export function storyVoiceFor(state, wizard = {}, { level = "K2", shapeId = "" }
     shapeId,
   });
 }
+/** R37: a picture-led book's expression principles, chosen once from the topic's seed, skipping the latest books' cards. */
+export function storyExpressionFor(state, wizard = {}) {
+  return chooseExpression({
+    seed: `${String(wizard.topic || "").trim()}:${Number(wizard.qualitySeedOffset) || 0}`,
+    recentIds: recentExpressionIds(storyQualityBookRecords(state)),
+  });
+}
 /** R33: the stage of a new draft — the parent's pick, else the chosen world card's category, else the topic's. */
 export function draftStageFor(state, wizard = {}) {
   const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
@@ -1057,6 +1067,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       storyVoice: storyVoiceFor(state, wizard, { level: readingLevels.koreanLevel, shapeId: storyShape.id }),
       // R35: the book's format (책 결), decided once here and frozen with the specs above.
       bookFormat: bookFormat(formatId),
+      // R37: a picture-led book's expression principles in place of R35's fixed plot template.
+      ...(formatId === "pictureLed" ? { storyExpression: storyExpressionFor(state, wizard) } : {}),
     },
     readingLevels,
     world,

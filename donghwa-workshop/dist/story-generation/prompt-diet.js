@@ -27,6 +27,7 @@ import { topicPlaceNames } from "./topic-places.js";
 import { storyShapeRule } from "./story-shapes.js";
 import { stageRule } from "./stage-categories.js";
 import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
+import { expressionWriterLine } from "./expression-deck.js";
 import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLed } from "../book-format.js";
 import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 
@@ -175,9 +176,10 @@ export function leanBeatWriterRules(input, outline, briefs = []) {
   return {
     common: `Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; a line of dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. Keep the approved events, place and ending of this beat; no spoken lesson.${mood ? ` Atmosphere: ${str(JSON.stringify(mood), 200)}.` : ""}`,
     // R34: the level in a sentence, then what good prose does and this book's own voice (a spark, never counted).
-    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko")].filter(Boolean).join("\n"),
+    // R37: a picture-led book's expression cards (words and telling) after the voice.
+    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko"), expressionWriterLine(input, "ko")].filter(Boolean).join("\n"),
     // R31e: what the English is for (the paid K2 writer packed every Korean event into two 16-word sentences).
-    en: `${leanLevelLine(input, "en")} The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons.${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}`,
+    en: `${leanLevelLine(input, "en")} The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons.${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}`,
   };
 }
 /** The app prose path (whole book at once) when no beat writer is used. */
@@ -185,7 +187,9 @@ export function leanProseRules(input) {
   return `Write the whole Korean and English prose in paragraphs, one paragraph per approved beat, without page divisions; return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with one approved beat index per blank-line-separated paragraph (metadata only — never beat numbers or labels in the text). Follow the approved beats in order and reveal the twist where the outline puts it; use the scene briefs' sounds, props and actions where they fit.
 Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. The English is its own picture-book text for the same story at its level, never a translation. usedRefrainAt lists only the approved beat IDs where the refrain actually appears.${
     input?.draftProse ? "\nThis is the final refinement of the supplied local draftProse: keep its events and improve its language inside the level." : ""
-  }${input?.storyVoice ? `\n${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}` : ""}`;
+  }${input?.storyVoice ? `\n${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}` : ""}${
+    expressionWriterLine(input, "ko") ? `\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}` : ""
+  }`;
 }
 
 /*
