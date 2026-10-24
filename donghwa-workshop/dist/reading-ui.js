@@ -13,6 +13,8 @@ import {
 import { describeReadingViolation } from "./reading-messages.js";
 export { describeReadingViolation };
 import { analyzeBook, estimateReadingScore } from "./reading-checker.js";
+import { pageReadingSpec } from "./story-generation/checker.js";
+import { buildStoryWords } from "./story-reading-context.js";
 import { layoutOf, openingsEnabled, unitLabel } from "./book-layout.js";
 
 const escape = (value) =>
@@ -185,6 +187,23 @@ export function cleanupReadingOperation() {
   currentOperation?.abort();
   currentOperation = null;
 }
+/**
+ * The options the ④ reading check (checkBookAtLevel) gives analyzeBook for one
+ * candidate. A book without the diet gets exactly the options it always had.
+ */
+export function bookReadingOptions(candidate, context, { characters = [], signal, lean = leanBook(candidate) } = {}) {
+  return {
+    allowedNames: context.allowedNames,
+    storyWords: lean
+      ? buildStoryWords(candidate, candidate.outline, characters, { briefs: candidate.sceneBriefs || [], lean: true })
+      : context.storyWords,
+    koVocabulary: context.specs.ko.vocabularyAvailable ? context.specs.ko.vocabList : null,
+    signal,
+    ...(lean ? { lean: true, pageSpec: (all, language, page) => pageReadingSpec(all, language, page, { lean: true }) } : {}),
+  };
+}
+/** R35 hotfix: a book made from a diet draft (its frozen story input carries the policy). */
+export const leanBook = (book) => (book?.storyInput || book?.input)?.promptDiet?.version === 1;
 export async function checkBookAtLevel(
   book,
   { rewrite = true, showProgress = false } = {},
@@ -201,20 +220,21 @@ export async function checkBookAtLevel(
       `${api.modalHeader("읽기 수준을 확인하고 있어요")}<p class="modal-intro">문장 길이, 어휘와 문형을 검사합니다. 범위를 벗어난 쪽은 최대 2회 다시 씁니다.</p><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="close-modal">검사 취소</button></div>`,
     );
   const specs = book.readingLevelSnapshot?.specs || book.levelSpecs;
+  // R35 hotfix: a diet book (R31c~) is judged as its story check judged it —
+  // the lean page spec (E2+ English unit tolerance, inflections, the story's own
+  // words, out-of-list share as a note) and the book totals as notes.
+  const lean = leanBook(book);
   try {
     const checked = await validateAndRewriteBook(book, {
       signal: controller.signal,
       maxRetries: rewrite ? 2 : 0,
       characters: state.characters,
       analyze: (candidate, context) =>
-        analyzeBook(candidate, context.specs || specs, {
-          allowedNames: context.allowedNames,
-          storyWords: context.storyWords,
-          koVocabulary: context.specs.ko.vocabularyAvailable
-            ? context.specs.ko.vocabList
-            : null,
+        analyzeBook(candidate, context.specs || specs, bookReadingOptions(candidate, context, {
+          characters: state.characters,
           signal: controller.signal,
-        }),
+          lean,
+        })),
     });
     if (
       controller.signal.aborted ||

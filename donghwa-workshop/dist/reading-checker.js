@@ -831,15 +831,23 @@ export function estimateReadingScore(book) {
     ],
   };
 }
-function bookResult(book, specs, options) {
+function bookResult(book, specs, allOptions) {
+  // R35 hotfix: a diet book is judged here the way checkStory judged it when it
+  // was made — the caller passes the same per-page spec (pageReadingSpec with
+  // lean) and lean: true turns the book-level totals into notes, as they are
+  // there. Without these options every book is judged exactly as before.
+  const { pageSpec, lean = false, ...options } = allOptions || {};
+  const specOf = (lang, page, kind) =>
+    typeof pageSpec === "function" ? pageSpec(specs, lang, page) : unitSpec(specs[lang], kind);
+  const bookNote = (row) => ({ ...row, severity: "warning", advisory: true });
   const pages = pageList(book).map((page, index) => {
     // R12: an openings spec is judged per unit (spread or page); others unchanged.
     const kind = unitKind(page),
-      ko = analyzeEstimatedPage(pageText(page, "ko"), unitSpec(specs.ko, kind), {
+      ko = analyzeEstimatedPage(pageText(page, "ko"), specOf("ko", page, kind), {
         ...options,
         language: "ko",
       }),
-      en = analyzeEstimatedPage(pageText(page, "en"), unitSpec(specs.en, kind), {
+      en = analyzeEstimatedPage(pageText(page, "en"), specOf("en", page, kind), {
         ...options,
         language: "en",
       });
@@ -865,13 +873,16 @@ function bookResult(book, specs, options) {
         (sum, page) => sum + page[lang].metrics.sentenceCount,
         0,
       );
-      if (total < budget.min || total > budget.max)
-        bookViolations.push({
+      if (total < budget.min || total > budget.max) {
+        const row = {
           code: "book-sentence-total",
           language: lang,
           actual: total,
           expected: { min: budget.min, max: budget.max },
-        });
+        };
+        if (lean) warnings.push(bookNote(row));
+        else bookViolations.push(row);
+      }
     }
     const outside = unique(
       pages.flatMap((p) => p[lang].metrics.outOfVocabWords),
@@ -897,7 +908,7 @@ function bookResult(book, specs, options) {
       specs[lang].newWordsPerBook != null &&
       outside.length > specs[lang].newWordsPerBook
     )
-      (specs[lang].vocabularyPolicy === "warning"
+      (specs[lang].vocabularyPolicy === "warning" || lean
         ? warnings
         : bookViolations
       ).push({
@@ -906,6 +917,7 @@ function bookResult(book, specs, options) {
         actual: outside.length,
         max: specs[lang].newWordsPerBook,
         words: outside,
+        ...(lean ? { severity: "warning", advisory: true } : {}),
       });
   }
   return {
