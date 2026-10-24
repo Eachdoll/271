@@ -1,0 +1,25 @@
+{
+  "networkCalls": 0,
+  "text": "Morning. We walk into the woods with a little bag.",
+  "bookFormat": {
+    "version": 1,
+    "id": "pictureLed"
+  },
+  "pipelinePassed": true,
+  "rawSpecLeanTolerance": null,
+  "pipelineSpecLeanTolerance": true,
+  "rawViolations": [
+    {
+      "code": "sentence-length",
+      "language": "en",
+      "sentenceIndex": 0,
+      "actual": 1,
+      "expected": {
+        "min": 5,
+        "max": 9
+      }
+    }
+  ],
+  "pipelineViolations": [],
+  "legacyPageText": "Morning. We walk into the woods with a little bag."
+}
