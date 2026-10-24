@@ -1,0 +1,116 @@
+{
+  "passed": true,
+  "pageErrors": [],
+  "paidRequests": [],
+  "cache": "donghwa-shell-v83",
+  "eco": {
+    "outlineComposition": true,
+    "shape": true,
+    "singleMoment": true,
+    "planRequest": true,
+    "planSchema": true,
+    "planNotes": 8,
+    "pagesPlan": true,
+    "pagesRange": true,
+    "noPadding": true,
+    "voice": true,
+    "completed": "text-review",
+    "errors": [],
+    "texts": [
+      "유하가 바닷가에 섰어요.",
+      "“물결이 올까?”",
+      "찰랑!",
+      "철썩!",
+      "쏴아!",
+      "물속 모래가 반짝여요.",
+      "“한 번 더!”",
+      "발자국 옆에서 물결을 기다려요."
+    ],
+    "keptSound": 3,
+    "passed": true,
+    "picturePrompt": true,
+    "coverNoPlan": true,
+    "requests": 0
+  },
+  "proFormatDefault": "pictureLed",
+  "proMemo": {
+    "memo": true,
+    "allPlans": true,
+    "turn": true
+  },
+  "demo": [
+    {
+      "format": "pictureLed",
+      "counts": [
+        2,
+        2,
+        1,
+        2,
+        1,
+        2,
+        2,
+        2,
+        2,
+        1,
+        2,
+        2,
+        2
+      ],
+      "blocking": 0,
+      "badges": [
+        "읽기 쉬움 ✓ · 참고 3",
+        "읽기 쉬움 ✓ · 참고 3",
+        "읽기 쉬움 ✓",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 3",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 4"
+      ],
+      "legacy": null
+    },
+    {
+      "format": "wordy",
+      "counts": [
+        12,
+        6,
+        6,
+        6,
+        6,
+        7,
+        6,
+        6,
+        6,
+        12,
+        6,
+        6,
+        12
+      ],
+      "blocking": 0,
+      "badges": [
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓ · 참고 2",
+        "읽기 쉬움 ✓ · 참고 1",
+        "읽기 쉬움 ✓",
+        "읽기 쉬움 ✓ · 참고 1"
+      ],
+      "legacy": {
+        "lean": false,
+        "passed": true
+      }
+    }
+  ]
+}
