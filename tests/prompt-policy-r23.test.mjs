@@ -40,7 +40,8 @@ const capture = () => ({id: 'openai', calls: [], async complete(req) { this.call
 const services = (engine) => ({engineFor: async o => o.engine || engine, qualityData: data, qualityModule: async () => qualityModule, outlineRequestSchema: schema, baseSystem: 'APP_BASE_RULES', levelRules: i => `FROZEN_LEVEL_SPECS:${JSON.stringify(i.specs)}`, assertValid, inspectOutlineRules: () => ({valid: true, violations: []})});
 const bible = {title: '빨간 장화의 종', planted: {name: '빨간 장화', nameEn: 'a red boot', firstSeen: '현관 옆'}, turn: {seen: '장화 속에서 울리는 작은 종', realized: '"장화가 종이었어!"', overturns: '남의 소리가 아니라 유하 장화 속 종소리'}, stakes: '저녁 노래', lowPoint: '그냥 갈까', payoff: '종을 울려요', echo: '머리맡의 장화', ladder: ['a', 'b', 'c']};
 function policyInput(state, extra = {}) {
-  const {input} = inputFromWizard(state, wizard, {layout: layoutFor(wizard)});
+  // R35: a draft without the diet never carries the picture-led specs; ask for 글이 많은 책 (the R12 specs).
+  const {input} = inputFromWizard(state, {...wizard, bookFormatId: 'wordy'}, {layout: layoutFor(wizard)});
   return normalizeStoryInput({...input, storyQuality: {enabled: true, useBeamSearch: false, twoPass: true, patternId: 'mystery_sound', approvedBooks: [], rules: [], banExamples: []}, ...extra});
 }
 const legacyOf = (input) => { const {promptPolicy: _p, promptDiet: _d, ...rest} = input; return normalizeStoryInput(rest); };

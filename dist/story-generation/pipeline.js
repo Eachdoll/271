@@ -2,6 +2,9 @@ import { leanPaginationRules, leanOpeningsPaginationRules, leanPageRewriteRules,
 import { topicPlaceIds, topicPlaceNames } from "./topic-places.js";
 import { storyShapeRef } from "./story-shapes.js";
 import { stageRef, stagePlanLine } from "./stage-categories.js";
+import { voiceRef } from "./voice-deck.js";
+import { bookFormatRef } from "../book-format.js";
+import { withPicturePlanSchema } from "./picture-plan.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -417,6 +420,16 @@ function modelVisibleInput(source) {
     const { stageCategory, ...rest } = input;
     input = rest;
   }
+  // R34: the voice cards are writer rules, not story data.
+  if (input?.storyVoice) {
+    const { storyVoice, ...rest } = input;
+    input = rest;
+  }
+  // R35: the book's format is a rule line, not story data.
+  if (input?.bookFormat) {
+    const { bookFormat, ...rest } = input;
+    input = rest;
+  }
   if (!input?.catchphrasePolicy) return input;
   const { catchphrasePolicy, ...rest } = input;
   return {
@@ -561,6 +574,10 @@ export function normalizeStoryInput(input = {}) {
     ...(stageRef(input.stageCategory, input.stageCategory?.from)
       ? { stageCategory: stageRef(input.stageCategory, input.stageCategory?.from) }
       : {}),
+    // R34: the book's voice cards (이 책의 목소리), chosen once in the wizard.
+    ...(voiceRef(input.storyVoice) ? { storyVoice: voiceRef(input.storyVoice) } : {}),
+    // R35: the book's format (책 결), chosen once in the wizard and frozen with its specs.
+    ...(bookFormatRef(input.bookFormat) ? { bookFormat: bookFormatRef(input.bookFormat) } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -2263,7 +2280,8 @@ export function outlineRequestSchema(input) {
     schema.properties.tension = outlineTensionSchema(frozenBeatCount(input));
     schema.required.push("tension");
   }
-  return schema;
+  // R36: a picture-led diet draft plans who tells each beat (words or picture) and how.
+  return withPicturePlanSchema(schema, input);
 }
 export async function generateOutline(source, options = {}) {
   const input = normalizeStoryInput(source);

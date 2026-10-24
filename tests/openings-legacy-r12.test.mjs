@@ -315,6 +315,9 @@ const wizardOf = (koreanLevel, englishLevel, pageCount, language, extra = {}) =>
   characterIds: ['yuha', 'greenie'], backgroundIds: [], topic: '바람 피리 찾기', pageCount, koreanLevel, englishLevel,
   language, value: 'none', ending: 'home', storyDate: STORY_DATE, ...extra,
 });
+// R35 책 결: an existing draft was written as 글이 많은 책 (today's budgets); the
+// legacy groups ask for that format so their frozen specs stay byte-identical.
+const LEGACY_FORMAT = {bookFormatId: 'wordy'};
 const WIZARDS = {
   'K1-E0-12-bilingual': wizardOf('K1', 'E0', 12, 'bilingual'),
   'K2-E2-16-bilingual': wizardOf('K2', 'E2', 16, 'bilingual'),
@@ -413,7 +416,7 @@ const REQUEST_SCENARIOS = {
 };
 const ledger = meta => (meta?.qualityCheckpoint ? {contextFingerprint: meta.qualityCheckpoint.contextFingerprint, keys: Object.keys(meta.qualityCheckpoint.completed || {})} : null);
 async function requestScenario(M, name, s, book) {
-  const state = seed(M, {quality: s.quality}), prepared = M.ui.inputFromWizard(state, {...WIZARDS[s.wizard], ...s.wizardPatch});
+  const state = seed(M, {quality: s.quality}), prepared = M.ui.inputFromWizard(state, {...WIZARDS[s.wizard], ...s.wizardPatch, ...LEGACY_FORMAT});
   // An existing draft: saved before the editor round and page rhythm.
   const input = {...asExistingDraft(prepared.input), bookId: `legacy-${name}`};
   const scenario = {...s, normalized: M.pipeline.normalizeStoryInput(input), counts: {}};
@@ -463,9 +466,9 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
-    const {rhythm, shortSentences, ...plain} = spec || {};
+    const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
   }));
   return {...rest, specs};
@@ -473,7 +476,7 @@ function asExistingDraft(input) {
 async function demoGroup(M) {
   const out = {};
   for (const name of ['K1-E0-12-bilingual', 'K2-E2-16-bilingual', 'K3-E3-24-dual', 'K2-E2-8-dual', 'K2-E2-16-en', 'K4-E4-16-ko']) {
-    const state = seed(M), input = {...asExistingDraft(M.ui.inputFromWizard(state, WIZARDS[name]).input), bookId: `demo-${name}`}, normalized = M.pipeline.normalizeStoryInput(input);
+    const state = seed(M), input = {...asExistingDraft(M.ui.inputFromWizard(state, {...WIZARDS[name], ...LEGACY_FORMAT}).input), bookId: `demo-${name}`}, normalized = M.pipeline.normalizeStoryInput(input);
     const outline = M.demo.demoOutline(normalized), prose = M.demo.demoProse(outline, normalized);
     out[`${name}-raw`] = {outline, prose, pagination: M.demo.demoPagination(outline, prose, normalized)};
     const options = {engineId: 'demo'};
@@ -708,7 +711,14 @@ const PINS = {
   // name} chosen from its topic (wizard and normalized); the fixture topics
   // name no stage category, so no stageCategory key; nothing else differs
   // (dump-diffed against 8f15876). 8f15876: 287d5785…1a26.
-  inputs: '5b0447718560b23519632eb1f0cba48822da96872d2b02d3cfb5b6c11d74436d',
+  // 목소리 카드 (R34): every new draft's input carries storyVoice {version, cards}
+  // (wizard and normalized); nothing else differs (dump-diffed against ae40cf5).
+  // ae40cf5: 5b044771…436d.
+  // 책 결 (R35): every new draft's input carries bookFormat {version: 1, id:
+  // "pictureLed"} (wizard and normalized); these are page-layout drafts, so
+  // their specs are unchanged; nothing else differs (dump-diffed against
+  // e698666). e698666: 1b7d0372…c67.
+  inputs: '6bfd45af91f0e3a6fe7bc06c63500d633df06008b00690dff0e66fe9bf211a73',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -756,7 +766,13 @@ const PINS = {
   // 이야기 모양 (R33-2): the two demo jobs' inputs carry storyShape (the demo
   // outline itself gets no shape, so the demo stays as it was); nothing else
   // differs (dump-diffed against 8f15876). 8f15876: c20447c5…624c.
-  fullAutoDemo: '1365c1de5391cf4c4dfddc4e679bece6f607c4694204c90a942ce7513765e589',
+  // 목소리 카드 (R34): the two demo jobs' inputs carry storyVoice (the demo text
+  // itself is fixed); nothing else differs (dump-diffed against ae40cf5).
+  // ae40cf5: 1365c1de…6589.
+  // 책 결 (R35): the two demo jobs' inputs carry bookFormat (both are page books
+  // — K1 and English-only — so their specs and demo text are unchanged);
+  // nothing else differs (dump-diffed against e698666). e698666: 1f61571a…2ac3.
+  fullAutoDemo: 'bba59c5011f8293012b20300ce60a1251d96185e76d534defdc07a5c66ce9e06',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

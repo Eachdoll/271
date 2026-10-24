@@ -61,6 +61,8 @@ import {
   splitSentences,
 } from "../dist/reading-checker.js";
 import { describeReadingViolation } from "../dist/reading-messages.js";
+import { styleReport, styleSummaryLine } from "../dist/story-generation/style-report.js";
+import { voiceSummary } from "../dist/story-generation/voice-deck.js";
 import {
   splitAtEllipsis,
   hasShortSentences,
@@ -101,6 +103,8 @@ const wizard = {
   language: "bilingual",
   simpleFlow: true,
   allowNew: !selection,
+  // R35 책 결: the default run is the picture-led book; BOOK_FORMAT=wordy asks for 글이 많은 책.
+  ...(process.env.BOOK_FORMAT === "wordy" ? { bookFormatId: "wordy" } : {}),
 };
 
 // Where keys come from: the environment of the machine that runs this, once.
@@ -340,6 +344,10 @@ function armReport(run, measured, usage) {
   for (const r of measured.rows) lines.push(`| ${r.pageNo} | ${r.sentences} | ${r.rhythm} | ${r.eojeol} | ${r.average} | ${r.longest} | ${r.quotes} | ${r.exclaims} | ${r.sounds.join(" ") || "-"} | ${verdict(r.koIssues, r.koNotes, true)} | ${verdict(r.enIssues, r.enNotes, r.en)} |`);
   const t = measured.totals;
   lines.push("", `책 전체: ${t.pages}쪽 · 문장 ${t.sentences}(리듬 ${t.rhythm}) · 어절 ${t.eojeol} · 보통 문장 평균 ${t.averageEojeol}어절 · 최장 ${t.longest} · 대사 문장 ${t.quotes} · 느낌표 ${t.exclaims} · 반복형 소리말 ${t.soundWords.length}종/${t.pagesWithSounds}쪽 (${t.soundWords.join(" ") || "-"}) · 영어 ${t.enWords}단어 · 검사 걸린 쪽 한글 ${t.koIssuePages} / 영어 ${t.enIssuePages}`);
+  // R34: the style numbers of the final pages (and the writer's own text), advisory.
+  const finalStyle = styleReport(measured.rows.map((r) => r.ko), { names: (job.input?.characters || []).map((c) => c?.name) });
+  if (finalStyle) lines.push(`${styleSummaryLine(finalStyle)} (최종 쪽 기준)${job.styleReport?.sentences ? ` · 작가 원문: ${styleSummaryLine(job.styleReport).replace("문체 실측 · ", "")}` : ""}`);
+  if (voiceSummary(job.input?.storyVoice)) lines.push(`- ${voiceSummary(job.input.storyVoice)}${job.input?.storyShape?.name ? ` · 이야기 모양 ${job.input.storyShape.name}` : ""}${job.input?.bookFormat?.id ? ` · 책 결 ${job.input.bookFormat.id === "pictureLed" ? "그림책 결" : "글이 많은 책"}` : ""}`);
   const notes = [];
   if (job.writerReport) notes.push(`작가 리포트: ${cell(JSON.stringify(job.writerReport)).slice(0, 600)}`);
   if (job.revision) notes.push(`통독: ${cell(JSON.stringify(job.revision.report || job.revision)).slice(0, 600)}`);

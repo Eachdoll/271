@@ -50,6 +50,7 @@ import {
   simpleDrawingInFlight,
   approvalImageWork,
 } from "./simple-create.js";
+import { BOOK_FORMAT_OPTIONS, formatFor } from "./book-format.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
   bookPricingUnknown,
@@ -1688,7 +1689,7 @@ function createPage() {
       "이야기 길이",
       pageCountOptions(w),
       w.pageCount,
-    )}${renderReadingSelectors(w)}${selectField(
+    )}${renderReadingSelectors(w)}${selectField("bookFormatId", "책 결", BOOK_FORMAT_OPTIONS, formatFor(w))}${selectField(
       "value",
       "함께 생각할 가치",
       [
@@ -1736,6 +1737,7 @@ function syncWizard() {
       "worldMemo",
       "storyQualityPatternId",
       "stageCategoryId",
+      "bookFormatId",
       "storyWorldId",
       "storySeason",
       "storyTimeOfDay",

@@ -1,6 +1,7 @@
 import { frozenBeatCount } from "./schemas.js";
 import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
 import { splitSentences } from "../story-quality/dist/util.js";
+import { isPictureLed } from "../book-format.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -126,6 +127,13 @@ export function demoOutline(input) {
     settingKey: background || "forest-path",
   }));
   beats[0].summary = `${input.characters.map((c) => c.name).join(", ")}의 소풍날이에요. ${beats[0].summary}`;
+  // R36: a picture-led openings demo carries the planned split between words and picture.
+  if (isPictureLed(input) && input.promptDiet?.version === 1 && input.layoutPolicy?.kind === "openings") {
+    const keys = openingDemoKeys({ beats });
+    beats.forEach((beat, i) => {
+      if (DEMO_PLANS[keys[i]]) beat.picturePlan = { version: 1, ...DEMO_PLANS[keys[i]] };
+    });
+  }
   if (input.endingType === "open")
     beats.at(-1).summary +=
       " 잠들기 전에 “내일은 노래하는 나무를 찾아보자!”라고 말해요.";
@@ -331,6 +339,59 @@ const OPENING_DEMO = Object.freeze({
     "We walk home under the red sky. I put the box by my soft bed. “Thank you, little box,” I said. The moon is up over my home.",
   ],
 });
+/*
+ * R35 그림책 결 demo: the same singing-stone story told the picture-led way —
+ * one to four Korean sentences per opening (one of them a single sound), one
+ * to four short English lines, three stones each bigger than the last, the
+ * turn carried by the picture. The demo is free and is not a quality claim.
+ */
+const PICTURE_LED_DEMO = Object.freeze({
+  setup: [
+    "아침이에요. 두 친구가 작은 가방을 메고 숲으로 가요.",
+    "Morning. We walk into the woods with a little bag.",
+  ],
+  want: [
+    "큰 나무에 팻말이 붙어 있어요. 노래하는 돌! “꼭 찾고 싶어.”",
+    "A sign is on the big tree. A singing stone! “I want to find it,” I said.",
+  ],
+  attempt1: [
+    "큰 돌이 있어요. 톡톡. “노래 안 해.”",
+    "A big stone. Tap, tap. No song.",
+  ],
+  attempt2: [
+    "더 큰 돌이 있어요. 쿵쿵! 개미들이 줄줄이 나와요. “미안해, 개미야.”",
+    "A bigger stone. Thump! Little ants run out. “Sorry, ants,” I said.",
+  ],
+  attempt3: [
+    "가장 큰 바위예요. 두 친구가 귀를 대요. 후우… 바위 뒤에서 소리가 나요!",
+    "The biggest rock. We put our ears on it. Whoo… a song is behind the rock!",
+  ],
+  attempts: [
+    "큰 돌은 톡톡. 더 큰 돌은 쿵쿵. 가장 큰 바위에서 후우… 소리가 나요!",
+    "Tap, tap. Thump, thump. Whoo… a song is in the big rock!",
+  ],
+  turn: ["휘이이!", "Whoo!"],
+  resolution: [
+    "바위 틈에 빈 도시락 통이 끼어 있었어요. 바람이 통 속으로 들어가 노래해요. “통이 노래하고 있었어!” 두 친구도 후우 불어요.",
+    "Our lunch box is in the rocks! The wind sings in it. We blow too. Whoo!",
+  ],
+  close: [
+    "집으로 가는 길, 가방 속 통이 달그락 노래해요. “잘 자, 노래하는 통아.”",
+    "We walk home. The box sings in my bag. Good night, little box.",
+  ],
+});
+/* R36: the demo's picture plan per paragraph key (spreads where the demo paginates spreads). */
+const DEMO_PLANS = Object.freeze({
+  setup: { carrier: "both", words: "아침, 소풍 가는 길", picture: "two tiny friends at the edge of a huge green forest, a lunch box swinging from the bag", shot: "wide", space: "airy", hook: "", unit: "spread" },
+  want: { carrier: "words", words: "\"꼭 찾고 싶어\" 하는 바람", picture: "a hand-drawn sign of a stone with music notes nailed to the tree", shot: "middle", space: "full", hook: "a faint whoo drifting in from the right edge", unit: "pages" },
+  attempt1: { carrier: "picture", words: "톡톡 소리와 한마디", picture: "a small stone, the stick tapping it, the friend's ear pressed close", shot: "close", space: "airy", hook: "", unit: "pages" },
+  attempt2: { carrier: "picture", words: "쿵쿵, 개미에게 미안해", picture: "a bigger stone lifted and a line of ants marching out", shot: "middle", space: "full", hook: "", unit: "pages" },
+  attempt3: { carrier: "contrast", words: "후우 소리가 바위 뒤에서", picture: "the biggest rock, and behind it, half hidden, the corner of a lunch box", shot: "wide", space: "airy", hook: "the sound comes from something the child can already spot", unit: "pages" },
+  attempts: { carrier: "picture", words: "톡톡·쿵쿵·후우, 세 번", picture: "three stones in a row, each bigger, the last one humming", shot: "wide", space: "airy", hook: "", unit: "pages" },
+  turn: { carrier: "picture", words: "휘이이! 한 단어", picture: "the lunch box wedged in the rock with wind pouring in, the friends' mouths wide open", shot: "close", space: "airy", hook: "", unit: "spread" },
+  resolution: { carrier: "both", words: "통이 노래하고 있었다는 말", picture: "the two friends blowing across the box rim, birds joining in", shot: "middle", space: "full", hook: "", unit: "pages" },
+  close: { carrier: "words", words: "\"잘 자, 노래하는 통아\"", picture: "the box by the bed under moonlight, the same lunch box from the first picture", shot: "wide", space: "airy", hook: "", unit: "spread" },
+});
 /** The demo paragraph key of every beat: attempts in order, or one combined attempt. */
 function openingDemoKeys(outline) {
   const attempts = outline.beats.filter((beat) => beat.type === "attempt").length;
@@ -349,8 +410,10 @@ function openingDemoKeys(outline) {
 function demoOpeningsProse(outline, input) {
   const baseline = demoOutline(input),
     keys = openingDemoKeys(outline),
-    ko = keys.map((key) => OPENING_DEMO[key][0]),
-    en = keys.map((key) => OPENING_DEMO[key][1]);
+    // R35: a picture-led draft shows the short demo (a few sentences per opening).
+    set = isPictureLed(input) ? PICTURE_LED_DEMO : OPENING_DEMO,
+    ko = keys.map((key) => set[key][0]),
+    en = keys.map((key) => set[key][1]);
   // A parent's beat edit is quoted verbatim into that beat, as in page demos.
   outline.beats.forEach((beat, index) => {
     if (

@@ -8,6 +8,7 @@
  * carried forward from the model's own earlier state.
  */
 import { PLOT_CONTRACT_SCHEMA } from "./plot-contract.js";
+import { settlePicturePlans } from "./picture-plan.js";
 import { normalizeFailureReason } from "../story-quality/dist/plotCheck.js";
 
 const object = (value) =>
@@ -528,5 +529,7 @@ export function normalizeOutlineResponse(source, input = {}) {
     outline.plotContract = result.contract;
     notes.push(...result.notes);
   }
+  // R36: the picture plan is cleaned (picture-led diet drafts) or dropped; never a reason to stop.
+  settlePicturePlans(outline, input);
   return { outline, notes: unique(notes) };
 }

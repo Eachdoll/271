@@ -96,7 +96,7 @@ test('R33 the lean outline request carries one STAGE line (the world card\'s own
   assert.equal(stageRule({}), '');
   assert.equal(stageDirection(input), '무대: 자연 · 바다 — 모래·파도·조개·갈매기·등대·바위 웅덩이');
   assert.equal(stageDirection(withCard), '무대: 제주 바다');
-  assert.match(directionLine(input), /무대: 자연 · 바다 — 모래·파도·조개·갈매기·등대·바위 웅덩이\.$/);
+  assert.match(directionLine(input), /무대: 자연 · 바다 — 모래·파도·조개·갈매기·등대·바위 웅덩이\. 책 결: 그림책 결 — [^\n]+\.$/);
   assert.doesNotMatch(directionLine(legacy(input)), /무대:/);
   assert.match(stagePlanLine(input), /^ The parent chose the stage "자연 · 바다" \(모래·파도·조개·갈매기·등대·바위 웅덩이\): prefer the supplied places that fit it; when none fits and new places are allowed, create one place there\.$/);
   assert.equal(stagePlanLine({stageCategory: {id: 'nature_sea', from: 'topic'}}), '', 'a topic-guessed stage adds nothing to the planner');

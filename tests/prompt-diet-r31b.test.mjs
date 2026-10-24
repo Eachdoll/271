@@ -91,7 +91,8 @@ test('R31b the K2 outline of a diet draft: the app path with the lean prompt and
   }};
   const result = await generateOutline(input, {engineId: 'openai', engine, qualityEngines: {outline: engine, prose: engine, cheap: engine}});
   const outlineCall = calls.at(-1);
-  assert.ok(outlineCall.system.length <= 4000, `${outlineCall.system.length} chars`);
+  // R35 adds the PICTURE-LED composition block (≈ 650 chars); R36 the PICTURE PLAN paragraph (≈ 1,000); measured 5,712.
+  assert.ok(outlineCall.system.length <= 6000, `${outlineCall.system.length} chars`);
   assert.doesNotMatch(outlineCall.system + outlineCall.user, QUOTA);
   assert.doesNotMatch(outlineCall.user, /\[플롯 패턴\]|\[정해진 재료\]|반드시 이대로/u, 'no package plot-pattern seed');
   assert.match(outlineCall.system, /THE WRITERS' ROOM CHOSE THIS PITCH — write the outline from it, in your own way/u);
@@ -119,8 +120,9 @@ test('R31b the K1 outline of a diet draft has no ledger and the K1 shape once; �
   const engine = {id: 'openai', async complete(req) { calls.push(req); return reply(o); }};
   const result = await generateOutline(input, {engine});
   assert.equal(calls.length, 1, 'no repair call for a missing ledger');
-  // R31b measured 3,169; R33 adds one STORY SHAPE line and one STAGE line (≈ 500 chars, a spark each, no counters).
-  assert.ok(calls[0].system.length <= 4000, `${calls[0].system.length} chars`);
+  // R31b measured 3,169; R33 adds one STORY SHAPE line and one STAGE line (≈ 500 chars, a spark each, no counters);
+  // R35 adds the PICTURE-LED composition block, R36 the PICTURE PLAN paragraph (measured 5,466).
+  assert.ok(calls[0].system.length <= 6000, `${calls[0].system.length} chars`);
   assert.doesNotMatch(calls[0].system, QUOTA);
   assert.doesNotMatch(calls[0].system, /plotContract/u);
   assert.equal((calls[0].system.match(/No villain/gu) || []).length, 1, 'the K1 shape is stated once');
@@ -135,7 +137,8 @@ test('R31b the beat writer and the app prose path of a diet draft: voice, not co
   const writer = {id: 'openai', async complete(req) { calls.push(req); const n = Number(/이 비트는 (\d+)문장/u.exec(req.user)?.[1] || 3); const ko = !/original English/u.test(req.system); return reply({text: Array.from({length: n}, (_, i) => ko ? `유하가 젖은 잎을 ${i + 1}번 살짝 만져요.` : `Yuha taps the wet leaf ${i + 1} times.`).join(' '), pick: 1, reason: 'x'}); }};
   await generateProse(o, input, {engineId: 'openai', engine: writer, qualityEngines: {beatWriter: writer, cheap: writer}});
   const beat = calls.find((c) => /\[이번 비트\] 3 /u.test(c.user) && !/original English/u.test(c.system));
-  assert.ok(beat.system.length <= 1200, `${beat.system.length} chars`);
+  // R31b measured 659; R34 adds the prose palette and this book's five voice cards with examples (≈ 800 chars, a spark, no counters).
+  assert.ok(beat.system.length <= 2000, `${beat.system.length} chars`);
   assert.doesNotMatch(beat.system, QUOTA);
   assert.doesNotMatch(beat.system, /EVERY sentence|Never repeat/u);
   assert.match(beat.system, /the way a good picture book sounds read aloud/u);

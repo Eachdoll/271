@@ -36,12 +36,15 @@
  * buys a beat twice.
  */
 import { ledger } from "./quality-adapter.js";
+import { styleReport } from "./style-report.js";
 import { buildBeatPagePlan } from "./pagination.js";
 import { isOpeningsInput } from "./opening-prose.js";
 import { analyzeEstimatedPage, splitSentences, mergeDialogueTags, leanEnglishLevel } from "../reading-checker.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { tensionRange } from "./orchestration.js";
 import { hasPromptDiet, writerBriefView } from "./prompt-diet.js";
+import { pictureLedBudgetLine } from "../book-format.js";
+import { planOf, picturePlanWriterLine } from "./picture-plan.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -93,7 +96,11 @@ export function beatBudgets(outline, input) {
         // Openings keep the frozen unit range; pages get ±20% (the book-level rhythm band).
         min = unit ? lo : Math.max(1, Math.floor(lo * 0.8)),
         max = unit ? hi : Math.max(min + 1, Math.ceil(hi * 1.2)),
-        target = Math.min(max, Math.max(min, Math.round(((lo + hi) / 2) * scale)));
+        // R35 그림책 결: a calm beat is a line or two, the big moment up to the top of the range.
+        target =
+          spec.pictureLed?.version === 1 && unit
+            ? Math.min(max, Math.max(min, lo + Math.round((hi - lo) * ((t - range.min) / Math.max(1, range.max - range.min)) * 0.8)))
+            : Math.min(max, Math.max(min, Math.round(((lo + hi) / 2) * scale)));
       out[lang] = { min, max, target };
     }
     return out;
@@ -128,14 +135,24 @@ function leanEnglishProblems(clean, metrics, budget, spec) {
   if (n > band.max) out.push(`문장이 ${n}개로 많아요(이 비트는 ${budget.min}~${budget.max}문장, ${band.max}개까지 괜찮아요).`);
   const exempt = new Set(list(metrics.minimumLengthExemptSentenceIndices)),
     texts = mergeDialogueTags(splitSentences(clean)),
-    rows = list(metrics.wordsPerSentence)
+    rows = list(metrics.lengthsWithoutSoundRuns || metrics.wordsPerSentence)
       .map((count, index) => ({ count, index, text: str(texts[index], 70) }))
       .filter((row) => !exempt.has(row.index)),
     mean = rows.length ? rows.reduce((sum, row) => sum + row.count, 0) / rows.length : 0,
     long = rows.filter((row) => row.count > wps.max),
     allowedLong = Math.ceil(rows.length / 3 - 1e-9),
     hardLimit = wps.max + 3,
-    quote = (list) => list.map((row) => `"${row.text}"(${row.count}단어)`).join(", ");
+    quote = (list) => list.map((row) => `"${row.text}"(${row.count}단어)`).join(", "),
+    // R35 그림책 결: the mean from a few sentences on, the length by its hard cap only (the page check reads the same).
+    picture = spec.pictureLed?.version === 1,
+    cap = wps.max + Number(spec.pictureLed?.longOver ?? 5);
+  if (picture) {
+    if (rows.length >= Number(spec.pictureLed.meanFromSentences ?? 3) && mean > wps.max + 0.5)
+      out.push(`문장이 평균 ${Math.round(mean * 10) / 10}단어로 길어요(한 문장 ${wps.min}~${wps.max}단어). 긴 문장: ${quote(long)}`);
+    else if (long.some((row) => row.count > cap))
+      out.push(`너무 긴 문장이 있어요(한 문장 ${cap}단어까지). 긴 문장: ${quote(long.filter((row) => row.count > cap))}`);
+    return out;
+  }
   if (rows.length && mean > wps.max + 0.5)
     out.push(`문장이 평균 ${Math.round(mean * 10) / 10}단어로 길어요(한 문장 ${wps.min}~${wps.max}단어). 긴 문장: ${quote(long)}`);
   else if (long.length > allowedLong || long.some((row) => row.count > hardLimit))
@@ -170,7 +187,9 @@ export function checkBeatText(text, lang, budget, spec, { refrain = "", needsRef
   } catch {
     metrics = null;
   }
-  const sentences = leanEn && metrics ? metrics.sentenceCount : splitSentences(clean).length;
+  // R35 그림책 결: a picture-led Korean beat is counted the way its page will be (pauses split, sound runs once).
+  const picture = spec?.pictureLed?.version === 1,
+    sentences = (leanEn || picture) && metrics ? metrics.sentenceCount : splitSentences(clean).length;
   if (leanEn && metrics) problems.push(...leanEnglishProblems(clean, metrics, budget, spec));
   else {
     // R31f: a lean Korean beat is told its band, not a target to hit exactly.
@@ -178,7 +197,12 @@ export function checkBeatText(text, lang, budget, spec, { refrain = "", needsRef
     if (sentences > band.max) problems.push(band.lean ? `문장이 ${sentences}개로 많아요(이 비트는 ${budget.min}~${budget.max}문장, ${band.max}개까지 괜찮아요).` : `문장이 ${sentences}개로 많아요(목표 ${budget.target}, 범위 ${budget.min}~${budget.max}).`);
     const limit = maxWords(spec) + 1,
       long = list(metrics?.wordsPerSentence).filter((n) => n > limit).length;
-    if (long > Math.max(1, Math.floor(sentences / 3)))
+    if (picture) {
+      // R35 그림책 결: only a sentence past the hard cap is a problem; the share of long sentences is a book note.
+      const cap = maxWords(spec) + Number(spec.pictureLed.longOver ?? 5),
+        over = list(metrics?.lengthsWithoutSoundRuns || metrics?.wordsPerSentence).filter((n) => n > cap).length;
+      if (over) problems.push(`너무 긴 문장이 ${over}개예요(한 문장 ${cap}${lang === "ko" ? "어절" : "단어"}까지).`);
+    } else if (long > Math.max(1, Math.floor(sentences / 3)))
       problems.push(`긴 문장이 ${long}개예요(한 문장 ${limit - 1}${lang === "ko" ? "어절" : "단어"} 안팎).`);
   }
   if (needsRefrain && refrain && !hasRefrain(clean, refrain))
@@ -267,6 +291,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       `[결말 상태] ${ending}`,
       bible?.growth ? `[성장 설계] want ${bible.growth.want} → need ${bible.growth.need} (걸림돌 ${bible.growth.flaw}); 교훈은 말하지 않고 행동으로: ${bible.lesson || ""}` : "",
       `[이번 비트] ${beat.index} ${beat.type}: ${str(beat.summary, 500)}${list(outline.tension)[i] !== undefined ? ` · 목표 긴장 ${outline.tension[i]}` : ""}`,
+      // R36: who tells this beat (a picture-led diet draft's plan) — permission to leave the picture's part unsaid.
+      lean ? picturePlanWriterLine(planOf(outline, beat.index), lang) : "",
       // R31e: on the diet the writer gets the brief's story-carrying fields; light, weather and creatures are the picture's.
       brief
         ? lean
@@ -276,7 +302,13 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       // R31e: the English of a diet draft gets its range (no tension-scaled target) — the target pushed two-sentence beats into 16-word sentences.
       lean && !ko
         ? `[분량] 이 비트의 영어는 ${budget.min}~${budget.max}문장, 한 문장 ${object(spec.wordsPerSentence) ? spec.wordsPerSentence.min : 4}~${maxWords(spec)} words.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`
-        : `[분량] 이 비트는 ${budget.target}문장 안팎(범위 ${budget.min}~${budget.max}). 한 문장 ${maxWords(spec)}${ko ? "어절" : " words"} 안팎.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`,
+        : lean && spec.pictureLed?.version === 1
+          // R35 그림책 결: a few sentences, the picture carries the rest — the check reads the band and a hard cap.
+          ? `${pictureLedBudgetLine(budget, spec)}${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`
+        : lean && input.storyVoice
+          // R34: a voiced book is asked for contrast, not even sentences — the check reads the same band.
+          ? `[분량] 이 비트는 ${budget.min}~${budget.max}문장. 짧은 문장과 긴 문장을 섞어요(한 단어 문장도 좋아요); 평균이 ${Array.isArray(spec.eojeolPerSentence) ? `${spec.eojeolPerSentence[0]}~${spec.eojeolPerSentence[1]}` : maxWords(spec)}어절 안이면 되고, ${maxWords(spec) + 1}어절을 넘는 문장은 셋에 하나까지.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`
+          : `[분량] 이 비트는 ${budget.target}문장 안팎(범위 ${budget.min}~${budget.max}). 한 문장 ${maxWords(spec)}${ko ? "어절" : " words"} 안팎.${cast ? ` 등장인물은 고른 인물만: ${cast}.` : ""}`,
       needsRefrain ? (ko ? `[되풀이 말 — 글자 그대로 한 번] ${refrain}` : `[Refrain — use this exact line once] ${refrain}`) : "",
       prior.text ? `[앞 비트까지 쓴 글${prior.summarized ? "(앞부분은 줄거리 요약)" : ""}]\n${prior.text}` : "[앞 비트] 없음 — 이 비트가 책의 첫 장면이에요.",
       anchor ? `[문체 기준 — 이 책의 첫 비트. 같은 목소리·리듬으로]\n${anchor}` : "",
@@ -409,6 +441,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       prose[lang] = written[lang].map((row) => row.text).join("\n\n");
       prose.paragraphBeats[lang] = written[lang].map((row) => row.beatIndex);
       const share = dialogueShare(written[lang].map((row) => row.text));
+      // R34: the free style numbers of the writer's Korean text (advisory: ③, the check report and the runner show them).
+      if (lang === "ko") report.style = styleReport(written[lang].map((row) => row.text), { names: list(input.characters).map((c) => c?.name) });
       report[`dialogue_${lang}`] = Math.round(share * 100) / 100;
       if (share < DIALOGUE_MIN(input))
         report.warnings.push(`${lang === "ko" ? "한글" : "영어"} 대화 비율 ${Math.round(share * 100)}% (책 전체 기준 ${Math.round(DIALOGUE_MIN(input) * 100)}% 이상 권장)`);
@@ -424,7 +458,7 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     return {
       data: prose,
       usage: journal.usage(),
-      meta: { ...journal.summary(), stage: "prose", writer: clone(report), ...(report.warnings.length ? { softIssues: [...report.warnings] } : {}) },
+      meta: { ...journal.summary(), stage: "prose", writer: clone(report), ...(report.style ? { style: clone(report.style) } : {}), ...(report.warnings.length ? { softIssues: [...report.warnings] } : {}) },
     };
   } catch (error) {
     if (error?.name === "AbortError") throw error;

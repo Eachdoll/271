@@ -46,6 +46,9 @@ import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
 import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
+import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
+import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
+import { picturePlanNote } from "./picture-plan.js";
 import {
   SPREAD_SHOTS,
   SHOTS,
@@ -454,19 +457,23 @@ export function renderStoryCoherence(report, { dirty = false } = {}) {
 }
 
 /** R33: the shape and stage an outline was written to (diet drafts). */
-function shapeStageNote(outline) {
+function shapeStageNote(outline, input = null) {
   const shape = outline?.storyShape,
     stage = outline?.stageCategory;
   const rows = [
+    // R35: the book's format (그림책 결 / 글이 많은 책), frozen with the draft.
+    bookFormatLabel(input) ? `책 결 · ${esc(bookFormatLabel(input))}${input.bookFormat.id === "pictureLed" ? " — 글은 짧게, 그림이 말해요" : ""}` : "",
     shape?.name ? `이야기 모양 · ${esc(shape.name)}${shapeById(shape.id)?.shape ? ` — ${esc(shapeById(shape.id).shape)}` : ""}` : "",
     stage?.name ? `무대 · ${esc(stage.name)}${stageById(stage.id)?.ko ? ` — ${esc(stageById(stage.id).ko)}` : ""}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
+    // R34: the voice the writer was given (a draft with a shape is a diet draft).
+    shape?.name && voiceSummary(input?.storyVoice) ? esc(voiceSummary(input.storyVoice)) : "",
   ].filter(Boolean);
   return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
 }
 export function renderStoryQualityPlan(draft) {
   const metadata = draft.outline?.quality,
     plan = draft.outline?.plan,
-    note = shapeStageNote(draft.outline);
+    note = shapeStageNote(draft.outline, draft.input);
   if (!metadata && !plan) return note ? `<section class="story-card quality-seed"><strong>이야기 모양과 무대</strong>${note}</section>` : "";
   const chips = String(metadata?.seedSummary || "")
       .split(" · ")
@@ -845,6 +852,15 @@ export function storyShapeFor(state, wizard = {}, { level = "K2" } = {}) {
     }),
   );
 }
+/** R34: the book's voice cards (이 책의 목소리), chosen once from the topic's seed, skipping the latest books' cards, leaning to the shape. */
+export function storyVoiceFor(state, wizard = {}, { level = "K2", shapeId = "" } = {}) {
+  return chooseVoice({
+    seed: `${String(wizard.topic || "").trim()}:${Number(wizard.qualitySeedOffset) || 0}`,
+    level,
+    recentIds: recentVoiceIds(storyQualityBookRecords(state)),
+    shapeId,
+  });
+}
 /** R33: the stage of a new draft — the parent's pick, else the chosen world card's category, else the topic's. */
 export function draftStageFor(state, wizard = {}) {
   const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
@@ -895,6 +911,10 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
   readingLevels.specs = withPageRhythm(readingLevels.specs);
   // R31a: a new K1 draft's Korean spec judges short rhythm lines and page averages.
   readingLevels.specs = withShortSentences(readingLevels.specs);
+  // R35 책 결: the default new book is picture-led (few sentences per opening,
+  // the three-step composition); 글이 많은 책 keeps today's budgets.
+  const formatId = formatFor(wizard);
+  if (formatId === "pictureLed") readingLevels.specs = withPictureLed(readingLevels.specs, { layout });
   const k1 = isK1Draft({ koreanLevel: readingLevels.koreanLevel, language: wizard.language, layout }),
     // R31a: a simple-mode story (no ending choice there) ends where its topic goes.
     topicEnding = wizard.simpleFlow === true && wizard.ending !== "open" && wizard.ending !== "custom";
@@ -920,7 +940,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       world.stylePresetId;
   }
   // R33: the stage of this draft (the pick, the chosen world card's category, or the topic's).
-  const stageCategory = draftStageFor(state, wizard);
+  const stageCategory = draftStageFor(state, wizard),
+    storyShape = storyShapeFor(state, wizard, { level: readingLevels.koreanLevel });
   return {
     input: {
       characters,
@@ -1030,8 +1051,12 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // R31b: lean requests — no counters, no spec JSON, no plot formula.
       promptDiet: promptDiet(),
       // R33: the story's shape and stage, chosen once here and frozen with the draft.
-      storyShape: storyShapeFor(state, wizard, { level: readingLevels.koreanLevel }),
+      storyShape,
       ...(stageCategory ? { stageCategory } : {}),
+      // R34: the book's voice cards, chosen once here (never on resume).
+      storyVoice: storyVoiceFor(state, wizard, { level: readingLevels.koreanLevel, shapeId: storyShape.id }),
+      // R35: the book's format (책 결), decided once here and frozen with the specs above.
+      bookFormat: bookFormat(formatId),
     },
     readingLevels,
     world,
@@ -1448,7 +1473,7 @@ export function renderStoryBeatCard(draft, index, { open = false } = {}) {
         .filter((page) => page.beatIndex === beat.index)
         .map((page) => page.pageNo)
         .join("·")}쪽`;
-  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${pagesLabel}</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "보통은 집" : "배경 서랍"}</legend><div class="story-chip-row">${usual.map(chip).join("") || (others.length ? "" : '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>')}</div>${others.length ? `<details class="story-place-more" ${others.some((background) => background.id === place) ? "open" : ""}><summary>다른 장소 ${others.length}곳</summary><div class="story-chip-row">${others.map(chip).join("")}</div></details>` : ""}${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
+  return `<details class="story-card story-beat-card" data-beat-details="${index}" ${open ? "open" : ""}><summary><span class="story-beat-heading">비트 ${index + 1} · ${esc(BEAT_LABELS[beat.type] || beat.type)}<small>${pagesLabel}</small></span><span class="story-beat-preview">${esc(beat.summary)}</span><span class="story-emotion-badge">${esc(emotion || "감정 선택")}</span></summary><div class="story-beat-body"><div class="field"><label class="story-label" for="story-beat-summary-${index}">사건</label><textarea id="story-beat-summary-${index}" data-beat-field="summary" data-index="${index}" maxlength="2000">${esc(beat.summary)}</textarea></div>${picturePlanNote(beat.picturePlan) ? `<p class="story-note story-plan-note">그림 계획 · ${esc(picturePlanNote(beat.picturePlan))}</p>` : ""}${renderBeatContract(draft, beat.index)}<fieldset><legend class="story-label">장소 · ${index === 0 || index === outline.beats.length - 1 ? "보통은 집" : "배경 서랍"}</legend><div class="story-chip-row">${usual.map(chip).join("") || (others.length ? "" : '<span class="story-note">사용할 배경을 재료 서랍에 추가해 주세요.</span>')}</div>${others.length ? `<details class="story-place-more" ${others.some((background) => background.id === place) ? "open" : ""}><summary>다른 장소 ${others.length}곳</summary><div class="story-chip-row">${others.map(chip).join("")}</div></details>` : ""}${!backgrounds.some((background) => background.id === place) ? '<p class="story-error">이 비트의 장소를 선택해 주세요.</p>' : ""}</fieldset><fieldset><legend class="story-label">감정</legend><div class="story-chip-row">${[...new Set([...EMOTIONS, ...(emotion ? [emotion] : [])])].map((value) => `<button type="button" class="story-chip ${emotion === value ? "selected" : ""}" aria-pressed="${emotion === value}" data-story-action="set-beat-emotion" data-index="${index}" data-emotion="${esc(value)}">${esc(value)}</button>`).join("")}</div></fieldset><div class="story-inline-actions">${button("↻ 이 비트 다시 쓰기", "rewrite-beat", `data-index="${index}"`)}</div></div></details>`;
 }
 function renderOutline(s) {
   const o = s.draft.outline;
@@ -2898,11 +2923,16 @@ function handleChange(event) {
     if (event.target.matches?.("[data-quality-pattern-choice]")) {
       s.draft.input.storyQuality.patternId = event.target.value;
       s.draft.wizard.storyQualityPatternId = event.target.value;
-      // R33: a diet draft's frozen shape follows the pick.
-      if (hasPromptDiet(s.draft.input))
+      // R33: a diet draft's frozen shape follows the pick (R34: and its voice leans to the shape).
+      if (hasPromptDiet(s.draft.input)) {
         s.draft.input.storyShape = storyShapeFor(s.state, s.draft.wizard, {
           level: s.draft.readingLevels?.koreanLevel,
         });
+        s.draft.input.storyVoice = storyVoiceFor(s.state, s.draft.wizard, {
+          level: s.draft.readingLevels?.koreanLevel,
+          shapeId: s.draft.input.storyShape.id,
+        });
+      }
       s.draft.qualityCheckpoint = null;
       s.draft.councilCheckpoint = null;
       saveDraft(s);

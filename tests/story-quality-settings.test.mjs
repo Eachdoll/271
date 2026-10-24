@@ -17,7 +17,7 @@ test('parent quality panel exposes six structural cards, stage roles and safe de
  const html=renderStoryQualitySettings(state),selector=renderQualityPatternSelector({storyQualityPatternId:'waiting'},{state});
  assert.match(html,/data-quality-flag="enabled" checked/);assert.match(html,/data-quality-flag="useBeamSearch">/);for(const flag of ['twoPass','childSimulator','weeklyCoach'])assert.match(html,new RegExp(`data-quality-flag="${flag}" checked`));
  for(const role of ['outline','prose','cheap','coach'])assert.ok(html.includes(`data-quality-role-engine="${role}"`));
- assert.match(html,/패턴 카드 편집 · 6종/);assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);assert.match(selector,/value="sound_adventure"/);assert.match(selector,/value="answer_pile"/);assert.equal((selector.match(/<option /g)||[]).length,29,'R33: 자동 + 28 story shapes');
+ assert.match(html,/패턴 카드 편집 · 6종/);assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);assert.match(selector,/value="sound_adventure"/);assert.match(selector,/value="answer_pile"/);assert.equal((selector.match(/<option /g)||[]).length,30,'R33: 자동 + 28 story shapes (R35: + 세 번의 파도형)');
  assert.doesNotMatch(html,/data-quality-pattern-field="(?:bookTitle|text|characters|author)"/);assert.match(html,/창을 닫은 동안에는 실행하지 않으며 API 요금/);
  assert.equal(validateQualityPatternCards(plotPatterns).valid,true);
  const bad=structuredClone(plotPatterns);bad[0].bookTitle='레퍼런스 본문';assert.equal(validateQualityPatternCards(bad).valid,false);bad[0]=structuredClone(plotPatterns[0]);bad[0].beats[1].text='책의 실제 문장';assert.equal(validateQualityPatternCards(bad).valid,false);

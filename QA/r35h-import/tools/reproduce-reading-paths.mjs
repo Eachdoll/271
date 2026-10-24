@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import {pathToFileURL} from 'node:url';
+const root=process.argv[2]||'/workspace/sites/donghwa-workshop';
+const mod=p=>import(pathToFileURL(`${root}/dist/${p}`).href);
+const {seedState}=await mod('engine.js'),{migrateWorldState}=await mod('image-generation/world.js'),{migrateReadingSettings}=await mod('reading-ui.js'),{inputFromWizard}=await mod('story-generation/ui.js'),{normalizeStoryInput,toLegacyPages}=await mod('story-generation/pipeline.js'),{demoOutline,demoProse,demoPagination}=await mod('story-generation/demo.js'),{checkStory,pageReadingSpec}=await mod('story-generation/checker.js'),{analyzeEstimatedPage}=await mod('reading-checker.js'),{unitSpec}=await mod('book-layout.js');
+const s=seedState();migrateWorldState(s);migrateReadingSettings(s.settings);
+const {input,readingLevels}=inputFromWizard(s,{characterIds:['yuha','greenie'],backgroundIds:['home','beach'],topic:'유하가 바닷가에서 파도를 처음 만나요',pageCount:16,koreanLevel:'K2',englishLevel:'E2',language:'bilingual',value:'none',ending:'home'},{layout:'openings'});
+const normalized=normalizeStoryInput({...input,bookId:'qa-r35-no-network'}),o=demoOutline(normalized),p=demoPagination(o,demoProse(o,normalized),normalized);
+const row=p.pages[0],before=unitSpec(readingLevels.specs.en,row.kind),after=pageReadingSpec(input.specs,'en',row,{lean:true});
+const raw=analyzeEstimatedPage(row.textEn,before,{language:'en'}),generation=analyzeEstimatedPage(row.textEn,after,{language:'en'});
+const report={networkCalls:0,text:row.textEn,bookFormat:input.bookFormat,pipelinePassed:checkStory(o,p,{specs:input.specs,storyInput:normalized}).passed,rawSpecLeanTolerance:before.leanTolerance??null,pipelineSpecLeanTolerance:after.leanTolerance,rawViolations:raw.violations,pipelineViolations:generation.violations,legacyPageText:toLegacyPages(p)[0].en};
+if(!report.pipelinePassed||!report.rawViolations.some(v=>v.code==='sentence-length')||report.pipelineViolations.some(v=>v.code==='sentence-length'))throw Error('Expected mismatch did not reproduce');
+console.log(JSON.stringify(report,null,2));

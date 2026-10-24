@@ -24,6 +24,9 @@ function describeUnitViolation(violation) {
     case "unit-mean-length":
       return `${lang} ${unit} 문장 평균 ${eojeol(violation.actual)} (허용 ${range(violation.expected)}${word})`;
     case "unit-long-sentences":
+      // R35 그림책 결: only the hard cap blocks there.
+      if (violation.pictureLed)
+        return `${lang} ${unit} 가장 긴 문장 ${eojeol(violation.longest)} (한 문장 ${violation.hardLimit}${word}까지)`;
       return `${lang} ${unit} 긴 문장 ${violation.actual}개 · 가장 긴 문장 ${eojeol(violation.longest)} (${violation.limit}${word} 넘는 문장은 ${violation.max}개까지, ${violation.hardLimit}${word} 넘는 문장은 없어야 해요)`;
     case "unit-length-note": {
       const parts = [

@@ -385,8 +385,18 @@ test('R12-P4 free demo FULL AUTO (stopBefore text) at K2/E2 makes valid openings
       assert.equal(L.validateOpenings(job.pagination, input, job.outline).valid, true);
       assert.equal(L.layoutOf(job.book), 'openings');
       assert.equal(L.printedPagesOf(job.book), pageCount);
-      const story = checkStory(job.outline, job.pagination, {specs: input.specs, allowedNames: ['유하', 'Yuha', '초록이', 'Greenie']});
+      // R35: the demo job is a picture-led diet draft, judged the way the app judges it (lean, its own input).
+      assert.deepEqual(input.bookFormat, {version: 1, id: 'pictureLed'});
+      const story = checkStory(job.outline, job.pagination, {specs: input.specs, allowedNames: ['유하', 'Yuha', '초록이', 'Greenie'], storyInput: input});
       assert.equal(story.checks.find(c => c.id === 'level').passed, true, JSON.stringify(story.checks.find(c => c.id === 'level').violations));
+      // 글이 많은 책: the R12 demo text under the strict checks, as before.
+      const wordyJob = createFullAutoJob(state, {...wizard, bookFormatId: 'wordy'}, {demo: true, stopBefore: 'text', planMode: 'selection'});
+      await runFullAuto(state, wordyJob, {buildBook: bookOf});
+      assert.equal(wordyJob.status, 'text-review', wordyJob.error || '');
+      const wordyInput = normalizeStoryInput(wordyJob.input);
+      assert.deepEqual(wordyInput.specs.ko.units.spread, {min: 10, max: 15, target: 12});
+      const wordyStory = checkStory(wordyJob.outline, wordyJob.pagination, {specs: wordyInput.specs, allowedNames: ['유하', 'Yuha', '초록이', 'Greenie']});
+      assert.equal(wordyStory.checks.find(c => c.id === 'level').passed, true, JSON.stringify(wordyStory.checks.find(c => c.id === 'level').violations));
       // Inputs made by inputFromWizard carry the same policy.
       assert.equal(inputFromWizard(state, wizard, {layout: 'openings'}).input.layoutPolicy.kind, 'openings');
     }

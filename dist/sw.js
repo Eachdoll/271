@@ -1,4 +1,4 @@
-const CACHE = "donghwa-shell-v79";
+const CACHE = "donghwa-shell-v83";
 const FILES = [
   "./ui-controls.js",
   "./assets/council/watercolor-portraits.webp",
@@ -29,6 +29,10 @@ const FILES = [
   "./story-generation/topic-places.js",
   "./story-generation/story-shapes.js",
   "./story-generation/stage-categories.js",
+  "./book-format.js",
+  "./story-generation/picture-plan.js",
+  "./story-generation/voice-deck.js",
+  "./story-generation/style-report.js",
   "./story-generation/council.js",
   "./story-generation/council-avatars.js",
   "./story-generation/council-room.js",

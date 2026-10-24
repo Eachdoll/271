@@ -9,6 +9,7 @@
 import { STORY_STAGE_LABELS, describeStoryError } from "./schemas.js";
 import { plotContractForBeat } from "./plot-contract.js";
 import { councilReportRows } from "./council.js";
+import { styleSummaryLine } from "./style-report.js";
 
 const list = (value) => (Array.isArray(value) ? value : []);
 const object = (value) =>
@@ -345,6 +346,9 @@ export function buildStopReport(job, { now = new Date() } = {}) {
   for (const note of list(job.notes)) rows.push(`- 메모: ${str(note, 500)}`);
   rows.push(...councilReportRows(job));
   rows.push("", "## 검사 결과");
+  // R34: the writer's style numbers (advisory, never a stop).
+  if (object(job.styleReport) && job.styleReport.sentences)
+    rows.push(`- ${styleSummaryLine(job.styleReport)} (작가 원문 기준 · 참고)`);
   const checkRows = [
     ...coherenceSection("쪽 사건 연결 검사", job.pageCoherence),
     ...coherenceSection("전문 사건 연결 검사", job.proseCoherence),

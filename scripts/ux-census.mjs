@@ -104,7 +104,7 @@ const proCheck = Object.fromEntries(Object.entries(table).map(([label, expected]
   return [label, { expected, got: { buttons: got.buttons, inputs: got.inputs, selects: got.selects }, same: Object.entries(expected).every(([k, v]) => got[k] === v) }];
 }));
 const createSteps = ['04-create-step1','04-create-step2','04-create-step3','04-create-step4'].map(l=>results.pro[l]).filter(Boolean);
-proCheck['04-create-steps'] = { expected: { buttons: '3~13', inputs: '0~3', selects: '1~6' }, got: createSteps.map(r=>({ buttons:r.buttons, inputs:r.inputs, selects:r.selects })), same: createSteps.length===4 && createSteps.every(r=>r.buttons>=3&&r.buttons<=13&&r.inputs<=3&&r.selects>=1&&r.selects<=6) };
+proCheck['04-create-steps'] = { expected: { buttons: '3~13', inputs: '0~3', selects: '1~7' }, got: createSteps.map(r=>({ buttons:r.buttons, inputs:r.inputs, selects:r.selects })), same: createSteps.length===4 && createSteps.every(r=>r.buttons>=3&&r.buttons<=13&&r.inputs<=3&&r.selects>=1&&r.selects<=7) };
 const simpleSteps = Object.fromEntries(Object.entries(results.simple).filter(([l])=>/step/.test(l)).map(([l, r]) => [l, { stepButtons: r.stepButtons, allButtons: r.buttons, inputs: r.inputs, selects: r.selects, withinLimit: r.stepButtons <= 12, overflowX: r.overflowX }]));
 const summary = {
   generatedAt: new Date().toISOString(),

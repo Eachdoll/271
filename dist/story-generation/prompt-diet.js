@@ -26,6 +26,9 @@ import { buildStoryWords } from "../story-reading-context.js";
 import { topicPlaceNames } from "./topic-places.js";
 import { storyShapeRule } from "./story-shapes.js";
 import { stageRule } from "./stage-categories.js";
+import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
+import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLed } from "../book-format.js";
+import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 
 export const PROMPT_DIET_VERSION = 1;
 export const promptDiet = () => ({ version: PROMPT_DIET_VERSION });
@@ -128,8 +131,8 @@ export function leanOutlineRules(input, { count, attempts, k1 = false, custom = 
   const shape = k1
     ? "A small, warm want and ONE small obstacle a three-year-old knows (being shy, waiting, a little mishap); solved together or with a little help; ends in joy. No villain, no danger, no tears, no mystery and no hidden clue — the 'turn' is simply the small change of heart or the moment play begins, and 'twist' names it in one plain sentence."
     : "Give the protagonist something they want and a reason it matters to them; let them try in ways that change what happens next; let the story turn at a moment the child can see; end warmly and a little differently from how it began. Surprise is welcome; a formula is not. Humor comes from what the characters do.";
-  return `Design the StoryOutline (not page text) with ${count} beats for ${input.pageCount} pages, indexes 1..${count}, in the order setup → want → ${attempts} attempt beat(s) → turn → resolution → close. Each beat summary is two or three concrete sentences a picture could show; every beat changes the situation.
-${[shape, storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
+  return `Design the StoryOutline (not page text) with ${count} beats for ${input.pageCount} pages, indexes 1..${count}, in the order setup → want → ${attempts} attempt beat(s) → turn → resolution → close. ${beatSummaryLine(input)}
+${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
 Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. The story happens where the topic puts it${topicPlaces.length ? ` — here ${topicPlaces.join(", ")}` : ""}: open there (a home ID only when the topic begins at home or names no place) and stay as long as the story wants; move to another supplied place only when the story needs it, never to show every place in the drawer. ${custom ? "The last beat happens wherever the parent's ending puts it." : "The last beat ends at a home ID (the parent chose a calm ending at home)."}
 People: beat.characters are supplied IDs; every chosen character appears by name somewhere and does something of their own. Use the supplied topic keywords.
 Return 3 Korean title candidates, a one-sentence logline, want and problem, the twist in one sentence, 3–5 new Korean words, new English words, one emotion per beat, one setting record per beat. newWordsEn are the everyday English for the same things, games and sounds the Korean names (손수건 → handkerchief, 까꿍 → peekaboo), never a different object or a shortened word. A refrain is optional (one short line, at most 3 beats) — only if the story naturally has one.`;
@@ -143,7 +146,7 @@ Title "${str(bible.title, 80)}". ${str(bible.logline, 300)}
 What is at stake for the child: ${str(bible.stakes, 200)}. Tries: ${list(bible.ladder).map((row) => str(row, 120)).join(" → ") || "-"}. Low moment: ${str(bible.lowPoint, 160)}.
 The turn: ${str(bible.turn.seen, 160)} — ${str(bible.turn.realized, 160)}. Then: ${str(bible.payoff, 200)}. Ending image: ${str(bible.echo, 160)}.${
     bible.planted?.name ? `\nA small thing that returns at the turn: ${str(bible.planted.name, 60)}${bible.planted.firstSeen ? ` (first seen: ${str(bible.planted.firstSeen, 80)})` : ""}.` : ""
-  }${g ? `\nGrowth: wants "${str(g.want, 120)}", truly gains "${str(g.need, 120)}", in the way "${str(g.flaw, 120)}".` : ""}${
+  }${isPictureLed(input) && Array.isArray(bible.visual?.pictures) && bible.visual.pictures.length ? `\nThe art director's picture for each beat (a starting point for picturePlan): ${bible.visual.pictures.map((row, i) => `${i + 1}. ${str(row?.en || row?.ko || row, 120)}`).join(" ")}` : ""}${g ? `\nGrowth: wants "${str(g.want, 120)}", truly gains "${str(g.need, 120)}", in the way "${str(g.flaw, 120)}".` : ""}${
     bible.lesson ? ` Lesson shown by the last action, never said: ${str(bible.lesson, 160)}.` : ""
   }`;
 }
@@ -171,9 +174,10 @@ export function leanBeatWriterRules(input, outline, briefs = []) {
   const storyWords = leanStoryWordsLine(input, outline, briefs);
   return {
     common: `Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; a line of dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. Keep the approved events, place and ending of this beat; no spoken lesson.${mood ? ` Atmosphere: ${str(JSON.stringify(mood), 200)}.` : ""}`,
-    ko: leanLevelLine(input, "ko"),
+    // R34: the level in a sentence, then what good prose does and this book's own voice (a spark, never counted).
+    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko")].filter(Boolean).join("\n"),
     // R31e: what the English is for (the paid K2 writer packed every Korean event into two 16-word sentences).
-    en: `${leanLevelLine(input, "en")} The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons.${storyWords ? ` ${storyWords}` : ""}`,
+    en: `${leanLevelLine(input, "en")} The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons.${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}`,
   };
 }
 /** The app prose path (whole book at once) when no beat writer is used. */
@@ -181,7 +185,7 @@ export function leanProseRules(input) {
   return `Write the whole Korean and English prose in paragraphs, one paragraph per approved beat, without page divisions; return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with one approved beat index per blank-line-separated paragraph (metadata only — never beat numbers or labels in the text). Follow the approved beats in order and reveal the twist where the outline puts it; use the scene briefs' sounds, props and actions where they fit.
 Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. The English is its own picture-book text for the same story at its level, never a translation. usedRefrainAt lists only the approved beat IDs where the refrain actually appears.${
     input?.draftProse ? "\nThis is the final refinement of the supplied local draftProse: keep its events and improve its language inside the level." : ""
-  }`;
+  }${input?.storyVoice ? `\n${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}` : ""}`;
 }
 
 /*
@@ -201,7 +205,7 @@ const sceneLines = (custom) =>
 /** The page book's pagination request on the diet: structure and shape, no quotas. */
 export function leanPaginationRules(input, { custom = false } = {}) {
   return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** The openings book's pagination request on the diet (the R12 mechanics, no quotas). */
 export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "", custom = false } = {}) {
@@ -211,7 +215,7 @@ export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "
     range = (unit) => (unit ? `${unit.min}-${unit.max}` : "?");
   return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own moment and its part of the beat text) — a spread for a highlight, a reveal, a new place, the turn or the ending; two pages when the beat has two distinct moments. Copy the beat paragraph; for two pages split where the moment changes; light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${cues.join(", ")}. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko?.spread)}, English ${range(en?.spread)}; a single page Korean ${range(ko?.page)}, English ${range(en?.page)}.${openingKinds ? ` Keep opening kinds ${openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
 Keep the approved events, dialogue and ending; each entry keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** One page rewritten on the diet: fix what is listed, keep the voice. */
 export function leanPageRewriteRules(pageNo, original, { sceneOnly = false } = {}) {

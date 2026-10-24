@@ -5,6 +5,10 @@ import { renderActionSwitch } from "./ui-controls.js";
  * page tools; no pipeline logic lives here. Nothing paid starts without a confirm
  * that names the cost, and completed paid steps are never bought again. */
 import { revisionSummary } from "./story-generation/book-revision.js";
+import { voiceSummary } from "./story-generation/voice-deck.js";
+import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
+import { picturePlanNote } from "./story-generation/picture-plan.js";
+import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
   startFullAutoJob,
@@ -476,6 +480,8 @@ export function formatSummary(wizard = {}) {
     parts.push(storyShapeLabel(wizard.storyShapeId) || "이야기 모양");
   if (wizard.stageCategoryId && wizard.stageCategoryId !== "auto")
     parts.push(stageLabel(wizard.stageCategoryId) || "무대");
+  // R35: 글이 많은 책 is named; the default 그림책 결 is the select's own label.
+  if (formatFor(wizard) === "wordy") parts.push(BOOK_FORMAT_LABELS.wordy);
   return parts.join(" · ");
 }
 /** Fill the simple-only fields without touching anything the pro wizard set. */
@@ -641,7 +647,7 @@ function renderEcoStep(ctx, w, job) {
       .map(([label, cls]) => `<li class="${cls}">${label}</li>`)
       .join(""),
     outlineBlock = job.outline
-      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p><ol>${beats.map((b) => `<li>${esc(b.summary || "")}</li>`).join("")}</ol></details>`
+      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p><ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
       : "",
     errorList = errors.length
       ? `<ul class="check-issues simple-eco-errors">${errors.map((e) => `<li class="check-violation">${esc(e)}</li>`).join("")}</ul>`
@@ -762,6 +768,11 @@ async function ecoFinish(ctx, job, pagination, report) {
   job.prose = ecoProseFromPages(job.outline, pagination);
   job.sceneBriefs = [];
   job.storyCheck = clone(report || {});
+  // R34: the pasted text's style numbers (free, advisory).
+  job.styleReport = styleReport(
+    (pagination.pages || pagination.entries || []).map((p) => p?.textKo ?? p?.ko ?? ""),
+    { names: (job.input?.characters || []).map((c) => c?.name) },
+  );
   job.completed = { ...(job.completed || {}), outline: true, briefs: true, prose: true, pagination: true };
   const payload = { ...fullAutoPayload(job), textEngineId: "eco", textModelId: null };
   state.storyDrafts ||= {};
@@ -1263,7 +1274,7 @@ function renderFormatPanel(w) {
     "이야기 모양",
     STORY_SHAPE_OPTIONS,
     w.storyShapeId || "auto",
-  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}</div>`;
+  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}${selectField("bookFormatId", "책 결", BOOK_FORMAT_OPTIONS, formatFor(w))}</div>`;
 }
 /** A story world chosen in pro mode gives world ideas; otherwise the built-in list is used. */
 function ideaState(state) {
@@ -1277,8 +1288,12 @@ function shapeStageLine(job) {
   const shape = job?.outline?.storyShape,
     stage = job?.input?.stageCategory;
   return [
+    // R35: the book's format (그림책 결 / 글이 많은 책).
+    bookFormatLabel(job?.input) ? `책 결 · ${bookFormatLabel(job.input)}` : "",
     shape?.name ? `이야기 모양 · ${shape.name}` : "",
     stage?.name ? `무대 · ${stage.name}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
+    // R34: the voice the writer was given (the demo's fixed text has none).
+    !job?.demo ? voiceSummary(job?.input?.storyVoice) : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1522,6 +1537,8 @@ export function checkNotes(job) {
   const writer = Array.isArray(job?.writerReport?.warnings) ? job.writerReport.warnings : [];
   if (writer.length)
     notes.push(`정성 모드 작가 참고 ${writer.length}건 · 검사 리포트에서 볼 수 있어요`);
+  // R34: the free style numbers (advisory — nothing is rewritten over them).
+  if (job?.styleReport?.sentences) notes.push(styleSummaryLine(job.styleReport));
   return notes;
 }
 const checkNotesLine = (job) =>
@@ -3724,12 +3741,13 @@ function onChange(event) {
       "englishLevel",
       "storyShapeId",
       "stageCategoryId",
+      "bookFormatId",
       "simple-allow-new",
     ].includes(target.id)
   )
     return;
   if (
-    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId"].includes(target.id)
+    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId", "bookFormatId"].includes(target.id)
   ) {
     const before = layoutFor(w);
     w[target.id] =

@@ -1052,7 +1052,15 @@ export function approvedBookRecord(book) {
     book.patternId ||
     previous.patternId ||
     "legacy";
+  // R34: the voice cards a diet book was written with (the next book's chooser avoids them).
+  const voice =
+    book.storyInput?.storyVoice?.cards && typeof book.storyInput.storyVoice.cards === "object"
+      ? { ...book.storyInput.storyVoice.cards }
+      : previous.voice && typeof previous.voice === "object"
+        ? { ...previous.voice }
+        : null;
   const usedElements = {
+    ...(voice ? { voice } : {}),
     planted: String(plan.planted || seed.planted?.ko || previous.planted || ""),
     creatures: plainValues([
       ...briefs.map((brief) => brief?.creature?.ko),
