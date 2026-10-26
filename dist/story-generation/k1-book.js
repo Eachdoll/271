@@ -28,6 +28,7 @@ import { leanLevelLine, hasPromptDiet } from "./prompt-diet.js";
 import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
 import { pictureLedK1Line } from "../book-format.js";
 import { planOf, picturePlanMapSuffix } from "./picture-plan.js";
+import { storyChangeK1Block, isWordlessEntry } from "./story-change.js";
 import { styleReport } from "./style-report.js";
 
 export const K1_POLICY_VERSION = 1;
@@ -113,8 +114,9 @@ const CRAFT = [
   "영어(en)는 같은 이야기를 그 단계의 영어로 새로 써요(번역이 아니에요). 이름은 영어 이름.",
 ];
 
-function pageChecks(page, input, allowedNames) {
+function pageChecks(page, input, allowedNames, { wordless = false } = {}) {
   const problems = [];
+  if (wordless) return problems;
   for (const lang of ["ko", "en"]) {
     const spec = input.specs?.[lang];
     if (!spec) continue;
@@ -175,6 +177,8 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     `[부모 요청] ${str(input.topic, 300)}`,
     `[줄거리 지도]\n${map}`,
     `[바람·걸림돌·작은 변화] ${str(outline.want, 200)} / ${str(outline.problem, 200)} / ${str(outline.twist, 200)}`,
+    // R38: what the last page shows (outlines with a change line only).
+    storyChangeK1Block(outline),
     `[등장인물 — who에는 이 ID만]\n${cast}`,
     `[쪽 배치 — 그대로] ${pagesLine}`,
     `[출력] JSON만. {"cover":"표지 그림을 영어로","pages":[{"pageNo":1,"ko":"한글","en":"English","picture":"그 쪽 그림을 영어로","feeling":"one English word","who":["id"],"timeOfDay":"morning","props":["English prop"]}, …]}`,
@@ -192,7 +196,9 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
       throw new StoryValidationError("prose", [`K1 그림책 원고가 ${input.pageCount}쪽이 아니에요(받은 쪽 ${rawPages.length}개). 다시 시도해 주세요.`]);
     }
     let pages = plan.map((row, i) => normalizePage(rawPages.find((p) => Number(p?.pageNo) === row.pageNo) || rawPages[i], row, input));
-    const failing = () => pages.map((page) => ({ page, problems: pageChecks(page, input, allowedNames) })).filter((row) => row.problems.length);
+    // R38: the one wordless page of a picture-led book (its beat told by the picture) needs no text.
+    const wordlessAt = (page, all = pages) => isWordlessEntry(page, all.indexOf(page), all, outline, input);
+    const failing = () => pages.map((page) => ({ page, problems: pageChecks(page, input, allowedNames, { wordless: wordlessAt(page) }) })).filter((row) => row.problems.length);
     let notes = failing();
     // One more call for the failing pages only (their neighbours as context).
     for (let attempt = 0; attempt < K1_FIX_ATTEMPTS && notes.length; attempt++) {
@@ -208,7 +214,8 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
         const raw = fixed.find((row) => Number(row?.pageNo) === page.pageNo);
         if (!raw) return page;
         const next = normalizePage({ ...page, ...raw, who: list(raw.who).length ? raw.who : page.who }, page, input);
-        return pageChecks(next, input, allowedNames).length <= pageChecks(page, input, allowedNames).length ? next : page;
+        const candidate = pages.map((row) => (row === page ? next : row));
+        return pageChecks(next, input, allowedNames, { wordless: wordlessAt(next, candidate) }).length <= pageChecks(page, input, allowedNames, { wordless: wordlessAt(page) }).length ? next : page;
       });
       notes = failing();
     }

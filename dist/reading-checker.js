@@ -836,7 +836,9 @@ function bookResult(book, specs, allOptions) {
   // was made — the caller passes the same per-page spec (pageReadingSpec with
   // lean) and lean: true turns the book-level totals into notes, as they are
   // there. Without these options every book is judged exactly as before.
-  const { pageSpec, lean = false, ...options } = allOptions || {};
+  // R38: the wordless entry (reading-ui passes its indexes) is not judged.
+  const { pageSpec, lean = false, wordlessPages = null, ...options } = allOptions || {};
+  const quiet = (result) => ({ ...result, passed: true, violations: [], warnings: [] });
   const specOf = (lang, page, kind) =>
     typeof pageSpec === "function" ? pageSpec(specs, lang, page) : unitSpec(specs[lang], kind);
   const bookNote = (row) => ({ ...row, severity: "warning", advisory: true });
@@ -851,6 +853,7 @@ function bookResult(book, specs, allOptions) {
         ...options,
         language: "en",
       });
+    if (wordlessPages?.has?.(index)) return { index, pageIndex: index, passed: true, ko: quiet(ko), en: quiet(en), wordless: true };
     return { index, pageIndex: index, passed: ko.passed && en.passed, ko, en };
   });
   const bookViolations = pages.flatMap((page) =>

@@ -6,8 +6,10 @@ import { renderActionSwitch } from "./ui-controls.js";
  * that names the cost, and completed paid steps are never bought again. */
 import { revisionSummary } from "./story-generation/book-revision.js";
 import { voiceSummary } from "./story-generation/voice-deck.js";
+import { expressionSummary } from "./story-generation/expression-deck.js";
 import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
 import { picturePlanNote } from "./story-generation/picture-plan.js";
+import { storyChangeSummary } from "./story-generation/story-change.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
@@ -242,57 +244,74 @@ export const SIMPLE_TOPICS = Object.freeze([
 /**
  * 아이디어 뽑기 without a story world: short, everyday topics for young children.
  * Plain situations only (no catchphrase-like lines), so the story finds its own words.
+ * R38: every idea names where it happens and what the child is after — a
+ * placeless idea ("그림자와 술래잡기") opened at home and had nothing to want.
  */
 export const IDEA_TOPICS = Object.freeze([
-  "잃어버린 장갑 한 짝을 찾는 날",
-  "구름 위에서 열린 작은 음악회",
-  "텃밭에 처음 심은 방울토마토",
-  "이가 흔들리기 시작한 날",
-  "동생이 처음 집에 온 날",
-  "우산 속에 들어온 작은 손님",
-  "눈사람이 녹지 않게 지키는 방법",
-  "밤하늘에 새 별자리 그리기",
-  "할머니 댁 다락방의 오래된 상자",
-  "개미 마을의 이사하는 날",
-  "무지개 끝에서 찾은 것",
-  "혼자 신발 끈을 묶어 본 날",
-  "바람에 날아간 연을 찾아서",
-  "도서관에서 길을 잃은 그림책",
-  "시장에서 처음 해 본 심부름",
-  "고장 난 장난감 자동차 고치기",
-  "꿀벌이 꽃밭을 찾아가는 길",
-  "첫눈이 내린 아침",
-  "달팽이와 느릿느릿 산책",
-  "바닷가에서 모래성 쌓기",
-  "숨바꼭질하다 찾은 비밀 장소",
-  "아기 새가 처음 날아오른 날",
-  "엄마 생일 깜짝 선물 준비",
-  "무서운 꿈을 이겨 낸 밤",
-  "친구와 다툰 뒤 화해한 날",
-  "가을 낙엽으로 만든 왕관",
-  "잠이 오지 않는 아기 곰",
-  "물웅덩이에 비친 거꾸로 세상",
-  "기차를 타고 떠난 첫 여행",
-  "동물원에서 만난 키 큰 기린",
-  "반짝이는 조약돌 모으기",
-  "빵집에서 처음 구워 본 빵",
-  "바람개비가 멈춘 날",
-  "꼬마 소방관의 하루",
-  "겨울잠을 자지 않은 다람쥐",
-  "그림자와 술래잡기",
-  "새 친구에게 먼저 인사한 날",
-  "캠핑장에서 본 반딧불이",
-  "고양이가 숨겨 둔 털실 뭉치",
-  "해바라기가 쑥쑥 자라는 여름",
-  "냉장고 속 채소들의 회의",
-  "사라진 소풍 도시락",
-  "등대 할아버지와 밤바다",
-  "처음 두발자전거를 탄 날",
-  "공룡 화석을 발견한 날",
-  "우주 정거장에 보내는 편지",
-  "비 오는 날 열린 장화 행진",
-  "할아버지와 함께 낚시한 날",
+  "바닷가에서 잃어버린 장갑 한 짝 찾기",
+  "구름 위 작은 음악회에 늦지 않게 가기",
+  "텃밭 방울토마토가 빨개지길 기다리기",
+  "유치원에서 흔들리는 이를 숨기는 날",
+  "숲길에서 우산 속에 들어온 작은 손님",
+  "공원에서 눈사람이 녹지 않게 지키기",
+  "밤하늘에 우리만의 별자리 그리기",
+  "할머니 댁 다락방 상자 열어 보기",
+  "숲속 개미 마을의 이사하는 날 돕기",
+  "무지개 끝 들판에서 찾은 것",
+  "유치원 문 앞에서 혼자 신발 끈 묶기",
+  "바람에 날아간 연을 숲까지 따라가기",
+  "도서관에서 길을 잃은 그림책 데려다주기",
+  "시장에서 처음 해 보는 심부름",
+  "집 마당에서 고장 난 자동차 고치기",
+  "꽃밭까지 꿀벌의 길을 안내하기",
+  "첫눈 내린 공원에서 발자국 따라가기",
+  "정원에서 달팽이와 느릿느릿 산책",
+  "바닷가에서 파도에 지지 않는 모래성",
+  "숲에서 숨바꼭질하다 찾은 비밀 장소",
+  "둥지에서 아기 새가 처음 날아오르는 날",
+  "부엌에서 엄마 생일 깜짝 선물 준비",
+  "별빛 창가에서 무서운 꿈 이겨 내기",
+  "놀이터에서 다툰 친구와 다시 손잡기",
+  "숲에서 가을 낙엽 왕관 만들기",
+  "동굴 속 잠이 오지 않는 아기 곰",
+  "비 온 뒤 공원 물웅덩이 거꾸로 세상",
+  "기차역에서 떠나는 첫 여행",
+  "동물원에서 키 큰 기린과 인사하기",
+  "강가에서 반짝이는 조약돌 모으기",
+  "빵집에서 처음 구워 보는 빵",
+  "언덕에서 바람개비를 다시 돌리기",
+  "마을 소방서 꼬마 소방관의 하루",
+  "눈 덮인 숲에서 겨울잠을 미룬 다람쥐",
+  "놀이터에서 자꾸 도망가는 그림자 잡기",
+  "유치원에서 새 친구에게 먼저 인사하기",
+  "캠핑장 밤에 반딧불이 따라가기",
+  "집에서 고양이가 숨긴 털실 뭉치 찾기",
+  "텃밭 해바라기보다 키 크고 싶은 여름",
+  "냉장고 속 채소들의 한밤 회의",
+  "소풍 간 들판에서 사라진 도시락",
+  "등대에서 할아버지와 밤바다 지키기",
+  "공원에서 처음 두발자전거 타기",
+  "바닷가 모래밭에서 공룡 화석 찾기",
+  "우주 정거장으로 편지 띄우기",
+  "비 오는 거리의 장화 행진",
+  "호숫가에서 할아버지와 낚시하기",
+  "달빛 아래 그림자가 길어지는 밤",
 ]);
+/** R38 쉬운 ①: a value the story shows in an action (Korean words, so the model reads them as they are). */
+export const SIMPLE_VALUE_OPTIONS = Object.freeze([
+  ["none", "없음 · 즐거운 이야기"],
+  ["용기", "용기"],
+  ["나눔", "나눔"],
+  ["친절", "친절"],
+  ["끈기", "끈기"],
+  ["호기심", "호기심"],
+  ["기다리기", "기다리기"],
+  ["배려", "배려"],
+]);
+/** R38 쉬운 ①: 어디서? — the drawer's places, or the topic's own. */
+export const storyPlaceOptions = (backgrounds = []) => [["auto", "주제대로 (자동)"], ...backgrounds.map((b) => [b.id, b.name])];
+const storyPlaceOf = (wizard, backgrounds = []) =>
+  wizard?.storyPlaceId && wizard.storyPlaceId !== "auto" ? backgrounds.find((b) => b.id === wizard.storyPlaceId) || null : null;
 /** One built-in idea that is not the current topic. */
 export function pickIdeaTopic(current = "", random = Math.random) {
   const now = String(current || "").trim(),
@@ -443,7 +462,9 @@ export function preselectMaterials(state, wizard) {
   const topic = String(wizard.topic || "").trim(),
     // R33: a chosen stage is part of the picks' key, so changing it fills ② again.
     stage = isStageId(wizard.stageCategoryId) ? wizard.stageCategoryId : "",
-    pickKey = stage ? `${topic}|${stage}` : topic;
+    // R38: the chosen opening place is part of the key too.
+    placeId = wizard.storyPlaceId && wizard.storyPlaceId !== "auto" ? String(wizard.storyPlaceId) : "",
+    pickKey = `${topic}${stage ? `|${stage}` : ""}${placeId ? `|place:${placeId}` : ""}`;
   if (wizard.simplePicksTouched || wizard.simplePickedFor === pickKey)
     return wizard;
   const characters = activeCharacters(state),
@@ -458,6 +479,7 @@ export function preselectMaterials(state, wizard) {
     home = backgrounds.find(isHomeBackground),
     places = [
       ...new Set([
+        ...(backgrounds.some((b) => b.id === placeId) ? [placeId] : []),
         ...recommendPlaces(topic, backgrounds),
         ...stagePlaceIds(stage, backgrounds.filter((b) => !isHomeBackground(b))),
       ]),
@@ -469,7 +491,7 @@ export function preselectMaterials(state, wizard) {
 }
 
 /* ---------- wizard and job lookups ---------- */
-export function formatSummary(wizard = {}) {
+export function formatSummary(wizard = {}, backgrounds = []) {
   const parts = [];
   if (wizard.language !== "en") parts.push(wizard.koreanLevel || "K1");
   if (wizard.language !== "ko") parts.push(wizard.englishLevel || "E0");
@@ -482,6 +504,10 @@ export function formatSummary(wizard = {}) {
     parts.push(stageLabel(wizard.stageCategoryId) || "무대");
   // R35: 글이 많은 책 is named; the default 그림책 결 is the select's own label.
   if (formatFor(wizard) === "wordy") parts.push(BOOK_FORMAT_LABELS.wordy);
+  // R38: the chosen opening place and value.
+  const place = storyPlaceOf(wizard, backgrounds);
+  if (place) parts.push(`${place.name}에서`);
+  if (SIMPLE_VALUE_OPTIONS.some(([v]) => v === wizard.value && v !== "none")) parts.push(`가치 · ${wizard.value}`);
   return parts.join(" · ");
 }
 /** Fill the simple-only fields without touching anything the pro wizard set. */
@@ -647,7 +673,7 @@ function renderEcoStep(ctx, w, job) {
       .map(([label, cls]) => `<li class="${cls}">${label}</li>`)
       .join(""),
     outlineBlock = job.outline
-      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p><ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
+      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p>${storyChangeSummary(job.outline) ? `<p><small class="simple-plan-note">${esc(storyChangeSummary(job.outline))}</small></p>` : ""}<ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
       : "",
     errorList = errors.length
       ? `<ul class="check-issues simple-eco-errors">${errors.map((e) => `<li class="check-violation">${esc(e)}</li>`).join("")}</ul>`
@@ -1253,7 +1279,7 @@ function stepsBar(step, access = [], { text = false } = {}) {
 function selectField(id, label, options, value) {
   return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${options.map(([v, t]) => `<option value="${v}" ${String(v) === String(value) ? "selected" : ""}>${t}</option>`).join("")}</select></div>`;
 }
-function renderFormatPanel(w) {
+function renderFormatPanel(w, backgrounds = []) {
   return `<div class="simple-format-panel form-grid" id="simple-format-panel">${selectField(
     "language",
     "언어",
@@ -1274,7 +1300,7 @@ function renderFormatPanel(w) {
     "이야기 모양",
     STORY_SHAPE_OPTIONS,
     w.storyShapeId || "auto",
-  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}${selectField("bookFormatId", "책 결", BOOK_FORMAT_OPTIONS, formatFor(w))}</div>`;
+  )}${selectField("stageCategoryId", "무대", STAGE_OPTIONS, w.stageCategoryId || "auto")}${selectField("bookFormatId", "책 결", BOOK_FORMAT_OPTIONS, formatFor(w))}${selectField("storyPlaceId", "어디서?", storyPlaceOptions(backgrounds), storyPlaceOf(w, backgrounds) ? w.storyPlaceId : "auto")}${selectField("value", "함께 생각할 가치", SIMPLE_VALUE_OPTIONS, SIMPLE_VALUE_OPTIONS.some(([v]) => v === w.value) ? w.value : "none")}</div>`;
 }
 /** A story world chosen in pro mode gives world ideas; otherwise the built-in list is used. */
 function ideaState(state) {
@@ -1294,6 +1320,10 @@ function shapeStageLine(job) {
     stage?.name ? `무대 · ${stage.name}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
     // R34: the voice the writer was given (the demo's fixed text has none).
     !job?.demo ? voiceSummary(job?.input?.storyVoice) : "",
+    // R37: a picture-led book's expression cards.
+    !job?.demo ? expressionSummary(job?.input?.storyExpression) : "",
+    // R38: what the outline says is different at the end.
+    storyChangeSummary(job?.outline),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1355,7 +1385,7 @@ function renderTopicStep(ctx, w) {
   const state = ctx.getState(),
     job = jobOfWizard(state, w);
   if (job) return renderFrozenTopic(ctx, w, job);
-  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? IDEA_NOTE : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w) : ""}<p class="small-label simple-defaults-note">교훈·마무리·분위기는 부모 설정의 기본값을 써요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
+  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? IDEA_NOTE : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
   home: "🏡",
@@ -1422,6 +1452,7 @@ function renderMaterialsStep(ctx, w) {
       ),
     ),
     placeRec = new Set([
+      ...(w.storyPlaceId && w.storyPlaceId !== "auto" ? [w.storyPlaceId] : []),
       ...recommendPlaces(w.topic, backgrounds),
       ...stagePlaceIds(w.stageCategoryId, backgrounds.filter((b) => !isHomeBackground(b))),
     ]),
@@ -3742,12 +3773,14 @@ function onChange(event) {
       "storyShapeId",
       "stageCategoryId",
       "bookFormatId",
+      "storyPlaceId",
+      "value",
       "simple-allow-new",
     ].includes(target.id)
   )
     return;
   if (
-    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId", "bookFormatId"].includes(target.id)
+    ["language", "pageCount", "koreanLevel", "englishLevel", "storyShapeId", "stageCategoryId", "bookFormatId", "storyPlaceId", "value"].includes(target.id)
   ) {
     const before = layoutFor(w);
     w[target.id] =
@@ -3755,7 +3788,7 @@ function onChange(event) {
     if (target.id === "pageCount") w.pageCountTouched = true;
     else snapFormatPageCount(w, before);
     const summary = document.querySelector("#simple-format-summary");
-    if (summary) summary.textContent = formatSummary(w);
+    if (summary) summary.textContent = formatSummary(w, activeBackgrounds(api.getState()));
     return;
   }
   if (target.id === "simple-allow-new") {

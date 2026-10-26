@@ -15,7 +15,7 @@ import {unitSpec} from '../dist/book-layout.js';
 import {freezeReadingLevels} from '../dist/reading-levels.js';
 import {withPageRhythm} from '../dist/page-rhythm.js';
 import {BOOK_FORMAT_OPTIONS, PICTURE_LED, PICTURE_LED_UNITS, formatFor, bookFormat, bookFormatRef, isPictureLed, withPictureLed, compositionRule, compositionDirection, pictureLedBudgetLine, pictureLedPaginationLine, bookFormatLabel} from '../dist/book-format.js';
-import {STORY_SHAPES, chooseStoryShape, shapeById, STORY_SHAPE_OPTIONS} from '../dist/story-generation/story-shapes.js';
+import {STORY_SHAPES, chooseStoryShape, shapeById, STORY_SHAPE_OPTIONS, storyShapeRef} from '../dist/story-generation/story-shapes.js';
 import {directionLine} from '../dist/story-generation/council.js';
 import {createFullAutoJob, runFullAuto} from '../dist/full-auto.js';
 import {formatSummary, renderSimpleCreate, ensureSimpleWizard} from '../dist/simple-create.js';
@@ -88,9 +88,11 @@ test('R35 a new K2 openings draft is picture-led; 글이 많은 책 freezes the 
   assert.deepEqual(wordy.input.specs.ko.units.spread, {min: 10, max: 15, target: 12});
   assert.equal('pictureLed' in wordy.input.specs.ko, false);
   assert.deepEqual(withPictureLed(wordy.input.specs, {layout: 'openings'}), led.input.specs, 'the two formats differ in the specs only');
-  const without = (input) => { const {bookFormat, specs, storyDate, ...rest} = input; return rest; };
+  // (R37: a picture-led draft also carries its expression cards, after the format.)
+  const without = (input) => { const {bookFormat, specs, storyDate, storyExpression, ...rest} = input; return rest; };
   assert.deepEqual(without(led.input), without(wordy.input), 'everything else is the same input');
-  assert.equal(Object.keys(led.input).at(-1), 'bookFormat', 'the format is the last key, after the voice');
+  assert.equal(Object.keys(wordy.input).at(-1), 'bookFormat', 'the format is the last key, after the voice');
+  assert.deepEqual(Object.keys(led.input).slice(-2), ['bookFormat', 'storyExpression']);
   const normalized = normalizeStoryInput({...led.input, bookId: 'n'});
   assert.deepEqual(normalized.bookFormat, {version: 1, id: 'pictureLed'});
   assert.equal(normalizeStoryInput({...led.input, bookFormat: {version: 9, id: 'pictureLed'}, bookId: 'n'}).bookFormat, undefined, 'an unknown format is dropped');
@@ -145,16 +147,20 @@ test('R35 the reference book: all 16 spreads pass the picture-led K2 spread chec
 });
 
 test('R35 the outline request carries the composition (one moment per beat, three encounters of one kind, the picture-told turn, the round ending) and the new shape; the room hears it; 글이 많은 책 and legacy requests are unchanged', () => {
-  const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
-  assert.equal(led.storyShape.id, 'three_waves', 'the wave topic picks the new shape');
+  // R37: a new picture-led draft carries expression cards and gets no plot
+  // template (expression-deck-r37 tests that); an R35 draft without cards
+  // keeps this composition byte for byte, so it is tested on one here.
+  const state = setup(), wordy = draft(state, {bookFormatId: 'wordy'}), led = {...draft(state), storyShape: storyShapeRef(shapeById('three_waves'))};
+  delete led.storyExpression;
+  assert.notEqual(draft(state).storyShape.id, 'three_waves', 'R37: a wave topic no longer picks the 세 번 shape by itself');
   assert.equal(STORY_SHAPES.length, 29);
   assert.equal(STORY_SHAPE_OPTIONS.length, 30);
-  assert.equal(shapeById('three_waves').name, '세 번의 파도형');
+  assert.equal(shapeById('three_waves').name, '세 번 되풀이형');
   assert.equal(chooseStoryShape('문을 세 번 두드려요', {level: 'K1'}).id, 'three_waves');
   const rules = leanOutlineRules(led, {count: 8, attempts: 3});
   assert.match(rules, /Each beat summary is one or two concrete sentences: the single moment its picture shows/);
   assert.match(rules, /\nPICTURE-LED BOOK: [^\n]*THREE encounters of ONE kind[^\n]*the picture says it before the words do[^\n]*quiet, round ending[^\n]*single big sound word[^\n]*no lesson line\.\n/);
-  assert.match(rules, /\nSTORY SHAPE — 세 번의 파도형: /);
+  assert.match(rules, /\nSTORY SHAPE — 세 번 되풀이형: /);
   assert.equal((rules.match(/PICTURE-LED/g) || []).length, 1);
   const six = leanOutlineRules(led, {count: 6, attempts: 1});
   assert.match(six, /the attempt beat holds three quick encounters of one kind/);
@@ -206,11 +212,11 @@ test('R35 the beat writer: budgets 1–7 with the target following the tension; 
 
 test('R35 pagination lines and the demo: the openings and page rules carry the picture-led line on a picture-led draft only; the picture-led demo paginates into short entries and passes checkStory; the wordy demo is the R12 text', () => {
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
-  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /Sentence ranges per entry: a spread Korean 1-7, English 1-3; a single page Korean 1-3, English 1-2\.[^\n]*\nKeep the approved events[^\n]*\nPICTURE-LED: keep each entry's text as short as its beat allows[^\n]*never pad a short beat to fill a range\.\n(?:PICTURE PLAN: [^\n]*\n)?scene\.who/);
+  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /Sentence ranges per entry: a spread Korean 1-7, English 1-3; a single page Korean 1-3, English 1-2\.[^\n]*\nKeep the approved events[^\n]*\nPICTURE-LED: keep each entry's text as short as its beat allows[^\n]*never pad a short beat to fill a range\.\n(?:PICTURE PLAN: [^\n]*\n)?(?:WORDLESS: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /PICTURE-LED/);
   assert.match(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /a spread Korean 10-15/);
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
-  assert.match(leanPaginationRules(k1), /\nPICTURE-LED: [^\n]*\n(?:PICTURE PLAN: [^\n]*\n)?scene\.who/);
+  assert.match(leanPaginationRules(k1), /\nPICTURE-LED: [^\n]*\n(?:PICTURE PLAN: [^\n]*\n)?(?:WORDLESS: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanPaginationRules(draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12, bookFormatId: 'wordy'}, 'pages')), /PICTURE-LED/);
   for (const input of [led, draft(state, {pageCount: 12})]) {
     const outline = demoOutline(input), prose = demoProse(outline, input), pagination = demoPagination(outline, prose, input);
@@ -270,7 +276,7 @@ test('R35 the screens: ① offers 책 결 with 그림책 결 selected, the forma
   assert.equal(bookFormatLabel(job.input), '그림책 결');
   const input = draft(state), outline = demoOutline(input);
   outline.storyShape = input.storyShape;
-  assert.match(renderStoryQualityPlan({outline, input}), /책 결 · 그림책 결 — 글은 짧게, 그림이 말해요<br>이야기 모양 · 세 번의 파도형/);
+  assert.match(renderStoryQualityPlan({outline, input}), /책 결 · 그림책 결 — 글은 짧게, 그림이 말해요<br>이야기 모양 · [^<]+<br>문체 · [^<]+<br>표현 · /);
   assert.match(renderStoryQualityPlan({outline, input: draft(state, {bookFormatId: 'wordy'})}), /책 결 · 글이 많은 책<br>/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.match(sw, /const CACHE = "donghwa-shell-v8[1-9]";/, 'v81 or later');

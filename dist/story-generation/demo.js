@@ -2,6 +2,7 @@ import { frozenBeatCount } from "./schemas.js";
 import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
 import { splitSentences } from "../story-quality/dist/util.js";
 import { isPictureLed } from "../book-format.js";
+import { hasStoryChange } from "./story-change.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -150,6 +151,14 @@ export function demoOutline(input) {
     beats,
     twist:
       "노래하는 돌 소리는 돌 틈에 낀 빈 도시락 통에 바람이 들어가는 소리였어요.",
+    // R38: what is different at the end, the expectation and the ending kind (asked-for drafts only).
+    ...(hasStoryChange(input)
+      ? {
+          change: "처음엔 노래는 돌이 하는 줄 알았는데, 끝에는 두 친구가 바람과 통으로 직접 노래를 만들어요.",
+          expectation: "숲 어딘가에 노래하는 돌이 있을 거예요.",
+          ending: "echo",
+        }
+      : {}),
     newWordsKo: ["도시락", "가장자리", "바람"],
     newWordsEn: ["stone", "box", "wind"],
     settings: beats.map((b) => ({
@@ -342,8 +351,9 @@ const OPENING_DEMO = Object.freeze({
 /*
  * R35 그림책 결 demo: the same singing-stone story told the picture-led way —
  * one to four Korean sentences per opening (one of them a single sound), one
- * to four short English lines, three stones each bigger than the last, the
- * turn carried by the picture. The demo is free and is not a quality claim.
+ * to four short English lines, the turn carried by the picture. R37: the
+ * tries are three different things (asking, building, keeping still), not
+ * one thing growing. The demo is free and is not a quality claim.
  */
 const PICTURE_LED_DEMO = Object.freeze({
   setup: [
@@ -355,20 +365,20 @@ const PICTURE_LED_DEMO = Object.freeze({
     "A sign is on the big tree. A singing stone! “I want to find it,” I said.",
   ],
   attempt1: [
-    "큰 돌이 있어요. 톡톡. “노래 안 해.”",
-    "A big stone. Tap, tap. No song.",
+    "돌 위에 개구리가 앉아 있어요. “너도 노래해?” 개구리는 개굴, 한 번만 울어요.",
+    "A frog sits on a stone. “Do you sing?” I said. The frog says croak.",
   ],
   attempt2: [
-    "더 큰 돌이 있어요. 쿵쿵! 개미들이 줄줄이 나와요. “미안해, 개미야.”",
-    "A bigger stone. Thump! Little ants run out. “Sorry, ants,” I said.",
+    "친구가 돌을 쌓아요. 하나, 둘… 와르르! “이건 노래가 아니야.”",
+    "My friend puts stones up high. One, two… down they go! “That is not a song,” I said.",
   ],
   attempt3: [
-    "가장 큰 바위예요. 두 친구가 귀를 대요. 후우… 바위 뒤에서 소리가 나요!",
-    "The biggest rock. We put our ears on it. Whoo… a song is behind the rock!",
+    "두 친구가 조용히 앉아 귀를 기울여요. 쉿… 바위 뒤에서 후우 소리가 나요!",
+    "We sit and listen. Shh… Whoo! A song is behind the rock!",
   ],
   attempts: [
-    "큰 돌은 톡톡. 더 큰 돌은 쿵쿵. 가장 큰 바위에서 후우… 소리가 나요!",
-    "Tap, tap. Thump, thump. Whoo… a song is in the big rock!",
+    "개구리에게 물어보고, 돌도 쌓아 봐요. 조용히 앉았더니 후우… 소리가 나요!",
+    "We ask a frog. We put stones up high. We sit still… Whoo! A song!",
   ],
   turn: ["휘이이!", "Whoo!"],
   resolution: [
@@ -384,10 +394,10 @@ const PICTURE_LED_DEMO = Object.freeze({
 const DEMO_PLANS = Object.freeze({
   setup: { carrier: "both", words: "아침, 소풍 가는 길", picture: "two tiny friends at the edge of a huge green forest, a lunch box swinging from the bag", shot: "wide", space: "airy", hook: "", unit: "spread" },
   want: { carrier: "words", words: "\"꼭 찾고 싶어\" 하는 바람", picture: "a hand-drawn sign of a stone with music notes nailed to the tree", shot: "middle", space: "full", hook: "a faint whoo drifting in from the right edge", unit: "pages" },
-  attempt1: { carrier: "picture", words: "톡톡 소리와 한마디", picture: "a small stone, the stick tapping it, the friend's ear pressed close", shot: "close", space: "airy", hook: "", unit: "pages" },
-  attempt2: { carrier: "picture", words: "쿵쿵, 개미에게 미안해", picture: "a bigger stone lifted and a line of ants marching out", shot: "middle", space: "full", hook: "", unit: "pages" },
-  attempt3: { carrier: "contrast", words: "후우 소리가 바위 뒤에서", picture: "the biggest rock, and behind it, half hidden, the corner of a lunch box", shot: "wide", space: "airy", hook: "the sound comes from something the child can already spot", unit: "pages" },
-  attempts: { carrier: "picture", words: "톡톡·쿵쿵·후우, 세 번", picture: "three stones in a row, each bigger, the last one humming", shot: "wide", space: "airy", hook: "", unit: "pages" },
+  attempt1: { carrier: "both", words: "\"너도 노래해?\" 묻는 말", picture: "a frog on a mossy stone, the two friends crouched nose to nose with it", shot: "close", space: "airy", hook: "", unit: "pages" },
+  attempt2: { carrier: "picture", words: "하나, 둘… 와르르!", picture: "a wobbly stone tower tumbling down, the friends' arms flung up", shot: "middle", space: "full", hook: "", unit: "pages" },
+  attempt3: { carrier: "contrast", words: "쉿… 조용히 듣기", picture: "the friends sitting still with eyes closed by a rock, and behind it, half hidden, the corner of a lunch box", shot: "wide", space: "airy", hook: "the sound comes from something the child can already spot", unit: "pages" },
+  attempts: { carrier: "picture", words: "묻고, 쌓고, 조용히 듣기", picture: "three small moments: the frog, the tumbled tower, the friends sitting still with eyes closed", shot: "wide", space: "airy", hook: "", unit: "pages" },
   turn: { carrier: "picture", words: "휘이이! 한 단어", picture: "the lunch box wedged in the rock with wind pouring in, the friends' mouths wide open", shot: "close", space: "airy", hook: "", unit: "spread" },
   resolution: { carrier: "both", words: "통이 노래하고 있었다는 말", picture: "the two friends blowing across the box rim, birds joining in", shot: "middle", space: "full", hook: "", unit: "pages" },
   close: { carrier: "words", words: "\"잘 자, 노래하는 통아\"", picture: "the box by the bed under moonlight, the same lunch box from the first picture", shot: "wide", space: "airy", hook: "", unit: "spread" },

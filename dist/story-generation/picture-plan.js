@@ -14,6 +14,8 @@
  * one composition line. Nothing is counted or checked against it, a missing
  * or odd plan is dropped silently and never costs a call. Pure module. */
 import { isPictureLed } from "../book-format.js";
+import { expressionOf, expressionFrameLine } from "./expression-deck.js";
+import { hasStoryChange } from "./story-change.js";
 
 export const PICTURE_PLAN_VERSION = 1;
 export const CARRIERS = Object.freeze(["words", "picture", "both", "contrast"]);
@@ -84,7 +86,28 @@ export function settlePicturePlans(outline, input) {
     if (plan) beat.picturePlan = plan;
     else delete beat.picturePlan;
   }
+  // R38: a planned shot replaces the staging rotation (R36), so twelve "wide"
+  // plans made twelve identical pictures. When one shot is planned for more
+  // than half the beats, the repeats after the first of a run lose their
+  // shot and the staging rotation takes over there; three in a row never stay.
+  if (wanted && hasStoryChange(input)) settleShotVariety(outline.beats);
   return outline;
+}
+export function settleShotVariety(beats) {
+  const rows = beats.filter((beat) => object(beat?.picturePlan));
+  if (rows.length < 3) return;
+  const counts = new Map();
+  for (const beat of rows) if (beat.picturePlan.shot) counts.set(beat.picturePlan.shot, (counts.get(beat.picturePlan.shot) || 0) + 1);
+  const [mode, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] || [],
+    // The planned shots as they came, so a whole run collapses to its first beat.
+    planned = rows.map((beat) => beat.picturePlan.shot);
+  if (mode && count > Math.ceil(rows.length / 2))
+    rows.forEach((beat, i) => {
+      if (i > 0 && planned[i] === mode && planned[i - 1] === mode) delete beat.picturePlan.shot;
+    });
+  rows.forEach((beat, i) => {
+    if (i >= 2 && planned[i] && planned[i - 1] === planned[i] && planned[i - 2] === planned[i]) delete beat.picturePlan.shot;
+  });
 }
 export const planOf = (outline, beatIndex) => {
   const beat = (Array.isArray(outline?.beats) ? outline.beats : []).find((row) => Number(row?.index) === Number(beatIndex));
@@ -94,8 +117,10 @@ export const planOf = (outline, beatIndex) => {
 /** The outline request's PICTURE PLAN paragraph (English, the writers' language there). */
 export function picturePlanOutlineRule(input) {
   if (!wantsPicturePlan(input)) return "";
-  const openings = openingsOf(input);
-  return `PICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it. carrier: "words" (only words can carry it: a line, a thought, a sound, time passing), "picture" (the picture alone tells it; the words are a line or a sound), "both", or "contrast" (the words say one thing and the picture shows another — calm words over a huge wave). words: in Korean, the part only the words carry. picture: in English, what the picture alone shows (faces, size against the world, what is hidden or coming closer); the words will not repeat it. shot: wide (small figures, big world), middle, or close (faces and hands). space: full or airy (lots of empty space). hook: what makes the child turn the page here (a sentence left open, something entering at the edge), or "" when nothing.${openings ? " unit: spread for one big moment (a reveal, the turn, a new place), pages when the beat has two moments." : ""} Vary them across the book; one short phrase per field — it is a plan for the artist, not a script.`;
+  const openings = openingsOf(input),
+    // R37: with expression cards the example is general and the book's frame cards follow.
+    expressed = !!expressionOf(input);
+  return `PICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it. carrier: "words" (only words can carry it: a line, a thought, a sound, time passing), "picture" (the picture alone tells it; the words are a line or a sound), "both", or "contrast" (the words say one thing and the picture shows another${expressed ? "" : " — calm words over a huge wave"}). words: in Korean, the part only the words carry. picture: in English, what the picture alone shows (faces, size against the world, what is hidden or coming closer); the words will not repeat it. shot: wide (small figures, big world), middle, or close (faces and hands). space: full or airy (lots of empty space). hook: what makes the child turn the page here (a sentence left open, something entering at the edge), or "" when nothing.${openings ? " unit: spread for one big moment (a reveal, the turn, a new place), pages when the beat has two moments." : ""} Vary them across the book; one short phrase per field — it is a plan for the artist, not a script.${expressed ? ` ${expressionFrameLine(input)}` : ""}`;
 }
 /** The beat writer's line for one beat (Korean writer, then English). Permission, never a ban. */
 export function picturePlanWriterLine(plan, lang = "ko") {

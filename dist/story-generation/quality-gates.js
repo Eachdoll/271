@@ -1059,8 +1059,16 @@ export function approvedBookRecord(book) {
       : previous.voice && typeof previous.voice === "object"
         ? { ...previous.voice }
         : null;
+  // R37: the expression cards a picture-led book was written with.
+  const expression =
+    book.storyInput?.storyExpression?.cards && typeof book.storyInput.storyExpression.cards === "object"
+      ? { ...book.storyInput.storyExpression.cards }
+      : previous.expression && typeof previous.expression === "object"
+        ? { ...previous.expression }
+        : null;
   const usedElements = {
     ...(voice ? { voice } : {}),
+    ...(expression ? { expression } : {}),
     planted: String(plan.planted || seed.planted?.ko || previous.planted || ""),
     creatures: plainValues([
       ...briefs.map((brief) => brief?.creature?.ko),

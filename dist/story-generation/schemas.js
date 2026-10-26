@@ -1,4 +1,5 @@
 import { STAGING_SCHEMA } from "./staging.js";
+import { isWordlessEntry } from "./story-change.js";
 import { PLOT_CONTRACT_SCHEMA, inspectPlotContract } from "./plot-contract.js";
 import {
   OPENING_PAGE_COUNTS,
@@ -550,7 +551,7 @@ function allowedVariants(input) {
       for (const r of rows || []) add(charId, r.variantId);
   return result;
 }
-export function validateStoryPage(page, input = {}, outline) {
+export function validateStoryPage(page, input = {}, outline, { wordless = false } = {}) {
   const errors = [];
   if (!object(page))
     return { valid: false, errors: ["쪽 JSON 객체가 필요해요."] };
@@ -561,7 +562,8 @@ export function validateStoryPage(page, input = {}, outline) {
     !outline?.beats?.some((b) => b.index === page.beatIndex)
   )
     errors.push("비트 번호가 잘못됐어요.");
-  if (!text(page.textKo, 6000) || !text(page.textEn, 8000))
+  // R38: the one wordless entry of a picture-led book carries no text.
+  if (!wordless && (!text(page.textKo, 6000) || !text(page.textEn, 8000)))
     errors.push("쪽에 한글·영어 글이 모두 필요해요.");
   const scene = page.scene,
     cast = new Set((input.characters || []).map((c) => c.id));
@@ -629,7 +631,7 @@ export function validatePagination(
     if (Array.isArray(value.pages))
       value.pages.forEach((p, i) =>
         errors.push(
-          ...validateStoryPage(p, input, outline).errors.map(
+          ...validateStoryPage(p, input, outline, { wordless: isWordlessEntry(p, i, value.pages, outline, input) }).errors.map(
             (e) => `${i + 1}번째 항목: ${e}`,
           ),
         ),
@@ -650,7 +652,7 @@ export function validatePagination(
       if (p?.pageNo !== i + 1)
         errors.push("쪽 번호는 1부터 순서대로여야 해요.");
       errors.push(
-        ...validateStoryPage(p, input, outline).errors.map(
+        ...validateStoryPage(p, input, outline, { wordless: isWordlessEntry(p, i, value.pages, outline, input) }).errors.map(
           (e) => `${i + 1}쪽: ${e}`,
         ),
       );

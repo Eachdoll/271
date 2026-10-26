@@ -1,0 +1,13 @@
+import {seedState} from '/workspace/sites/donghwa-workshop/dist/engine.js';
+import {migrateWorldState} from '/workspace/sites/donghwa-workshop/dist/image-generation/world.js';
+import {migrateReadingSettings} from '/workspace/sites/donghwa-workshop/dist/reading-ui.js';
+import {inputFromWizard} from '/workspace/sites/donghwa-workshop/dist/story-generation/ui.js';
+import {normalizeStoryInput,inspectStory} from '/workspace/sites/donghwa-workshop/dist/story-generation/pipeline.js';
+import {demoOutline,demoProse,demoPagination} from '/workspace/sites/donghwa-workshop/dist/story-generation/demo.js';
+import {checkStory} from '/workspace/sites/donghwa-workshop/dist/story-generation/checker.js';
+import {validatePagination} from '/workspace/sites/donghwa-workshop/dist/story-generation/schemas.js';
+const s=seedState();migrateWorldState(s);migrateReadingSettings(s.settings);
+const input=normalizeStoryInput({...inputFromWizard(s,{characterIds:['yuha','greenie'],backgroundIds:['home','beach'],topic:'놀이터에서 자꾸 도망가는 그림자 잡기',pageCount:12,koreanLevel:'K1',englishLevel:'E0',value:'none',ending:'home',language:'bilingual'}).input,bookId:'qa-wordless'});
+const outline=demoOutline(input),pagination=demoPagination(outline,demoProse(outline,input),input);outline.beats[2].picturePlan={version:1,carrier:'picture',picture:'A shadow stretches across a slide'};const index=pagination.pages.findIndex(p=>p.beatIndex===3);pagination.pages[index].textKo='';pagination.pages[index].textEn='';
+const structural=validatePagination(pagination,input,outline);const direct=checkStory(outline,pagination,{specs:input.specs,storyInput:input});const wrapper=inspectStory(outline,pagination,input);
+console.log(JSON.stringify({paidCalls:0,blankEntry:index+1,structural,direct:{passed:direct.passed,violations:direct.violations},wrapper:{passed:wrapper.passed,violations:wrapper.violations}},null,2));if(!structural.valid||!direct.passed||!wrapper.passed)process.exitCode=1;

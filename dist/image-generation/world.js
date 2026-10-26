@@ -1,5 +1,5 @@
 import { genderWord } from "./identity.js";
-import { buildScenePrompt, sceneBriefText, scenePlanText } from "./scene-prompt.js";
+import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor } from "./scene-prompt.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
 import { characterSVG } from "../engine.js";
@@ -267,7 +267,7 @@ function freezeBookVariants(state, book, world, sheets) {
 }
 
 /** Front identity is always retained. Variants replace only the full-body slot. */
-export function sceneReferenceRecords(snapshot, pageIndex) {
+export function sceneReferenceRecords(snapshot, pageIndex, { closeView = false } = {}) {
   const sheets = snapshot.characterSheets || [],
     fronts = [],
     bodies = [];
@@ -312,7 +312,8 @@ export function sceneReferenceRecords(snapshot, pageIndex) {
     label: `authoritative rendering style ${index + 1}`,
   }));
   const pagePlaces = snapshot.backgroundReferenceByPage?.[pageIndex];
-  const backgrounds = (snapshot.backgrounds || [])
+  // R38: a close view carries no place reference (scene-prompt.js closeViewFor).
+  const backgrounds = (closeView ? [] : snapshot.backgrounds || [])
     .filter(
       (background) =>
         (!Array.isArray(pagePlaces) || pagePlaces.includes(background.id)) &&
@@ -874,6 +875,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
         },
       },
       pageIndex,
+      { closeView: closeViewFor(book, page, { cover: !!options.cover }) },
     ).map((ref) => ({
       ...ref,
       ...(ref.role === "background" ? { required: true } : {}),
@@ -1065,7 +1067,7 @@ export function commitSceneResult(state, book, pageIndex, result) {
     result.seed === undefined || result.seed === null
       ? null
       : seedValue(result.seed);
-  const references = sceneReferenceRecords(snapshot, pageIndex);
+  const references = sceneReferenceRecords(snapshot, pageIndex, { closeView: closeViewFor(book, page) });
   page.imageAssetId = result.imageAssetId || null;
   page.imageUrl = result.imageAssetId
     ? `asset:${result.imageAssetId}`

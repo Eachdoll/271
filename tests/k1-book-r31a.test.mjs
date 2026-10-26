@@ -49,7 +49,9 @@ test('R31a a simple-mode story ends where its topic goes; a pro story keeps its 
   assert.equal(simple.endingType, 'custom');
   assert.deepEqual(simple.topicEndingPolicy, {version: 1});
   assert.match(simple.endingNote, /유치원에 가는 이야기/u);
-  assert.match(simple.endingNote, /주제에 가는 곳이 없으면 집에서/u);
+  // R38: a placeless topic ends where it began with one thing changed, not at home.
+  assert.match(simple.endingNote, /주제에 가는 곳이 없으면 이야기가 시작한 곳에서 끝내되 처음과 하나가 달라진 채로/u);
+  assert.doesNotMatch(simple.endingNote, /집에서 편안히/u);
   const pro = inputFromWizard(state, wiz()).input;
   assert.equal(pro.endingType, 'home_sleep');
   assert.equal('topicEndingPolicy' in pro, false);

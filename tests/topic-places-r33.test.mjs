@@ -69,7 +69,9 @@ test('R33 the outline rules say the story opens where the topic puts it; no visi
   const input = normalizeStoryInput(inputFromWizard(state, beachWizard()).input);
   const rules = leanOutlineRules(input, {count: 6, attempts: 1, custom: true});
   assert.match(rules, /The story happens where the topic puts it — here 조개빛 바닷가/);
-  assert.match(rules, /a home ID only when the topic begins at home or names no place/);
+  // R38: a placeless topic opens at a chosen place that is not home.
+  assert.match(rules, /open at a chosen place that is not home; a home ID first only when the topic begins at home or home is the only place chosen/);
+  assert.match(leanOutlineRules({...input, storyChange: undefined}, {count: 6, attempts: 1, custom: true}), /a home ID only when the topic begins at home or names no place/, 'an R33–R37 draft keeps its line');
   assert.match(rules, /never to show every place in the drawer/);
   assert.doesNotMatch(rules, /first beat uses a home ID|two or more different ones/);
   const homeEnd = leanOutlineRules(input, {count: 6, attempts: 1, custom: false});

@@ -103,7 +103,10 @@ test('each simple step shows at most 12 buttons (material cards and page arrows 
   assert.doesNotMatch(first, /프로 모드의 이야기 품질 설정|기본 무대를 골라/, 'no pro-mode explanation on the simple screen');
   assert.match(first, /K1 · E0 · 8쪽 · 한글판·영어판 두 권/);
   for (const id of ['language', 'pageCount', 'koreanLevel', 'englishLevel']) assert.match(first, new RegExp(`id="${id}"`));
-  assert.doesNotMatch(first, /id="value"|id="ending"|storyWorldId/);
+  // R38: ① offers the value (함께 생각할 가치) and 어디서?; the ending and the story world stay out.
+  assert.doesNotMatch(first, /id="ending"|storyWorldId/);
+  assert.match(first, /<select id="value">[^<]*<option value="none" selected>/);
+  assert.match(first, /<select id="storyPlaceId">/);
   assert.equal((first.match(/simple-resume-card/g) || []).length, 2);
   // FIX-UI-3: the forced screen's '프로 만들기 화면' takes one card's place at ①,
   // and the cards left out are named (they stay in the library's job list).

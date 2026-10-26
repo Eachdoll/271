@@ -43,10 +43,12 @@ import { withPageRhythm } from "../page-rhythm.js";
 import { withShortSentences } from "../short-sentences.js";
 import { k1Policy, isK1Draft } from "./k1-book.js";
 import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
+import { storyChangePolicy, storyPlace, storyChangeSummary } from "./story-change.js";
 import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
 import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
+import { chooseExpression, recentExpressionIds, expressionSummary } from "./expression-deck.js";
 import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
 import { picturePlanNote } from "./picture-plan.js";
 import {
@@ -467,6 +469,10 @@ function shapeStageNote(outline, input = null) {
     stage?.name ? `무대 · ${esc(stage.name)}${stageById(stage.id)?.ko ? ` — ${esc(stageById(stage.id).ko)}` : ""}${stage.from === "topic" ? " (주제에서)" : ""}` : "",
     // R34: the voice the writer was given (a draft with a shape is a diet draft).
     shape?.name && voiceSummary(input?.storyVoice) ? esc(voiceSummary(input.storyVoice)) : "",
+    // R37: a picture-led book's expression principles (표현 원리 카드).
+    expressionSummary(input?.storyExpression) ? esc(expressionSummary(input.storyExpression)) : "",
+    // R38: what the outline says is different at the end.
+    storyChangeSummary(outline) ? esc(storyChangeSummary(outline)) : "",
   ].filter(Boolean);
   return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
 }
@@ -861,6 +867,13 @@ export function storyVoiceFor(state, wizard = {}, { level = "K2", shapeId = "" }
     shapeId,
   });
 }
+/** R37: a picture-led book's expression principles, chosen once from the topic's seed, skipping the latest books' cards. */
+export function storyExpressionFor(state, wizard = {}) {
+  return chooseExpression({
+    seed: `${String(wizard.topic || "").trim()}:${Number(wizard.qualitySeedOffset) || 0}`,
+    recentIds: recentExpressionIds(storyQualityBookRecords(state)),
+  });
+}
 /** R33: the stage of a new draft — the parent's pick, else the chosen world card's category, else the topic's. */
 export function draftStageFor(state, wizard = {}) {
   const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
@@ -1013,7 +1026,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
         wizard.ending === "custom"
           ? String(wizard.endingCustom || "").trim()
           : topicEnding
-            ? topicEndingNote(wizard.topic)
+            ? // R38: a placeless topic ends where it began, one thing changed — not at home by default.
+              topicEndingNote(wizard.topic, { change: true })
             : "",
       ...(topicEnding ? { topicEndingPolicy: topicEndingPolicy() } : {}),
       previousSummary:
@@ -1050,6 +1064,10 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       promptPolicy: promptPolicy(),
       // R31b: lean requests — no counters, no spec JSON, no plot formula.
       promptDiet: promptDiet(),
+      // R38: the outline must say what is different at the end (and the picture rules read the same marker).
+      storyChange: storyChangePolicy(),
+      // R38: the parent's opening place (쉬운 ① 어디서?), when it is a drawer place.
+      ...(storyPlace(wizard.storyPlaceId, state.backgrounds) ? { storyPlace: storyPlace(wizard.storyPlaceId, state.backgrounds) } : {}),
       // R33: the story's shape and stage, chosen once here and frozen with the draft.
       storyShape,
       ...(stageCategory ? { stageCategory } : {}),
@@ -1057,6 +1075,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       storyVoice: storyVoiceFor(state, wizard, { level: readingLevels.koreanLevel, shapeId: storyShape.id }),
       // R35: the book's format (책 결), decided once here and frozen with the specs above.
       bookFormat: bookFormat(formatId),
+      // R37: a picture-led book's expression principles in place of R35's fixed plot template.
+      ...(formatId === "pictureLed" ? { storyExpression: storyExpressionFor(state, wizard) } : {}),
     },
     readingLevels,
     world,
@@ -2157,6 +2177,7 @@ async function approvePages(
   }
   const checked = checkStory(d.outline, d.pagination, {
     specs: d.input.specs,
+    storyInput: d.input,
     lean: d.input?.promptDiet?.version === 1,
     catchphrases: storyCatchphrases(d.input),
     storyWords: buildStoryWords(d.input, d.outline, [], { briefs: d.sceneBriefs || [], lean: d.input?.promptDiet?.version === 1 }),
@@ -2452,6 +2473,7 @@ async function handleClick(event) {
       d.pagination = fitted;
       d.storyCheck = checkStory(d.outline, fitted, {
         specs: d.input.specs,
+        storyInput: d.input,
         lean: d.input?.promptDiet?.version === 1,
         catchphrases: storyCatchphrases(d.input),
         storyWords: buildStoryWords(d.input, d.outline, [], { briefs: d.sceneBriefs || [], lean: d.input?.promptDiet?.version === 1 }),

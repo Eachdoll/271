@@ -11,6 +11,8 @@
  * checks judge the level sentence by sentence while the lengths are judged
  * over the book. 글이 많은 책 (wordy) keeps today's budgets. Drafts, jobs and
  * books without a format are judged exactly as before. Pure: no DOM, no network. */
+import { expressionOf, expressionOutlineBlock, expressionDirection, expressionWriterLine } from "./story-generation/expression-deck.js";
+import { pageBookVoiceLine, wordlessRule } from "./story-generation/story-change.js";
 export const BOOK_FORMAT_VERSION = 1;
 export const BOOK_FORMAT_IDS = Object.freeze(["pictureLed", "wordy"]);
 export const BOOK_FORMAT_LABELS = Object.freeze({ pictureLed: "그림책 결", wordy: "글이 많은 책" });
@@ -104,6 +106,10 @@ export function beatSummaryLine(input) {
 /** The lean outline request's composition block (English, the writers' language there); empty for other formats. */
 export function compositionRule(input, { k1 = false, attempts = 3 } = {}) {
   if (!isPictureLed(input)) return "";
+  // R37: a book with expression cards gets no plot template — the story shape
+  // decides the plot, the cards how it is told and pictured.
+  if (expressionOf(input))
+    return `PICTURE-LED BOOK: each beat is one opening with only a few sentences, so the picture carries what the words leave out. The plot follows the story shape; nothing here sets how many times something happens or how the book ends. Nothing is explained and there is no lesson line.\n${expressionOutlineBlock(input)}`;
   const three =
     Number(attempts) >= 3
       ? "the attempt beats are THREE encounters of ONE kind (tries, doors, puddles, waves — the story shape says which), each bigger or closer than the last, and the third tips the story into the turn"
@@ -114,12 +120,19 @@ export function compositionRule(input, { k1 = false, attempts = 3 } = {}) {
 }
 /** The writers' room hears the composition in its direction (Korean, one clause); empty for other formats. */
 export function compositionDirection(input) {
+  if (isPictureLed(input) && expressionOf(input))
+    return `책 결: 그림책 결 — 펼침마다 글은 몇 문장뿐이고 그림이 나머지를 말해요; 짜임은 이야기 모양을 따르고, 이 책의 ${expressionDirection(input)}`;
   return isPictureLed(input)
     ? "책 결: 그림책 결 — 펼침마다 글은 몇 문장뿐이고 그림이 나머지를 말해요; 같은 일이 세 번 점점 크게 닥치고 세 번째에 뒤집히며, 전환은 그림이 먼저 보여 주고, 끝은 처음을 조용히 되풀이하되 하나가 달라져요"
     : "";
 }
 /** The K1 writer's line on a picture-led book (the K1 page spec itself is unchanged). */
 export function pictureLedK1Line(input) {
+  if (isPictureLed(input) && expressionOf(input))
+    return `그림책 결: 글은 그림이 못 하는 것만 써요. 짜임은 줄거리 지도를 따라요.\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}${
+      // R38: the page book's voice and the one wordless page.
+      [pageBookVoiceLine(input, "ko"), pageBookVoiceLine(input, "en"), wordlessRule(input, { k1: true })].filter(Boolean).map((line) => `\n${line}`).join("")
+    }`;
   return isPictureLed(input)
     ? "그림책 결: 글은 그림이 못 하는 것만 써요. 같은 일이 세 번, 점점 크게 닥치고 세 번째에 뒤집혀요. 큰 순간은 소리 한 단어로 끝내도 좋아요."
     : "";

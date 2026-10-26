@@ -38,9 +38,11 @@ export const STORY_SHAPES = Object.freeze([
     "A chain of small riddles or questions; each answer is a piece the child keeps; the pieces fit together into the big answer at the end.",
     ["수수께끼", "퀴즈", "질문", "보물", "맞히", "힌트"], K2UP, "'One more piece!' as each answer is kept"),
   // R35: the picture-led composition as a shape of its own (the reference round, 2026-10-24).
-  card("three_waves", "세 번의 파도형", "같은 일이 세 번, 점점 크게 닥치고 세 번째에 뒤집혀요. 글은 짧고 그림이 말해요.",
-    "The same kind of thing comes three times, each bigger or closer than the last (a wave, a knock, a gust, a puddle); the small one braces and the big one stays near; the third time tips the story over into the turn, where what was feared turns out to hold something good; the ending is quiet and round, back where it began with one thing changed.",
-    ["파도", "바다", "무서", "용기", "처음", "세 번", "점점", "크게", "바람"], ALL, "the same sound word at each of the three, bigger each time"),
+  // R37: one selectable shape among the others (no longer the picture-led
+  // default's template); picked automatically only when the topic says so.
+  card("three_waves", "세 번 되풀이형", "비슷한 일이 세 번 찾아오고, 세 번째에 무언가 달라져요.",
+    "Something comes back three times, a little different each time; the third time something changes. What it is, how it changes and how the book ends belong to this story.",
+    ["세 번", "점점", "되풀이"], ALL, "a line or a sound that comes back each time"),
   card("first_time", "처음 해보기형", "처음 하는 일에 조마조마하다 작게 해내요.",
     "Doing something for the first time: small worries before, a wobble in the middle, one brave step, and a small, real success.",
     ["처음", "유치원", "심부름", "혼자", "첫", "용기"], ALL),

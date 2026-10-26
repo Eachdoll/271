@@ -1,4 +1,5 @@
 import { describeReadingViolation } from "../reading-messages.js";
+import { wordlessPageIndexes } from "./story-change.js";
 import {
   analyzeEstimatedPage,
   splitSentences,
@@ -594,8 +595,11 @@ export function checkStory(
   }
 
   const levelResults = { ko: [], en: [] };
-  for (const { page, pageNo } of pages)
+  // R38: the one wordless entry of a picture-led book has no reading level to check.
+  const wordless = wordlessPageIndexes(rawPages, outline, storyInput);
+  for (const { page, pageNo, index } of pages)
     for (const language of ["ko", "en"]) {
+      if (wordless.has(index)) continue;
       try {
         // R12: an openings spec is judged per unit (spread or page); R31c/R31e:
         // the lean English spec on the diet (pageReadingSpec).

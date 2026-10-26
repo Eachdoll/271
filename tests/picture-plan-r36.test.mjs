@@ -58,7 +58,7 @@ test('R36 the outline request carries one PICTURE PLAN paragraph (who tells it, 
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
   const rules = leanOutlineRules(led, {count: 8, attempts: 3});
   assert.equal((rules.match(/PICTURE PLAN:/g) || []).length, 1);
-  assert.match(rules, /\nPICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it\.[^\n]*"contrast" \(the words say one thing and the picture shows another[^\n]*unit: spread for one big moment[^\n]*it is a plan for the artist, not a script\.\n/);
+  assert.match(rules, /\nPICTURE PLAN: for every beat return picturePlan — decide who tells this moment before anyone writes it\.[^\n]*"contrast" \(the words say one thing and the picture shows another[^\n]*unit: spread for one big moment[^\n]*it is a plan for the artist, not a script\.( This book's picture ideas: [^\n]+)?\n/);
   assert.doesNotMatch(rules, /PICTURE PLAN[^\n]*\b(Never|MUST|must|exactly)\b/);
   assert.doesNotMatch(leanOutlineRules(wordy, {count: 8, attempts: 3}), /PICTURE PLAN/);
   assert.equal(picturePlanOutlineRule(wordy), '');
@@ -123,7 +123,7 @@ test('R36 the K1 writer\'s map names each beat\'s plan on a picture-led diet dra
 test('R36 pagination prefers the planned unit and turns the plan\'s picture into scene.action; the picture-led demo still paginates and passes', () => {
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
   const rules = leanOpeningsPaginationRules(led, {cues: ['arrival']});
-  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\nscene\.who/);
+  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /PICTURE PLAN/);
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
   assert.match(leanPaginationRules(k1), /\nPICTURE PLAN: [^\n]*moment\. The picture's part/);
