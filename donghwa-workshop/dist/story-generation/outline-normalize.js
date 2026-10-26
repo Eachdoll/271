@@ -9,6 +9,7 @@
  */
 import { PLOT_CONTRACT_SCHEMA } from "./plot-contract.js";
 import { settlePicturePlans } from "./picture-plan.js";
+import { settleStoryChange } from "./story-change.js";
 import { normalizeFailureReason } from "../story-quality/dist/plotCheck.js";
 
 const object = (value) =>
@@ -531,5 +532,7 @@ export function normalizeOutlineResponse(source, input = {}) {
   }
   // R36: the picture plan is cleaned (picture-led diet drafts) or dropped; never a reason to stop.
   settlePicturePlans(outline, input);
+  // R38: the change line, the expectation and the ending kind (asked-for drafts only).
+  settleStoryChange(outline, input);
   return { outline, notes: unique(notes) };
 }

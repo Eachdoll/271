@@ -12,6 +12,7 @@
  * over the book. 글이 많은 책 (wordy) keeps today's budgets. Drafts, jobs and
  * books without a format are judged exactly as before. Pure: no DOM, no network. */
 import { expressionOf, expressionOutlineBlock, expressionDirection, expressionWriterLine } from "./story-generation/expression-deck.js";
+import { pageBookVoiceLine, wordlessRule } from "./story-generation/story-change.js";
 export const BOOK_FORMAT_VERSION = 1;
 export const BOOK_FORMAT_IDS = Object.freeze(["pictureLed", "wordy"]);
 export const BOOK_FORMAT_LABELS = Object.freeze({ pictureLed: "그림책 결", wordy: "글이 많은 책" });
@@ -128,7 +129,10 @@ export function compositionDirection(input) {
 /** The K1 writer's line on a picture-led book (the K1 page spec itself is unchanged). */
 export function pictureLedK1Line(input) {
   if (isPictureLed(input) && expressionOf(input))
-    return `그림책 결: 글은 그림이 못 하는 것만 써요. 짜임은 줄거리 지도를 따라요.\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}`;
+    return `그림책 결: 글은 그림이 못 하는 것만 써요. 짜임은 줄거리 지도를 따라요.\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}${
+      // R38: the page book's voice and the one wordless page.
+      [pageBookVoiceLine(input, "ko"), pageBookVoiceLine(input, "en"), wordlessRule(input, { k1: true })].filter(Boolean).map((line) => `\n${line}`).join("")
+    }`;
   return isPictureLed(input)
     ? "그림책 결: 글은 그림이 못 하는 것만 써요. 같은 일이 세 번, 점점 크게 닥치고 세 번째에 뒤집혀요. 큰 순간은 소리 한 단어로 끝내도 좋아요."
     : "";

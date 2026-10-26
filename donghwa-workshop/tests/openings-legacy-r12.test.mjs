@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -721,7 +721,10 @@ const PINS = {
   // 표현 원리 카드 (R37): every new picture-led draft's input carries
   // storyExpression {version: 1, cards} (wizard and normalized); nothing else
   // differs (dump-diffed against 34264d5). 34264d5: 6bfd45af…1a73.
-  inputs: 'b8270c6911d317bc5fe7c44efc58aa625daf97237db9acc8346a57248bde60fe',
+  // 달라지는 것 (R38): every new diet draft's input carries storyChange
+  // {version: 1} (wizard and normalized); nothing else differs (dump-diffed
+  // against 6d1d5c9). 6d1d5c9: b8270c69…60fe.
+  inputs: 'a0a4c68030030e35fc58cfd9f0267bc48f8e79e4deba9d1c88e806086a78be50',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -778,7 +781,10 @@ const PINS = {
   // 표현 원리 카드 (R37): the two demo jobs' inputs carry storyExpression; the
   // demo text is the page books' own and unchanged; nothing else differs
   // (dump-diffed against 34264d5). 34264d5: bba59c50…9e06.
-  fullAutoDemo: '606fef5595b200cd59b42dcc38c6abbdb26177f54892e19ca09453b127e10908',
+  // 달라지는 것 (R38): the two demo jobs' inputs carry storyChange and their
+  // demo outlines the change line, the expectation and the ending kind;
+  // nothing else differs (dump-diffed against 6d1d5c9). 6d1d5c9: 606fef55…0908.
+  fullAutoDemo: '1f580902886dd8b942f2404246837745024b62204bdc56cfcbf45cde39402ef0',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

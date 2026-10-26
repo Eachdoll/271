@@ -45,6 +45,7 @@ import { tensionRange } from "./orchestration.js";
 import { hasPromptDiet, writerBriefView } from "./prompt-diet.js";
 import { pictureLedBudgetLine } from "../book-format.js";
 import { planOf, picturePlanWriterLine } from "./picture-plan.js";
+import { storyChangeWriterLine } from "./story-change.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -293,6 +294,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       `[이번 비트] ${beat.index} ${beat.type}: ${str(beat.summary, 500)}${list(outline.tension)[i] !== undefined ? ` · 목표 긴장 ${outline.tension[i]}` : ""}`,
       // R36: who tells this beat (a picture-led diet draft's plan) — permission to leave the picture's part unsaid.
       lean ? picturePlanWriterLine(planOf(outline, beat.index), lang) : "",
+      // R38: the expectation, the turn and what the ending shows (outlines with a change line only).
+      lean ? storyChangeWriterLine(outline, beat, lang) : "",
       // R31e: on the diet the writer gets the brief's story-carrying fields; light, weather and creatures are the picture's.
       brief
         ? lean

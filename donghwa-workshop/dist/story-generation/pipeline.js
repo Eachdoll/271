@@ -6,6 +6,7 @@ import { voiceRef } from "./voice-deck.js";
 import { expressionRef } from "./expression-deck.js";
 import { bookFormatRef } from "../book-format.js";
 import { withPicturePlanSchema } from "./picture-plan.js";
+import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangePolicy, storyPlaceRef, withWordlessSchema } from "./story-change.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -431,6 +432,15 @@ function modelVisibleInput(source) {
     const { storyExpression, ...rest } = input;
     input = rest;
   }
+  // R38: the change marker and the opening place are rule lines, not story data.
+  if (input?.storyChange) {
+    const { storyChange, ...rest } = input;
+    input = rest;
+  }
+  if (input?.storyPlace) {
+    const { storyPlace, ...rest } = input;
+    input = rest;
+  }
   // R35: the book's format is a rule line, not story data.
   if (input?.bookFormat) {
     const { bookFormat, ...rest } = input;
@@ -586,6 +596,9 @@ export function normalizeStoryInput(input = {}) {
     ...(bookFormatRef(input.bookFormat) ? { bookFormat: bookFormatRef(input.bookFormat) } : {}),
     // R37: a picture-led book's expression cards (표현 원리), chosen once in the wizard.
     ...(expressionRef(input.storyExpression) ? { storyExpression: expressionRef(input.storyExpression) } : {}),
+    // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
+    ...(hasStoryChange(input) ? { storyChange: storyChangePolicy() } : {}),
+    ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -2127,6 +2140,8 @@ export function inspectOutlineRules(outline, source = {}) {
     places = preflightOutlineLocations(source),
     backgrounds = source.backgrounds || source.backgroundList || [],
     allowed = new Set(backgrounds.map((b) => b.id));
+  // R38: an asked-for change that is missing stops the outline (structure, not quality).
+  violations.push(...storyChangeViolations(outline, source));
   const missingTopic = topicKeywords.filter(
     (keyword) =>
       !includesTopicKeyword(body, keyword) &&
@@ -2289,7 +2304,8 @@ export function outlineRequestSchema(input) {
     schema.required.push("tension");
   }
   // R36: a picture-led diet draft plans who tells each beat (words or picture) and how.
-  return withPicturePlanSchema(schema, input);
+  // R38: and says what is different at the end.
+  return withStoryChangeSchema(withPicturePlanSchema(schema, input), input);
 }
 export async function generateOutline(source, options = {}) {
   const input = normalizeStoryInput(source);
@@ -3145,7 +3161,7 @@ async function paginateOpeningsOnce(outline, prose, input, options, violations) 
           ...(violations.length ? { violations } : {}),
         },
       },
-      openingPaginationSchema(count),
+      withWordlessSchema(openingPaginationSchema(count), input),
       options,
     );
   try {
@@ -3215,7 +3231,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
       meta: { stage: "pagination", engineId: options.engineId || "k1Book", model: null, requests: 0, demo: false, k1Pages: true },
     };
   const pagePlan = buildBeatPagePlan(outline, input.pageCount),
-    schema = clone(PAGINATION_SCHEMA);
+    schema = withWordlessSchema(clone(PAGINATION_SCHEMA), input);
   schema.properties.pages.minItems = input.pageCount;
   schema.properties.pages.maxItems = input.pageCount;
   const result = await complete(

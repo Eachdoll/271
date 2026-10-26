@@ -178,6 +178,12 @@ export function selectionMaterialPlan(state, wizard = {}, { lean = false } = {})
     // R33 (diet drafts): the parent's picks are the places. Nothing picked:
     // the places the topic names, else the home. Never a filler place.
     if (!chosen.length) {
+      // R38: the parent's opening place (쉬운 ① 어디서?) comes first.
+      const picked = wizard.storyPlaceId && wizard.storyPlaceId !== "auto" ? backgrounds.find((b) => b.id === wizard.storyPlaceId) : null;
+      if (picked) {
+        chosen.push(picked);
+        filled.push(picked);
+      }
       for (const id of topicPlaceIds(wizard.topic, backgrounds).slice(0, 2)) {
         const background = backgrounds.find((b) => b.id === id);
         if (background && !chosen.includes(background)) {
@@ -1358,6 +1364,8 @@ export async function runFullAuto(
         storyVoice: _freshVoice,
         bookFormat: _freshFormat,
         storyExpression: _freshExpression,
+        storyChange: _freshChange,
+        storyPlace: _freshPlace,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1404,6 +1412,9 @@ export async function runFullAuto(
         ...(job.input?.bookFormat ? { bookFormat: clone(job.input.bookFormat) } : {}),
         // R37: the job's own expression cards (never re-chosen on resume).
         ...(job.input?.storyExpression ? { storyExpression: clone(job.input.storyExpression) } : {}),
+        // R38: the job's own change marker and opening place.
+        ...(job.input?.storyChange ? { storyChange: clone(job.input.storyChange) } : {}),
+        ...(job.input?.storyPlace ? { storyPlace: clone(job.input.storyPlace) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

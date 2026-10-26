@@ -10,6 +10,7 @@ import { biblePictureRules } from "../story-generation/council.js";
 import { genderWord } from "./identity.js";
 import { planOf, picturePlanPictureLine, picturePlanText } from "../story-generation/picture-plan.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
+import { hasStoryChange } from "../story-generation/story-change.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -80,6 +81,24 @@ export function pagePlan(book, page) {
 }
 /** R36: the plan text a picture request carries (model-written, lenient scope). */
 export const scenePlanText = (book, page) => picturePlanText(pagePlan(book, page));
+const PLAN_SHOT = Object.freeze({ wide: "wide", middle: "medium", close: "closeup" });
+/** R38: the composition sentence that opens a request — the camera and the plan before anything a reference image could suggest. */
+const framedLead = (shot, plan) =>
+  `COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): ${SHOT_TEXT[shot] || SHOT_TEXT.wide}.${plan ? ` ${plan}` : ""} Draw this page from this camera, not from the angle the place reference was painted at. `;
+/** The staging a page is drawn with: the planned shot (R36) over the staging rotation. */
+export function effectiveStaging(book, page, { cover = false } = {}) {
+  const planned = cover ? null : pagePlan(book, page);
+  return planned?.shot ? { ...(page?.staging || {}), shot: PLAN_SHOT[planned.shot] } : page?.staging || {};
+}
+/**
+ * R38: a close view of an R38 book is drawn without the place reference
+ * image — the reference's viewpoint was reproduced on every page, so twelve
+ * pages came out as the same wide room. The place's facts still travel.
+ */
+export function closeViewFor(book, page, { cover = false } = {}) {
+  if (cover || !hasStoryChange(book?.storyInput)) return false;
+  return ["closeup", "over_shoulder"].includes(effectiveStaging(book, page).shot);
+}
 export function buildScenePrompt({
   book,
   page,
@@ -93,7 +112,10 @@ export function buildScenePrompt({
   const brief = sceneBriefForPage(book, page),
     planned = cover ? null : pagePlan(book, page),
     // R36: a planned shot replaces the staging shot, so the request never asks for two cameras.
-    staging = planned?.shot ? { ...(page.staging || {}), shot: { wide: "wide", middle: "medium", close: "closeup" }[planned.shot] } : page.staging || {},
+    staging = effectiveStaging(book, page, { cover }),
+    // R38: the composition leads the request and a close view carries no place reference.
+    framed = hasStoryChange(book.storyInput),
+    closeView = closeViewFor(book, page, { cover }),
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -108,9 +130,11 @@ export function buildScenePrompt({
       book.outputSettings?.textPosition) === "staged";
   const shot = cover ? "medium" : staging.shot || "wide";
   const openings = !cover && layoutOf(book) === "openings";
+  // R36: the composition planned with the story (picture-led books only; empty otherwise).
+  const plan = picturePlanPictureLine(planned);
   const composition = openings
-    ? openingComposition(page, staging, leadName)
-    : `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
+    ? `${framed && !cover ? framedLead(shot, plan) : ""}${openingComposition(page, staging, leadName)}`
+    : `${framed && !cover ? framedLead(shot, plan) : ""}${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
   const time = brief?.timeOfDay || page.scene?.timeOfDay || "day";
   const mood = book.outline?.quality?.worldMood || book.storyQuality?.worldMood;
   const atmosphere = mood
@@ -139,9 +163,7 @@ export function buildScenePrompt({
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });
-  // R36: the composition planned with the story (picture-led books only; empty otherwise).
-  const plan = picturePlanPictureLine(planned);
-  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan ? ` ${plan}` : ""}`;
+  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan && !(framed && !cover) ? ` ${plan}` : ""}`;
   const background = place.background;
   const facts = background
     ? {
@@ -159,7 +181,11 @@ export function buildScenePrompt({
   // last two pages and the ledger to this beat's three lines; the picture
   // model then reads the event instead of a wall of text.
   const lean = hasPromptPolicy(book.storyInput);
-  const location = lean
+  const location = closeView
+    ? `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for ${time}.${
+        earlierPages.length ? ` Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep prior consequences; previous poses and temporary props are not instructions to repeat.` : ""
+      } Style references define rendering only. No words, captions, watermark or logos.`
+    : lean
     ? `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}${ARCHITECTURE_LOCK_SHORT} Relight the same geometry for ${time}. Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.`
     : `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}ARCHITECTURE LOCK: the approved place sheet is authoritative; the CANONICAL first scene establishes previously unspecified visible geometry. Preserve the exact doorway silhouette (arch/rectangle), door count, frame color, handle, windows, wall materials, roof, paths and relative structural positions across every view. Camera angle may change; the physical building must not. Background references define layout only: relight the SAME geometry for ${time}; prior daytime lighting must not override the brief. Recent scenes are secondary continuity references and cannot override the canonical layout. Never invent an extra entrance, bridge, tower, staircase or decorative structure to fill the composition. A sub-location must already exist in the place facts/reference; otherwise change only the camera position. Draw only architecture and props established by the place references or current story. A new permanent structure requires explicit story content. Do not transfer buildings from a different place. Earlier page continuity: ${json(earlierPages)}. Preserve prior action consequences while depicting this page event. Previous poses and temporary props are not instructions to duplicate them. Style references define rendering only. No words, captions, watermark or logos.`;
   const plot = plotContextForPage(book.outline, page);

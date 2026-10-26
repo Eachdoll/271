@@ -14,6 +14,7 @@ import { describeReadingViolation } from "./reading-messages.js";
 export { describeReadingViolation };
 import { analyzeBook, estimateReadingScore } from "./reading-checker.js";
 import { pageReadingSpec } from "./story-generation/checker.js";
+import { wordlessPageIndexes } from "./story-generation/story-change.js";
 import { buildStoryWords } from "./story-reading-context.js";
 import { layoutOf, openingsEnabled, unitLabel } from "./book-layout.js";
 
@@ -200,6 +201,8 @@ export function bookReadingOptions(candidate, context, { characters = [], signal
     koVocabulary: context.specs.ko.vocabularyAvailable ? context.specs.ko.vocabList : null,
     signal,
     ...(lean ? { lean: true, pageSpec: (all, language, page) => pageReadingSpec(all, language, page, { lean: true }) } : {}),
+    // R38: the one wordless entry of a picture-led book.
+    ...(lean ? { wordlessPages: wordlessPageIndexes(candidate.pages, candidate.outline, candidate.storyInput || candidate.input) } : {}),
   };
 }
 /** R35 hotfix: a book made from a diet draft (its frozen story input carries the policy). */

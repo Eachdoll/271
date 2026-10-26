@@ -2,6 +2,7 @@ import { frozenBeatCount } from "./schemas.js";
 import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
 import { splitSentences } from "../story-quality/dist/util.js";
 import { isPictureLed } from "../book-format.js";
+import { hasStoryChange } from "./story-change.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -150,6 +151,14 @@ export function demoOutline(input) {
     beats,
     twist:
       "노래하는 돌 소리는 돌 틈에 낀 빈 도시락 통에 바람이 들어가는 소리였어요.",
+    // R38: what is different at the end, the expectation and the ending kind (asked-for drafts only).
+    ...(hasStoryChange(input)
+      ? {
+          change: "처음엔 노래는 돌이 하는 줄 알았는데, 끝에는 두 친구가 바람과 통으로 직접 노래를 만들어요.",
+          expectation: "숲 어딘가에 노래하는 돌이 있을 거예요.",
+          ending: "echo",
+        }
+      : {}),
     newWordsKo: ["도시락", "가장자리", "바람"],
     newWordsEn: ["stone", "box", "wind"],
     settings: beats.map((b) => ({
