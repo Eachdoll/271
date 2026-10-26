@@ -2177,6 +2177,7 @@ async function approvePages(
   }
   const checked = checkStory(d.outline, d.pagination, {
     specs: d.input.specs,
+    storyInput: d.input,
     lean: d.input?.promptDiet?.version === 1,
     catchphrases: storyCatchphrases(d.input),
     storyWords: buildStoryWords(d.input, d.outline, [], { briefs: d.sceneBriefs || [], lean: d.input?.promptDiet?.version === 1 }),
@@ -2472,6 +2473,7 @@ async function handleClick(event) {
       d.pagination = fitted;
       d.storyCheck = checkStory(d.outline, fitted, {
         specs: d.input.specs,
+        storyInput: d.input,
         lean: d.input?.promptDiet?.version === 1,
         catchphrases: storyCatchphrases(d.input),
         storyWords: buildStoryWords(d.input, d.outline, [], { briefs: d.sceneBriefs || [], lean: d.input?.promptDiet?.version === 1 }),

@@ -5,7 +5,7 @@ import {seedState} from '../dist/engine.js';
 import {migrateWorldState, sceneReferenceRecords} from '../dist/image-generation/world.js';
 import {migrateReadingSettings, bookReadingOptions} from '../dist/reading-ui.js';
 import {inputFromWizard, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
-import {normalizeStoryInput, generateProse, inspectOutlineRules, outlineRequestSchema} from '../dist/story-generation/pipeline.js';
+import {normalizeStoryInput, generateProse, inspectOutlineRules, outlineRequestSchema, inspectStory} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanBeatWriterRules, leanProseRules, leanPaginationRules, leanOpeningsPaginationRules, leanVisibleInput, leanOutlineView} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
 import {normalizeOutlineResponse} from '../dist/story-generation/outline-normalize.js';
@@ -17,7 +17,7 @@ import {buildScenePrompt, closeViewFor, effectiveStaging} from '../dist/image-ge
 import {pictureLedK1Line} from '../dist/book-format.js';
 import {topicEndingNote} from '../dist/story-generation/topic-ending.js';
 import {createFullAutoJob, selectionMaterialPlan} from '../dist/full-auto.js';
-import {ecoOutlinePrompt, ecoJobInit, ecoAcceptOutline} from '../dist/eco-mode.js';
+import {ecoOutlinePrompt, ecoJobInit, ecoAcceptOutline, ecoAcceptPages} from '../dist/eco-mode.js';
 import {IDEA_TOPICS, SIMPLE_VALUE_OPTIONS, formatSummary, renderSimpleCreate, ensureSimpleWizard, preselectMaterials} from '../dist/simple-create.js';
 import {hasStoryChange, storyChangePolicy, settleStoryChange, storyChangeViolations, storyChangeWriterLine, storyChangeK1Block, storyChangeSummary, storyPlaceRef, isWordlessEntry, wordlessPageIndexes, wordlessRule, pageBookVoiceLine, withWordlessSchema} from '../dist/story-generation/story-change.js';
 
@@ -251,6 +251,19 @@ test('R38 the wordless page: one middle entry of a picture-led R38 book whose be
   assert.deepEqual([...wordlessPageIndexes(wordless.pages, outline, input)], [idx]);
   assert.deepEqual(validatePagination(wordless, input, outline), {valid: true, errors: []});
   assert.equal(checkStory(outline, wordless, {specs: input.specs, storyInput: input}).passed, true);
+  // R38 hotfix (Codex R38 report): the real wrappers — inspectStory (FULL AUTO, pagination repairs) and eco's page accept — pass it too.
+  const inspected = inspectStory(outline, wordless, input);
+  assert.equal(inspected.passed, true, JSON.stringify(inspected.checks.filter((c) => !c.passed)));
+  assert.equal(inspectStory(outline, wordless, dated(input)).passed, false, 'an R37 draft still needs text on every page through the wrapper');
+  const ecoJob = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true, koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12, topic: '숲에서 노래하는 돌 찾기'}), backgroundIds: ['forest']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
+  const ecoInputN = normalizeStoryInput(ecoJob.input), ecoOutline = demoOutline(ecoInputN);
+  const ecoPages = demoPagination(ecoOutline, demoProse(ecoOutline, ecoInputN), ecoInputN);
+  ecoOutline.beats[2].picturePlan = {version: 1, carrier: 'picture', picture: 'the stones in a row, one humming'};
+  const ecoIdx = ecoPages.pages.findIndex((p) => p.beatIndex === 3);
+  ecoPages.pages[ecoIdx].textKo = ''; ecoPages.pages[ecoIdx].textEn = '';
+  const accepted = ecoAcceptPages(JSON.stringify(ecoPages), ecoOutline, ecoJob.input, {bookId: 'eco-wordless'});
+  assert.equal(accepted.ok, true, JSON.stringify(accepted.errors || accepted.findings));
+  assert.equal(accepted.pagination.pages[ecoIdx].textKo, '');
   // The ④ check (reading-ui's options) skips the entry; without the option the empty page fails as before.
   const book = {pages: wordless.pages.map((p) => ({...p, ko: p.textKo, en: p.textEn})), outline, storyInput: input};
   const options = bookReadingOptions(book, {allowedNames: [], storyWords: [], specs: input.specs}, {characters: input.characters});

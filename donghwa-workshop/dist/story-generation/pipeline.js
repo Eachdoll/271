@@ -3284,6 +3284,10 @@ export function inspectStory(outline, pagination, input) {
     ),
     craftPolicy: input.craftPolicy || null,
     lean: hasPromptDiet(input),
+    // R38 hotfix (Codex R38 report): the checker reads the draft's policies
+    // (the wordless entry) from storyInput; without it the eco and FULL AUTO
+    // paths refused the one blank page the request had allowed.
+    storyInput: input,
   });
   // R12 openings: the opening structure (validateOpenings) replaces the entry count.
   const structure = isOpeningsInput(input)
