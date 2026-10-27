@@ -8,6 +8,7 @@ import { bookFormatRef } from "../book-format.js";
 import { withPicturePlanSchema } from "./picture-plan.js";
 import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangePolicy, storyPlaceRef, withWordlessSchema } from "./story-change.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
+import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -447,6 +448,11 @@ function modelVisibleInput(source) {
     const { storyDrama, ...rest } = input;
     input = rest;
   }
+  // R40: so is the text-pocket marker.
+  if (input?.textPocket) {
+    const { textPocket, ...rest } = input;
+    input = rest;
+  }
   // R35: the book's format is a rule line, not story data.
   if (input?.bookFormat) {
     const { bookFormat, ...rest } = input;
@@ -607,6 +613,8 @@ export function normalizeStoryInput(input = {}) {
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
     // R39: the drama contract (tries of different kinds, a secret, the companion's want, plain and text-only pages).
     ...(hasStoryDrama(input) ? { storyDrama: storyDramaPolicy() } : {}),
+    // R40: the words' field on each picture (typeset, never painted).
+    ...(hasTextPocket(input) ? { textPocket: textPocketPolicy() } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -2316,7 +2324,8 @@ export function outlineRequestSchema(input) {
   // R36: a picture-led diet draft plans who tells each beat (words or picture) and how.
   // R38: and says what is different at the end.
   // R39: and the drama contract, with the plan's focus, secret placement and backdrop.
-  return withDramaPlanSchema(withStoryDramaSchema(withStoryChangeSchema(withPicturePlanSchema(schema, input), input), input), input);
+  // R40: and where the words sit on each picture.
+  return withPocketSchema(withDramaPlanSchema(withStoryDramaSchema(withStoryChangeSchema(withPicturePlanSchema(schema, input), input), input), input), input);
 }
 export async function generateOutline(source, options = {}) {
   const input = normalizeStoryInput(source);

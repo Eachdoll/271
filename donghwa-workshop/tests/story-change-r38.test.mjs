@@ -307,6 +307,6 @@ test('R38 the screens and the shell: ③, the eco outline and the pro card say w
   assert.match(html, / · 달라지는 것 · 처음엔/);
   assert.match(html, /<small class="simple-plan-note">달라지는 것 · 처음엔[^<]+<\/small>/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v8[5-9]";/);
+  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[5-9]|9[0-9])";/);
   assert.match(sw, /"\.\/story-generation\/story-change\.js",/);
 });

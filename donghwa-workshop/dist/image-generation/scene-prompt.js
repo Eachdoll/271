@@ -12,6 +12,7 @@ import { planOf, picturePlanPictureLine, picturePlanText } from "../story-genera
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
+import { pocketOf, pocketPromptLine } from "../text-pocket.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -120,6 +121,8 @@ export function buildScenePrompt({
     // R39: a plain-backdrop page (a thought, a monologue) is drawn with no place at all.
     plain = plainBackdropFor(book, page, { cover }),
     dramaCover = cover && hasStoryDrama(book.storyInput),
+    // R40: the flat field the words are typeset on (never on the cover).
+    pocketLine = !cover && pocketOf(book, page) ? pocketPromptLine(planned) : "",
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -137,8 +140,8 @@ export function buildScenePrompt({
   // R36: the composition planned with the story (picture-led books only; empty otherwise).
   const plan = picturePlanPictureLine(planned);
   const composition = openings
-    ? `${framed && !cover ? framedLead(shot, plan) : ""}${openingComposition(page, staging, leadName)}`
-    : `${framed && !cover ? framedLead(shot, plan) : ""}${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
+    ? `${framed && !cover ? framedLead(shot, plan) : ""}${openingComposition(page, staging, leadName)}${pocketLine ? ` ${pocketLine}` : ""}`
+    : `${framed && !cover ? framedLead(shot, plan) : ""}${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
   const time = brief?.timeOfDay || page.scene?.timeOfDay || "day";
   const mood = book.outline?.quality?.worldMood || book.storyQuality?.worldMood;
   const atmosphere = mood

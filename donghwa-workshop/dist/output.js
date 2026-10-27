@@ -12,6 +12,7 @@ import {
 } from "./image-generation/assets.js";
 import { layoutOf, openingsOf, splitSpreadText } from "./book-layout.js";
 import { isTextOnlyPage, textOnlySVG } from "./story-generation/story-drama.js";
+import { hasTextPocket, pocketOf, pocketOnHalf, pocketFrame, pocketPanel, pocketClasses, pocketStyle, isShout, POCKET_CSS, POCKET_SAMPLER_SCRIPT } from "./text-pocket.js";
 
 const DEFAULTS = {
   layout: "single",
@@ -166,6 +167,15 @@ function parsePages(selection, count) {
   return [...selected].sort((a, b) => a - b);
 }
 
+/** R40: the pocket's stylesheet and sampler, only for a book that has pockets (other books' print HTML is unchanged). */
+const pocketStyles = (book, settings) =>
+  hasTextPocket(book?.storyInput)
+    ? `${POCKET_CSS}\n.text-pocket-leaf .picturebook-frame>.pocket-frame{width:100%;height:100%}\n.text-pocket-leaf .pocket-picture,.text-pocket-leaf .pocket-picture>.illustration{width:100%;height:100%}\n.text-pocket-leaf .pocket-picture>.illustration{object-fit:contain}\n.text-pocket{font-size:${settings.fontSize === "large" ? "17pt" : "14pt"}}\n.one .text-pocket{font-size:${settings.fontSize === "large" ? "21pt" : "17pt"}}\n.ob-art .text-pocket{font-size:var(--ob-font, ${OPENING_FONT_FLOORS.K2}pt)}\n.ob-pocket .ob-text{flex:0 0 0;padding:0}\n`
+    : "";
+const pocketScript = (book) => (hasTextPocket(book?.storyInput) ? POCKET_SAMPLER_SCRIPT : "");
+/** R40: the page's words for the language, as plain strings (the shout test). */
+const pageTexts = (page, language) =>
+  [language !== "en" ? page.ko ?? page.textKo ?? "" : "", language !== "ko" ? page.en ?? page.textEn ?? "" : ""].filter((t) => String(t).trim());
 function pageText(page, language) {
   const ko = `<p lang="ko" class="ko">${escapeHTML(page.ko ?? page.textKo ?? "")}</p>`;
   const en = `<p lang="en" class="en">${escapeHTML(page.en ?? page.textEn ?? "")}</p>`;
@@ -202,11 +212,19 @@ function logicalPages(book, settings, characters) {
   };
   const selected = parsePages(settings.pages, book.pages.length);
   if (settings.pages === "cover") return [cover];
-  const pages = selected.map((index) => ({
-    kind: "page",
-    label: `${index + 1}쪽`,
-    html: `<article class="leaf story-page ${textPlacement(book.pages[index], settings)}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${imageMarkup(artwork(book, book.pages[index], characters, false, settings.imageSources), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div></div><span class="folio">${index + 1}</span></article>`,
-  }));
+  const pages = selected.map((index) => {
+    const page = book.pages[index],
+      picture = imageMarkup(artwork(book, page, characters, false, settings.imageSources), `${index + 1}쪽 이야기 그림`),
+      // R40: a page with a text pocket sets its words on the picture's flat field; no story card below.
+      pocket = pocketOf(book, page);
+    return {
+      kind: "page",
+      label: `${index + 1}쪽`,
+      html: pocket
+        ? `<article class="leaf story-page text-pocket-leaf" aria-label="${index + 1}쪽"><div class="picturebook-frame">${pocketFrame(picture, pageText(page, settings.language), pocket, { shout: isShout(pageTexts(page, settings.language)) })}</div><span class="folio">${index + 1}</span></article>`
+        : `<article class="leaf story-page ${textPlacement(page, settings)}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${picture}<div class="story">${pageText(page, settings.language)}</div></div><span class="folio">${index + 1}</span></article>`,
+    };
+  });
   if (!settings.pages || settings.pages === "all")
     return [cover, ...pages, back];
   return pages;
@@ -412,11 +430,14 @@ function openingLeaves(book, opening, characters, sources = null) {
     const index = opening.indices[0],
       page = book.pages[index],
       src = artwork(book, page, characters, false, sources),
-      [koLeft, koRight] = splitSpreadText(text(page, "ko")),
-      [enLeft, enRight] = splitSpreadText(text(page, "en"));
+      // R40: a side pocket holds the whole spread's words on its own half; a top/bottom one spans both halves.
+      pocket = pocketOf(book, page),
+      sided = pocket && (pocket.side === "left" || pocket.side === "right"),
+      [koLeft, koRight] = sided ? (pocket.side === "left" ? [text(page, "ko"), ""] : ["", text(page, "ko")]) : splitSpreadText(text(page, "ko")),
+      [enLeft, enRight] = sided ? (pocket.side === "left" ? [text(page, "en"), ""] : ["", text(page, "en")]) : splitSpreadText(text(page, "en"));
     return [
-      { no: opening.printedPages[0], half: "left", src, ko: koLeft, en: enLeft },
-      { no: opening.printedPages[1], half: "right", src, ko: koRight, en: enRight },
+      { no: opening.printedPages[0], half: "left", src, ko: koLeft, en: enLeft, pocket: pocketOnHalf(pocket, "left") },
+      { no: opening.printedPages[1], half: "right", src, ko: koRight, en: enRight, pocket: pocketOnHalf(pocket, "right") },
     ];
   }
   return opening.indices.map((index, k) => ({
@@ -425,13 +446,17 @@ function openingLeaves(book, opening, characters, sources = null) {
     src: artwork(book, book.pages[index], characters, false, sources),
     ko: text(book.pages[index], "ko"),
     en: text(book.pages[index], "en"),
+    pocket: pocketOf(book, book.pages[index]),
   }));
 }
 function leafMarkup(leaf, language) {
   const ko = `<p lang="ko" class="ko">${escapeHTML(leaf.ko.trim())}</p>`,
     en = `<p lang="en" class="en">${escapeHTML(leaf.en.trim())}</p>`,
-    body = language === "ko" ? ko : language === "en" ? en : en + ko;
-  return `<article class="ob-leaf ${leaf.half ? `ob-half ob-half-${leaf.half}` : "ob-page"} ob-${leaf.no % 2 ? "left" : "right"}" aria-label="${leaf.no}쪽" data-leaf="${leaf.no}"><div class="ob-art-row"><div class="ob-art">${imageMarkup(leaf.src, `${leaf.no}쪽 이야기 그림`)}</div></div><div class="ob-text">${body}</div><span class="ob-folio">${leaf.no}</span></article>`;
+    body = language === "ko" ? ko : language === "en" ? en : en + ko,
+    // R40: the words sit in the picture's flat field; the text block below stays empty.
+    pocket = leaf.pocket && (leaf.ko.trim() || leaf.en.trim()) ? leaf.pocket : null,
+    texts = [language !== "en" ? leaf.ko : "", language !== "ko" ? leaf.en : ""].filter((t) => t.trim());
+  return `<article class="ob-leaf ${leaf.half ? `ob-half ob-half-${leaf.half}` : "ob-page"} ob-${leaf.no % 2 ? "left" : "right"}${pocket ? " ob-pocket" : ""}" aria-label="${leaf.no}쪽" data-leaf="${leaf.no}"><div class="ob-art-row"><div class="ob-art${pocket ? ` ${pocketClasses(pocket)}` : ""}"${pocket ? ` style="${pocketStyle(pocket)}"` : ""}>${imageMarkup(leaf.src, `${leaf.no}쪽 이야기 그림`)}${pocket ? pocketPanel(body, pocket, { shout: isShout(texts) }) : ""}</div></div><div class="ob-text">${pocket ? "" : body}</div><span class="ob-folio">${leaf.no}</span></article>`;
 }
 function openingStyles(settings) {
   return `
@@ -547,7 +572,7 @@ function openingsPrintHTML(book, normalized, characters, requestedLayout) {
         ? "크게 읽기 · A4 세로 한 장에 한 쪽"
         : "펼침 구성 · A4 가로 한 장에 펼침 하나",
     guidance = `<p>A4 ${settings.layout === "two" ? "세로" : "가로"} · 실제 크기(100%)로 출력해 주세요.${settings.layout === "two" ? " 펼침면은 왼쪽 반과 오른쪽 반을 두 장에 나눠 마주 보게 출력해요." : " 한 장에 마주 보는 두 쪽(펼침 하나)을 출력해요. 펼침면 그림은 가운데에서 이어져요."} 책 전체를 같은 글자 크기(${floor}pt 이상)로 맞춰요.</p>${bookletNote ? `<p class="print-warning">${OPENING_BOOKLET_NOTE}. 일반 출력(A4 가로 한 장에 펼침 하나)으로 열었어요.</p>` : ""}${feedbackNote(settings)}`;
-  return `<!doctype html><html lang="${settings.language === "en" ? "en" : "ko"}" data-font-floor="${floor}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(settings)}${openingStyles(settings)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · 펼침 ${openings.length}개 · ${body.length}개 출력면 · ${settings.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래에 배치됩니다. 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${body.join("")}</main>${openingFitScript()}</body></html>`;
+  return `<!doctype html><html lang="${settings.language === "en" ? "en" : "ko"}" data-font-floor="${floor}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(settings)}${openingStyles(settings)}${pocketStyles(book, settings)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · 펼침 ${openings.length}개 · ${body.length}개 출력면 · ${settings.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래에 배치됩니다. 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${body.join("")}</main>${openingFitScript()}${pocketScript(book)}</body></html>`;
 }
 
 /** Standalone portable HTML, suitable for saving and opening without this app. */
@@ -570,7 +595,7 @@ export function getPrintHTML(book, settings = {}, characters = []) {
     normalized.layout === "booklet"
       ? `<p>제본용 배치입니다. 빈 쪽을 포함해 4의 배수로 맞추므로 1쪽 옆이나 2쪽 옆에 빈 쪽이 보일 수 있습니다. 빈 쪽 없이 1→2쪽 순서로 보려면 일반 인쇄를 선택하세요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
       : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === "two" ? " 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요." : ""}</p>${feedbackNote(normalized)}`;
-  return `<!doctype html><html lang="${normalized.language === "en" ? "en" : "ko"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition === "below" ? "본문은 그림 아래에 배치됩니다." : normalized.textPosition === "staged" ? "장면별로 정한 빈 공간에 본문을 배치합니다. 구도 정보가 없는 쪽은 그림 아래에 배치합니다." : "본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다."} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition === "below" ? "" : " 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다."}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
+  return `<!doctype html><html lang="${normalized.language === "en" ? "en" : "ko"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(normalized)}${pocketStyles(book, normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition === "below" ? "본문은 그림 아래에 배치됩니다." : normalized.textPosition === "staged" ? "장면별로 정한 빈 공간에 본문을 배치합니다. 구도 정보가 없는 쪽은 그림 아래에 배치합니다." : "본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다."} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition === "below" ? "" : " 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다."}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}${pocketScript(book)}</body></html>`;
 }
 
 /* ---------- R39-F: the low-resolution feedback edition ---------- */

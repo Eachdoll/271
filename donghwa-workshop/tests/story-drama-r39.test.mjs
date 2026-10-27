@@ -380,7 +380,7 @@ test('R39 the screens, the deck and the shell: ③, the eco outline and the pro 
   assert.equal(EXPRESSION_DECK.telling.length, 8);
   assert.ok(Array.from({length: 60}, (_, i) => chooseExpression({seed: `주제 ${i}:0`}).cards.telling).some((hand) => hand.includes('aside')), 'the card is dealt');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v8[7-9]";/);
+  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[7-9]|9[0-9])";/);
   assert.match(sw, /"\.\/story-generation\/story-drama\.js",/);
   const module = readFileSync(new URL('../dist/story-generation/story-drama.js', import.meta.url), 'utf8');
   assert.doesNotMatch(module, /Haughton|호튼|Oh No, George|Shh! We Have a Plan|Little Owl Lost|A Bit Lost|Goodnight Already/i);

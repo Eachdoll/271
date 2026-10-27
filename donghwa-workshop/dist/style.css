@@ -5344,3 +5344,25 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
   font-size: 13px;
   margin: 4px 0 8px;
 }
+
+/* R40 글 자리: the words typeset on the picture's flat field (the same rules as text-pocket.js POCKET_CSS). */
+.pocket-frame{position:relative;overflow:hidden}
+.pocket-frame .pocket-picture{display:block}
+.pocket-frame .pocket-picture>img,.pocket-frame .pocket-picture>svg,.pocket-frame .pocket-picture>.illustration{display:block;width:100%;height:auto}
+.text-pocket{position:absolute;display:flex;align-items:center;justify-content:center;padding:3% 4%;box-sizing:border-box;background:rgba(255,253,246,.88);color:#2b2b2b;font-weight:600;line-height:1.5;word-break:keep-all;overflow-wrap:break-word;white-space:pre-line;text-align:center;z-index:1}
+.text-pocket.pocket-flat{background:var(--pocket-bg,#f6f2e8);color:var(--pocket-fg,#2b2b2b)}
+.pocket-left .text-pocket{top:0;bottom:0;left:0;width:var(--pocket-share,34%)}
+.pocket-right .text-pocket{top:0;bottom:0;right:0;width:var(--pocket-share,34%)}
+.pocket-top .text-pocket{left:0;right:0;top:0;height:var(--pocket-share,30%)}
+.pocket-bottom .text-pocket{left:0;right:0;bottom:0;height:var(--pocket-share,30%)}
+.text-pocket-inner{max-width:100%;max-height:100%;overflow:hidden}
+.text-pocket p{margin:0}
+.text-pocket p+p{margin-top:.5em}
+.text-pocket .en{font-weight:500;opacity:.9}
+.text-pocket-shout .text-pocket-inner{font-size:2.4em;line-height:1.15;font-weight:800;letter-spacing:-.02em}
+.reader-picture .pocket-frame{border-radius:12px}
+.reader-picture .text-pocket{font-size:clamp(15px,2.3vw,23px);font-family:var(--serif)}
+.reader-picture .text-pocket .en{font-family:var(--sans);font-size:.85em}
+.reader-picture .text-pocket [data-reader-word]{border-radius:4px;padding:0 .06em}
+.simple-page-art .pocket-frame{border-radius:10px}
+.simple-page-art .text-pocket{font-size:clamp(12px,1.7vw,18px)}

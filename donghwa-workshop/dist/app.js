@@ -52,6 +52,7 @@ import {
 } from "./simple-create.js";
 import { BOOK_FORMAT_OPTIONS, formatFor } from "./book-format.js";
 import { isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
+import { pocketOf, pocketFrame, pocketText, isShout, samplePocketColours } from "./text-pocket.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
   bookPricingUnknown,
@@ -580,11 +581,17 @@ function toast(message, { action } = {}) {
     action ? 6000 : 3800,
   );
 }
-function illustration(book, i = 0) {
+function illustration(book, i = 0, { words = null } = {}) {
   const pages = Array.isArray(book.pages) ? book.pages : [];
   if (!pages.length)
     return '<div class="image-missing">아직 그림이 없는 책이에요.</div>';
   const p = pages[Math.max(0, Math.min(i, pages.length - 1))];
+  // R40: with words given and a pocket planned, the picture carries its words in the flat field.
+  const pocket = words ? pocketOf(book, p) : null;
+  if (pocket) return pocketFrame(pictureMarkup(book, p, i), words.inner, pocket, { shout: !!words.shout });
+  return pictureMarkup(book, p, i);
+}
+function pictureMarkup(book, p, i) {
   // R39: a text-only page (backdrop "none") is its words on a flat colour, never a picture.
   if (isTextOnlyPage(p))
     return `<div class="text-only-art" style="background:${textOnlyTint(i)}"><p class="text-only-words">${esc(p.ko ?? p.textKo ?? p.en ?? p.textEn ?? "")}</p></div>`;
@@ -635,6 +642,8 @@ function refreshHydratedImages() {
         "그림 원본을 찾을 수 없어요. 클라우드 또는 백업에서 복원해 주세요.";
     }
   });
+  // R40: paint the text pockets in their picture's own colour.
+  samplePocketColours(document);
 }
 function bookCard(book) {
   return `<article class="book-card">${!childMode ? `<button class="book-favorite ${book.favorite ? "is-favorite" : ""}" data-action="favorite" data-id="${esc(book.id)}" aria-label="${book.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}">${icon("heart")}</button>` : ""}<button class="book-cover-button" data-action="open-book" data-id="${esc(book.id)}" aria-label="${esc(book.title)} 열기" style="display:block;width:100%;padding:0">${cover(book)}</button><div class="book-info"><button class="book-name" data-action="${childMode ? "read-book" : "open-book"}" data-id="${esc(book.id)}">${childMode ? icon("play") + "읽어줘" : esc(book.title)}</button><p class="book-series">${esc(book.series)} · ${book.episode || 1}편</p>${!childMode ? renderReadingBadge(book, { compact: true }) : ""}${!childMode && (book.textDemo || (!book.prose && book.localSample)) ? '<span class="style-changed-badge">데모 이야기</span>' : ""}<div class="book-meta"><span class="lang-tag">${languageLabel(book.language)}</span><span>${layoutOf(book) === "openings" ? printedPagesOf(book) : book.pages?.length || 0}쪽</span><span>·</span><span>${date(book.createdAt)}</span></div></div></article>`;
@@ -2433,12 +2442,21 @@ function renderReader() {
     openings = layoutOf(b) === "openings",
     spread = openings && p?.kind === "spread";
   showModal(
-    `<div class="reader-top"><strong>${esc(b.title)}</strong><small>${openings ? esc(openingHeading(b, r.page)) : `${r.page + 1} / ${b.pages.length}쪽`}</small><button class="close-btn" data-action="close-modal" aria-label="읽기 닫기">${icon("close")}</button></div>${spread ? `<div class="reader-page reader-spread"><div class="reader-picture">${illustration(b, r.page)}</div><p class="reader-turn-hint">폰을 가로로 돌리면 그림이 커져요</p>` : `<div class="reader-page"><div class="reader-picture">${illustration(b, r.page)}</div>`}<div class="reader-body"><div class="audio-indicator">${icon("headphones")}종이책을 보며 들어요</div>${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}</div></div><div class="reader-pagination"><button class="btn btn-outline" data-action="reader-prev" ${r.page === 0 ? "disabled" : ""} aria-label="이전 쪽">${icon("back")}</button><button class="btn btn-green" data-action="reader-toggle-play">${r.speaking ? "읽기 멈춤" : "읽어주기"}</button><span>${r.page + 1} / ${b.pages.length}</span><button class="btn btn-outline" data-action="reader-next" ${r.page === b.pages.length - 1 ? "disabled" : ""} aria-label="다음 쪽">${icon("chevron")}</button></div><details class="reader-play-options"><summary>재생 설정 · 글자 크기</summary><div class="reader-lang-actions">${b.language !== "en" ? btn("한글", "speak-ko", "soft", "volume") : ""}${b.language !== "ko" ? btn("English", "speak-en", "outline", "volume") : ""}${btn("다시 듣기", "replay-speech", "outline", "refresh")}${btn("멈춤", "stop-speech", "outline", "pause")}</div><div class="reader-size-controls" role="group" aria-label="글자 크기">${["기본", "크게", "아주 크게"].map((label, index) => `<button class="btn btn-outline" data-action="reader-font" data-size="${index}" aria-pressed="${readerFontSize === index}">${label}</button>`).join("")}</div><div class="reader-options"><label>속도 <select id="reader-rate"><option value="0.65" ${r.rate === 0.65 ? "selected" : ""}>천천히</option><option value="0.85" ${r.rate === 0.85 ? "selected" : ""}>보통</option><option value="1.05" ${r.rate === 1.05 ? "selected" : ""}>조금 빠르게</option></select></label><label><input type="checkbox" id="reader-continuous" ${r.continuous ? "checked" : ""}>이어 듣기</label><button data-action="audio-only">${r.audioOnly ? "그림과 글 보기" : "듣기 전용"}</button></div></details><div class="reader-status" id="reader-status">재생 버튼을 누르면 이 쪽을 읽어줘요.</div>${r.page === b.pages.length - 1 ? `<div class="reader-feedback"><button type="button" class="btn btn-green" data-reading-action="feedback" data-id="${esc(b.id)}">다 읽었어요 · 쉬움 / 딱 맞음 / 어려움</button></div>` : ""}`,
+    `<div class="reader-top"><strong>${esc(b.title)}</strong><small>${openings ? esc(openingHeading(b, r.page)) : `${r.page + 1} / ${b.pages.length}쪽`}</small><button class="close-btn" data-action="close-modal" aria-label="읽기 닫기">${icon("close")}</button></div>${spread ? `<div class="reader-page reader-spread"><div class="reader-picture">${illustration(b, r.page, { words: readerPocketWords(b, p) })}</div><p class="reader-turn-hint">폰을 가로로 돌리면 그림이 커져요</p>` : `<div class="reader-page"><div class="reader-picture">${illustration(b, r.page, { words: readerPocketWords(b, p) })}</div>`}<div class="reader-body"><div class="audio-indicator">${icon("headphones")}종이책을 보며 들어요</div>${pocketOf(b, p) ? "" : `${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}`}</div></div><div class="reader-pagination"><button class="btn btn-outline" data-action="reader-prev" ${r.page === 0 ? "disabled" : ""} aria-label="이전 쪽">${icon("back")}</button><button class="btn btn-green" data-action="reader-toggle-play">${r.speaking ? "읽기 멈춤" : "읽어주기"}</button><span>${r.page + 1} / ${b.pages.length}</span><button class="btn btn-outline" data-action="reader-next" ${r.page === b.pages.length - 1 ? "disabled" : ""} aria-label="다음 쪽">${icon("chevron")}</button></div><details class="reader-play-options"><summary>재생 설정 · 글자 크기</summary><div class="reader-lang-actions">${b.language !== "en" ? btn("한글", "speak-ko", "soft", "volume") : ""}${b.language !== "ko" ? btn("English", "speak-en", "outline", "volume") : ""}${btn("다시 듣기", "replay-speech", "outline", "refresh")}${btn("멈춤", "stop-speech", "outline", "pause")}</div><div class="reader-size-controls" role="group" aria-label="글자 크기">${["기본", "크게", "아주 크게"].map((label, index) => `<button class="btn btn-outline" data-action="reader-font" data-size="${index}" aria-pressed="${readerFontSize === index}">${label}</button>`).join("")}</div><div class="reader-options"><label>속도 <select id="reader-rate"><option value="0.65" ${r.rate === 0.65 ? "selected" : ""}>천천히</option><option value="0.85" ${r.rate === 0.85 ? "selected" : ""}>보통</option><option value="1.05" ${r.rate === 1.05 ? "selected" : ""}>조금 빠르게</option></select></label><label><input type="checkbox" id="reader-continuous" ${r.continuous ? "checked" : ""}>이어 듣기</label><button data-action="audio-only">${r.audioOnly ? "그림과 글 보기" : "듣기 전용"}</button></div></details><div class="reader-status" id="reader-status">재생 버튼을 누르면 이 쪽을 읽어줘요.</div>${r.page === b.pages.length - 1 ? `<div class="reader-feedback"><button type="button" class="btn btn-green" data-reading-action="feedback" data-id="${esc(b.id)}">다 읽었어요 · 쉬움 / 딱 맞음 / 어려움</button></div>` : ""}`,
     `reader reader-font-${readerFontSize} ` +
       // R12 openings: a sticky bar and word follow (page books unchanged).
       (openings ? "reader-openings " : "") +
       (r.audioOnly ? "audio-only" : ""),
   );
+  // R40: the pocket takes the picture's colour once the modal is in the document.
+  samplePocketColours(document);
+}
+/** R40: the reader's words for the picture's pocket (the same word spans the read-aloud highlights). */
+function readerPocketWords(b, p) {
+  return {
+    inner: `${b.language !== "en" ? `<div class="ko">${readerWords(p.ko, "ko")}</div>` : ""}${b.language !== "ko" ? `<div class="en">${readerWords(p.en, "en")}</div>` : ""}`,
+    shout: isShout([b.language !== "en" ? p.ko : "", b.language !== "ko" ? p.en : ""]),
+  };
 }
 function readerWords(text, language) {
   let end = 0;
