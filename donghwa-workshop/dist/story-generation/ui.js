@@ -1079,7 +1079,7 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // R40: the picture leaves a flat field where the words are typeset (never painted in).
       textPocket: textPocketPolicy(),
       // R41: four or five characters with different relations to the hero.
-      storyCast: storyCastPolicy(),
+      storyCast: storyCastPolicy({ entrance: true }),
       // R42: the English of every beat is the short telling of its Korean (written after it, from it).
       englishMirror: englishMirrorPolicy(),
       // R38: the parent's opening place (쉬운 ① 어디서?), when it is a drawer place.

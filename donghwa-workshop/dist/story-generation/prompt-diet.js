@@ -32,6 +32,7 @@ import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLe
 import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 import { storyChangeOutlineRule, hasStoryChange, storyPlaceName, pageBookVoiceLine, wordlessRule } from "./story-change.js";
 import { mirrorWriterRule, mirrorPaginationLine, mirrorProseLine } from "./english-mirror.js";
+import { castPaginationLine } from "./story-cast.js";
 import { storyDramaOutlineRule, dramaPlanRule, dramaBibleLines, backdropRule, hasStoryDrama } from "./story-drama.js";
 import { pocketRule } from "../text-pocket.js";
 import { castRule } from "./story-cast.js";
@@ -225,7 +226,7 @@ const sceneLines = (custom) =>
 /** The page book's pagination request on the diet: structure and shape, no quotas. */
 export function leanPaginationRules(input, { custom = false } = {}) {
   return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input), mirrorPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input), mirrorPaginationLine(input), castPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** The openings book's pagination request on the diet (the R12 mechanics, no quotas). */
 export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "", custom = false } = {}) {
@@ -235,7 +236,7 @@ export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "
     range = (unit) => (unit ? `${unit.min}-${unit.max}` : "?");
   return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own moment and its part of the beat text) — a spread for a highlight, a reveal, a new place, the turn or the ending; two pages when the beat has two distinct moments. Copy the beat paragraph; for two pages split where the moment changes; light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${cues.join(", ")}. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko?.spread)}, English ${range(en?.spread)}; a single page Korean ${range(ko?.page)}, English ${range(en?.page)}.${openingKinds ? ` Keep opening kinds ${openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
 Keep the approved events, dialogue and ending; each entry keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input), mirrorPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input), mirrorPaginationLine(input), castPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** One page rewritten on the diet: fix what is listed, keep the voice. */
 export function leanPageRewriteRules(pageNo, original, { sceneOnly = false } = {}) {

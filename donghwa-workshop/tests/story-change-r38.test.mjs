@@ -143,7 +143,7 @@ test('R38 the writers: the want, the turn and the close beats hear the expectati
   assert.match(k1Calls[0].user, /\n\n\[달라지는 것\] 처음엔/);
   assert.match(k1Calls[0].system, /말 없는 쪽: /);
   // Pagination requests allow the one wordless entry (picture-led R38 drafts only).
-  assert.match(leanPaginationRules(preR42(k1)), /\nWORDLESS: one entry in the middle of the book whose beat is told by its picture[^\n]*At most one such entry; never the first or the last\.\n(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?scene\.who/);
+  assert.match(leanPaginationRules(preR42(k1)), /\nWORDLESS: one entry in the middle of the book whose beat is told by its picture[^\n]*At most one such entry; never the first or the last\.\n(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?(?:ENTRANCE: [^\n]*\n)?scene\.who/);
   assert.match(leanOpeningsPaginationRules(preR42(led), {cues: ['arrival']}), /\nWORDLESS: /);
   assert.doesNotMatch(leanOpeningsPaginationRules(led, {cues: ['arrival']}) + leanPaginationRules(k1), /WORDLESS/, 'R42: new drafts are not offered a wordless entry');
   assert.equal(wordlessRule(k1), '');

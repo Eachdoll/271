@@ -478,8 +478,9 @@ export function preselectMaterials(state, wizard) {
       wizard.characterIds?.find((id) => characters.some((c) => c.id === id)) ||
       characters[0]?.id,
     others = characters.filter((c) => c.id !== protagonist),
-    // R41: the topic's picks first, then the rest of the drawer in order, up to the preselect count.
-    friends = [...new Set([...recommendFriends(topic, others), ...others.map((c) => c.id)])].slice(0, PRESELECT_FRIENDS),
+    // R43: only the friends the topic calls for (up to the preselect count); the rest of the cast is the
+    // material plan's to choose for what they can do in the story (R41 filled from the drawer in order).
+    friends = recommendFriends(topic, others).slice(0, PRESELECT_FRIENDS),
     home = backgrounds.find(isHomeBackground),
     places = [
       ...new Set([
@@ -1467,7 +1468,7 @@ function renderMaterialsStep(ctx, w) {
       ...stagePlaceIds(w.stageCategoryId, backgrounds.filter((b) => !isHomeBackground(b))),
     ]),
     portrait = ctx.materialPortrait || (() => "");
-  return `<section class="panel simple-panel"><h3>누구와 어디로 갈까요?</h3><p class="section-sub">주인공은 정해져 있어요. 친구는 ${MAX_FRIENDS}명까지, 장소는 주제가 향하는 곳 위주로 1~${MAX_PLACES}곳을 골라요. 고른 친구와 장소는 모두 이야기에 나와요(친구마다 두 장면 이상).</p><p class="form-label">함께할 친구 <span class="count">최대 ${MAX_FRIENDS}명</span></p><div class="selection-grid simple-cards">${characters
+  return `<section class="panel simple-panel"><h3>누구와 어디로 갈까요?</h3><p class="section-sub">주인공은 정해져 있어요. 친구는 ${MAX_FRIENDS}명까지, 장소는 주제가 향하는 곳 위주로 1~${MAX_PLACES}곳을 골라요. 고른 친구와 장소는 모두 이야기에 나와요(친구마다 두 장면 이상). 주제가 부르는 친구만 미리 골라 두었어요 — 나머지는 이야기에 할 일이 있을 때만 자동으로 더해요.</p><p class="form-label">함께할 친구 <span class="count">최대 ${MAX_FRIENDS}명</span></p><div class="selection-grid simple-cards">${characters
     .map((c) => {
       const lead = c.id === protagonist,
         selected = w.characterIds.includes(c.id),

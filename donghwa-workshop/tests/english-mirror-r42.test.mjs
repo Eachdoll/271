@@ -146,8 +146,8 @@ test('R42 the writers: the English of a mirrored beat is written after its Korea
   assert.equal(mirrorProseLine(dated(led)), '');
   // Pagination (pages, openings, eco) — after the other lines, before scene.who.
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
-  assert.match(leanPaginationRules(k1), /\nENGLISH FOLLOWS KOREAN: every entry's textEn is the short English telling of that same entry's textKo[^\n]*\nscene\.who/);
-  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /\nENGLISH FOLLOWS KOREAN: [^\n]*\nscene\.who/);
+  assert.match(leanPaginationRules(k1), /\nENGLISH FOLLOWS KOREAN: every entry's textEn is the short English telling of that same entry's textKo[^\n]*\n(?:ENTRANCE: [^\n]*\n)?scene\.who/);
+  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /\nENGLISH FOLLOWS KOREAN: [^\n]*\n(?:ENTRANCE: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanPaginationRules(dated(k1)) + leanOpeningsPaginationRules(dated(led), {cues: ['arrival']}), /ENGLISH FOLLOWS/);
   assert.equal(mirrorPaginationLine(dated(k1)), '');
   const ecoJob = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));

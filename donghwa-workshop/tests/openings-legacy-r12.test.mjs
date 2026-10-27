@@ -735,7 +735,9 @@ const PINS = {
   // 영어는 한글을 따라 · 말 없는 쪽 기본 끔 (R42): every new diet draft's input carries
   // englishMirror {version: 1} and storyChange {version: 1, wordless: false}; nothing else
   // differs (dump-diffed against a60f8e9). a60f8e9: 3a307f47…8a911.
-  inputs: '77477212ad2450c4e4de4df9c4475f023f498b49f5a756092ca7c049831cecc0',
+  // 첫 등장 (R43): every new diet draft's storyCast carries entrance: true; nothing else
+  // differs (dump-diffed against b74c975). b74c975: 77477212…ecc0.
+  inputs: 'b08e99bc3d35a8768aaa03cf5ed88ac93eb8e1592e147bd95285883dfc602185',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -805,7 +807,9 @@ const PINS = {
   // differs (dump-diffed against d758366). d758366: 629d0513…dd6a.
   // R42: the two demo jobs' inputs carry englishMirror and storyChange.wordless false;
   // nothing else differs (dump-diffed against a60f8e9). a60f8e9: 73a225cf…172f.
-  fullAutoDemo: 'aed281aefde596f5d56ca1277dfac7a9b8e6a6f2017566cb03d6bc78f6be99bf',
+  // R43: the two demo jobs' storyCast carries entrance: true; nothing else differs
+  // (dump-diffed against b74c975). b74c975: aed281ae…99bf.
+  fullAutoDemo: 'e1cf14bdb2e304dc11ecd3b66a02969159d2c60ce2cabbc23527ffbfc20cd156',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

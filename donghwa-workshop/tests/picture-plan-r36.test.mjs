@@ -126,7 +126,7 @@ test('R36 the K1 writer\'s map names each beat\'s plan on a picture-led diet dra
 test('R36 pagination prefers the planned unit and turns the plan\'s picture into scene.action; the picture-led demo still paginates and passes', () => {
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
   const rules = leanOpeningsPaginationRules(led, {cues: ['arrival']});
-  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?scene\.who/);
+  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?(?:ENTRANCE: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /PICTURE PLAN/);
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
   assert.match(leanPaginationRules(k1), /\nPICTURE PLAN: [^\n]*moment\. The picture's part/);

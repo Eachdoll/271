@@ -10,7 +10,7 @@ import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChan
 import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
-import { hasStoryCast, storyCastPolicy, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
+import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -628,7 +628,7 @@ export function normalizeStoryInput(input = {}) {
     // R40: the words' field on each picture (typeset, never painted).
     ...(hasTextPocket(input) ? { textPocket: textPocketPolicy() } : {}),
     // R41: the cast's relations (four or five characters, each with a relation and a want).
-    ...(hasStoryCast(input) ? { storyCast: storyCastPolicy() } : {}),
+    ...(hasStoryCast(input) ? { storyCast: storyCastRef(input.storyCast) } : {}),
     // R42: the English of every beat follows its Korean.
     ...(hasEnglishMirror(input) ? { englishMirror: englishMirrorPolicy() } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
