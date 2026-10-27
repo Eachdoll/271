@@ -1,0 +1,25 @@
+{
+  "requestedRange": "e92e8ca..a204d49",
+  "actualDiff": "74bd068..a60f8e9",
+  "files": [
+    "CLAUDE.md",
+    "CODEX_WORK_ORDER_R41_2026-10-27.md",
+    "dist/full-auto.js",
+    "dist/output.js",
+    "dist/simple-create.js",
+    "dist/story-generation/beat-writer.js",
+    "dist/story-generation/council.js",
+    "dist/story-generation/k1-book.js",
+    "dist/story-generation/outline-normalize.js",
+    "dist/story-generation/pipeline.js",
+    "dist/story-generation/prompt-diet.js",
+    "dist/story-generation/story-cast.js",
+    "dist/story-generation/ui.js",
+    "dist/sw.js",
+    "tests/expression-deck-r37.test.mjs",
+    "tests/material-variety.test.mjs",
+    "tests/openings-legacy-r12.test.mjs",
+    "tests/openings-policy-r12.test.mjs",
+    "tests/story-cast-r41.test.mjs"
+  ]
+}

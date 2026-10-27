@@ -1,0 +1,28 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "paidRequests": [],
+  "cloudRequests": [
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    }
+  ],
+  "pageErrors": [],
+  "synthetic": true,
+  "realFamilySaveVerified": false,
+  "capacity": {
+    "assetCount": 5,
+    "bytesPerAsset": 33554432,
+    "totalBytes": 167772160,
+    "over150MiB": true,
+    "cloudPackaged": true,
+    "cloudBytes": 167772160,
+    "cloudHasNoBase64Text": true,
+    "fileBackupError": "그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.",
+    "fileCapPreserved": true,
+    "stateUnchanged": true,
+    "directCloudPackaged": true,
+    "directCloudBytes": 167772160
+  },
+  "passed": true
+}
