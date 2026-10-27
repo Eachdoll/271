@@ -32,6 +32,8 @@ export const EXPRESSION_DECK = Object.freeze({
     card("small_and_big", "작은 것과 큰 것", "작은 인물과 큰 무언가의 대비로 마음을 전해요.", "Let a small character against something big carry the feeling."),
     card("wordless_opening", "말 없는 펼침", "한 펼침쯤은 거의 말 없이 그림만으로 가요.", "Let one opening go almost without words."),
     card("two_voices", "두 목소리", "두 인물이 짧은 말을 주고받으며 이야기를 밀고 가요.", "Two characters trade short lines and carry the story between them."),
+    // R39: the narrator steps aside to the reader, or the hero speaks alone (a monologue on a plain page).
+    card("aside", "한 발 물러선 화자", "어느 쪽에선 이야기꾼이 한 발 물러나 읽는 아이에게 말을 걸거나, 주인공이 혼자 속마음을 한 줄로 말해요.", "Somewhere the narrator steps aside to speak to the reader, or the hero speaks a line alone, to no one."),
   ]),
   frame: Object.freeze([
     card("one_focus", "시선은 한 곳", "그림마다 눈이 가는 곳은 하나, 나머지는 단순하게.", "One clear focal point per picture; everything else stays simple."),

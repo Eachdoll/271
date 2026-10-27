@@ -11,6 +11,7 @@ import {
   hydrateImageAssets,
 } from "./image-generation/assets.js";
 import { layoutOf, openingsOf, splitSpreadText } from "./book-layout.js";
+import { isTextOnlyPage, textOnlySVG } from "./story-generation/story-drama.js";
 
 const DEFAULTS = {
   layout: "single",
@@ -110,6 +111,8 @@ function imageReference(value) {
 }
 
 function artwork(book, page, characters, cover = false) {
+  // R39: a text-only page is a flat colour; the leaf typesets its words.
+  if (!cover && isTextOnlyPage(page)) return textOnlySVG((book.pages || []).indexOf(page), { wide: page.kind === "spread" });
   const image = cover
     ? imageReference(
         book.cover ||

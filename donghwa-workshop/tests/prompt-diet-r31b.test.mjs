@@ -93,7 +93,8 @@ test('R31b the K2 outline of a diet draft: the app path with the lean prompt and
   const outlineCall = calls.at(-1);
   // R35 adds the PICTURE-LED composition block (≈ 650 chars); R36 the PICTURE PLAN paragraph (≈ 1,000); measured 5,712.
   // (R38 adds the WHAT CHANGES paragraph: 6,000 → 7,000.)
-  assert.ok(outlineCall.system.length <= 7000, `${outlineCall.system.length} chars`);
+  // R39 the DRAMA paragraph and the plan's three fields (8,794).
+  assert.ok(outlineCall.system.length <= 9500, `${outlineCall.system.length} chars`);
   assert.doesNotMatch(outlineCall.system + outlineCall.user, QUOTA);
   assert.doesNotMatch(outlineCall.user, /\[플롯 패턴\]|\[정해진 재료\]|반드시 이대로/u, 'no package plot-pattern seed');
   assert.match(outlineCall.system, /THE WRITERS' ROOM CHOSE THIS PITCH — write the outline from it, in your own way/u);
@@ -123,7 +124,8 @@ test('R31b the K1 outline of a diet draft has no ledger and the K1 shape once; �
   assert.equal(calls.length, 1, 'no repair call for a missing ledger');
   // R31b measured 3,169; R33 adds one STORY SHAPE line and one STAGE line (≈ 500 chars, a spark each, no counters);
   // R35 adds the PICTURE-LED composition block, R36 the PICTURE PLAN paragraph (measured 5,466).
-  assert.ok(calls[0].system.length <= 7000, `${calls[0].system.length} chars`);
+  // R39 (8,295).
+  assert.ok(calls[0].system.length <= 9500, `${calls[0].system.length} chars`);
   assert.doesNotMatch(calls[0].system, QUOTA);
   assert.doesNotMatch(calls[0].system, /plotContract/u);
   assert.equal((calls[0].system.match(/No villain/gu) || []).length, 1, 'the K1 shape is stated once');

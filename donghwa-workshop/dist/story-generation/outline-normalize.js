@@ -10,6 +10,7 @@
 import { PLOT_CONTRACT_SCHEMA } from "./plot-contract.js";
 import { settlePicturePlans } from "./picture-plan.js";
 import { settleStoryChange } from "./story-change.js";
+import { settleStoryDrama, settleDramaPlans } from "./story-drama.js";
 import { normalizeFailureReason } from "../story-quality/dist/plotCheck.js";
 
 const object = (value) =>
@@ -534,5 +535,8 @@ export function normalizeOutlineResponse(source, input = {}) {
   settlePicturePlans(outline, input);
   // R38: the change line, the expectation and the ending kind (asked-for drafts only).
   settleStoryChange(outline, input);
+  // R39: the drama fields (try kinds, consequences, secret, companion, refrain flip) and the plan's focus/secret/backdrop.
+  settleStoryDrama(outline, input);
+  settleDramaPlans(outline, input);
   return { outline, notes: unique(notes) };
 }

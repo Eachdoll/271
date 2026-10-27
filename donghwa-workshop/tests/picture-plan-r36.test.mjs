@@ -45,7 +45,8 @@ test('R36 only a picture-led diet draft plans its pictures: the outline schema a
   assert.equal(wantsPicturePlan(legacy), false);
   const beat = outlineRequestSchema(led).properties.beats.items;
   assert.ok(beat.required.includes('picturePlan'));
-  assert.deepEqual(beat.properties.picturePlan.required, ['carrier', 'words', 'picture', 'shot', 'space', 'hook', 'unit']);
+  // R39: focus, secret and backdrop join the plan.
+  assert.deepEqual(beat.properties.picturePlan.required, ['carrier', 'words', 'picture', 'shot', 'space', 'hook', 'unit', 'focus', 'secret', 'backdrop']);
   assert.deepEqual(beat.properties.picturePlan.properties.carrier.enum, ['words', 'picture', 'both', 'contrast']);
   assert.equal('picturePlan' in outlineRequestSchema(wordy).properties.beats.items.properties, false);
   assert.equal('picturePlan' in outlineRequestSchema(legacy).properties.beats.items.properties, false);
@@ -123,7 +124,7 @@ test('R36 the K1 writer\'s map names each beat\'s plan on a picture-led diet dra
 test('R36 pagination prefers the planned unit and turns the plan\'s picture into scene.action; the picture-led demo still paginates and passes', () => {
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
   const rules = leanOpeningsPaginationRules(led, {cues: ['arrival']});
-  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?scene\.who/);
+  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /PICTURE PLAN/);
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
   assert.match(leanPaginationRules(k1), /\nPICTURE PLAN: [^\n]*moment\. The picture's part/);

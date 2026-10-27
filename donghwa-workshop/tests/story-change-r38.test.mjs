@@ -139,7 +139,7 @@ test('R38 the writers: the want, the turn and the close beats hear the expectati
   assert.match(k1Calls[0].user, /\n\n\[달라지는 것\] 처음엔/);
   assert.match(k1Calls[0].system, /말 없는 쪽: /);
   // Pagination requests allow the one wordless entry (picture-led R38 drafts only).
-  assert.match(leanPaginationRules(k1), /\nWORDLESS: one entry in the middle of the book whose beat is told by its picture[^\n]*At most one such entry; never the first or the last\.\nscene\.who/);
+  assert.match(leanPaginationRules(k1), /\nWORDLESS: one entry in the middle of the book whose beat is told by its picture[^\n]*At most one such entry; never the first or the last\.\n(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?scene\.who/);
   assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /\nWORDLESS: /);
   assert.doesNotMatch(leanPaginationRules(dated(k1)), /WORDLESS/);
   assert.doesNotMatch(leanPaginationRules(draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12, bookFormatId: 'wordy'}, 'pages')), /WORDLESS/);
@@ -298,7 +298,7 @@ test('R38 the screens and the shell: ③, the eco outline and the pro card say w
   assert.equal(storyChangeSummary(outline), `달라지는 것 · ${outline.change} (되비추는 끝)`);
   assert.equal(storyChangeSummary({...outline, ending: 'open'}), `달라지는 것 · ${outline.change} (열린 끝)`);
   assert.equal(storyChangeSummary(demoOutline(dated(input))), '');
-  assert.match(renderStoryQualityPlan({outline, input}), /<br>달라지는 것 · 처음엔[^<]+<\/p>/);
+  assert.match(renderStoryQualityPlan({outline, input}), /<br>달라지는 것 · 처음엔[^<]+(?:<br>시도 · [^<]+)?<\/p>/);
   const job = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
   job.outline = demoOutline(normalizeStoryInput(job.input)); job.eco.step = 'pages';
   const withJob = {...state, fullAutoJobs: {...state.fullAutoJobs, [job.id]: job}};

@@ -44,6 +44,7 @@ import { withShortSentences } from "../short-sentences.js";
 import { k1Policy, isK1Draft } from "./k1-book.js";
 import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
 import { storyChangePolicy, storyPlace, storyChangeSummary } from "./story-change.js";
+import { storyDramaPolicy, storyDramaSummary } from "./story-drama.js";
 import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
@@ -473,6 +474,8 @@ function shapeStageNote(outline, input = null) {
     expressionSummary(input?.storyExpression) ? esc(expressionSummary(input.storyExpression)) : "",
     // R38: what the outline says is different at the end.
     storyChangeSummary(outline) ? esc(storyChangeSummary(outline)) : "",
+    // R39: the tries' kinds, the secret and the companion's want.
+    storyDramaSummary(outline) ? esc(storyDramaSummary(outline)) : "",
   ].filter(Boolean);
   return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
 }
@@ -1066,6 +1069,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       promptDiet: promptDiet(),
       // R38: the outline must say what is different at the end (and the picture rules read the same marker).
       storyChange: storyChangePolicy(),
+      // R39: tries of different kinds, a secret the child sees first, the companion's own want, plain and text-only pages, a cover of the story's cast.
+      storyDrama: storyDramaPolicy(),
       // R38: the parent's opening place (쉬운 ① 어디서?), when it is a drawer place.
       ...(storyPlace(wizard.storyPlaceId, state.backgrounds) ? { storyPlace: storyPlace(wizard.storyPlaceId, state.backgrounds) } : {}),
       // R33: the story's shape and stage, chosen once here and frozen with the draft.

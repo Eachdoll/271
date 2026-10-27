@@ -16,6 +16,7 @@ import {
 } from "./story-generation/pipeline.js";
 import { hasPromptDiet } from "./story-generation/prompt-diet.js";
 import { topicPlaceIds } from "./story-generation/topic-places.js";
+import { isTextOnlyPage } from "./story-generation/story-drama.js";
 import {
   inspectAutoMaterialPlan,
   materializeAutoPlan,
@@ -842,7 +843,8 @@ export function fullAutoProgress(job) {
         job.input?.layoutPolicy?.kind === "openings"
           ? Number(job.input.pageCount) - 1
           : Number(job.input?.pageCount) || 12;
-    total += (pages.length || planned) + 1;
+    // R39: text-only pages are not pictures to make.
+    total += (pages.length ? pages.filter((page) => !isTextOnlyPage(page)).length : planned) + 1;
     done +=
       pages.filter(finalImage).length + (job.book?.cover?.imageAssetId ? 1 : 0);
   }
@@ -1366,6 +1368,7 @@ export async function runFullAuto(
         storyExpression: _freshExpression,
         storyChange: _freshChange,
         storyPlace: _freshPlace,
+        storyDrama: _freshDrama,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1415,6 +1418,8 @@ export async function runFullAuto(
         // R38: the job's own change marker and opening place.
         ...(job.input?.storyChange ? { storyChange: clone(job.input.storyChange) } : {}),
         ...(job.input?.storyPlace ? { storyPlace: clone(job.input.storyPlace) } : {}),
+        // R39: the job's own drama marker.
+        ...(job.input?.storyDrama ? { storyDrama: clone(job.input.storyDrama) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),
@@ -1617,7 +1622,8 @@ export async function runFullAuto(
       const page = job.book.pages[index],
         edited = page?.imageStale === true;
       // A final image drawn since the edit (any path) is current: finalImage drops the old mark.
-      if (finalImage(page)) continue;
+      // R39: a text-only page (backdrop "none") has no picture by design.
+      if (finalImage(page) || isTextOnlyPage(page)) continue;
       // Text changed after this page was drawn: the old purchase no longer covers it.
       if (edited) delete job.completed["page:" + index];
       await step(

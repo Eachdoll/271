@@ -11,6 +11,7 @@ import { genderWord } from "./identity.js";
 import { planOf, picturePlanPictureLine, picturePlanText } from "../story-generation/picture-plan.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 import { hasStoryChange } from "../story-generation/story-change.js";
+import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -116,6 +117,9 @@ export function buildScenePrompt({
     // R38: the composition leads the request and a close view carries no place reference.
     framed = hasStoryChange(book.storyInput),
     closeView = closeViewFor(book, page, { cover }),
+    // R39: a plain-backdrop page (a thought, a monologue) is drawn with no place at all.
+    plain = plainBackdropFor(book, page, { cover }),
+    dramaCover = cover && hasStoryDrama(book.storyInput),
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -159,7 +163,7 @@ export function buildScenePrompt({
       page.scene?.prompt ||
       currentNarrative.en ||
       currentNarrative.ko;
-  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
+  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });
@@ -181,7 +185,11 @@ export function buildScenePrompt({
   // last two pages and the ledger to this beat's three lines; the picture
   // model then reads the event instead of a wall of text.
   const lean = hasPromptPolicy(book.storyInput);
-  const location = closeView
+  const location = plain
+    ? `Location: none. This page has no place: ${leadName} alone on a flat, single-colour background taken from the style palette, with big quiet empty space around the figure — a thought, a line spoken to the reader. No place reference image is attached; draw no room, no ground line, no scenery, no props beyond what the figure holds. Light as ${time}, within the style palette only.${
+        earlierPages.length ? ` Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep the figure's state as it was.` : ""
+      } Style references define rendering only. No words, captions, watermark or logos.`
+    : closeView
     ? `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for ${time}.${
         earlierPages.length ? ` Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep prior consequences; previous poses and temporary props are not instructions to repeat.` : ""
       } Style references define rendering only. No words, captions, watermark or logos.`

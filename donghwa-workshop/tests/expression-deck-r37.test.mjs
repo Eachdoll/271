@@ -47,17 +47,18 @@ const TEMPLATE = /THREE encounters|three quick encounters|each bigger|the third 
 test('R37 the deck: three slots of seven general principles, unique ids, a Korean name and line and an English spark each; no author, title or studio named anywhere in the prompt modules', () => {
   assert.deepEqual(EXPRESSION_SLOTS, ['words', 'telling', 'frame']);
   const ids = EXPRESSION_SLOTS.flatMap((slot) => EXPRESSION_DECK[slot].map((c) => c.id));
-  assert.equal(ids.length, 21);
-  assert.equal(new Set(ids).size, 21);
+  // R39 adds the telling card 'aside' (한 발 물러선 화자): 22 cards, 8 in the telling slot.
+  assert.equal(ids.length, 22);
+  assert.equal(new Set(ids).size, 22);
   for (const slot of EXPRESSION_SLOTS) {
-    assert.equal(EXPRESSION_DECK[slot].length, 7, slot);
+    assert.equal(EXPRESSION_DECK[slot].length, slot === 'telling' ? 8 : 7, slot);
     for (const card of EXPRESSION_DECK[slot]) {
       assert.ok(card.name.length >= 4 && card.ko.length > 10 && card.en.length > 30, card.id);
       assert.equal(expressionCardById(card.id).slot, slot);
       assert.doesNotMatch(card.en, /\b(three|third|bigger|biggest|wave)\b/i, `${card.id} is a principle, not a plot`);
     }
   }
-  for (const file of ['story-generation/expression-deck.js', 'book-format.js', 'story-generation/picture-plan.js', 'story-generation/story-shapes.js', 'story-generation/demo.js', 'story-generation/prompt-diet.js']) {
+  for (const file of ['story-generation/expression-deck.js', 'book-format.js', 'story-generation/picture-plan.js', 'story-generation/story-shapes.js', 'story-generation/demo.js', 'story-generation/prompt-diet.js', 'story-generation/story-change.js', 'story-generation/story-drama.js']) {
     const text = readFileSync(new URL(`../dist/${file}`, import.meta.url), 'utf8');
     assert.doesNotMatch(text, /Haughton|호튼|Oh No, George|Shh! We Have a Plan|Little Owl Lost|A Bit Lost|Goodnight Already/i, file);
   }
@@ -78,7 +79,7 @@ test('R37 the chooser: deterministic from the seed, two known cards per slot, th
   const sets = new Set(Array.from({length: 40}, (_, i) => JSON.stringify(chooseExpression({seed: `주제 ${i}:0`}).cards)));
   assert.ok(sets.size >= 30, `40 topics give ${sets.size} different hands`);
   const used = new Set(Array.from({length: 40}, (_, i) => Object.values(chooseExpression({seed: `주제 ${i}:0`}).cards).flat()).flat());
-  assert.equal(used.size, 21, 'every card turns up');
+  assert.equal(used.size, 22, 'every card turns up');
   assert.deepEqual(expressionRef({version: 1, cards: {words: ['few_words', 'one_focus', 'nope'], telling: ['quiet_peak'], frame: ['one_focus']}}), {version: 1, cards: {words: ['few_words'], telling: ['quiet_peak'], frame: ['one_focus']}});
   assert.equal(expressionRef({version: 2, cards: a.cards}), null);
   assert.equal(expressionRef({version: 1, cards: {words: ['nope'], telling: ['quiet_peak'], frame: ['one_focus']}}), null, 'an empty slot is no hand');
@@ -128,7 +129,8 @@ test('R37 the outline request: no plot template on a carded draft — the shape 
   assert.match(ecoOutlinePrompt(job.input), /EXPRESSION FOR THIS BOOK/);
   assert.doesNotMatch(ecoOutlinePrompt(job.input), TEMPLATE);
   // The request stays inside the R31b budget.
-  assert.ok(rules.length <= 6000, `outline rules ${rules.length}`);
+  // R39 adds the DRAMA paragraph and the plan's three fields (measured 6,891).
+  assert.ok(rules.length <= 7500, `outline rules ${rules.length}`);
 });
 
 test('R37 the writers hear the words and telling cards (beat writer, app prose, K1 writer, eco pages); the K1 line has no plot template; drafts without cards hear none', async () => {
@@ -166,7 +168,7 @@ test('R37 the book remembers its cards and the next book draws others; ③ and t
   state.settings.storyQuality = {...(state.settings.storyQuality || {}), approvedBooks: [{bookId: 'b1', approved: true, createdAt: new Date().toISOString(), topic: input.topic, outline: {beats: outline.beats}, usedElements: record.usedElements}]};
   const next = inputFromWizard(state, wizardOf(), {layout: 'openings'}).input.storyExpression;
   for (const slot of EXPRESSION_SLOTS) assert.ok(next.cards[slot].every((id) => !input.storyExpression.cards[slot].includes(id)), `${slot}: the next book draws other cards`);
-  assert.match(renderStoryQualityPlan({outline, input}), /<br>표현 · [^<]+<br>달라지는 것 · [^<]+<\/p>/);
+  assert.match(renderStoryQualityPlan({outline, input}), /<br>표현 · [^<]+<br>달라지는 것 · [^<]+(?:<br>시도 · [^<]+)?<\/p>/);
   // ③ (the eco panel shows the line from the start)
   const fresh = setup();
   const job = ecoJobInit(createFullAutoJob(fresh, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));

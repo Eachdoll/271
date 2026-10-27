@@ -51,6 +51,7 @@ import {
   approvalImageWork,
 } from "./simple-create.js";
 import { BOOK_FORMAT_OPTIONS, formatFor } from "./book-format.js";
+import { isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
   bookPricingUnknown,
@@ -582,6 +583,9 @@ function illustration(book, i = 0) {
   if (!pages.length)
     return '<div class="image-missing">아직 그림이 없는 책이에요.</div>';
   const p = pages[Math.max(0, Math.min(i, pages.length - 1))];
+  // R39: a text-only page (backdrop "none") is its words on a flat colour, never a picture.
+  if (isTextOnlyPage(p))
+    return `<div class="text-only-art" style="background:${textOnlyTint(i)}"><p class="text-only-words">${esc(p.ko ?? p.textKo ?? p.en ?? p.textEn ?? "")}</p></div>`;
   const url = p.imageAssetId
     ? getImageURL(p.imageAssetId)
     : p.imageUrl && !p.imageUrl.startsWith("asset:")
