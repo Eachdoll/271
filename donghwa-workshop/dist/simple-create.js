@@ -9,7 +9,7 @@ import { voiceSummary } from "./story-generation/voice-deck.js";
 import { expressionSummary } from "./story-generation/expression-deck.js";
 import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
 import { picturePlanNote } from "./story-generation/picture-plan.js";
-import { storyChangeSummary } from "./story-generation/story-change.js";
+import { storyChangeSummary, wordlessPageIndexes } from "./story-generation/story-change.js";
 import { storyDramaSummary, isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
 import { pocketText, isShout } from "./text-pocket.js";
 import { castSummary, CAST_TARGET } from "./story-generation/story-cast.js";
@@ -1832,8 +1832,11 @@ function renderReviewStep(ctx, w) {
       ? unitSpec(book.storyInput?.specs?.ko, kind)?.sentencesPerPageRange
       : null,
     sentences = band ? splitSentences(textOf("ko")).length : 0,
-    counter =
-      band && needsKo(book)
+    // R42: an entry a pre-R42 draft was allowed to leave without words says so instead of "문장 0".
+    wordless = sentences === 0 && !textOf("en").trim() && wordlessPageIndexes(book.pages, book.outline, book.storyInput).has(index),
+    counter = wordless
+      ? `<p class="small-label simple-sentence-count simple-wordless">말 없는 쪽 · 그림이 말해요 (글을 넣으려면 ‘글 고치기’)</p>`
+      : band && needsKo(book)
         ? `<p class="small-label simple-sentence-count${sentences < band.min || sentences > band.max ? " simple-count-off" : ""}">문장 ${sentences} · 권장 ${band.min}~${band.max}</p>`
         : "",
     cue = openings

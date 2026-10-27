@@ -32,7 +32,8 @@ const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({.
 const PLAN = {version: 1, carrier: 'contrast', words: '“괜찮아” 하는 작은 목소리', picture: 'a tiny crab under a wave three times its size', shot: 'wide', space: 'airy', hook: 'the wave curls off the right edge', unit: 'spread'};
 const firstCalls = async (input, outline) => {
   const calls = [];
-  const engine = {id: 'openai', async complete(req) { calls.push(req); throw new Error('stop after the first request'); }};
+  // R42: the Korean beat and the anchor sniff are answered so the English request (now written after the Korean) is issued too.
+  const engine = {id: 'openai', async complete(req) { calls.push(req); if (/첫 장면의 두 초안/u.test(String(req.system))) return {json: {pick: 1, reason: 'r'}, usage: {input: 1, output: 1}, meta: {requests: 1}}; if (/그림책 작가다/u.test(String(req.system))) return {json: {text: '유하가 숲길을 걸어요. 바람이 살랑 불어요.'}, usage: {input: 1, output: 1}, meta: {requests: 1}}; throw new Error('stop after the first request'); }};
   await generateProse(outline, input, {engine, qualityEngines: {beatWriter: engine, cheap: engine}}).catch(() => {});
   return calls;
 };
@@ -125,7 +126,7 @@ test('R36 the K1 writer\'s map names each beat\'s plan on a picture-led diet dra
 test('R36 pagination prefers the planned unit and turns the plan\'s picture into scene.action; the picture-led demo still paginates and passes', () => {
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
   const rules = leanOpeningsPaginationRules(led, {cues: ['arrival']});
-  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?scene\.who/);
+  assert.match(rules, /\nPICTURE PLAN: each approved beat carries picturePlan\. scene\.action is that beat's picturePlan\.picture made into this entry's moment; picturePlan\.unit is the planned shape \(spread or two pages\) — follow it unless the beat text clearly needs the other\. The picture's part stays in the picture; the text keeps its own part\.\n(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /PICTURE PLAN/);
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
   assert.match(leanPaginationRules(k1), /\nPICTURE PLAN: [^\n]*moment\. The picture's part/);

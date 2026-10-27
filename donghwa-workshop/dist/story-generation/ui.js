@@ -47,6 +47,7 @@ import { storyChangePolicy, storyPlace, storyChangeSummary } from "./story-chang
 import { storyDramaPolicy, storyDramaSummary, isTextOnlyPage } from "./story-drama.js";
 import { textPocketPolicy } from "../text-pocket.js";
 import { storyCastPolicy, castSummary } from "./story-cast.js";
+import { englishMirrorPolicy } from "./english-mirror.js";
 import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
@@ -1072,13 +1073,15 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // R31b: lean requests — no counters, no spec JSON, no plot formula.
       promptDiet: promptDiet(),
       // R38: the outline must say what is different at the end (and the picture rules read the same marker).
-      storyChange: storyChangePolicy(),
+      storyChange: storyChangePolicy({ wordless: false }),
       // R39: tries of different kinds, a secret the child sees first, the companion's own want, plain and text-only pages, a cover of the story's cast.
       storyDrama: storyDramaPolicy(),
       // R40: the picture leaves a flat field where the words are typeset (never painted in).
       textPocket: textPocketPolicy(),
       // R41: four or five characters with different relations to the hero.
       storyCast: storyCastPolicy(),
+      // R42: the English of every beat is the short telling of its Korean (written after it, from it).
+      englishMirror: englishMirrorPolicy(),
       // R38: the parent's opening place (쉬운 ① 어디서?), when it is a drawer place.
       ...(storyPlace(wizard.storyPlaceId, state.backgrounds) ? { storyPlace: storyPlace(wizard.storyPlaceId, state.backgrounds) } : {}),
       // R33: the story's shape and stage, chosen once here and frozen with the draft.

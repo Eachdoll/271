@@ -29,6 +29,7 @@ import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
 import { pictureLedK1Line } from "../book-format.js";
 import { planOf, picturePlanMapSuffix } from "./picture-plan.js";
 import { storyChangeK1Block, isWordlessEntry } from "./story-change.js";
+import { mirrorK1Line } from "./english-mirror.js";
 import { storyDramaK1Block } from "./story-drama.js";
 import { castK1Block } from "./story-cast.js";
 import { styleReport } from "./style-report.js";
@@ -174,7 +175,7 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
   // R31b: the level lines are sentences (leanLevelLine), never the spec JSON.
   // R34: a diet draft's own voice cards and the prose palette (a spark, never counted).
   const voiced = hasPromptDiet(input) && voiceBlock(input, "ko"),
-    system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}${voiced ? `\n${VOICE_PALETTE}\n${voiced}\n${voiceBlock(input, "en")}` : ""}${pictureLedK1Line(input) ? `\n${pictureLedK1Line(input)}` : ""}`;
+    system = `너는 만 3~4세 아이에게 읽어 주는 그림책 작가예요. 이 책 ${input.pageCount}쪽을 한 번에, 쪽부터 설계해서 써요. 다정한 이야기꾼 말투('~요'). JSON으로만 답해요.\n${CRAFT.map((line) => (line.startsWith("영어(en)는") && mirrorK1Line(input) ? mirrorK1Line(input) : line)).join("\n")}\n${leanLevelLine(input, "ko")}\n${leanLevelLine(input, "en")}${voiced ? `\n${VOICE_PALETTE}\n${voiced}\n${voiceBlock(input, "en")}` : ""}${pictureLedK1Line(input) ? `\n${pictureLedK1Line(input)}` : ""}`;
   const user = [
     `[부모 요청] ${str(input.topic, 300)}`,
     `[줄거리 지도]\n${map}`,

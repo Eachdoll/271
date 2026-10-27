@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -732,7 +732,10 @@ const PINS = {
   // nothing else differs (dump-diffed against d32637a). d32637a: 94fd565f…5428.
   // 등장인물의 관계 (R41): every new diet draft's input carries storyCast {version: 1};
   // nothing else differs (dump-diffed against d758366). d758366: 0ac45dd5…ae67.
-  inputs: '3a307f473fe88eacac6313027cce0fae691fccd3032c00e89aabe858bac8a911',
+  // 영어는 한글을 따라 · 말 없는 쪽 기본 끔 (R42): every new diet draft's input carries
+  // englishMirror {version: 1} and storyChange {version: 1, wordless: false}; nothing else
+  // differs (dump-diffed against a60f8e9). a60f8e9: 3a307f47…8a911.
+  inputs: '77477212ad2450c4e4de4df9c4475f023f498b49f5a756092ca7c049831cecc0',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -800,7 +803,9 @@ const PINS = {
   // differs (dump-diffed against d32637a). d32637a: 90d7df73…3d871.
   // 등장인물의 관계 (R41): the two demo jobs' inputs carry storyCast; nothing else
   // differs (dump-diffed against d758366). d758366: 629d0513…dd6a.
-  fullAutoDemo: '73a225cf12ef16f4a7e31d3b4520e4f6e1fd212afdf00b75c5c8d68ecdfa172f',
+  // R42: the two demo jobs' inputs carry englishMirror and storyChange.wordless false;
+  // nothing else differs (dump-diffed against a60f8e9). a60f8e9: 73a225cf…172f.
+  fullAutoDemo: 'aed281aefde596f5d56ca1277dfac7a9b8e6a6f2017566cb03d6bc78f6be99bf',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

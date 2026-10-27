@@ -31,6 +31,7 @@ import { expressionWriterLine } from "./expression-deck.js";
 import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLed } from "../book-format.js";
 import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 import { storyChangeOutlineRule, hasStoryChange, storyPlaceName, pageBookVoiceLine, wordlessRule } from "./story-change.js";
+import { mirrorWriterRule, mirrorPaginationLine, mirrorProseLine } from "./english-mirror.js";
 import { storyDramaOutlineRule, dramaPlanRule, dramaBibleLines, backdropRule, hasStoryDrama } from "./story-drama.js";
 import { pocketRule } from "../text-pocket.js";
 import { castRule } from "./story-cast.js";
@@ -189,13 +190,13 @@ export function leanBeatWriterRules(input, outline, briefs = []) {
     // R37: a picture-led book's expression cards (words and telling) after the voice.
     ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko"), expressionWriterLine(input, "ko"), pageBookVoiceLine(input, "ko")].filter(Boolean).join("\n"),
     // R31e: what the English is for (the paid K2 writer packed every Korean event into two 16-word sentences).
-    en: `${leanLevelLine(input, "en")} The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons.${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "en") ? ` ${pageBookVoiceLine(input, "en")}` : ""}`,
+    en: `${leanLevelLine(input, "en")} ${mirrorWriterRule(input) || "The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons."}${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "en") ? ` ${pageBookVoiceLine(input, "en")}` : ""}`,
   };
 }
 /** The app prose path (whole book at once) when no beat writer is used. */
 export function leanProseRules(input) {
   return `Write the whole Korean and English prose in paragraphs, one paragraph per approved beat, without page divisions; return paragraphBeats:{ko:[beatIndex,...],en:[beatIndex,...]} with one approved beat index per blank-line-separated paragraph (metadata only — never beat numbers or labels in the text). Follow the approved beats in order and reveal the twist where the outline puts it; use the scene briefs' sounds, props and actions where they fit.
-Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. The English is its own picture-book text for the same story at its level, never a translation. usedRefrainAt lists only the approved beat IDs where the refrain actually appears.${
+Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. ${mirrorProseLine(input) || "The English is its own picture-book text for the same story at its level, never a translation."} usedRefrainAt lists only the approved beat IDs where the refrain actually appears.${
     input?.draftProse ? "\nThis is the final refinement of the supplied local draftProse: keep its events and improve its language inside the level." : ""
   }${input?.storyVoice ? `\n${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}` : ""}${
     expressionWriterLine(input, "ko") ? `\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}` : ""
@@ -224,7 +225,7 @@ const sceneLines = (custom) =>
 /** The page book's pagination request on the diet: structure and shape, no quotas. */
 export function leanPaginationRules(input, { custom = false } = {}) {
   return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input), mirrorPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** The openings book's pagination request on the diet (the R12 mechanics, no quotas). */
 export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "", custom = false } = {}) {
@@ -234,7 +235,7 @@ export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "
     range = (unit) => (unit ? `${unit.min}-${unit.max}` : "?");
   return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own moment and its part of the beat text) — a spread for a highlight, a reveal, a new place, the turn or the ending; two pages when the beat has two distinct moments. Copy the beat paragraph; for two pages split where the moment changes; light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${cues.join(", ")}. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko?.spread)}, English ${range(en?.spread)}; a single page Korean ${range(ko?.page)}, English ${range(en?.page)}.${openingKinds ? ` Keep opening kinds ${openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
 Keep the approved events, dialogue and ending; each entry keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input), mirrorPaginationLine(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** One page rewritten on the diet: fix what is listed, keep the voice. */
 export function leanPageRewriteRules(pageNo, original, { sceneOnly = false } = {}) {

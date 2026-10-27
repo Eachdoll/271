@@ -39,6 +39,8 @@ const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadin
 const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie'], backgroundIds: ['home', 'beach'], topic: '놀이터에서 자꾸 도망가는 그림자 잡기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `c-${Object.keys(extra).join('-') || 'default'}`});
 const dated = (input) => { const copy = structuredClone(input); delete copy.storyChange; return copy; };
+// R42: a draft frozen before R42 carries storyChange {version: 1} and keeps its one wordless entry; a new draft freezes wordless: false.
+const preR42 = (input) => ({...structuredClone(input), storyChange: {version: 1}});
 const firstCalls = async (input, outline) => {
   const calls = [];
   const engine = {id: 'openai', async complete(req) { calls.push(req); throw new Error('stop after the first request'); }};
@@ -51,8 +53,8 @@ const R38_BOOK_INPUT = {promptDiet: {version: 1}, promptPolicy: {version: 1}, st
 test('R38 the marker: every new diet draft freezes storyChange; the model JSON never shows it or the opening place; a draft without the diet has neither; normalize keeps a drawer place only', () => {
   const state = setup();
   const led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
-  assert.deepEqual(led.storyChange, storyChangePolicy());
-  assert.deepEqual(wordy.storyChange, storyChangePolicy(), 'the change line is for every diet draft, not only picture-led');
+  assert.deepEqual(led.storyChange, storyChangePolicy({wordless: false}));
+  assert.deepEqual(wordy.storyChange, storyChangePolicy({wordless: false}), 'the change line is for every diet draft, not only picture-led');
   assert.equal(hasStoryChange(led), true);
   assert.equal(hasStoryChange({storyChange: {version: 1}}), false, 'off the diet nothing reads it');
   assert.equal('storyChange' in leanVisibleInput(led), false);
@@ -65,7 +67,7 @@ test('R38 the marker: every new diet draft freezes storyChange; the model JSON n
   assert.equal(storyPlaceRef({version: 1, id: 'beach'}, []), null);
   assert.equal(normalizeStoryInput({...placed, storyPlace: {version: 1, id: 'nowhere'}}).storyPlace, undefined);
   const job = createFullAutoJob(state, wizardOf({simpleFlow: true, storyPlaceId: 'beach'}), {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false});
-  assert.deepEqual(job.input.storyChange, storyChangePolicy());
+  assert.deepEqual(job.input.storyChange, storyChangePolicy({wordless: false}), 'R42: a new job never leaves an entry without words');
   assert.deepEqual(job.input.storyPlace, {version: 1, id: 'beach'});
 });
 
@@ -133,14 +135,18 @@ test('R38 the writers: the want, the turn and the close beats hear the expectati
   assert.match(leanProseRules(led), /외치는 말만 두지 않아요/);
   // The K1 writer: the block in the user message, the voice and the wordless line in the system.
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
-  assert.match(pictureLedK1Line(k1), /\n쪽마다 아이가 외치는 말만 두지 않아요[^\n]*\nNot every page is the child speaking[^\n]*\n말 없는 쪽: 그림이 말하는 비트[^\n]*책에 한 쪽만, 첫 쪽과 마지막 쪽은 아니에요\.$/);
+  assert.match(pictureLedK1Line(preR42(k1)), /\n쪽마다 아이가 외치는 말만 두지 않아요[^\n]*\nNot every page is the child speaking[^\n]*\n말 없는 쪽: 그림이 말하는 비트[^\n]*책에 한 쪽만, 첫 쪽과 마지막 쪽은 아니에요\.$/);
+  assert.match(pictureLedK1Line(k1), /Not every page is the child speaking[^\n]*$/, 'R42: a new draft hears the voice line and no wordless line');
+  assert.doesNotMatch(pictureLedK1Line(k1), /말 없는 쪽/);
   assert.doesNotMatch(pictureLedK1Line(dated(k1)), /말 없는 쪽|외치는 말만/);
-  const k1Calls = await firstCalls(k1, demoOutline(k1));
+  const k1Calls = await firstCalls(preR42(k1), demoOutline(k1));
   assert.match(k1Calls[0].user, /\n\n\[달라지는 것\] 처음엔/);
   assert.match(k1Calls[0].system, /말 없는 쪽: /);
   // Pagination requests allow the one wordless entry (picture-led R38 drafts only).
-  assert.match(leanPaginationRules(k1), /\nWORDLESS: one entry in the middle of the book whose beat is told by its picture[^\n]*At most one such entry; never the first or the last\.\n(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?scene\.who/);
-  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /\nWORDLESS: /);
+  assert.match(leanPaginationRules(preR42(k1)), /\nWORDLESS: one entry in the middle of the book whose beat is told by its picture[^\n]*At most one such entry; never the first or the last\.\n(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?scene\.who/);
+  assert.match(leanOpeningsPaginationRules(preR42(led), {cues: ['arrival']}), /\nWORDLESS: /);
+  assert.doesNotMatch(leanOpeningsPaginationRules(led, {cues: ['arrival']}) + leanPaginationRules(k1), /WORDLESS/, 'R42: new drafts are not offered a wordless entry');
+  assert.equal(wordlessRule(k1), '');
   assert.doesNotMatch(leanPaginationRules(dated(k1)), /WORDLESS/);
   assert.doesNotMatch(leanPaginationRules(draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12, bookFormatId: 'wordy'}, 'pages')), /WORDLESS/);
   assert.equal(wordlessRule(dated(k1)), '');
@@ -241,7 +247,8 @@ test('R38 the ideas and ①: every idea names a place and a want; ① offers 어
 
 test('R38 the wordless page: one middle entry of a picture-led R38 book whose beat is told by the picture may be blank — the validator, the generation check and the ④ check all pass it; a second blank page, the first or the last, or an R37 book is a missing text as before', async () => {
   const state = setup();
-  const input = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
+  // R42: the wordless entry is the pre-R42 contract (a new draft freezes wordless: false — tests/english-mirror-r42).
+  const input = preR42(draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages'));
   const outline = demoOutline(input), prose = demoProse(outline, input), pagination = demoPagination(outline, prose, input);
   outline.beats[2].picturePlan = {version: 1, carrier: 'picture', picture: 'the shadow stretches across the slide'};
   const idx = pagination.pages.findIndex((p) => p.beatIndex === 3);
@@ -256,6 +263,8 @@ test('R38 the wordless page: one middle entry of a picture-led R38 book whose be
   assert.equal(inspected.passed, true, JSON.stringify(inspected.checks.filter((c) => !c.passed)));
   assert.equal(inspectStory(outline, wordless, dated(input)).passed, false, 'an R37 draft still needs text on every page through the wrapper');
   const ecoJob = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true, koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12, topic: '숲에서 노래하는 돌 찾기'}), backgroundIds: ['forest']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
+  // R42: eco's job input is a new draft (wordless: false); the wordless entry below is the pre-R42 behaviour.
+  ecoJob.input = preR42(ecoJob.input);
   const ecoInputN = normalizeStoryInput(ecoJob.input), ecoOutline = demoOutline(ecoInputN);
   const ecoPages = demoPagination(ecoOutline, demoProse(ecoOutline, ecoInputN), ecoInputN);
   ecoOutline.beats[2].picturePlan = {version: 1, carrier: 'picture', picture: 'the stones in a row, one humming'};

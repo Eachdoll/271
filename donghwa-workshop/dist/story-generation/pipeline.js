@@ -6,7 +6,8 @@ import { voiceRef } from "./voice-deck.js";
 import { expressionRef } from "./expression-deck.js";
 import { bookFormatRef } from "../book-format.js";
 import { withPicturePlanSchema } from "./picture-plan.js";
-import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangePolicy, storyPlaceRef, withWordlessSchema } from "./story-change.js";
+import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangeRef, storyPlaceRef, withWordlessSchema } from "./story-change.js";
+import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastPolicy, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -459,6 +460,11 @@ function modelVisibleInput(source) {
     const { storyCast, ...rest } = input;
     input = rest;
   }
+  // R42: and the English-follows-Korean marker.
+  if (input?.englishMirror) {
+    const { englishMirror, ...rest } = input;
+    input = rest;
+  }
   // R35: the book's format is a rule line, not story data.
   if (input?.bookFormat) {
     const { bookFormat, ...rest } = input;
@@ -615,7 +621,7 @@ export function normalizeStoryInput(input = {}) {
     // R37: a picture-led book's expression cards (표현 원리), chosen once in the wizard.
     ...(expressionRef(input.storyExpression) ? { storyExpression: expressionRef(input.storyExpression) } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
-    ...(hasStoryChange(input) ? { storyChange: storyChangePolicy() } : {}),
+    ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
     // R39: the drama contract (tries of different kinds, a secret, the companion's want, plain and text-only pages).
     ...(hasStoryDrama(input) ? { storyDrama: storyDramaPolicy() } : {}),
@@ -623,6 +629,8 @@ export function normalizeStoryInput(input = {}) {
     ...(hasTextPocket(input) ? { textPocket: textPocketPolicy() } : {}),
     // R41: the cast's relations (four or five characters, each with a relation and a want).
     ...(hasStoryCast(input) ? { storyCast: storyCastPolicy() } : {}),
+    // R42: the English of every beat follows its Korean.
+    ...(hasEnglishMirror(input) ? { englishMirror: englishMirrorPolicy() } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
