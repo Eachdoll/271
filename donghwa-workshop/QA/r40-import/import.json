@@ -1,0 +1,30 @@
+{
+  "requestedRange": "f8913b8..e92e8ca",
+  "actualDiff": "7dd7dd8..d758366",
+  "files": [
+    "donghwa-workshop/CLAUDE.md",
+    "donghwa-workshop/CODEX_WORK_ORDER_R40_2026-10-27.md",
+    "donghwa-workshop/PICTURE_LED_DIRECTION_2026-10-24.md",
+    "donghwa-workshop/dist/app.js",
+    "donghwa-workshop/dist/eco-mode.js",
+    "donghwa-workshop/dist/full-auto.js",
+    "donghwa-workshop/dist/image-generation/scene-prompt.js",
+    "donghwa-workshop/dist/output.js",
+    "donghwa-workshop/dist/simple-create.js",
+    "donghwa-workshop/dist/story-generation/outline-normalize.js",
+    "donghwa-workshop/dist/story-generation/picture-plan.js",
+    "donghwa-workshop/dist/story-generation/pipeline.js",
+    "donghwa-workshop/dist/story-generation/prompt-diet.js",
+    "donghwa-workshop/dist/story-generation/ui.js",
+    "donghwa-workshop/dist/style.css",
+    "donghwa-workshop/dist/sw.js",
+    "donghwa-workshop/dist/text-pocket.js",
+    "donghwa-workshop/tests/openings-legacy-r12.test.mjs",
+    "donghwa-workshop/tests/openings-policy-r12.test.mjs",
+    "donghwa-workshop/tests/picture-led-r35.test.mjs",
+    "donghwa-workshop/tests/picture-plan-r36.test.mjs",
+    "donghwa-workshop/tests/story-change-r38.test.mjs",
+    "donghwa-workshop/tests/story-drama-r39.test.mjs",
+    "donghwa-workshop/tests/text-pocket-r40.test.mjs"
+  ]
+}
