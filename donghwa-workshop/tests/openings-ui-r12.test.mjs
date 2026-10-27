@@ -132,6 +132,10 @@ test('R12-P6 labels: checks panel, reading table, level names; page books keep "
   assert.equal(L.openingsSummary(book), '16쪽 · 펼침 8개 · 그림 13장');
   assert.equal(L.openingsSummary(legacy), null);
   assert.equal(L.openingsMix(book), '펼침 8개 · 펼침면 3 · 낱쪽 10 → 그림 13장 + 표지');
+  // R39H: a text-only entry (backdrop "none") is no picture (Codex R39 report: the summary said 8 where 7 were drawn).
+  const textOnly = structuredClone(book); textOnly.pages[3].backdrop = 'none';
+  assert.equal(L.openingsSummary(textOnly), '16쪽 · 펼침 8개 · 그림 12장');
+  assert.equal(L.openingsMix(textOnly), '펼침 8개 · 펼침면 3 · 낱쪽 10 → 그림 12장 + 표지 (글만 있는 쪽 1)');
   // The app's library card and detail use printed pages; the reader branches on the layout.
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
   assert.match(app, /layoutOf\(book\) === "openings" \? printedPagesOf\(book\) : book\.pages\?\.length \|\| 0\}쪽/u);

@@ -376,17 +376,20 @@ export function openingHeading(book, index) {
   return `펼침 ${opening.openingNo} / ${list.length} · ${pages[index]?.kind === "spread" ? `${first}–${first + 1}쪽` : `${first}쪽`}`;
 }
 /** '16쪽 · 펼침 8개 · 그림 13장' (openings), or null for page books. */
+/** R39H (Codex R39 report): a text-only entry (backdrop "none") is no picture, so the summaries count the drawn entries only. */
+const pictureEntries = (pages) => pages.filter((page) => page?.backdrop !== "none");
 export function openingsSummary(book) {
   if (layoutOf(book) !== "openings") return null;
   const pages = sourceOf(book).pages || [];
-  return `${printedPagesOf(pages)}쪽 · 펼침 ${openingsOf(book).length}개 · 그림 ${pages.length}장`;
+  return `${printedPagesOf(pages)}쪽 · 펼침 ${openingsOf(book).length}개 · 그림 ${pictureEntries(pages).length}장`;
 }
 /** '펼침 8개 · 펼침면 3 · 낱쪽 10 → 그림 13장 + 표지' (or '펼침면 8 · 낱쪽 0 …'), null for page books. */
 export function openingsMix(book) {
   if (layoutOf(book) !== "openings") return null;
   const pages = sourceOf(book).pages || [],
-    spreads = pages.filter((page) => page?.kind === "spread").length;
-  return `펼침 ${openingsOf(book).length}개 · 펼침면 ${spreads} · 낱쪽 ${pages.length - spreads} → 그림 ${pages.length}장 + 표지`;
+    spreads = pages.filter((page) => page?.kind === "spread").length,
+    textOnly = pages.length - pictureEntries(pages).length;
+  return `펼침 ${openingsOf(book).length}개 · 펼침면 ${spreads} · 낱쪽 ${pages.length - spreads} → 그림 ${pictureEntries(pages).length}장 + 표지${textOnly ? ` (글만 있는 쪽 ${textOnly})` : ""}`;
 }
 
 /* ---------- structure ---------- */
