@@ -16,6 +16,7 @@
 import { isPictureLed } from "../book-format.js";
 import { expressionOf, expressionFrameLine } from "./expression-deck.js";
 import { hasStoryChange } from "./story-change.js";
+import { dramaPlanPictureParts, dramaPlanNoteParts, hasStoryDrama } from "./story-drama.js";
 
 export const PICTURE_PLAN_VERSION = 1;
 export const CARRIERS = Object.freeze(["words", "picture", "both", "contrast"]);
@@ -73,6 +74,8 @@ export function normalizePicturePlan(plan, input) {
   if (hook) out.hook = hook;
   const unit = str(plan.unit, 20).toLowerCase();
   if (openingsOf(input) && UNITS.includes(unit)) out.unit = unit;
+  // R39: a drama draft's focus, secret placement and backdrop travel on (settleDramaPlans cleans and caps them).
+  if (hasStoryDrama(input)) for (const key of ["focus", "secret", "backdrop"]) if (str(plan[key], 120)) out[key] = str(plan[key], 120);
   // A plan that says neither who tells the beat nor what the picture shows is no plan.
   return out.carrier || out.picture ? { version: PICTURE_PLAN_VERSION, ...out } : null;
 }
@@ -169,6 +172,8 @@ export function picturePlanPictureLine(plan) {
     plan.shot ? SHOT_LINE[plan.shot] : "",
     plan.space ? SPACE_LINE[plan.space] : "",
     plan.hook ? `page turn: ${plan.hook}` : "",
+    // R39: where the eye lands, where the secret sits, the plain backdrop (drama plans only; empty otherwise).
+    ...dramaPlanPictureParts(plan),
   ].filter(Boolean);
   return parts.length ? `PICTURE PLAN (decided with the story): ${parts.join("; ")}. Keep it within the actual event above.` : "";
 }
@@ -183,6 +188,8 @@ export function picturePlanNote(plan) {
     plan.words ? `글 · ${plan.words}` : "",
     [{ wide: "멀리서", middle: "중간 거리", close: "가까이" }[plan.shot], { full: "꽉 찬 화면", airy: "여백 많이" }[plan.space], { spread: "펼침면 한 장", pages: "낱쪽 두 장" }[plan.unit]].filter(Boolean).join(" · "),
     plan.hook ? `넘김 · ${plan.hook}` : "",
+    // R39: the eye's landing place, the secret's corner, a plain or text-only beat.
+    ...dramaPlanNoteParts(plan),
   ]
     .filter(Boolean)
     .join(" / ");

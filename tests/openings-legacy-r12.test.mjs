@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -724,7 +724,11 @@ const PINS = {
   // 달라지는 것 (R38): every new diet draft's input carries storyChange
   // {version: 1} (wizard and normalized); nothing else differs (dump-diffed
   // against 6d1d5c9). 6d1d5c9: b8270c69…60fe.
-  inputs: 'a0a4c68030030e35fc58cfd9f0267bc48f8e79e4deba9d1c88e806086a78be50',
+  // 이야기의 드라마 (R39): every new diet draft's input carries storyDrama
+  // {version: 1}, and the new telling card 'aside' reshuffles two drafts'
+  // expression hands (K3-E3-24-dual, K4-E4-16-ko); nothing else differs
+  // (dump-diffed against e7acbbf). e7acbbf: a0a4c680…be50.
+  inputs: '94fd565f6ba78989c5a1206c7fe9e05ae91b801b424f8c59e8801b828eda5428',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -784,7 +788,11 @@ const PINS = {
   // 달라지는 것 (R38): the two demo jobs' inputs carry storyChange and their
   // demo outlines the change line, the expectation and the ending kind;
   // nothing else differs (dump-diffed against 6d1d5c9). 6d1d5c9: 606fef55…0908.
-  fullAutoDemo: '1f580902886dd8b942f2404246837745024b62204bdc56cfcbf45cde39402ef0',
+  // 이야기의 드라마 (R39): the two demo jobs' inputs carry storyDrama and their
+  // demo outlines a tryKind and consequence on each attempt beat, the secret
+  // and the companion's want; nothing else differs (dump-diffed against
+  // e7acbbf). e7acbbf: 1f580902…2ef0.
+  fullAutoDemo: '90d7df73ead0278e1a164a23d62ac0b0bd702585a13fb32069ecdba80683d871',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

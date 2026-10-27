@@ -11,6 +11,7 @@ import {
   hydrateImageAssets,
 } from "./image-generation/assets.js";
 import { layoutOf, openingsOf, splitSpreadText } from "./book-layout.js";
+import { isTextOnlyPage, textOnlySVG } from "./story-generation/story-drama.js";
 
 const DEFAULTS = {
   layout: "single",
@@ -44,6 +45,9 @@ function options(settings = {}) {
   if (!["large", "normal"].includes(result.fontSize)) result.fontSize = "large";
   if (!["standard", "binding"].includes(result.margin))
     result.margin = "standard";
+  // R39-F: the low-resolution feedback edition (pictures shrunk for sharing and review, never for printing).
+  if (!["full", "feedback"].includes(result.quality)) result.quality = "full";
+  if (!result.imageSources || typeof result.imageSources !== "object") result.imageSources = null;
   return result;
 }
 
@@ -87,7 +91,8 @@ function fallbackArtwork(book, page, characters, cover = false) {
   );
 }
 
-function imageReference(value) {
+function imageReference(value, sources = null) {
+  const swap = (url) => (sources && typeof sources[url] === "string" ? sources[url] : url);
   const id =
     value?.imageAssetId ||
     (typeof value?.imageUrl === "string" && value.imageUrl.startsWith("asset:")
@@ -99,28 +104,31 @@ function imageReference(value) {
       throw new Error(
         "생성한 그림을 보관함에서 불러오지 못했어요. 새로고침 후 다시 시도하거나 그림 백업을 복원해 주세요.",
       );
-    return url;
+    return swap(url);
   }
   if (value?.imageUrl) {
     if (!/^(data:image\/|blob:|https?:\/\/)/i.test(value.imageUrl))
       throw new Error("생성한 그림의 주소를 확인해 주세요.");
-    return value.imageUrl;
+    return swap(value.imageUrl);
   }
   return null;
 }
 
-function artwork(book, page, characters, cover = false) {
+function artwork(book, page, characters, cover = false, sources = null) {
+  // R39: a text-only page is a flat colour; the leaf typesets its words.
+  if (!cover && isTextOnlyPage(page)) return textOnlySVG((book.pages || []).indexOf(page), { wide: page.kind === "spread" });
   const image = cover
     ? imageReference(
         book.cover ||
           (book.coverImageAssetId
             ? { imageAssetId: book.coverImageAssetId }
             : null),
+        sources,
       )
     : null;
   return (
     image ||
-    imageReference(page) ||
+    imageReference(page, sources) ||
     fallbackArtwork(book, page, characters, cover)
   );
 }
@@ -185,7 +193,7 @@ function logicalPages(book, settings, characters) {
   const cover = {
     kind: "cover",
     label: "표지",
-    html: `<article class="leaf cover" aria-label="표지"><div class="cover-series">${escapeHTML(book.series || "우리 아이의 작은 이야기")}${book.episode ? ` · ${escapeHTML(book.episode)}편` : ""}</div><h1>${escapeHTML(title || "우리의 동화책")}</h1>${settings.language === "bilingual" && book.titleEn ? `<p class="cover-subtitle" lang="en">${escapeHTML(book.titleEn)}</p>` : ""}${imageMarkup(artwork(book, book.pages[0], characters, true), "이야기 표지 그림")}<p class="cover-credit">동화공방 · 함께 만든 우리 집 그림책</p></article>`,
+    html: `<article class="leaf cover" aria-label="표지"><div class="cover-series">${escapeHTML(book.series || "우리 아이의 작은 이야기")}${book.episode ? ` · ${escapeHTML(book.episode)}편` : ""}</div><h1>${escapeHTML(title || "우리의 동화책")}</h1>${settings.language === "bilingual" && book.titleEn ? `<p class="cover-subtitle" lang="en">${escapeHTML(book.titleEn)}</p>` : ""}${imageMarkup(artwork(book, book.pages[0], characters, true, settings.imageSources), "이야기 표지 그림")}<p class="cover-credit">동화공방 · 함께 만든 우리 집 그림책</p></article>`,
   };
   const back = {
     kind: "back",
@@ -197,7 +205,7 @@ function logicalPages(book, settings, characters) {
   const pages = selected.map((index) => ({
     kind: "page",
     label: `${index + 1}쪽`,
-    html: `<article class="leaf story-page ${textPlacement(book.pages[index], settings)}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${imageMarkup(artwork(book, book.pages[index], characters), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div></div><span class="folio">${index + 1}</span></article>`,
+    html: `<article class="leaf story-page ${textPlacement(book.pages[index], settings)}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${imageMarkup(artwork(book, book.pages[index], characters, false, settings.imageSources), `${index + 1}쪽 이야기 그림`)}<div class="story">${pageText(book.pages[index], settings.language)}</div></div><span class="folio">${index + 1}</span></article>`,
   }));
   if (!settings.pages || settings.pages === "all")
     return [cover, ...pages, back];
@@ -394,7 +402,7 @@ function parseOpenings(selection, count) {
  * (splitSpreadText per language; the stored text never changes); a pair gives
  * its two pages with whole pictures.
  */
-function openingLeaves(book, opening, characters) {
+function openingLeaves(book, opening, characters, sources = null) {
   const text = (page, lang) =>
     String(
       (lang === "ko" ? (page.ko ?? page.textKo) : (page.en ?? page.textEn)) ??
@@ -403,7 +411,7 @@ function openingLeaves(book, opening, characters) {
   if (opening.kind === "spread") {
     const index = opening.indices[0],
       page = book.pages[index],
-      src = artwork(book, page, characters),
+      src = artwork(book, page, characters, false, sources),
       [koLeft, koRight] = splitSpreadText(text(page, "ko")),
       [enLeft, enRight] = splitSpreadText(text(page, "en"));
     return [
@@ -414,7 +422,7 @@ function openingLeaves(book, opening, characters) {
   return opening.indices.map((index, k) => ({
     no: opening.printedPages[k],
     half: null,
-    src: artwork(book, book.pages[index], characters),
+    src: artwork(book, book.pages[index], characters, false, sources),
     ko: text(book.pages[index], "ko"),
     en: text(book.pages[index], "en"),
   }));
@@ -520,7 +528,7 @@ function openingsPrintHTML(book, normalized, characters, requestedLayout) {
     const all = !settings.pages || settings.pages === "all";
     if (all) body.push(sheet(`<div class="slot left">${cover.html}</div>`, "one"));
     for (const index of selected) {
-      const leaves = openingLeaves(book, openings[index], characters);
+      const leaves = openingLeaves(book, openings[index], characters, settings.imageSources);
       if (settings.layout === "two")
         for (const leaf of leaves)
           body.push(
@@ -538,7 +546,7 @@ function openingsPrintHTML(book, normalized, characters, requestedLayout) {
       settings.layout === "two"
         ? "크게 읽기 · A4 세로 한 장에 한 쪽"
         : "펼침 구성 · A4 가로 한 장에 펼침 하나",
-    guidance = `<p>A4 ${settings.layout === "two" ? "세로" : "가로"} · 실제 크기(100%)로 출력해 주세요.${settings.layout === "two" ? " 펼침면은 왼쪽 반과 오른쪽 반을 두 장에 나눠 마주 보게 출력해요." : " 한 장에 마주 보는 두 쪽(펼침 하나)을 출력해요. 펼침면 그림은 가운데에서 이어져요."} 책 전체를 같은 글자 크기(${floor}pt 이상)로 맞춰요.</p>${bookletNote ? `<p class="print-warning">${OPENING_BOOKLET_NOTE}. 일반 출력(A4 가로 한 장에 펼침 하나)으로 열었어요.</p>` : ""}`;
+    guidance = `<p>A4 ${settings.layout === "two" ? "세로" : "가로"} · 실제 크기(100%)로 출력해 주세요.${settings.layout === "two" ? " 펼침면은 왼쪽 반과 오른쪽 반을 두 장에 나눠 마주 보게 출력해요." : " 한 장에 마주 보는 두 쪽(펼침 하나)을 출력해요. 펼침면 그림은 가운데에서 이어져요."} 책 전체를 같은 글자 크기(${floor}pt 이상)로 맞춰요.</p>${bookletNote ? `<p class="print-warning">${OPENING_BOOKLET_NOTE}. 일반 출력(A4 가로 한 장에 펼침 하나)으로 열었어요.</p>` : ""}${feedbackNote(settings)}`;
   return `<!doctype html><html lang="${settings.language === "en" ? "en" : "ko"}" data-font-floor="${floor}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(settings)}${openingStyles(settings)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · 펼침 ${openings.length}개 · ${body.length}개 출력면 · ${settings.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래에 배치됩니다. 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${body.join("")}</main>${openingFitScript()}</body></html>`;
 }
 
@@ -561,8 +569,105 @@ export function getPrintHTML(book, settings = {}, characters = []) {
   const guidance =
     normalized.layout === "booklet"
       ? `<p>제본용 배치입니다. 빈 쪽을 포함해 4의 배수로 맞추므로 1쪽 옆이나 2쪽 옆에 빈 쪽이 보일 수 있습니다. 빈 쪽 없이 1→2쪽 순서로 보려면 일반 인쇄를 선택하세요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
-      : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === "two" ? " 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요." : ""}</p>`;
+      : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === "two" ? " 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요." : ""}</p>${feedbackNote(normalized)}`;
   return `<!doctype html><html lang="${normalized.language === "en" ? "en" : "ko"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition === "below" ? "본문은 그림 아래에 배치됩니다." : normalized.textPosition === "staged" ? "장면별로 정한 빈 공간에 본문을 배치합니다. 구도 정보가 없는 쪽은 그림 아래에 배치합니다." : "본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다."} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition === "below" ? "" : " 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다."}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}</body></html>`;
+}
+
+/* ---------- R39-F: the low-resolution feedback edition ---------- */
+export const FEEDBACK_NOTE = "저용량 피드백판 · 그림을 작게 줄여 넣었어요(검증·공유용, 인쇄용이 아니에요). ‘PDF로 저장’하면 파일이 작아요.";
+const feedbackNote = (settings) => (settings.quality === "feedback" ? `<p class="print-warning print-feedback-note">${FEEDBACK_NOTE}</p>` : "");
+export const FEEDBACK_MAX_SIDE = 640;
+export const FEEDBACK_JPEG_QUALITY = 0.55;
+/** Every picture a print of this book would show (pages and cover), as the URLs artwork() would use; unreadable ones are skipped. */
+function printImageUrls(book) {
+  const urls = new Set();
+  const add = (value) => {
+    try {
+      const url = imageReference(value);
+      if (url) urls.add(url);
+    } catch {
+      /* a missing asset is reported by the print itself */
+    }
+  };
+  add(book?.cover || (book?.coverImageAssetId ? { imageAssetId: book.coverImageAssetId } : null));
+  for (const page of book?.pages || []) if (!isTextOnlyPage(page)) add(page);
+  return [...urls];
+}
+/** One picture shrunk to a small JPEG data URL (the browser's canvas); null when it cannot be read. */
+async function shrinkImage(url, maxSide, quality) {
+  const image = new Image();
+  image.decoding = "async";
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = () => reject(new Error("그림을 읽지 못했어요."));
+    image.src = url;
+  });
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth || 1, image.naturalHeight || 1)),
+    width = Math.max(1, Math.round((image.naturalWidth || 1) * scale)),
+    height = Math.max(1, Math.round((image.naturalHeight || 1) * scale)),
+    canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+/**
+ * The shrunk pictures of a book, keyed by the URL the print would use
+ * (what getPrintHTML takes as settings.imageSources). Browser only: without
+ * a document it returns {} and the print shows the originals.
+ */
+export async function feedbackImageSources(book, { maxSide = FEEDBACK_MAX_SIDE, quality = FEEDBACK_JPEG_QUALITY, onProgress } = {}) {
+  const sources = {};
+  if (typeof document === "undefined" || typeof Image === "undefined") return sources;
+  const urls = printImageUrls(book);
+  let done = 0;
+  for (const url of urls) {
+    try {
+      sources[url] = await shrinkImage(url, maxSide, quality);
+    } catch {
+      /* the original stays */
+    }
+    done++;
+    onProgress?.({ done, total: urls.length });
+  }
+  return sources;
+}
+const feedbackSettings = (settings, imageSources) => ({ ...settings, quality: "feedback", imageSources });
+/** The feedback edition as one self-contained HTML file (shrunk pictures inline) and its file name. */
+export async function feedbackBookHTML(book, settings = {}, characters = [], options = {}) {
+  const imageSources = await feedbackImageSources(book, options);
+  const html = getPrintHTML(book, feedbackSettings(settings, imageSources), characters);
+  return { html, filename: `${archiveName(book?.title)}-피드백판.html`, pictures: Object.keys(imageSources).length };
+}
+/**
+ * Opens the print tab synchronously (the click authorizes it), then fills it
+ * with the feedback edition once the pictures are shrunk. Resolves false when
+ * the popup was blocked; a build error closes the tab and rethrows.
+ */
+export async function printFeedbackBook(book, settings = {}, characters = [], options = {}) {
+  // Validate before opening to avoid an empty tab for a malformed page range.
+  getPrintHTML(book, { ...settings, quality: "feedback" }, characters);
+  const tab = window.open("", "_blank");
+  if (!tab) return false;
+  try {
+    tab.opener = null;
+    tab.document.open();
+    tab.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>저용량 피드백판 준비 중</title></head><body style="font-family:sans-serif;padding:24px">그림을 작게 줄이는 중이에요…</body></html>`);
+    tab.document.close();
+    const imageSources = await feedbackImageSources(book, options);
+    const html = getPrintHTML(book, feedbackSettings(settings, imageSources), characters);
+    tab.document.open();
+    tab.document.write(html);
+    tab.document.close();
+    tab.focus();
+    return true;
+  } catch (error) {
+    tab.close();
+    throw error;
+  }
 }
 
 /** Opens synchronously so the user's click authorizes the print tab. */

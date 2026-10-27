@@ -1,5 +1,6 @@
 import { genderWord } from "./identity.js";
 import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor } from "./scene-prompt.js";
+import { plainBackdropFor } from "../story-generation/story-drama.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
 import { characterSVG } from "../engine.js";
@@ -875,7 +876,8 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
         },
       },
       pageIndex,
-      { closeView: closeViewFor(book, page, { cover: !!options.cover }) },
+      // R39: nor does a plain-backdrop page.
+      { closeView: closeViewFor(book, page, { cover: !!options.cover }) || plainBackdropFor(book, page, { cover: !!options.cover }) },
     ).map((ref) => ({
       ...ref,
       ...(ref.role === "background" ? { required: true } : {}),
@@ -1067,7 +1069,7 @@ export function commitSceneResult(state, book, pageIndex, result) {
     result.seed === undefined || result.seed === null
       ? null
       : seedValue(result.seed);
-  const references = sceneReferenceRecords(snapshot, pageIndex, { closeView: closeViewFor(book, page) });
+  const references = sceneReferenceRecords(snapshot, pageIndex, { closeView: closeViewFor(book, page) || plainBackdropFor(book, page) });
   page.imageAssetId = result.imageAssetId || null;
   page.imageUrl = result.imageAssetId
     ? `asset:${result.imageAssetId}`

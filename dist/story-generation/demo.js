@@ -3,6 +3,7 @@ import { buildOpeningPlan, normalizeOpenings } from "../book-layout.js";
 import { splitSentences } from "../story-quality/dist/util.js";
 import { isPictureLed } from "../book-format.js";
 import { hasStoryChange } from "./story-change.js";
+import { hasStoryDrama } from "./story-drama.js";
 /* An explicitly selected, authored demonstration. Never an API-error fallback. */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sentences = (text) =>
@@ -135,6 +136,19 @@ export function demoOutline(input) {
       if (DEMO_PLANS[keys[i]]) beat.picturePlan = { version: 1, ...DEMO_PLANS[keys[i]] };
     });
   }
+  // R39: a drama demo's tries are of different kinds (ask, force, wait) with what each changed.
+  if (hasStoryDrama(input)) {
+    const kinds = [
+      ["ask", "개구리는 폴짝 뛰어 사라지고, 돌 틈에서 작은 후우 소리가 처음 들려요."],
+      ["force", "돌탑이 와르르 무너지며 돌 틈이 조금 더 벌어져요."],
+      ["wait", "조용해지자 후우 소리가 돌 틈 안쪽에서 또렷이 들려요."],
+    ];
+    let n = 0;
+    for (const beat of beats)
+      if (beat.type === "attempt") {
+        [beat.tryKind, beat.consequence] = kinds[Math.min(n++, kinds.length - 1)];
+      }
+  }
   if (input.endingType === "open")
     beats.at(-1).summary +=
       " 잠들기 전에 “내일은 노래하는 나무를 찾아보자!”라고 말해요.";
@@ -157,6 +171,13 @@ export function demoOutline(input) {
           change: "처음엔 노래는 돌이 하는 줄 알았는데, 끝에는 두 친구가 바람과 통으로 직접 노래를 만들어요.",
           expectation: "숲 어딘가에 노래하는 돌이 있을 거예요.",
           ending: "echo",
+        }
+      : {}),
+    // R39: what the child sees before the friends, and the companion's own want.
+    ...(hasStoryDrama(input)
+      ? {
+          secret: "돌 틈에 낀 빈 도시락 통 모서리가 첫 그림부터 살짝 보여요.",
+          companion: "친구는 노래보다 도시락을 먼저 열고 싶어 해요.",
         }
       : {}),
     newWordsKo: ["도시락", "가장자리", "바람"],

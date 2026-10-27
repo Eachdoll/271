@@ -57,6 +57,7 @@ import { getStylePreset } from "./image-generation/styles.js";
 import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
 import { expressionWriterLine } from "./story-generation/expression-deck.js";
 import { pageBookVoiceLine, withWordlessSchema } from "./story-generation/story-change.js";
+import { withBackdropSchema, isTextOnlyPage, plainBackdropFor } from "./story-generation/story-drama.js";
 import { planOf, picturePlanPictureLine } from "./story-generation/picture-plan.js";
 
 export const ECO_VERSION = 1;
@@ -208,8 +209,8 @@ export const ecoOutlineFixPrompt = (errors = []) => ecoRetryPrompt(errors, "outl
 
 /* ---------- 2단계: 쪽 글 ---------- */
 const pagesSchema = (input) => {
-  if (isOpenings(input)) return withWordlessSchema(openingPaginationSchema(input.pageCount / 2), input);
-  const schema = withWordlessSchema(clone(PAGINATION_SCHEMA), input);
+  if (isOpenings(input)) return withBackdropSchema(withWordlessSchema(openingPaginationSchema(input.pageCount / 2), input), input);
+  const schema = withBackdropSchema(withWordlessSchema(clone(PAGINATION_SCHEMA), input), input);
   schema.properties.pages.minItems = input.pageCount;
   schema.properties.pages.maxItems = input.pageCount;
   return schema;
@@ -441,6 +442,8 @@ function placeLine(state, book, page, { cover = false } = {}) {
 export function ecoPicturePrompt(state, book, index = 0, { cover = false } = {}) {
   const page = cover ? null : book?.pages?.[index];
   if (!cover && !page) throw Error("그림을 설명할 쪽을 찾지 못했어요.");
+  // R39: a text-only page has no picture to ask for.
+  if (!cover && isTextOnlyPage(page)) throw Error("이 쪽은 그림 없이 글만 있는 쪽이에요.");
   const preset = getStylePreset(book?.worldSettingsSnapshot?.stylePresetId || book?.stylePresetId || state?.settings?.style, state),
     total = book.pages?.length || 0,
     openings = layoutOf(book) === "openings",
@@ -466,6 +469,8 @@ export function ecoPicturePrompt(state, book, index = 0, { cover = false } = {})
       : `The moment to draw: ${action}.${scene.emotion ? ` Feeling: ${text(scene.emotion)}.` : ""}${scene.timeOfDay ? ` Time of day: ${text(scene.timeOfDay)}.` : ""}${Array.isArray(scene.props) && scene.props.length ? ` Show these things: ${scene.props.map(text).filter(Boolean).join(", ")}.` : ""}`,
     // R36: the composition planned with the story (shown to the parent, who draws or prompts it).
     cover ? "" : picturePlanPictureLine(planOf(book.outline, page.beatIndex)),
+    // R39: a plain-backdrop page (a thought, a monologue) has no place at all.
+    !cover && plainBackdropFor(book, page) ? "No place in this picture: the character alone on a flat single-colour background with big quiet empty space — a thought or a line spoken to the reader. No room, no ground, no scenery." : "",
     cover ? "" : `The entry reads — Korean: 「${text(page.ko ?? page.textKo)}」 English: “${text(page.en ?? page.textEn)}”. Draw the moment, not the words.`,
     SIZE_TEXT[size] || `Picture size about ${size} pixels.`,
     `Continuity: one book, one style — the same characters, faces, colours and drawing style in every picture.${prev?.scene?.action ? ` The previous entry showed: ${text(prev.scene.action)}.` : ""}`,
@@ -477,7 +482,7 @@ export function ecoPicturePrompt(state, book, index = 0, { cover = false } = {})
 /** Every entry's request and the cover's, in order, for the copy-all dialog. */
 export function ecoPicturePrompts(state, book) {
   return [
-    ...(book?.pages || []).map((_, index) => ({ index, cover: false, prompt: ecoPicturePrompt(state, book, index) })),
+    ...(book?.pages || []).flatMap((page, index) => (isTextOnlyPage(page) ? [] : [{ index, cover: false, prompt: ecoPicturePrompt(state, book, index) }])),
     { index: -1, cover: true, prompt: ecoPicturePrompt(state, book, 0, { cover: true }) },
   ];
 }
@@ -539,6 +544,7 @@ export function ecoAttachUpload(book, target, saved, info = {}) {
 /** Entries without a current picture, for ⑤'s note and the save guard. */
 export function ecoMissingPictures(book) {
   return (book?.pages || [])
-    .map((page, index) => (page?.imageAssetId && page.imageMeta?.quality === "final" ? -1 : index))
+    // R39: a text-only page (backdrop "none") needs no picture.
+    .map((page, index) => ((page?.imageAssetId && page.imageMeta?.quality === "final") || isTextOnlyPage(page) ? -1 : index))
     .filter((index) => index >= 0);
 }

@@ -7,6 +7,7 @@ import { expressionRef } from "./expression-deck.js";
 import { bookFormatRef } from "../book-format.js";
 import { withPicturePlanSchema } from "./picture-plan.js";
 import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangePolicy, storyPlaceRef, withWordlessSchema } from "./story-change.js";
+import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import {
   buildStoryWords,
   englishVocabularyPrompt,
@@ -441,6 +442,11 @@ function modelVisibleInput(source) {
     const { storyPlace, ...rest } = input;
     input = rest;
   }
+  // R39: the drama marker is rule lines, not story data.
+  if (input?.storyDrama) {
+    const { storyDrama, ...rest } = input;
+    input = rest;
+  }
   // R35: the book's format is a rule line, not story data.
   if (input?.bookFormat) {
     const { bookFormat, ...rest } = input;
@@ -599,6 +605,8 @@ export function normalizeStoryInput(input = {}) {
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangePolicy() } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
+    // R39: the drama contract (tries of different kinds, a secret, the companion's want, plain and text-only pages).
+    ...(hasStoryDrama(input) ? { storyDrama: storyDramaPolicy() } : {}),
     // R25: the frozen planted objects of recent books (the meeting's ban list).
     ...(input.councilRecent?.version === 1
       ? { councilRecent: { version: 1, planted: councilRecentPlanted(input) } }
@@ -2142,6 +2150,8 @@ export function inspectOutlineRules(outline, source = {}) {
     allowed = new Set(backgrounds.map((b) => b.id));
   // R38: an asked-for change that is missing stops the outline (structure, not quality).
   violations.push(...storyChangeViolations(outline, source));
+  // R39: a try without a kind, two tries of one kind or a missing secret stops the outline too.
+  violations.push(...storyDramaViolations(outline, source));
   const missingTopic = topicKeywords.filter(
     (keyword) =>
       !includesTopicKeyword(body, keyword) &&
@@ -2305,7 +2315,8 @@ export function outlineRequestSchema(input) {
   }
   // R36: a picture-led diet draft plans who tells each beat (words or picture) and how.
   // R38: and says what is different at the end.
-  return withStoryChangeSchema(withPicturePlanSchema(schema, input), input);
+  // R39: and the drama contract, with the plan's focus, secret placement and backdrop.
+  return withDramaPlanSchema(withStoryDramaSchema(withStoryChangeSchema(withPicturePlanSchema(schema, input), input), input), input);
 }
 export async function generateOutline(source, options = {}) {
   const input = normalizeStoryInput(source);
@@ -3110,6 +3121,8 @@ function settleOpenings(data, outline, input, options) {
     };
   if (fixed.unplaced.length) next.openingUnplaced = fixed.unplaced.length;
   else delete next.openingUnplaced;
+  // R39: the entries' backdrop (plain / text-only) settles before the check; other drafts carry none.
+  settleBackdrops(next, outline, input);
   const staged = applyStaging(next, outline, input, options),
     structural = new Set(validateOpenings(staged, input, outline).errors),
     hard = validatePagination(staged, input, outline).errors.filter(
@@ -3161,7 +3174,7 @@ async function paginateOpeningsOnce(outline, prose, input, options, violations) 
           ...(violations.length ? { violations } : {}),
         },
       },
-      withWordlessSchema(openingPaginationSchema(count), input),
+      withBackdropSchema(withWordlessSchema(openingPaginationSchema(count), input), input),
       options,
     );
   try {
@@ -3196,6 +3209,8 @@ function applyStaging(pagination, outline, input, options) {
   return next;
 }
 function validateGeneratedPagination(value, input, outline) {
+  // R39: the entries' backdrop (plain / text-only) settles before the check; other drafts carry none.
+  settleBackdrops(value, outline, input);
   const result = validatePagination(value, input, outline);
   // Count/order mistakes are repairable by re-pagination. Unsafe cast/wardrobe or
   // malformed text is never passed through to an image request.
@@ -3231,7 +3246,7 @@ async function paginateOnce(outline, prose, input, options, violations = []) {
       meta: { stage: "pagination", engineId: options.engineId || "k1Book", model: null, requests: 0, demo: false, k1Pages: true },
     };
   const pagePlan = buildBeatPagePlan(outline, input.pageCount),
-    schema = withWordlessSchema(clone(PAGINATION_SCHEMA), input);
+    schema = withBackdropSchema(withWordlessSchema(clone(PAGINATION_SCHEMA), input), input);
   schema.properties.pages.minItems = input.pageCount;
   schema.properties.pages.maxItems = input.pageCount;
   const result = await complete(

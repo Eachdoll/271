@@ -4489,6 +4489,32 @@ html:has(.settings-save-bar) {
 .simple-stale {
   color: var(--warn);
 }
+/* R39: a text-only page — its words alone on a flat colour (no picture by design). */
+.text-only-art {
+  width: 100%;
+  aspect-ratio: 800/580;
+  border-radius: 10px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: 24px;
+  text-align: center;
+  color: #2b2b2b;
+}
+.text-only-art.simple-empty-spread {
+  aspect-ratio: 2048/880;
+}
+.text-only-art .text-only-words {
+  margin: 0;
+  font-size: clamp(16px, 2.6vw, 24px);
+  line-height: 1.7;
+  word-break: keep-all;
+  max-width: 28em;
+}
+.text-only-art .small-label {
+  color: var(--text-2);
+}
 /* 에코 모드 (R32): the paste panel in ③ and the picture-request dialogs. */
 .simple-eco .field {
   margin-top: var(--space-4);

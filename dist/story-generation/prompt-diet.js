@@ -31,6 +31,7 @@ import { expressionWriterLine } from "./expression-deck.js";
 import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLed } from "../book-format.js";
 import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 import { storyChangeOutlineRule, hasStoryChange, storyPlaceName, pageBookVoiceLine, wordlessRule } from "./story-change.js";
+import { storyDramaOutlineRule, dramaPlanRule, dramaBibleLines, backdropRule, hasStoryDrama } from "./story-drama.js";
 
 export const PROMPT_DIET_VERSION = 1;
 export const promptDiet = () => ({ version: PROMPT_DIET_VERSION });
@@ -136,7 +137,7 @@ export function leanOutlineRules(input, { count, attempts, k1 = false, custom = 
     ? "A small, warm want and ONE small obstacle a three-year-old knows (being shy, waiting, a little mishap); solved together or with a little help; ends in joy. No villain, no danger, no tears, no mystery and no hidden clue — the 'turn' is simply the small change of heart or the moment play begins, and 'twist' names it in one plain sentence."
     : "Give the protagonist something they want and a reason it matters to them; let them try in ways that change what happens next; let the story turn at a moment the child can see; end warmly and a little differently from how it began. Surprise is welcome; a formula is not. Humor comes from what the characters do.";
   return `Design the StoryOutline (not page text) with ${count} beats for ${input.pageCount} pages, indexes 1..${count}, in the order setup → want → ${attempts} attempt beat(s) → turn → resolution → close. ${beatSummaryLine(input)}
-${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), storyChangeOutlineRule(input), storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
+${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), dramaPlanRule(input), storyChangeOutlineRule(input), storyDramaOutlineRule(input), storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
 Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. The story happens where the topic puts it${topicPlaces.length ? ` — here ${topicPlaces.join(", ")}` : ""}: open there (${
     changed
       ? "when neither the topic nor the parent names a place, open at a chosen place that is not home; a home ID first only when the topic begins at home or home is the only place chosen"
@@ -156,7 +157,7 @@ The turn: ${str(bible.turn.seen, 160)} — ${str(bible.turn.realized, 160)}. The
     bible.planted?.name ? `\nA small thing that returns at the turn: ${str(bible.planted.name, 60)}${bible.planted.firstSeen ? ` (first seen: ${str(bible.planted.firstSeen, 80)})` : ""}.` : ""
   }${isPictureLed(input) && Array.isArray(bible.visual?.pictures) && bible.visual.pictures.length ? `\nThe art director's picture for each beat (a starting point for picturePlan): ${bible.visual.pictures.map((row, i) => `${i + 1}. ${str(row?.en || row?.ko || row, 120)}`).join(" ")}` : ""}${g ? `\nGrowth: wants "${str(g.want, 120)}", truly gains "${str(g.need, 120)}", in the way "${str(g.flaw, 120)}".` : ""}${
     bible.lesson ? ` Lesson shown by the last action, never said: ${str(bible.lesson, 160)}.` : ""
-  }`;
+  }${dramaBibleLines(bible)}`;
 }
 /** The tension numbers, asked for as data. */
 export const LEAN_TENSION_RULE = (beats, range) =>
@@ -211,12 +212,17 @@ Write it the way a good picture book sounds read aloud: concrete things a child 
  * report (not rewrite) everything that is not the reading level, the
  * structure or safety. Drafts without the policy are unchanged.
  */
+/** R39: the cover shows the story's own cast — the lead alone, or with a companion who is in the beats (a dinosaur from the drawer appeared on an umbrella book's cover). */
+const coverCastRule = (input) =>
+  hasStoryDrama(input)
+    ? `COVER: cover.sceneAction shows the main character (the first supplied character) in one moment of this story, alone; a second character only when that character acts in the approved beats; a character who is not in the beats does not appear, and the cast is not lined up together.`
+    : "";
 const sceneLines = (custom) =>
   `scene.who = selected character IDs; scene.where = the beat's supplied background ID (its settingKey${custom ? "" : "; a home ID at the end"}); scene.action = what the picture shows, in English; scene.emotion = one English word; timeOfDay as the story has it; props = an English list. Use only supplied wardrobe IDs: variantByCharacter maps selected character IDs to an allowed variant or null, honouring per-book defaults and page ranges. isRefrainPage is true only where the refrain text actually appears. cover.sceneAction = the cover picture, in English.`;
 /** The page book's pagination request on the diet: structure and shape, no quotas. */
 export function leanPaginationRules(input, { custom = false } = {}) {
   return `Paginate the approved prose into exactly ${input.pageCount} pages (pageNo 1..${input.pageCount}), following the supplied pagePlan (pageNo -> beatIndex): every approved beat appears in order and the last page is the close beat. Keep the approved events, dialogue and ending; light smoothing and splitting or merging adjacent blocks are fine, never a different plot. Each page keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** The openings book's pagination request on the diet (the R12 mechanics, no quotas). */
 export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "", custom = false } = {}) {
@@ -226,7 +232,7 @@ export function leanOpeningsPaginationRules(input, { cues = [], openingKinds = "
     range = (unit) => (unit ? `${unit.min}-${unit.max}` : "?");
   return `OPENINGS: the book has exactly ${count} openings (two facing printed pages each, ${input.pageCount} printed pages); opening k carries approved beat k (openingPlan). For each beat return EITHER one entry (a spread: one wide picture across both pages with the whole beat text) OR two consecutive entries (a left page then a right page, each with its own moment and its part of the beat text) — a spread for a highlight, a reveal, a new place, the turn or the ending; two pages when the beat has two distinct moments. Copy the beat paragraph; for two pages split where the moment changes; light smoothing only. beatIndex is the beat; pageNo counts entries 1..n. cue is one of ${cues.join(", ")}. For a spread keep faces and the key action away from the exact centre (the fold). Wardrobe page ranges are printed pages; an entry uses the range containing its first printed page. Sentence ranges per entry: a spread Korean ${range(ko?.spread)}, English ${range(en?.spread)}; a single page Korean ${range(ko?.page)}, English ${range(en?.page)}.${openingKinds ? ` Keep opening kinds ${openingKinds} (S = spread, P = two pages) unless the new text needs otherwise.` : ""}
 Keep the approved events, dialogue and ending; each entry keeps its language's reading level (the lines above). Text that already fits its level is copied as it is; smooth only what does not.
-${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
+${[pictureLedPaginationLine(input), picturePlanPaginationLine(input), wordlessRule(input), backdropRule(input), coverCastRule(input)].filter(Boolean).map((line) => `${line}\n`).join("")}${sceneLines(custom)}`;
 }
 /** One page rewritten on the diet: fix what is listed, keep the voice. */
 export function leanPageRewriteRules(pageNo, original, { sceneOnly = false } = {}) {
@@ -275,6 +281,9 @@ const LEAN_OUTLINE_KEYS = [
   "change",
   "expectation",
   "ending",
+  // R39: the secret and the companion's own want (the beats carry tryKind and consequence).
+  "secret",
+  "companion",
 ];
 const LEAN_PAGE_KEYS = [
   "pageNo",
@@ -289,6 +298,8 @@ const LEAN_PAGE_KEYS = [
   "scene",
   "variantByCharacter",
   "isRefrainPage",
+  // R39: the entry's backdrop (plain / text-only), kept through a rewrite.
+  "backdrop",
 ];
 const WRITER_BRIEF_KEYS = ["sounds", "props", "pose", "dialogueLine", "humor"];
 const pick = (value, keys) => {

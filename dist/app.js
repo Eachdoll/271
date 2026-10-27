@@ -51,6 +51,7 @@ import {
   approvalImageWork,
 } from "./simple-create.js";
 import { BOOK_FORMAT_OPTIONS, formatFor } from "./book-format.js";
+import { isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
 import { isPageOperationBusy } from "./story-generation/page-tools.js";
 import {
   bookPricingUnknown,
@@ -111,6 +112,8 @@ import {
 import {
   migratePrintSettings,
   printBook,
+  printFeedbackBook,
+  feedbackBookHTML,
   exportLibrary,
   validateImport,
   restoreLibraryImages,
@@ -582,6 +585,9 @@ function illustration(book, i = 0) {
   if (!pages.length)
     return '<div class="image-missing">아직 그림이 없는 책이에요.</div>';
   const p = pages[Math.max(0, Math.min(i, pages.length - 1))];
+  // R39: a text-only page (backdrop "none") is its words on a flat colour, never a picture.
+  if (isTextOnlyPage(p))
+    return `<div class="text-only-art" style="background:${textOnlyTint(i)}"><p class="text-only-words">${esc(p.ko ?? p.textKo ?? p.en ?? p.textEn ?? "")}</p></div>`;
   const url = p.imageAssetId
     ? getImageURL(p.imageAssetId)
     : p.imageUrl && !p.imageUrl.startsWith("asset:")
@@ -2295,7 +2301,15 @@ function showOpeningsPrintOptions(b) {
         ["grayscale", "흑백"],
       ],
       "color",
-    )}<input type="hidden" id="p-textPosition" value="below"><input type="hidden" id="p-fontSize" value="large"><input type="hidden" id="p-margin" value="standard"></div><div class="notice" style="margin-top:20px">책 전체를 한 가지 글자 크기로 맞추고, 글이 길면 그 펼침의 그림만 조금 줄여요(펼침면은 낱쪽 그림보다 작아지지 않아요).<br>글이 넘치면 인쇄 창에서 알려 드려요. 그때는 ‘크게 읽기’를 골라 주세요.</div><div class="modal-actions"><button type="submit" class="btn btn-primary">${icon("print")}그림 + 글 인쇄 미리보기</button></div></form>`,
+    )}${selectField(
+      "p-quality",
+      "화질",
+      [
+        ["full", "원본 화질 · 인쇄용"],
+        ["feedback", "저용량 피드백판 · 검증·공유용 (그림 축소)"],
+      ],
+      "full",
+    )}<input type="hidden" id="p-textPosition" value="below"><input type="hidden" id="p-fontSize" value="large"><input type="hidden" id="p-margin" value="standard"></div><div class="notice" style="margin-top:20px">책 전체를 한 가지 글자 크기로 맞추고, 글이 길면 그 펼침의 그림만 조금 줄여요(펼침면은 낱쪽 그림보다 작아지지 않아요).<br>글이 넘치면 인쇄 창에서 알려 드려요. 그때는 ‘크게 읽기’를 골라 주세요.</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="print-feedback-file" data-id="${esc(b.id)}">저용량 HTML 파일 저장</button><button type="submit" class="btn btn-primary">${icon("print")}그림 + 글 인쇄 미리보기</button></div></form>`,
   );
 }
 function showPrintOptions(b) {
@@ -2357,7 +2371,15 @@ function showPrintOptions(b) {
         ["binding", "제본용 · 안쪽 여백 넓게"],
       ],
       "standard",
-    )}</div><div class="notice" style="margin-top:20px">일반 인쇄는 빈 쪽을 끼우지 않고 읽는 순서대로 출력합니다. ‘두 쪽씩’은 본문 1·2쪽을 같은 면에 둡니다.<br>제본용 소책자는 4의 배수를 맞추는 빈 쪽과 쪽 재배치가 필요합니다. A4 가로 · 양면 · 짧은 쪽 뒤집기로 먼저 한 장 시험 인쇄해 주세요.<br>권장 종이: 120–160g · 반 접어 스테이플러 또는 링으로 묶어요.</div><div class="modal-actions"><button type="submit" class="btn btn-primary">${icon("print")}그림 + 글 인쇄 미리보기</button></div></form>`,
+    )}${selectField(
+      "p-quality",
+      "화질",
+      [
+        ["full", "원본 화질 · 인쇄용"],
+        ["feedback", "저용량 피드백판 · 검증·공유용 (그림 축소)"],
+      ],
+      "full",
+    )}</div><div class="notice" style="margin-top:20px">일반 인쇄는 빈 쪽을 끼우지 않고 읽는 순서대로 출력합니다. ‘두 쪽씩’은 본문 1·2쪽을 같은 면에 둡니다.<br>제본용 소책자는 4의 배수를 맞추는 빈 쪽과 쪽 재배치가 필요합니다. A4 가로 · 양면 · 짧은 쪽 뒤집기로 먼저 한 장 시험 인쇄해 주세요.<br>권장 종이: 120–160g · 반 접어 스테이플러 또는 링으로 묶어요.</div><div class="modal-actions"><button type="button" class="btn btn-outline" data-action="print-feedback-file" data-id="${esc(b.id)}">저용량 HTML 파일 저장</button><button type="submit" class="btn btn-primary">${icon("print")}그림 + 글 인쇄 미리보기</button></div></form>`,
   );
 }
 function startReading(b) {
@@ -3521,6 +3543,22 @@ async function onAction(e) {
     protectedAction(() => showPrintOptions(bookById(id)));
     return;
   }
+  // R39-F: the feedback edition as one small HTML file (shrunk pictures inline) for sharing and review.
+  if (a === "print-feedback-file") {
+    const form = document.getElementById("print-form"),
+      b = draft?.id === id ? draft : bookById(id),
+      s = {};
+    if (!form || !b) return;
+    for (const k of ["layout", "language", "pages", "color", "fontSize", "margin", "textPosition"]) s[k] = document.getElementById("p-" + k)?.value;
+    toast("그림을 작게 줄여 파일을 만드는 중이에요…");
+    feedbackBookHTML(b, s, state.characters)
+      .then(({ html, filename, pictures }) => {
+        downloadFile(html, filename, "text/html;charset=utf-8");
+        toast(`저용량 피드백판을 저장했어요 (${Math.round(html.length / 1024)}KB · 그림 ${pictures}장). 열어서 ‘PDF로 저장’도 할 수 있어요.`);
+      })
+      .catch((err) => toast(err));
+    return;
+  }
   if (a === "read-book") {
     const book = bookById(id);
     startReading(book);
@@ -3876,16 +3914,22 @@ document.addEventListener("submit", async (e) => {
       "fontSize",
       "margin",
       "textPosition",
+      "quality",
     ])
-      s[k] = document.getElementById("p-" + k).value;
-    try {
-      if (printBook(b, s, state.characters)) {
+      s[k] = document.getElementById("p-" + k)?.value;
+    // R39-F: the low-resolution feedback edition opens its tab now and fills it once the pictures are shrunk.
+    const opened = (ok) => {
+      if (ok) {
         b.printedAt = new Date().toISOString();
         save();
         closeModal();
         render();
-        toast("인쇄 창에서 프린터 또는 PDF 저장을 선택해 주세요.");
+        toast(s.quality === "feedback" ? "저용량 피드백판이 열렸어요. 인쇄 창에서 ‘PDF로 저장’을 고르면 파일이 작아요." : "인쇄 창에서 프린터 또는 PDF 저장을 선택해 주세요.");
       } else toast("팝업을 허용한 뒤 인쇄 창을 다시 열어 주세요.");
+    };
+    try {
+      if (s.quality === "feedback") printFeedbackBook(b, s, state.characters).then(opened, (err) => toast(err));
+      else opened(printBook(b, s, state.characters));
     } catch (err) {
       toast(err);
     }

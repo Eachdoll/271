@@ -3,6 +3,7 @@
 import { rewriteStoryPage, alignEnglishText } from "./pipeline.js";
 import { hasOrchestrationPolicy } from "./orchestration.js";
 import { checkStory } from "./checker.js";
+import { isTextOnlyPage } from "./story-drama.js";
 import { checkRichness } from "./richness.js";
 import { currentBookPagination } from "./book-coherence.js";
 import { syncStoryDraft } from "./ui.js";
@@ -678,9 +679,11 @@ export async function setPageReviewed(
  */
 export function pagesNeedingImages(book) {
   return (book?.pages || []).flatMap((page, index) =>
-    !page?.imageAssetId ||
+    // R39: a text-only page (backdrop "none") needs no picture.
+    !isTextOnlyPage(page) &&
+    (!page?.imageAssetId ||
     page.imageMeta?.quality !== "final" ||
-    isPageImageStale(page)
+    isPageImageStale(page))
       ? [index]
       : [],
   );

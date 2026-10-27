@@ -1,0 +1,16 @@
+{
+  "paidCalls": 0,
+  "blankEntry": 4,
+  "structural": {
+    "valid": true,
+    "errors": []
+  },
+  "direct": {
+    "passed": true,
+    "violations": []
+  },
+  "wrapper": {
+    "passed": true,
+    "violations": []
+  }
+}

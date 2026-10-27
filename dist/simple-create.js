@@ -10,6 +10,7 @@ import { expressionSummary } from "./story-generation/expression-deck.js";
 import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
 import { picturePlanNote } from "./story-generation/picture-plan.js";
 import { storyChangeSummary } from "./story-generation/story-change.js";
+import { storyDramaSummary, isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
@@ -390,7 +391,8 @@ export function approvalImageWork(book, engine) {
     autoReady =
       !!book?.autoGenerationComplete &&
       coverDone &&
-      pages.every((p) => p?.imageAssetId && p.imageMeta?.quality === "final"),
+      // R39: a text-only page (backdrop "none") has no picture by design.
+      pages.every((p) => isTextOnlyPage(p) || (p?.imageAssetId && p.imageMeta?.quality === "final")),
     finalize =
       !autoReady &&
       (engine !== "sample" ||
@@ -673,7 +675,7 @@ function renderEcoStep(ctx, w, job) {
       .map(([label, cls]) => `<li class="${cls}">${label}</li>`)
       .join(""),
     outlineBlock = job.outline
-      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p>${storyChangeSummary(job.outline) ? `<p><small class="simple-plan-note">${esc(storyChangeSummary(job.outline))}</small></p>` : ""}<ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
+      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p>${[storyChangeSummary(job.outline), storyDramaSummary(job.outline)].filter(Boolean).map((line) => `<p><small class="simple-plan-note">${esc(line)}</small></p>`).join("")}<ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
       : "",
     errorList = errors.length
       ? `<ul class="check-issues simple-eco-errors">${errors.map((e) => `<li class="check-violation">${esc(e)}</li>`).join("")}</ul>`
@@ -1159,6 +1161,8 @@ export function imageWork(book) {
   const missing = [],
     stale = [];
   (book?.pages || []).forEach((page, index) => {
+    // R39: a text-only page (backdrop "none") has no picture by design.
+    if (isTextOnlyPage(page)) return;
     if (!page?.imageAssetId || page.imageMeta?.quality !== "final")
       missing.push(index);
     else if (isPageTextEdited(page)) stale.push(index);
@@ -1324,6 +1328,8 @@ function shapeStageLine(job) {
     !job?.demo ? expressionSummary(job?.input?.storyExpression) : "",
     // R38: what the outline says is different at the end.
     storyChangeSummary(job?.outline),
+    // R39: the tries' kinds, the secret and the companion's want.
+    storyDramaSummary(job?.outline),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1771,7 +1777,8 @@ function pageBadge(book, index) {
 }
 /** "그림 8 / 8 · 글 바뀐 쪽 1": final pictures, then pages whose text changed after drawing. */
 export function imageCountLabel(book) {
-  const total = book?.pages?.length || 0,
+  // R39: text-only pages are not pictures.
+  const total = (book?.pages || []).filter((page) => !isTextOnlyPage(page)).length,
     work = imageWork(book);
   return `그림 ${total - work.missing.length} / ${total}${work.stale.length ? ` · ${layoutOf(book) === "openings" ? "글 바뀐 그림" : "글 바뀐 쪽"} ${work.stale.length}` : ""}`;
 }
@@ -1800,7 +1807,11 @@ function renderReviewStep(ctx, w) {
     openings = layoutOf(book) === "openings",
     kind = page?.kind === "spread" ? "spread" : "page";
   const eco = isEcoBook(book);
-  const art = image
+  // R39: a text-only page (backdrop "none") shows its words on a flat colour; nothing to draw or upload.
+  const textOnly = isTextOnlyPage(page);
+  const art = textOnly
+    ? `<div class="text-only-art simple-text-only${openings ? ` simple-empty-${kind}` : ""}" style="background:${textOnlyTint(index)}"><p class="text-only-words">${esc(page.ko ?? page.textKo ?? page.en ?? page.textEn ?? "")}</p><p class="small-label">그림 없이 글만 있는 쪽 — 이야기가 잠시 멈춰 생각하는 자리예요.</p></div>`
+    : image
     ? `${illustration(book, index)}${isPageTextEdited(page) ? `<p class="small-label simple-stale">${eco ? "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 올리기’로 바꿀 수 있어요." : "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요."}</p>` : ""}`
     : eco
       ? `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p><p class="small-label">‘그림 프롬프트’를 복사해 그림 AI에게 만들게 하고, 받은 그림을 ‘그림 올리기’로 넣어요.</p></div>`
@@ -1830,7 +1841,7 @@ function renderReviewStep(ctx, w) {
   const pageActions = editing
     ? `${sbtn("저장", "save-text", "green")}${sbtn("취소", "cancel-text")}`
     : eco
-      ? `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("그림 프롬프트", "eco-prompt", "outline", `${off} data-index="${index}"`)}${sbtn(image ? "그림 다시 올리기" : "그림 올리기", "eco-upload", image ? "outline" : "green", `${off} data-index="${index}"`)}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`
+      ? `${sbtn("글 고치기", "edit-text", "outline", off)}${textOnly ? "" : `${sbtn("그림 프롬프트", "eco-prompt", "outline", `${off} data-index="${index}"`)}${sbtn(image ? "그림 다시 올리기" : "그림 올리기", "eco-upload", image ? "outline" : "green", `${off} data-index="${index}"`)}`}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`
       : `${sbtn("글 고치기", "edit-text", "outline", off)}${sbtn("글 다시 만들기", "rewrite-text", "outline", off)}${image ? sbtn("그림 다시 만들기", "redraw-page", "outline", off) : ""}${sbtn(page.reviewed ? "좋아요 ✓" : "좋아요", "like", page.reviewed ? "green" : "outline", `${off} aria-pressed="${!!page.reviewed}"`)}`;
   const ownOp = pageOp && pageOp.bookId === book.id ? pageOp : null,
     running =
@@ -2433,6 +2444,8 @@ async function drawPage(
     job = jobOfBook(state, book);
   if (!book || !job) return ctx.toast("이 책의 자동 작업을 찾지 못했어요.");
   if (isEcoBook(book)) return ctx.toast(ECO_NO_BUY);
+  // R39: a text-only page has no picture to make.
+  if (isTextOnlyPage(book.pages?.[index])) return ctx.toast("이 쪽은 그림 없이 글만 있는 쪽이에요.");
   // A stop asked for after this click (here, in the library or another tab) wins.
   const stops = stopMark(state, job.id);
   if (runInterrupted(job)) return ctx.toast(INTERRUPTED_FIRST);
