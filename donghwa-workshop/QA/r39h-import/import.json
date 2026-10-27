@@ -1,0 +1,15 @@
+{
+  "requestedRange": "99b2320..f8913b8",
+  "actualDiff": "a12ea5d..d32637a",
+  "files": [
+    "donghwa-workshop/CLAUDE.md",
+    "donghwa-workshop/CODEX_WORK_ORDER_R39H_2026-10-27.md",
+    "donghwa-workshop/dist/book-layout.js",
+    "donghwa-workshop/dist/full-auto.js",
+    "donghwa-workshop/dist/story-generation/ui.js",
+    "donghwa-workshop/dist/sw.js",
+    "donghwa-workshop/tests/openings-pictures-r12.test.mjs",
+    "donghwa-workshop/tests/openings-ui-r12.test.mjs",
+    "donghwa-workshop/tests/print-feedback-r39.test.mjs"
+  ]
+}
