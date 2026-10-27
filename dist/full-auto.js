@@ -113,7 +113,8 @@ export function autoJobs(state) {
  */
 export function jobPictureTotal(job, fallback = job?.input?.pageCount) {
   if (job?.input?.layoutPolicy?.kind !== "openings") return `${fallback}쪽`;
-  const pages = job.book?.pages?.length;
+  // R39H: a text-only entry is no picture.
+  const pages = job.book?.pages?.filter((page) => !isTextOnlyPage(page)).length;
   return pages
     ? `${pages}장`
     : `펼침 ${Number(job.input.pageCount) / 2}개 · ${job.input.pageCount}쪽`;

@@ -60,5 +60,5 @@ test('R39-F outside a browser the shrinking yields nothing and the constants are
   assert.equal(count(app, /data-action="print-feedback-file"/gu), 2);
   assert.match(app, /if \(s\.quality === "feedback"\) printFeedbackBook\(b, s, state\.characters\)/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v8[8-9]";/);
+  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[8-9]|9[0-9])";/);
 });

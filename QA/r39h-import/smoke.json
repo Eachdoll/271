@@ -1,0 +1,567 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "runs": [
+    {
+      "width": 1280,
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "steps": {
+        "defaultMode": null,
+        "settingsGroups": [
+          "우리 아이",
+          "엔진과 키",
+          "잠금",
+          "보관"
+        ],
+        "ideas": [
+          "공원에서 눈사람이 녹지 않게 지키기",
+          "할머니 댁 다락방 상자 열어 보기"
+        ],
+        "ideaStatus": "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.",
+        "forcedTopicCensus": {
+          "stepButtons": 12,
+          "resumeCards": 1,
+          "exitForced": 1
+        },
+        "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
+        "recommended": 3,
+        "selectedCards": 5,
+        "browserBack": {
+          "jobsBefore": 0,
+          "afterBack": 1,
+          "topic": "공룡 친구와 숲으로 소풍 가는 날",
+          "afterForward": 2,
+          "jobsAfter": 0
+        },
+        "escape": {
+          "retry": "이어서 만들기",
+          "engineLocked": true,
+          "stepAfter": 1,
+          "topicKept": true,
+          "resumeCards": 0,
+          "engineUnlocked": true,
+          "stoppedJobKept": true
+        },
+        "backFromFirstReview": {
+          "afterBack": 3,
+          "afterForward": 4,
+          "inApp": true
+        },
+        "backWhileEditing": [
+          {
+            "inApp": true,
+            "sameEntry": true,
+            "step": 4,
+            "edit": true,
+            "toast": "고치던 글을 저장하거나 취소해 주세요."
+          },
+          {
+            "inApp": true,
+            "sameEntry": true,
+            "step": 4,
+            "edit": true,
+            "toast": "고치던 글을 저장하거나 취소해 주세요."
+          },
+          {
+            "inApp": true,
+            "sameEntry": true,
+            "step": 4,
+            "edit": true,
+            "toast": "고치던 글을 저장하거나 취소해 주세요."
+          }
+        ],
+        "badge": "읽기 쉬움 ✓ · 참고 2",
+        "stepBarRoundTrip": {
+          "page": "1 / 8",
+          "jobs": 2,
+          "atFirst": 1,
+          "frozen": 1,
+          "topicField": 0,
+          "fork": 1,
+          "leaveDialog": true,
+          "stayed": 1,
+          "atThird": 3,
+          "toReview": 1,
+          "startText": 0,
+          "back": 4,
+          "pageAfter": "1 / 8",
+          "liked": "true",
+          "same": true,
+          "jobsAfter": 2
+        },
+        "stickyActions": {
+          "bar": [
+            831,
+            900
+          ],
+          "innerHeight": 900,
+          "navCovers": 0,
+          "links": [
+            [
+              95,
+              40
+            ],
+            [
+              107,
+              40
+            ],
+            [
+              68,
+              40
+            ],
+            [
+              119,
+              40
+            ]
+          ]
+        },
+        "toastClear": {
+          "atTop": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              831,
+              900
+            ]
+          },
+          "atBar": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              761,
+              830
+            ]
+          }
+        },
+        "proMode": "pro",
+        "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
+        "onePage": {
+          "toast": "2쪽 그림을 저장했어요.",
+          "error": "",
+          "image": 1
+        },
+        "staleCount": "그림 1 / 8 · 글 바뀐 쪽 1",
+        "keptAfterEdit": {
+          "jobId": "auto-9e9a1b1f-083e-4f7a-a448-5eaca805640c",
+          "status": "pages-ready",
+          "error": null,
+          "asset": "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+          "marker": "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+          "stale": false
+        },
+        "drawAllChoice": "취소\n빈 그림만 만들기\n고친 1쪽도 다시 만들기",
+        "stoppedRun": {
+          "jobId": "auto-9e9a1b1f-083e-4f7a-a448-5eaca805640c",
+          "status": "paused",
+          "error": null,
+          "asset": "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+          "marker": "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+          "stale": false
+        },
+        "simpleLibrary": {
+          "card": true,
+          "label": "그림 1/8",
+          "open": 1,
+          "runs": 0,
+          "aboveBooks": true
+        },
+        "resumeAsked": 0,
+        "resumedRun": {
+          "jobId": "auto-9e9a1b1f-083e-4f7a-a448-5eaca805640c",
+          "status": "review",
+          "error": null,
+          "asset": "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+          "marker": "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+          "stale": false
+        },
+        "reopenedOnPage": "2 / 8",
+        "allImages": "그림 8 / 8 · 글 바뀐 쪽 1",
+        "proReviewWhileDrawing": {
+          "card": 1,
+          "toast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "editor": 0,
+          "draftCard": 1,
+          "draftResume": 0,
+          "draftToast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "draftEditor": 0,
+          "draftWorkflow": 0,
+          "step": 4,
+          "redrawn": true,
+          "keptStill": true
+        },
+        "storyDraftCard": {
+          "card": 1,
+          "editor": 1,
+          "workflow": 0,
+          "regenerateToast": "FULL AUTO로 만든 책은 이미 만든 그림을 지키려고 이야기에서 다시 엮지 않아요. 쪽 글은 검수 화면에서 고쳐 주세요.",
+          "regenerateWorkflow": 0,
+          "same": true,
+          "before": {
+            "bookId": "book-767501a4-ffed-4570-b131-ae265723e335",
+            "pages": [
+              "image-03c24420-a4ce-4624-8e71-d658e7c6ed5e",
+              "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+              "image-55f93114-e615-47fe-b23b-67259209eee4",
+              "image-4b64bb84-730f-46e0-95fc-9f8549e3cf3b",
+              "image-a9ece74a-3442-4f6d-be6c-b64b49d91d33",
+              "image-a3770864-3a7a-45db-af53-e3387599ce05",
+              "image-0c000329-d603-484e-930b-76f1db4ffc9d",
+              "image-961460e0-46c9-4924-ad13-061eadaaa33c"
+            ],
+            "final": 8,
+            "cover": "image-d911b27f-b183-4e00-9c1b-3f84b8ffca4f",
+            "history": 7,
+            "usage": 16
+          },
+          "after": {
+            "bookId": "book-767501a4-ffed-4570-b131-ae265723e335",
+            "pages": [
+              "image-03c24420-a4ce-4624-8e71-d658e7c6ed5e",
+              "image-5ac767a3-b5f2-46f8-92b3-dd211764c3ad",
+              "image-55f93114-e615-47fe-b23b-67259209eee4",
+              "image-4b64bb84-730f-46e0-95fc-9f8549e3cf3b",
+              "image-a9ece74a-3442-4f6d-be6c-b64b49d91d33",
+              "image-a3770864-3a7a-45db-af53-e3387599ce05",
+              "image-0c000329-d603-484e-930b-76f1db4ffc9d",
+              "image-961460e0-46c9-4924-ad13-061eadaaa33c"
+            ],
+            "final": 8,
+            "cover": "image-d911b27f-b183-4e00-9c1b-3f84b8ffca4f",
+            "history": 7,
+            "usage": 16
+          }
+        },
+        "title": "노래하는 돌은 어디에?",
+        "staleChoice": "취소\n그림 그대로 저장\n고친 1쪽 그림 다시 만들고 저장",
+        "keptPictures": {
+          "same": true,
+          "keptBefore": 1,
+          "keptAfter": 1,
+          "staleBefore": 0,
+          "staleAfter": 0,
+          "imageRecordsBefore": 16,
+          "saved": true
+        },
+        "reopened": "노래하는 돌은 어디에?",
+        "fork": {
+          "start": 1,
+          "frozenTopic": "바닷가에서 조개 줍는 날",
+          "asked": "지금 이야기 ‘바람이 부는 도시락 통’의 글과 그림은 그대로 남아요. ‘이어서 만들기’에서 언제든 다시 열 수 있어요.새 이야기의 글은 ③에서 ‘글 만들기’를 누를 때 만들어요 · 글 엔진 요금 약 $0.26 (데모는 무료). 그림은 ④에서 따로 물어요.",
+          "okLabel": "새 이야기로 고치기",
+          "step": 1,
+          "topic": "바닷가에서 조개 줍는 날",
+          "idea": 1,
+          "same": true,
+          "newJobs": 0,
+          "backToast": "",
+          "backInApp": true,
+          "backStep": 0,
+          "leaveDialog": false,
+          "listed": 1
+        },
+        "reopenBackLive": {
+          "start": 1,
+          "stoppedStatus": "paused",
+          "opened": 3,
+          "live": true,
+          "inApp": true,
+          "afterBack": 0,
+          "library": 1,
+          "finished": true,
+          "status": "text-review",
+          "book": true
+        }
+      },
+      "imageBug": null,
+      "problems": []
+    },
+    {
+      "width": 390,
+      "pageErrors": [],
+      "paidRequests": [],
+      "overflow": [],
+      "steps": {
+        "defaultMode": null,
+        "settingsGroups": [
+          "우리 아이",
+          "엔진과 키",
+          "잠금",
+          "보관"
+        ],
+        "ideas": [
+          "바닷가에서 잃어버린 장갑 한 짝 찾기",
+          "비 오는 거리의 장화 행진"
+        ],
+        "ideaStatus": "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.",
+        "forcedTopicCensus": {
+          "stepButtons": 12,
+          "resumeCards": 1,
+          "exitForced": 1
+        },
+        "format": "K1 · E0 · 8쪽 · 한글판·영어판 두 권",
+        "recommended": 3,
+        "selectedCards": 5,
+        "browserBack": {
+          "jobsBefore": 0,
+          "afterBack": 1,
+          "topic": "공룡 친구와 숲으로 소풍 가는 날",
+          "afterForward": 2,
+          "jobsAfter": 0
+        },
+        "escape": {
+          "retry": "이어서 만들기",
+          "engineLocked": true,
+          "stepAfter": 1,
+          "topicKept": true,
+          "resumeCards": 0,
+          "engineUnlocked": true,
+          "stoppedJobKept": true
+        },
+        "backFromFirstReview": {
+          "afterBack": 3,
+          "afterForward": 4,
+          "inApp": true
+        },
+        "backWhileEditing": [
+          {
+            "inApp": true,
+            "sameEntry": true,
+            "step": 4,
+            "edit": true,
+            "toast": "고치던 글을 저장하거나 취소해 주세요."
+          },
+          {
+            "inApp": true,
+            "sameEntry": true,
+            "step": 4,
+            "edit": true,
+            "toast": "고치던 글을 저장하거나 취소해 주세요."
+          },
+          {
+            "inApp": true,
+            "sameEntry": true,
+            "step": 4,
+            "edit": true,
+            "toast": "고치던 글을 저장하거나 취소해 주세요."
+          }
+        ],
+        "badge": "읽기 쉬움 ✓ · 참고 2",
+        "stepBarRoundTrip": {
+          "page": "1 / 8",
+          "jobs": 2,
+          "atFirst": 1,
+          "frozen": 1,
+          "topicField": 0,
+          "fork": 1,
+          "leaveDialog": true,
+          "stayed": 1,
+          "atThird": 3,
+          "toReview": 1,
+          "startText": 0,
+          "back": 4,
+          "pageAfter": "1 / 8",
+          "liked": "true",
+          "same": true,
+          "jobsAfter": 2
+        },
+        "stickyActions": {
+          "bar": [
+            709,
+            778
+          ],
+          "innerHeight": 844,
+          "navCovers": 66,
+          "links": [
+            [
+              40,
+              40
+            ],
+            [
+              40,
+              40
+            ],
+            [
+              40,
+              40
+            ],
+            [
+              40,
+              40
+            ]
+          ]
+        },
+        "toastClear": {
+          "atTop": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              709,
+              778
+            ]
+          },
+          "atBar": {
+            "overlap": 0,
+            "toast": [
+              16,
+              61
+            ],
+            "bar": [
+              709,
+              778
+            ]
+          }
+        },
+        "proMode": "pro",
+        "modeRoundTrip": "pro → 쪽마다 검수 → simple · 저장 내용 같음",
+        "onePage": {
+          "toast": "2쪽 그림을 저장했어요.",
+          "error": "",
+          "image": 1
+        },
+        "staleCount": "그림 1 / 8 · 글 바뀐 쪽 1",
+        "keptAfterEdit": {
+          "jobId": "auto-1c7d7970-8157-4c13-9b1f-dbf1f9e33748",
+          "status": "pages-ready",
+          "error": null,
+          "asset": "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+          "marker": "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+          "stale": false
+        },
+        "drawAllChoice": "취소\n빈 그림만 만들기\n고친 1쪽도 다시 만들기",
+        "stoppedRun": {
+          "jobId": "auto-1c7d7970-8157-4c13-9b1f-dbf1f9e33748",
+          "status": "paused",
+          "error": null,
+          "asset": "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+          "marker": "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+          "stale": false
+        },
+        "simpleLibrary": {
+          "card": true,
+          "label": "그림 1/8",
+          "open": 1,
+          "runs": 0,
+          "aboveBooks": true
+        },
+        "resumeAsked": 0,
+        "resumedRun": {
+          "jobId": "auto-1c7d7970-8157-4c13-9b1f-dbf1f9e33748",
+          "status": "review",
+          "error": null,
+          "asset": "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+          "marker": "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+          "stale": false
+        },
+        "reopenedOnPage": "2 / 8",
+        "allImages": "그림 8 / 8 · 글 바뀐 쪽 1",
+        "proReviewWhileDrawing": {
+          "card": 1,
+          "toast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "editor": 0,
+          "draftCard": 1,
+          "draftResume": 0,
+          "draftToast": "진행 중인 작업이 끝난 뒤 열어 주세요.",
+          "draftEditor": 0,
+          "draftWorkflow": 0,
+          "step": 4,
+          "redrawn": true,
+          "keptStill": true
+        },
+        "storyDraftCard": {
+          "card": 1,
+          "editor": 1,
+          "workflow": 0,
+          "regenerateToast": "FULL AUTO로 만든 책은 이미 만든 그림을 지키려고 이야기에서 다시 엮지 않아요. 쪽 글은 검수 화면에서 고쳐 주세요.",
+          "regenerateWorkflow": 0,
+          "same": true,
+          "before": {
+            "bookId": "book-7fe2a225-4eb3-406d-bed5-7c13ef5aecf9",
+            "pages": [
+              "image-1fa2fd4a-5a52-4380-9197-e06f416c0e81",
+              "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+              "image-1c1c9a0f-e9c9-4a84-916d-c354f61f3381",
+              "image-b021bf2c-16bf-4682-9f8b-e61066a8e3d8",
+              "image-bfe06a6e-0e86-487d-b674-b825ac9595f5",
+              "image-39227168-890c-4ec3-a1d3-cc0f4ae2f964",
+              "image-77c5ccbb-31f8-4572-b90f-104e632ce75c",
+              "image-5d2c9319-3e41-4e0e-b778-37c471f640b0"
+            ],
+            "final": 8,
+            "cover": "image-539ec592-0917-44fa-bc74-86d009d1ccba",
+            "history": 7,
+            "usage": 16
+          },
+          "after": {
+            "bookId": "book-7fe2a225-4eb3-406d-bed5-7c13ef5aecf9",
+            "pages": [
+              "image-1fa2fd4a-5a52-4380-9197-e06f416c0e81",
+              "image-bb364a05-0aed-4e0b-bcfe-9418b9d1b0f7",
+              "image-1c1c9a0f-e9c9-4a84-916d-c354f61f3381",
+              "image-b021bf2c-16bf-4682-9f8b-e61066a8e3d8",
+              "image-bfe06a6e-0e86-487d-b674-b825ac9595f5",
+              "image-39227168-890c-4ec3-a1d3-cc0f4ae2f964",
+              "image-77c5ccbb-31f8-4572-b90f-104e632ce75c",
+              "image-5d2c9319-3e41-4e0e-b778-37c471f640b0"
+            ],
+            "final": 8,
+            "cover": "image-539ec592-0917-44fa-bc74-86d009d1ccba",
+            "history": 7,
+            "usage": 16
+          }
+        },
+        "title": "노래하는 돌은 어디에?",
+        "staleChoice": "취소\n그림 그대로 저장\n고친 1쪽 그림 다시 만들고 저장",
+        "keptPictures": {
+          "same": true,
+          "keptBefore": 1,
+          "keptAfter": 1,
+          "staleBefore": 0,
+          "staleAfter": 0,
+          "imageRecordsBefore": 16,
+          "saved": true
+        },
+        "reopened": "노래하는 돌은 어디에?",
+        "fork": {
+          "start": 1,
+          "frozenTopic": "바닷가에서 조개 줍는 날",
+          "asked": "지금 이야기 ‘바람이 부는 도시락 통’의 글과 그림은 그대로 남아요. ‘이어서 만들기’에서 언제든 다시 열 수 있어요.새 이야기의 글은 ③에서 ‘글 만들기’를 누를 때 만들어요 · 글 엔진 요금 약 $0.26 (데모는 무료). 그림은 ④에서 따로 물어요.",
+          "okLabel": "새 이야기로 고치기",
+          "step": 1,
+          "topic": "바닷가에서 조개 줍는 날",
+          "idea": 1,
+          "same": true,
+          "newJobs": 0,
+          "backToast": "",
+          "backInApp": true,
+          "backStep": 0,
+          "leaveDialog": false,
+          "listed": 1
+        },
+        "reopenBackLive": {
+          "start": 1,
+          "stoppedStatus": "paused",
+          "opened": 3,
+          "live": true,
+          "inApp": true,
+          "afterBack": 0,
+          "library": 1,
+          "finished": true,
+          "status": "text-review",
+          "book": true
+        }
+      },
+      "imageBug": null,
+      "problems": []
+    }
+  ]
+}

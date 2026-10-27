@@ -214,6 +214,8 @@ test('R12-P5 FULL AUTO buys each entry once across a resume and labels pictures 
     assert.equal(job.book.pages.length, 13);
     assert.deepEqual(bought, Array.from({length: 13}, (_, i) => i), 'each entry bought exactly once');
     assert.equal(jobPictureTotal(job), '13장');
+    // R39H: a text-only entry is no picture.
+    assert.equal(jobPictureTotal({...job, book: {...job.book, pages: job.book.pages.map((page, i) => (i === 2 ? {...page, backdrop: 'none'} : page))}}), '12장');
     assert.equal(fullAutoProgress(job).total, before - 16 + 14, 'the total turns into entries + cover once the book exists');
     assert.ok(Object.keys(job.completed).filter(key => key.startsWith('page:')).length === 13);
   } finally {
