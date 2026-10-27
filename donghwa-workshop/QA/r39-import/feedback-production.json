@@ -1,0 +1,21 @@
+{
+  "originalImageBytes": 4755674,
+  "htmlBytes": 156634,
+  "originalHtmlBytes": 14274960,
+  "dimensions": [
+    640,
+    427
+  ],
+  "unchanged": true,
+  "note": true,
+  "filename": "QA 피드백-피드백판.html",
+  "pictures": 1,
+  "downloadName": "QA 피드백-피드백판.html",
+  "downloadBytes": 157329,
+  "normalPdfBytes": 2422184,
+  "smallPdfBytes": 172525,
+  "fileUrlVerification": "Platform blocks file:// navigation; downloaded bytes rendered as document instead",
+  "downloadOpens": true,
+  "errors": [],
+  "passed": true
+}
