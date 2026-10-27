@@ -13,18 +13,18 @@
 | 항목 | 값 |
 | --- | --- |
 | 저장소·브랜치 | https://github.com/Eachdoll/271 · `claude/cross-owner-repo-constraint-j20lhz` |
-| 코드 커밋 | **`cc5d469`** (캐시 `donghwa-shell-v87`) |
+| 코드 커밋 | **`cc5d469`** (R39) + **`99b2320`** (R39-F 저용량 피드백판, 캐시 `donghwa-shell-v88`) |
 
 | 운영 상태 | 반입 범위 | 운영 버전 |
 | --- | --- | --- |
-| v49 / v86 (지금, R38H 보고 `CODEX_R38H_COMPLETION_2026-10-26.md`까지 배포됨) | **`236c494..cc5d469`** (R39만) | v50 |
+| v49 / v86 (지금, R38H 보고 `CODEX_R38H_COMPLETION_2026-10-26.md`까지 배포됨) | **`236c494..99b2320`** (R39 + R39-F) | v50 |
 
 R38H 완료 보고(배포 v49/v86, 에코에서 빈 중간 쪽 수락·둘째 빈 쪽 거절, 운영 재검사 PASS)를 받았습니다. 감사합니다. 보고 커밋 `1c28b3b`는 이 브랜치에 병합했습니다.
 
 | 구분 | 파일 |
 | --- | --- |
-| 새 파일 | `dist/story-generation/story-drama.js`, `tests/story-drama-r39.test.mjs` |
-| 바뀐 코드 | `dist/sw.js`(v87 · 새 모듈 1개), `dist/app.js`, `dist/book-layout.js`, `dist/eco-mode.js`, `dist/full-auto.js`, `dist/output.js`, `dist/simple-create.js`, `dist/style.css`, `dist/image-generation/{scene-prompt,world}.js`, `dist/story-generation/{beat-writer,council,demo,expression-deck,k1-book,outline-normalize,page-tools,picture-plan,pipeline,prompt-diet,ui}.js` |
+| 새 파일 | `dist/story-generation/story-drama.js`, `tests/story-drama-r39.test.mjs`, `tests/print-feedback-r39.test.mjs` |
+| 바뀐 코드 | `dist/sw.js`(v88 · 새 모듈 1개), `dist/app.js`, `dist/book-layout.js`, `dist/eco-mode.js`, `dist/full-auto.js`, `dist/output.js`, `dist/simple-create.js`, `dist/style.css`, `dist/image-generation/{scene-prompt,world}.js`, `dist/story-generation/{beat-writer,council,demo,expression-deck,k1-book,outline-normalize,page-tools,picture-plan,pipeline,prompt-diet,ui}.js` |
 | 바뀐 테스트 | `tests/{eco-mode,expression-deck-r37,lean-checks-r31c,openings-legacy-r12,openings-policy-r12,picture-led-r35,picture-plan-r36,prompt-diet-r31b,story-change-r38}.test.mjs` |
 | 문서 | `CLAUDE.md`(R39 항목), `PICTURE_LED_DIRECTION_2026-10-24.md`(10절) |
 
@@ -67,11 +67,19 @@ R38H 완료 보고(배포 v49/v86, 에코에서 빈 중간 쪽 수락·둘째 �
 
 비용: 유료 호출 추가 0회. 줄거리 규칙 K2 약 +2,000자(4,787 → 6,803), 쪽 나누기 약 +730자, 비트 작가 시도 비트 한글 +260·영어 +410, K1 블록 +약 260.
 
+### (6) 저용량 피드백판 (R39-F · 부모님 추가 요청)
+
+부모님: "인쇄 시 해상도를 낮춰 피드백 가능한 저용량 그림책 파일을 출력(검증용) — 클로드에 넣으려니 30MB가 넘는다."
+
+- 두 인쇄 창(쪽 책·펼침 책)에 **화질** 선택: '원본 화질 · 인쇄용'(기본, 예전과 바이트 단위로 같음) / '저용량 피드백판 · 검증·공유용 (그림 축소)'. 피드백판은 그림을 긴 변 640px JPEG로 줄여 넣은 같은 인쇄 창을 열고(맨 위에 "저용량 피드백판 · … 인쇄용이 아니에요" 안내) 거기서 'PDF로 저장'하면 작은 PDF가 됩니다.
+- **저용량 HTML 파일 저장** 버튼: 같은 내용을 그림이 든 HTML 한 파일(`<제목>-피드백판.html`)로 내려받습니다(토스트에 KB·그림 수). 파일을 열어 'PDF로 저장'도 됩니다.
+- 그림 줄이기는 브라우저 캔버스로만 하고 보관함의 원본은 바꾸지 않습니다. 글만 있는 쪽의 단색 바탕은 그대로입니다. 실측(Chromium, 1536×1024 PNG): 640×427 JPEG, 쪽 하나당 약 10KB.
+
 ## 2. 검증
 
 | 명령 | 기대값 |
 | --- | --- |
-| `npm test` | **1092/1092**. 새 테스트 8개: `story-drama-r39` |
+| `npm test` | **1094/1094**. 새 테스트 10개: `story-drama-r39`(8) · `print-feedback-r39`(2) |
 | `npm run test:quality` | **85/85**, `diff -rq story-quality/dist dist/story-quality/dist` 출력 없음 |
 | `scripts/r12-legacy-dom.mjs --check` (포트 4960) | `0e5035cf…` 그대로 |
 | `scripts/ux-census.mjs` | `PRO SAME AS TABLE true`, `ERRORS []`, `PAID 0`, 쉬운 단계 모두 12버튼 이내 |
@@ -84,11 +92,11 @@ R38H 완료 보고(배포 v49/v86, 에코에서 빈 중간 쪽 수락·둘째 �
 
 ```bash
 git add donghwa-workshop
-git commit -m "donghwa-workshop: r39 반입 · 캐시 v87"
+git commit -m "donghwa-workshop: r39 + r39-f 반입 · 캐시 v88"
 git push origin <운영 브랜치>
 ```
 
-서비스 워커는 `donghwa-shell-v87`입니다. DB와 비밀값은 바꾸지 않습니다. 배포 뒤 새로 고침을 한 번 더 합니다.
+서비스 워커는 `donghwa-shell-v88`입니다. DB와 비밀값은 바꾸지 않습니다. 배포 뒤 새로 고침을 한 번 더 합니다.
 
 ## 4. 배포 후 확인 (무료 · 운영 URL)
 
@@ -97,6 +105,7 @@ git push origin <운영 브랜치>
 - ③에 "시도 · … / 비밀 · … / 조연 · …" 줄이 보이는지(에코 ③의 '받은 줄거리'에도).
 - 쪽 답에서 글이 맡는 비트의 중간 쪽 하나에 `"backdrop":"none"`(그 비트의 그림 계획도 `"backdrop":"none"`)을 넣어 ④로 가면 그 쪽이 단색 위의 글로 보이고 '그림 프롬프트'·'그림 올리기' 버튼이 없는지, 위의 '그림 n / total'에서 total이 하나 줄었는지, ⑤ 저장 안내의 빠진 쪽 목록에 그 쪽이 없는지.
 - 그림책 결 데모 책을 만들어 ④ 배지가 '읽기 쉬움'인지, 기존 책 하나의 ④ 배지와 표지가 예전과 같은지.
+- 그림이 있는 기존 책의 '인쇄 · PDF로 저장'에서 화질 '저용량 피드백판'으로 미리보기를 열면 맨 위에 안내가 있고 그림이 작게(640px) 보이는지, 'PDF로 저장'한 파일이 원본 화질 PDF보다 훨씬 작은지(크기만 적고 파일은 보고에 넣지 않음). '저용량 HTML 파일 저장'이 `<제목>-피드백판.html`을 내려받고 열리는지. 원본 화질 미리보기는 예전과 같은지.
 - R38H 보고에서 확인한 빈 중간 쪽 수락·둘째 빈 쪽 거절이 그대로인지(한 번만).
 
 유료 확인은 선택입니다. 부모님이 따로 승인한 경우에만 합니다. **같은 주제("놀이터에서 자꾸 도망가는 그림자 잡기") K2/E2 16쪽을 전후 한 편씩** — 앞 편은 R39 표식만 뺀 입력(러너에서 `storyDrama` 삭제), 뒤 편은 그대로. 볼 것:
@@ -114,7 +123,7 @@ git push origin <운영 브랜치>
 
 - 반입 범위와 커밋
 - 2절 결과표
-- 배포 URL, 운영 버전(v50), 캐시(v87)
+- 배포 URL, 운영 버전(v50), 캐시(v88)
 - 4절 확인 결과(유료를 돌렸다면 전후 비교표)
 
 ## 6. 하지 말 것
