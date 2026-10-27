@@ -47,6 +47,7 @@ import { pictureLedBudgetLine } from "../book-format.js";
 import { planOf, picturePlanWriterLine } from "./picture-plan.js";
 import { storyChangeWriterLine } from "./story-change.js";
 import { storyDramaWriterLine } from "./story-drama.js";
+import { castWriterLine } from "./story-cast.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -299,6 +300,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
       lean ? storyChangeWriterLine(outline, beat, lang) : "",
       // R39: the try's kind and consequence, the secret, the companion's want, the flipped refrain (drama outlines only).
       lean ? storyDramaWriterLine(outline, beat, lang) : "",
+      // R41: the relations of the companions in this beat.
+      lean ? castWriterLine(outline, beat, input, lang) : "",
       // R31e: on the diet the writer gets the brief's story-carrying fields; light, weather and creatures are the picture's.
       brief
         ? lean

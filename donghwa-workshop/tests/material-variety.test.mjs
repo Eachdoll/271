@@ -61,13 +61,14 @@ test('the planner may plan seven and, for new drafts with 자동 추가 on, is a
   assert.match(inspectAutoMaterialPlan(eight, catalog).errors.join(' '), /7명 이하/);
 });
 
-test('the simple steps allow six friends and four places but still preselect two of each', () => {
-  assert.deepEqual(SIMPLE_MATERIAL_LIMITS, {friends: 6, places: 5, preselectFriends: 2, preselectPlaces: 2});
+test('the simple steps allow six friends and four places but preselect three friends and two places', () => {
+  // R41: the hero and three friends by default (four or five characters).
+  assert.deepEqual(SIMPLE_MATERIAL_LIMITS, {friends: 6, places: 5, preselectFriends: 3, preselectPlaces: 2});
   const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings);
   for (let i = 0; i < 6; i++) state.characters.push({id: `extra-${i}`, name: `친구${i}`, nameEn: `Friend${i}`, kind: 'rabbit', likes: '달'});
   for (let i = 0; i < 4; i++) state.backgrounds.push({id: `extra-place-${i}`, name: `달 언덕 ${i}`, nameEn: `Moon Hill ${i}`, type: 'space'});
   const wizard = preselectMaterials(state, {characterIds: ['yuha'], backgroundIds: [], topic: '달 토끼와 놀러 간 날', pageCount: 12, koreanLevel: 'K1', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual', simpleFlow: true});
-  assert.ok(wizard.characterIds.length - 1 <= 2, 'two friends preselected at most');
+  assert.equal(wizard.characterIds.length - 1, 3, 'three friends preselected');
   assert.ok(wizard.backgroundIds.length <= 3, 'home and two places preselected at most');
   const w = ensureSimpleWizard(state, {...wizard, step: 2, simpleStep: 2});
   const html = renderSimpleCreate({getState: () => state, getWizard: () => w, setWizard() {}, getDraft: () => null, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''});

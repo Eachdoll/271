@@ -846,6 +846,21 @@ function archiveName(value) {
 
 const MAX_BACKUP_TEXT = 250 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 40 * 1024 * 1024;
+/**
+ * R41 (the parent's cloud save stopped at "그림 원본이 150MB를 넘었어요"):
+ * a single backup file keeps the 150MB picture cap; the family cloud stores
+ * every picture as its own media object under the family's 5GB quota, so
+ * the blobs path (cloud sync) is capped at that quota instead and the
+ * server's own quota answer is what stops it.
+ */
+const BACKUP_ASSET_CAP = 150 * 1024 * 1024;
+const CLOUD_ASSET_CAP = 5 * 1024 * 1024 * 1024;
+const assetCapError = (blobs) =>
+  new Error(
+    blobs
+      ? "그림 원본이 가족 클라우드 저장 공간(5GB)을 넘었어요. 책을 나누어 저장해 주세요."
+      : "그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.",
+  );
 const ASSET_ID = /^image-[a-zA-Z0-9-]{8,120}$/;
 const IMAGE_TYPES = {
   "image/png": "png",
@@ -1117,10 +1132,7 @@ async function externalizeDirectImages(state, assets, { blobs = false } = {}) {
         }
       } else image = await directImage(canonical);
       bytes += blobs ? image.size : image.bytes.length;
-      if (bytes > 150 * 1024 * 1024)
-        throw new Error(
-          "그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.",
-        );
+      if (bytes > (blobs ? CLOUD_ASSET_CAP : BACKUP_ASSET_CAP)) throw assetCapError(blobs);
       id = "image-" + crypto.randomUUID();
       byUrl.set(canonical, id);
       assets.set(id, image);
@@ -1299,10 +1311,7 @@ export async function createLibraryBackup(state, { mode = "text" } = {}) {
         "참조하는 생성 그림 원본이 보관함에 없어 백업을 중단했어요. 그림 백업을 복원한 뒤 다시 시도해 주세요.",
       );
     assetBytes += blob.size;
-    if (assetBytes > 150 * 1024 * 1024)
-      throw new Error(
-        "그림 원본이 150MB를 넘었어요. 라이브러리를 나누어 백업해 주세요.",
-      );
+    if (assetBytes > (mode === "blobs" ? CLOUD_ASSET_CAP : BACKUP_ASSET_CAP)) throw assetCapError(mode === "blobs");
     assets.set(id, mode === "blobs" ? blob : await blobImage(blob));
   }
   await externalizeDirectImages(snapshot, assets, { blobs: mode === "blobs" });

@@ -33,6 +33,7 @@ import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-pla
 import { storyChangeOutlineRule, hasStoryChange, storyPlaceName, pageBookVoiceLine, wordlessRule } from "./story-change.js";
 import { storyDramaOutlineRule, dramaPlanRule, dramaBibleLines, backdropRule, hasStoryDrama } from "./story-drama.js";
 import { pocketRule } from "../text-pocket.js";
+import { castRule } from "./story-cast.js";
 
 export const PROMPT_DIET_VERSION = 1;
 export const promptDiet = () => ({ version: PROMPT_DIET_VERSION });
@@ -138,7 +139,7 @@ export function leanOutlineRules(input, { count, attempts, k1 = false, custom = 
     ? "A small, warm want and ONE small obstacle a three-year-old knows (being shy, waiting, a little mishap); solved together or with a little help; ends in joy. No villain, no danger, no tears, no mystery and no hidden clue — the 'turn' is simply the small change of heart or the moment play begins, and 'twist' names it in one plain sentence."
     : "Give the protagonist something they want and a reason it matters to them; let them try in ways that change what happens next; let the story turn at a moment the child can see; end warmly and a little differently from how it began. Surprise is welcome; a formula is not. Humor comes from what the characters do.";
   return `Design the StoryOutline (not page text) with ${count} beats for ${input.pageCount} pages, indexes 1..${count}, in the order setup → want → ${attempts} attempt beat(s) → turn → resolution → close. ${beatSummaryLine(input)}
-${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), dramaPlanRule(input), pocketRule(input), storyChangeOutlineRule(input), storyDramaOutlineRule(input), storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
+${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), dramaPlanRule(input), pocketRule(input), storyChangeOutlineRule(input), storyDramaOutlineRule(input), castRule(input), storyShapeRule(input?.storyShape), stageRule(input)].filter(Boolean).join("\n")}
 Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. The story happens where the topic puts it${topicPlaces.length ? ` — here ${topicPlaces.join(", ")}` : ""}: open there (${
     changed
       ? "when neither the topic nor the parent names a place, open at a chosen place that is not home; a home ID first only when the topic begins at home or home is the only place chosen"
@@ -285,6 +286,8 @@ const LEAN_OUTLINE_KEYS = [
   // R39: the secret and the companion's own want (the beats carry tryKind and consequence).
   "secret",
   "companion",
+  // R41: the companions' relations.
+  "relations",
 ];
 const LEAN_PAGE_KEYS = [
   "pageNo",

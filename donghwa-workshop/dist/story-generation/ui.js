@@ -46,6 +46,7 @@ import { topicEndingPolicy, topicEndingNote } from "./topic-ending.js";
 import { storyChangePolicy, storyPlace, storyChangeSummary } from "./story-change.js";
 import { storyDramaPolicy, storyDramaSummary, isTextOnlyPage } from "./story-drama.js";
 import { textPocketPolicy } from "../text-pocket.js";
+import { storyCastPolicy, castSummary } from "./story-cast.js";
 import { promptDiet, hasPromptDiet } from "./prompt-diet.js";
 import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shapeById } from "./story-shapes.js";
 import { stageFor, stageById } from "./stage-categories.js";
@@ -477,6 +478,8 @@ function shapeStageNote(outline, input = null) {
     storyChangeSummary(outline) ? esc(storyChangeSummary(outline)) : "",
     // R39: the tries' kinds, the secret and the companion's want.
     storyDramaSummary(outline) ? esc(storyDramaSummary(outline)) : "",
+    // R41: the companions' relations.
+    castSummary(outline, input) ? esc(castSummary(outline, input)) : "",
   ].filter(Boolean);
   return rows.length ? `<p class="story-note quality-shape-note">${rows.join("<br>")}</p>` : "";
 }
@@ -1074,6 +1077,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       storyDrama: storyDramaPolicy(),
       // R40: the picture leaves a flat field where the words are typeset (never painted in).
       textPocket: textPocketPolicy(),
+      // R41: four or five characters with different relations to the hero.
+      storyCast: storyCastPolicy(),
       // R38: the parent's opening place (쉬운 ① 어디서?), when it is a drawer place.
       ...(storyPlace(wizard.storyPlaceId, state.backgrounds) ? { storyPlace: storyPlace(wizard.storyPlaceId, state.backgrounds) } : {}),
       // R33: the story's shape and stage, chosen once here and frozen with the draft.

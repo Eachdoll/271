@@ -129,8 +129,8 @@ test('R37 the outline request: no plot template on a carded draft — the shape 
   assert.match(ecoOutlinePrompt(job.input), /EXPRESSION FOR THIS BOOK/);
   assert.doesNotMatch(ecoOutlinePrompt(job.input), TEMPLATE);
   // The request stays inside the R31b budget.
-  // R39 adds the DRAMA paragraph and the plan's three fields (measured 6,891).
-  assert.ok(rules.length <= 7500, `outline rules ${rules.length}`);
+  // R39 adds the DRAMA paragraph and the plan's three fields (measured 6,891); R40 the pocket, R41 the CAST paragraph (8,228).
+  assert.ok(rules.length <= 9000, `outline rules ${rules.length}`);
 });
 
 test('R37 the writers hear the words and telling cards (beat writer, app prose, K1 writer, eco pages); the K1 line has no plot template; drafts without cards hear none', async () => {

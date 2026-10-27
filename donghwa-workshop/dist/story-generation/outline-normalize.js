@@ -12,6 +12,7 @@ import { settlePicturePlans } from "./picture-plan.js";
 import { settleStoryChange } from "./story-change.js";
 import { settleStoryDrama, settleDramaPlans } from "./story-drama.js";
 import { settlePockets } from "../text-pocket.js";
+import { settleRelations } from "./story-cast.js";
 import { normalizeFailureReason } from "../story-quality/dist/plotCheck.js";
 
 const object = (value) =>
@@ -541,5 +542,7 @@ export function normalizeOutlineResponse(source, input = {}) {
   settleDramaPlans(outline, input);
   // R40: the plan's text pocket.
   settlePockets(outline, input);
+  // R41: the companions' relations.
+  settleRelations(outline, input);
   return { outline, notes: unique(notes) };
 }

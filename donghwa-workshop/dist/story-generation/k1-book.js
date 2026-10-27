@@ -30,6 +30,7 @@ import { pictureLedK1Line } from "../book-format.js";
 import { planOf, picturePlanMapSuffix } from "./picture-plan.js";
 import { storyChangeK1Block, isWordlessEntry } from "./story-change.js";
 import { storyDramaK1Block } from "./story-drama.js";
+import { castK1Block } from "./story-cast.js";
 import { styleReport } from "./style-report.js";
 
 export const K1_POLICY_VERSION = 1;
@@ -182,6 +183,8 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     storyChangeK1Block(outline),
     // R39: the tries' kinds, the companion's want and the flipped refrain (drama outlines only).
     storyDramaK1Block(outline),
+    // R41: the companions' relations.
+    castK1Block(outline, input),
     `[등장인물 — who에는 이 ID만]\n${cast}`,
     `[쪽 배치 — 그대로] ${pagesLine}`,
     `[출력] JSON만. {"cover":"표지 그림을 영어로","pages":[{"pageNo":1,"ko":"한글","en":"English","picture":"그 쪽 그림을 영어로","feeling":"one English word","who":["id"],"timeOfDay":"morning","props":["English prop"]}, …]}`,
