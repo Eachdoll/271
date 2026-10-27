@@ -212,11 +212,11 @@ test('R35 the beat writer: budgets 1–7 with the target following the tension; 
 
 test('R35 pagination lines and the demo: the openings and page rules carry the picture-led line on a picture-led draft only; the picture-led demo paginates into short entries and passes checkStory; the wordy demo is the R12 text', () => {
   const state = setup(), led = draft(state), wordy = draft(state, {bookFormatId: 'wordy'});
-  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /Sentence ranges per entry: a spread Korean 1-7, English 1-3; a single page Korean 1-3, English 1-2\.[^\n]*\nKeep the approved events[^\n]*\nPICTURE-LED: keep each entry's text as short as its beat allows[^\n]*never pad a short beat to fill a range\.\n(?:PICTURE PLAN: [^\n]*\n)?(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?scene\.who/);
+  assert.match(leanOpeningsPaginationRules(led, {cues: ['arrival']}), /Sentence ranges per entry: a spread Korean 1-7, English 1-3; a single page Korean 1-3, English 1-2\.[^\n]*\nKeep the approved events[^\n]*\nPICTURE-LED: keep each entry's text as short as its beat allows[^\n]*never pad a short beat to fill a range\.\n(?:PICTURE PLAN: [^\n]*\n)?(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?(?:ENTRANCE: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /PICTURE-LED/);
   assert.match(leanOpeningsPaginationRules(wordy, {cues: ['arrival']}), /a spread Korean 10-15/);
   const k1 = draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, 'pages');
-  assert.match(leanPaginationRules(k1), /\nPICTURE-LED: [^\n]*\n(?:PICTURE PLAN: [^\n]*\n)?(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?scene\.who/);
+  assert.match(leanPaginationRules(k1), /\nPICTURE-LED: [^\n]*\n(?:PICTURE PLAN: [^\n]*\n)?(?:WORDLESS: [^\n]*\n)?(?:BACKDROP: [^\n]*\n)?(?:COVER: [^\n]*\n)?(?:ENGLISH FOLLOWS KOREAN: [^\n]*\n)?(?:ENTRANCE: [^\n]*\n)?scene\.who/);
   assert.doesNotMatch(leanPaginationRules(draft(state, {koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12, bookFormatId: 'wordy'}, 'pages')), /PICTURE-LED/);
   for (const input of [led, draft(state, {pageCount: 12})]) {
     const outline = demoOutline(input), prose = demoProse(outline, input), pagination = demoPagination(outline, prose, input);

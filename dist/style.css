@@ -5126,6 +5126,10 @@ html:has(.simple-create) {
   color: #757575;
   font-weight: 700;
 }
+/* R42: a pre-R42 draft's wordless entry is named, not counted. */
+.simple-sentence-count.simple-wordless {
+  color: #4a6b7c;
+}
 .simple-pager.simple-pager-bottom {
   margin-bottom: 0;
 }

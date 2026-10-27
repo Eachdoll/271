@@ -1372,6 +1372,7 @@ export async function runFullAuto(
         storyDrama: _freshDrama,
         textPocket: _freshPocket,
         storyCast: _freshCast,
+        englishMirror: _freshMirror,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1427,6 +1428,7 @@ export async function runFullAuto(
         ...(job.input?.textPocket ? { textPocket: clone(job.input.textPocket) } : {}),
         // R41: the job's own cast marker.
         ...(job.input?.storyCast ? { storyCast: clone(job.input.storyCast) } : {}),
+        ...(job.input?.englishMirror ? { englishMirror: clone(job.input.englishMirror) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

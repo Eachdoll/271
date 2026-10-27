@@ -29,7 +29,8 @@ import {hasStoryCast, storyCastPolicy, CAST_TARGET, withCastSchema, castRule, se
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie', 'toto', 'mom'], backgroundIds: ['home', 'beach'], topic: '놀이터에서 자꾸 도망가는 그림자 잡기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
-const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `c-${Object.keys(extra).join('-') || 'default'}`});
+// R43 freezes storyCast {version: 1, entrance: true}; this file keeps testing the R41 contract on an R41 marker (tests/cast-entrance-r43 covers the rest).
+const draft = (state, extra = {}, layout = 'openings') => ({...normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `c-${Object.keys(extra).join('-') || 'default'}`}), storyCast: {version: 1}});
 const dated = (input) => { const copy = structuredClone(input); delete copy.storyCast; return copy; };
 const ctxFor = (state, wizard) => ({getState: () => state, getWizard: () => wizard, setWizard() {}, getDraft: () => null, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''});
 const firstCalls = async (input, outline) => {
@@ -40,16 +41,16 @@ const firstCalls = async (input, outline) => {
 };
 const RELATIONS = [{characterId: 'greenie', relation: '같은 그림자를 먼저 잡고 싶은 라이벌', want: '그림자를 제일 먼저 밟기'}, {characterId: 'toto', relation: '따라 하는 꼬마', want: '유하가 하는 건 다 해 보기'}, {characterId: 'mom', relation: '제 일로 바쁜 어른', want: '빨래를 다 널기'}];
 
-test('R41 the picks and the plan: ② preselects the hero and three friends (the topic\'s picks first, the rest of the drawer after); the auto material plan asks for four or five; every new diet draft freezes storyCast; the model JSON never shows it', () => {
+test('R41 the picks and the plan: ② preselects the hero and the friends the topic calls for (R43: never the rest of the drawer, up to three); the auto material plan asks for four or five; every new diet draft freezes storyCast; the model JSON never shows it', () => {
   const state = setup();
   assert.deepEqual(SIMPLE_MATERIAL_LIMITS, {friends: 6, places: 5, preselectFriends: 3, preselectPlaces: 2});
   assert.deepEqual(CAST_TARGET, {min: 4, max: 5});
   const picks = preselectMaterials(state, {characterIds: ['yuha'], backgroundIds: [], topic: '공룡 친구와 숲으로 소풍'});
-  assert.deepEqual(picks.characterIds, ['yuha', 'greenie', 'toto', 'mom'], 'the dinosaur first (the topic), then the rest of the drawer');
+  assert.deepEqual(picks.characterIds, ['yuha', 'greenie'], 'R43: the dinosaur (the topic) and nobody else from the drawer');
   for (let i = 0; i < 4; i++) state.characters.push({id: `extra-${i}`, name: `친구${i}`, nameEn: `Friend${i}`, kind: 'rabbit', likes: '달'});
   const moon = preselectMaterials(state, {characterIds: ['yuha'], backgroundIds: [], topic: '달 토끼와 놀러 간 날'});
   assert.equal(moon.characterIds.length, 4, 'never more than the hero and three');
-  assert.ok(moon.characterIds.slice(1).every((id) => id === 'toto' || id.startsWith('extra-')), 'the moon rabbits come first');
+  assert.ok(moon.characterIds.slice(1).every((id) => id === 'toto' || id.startsWith('extra-')), 'only the moon rabbits');
   const led = draft(state), old = dated(led);
   assert.deepEqual(led.storyCast, storyCastPolicy());
   assert.equal(hasStoryCast(led), true);
@@ -58,7 +59,7 @@ test('R41 the picks and the plan: ② preselects the hero and three friends (the
   assert.equal('storyCast' in leanVisibleInput(led), false);
   assert.equal(normalizeStoryInput({...led, storyCast: {version: 2}}).storyCast, undefined);
   const job = createFullAutoJob(state, wizardOf({simpleFlow: true}), {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false});
-  assert.deepEqual(job.input.storyCast, storyCastPolicy());
+  assert.deepEqual(job.input.storyCast, storyCastPolicy({entrance: true}), 'R43: a new job freezes the entrance flag');
   assert.match(castPlanRule(led), /^\nCAST SIZE: 4 or 5 characters in all \(the hero and 3–4 companions who relate to the hero in different ways[^\n]*never more than 5\.$/);
   assert.equal(castPlanRule(old), '');
   const pipeline = readFileSync(new URL('../dist/story-generation/pipeline.js', import.meta.url), 'utf8');

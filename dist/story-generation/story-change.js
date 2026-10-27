@@ -11,7 +11,15 @@
  * marker gates the R38 picture rules (picture-plan.js, scene-prompt.js) and
  * the wordless page. Drafts without the marker are unchanged. Pure module. */
 export const STORY_CHANGE_VERSION = 1;
-export const storyChangePolicy = () => ({ version: STORY_CHANGE_VERSION });
+/**
+ * The frozen marker. R42: a new draft freezes {version: 1, wordless: false} —
+ * the parent on a finished draft: "there is a blank page" (the turn opening
+ * had no words at all). Drafts frozen before R42 carry {version: 1} and keep
+ * the one wordless entry they were asked for.
+ */
+export const storyChangePolicy = ({ wordless } = {}) => ({ version: STORY_CHANGE_VERSION, ...(wordless === false ? { wordless: false } : {}) });
+/** normalizeStoryInput keeps the marker as it was frozen (the wordless flag included). */
+export const storyChangeRef = (value) => (value && typeof value === "object" && value.version === STORY_CHANGE_VERSION ? storyChangePolicy({ wordless: value.wordless === false ? false : undefined }) : null);
 export const hasStoryChange = (input) => input?.storyChange?.version === STORY_CHANGE_VERSION && input?.promptDiet?.version === 1;
 export const ENDING_KINDS = Object.freeze(["echo", "open"]);
 const str = (value, max = 200) =>
@@ -112,15 +120,17 @@ export function pageBookVoiceLine(input, lang = "ko") {
     : "Not every page is the child speaking: let a narrator's line, a sound, or a returning line with one word changed carry some pages.";
 }
 /** The pagination (and K1 writer) line that allows one wordless entry. */
+/** A picture-led R38 book may leave one middle entry without words unless the draft froze wordless: false (R42: every new draft). */
+export const allowsWordless = (input) => hasStoryChange(input) && pictureLedBook(input) && input.storyChange.wordless !== false;
 export function wordlessRule(input, { k1 = false } = {}) {
-  if (!hasStoryChange(input) || !pictureLedBook(input)) return "";
+  if (!allowsWordless(input)) return "";
   return k1
     ? "말 없는 쪽: 그림이 말하는 비트(그림 계획 carrier가 picture)의 쪽 하나는 ko와 en을 빈 글(\"\")로 두어도 돼요 — 책에 한 쪽만, 첫 쪽과 마지막 쪽은 아니에요."
     : 'WORDLESS: one entry in the middle of the book whose beat is told by its picture (picturePlan carrier "picture") may carry no text at all — return "" for textKo and textEn there. At most one such entry; never the first or the last.';
 }
 /** The pagination request schema lets the text fields be empty (the validator decides which entry may be). */
 export function withWordlessSchema(schema, input) {
-  if (!hasStoryChange(input) || !pictureLedBook(input)) return schema;
+  if (!allowsWordless(input)) return schema;
   const page = schema?.properties?.pages?.items?.properties;
   if (!page) return schema;
   for (const key of ["textKo", "textEn"]) if (page[key] && typeof page[key] === "object") page[key] = { ...page[key], minLength: 0 };
@@ -137,7 +147,7 @@ const carrierOf = (outline, beatIndex) => {
  * entry in the book (a second blank entry is a missing text, as before).
  */
 export function isWordlessEntry(page, index, pages, outline, input) {
-  if (!hasStoryChange(input) || !pictureLedBook(input)) return false;
+  if (!allowsWordless(input)) return false;
   const list = Array.isArray(pages) ? pages : [];
   if (!page || index <= 0 || index >= list.length - 1) return false;
   if (!blank(page.textKo ?? page.ko) || !blank(page.textEn ?? page.en)) return false;

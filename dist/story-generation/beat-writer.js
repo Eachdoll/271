@@ -48,6 +48,7 @@ import { planOf, picturePlanWriterLine } from "./picture-plan.js";
 import { storyChangeWriterLine } from "./story-change.js";
 import { storyDramaWriterLine } from "./story-drama.js";
 import { castWriterLine } from "./story-cast.js";
+import { hasEnglishMirror, mirrorWriterSystem, mirrorWriterBlock } from "./english-mirror.js";
 
 export const BEAT_WRITER_ATTEMPTS = 3; // two retries
 export const SUMMARY_SWITCH_TOKENS = 4000;
@@ -258,6 +259,8 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     refrainBeats = new Set(list(outline.refrain?.usedAtBeats).map(Number)),
     bible = object(outline.bible) ? outline.bible : null,
     lean = hasPromptDiet(input),
+    // R42: the English of a beat is written after its Korean, from it.
+    mirror = hasEnglishMirror(input),
     map = mapLines(outline, briefs, lean),
     last = beats.at(-1),
     lastRow = list(outline.plotContract?.beats).find((c) => Number(c.beatIndex) === Number(last?.index)) || {},
@@ -275,7 +278,7 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
   // R31e: on the diet every attempt is logged (sentences, words per sentence, problems), so a paid run shows why it retried.
   const report = { attempts: {}, warnings: [], anchor: {}, summarized: false, calls: 0, budget: budgetLimit, ...(lean ? { attemptLog: {} } : {}) };
   const spent = () => journal.paid.length;
-  const write = async (lang, beat, i, { written, anchor, retry = null, draft = 0 }) => {
+  const write = async (lang, beat, i, { written, anchor, retry = null, draft = 0, koText = "" }) => {
     const spec = input.specs?.[lang] || {},
       budget = budgets[i][lang],
       brief = briefs.find((row) => Number(row?.beatIndex) === Number(beat.index)),
@@ -287,13 +290,16 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     const system = `${
       ko
         ? `너는 ${spec.id || "어린이"} 단계 한국어 그림책 작가다. 다정한 이야기꾼의 말투로, 보이는 것·들리는 것·손으로 하는 일을 짧은 문장으로 쓴다. 이번에는 한 비트의 글만 쓴다. 비트 번호·제목·설명은 쓰지 않는다. JSON으로만 답한다.`
-        : `You are a picture-book author writing original English at ${spec.id || "the frozen level"}. Write only this one beat's story text in short, concrete sentences a young child can follow; never a translation of Korean. No beat numbers, labels or notes. Reply in JSON only.`
+        : mirrorWriterSystem(input, spec.id) ||
+          `You are a picture-book author writing original English at ${spec.id || "the frozen level"}. Write only this one beat's story text in short, concrete sentences a young child can follow; never a translation of Korean. No beat numbers, labels or notes. Reply in JSON only.`
     }${rules.common ? `\n${rules.common}` : ""}${rules[lang] ? `\n${rules[lang]}` : ""}`;
     const user = [
       `[전체 지도 — 모든 비트(목표·결과·긴장)]\n${map}`,
       `[결말 상태] ${ending}`,
       bible?.growth ? `[성장 설계] want ${bible.growth.want} → need ${bible.growth.need} (걸림돌 ${bible.growth.flaw}); 교훈은 말하지 않고 행동으로: ${bible.lesson || ""}` : "",
       `[이번 비트] ${beat.index} ${beat.type}: ${str(beat.summary, 500)}${list(outline.tension)[i] !== undefined ? ` · 목표 긴장 ${outline.tension[i]}` : ""}`,
+      // R42: the English call gets this beat's finished Korean and follows it.
+      ko ? "" : mirrorWriterBlock(input, koText),
       // R36: who tells this beat (a picture-led diet draft's plan) — permission to leave the picture's part unsaid.
       lean ? picturePlanWriterLine(planOf(outline, beat.index), lang) : "",
       // R38: the expectation, the turn and what the ending shows (outlines with a change line only).
@@ -399,41 +405,43 @@ export async function writeProseByBeat(outline, input, options = {}, services = 
     for (let i = 0; i < beats.length; i++) {
       const beat = beats[i];
       options.onProgress?.({ stage: "prose", phase: "beat", message: `정성 모드 · ${i + 1}/${beats.length}비트를 쓰고 있어요.`, beatIndex: beat.index });
-      await Promise.all(
-        languages.map(async (lang) => {
-          const ctx = { written: written[lang], anchor: anchors[lang] || "" };
-          let chosen;
-          if (i === 0) {
-            // The style anchor: two drafts, then the better voice.
-            const [a, b] = await Promise.all([write(lang, beat, i, { ...ctx, draft: 1 }), write(lang, beat, i, { ...ctx, draft: 2 })]);
-            const passA = !a.check.problems.length,
-              passB = !b.check.problems.length;
-            // One passes: that one. Both fail: the closer one (it goes on to the retries).
-            let pick = passA !== passB ? (passA ? 1 : 2) : a.check.distance <= b.check.distance ? 1 : 2;
-            if (passA && passB) {
-              const sniff = await journal.call(
-                "cheap",
-                {
-                  system: "너는 그림책 편집자다. 같은 첫 장면의 두 초안 중 이 책 전체의 목소리로 삼을 글을 고른다. 기준: 아이 귀에 리듬이 살아 있는가, 보이고 들리는 구체가 있는가, 말맛, 목표 분량에 가까운가. JSON으로만.",
-                  user: `[목표] ${budgets[0][lang].target}문장 안팎\n\n[초안 1]\n${a.text}\n\n[초안 2]\n${b.text}\n\n[출력] JSON만. {"pick":1|2,"reason":"한 줄"}`,
-                  jsonSchema: PICK_SCHEMA,
-                  temperature: 0.1,
-                  maxTokens: 200,
-                },
-                services,
-              );
-              const data = sniff?.json !== undefined ? sniff.json : parseJsonLenient(String(sniff?.text || ""));
-              if (Number(data?.pick) === 1 || Number(data?.pick) === 2) pick = Number(data.pick);
-              report.anchor[lang] = { pick, reason: str(data?.reason, 200), judged: true };
-            } else report.anchor[lang] = { pick, judged: false };
-            chosen = await settle(lang, beat, i, ctx, pick === 1 ? a : b);
-            anchors[lang] = chosen.text;
-          } else chosen = await settle(lang, beat, i, ctx, await write(lang, beat, i, ctx));
-          // Never an empty paragraph: an empty beat keeps its outline line, with a warning.
-          if (!chosen.text) report.warnings.push(`${lang === "ko" ? "한글" : "영어"} ${beat.index}비트: 글이 비어 줄거리 문장으로 채웠어요`);
-          written[lang].push({ beatIndex: beat.index, text: chosen.text || str(beat.summary, 600) || "…" });
-        }),
-      );
+      const writeLanguage = async (lang) => {
+        // R42: the English of a mirrored draft is written from this beat's Korean (already written).
+        const ctx = { written: written[lang], anchor: anchors[lang] || "", koText: mirror && lang === "en" ? written.ko[i]?.text || "" : "" };
+        let chosen;
+        if (i === 0) {
+          // The style anchor: two drafts, then the better voice.
+          const [a, b] = await Promise.all([write(lang, beat, i, { ...ctx, draft: 1 }), write(lang, beat, i, { ...ctx, draft: 2 })]);
+          const passA = !a.check.problems.length,
+            passB = !b.check.problems.length;
+          // One passes: that one. Both fail: the closer one (it goes on to the retries).
+          let pick = passA !== passB ? (passA ? 1 : 2) : a.check.distance <= b.check.distance ? 1 : 2;
+          if (passA && passB) {
+            const sniff = await journal.call(
+              "cheap",
+              {
+                system: "너는 그림책 편집자다. 같은 첫 장면의 두 초안 중 이 책 전체의 목소리로 삼을 글을 고른다. 기준: 아이 귀에 리듬이 살아 있는가, 보이고 들리는 구체가 있는가, 말맛, 목표 분량에 가까운가. JSON으로만.",
+                user: `[목표] ${budgets[0][lang].target}문장 안팎\n\n[초안 1]\n${a.text}\n\n[초안 2]\n${b.text}\n\n[출력] JSON만. {"pick":1|2,"reason":"한 줄"}`,
+                jsonSchema: PICK_SCHEMA,
+                temperature: 0.1,
+                maxTokens: 200,
+              },
+              services,
+            );
+            const data = sniff?.json !== undefined ? sniff.json : parseJsonLenient(String(sniff?.text || ""));
+            if (Number(data?.pick) === 1 || Number(data?.pick) === 2) pick = Number(data.pick);
+            report.anchor[lang] = { pick, reason: str(data?.reason, 200), judged: true };
+          } else report.anchor[lang] = { pick, judged: false };
+          chosen = await settle(lang, beat, i, ctx, pick === 1 ? a : b);
+          anchors[lang] = chosen.text;
+        } else chosen = await settle(lang, beat, i, ctx, await write(lang, beat, i, ctx));
+        // Never an empty paragraph: an empty beat keeps its outline line, with a warning.
+        if (!chosen.text) report.warnings.push(`${lang === "ko" ? "한글" : "영어"} ${beat.index}비트: 글이 비어 줄거리 문장으로 채웠어요`);
+        written[lang].push({ beatIndex: beat.index, text: chosen.text || str(beat.summary, 600) || "…" });
+      };
+      // R42: Korean first, then English from it; drafts without the marker keep the two in parallel.
+      if (mirror) for (const lang of languages) await writeLanguage(lang);
+      else await Promise.all(languages.map(writeLanguage));
     }
     const prose = {
       ko: "",

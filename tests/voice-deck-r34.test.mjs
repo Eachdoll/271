@@ -31,7 +31,8 @@ const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie'], background
 const legacy = (input) => { const copy = structuredClone(input); delete copy.promptDiet; return copy; };
 const firstCalls = async (input, outline, {k1 = false} = {}) => {
   const calls = [];
-  const engine = {id: 'openai', async complete(req) { calls.push(req); throw new Error('stop after the first request'); }};
+  // R42: the Korean beat and the anchor sniff are answered so the English request (now written after the Korean) is issued too.
+  const engine = {id: 'openai', async complete(req) { calls.push(req); if (/첫 장면의 두 초안/u.test(String(req.system))) return {json: {pick: 1, reason: 'r'}, usage: {input: 1, output: 1}, meta: {requests: 1}}; if (/그림책 작가다/u.test(String(req.system))) return {json: {text: '유하가 숲길을 걸어요. 바람이 살랑 불어요.'}, usage: {input: 1, output: 1}, meta: {requests: 1}}; throw new Error('stop after the first request'); }};
   await generateProse(outline, input, {engine, qualityEngines: {beatWriter: engine, cheap: engine}, ...(k1 ? {} : {})}).catch(() => {});
   return calls;
 };

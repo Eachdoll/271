@@ -1,0 +1,31 @@
+{
+  "requestedRange": "a204d49..6e13c38",
+  "actualDiff": "148cd29..e0f34f6",
+  "files": [
+    "CLAUDE.md",
+    "CODEX_WORK_ORDER_R42_2026-10-27.md",
+    "CODEX_WORK_ORDER_R43_2026-10-27.md",
+    "PICTURE_LED_DIRECTION_2026-10-24.md",
+    "dist/full-auto.js",
+    "dist/simple-create.js",
+    "dist/story-generation/beat-writer.js",
+    "dist/story-generation/english-mirror.js",
+    "dist/story-generation/k1-book.js",
+    "dist/story-generation/pipeline.js",
+    "dist/story-generation/prompt-diet.js",
+    "dist/story-generation/story-cast.js",
+    "dist/story-generation/story-change.js",
+    "dist/story-generation/ui.js",
+    "dist/style.css",
+    "dist/sw.js",
+    "tests/cast-entrance-r43.test.mjs",
+    "tests/english-mirror-r42.test.mjs",
+    "tests/openings-legacy-r12.test.mjs",
+    "tests/openings-policy-r12.test.mjs",
+    "tests/picture-led-r35.test.mjs",
+    "tests/picture-plan-r36.test.mjs",
+    "tests/story-cast-r41.test.mjs",
+    "tests/story-change-r38.test.mjs",
+    "tests/voice-deck-r34.test.mjs"
+  ]
+}
