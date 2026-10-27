@@ -12,6 +12,7 @@ import { picturePlanNote } from "./story-generation/picture-plan.js";
 import { storyChangeSummary } from "./story-generation/story-change.js";
 import { storyDramaSummary, isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
 import { pocketText, isShout } from "./text-pocket.js";
+import { castSummary, CAST_TARGET } from "./story-generation/story-cast.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
@@ -346,7 +347,8 @@ const RESUMABLE = ["ready", "running", "paused", "failed", COUNCIL_REVIEW_STATUS
 // (plus the home); the topic still preselects only two of each.
 const MAX_FRIENDS = 6,
   MAX_PLACES = 5,
-  PRESELECT_FRIENDS = 2,
+  // R41: the hero and three friends by default (the parent asked for four or five characters).
+  PRESELECT_FRIENDS = 3,
   PRESELECT_PLACES = 2,
   MAX_RESUME_CARDS = 2,
   /** R9-B2 rule 3: at most 12 visible buttons per simple step. */
@@ -475,10 +477,9 @@ export function preselectMaterials(state, wizard) {
     protagonist =
       wizard.characterIds?.find((id) => characters.some((c) => c.id === id)) ||
       characters[0]?.id,
-    friends = recommendFriends(
-      topic,
-      characters.filter((c) => c.id !== protagonist),
-    ).slice(0, PRESELECT_FRIENDS),
+    others = characters.filter((c) => c.id !== protagonist),
+    // R41: the topic's picks first, then the rest of the drawer in order, up to the preselect count.
+    friends = [...new Set([...recommendFriends(topic, others), ...others.map((c) => c.id)])].slice(0, PRESELECT_FRIENDS),
     home = backgrounds.find(isHomeBackground),
     places = [
       ...new Set([
@@ -676,7 +677,7 @@ function renderEcoStep(ctx, w, job) {
       .map(([label, cls]) => `<li class="${cls}">${label}</li>`)
       .join(""),
     outlineBlock = job.outline
-      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p>${[storyChangeSummary(job.outline), storyDramaSummary(job.outline)].filter(Boolean).map((line) => `<p><small class="simple-plan-note">${esc(line)}</small></p>`).join("")}<ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
+      ? `<details class="simple-eco-outline"><summary>받은 줄거리 · ${esc(job.outline.titleCandidates?.[0] || "")}</summary><p>${esc(job.outline.logline || "")}</p>${[storyChangeSummary(job.outline), storyDramaSummary(job.outline), castSummary(job.outline, job.input)].filter(Boolean).map((line) => `<p><small class="simple-plan-note">${esc(line)}</small></p>`).join("")}<ol>${beats.map((b) => `<li>${esc(b.summary || "")}${picturePlanNote(b.picturePlan) ? `<br><small class="simple-plan-note">그림 계획 · ${esc(picturePlanNote(b.picturePlan))}</small>` : ""}</li>`).join("")}</ol></details>`
       : "",
     errorList = errors.length
       ? `<ul class="check-issues simple-eco-errors">${errors.map((e) => `<li class="check-violation">${esc(e)}</li>`).join("")}</ul>`
@@ -1331,6 +1332,8 @@ function shapeStageLine(job) {
     storyChangeSummary(job?.outline),
     // R39: the tries' kinds, the secret and the companion's want.
     storyDramaSummary(job?.outline),
+    // R41: the companions' relations.
+    castSummary(job?.outline, job?.input),
   ]
     .filter(Boolean)
     .join(" · ");

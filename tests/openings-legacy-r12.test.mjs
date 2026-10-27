@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -730,7 +730,9 @@ const PINS = {
   // (dump-diffed against e7acbbf). e7acbbf: a0a4c680…be50.
   // 글 자리 (R40): every new diet draft's input carries textPocket {version: 1};
   // nothing else differs (dump-diffed against d32637a). d32637a: 94fd565f…5428.
-  inputs: '0ac45dd519cece2d3d88fb9728098ce91b9924ae83b4f969cffe9bdd1697ae67',
+  // 등장인물의 관계 (R41): every new diet draft's input carries storyCast {version: 1};
+  // nothing else differs (dump-diffed against d758366). d758366: 0ac45dd5…ae67.
+  inputs: '3a307f473fe88eacac6313027cce0fae691fccd3032c00e89aabe858bac8a911',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -796,7 +798,9 @@ const PINS = {
   // e7acbbf). e7acbbf: 1f580902…2ef0.
   // 글 자리 (R40): the two demo jobs' inputs carry textPocket; nothing else
   // differs (dump-diffed against d32637a). d32637a: 90d7df73…3d871.
-  fullAutoDemo: '629d051353d6bf832a7029a5df29934d0230d5d09af693595615800ef19fdd6a',
+  // 등장인물의 관계 (R41): the two demo jobs' inputs carry storyCast; nothing else
+  // differs (dump-diffed against d758366). d758366: 629d0513…dd6a.
+  fullAutoDemo: '73a225cf12ef16f4a7e31d3b4520e4f6e1fd212afdf00b75c5c8d68ecdfa172f',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

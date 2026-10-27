@@ -21,6 +21,7 @@ import { storyShapeDirection } from "./story-shapes.js";
 import { stageDirection } from "./stage-categories.js";
 import { compositionDirection } from "../book-format.js";
 import { hasStoryDrama, dramaPitchProperties, dramaPitchInstructions, normalizeDramaPitch, pitchRepeatsTry } from "./story-drama.js";
+import { castPitchInstructions } from "./story-cast.js";
 import { headNoun } from "../story-quality/dist/banList.js";
 import {
   hasOrchestrationPolicy,
@@ -601,7 +602,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     range = tensionRange(input),
     // R39: a drama draft's pitches name their try kinds, secret and companion.
     drama = hasStoryDrama(input),
-    dramaNote = drama ? `\n${dramaPitchInstructions(attempts)}` : "",
+    dramaNote = `${drama ? `\n${dramaPitchInstructions(attempts)}` : ""}${castPitchInstructions(input) ? `\n${castPitchInstructions(input)}` : ""}`,
     CANDIDATE_SCHEMA = orchestrated
       ? strict({ pitch: strict({ ...pitchSchema(attempts, drama).properties, ...candidateSchemaProperties(beats) }) })
       : null,
