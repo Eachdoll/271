@@ -1370,6 +1370,7 @@ export async function runFullAuto(
         storyChange: _freshChange,
         storyPlace: _freshPlace,
         storyDrama: _freshDrama,
+        textPocket: _freshPocket,
         ...preparedInput
       } = prepared.input;
       // R31a: a job saved before the topic ending keeps its own ending.
@@ -1421,6 +1422,8 @@ export async function runFullAuto(
         ...(job.input?.storyPlace ? { storyPlace: clone(job.input.storyPlace) } : {}),
         // R39: the job's own drama marker.
         ...(job.input?.storyDrama ? { storyDrama: clone(job.input.storyDrama) } : {}),
+        // R40: the job's own text-pocket marker.
+        ...(job.input?.textPocket ? { textPocket: clone(job.input.textPocket) } : {}),
         backgrounds: prepared.input.backgrounds.filter((b) =>
           job.plan.backgroundIds.includes(b.id),
         ),

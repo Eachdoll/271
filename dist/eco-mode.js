@@ -58,6 +58,7 @@ import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
 import { expressionWriterLine } from "./story-generation/expression-deck.js";
 import { pageBookVoiceLine, withWordlessSchema } from "./story-generation/story-change.js";
 import { withBackdropSchema, isTextOnlyPage, plainBackdropFor } from "./story-generation/story-drama.js";
+import { pocketOf, pocketPromptLine } from "./text-pocket.js";
 import { planOf, picturePlanPictureLine } from "./story-generation/picture-plan.js";
 
 export const ECO_VERSION = 1;
@@ -469,6 +470,8 @@ export function ecoPicturePrompt(state, book, index = 0, { cover = false } = {})
       : `The moment to draw: ${action}.${scene.emotion ? ` Feeling: ${text(scene.emotion)}.` : ""}${scene.timeOfDay ? ` Time of day: ${text(scene.timeOfDay)}.` : ""}${Array.isArray(scene.props) && scene.props.length ? ` Show these things: ${scene.props.map(text).filter(Boolean).join(", ")}.` : ""}`,
     // R36: the composition planned with the story (shown to the parent, who draws or prompts it).
     cover ? "" : picturePlanPictureLine(planOf(book.outline, page.beatIndex)),
+    // R40: the flat field the words are typeset on.
+    !cover && pocketOf(book, page) ? pocketPromptLine(planOf(book.outline, page.beatIndex)) : "",
     // R39: a plain-backdrop page (a thought, a monologue) has no place at all.
     !cover && plainBackdropFor(book, page) ? "No place in this picture: the character alone on a flat single-colour background with big quiet empty space — a thought or a line spoken to the reader. No room, no ground, no scenery." : "",
     cover ? "" : `The entry reads — Korean: 「${text(page.ko ?? page.textKo)}」 English: “${text(page.en ?? page.textEn)}”. Draw the moment, not the words.`,

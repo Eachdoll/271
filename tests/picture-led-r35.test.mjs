@@ -170,7 +170,7 @@ test('R35 the outline request carries the composition (one moment per beat, thre
   assert.match(wordyRules, /Each beat summary is two or three concrete sentences a picture could show/);
   assert.doesNotMatch(wordyRules, /PICTURE-LED/);
   // (R36 adds the PICTURE PLAN paragraph to a picture-led request; picture-plan-r36 tests it.)
-  assert.equal(wordyRules, rules.replace(/Each beat summary is one or two concrete sentences: the single moment its picture shows/, 'Each beat summary is two or three concrete sentences a picture could show').replace(/\nPICTURE-LED BOOK: [^\n]*\n/, '\n').replace(/PICTURE PLAN: [^\n]*\n/, '').replace(/PICTURE PLAN, three more fields: [^\n]*\n/, ''), 'the two requests differ in those places only (R39 adds the plan\'s three fields to the picture-led one)');
+  assert.equal(wordyRules, rules.replace(/Each beat summary is one or two concrete sentences: the single moment its picture shows/, 'Each beat summary is two or three concrete sentences a picture could show').replace(/\nPICTURE-LED BOOK: [^\n]*\n/, '\n').replace(/PICTURE PLAN: [^\n]*\n/, '').replace(/PICTURE PLAN, three more fields: [^\n]*\n/, '').replace(/PICTURE PLAN, where the words sit: [^\n]*\n/, ''), 'the two requests differ in those places only (R39 adds the plan\'s three fields to the picture-led one, R40 the pocket)');
   assert.match(directionLine(led), /책 결: 그림책 결 — 펼침마다 글은 몇 문장뿐이고[^\n]*하나가 달라져요\.$/);
   assert.doesNotMatch(directionLine(wordy), /책 결/);
   assert.equal(compositionDirection(wordy), '');
@@ -279,6 +279,6 @@ test('R35 the screens: ① offers 책 결 with 그림책 결 selected, the forma
   assert.match(renderStoryQualityPlan({outline, input}), /책 결 · 그림책 결 — 글은 짧게, 그림이 말해요<br>이야기 모양 · [^<]+<br>문체 · [^<]+<br>표현 · /);
   assert.match(renderStoryQualityPlan({outline, input: draft(state, {bookFormatId: 'wordy'})}), /책 결 · 글이 많은 책<br>/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v8[1-9]";/, 'v81 or later');
+  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[1-9]|9[0-9])";/, 'v81 or later');
   assert.match(sw, /"\.\/book-format\.js",/);
 });

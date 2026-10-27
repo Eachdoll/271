@@ -17,6 +17,7 @@ import { isPictureLed } from "../book-format.js";
 import { expressionOf, expressionFrameLine } from "./expression-deck.js";
 import { hasStoryChange } from "./story-change.js";
 import { dramaPlanPictureParts, dramaPlanNoteParts, hasStoryDrama } from "./story-drama.js";
+import { hasTextPocket, pocketNotePart } from "../text-pocket.js";
 
 export const PICTURE_PLAN_VERSION = 1;
 export const CARRIERS = Object.freeze(["words", "picture", "both", "contrast"]);
@@ -76,6 +77,8 @@ export function normalizePicturePlan(plan, input) {
   if (openingsOf(input) && UNITS.includes(unit)) out.unit = unit;
   // R39: a drama draft's focus, secret placement and backdrop travel on (settleDramaPlans cleans and caps them).
   if (hasStoryDrama(input)) for (const key of ["focus", "secret", "backdrop"]) if (str(plan[key], 120)) out[key] = str(plan[key], 120);
+  // R40: and the text pocket (settlePockets cleans it).
+  if (hasTextPocket(input) && str(plan.pocket, 20)) out.pocket = str(plan.pocket, 20);
   // A plan that says neither who tells the beat nor what the picture shows is no plan.
   return out.carrier || out.picture ? { version: PICTURE_PLAN_VERSION, ...out } : null;
 }
@@ -190,6 +193,8 @@ export function picturePlanNote(plan) {
     plan.hook ? `넘김 · ${plan.hook}` : "",
     // R39: the eye's landing place, the secret's corner, a plain or text-only beat.
     ...dramaPlanNoteParts(plan),
+    // R40: where the words sit.
+    pocketNotePart(plan),
   ]
     .filter(Boolean)
     .join(" / ");

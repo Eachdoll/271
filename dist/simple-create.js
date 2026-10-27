@@ -11,6 +11,7 @@ import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } f
 import { picturePlanNote } from "./story-generation/picture-plan.js";
 import { storyChangeSummary } from "./story-generation/story-change.js";
 import { storyDramaSummary, isTextOnlyPage, textOnlyTint } from "./story-generation/story-drama.js";
+import { pocketText, isShout } from "./text-pocket.js";
 import { styleReport, styleSummaryLine } from "./story-generation/style-report.js";
 import { activeCharacters, activeBackgrounds } from "./management.js";
 import {
@@ -1812,7 +1813,7 @@ function renderReviewStep(ctx, w) {
   const art = textOnly
     ? `<div class="text-only-art simple-text-only${openings ? ` simple-empty-${kind}` : ""}" style="background:${textOnlyTint(index)}"><p class="text-only-words">${esc(page.ko ?? page.textKo ?? page.en ?? page.textEn ?? "")}</p><p class="small-label">그림 없이 글만 있는 쪽 — 이야기가 잠시 멈춰 생각하는 자리예요.</p></div>`
     : image
-    ? `${illustration(book, index)}${isPageTextEdited(page) ? `<p class="small-label simple-stale">${eco ? "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 올리기’로 바꿀 수 있어요." : "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요."}</p>` : ""}`
+    ? `${illustration(book, index, { words: { inner: pocketText([{ lang: "ko", text: book.language !== "en" ? (page.ko ?? page.textKo ?? "") : "" }, { lang: "en", text: book.language !== "ko" ? (page.en ?? page.textEn ?? "") : "" }]), shout: isShout([book.language !== "en" ? page.ko ?? page.textKo : "", book.language !== "ko" ? page.en ?? page.textEn : ""]) } })}${isPageTextEdited(page) ? `<p class="small-label simple-stale">${eco ? "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 올리기’로 바꿀 수 있어요." : "글이 바뀌었어요. 지금 그림을 그대로 두었어요 · ‘그림 다시 만들기’로 바꿀 수 있어요."}</p>` : ""}`
     : eco
       ? `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p><p class="small-label">‘그림 프롬프트’를 복사해 그림 AI에게 만들게 하고, 받은 그림을 ‘그림 올리기’로 넣어요.</p></div>`
       : `<div class="image-missing simple-empty-art${openings ? ` simple-empty-${kind}` : ""}"><p>아직 그림이 없어요.</p>${sbtn(openings && kind === "spread" ? "이 펼침면 그림 만들기" : "이 쪽 그림 만들기", "draw-page", "green", editing ? "disabled" : off)}</div>`;

@@ -46,7 +46,8 @@ test('R36 only a picture-led diet draft plans its pictures: the outline schema a
   const beat = outlineRequestSchema(led).properties.beats.items;
   assert.ok(beat.required.includes('picturePlan'));
   // R39: focus, secret and backdrop join the plan.
-  assert.deepEqual(beat.properties.picturePlan.required, ['carrier', 'words', 'picture', 'shot', 'space', 'hook', 'unit', 'focus', 'secret', 'backdrop']);
+  // R40: and the pocket.
+  assert.deepEqual(beat.properties.picturePlan.required, ['carrier', 'words', 'picture', 'shot', 'space', 'hook', 'unit', 'focus', 'secret', 'backdrop', 'pocket']);
   assert.deepEqual(beat.properties.picturePlan.properties.carrier.enum, ['words', 'picture', 'both', 'contrast']);
   assert.equal('picturePlan' in outlineRequestSchema(wordy).properties.beats.items.properties, false);
   assert.equal('picturePlan' in outlineRequestSchema(legacy).properties.beats.items.properties, false);
@@ -182,6 +183,6 @@ test('R36 shown to the parent: the eco picture prompt they copy carries the plan
   assert.equal(picturePlanNote(null), '');
   assert.equal(planOf(outline, 6).carrier, 'picture', 'the turn is told by its picture');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v8[2-9]";/, 'v82 or later');
+  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[2-9]|9[0-9])";/, 'v82 or later');
   assert.match(sw, /"\.\/story-generation\/picture-plan\.js",/);
 });
