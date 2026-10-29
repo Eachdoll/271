@@ -1,0 +1,26 @@
+{
+  "target": "isolated rebuilt Worker and fresh Chromium",
+  "synthetic": true,
+  "parentAccountTouched": false,
+  "realParentPullVerified": false,
+  "paidRequests": [],
+  "pageErrors": [],
+  "mediaDownloads": 7,
+  "imageCount": 7,
+  "bytesPerImage": 33554432,
+  "totalImageBytes": 234881024,
+  "estimatedBase64Characters": 313174708,
+  "pullMilliseconds": 34792,
+  "restored": {
+    "bookCount": 1,
+    "pageCount": 7,
+    "assetBytes": 234881024,
+    "assetCount": 7,
+    "recoveryReason": "before-cloud-pull",
+    "recoveryTitle": "R45 이전 기기 자료 보관 확인",
+    "storageHasInlineImages": true
+  },
+  "readerImageVisible": true,
+  "persisted": true,
+  "passed": true
+}

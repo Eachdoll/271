@@ -1,0 +1,12 @@
+{
+  "requestedRange": "8c61567..6aa61ae",
+  "actualDiff": "033d826..c262f7b",
+  "files": [
+    "CLAUDE.md",
+    "CODEX_WORK_ORDER_R45_2026-10-29.md",
+    "dist/cloud-sync.js",
+    "dist/output.js",
+    "dist/sw.js",
+    "tests/cloud-pull-r45.test.mjs"
+  ]
+}
