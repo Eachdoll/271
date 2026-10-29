@@ -1,4 +1,7 @@
 import { createLibraryBackup, validateImport } from "./output.js";
+import { compactLibrary, librarySizeParts, formatMB } from "./library-compact.js";
+/** R44: the library text the cloud keeps (pictures and sounds are stored apart). Same value as the server's CLOUD_LIMITS.stateBytes. */
+export const CLOUD_STATE_BYTES = 16 * 1024 * 1024;
 import {
   FAMILY_MESSAGES,
   FAMILY_SESSION_HEADER,
@@ -504,12 +507,17 @@ async function cloudSnapshot(state, makeBackup) {
         blob,
       });
   }
+  // R44: the copy sent to the cloud carries no copies of paid journals (usage rows, stage metas, finished jobs).
+  if (backup.snapshot && typeof backup.snapshot === "object") compactLibrary(backup.snapshot);
   const compact = semanticValue(remapIds(backup.snapshot, mapping));
-  if (encoder.encode(JSON.stringify(compact)).byteLength > 8 * 1024 * 1024)
+  const size = encoder.encode(JSON.stringify(compact)).byteLength;
+  if (size > CLOUD_STATE_BYTES) {
+    const { line } = librarySizeParts(compact);
     throw new CloudSyncError(
-      "클라우드 책장 내용은 8MB까지 보관할 수 있어요. 그림·음원 원본은 별도로 보관됩니다.",
+      `클라우드에 저장하지 못했어요. 책장 글 자료가 ${formatMB(size)}로 저장 한도 ${formatMB(CLOUD_STATE_BYTES)}를 넘었어요${line ? ` (큰 곳: ${line})` : ""}. 그림·음원 원본은 따로 보관되니 이 크기에 들어가지 않아요. 책장의 '오래된 작업 기록 정리'를 누르면 줄어들 수 있어요.`,
       "LIBRARY_TOO_LARGE",
     );
+  }
   return {
     state: compact,
     media,

@@ -46,7 +46,7 @@ export function pruneTextJournals(job) {
     }
   return pruned;
 }
-export function cleanupOldWorkRecords(state) {
+export function cleanupOldWorkRecords(state, { compact } = {}) {
   let cleaned = 0;
   for (const job of Object.values(state.fullAutoJobs || {}))
     if (job?.status !== "running" && pruneTextJournals(job)) cleaned++;
@@ -60,6 +60,11 @@ export function cleanupOldWorkRecords(state) {
       finalizeBookRecords(state, book);
       cleaned++;
     }
+  }
+  // R44: the copies of paid journals inside usage records (library-compact.js, passed in to avoid an import cycle).
+  if (typeof compact === "function") {
+    const count = compact(state);
+    cleaned += count.rows + count.metas;
   }
   return cleaned;
 }

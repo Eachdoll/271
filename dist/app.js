@@ -1,3 +1,4 @@
+import { compactLibrary } from "./library-compact.js";
 import { storageStatusView } from "./ui-controls.js";
 import { buildStoryWords } from "./story-reading-context.js";
 import { credentialToastAction } from "./credential-errors.js";
@@ -357,6 +358,8 @@ const typedBackground = (b) => ({
     "forest",
 });
 state.backgrounds = state.backgrounds.map(typedBackground);
+// R44: drop the copies of paid journals that usage records used to carry (saved once the app is up).
+const bootCompaction = storageBlocked ? null : compactLibrary(state);
 // The built-in samples as this load path normalizes them, for the cloud
 // "nothing of the family's here yet" check. Built once, never mutated.
 let sampleLibrary = null;
@@ -908,7 +911,7 @@ function confirmCloudChange(kind) {
         ? pushBookCountWarning(local.bookCount, remote.bookCount)
         : "";
   showModal(
-    `${modalHeader(kind === "push" ? "클라우드에 저장할 자료 확인" : "이 기기로 불러올 자료 확인")}<p class="modal-intro">${kind === "push" ? `이 기기의 책 ${local.bookCount}권·캐릭터 ${local.characterCount}명·배경 ${local.backgroundCount}곳을 로그인한 계정에 저장합니다.` : `클라우드의 책 ${remote.bookCount || 0}권·캐릭터 ${remote.characterCount || 0}명·배경 ${remote.backgroundCount || 0}곳을 이 기기로 불러옵니다.`}</p>${shrink ? '<div class="notice cloud-conflict" role="alert">' : '<div class="notice">'}${shrink ? `<strong>${esc(shrink)}</strong><br>클라우드의 최신 변경을 먼저 확인해 주세요.` : kind === "push" && c.remoteExists ? "현재 클라우드 자료가 이 기기의 내용으로 바뀝니다. 클라우드의 최신 변경을 먼저 확인해 주세요." : kind === "pull" ? "현재 이 기기의 자료는 복구용 보관함에 남긴 뒤 클라우드 내용으로 바뀝니다." : "재료·책·그림·음원을 이 계정의 저장소에 보관합니다."}</div><p id="cloud-action-error" class="text-error"></p><div class="modal-actions">${btn("취소", "close-modal", "outline")}<button type="button" class="btn btn-primary" id="cloud-action-confirm">${kind === "push" ? "이 내용으로 클라우드 저장" : "보관본을 남기고 불러오기"}</button></div>`,
+    `${modalHeader(kind === "push" ? "클라우드에 저장할 자료 확인" : "이 기기로 불러올 자료 확인")}<p class="modal-intro">${kind === "push" ? `이 기기의 책 ${local.bookCount}권·캐릭터 ${local.characterCount}명·배경 ${local.backgroundCount}곳을 로그인한 계정에 저장합니다.` : `클라우드의 책 ${remote.bookCount || 0}권·캐릭터 ${remote.characterCount || 0}명·배경 ${remote.backgroundCount || 0}곳을 이 기기로 불러옵니다.`}</p>${shrink ? '<div class="notice cloud-conflict" role="alert">' : '<div class="notice">'}${shrink ? `<strong>${esc(shrink)}</strong><br>클라우드의 최신 변경을 먼저 확인해 주세요.` : kind === "push" && c.remoteExists ? "현재 클라우드 자료가 이 기기의 내용으로 바뀝니다. 클라우드의 최신 변경을 먼저 확인해 주세요." : kind === "pull" ? "현재 이 기기의 자료는 복구용 보관함에 남긴 뒤 클라우드 내용으로 바뀝니다." : "재료·책·그림·음원을 이 계정의 저장소에 보관합니다."}</div><p id="cloud-action-error" class="text-error" role="alert"></p><div class="modal-actions">${btn("취소", "close-modal", "outline")}<button type="button" class="btn btn-primary" id="cloud-action-confirm">${kind === "push" ? "이 내용으로 클라우드 저장" : "보관본을 남기고 불러오기"}</button></div>`,
     "cloud-confirm",
   );
   document.querySelector("#cloud-action-confirm").onclick = async () => {
@@ -3082,7 +3085,7 @@ async function onAction(e) {
   }
   if (a === "cleanup-work-records") {
     protectedAction(() => {
-      const cleaned = cleanupOldWorkRecords(state);
+      const cleaned = cleanupOldWorkRecords(state, { compact: compactLibrary });
       if (save()) {
         render();
         toast(`작업 기록 ${cleaned}건을 정리했어요. 완성된 책과 진행 중인 작업은 그대로예요.`);
@@ -4431,6 +4434,8 @@ configureStoryQualityUI({
   },
 });
 render();
+// R44: a library the boot compaction shrank is written back once.
+if (bootCompaction && bootCompaction.rows + bootCompaction.metas + bootCompaction.journals > 0) save();
 // R30: once per device after the 정성 모드 beat writer ships, say what changed
 // and what a new story's text now costs (settings show the same estimate).
 try {

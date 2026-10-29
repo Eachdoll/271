@@ -1,4 +1,5 @@
 /* Full Auto is a resumable client-side job. No credentials or engine responses are stored in job inputs. */
+import { compactUsageRow } from "./library-compact.js";
 import { pruneTextJournals } from "./finalize-cleanup.js";
 import {
   generateMaterialPlan,
@@ -693,12 +694,13 @@ export function fullAutoPayload(job) {
 }
 function recordUsage(job, result, callId) {
   if (!result?.usage || result.meta?.requests === 0) return;
-  const row = {
+  // R44: the row keeps tokens, requests, cost and model — never the stage's journals (they live on the job).
+  const row = compactUsageRow({
       ...clone(result.usage),
       ...clone(result.meta || {}),
       callId,
       at: now(),
-    },
+    }),
     index = job.usage.calls.findIndex((c) => c.callId === callId);
   if (index < 0) job.usage.calls.push(row);
   else job.usage.calls[index] = row;
@@ -724,8 +726,8 @@ function recordImage(job, result) {
 function upsertJobUsage(job, row) {
   const calls = ((job.usage ||= { calls: [] }).calls ||= []),
     index = row.callId ? calls.findIndex((c) => c.callId === row.callId) : -1;
-  if (index < 0) calls.push(clone(row));
-  else calls[index] = clone(row);
+  if (index < 0) calls.push(compactUsageRow(clone(row)));
+  else calls[index] = compactUsageRow(clone(row));
 }
 /** Keep a usage row for paid text work done on a FULL AUTO book outside runFullAuto (upsert by callId). */
 export function recordFullAutoBookUsage(state, book, row) {

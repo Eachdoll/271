@@ -1,0 +1,27 @@
+{
+  "requestedRange": "e0f34f6..bf47fa2",
+  "actualDiff": "fe87ccb..8c61567",
+  "files": [
+    "CLAUDE.md",
+    "CODEX_WORK_ORDER_R44_2026-10-29.md",
+    "dist/app.js",
+    "dist/cloud-sync.js",
+    "dist/finalize-cleanup.js",
+    "dist/full-auto.js",
+    "dist/library-compact.js",
+    "dist/story-generation/book-coherence.js",
+    "dist/story-generation/quality-settings.js",
+    "dist/story-generation/ui.js",
+    "dist/sw.js",
+    "server/cloud-api.js",
+    "tests/library-compact-r44.test.mjs"
+  ],
+  "restoredTestFixtures": [
+    {
+      "file": "QA/r33-beach/K2-diet.json",
+      "bytes": 352154,
+      "sha256": "39861d12abd3413b5140b94676467ea569efabd1d05403fa37e6a34cc7f1202b",
+      "source": "8c61567"
+    }
+  ]
+}

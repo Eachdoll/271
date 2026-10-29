@@ -1,3 +1,4 @@
+import { compactUsageRow, compactStageMeta } from "../library-compact.js";
 import { renderCheckboxSwitch } from "../ui-controls.js";
 import { beatCountFor, hardOutlineViolations } from "./schemas.js";
 import { describeReadingViolation } from "../reading-messages.js";
@@ -1853,12 +1854,13 @@ function captureEdits(s) {
 function addUsage(s, result, callId = s.runId) {
   if (result.meta?.requests === 0) return;
   const calls = (s.draft.usage ||= { calls: [] }).calls,
-    row = {
+    // R44: no journals in the usage row (they are on the draft itself).
+    row = compactUsageRow({
       at: new Date().toISOString(),
       ...clone(result.usage || {}),
       ...clone(result.meta || {}),
       ...(callId ? { callId } : {}),
-    },
+    }),
     index = callId ? calls.findIndex((c) => c.callId === callId) : -1;
   if (index >= 0) calls[index] = row;
   else calls.push(row);
@@ -2121,7 +2123,7 @@ async function approvePages(
         ),
       async (result) => {
         d.pagination = result.data;
-        d.paginationMeta = { ...(d.paginationMeta || {}), ...result.meta };
+        d.paginationMeta = compactStageMeta({ ...(d.paginationMeta || {}), ...result.meta });
         recordCoherence(d, result);
         d.storyCheck = result.meta?.checks || d.storyCheck;
         d.richnessCheck = result.meta?.richnessChecks || d.richnessCheck;
@@ -2623,7 +2625,7 @@ async function handleClick(event) {
         () => approvedSceneBriefs(s),
         (r) => {
           d.sceneBriefs = r.data;
-          d.sceneBriefsMeta = r.meta;
+          d.sceneBriefsMeta = compactStageMeta(r.meta);
           d.stage = "outline_ok";
           s.mode = "outline";
         },
@@ -2644,7 +2646,7 @@ async function handleClick(event) {
         (r) => {
           invalidateStoryDetails(d);
           d.sceneBriefs = r.data;
-          d.sceneBriefsMeta = r.meta;
+          d.sceneBriefsMeta = compactStageMeta(r.meta);
           s.mode = "outline";
         },
       );
@@ -2774,7 +2776,7 @@ async function handleClick(event) {
           }),
         (r) => {
           d.pagination = r.data;
-          d.paginationMeta = r.meta;
+          d.paginationMeta = compactStageMeta(r.meta);
           if (r.meta?.revision) d.revision = r.meta.revision;
           recordCoherence(d, r);
           d.storyCheck = r.meta?.checks;
@@ -2809,7 +2811,7 @@ async function handleClick(event) {
           if (d.wizard) d.wizard.pageCount = targetPages;
           snapshot(s, "pagination");
           d.pagination = r.data;
-          d.paginationMeta = r.meta;
+          d.paginationMeta = compactStageMeta(r.meta);
           recordCoherence(d, r);
           d.storyCheck = r.meta?.checks;
           d.richnessCheck = r.meta?.richnessChecks || null;
@@ -2832,7 +2834,7 @@ async function handleClick(event) {
         (r) => {
           snapshot(s, "pagination");
           d.pagination = r.data;
-          d.paginationMeta = r.meta;
+          d.paginationMeta = compactStageMeta(r.meta);
           recordCoherence(d, r);
           d.storyCheck = r.meta?.checks;
           d.richnessCheck = r.meta?.richnessChecks || null;
@@ -2855,7 +2857,7 @@ async function handleClick(event) {
         (r) => {
           snapshot(s, "pagination");
           d.pagination = r.data;
-          d.paginationMeta = r.meta;
+          d.paginationMeta = compactStageMeta(r.meta);
           recordCoherence(d, r);
           d.storyCheck = r.meta?.checks;
           d.richnessCheck = r.meta?.richnessChecks || null;
