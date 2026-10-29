@@ -914,16 +914,15 @@ export function createCloudSync(context) {
         ...(item.kind === "audio" ? { mimeType: item.mimeType } : {}),
       });
     });
-    const candidate = validate(
-      JSON.stringify({
-        format: "donghwa-workshop-library",
-        version: 1,
-        exportedAt: record.updatedAt || new Date().toISOString(),
-        state: record.state,
-        imageAssets: images,
-        audioAssets: audio,
-      }),
-    );
+    // R45: handed over as an object — one string holding every picture as base64 broke the file cap (250MB) and memory.
+    const candidate = validate({
+      format: "donghwa-workshop-library",
+      version: 1,
+      exportedAt: record.updatedAt || new Date().toISOString(),
+      state: clone(record.state),
+      imageAssets: images,
+      audioAssets: audio,
+    });
     check(op);
     // Opening a book during the download saves reading statistics only; those
     // are merged below. Re-hash until no save lands while the digest runs.

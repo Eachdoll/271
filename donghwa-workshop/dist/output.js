@@ -1466,21 +1466,43 @@ export async function exportLibrary(state) {
   };
 }
 
-/** Accepts our ZIP's library.json or a plain state JSON; returns the checked state. */
+const FORBIDDEN_KEYS = ["__proto__", "prototype", "constructor"];
+/** R45: the same key guard as the file reviver, for a backup that arrives already parsed. */
+function assertSafeKeys(value, depth = 0) {
+  if (depth > 200) throw new Error("백업 데이터가 너무 깊어요.");
+  if (Array.isArray(value)) for (const item of value) assertSafeKeys(item, depth + 1);
+  else if (value && typeof value === "object")
+    for (const key of Object.keys(value)) {
+      if (FORBIDDEN_KEYS.includes(key)) throw new Error("허용하지 않는 데이터 키입니다.");
+      assertSafeKeys(value[key], depth + 1);
+    }
+}
+/**
+ * Accepts our ZIP's library.json or a plain state JSON; returns the checked state.
+ * R45: the cloud pull passes its backup as an object ({format, version, state,
+ * imageAssets, audioAssets}) — the 250MB cap is for one file's text, and
+ * joining a cloud library's pictures (up to the 5GB family quota) into one
+ * string refused libraries over ~180MB of pictures. Every check below is the same.
+ */
 export function validateImport(text, { allowStoredAssets = false } = {}) {
-  if (typeof text !== "string" || text.length > MAX_BACKUP_TEXT)
-    throw new Error("250MB 이하의 동화공방 JSON 백업 파일을 선택해 주세요.");
   let parsed;
-  try {
-    parsed = JSON.parse(text, (key, value) => {
-      if (["__proto__", "prototype", "constructor"].includes(key))
-        throw new Error("허용하지 않는 데이터 키입니다.");
-      return value;
-    });
-  } catch {
-    throw new Error(
-      "JSON 백업 파일을 읽을 수 없어요. ZIP을 풀고 library.json을 선택해 주세요.",
-    );
+  if (text && typeof text === "object" && !Array.isArray(text)) {
+    assertSafeKeys(text.state);
+    parsed = text;
+  } else {
+    if (typeof text !== "string" || text.length > MAX_BACKUP_TEXT)
+      throw new Error("250MB 이하의 동화공방 JSON 백업 파일을 선택해 주세요.");
+    try {
+      parsed = JSON.parse(text, (key, value) => {
+        if (FORBIDDEN_KEYS.includes(key))
+          throw new Error("허용하지 않는 데이터 키입니다.");
+        return value;
+      });
+    } catch {
+      throw new Error(
+        "JSON 백업 파일을 읽을 수 없어요. ZIP을 풀고 library.json을 선택해 주세요.",
+      );
+    }
   }
   if (
     parsed?.format &&
