@@ -1,0 +1,23 @@
+{
+  "appTests": 1123,
+  "qualityTests": 85,
+  "mirrorEqual": true,
+  "buildPassed": true,
+  "legacySha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "smokePassed": true,
+  "targetedLocalPassed": true,
+  "syntheticPocketFitPassed": true,
+  "syntheticPocketCount": 16,
+  "originalParentHTMLVerified": false,
+  "sameSideRuleVerified": true,
+  "storyLogicRuleVerified": true,
+  "realFamilySaveVerified": false,
+  "paidCalls": 0,
+  "cache": "donghwa-shell-v97",
+  "sourceChangesBeyondUpstream": 0
+}

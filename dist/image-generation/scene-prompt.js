@@ -86,7 +86,7 @@ export const scenePlanText = (book, page) => picturePlanText(pagePlan(book, page
 const PLAN_SHOT = Object.freeze({ wide: "wide", middle: "medium", close: "closeup" });
 /** R38: the composition sentence that opens a request — the camera and the plan before anything a reference image could suggest. */
 const framedLead = (shot, plan) =>
-  `COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): ${SHOT_TEXT[shot] || SHOT_TEXT.wide}.${plan ? ` ${plan}` : ""} Draw this page from this camera, not from the angle the place reference was painted at. `;
+  `COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): ${SHOT_TEXT[shot] || SHOT_TEXT.wide}.${plan ? ` ${plan}` : ""} Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. `;
 /** The staging a page is drawn with: the planned shot (R36) over the staging rotation. */
 export function effectiveStaging(book, page, { cover = false } = {}) {
   const planned = cover ? null : pagePlan(book, page);
@@ -122,7 +122,8 @@ export function buildScenePrompt({
     plain = plainBackdropFor(book, page, { cover }),
     dramaCover = cover && hasStoryDrama(book.storyInput),
     // R40: the flat field the words are typeset on (never on the cover).
-    pocketLine = !cover && pocketOf(book, page) ? pocketPromptLine(planned) : "",
+    // R47: the field is sized to the page's words.
+    pocketLine = !cover && pocketOf(book, page) ? pocketPromptLine(planned, pocketOf(book, page).share) : "",
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];

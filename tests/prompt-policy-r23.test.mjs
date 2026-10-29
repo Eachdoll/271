@@ -136,7 +136,8 @@ test('R23 the picture request of a policy book: three-line event, two pages of c
   assert.match(full, /LOCKED EVENT AND STATE LEDGER \(scope: entire beat, not every page\): \{"version":1/u);
   assert.match(full, /Preserve the exact doorway silhouette/u);
   assert.match(full, /Earlier page continuity: \[\{"pageNo":1/u);
-  assert.ok(lean.length < full.length / 1.5, `${lean.length} vs ${full.length}`);
+  // R47: the composition lead keeps the place's left-right layout (one sentence longer): 1.5 → 1.4.
+  assert.ok(lean.length < full.length / 1.4, `${lean.length} vs ${full.length}`);
   assert.equal(compactPlotLines(null), '');
 });
 

@@ -29,6 +29,7 @@ import { stageRule } from "./stage-categories.js";
 import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
 import { expressionWriterLine } from "./expression-deck.js";
 import { ideaOutlineBlock, ideaWriterLine, ideaInputFor } from "./idea-deck.js";
+import { storyLogicOutlineRule, storyLogicWriterLine } from "./story-logic.js";
 import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLed } from "../book-format.js";
 import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 import { storyChangeOutlineRule, hasStoryChange, storyPlaceName, pageBookVoiceLine, wordlessRule } from "./story-change.js";
@@ -142,7 +143,7 @@ export function leanOutlineRules(input, { count, attempts, k1 = false, custom = 
     ? "A small, warm want and ONE small obstacle a three-year-old knows (being shy, waiting, a little mishap); solved together or with a little help; ends in joy. No villain, no danger, no tears, no mystery and no hidden clue — the 'turn' is simply the small change of heart or the moment play begins, and 'twist' names it in one plain sentence."
     : "Give the protagonist something they want and a reason it matters to them; let them try in ways that change what happens next; let the story turn at a moment the child can see; end warmly and a little differently from how it began. Surprise is welcome; a formula is not. Humor comes from what the characters do.";
   return `Design the StoryOutline (not page text) with ${count} beats for ${input.pageCount} pages, indexes 1..${count}, in the order setup → want → ${attempts} attempt beat(s) → turn → resolution → close. ${beatSummaryLine(input)}
-${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), dramaPlanRule(input), pocketRule(input), storyChangeOutlineRule(input), storyDramaOutlineRule(input), castRule(input), storyShapeRule(input?.storyShape), ideaOutlineBlock(input), stageRule(input)].filter(Boolean).join("\n")}
+${[shape, compositionRule(input, { k1, attempts }), picturePlanOutlineRule(input), dramaPlanRule(input), pocketRule(input), storyChangeOutlineRule(input), storyDramaOutlineRule(input), storyLogicOutlineRule(input), castRule(input), storyShapeRule(input?.storyShape), ideaOutlineBlock(input), stageRule(input)].filter(Boolean).join("\n")}
 Places: settings[].backgroundId and beat.settingKey are supplied background IDs only. The story happens where the topic puts it${topicPlaces.length ? ` — here ${topicPlaces.join(", ")}` : ""}: open there (${
     changed
       ? "when neither the topic nor the parent names a place, open at a chosen place that is not home; a home ID first only when the topic begins at home or home is the only place chosen"
@@ -192,9 +193,9 @@ export function leanBeatWriterRules(input, outline, briefs = []) {
     common: `Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; a line of dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. Keep the approved events, place and ending of this beat; no spoken lesson.${mood ? ` Atmosphere: ${str(JSON.stringify(mood), 200)}.` : ""}`,
     // R34: the level in a sentence, then what good prose does and this book's own voice (a spark, never counted).
     // R37: a picture-led book's expression cards (words and telling) after the voice.
-    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko"), expressionWriterLine(input, "ko"), ideaWriterLine(idea, "ko"), pageBookVoiceLine(input, "ko")].filter(Boolean).join("\n"),
+    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko"), expressionWriterLine(input, "ko"), ideaWriterLine(idea, "ko"), storyLogicWriterLine(input, "ko"), pageBookVoiceLine(input, "ko")].filter(Boolean).join("\n"),
     // R31e: what the English is for (the paid K2 writer packed every Korean event into two 16-word sentences).
-    en: `${leanLevelLine(input, "en")} ${mirrorWriterRule(input) || "The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons."}${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}${ideaWriterLine(idea, "en") ? ` ${ideaWriterLine(idea, "en")}` : ""}${pageBookVoiceLine(input, "en") ? ` ${pageBookVoiceLine(input, "en")}` : ""}`,
+    en: `${leanLevelLine(input, "en")} ${mirrorWriterRule(input) || "The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons."}${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}${ideaWriterLine(idea, "en") ? ` ${ideaWriterLine(idea, "en")}` : ""}${storyLogicWriterLine(input, "en") ? ` ${storyLogicWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "en") ? ` ${pageBookVoiceLine(input, "en")}` : ""}`,
   };
 }
 /** The app prose path (whole book at once) when no beat writer is used. */
@@ -204,7 +205,7 @@ Write it the way a good picture book sounds read aloud: concrete things a child 
     input?.draftProse ? "\nThis is the final refinement of the supplied local draftProse: keep its events and improve its language inside the level." : ""
   }${input?.storyVoice ? `\n${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}` : ""}${
     expressionWriterLine(input, "ko") ? `\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}` : ""
-  }${ideaWriterLine(input, "ko") ? `\n${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "ko") ? `\n${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}` : ""}`;
+  }${ideaWriterLine(input, "ko") ? `\n${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}` : ""}${storyLogicWriterLine(input, "ko") ? `\n${storyLogicWriterLine(input, "ko")}\n${storyLogicWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "ko") ? `\n${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}` : ""}`;
 }
 
 /*

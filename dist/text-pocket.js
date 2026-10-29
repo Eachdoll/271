@@ -55,18 +55,29 @@ export function settlePockets(outline, input) {
   }
   return outline;
 }
-/** The share of the picture the field takes: a beat told by its words gets more. */
-export const pocketShare = (plan, side) => {
-  const words = plan?.carrier === "words";
-  return side === "top" || side === "bottom" ? (words ? 0.4 : 0.3) : words ? 0.45 : 0.34;
+/**
+ * The share of the picture the field takes: a beat told by its words gets
+ * more. R47: given the page's words, a longer page gets a bigger field (the
+ * parent's bilingual K2 book had three sentences in each language in a 30%
+ * band, and the Korean, set after the English, was cut off on 12 of 15
+ * pages). Korean letters count one each, Latin letters half.
+ */
+export const pocketShare = (plan, side, texts = null) => {
+  const words = plan?.carrier === "words",
+    band = side === "top" || side === "bottom",
+    base = band ? (words ? 0.4 : 0.3) : words ? 0.45 : 0.34;
+  if (!Array.isArray(texts)) return base;
+  const units = texts.reduce((sum, text) => sum + [...String(text ?? "")].reduce((n, ch) => n + (/[\u3131-\uD7A3]/u.test(ch) ? 1 : 0.5), 0), 0),
+    need = units <= 40 ? 0 : units <= 80 ? (band ? 0.4 : 0.42) : units <= 120 ? 0.45 : band ? 0.5 : 0.45;
+  return Math.max(base, need);
 };
 const PART = Object.freeze({ left: "the left", right: "the right", top: "the top", bottom: "the bottom" });
 const pct = (share) => `${Math.round(share * 100)}%`;
-/** The picture request's sentence (empty without a pocket). */
-export function pocketPromptLine(plan) {
+/** The picture request's sentence (empty without a pocket); R47: the share sized to the page's words when given. */
+export function pocketPromptLine(plan, sized = null) {
   const side = object(plan) && SIDES.includes(plan.pocket) ? plan.pocket : null;
   if (!side) return "";
-  const share = pocketShare(plan, side),
+  const share = Number(sized) > 0 ? Number(sized) : pocketShare(plan, side),
     axis = side === "top" || side === "bottom" ? "height" : "width";
   return `TEXT FIELD: leave ${PART[side]} ${pct(share)} of the picture's ${axis} as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.`;
 }
@@ -75,7 +86,14 @@ export function pocketOf(book, page) {
   if (!hasTextPocket(book?.storyInput) || !page || page.backdrop === "none") return null;
   const beat = list(book?.outline?.beats).find((row) => Number(row?.index) === Number(page?.beatIndex ?? page?.scene?.beatIndex)),
     plan = object(beat?.picturePlan) ? beat.picturePlan : null;
-  return plan && SIDES.includes(plan.pocket) ? { side: plan.pocket, share: pocketShare(plan, plan.pocket) } : null;
+  if (!plan || !SIDES.includes(plan.pocket)) return null;
+  // R47: a page whose picture exists keeps the field that picture was asked to leave (its own request says so);
+  // otherwise the field is sized to the words the book prints on this page.
+  const drawn = /TEXT FIELD: leave the (?:left|right|top|bottom) (\d{1,3})% /u.exec(String(page.imageMeta?.prompt || ""));
+  if (drawn && Number(drawn[1]) > 0 && Number(drawn[1]) <= 100) return { side: plan.pocket, share: Number(drawn[1]) / 100 };
+  const language = book?.language,
+    texts = [language !== "en" ? page.ko ?? page.textKo ?? "" : "", language !== "ko" ? page.en ?? page.textEn ?? "" : ""];
+  return { side: plan.pocket, share: pocketShare(plan, plan.pocket, texts) };
 }
 /** The parent's note part. */
 export const pocketNotePart = (plan) => (object(plan) && SIDES.includes(plan.pocket) ? `글 자리 · ${{ left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" }[plan.pocket]}` : "");
@@ -161,11 +179,91 @@ function samplePockets(root){
     if(img.complete&&img.naturalWidth)go();else img.addEventListener('load',go,{once:true});
   });
 }`;
-export const POCKET_SAMPLER_SCRIPT = `<script>(()=>{${POCKET_SAMPLER_SOURCE}\nsamplePockets(document);})();</script>`;
-let sampler = null;
-/** The app's sampler (browser only; a no-op elsewhere). */
+/**
+ * R47: the words always fit their field. For every pocket whose words are
+ * taller than the field: grow the field a little (a band by 15 points, a side
+ * field by 20); in the print, where the leaf has its text block under the
+ * picture, then set the English there and keep the Korean in the field, and
+ * if even that does not fit, set all the words under the picture rather than
+ * cover the art; where there is no block (the app, a page print), grow the
+ * field up to three quarters of the picture (a side field up to the whole
+ * half) and then set this page's words smaller, down to 70% of the book's
+ * size. A page that still overflows is marked pocket-overflow and counted.
+ * Returns the count. Run after the pictures load, on resize and before printing.
+ */
+export const POCKET_FIT_SOURCE = `
+function resetPocket(frame){
+  const panel=frame.querySelector(':scope>.text-pocket'),host=frame.closest('.ob-leaf'),below=host&&host.querySelector('.ob-text');
+  if(!frame.dataset.share0)frame.dataset.share0=String((parseFloat(frame.style.getPropertyValue('--pocket-share'))||30)/100);
+  frame.style.setProperty('--pocket-share',Math.round(Number(frame.dataset.share0)*100)+'%');
+  frame.classList.remove('pocket-overflow');if(panel)panel.style.fontSize='';
+  if(host&&(host.classList.contains('pocket-split')||host.classList.contains('pocket-spill'))){host.classList.remove('pocket-split','pocket-spill');if(below)below.innerHTML='';}
+}
+function fitPockets(root){
+  let overflow=0;
+  (root||document).querySelectorAll('.pocket-frame').forEach((frame)=>{
+    const panel=frame.querySelector(':scope>.text-pocket'),inner=panel&&panel.querySelector('.text-pocket-inner');
+    if(!inner)return;
+    resetPocket(frame);
+    const base=Number(frame.dataset.share0)||.3,side=panel.dataset.pocket,band=side==='top'||side==='bottom',max=band?.75:1,soft=Math.min(max,base+(band?.15:.2));
+    const host=frame.closest('.ob-leaf'),below=host&&host.querySelector('.ob-text');
+    const set=(s)=>frame.style.setProperty('--pocket-share',Math.round(s*100)+'%');
+    // Sub-pixel exact: the last visible line must end inside the field.
+    const over=()=>{if(inner.scrollHeight>inner.clientHeight)return true;const box=inner.getBoundingClientRect(),last=[...inner.children].reverse().find((el)=>getComputedStyle(el).display!=='none');return !!last&&last.getBoundingClientRect().bottom>box.bottom+.25;};
+    const grow=(to)=>{for(let s=base;s<to-1e-9;){s=Math.min(to,s+.05);set(s);if(!over())return true;}return !over();};
+    if(!frame.getBoundingClientRect().height||!over())return;
+    if(grow(soft))return;
+    if(below){
+      const ko=inner.querySelector('.ko'),en=inner.querySelector('.en');
+      set(base);
+      if(ko&&en&&ko.textContent.trim()&&en.textContent.trim()){host.classList.add('pocket-split');below.innerHTML=en.outerHTML;if(!over()||grow(soft))return;set(base);host.classList.remove('pocket-split');}
+      host.classList.add('pocket-spill');below.innerHTML=inner.innerHTML;return;
+    }
+    if(grow(max))return;
+    let px=parseFloat(getComputedStyle(panel).fontSize)||16;const floor=px*.7;
+    while(over()&&px>floor){px=Math.max(floor,px-.5);panel.style.fontSize=px+'px';}
+    if(over()){frame.classList.add('pocket-overflow');overflow++;}
+  });
+  return overflow;
+}`;
+/** The print tab's script: colours, and the fit (an openings print calls window.__fitPockets from its own fit; a page print fits here). */
+export const POCKET_SAMPLER_SCRIPT = `<script>(()=>{${POCKET_SAMPLER_SOURCE}\n${POCKET_FIT_SOURCE}\nsamplePockets(document);
+window.__fitPockets=fitPockets;
+window.__resetPockets=(root)=>(root||document).querySelectorAll('.pocket-frame').forEach(resetPocket);
+const note=(n)=>{const w=document.getElementById('print-pocket-warning');if(w){w.hidden=!n;w.textContent=n+'쪽의 글이 그림의 글 자리보다 길어요. ④에서 글을 조금 줄이면 그림이 더 많이 보여요.';}};
+window.__notePockets=note;
+if(!document.querySelector('.ob-sheet')){
+ const run=()=>note(fitPockets(document));
+ const ready=async()=>{await Promise.all(Array.from(document.images,img=>img.complete?Promise.resolve():new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})));if(document.fonts)await document.fonts.ready;run();};
+ window.addEventListener('beforeprint',run);ready();
+}
+})();</script>`;
+let sampler = null,
+  fitter = null,
+  resizeHooked = false;
+/** The app's sampler and fit (browser only; a no-op elsewhere). */
 export function samplePocketColours(root) {
   if (typeof document === "undefined") return;
   if (!sampler) sampler = new Function(`${POCKET_SAMPLER_SOURCE}\nreturn samplePockets;`)();
   sampler(root);
+  fitPocketWords(root);
+}
+/** R47: fit every pocket's words once its picture has loaded (and again when the window changes size). */
+export function fitPocketWords(root) {
+  if (typeof document === "undefined") return;
+  if (!fitter) fitter = new Function(`${POCKET_FIT_SOURCE}\nreturn fitPockets;`)();
+  const scope = root || document;
+  scope.querySelectorAll?.(".pocket-frame").forEach((frame) => {
+    const img = frame.querySelector("img");
+    if (img && !(img.complete && img.naturalWidth)) img.addEventListener("load", () => fitter(frame.parentNode || document), { once: true });
+  });
+  fitter(scope);
+  if (!resizeHooked && typeof window !== "undefined") {
+    resizeHooked = true;
+    let timer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fitter(document), 150);
+    });
+  }
 }

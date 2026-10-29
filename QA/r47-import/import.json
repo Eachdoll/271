@@ -1,0 +1,29 @@
+{
+  "requestedRange": "9a58e9d..2701f25",
+  "actualDiff": "18e9c2d..7b347f2",
+  "files": [
+    "CLAUDE.md",
+    "CODEX_WORK_ORDER_R47_2026-10-29.md",
+    "dist/eco-mode.js",
+    "dist/full-auto.js",
+    "dist/image-generation/scene-prompt.js",
+    "dist/output.js",
+    "dist/story-generation/k1-book.js",
+    "dist/story-generation/pipeline.js",
+    "dist/story-generation/prompt-diet.js",
+    "dist/story-generation/story-logic.js",
+    "dist/story-generation/ui.js",
+    "dist/sw.js",
+    "dist/text-pocket.js",
+    "scripts/r47-pocket-fit.mjs",
+    "tests/eco-mode.test.mjs",
+    "tests/expression-deck-r37.test.mjs",
+    "tests/openings-legacy-r12.test.mjs",
+    "tests/openings-policy-r12.test.mjs",
+    "tests/picture-led-r35.test.mjs",
+    "tests/pocket-fit-r47.test.mjs",
+    "tests/prompt-policy-r23.test.mjs",
+    "tests/story-change-r38.test.mjs",
+    "tests/text-pocket-r40.test.mjs"
+  ]
+}

@@ -170,16 +170,19 @@ function parsePages(selection, count) {
 /** R40: the pocket's stylesheet and sampler, only for a book that has pockets (other books' print HTML is unchanged). */
 const pocketStyles = (book, settings) =>
   hasTextPocket(book?.storyInput)
-    ? `${POCKET_CSS}\n.text-pocket-leaf .picturebook-frame>.pocket-frame{width:100%;height:100%}\n.text-pocket-leaf .pocket-picture,.text-pocket-leaf .pocket-picture>.illustration{width:100%;height:100%}\n.text-pocket-leaf .pocket-picture>.illustration{object-fit:contain}\n.text-pocket{font-size:${settings.fontSize === "large" ? "17pt" : "14pt"}}\n.one .text-pocket{font-size:${settings.fontSize === "large" ? "21pt" : "17pt"}}\n.ob-art .text-pocket{font-size:var(--ob-font, ${OPENING_FONT_FLOORS.K2}pt)}\n.ob-pocket .ob-text{flex:0 0 0;padding:0}\n`
+    ? `${POCKET_CSS}\n.text-pocket-leaf .picturebook-frame>.pocket-frame{width:100%;height:100%}\n.text-pocket-leaf .pocket-picture,.text-pocket-leaf .pocket-picture>.illustration{width:100%;height:100%}\n.text-pocket-leaf .pocket-picture>.illustration{object-fit:contain}\n.text-pocket{font-size:${settings.fontSize === "large" ? "17pt" : "14pt"}}\n.one .text-pocket{font-size:${settings.fontSize === "large" ? "21pt" : "17pt"}}\n.ob-art .text-pocket{font-size:var(--ob-font, ${OPENING_FONT_FLOORS.K2}pt)}\n.ob-pocket .ob-text{flex:0 0 0;padding:0}\n.ob-pocket.pocket-split .ob-text,.ob-pocket.pocket-spill .ob-text{flex:1;padding:3mm 1mm 0}\n.pocket-split .text-pocket .en,.pocket-spill .text-pocket{display:none}\n`
     : "";
 const pocketScript = (book) => (hasTextPocket(book?.storyInput) ? POCKET_SAMPLER_SCRIPT : "");
+/** R47: the line that says how many pages' words are longer than their field (pocket books only). */
+const pocketWarning = (book) => (hasTextPocket(book?.storyInput) ? `<p id="print-pocket-warning" class="print-warning" hidden></p>` : "");
 /** R40: the page's words for the language, as plain strings (the shout test). */
 const pageTexts = (page, language) =>
   [language !== "en" ? page.ko ?? page.textKo ?? "" : "", language !== "ko" ? page.en ?? page.textEn ?? "" : ""].filter((t) => String(t).trim());
-function pageText(page, language) {
+function pageText(page, language, { koFirst = false } = {}) {
   const ko = `<p lang="ko" class="ko">${escapeHTML(page.ko ?? page.textKo ?? "")}</p>`;
   const en = `<p lang="en" class="en">${escapeHTML(page.en ?? page.textEn ?? "")}</p>`;
-  return language === "ko" ? ko : language === "en" ? en : en + ko;
+  // R47: in a text pocket the Korean (the book's main text) comes first.
+  return language === "ko" ? ko : language === "en" ? en : koFirst ? ko + en : en + ko;
 }
 
 function textPlacement(page, settings) {
@@ -221,7 +224,7 @@ function logicalPages(book, settings, characters) {
       kind: "page",
       label: `${index + 1}쪽`,
       html: pocket
-        ? `<article class="leaf story-page text-pocket-leaf" aria-label="${index + 1}쪽"><div class="picturebook-frame">${pocketFrame(picture, pageText(page, settings.language), pocket, { shout: isShout(pageTexts(page, settings.language)) })}</div><span class="folio">${index + 1}</span></article>`
+        ? `<article class="leaf story-page text-pocket-leaf" aria-label="${index + 1}쪽"><div class="picturebook-frame">${pocketFrame(picture, pageText(page, settings.language, { koFirst: true }), pocket, { shout: isShout(pageTexts(page, settings.language)) })}</div><span class="folio">${index + 1}</span></article>`
         : `<article class="leaf story-page ${textPlacement(page, settings)}" aria-label="${index + 1}쪽"><div class="picturebook-frame">${picture}<div class="story">${pageText(page, settings.language)}</div></div><span class="folio">${index + 1}</span></article>`,
     };
   });
@@ -452,9 +455,10 @@ function openingLeaves(book, opening, characters, sources = null) {
 function leafMarkup(leaf, language) {
   const ko = `<p lang="ko" class="ko">${escapeHTML(leaf.ko.trim())}</p>`,
     en = `<p lang="en" class="en">${escapeHTML(leaf.en.trim())}</p>`,
-    body = language === "ko" ? ko : language === "en" ? en : en + ko,
     // R40: the words sit in the picture's flat field; the text block below stays empty.
     pocket = leaf.pocket && (leaf.ko.trim() || leaf.en.trim()) ? leaf.pocket : null,
+    // R47: in a pocket the Korean comes first.
+    body = language === "ko" ? ko : language === "en" ? en : pocket ? ko + en : en + ko,
     texts = [language !== "en" ? leaf.ko : "", language !== "ko" ? leaf.en : ""].filter((t) => t.trim());
   return `<article class="ob-leaf ${leaf.half ? `ob-half ob-half-${leaf.half}` : "ob-page"} ob-${leaf.no % 2 ? "left" : "right"}${pocket ? " ob-pocket" : ""}" aria-label="${leaf.no}쪽" data-leaf="${leaf.no}"><div class="ob-art-row"><div class="ob-art${pocket ? ` ${pocketClasses(pocket)}` : ""}"${pocket ? ` style="${pocketStyle(pocket)}"` : ""}>${imageMarkup(leaf.src, `${leaf.no}쪽 이야기 그림`)}${pocket ? pocketPanel(body, pocket, { shout: isShout(texts) }) : ""}</div></div><div class="ob-text">${pocket ? "" : body}</div><span class="ob-folio">${leaf.no}</span></article>`;
 }
@@ -494,28 +498,35 @@ function openingStyles(settings) {
  * 11pt, repeating 3; 5) still too long: warn, disable printing, suggest 크게 읽기.
  * On narrow screens the preview zooms to the width (never in print).
  */
-function openingFitScript() {
+export function openingFitScript({ pockets = false } = {}) {
+  // R47: a pocket book's leaves count their pocket too when the book font is chosen, and the pockets fit last.
+  const pocketOver = pockets ? `,pocketOver=leaf=>{const t=leaf.querySelector('.text-pocket-inner');return !!t&&t.scrollHeight>t.clientHeight;}` : "",
+    lowOver = pockets ? "(over(leaf)||pocketOver(leaf))" : "over(leaf)",
+    pocketReset = pockets ? "window.__resetPockets&&window.__resetPockets(document);" : "",
+    pocketFit = pockets ? "\n  if(window.__fitPockets)window.__notePockets(window.__fitPockets(document));" : "",
+    // The pockets fit at the chosen font first (moving words under a picture where they must), then the leaves fit around them.
+    pocketFirst = pockets ? "root.style.setProperty('--ob-font',Math.max(floor,low)+'pt');if(window.__fitPockets)window.__fitPockets(document);" : "";
   return `<script>
 (()=>{
  const root=document.documentElement,floor=Number(root.dataset.fontFloor)||14,MIN=${OPENING_MIN_FONT},CAP=20,LOW=.75;
  const main=document.querySelector('main'),sheets=[...document.querySelectorAll('.ob-sheet')],leaves=[...document.querySelectorAll('.ob-leaf')];
- const over=leaf=>{const t=leaf.querySelector('.ob-text');return !!t&&t.scrollHeight>t.clientHeight+1;};
+ const over=leaf=>{const t=leaf.querySelector('.ob-text');return !!t&&t.scrollHeight>t.clientHeight+1;}${pocketOver};
  const groups=()=>{const m=new Map();for(const s of sheets){const k=s.dataset.opening;if(!m.has(k))m.set(k,[]);m.get(k).push(s);}return [...m.values()];};
  const scaleOf=(g,v)=>g.forEach(s=>s.style.setProperty('--ob-scale',String(v)));
  const zoom=on=>{main.style.zoom='';if(!on)return;const w=sheets[0]?.getBoundingClientRect().width||0;if(w&&w>innerWidth-16)main.style.zoom=String(Math.max(.2,(innerWidth-16)/w));};
  const fit=()=>{
-  zoom(false);root.style.removeProperty('--ob-font');sheets.forEach(s=>s.style.setProperty('--ob-scale','1'));
+  zoom(false);root.style.removeProperty('--ob-font');sheets.forEach(s=>s.style.setProperty('--ob-scale','1'));${pocketReset}
   let low=CAP;
-  for(const leaf of leaves){let pt=CAP;leaf.style.setProperty('--ob-font',pt+'pt');while(over(leaf)&&pt>4){pt-=.5;leaf.style.setProperty('--ob-font',pt+'pt');}leaf.style.removeProperty('--ob-font');low=Math.min(low,pt);}
+  for(const leaf of leaves){let pt=CAP;leaf.style.setProperty('--ob-font',pt+'pt');while(${lowOver}&&pt>4){pt-=.5;leaf.style.setProperty('--ob-font',pt+'pt');}leaf.style.removeProperty('--ob-font');low=Math.min(low,pt);}
   const attempt=pt=>{root.style.setProperty('--ob-font',pt+'pt');let bad=0;for(const g of groups()){let v=1;scaleOf(g,v);const own=g.flatMap(s=>[...s.querySelectorAll('.ob-leaf')]);while(own.some(over)&&v>LOW+1e-9){v=Math.max(LOW,Math.round((v-.05)*100)/100);scaleOf(g,v);}if(own.some(over))bad++;}return bad;};
-  let font=Math.max(floor,low),bad=attempt(font);
+  ${pocketFirst}let font=Math.max(floor,low),bad=attempt(font);
   while(bad&&font>MIN){font=Math.max(MIN,font-.5);bad=attempt(font);}
   root.dataset.bookFont=String(font);root.dataset.overflowOpenings=String(bad);
   const warning=document.getElementById('print-fit-warning');
   warning.hidden=!bad;
   warning.textContent=bad+'개 펼침의 글이 ${OPENING_MIN_FONT}pt로도 출력 영역보다 깁니다. ‘크게 읽기 · A4 세로’를 골라 주세요.';
   document.getElementById('print-now').disabled=!!bad;
-  root.dataset.printReady=bad?'overflow':'ready';
+  root.dataset.printReady=bad?'overflow':'ready';${pocketFit}
  };
  const ready=async()=>{
   await Promise.all(Array.from(document.images,img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
@@ -572,7 +583,7 @@ function openingsPrintHTML(book, normalized, characters, requestedLayout) {
         ? "크게 읽기 · A4 세로 한 장에 한 쪽"
         : "펼침 구성 · A4 가로 한 장에 펼침 하나",
     guidance = `<p>A4 ${settings.layout === "two" ? "세로" : "가로"} · 실제 크기(100%)로 출력해 주세요.${settings.layout === "two" ? " 펼침면은 왼쪽 반과 오른쪽 반을 두 장에 나눠 마주 보게 출력해요." : " 한 장에 마주 보는 두 쪽(펼침 하나)을 출력해요. 펼침면 그림은 가운데에서 이어져요."} 책 전체를 같은 글자 크기(${floor}pt 이상)로 맞춰요.</p>${bookletNote ? `<p class="print-warning">${OPENING_BOOKLET_NOTE}. 일반 출력(A4 가로 한 장에 펼침 하나)으로 열었어요.</p>` : ""}${feedbackNote(settings)}`;
-  return `<!doctype html><html lang="${settings.language === "en" ? "en" : "ko"}" data-font-floor="${floor}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(settings)}${openingStyles(settings)}${pocketStyles(book, settings)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · 펼침 ${openings.length}개 · ${body.length}개 출력면 · ${settings.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래에 배치됩니다. 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${body.join("")}</main>${openingFitScript()}${pocketScript(book)}</body></html>`;
+  return `<!doctype html><html lang="${settings.language === "en" ? "en" : "ko"}" data-font-floor="${floor}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(settings)}${openingStyles(settings)}${pocketStyles(book, settings)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · 펼침 ${openings.length}개 · ${body.length}개 출력면 · ${settings.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>본문은 그림 아래에 배치됩니다. 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.</p><p id="print-fit-warning" class="print-warning" hidden></p>${pocketWarning(book)}<p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${body.join("")}</main>${openingFitScript({ pockets: hasTextPocket(book?.storyInput) })}${pocketScript(book)}</body></html>`;
 }
 
 /** Standalone portable HTML, suitable for saving and opening without this app. */
@@ -595,7 +606,7 @@ export function getPrintHTML(book, settings = {}, characters = []) {
     normalized.layout === "booklet"
       ? `<p>제본용 배치입니다. 빈 쪽을 포함해 4의 배수로 맞추므로 1쪽 옆이나 2쪽 옆에 빈 쪽이 보일 수 있습니다. 빈 쪽 없이 1→2쪽 순서로 보려면 일반 인쇄를 선택하세요.</p><p><strong>가로 A4 · 양면 · 짧은 쪽 뒤집기</strong>를 기본으로 선택하세요. 프린터마다 방향이 달라 첫 장을 시험 출력해 앞뒤가 같은 방향인지 확인해 주세요. 인쇄된 종이를 순서대로 포갠 뒤 반으로 접어 가운데를 제본하세요.</p>`
       : `<p>A4 ${orientation} · 실제 크기(100%)로 출력해 주세요.${normalized.layout === "two" ? " 본문은 1·2쪽, 3·4쪽 순서로 위아래에 놓고 표지·뒤표지는 별도 출력면에 둡니다. 프린터의 모아 찍기는 1로 두세요." : ""}</p>${feedbackNote(normalized)}`;
-  return `<!doctype html><html lang="${normalized.language === "en" ? "en" : "ko"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(normalized)}${pocketStyles(book, normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition === "below" ? "본문은 그림 아래에 배치됩니다." : normalized.textPosition === "staged" ? "장면별로 정한 빈 공간에 본문을 배치합니다. 구도 정보가 없는 쪽은 그림 아래에 배치합니다." : "본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다."} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition === "below" ? "" : " 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다."}</p><p id="print-fit-warning" class="print-warning" hidden></p><p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}${pocketScript(book)}</body></html>`;
+  return `<!doctype html><html lang="${normalized.language === "en" ? "en" : "ko"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(title || "동화공방")} · 인쇄</title><style>${printStyles(normalized)}${pocketStyles(book, normalized)}</style></head><body><header class="print-tools"><h2>${escapeHTML(title || "우리의 동화책")}</h2><p>${layoutLabel} · ${sheets.count}개 출력면 · ${normalized.color === "grayscale" ? "흑백" : "컬러"} · 바깥 여백 10mm</p>${guidance}<p>${normalized.textPosition === "below" ? "본문은 그림 아래에 배치됩니다." : normalized.textPosition === "staged" ? "장면별로 정한 빈 공간에 본문을 배치합니다. 구도 정보가 없는 쪽은 그림 아래에 배치합니다." : "본문은 그림 안의 밝은 영역에 겹쳐 배치됩니다."} 한글·영어는 실제 글자로 조판되어 PDF에서도 또렷하게 출력됩니다.${normalized.textPosition === "below" ? "" : " 브라우저의 배경 그래픽 인쇄를 켜면 밝은 본문 영역이 그대로 나옵니다."}</p><p id="print-fit-warning" class="print-warning" hidden></p>${pocketWarning(book)}<p>인쇄 대화상자에서 대상을 <strong>PDF로 저장</strong>으로 고르면 파일로 보관할 수 있어요. 브라우저 머리글·바닥글은 끄고, 여백은 기본값을 유지해 주세요.</p><button id="print-now" type="button" onclick="window.print()">인쇄 · PDF로 저장</button></header><main>${sheets.html}</main>${printFitScript()}${pocketScript(book)}</body></html>`;
 }
 
 /* ---------- R39-F: the low-resolution feedback edition ---------- */
