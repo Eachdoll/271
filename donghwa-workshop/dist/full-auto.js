@@ -1370,6 +1370,7 @@ export async function runFullAuto(
         bookFormat: _freshFormat,
         storyExpression: _freshExpression,
         storyIdea: _freshIdea,
+        storyLogic: _freshLogic,
         storyChange: _freshChange,
         storyPlace: _freshPlace,
         storyDrama: _freshDrama,
@@ -1424,6 +1425,8 @@ export async function runFullAuto(
         ...(job.input?.storyExpression ? { storyExpression: clone(job.input.storyExpression) } : {}),
         // R46: the job's own idea cards.
         ...(job.input?.storyIdea ? { storyIdea: clone(job.input.storyIdea) } : {}),
+        // R47: the job's own logic marker.
+        ...(job.input?.storyLogic ? { storyLogic: clone(job.input.storyLogic) } : {}),
         // R38: the job's own change marker and opening place.
         ...(job.input?.storyChange ? { storyChange: clone(job.input.storyChange) } : {}),
         ...(job.input?.storyPlace ? { storyPlace: clone(job.input.storyPlace) } : {}),

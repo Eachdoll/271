@@ -92,8 +92,9 @@ test('R35 a new K2 openings draft is picture-led; 글이 많은 책 freezes the 
   const without = (input) => { const {bookFormat, specs, storyDate, storyExpression, ...rest} = input; return rest; };
   assert.deepEqual(without(led.input), without(wordy.input), 'everything else is the same input');
   // R46: the idea cards come last (after the format and the expression cards).
-  assert.deepEqual(Object.keys(wordy.input).slice(-2), ['bookFormat', 'storyIdea'], 'the format comes after the voice');
-  assert.deepEqual(Object.keys(led.input).slice(-3), ['bookFormat', 'storyExpression', 'storyIdea']);
+  // R47: then the logic marker.
+  assert.deepEqual(Object.keys(wordy.input).slice(-3), ['bookFormat', 'storyIdea', 'storyLogic'], 'the format comes after the voice');
+  assert.deepEqual(Object.keys(led.input).slice(-4), ['bookFormat', 'storyExpression', 'storyIdea', 'storyLogic']);
   const normalized = normalizeStoryInput({...led.input, bookId: 'n'});
   assert.deepEqual(normalized.bookFormat, {version: 1, id: 'pictureLed'});
   assert.equal(normalizeStoryInput({...led.input, bookFormat: {version: 9, id: 'pictureLed'}, bookId: 'n'}).bookFormat, undefined, 'an unknown format is dropped');
@@ -155,6 +156,7 @@ test('R35 the outline request carries the composition (one moment per beat, thre
   delete led.storyExpression;
   delete led.storyIdea; // R46: an R35 draft had no idea cards either.
   delete wordy.storyIdea;
+  delete led.storyLogic; delete wordy.storyLogic; // R47 likewise.
   assert.notEqual(draft(state).storyShape.id, 'three_waves', 'R37: a wave topic no longer picks the 세 번 shape by itself');
   assert.equal(STORY_SHAPES.length, 29);
   assert.equal(STORY_SHAPE_OPTIONS.length, 30);

@@ -55,6 +55,7 @@ import { stageFor, stageById } from "./stage-categories.js";
 import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
 import { chooseExpression, recentExpressionIds, expressionSummary } from "./expression-deck.js";
 import { drawIdea, recentIdeaIds, storyIdeaRef, ideaSummary, withoutDevice, ideaInputFor } from "./idea-deck.js";
+import { storyLogicPolicy } from "./story-logic.js";
 import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
 import { picturePlanNote } from "./picture-plan.js";
 import {
@@ -1117,6 +1118,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       ...(formatId === "pictureLed" ? { storyExpression: storyExpressionFor(state, wizard) } : {}),
       // R46: the book's idea cards (발상·인물 짜임·장치·끝), drawn once here (never on resume).
       storyIdea: storyIdeaFor(state, wizard, { k1, room: !k1 && !!orchestrationPolicyFor(state) }),
+      // R47: cause and effect a child can follow; varied speech tags.
+      storyLogic: storyLogicPolicy(),
     },
     readingLevels,
     world,

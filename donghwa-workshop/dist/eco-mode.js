@@ -57,6 +57,7 @@ import { getStylePreset } from "./image-generation/styles.js";
 import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
 import { expressionWriterLine } from "./story-generation/expression-deck.js";
 import { ideaWriterLine, withDevice } from "./story-generation/idea-deck.js";
+import { storyLogicWriterLine } from "./story-generation/story-logic.js";
 import { pageBookVoiceLine, withWordlessSchema } from "./story-generation/story-change.js";
 import { withBackdropSchema, isTextOnlyPage, plainBackdropFor } from "./story-generation/story-drama.js";
 import { pocketOf, pocketPromptLine } from "./text-pocket.js";
@@ -240,6 +241,8 @@ export function ecoPagesPrompt(source, outline) {
     ...(expressionWriterLine(input, "ko") ? [`${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}`] : []),
     // R46: the book's idea cards.
     ...(ideaWriterLine(input, "ko") ? [`${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}`] : []),
+    // R47: varied speech tags.
+    ...(storyLogicWriterLine(input, "ko") ? [`${storyLogicWriterLine(input, "ko")}\n${storyLogicWriterLine(input, "en")}`] : []),
     // R38: the page book's voice.
     ...(pageBookVoiceLine(input, "ko") ? [`${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}`] : []),
     block(
@@ -476,7 +479,7 @@ export function ecoPicturePrompt(state, book, index = 0, { cover = false } = {})
     // R36: the composition planned with the story (shown to the parent, who draws or prompts it).
     cover ? "" : picturePlanPictureLine(planOf(book.outline, page.beatIndex)),
     // R40: the flat field the words are typeset on.
-    !cover && pocketOf(book, page) ? pocketPromptLine(planOf(book.outline, page.beatIndex)) : "",
+    !cover && pocketOf(book, page) ? pocketPromptLine(planOf(book.outline, page.beatIndex), pocketOf(book, page).share) : "",
     // R39: a plain-backdrop page (a thought, a monologue) has no place at all.
     !cover && plainBackdropFor(book, page) ? "No place in this picture: the character alone on a flat single-colour background with big quiet empty space — a thought or a line spoken to the reader. No room, no ground, no scenery." : "",
     cover ? "" : `The entry reads — Korean: 「${text(page.ko ?? page.textKo)}」 English: “${text(page.en ?? page.textEn)}”. Draw the moment, not the words.`,

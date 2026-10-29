@@ -125,8 +125,8 @@ test('R40 the typesetting: the frame and the panel, half-spread geometry, the sh
   const beat2 = book.pages.find((p) => p.beatIndex === 2), beat3 = book.pages.find((p) => p.beatIndex === 3);
   beat3.ko = '쾅!'; beat3.en = 'Bang!';
   const html = getPrintHTML(book, {layout: 'single', pages: 'all'}, []);
-  assert.match(html, new RegExp(`<article class="leaf story-page text-pocket-leaf" aria-label="${beat2.pageNo}쪽"><div class="picturebook-frame"><div class="pocket-frame pocket-left" style="--pocket-share:34%"><div class="pocket-picture"><img class="illustration"[^>]*></div><div class="text-pocket" data-pocket="left" data-share="0.34"><div class="text-pocket-inner"><p lang="en" class="en">`));
-  assert.match(html, new RegExp(`aria-label="${beat3.pageNo}쪽"><div class="picturebook-frame"><div class="pocket-frame pocket-bottom" style="--pocket-share:40%">[^]*?<div class="text-pocket text-pocket-shout"`));
+  assert.match(html, new RegExp(`<article class="leaf story-page text-pocket-leaf" aria-label="${beat2.pageNo}쪽"><div class="picturebook-frame"><div class="pocket-frame pocket-left" style="--pocket-share:(\\d+)%"><div class="pocket-picture"><img class="illustration"[^>]*></div><div class="text-pocket" data-pocket="left" data-share="0\\.\\d+"><div class="text-pocket-inner"><p lang="ko" class="ko">`), 'R47: the field is sized to the words and the Korean comes first');
+  assert.match(html, new RegExp(`aria-label="${beat3.pageNo}쪽"><div class="picturebook-frame"><div class="pocket-frame pocket-bottom" style="--pocket-share:4\\d%">[^]*?<div class="text-pocket text-pocket-shout"`));
   assert.ok(html.includes('class="story"'), 'the other pages keep their story card');
   assert.ok(html.includes('.text-pocket{') && html.includes('samplePockets(document)'));
   const plain = getPrintHTML({...book, storyInput: dated(input)}, {layout: 'single', pages: 'all'}, []);
@@ -143,11 +143,11 @@ test('R40 the typesetting: the frame and the panel, half-spread geometry, the sh
   const leafOf = (no) => ohtml.match(new RegExp(`<article class="ob-leaf[^"]*" aria-label="${no}쪽"[^]*?</article>`))[0];
   const left = leafOf(spreadOpening.printedPages[0]), right = leafOf(spreadOpening.printedPages[1]);
   assert.match(left, /class="ob-leaf ob-half ob-half-left ob-left ob-pocket"/);
-  assert.match(left, /<div class="ob-art pocket-frame pocket-left" style="--pocket-share:68%"><img class="illustration"[^>]*><div class="text-pocket" data-pocket="left" data-share="0\.34">/);
+  assert.match(left, /<div class="ob-art pocket-frame pocket-left" style="--pocket-share:(?:68|8[0-9]|90)%"><img class="illustration"[^>]*><div class="text-pocket" data-pocket="left" data-share="0\.(?:34|42|45)">/);
   assert.match(left, /<div class="ob-text"><\/div>/);
   assert.doesNotMatch(right, /text-pocket|ob-pocket/);
   assert.match(right, /<div class="ob-text"><p lang="en" class="en"><\/p><p lang="ko" class="ko"><\/p><\/div>/, 'the right half carries no words: they all sit in the left field');
-  assert.match(leafOf(pageOpening.printedPages[0]), /<div class="ob-art pocket-frame pocket-top" style="--pocket-share:30%">/);
+  assert.match(leafOf(pageOpening.printedPages[0]), /<div class="ob-art pocket-frame pocket-top" style="--pocket-share:(?:30|40|45|50)%">/);
   assert.match(leafOf(otherOpening.printedPages[0]), /<div class="ob-art"><img class="illustration"/);
   assert.ok(ohtml.includes('.ob-art .text-pocket{font-size:var(--ob-font') && ohtml.includes('samplePockets(document)'));
   // The app's stylesheet carries the frame rules and the shell precaches the module.

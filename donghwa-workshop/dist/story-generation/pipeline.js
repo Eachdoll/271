@@ -9,6 +9,7 @@ import { withPicturePlanSchema } from "./picture-plan.js";
 import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangeRef, storyPlaceRef, withWordlessSchema } from "./story-change.js";
 import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
+import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -442,6 +443,11 @@ function modelVisibleInput(source) {
     const { storyIdea, ...rest } = input;
     input = rest;
   }
+  // R47: and the logic marker.
+  if (input?.storyLogic) {
+    const { storyLogic, ...rest } = input;
+    input = rest;
+  }
   // R38: the change marker and the opening place are rule lines, not story data.
   if (input?.storyChange) {
     const { storyChange, ...rest } = input;
@@ -628,6 +634,8 @@ export function normalizeStoryInput(input = {}) {
     ...(expressionRef(input.storyExpression) ? { storyExpression: expressionRef(input.storyExpression) } : {}),
     // R46: the idea cards (발상·인물 짜임·장치·끝), drawn once in the wizard.
     ...(storyIdeaRef(input.storyIdea) ? { storyIdea: storyIdeaRef(input.storyIdea) } : {}),
+    // R47: cause and effect a child can follow (outline), varied speech tags (writers).
+    ...(hasStoryLogic(input) ? { storyLogic: storyLogicPolicy() } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),

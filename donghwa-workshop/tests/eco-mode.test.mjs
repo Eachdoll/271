@@ -64,7 +64,8 @@ test('R32 outline request: the lean head, the level, the outline rules, the inpu
   assert.doesNotMatch(text, /plotContract/, 'a diet outline has no ledger');
   assert.doesNotMatch(text, /"tension"/, 'no paid tension curve');
   // R39 adds the DRAMA paragraph, the plan's three fields and the schema fields (measured 13,366).
-  assert.ok(text.length < 14500, `request stays pasteable: ${text.length}`);
+  // R46 IDEA block + R47 LOGIC paragraph (≈ 900 chars): 14,500 → 15,500.
+  assert.ok(text.length < 15500, `request stays pasteable: ${text.length}`);
   const k1 = ecoOutlinePrompt(ecoJob(state, 'K1').input);
   assert.match(k1, /three-year-old/);
 });
