@@ -1,0 +1,30 @@
+{
+  "requestedRange": "c262f7b..98c0064",
+  "actualDiff": "ce0c8a5..9a58e9d",
+  "files": [
+    "CLAUDE.md",
+    "CODEX_WORK_ORDER_R46_2026-10-29.md",
+    "dist/eco-mode.js",
+    "dist/full-auto.js",
+    "dist/simple-create.js",
+    "dist/story-generation/council-room.js",
+    "dist/story-generation/council.js",
+    "dist/story-generation/idea-deck.js",
+    "dist/story-generation/k1-book.js",
+    "dist/story-generation/pipeline.js",
+    "dist/story-generation/prompt-diet.js",
+    "dist/story-generation/quality-gates.js",
+    "dist/story-generation/story-drama.js",
+    "dist/story-generation/ui.js",
+    "dist/style.css",
+    "dist/sw.js",
+    "tests/expression-deck-r37.test.mjs",
+    "tests/idea-deck-r46.test.mjs",
+    "tests/openings-legacy-r12.test.mjs",
+    "tests/openings-policy-r12.test.mjs",
+    "tests/picture-led-r35.test.mjs",
+    "tests/prompt-diet-r31b.test.mjs",
+    "tests/simple-create-actions.test.mjs",
+    "tests/voice-deck-r34.test.mjs"
+  ]
+}

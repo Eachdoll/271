@@ -12,6 +12,8 @@ import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/d
 import {normalizeStoryInput} from '../dist/story-generation/pipeline.js';
 import {configureStoryUI, renderStoryDrafts} from '../dist/story-generation/ui.js';
 import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
+import {IDEA_DECK} from '../dist/story-generation/idea-deck.js';
+const SPARK_TOPICS = IDEA_DECK.spark.flatMap((card) => card.topics);
 import {
   configureSimpleCreate, openSimpleJob, renderSimpleCreate, simpleJobs, imageWork, imageCountLabel,
   IDEA_TOPICS, pickIdeaTopic, isSimpleBusy, isPictureKeptAfterEdit, keepEditedPictures, coherenceCheckDue,
@@ -650,8 +652,10 @@ test('아이디어 뽑기 works without a story world and never repeats the curr
       const before = wizard.topic;
       fields['#topic'] = before;
       await click('idea');
-      assert.ok(IDEA_TOPICS.includes(wizard.topic));
+      // R46: the topic is the drawn spark card's own example (the built-in list is the fallback).
+      assert.ok(IDEA_TOPICS.includes(wizard.topic) || SPARK_TOPICS.includes(wizard.topic), wizard.topic);
       assert.notEqual(wizard.topic, before);
+      assert.equal(wizard.storyIdea.topic, wizard.topic);
     }
   } finally {
     fields = {};
@@ -908,10 +912,12 @@ test('아이디어 뽑기 keeps its status line: no redraw wipes it, and ① ren
     await click('idea');
     assert.equal(renders, 0, 'the click does not redraw the screen');
     assert.equal(wizard.simpleIdeaNote, wizard.topic);
-    assert.ok(renderSimpleCreate(ctx).includes(`aria-live="polite">${NOTE}</span>`));
-    // Choosing a topic chip clears it.
+    // R46: the note names the drawn cards.
+    assert.match(renderSimpleCreate(ctx), new RegExp(`aria-live="polite">${NOTE} 아이디어 · 발상 [^<]+ · 인물 짜임 [^<]+ · 장치 [^<]+ · 끝 [^<]+</span>`));
+    // Choosing a topic chip clears it (and the drawn idea).
     await click('topic', {topic: '달에 놀러 간 날'});
     assert.ok(renderSimpleCreate(ctx).includes('aria-live="polite"></span>'));
+    assert.equal(wizard.storyIdea, undefined);
     // The note is screen state only: it is never frozen into a job's wizard.
     await click('idea');
     assert.equal(jobWizardFrom(wizard).simpleIdeaNote, undefined);

@@ -168,7 +168,7 @@ test('R37 the book remembers its cards and the next book draws others; ③ and t
   state.settings.storyQuality = {...(state.settings.storyQuality || {}), approvedBooks: [{bookId: 'b1', approved: true, createdAt: new Date().toISOString(), topic: input.topic, outline: {beats: outline.beats}, usedElements: record.usedElements}]};
   const next = inputFromWizard(state, wizardOf(), {layout: 'openings'}).input.storyExpression;
   for (const slot of EXPRESSION_SLOTS) assert.ok(next.cards[slot].every((id) => !input.storyExpression.cards[slot].includes(id)), `${slot}: the next book draws other cards`);
-  assert.match(renderStoryQualityPlan({outline, input}), /<br>표현 · [^<]+<br>달라지는 것 · [^<]+(?:<br>시도 · [^<]+)?<\/p>/);
+  assert.match(renderStoryQualityPlan({outline, input}), /<br>표현 · [^<]+(?:<br>아이디어 · [^<]+)?<br>달라지는 것 · [^<]+(?:<br>시도 · [^<]+)?<\/p>/);
   // ③ (the eco panel shows the line from the start)
   const fresh = setup();
   const job = ecoJobInit(createFullAutoJob(fresh, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));

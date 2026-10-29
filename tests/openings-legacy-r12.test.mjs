@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, storyIdea, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -737,7 +737,10 @@ const PINS = {
   // differs (dump-diffed against a60f8e9). a60f8e9: 3a307f47…8a911.
   // 첫 등장 (R43): every new diet draft's storyCast carries entrance: true; nothing else
   // differs (dump-diffed against b74c975). b74c975: 77477212…ecc0.
-  inputs: 'b08e99bc3d35a8768aaa03cf5ed88ac93eb8e1592e147bd95285883dfc602185',
+  // 아이디어 카드 (R46): every new draft's input carries storyIdea {version: 1, cards, from}
+  // (a draft with a writers' room leaves the device out — one per candidate there);
+  // nothing else differs (dump-diffed against c262f7b). c262f7b: b08e99bc…2185.
+  inputs: 'a70bb8d192378ab35f90f1caf4edff8b72195d76bdd57e089f561e5d40ed6018',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -809,7 +812,9 @@ const PINS = {
   // nothing else differs (dump-diffed against a60f8e9). a60f8e9: 73a225cf…172f.
   // R43: the two demo jobs' storyCast carries entrance: true; nothing else differs
   // (dump-diffed against b74c975). b74c975: aed281ae…99bf.
-  fullAutoDemo: 'e1cf14bdb2e304dc11ecd3b66a02969159d2c60ce2cabbc23527ffbfc20cd156',
+  // R46: the two demo jobs' inputs carry storyIdea; nothing else differs
+  // (dump-diffed against c262f7b). c262f7b: e1cf14bd…d156.
+  fullAutoDemo: 'ce00ecf9bdd7428dd674196a18b497c480341117c175c374a745a9f6293589bb',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

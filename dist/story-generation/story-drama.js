@@ -14,6 +14,7 @@
  * alone on a coloured page); its cover shows only the cast of the story.
  * Drafts without the marker are unchanged. Pure module. */
 import { hasStoryChange } from "./story-change.js";
+import { ideaRepeatsTries, ideaInputFor } from "./idea-deck.js";
 export const STORY_DRAMA_VERSION = 1;
 export const storyDramaPolicy = () => ({ version: STORY_DRAMA_VERSION });
 /** The marker, on a diet draft that also has the R38 change contract. */
@@ -57,7 +58,11 @@ export function withStoryDramaSchema(schema, input) {
 export function storyDramaOutlineRule(input) {
   if (!hasStoryDrama(input)) return "";
   const k1 = isK1(input);
-  return `DRAMA: the attempt beats are different kinds of trying, never the same move again a little bigger — return tryKind on every beat: "force" (push, pull, climb, chase), "trick" (a plan, a tool, a disguise), "ask" (asking someone or something for help), "wait" (waiting, listening, hiding, sneaking), "giveup" (stopping, turning away, sulking — and something happens anyway); "none" on beats that are not attempts. Two attempt beats never share a kind. Return consequence on each attempt beat — what that try changes in the world (something breaks, moves, wakes, is lost; someone notices) — so the next beat starts from it; "" on other beats.${
+  return `DRAMA: the attempt beats are different kinds of trying, never the same move again a little bigger — return tryKind on every beat: "force" (push, pull, climb, chase), "trick" (a plan, a tool, a disguise), "ask" (asking someone or something for help), "wait" (waiting, listening, hiding, sneaking), "giveup" (stopping, turning away, sulking — and something happens anyway); "none" on beats that are not attempts. ${
+    ideaRepeatsTries(input)
+      ? "This book's device is the same plan tried again: the attempt beats may share a kind, but each try goes wrong in a new way and changes something different."
+      : "Two attempt beats never share a kind."
+  } Return consequence on each attempt beat — what that try changes in the world (something breaks, moves, wakes, is lost; someone notices) — so the next beat starts from it; "" on other beats.${
     k1
       ? ""
       : ` Return secret: one thing the child can see in the pictures from early on that the hero has not noticed (where the lost thing is, who is following, what the strange sound was); the turn is the hero finally seeing it, and the words never point at it before then.`
@@ -97,7 +102,8 @@ export function storyDramaViolations(outline, input) {
     kinds = attempts.map((beat) => str(beat.tryKind, 20).toLowerCase());
   if (attempts.length && kinds.some((kind) => !TRY_KINDS.includes(kind)))
     out.push({ code: "try_kinds", message: "시도 비트마다 시도의 종류(tryKind: force·trick·ask·wait·giveup)가 필요해요." });
-  else if (new Set(kinds).size < kinds.length)
+  // R46: the device "same plan again" lets the tries share a kind.
+  else if (!ideaRepeatsTries(ideaInputFor(input, outline?.bible?.device)) && new Set(kinds).size < kinds.length)
     out.push({ code: "try_kinds", message: "시도 비트의 종류가 서로 달라야 해요(같은 방법을 되풀이하지 않아요)." });
   if (!isK1(input) && !str(outline?.secret)) out.push({ code: "secret_missing", message: "아이가 주인공보다 먼저 보는 것 한 줄(secret)이 필요해요." });
   return out;
@@ -118,11 +124,18 @@ export function storyDramaWriterLine(outline, beat, lang = "ko") {
     flip = str(outline.refrain?.flip, 150),
     lines = [];
   if (type === "attempt" && TRY_KINDS.includes(beat.tryKind)) {
-    const consequence = clause(beat.consequence);
+    const consequence = clause(beat.consequence),
+      // R46: an outline whose device is the same plan again repeats a kind; say so instead of "a different way".
+      before = list(outline.beats).filter((row) => object(row) && row.type === "attempt" && Number(row.index) < Number(beat.index)).pop(),
+      again = before?.tryKind === beat.tryKind;
     lines.push(
       ko
-        ? `[시도 종류] 이번 시도는 ${TRY_KO[beat.tryKind]} 해 보는 거예요 — 앞 시도와 다른 방법이에요.${consequence ? ` 결과: ${consequence} — 다음 비트는 여기서 시작해요.` : ""}`
-        : `[This try] The hero tries ${TRY_EN[beat.tryKind]} — a different way from the try before.${consequence ? ` What it changes: ${consequence}. The next beat starts from that.` : ""}`,
+        ? again
+          ? `[시도 종류] 이번에도 같은 계획을 ${TRY_KO[beat.tryKind]} 다시 해 봐요 — 이번엔 새로운 방식으로 어긋나요.${consequence ? ` 결과: ${consequence} — 다음 비트는 여기서 시작해요.` : ""}`
+          : `[시도 종류] 이번 시도는 ${TRY_KO[beat.tryKind]} 해 보는 거예요 — 앞 시도와 다른 방법이에요.${consequence ? ` 결과: ${consequence} — 다음 비트는 여기서 시작해요.` : ""}`
+        : again
+          ? `[This try] The same plan again, ${TRY_EN[beat.tryKind]} — this time it goes wrong in a new way.${consequence ? ` What it changes: ${consequence}. The next beat starts from that.` : ""}`
+          : `[This try] The hero tries ${TRY_EN[beat.tryKind]} — a different way from the try before.${consequence ? ` What it changes: ${consequence}. The next beat starts from that.` : ""}`,
     );
   }
   if (secret && ["setup", "want", "attempt"].includes(type))
@@ -141,7 +154,11 @@ export function storyDramaK1Block(outline) {
     companion = clause(outline.companion),
     flip = str(outline.refrain?.flip, 150),
     rows = [
-      tries.length ? `시도는 서로 다른 방법이에요: ${tries.join(" / ")}.` : "",
+      tries.length
+        ? new Set(tryKindsOf(outline)).size < tryKindsOf(outline).length
+          ? `시도는 같은 계획의 되풀이예요 — 매번 새로운 방식으로 어긋나요: ${tries.join(" / ")}.`
+          : `시도는 서로 다른 방법이에요: ${tries.join(" / ")}.`
+        : "",
       clause(outline.secret) ? `아이가 주인공보다 먼저 보는 것: ${clause(outline.secret)} — 글은 전환 전에는 가리키지 않아요.` : "",
       companion ? `조연의 바람: ${companion} — 조연은 돕는 역할이 아니라 제 바람대로 움직여요.` : "",
       flip ? `되풀이 줄은 마지막에 이렇게 바뀌어요: "${flip}".` : "",
@@ -165,8 +182,12 @@ export function dramaPitchProperties(attempts) {
   };
 }
 /** The author bot's extra instructions for a drama draft's pitches (Korean, the room's language). */
-export function dramaPitchInstructions(attempts) {
-  return `tryKinds(시도 ${attempts}개의 종류를 차례로 — force 힘으로·trick 꾀로·ask 부탁으로·wait 기다리며·giveup 포기하듯 — 같은 종류를 두 번 쓰지 않는다; 같은 시도를 조금 크게 되풀이하는 사다리는 0점), secret(아이는 그림에서 일찍부터 보지만 주인공은 모르는 것 한 줄 — 반전은 주인공이 그것을 드디어 보는 순간), companion(조연이 이 이야기에서 제 스스로 바라는 것 — 주인공을 돕는 역할이 아니라 방해하거나 우연히 돕는다; 조연이 없으면 빈 문자열)`;
+export function dramaPitchInstructions(attempts, { sameTry = false } = {}) {
+  return `tryKinds(시도 ${attempts}개의 종류를 차례로 — force 힘으로·trick 꾀로·ask 부탁으로·wait 기다리며·giveup 포기하듯 — ${
+    sameTry
+      ? "이 책의 장치는 같은 계획 되풀이라 같은 종류를 다시 써도 되지만, 매번 새로운 방식으로 어긋나야 한다; 똑같이 어긋나는 사다리는 0점"
+      : "같은 종류를 두 번 쓰지 않는다; 같은 시도를 조금 크게 되풀이하는 사다리는 0점"
+  }), secret(아이는 그림에서 일찍부터 보지만 주인공은 모르는 것 한 줄 — 반전은 주인공이 그것을 드디어 보는 순간), companion(조연이 이 이야기에서 제 스스로 바라는 것 — 주인공을 돕는 역할이 아니라 방해하거나 우연히 돕는다; 조연이 없으면 빈 문자열)`;
 }
 /** The pitch's cleaned extra fields, or {} for a pitch without them. */
 export function normalizeDramaPitch(raw, attempts) {

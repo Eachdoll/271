@@ -22,6 +22,7 @@ import { stageDirection } from "./stage-categories.js";
 import { compositionDirection } from "../book-format.js";
 import { hasStoryDrama, dramaPitchProperties, dramaPitchInstructions, normalizeDramaPitch, pitchRepeatsTry } from "./story-drama.js";
 import { castPitchInstructions } from "./story-cast.js";
+import { ideaDirection, ideaRepeatsTries, ideaCardById, roomDevices, ideaCandidateLines, ideaGrowthLine, roomMaterials } from "./idea-deck.js";
 import { headNoun } from "../story-quality/dist/banList.js";
 import {
   hasOrchestrationPolicy,
@@ -152,7 +153,8 @@ export function directionLine(input) {
     extra =
       input?.promptDiet?.version === 1
         ? // R35: and the book's format (그림책 결).
-          [storyShapeDirection(input?.storyShape), stageDirection(input), compositionDirection(input)]
+          // R46: and the book's idea cards.
+          [storyShapeDirection(input?.storyShape), stageDirection(input), compositionDirection(input), ideaDirection(input)]
             .filter(Boolean)
             .map((line) => ` ${line}${/[.!?]$/u.test(line) ? "" : "."}`)
             .join("")
@@ -461,11 +463,12 @@ const artTotal = (v) =>
   v ? clamp2(v.drawableTurn) + clamp2(v.plantedVisible) + clamp2(v.lowPointVisible) + clamp2(v.variety) : 0;
 const readerTotal = (r) => (r ? clamp2(r.nextQuestion) + (r.retellHasTurn === true ? 2 : 0) : 0);
 /** Weighted sum (editor 5, art 4, reader 3 out of 12) and the three vetoes. */
-export function chairScores(editor, art, reader, count, pitches = []) {
+export function chairScores(editor, art, reader, count, pitches = [], { sameTry = false } = {}) {
   const rows = [];
   for (let i = 0; i < count; i++) {
     // R39: the same try repeated is no ladder (the chair scores it 0 whatever the editor said).
-    const e = editor[i] && pitchRepeatsTry(pitches[i]) ? { ...editor[i], ladder: 0 } : editor[i],
+    // R46: unless the book's (or this candidate's) device is the same plan tried again.
+    const e = editor[i] && !sameTry && !ideaCardById(pitches[i]?.device)?.sameTry && pitchRepeatsTry(pitches[i]) ? { ...editor[i], ladder: 0 } : editor[i],
       a = art[i],
       r = reader[i],
       vetoes = [];
@@ -570,6 +573,8 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     // and what the parent decided once the meeting goes on.
     recommended: null,
     parentChoice: null,
+    // R46: the drawer's materials, so the parent's choice says who and where each candidate uses.
+    ...(roomMaterials(input) ? { materials: roomMaterials(input) } : {}),
   };
   const log = (entry) => appendDecision(record, entry);
   // R22: what the parent did to earlier meetings of this story (a rewritten
@@ -602,7 +607,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
     range = tensionRange(input),
     // R39: a drama draft's pitches name their try kinds, secret and companion.
     drama = hasStoryDrama(input),
-    dramaNote = `${drama ? `\n${dramaPitchInstructions(attempts)}` : ""}${castPitchInstructions(input) ? `\n${castPitchInstructions(input)}` : ""}`,
+    dramaNote = `${drama ? `\n${dramaPitchInstructions(attempts, { sameTry: ideaRepeatsTries(input) })}` : ""}${castPitchInstructions(input) ? `\n${castPitchInstructions(input)}` : ""}`,
     CANDIDATE_SCHEMA = orchestrated
       ? strict({ pitch: strict({ ...pitchSchema(attempts, drama).properties, ...candidateSchemaProperties(beats) }) })
       : null,
@@ -614,7 +619,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
       record.roles = { chair: "speaking", author: "speaking", editor: "waiting", art: "waiting", reader: "waiting" };
       await snapshot("pitches", PROGRESS.pitches);
       design = normalizeGrowthDesign(
-        await ask("작가", PERSONA.author, `${context}\n\n${growthDesignInstructions()}\n\n[출력] JSON만.`, GROWTH_DESIGN_SCHEMA, 0.7, 900, "prose"),
+        await ask("작가", PERSONA.author, `${context}\n\n${growthDesignInstructions()}${ideaGrowthLine(input) ? `\n${ideaGrowthLine(input)}` : ""}\n\n[출력] JSON만.`, GROWTH_DESIGN_SCHEMA, 0.7, 900, "prose"),
       );
       if (!design) throw journal.fail(councilError("작가 봇이 성장 설계를 내지 못했어요."));
       record.design = design;
@@ -637,8 +642,14 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         // R29 정성 모드: three candidates from three angles in parallel (the
         // author model), each with its growth and tension curve; a candidate
         // whose curve fails the check is asked once more with the problems.
+        // R46: on an idea draft each candidate has its own device, kind of turn and curve shape.
+        const devices = roomDevices(input);
         const candidate = async (angle) => {
-          const base = `${context}\n\n${singlePitchInstructions}${dramaNote}\n${candidateInstructions(angle, beats, range, design)}${vetoNote}`;
+          const device = devices?.[angle.id] || "",
+            sameTry = ideaRepeatsTries(input) || ideaCardById(device)?.sameTry === true,
+            note = devices ? `${drama ? `\n${dramaPitchInstructions(attempts, { sameTry })}` : ""}${castPitchInstructions(input) ? `\n${castPitchInstructions(input)}` : ""}` : dramaNote,
+            ideaLines = ideaCandidateLines(input, angle.id, device);
+          const base = `${context}\n\n${singlePitchInstructions}${note}\n${candidateInstructions(angle, beats, range, design)}${ideaLines ? `\n${ideaLines}` : ""}${vetoNote}`;
           let raw = await ask("작가", PERSONA.author, `${base}\n\n[출력] JSON만. {"pitch":{...}}`, CANDIDATE_SCHEMA, 0.95, 2200, "prose");
           let pitch = normalizePitch(raw.pitch, attempts, drama),
             extra = normalizeCandidate(raw.pitch, beats),
@@ -655,7 +666,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
           }
           // Still failing after the one retry: kept with its notes (the chair
           // ranks it as it is; never a third request).
-          return pitch ? { ...pitch, ...design, ...extra, angle: angle.id, ...(problems.length ? { curveNotes: problems } : {}) } : null;
+          return pitch ? { ...pitch, ...design, ...extra, angle: angle.id, ...(device ? { device } : {}), ...(problems.length ? { curveNotes: problems } : {}) } : null;
         };
         pitches = (await Promise.all(PLOT_ANGLES.map(candidate))).filter(Boolean);
       } else {
@@ -718,7 +729,7 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         reader: byPitch(reader.reactions, pitches.length),
         picks: { editor: Number(editor.pick) || null, art: Number(art.pick) || null, reader: Number(reader.favorite) || null },
       };
-      scores = chairScores(verdicts.editor, verdicts.art, verdicts.reader, pitches.length, pitches);
+      scores = chairScores(verdicts.editor, verdicts.art, verdicts.reader, pitches.length, pitches, { sameTry: ideaRepeatsTries(input) });
       record.verdicts = verdicts;
       record.scores = scores;
       record.roles.chair = "speaking";
@@ -787,6 +798,8 @@ export async function runStoryCouncil(input, options = {}, services = {}) {
         lesson: design.lesson,
         tension: grown.tension.length === beats && !checkTensionCurve(grown.tension, beats, range).length ? grown.tension : list(chosen.tension),
       });
+      // R46: the chosen candidate's device (set by the app, never by the model) goes on with the bible.
+      if (ideaCardById(chosen.device)?.slot === "device") bible.device = chosen.device;
     }
     const visual = object(bibleReply.bible?.visual) ? bibleReply.bible.visual : {};
     const pictures = [];

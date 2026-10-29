@@ -660,6 +660,8 @@ function legacyInputOf(state, job) {
   // R41: and the cast marker.
   delete prepared.input.storyCast;
   delete prepared.input.englishMirror;
+  // R46: and the idea cards.
+  delete prepared.input.storyIdea;
   return {...prepared.input, backgrounds: prepared.input.backgrounds.filter(b => job.plan.backgroundIds.includes(b.id)), preferredBackgroundIds: clone(job.plan.backgroundIds), specs: clone(job.readingLevels.specs), bookId: job.bookId, storyDate: job.input.storyDate || job.createdAt};
 }
 test('R12-P1 the v3 FULL AUTO job fixture resumed at the input step gives the byte-identical page input, with openings on', async () => {

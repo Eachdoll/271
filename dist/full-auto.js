@@ -1369,6 +1369,7 @@ export async function runFullAuto(
         storyVoice: _freshVoice,
         bookFormat: _freshFormat,
         storyExpression: _freshExpression,
+        storyIdea: _freshIdea,
         storyChange: _freshChange,
         storyPlace: _freshPlace,
         storyDrama: _freshDrama,
@@ -1421,6 +1422,8 @@ export async function runFullAuto(
         ...(job.input?.bookFormat ? { bookFormat: clone(job.input.bookFormat) } : {}),
         // R37: the job's own expression cards (never re-chosen on resume).
         ...(job.input?.storyExpression ? { storyExpression: clone(job.input.storyExpression) } : {}),
+        // R46: the job's own idea cards.
+        ...(job.input?.storyIdea ? { storyIdea: clone(job.input.storyIdea) } : {}),
         // R38: the job's own change marker and opening place.
         ...(job.input?.storyChange ? { storyChange: clone(job.input.storyChange) } : {}),
         ...(job.input?.storyPlace ? { storyPlace: clone(job.input.storyPlace) } : {}),
