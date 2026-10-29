@@ -1,0 +1,10 @@
+{
+  "source": "8c61567",
+  "codeFiles": 539,
+  "runtimeBuilt": 9,
+  "mismatches": [],
+  "builtMismatches": [],
+  "server16MBMessageInBundle": [
+    "server/_next/static/route-DMb-PQb2.js"
+  ]
+}

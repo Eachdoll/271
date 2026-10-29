@@ -1,0 +1,69 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "synthetic": true,
+  "pageErrors": [],
+  "paidRequests": [],
+  "cloudRequests": [
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    }
+  ],
+  "realFamilySaveVerified": false,
+  "before": {
+    "bytes": 2609535,
+    "bookId": "seed-dinosaur",
+    "bookCount": 4,
+    "jobId": "auto-619e4c80-ec01-4898-94a6-791df463c7de",
+    "imageUsage": {
+      "prompt": "synthetic picture request retained",
+      "seed": 123
+    },
+    "rows": 6
+  },
+  "after": {
+    "bytes": 119921,
+    "bookCount": 4,
+    "rows": 6,
+    "usageCheckpointCount": 0,
+    "totals": {
+      "input": 7404,
+      "output": 3402,
+      "requests": 12,
+      "costUsd": 0.7404
+    },
+    "allModelNamesKept": true,
+    "resume": {
+      "version": 1,
+      "completed": {
+        "resume": "keep-this-response"
+      }
+    },
+    "meta": {
+      "coherence": {
+        "passed": true
+      }
+    },
+    "imageUsage": {
+      "prompt": "synthetic picture request retained",
+      "seed": 123
+    }
+  },
+  "idempotent": true,
+  "readerOpened": true,
+  "cache": "donghwa-shell-v94",
+  "savedPercent": 95.4,
+  "passed": true
+}

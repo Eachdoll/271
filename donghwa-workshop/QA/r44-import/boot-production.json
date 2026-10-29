@@ -1,0 +1,69 @@
+{
+  "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site/",
+  "synthetic": true,
+  "pageErrors": [],
+  "paidRequests": [],
+  "cloudRequests": [
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/session"
+    }
+  ],
+  "realFamilySaveVerified": false,
+  "before": {
+    "bytes": 2609524,
+    "bookId": "seed-dinosaur",
+    "bookCount": 4,
+    "jobId": "auto-f7c13230-9e49-49a8-b995-33fd0d93191d",
+    "imageUsage": {
+      "prompt": "synthetic picture request retained",
+      "seed": 123
+    },
+    "rows": 6
+  },
+  "after": {
+    "bytes": 119910,
+    "bookCount": 4,
+    "rows": 6,
+    "usageCheckpointCount": 0,
+    "totals": {
+      "input": 7404,
+      "output": 3402,
+      "requests": 12,
+      "costUsd": 0.7404
+    },
+    "allModelNamesKept": true,
+    "resume": {
+      "version": 1,
+      "completed": {
+        "resume": "keep-this-response"
+      }
+    },
+    "meta": {
+      "coherence": {
+        "passed": true
+      }
+    },
+    "imageUsage": {
+      "prompt": "synthetic picture request retained",
+      "seed": 123
+    }
+  },
+  "idempotent": true,
+  "readerOpened": true,
+  "cache": "donghwa-shell-v94",
+  "savedPercent": 95.4,
+  "passed": true
+}

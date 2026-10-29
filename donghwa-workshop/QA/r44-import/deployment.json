@@ -1,0 +1,34 @@
+{
+  "saved": {
+    "id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_1c620b9bf10c81918fb8aa60ce37414c",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "version_number": 55,
+    "source": {
+      "commit_sha": "66b72fe3e315303052c5ad68702a137770188363"
+    },
+    "archive_storage": {
+      "archive_format": "tar",
+      "sediment_file_id": "file_00000000b604821183c9bb7125161bb4",
+      "content_hash": "sha256:72a1893e00d9465459ac75641fba950bb71a0fe8e3eb3e3047f64ddb703ef557",
+      "size_bytes": 9226240,
+      "file_count": 263
+    },
+    "screenshot_url": null,
+    "deployment_id": null
+  },
+  "deployment": {
+    "id": "appgdep_6ae2d4a50348819194b909694abbd803",
+    "project_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd",
+    "title": "동화공방 · 우리 아이가 주인공인 이야기",
+    "version_id": "appgprj_6acf7d49d818819196c04d5ff8fa10cd~appgver_1c620b9bf10c81918fb8aa60ce37414c",
+    "type": "publish",
+    "status": "succeeded",
+    "url": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site",
+    "has_mcp": false,
+    "screenshot_asset_pointer": null,
+    "provider_deployment_id": "site---6acf7d49d818819196c04d5ff8fa10cd",
+    "failure_message": null,
+    "env_set_revision": 1,
+    "updated_at": "2026-10-29T05:08:10.310066+00:00"
+  }
+}
