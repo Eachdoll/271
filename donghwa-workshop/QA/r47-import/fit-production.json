@@ -1,0 +1,747 @@
+{
+  "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site/",
+  "synthetic": true,
+  "originalBookFilesAvailable": false,
+  "originalBookVerification": "unverified",
+  "pageErrors": [],
+  "paidRequests": [],
+  "prints": {
+    "bilingual": {
+      "summary": {
+        "bookFont": "14",
+        "printReady": "ready",
+        "pockets": 16,
+        "split": 2,
+        "spill": 0,
+        "cut": 0,
+        "pass": true
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "top",
+          "share": "35%",
+          "mode": "split",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "6",
+          "side": "top",
+          "share": "45%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "8",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "10",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "top",
+          "share": "35%",
+          "mode": "split",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "12",
+          "side": "top",
+          "share": "45%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "14",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "16",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ]
+    },
+    "bilingualFeedback": {
+      "summary": {
+        "bookFont": "14",
+        "printReady": "ready",
+        "pockets": 16,
+        "split": 2,
+        "spill": 0,
+        "cut": 0,
+        "pass": true
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "top",
+          "share": "35%",
+          "mode": "split",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "6",
+          "side": "top",
+          "share": "45%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "8",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "10",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "top",
+          "share": "35%",
+          "mode": "split",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "12",
+          "side": "top",
+          "share": "45%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "14",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "16",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ]
+    },
+    "ko": {
+      "summary": {
+        "bookFont": "14",
+        "printReady": "ready",
+        "pockets": 16,
+        "split": 0,
+        "spill": 0,
+        "cut": 0,
+        "pass": true
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "top",
+          "share": "35%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "6",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "8",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "10",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "top",
+          "share": "35%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "12",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "14",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "16",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ]
+    },
+    "koFeedback": {
+      "summary": {
+        "bookFont": "14",
+        "printReady": "ready",
+        "pockets": 16,
+        "split": 0,
+        "spill": 0,
+        "cut": 0,
+        "pass": true
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "top",
+          "share": "35%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "6",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "8",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "10",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "top",
+          "share": "35%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "12",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "14",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "16",
+          "side": "top",
+          "share": "30%",
+          "mode": "field",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ]
+    }
+  },
+  "unchanged": true,
+  "legacyHasNoPocket": true,
+  "readers": [
+    {
+      "width": 390,
+      "share": "75%",
+      "font": "12.5px",
+      "overflow": false,
+      "order": [
+        "ko",
+        "en"
+      ],
+      "visible": [
+        {
+          "lang": "ko",
+          "ratio": 1
+        },
+        {
+          "lang": "en",
+          "ratio": 1
+        }
+      ]
+    },
+    {
+      "width": 1280,
+      "share": "40%",
+      "font": "23px",
+      "overflow": false,
+      "order": [
+        "ko",
+        "en"
+      ],
+      "visible": [
+        {
+          "lang": "ko",
+          "ratio": 1
+        },
+        {
+          "lang": "en",
+          "ratio": 1
+        }
+      ]
+    }
+  ],
+  "passed": true
+}
