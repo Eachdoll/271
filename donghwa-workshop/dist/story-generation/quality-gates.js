@@ -1066,9 +1066,17 @@ export function approvedBookRecord(book) {
       : previous.expression && typeof previous.expression === "object"
         ? { ...previous.expression }
         : null;
+  // R46: the idea cards a diet book was written with (the next book's draw leaves them for last).
+  const idea =
+    book.storyInput?.storyIdea?.cards && typeof book.storyInput.storyIdea.cards === "object"
+      ? { ...book.storyInput.storyIdea.cards, ...(book.outline?.bible?.device && !book.storyInput.storyIdea.cards.device ? { device: String(book.outline.bible.device) } : {}) }
+      : previous.idea && typeof previous.idea === "object"
+        ? { ...previous.idea }
+        : null;
   const usedElements = {
     ...(voice ? { voice } : {}),
     ...(expression ? { expression } : {}),
+    ...(idea ? { idea } : {}),
     planted: String(plan.planted || seed.planted?.ko || previous.planted || ""),
     creatures: plainValues([
       ...briefs.map((brief) => brief?.creature?.ko),

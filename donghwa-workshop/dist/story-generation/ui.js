@@ -54,6 +54,7 @@ import { chooseStoryShape, storyShapeRef, recentShapeIds, storyShapeLabel, shape
 import { stageFor, stageById } from "./stage-categories.js";
 import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
 import { chooseExpression, recentExpressionIds, expressionSummary } from "./expression-deck.js";
+import { drawIdea, recentIdeaIds, storyIdeaRef, ideaSummary, withoutDevice, ideaInputFor } from "./idea-deck.js";
 import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
 import { picturePlanNote } from "./picture-plan.js";
 import {
@@ -476,6 +477,8 @@ function shapeStageNote(outline, input = null) {
     shape?.name && voiceSummary(input?.storyVoice) ? esc(voiceSummary(input.storyVoice)) : "",
     // R37: a picture-led book's expression principles (표현 원리 카드).
     expressionSummary(input?.storyExpression) ? esc(expressionSummary(input.storyExpression)) : "",
+    // R46: the idea cards (발상·인물 짜임·장치·끝).
+    ideaSummary(ideaInputFor(input, outline?.bible?.device)?.storyIdea) ? esc(ideaSummary(ideaInputFor(input, outline?.bible?.device).storyIdea)) : "",
     // R38: what the outline says is different at the end.
     storyChangeSummary(outline) ? esc(storyChangeSummary(outline)) : "",
     // R39: the tries' kinds, the secret and the companion's want.
@@ -883,6 +886,24 @@ export function storyExpressionFor(state, wizard = {}) {
     recentIds: recentExpressionIds(storyQualityBookRecords(state)),
   });
 }
+/**
+ * R46: the book's idea cards. The parent's draw from ① (아이디어 뽑기) when it
+ * is still for this topic (its spark only while the topic is the one it
+ * filled in); otherwise cast, device and ending drawn from the topic's seed,
+ * the latest books' cards left for last.
+ */
+export function storyIdeaFor(state, wizard = {}, { k1 = false, room = false } = {}) {
+  const topic = String(wizard.topic || "").trim(),
+    drawn = storyIdeaRef(wizard.storyIdea);
+  if (drawn) {
+    if (drawn.cards.spark && String(wizard.storyIdea.topic || "").trim() !== topic) delete drawn.cards.spark;
+    return drawn;
+  }
+  const auto = drawIdea({ seed: `${topic}:${Number(wizard.qualitySeedOffset) || 0}`, recentIds: recentIdeaIds(storyQualityBookRecords(state)), k1, spark: false });
+  // A draft whose writers' room weighs three candidates leaves the device to
+  // the room: each candidate gets its own (roomDevices).
+  return room ? withoutDevice(auto) : auto;
+}
 /** R33: the stage of a new draft — the parent's pick, else the chosen world card's category, else the topic's. */
 export function draftStageFor(state, wizard = {}) {
   const defaults = normalizeStoryQualitySettings(state.settings?.storyQuality);
@@ -1094,6 +1115,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       bookFormat: bookFormat(formatId),
       // R37: a picture-led book's expression principles in place of R35's fixed plot template.
       ...(formatId === "pictureLed" ? { storyExpression: storyExpressionFor(state, wizard) } : {}),
+      // R46: the book's idea cards (발상·인물 짜임·장치·끝), drawn once here (never on resume).
+      storyIdea: storyIdeaFor(state, wizard, { k1, room: !k1 && !!orchestrationPolicyFor(state) }),
     },
     readingLevels,
     world,

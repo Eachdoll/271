@@ -56,6 +56,7 @@ import {
 import { getStylePreset } from "./image-generation/styles.js";
 import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
 import { expressionWriterLine } from "./story-generation/expression-deck.js";
+import { ideaWriterLine, withDevice } from "./story-generation/idea-deck.js";
 import { pageBookVoiceLine, withWordlessSchema } from "./story-generation/story-change.js";
 import { withBackdropSchema, isTextOnlyPage, plainBackdropFor } from "./story-generation/story-drama.js";
 import { pocketOf, pocketPromptLine } from "./text-pocket.js";
@@ -91,6 +92,8 @@ export function ecoInput(input) {
   delete next.orchestrationPolicy;
   delete next.editorPolicy;
   if (!hasPromptDiet(next)) next.promptDiet = promptDiet();
+  // R46: no writers' room here, so a device the room would have picked is drawn now.
+  if (next.storyIdea) next.storyIdea = withDevice(next.storyIdea, `${String(next.topic || "").trim()}:${Number(next.qualitySeedOffset) || 0}`, { k1: next.k1Policy?.version === 1 }) || next.storyIdea;
   return next;
 }
 /** Turn a freshly created (never run) FULL AUTO job into an eco job at its first step. */
@@ -235,6 +238,8 @@ export function ecoPagesPrompt(source, outline) {
     ...(voiceBlock(input, "ko") ? [`${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}`] : []),
     // R37: a picture-led book's expression cards.
     ...(expressionWriterLine(input, "ko") ? [`${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}`] : []),
+    // R46: the book's idea cards.
+    ...(ideaWriterLine(input, "ko") ? [`${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}`] : []),
     // R38: the page book's voice.
     ...(pageBookVoiceLine(input, "ko") ? [`${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}`] : []),
     block(

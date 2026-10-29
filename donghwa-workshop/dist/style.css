@@ -5259,6 +5259,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 .council-pick:has(input:checked) { border: 2px solid #292929; padding: 13px; background: #f4f4f4; }
 .council-pick-body { font-size: 14px; gap: 6px; }
 .council-pick .pitch-turn, .council-pick .pitch-logline { font-size: 14px; color: #444444; }
+/* R46: who and where each candidate uses (measured by the app). */
+.council-pick .pitch-materials { font-size: 13px; color: #505050; font-weight: 600; }
 .pitch-review-details { padding: 0 14px; font-size: 13px; color: #505050; }
 .pitch-review-details p { margin: 0 0 12px; }
 .council-budget { display: grid; gap: 8px; padding: 14px; background: #f0f0f0; border-radius: 10px; font-size: 13px; margin: 16px 0; }

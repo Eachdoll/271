@@ -8,6 +8,7 @@ import { bookFormatRef } from "../book-format.js";
 import { withPicturePlanSchema } from "./picture-plan.js";
 import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChangeRef, storyPlaceRef, withWordlessSchema } from "./story-change.js";
 import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
+import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -436,6 +437,11 @@ function modelVisibleInput(source) {
     const { storyExpression, ...rest } = input;
     input = rest;
   }
+  // R46: so are the idea cards.
+  if (input?.storyIdea) {
+    const { storyIdea, ...rest } = input;
+    input = rest;
+  }
   // R38: the change marker and the opening place are rule lines, not story data.
   if (input?.storyChange) {
     const { storyChange, ...rest } = input;
@@ -620,6 +626,8 @@ export function normalizeStoryInput(input = {}) {
     ...(bookFormatRef(input.bookFormat) ? { bookFormat: bookFormatRef(input.bookFormat) } : {}),
     // R37: a picture-led book's expression cards (표현 원리), chosen once in the wizard.
     ...(expressionRef(input.storyExpression) ? { storyExpression: expressionRef(input.storyExpression) } : {}),
+    // R46: the idea cards (발상·인물 짜임·장치·끝), drawn once in the wizard.
+    ...(storyIdeaRef(input.storyIdea) ? { storyIdea: storyIdeaRef(input.storyIdea) } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
@@ -2345,7 +2353,7 @@ export function outlineRequestSchema(input) {
   return withCastSchema(withPocketSchema(withDramaPlanSchema(withStoryDramaSchema(withStoryChangeSchema(withPicturePlanSchema(schema, input), input), input), input), input), input);
 }
 export async function generateOutline(source, options = {}) {
-  const input = normalizeStoryInput(source);
+  let input = normalizeStoryInput(source);
   abort(options.signal);
   if (demo(options)) {
     const outline = demoOutline(input);
@@ -2368,6 +2376,8 @@ export async function generateOutline(source, options = {}) {
   const council = hasCouncilPolicy(input)
     ? await runStoryCouncil(input, options, qualityServices())
     : null;
+  // R46: the room gave each candidate its own device; the chosen one is this outline's.
+  input = ideaInputFor(input, council?.record.bible?.device);
   const diet = hasPromptDiet(input);
   const bibleRules = [
     council ? (diet ? leanBibleBlock(council.record.bible, input) : bibleOutlineRules(council.record.bible, input)) : "",

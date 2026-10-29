@@ -7,6 +7,7 @@ import { renderActionSwitch } from "./ui-controls.js";
 import { revisionSummary } from "./story-generation/book-revision.js";
 import { voiceSummary } from "./story-generation/voice-deck.js";
 import { expressionSummary } from "./story-generation/expression-deck.js";
+import { drawIdea, recentIdeaIds, sparkTopic, ideaSummary, ideaInputFor } from "./story-generation/idea-deck.js";
 import { BOOK_FORMAT_OPTIONS, BOOK_FORMAT_LABELS, formatFor, bookFormatLabel } from "./book-format.js";
 import { picturePlanNote } from "./story-generation/picture-plan.js";
 import { storyChangeSummary, wordlessPageIndexes } from "./story-generation/story-change.js";
@@ -112,6 +113,7 @@ import { syncActiveWorldTextSettings } from "./world-variations.js";
 import {
   setStoryQualityOption,
   storyWorldTopic,
+  storyQualityBookRecords,
 } from "./story-generation/quality-settings.js";
 import { isCoherenceCurrent } from "./story-generation/coherence.js";
 import { loadStoryQualityData, resolveStoryWorld } from "./story-generation/quality-adapter.js";
@@ -354,6 +356,8 @@ const MAX_FRIENDS = 6,
   /** R9-B2 rule 3: at most 12 visible buttons per simple step. */
   MAX_STEP_BUTTONS = 12;
 const IDEA_NOTE = "주제 칸에 아이디어를 넣었어요. 자유롭게 고쳐 주세요.";
+/** R46: the note under ① after a draw — the drawn cards when there are any. */
+const ideaNote = (w) => (ideaSummary(w?.storyIdea) ? `${IDEA_NOTE} ${ideaSummary(w.storyIdea)}` : IDEA_NOTE);
 
 /* ---------- language-aware text check (approve-book) ---------- */
 const needsKo = (book) => book?.language !== "en";
@@ -1329,6 +1333,8 @@ function shapeStageLine(job) {
     !job?.demo ? voiceSummary(job?.input?.storyVoice) : "",
     // R37: a picture-led book's expression cards.
     !job?.demo ? expressionSummary(job?.input?.storyExpression) : "",
+    // R46: the idea cards (발상·인물 짜임·장치·끝).
+    !job?.demo ? ideaSummary(ideaInputFor(job?.input, job?.outline?.bible?.device)?.storyIdea) : "",
     // R38: what the outline says is different at the end.
     storyChangeSummary(job?.outline),
     // R39: the tries' kinds, the secret and the companion's want.
@@ -1396,7 +1402,7 @@ function renderTopicStep(ctx, w) {
   const state = ctx.getState(),
     job = jobOfWizard(state, w);
   if (job) return renderFrozenTopic(ctx, w, job);
-  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? IDEA_NOTE : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
+  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? esc(ideaNote(w)) : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
   home: "🏡",
@@ -3275,6 +3281,8 @@ async function handle(ctx, action, el) {
   if (action === "topic") {
     w.topic = el.dataset.topic;
     delete w.simpleIdeaNote;
+    // R46: a chip is the parent's own topic; the drawn idea goes with the draw.
+    delete w.storyIdea;
     const field = document.querySelector("#topic"),
       status = document.querySelector("#simple-idea-status");
     if (field) field.value = w.topic;
@@ -3305,7 +3313,17 @@ async function handle(ctx, action, el) {
       }
     // The parent moved on while the world idea loaded: leave the topic alone.
     if (ctx.getWizard() !== w || w.simpleStep !== 1 || w.simpleJobId) return;
-    if (!topic || topic === current) topic = pickIdeaTopic(current);
+    // R46: draw the four idea cards (발상·인물 짜임·장치·끝), the latest books' cards left
+    // for last; the spark's own example fills the topic unless a world card gave one.
+    const seed = `${Date.now()}:${Math.random()}`,
+      drawn = drawIdea({
+        seed,
+        recentIds: recentIdeaIds(storyQualityBookRecords(state)),
+        k1: w.language !== "en" && (w.koreanLevel || "K1") === "K1",
+      });
+    if (!topic || topic === current) topic = sparkTopic(drawn.cards.spark, current, seed) || pickIdeaTopic(current);
+    else delete drawn.cards.spark;
+    w.storyIdea = { ...drawn, topic };
     w.topic = topic;
     // Kept on the screen state, so a later redraw of ① still shows it.
     w.simpleIdeaNote = topic;
@@ -3317,7 +3335,7 @@ async function handle(ctx, action, el) {
       ?.forEach((chip) =>
         chip.classList.toggle("selected", chip.dataset.topic === topic),
       );
-    if (status) status.textContent = IDEA_NOTE;
+    if (status) status.textContent = ideaNote(w);
     return;
   }
   if (action === "format") {
