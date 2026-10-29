@@ -1,0 +1,29 @@
+{
+  "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site/",
+  "synthetic": true,
+  "pageErrors": [],
+  "paidRequests": [],
+  "transfer": {
+    "jsonBytes": 29763,
+    "json": {
+      "bookCount": 4,
+      "characterCount": 4,
+      "backgroundCount": 5,
+      "worldCount": 0,
+      "draftCount": 0,
+      "imageCount": 0,
+      "audioCount": 0
+    },
+    "zip": {
+      "bookCount": 4,
+      "characterCount": 4,
+      "backgroundCount": 5,
+      "worldCount": 0,
+      "draftCount": 0,
+      "imageCount": 0,
+      "audioCount": 0
+    },
+    "sameFirstTitle": true
+  },
+  "passed": true
+}
