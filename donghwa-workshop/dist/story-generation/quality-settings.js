@@ -1,3 +1,4 @@
+import { compactUsageRow } from "../library-compact.js";
 import { renderCheckboxSwitch } from "../ui-controls.js";
 /* Parent-owned structure settings. Reference cards contain abstract structure only. */
 import {
@@ -637,7 +638,7 @@ export async function maybeRunStoryQualityCoach({ force = false } = {}) {
     if (api.isParent() && api.getState() === state) {
       state.settings.storyQuality.coachUsage = [
         ...list(state.settings.storyQuality.coachUsage),
-        { at: new Date().toISOString(), ...result.usage, ...result.meta },
+        compactUsageRow({ at: new Date().toISOString(), ...result.usage, ...result.meta }),
       ].slice(-50);
       api.save();
       if (force)

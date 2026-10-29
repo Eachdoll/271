@@ -1,3 +1,4 @@
+import { compactUsageRow } from "../library-compact.js";
 import { isCoherenceCurrent } from "./coherence.js";
 import { reviewStoryCoherence } from "./pipeline.js";
 import { getTextGenerationSettings } from "../text-generation/settings-ui.js";
@@ -41,11 +42,13 @@ export async function ensureBookStoryCoherence(
     if (result?.usage && result.meta?.requests !== 0) {
       book.textUsage ||= { calls: [] };
       book.textUsage.calls ||= [];
-      book.textUsage.calls.push({
-        ...result.usage,
-        ...result.meta,
-        at: new Date().toISOString(),
-      });
+      book.textUsage.calls.push(
+        compactUsageRow({
+          ...result.usage,
+          ...result.meta,
+          at: new Date().toISOString(),
+        }),
+      );
     }
   };
   try {

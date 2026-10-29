@@ -8,8 +8,9 @@
  */
 export const CLOUD_LIMITS = Object.freeze({
   mediaBytes: 40 * 1024 * 1024,
-  stateBytes: 8 * 1024 * 1024,
-  requestBytes: 10 * 1024 * 1024,
+  // R44: the library text lives in an R2 object (the D1 row holds a pointer), so 16MB is a choice, not a storage limit.
+  stateBytes: 16 * 1024 * 1024,
+  requestBytes: 18 * 1024 * 1024,
   manifestEntries: 10000,
 });
 const encoder = new TextEncoder();
@@ -628,7 +629,7 @@ async function putLibrary(request, env, user) {
     fail(
       413,
       "state_too_large",
-      "글과 설정 자료는 8MB까지 저장할 수 있어요. 그림·음원은 별도로 전송해 주세요.",
+      "글과 설정 자료는 16MB까지 저장할 수 있어요. 그림·음원은 별도로 전송해 주세요.",
     );
   const manifest = validateManifest(body.manifest, references);
   await checkUploadedAssets(env, user.id, manifest);
