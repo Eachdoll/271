@@ -87,6 +87,19 @@ const PLAN_SHOT = Object.freeze({ wide: "wide", middle: "medium", close: "closeu
 /** R38: the composition sentence that opens a request — the camera and the plan before anything a reference image could suggest. */
 const framedLead = (shot, plan) =>
   `COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): ${SHOT_TEXT[shot] || SHOT_TEXT.wide}.${plan ? ` ${plan}` : ""} Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. `;
+/**
+ * R48: the other page of the same opening (a pair of single pages). The
+ * parent's K2 book drew three pairs as the same salon from the same spot
+ * twice; the request now names the facing page's moment and asks for a
+ * different one.
+ */
+export function facingPageLine(book, page) {
+  if (!page || page.kind !== "page" || page.openingNo == null) return "";
+  const sibling = (book?.pages || []).find((row) => row && row !== page && row.kind === "page" && row.openingNo === page.openingNo);
+  if (!sibling) return "";
+  const moment = String(sibling.scene?.action || sibling.scene?.prompt || sibling.en || sibling.textEn || "").replace(/\s+/gu, " ").trim().slice(0, 240).replace(/[.。]+$/u, "");
+  return `FACING PAGE (the other page of this opening) shows: ${moment || "another moment of this beat"}. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. `;
+}
 /** The staging a page is drawn with: the planned shot (R36) over the staging rotation. */
 export function effectiveStaging(book, page, { cover = false } = {}) {
   const planned = cover ? null : pagePlan(book, page);
@@ -124,6 +137,8 @@ export function buildScenePrompt({
     // R40: the flat field the words are typeset on (never on the cover).
     // R47: the field is sized to the page's words.
     pocketLine = !cover && pocketOf(book, page) ? pocketPromptLine(planned, pocketOf(book, page).share) : "",
+    // R48: the facing page of a pair (낱쪽 둘) is a different moment, never the same picture twice.
+    facing = framed && !cover ? facingPageLine(book, page) : "",
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -141,7 +156,7 @@ export function buildScenePrompt({
   // R36: the composition planned with the story (picture-led books only; empty otherwise).
   const plan = picturePlanPictureLine(planned);
   const composition = openings
-    ? `${framed && !cover ? framedLead(shot, plan) : ""}${openingComposition(page, staging, leadName)}${pocketLine ? ` ${pocketLine}` : ""}`
+    ? `${framed && !cover ? framedLead(shot, plan) : ""}${facing}${openingComposition(page, staging, leadName)}${pocketLine ? ` ${pocketLine}` : ""}`
     : `${framed && !cover ? framedLead(shot, plan) : ""}${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
   const time = brief?.timeOfDay || page.scene?.timeOfDay || "day";
   const mood = book.outline?.quality?.worldMood || book.storyQuality?.worldMood;

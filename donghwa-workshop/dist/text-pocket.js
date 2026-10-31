@@ -137,133 +137,124 @@ export const POCKET_CSS = `
 .pocket-frame{position:relative;overflow:hidden}
 .pocket-frame .pocket-picture{display:block}
 .pocket-frame .pocket-picture>img,.pocket-frame .pocket-picture>svg,.pocket-frame .pocket-picture>.illustration{display:block;width:100%;height:auto}
-.text-pocket{position:absolute;display:flex;align-items:center;justify-content:center;padding:3% 4%;box-sizing:border-box;background:rgba(255,253,246,.88);color:#2b2b2b;font-weight:600;line-height:1.5;word-break:keep-all;overflow-wrap:break-word;white-space:pre-line;text-align:center;z-index:1}
-.text-pocket.pocket-flat{background:var(--pocket-bg,#f6f2e8);color:var(--pocket-fg,#2b2b2b)}
+.text-pocket{position:absolute;display:none;align-items:center;justify-content:center;padding:3% 4%;box-sizing:border-box;background:var(--pocket-bg,#f6f2e8);color:var(--pocket-fg,#2b2b2b);font-weight:600;line-height:1.5;word-break:keep-all;overflow-wrap:break-word;white-space:pre-line;text-align:center;z-index:1}
+.pocket-on .text-pocket{display:flex}
 .pocket-left .text-pocket{top:0;bottom:0;left:0;width:var(--pocket-share,34%)}
 .pocket-right .text-pocket{top:0;bottom:0;right:0;width:var(--pocket-share,34%)}
 .pocket-top .text-pocket{left:0;right:0;top:0;height:var(--pocket-share,30%)}
 .pocket-bottom .text-pocket{left:0;right:0;bottom:0;height:var(--pocket-share,30%)}
 .text-pocket-inner{max-width:100%;max-height:100%;overflow:hidden}
-.text-pocket p{margin:0}
-.text-pocket p+p{margin-top:.5em}
+.text-pocket p,.text-pocket .ko,.text-pocket .en{margin:0}
+.text-pocket p+p,.text-pocket .ko+.en{margin-top:.5em}
 .text-pocket .en{font-weight:500;opacity:.9}
 .text-pocket-shout .text-pocket-inner{font-size:2.4em;line-height:1.15;font-weight:800;letter-spacing:-.02em}
 `;
-/**
- * The colour sampler, as a function body shared by the app and the print
- * tab: for every pocket panel, read the finished picture's field (a 48×48
- * copy), and when it is flat (little luminance spread) paint the panel in
- * that colour with dark or light type; otherwise keep the translucent card.
+/*
+ * R48 글은 그림이 비워 둔 곳에만. The parent's printed PDF (v58): the R40/R47
+ * panel, painted in the sampled wall colour, hid the top 45% of every spread
+ * (mirrors, plants, a window) and nine tenths of a left half — "the words
+ * cover the picture". The sampler called a cream wall "flat" (sd ≤ 0.09 over
+ * the whole planned field) and R47 then grew the field into the art. Now the
+ * words sit on a picture only where the picture really is empty: the placer
+ * measures, from the pocket's edge inward, how far the picture stays one flat
+ * colour (strip by strip), uses only that much, and when the words do not fit
+ * there — or there is no flat edge at all — leaves them under the picture
+ * (the print's text block, the reader's body, ④'s text fields). Nothing is
+ * ever painted over art, no font shrinks over art, no translucent card.
+ *
+ * One function body shared by the app and the print tab. Markup contract:
+ * a `.pocket-frame` (the picture and its `.text-pocket` panel, hidden until
+ * `pocket-on`), its host = the closest `[data-pocket-host]` (else the frame),
+ * and an optional words block `[data-pocket-words]` in the host whose `.ko`
+ * and `.en` children the placer moves into the panel when they fit (all of
+ * them, else the Korean alone → `pocket-split`, else none). A frame whose
+ * panel already holds its words (④ cards) is simply switched on or off.
  */
-export const POCKET_SAMPLER_SOURCE = `
-function samplePockets(root){
-  const frames=(root||document).querySelectorAll('.pocket-frame');
-  frames.forEach((frame)=>{
-    const img=frame.querySelector('img,.illustration'),panel=frame.querySelector('.text-pocket');
-    if(!img||!panel||panel.dataset.sampled==='1')return;
-    const go=()=>{
-      try{
-        const N=48,c=document.createElement('canvas');c.width=N;c.height=N;
-        const ctx=c.getContext('2d');ctx.drawImage(img,0,0,N,N);
-        const side=panel.dataset.pocket,share=Math.max(.1,Math.min(1,Number(panel.dataset.share)||.34));
-        const x0=side==='right'?Math.floor(N*(1-share)):0,x1=side==='left'?Math.ceil(N*share):N;
-        const y0=side==='bottom'?Math.floor(N*(1-share)):0,y1=side==='top'?Math.ceil(N*share):N;
-        const d=ctx.getImageData(0,0,N,N).data;let r=0,g=0,b=0,n=0,sum=0,sq=0;
-        for(let y=y0+1;y<y1-1;y++)for(let x=x0+1;x<x1-1;x++){const i=(y*N+x)*4;r+=d[i];g+=d[i+1];b+=d[i+2];n++;const l=(.299*d[i]+.587*d[i+1]+.114*d[i+2])/255;sum+=l;sq+=l*l;}
-        if(!n)return;r/=n;g/=n;b/=n;const mean=sum/n,sd=Math.sqrt(Math.max(0,sq/n-mean*mean));
-        panel.dataset.sampled='1';
-        if(sd<=0.09){panel.style.setProperty('--pocket-bg','rgb('+Math.round(r)+','+Math.round(g)+','+Math.round(b)+')');panel.style.setProperty('--pocket-fg',mean>0.6?'#2b2b2b':'#fffaf0');panel.classList.add('pocket-flat');}
-        else panel.classList.add('pocket-busy');
-      }catch(e){panel.dataset.sampled='1';panel.classList.add('pocket-busy');}
-    };
-    if(img.complete&&img.naturalWidth)go();else img.addEventListener('load',go,{once:true});
-  });
-}`;
-/**
- * R47: the words always fit their field. For every pocket whose words are
- * taller than the field: grow the field a little (a band by 15 points, a side
- * field by 20); in the print, where the leaf has its text block under the
- * picture, then set the English there and keep the Korean in the field, and
- * if even that does not fit, set all the words under the picture rather than
- * cover the art; where there is no block (the app, a page print), grow the
- * field up to three quarters of the picture (a side field up to the whole
- * half) and then set this page's words smaller, down to 70% of the book's
- * size. A page that still overflows is marked pocket-overflow and counted.
- * Returns the count. Run after the pictures load, on resize and before printing.
- */
-export const POCKET_FIT_SOURCE = `
-function resetPocket(frame){
-  const panel=frame.querySelector(':scope>.text-pocket'),host=frame.closest('.ob-leaf'),below=host&&host.querySelector('.ob-text');
-  if(!frame.dataset.share0)frame.dataset.share0=String((parseFloat(frame.style.getPropertyValue('--pocket-share'))||30)/100);
-  frame.style.setProperty('--pocket-share',Math.round(Number(frame.dataset.share0)*100)+'%');
-  frame.classList.remove('pocket-overflow');if(panel)panel.style.fontSize='';
-  if(host&&(host.classList.contains('pocket-split')||host.classList.contains('pocket-spill'))){host.classList.remove('pocket-split','pocket-spill');if(below)below.innerHTML='';}
+export const POCKET_PLACE_SOURCE = `
+function pocketFlatEdge(img,side,crop){
+  const N=96,M=54,c=document.createElement('canvas');c.width=N;c.height=M;
+  const ctx=c.getContext('2d');ctx.drawImage(img,0,0,N,M);
+  const d=ctx.getImageData(0,0,N,M).data,x0=Math.floor(N*crop.x0),x1=Math.max(x0+1,Math.ceil(N*crop.x1)),vertical=side==='left'||side==='right';
+  const lum=(i)=>(.299*d[i]+.587*d[i+1]+.114*d[i+2])/255;
+  const strip=(k)=>{let sum=0,sq=0,n=0,r=0,g=0,b=0;const xs=vertical?[k]:null;
+    for(let y=vertical?0:k;y<(vertical?M:k+1);y++)for(let x=vertical?k:x0;x<(vertical?k+1:x1);x++){const i=(y*N+x)*4,l=lum(i);sum+=l;sq+=l*l;n++;r+=d[i];g+=d[i+1];b+=d[i+2];}
+    const mean=sum/n;return {mean,sd:Math.sqrt(Math.max(0,sq/n-mean*mean)),r:r/n,g:g/n,b:b/n};};
+  const order=[];if(side==='left')for(let x=x0;x<x1;x++)order.push(x);else if(side==='right')for(let x=x1-1;x>=x0;x--)order.push(x);else if(side==='top')for(let y=0;y<M;y++)order.push(y);else for(let y=M-1;y>=0;y--)order.push(y);
+  const first=strip(order[0]);if(first.sd>0.06)return {extent:0};
+  let n=0,prev=first.mean,r=0,g=0,b=0,lum0=0;
+  for(const k of order){const s=strip(k);if(s.sd>0.06||Math.abs(s.mean-prev)>0.03||Math.abs(s.mean-first.mean)>0.1)break;n++;prev=s.mean;r+=s.r;g+=s.g;b+=s.b;lum0+=s.mean;}
+  return {extent:n/order.length,rgb:n?[r/n,g/n,b/n]:null,mean:n?lum0/n:0};
 }
-function fitPockets(root){
-  let overflow=0;
+function pocketWords(block){return block?[...block.children].filter((el)=>el.classList.contains('ko')||el.classList.contains('en')):[];}
+function giveBack(words,els){for(const el of els)words.appendChild(el);const ko=words.querySelector(':scope>.ko'),en=words.querySelector(':scope>.en');if(ko&&en&&(ko.compareDocumentPosition(en)&Node.DOCUMENT_POSITION_PRECEDING))words.insertBefore(ko,en);}
+function resetPocket(frame){
+  const panel=frame.querySelector(':scope>.text-pocket'),inner=panel&&panel.querySelector('.text-pocket-inner'),host=frame.closest('[data-pocket-host]')||frame,words=host.querySelector('[data-pocket-words]');
+  host.classList.remove('pocket-on','pocket-split');
+  if(words&&inner)giveBack(words,pocketWords(inner));
+  if(frame.dataset.share0)frame.style.setProperty('--pocket-share',Math.round(Number(frame.dataset.share0)*100)+'%');
+}
+function placePockets(root){
+  let below=0;
   (root||document).querySelectorAll('.pocket-frame').forEach((frame)=>{
-    const panel=frame.querySelector(':scope>.text-pocket'),inner=panel&&panel.querySelector('.text-pocket-inner');
-    if(!inner)return;
+    const panel=frame.querySelector(':scope>.text-pocket'),inner=panel&&panel.querySelector('.text-pocket-inner'),img=frame.querySelector('img');
+    if(!inner||!img)return;
+    if(!frame.dataset.share0)frame.dataset.share0=String((parseFloat(frame.style.getPropertyValue('--pocket-share'))||30)/100);
     resetPocket(frame);
-    const base=Number(frame.dataset.share0)||.3,side=panel.dataset.pocket,band=side==='top'||side==='bottom',max=band?.75:1,soft=Math.min(max,base+(band?.15:.2));
-    const host=frame.closest('.ob-leaf'),below=host&&host.querySelector('.ob-text');
-    const set=(s)=>frame.style.setProperty('--pocket-share',Math.round(s*100)+'%');
-    // Sub-pixel exact: the last visible line must end inside the field.
+    if(!(img.complete&&img.naturalWidth)||!frame.getBoundingClientRect().height)return;
+    const host=frame.closest('[data-pocket-host]')||frame,words=host.querySelector('[data-pocket-words]'),side=panel.dataset.pocket,band=side==='top'||side==='bottom';
+    const half=frame.closest('.ob-half-left')?'left':frame.closest('.ob-half-right')?'right':'';
+    const crop=half==='left'?{x0:0,x1:.5}:half==='right'?{x0:.5,x1:1}:{x0:0,x1:1};
+    let flat;try{flat=pocketFlatEdge(img,side,crop);}catch(e){flat={extent:0};}
+    const extent=band?flat.extent:(half?Math.min(1,flat.extent):flat.extent);
+    const share=Math.min(band?.6:.65,extent-.02);
     const over=()=>{if(inner.scrollHeight>inner.clientHeight)return true;const box=inner.getBoundingClientRect(),last=[...inner.children].reverse().find((el)=>getComputedStyle(el).display!=='none');return !!last&&last.getBoundingClientRect().bottom>box.bottom+.25;};
-    const grow=(to)=>{for(let s=base;s<to-1e-9;){s=Math.min(to,s+.05);set(s);if(!over())return true;}return !over();};
-    if(!frame.getBoundingClientRect().height||!over())return;
-    if(grow(soft))return;
-    if(below){
-      const ko=inner.querySelector('.ko'),en=inner.querySelector('.en');
-      set(base);
-      if(ko&&en&&ko.textContent.trim()&&en.textContent.trim()){host.classList.add('pocket-split');below.innerHTML=en.outerHTML;if(!over()||grow(soft))return;set(base);host.classList.remove('pocket-split');}
-      host.classList.add('pocket-spill');below.innerHTML=inner.innerHTML;return;
-    }
-    if(grow(max))return;
-    let px=parseFloat(getComputedStyle(panel).fontSize)||16;const floor=px*.7;
-    while(over()&&px>floor){px=Math.max(floor,px-.5);panel.style.fontSize=px+'px';}
-    if(over()){frame.classList.add('pocket-overflow');overflow++;}
+    const on=(split)=>{host.classList.add('pocket-on');if(split)host.classList.add('pocket-split');};
+    if(share<.14){below++;return;}
+    frame.style.setProperty('--pocket-share',Math.round(share*100)+'%');
+    if(flat.rgb){panel.style.setProperty('--pocket-bg','rgb('+Math.round(flat.rgb[0])+','+Math.round(flat.rgb[1])+','+Math.round(flat.rgb[2])+')');panel.style.setProperty('--pocket-fg',flat.mean>0.6?'#2b2b2b':'#fffaf0');}
+    host.classList.add('pocket-on');
+    if(!words){if(over()){host.classList.remove('pocket-on');below++;}return;}
+    const all=pocketWords(words),ko=all.filter((el)=>el.classList.contains('ko')),en=all.filter((el)=>el.classList.contains('en'));
+    for(const el of all)inner.appendChild(el);
+    if(!over())return;
+    if(ko.length&&en.length){giveBack(words,en);if(!over()){on(true);return;}}
+    giveBack(words,pocketWords(inner));
+    host.classList.remove('pocket-on','pocket-split');below++;
   });
-  return overflow;
+  return below;
 }`;
-/** The print tab's script: colours, and the fit (an openings print calls window.__fitPockets from its own fit; a page print fits here). */
-export const POCKET_SAMPLER_SCRIPT = `<script>(()=>{${POCKET_SAMPLER_SOURCE}\n${POCKET_FIT_SOURCE}\nsamplePockets(document);
-window.__fitPockets=fitPockets;
+/** The print tab's script: the placer, exposed for the openings fit (window.__placePockets / __resetPockets / __notePockets); a page print runs it itself. */
+export const POCKET_SAMPLER_SCRIPT = `<script>(()=>{${POCKET_PLACE_SOURCE}
+window.__placePockets=placePockets;
 window.__resetPockets=(root)=>(root||document).querySelectorAll('.pocket-frame').forEach(resetPocket);
-const note=(n)=>{const w=document.getElementById('print-pocket-warning');if(w){w.hidden=!n;w.textContent=n+'쪽의 글이 그림의 글 자리보다 길어요. ④에서 글을 조금 줄이면 그림이 더 많이 보여요.';}};
+const note=(n)=>{const w=document.getElementById('print-pocket-warning');if(w){w.hidden=!n;w.textContent=n+'쪽은 그림이 글 자리를 비워 두지 않아 글을 그림 아래에 두었어요.';}};
 window.__notePockets=note;
 if(!document.querySelector('.ob-sheet')){
- const run=()=>note(fitPockets(document));
+ const run=()=>{note(placePockets(document));if(window.__fitPages)window.__fitPages();};
  const ready=async()=>{await Promise.all(Array.from(document.images,img=>img.complete?Promise.resolve():new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})));if(document.fonts)await document.fonts.ready;run();};
  window.addEventListener('beforeprint',run);ready();
 }
 })();</script>`;
-let sampler = null,
-  fitter = null,
+let placer = null,
   resizeHooked = false;
-/** The app's sampler and fit (browser only; a no-op elsewhere). */
+/** The app: place every pocket's words (once its picture has loaded, and again when the window changes size). Browser only; a no-op elsewhere. */
 export function samplePocketColours(root) {
   if (typeof document === "undefined") return;
-  if (!sampler) sampler = new Function(`${POCKET_SAMPLER_SOURCE}\nreturn samplePockets;`)();
-  sampler(root);
-  fitPocketWords(root);
-}
-/** R47: fit every pocket's words once its picture has loaded (and again when the window changes size). */
-export function fitPocketWords(root) {
-  if (typeof document === "undefined") return;
-  if (!fitter) fitter = new Function(`${POCKET_FIT_SOURCE}\nreturn fitPockets;`)();
+  if (!placer) placer = new Function(`${POCKET_PLACE_SOURCE}\nreturn placePockets;`)();
   const scope = root || document;
   scope.querySelectorAll?.(".pocket-frame").forEach((frame) => {
     const img = frame.querySelector("img");
-    if (img && !(img.complete && img.naturalWidth)) img.addEventListener("load", () => fitter(frame.parentNode || document), { once: true });
+    if (img && !(img.complete && img.naturalWidth)) img.addEventListener("load", () => placer(frame.parentNode || document), { once: true });
   });
-  fitter(scope);
+  placer(scope);
   if (!resizeHooked && typeof window !== "undefined") {
     resizeHooked = true;
     let timer = null;
     window.addEventListener("resize", () => {
       clearTimeout(timer);
-      timer = setTimeout(() => fitter(document), 150);
+      timer = setTimeout(() => placer(document), 150);
     });
   }
 }
+/** R47's name for the same thing (kept for callers). */
+export const fitPocketWords = samplePocketColours;

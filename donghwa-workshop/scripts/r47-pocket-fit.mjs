@@ -1,9 +1,10 @@
 // R47 글 자리 맞춤, measured in Chromium on a saved print or feedback HTML
 // (인쇄 창의 '저용량 HTML 파일 저장'). Offline: the file is opened from disk.
-// For every text pocket it reports the field's share, whether the words were
-// moved under the picture (pocket-split: English below, pocket-spill: all
-// below), and whether every Korean and English line is fully visible —
-// in the field or under the picture. Passes when no line is cut, no text
+// For every text pocket it reports the field's share and where the placer
+// put the words (R48: on — on the picture's empty field; split — Korean on
+// the field, English under the picture; below — under the picture, because
+// the picture left no empty field or the words did not fit it), and whether
+// every Korean and English line is fully visible where it is. Passes when no line is cut, no text
 // block under a picture overflows and no field is marked pocket-overflow.
 // 사용: node scripts/r47-pocket-fit.mjs <피드백판.html> [결과 JSON]
 // 환경변수: PLAYWRIGHT_MODULE(기본 playwright), CHROMIUM_PATH(선택)
@@ -33,11 +34,13 @@ try {
       return Math.max(0, Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top)) / r.height;
     };
     const rows = [...document.querySelectorAll(".pocket-frame")].map((frame) => {
-      const leaf = frame.closest("[data-leaf]") || frame.closest("article"),
+      // R48: the host carries pocket-on / pocket-split; the words live in [data-pocket-words] until the placer moves them up.
+      const host = frame.closest("[data-pocket-host]") || frame,
+        leaf = frame.closest("[data-leaf]") || frame.closest("article"),
         panel = frame.querySelector(":scope>.text-pocket"),
         inner = panel?.querySelector(".text-pocket-inner"),
-        below = leaf?.querySelector(".ob-text"),
-        mode = leaf?.classList.contains("pocket-spill") ? "spill" : leaf?.classList.contains("pocket-split") ? "split" : "field",
+        below = host.querySelector("[data-pocket-words]") || leaf?.querySelector(".ob-text"),
+        mode = host.classList.contains("pocket-split") ? "split" : host.classList.contains("pocket-on") ? "on" : "below",
         innerBox = inner?.getBoundingClientRect(),
         belowBox = below?.getBoundingClientRect(),
         where = (lang) => {
@@ -48,7 +51,7 @@ try {
       return {
         page: leaf?.dataset.leaf || leaf?.getAttribute("aria-label") || "",
         side: panel?.dataset.pocket || "",
-        share: frame.style.getPropertyValue("--pocket-share"),
+        share: mode === "below" ? "" : frame.style.getPropertyValue("--pocket-share"),
         mode,
         ko: where("ko"),
         en: where("en"),
@@ -64,8 +67,9 @@ try {
     bookFont: report.bookFont,
     printReady: report.printReady,
     pockets: report.rows.length,
+    on: report.rows.filter((r) => r.mode === "on").length,
     split: report.rows.filter((r) => r.mode === "split").length,
-    spill: report.rows.filter((r) => r.mode === "spill").length,
+    below: report.rows.filter((r) => r.mode === "below").length,
     cut: cut.length,
     pass: cut.length === 0,
   };
