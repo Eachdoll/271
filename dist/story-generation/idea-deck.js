@@ -203,7 +203,7 @@ export const ROOM_ANGLES = Object.freeze({
     devices: Object.freeze(["same_question", "refrain_turns", "small_gains", "misreads", "chain_reaction"]),
   }),
   adventure: Object.freeze({
-    turn: "숨어 있던 것이 드러나는 반전 — 장소·누군가·소리의 정체나 처음부터 있던 길이 드러난다. 작은 표시(스티커·무늬·조각)를 다시 보는 반전은 쓰지 않는다.",
+    turn: "숨어 있던 것이 드러나는 반전 — 장소·누군가·소리의 정체나 처음부터 있던 길이 드러난다. 주제에 정체가 드러날 것이 없으면 막힌 길이 다른 방법으로 열리는 반전으로 한다(숨을 수 없는 것을 숨어 있던 것으로 만들지 않는다). 작은 표시(스티커·무늬·조각)를 다시 보는 반전은 쓰지 않는다.",
     curve: "첫 비트부터 꽤 높게 시작해(사건이 먼저 온다) 한 번 내려갔다가 다시 끝까지 올라 전환 근처가 가장 높다(예: 2·3·1·2·3·4·1·0처럼 출렁이는 길).",
     devices: Object.freeze(["child_sees", "chain_reaction", "countdown", "small_gains", "misreads", "piling_up"]),
   }),

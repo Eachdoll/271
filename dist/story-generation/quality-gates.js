@@ -1089,6 +1089,8 @@ export function approvedBookRecord(book) {
       previous.twistTypeId ||
       undefined,
     patternId: String(patternId),
+    // R49: the laughs this book used, so the next draft is told not to use them again.
+    ...(plainValues(briefs.map((brief) => brief?.humor), 12).length ? { humor: plainValues(briefs.map((brief) => brief?.humor), 12) } : {}),
     places: plainValues([
       ...briefs.flatMap((brief) => [
         brief?.subLocation?.ko,

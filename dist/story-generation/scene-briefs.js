@@ -101,6 +101,7 @@ const ABSTRACT =
  * changes approved props or scenes.
  */
 import { hasPromptDiet, leanSceneBriefRules } from "./prompt-diet.js";
+import { hasStoryManners } from "./story-manners.js";
 // R31c: on the diet the day's clock and the pose/prop style are notes, not fix calls.
 const LEAN_ADVISORY = new Set(["first_time", "last_time", "time_backwards", "pose", "abstract_prop"]);
 export const SCENE_BRIEF_SEVERITY = Object.freeze({
@@ -259,7 +260,8 @@ export function inspectSceneBriefs(value, outline, source = {}) {
           `${key}에 한글·영어 항목 ${target}개가 필요해요.`,
         );
     for (const key of ["dialogueLine", "humor"])
-      if (!validText(brief[key]))
+      // R49: a manners draft's beat may have nothing funny ("").
+      if (!validText(brief[key]) && !(key === "humor" && hasStoryManners(source) && typeof brief[key] === "string"))
         add(beat.index, "field", `${key}를 한글로 작성해 주세요.`);
     if (
       (Array.isArray(brief.props) ? brief.props : []).some(
@@ -373,7 +375,7 @@ export function inspectSceneBriefs(value, outline, source = {}) {
   };
 }
 export function sceneBriefRules(input = null) {
-  if (hasPromptDiet(input)) return leanSceneBriefRules();
+  if (hasPromptDiet(input)) return leanSceneBriefRules(input);
   return `Create one bilingual SceneBrief per approved beat. All fields are required. These details are shared by prose and illustrations.
 Preserve the approved event, character identity/speech habits and fixed background geometry FIRST. Never invent a permanent structure, new room, speaking character, or action that contradicts the outline merely for variety. Creatures are small background life appropriate to the supplied place and time, never additional speaking cast.
 Time progresses monotonically morning -> day -> afternoon -> evening -> night (stages may repeat or be skipped); first beat morning, final beat evening or night. Weather follows the topic and remains continuous. A rain topic includes rain, puddle and umbrella in appropriate middle beats.

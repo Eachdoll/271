@@ -117,7 +117,9 @@ test('R40 the typesetting: the frame and the panel, half-spread geometry, the sh
   assert.equal(pocketFrame('<img>', 'x', null), '<img>');
   assert.match(pocketPanel('w', {side: 'left', share: 0.68, sample: 0.34}), /data-share="0\.34"/);
   assert.equal(samplePocketColours(), undefined, 'a no-op outside the browser');
-  assert.match(POCKET_SAMPLER_SCRIPT, /sd<=0\.09/);
+  // R48: the placer measures the picture's flat edge strip by strip (no 0.09 whole-field guess) and never paints over art.
+  assert.match(POCKET_SAMPLER_SCRIPT, /pocketFlatEdge\(img,side,crop\)/);
+  assert.doesNotMatch(POCKET_SAMPLER_SCRIPT, /pocket-busy/);
   // A page book: the pocketed page has no story card; the plain one keeps it; the shout page is big.
   const input = normalizeStoryInput({...LEGACY.storyInput, ...BOOK_INPUT});
   const book = {...clone(LEGACY), storyInput: input, outline: {...clone(LEGACY.outline), beats: clone(LEGACY.outline.beats).map((b, i) => ({...b, picturePlan: i === 1 ? plan({pocket: 'left'}) : i === 2 ? plan({pocket: 'bottom', carrier: 'words'}) : plan()}))}};
@@ -125,12 +127,13 @@ test('R40 the typesetting: the frame and the panel, half-spread geometry, the sh
   const beat2 = book.pages.find((p) => p.beatIndex === 2), beat3 = book.pages.find((p) => p.beatIndex === 3);
   beat3.ko = '쾅!'; beat3.en = 'Bang!';
   const html = getPrintHTML(book, {layout: 'single', pages: 'all'}, []);
-  assert.match(html, new RegExp(`<article class="leaf story-page text-pocket-leaf" aria-label="${beat2.pageNo}쪽"><div class="picturebook-frame"><div class="pocket-frame pocket-left" style="--pocket-share:(\\d+)%"><div class="pocket-picture"><img class="illustration"[^>]*></div><div class="text-pocket" data-pocket="left" data-share="0\\.\\d+"><div class="text-pocket-inner"><p lang="ko" class="ko">`), 'R47: the field is sized to the words and the Korean comes first');
-  assert.match(html, new RegExp(`aria-label="${beat3.pageNo}쪽"><div class="picturebook-frame"><div class="pocket-frame pocket-bottom" style="--pocket-share:4\\d%">[^]*?<div class="text-pocket text-pocket-shout"`));
+  // R48: the page leaf is the text-below layout with an empty panel in the picture; the words start in the story block under it (Korean first).
+  assert.match(html, new RegExp(`<article class="leaf story-page text-below text-pocket-leaf" aria-label="${beat2.pageNo}쪽" data-pocket-host><div class="picturebook-frame"><div class="pocket-frame pocket-left" style="--pocket-share:(\\d+)%"><div class="pocket-picture"><img class="illustration"[^>]*></div><div class="text-pocket" data-pocket="left" data-share="0\\.\\d+"><div class="text-pocket-inner"></div></div></div><div class="story" data-pocket-words><p lang="ko" class="ko">`));
+  assert.match(html, new RegExp(`aria-label="${beat3.pageNo}쪽" data-pocket-host><div class="picturebook-frame"><div class="pocket-frame pocket-bottom" style="--pocket-share:4\\d%">[^]*?<div class="text-pocket text-pocket-shout"`));
   assert.ok(html.includes('class="story"'), 'the other pages keep their story card');
-  assert.ok(html.includes('.text-pocket{') && html.includes('samplePockets(document)'));
+  assert.ok(html.includes('.text-pocket{') && html.includes('window.__placePockets=placePockets'));
   const plain = getPrintHTML({...book, storyInput: dated(input)}, {layout: 'single', pages: 'all'}, []);
-  assert.doesNotMatch(plain, /text-pocket|samplePockets/);
+  assert.doesNotMatch(plain, /text-pocket|placePockets|__fitPages/);
   // An openings book: a left pocket on a spread takes all the words on the left half; a page entry gets its own; a plain entry keeps the text block.
   const oinput = normalizeStoryInput({...LEGACY.storyInput, ...BOOK_INPUT, layoutPolicy: L.openingsLayoutPolicy(), specs: freezeReadingLevels({koreanLevel: 'K2', englishLevel: 'E2'}, {}, {layout: 'openings'}).specs, pageCount: 16});
   const prose = demoProse(LEGACY.outline, oinput), pagination = demoPagination(LEGACY.outline, prose, oinput);
@@ -143,13 +146,15 @@ test('R40 the typesetting: the frame and the panel, half-spread geometry, the sh
   const leafOf = (no) => ohtml.match(new RegExp(`<article class="ob-leaf[^"]*" aria-label="${no}쪽"[^]*?</article>`))[0];
   const left = leafOf(spreadOpening.printedPages[0]), right = leafOf(spreadOpening.printedPages[1]);
   assert.match(left, /class="ob-leaf ob-half ob-half-left ob-left ob-pocket"/);
-  assert.match(left, /<div class="ob-art pocket-frame pocket-left" style="--pocket-share:(?:68|8[0-9]|90)%"><img class="illustration"[^>]*><div class="text-pocket" data-pocket="left" data-share="0\.(?:34|42|45)">/);
-  assert.match(left, /<div class="ob-text"><\/div>/);
+  assert.match(left, /<div class="ob-art pocket-frame pocket-left" style="--pocket-share:(?:68|8[0-9]|90)%"><img class="illustration"[^>]*><div class="text-pocket" data-pocket="left" data-share="0\.(?:34|42|45)"><div class="text-pocket-inner"><\/div>/);
+  // R48: the words wait in the text block (Korean first) until the placer finds an empty field for them.
+  assert.match(left, /<div class="ob-text" data-pocket-words><p lang="ko" class="ko">[^<]+<\/p><p lang="en" class="en">[^<]+<\/p><\/div>/);
+  assert.match(left, /class="ob-leaf ob-half ob-half-left ob-left ob-pocket" aria-label="\d+쪽" data-leaf="\d+" data-pocket-host>/);
   assert.doesNotMatch(right, /text-pocket|ob-pocket/);
   assert.match(right, /<div class="ob-text"><p lang="en" class="en"><\/p><p lang="ko" class="ko"><\/p><\/div>/, 'the right half carries no words: they all sit in the left field');
   assert.match(leafOf(pageOpening.printedPages[0]), /<div class="ob-art pocket-frame pocket-top" style="--pocket-share:(?:30|40|45|50)%">/);
   assert.match(leafOf(otherOpening.printedPages[0]), /<div class="ob-art"><img class="illustration"/);
-  assert.ok(ohtml.includes('.ob-art .text-pocket{font-size:var(--ob-font') && ohtml.includes('samplePockets(document)'));
+  assert.ok(ohtml.includes('.ob-art .text-pocket{font-size:var(--ob-font') && ohtml.includes('window.__placePockets=placePockets'));
   // The app's stylesheet carries the frame rules and the shell precaches the module.
   const css = readFileSync(new URL('../dist/style.css', import.meta.url), 'utf8');
   for (const rule of POCKET_CSS.trim().split('\n').slice(0, 4)) assert.ok(css.includes(rule), rule);

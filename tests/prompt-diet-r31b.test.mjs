@@ -95,7 +95,7 @@ test('R31b the K2 outline of a diet draft: the app path with the lean prompt and
   // (R38 adds the WHAT CHANGES paragraph: 6,000 → 7,000.)
   // R39 the DRAMA paragraph and the plan's three fields (8,794).
   // R46 the IDEA block (≈ 400; measured 9,924).
-  assert.ok(outlineCall.system.length <= 10500, `${outlineCall.system.length} chars`);
+  assert.ok(outlineCall.system.length <= 11000, `${outlineCall.system.length} chars`);
   assert.doesNotMatch(outlineCall.system + outlineCall.user, QUOTA);
   assert.doesNotMatch(outlineCall.user, /\[플롯 패턴\]|\[정해진 재료\]|반드시 이대로/u, 'no package plot-pattern seed');
   assert.match(outlineCall.system, /THE WRITERS' ROOM CHOSE THIS PITCH — write the outline from it, in your own way/u);
@@ -126,7 +126,7 @@ test('R31b the K1 outline of a diet draft has no ledger and the K1 shape once; �
   // R31b measured 3,169; R33 adds one STORY SHAPE line and one STAGE line (≈ 500 chars, a spark each, no counters);
   // R35 adds the PICTURE-LED composition block, R36 the PICTURE PLAN paragraph (measured 5,466).
   // R39 (8,295).
-  assert.ok(calls[0].system.length <= 10500, `${calls[0].system.length} chars`);
+  assert.ok(calls[0].system.length <= 11000, `${calls[0].system.length} chars`);
   assert.doesNotMatch(calls[0].system, QUOTA);
   assert.doesNotMatch(calls[0].system, /plotContract/u);
   assert.equal((calls[0].system.match(/No villain/gu) || []).length, 1, 'the K1 shape is stated once');
@@ -142,7 +142,7 @@ test('R31b the beat writer and the app prose path of a diet draft: voice, not co
   await generateProse(o, input, {engineId: 'openai', engine: writer, qualityEngines: {beatWriter: writer, cheap: writer}});
   const beat = calls.find((c) => /\[이번 비트\] 3 /u.test(c.user) && !/original English/u.test(c.system));
   // R31b measured 659; R34 adds the prose palette and this book's five voice cards with examples (≈ 800 chars, a spark, no counters).
-  assert.ok(beat.system.length <= 2000, `${beat.system.length} chars`);
+  assert.ok(beat.system.length <= 2300, `${beat.system.length} chars`);
   assert.doesNotMatch(beat.system, QUOTA);
   assert.doesNotMatch(beat.system, /EVERY sentence|Never repeat/u);
   assert.match(beat.system, /the way a good picture book sounds read aloud/u);

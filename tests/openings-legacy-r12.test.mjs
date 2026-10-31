@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, storyIdea, storyLogic, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, storyIdea, storyLogic, storyManners, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -742,7 +742,9 @@ const PINS = {
   // nothing else differs (dump-diffed against c262f7b). c262f7b: b08e99bc…2185.
   // 이야기의 논리 (R47): every new draft's input carries storyLogic {version: 1};
   // nothing else differs (dump-diffed against 9a58e9d). 9a58e9d: a70bb8d1…6018.
-  inputs: 'dcd8e232b389f13eb1cf246a372507589b5ab1b65a785c166cc963b00f4e6ee4',
+  // 말높임·웃음·비밀 (R49): every new draft's input carries storyManners {version: 1};
+  // nothing else differs (dump-diffed against ad90083). ad90083: dcd8e232…6ee4.
+  inputs: '2f3a13a0083e3cbe50300c18f52573529b8862c4b57eca0a2118e65ac52e5414',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -818,7 +820,9 @@ const PINS = {
   // (dump-diffed against c262f7b). c262f7b: e1cf14bd…d156.
   // R47: the two demo jobs' inputs carry storyLogic; nothing else differs
   // (dump-diffed against 9a58e9d). 9a58e9d: ce00ecf9…89bb.
-  fullAutoDemo: '239c972b8859be573dd44bcf44a1415d05f31e31f26803c7da77f7da6be1f608',
+  // R49: the two demo jobs' inputs carry storyManners; nothing else differs
+  // (dump-diffed against ad90083). ad90083: 239c972b…1f08.
+  fullAutoDemo: 'aefebd86bc0c54745969ad1458ec7db6e58234fbfc91cb92325ed28e673e3821',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

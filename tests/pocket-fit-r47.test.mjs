@@ -11,7 +11,7 @@ import {normalizeStoryInput, toLegacyPages} from '../dist/story-generation/pipel
 import {leanOutlineRules, leanBeatWriterRules, leanVisibleInput} from '../dist/story-generation/prompt-diet.js';
 import {demoProse, demoPagination} from '../dist/story-generation/demo.js';
 import {getPrintHTML, openingFitScript} from '../dist/output.js';
-import {pocketOf, pocketShare, pocketPromptLine, POCKET_FIT_SOURCE, POCKET_SAMPLER_SCRIPT} from '../dist/text-pocket.js';
+import {pocketOf, pocketShare, pocketPromptLine, POCKET_PLACE_SOURCE, POCKET_SAMPLER_SCRIPT} from '../dist/text-pocket.js';
 import {hasStoryLogic, storyLogicPolicy, storyLogicOutlineRule, storyLogicWriterLine} from '../dist/story-generation/story-logic.js';
 
 /**
@@ -52,26 +52,27 @@ test('R47 the field size: the plan alone keeps R40; with words a longer page get
   assert.equal(pocketOf({...book, language: 'ko'}, page).share, 0.4, 'Korean alone: a little less');
 });
 
-test('R47 the print: the Korean comes first in a field; the openings fit counts the fields and fits them; the fit script grows, splits, spills, then shrinks', () => {
+test('R47/R48 the print: the words wait under the picture, Korean first; the openings fit chooses the font with pockets off and places them after', () => {
   const oinput = normalizeStoryInput({...LEGACY.storyInput, ...BOOK_INPUT, layoutPolicy: L.openingsLayoutPolicy(), specs: freezeReadingLevels({koreanLevel: 'K2', englishLevel: 'E2'}, {}, {layout: 'openings'}).specs, pageCount: 16});
   const prose = demoProse(LEGACY.outline, oinput), pagination = demoPagination(LEGACY.outline, prose, oinput);
   const obook = {...clone(LEGACY), language: 'bilingual', storyInput: oinput, prose, pagination, pages: toLegacyPages(pagination).map((p) => ({...p, imageUrl: PNG})), cover: {imageUrl: PNG}};
   obook.outline = {...clone(LEGACY.outline), beats: clone(LEGACY.outline.beats).map((b) => ({...b, picturePlan: plan({pocket: 'top'})}))};
   const html = getPrintHTML(obook, {layout: 'single'}, []);
-  assert.match(html, /<div class="text-pocket-inner"><p lang="ko" class="ko">[^<]+<\/p><p lang="en" class="en">/);
-  assert.doesNotMatch(html, /<div class="text-pocket-inner"><p lang="en"/);
+  // R48: the words wait under the picture, Korean first; the placer moves them up only where the picture is empty.
+  assert.match(html, /<div class="text-pocket-inner"><\/div>/);
+  assert.match(html, /<div class="ob-text" data-pocket-words><p lang="ko" class="ko">[^<]+<\/p><p lang="en" class="en">/);
+  assert.doesNotMatch(html, /<div class="ob-text" data-pocket-words><p lang="en"/);
   assert.match(html, /<p id="print-pocket-warning" class="print-warning" hidden><\/p>/);
-  assert.match(html, /pocketOver=leaf=>/);
-  assert.match(html, /while\(\(over\(leaf\)\|\|pocketOver\(leaf\)\)&&pt>4\)/, 'the book font counts the fields');
-  assert.match(html, /window\.__fitPockets\(document\);let font=/, 'the fields fit at the chosen font before the leaves');
-  assert.match(html, /\.ob-pocket\.pocket-split \.ob-text,\.ob-pocket\.pocket-spill \.ob-text\{flex:1/);
-  assert.match(html, /\.pocket-split \.text-pocket \.en,\.pocket-spill \.text-pocket\{display:none\}/);
+  assert.match(html, /window\.__resetPockets&&window\.__resetPockets\(document\);/, 'pockets off while the font is chosen');
+  assert.match(html, /window\.__notePockets\(window\.__placePockets\(document\)\)/, 'placed once the font is settled');
+  assert.doesNotMatch(html, /pocketOver|__fitPockets|pocket-spill/);
   // A book without pockets gets the R12 script byte for byte.
   assert.equal(openingFitScript(), openingFitScript({pockets: false}));
   assert.doesNotMatch(openingFitScript(), /pocket/i);
-  // The fit routine: grow a little, English under the picture, everything under it, else grow and shrink.
-  for (const step of ["host.classList.add('pocket-split')", "host.classList.add('pocket-spill')", 'grow(max)', "frame.classList.add('pocket-overflow')", 'band?.15:.2']) assert.ok(POCKET_FIT_SOURCE.includes(step), step);
-  assert.ok(POCKET_SAMPLER_SCRIPT.includes('window.__fitPockets=fitPockets') && POCKET_SAMPLER_SCRIPT.includes('window.__resetPockets'));
+  // The placer: a flat edge measured strip by strip, the words moved up whole, else the Korean alone, else left below; nothing grows into art.
+  for (const step of ['function pocketFlatEdge(img,side,crop)', 'if(s.sd>0.06||', "host.classList.add('pocket-on')", "on(true)", 'if(share<.14)', "const share=Math.min(band?.6:.65,extent-.02)"]) assert.ok(POCKET_PLACE_SOURCE.includes(step), step);
+  assert.doesNotMatch(POCKET_PLACE_SOURCE, /grow\(|fontSize=/);
+  assert.ok(POCKET_SAMPLER_SCRIPT.includes('window.__placePockets=placePockets') && POCKET_SAMPLER_SCRIPT.includes('window.__resetPockets'));
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.match(sw, /const CACHE = "donghwa-shell-v(?:9[7-9])";/);
   assert.match(sw, /"\.\/story-generation\/story-logic\.js",/);

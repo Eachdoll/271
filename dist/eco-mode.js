@@ -58,6 +58,7 @@ import { voiceBlock, VOICE_PALETTE } from "./story-generation/voice-deck.js";
 import { expressionWriterLine } from "./story-generation/expression-deck.js";
 import { ideaWriterLine, withDevice } from "./story-generation/idea-deck.js";
 import { storyLogicWriterLine } from "./story-generation/story-logic.js";
+import { speechLevelLine, humorWriterLine } from "./story-generation/story-manners.js";
 import { pageBookVoiceLine, withWordlessSchema } from "./story-generation/story-change.js";
 import { withBackdropSchema, isTextOnlyPage, plainBackdropFor } from "./story-generation/story-drama.js";
 import { pocketOf, pocketPromptLine } from "./text-pocket.js";
@@ -243,6 +244,8 @@ export function ecoPagesPrompt(source, outline) {
     ...(ideaWriterLine(input, "ko") ? [`${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}`] : []),
     // R47: varied speech tags.
     ...(storyLogicWriterLine(input, "ko") ? [`${storyLogicWriterLine(input, "ko")}\n${storyLogicWriterLine(input, "en")}`] : []),
+    // R49: who speaks politely; laughs from what happens.
+    ...(speechLevelLine(input, "ko") ? [`${speechLevelLine(input, "ko")}\n${speechLevelLine(input, "en")}`, `${humorWriterLine(input, "ko")}\n${humorWriterLine(input, "en")}`] : []),
     // R38: the page book's voice.
     ...(pageBookVoiceLine(input, "ko") ? [`${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}`] : []),
     block(

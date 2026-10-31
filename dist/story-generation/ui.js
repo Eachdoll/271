@@ -56,6 +56,7 @@ import { chooseVoice, recentVoiceIds, voiceSummary } from "./voice-deck.js";
 import { chooseExpression, recentExpressionIds, expressionSummary } from "./expression-deck.js";
 import { drawIdea, recentIdeaIds, storyIdeaRef, ideaSummary, withoutDevice, ideaInputFor } from "./idea-deck.js";
 import { storyLogicPolicy } from "./story-logic.js";
+import { mannersPolicy, recentHumorLines } from "./story-manners.js";
 import { formatFor, bookFormat, bookFormatLabel, withPictureLed } from "../book-format.js";
 import { picturePlanNote } from "./picture-plan.js";
 import {
@@ -1120,6 +1121,8 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       storyIdea: storyIdeaFor(state, wizard, { k1, room: !k1 && !!orchestrationPolicyFor(state) }),
       // R47: cause and effect a child can follow; varied speech tags.
       storyLogic: storyLogicPolicy(),
+      // R49: who speaks politely, laughs from what happens (not the recent books' ones), a secret only when there is one.
+      storyManners: mannersPolicy(recentHumorLines(storyQualityBookRecords(state))),
     },
     readingLevels,
     world,

@@ -17,7 +17,7 @@ export const hasStoryLogic = (input) => input?.storyLogic?.version === STORY_LOG
 /** The outline request's paragraph (English, the outline's language). */
 export function storyLogicOutlineRule(input) {
   if (!hasStoryLogic(input)) return "";
-  return "LOGIC A CHILD CAN FOLLOW: everything that enters the story comes from somewhere the child has already seen or heard (a thing that blocks the way was lying there, was dropped, was blown in — never simply arrives); the want and what stands in its way are about the same thing, so every try is a try at the want; when the answer has been hidden all along, an early beat shows a small sign of it that the child can find again; the last beat answers the want — the hero gets it, or shows why it no longer matters. If the story is pretend play, the first beat shows that it is play.";
+  return "LOGIC A CHILD CAN FOLLOW: everything that enters the story comes from somewhere the child has already seen or heard (a thing that blocks the way was lying there, was dropped, was blown in — never simply arrives); the want and what stands in its way are about the same thing, so every try is a try at the want; when the answer has been hidden all along, an early beat shows a small sign of it that the child can find again; the last beat answers the want — the hero gets it, or shows why it no longer matters. If the story is pretend play, the first beat shows that it is play. No one thing is in every beat: a prop that matters comes back in some beats and rests in the others, so each picture has its own thing to look at.";
 }
 /** The prose writers' line (Korean for the Korean writer, English otherwise). */
 export function storyLogicWriterLine(input, lang = "ko") {

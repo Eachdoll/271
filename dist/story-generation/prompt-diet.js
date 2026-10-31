@@ -30,6 +30,7 @@ import { voiceBlock, VOICE_PALETTE } from "./voice-deck.js";
 import { expressionWriterLine } from "./expression-deck.js";
 import { ideaOutlineBlock, ideaWriterLine, ideaInputFor } from "./idea-deck.js";
 import { storyLogicOutlineRule, storyLogicWriterLine } from "./story-logic.js";
+import { speechLevelLine, humorWriterLine, mannersBriefRule } from "./story-manners.js";
 import { beatSummaryLine, compositionRule, pictureLedPaginationLine, isPictureLed } from "../book-format.js";
 import { picturePlanOutlineRule, picturePlanPaginationLine } from "./picture-plan.js";
 import { storyChangeOutlineRule, hasStoryChange, storyPlaceName, pageBookVoiceLine, wordlessRule } from "./story-change.js";
@@ -193,9 +194,9 @@ export function leanBeatWriterRules(input, outline, briefs = []) {
     common: `Write it the way a good picture book sounds read aloud: concrete things a child can see, hear and touch; feelings shown by what the characters do; a line of dialogue where it matters, with it clear who speaks; sounds written as the sound itself (딸랑! / splash!) when something makes one. Make it clear who is doing what. Keep the approved events, place and ending of this beat; no spoken lesson.${mood ? ` Atmosphere: ${str(JSON.stringify(mood), 200)}.` : ""}`,
     // R34: the level in a sentence, then what good prose does and this book's own voice (a spark, never counted).
     // R37: a picture-led book's expression cards (words and telling) after the voice.
-    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko"), expressionWriterLine(input, "ko"), ideaWriterLine(idea, "ko"), storyLogicWriterLine(input, "ko"), pageBookVoiceLine(input, "ko")].filter(Boolean).join("\n"),
+    ko: [leanLevelLine(input, "ko"), input?.storyVoice ? VOICE_PALETTE : "", voiceBlock(input, "ko"), expressionWriterLine(input, "ko"), ideaWriterLine(idea, "ko"), storyLogicWriterLine(input, "ko"), speechLevelLine(input, "ko"), humorWriterLine(input, "ko"), pageBookVoiceLine(input, "ko")].filter(Boolean).join("\n"),
     // R31e: what the English is for (the paid K2 writer packed every Korean event into two 16-word sentences).
-    en: `${leanLevelLine(input, "en")} ${mirrorWriterRule(input) || "The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons."}${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}${ideaWriterLine(idea, "en") ? ` ${ideaWriterLine(idea, "en")}` : ""}${storyLogicWriterLine(input, "en") ? ` ${storyLogicWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "en") ? ` ${pageBookVoiceLine(input, "en")}` : ""}`,
+    en: `${leanLevelLine(input, "en")} ${mirrorWriterRule(input) || "The English is the short telling of the same beat for an early reader: a few short sentences for the moment the picture shows; the Korean carries the details. One idea per sentence; no semicolons."}${storyWords ? ` ${storyWords}` : ""}${voiceBlock(input, "en") ? ` ${voiceBlock(input, "en")}` : ""}${expressionWriterLine(input, "en") ? ` ${expressionWriterLine(input, "en")}` : ""}${ideaWriterLine(idea, "en") ? ` ${ideaWriterLine(idea, "en")}` : ""}${storyLogicWriterLine(input, "en") ? ` ${storyLogicWriterLine(input, "en")}` : ""}${speechLevelLine(input, "en") ? ` ${speechLevelLine(input, "en")}` : ""}${humorWriterLine(input, "en") ? ` ${humorWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "en") ? ` ${pageBookVoiceLine(input, "en")}` : ""}`,
   };
 }
 /** The app prose path (whole book at once) when no beat writer is used. */
@@ -205,7 +206,7 @@ Write it the way a good picture book sounds read aloud: concrete things a child 
     input?.draftProse ? "\nThis is the final refinement of the supplied local draftProse: keep its events and improve its language inside the level." : ""
   }${input?.storyVoice ? `\n${VOICE_PALETTE}\n${voiceBlock(input, "ko")}\n${voiceBlock(input, "en")}` : ""}${
     expressionWriterLine(input, "ko") ? `\n${expressionWriterLine(input, "ko")}\n${expressionWriterLine(input, "en")}` : ""
-  }${ideaWriterLine(input, "ko") ? `\n${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}` : ""}${storyLogicWriterLine(input, "ko") ? `\n${storyLogicWriterLine(input, "ko")}\n${storyLogicWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "ko") ? `\n${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}` : ""}`;
+  }${ideaWriterLine(input, "ko") ? `\n${ideaWriterLine(input, "ko")}\n${ideaWriterLine(input, "en")}` : ""}${storyLogicWriterLine(input, "ko") ? `\n${storyLogicWriterLine(input, "ko")}\n${storyLogicWriterLine(input, "en")}` : ""}${speechLevelLine(input, "ko") ? `\n${speechLevelLine(input, "ko")}\n${speechLevelLine(input, "en")}\n${humorWriterLine(input, "ko")}\n${humorWriterLine(input, "en")}` : ""}${pageBookVoiceLine(input, "ko") ? `\n${pageBookVoiceLine(input, "ko")}\n${pageBookVoiceLine(input, "en")}` : ""}`;
 }
 
 /*
@@ -249,8 +250,9 @@ export function leanPageRewriteRules(pageNo, original, { sceneOnly = false } = {
   return `Rewrite only story page ${pageNo} (keep pageNo=${pageNo}, beatIndex=${original?.beatIndex}, the cast and the allowed wardrobe IDs). Fix the listed problems and nothing else: keep the page's event, its voice, its sound words and short lines, and its continuity with the pages before and after. If a problem names only one language, return the other language byte-for-byte. Other pages stay unchanged. Return one StoryPage.`;
 }
 /** Scene briefs on the diet: the fields, as the story has them. */
-export function leanSceneBriefRules() {
-  return `Create one bilingual SceneBrief per approved beat; all fields are required and are shared by the prose and the pictures. timeOfDay is morning/day/afternoon/evening/night as the story has it; weather and light follow the story. sounds: one or two sound or movement details (ko/en). smellOrTouch: one. creature: small background life that fits the place, never new speaking cast. props: two to four concrete things in the scene (ko/en). pose: what the character is doing, in English a picture can show. dialogueLine and humor are Korean, in the character's own way of speaking. Keep the approved event, cast and places; English fields are picture descriptions, not instructions.`;
+export function leanSceneBriefRules(input = null) {
+  // R49: humor is optional on a manners draft (the sentence after the fields says so).
+  return `Create one bilingual SceneBrief per approved beat; all fields are required and are shared by the prose and the pictures. timeOfDay is morning/day/afternoon/evening/night as the story has it; weather and light follow the story. sounds: one or two sound or movement details (ko/en). smellOrTouch: one. creature: small background life that fits the place, never new speaking cast. props: two to four concrete things in the scene (ko/en). pose: what the character is doing, in English a picture can show. dialogueLine and humor are Korean, in the character's own way of speaking. Keep the approved event, cast and places; English fields are picture descriptions, not instructions.${mannersBriefRule(input)}`;
 }
 /** The editor's read-through on the diet: fix what is wrong, keep the writer's voice. */
 export function leanRevisionRules(input, pageCount) {
