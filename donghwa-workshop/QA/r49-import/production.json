@@ -1,0 +1,30 @@
+{
+  "base": "https://donghwa-workshop.seoulsemitec-3654.chatgpt.site/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "lastAction": "[data-simple-action=\"eco-accept\"]",
+  "outline": {
+    "optionalSecret": true,
+    "noRequiredSecret": true
+  },
+  "frozen": {
+    "manners": {
+      "version": 1
+    },
+    "adult": "adult"
+  },
+  "pages": {
+    "speech": true,
+    "humor": true,
+    "namedAdult": true,
+    "politeChildren": true
+  },
+  "accepted": {
+    "step": "pages",
+    "errors": [],
+    "secret": null
+  },
+  "cache": "donghwa-shell-v99",
+  "passed": true
+}

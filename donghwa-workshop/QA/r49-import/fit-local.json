@@ -1,0 +1,517 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "synthetic": true,
+  "originalBookFilesAvailable": false,
+  "originalBookVerification": "unverified",
+  "pageErrors": [],
+  "paidRequests": [],
+  "prints": {
+    "bilingual": {
+      "summary": {
+        "bookFont": "17",
+        "printReady": "ready",
+        "pockets": 10,
+        "split": 0,
+        "on": 5,
+        "below": 5,
+        "cut": 0,
+        "pass": true,
+        "busyOn": 0,
+        "flatOn": 5
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ],
+      "warning": "5쪽은 그림이 글 자리를 비워 두지 않아 글을 그림 아래에 두었어요."
+    },
+    "bilingualFeedback": {
+      "summary": {
+        "bookFont": "17",
+        "printReady": "ready",
+        "pockets": 10,
+        "split": 0,
+        "on": 5,
+        "below": 5,
+        "cut": 0,
+        "pass": true,
+        "busyOn": 0,
+        "flatOn": 5
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": 1,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ],
+      "warning": "5쪽은 그림이 글 자리를 비워 두지 않아 글을 그림 아래에 두었어요."
+    },
+    "ko": {
+      "summary": {
+        "bookFont": "20",
+        "printReady": "ready",
+        "pockets": 10,
+        "split": 0,
+        "on": 5,
+        "below": 5,
+        "cut": 0,
+        "pass": true,
+        "busyOn": 0,
+        "flatOn": 5
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ],
+      "warning": "5쪽은 그림이 글 자리를 비워 두지 않아 글을 그림 아래에 두었어요."
+    },
+    "koFeedback": {
+      "summary": {
+        "bookFont": "20",
+        "printReady": "ready",
+        "pockets": 10,
+        "split": 0,
+        "on": 5,
+        "below": 5,
+        "cut": 0,
+        "pass": true,
+        "busyOn": 0,
+        "flatOn": 5
+      },
+      "rows": [
+        {
+          "page": "1",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "2",
+          "side": "left",
+          "share": "36%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "3",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "4",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "5",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "7",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "9",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "11",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "13",
+          "side": "left",
+          "share": "65%",
+          "mode": "on",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        },
+        {
+          "page": "15",
+          "side": "left",
+          "share": "",
+          "mode": "below",
+          "ko": 1,
+          "en": null,
+          "belowOverflow": false,
+          "fieldOverflow": false
+        }
+      ],
+      "warning": "5쪽은 그림이 글 자리를 비워 두지 않아 글을 그림 아래에 두었어요."
+    }
+  },
+  "unchanged": true,
+  "legacyHasNoPocket": true,
+  "readers": [
+    {
+      "width": 390,
+      "mode": "split",
+      "share": "36%",
+      "visible": [
+        {
+          "lang": "ko",
+          "ratio": 1
+        },
+        {
+          "lang": "en",
+          "ratio": 1
+        }
+      ],
+      "overflow": false,
+      "panelBackground": "rgb(82, 120, 138)"
+    },
+    {
+      "width": 1280,
+      "mode": "on",
+      "share": "36%",
+      "visible": [
+        {
+          "lang": "ko",
+          "ratio": 1
+        },
+        {
+          "lang": "en",
+          "ratio": 1
+        }
+      ],
+      "overflow": false,
+      "panelBackground": "rgb(82, 120, 138)"
+    }
+  ],
+  "passed": true
+}
