@@ -34,6 +34,7 @@ import { storyDramaK1Block } from "./story-drama.js";
 import { castK1Block } from "./story-cast.js";
 import { ideaWriterLine } from "./idea-deck.js";
 import { storyLogicWriterLine } from "./story-logic.js";
+import { speechLevelLine, humorWriterLine } from "./story-manners.js";
 import { styleReport } from "./style-report.js";
 
 export const K1_POLICY_VERSION = 1;
@@ -192,6 +193,8 @@ export async function writeK1Book(outline, input, options = {}, services = {}) {
     ...(ideaWriterLine(input, "ko") ? [ideaWriterLine(input, "ko")] : []),
     // R47: varied speech tags.
     ...(storyLogicWriterLine(input, "ko") ? [storyLogicWriterLine(input, "ko")] : []),
+    // R49: who speaks politely; laughs from what happens.
+    ...(speechLevelLine(input, "ko") ? [speechLevelLine(input, "ko"), humorWriterLine(input, "ko")] : []),
     `[등장인물 — who에는 이 ID만]\n${cast}`,
     `[쪽 배치 — 그대로] ${pagesLine}`,
     `[출력] JSON만. {"cover":"표지 그림을 영어로","pages":[{"pageNo":1,"ko":"한글","en":"English","picture":"그 쪽 그림을 영어로","feeling":"one English word","who":["id"],"timeOfDay":"morning","props":["English prop"]}, …]}`,

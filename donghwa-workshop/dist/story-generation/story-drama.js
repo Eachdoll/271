@@ -15,6 +15,7 @@
  * Drafts without the marker are unchanged. Pure module. */
 import { hasStoryChange } from "./story-change.js";
 import { ideaRepeatsTries, ideaInputFor } from "./idea-deck.js";
+import { hasStoryManners, mannersSecretRule } from "./story-manners.js";
 export const STORY_DRAMA_VERSION = 1;
 export const storyDramaPolicy = () => ({ version: STORY_DRAMA_VERSION });
 /** The marker, on a diet draft that also has the R38 change contract. */
@@ -45,7 +46,8 @@ export function withStoryDramaSchema(schema, input) {
     beat.required = [...new Set([...(beat.required || []), "tryKind", "consequence"])];
   }
   if (!isK1(input)) {
-    schema.properties.secret = { type: "string", minLength: 1, maxLength: 200 };
+    // R49: a manners draft may answer "" — only a story with something to hide has a secret.
+    schema.properties.secret = { type: "string", ...(hasStoryManners(input) ? {} : { minLength: 1 }), maxLength: 200 };
     schema.required = [...new Set([...(schema.required || []), "secret"])];
   }
   schema.properties.companion = { type: "string", maxLength: 200 };
@@ -65,7 +67,7 @@ export function storyDramaOutlineRule(input) {
   } Return consequence on each attempt beat — what that try changes in the world (something breaks, moves, wakes, is lost; someone notices) — so the next beat starts from it; "" on other beats.${
     k1
       ? ""
-      : ` Return secret: one thing the child can see in the pictures from early on that the hero has not noticed (where the lost thing is, who is following, what the strange sound was); the turn is the hero finally seeing it, and the words never point at it before then.`
+      : mannersSecretRule(input) || ` Return secret: one thing the child can see in the pictures from early on that the hero has not noticed (where the lost thing is, who is following, what the strange sound was); the turn is the hero finally seeing it, and the words never point at it before then.`
   } Return companion: what the companion wants for themselves in this story (not helping the hero) — it gets in the way or helps by accident; "" when the hero is alone. refrain.flip: when there is a refrain, the version that comes back changed at the end (one word turned); "" when there is none.`;
 }
 /** Clean the drama fields on an outline (in place): asked-for drafts keep clean values, others carry none. */
@@ -105,7 +107,7 @@ export function storyDramaViolations(outline, input) {
   // R46: the device "same plan again" lets the tries share a kind.
   else if (!ideaRepeatsTries(ideaInputFor(input, outline?.bible?.device)) && new Set(kinds).size < kinds.length)
     out.push({ code: "try_kinds", message: "시도 비트의 종류가 서로 달라야 해요(같은 방법을 되풀이하지 않아요)." });
-  if (!isK1(input) && !str(outline?.secret)) out.push({ code: "secret_missing", message: "아이가 주인공보다 먼저 보는 것 한 줄(secret)이 필요해요." });
+  if (!isK1(input) && !hasStoryManners(input) && !str(outline?.secret)) out.push({ code: "secret_missing", message: "아이가 주인공보다 먼저 보는 것 한 줄(secret)이 필요해요." });
   return out;
 }
 /** The try kinds of an outline's attempt beats, in order. */

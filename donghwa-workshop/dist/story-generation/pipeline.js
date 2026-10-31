@@ -10,6 +10,7 @@ import { withStoryChangeSchema, storyChangeViolations, hasStoryChange, storyChan
 import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
+import { hasStoryManners, mannersRef } from "./story-manners.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -448,6 +449,11 @@ function modelVisibleInput(source) {
     const { storyLogic, ...rest } = input;
     input = rest;
   }
+  // R49: and the manners marker (the recent laughs ride inside it).
+  if (input?.storyManners) {
+    const { storyManners, ...rest } = input;
+    input = rest;
+  }
   // R38: the change marker and the opening place are rule lines, not story data.
   if (input?.storyChange) {
     const { storyChange, ...rest } = input;
@@ -636,6 +642,8 @@ export function normalizeStoryInput(input = {}) {
     ...(storyIdeaRef(input.storyIdea) ? { storyIdea: storyIdeaRef(input.storyIdea) } : {}),
     // R47: cause and effect a child can follow (outline), varied speech tags (writers).
     ...(hasStoryLogic(input) ? { storyLogic: storyLogicPolicy() } : {}),
+    // R49: speech levels, laughs, a secret only when there is one.
+    ...(mannersRef(input?.storyManners) ? { storyManners: mannersRef(input.storyManners) } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
@@ -1458,6 +1466,8 @@ export async function generateSceneBriefs(outline, source, options = {}) {
       const schema = clone(SCENE_BRIEFS_SCHEMA);
       schema.properties.briefs.minItems = outline.beats.length;
       schema.properties.briefs.maxItems = outline.beats.length;
+      // R49: a beat with nothing funny returns "" for humor.
+      if (hasStoryManners(input)) schema.properties.briefs.items.properties.humor = { type: "string", maxLength: 500 };
       const result = await complete(
         "sceneBriefs",
         input,

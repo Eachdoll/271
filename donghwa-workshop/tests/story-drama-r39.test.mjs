@@ -76,7 +76,14 @@ test('R39 the outline contract: the schema asks for tryKind and consequence per 
   assert.ok(!('secret' in outlineRequestSchema(old).properties));
   assert.ok(!('secret' in outlineRequestSchema(k1).properties), 'a K1 book has no hidden clue');
   assert.ok(outlineRequestSchema(k1).properties.beats.items.required.includes('tryKind'));
-  const rules = leanOutlineRules(led, {count: 8, attempts: 3});
+  // R49: a manners draft asks for a secret only when the story has one; the R39 sentence stays on drafts without the marker.
+  const r49 = leanOutlineRules(led, {count: 8, attempts: 3});
+  assert.match(r49, /Return secret only when the story really has one[^\n]*"" when the story has no such thing — never make something that cannot hide \(someone's own hair, a feeling\) the secret\./);
+  assert.doesNotMatch(r49, /Return secret: one thing/);
+  assert.equal(outlineRequestSchema(led).properties.secret.minLength, undefined, 'the schema takes ""');
+  const {storyManners, ...plain} = led;
+  const rules = leanOutlineRules(plain, {count: 8, attempts: 3});
+  assert.equal(outlineRequestSchema(plain).properties.secret.minLength, 1);
   assert.match(rules, /\nDRAMA: the attempt beats are different kinds of trying, never the same move again a little bigger — return tryKind on every beat: "force"[^\n]*"trick"[^\n]*"ask"[^\n]*"wait"[^\n]*"giveup"[^\n]*Two attempt beats never share a kind\. Return consequence[^\n]*Return secret: one thing the child can see in the pictures from early on that the hero has not noticed[^\n]*Return companion: what the companion wants for themselves[^\n]*refrain\.flip:[^\n]*\n/);
   assert.match(rules, /\nPICTURE PLAN, three more fields: picturePlan\.focus[^\n]*picturePlan\.secret[^\n]*picturePlan\.backdrop — "scene"[^\n]*"plain"[^\n]*at most two beats[^\n]*"none"[^\n]*at most one beat, never the first or the last, only when carrier is "words"[^\n]*\n/);
   assert.doesNotMatch(leanOutlineRules(k1, {count: 7, attempts: 2}), /Return secret/);
@@ -98,7 +105,8 @@ test('R39 the outline contract: the schema asks for tryKind and consequence per 
   const twice = structuredClone(outline); attemptBeats(twice)[1].tryKind = 'ask';
   assert.ok(hardOutlineViolations(inspectOutlineRules(twice, led)).some((v) => v.code === 'try_kinds' && /서로 달라야/.test(v.message)));
   const noSecret = structuredClone(outline); delete noSecret.secret;
-  assert.ok(hardOutlineViolations(inspectOutlineRules(noSecret, led)).some((v) => v.code === 'secret_missing'));
+  assert.ok(hardOutlineViolations(inspectOutlineRules(noSecret, plain)).some((v) => v.code === 'secret_missing'));
+  assert.deepEqual(storyDramaViolations(noSecret, led), [], 'R49: a manners draft may have no secret');
   assert.deepEqual(storyDramaViolations({...demoOutline(k1), secret: undefined}, k1), []);
   assert.deepEqual(storyDramaViolations(noKind, old), [], 'nothing is asked of an R38 outline');
   // Clean-up: a kind on a non-attempt beat is dropped, an unknown kind is dropped, nothing kept where nothing was asked.

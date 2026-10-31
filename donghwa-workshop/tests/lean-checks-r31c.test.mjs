@@ -114,7 +114,7 @@ test('R31c scene briefs on the diet: the day is the story’s own, pose and prop
   const broken = briefs.map((b, i) => (i === 0 ? {...b, timeOfDay: 'dawnish'} : b));
   assert.ok(inspectSceneBriefs(broken, outline, input).hardBeatIndexes.includes(outline.beats[0].index), 'an unknown time is still a hard error');
   assert.match(sceneBriefRules(plain), /final beat evening or night|exactly THREE/u);
-  assert.equal(sceneBriefRules(input), leanSceneBriefRules());
+  assert.equal(sceneBriefRules(input), leanSceneBriefRules(input));
   assert.doesNotMatch(sceneBriefRules(input), /evening or night|exactly THREE|at least two kinds|body part/u);
 });
 
