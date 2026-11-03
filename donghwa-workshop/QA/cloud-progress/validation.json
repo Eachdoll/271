@@ -1,0 +1,24 @@
+{
+  "appTests": 1143,
+  "qualityTests": 85,
+  "cloudTests": 28,
+  "buildPassed": true,
+  "mirrorEqual": true,
+  "legacySha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "simpleButtonLimitPassed": true,
+  "smokePassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "beforeReproduced": true,
+  "autoRestoreProgressVerified": true,
+  "livePanelButtonsVerified": true,
+  "existingLocalChoicePreserved": true,
+  "syntheticNetworkWrites": 0,
+  "actualFamilyDataChanged": false,
+  "actualUserRestoreCompletionVerified": false,
+  "paidCalls": 0,
+  "cache": "donghwa-shell-v106"
+}

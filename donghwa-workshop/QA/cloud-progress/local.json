@@ -1,0 +1,26 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "synthetic": true,
+  "pageErrors": [],
+  "providerRequests": [],
+  "writes": [],
+  "runs": [
+    {
+      "scenario": "automatic",
+      "inFlight": "클라우드 자료 불러오는 중 · 그림·음원 0/1개",
+      "disabledWhileBusy": true,
+      "finished": "클라우드 저장됨",
+      "enabledAfterFinish": true,
+      "restored": true,
+      "progressShown": true
+    },
+    {
+      "scenario": "choice",
+      "disabledWhileBusy": true,
+      "enabledAfterFinish": true,
+      "localUntouched": true,
+      "libraryGets": 2
+    }
+  ],
+  "passed": true
+}
