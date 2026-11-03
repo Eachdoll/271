@@ -595,6 +595,7 @@ export function createCloudSync(context) {
     connected: false,
     dirty: false,
     busy: false,
+    progress: null,
     remoteExists: false,
     revision: 0,
     updatedAt: null,
@@ -626,6 +627,7 @@ export function createCloudSync(context) {
     ...status,
     user: status.user ? { ...status.user } : null,
     remoteSummary: { ...status.remoteSummary },
+    progress: status.progress ? { ...status.progress } : null,
   });
   function emit(patch = {}) {
     status = { ...status, ...patch, localAvailable: localAvailable() };
@@ -889,6 +891,11 @@ export function createCloudSync(context) {
     check(op);
     const images = [],
       audio = [];
+    let completed = 0;
+    const progress = (stage = "download") => ({
+      kind: "pull", stage, completed, total: record.manifest.length,
+    });
+    emit({ phase: "syncing", progress: progress() });
     await twoAtATime(record.manifest, async (item) => {
       const response = await request(
           "/media/" + encodeURIComponent(item.id),
@@ -913,7 +920,10 @@ export function createCloudSync(context) {
         dataUrl,
         ...(item.kind === "audio" ? { mimeType: item.mimeType } : {}),
       });
+      completed++;
+      emit({ progress: progress() });
     });
+    emit({ progress: progress("restoring") });
     // R45: handed over as an object — one string holding every picture as base64 broke the file cap (250MB) and memory.
     const candidate = validate({
       format: "donghwa-workshop-library",
@@ -1266,6 +1276,7 @@ export function createCloudSync(context) {
     const op = { epoch: ++epoch, signal: controller.signal };
     emit({
       busy: true,
+      progress: null,
       phase:
         kind === "refresh" && status.connected
           ? status.phase
@@ -1332,7 +1343,7 @@ export function createCloudSync(context) {
           operation = null;
           operationKind = null;
           controller = null;
-          emit({ busy: false });
+          emit({ busy: false, progress: null });
           if (status.phase === "ready") schedule();
         }
       }
@@ -1443,7 +1454,7 @@ export function createCloudSync(context) {
     target?.removeEventListener?.("focus", focus);
     target?.removeEventListener?.("storage", onStorage);
     visibility?.removeEventListener?.("visibilitychange", focus);
-    emit({ phase: "stopped", busy: false });
+    emit({ phase: "stopped", busy: false, progress: null });
   }
 
   // ---- Family ID accounts --------------------------------------------------

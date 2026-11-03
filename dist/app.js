@@ -721,8 +721,13 @@ function openPin() {
     "pin-modal",
   );
 }
-const cloudPhaseLabel = () =>
-  ({
+const cloudPhaseLabel = () => {
+  const progress = cloudStatus.progress;
+  if (cloudStatus.busy && progress?.kind === "pull")
+    return progress.stage === "restoring"
+      ? "내려받은 클라우드 자료를 확인·저장 중"
+      : `클라우드 자료 불러오는 중 · 그림·음원 ${progress.completed}/${progress.total}개`;
+  return ({
     checking: "클라우드 연결 확인 중",
     paused: "편집 중 · 클라우드 변경 대기",
     syncing: "클라우드 동기화 중",
@@ -738,6 +743,7 @@ const cloudPhaseLabel = () =>
         : "클라우드 연결 확인 필요",
     stopped: "클라우드 연결 중지",
   })[cloudStatus.phase] || "클라우드 저장";
+};
 function cloudStatusSummary() {
   if (storageBlocked) return "기존 데이터 보호 중";
   return cloudStatus.connected
@@ -840,6 +846,24 @@ function updateCloudStatus(next) {
   if (panel)
     panel.textContent =
       cloudPhaseLabel() + (next.error ? " · " + next.error : "");
+  // A panel opened during a background refresh must follow its final state.
+  // Update controls in place so progress never steals focus from the parent.
+  const cloudPanel = panel?.closest(".cloud-panel");
+  if (cloudPanel) {
+    const pull = cloudPanel.querySelector('[data-action="cloud-pull"]');
+    if (Boolean(pull) !== Boolean(next.authenticated)) showCloudPanel();
+    else if (pull) {
+      pull.disabled = !next.remoteExists || next.busy;
+      const push = cloudPanel.querySelector('[data-action="cloud-push"]');
+      if (push) push.disabled = next.busy || next.phase === "account-changed" || storageBlocked;
+      const boxes = cloudPanel.querySelectorAll(".cloud-library-compare > div > p"),
+        local = backupSummary(state), remote = next.remoteSummary || {};
+      if (boxes[0]) boxes[0].textContent = `책 ${local.bookCount}권 · 캐릭터 ${local.characterCount}명 · 배경 ${local.backgroundCount}곳`;
+      if (boxes[1]) boxes[1].textContent = next.remoteExists
+        ? `책 ${remote.bookCount || 0}권 · 캐릭터 ${remote.characterCount || 0}명 · 배경 ${remote.backgroundCount || 0}곳`
+        : "아직 저장된 자료가 없어요.";
+    }
+  }
   const accountRow = document.querySelector("#simple-account-row");
   if (accountRow) accountRow.outerHTML = renderSimpleAccountRow(next);
 }
