@@ -4,8 +4,8 @@ v60·v61 배포 감사합니다(클라우드 복원 수정 `84598a1`·보고 `ef
 
 | 항목 | 값 |
 | --- | --- |
-| 코드 커밋 | **`9f28ac7`** (캐시 `donghwa-shell-v107`) |
-| 반입 범위 | v61 보고 `ef89487` 이후: `ef89487..9f28ac7`  |
+| 코드 커밋 | **`b7068e9`** (캐시 `donghwa-shell-v107`) |
+| 반입 범위 | v61 보고 `ef89487` 이후: `ef89487..b7068e9`  |
 | 바뀐 파일 | `dist/story-generation/quality-settings.js`, `dist/simple-create.js`, `dist/sw.js`, `scripts/ux-census.mjs`, `tests/story-quality-settings.test.mjs`, `CLAUDE.md` |
 
 ## 달라진 것
@@ -13,4 +13,4 @@ v60·v61 배포 감사합니다(클라우드 복원 수정 `84598a1`·보고 `ef
 - ③의 작가실 스위치는 이미 만든 이야기가 열려 있어도 보입니다(잠긴 채 그 이야기의 상태).
 
 ## 검증·배포
-`npm test` 1141/1141 · 품질 85/85 · 미러 없음 · DOM `0e5035cf…` · 센서스 `PRO SAME AS TABLE true`·`ERRORS []`·`PAID 0` · 스모크 PASS. 캐시 v107. 유료 호출 없음. 배포 뒤 부모 설정 '더 보기 → 글 모델'에 스위치가 보이는지 확인하고 `CODEX_R53_COMPLETION_2026-11-03.md`에 한 줄 덧붙입니다.
+`npm test` 1144/1144 · 품질 85/85 · 미러 없음 · DOM `0e5035cf…` · 센서스 `PRO SAME AS TABLE true`·`ERRORS []`·`PAID 0` · 스모크 PASS. 캐시 v107. 유료 호출 없음. 배포 뒤 부모 설정 '더 보기 → 글 모델'에 스위치가 보이는지 확인하고 `CODEX_R53_COMPLETION_2026-11-03.md`에 한 줄 덧붙입니다.
