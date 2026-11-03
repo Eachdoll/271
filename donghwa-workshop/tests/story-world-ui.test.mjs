@@ -21,7 +21,7 @@ test('adventure-stage selector lists the real 100 cards by era and preserves the
  assert.match(field(html,'storyWorldId'),/value="drawer" selected/);assert.match(field(html,'storySeason'),/value="auto" selected/);assert.match(field(html,'storyTimeOfDay'),/value="auto" selected/);assert.match(html,/data-quality-action="world-topic" disabled/);
  const chosen=worldLibrary.worlds.find(world=>world.era==='future'),explicit=renderQualityWorldSelectors({storyWorldId:chosen.id,storySeason:'winter',storyTimeOfDay:'night'},{state});
  assert.ok(field(explicit,'storyWorldId').includes(`value="${chosen.id}" selected`));assert.match(field(explicit,'storySeason'),/value="winter" selected/);assert.match(field(explicit,'storyTimeOfDay'),/value="night" selected/);assert.match(explicit,/엔진과 화풍은 현재 월드 설정/);
- const parent=renderStoryQualitySettings(state);assert.match(parent,/id="quality-default-storyWorldId"/);assert.match(parent,/id="quality-variant-chance"[^>]+value="35"/);
+ const parent=renderStoryQualitySettings(state);assert.doesNotMatch(parent,/id="quality-default-storyWorldId"|id="quality-variant-chance"/,'R54a: the world and variation defaults left the settings page');
 });
 
 test('world selection never replaces a typed topic, image engine, style or custom background drawer',()=>{

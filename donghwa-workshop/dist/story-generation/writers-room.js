@@ -445,8 +445,8 @@ const asPitch = (premise, n, row) => ({
   ...(row ? { pull: row.pull, laughed: row.laughed, curious: row.curious, again: row.again, lost: row.lost, words: row.words } : {}),
 });
 /**
- * The room's first half: premises (the top model), the panel's reactions (the
- * cheap model), the deterministic shortlist, then the parent's choice — a
+ * The room's first half: premises (the author — the "outline" role, the
+ * parent's 상위 model), the panel's reactions (the cheap model), the deterministic shortlist, then the parent's choice — a
  * hold like R22's when options.councilHold is on and no choice is given yet.
  * Every paid answer is journaled in options.councilCheckpoint, so a resumed
  * run replays the rounds and buys nothing again.
@@ -487,7 +487,7 @@ export async function runWritersRoom(input, options = {}, services = {}) {
   };
   try {
     await snapshot("premises", ROOM_PROGRESS.premises);
-    const proposed = await ask("작가", premisesRequest(input, { records }), "prose");
+    const proposed = await ask("작가", premisesRequest(input, { records }), "outline");
     const all = list(proposed.premises).filter(object).slice(0, PREMISE_COUNT);
     if (!all.length) throw journal.fail(roomError("작가가 쓸 수 있는 전제를 내지 못했어요."));
     const kept = sievePremises(all, records.length ? records : list(input.writersRoom?.recent));
@@ -651,7 +651,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     const drafts = (
       await Promise.all(
         Array.from({ length: count }, (_, i) =>
-          ask(`초고 ${i + 1}`, { ...base, user: `${base.user}\n\n[초고 ${i + 1}/${count} — 다른 초고와 다르게, 네 식대로]` }, "prose").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
+          ask(`초고 ${i + 1}`, { ...base, user: `${base.user}\n\n[초고 ${i + 1}/${count} — 다른 초고와 다르게, 네 식대로]` }, "outline").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
         ),
       )
     ).filter(Boolean);
@@ -673,7 +673,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       title = chosen.title;
     if (options.roomRewrite !== false && drafts.length > 1) {
       await snapshot("rewrite");
-      const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes), "prose"), title);
+      const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes), "outline"), title);
       if (again) {
         pages = again.pages;
         title = again.title;
@@ -682,7 +682,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     }
     if (input?.language !== "ko") {
       await snapshot("english");
-      const en = await ask("영어판", englishRequest(input, pages), "prose");
+      const en = await ask("영어판", englishRequest(input, pages), "outline");
       const rows = list(en.pages).map((p) => str(p?.en, 1200));
       if (rows.length === pages.length) {
         pages = pages.map((p, i) => ({ ...p, en: rows[i] }));
@@ -692,7 +692,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     record.levelNotes = levelNotes(outline, pages, input);
     if (record.levelNotes.length && options.roomPolish !== false) {
       await snapshot("polish");
-      const polished = await ask("다듬기", polishRequest(input, pages, record.levelNotes), "prose");
+      const polished = await ask("다듬기", polishRequest(input, pages, record.levelNotes), "outline");
       const rows = list(polished.pages).filter(object);
       if (rows.length === pages.length) {
         pages = pages.map((p, i) => ({ ko: str(rows[i].ko, 1200) || p.ko, ...(p.en !== undefined ? { en: str(rows[i].en, 1200) || p.en } : {}) }));

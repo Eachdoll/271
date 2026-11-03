@@ -736,14 +736,14 @@ export function estimateStoryTextCost({
   if (room) {
     const draftOut = 1200 + pages * 160;
     stages.push(
-      stageEstimate("roomPremises", 2500, 4500, 1, "prose"),
+      stageEstimate("roomPremises", 2500, 4500, 1, "outline"),
       stageEstimate("roomPanel", 4500, 3000, 1, "cheap"),
       stageEstimate("outline", 5000, beats * 350, 1),
-      stageEstimate("roomDrafts", 3000, draftOut, 3, "prose"),
+      stageEstimate("roomDrafts", 3000, draftOut, 3, "outline"),
       stageEstimate("roomRead", 3000 + pages * 300, 2500, 1, "cheap"),
-      stageEstimate("roomRewrite", 3500 + pages * 120, draftOut, 1, "prose"),
-      stageEstimate("roomEnglish", 2500 + pages * 120, Math.ceil(draftOut * 0.7), 1, "prose"),
-      stageEstimate("roomPolish", 3500 + pages * 200, draftOut, 1, "prose"),
+      stageEstimate("roomRewrite", 3500 + pages * 120, draftOut, 1, "outline"),
+      stageEstimate("roomEnglish", 2500 + pages * 120, Math.ceil(draftOut * 0.7), 1, "outline"),
+      stageEstimate("roomPolish", 3500 + pages * 200, draftOut, 1, "outline"),
       stageEstimate("roomPages", 3000 + pages * 200, 300 + pages * 120, 1, "cheap"),
     );
     if (editor)

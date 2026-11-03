@@ -56,10 +56,27 @@ const ERAS = { present: "현재", past: "과거", future: "미래", fantasy: "�
   },
   TIMES = { auto: "자동 · 낮", day: "낮", night: "밤" };
 const ROLE_NAMES = {
-  outline: "줄거리 · 상위",
+  outline: "작가 · 상위",
   prose: "전문 · 보급형 중",
-  cheap: "심사·단순화·아이 시뮬레이터 · 보급형 하",
+  cheap: "독자단·읽기 · 보급형",
   coach: "주간 코치 · 상위",
+};
+/*
+ * R54a (2026-11-03). The parent on the pro quality panel: "too complex —
+ * simplify, drop what is useless". Everything the writers' room decides
+ * (the legacy quality package and its six switches, the 29 story shapes, the
+ * stage/world/season/hour defaults, the prop-variation chance, the six
+ * pattern cards, the repeat-material log, the weekly coach) left the screen.
+ * Only the two models stay: the author (the room's premises, drafts,
+ * rewrite, English edition and polish, and the outline) and the economy
+ * model (the panel's listening and reading, the picture reading). Stored
+ * values of the hidden controls are kept so old drafts and pins never
+ * change; the form reads only what it shows.
+ */
+const SHOWN_ROLES = ["outline", "cheap"];
+const ROLE_HELP = {
+  outline: "작가실의 전제·초고 3권·고쳐쓰기·영어판·다듬기와 줄거리를 씁니다.",
+  cheap: "독자 여섯이 듣고 읽는 일, 완성된 글에서 그림에 필요한 것을 읽는 일을 맡습니다.",
 };
 let api,
   configured = false,
@@ -378,7 +395,7 @@ function roleFields(state, role) {
     explicit = q.engines?.[role] || {},
     selected = explicit.engine || "",
     engine = selected || resolved.engineId;
-  return `<fieldset class="quality-role"><legend>${ROLE_NAMES[role]}</legend><label class="field"><span>엔진</span><select data-quality-role-engine="${role}"><option value="" ${!selected ? "selected" : ""}>부모 글 엔진에서 자동</option>${Object.entries(
+  return `<fieldset class="quality-role"><legend>${ROLE_NAMES[role]}</legend>${ROLE_HELP[role] ? `<p class="small-label">${ROLE_HELP[role]}</p>` : ""}<label class="field"><span>엔진</span><select data-quality-role-engine="${role}"><option value="" ${!selected ? "selected" : ""}>부모 글 엔진에서 자동</option>${Object.entries(
     ENGINES,
   )
     .map(
@@ -481,23 +498,15 @@ function renderCoach(state) {
   }</details><p id="quality-coach-status" class="story-note" role="status" aria-live="polite"></p></section>`;
 }
 export function renderStoryQualitySettings(state) {
-  const q = quality(state),
-    toggle = (field, label, help) =>
-      renderCheckboxSwitch({id: `quality-${field}`, qualityFlag: field, label, description: help, checked: q[field], className: "quality-toggle"});
-  return `<section class="panel" id="story-quality-settings"><h3>이야기 구성·글 품질</h3><form id="story-quality-form">${toggle("enabled", "구성 재료·패턴으로 이야기 만들기", "일관된 기승전결과 새로운 시도를 구성합니다.")}${toggle("useDistilledExamples", "증류 예시 함께 쓰기", "자동 판정만 통과한 161편입니다. 새 이야기(뼈대 규칙)는 이 가운데 9점 이상을 ‘뼈대 카드’로 늘 참고하고, 이 스위치는 예전 초안과 8점 예시에만 영향을 줍니다. 같은 주제는 제외하고 골드를 먼저 후보에 둡니다.")}${toggle("useBeamSearch", "비트 탐색", "기본 꺼짐 · 비트마다 후보 3개를 만들고 심사해 요청과 요금이 늘어요.")}${toggle("twoPass", "풍부화 2패스", "풍부하게 쓴 뒤 목표 읽기 수준으로 다듬습니다.")}${toggle("childSimulator", "아이 시뮬레이터", "다음 쪽에 대한 궁금증과 목표·반전·해결의 되말하기를 검사합니다.")}${toggle("weeklyCoach", "주간 코치", "최근 승인 책을 살펴 제안하며 자동으로 규칙을 바꾸지 않습니다.")}<details class="story-card"><summary>단계별 엔진</summary><div class="quality-role-grid">${Object.keys(
-    ROLE_NAMES,
-  )
-    .map((role) => roleFields(state, role))
-    .join(
-      "",
-    )}</div><p class="story-note">Anthropic 줄거리 자동 선택은 Sonnet 5.5입니다. 패키지 줄거리 20주제 비교에서 Opus와 평균 점수가 같고 비용이 낮았어요. 전문·쪽 나누기는 별도 검증이 필요합니다.<br>API 키는 위의 글 엔진 설정에서 공급자별로 저장하세요. 단계 선택에는 저장된 키를 공유합니다.</p></details>${renderQualityPatternSelector({ storyQualityPatternId: q.patternId }, { id: "quality-default-pattern", state })}<details class="story-card"><summary>기본 모험 무대·계절·시간</summary>${renderQualityWorldSelectors({ storyQuality: q }, { state, prefix: "quality-default-", topicButton: false })}<label class="field"><span>소품·생물 변형 확률 · %</span><input id="quality-variant-chance" type="number" min="0" max="100" step="1" value="${Math.round((q.variantChance ?? 0.35) * 100)}"><small>기본 35% · 색·크기·특징 변형으로 사건 재료를 다양하게 골라요.</small></label></details>${renderPatternEditor(state)}<p id="quality-settings-error" class="story-error" role="status" aria-live="polite"></p><button type="submit" class="btn btn-green">글 품질 설정 저장</button></form>${renderBans(state)}${renderCoach(state)}</section>`;
+  return `<section class="panel" id="story-quality-settings"><h3>글 모델</h3><p class="section-sub">작가실이 쓰는 모델 둘이에요. 이야기의 모양·길이·끝은 작가실이 정하고, 등급과 언어는 '우리 아이' 설정을 써요.</p><form id="story-quality-form"><div class="quality-role-grid">${SHOWN_ROLES.map((role) => roleFields(state, role)).join("")}</div><div class="form-actions"><button type="submit" class="btn btn-green">모델 저장</button></div><p id="quality-settings-error" class="pin-error" aria-live="polite"></p></form></section>`;
 }
 function readSettings(form, state) {
   const q = quality(state),
     settings = getTextGenerationSettings(state);
   for (const element of form.querySelectorAll("[data-quality-flag]"))
     q[element.dataset.qualityFlag] = element.checked;
-  for (const role of Object.keys(ROLE_NAMES)) {
+  // R54a: only the roles the form shows; the others keep their stored engines.
+  for (const role of Object.keys(ROLE_NAMES).filter((role) => form.querySelector(`[data-quality-role-engine="${role}"]`))) {
     const engine = form.querySelector(
         `[data-quality-role-engine="${role}"]`,
       )?.value,
@@ -524,10 +533,11 @@ function readSettings(form, state) {
       throw Error(`${ROLE_NAMES[role]}에 사용할 모델을 골라 주세요.`);
     q.engines[role] = { engine: id, ...(model ? { model } : {}) };
   }
-  q.patternId = form.querySelector("#quality-default-pattern")?.value || "auto";
+  // R54a: a control the form no longer shows keeps its stored value.
+  q.patternId = form.querySelector("#quality-default-pattern")?.value || q.patternId || "auto";
   // R33: the default stage (자동 is stored as "auto" and normalizes to no key).
   q.stageCategoryId =
-    form.querySelector("#quality-default-stageCategoryId")?.value || "auto";
+    form.querySelector("#quality-default-stageCategoryId")?.value || q.stageCategoryId || "auto";
   q.worldId =
     form.querySelector("#quality-default-storyWorldId")?.value ||
     q.worldId ||
@@ -611,6 +621,8 @@ export function cleanupStoryQualityUI() {
 }
 export async function maybeRunStoryQualityCoach({ force = false } = {}) {
   if (!api?.isParent() || coachController) return;
+  // R54a: the weekly coach never runs on its own any more (its screen is gone; a forced run from code only).
+  if (!force) return;
   const state = api.getState();
   if (!force && !qualityWeeklyCoachDue(state)) return;
   const q = quality(state),
@@ -707,7 +719,7 @@ export function configureStoryQualityUI(context) {
       if (api.save() === false)
         throw Error("글 품질 설정을 저장하지 못했어요.");
       api.render();
-      api.toast("새 이야기부터 글 품질 설정을 적용해요.");
+      api.toast("새 이야기부터 이 모델을 써요.");
     } catch (error) {
       displayError(error);
     }

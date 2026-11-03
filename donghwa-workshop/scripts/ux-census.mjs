@@ -89,7 +89,11 @@ const table = {
   // R26: +1 input, the '검사는 최고 모델로' box on the text settings page.
   // R29: +2 inputs, the '정성 모드' and '정성 모드 작가는 최고 모델로' boxes.
   // R33: +1 select, the default '무대' (stage category) above the world cards.
-  '02-settings-text': { buttons: 10, inputs: 102, selects: 65 },
+  // R54a (deliberate): the quality panel is two model rows (작가 · 독자단); the
+  // six switches, the shape/stage/world/season/hour defaults, the variation
+  // chance, the six pattern cards, the repeat log and the coach left the
+  // screen (102 → 10 inputs, 65 → 5 selects, 10 → 9 buttons).
+  '02-settings-text': { buttons: 9, inputs: 10, selects: 5 },
   '02-settings-image': { buttons: 16, inputs: 10, selects: 4 },
   '03-materials': { buttons: 43, inputs: 0, selects: 0 },
   // 2026-10-21 (deliberate): each beat also offers the drawer's other places
