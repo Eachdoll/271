@@ -1091,6 +1091,8 @@ export function approvedBookRecord(book) {
     patternId: String(patternId),
     // R49: the laughs this book used, so the next draft is told not to use them again.
     ...(plainValues(briefs.map((brief) => brief?.humor), 12).length ? { humor: plainValues(briefs.map((brief) => brief?.humor), 12) } : {}),
+    // R52: the story shape the writers' room wrote with, so the next room avoids it.
+    ...(text(book.outline?.writersRoom?.premise?.engine, 40) ? { engine: book.outline.writersRoom.premise.engine.trim() } : {}),
     places: plainValues([
       ...briefs.flatMap((brief) => [
         brief?.subLocation?.ko,

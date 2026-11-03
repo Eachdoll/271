@@ -1125,7 +1125,7 @@ export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
       // R49: who speaks politely, laughs from what happens (not the recent books' ones), a secret only when there is one.
       storyManners: mannersPolicy(recentHumorLines(storyQualityBookRecords(state))),
       // R51: the writers' room (the parent's setting; off until R53) in place of the council, not for K1 yet.
-      ...(!k1 && writersRoomFor(state) ? { writersRoom: writersRoomFor(state) } : {}),
+      ...(!k1 && writersRoomFor(state) ? { writersRoom: writersRoomFor(state, storyQualityBookRecords(state)) } : {}),
     },
     readingLevels,
     world,

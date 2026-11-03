@@ -128,7 +128,7 @@ import {
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
 import { councilSummaryLine } from "./story-generation/council.js";
-import { writersRoomFor, roomSummaryLine } from "./story-generation/writers-room.js";
+import { writersRoomFor, roomSummaryLine, roomDraftLine } from "./story-generation/writers-room.js";
 import {
   councilRoomBlock,
   renderCouncilBudget,
@@ -1730,7 +1730,7 @@ function renderGenerateStep(ctx, w) {
         live ||
         (!!pageOp && pageOp.bookId === bookId) ||
         (!!bookId && isPageOperationBusy(bookId));
-    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}${councilSummaryLine(job.outline) || roomSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline) || roomSummaryLine(job.outline))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
+    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}${councilSummaryLine(job.outline) || roomSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline) || roomSummaryLine(job.outline))}</p>` : ""}${roomDraftLine(job.roomDraft) ? `<p class="small-label simple-council-note">${esc(roomDraftLine(job.roomDraft))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
   } else if (live)
     status = `${councilRoomBlock(job, { live: true })}${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
   else if (councilHeld(job)) {

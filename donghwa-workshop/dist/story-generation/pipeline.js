@@ -11,7 +11,7 @@ import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
 import { hasStoryManners, mannersRef } from "./story-manners.js";
-import { hasWritersRoom, writersRoomPolicy, runWritersRoom, attachWritersRoom, roomPremiseBlock } from "./writers-room.js";
+import { hasWritersRoom, writersRoomRef, runWritersRoom, attachWritersRoom, roomPremiseBlock } from "./writers-room.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -651,7 +651,7 @@ export function normalizeStoryInput(input = {}) {
     // R49: speech levels, laughs, a secret only when there is one.
     ...(mannersRef(input?.storyManners) ? { storyManners: mannersRef(input.storyManners) } : {}),
     // R51: the writers' room in place of the council.
-    ...(hasWritersRoom(input) ? { writersRoom: writersRoomPolicy() } : {}),
+    ...(writersRoomRef(input?.writersRoom) ? { writersRoom: writersRoomRef(input.writersRoom) } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),

@@ -78,6 +78,7 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
+import { hasWritersRoom, runRoomDrafts } from "./story-generation/writers-room.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
 import { hasK1Policy, isK1Draft } from "./story-generation/k1-book.js";
@@ -641,6 +642,8 @@ async function generateAutoBackground(
 const DEFAULT_OPS = {
   plan: generateMaterialPlan,
   outline: generateOutline,
+  // R52 작가실: whole drafts → the panel → rewrite → the English edition → one polish.
+  roomDrafts: runRoomDrafts,
   briefs: generateSceneBriefs,
   prose: generateProse,
   enrichment: enrichProse,
@@ -1480,6 +1483,15 @@ export async function runFullAuto(
       if (!isCouncilHold(error)) throw error;
       return await holdAt(COUNCIL_REVIEW_STATUS, COUNCIL_REVIEW_PHASE);
     }
+    // R52 작가실: the book itself, written whole from the chosen premise and kept
+    // on the job (R53 turns it into the pages the pictures and prints read).
+    if (hasWritersRoom(job.input))
+      await step(
+        "roomDrafts",
+        "작가실 · 초고 쓰기",
+        (opts) => ops.roomDrafts(job.input, job.outline, opts("prose")),
+        (r) => (job.roomDraft = r.data),
+      );
     await step(
       "briefs",
       "장면 디테일 만들기",

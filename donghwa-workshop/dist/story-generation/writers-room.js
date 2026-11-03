@@ -16,9 +16,25 @@ import { parseJsonLenient } from "./outline-normalize.js";
 import { councilHoldError, normalizeCouncilChoice, appendDecision } from "./council.js";
 import { StoryValidationError } from "./schemas.js";
 import { ROOM_PHASES } from "./council-room.js";
+import { checkStory } from "./checker.js";
+import { leanLevelLine } from "./prompt-diet.js";
 export { ROOM_PHASES };
 export const WRITERS_ROOM_VERSION = 1;
-export const writersRoomPolicy = () => ({ version: WRITERS_ROOM_VERSION });
+/** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
+export const writersRoomPolicy = (records = []) => {
+  const recent = recentRoomBooks(records);
+  return { version: WRITERS_ROOM_VERSION, ...(recent.length ? { recent } : {}) };
+};
+/** The marker as normalize keeps it; null when it is not the R51 one. */
+export const writersRoomRef = (value) => {
+  if (!object(value) || value.version !== WRITERS_ROOM_VERSION) return null;
+  const recent = list(value.recent)
+    .filter(object)
+    .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
+    .filter((r) => r.line)
+    .slice(0, 6);
+  return { version: WRITERS_ROOM_VERSION, ...(recent.length ? { recent } : {}) };
+};
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -115,6 +131,18 @@ export function recentBookLines(records = [], count = 6) {
     })
     .filter(Boolean);
 }
+/** The recent books as the marker carries them: the brief's line, the engine and the first laugh (for the sieve). */
+export function recentRoomBooks(records = [], count = 6) {
+  return list(records)
+    .slice(0, count)
+    .map((r, i) => {
+      const line = recentBookLines([r])[0] || "";
+      const engine = str(r?.usedElements?.engine || r?.outline?.writersRoom?.premise?.engine, 40),
+        laugh = str(list(r?.usedElements?.humor)[0], 120);
+      return line ? { line, ...(engine ? { engine } : {}), ...(laugh ? { laugh } : {}) } : null;
+    })
+    .filter(Boolean);
+}
 /* ---------- the brief: one page, every round reads it ---------- */
 const LEVEL_LINE = Object.freeze({
   K1: "3~4세가 듣는 책 — 한 쪽에 한 사건, 짧은 말.",
@@ -133,7 +161,8 @@ export function roomBrief(input, { records = [] } = {}) {
   const ko = String(input?.specs?.ko?.id || "K2"),
     lang = input?.language === "ko" ? "한글" : input?.language === "en" ? "영어" : "한글과 영어",
     ending = customEnding(input),
-    recent = recentBookLines(records);
+    // The records when the caller has them (tests, runners); else what the marker froze.
+    recent = list(records).length ? recentBookLines(records) : list(input?.writersRoom?.recent).map((r) => str(r?.line, 200)).filter(Boolean);
   return [
     `[이 책] 주제: ${str(input?.topic, 80) || "자유"} · ${lang} · ${LEVEL_LINE[ko] || LEVEL_LINE.K2}${input?.language !== "ko" ? " 영어는 한글을 따라 나중에 씁니다." : ""}`,
     `[꼭 나오는 인물 — 부모님이 골랐어요]\n${castText(input) || "- (없음)"}`,
@@ -213,14 +242,13 @@ export function similarity(a, b) {
 }
 /** Drops a premise whose engine and laugh both echo one of the last books; keeps the rest in order. */
 export function sievePremises(premises, records = [], { count = 3, laughAlike = 0.5 } = {}) {
-  const recent = list(records).slice(0, count);
+  // Records (usedElements) or the marker's rows ({engine, laugh}).
+  const recent = list(records)
+    .slice(0, count)
+    .map((r) => (object(r?.usedElements) ? { engine: str(r.usedElements.engine, 40), laughs: list(r.usedElements.humor) } : { engine: str(r?.engine, 40), laughs: r?.laugh ? [r.laugh] : [] }));
   return list(premises).filter((p) => {
     if (!object(p)) return false;
-    return !recent.some((r) => {
-      const engine = str(r?.usedElements?.engine, 40);
-      const laughs = list(r?.usedElements?.humor);
-      return engine && engine === str(p.engine, 40) && laughs.some((l) => similarity(l, p.laugh) >= laughAlike);
-    });
+    return !recent.some((r) => r.engine && r.engine === str(p.engine, 40) && r.laughs.some((l) => similarity(l, p.laugh) >= laughAlike));
   });
 }
 export const PANEL_IDS = Object.freeze(["action", "laugh", "heart", "eye", "ours", "parent"]);
@@ -383,7 +411,8 @@ export function rewriteNotes(row) {
 export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
   return {
     system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 그 반응을 받아 책을 통째로 다시 써요 — 쪽을 합치거나 나누거나 빼거나 더해도 돼요. 좋았던 것은 지키고, 지루한 곳은 과감히. 제목도 다시 정해도 돼요.",
-    user: `${roomBrief(input, { records })}\n\n[독자 반응]\n${str(notes, 2000) || "(없음)"}\n\n${draftText(draft, 0)}`,
+    // The notes keep their lines (str() would fold them into one).
+    user: `${roomBrief(input, { records })}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`,
     jsonSchema: DRAFT_SCHEMA,
     temperature: 0.8,
     maxTokens: 8000,
@@ -393,8 +422,8 @@ export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
 /* ---------- R51: the room runs (premises → the panel → the parent) ---------- */
 const clone = (value) => JSON.parse(JSON.stringify(value));
 /** The parent's setting (off until R53 turns it on by default) → the marker a new draft freezes, or null. */
-export function writersRoomFor(state) {
-  return state?.settings?.textGeneration?.writersRoom === true ? writersRoomPolicy() : null;
+export function writersRoomFor(state, records = []) {
+  return state?.settings?.textGeneration?.writersRoom === true ? writersRoomPolicy(records) : null;
 }
 const ROOM_PROGRESS = Object.freeze({
   premises: "작가실 · 작가가 이야기 전제 열두 개를 내고 있어요.",
@@ -460,7 +489,7 @@ export async function runWritersRoom(input, options = {}, services = {}) {
     const proposed = await ask("작가", premisesRequest(input, { records }), "prose");
     const all = list(proposed.premises).filter(object).slice(0, PREMISE_COUNT);
     if (!all.length) throw journal.fail(roomError("작가가 쓸 수 있는 전제를 내지 못했어요."));
-    const kept = sievePremises(all, records);
+    const kept = sievePremises(all, records.length ? records : list(input.writersRoom?.recent));
     const premises = kept.length ? kept : all;
     record.premises = premises;
     record.dropped = all.length - premises.length;
@@ -514,4 +543,177 @@ export function roomSummaryLine(outline) {
   if (!object(r) || !r.chosen) return "";
   const p = r.pitches?.[r.chosen - 1];
   return `작가실 · '${str(p?.title, 40)}' (전제 ${list(r.premises).length}개 중 독자단이 셋을 골라${r.parentChoice ? " 부모가" : ""} 채택)`;
+}
+
+/* ---------- R52: whole drafts → the panel reads → rewrite → finishing ---------- */
+const DRAFT_COUNT = 3;
+const pageRows = (draft) => list(draft?.pages).filter(object).map((p) => ({ ko: str(p.ko, 1200) })).filter((p) => p.ko);
+const normalizeDraft = (raw, fallbackTitle = "") => {
+  const pages = pageRows(raw);
+  return pages.length ? { title: str(raw?.title, 40) || fallbackTitle, pages } : null;
+};
+const numbered = (pages, key = "ko") => list(pages).map((p, i) => `${i + 1}쪽: ${str(p?.[key], 1200)}`).join("\n");
+/**
+ * The English edition, written after the Korean is final (the parent, 11-03:
+ * "write the Korean first, then the English as its translation, and let us
+ * choose the edition"): page by page, the same events, the same lines, at the
+ * English level; it may say less, never something else.
+ */
+export function englishRequest(input, pages) {
+  const count = list(pages).length;
+  return {
+    system: `You are a picture-book author writing the English edition of a finished Korean picture book, page by page. ${leanLevelLine(input, "en", { vocab: true })} Each page's English follows that page's Korean: the same events in the same order, the same spoken lines in plain English, the same surprise kept for the same page; it may say less when the level needs it, never something else. One idea per sentence; no semicolons. Return exactly ${count} pages in order.`,
+    user: numbered(pages),
+    jsonSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["pages"],
+      properties: { pages: { type: "array", minItems: count, maxItems: count, items: { type: "object", additionalProperties: false, required: ["en"], properties: { en: { type: "string", maxLength: 1200 } } } } },
+    },
+    temperature: 0.4,
+    maxTokens: 6000,
+  };
+}
+/** The level notes a page failed (deterministic, from the checker), as the writer hears them. */
+export function levelNotes(outline, pages, input) {
+  let report;
+  try {
+    report = checkStory(outline, list(pages).map((p, i) => ({ pageNo: i + 1, ko: p.ko, en: p.en || "" })), {
+      specs: input?.specs,
+      allowedNames: [...list(input?.characters).flatMap((c) => [c?.name, c?.nameEn]), ...list(outline?.writersRoom?.premise?.cast).map((c) => c?.name)].filter(Boolean),
+      storyInput: input,
+    });
+  } catch {
+    return [];
+  }
+  return list(report?.checks)
+    .flatMap((check) => list(check?.violations))
+    .filter((v) => object(v) && v.pageNo != null && (v.language === "ko" || v.language === "en"))
+    .map((v) => ({ pageNo: Number(v.pageNo), language: v.language, message: str(v.message, 200) }))
+    .filter((v) => v.pageNo && v.message)
+    .slice(0, 40);
+}
+/** One polish: the pages the level notes name, rewritten within the level; every other page returned as it is. */
+export function polishRequest(input, pages, notes) {
+  const count = list(pages).length,
+    both = list(pages).some((p) => p.en);
+  const lines = list(notes).map((n) => `${n.pageNo}쪽 (${n.language === "en" ? "영어" : "한글"}): ${n.message}`).join("\n");
+  return {
+    system: `너는 이 책을 쓴 작가예요. 아래는 쪽마다 읽기 등급 검사가 남긴 참고예요. 그 쪽만 등급 안에서 다시 쓰고(이야기·대사·웃음은 그대로), 나머지 쪽은 글자 하나 바꾸지 않고 그대로 돌려줘요. ${both ? "영어가 있으면 영어도 그 쪽의 한글을 따라 함께 돌려줘요. " : ""}쪽 수는 ${count}쪽 그대로예요.\n${leanLevelLine(input, "ko")}${both ? `\n${leanLevelLine(input, "en", { vocab: true })}` : ""}`,
+    user: `[등급 참고]\n${lines || "(없음)"}\n\n[책]\n${list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}`).join("\n")}`,
+    jsonSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["pages"],
+      properties: { pages: { type: "array", minItems: count, maxItems: count, items: { type: "object", additionalProperties: false, required: both ? ["ko", "en"] : ["ko"], properties: { ko: { type: "string", maxLength: 1200 }, ...(both ? { en: { type: "string", maxLength: 1200 } } : {}) } } } },
+    },
+    temperature: 0.3,
+    maxTokens: 8000,
+  };
+}
+const DRAFT_PROGRESS = Object.freeze({
+  drafts: "작가실 · 작가가 초고 세 권을 통째로 쓰고 있어요.",
+  read: "작가실 · 독자 여섯이 초고를 한 쪽씩 읽고 있어요.",
+  rewrite: "작가실 · 작가가 독자 반응을 받아 고쳐 쓰고 있어요.",
+  english: "작가실 · 완성된 한글을 따라 영어판을 쓰고 있어요.",
+  polish: "작가실 · 등급 검사가 남긴 쪽만 다듬고 있어요.",
+  done: "작가실이 책을 다 썼어요.",
+});
+/**
+ * The room's second half, from the chosen premise: three whole drafts (the top
+ * model, in parallel), the panel's page-by-page reading (the cheap model), the
+ * counted pick, one rewrite on the readers' notes, the English edition, and
+ * one polish of the pages the level checker names (advisory — never a loop).
+ * Journaled under writerCheckpoint; a resumed run replays and buys nothing.
+ */
+export async function runRoomDrafts(input, outline, options = {}, services = {}) {
+  const premise = outline?.writersRoom?.premise;
+  if (!object(premise)) throw new StoryValidationError("prose", ["작가실이 고른 전제가 없어요. 줄거리 단계부터 다시 만들어 주세요."]);
+  const journal = ledger("roomDrafts", input, options, { version: WRITERS_ROOM_VERSION, premise }, "writerCheckpoint");
+  const count = Math.max(1, Math.min(DRAFT_COUNT, Number(options.roomDraftCount) || DRAFT_COUNT));
+  const record = { kind: "roomDrafts", version: WRITERS_ROOM_VERSION, phase: "drafts", drafts: [], rows: [], chosen: null, notes: "", rewritten: false, english: false, levelNotes: [], polished: false, levelNotesAfter: [] };
+  const snapshot = async (phase) => {
+    record.phase = phase;
+    journal.checkpoint.record = clone(record);
+    await journal.save();
+    options.onProgress?.({ stage: "roomDrafts", phase, message: DRAFT_PROGRESS[phase], room: clone(record) });
+  };
+  const ask = async (label, request, role) => {
+    const response = await journal.call(role, request, services);
+    const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));
+    if (!object(data)) throw journal.fail(roomError(`${label}의 답을 읽을 수 없어요.`));
+    return data;
+  };
+  try {
+    await snapshot("drafts");
+    const base = draftRequest(input, premise);
+    const drafts = (
+      await Promise.all(
+        Array.from({ length: count }, (_, i) =>
+          ask(`초고 ${i + 1}`, { ...base, user: `${base.user}\n\n[초고 ${i + 1}/${count} — 다른 초고와 다르게, 네 식대로]` }, "prose").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
+        ),
+      )
+    ).filter(Boolean);
+    if (!drafts.length) throw journal.fail(roomError("작가가 쓸 수 있는 초고를 내지 못했어요."));
+    record.drafts = drafts.map((d) => ({ title: d.title, pages: d.pages.length }));
+    let pick = 1,
+      chosen = drafts[0];
+    if (drafts.length > 1) {
+      await snapshot("read");
+      const read = await ask("독자단", panelReadRequest(input, drafts), "cheap");
+      const rows = countReadings(read.readings);
+      record.rows = rows;
+      pick = Math.min(drafts.length, pickDraft(rows));
+      chosen = drafts[pick - 1];
+      record.notes = rewriteNotes(rows.find((row) => row.draft === pick));
+    }
+    record.chosen = pick;
+    let pages = chosen.pages,
+      title = chosen.title;
+    if (options.roomRewrite !== false && drafts.length > 1) {
+      await snapshot("rewrite");
+      const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes), "prose"), title);
+      if (again) {
+        pages = again.pages;
+        title = again.title;
+        record.rewritten = true;
+      }
+    }
+    if (input?.language !== "ko") {
+      await snapshot("english");
+      const en = await ask("영어판", englishRequest(input, pages), "prose");
+      const rows = list(en.pages).map((p) => str(p?.en, 1200));
+      if (rows.length === pages.length) {
+        pages = pages.map((p, i) => ({ ...p, en: rows[i] }));
+        record.english = true;
+      }
+    }
+    record.levelNotes = levelNotes(outline, pages, input);
+    if (record.levelNotes.length && options.roomPolish !== false) {
+      await snapshot("polish");
+      const polished = await ask("다듬기", polishRequest(input, pages, record.levelNotes), "prose");
+      const rows = list(polished.pages).filter(object);
+      if (rows.length === pages.length) {
+        pages = pages.map((p, i) => ({ ko: str(rows[i].ko, 1200) || p.ko, ...(p.en !== undefined ? { en: str(rows[i].en, 1200) || p.en } : {}) }));
+        record.polished = true;
+        record.levelNotesAfter = levelNotes(outline, pages, input);
+      }
+    }
+    await snapshot("done");
+    return {
+      data: { title, language: record.english ? "dual" : "ko", pages: pages.map((p, i) => ({ pageNo: i + 1, ko: p.ko, ...(p.en !== undefined ? { en: p.en } : {}) })), room: clone(record) },
+      usage: journal.usage(),
+      meta: { ...journal.summary(), stage: "roomDrafts" },
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    throw journal.fail(error);
+  }
+}
+/** The ③ line for a finished room draft. */
+export function roomDraftLine(draft) {
+  const r = draft?.room;
+  if (!object(r) || !r.chosen) return "";
+  const notes = list(r.levelNotes).length;
+  return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? " 고쳐 쓰고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽`;
 }

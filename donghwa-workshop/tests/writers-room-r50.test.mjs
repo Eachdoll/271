@@ -113,6 +113,6 @@ test('R50 the requests: premises hear the menu as a menu; drafts are whole books
   assert.equal(W.rewriteNotes(read[0]), '지루해한 쪽: 3 — 줄이거나 사건을 넣어요.\n무슨 말인지 모른 쪽: 3 — 아이가 따라올 수 있게 보여 줘요.\n웃은 쪽: 2 — 숨 쉴 자리를 주고 건드리지 않아요.\n한마디: 또!');
   const rw = W.rewriteRequest(input, {title: '파마 날', pages: [{ko: '싹둑.'}]}, W.rewriteNotes(read[0]));
   assert.match(rw.user, /\[독자 반응\]\n지루해한 쪽: 3/);
-  assert.match(rw.user, /=== 초고 1 · 파마 날 ===\n1쪽: 싹둑\./);
+  assert.match(rw.user, /=== 초고 · 파마 날 ===\n1쪽: 싹둑\./);
   assert.match(W.panelReadRequest(input, [{title: 'a', pages: [{ko: 'x'}]}]).user, /=== 초고 1 · a ===\n1쪽: x/);
 });
