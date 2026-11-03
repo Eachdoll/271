@@ -184,6 +184,6 @@ test('R36 shown to the parent: the eco picture prompt they copy carries the plan
   assert.equal(picturePlanNote(null), '');
   assert.equal(planOf(outline, 6).carrier, 'picture', 'the turn is told by its picture');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[2-9]|9[0-9])";/, 'v82 or later');
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 82, 'v82 or later');
   assert.match(sw, /"\.\/story-generation\/picture-plan\.js",/);
 });

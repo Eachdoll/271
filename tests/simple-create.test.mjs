@@ -52,19 +52,17 @@ function stepButtons(html) {
   return [...html.matchAll(/<button\b[^>]*>/g)].map(m => m[0]).filter(tag => !/simple-card/.test(tag) && !/data-simple-nav=/.test(tag));
 }
 
-test('ui mode is per device: simple by default, pro only when stored, unreadable storage is simple', () => {
+test('R55a one screen: the mode is always simple whatever a device stored; writing it stores simple; nothing else is touched', () => {
   assert.equal(readUiMode(memoryStorage()), 'simple');
-  assert.equal(readUiMode(memoryStorage({[UI_MODE_KEY]: 'pro'})), 'pro');
-  assert.equal(readUiMode(memoryStorage({[UI_MODE_KEY]: 'weird'})), 'simple');
+  assert.equal(readUiMode(memoryStorage({[UI_MODE_KEY]: 'pro'})), 'simple', 'a device that stored pro gets the one screen');
   assert.equal(readUiMode({getItem() { throw new Error('blocked'); }}), 'simple');
   assert.equal(readUiMode(undefined), 'simple');
   const storage = memoryStorage();
-  assert.equal(writeUiMode(nextUiMode(readUiMode(storage)), storage), 'pro');
-  assert.equal(storage.data.get(UI_MODE_KEY), 'pro');
+  assert.equal(nextUiMode('simple'), 'simple');
   assert.equal(writeUiMode(nextUiMode(readUiMode(storage)), storage), 'simple');
-  assert.equal(writeUiMode('anything', storage), 'simple');
-  assert.equal(writeUiMode('pro', {setItem() { throw new Error('quota'); }}), 'pro');
-  // Toggling is a device preference only: the library state is not touched.
+  assert.equal(storage.data.get(UI_MODE_KEY), 'simple');
+  assert.equal(writeUiMode('pro', storage), 'simple');
+  assert.equal(writeUiMode('pro', {setItem() { throw new Error('quota'); }}), 'simple');
   const {state} = setup(), before = JSON.stringify(state);
   writeUiMode('pro', memoryStorage());
   assert.equal(JSON.stringify(state), before);
@@ -137,7 +135,7 @@ test('each simple step shows at most 12 buttons (material cards and page arrows 
   assert.match(generate, /data-simple-action="start-text"/);
   assert.match(generate, /data-simple-action="start-demo"/);
   assert.match(generate, /그림은 다음 단계에서/);
-  assert.match(generate, /role="switch" aria-checked="false"[^>]*data-simple-action="toggle-distilled"/);
+  assert.doesNotMatch(generate, /toggle-distilled|toggle-orchestration|toggle-review-tier|toggle-council-review/, 'R55a: the legacy switches left ③');
   assert.ok(counts[2] <= 3, 'step ② is cards plus 이전/다음');
 });
 
@@ -249,7 +247,7 @@ test('the 승인 예시 switch spread-merges one key and stays off by default', 
   const fresh = {settings: {}};
   const {wizard} = setup(), full = setup().state;
   const html = renderSimpleCreate(ctxFor(full, ensureSimpleWizard(full, {...wizard, simpleStep: 3})));
-  assert.match(html, /role="switch" aria-checked="false"[^>]*data-simple-action="toggle-distilled"/);
+  assert.doesNotMatch(html, /toggle-distilled/, 'R55a: the switch left ③; the option is code-only now');
   assert.equal(fresh.settings.storyQuality, undefined);
 });
 
@@ -627,10 +625,11 @@ function ecoJobFor(state) {
 }
 const ecoRender = (state, job, step, draft = null) => renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...ecoWizard(), simpleStep: step, simpleJobId: job.id}), draft));
 
-test('R32 ③ offers 에코 모드 next to 글 만들기 and 데모, within the button cap', () => {
+test('R55a ③ offers 글 만들기 and 데모 only (the eco button is gone; an eco job already made still opens), within the button cap', () => {
   const {state} = setup();
   const html = renderSimpleCreate(ctxFor(state, ensureSimpleWizard(state, {...ecoWizard(), simpleStep: 3})));
-  assert.match(html, /data-simple-action="start-eco"/);
+  assert.doesNotMatch(html, /data-simple-action="start-eco"/);
+  assert.match(html, /data-simple-action="start-demo"/);
   assert.match(html, /data-simple-action="start-text"/);
   assert.ok(stepButtons(html).length <= 12, `③: ${stepButtons(html).length}`);
 });

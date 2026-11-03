@@ -333,7 +333,7 @@ test('simple ③ names the read-through once the text is done', async () => {
   assert.match(simple, /simple-revision-note/);
   const sw = await readFile(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.match(sw, /"\.\/story-generation\/book-revision\.js"/);
-  assert.match(sw, /donghwa-shell-v(?:4[3-9]|[5-9]\d)/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 43, 'v43 or later');
 });
 
 test('the real paginateStory chain: prose review → pagination → read-through → page review', async () => {

@@ -74,7 +74,7 @@ test('R47/R48 the print: the words wait under the picture, Korean first; the ope
   assert.doesNotMatch(POCKET_PLACE_SOURCE, /grow\(|fontSize=/);
   assert.ok(POCKET_SAMPLER_SCRIPT.includes('window.__placePockets=placePockets') && POCKET_SAMPLER_SCRIPT.includes('window.__resetPockets'));
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v(?:9[7-9])";/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 97, 'v97 or later');
   assert.match(sw, /"\.\/story-generation\/story-logic\.js",/);
 });
 

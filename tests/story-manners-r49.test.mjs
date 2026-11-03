@@ -94,6 +94,6 @@ test('R49 a secret only when there is one; a beat with nothing funny; the advent
   assert.deepEqual(approvedBookRecord(book)?.usedElements.humor, ['망토가 펄럭 날아가요']);
   assert.equal('humor' in (approvedBookRecord({...book, sceneBriefs: briefs})?.usedElements || {}), false);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v99";/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 99, 'v99 or later');
   assert.match(sw, /"\.\/story-generation\/story-manners\.js",/);
 });

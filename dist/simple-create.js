@@ -128,6 +128,7 @@ import {
   stopReportAvailable,
 } from "./story-generation/stop-report.js";
 import { councilSummaryLine } from "./story-generation/council.js";
+import { writersRoomFor, roomSummaryLine, roomDraftLine } from "./story-generation/writers-room.js";
 import {
   councilRoomBlock,
   renderCouncilBudget,
@@ -185,17 +186,19 @@ const pageName = (book, index) =>
 /* ---------- per-device mode ---------- */
 export const UI_MODE_KEY = "donghwa-ui-mode";
 export const UI_MODES = Object.freeze(["simple", "pro"]);
-/** Per-device screen mode. Missing, unknown or unreadable storage means the simple screen. */
-export function readUiMode(storage = globalThis.localStorage) {
-  try {
-    return storage?.getItem(UI_MODE_KEY) === "pro" ? "pro" : "simple";
-  } catch {
-    return "simple";
-  }
+/**
+ * R55a (2026-11-03): one screen. The parent — "drop the simple/pro split".
+ * The professional screens (the five-step wizard, the outline cards, the
+ * prose and page editors, the three settings tabs) were the old path's
+ * controls; the writers' room has nothing for them to edit. The mode is
+ * always "simple" whatever a device stored; the stored key is ignored.
+ */
+export function readUiMode() {
+  return "simple";
 }
 /** Store the mode on this device only; returns the mode actually in effect. */
 export function writeUiMode(mode, storage = globalThis.localStorage) {
-  const next = mode === "pro" ? "pro" : "simple";
+  const next = "simple";
   try {
     storage?.setItem(UI_MODE_KEY, next);
   } catch {
@@ -203,7 +206,7 @@ export function writeUiMode(mode, storage = globalThis.localStorage) {
   }
   return next;
 }
-export const nextUiMode = (mode) => (mode === "pro" ? "simple" : "pro");
+export const nextUiMode = () => "simple";
 
 /* ---------- small helpers ---------- */
 const esc = (value) =>
@@ -1402,7 +1405,7 @@ function renderTopicStep(ctx, w) {
   const state = ctx.getState(),
     job = jobOfWizard(state, w);
   if (job) return renderFrozenTopic(ctx, w, job);
-  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? esc(ideaNote(w)) : ""}</span></div><div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p></section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
+  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? esc(ideaNote(w)) : ""}</span></div>${writersRoomFor(state) ? `<p class="small-label simple-defaults-note simple-room-note">작가실이 책의 길이·모양·끝을 정해요. 읽기 등급과 언어는 ‘우리 아이’ 설정을 써요.</p>` : `<div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p>`}</section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
   home: "🏡",
@@ -1706,6 +1709,12 @@ function renderGenerateStep(ctx, w) {
           (orchestrationOn
             ? renderActionSwitch({ id: "simple-writer-switch", label: "정성 모드 작가는 최고 모델로", description: locked ? "이 이야기에 고정된 설정이에요." : "끄면(기본) 비트별 작가는 중간 모델이에요. 켜면 요금이 늘어요.", action: "toggle-writer-tier", checked: writerUpper, disabled: locked, className: "simple-distilled simple-writer-tier" })
             : "");
+  // R51 작가실: the parent's switch (off until R53); a job shows what it was made with.
+  const roomOn = job ? job.input?.writersRoom?.version === 1 : settings.writersRoom === true,
+    roomLine =
+      job?.demo || textEngine === "demo" || textEngine === "local" || (job && !roomOn)
+        ? ""
+        : renderActionSwitch({ id: "simple-room-switch", label: "작가실", description: locked ? "이 이야기에 고정된 설정이에요." : "작가가 전제 열두 개를 내고 독자 여섯이 듣고 부모님이 셋 중 하나를 골라요. 규칙은 한 쪽뿐이고, 글 요금이 늘어요.", action: "toggle-writers-room", checked: roomOn, disabled: locked, className: "simple-distilled simple-writers-room" });
   const distilledLine = renderActionSwitch({ id: "simple-distilled-switch", label: "승인 예시 더 참고", description: locked ? "이 이야기에 고정된 설정이에요." : "부모님이 승인한 동화 예시를 더 참고해요. 꺼도 기본 9점 이상 예시는 유지돼요.", action: "toggle-distilled", checked: distilled, disabled: locked, className: "simple-distilled" });
   // A check that failed on a paid result fails the same way on 다시 시도 (it replays the saved
   // responses); 줄거리 새로 만들기 writes a new outline with a new seed after a cost confirm.
@@ -1715,7 +1724,7 @@ function renderGenerateStep(ctx, w) {
     /결과를 확인해 주세요/u.test(String(job?.error || ""));
   let status = "";
   if (!job)
-    status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}${sbtn("에코 모드 · 복사·붙여넣기", "start-eco", "outline")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
+    status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
   else if (text) {
     const pages = job.book?.pages?.length || 0,
       bookId = job.book?.id,
@@ -1723,7 +1732,7 @@ function renderGenerateStep(ctx, w) {
         live ||
         (!!pageOp && pageOp.bookId === bookId) ||
         (!!bookId && isPageOperationBusy(bookId));
-    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}${councilSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
+    status = `<div class="notice simple-done">글이 완성됐어요${pages ? ` · 쪽 ${pages}개` : ""}</div>${revisionSummary(job.revision) ? `<p class="small-label simple-revision-note">${esc(revisionSummary(job.revision))}</p>` : ""}${shapeStageLine(job) ? `<p class="small-label simple-shape-note">${esc(shapeStageLine(job))}</p>` : ""}${councilSummaryLine(job.outline) || roomSummaryLine(job.outline) ? `<p class="small-label simple-council-note">${esc(councilSummaryLine(job.outline) || roomSummaryLine(job.outline))}</p>` : ""}${roomDraftLine(job.roomDraft) ? `<p class="small-label simple-council-note">${esc(roomDraftLine(job.roomDraft))}</p>` : ""}${councilRoomBlock(job)}${checkNotesLine(job)}${!drawing && stopReportAvailable(job) ? `<div class="simple-start">${sbtn("검사 리포트", "stop-report", "plain")}</div>` : ""}${drawing ? '<p class="small-label simple-drawing-note">지금 그림을 만들고 있어요 · ④에서 볼 수 있어요</p>' : ""}`;
   } else if (live)
     status = `${councilRoomBlock(job, { live: true })}${progressBlock(job, stageLine(job))}<div class="simple-start">${sbtn("중지", "stop", "outline")}</div><p class="small-label">이 화면을 떠나도 계속 만들어요. 중지해도 완료한 부분은 보관돼요.</p>`;
   else if (councilHeld(job)) {
@@ -1734,11 +1743,11 @@ function renderGenerateStep(ctx, w) {
     }
     const fee = textFee(estimateCouncilCost(job).costUsd, estimateCouncilCost(job).pricingUnknown);
     const record = liveCouncilRecord(job), selected = record?.pitches?.[(record.recommended || 1) - 1]?.title || "추천 이야기";
-    status = `<div class="council-decision-heading"><strong>회의가 끝났어요. 이야기 안을 골라 주세요.</strong><p>받은 답은 보관돼요. 선택 후 설계서와 글을 이어서 만들어요.</p></div>${councilRoomBlock(job, { open: true })}${renderCouncilReviewForm(record, { direction: job.input?.direction || "", fee })}${renderCouncilBudget(job)}<div class="simple-start council-choice-actions"><div class="council-selection-summary"><small>선택한 이야기</small><strong data-council-selected-title>${esc(selected)}</strong></div>${sbtn("이 안으로 계속", "council-continue", "primary")}</div><div class="council-secondary-actions">${sbtn("방향 고쳐 다시 회의", "council-redirect", "outline")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "plain") : ""}</div>`;
+    status = `<div class="council-decision-heading">${record?.kind === "writersRoom" ? `<strong>작가실이 전제 셋을 골랐어요. 하나를 골라 주세요.</strong><p>받은 답은 보관돼요. 고르면 그 전제로 글을 이어서 만들어요.</p>` : `<strong>회의가 끝났어요. 이야기 안을 골라 주세요.</strong><p>받은 답은 보관돼요. 선택 후 설계서와 글을 이어서 만들어요.</p>`}</div>${councilRoomBlock(job, { open: true })}${renderCouncilReviewForm(record, { direction: job.input?.direction || "", fee })}${renderCouncilBudget(job)}<div class="simple-start council-choice-actions"><div class="council-selection-summary"><small>선택한 이야기</small><strong data-council-selected-title>${esc(selected)}</strong></div>${sbtn("이 안으로 계속", "council-continue", "primary")}</div><div class="council-secondary-actions">${sbtn("방향 고쳐 다시 회의", "council-redirect", "outline")}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "plain") : ""}</div>`;
   }
   else
     status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${orchestrationLine}${reviewLine}<div class="generation-options">${distilledLine}${job ? councilLine : ""}</div></details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p><details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${roomLine}</details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(
@@ -3401,6 +3410,28 @@ async function handle(ctx, action, el) {
     ctx.render();
     return;
   }
+  if (action === "toggle-writers-room") {
+    // R51: stored only as `writersRoom: true` with the text settings (and the World's copy).
+    if (jobOfWizard(state, w)) return;
+    const text = (state.settings.textGeneration ||= {}),
+      world = getActiveWorld(state),
+      targets = [text, world?.textGeneration].filter(Boolean),
+      before = targets.map((target) => [target, Object.hasOwn(target, "writersRoom"), target.writersRoom]),
+      next = text.writersRoom === true ? undefined : true;
+    for (const target of targets) {
+      if (next === undefined) delete target.writersRoom;
+      else target.writersRoom = next;
+    }
+    if (ctx.save() === false) {
+      for (const [target, had, value] of before) {
+        if (had) target.writersRoom = value;
+        else delete target.writersRoom;
+      }
+      ctx.toast("설정을 저장하지 못했어요.");
+    }
+    ctx.render();
+    return;
+  }
   if (action === "toggle-orchestration" || action === "toggle-writer-tier") {
     // R29: parent settings stored with the text settings (and the World's
     // copy): only `orchestration: false` and `writerTier: "upper"` are stored.
@@ -3768,7 +3799,7 @@ function onClick(event) {
         if (api.isSimpleView?.() && !api.getWizard()?.simpleEditing)
           api.render();
       }
-      if (action === "toggle-distilled" || action === "toggle-council-review" || action === "toggle-review-tier" || action === "toggle-orchestration" || action === "toggle-writer-tier")
+      if (action === "toggle-distilled" || action === "toggle-council-review" || action === "toggle-review-tier" || action === "toggle-orchestration" || action === "toggle-writer-tier" || action === "toggle-writers-room")
         globalThis.document?.querySelector?.(`[data-simple-action="${action}"]`)?.focus?.({ preventScroll: true });
     }
   });

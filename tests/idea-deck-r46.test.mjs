@@ -52,7 +52,7 @@ test('R46 the deck: four slots, unique ids, spark topics that are safe one-liner
   const module = readFileSync(new URL('../dist/story-generation/idea-deck.js', import.meta.url), 'utf8');
   assert.doesNotMatch(module, /Haughton|호튼|Oh No, George|Shh! We Have a Plan|Little Owl Lost|A Bit Lost|Goodnight Already/i);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v(?:9[6-9])";/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 96, 'v96 or later');
   assert.match(sw, /"\.\/story-generation\/idea-deck\.js",/);
 });
 

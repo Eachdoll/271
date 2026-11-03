@@ -13,29 +13,31 @@ configureStoryQualityUI({getState:()=>state,isParent:()=>true,save:()=>{saves++;
 
 function record(index){return {bookId:`book-${index}`,approved:true,createdAt:new Date(Date.now()-index*86400000).toISOString(),topic:'바람',patternId:plotPatterns[index%6].id,outline:{beats:[{index:1,summary:'유하가 집에서 시작해요.'}]},usedElements:{planted:`물건 ${index}`,creatures:[`생물 ${index}`],twistTypeId:'wind',patternId:plotPatterns[index%6].id,places:[`자리 ${index}`]}};}
 
-test('parent quality panel exposes six structural cards, stage roles and safe default toggles',()=>{
+test('R54a the parent quality panel is two models: the author (상위) and the economy model; every legacy control is gone from the screen (its stored value stays)',()=>{
  const html=renderStoryQualitySettings(state),selector=renderQualityPatternSelector({storyQualityPatternId:'waiting'},{state});
- assert.match(html,/data-quality-flag="enabled" checked/);assert.match(html,/data-quality-flag="useBeamSearch">/);for(const flag of ['twoPass','childSimulator','weeklyCoach'])assert.match(html,new RegExp(`data-quality-flag="${flag}" checked`));
- for(const role of ['outline','prose','cheap','coach'])assert.ok(html.includes(`data-quality-role-engine="${role}"`));
- assert.match(html,/패턴 카드 편집 · 6종/);assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);assert.match(selector,/value="sound_adventure"/);assert.match(selector,/value="answer_pile"/);assert.equal((selector.match(/<option /g)||[]).length,30,'R33: 자동 + 28 story shapes (R35: + 세 번의 파도형)');
- assert.doesNotMatch(html,/data-quality-pattern-field="(?:bookTitle|text|characters|author)"/);assert.match(html,/창을 닫은 동안에는 실행하지 않으며 API 요금/);
+ assert.match(html,/<h3>글 모델<\/h3>/);
+ for(const role of ['outline','cheap'])assert.ok(html.includes(`data-quality-role-engine="${role}"`));
+ for(const role of ['prose','coach'])assert.ok(!html.includes(`data-quality-role-engine="${role}"`));
+ assert.match(html,/작가 · 상위/);assert.match(html,/독자단·읽기 · 보급형/);
+ for(const gone of ['data-quality-flag=','패턴 카드 편집','반복 소재 확인','주간 코치','기본 모험 무대','변형 확률','quality-default-pattern','quality-default-stageCategoryId','Sonnet'])assert.ok(!html.includes(gone),gone);
+ // The story-shape selector still exists for the pro ② (a menu the writer may use), untouched.
+ assert.match(selector,/value="waiting" selected/);assert.match(selector,/value="mystery_sound"/);assert.equal((selector.match(/<option /g)||[]).length,30,'R33: 자동 + 28 story shapes + 29th');
  assert.equal(validateQualityPatternCards(plotPatterns).valid,true);
  const bad=structuredClone(plotPatterns);bad[0].bookTitle='레퍼런스 본문';assert.equal(validateQualityPatternCards(bad).valid,false);bad[0]=structuredClone(plotPatterns[0]);bad[0].beats[1].text='책의 실제 문장';assert.equal(validateQualityPatternCards(bad).valid,false);
 });
 
-test('reference card edits and coach evidence remain escaped and show only allowed structural fields',()=>{
+test('R54a the coach proposal and the pattern cards are not on the screen any more (nothing of them is rendered, escaped or not)',()=>{
  const custom=structuredClone(plotPatterns);custom[0].name='<script>bad</script>';state={settings:{storyQuality:{patterns:custom,coachProposal:{proposedRules:[{text:'<img src=x onerror=bad>',why:'이유',replaces:null}],proposedBanExamples:[],recurringWeaknesses:[{pattern:'반복',evidence:'<script>bad</script>'}]}}}};
- const html=renderStoryQualitySettings(state);assert.doesNotMatch(html,/<script>|<img/);assert.match(html,/data-quality-coach-rule="0"/);assert.match(html,/선택한 제안 승인/);
+ const html=renderStoryQualitySettings(state);assert.doesNotMatch(html,/<script>|<img|data-quality-coach-rule|선택한 제안 승인/);
 });
 
-test('repeat-material view uses configured book and pattern windows with approved records only',()=>{
+test('R54a the repeat-material log left the screen; the records behind it are unchanged',()=>{
  state={settings:{storyQuality:{approvedBooks:Array.from({length:8},(_,i)=>record(i)),banWindow:2,patternBanWindow:1}},books:[{approved:false,id:'unapproved',outline:{beats:[]}}]};
- const html=renderStoryQualitySettings(state);assert.match(html,/최근 2권 \/ 패턴 1권/);assert.match(html,/물건 0/);assert.match(html,/물건 1/);assert.doesNotMatch(html,/물건 2/);assert.equal(storyQualityBookRecords(state).length,8);
+ const html=renderStoryQualitySettings(state);assert.doesNotMatch(html,/최근 2권|물건 0/);assert.equal(storyQualityBookRecords(state).length,8);
 });
 
-test('weekly due check skips fewer than three books without resolving an engine or disrupting the current wizard',async()=>{
- state={settings:{storyQuality:{approvedBooks:[record(0),record(1)]}}};saves=0;engines=0;renders=0;await checkDueQualityCoach();assert.equal(engines,0);assert.equal(renders,0);assert.ok(saves>0);assert.match(state.settings.storyQuality.coachLastResult.skipped,/3개 미만/);
- const before=saves;await checkDueQualityCoach();assert.equal(saves,before);assert.equal(engines,0);
+test('R54a the weekly coach never runs on its own: the due check resolves no engine, saves nothing, renders nothing',async()=>{
+ state={settings:{storyQuality:{approvedBooks:[record(0),record(1),record(2),record(3)]}}};saves=0;engines=0;renders=0;await checkDueQualityCoach();assert.equal(engines,0);assert.equal(renders,0);assert.equal(saves,0);assert.equal(state.settings.storyQuality.coachLastResult,undefined);
 });
 
 test('no coach proposal is applied merely by viewing it or clicking approval without a selection',()=>{
@@ -49,14 +51,18 @@ test('seed chips and folded writer plan stay separate from printable prose; simu
  const report=renderStoryChildGate({pass:true,curiosity:{overall:8},retell:{retell:['유하가 소리를 찾아요.','유하가 통을 살펴봐요.','유하가 직접 소리를 내요.'],missingCore:[]}});assert.match(report,/모의검사/);assert.match(report,/실제 아이의 평가나 공식 읽기 점수가 아닙니다/);assert.match(report,/약 8\/10/);
 });
 
-test('R33 saving a stage then auto clears the old default through the actual submit handler',()=>{
- state={settings:{storyQuality:{futureOption:'keep'}}};
- const form=(stage)=>({id:'story-quality-form',querySelector:selector=>selector==='#quality-default-stageCategoryId'?{value:stage}:null,querySelectorAll:()=>[]});
+test('R33/R54a saving a stage then auto clears the old default through the actual submit handler; a form without the field keeps the stored stage, pattern and engines',()=>{
+ state={settings:{storyQuality:{futureOption:'keep',patternId:'waiting',engines:{prose:{engine:'openai'},coach:{engine:'openai'}}}}};
+ const form=(stage)=>({id:'story-quality-form',querySelector:selector=>selector==='#quality-default-stageCategoryId'?(stage===undefined?null:{value:stage}):null,querySelectorAll:()=>[]});
  const before=saves;
  handlers.submit({target:form('city'),preventDefault(){}});
  assert.equal(state.settings.storyQuality.stageCategoryId,'city');
+ handlers.submit({target:form(undefined),preventDefault(){}});
+ assert.equal(state.settings.storyQuality.stageCategoryId,'city','a form that does not show the stage keeps it');
+ assert.equal(state.settings.storyQuality.patternId,'waiting','the hidden story-shape default survives a save');
+ assert.deepEqual(state.settings.storyQuality.engines,{prose:{engine:'openai'},coach:{engine:'openai'}},'hidden roles keep their engines');
  handlers.submit({target:form('auto'),preventDefault(){}});
- assert.equal(saves,before+2,'both changes saved');
+ assert.equal(saves,before+3,'all three saves');
  assert.equal(Object.hasOwn(state.settings.storyQuality,'stageCategoryId'),false,'auto removes the previous explicit stage');
  assert.equal(state.settings.storyQuality.futureOption,'keep','unrelated forward-compatible settings survive');
 });

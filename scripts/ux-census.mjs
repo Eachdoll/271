@@ -36,25 +36,7 @@ const censusOf = (page, pass) => async (label, scope='#app') => {
 };
 const pin = async (page, click) => { await click('button[data-action="nav"][data-view="settings"]'); await page.fill('#pin','1234'); await page.fill('#pin-confirm','1234'); await page.click('#pin-form button[type=submit]'); await page.waitForTimeout(700); };
 
-// ---- pass 1: professional mode, exactly the pre-R9 tour ----
-{
-  const { ctx, page } = await context('pro'), click = clicker(page), census = censusOf(page, 'pro');
-  await page.goto(BASE, { waitUntil:'networkidle' });
-  await census('01-library');
-  await pin(page, click);
-  for (const t of ['home','text','image']) { await click(`[data-action=settings-tab][data-tab=${t}]`); await page.evaluate(()=>document.querySelectorAll('#page-content details').forEach(d=>d.open=true)); await census('02-settings-'+t); }
-  await click('button[data-action="nav"][data-view="materials"]'); await census('03-materials');
-  await click('button[data-action="nav"][data-view="create"]'); await census('04-create-step1');
-  for (let s=2;s<=6;s++){ await click('button[data-action="wizard-next"]'); if (await page.$('#topic')) await page.fill('#topic','유하가 공룡 친구와 함께 별을 찾아주는 이야기'); if (await page.$('#modal-root .story-workspace')) { await census('05-workspace-open','modal'); break;} await census('04-create-step'+s); }
-  await page.evaluate(()=>document.querySelectorAll('#modal-root details').forEach(d=>d.open=true)); await census('06-workspace-details-open','modal');
-  await click('button[data-story-action="start-demo"]'); await page.waitForTimeout(2000); await census('07-outline','modal');
-  await click('#modal-root button[data-story-action="approve-outline"]'); await page.waitForTimeout(2000); await census('08-after-outline','modal');
-  await click('#modal-root button[data-story-action="generate-prose"]'); await page.waitForTimeout(2500); await census('09-prose','modal');
-  await click('#modal-root button[data-story-action="approve-prose"]'); await page.waitForTimeout(2500); await census('10-pages','modal');
-  const acc = await page.$('#story-accept-failures'); if (acc) await acc.check();
-  await click('#modal-root button[data-story-action="approve-pages"]'); await page.waitForTimeout(3000); await census('11-editor');
-  await ctx.close();
-}
+// ---- R55a: one screen. The professional pass is gone with the mode; the simple pass below is the tour. ----
 
 // ---- pass 2: a new device in the default simple mode ----
 {
@@ -89,7 +71,11 @@ const table = {
   // R26: +1 input, the '검사는 최고 모델로' box on the text settings page.
   // R29: +2 inputs, the '정성 모드' and '정성 모드 작가는 최고 모델로' boxes.
   // R33: +1 select, the default '무대' (stage category) above the world cards.
-  '02-settings-text': { buttons: 10, inputs: 102, selects: 65 },
+  // R54a (deliberate): the quality panel is two model rows (작가 · 독자단); the
+  // six switches, the shape/stage/world/season/hour defaults, the variation
+  // chance, the six pattern cards, the repeat log and the coach left the
+  // screen (102 → 10 inputs, 65 → 5 selects, 10 → 9 buttons).
+  '02-settings-text': { buttons: 9, inputs: 10, selects: 5 },
   '02-settings-image': { buttons: 16, inputs: 10, selects: 4 },
   '03-materials': { buttons: 43, inputs: 0, selects: 0 },
   // 2026-10-21 (deliberate): each beat also offers the drawer's other places
@@ -99,12 +85,21 @@ const table = {
   '10-pages': { buttons: 162, inputs: 75, selects: 25 },
   '11-editor': { buttons: 35, inputs: 4, selects: 0 },
 };
-const proCheck = Object.fromEntries(Object.entries(table).map(([label, expected]) => {
-  const got = results.pro[label] || {};
+// R55a (deliberate): the professional screens are unreachable; the simple screens are checked against this table instead.
+const simpleTable = {
+  '01-library': { buttons: 22, inputs: 1, selects: 1 },
+  // 더 보기 (opened by this census) holds the two model rows and the image World settings.
+  '02-settings': { buttons: 19, inputs: 4, selects: 12 },
+  '03-step1-topic': { buttons: 10, inputs: 1, selects: 0 },
+  '04-step2-materials': { buttons: 13, inputs: 1, selects: 0 },
+  '05-step3-generate': { buttons: 9, inputs: 0, selects: 2 },
+  '06-step4-review': { buttons: 15, inputs: 2, selects: 0 },
+  '07-step5-finish': { buttons: 7, inputs: 3, selects: 0 },
+};
+const proCheck = Object.fromEntries(Object.entries(simpleTable).map(([label, expected]) => {
+  const got = results.simple[label] || {};
   return [label, { expected, got: { buttons: got.buttons, inputs: got.inputs, selects: got.selects }, same: Object.entries(expected).every(([k, v]) => got[k] === v) }];
 }));
-const createSteps = ['04-create-step1','04-create-step2','04-create-step3','04-create-step4'].map(l=>results.pro[l]).filter(Boolean);
-proCheck['04-create-steps'] = { expected: { buttons: '3~13', inputs: '0~3', selects: '1~7' }, got: createSteps.map(r=>({ buttons:r.buttons, inputs:r.inputs, selects:r.selects })), same: createSteps.length===4 && createSteps.every(r=>r.buttons>=3&&r.buttons<=13&&r.inputs<=3&&r.selects>=1&&r.selects<=7) };
 const simpleSteps = Object.fromEntries(Object.entries(results.simple).filter(([l])=>/step/.test(l)).map(([l, r]) => [l, { stepButtons: r.stepButtons, allButtons: r.buttons, inputs: r.inputs, selects: r.selects, withinLimit: r.stepButtons <= 12, overflowX: r.overflowX }]));
 const summary = {
   generatedAt: new Date().toISOString(),

@@ -640,6 +640,10 @@ export function estimateStoryTextCost({
   // R31e: a diet outline has no event ledger, so the two ledger-based coherence
   // reviews are not bought (a diet job made before R31e keeps its ledger's rows).
   ledger = !diet,
+  // R53 작가실 (input.writersRoom): premises and the drafts on the author (prose
+  // role) model, the panel and the page reading on the economy model; no
+  // council, no scene briefs, no beat writers, no pagination request.
+  room = false,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -729,7 +733,26 @@ export function estimateStoryTextCost({
     };
   };
   const stages = [];
-  if (k1Book);
+  if (room) {
+    const draftOut = 1200 + pages * 160;
+    stages.push(
+      stageEstimate("roomPremises", 2500, 4500, 1, "outline"),
+      stageEstimate("roomPanel", 4500, 3000, 1, "cheap"),
+      stageEstimate("outline", 5000, beats * 350, 1),
+      stageEstimate("roomDrafts", 3000, draftOut, 3, "outline"),
+      stageEstimate("roomRead", 3000 + pages * 300, 2500, 1, "cheap"),
+      stageEstimate("roomRewrite", 3500 + pages * 120, draftOut, 1, "outline"),
+      stageEstimate("roomEnglish", 2500 + pages * 120, Math.ceil(draftOut * 0.7), 1, "outline"),
+      stageEstimate("roomPolish", 3500 + pages * 200, draftOut, 1, "outline"),
+      stageEstimate("roomPages", 3000 + pages * 200, 300 + pages * 120, 1, "cheap"),
+    );
+    if (editor)
+      stages.push({
+        ...stageEstimate("coherence", 5000 + pages * 125, 800),
+        stage: "revision",
+      });
+  }
+  if (room || k1Book);
   else if (council && orchestration)
     stages.push(
       diet
@@ -746,12 +769,13 @@ export function estimateStoryTextCost({
         : stageEstimate("council", 4000, 1200, 5, "cheap"),
     );
   // (a K1 book has no writers' room.)
-  if (beam) {
+  if (beam && !room) {
     stages.push(
       stageEstimate("beatCandidates", 3500, 900, beats, "outline"),
       stageEstimate("beatJudge", 2000, 250, beats, "cheap"),
     );
   }
+  if (!room)
   stages.push(
     // R31f: the diet rows are sized to the recorded stage costs of the R31e
     // K2 and R31c K1 runs plus about a third of headroom (a lean outline has
@@ -767,7 +791,8 @@ export function estimateStoryTextCost({
       ? stageEstimate("sceneBriefs", 3500, beats * 300)
       : stageEstimate("sceneBriefs", input, beats * 500),
   );
-  if (k1Book) {
+  if (room);
+  else if (k1Book) {
     // The whole book in one call, and one call for the pages the checks flag.
     const bookOutput = pages * 220 + 400;
     stages.push(
@@ -826,14 +851,14 @@ export function estimateStoryTextCost({
     if (hybrid) stages.push(stageEstimate("proseDraft", input, baseOutput));
     stages.push(stageEstimate("prose", input, baseOutput));
   }
-  if (enrichment && paragraphs.ko + paragraphs.en && !k1Book)
+  if (enrichment && paragraphs.ko + paragraphs.en && !k1Book && !room)
     stages.push(
       stageEstimate("enrichment", 3000, 800, paragraphs.ko + paragraphs.en),
     );
   // A K1 book's pages were written as pages (no pagination request).
   // R31f: the diet pagination request shows the lean outline and the prose
   // (measured about 5.5k in, 2k out); the pre-diet row stays for other drafts.
-  if (!k1Book)
+  if (!k1Book && !room)
     stages.push(
       diet
         ? stageEstimate("pagination", 5500, 600 + pages * 45)
@@ -842,12 +867,12 @@ export function estimateStoryTextCost({
   // R31c: about two page fixes after the checks on the diet (measured 11–24
   // before the loop was put on a diet); a diet K1 book skips the editor.
   // R31f: a fix shows one lean page (K1 pages are shorter still).
-  if (diet)
+  if (diet && !room)
     stages.push({
       ...(k1Book ? stageEstimate("pagination", 2500, 200, 2) : stageEstimate("pagination", 5000, 350, 2)),
       stage: "pageFix",
     });
-  if (editor && !(k1Book && diet))
+  if (editor && !(k1Book && diet) && !room)
     stages.push({
       // R31f: the diet read-through shows lean views and returns only the
       // entries it changed (sized to the recorded R31e pagination stage).
@@ -900,6 +925,7 @@ export function estimateStoryTextCost({
     ...((orchestration || k1Book) && writerTier === "upper" ? { writerTier } : {}),
     ...(k1Book ? { k1Book: true } : {}),
     ...(diet ? { diet: true } : {}),
+    ...(room ? { room: true } : {}),
     beatCount: beats,
     paragraphCount: paragraphs,
     stages,
@@ -910,6 +936,15 @@ export function estimateStoryTextCost({
 // R24: which FULL AUTO step pays for each estimate row (the review row is
 // split between the prose check and the final page check).
 const BUDGET_STEP = {
+  // R53 작가실.
+  roomPremises: "outline",
+  roomPanel: "outline",
+  roomDrafts: "roomDrafts",
+  roomRead: "roomDrafts",
+  roomRewrite: "roomDrafts",
+  roomEnglish: "roomDrafts",
+  roomPolish: "roomDrafts",
+  roomPages: "pagination",
   plotCandidates: "outline",
   council: "outline",
   beatCandidates: "outline",
@@ -946,7 +981,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1 }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {
@@ -955,6 +990,8 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
     else if (done[BUDGET_STEP[row.stage]]) share = 0;
     else if (row.stage === "council" && parked) share = 1 / Math.max(1, row.requestCount);
     else if (row.stage === "plotCandidates" && parked) share = 0;
+    // R53 작가실: parked after the premises and the panel, both already paid.
+    else if ((row.stage === "roomPremises" || row.stage === "roomPanel") && parked) share = 0;
     if (share > 0) rows.push({ stage: row.stage, costUsd: row.costUsd * share, pricingUnknown: row.pricingUnknown === true });
   }
   // The paid material plan runs before the outline (never for a picked cast).

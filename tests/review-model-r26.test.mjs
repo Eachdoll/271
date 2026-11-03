@@ -103,12 +103,12 @@ test('R26 ③ shows the switch in the folded engine/cost details; locked on a jo
   const state = setup();
   const ctx = (w) => ({getState: () => state, getWizard: () => w, setWizard() {}, getDraft: () => null, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''});
   const html = renderSimpleCreate(ctx(ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3})));
-  assert.match(html, /<details class="generation-details"[\s\S]*검사는 최고 모델로[\s\S]*data-simple-action="toggle-review-tier"[\s\S]*<\/details>/u);
-  assert.match(html, /id="simple-review-switch" class="setting-switch" role="switch" aria-checked="false"/u);
+  // R55a: the switch left ③ (the setting keeps its default); the pro text settings still carry the box.
+  assert.doesNotMatch(html, /toggle-review-tier|simple-review-switch|정성 모드|승인 예시 더 참고|회의 후 부모 확인/u);
   const job = createFullAutoJob(state, {...wizard, simpleFlow: true}, {stopBefore: 'text'});
   job.status = 'paused';
   const locked = renderSimpleCreate(ctx(ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: job.id})));
-  assert.match(locked, /id="simple-review-switch"[^>]*aria-checked="false"[^>]*data-simple-action="toggle-review-tier" disabled/u);
+  assert.doesNotMatch(locked, /simple-review-switch/u);
   assert.match(renderTextSettings(state), /<input id="tg-review-upper" type="checkbox" > 검사는 최고 모델로/u);
   state.settings.textGeneration = {...state.settings.textGeneration, reviewTier: 'upper'};
   getActiveWorld(state).textGeneration = {...getActiveWorld(state).textGeneration, reviewTier: 'upper'};

@@ -32,9 +32,20 @@ export const COUNCIL_PHASES = Object.freeze([
 ]);
 /** R22: a meeting parked for the parent's choice (its checkpoint record). */
 export const reviewPending = (record) => record?.phase === "review" && !record?.chosen;
+/** R51 작가실: the room's rounds (its record carries kind "writersRoom"). */
+export const ROOM_PHASES = Object.freeze([
+  ["premises", "발상"],
+  ["panel", "독자단"],
+  ["review", "부모 선택"],
+  ["done", "확정"],
+]);
+export const isRoomRecord = (record) => record?.kind === "writersRoom";
 
 /** The record to draw for a job: the finished outline's, else the live checkpoint's. */
 export function liveCouncilRecord(job) {
+  // R51: a writers'-room outline carries the room's record instead of a council's.
+  const room = job?.outline?.writersRoom;
+  if (object(room) && room.chosen) return { ...room, phase: "done" };
   const final = job?.outline?.council;
   if (object(final) && final.chosen)
     return { ...final, bible: job.outline.bible || final.bible || null, phase: "done", roles: null };
@@ -156,6 +167,7 @@ function phaseStrip(record) {
 }
 /** The room. `live` adds the pulsing seats; `compact` hides the role titles. */
 export function renderCouncilRoom(record, { live = false, compact = false, hidePitches = false } = {}) {
+  if (isRoomRecord(record)) return renderWritersRoomPanel(record, { live, hidePitches });
   const r = object(record) ? record : emptyCouncilRecord();
   const choosing = reviewPending(r);
   const seats = COUNCIL_ROLES.map((role) => seat(r, role.id, { compact: compact || choosing, terse: choosing })).join("");
@@ -181,7 +193,48 @@ export function councilRoomBlock(job, { live = false, compact = false, open = fa
   // R22: the parked meeting stays open while the parent chooses.
   if (open) return `<div class="council-room-wrap">${html}</div>`;
   const row = chosenRow(record);
+  if (isRoomRecord(record))
+    return `<details class="simple-council-details"><summary>작가실 다시 보기${record?.chosen ? ` · '${esc(pitchTitle(record, record.chosen))}' 채택${parentTag(record)}` : ""}</summary><div class="council-room-wrap">${html}</div></details>`;
   return `<details class="simple-council-details"><summary>회의실 다시 보기${record?.chosen ? ` · '${esc(pitchTitle(record, record.chosen))}' 채택${row ? ` · ${row.score}/12` : ""}${parentTag(record)}` : ""}</summary><div class="council-room-wrap">${html}</div></details>`;
+}
+
+/* ---------- R51 작가실: the room as a panel ---------- */
+const roomPhaseIndex = (phase) => Math.max(0, ROOM_PHASES.findIndex(([id]) => id === phase));
+function roomPhaseStrip(record) {
+  const at = roomPhaseIndex(record?.phase);
+  return `<ol class="council-phases">${ROOM_PHASES.map(([id, label], i) => `<li class="${i < at ? "done" : i === at ? "now" : ""}" data-phase="${id}">${esc(label)}</li>`).join("")}</ol>`;
+}
+/** A shortlisted premise: title, the line, the laugh, the picture, the panel's tally. */
+function premiseCard(p, n, { chosen = false, recommended = false } = {}) {
+  const tally = p?.laughed !== undefined ? `<span class="pitch-score">웃음 ${p.laughed} · 궁금 ${p.curious} · 또 ${p.again}${p.lost ? ` · 모름 ${p.lost}` : ""}</span>` : "";
+  const cast = list(p?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter(Boolean);
+  return `<strong>${chosen ? "✓ " : ""}${esc(str(p?.title, 40))}${recommended ? ' <span class="pitch-tag">독자단 1순위</span>' : ""}</strong><span class="pitch-logline">${esc(str(p?.logline, 200))}</span>${p?.laugh ? `<span class="pitch-turn">웃음: ${esc(str(p.laugh, 120))}</span>` : ""}${p?.picture ? `<span class="pitch-materials">그림: ${esc(str(p.picture, 120))}</span>` : ""}${cast.length ? `<span class="pitch-materials">새 인물: ${esc(cast.join(", "))}</span>` : ""}${tally}`;
+}
+export function renderWritersRoomPanel(record, { live = false, hidePitches = false } = {}) {
+  const r = object(record) ? record : { phase: "premises", pitches: [] };
+  const choosing = r.phase === "review" && !r.chosen;
+  const progress = choosing
+    ? "독자 여섯이 고른 셋이에요. 부모님의 선택을 기다려요. 받은 답은 보관돼 있어요."
+    : r.phase === "done"
+      ? `전제 ${list(r.premises).length}개 중 독자단이 셋을 골랐고${r.parentChoice ? " 부모님이" : ""} 하나를 채택했어요.`
+      : r.phase === "panel"
+        ? `독자 여섯(${list(r.panel).map((p) => str(p.name, 20)).join(", ")})이 전제 ${list(r.premises).length}개를 듣고 있어요.`
+        : "작가가 이야기 전제 열두 개를 내고 있어요. 규칙은 한 쪽뿐이에요.";
+  const cards = !choosing && !hidePitches && list(r.pitches).length
+    ? `<ol class="council-room-pitches">${list(r.pitches).map((p, i) => `<li class="${r.chosen === i + 1 ? "council-chosen" : ""}">${premiseCard(p, i + 1, { chosen: r.chosen === i + 1, recommended: r.recommended === i + 1 && r.chosen !== i + 1 })}</li>`).join("")}</ol>`
+    : "";
+  const dropped = r.dropped ? `<p class="small-label">최근 책과 모양·웃음이 닮은 전제 ${r.dropped}개는 뺐어요.</p>` : "";
+  return `<div class="council-room writers-room ${live ? "live" : ""} phase-${esc(r.phase || "premises")}">${roomPhaseStrip(r)}<p class="council-progress-label">${esc(progress)}</p>${dropped}${cards}</div>`;
+}
+/** The parent's choice among the shortlist (radio name council-pick, note #council-note, so the R22 readers work unchanged). */
+export function renderPremiseChoiceForm(record) {
+  const r = object(record) ? record : {}, pitches = list(r.pitches), recommended = r.recommended || 1;
+  if (!pitches.length) return "";
+  const picks = pitches.map((p, i) => {
+    const n = i + 1;
+    return `<div class="council-pick-option"><label class="council-pick${n === recommended ? " council-recommended" : ""}"><input type="radio" name="council-pick" value="${n}" data-pitch-title="${esc(str(p.title, 40))}" ${n === recommended ? "checked" : ""}><span class="council-pick-body">${premiseCard(p, n, { recommended: n === recommended })}</span></label></div>`;
+  }).join("");
+  return `<div class="council-review writers-room-review" id="council-review"><h4 id="council-choice-heading" tabindex="-1">어떤 이야기로 쓸까요?</h4><p class="council-review-intro">독자 여섯이 가장 끌린 순서예요. 하나를 고르거나 그대로 두세요.</p><fieldset class="council-review-picks"><legend>전제 선택</legend>${picks}</fieldset><div class="field"><label for="council-note">작가에게 한마디 (선택)</label><textarea id="council-note" maxlength="300" rows="2" placeholder="예: 엄마가 더 많이 나오게, 끝은 미용실 앞에서"></textarea></div></div>`;
 }
 
 /* ---------- R22 회의 결과 보고 진행: the parent's choice ---------- */
@@ -193,6 +246,7 @@ export function councilRoomBlock(job, { live = false, compact = false, open = fa
  * readCouncilDirection. `fee` is the caller's price line for a new meeting.
  */
 export function renderCouncilReviewForm(record, { direction = "", fee = "" } = {}) {
+  if (isRoomRecord(record)) return renderPremiseChoiceForm(record);
   const r = object(record) ? record : {}, pitches = list(r.pitches), recommended = r.recommended || 1;
   if (!pitches.length) return "";
   const picks = pitches.map((p, i) => {

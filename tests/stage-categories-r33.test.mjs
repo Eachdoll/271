@@ -127,8 +127,9 @@ test('R33 the pro selectors: a stage select narrows the world cards (the chosen 
     const kept = renderQualityWorldSelectors({stageCategoryId: 'city', storyWorldId: 'jeju_sea'}, {state});
     assert.match(field(kept, 'storyWorldId'), /value="jeju_sea" selected/, 'a chosen card outside the stage stays listed');
     assert.equal((field(kept, 'storyWorldId').match(/<option /g) || []).length, 9, 'drawer + seven city cards + the kept card');
+    // R54a: the settings page no longer shows the stage default (the pro ② selectors keep it).
     const settings = renderStoryQualitySettings(state);
-    assert.match(settings, /id="quality-default-stageCategoryId"/);
+    assert.doesNotMatch(settings, /id="quality-default-stageCategoryId"/);
     const worldSelect = {value: 'drawer', innerHTML: ''}, container = {querySelector: () => worldSelect};
     handlers.change({target: {dataset: {qualityWorldField: 'stageCategoryId'}, value: 'sky_space', closest: () => container}});
     assert.equal((worldSelect.innerHTML.match(/<option /g) || []).length, 10, 'drawer + nine sky cards');
