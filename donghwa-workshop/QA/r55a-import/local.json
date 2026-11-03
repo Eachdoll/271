@@ -1,0 +1,91 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "runs": [
+    {
+      "width": 1280,
+      "storedProTest": true,
+      "noModeSwitch": true,
+      "moreInitiallyClosed": true,
+      "roles": [
+        "작가 · 상위",
+        "독자단·읽기 · 보급형"
+      ],
+      "worldFields": 3,
+      "sheetVisible": true,
+      "noComparison": true,
+      "noSettingsTabs": true,
+      "noAutoCompanion": true,
+      "simpleCreate": true,
+      "roomDefaultOff": true,
+      "onlyRoomSwitch": true,
+      "noEco": true,
+      "mainButtons": [
+        "글 만들기",
+        "데모로 체험"
+      ],
+      "stepButtons": 7,
+      "costOff": "약 $0.81",
+      "costOn": "약 $3.12",
+      "noFormatOn": true,
+      "roomNote": "작가실이 책의 길이·모양·끝을 정해요. 읽기 등급과 언어는 ‘우리 아이’ 설정을 써요.",
+      "costRestored": true,
+      "demoWithRoom": false,
+      "demo": {
+        "demo": true,
+        "status": "text-review",
+        "hasRoomMarker": false,
+        "roomDraftPresent": false,
+        "pages": 13,
+        "usageRequests": 0
+      },
+      "oldReader": true,
+      "oldPrint": true
+    },
+    {
+      "width": 390,
+      "storedProTest": true,
+      "noModeSwitch": true,
+      "moreInitiallyClosed": true,
+      "roles": [
+        "작가 · 상위",
+        "독자단·읽기 · 보급형"
+      ],
+      "worldFields": 3,
+      "sheetVisible": true,
+      "noComparison": true,
+      "noSettingsTabs": true,
+      "noAutoCompanion": true,
+      "simpleCreate": true,
+      "roomDefaultOff": true,
+      "onlyRoomSwitch": true,
+      "noEco": true,
+      "mainButtons": [
+        "글 만들기",
+        "데모로 체험"
+      ],
+      "stepButtons": 7,
+      "costOff": "약 $0.81",
+      "costOn": "약 $3.12",
+      "noFormatOn": true,
+      "roomNote": "작가실이 책의 길이·모양·끝을 정해요. 읽기 등급과 언어는 ‘우리 아이’ 설정을 써요.",
+      "costRestored": true,
+      "demoWithRoom": true,
+      "demo": {
+        "demo": true,
+        "status": "text-review",
+        "hasRoomMarker": true,
+        "roomDraftPresent": false,
+        "pages": 16,
+        "usageRequests": 0
+      },
+      "oldReader": true,
+      "oldPrint": true
+    }
+  ],
+  "lastAction": "#pin-form button[type=\"submit\"]",
+  "cache": "donghwa-shell-v105",
+  "passed": true
+}
