@@ -78,7 +78,8 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
-import { hasWritersRoom, runRoomDrafts } from "./story-generation/writers-room.js";
+import { hasWritersRoom, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
+import { ecoProseFromPages } from "./eco-mode.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
 import { hasK1Policy, isK1Draft } from "./story-generation/k1-book.js";
@@ -441,6 +442,8 @@ export function estimateFullAutoCost(
       ...(job ? (hasCouncilPolicy(job.input) ? { council: true } : {}) : k1Book ? {} : { council: true }),
       // R31b: diet drafts price the app-path outline/prose on the stage models.
       ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
+      // R53 작가실: a room job (or a new one while the setting is on) is priced by its rounds.
+      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true } : {}),
       // R31e: the ledger-based coherence rows only when the job's outline has a ledger.
       ...(job?.outline ? { ledger: !!job.outline.plotContract } : {}),
       ...(k1Book
@@ -644,6 +647,7 @@ const DEFAULT_OPS = {
   outline: generateOutline,
   // R52 작가실: whole drafts → the panel → rewrite → the English edition → one polish.
   roomDrafts: runRoomDrafts,
+  roomPages: runRoomPages,
   briefs: generateSceneBriefs,
   prose: generateProse,
   enrichment: enrichProse,
@@ -1485,26 +1489,49 @@ export async function runFullAuto(
     }
     // R52 작가실: the book itself, written whole from the chosen premise and kept
     // on the job (R53 turns it into the pages the pictures and prints read).
-    if (hasWritersRoom(job.input))
+    // R53: a demo job keeps the old path (its canned answers are not the room's).
+    const room = hasWritersRoom(job.input) && !job.demo;
+    if (room)
       await step(
         "roomDrafts",
         "작가실 · 초고 쓰기",
         (opts) => ops.roomDrafts(job.input, job.outline, opts("prose")),
         (r) => (job.roomDraft = r.data),
       );
+    if (room) {
+      // R53: the finished text becomes the pages; no scene briefs, no beat
+      // writers, no pagination request. The page count follows the book.
+      await step(
+        "pagination",
+        "작가실 · 쪽과 그림 읽기",
+        (opts) => ops.roomPages(job.input, job.outline, job.roomDraft, opts("pagination")),
+        (r) => {
+          job.pagination = r.data;
+          job.input.pageCount = r.data.pages.length;
+          job.sceneBriefs = [];
+          job.prose = ecoProseFromPages(job.outline, r.data);
+          job.storyCheck = r.meta?.checks || inspectStory(job.outline, r.data, job.input);
+          job.richnessCheck = null;
+          job.pageCoherence = null;
+          job.childGate = null;
+        },
+      );
+    }
+    if (!room)
     await step(
       "briefs",
       "장면 디테일 만들기",
       (opts) => ops.briefs(job.outline, job.input, opts("sceneBriefs")),
       (r) => (job.sceneBriefs = r.data),
     );
-    if (job.textSettings.hybrid?.enabled && !job.input.storyQuality?.enabled)
+    if (!room && job.textSettings.hybrid?.enabled && !job.input.storyQuality?.enabled)
       await step(
         "proseDraft",
         "로컬 전문 초안 쓰기",
         (opts) => ops.prose(job.outline, job.input, opts("proseDraft")),
         (r) => (job.localDraftProse = r.data),
       );
+    if (!room)
     await step(
       "prose",
       "한글·영어 전문 쓰기",
@@ -1526,6 +1553,7 @@ export async function runFullAuto(
       },
     );
     if (
+      !room &&
       job.textSettings.storyEnrichment !== false &&
       !job.input.storyQuality?.enabled &&
       // R30: the beat writer already wrote each beat with its brief.
@@ -1545,7 +1573,7 @@ export async function runFullAuto(
             r.meta?.enrichmentCheckpoint || job.enrichmentCheckpoint;
         },
       );
-    if (job.outline.plotContract)
+    if (!room && job.outline.plotContract)
       await step(
         "proseCoherence",
         "전문 인과관계·상태 검사",
@@ -1562,6 +1590,7 @@ export async function runFullAuto(
           job.proseCoherence = r.meta.coherence;
         },
       );
+    if (!room)
     await step(
       "pagination",
       "쪽 나누기와 본문 검사",

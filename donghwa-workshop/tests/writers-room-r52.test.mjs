@@ -31,7 +31,7 @@ function mockEngine(calls, {longDraft = 1} = {}) {
     const props = req.jsonSchema?.properties || {}, items = props.pages?.items?.properties || {};
     if (props.readings) return reply({readings: [1, 2, 3].map((d) => ({draft: d, pages: [{page: 2, laughed: d === 2 ? ['action', 'laugh', 'ours'] : [], curious: d === 2 ? ['heart'] : [], bored: d === 3 ? ['action', 'eye', 'ours'] : [], lost: []}, {page: 5, laughed: [], curious: [], bored: d === 2 ? ['action', 'eye', 'parent'] : [], lost: d === 2 ? ['heart'] : []}], again: d === 2 ? ['action', 'laugh', 'ours'] : d === 1 ? ['parent'] : [], words: d === 2 ? ['또!'] : []}))});
     if (items.en && !items.ko) return reply({pages: Array.from({length: Number(props.pages.minItems)}, (_, i) => ({en: `Snip! Page ${i + 1}.`}))});
-    if (items.ko && items.en) return reply({pages: Array.from({length: Number(props.pages.minItems)}, (_, i) => ({ko: i === 1 ? '유하가 거울을 봐요. 참새가 날아가요.' : `고친 ${i + 1}쪽.`, en: `Fixed ${i + 1}.`}))});
+    if (items.ko && items.en) return reply({pages: Array.from({length: Number(props.pages.minItems)}, (_, i) => ({ko: i === 1 ? '유하가 큰 거울을 가만히 봐요. 작은 참새가 창밖으로 포르르 날아가요.' : `고친 ${i + 1}쪽.`, en: `Fixed ${i + 1}.`}))});
     const m = /\[초고 (\d)\/(\d)/.exec(req.user);
     if (m) return reply(draft(Number(m[1]), Number(m[1]) === longDraft));
     if (/\[독자 반응\]/.test(req.user)) return reply({title: '파마 날!', pages: [{ko: '싹둑.'}, {ko: LONG}, {ko: '엄마가 웃어요.'}]});
@@ -73,7 +73,7 @@ test('R52 the drafts round: three whole drafts in parallel, the panel reads, the
   assert.match(calls[5].system, /^You are a picture-book author writing the English edition of a finished Korean picture book, page by page\. English E2/);
   assert.match(calls[5].user, /^1쪽: 싹둑\.\n2쪽: 유하는 거울 앞에/);
   assert.match(calls[6].system, /그 쪽만 등급 안에서 다시 쓰고/);
-  assert.match(calls[6].user, /\[등급 참고\]\n2쪽 \(한글\): /);
+  assert.match(calls[6].user, /\[등급 참고\]\n[\s\S]*?2쪽 \(한글\): /);
   const room = result.data.room;
   assert.deepEqual(room.drafts, [{title: '파마 날 1', pages: 8}, {title: '파마 날 2', pages: 8}, {title: '파마 날 3', pages: 8}]);
   assert.equal(room.chosen, 2, 'the readers laughed and asked again at draft 2');
@@ -84,7 +84,7 @@ test('R52 the drafts round: three whole drafts in parallel, the panel reads, the
   assert.deepEqual(room.levelNotesAfter.filter((n) => n.pageNo === 2 && n.language === 'ko'), [], 'the polish cleared page 2');
   assert.equal(result.data.title, '파마 날!');
   assert.equal(result.data.language, 'dual', 'the Korean book and its English edition; the parent picks the edition when reading or printing');
-  assert.deepEqual(result.data.pages.map((p) => [p.pageNo, p.ko, p.en]), [[1, '고친 1쪽.', 'Fixed 1.'], [2, '유하가 거울을 봐요. 참새가 날아가요.', 'Fixed 2.'], [3, '고친 3쪽.', 'Fixed 3.']]);
+  assert.deepEqual(result.data.pages.map((p) => [p.pageNo, p.ko, p.en]), [[1, '고친 1쪽.', 'Fixed 1.'], [2, '유하가 큰 거울을 가만히 봐요. 작은 참새가 창밖으로 포르르 날아가요.', 'Fixed 2.'], [3, '고친 3쪽.', 'Fixed 3.']]);
   assert.deepEqual(progress.filter((p) => p.phase !== 'request').map((p) => p.phase), ['drafts', 'read', 'rewrite', 'english', 'polish', 'done']);
   assert.ok(progress.some((p) => p.phase === 'request' && p.stage === 'roomDrafts'), 'the journal reports each paid call');
   assert.equal(result.meta.stage, 'roomDrafts');

@@ -83,7 +83,7 @@ import {
   getTextGenerationSettings,
   normalizeStoryQualitySettings,
 } from "../text-generation/settings-ui.js";
-import { freezeReadingLevels } from "../reading-levels.js";
+import { freezeReadingLevels, normalizeReadingLevels } from "../reading-levels.js";
 import {
   OPENING_PAGE_COUNTS,
   OPENING_KOREAN_LEVELS,
@@ -916,9 +916,12 @@ export function draftStageFor(state, wizard = {}) {
     topic: wizard.topic,
   });
 }
-export function inputFromWizard(state, wizard, { layout = "pages" } = {}) {
-  if (layout !== "pages" && layout !== "openings")
+export function inputFromWizard(state, wizard, { layout: askedLayout = "pages" } = {}) {
+  if (askedLayout !== "pages" && askedLayout !== "openings")
     throw new Error("책 구성은 pages 또는 openings여야 해요.");
+  // R53 작가실: the writer sets the length, so a room draft is a page book (openings pair a fixed count).
+  const room = !isK1Draft({ koreanLevel: normalizeReadingLevels(wizard, state.settings).koreanLevel, language: wizard.language, layout: askedLayout }) && !!writersRoomFor(state),
+    layout = room ? "pages" : askedLayout;
   const openings = layout === "openings";
   if (openings && !OPENING_PAGE_COUNTS.includes(Number(wizard.pageCount || 12)))
     throw new Error("펼침 구성 책은 12쪽이나 16쪽으로 골라 주세요.");

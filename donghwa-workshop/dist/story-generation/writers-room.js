@@ -18,6 +18,7 @@ import { StoryValidationError } from "./schemas.js";
 import { ROOM_PHASES } from "./council-room.js";
 import { checkStory } from "./checker.js";
 import { leanLevelLine } from "./prompt-diet.js";
+import { acceptEcoPagination, inspectStory } from "./pipeline.js";
 export { ROOM_PHASES };
 export const WRITERS_ROOM_VERSION = 1;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
@@ -716,4 +717,166 @@ export function roomDraftLine(draft) {
   if (!object(r) || !r.chosen) return "";
   const notes = list(r.levelNotes).length;
   return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? " 고쳐 쓰고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽`;
+}
+
+/* ---------- R53: the finished text becomes the pages the pictures and prints read ---------- */
+/** The app's bindings (its beat tables and prints): a page book has 8, 12, 16 or 24 pages. */
+export const PAGE_COUNTS = Object.freeze([8, 12, 16, 24]);
+const nearestCount = (n) => PAGE_COUNTS.reduce((best, c) => (Math.abs(c - n) < Math.abs(best - n) || (Math.abs(c - n) === Math.abs(best - n) && c > best) ? c : best), PAGE_COUNTS[0]);
+const TIMES = ["morning", "day", "afternoon", "evening", "night"];
+/** Sentences of a page, for a split (Korean/English end marks, quotes kept with their sentence). */
+const sentences = (value) =>
+  String(value ?? "")
+    .split(/(?<=[.!?。！？…][”"’']?)\s+/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+/**
+ * The binding's one physical fact, applied silently: a book has 8, 12, 16 or
+ * 24 pages (the nearest; ties go up). Fewer: the longest pages are split at a
+ * sentence; more: the two shortest neighbours are joined. The words never
+ * change. A book too short to split stays short (the acceptor reports it).
+ */
+export function clampPages(pages) {
+  let rows = list(pages)
+    .filter(object)
+    .map((p) => ({ ko: str(p.ko, 1200), ...(p.en !== undefined ? { en: str(p.en, 1200) } : {}) }))
+    .filter((p) => p.ko);
+  const target = nearestCount(rows.length);
+  let guard = 64;
+  while (rows.length < target && guard-- > 0) {
+    const i = rows.reduce((best, p, n) => (sentences(p.ko).length > sentences(rows[best].ko).length ? n : best), 0);
+    const ko = sentences(rows[i].ko);
+    if (ko.length < 2) break;
+    const cut = Math.ceil(ko.length / 2),
+      en = rows[i].en !== undefined ? sentences(rows[i].en) : null,
+      cutEn = en ? Math.ceil(en.length / 2) : 0;
+    const a = { ko: ko.slice(0, cut).join(" "), ...(en ? { en: en.slice(0, cutEn).join(" ") } : {}) },
+      b = { ko: ko.slice(cut).join(" "), ...(en ? { en: en.slice(cutEn).join(" ") } : {}) };
+    rows.splice(i, 1, a, b);
+  }
+  while (rows.length > target) {
+    let best = 0,
+      size = Infinity;
+    for (let n = 0; n + 1 < rows.length; n++) {
+      const together = rows[n].ko.length + rows[n + 1].ko.length;
+      if (together < size) {
+        size = together;
+        best = n;
+      }
+    }
+    const [a, b] = [rows[best], rows[best + 1]];
+    rows.splice(best, 2, { ko: `${a.ko} ${b.ko}`.trim(), ...(a.en !== undefined || b.en !== undefined ? { en: `${a.en || ""} ${b.en || ""}`.trim() } : {}) });
+  }
+  return rows;
+}
+/** The cheap call that reads the finished book and returns what the pictures need: who, where, the action, a feeling, the hour, props, the beat. */
+export function extractRequest(input, outline, pages) {
+  const count = list(pages).length,
+    cast = list(input?.characters).filter(object).map((c) => `${c.id} = ${str(c.name, 30)}${c.nameEn ? ` (${str(c.nameEn, 30)})` : ""}`).join(", "),
+    places = list(input?.backgrounds).filter(object).map((b) => `${b.id} = ${str(b.name, 30)}`).join(", "),
+    beats = list(outline?.beats).filter(object).map((b) => `${b.index}: ${str(b.summary || b.title, 200)}`).join("\n"),
+    extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter(Boolean);
+  return {
+    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: beatIndex (which approved beat this page belongs to; pages run in order through the beats), who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English). Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}\n[beats]\n${beats || "(none)"}`,
+    user: list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}`).join("\n"),
+    jsonSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["cover", "pages"],
+      properties: {
+        cover: { type: "object", additionalProperties: false, required: ["title", "sceneAction"], properties: { title: { type: "string", maxLength: 100 }, sceneAction: { type: "string", maxLength: 500 } } },
+        pages: {
+          type: "array",
+          minItems: count,
+          maxItems: count,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["pageNo", "beatIndex", "who", "where", "action", "emotion", "timeOfDay", "props"],
+            properties: {
+              pageNo: { type: "integer", minimum: 1 },
+              beatIndex: { type: "integer", minimum: 1 },
+              who: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", maxLength: 60 } },
+              where: { type: "string", maxLength: 500 },
+              action: { type: "string", maxLength: 500 },
+              emotion: { type: "string", maxLength: 40 },
+              timeOfDay: { type: "string", enum: TIMES },
+              props: { type: "array", maxItems: 12, items: { type: "string", maxLength: 80 } },
+            },
+          },
+        },
+      },
+    },
+    temperature: 0.2,
+    maxTokens: 6000,
+  };
+}
+/** The extraction's rows settled against the cast and the beats (an id or beat the model made up falls back, never fails). */
+export function settleExtraction(raw, input, outline, pages, title) {
+  const cast = list(input?.characters).filter(object).map((c) => String(c.id)),
+    castSet = new Set(cast),
+    beats = list(outline?.beats).filter(object).map((b) => Number(b.index)).filter(Number.isInteger),
+    count = list(pages).length,
+    rows = list(raw?.pages).filter(object);
+  let last = beats[0] || 1;
+  const fallbackBeat = (i) => beats[Math.min(beats.length - 1, Math.floor((i * beats.length) / Math.max(1, count)))] || 1;
+  const out = list(pages).map((p, i) => {
+    const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
+    const who = list(row.who).map(String).filter((id) => castSet.has(id));
+    let beat = Number(row.beatIndex);
+    if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
+    last = beat;
+    const emotion = /^[A-Za-z]+(?:-[A-Za-z]+)?$/u.test(str(row.emotion, 40)) ? str(row.emotion, 40) : "calm";
+    return {
+      pageNo: i + 1,
+      beatIndex: beat,
+      textKo: p.ko,
+      textEn: p.en || p.ko,
+      scene: {
+        who: who.length ? who : cast.slice(0, 1),
+        where: str(row.where, 500) || "the story's place",
+        action: str(row.action, 500) || str(p.en || p.ko, 500),
+        emotion,
+        timeOfDay: TIMES.includes(row.timeOfDay) ? row.timeOfDay : "day",
+        props: list(row.props).map((v) => str(v, 80)).filter(Boolean).slice(0, 12),
+      },
+      variantByCharacter: {},
+      isRefrainPage: false,
+    };
+  });
+  return { cover: { title: str(raw?.cover?.title, 100) || str(title, 100) || "이야기", sceneAction: str(raw?.cover?.sceneAction, 500) || str(out[0]?.scene.action, 500) || "the hero at the story's place" }, pages: out };
+}
+/**
+ * The room's third part: the finished text, clamped to the binding, read once
+ * by the cheap model for what the pictures need, settled against the cast and
+ * beats, then through the app's own page acceptor and story checks (advisory).
+ * The result is the pagination every later stage reads; the input's page
+ * count follows the book (the caller updates its frozen input).
+ */
+export async function runRoomPages(input, outline, draft, options = {}, services = {}) {
+  if (!list(draft?.pages).length) throw new StoryValidationError("pagination", ["작가실 글이 없어요. 초고 단계부터 다시 만들어 주세요."]);
+  const pages = clampPages(draft.pages);
+  const sized = { ...input, pageCount: pages.length };
+  const journal = ledger("roomPages", sized, options, { version: WRITERS_ROOM_VERSION, pages }, "enrichmentCheckpoint");
+  const ask = async (label, request, role) => {
+    const response = await journal.call(role, request, services);
+    const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));
+    if (!object(data)) throw journal.fail(roomError(`${label}의 답을 읽을 수 없어요.`));
+    return data;
+  };
+  try {
+    options.onProgress?.({ stage: "roomPages", phase: "extract", message: "작가실 · 완성된 글에서 그림에 필요한 것을 읽고 있어요." });
+    const raw = await ask("그림 읽기", extractRequest(sized, outline, pages), "cheap");
+    const settled = settleExtraction(raw, sized, outline, pages, draft.title);
+    const pagination = acceptEcoPagination(settled, outline, sized, { bookId: sized.bookId });
+    const report = inspectStory(outline, pagination, sized);
+    return {
+      data: pagination,
+      usage: journal.usage(),
+      meta: { ...journal.summary(), stage: "roomPages", pageCount: pages.length, checks: report, clamped: pages.length !== list(draft.pages).length },
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    throw journal.fail(error);
+  }
 }
