@@ -11,6 +11,7 @@ import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
 import { hasStoryManners, mannersRef } from "./story-manners.js";
+import { hasWritersRoom, writersRoomPolicy, runWritersRoom, attachWritersRoom, roomPremiseBlock } from "./writers-room.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -454,6 +455,11 @@ function modelVisibleInput(source) {
     const { storyManners, ...rest } = input;
     input = rest;
   }
+  // R51: and the writers' room marker.
+  if (input?.writersRoom) {
+    const { writersRoom, ...rest } = input;
+    input = rest;
+  }
   // R38: the change marker and the opening place are rule lines, not story data.
   if (input?.storyChange) {
     const { storyChange, ...rest } = input;
@@ -644,6 +650,8 @@ export function normalizeStoryInput(input = {}) {
     ...(hasStoryLogic(input) ? { storyLogic: storyLogicPolicy() } : {}),
     // R49: speech levels, laughs, a secret only when there is one.
     ...(mannersRef(input?.storyManners) ? { storyManners: mannersRef(input.storyManners) } : {}),
+    // R51: the writers' room in place of the council.
+    ...(hasWritersRoom(input) ? { writersRoom: writersRoomPolicy() } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),
@@ -2391,14 +2399,16 @@ export async function generateOutline(source, options = {}) {
   if (!places.valid) throw new StoryValidationError("outline", places.errors);
   // R20: the writers' room meets once before the outline; a resumed run replays
   // it from options.councilCheckpoint without a paid call.
-  const council = hasCouncilPolicy(input)
-    ? await runStoryCouncil(input, options, qualityServices())
-    : null;
+  // R51: a writers'-room draft runs the room (premises → the panel → the
+  // parent) instead of the council; its record rides on the outline the same way.
+  const room = hasWritersRoom(input) ? await runWritersRoom(input, options, qualityServices()) : null;
+  const council = room || (hasCouncilPolicy(input) ? await runStoryCouncil(input, options, qualityServices()) : null);
+  const attach = (outline) => (room ? attachWritersRoom(outline, room) : attachCouncil(outline, council));
   // R46: the room gave each candidate its own device; the chosen one is this outline's.
   input = ideaInputFor(input, council?.record.bible?.device);
   const diet = hasPromptDiet(input);
   const bibleRules = [
-    council ? (diet ? leanBibleBlock(council.record.bible, input) : bibleOutlineRules(council.record.bible, input)) : "",
+    room ? roomPremiseBlock(room.record, input) : council ? (diet ? leanBibleBlock(council.record.bible, input) : bibleOutlineRules(council.record.bible, input)) : "",
     hasOrchestrationPolicy(input)
       ? diet
         ? LEAN_TENSION_RULE(frozenBeatCount(input), tensionRange(input))
@@ -2428,7 +2438,7 @@ export async function generateOutline(source, options = {}) {
   };
   const withCouncil = (result) => {
     if (!council) return result;
-    attachCouncil(result.data, council);
+    attach(result.data);
     result.usage = mergeStoryUsage([council, result]);
     result.meta = {
       ...result.meta,
@@ -2542,7 +2552,7 @@ ${customEnding(input) ? endingRuleLine(input) : `endingType=${input.endingType}.
       // R33: the shape and stage the outline was written to, kept with it.
       if (input.storyShape) result.data.storyShape = clone(input.storyShape);
       if (input.stageCategory) result.data.stageCategory = clone(input.stageCategory);
-      if (council) attachCouncil(result.data, council);
+      if (council) attach(result.data);
       result.usage = mergeStoryUsage(council ? [council, ...results] : results);
       result.meta = {
         ...result.meta,

@@ -11,6 +11,12 @@
  * candidates (reactions are counted, never scored by the model). R51 runs the
  * rounds; nothing here is wired into a draft yet. Pure module. */
 import { topicEndingNote } from "./topic-ending.js";
+import { ledger } from "./quality-adapter.js";
+import { parseJsonLenient } from "./outline-normalize.js";
+import { councilHoldError, normalizeCouncilChoice, appendDecision } from "./council.js";
+import { StoryValidationError } from "./schemas.js";
+import { ROOM_PHASES } from "./council-room.js";
+export { ROOM_PHASES };
 export const WRITERS_ROOM_VERSION = 1;
 export const writersRoomPolicy = () => ({ version: WRITERS_ROOM_VERSION });
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
@@ -382,4 +388,130 @@ export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
     temperature: 0.8,
     maxTokens: 8000,
   };
+}
+
+/* ---------- R51: the room runs (premises → the panel → the parent) ---------- */
+const clone = (value) => JSON.parse(JSON.stringify(value));
+/** The parent's setting (off until R53 turns it on by default) → the marker a new draft freezes, or null. */
+export function writersRoomFor(state) {
+  return state?.settings?.textGeneration?.writersRoom === true ? writersRoomPolicy() : null;
+}
+const ROOM_PROGRESS = Object.freeze({
+  premises: "작가실 · 작가가 이야기 전제 열두 개를 내고 있어요.",
+  panel: "작가실 · 독자 여섯이 전제를 듣고 있어요.",
+  review: "작가실 · 독자단이 고른 셋 중 하나를 골라 주세요.",
+  done: "작가실이 전제를 정했어요. 줄거리를 씁니다.",
+});
+const roomError = (message) => new StoryValidationError("council", [message]);
+/** A shortlisted premise as the review screen and the summary read it (a pitch-shaped row). */
+const asPitch = (premise, n, row) => ({
+  premise: n,
+  title: str(premise?.title, 40) || `전제 ${n}`,
+  logline: str(premise?.line, 300),
+  engine: str(premise?.engine, 40),
+  laugh: str(premise?.laugh, 200),
+  picture: str(premise?.picture, 200),
+  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100) })),
+  ...(row ? { pull: row.pull, laughed: row.laughed, curious: row.curious, again: row.again, lost: row.lost, words: row.words } : {}),
+});
+/**
+ * The room's first half: premises (the top model), the panel's reactions (the
+ * cheap model), the deterministic shortlist, then the parent's choice — a
+ * hold like R22's when options.councilHold is on and no choice is given yet.
+ * Every paid answer is journaled in options.councilCheckpoint, so a resumed
+ * run replays the rounds and buys nothing again.
+ */
+export async function runWritersRoom(input, options = {}, services = {}) {
+  const journal = ledger("writersRoom", input, options, { version: WRITERS_ROOM_VERSION }, "councilCheckpoint");
+  const records = list(options.roomRecords);
+  const record = {
+    kind: "writersRoom",
+    version: WRITERS_ROOM_VERSION,
+    phase: "premises",
+    brief: roomBrief(input, { records }),
+    panel: readerPanel(input).map((p) => ({ id: p.id, name: p.name })),
+    premises: [],
+    dropped: 0,
+    rows: [],
+    shortlist: [],
+    pitches: [],
+    recommended: null,
+    parentChoice: null,
+    chosen: null,
+    premise: null,
+    decisions: [],
+  };
+  const log = (entry) => appendDecision(record, entry);
+  const hold = options.councilHold === true;
+  const snapshot = async (phase, message) => {
+    record.phase = phase;
+    journal.checkpoint.record = clone(record);
+    await journal.save();
+    options.onProgress?.({ stage: "council", phase, message, council: clone(record) });
+  };
+  const ask = async (label, request, role) => {
+    const response = await journal.call(role, request, services);
+    const data = response?.json !== undefined ? response.json : parseJsonLenient(String(response?.text || ""));
+    if (!object(data)) throw journal.fail(roomError(`${label}의 답을 읽을 수 없어요.`));
+    return data;
+  };
+  try {
+    await snapshot("premises", ROOM_PROGRESS.premises);
+    const proposed = await ask("작가", premisesRequest(input, { records }), "prose");
+    const all = list(proposed.premises).filter(object).slice(0, PREMISE_COUNT);
+    if (!all.length) throw journal.fail(roomError("작가가 쓸 수 있는 전제를 내지 못했어요."));
+    const kept = sievePremises(all, records);
+    const premises = kept.length ? kept : all;
+    record.premises = premises;
+    record.dropped = all.length - premises.length;
+    log({ by: "작가", kind: "proposed", what: `전제 ${all.length}개: ${all.map((p) => str(p.title, 24)).join(" / ")}`, why: record.dropped ? `최근 책과 모양·웃음이 닮은 ${record.dropped}개는 뺌` : "브리프 한 쪽으로" });
+    await snapshot("panel", ROOM_PROGRESS.panel);
+    const heard = await ask("독자단", panelPremisesRequest(input, premises), "cheap");
+    const rows = countReactions(heard.reactions);
+    record.rows = rows;
+    const shortlist = pickPremises(rows, Math.min(SHORTLIST, premises.length));
+    record.shortlist = shortlist;
+    record.pitches = shortlist.map((n, i) => asPitch(premises[n - 1], i + 1, rows.find((row) => row.premise === n)));
+    record.recommended = 1;
+    log({ by: "독자단", kind: "reviewed", what: `셋을 고름: ${record.pitches.map((p) => `'${p.title}' (웃음 ${p.laughed ?? 0}·궁금 ${p.curious ?? 0}·또 ${p.again ?? 0})`).join(" / ")}`, why: "웃음+궁금+또−모름을 셈 — 점수가 아니라 반응" });
+    const choice = normalizeCouncilChoice(options.councilChoice, record.pitches.length);
+    if (hold && !choice) {
+      await snapshot("review", ROOM_PROGRESS.review);
+      throw councilHoldError();
+    }
+    const pick = choice?.pick || 1;
+    record.chosen = pick;
+    record.premise = clone(premises[shortlist[pick - 1] - 1]);
+    if (choice) record.parentChoice = { pick, note: choice.note };
+    log({ by: choice ? "부모" : "작가실", kind: "adopted", what: `'${record.pitches[pick - 1]?.title}'`, why: choice ? (pick === 1 ? "독자단이 가장 끌린 것을 확인" : "독자단의 첫 추천 대신 고름") : "부모 확인 없이 독자단이 가장 끌린 것으로" });
+    if (choice?.note) log({ by: "부모", kind: "revised", what: `한마디: ${choice.note}`, why: "작가가 줄거리에 반영" });
+    await snapshot("done", ROOM_PROGRESS.done);
+    return { record, usage: journal.usage(), meta: { ...journal.summary(), stage: "council" } };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    throw journal.fail(error, error?.name === "CouncilHold" ? { held: true } : {});
+  }
+}
+/** The outline carries the room's record (the premise binds the outline request; no bible). */
+export function attachWritersRoom(outline, result) {
+  if (!object(outline) || !object(result?.record)) return outline;
+  outline.writersRoom = clone(result.record);
+  return outline;
+}
+/** R51 bridge: the chosen premise as the outline request's pitch (R52 writes whole drafts from it instead). */
+export function roomPremiseBlock(record, input) {
+  const p = record?.premise;
+  if (!object(p)) return "";
+  const cast = list(p.cast).filter(object).map((c) => `${str(c.name, 30)}${c.isNew ? " (new to this book)" : ""}: wants ${str(c.want, 100)}; flaw ${str(c.flaw, 100)}; speaks ${str(c.speech, 100)}`).join(" / ");
+  const note = str(record?.parentChoice?.note, 300);
+  return `THE WRITERS' ROOM CHOSE THIS PREMISE — write the outline from it, in your own way:
+Title "${str(p.title, 40)}". ${str(p.line, 300)}
+Shape: ${engineById(p.engine)?.line || str(p.engine, 40) || "the writer's own"}. The biggest laugh: ${str(p.laugh, 200)}. The picture a child wants to see: ${str(p.picture, 200)}.${cast ? `\nCast: ${cast}. A character new to this book is fine; the parent's chosen characters all appear.` : ""}${note ? `\nThe parent's note — keep it: ${note}` : ""}`;
+}
+/** The ③ summary line for a finished room (parallel to councilSummaryLine). */
+export function roomSummaryLine(outline) {
+  const r = outline?.writersRoom;
+  if (!object(r) || !r.chosen) return "";
+  const p = r.pitches?.[r.chosen - 1];
+  return `작가실 · '${str(p?.title, 40)}' (전제 ${list(r.premises).length}개 중 독자단이 셋을 골라${r.parentChoice ? " 부모가" : ""} 채택)`;
 }

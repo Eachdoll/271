@@ -466,7 +466,7 @@ async function requestsGroup(M, book) {
  * neither, so this is a no-op there.
  */
 function asExistingDraft(input) {
-  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, storyIdea, storyLogic, storyManners, ...rest} = input;
+  const {editorPolicy, craftPolicy, arcPolicy, councilPolicy, promptPolicy, councilRecent, orchestrationPolicy, k1Policy, topicEndingPolicy, promptDiet, storyShape, stageCategory, storyVoice, bookFormat, storyExpression, storyChange, storyPlace, storyDrama, textPocket, storyCast, englishMirror, storyIdea, storyLogic, storyManners, writersRoom, ...rest} = input;
   const specs = Object.fromEntries(Object.entries(rest.specs || {}).map(([lang, spec]) => {
     const {rhythm, shortSentences, pictureLed, ...plain} = spec || {};
     return [lang, plain];
@@ -878,7 +878,10 @@ const PINS = {
   // R31e/R31c runs (K1 12쪽 글 약 $0.51 → $0.26, K2 16쪽 영어 $1.56 → $0.88) and
   // its start row gains the '에코 모드 · 복사·붙여넣기' button; ④ and ⑤ and every
   // other group are unchanged (dump-diffed against b928880). b928880: 75314338…f875.
-  review: '2004a7812b152e8378cd381b14693f1fe909e9cda8d85010f131b0b7e3d40cb4',
+  // 작가실 (R51): ③ of a new story gains the '작가실' switch (off) under 엔진·예상
+  // 요금; a job without the marker shows nothing new; every other group is
+  // unchanged (dump-diffed against b1d01b5). b1d01b5: 2004a781…0cb4.
+  review: 'ab2740aae0dc1348de4c218a8d5b6eb93e074a51d12c73f9d11b5f079d1e4dee',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost

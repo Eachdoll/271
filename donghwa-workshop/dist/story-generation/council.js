@@ -522,7 +522,7 @@ export const COUNCIL_HOLD = "CouncilHold";
 export function isCouncilHold(error) {
   return error?.name === COUNCIL_HOLD;
 }
-function councilHoldError() {
+export function councilHoldError() {
   const error = new Error("기획 회의 결과를 보고 피치를 고르거나 방향을 고쳐 이어 가 주세요.");
   error.name = COUNCIL_HOLD;
   error.stage = "council";

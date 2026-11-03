@@ -173,6 +173,8 @@ export function getTextGenerationSettings(state) {
     // beat writer on the upper model only when chosen (medium otherwise).
     ...(source.orchestration === false ? { orchestration: false } : {}),
     ...(source.writerTier === "upper" ? { writerTier: "upper" } : {}),
+    // R51 작가실: stored only when on.
+    ...(source.writersRoom === true ? { writersRoom: true } : {}),
     hybrid: {
       enabled: source.hybrid?.enabled === true,
       finalEngine: ENGINES.slice(0, 3).includes(source.hybrid?.finalEngine)
