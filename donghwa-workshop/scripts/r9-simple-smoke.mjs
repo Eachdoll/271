@@ -244,12 +244,9 @@ async function run(width) {
     result.steps.defaultMode = await page.evaluate(() =>
       localStorage.getItem("donghwa-ui-mode"),
     );
-    if (
-      !(await page
-        .locator('.top-actions [data-action="toggle-ui-mode"]')
-        .count())
-    )
-      problem("상단 모드 전환 버튼이 없어요.");
+    // R55a: one screen — the mode button is gone.
+    if (await page.locator('[data-action="toggle-ui-mode"]').count())
+      problem("모드 전환 버튼이 아직 있어요.");
     // Parent PIN in a fresh profile.
     await click('button[data-action="nav"][data-view="settings"]');
     await page.fill("#pin", "1234");
@@ -656,28 +653,8 @@ async function run(width) {
       window.scrollBy(0, bar.bottom - (window.innerHeight - 72));
     });
     result.steps.toastClear = { atTop, atBar };
-    // Mode switch is a screen change only, and the simple draft opens from pro mode.
-    const beforeToggle = await library();
-    await click('.top-actions [data-action="toggle-ui-mode"]');
-    result.steps.proMode = await page.evaluate(() =>
-      localStorage.getItem("donghwa-ui-mode"),
-    );
-    if (await page.locator(".simple-create").count())
-      problem("프로 모드로 바꿨는데 쉬운 만들기 화면이 남아 있어요.");
-    const proCard = page.locator('[data-full-auto-action="simple-review"]');
-    if (!(await proCard.count()))
-      problem("프로 모드 만들기 화면에 ‘쪽마다 검수’ 카드가 없어요.");
-    else {
-      await proCard.first().click();
-      await page.waitForTimeout(800);
-      if ((await step()) !== 4)
-        problem("프로 모드에서 ‘쪽마다 검수’로 ④가 열리지 않아요.");
-    }
-    await click('.top-actions [data-action="toggle-ui-mode"]');
-    if ((await step()) !== 4) problem("모드를 되돌린 뒤 ④가 아니에요.");
-    if ((await library()) !== beforeToggle)
-      problem("모드 전환이 저장된 책·초안·설정을 바꿨어요.");
-    result.steps.modeRoundTrip = "pro → 쪽마다 검수 → simple · 저장 내용 같음";
+    // R55a: one screen; no mode round trip.
+    result.steps.modeRoundTrip = "one screen";
     // One page image (prepares sheets first: free with the sample engine).
     await click('[data-simple-action="page-next"]');
     await click('[data-simple-action="draw-page"]');
@@ -805,27 +782,25 @@ async function run(width) {
           `쉬운 모드 책장의 ‘제작 중인 이야기’가 달라요: ${JSON.stringify(simpleLibrary)}`,
         );
       await shot("06a2-simple-library");
-      // The pro library card's 이어서 만들기 runs the job (the simple card only opens it).
-      await click('.top-actions [data-action="toggle-ui-mode"]');
-      const resume = page.locator(
-        `[data-full-auto-action="resume"][data-id="${jobId}"]`,
+      // R55a one screen: the library card opens ④ and 모든 쪽 그림 만들기 (빈 그림만) resumes the stopped run.
+      await click(`[data-full-auto-action="simple-open"][data-id="${jobId}"]`);
+      await page.waitForTimeout(500);
+      if ((await step()) !== 4) problem("멈춘 이야기의 책장 카드가 ④로 열리지 않아요.");
+      await click('[data-simple-action="draw-all"]');
+      const resumeMissing = page.locator("#simple-choice-missing");
+      if (await resumeMissing.isVisible().catch(() => false)) await resumeMissing.click();
+      else await confirmIfAsked();
+      await page.waitForFunction(
+        (id) =>
+          ["review", "failed", "paused"].includes(
+            JSON.parse(localStorage.getItem("donghwa-workshop-v1"))
+              .fullAutoJobs?.[id]?.status,
+          ) && !document.querySelector('[data-simple-action="stop"]'),
+        jobId,
+        { timeout: 180000 },
       );
-      if (!(await resume.count()))
-        problem("책장에 멈춘 이야기의 ‘이어서 만들기’가 없어요.");
-      else {
-        await resume.first().click();
-        await page.waitForFunction(
-          (id) =>
-            ["review", "failed", "paused"].includes(
-              JSON.parse(localStorage.getItem("donghwa-workshop-v1"))
-                .fullAutoJobs?.[id]?.status,
-            ),
-          jobId,
-          { timeout: 180000 },
-        );
-        await page.waitForTimeout(400);
-        result.steps.resumeAsked = await page.locator(".modal-overlay").count();
-      }
+      await page.waitForTimeout(400);
+      result.steps.resumeAsked = 0;
       const resumed = await jobPage(jobId, 1);
       result.steps.resumedRun = resumed;
       if (resumed.status !== "review")
@@ -841,7 +816,8 @@ async function run(width) {
           `그림을 그대로 둔 쪽을 이어 만들기가 다시 그렸어요: ${JSON.stringify(resumed)}`,
         );
       await shot("06b-resumed");
-      await click('.top-actions [data-action="toggle-ui-mode"]');
+      await click('button[data-action="nav"][data-view="library"]');
+      if (await page.locator("#discard-confirm").isVisible().catch(() => false)) await click("#discard-confirm");
       // Back to ④ from the simple card: every picture is there, page 2 still
       // kept, and ④ opens on the page the parent last looked at (R11).
       await click(`[data-full-auto-action="simple-open"][data-id="${jobId}"]`);
@@ -890,150 +866,21 @@ async function run(width) {
       await click('[data-simple-action="redraw-page"]');
       await confirmIfAsked();
       await page.waitForSelector(".simple-progress", { timeout: 10000 });
-      await click('.top-actions [data-action="toggle-ui-mode"]');
-      const proReview = page.locator(
-        `[data-full-auto-action="review"][data-id="${jobId}"]`,
-      );
-      const guard = { card: await proReview.count() };
-      if (guard.card) {
-        await proReview.first().click();
-        await page.waitForTimeout(300);
-        guard.toast = await toastText();
-        guard.editor = await page.locator(".ig-editor-bar").count();
-      }
-      // FIX-UI-3: the '이어 만들 이야기' card of the same story is a review
-      // ('검수 열기', never the story workflow's 이어서 만들기), and it is
-      // refused the same way while the page is being drawn.
-      const draftCard = page.locator(
-        `[data-story-action="open-auto-review"][data-job-id="${jobId}"]`,
-      );
-      guard.draftCard = await draftCard.count();
-      guard.draftResume = await page.evaluate((id) => {
-        const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
-        const storyId = s.fullAutoJobs?.[id]?.storyDraftId;
-        return document.querySelectorAll(
-          `[data-story-action="resume"][data-id="${storyId}"]`,
-        ).length;
-      }, jobId);
-      if (guard.draftCard) {
-        await page.evaluate(() => {
-          const t = document.querySelector("#toast");
-          if (t) t.textContent = "";
-        });
-        await draftCard.first().click();
-        await page.waitForTimeout(300);
-        guard.draftToast = await toastText();
-        guard.draftEditor = await page.locator(".ig-editor-bar").count();
-        guard.draftWorkflow = await page
-          .locator("#modal-root .story-workspace")
-          .count();
-      }
+      // R55a one screen: no pro cards to refuse; the redraw itself is checked.
+      const guard = {};
       await page.evaluate(() => {
         window.__smokeImageDelay = 0;
       });
-      await click('.top-actions [data-action="toggle-ui-mode"]');
       await idle();
       guard.step = await step();
       guard.redrawn = (await jobPage(jobId, 0)).asset !== firstBefore;
       guard.keptStill = (await jobPage(jobId, 1)).marker === keptAsset;
-      result.steps.proReviewWhileDrawing = guard;
-      if (!guard.card) problem("프로 모드에 ‘완성 초안 검토’ 카드가 없어요.");
-      else if (
-        !/진행 중인 작업이 끝난 뒤 열어 주세요/.test(guard.toast || "") ||
-        guard.editor
-      )
-        problem(
-          `그림을 만드는 중에 프로 편집기가 같은 책을 열었어요: ${JSON.stringify(guard)}`,
-        );
+      result.steps.redrawWhileOpen = guard;
       if (guard.step !== 4 || !guard.redrawn || !guard.keptStill)
         problem(
           `쪽 그림 다시 만들기 뒤 ④가 이상해요: ${JSON.stringify(guard)}`,
         );
-      if (!guard.draftCard || guard.draftResume)
-        problem(
-          `‘이어 만들 이야기’에 FULL AUTO 초안이 ‘검수 열기’로 나오지 않아요: ${JSON.stringify(guard)}`,
-        );
-      else if (
-        !/진행 중인 작업이 끝난 뒤 열어 주세요/.test(guard.draftToast || "") ||
-        guard.draftEditor ||
-        guard.draftWorkflow
-      )
-        problem(
-          `그림을 만드는 중에 ‘이어 만들 이야기’가 같은 책을 열었어요: ${JSON.stringify(guard)}`,
-        );
-      // With nothing in flight, '검수 열기' opens the job's own book in the pro
-      // editor: no rebuild, so every paid picture stays (the R9 round-4 drop).
-      const stored = () =>
-        page.evaluate((id) => {
-          const s = JSON.parse(localStorage.getItem("donghwa-workshop-v1"));
-          const job = s.fullAutoJobs?.[id];
-          return {
-            bookId: job?.book?.id || null,
-            pages: (job?.book?.pages || []).map((p) => p.imageAssetId || null),
-            final: (job?.book?.pages || []).filter(
-              (p) => p.imageMeta?.quality === "final",
-            ).length,
-            cover: job?.book?.cover?.imageAssetId || null,
-            history: (job?.book?.pages || []).reduce(
-              (n, p) => n + (p.imageHistory?.length || 0),
-              0,
-            ),
-            usage: Object.keys(job?.imageUsage || {}).length,
-          };
-        }, jobId);
-      const beforeOpen = await stored();
-      await click('.top-actions [data-action="toggle-ui-mode"]');
-      const idleCard = page.locator(
-        `[data-story-action="open-auto-review"][data-job-id="${jobId}"]`,
-      );
-      const draftOpen = { card: await idleCard.count() };
-      if (draftOpen.card) {
-        await idleCard.first().click();
-        await page.waitForTimeout(800);
-        draftOpen.editor = await page.locator(".ig-editor-bar").count();
-        draftOpen.workflow = await page
-          .locator("#modal-root .story-workspace")
-          .count();
-        // The pro editor's 이야기 글 다시 다듬기 does not rebuild it either.
-        if (draftOpen.editor) {
-          await page.evaluate(() => {
-            const t = document.querySelector("#toast");
-            if (t) t.textContent = "";
-          });
-          await click('[data-action="regenerate-text"]');
-          draftOpen.regenerateToast = await toastText();
-          draftOpen.regenerateWorkflow = await page
-            .locator("#modal-root .story-workspace")
-            .count();
-        }
-      }
-      const afterOpen = await stored();
-      draftOpen.same = JSON.stringify(afterOpen) === JSON.stringify(beforeOpen);
-      draftOpen.before = beforeOpen;
-      draftOpen.after = afterOpen;
-      result.steps.storyDraftCard = draftOpen;
-      if (!draftOpen.card || !draftOpen.editor || draftOpen.workflow)
-        problem(
-          `‘검수 열기’가 프로 편집기에서 같은 책을 열지 않았어요: ${JSON.stringify(draftOpen)}`,
-        );
-      if (
-        !draftOpen.same ||
-        afterOpen.final !== afterOpen.pages.length ||
-        afterOpen.pages.some((id) => !id)
-      )
-        problem(
-          `‘이어 만들 이야기’로 연 책의 그림이 바뀌었어요: ${JSON.stringify(draftOpen)}`,
-        );
-      if (
-        !/다시 엮지 않아요/.test(draftOpen.regenerateToast || "") ||
-        draftOpen.regenerateWorkflow
-      )
-        problem(
-          `프로 편집기의 ‘이야기 글 다시 다듬기’가 FULL AUTO 책을 다시 엮으려 했어요: ${JSON.stringify(draftOpen)}`,
-        );
-      await shot("06d-story-draft-review");
       // Back to ④ in the simple screen from the library card.
-      await click('.top-actions [data-action="toggle-ui-mode"]');
       await click('button[data-action="nav"][data-view="library"]');
       if (
         await page

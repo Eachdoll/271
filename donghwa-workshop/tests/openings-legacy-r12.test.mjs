@@ -881,7 +881,10 @@ const PINS = {
   // 작가실 (R51): ③ of a new story gains the '작가실' switch (off) under 엔진·예상
   // 요금; a job without the marker shows nothing new; every other group is
   // unchanged (dump-diffed against b1d01b5). b1d01b5: 2004a781…0cb4.
-  review: 'ab2740aae0dc1348de4c218a8d5b6eb93e074a51d12c73f9d11b5f079d1e4dee',
+  // 한 화면 (R55a): ③ of a new story loses the four legacy switches (회의 후 부모
+  // 확인·검사는 최고 모델로·정성 모드·승인 예시 더 참고) and the 에코 모드 button;
+  // every other group is unchanged (dump-diffed against 9afba2b). 9afba2b: ab2740aa…4dee.
+  review: '533bb09e6f729cce36018c404d74c21afd44c1853504dd353f0d8e68c0b0c286',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost

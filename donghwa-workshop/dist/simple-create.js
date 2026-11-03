@@ -186,17 +186,19 @@ const pageName = (book, index) =>
 /* ---------- per-device mode ---------- */
 export const UI_MODE_KEY = "donghwa-ui-mode";
 export const UI_MODES = Object.freeze(["simple", "pro"]);
-/** Per-device screen mode. Missing, unknown or unreadable storage means the simple screen. */
-export function readUiMode(storage = globalThis.localStorage) {
-  try {
-    return storage?.getItem(UI_MODE_KEY) === "pro" ? "pro" : "simple";
-  } catch {
-    return "simple";
-  }
+/**
+ * R55a (2026-11-03): one screen. The parent — "drop the simple/pro split".
+ * The professional screens (the five-step wizard, the outline cards, the
+ * prose and page editors, the three settings tabs) were the old path's
+ * controls; the writers' room has nothing for them to edit. The mode is
+ * always "simple" whatever a device stored; the stored key is ignored.
+ */
+export function readUiMode() {
+  return "simple";
 }
 /** Store the mode on this device only; returns the mode actually in effect. */
 export function writeUiMode(mode, storage = globalThis.localStorage) {
-  const next = mode === "pro" ? "pro" : "simple";
+  const next = "simple";
   try {
     storage?.setItem(UI_MODE_KEY, next);
   } catch {
@@ -204,7 +206,7 @@ export function writeUiMode(mode, storage = globalThis.localStorage) {
   }
   return next;
 }
-export const nextUiMode = (mode) => (mode === "pro" ? "simple" : "pro");
+export const nextUiMode = () => "simple";
 
 /* ---------- small helpers ---------- */
 const esc = (value) =>
@@ -1722,7 +1724,7 @@ function renderGenerateStep(ctx, w) {
     /결과를 확인해 주세요/u.test(String(job?.error || ""));
   let status = "";
   if (!job)
-    status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}${sbtn("에코 모드 · 복사·붙여넣기", "start-eco", "outline")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
+    status = `<div class="simple-start">${sbtn("글 만들기", "start-text", "primary")}${sbtn("데모로 체험", "start-demo", "plain")}</div><p class="small-label">줄거리 → 글 → 쪽 나누기를 기다림 없이 이어서 만들어요. 데모는 무료 예시 글이에요.</p>`;
   else if (text) {
     const pages = job.book?.pages?.length || 0,
       bookId = job.book?.id,
@@ -1745,7 +1747,7 @@ function renderGenerateStep(ctx, w) {
   }
   else
     status = `${councilRoomBlock(job)}${progressBlock(job, stageLine(job))}${job.error ? `<p class="pin-error">${esc(job.error)}</p>` : `<p class="small-label">${job.status === "failed" ? "멈췄어요." : runInterrupted(job) ? "창이 닫혀 멈췄어요. 완료한 부분은 보관돼 있어요." : "멈췄어요. 완료한 부분은 보관돼 있어요."}</p>`}<div class="simple-start">${sbtn(job.status === "failed" ? "다시 시도" : "이어서 만들기", "retry", "primary")}${checkFailed ? sbtn("줄거리 새로 만들기", "restart", "outline") : ""}${canAbandon(job) ? sbtn("주제·엔진 바꾸기", "abandon", "outline") : ""}${stopReportAvailable(job) ? sbtn("멈춤 리포트", "stop-report", "plain") : ""}</div>${checkFailed ? '<p class="small-label">다시 시도는 저장된 결과를 다시 써서 이미 받은 글을 다시 사지 않아요. 검사에서 남은 부분만 새로 요청하므로 요금이 조금 들 수 있어요. 그래도 같은 검사에서 멈추면 ‘줄거리 새로 만들기’로 줄거리부터 새로 써요(요금은 누르기 전에 보여 드려요).</p>' : ""}${canAbandon(job) ? '<p class="small-label">주제·엔진 바꾸기: 멈춘 이야기는 ‘제작 중인 이야기’(프로 모드)에 그대로 두고, 고른 주제·재료로 처음부터 다시 골라요.</p>' : ""}`;
-  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p>${!job ? `<div class="generation-options">${councilLine}</div>` : ""}<details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${roomLine}${orchestrationLine}${reviewLine}<div class="generation-options">${distilledLine}${job ? councilLine : ""}</div></details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
+  return `<section class="panel simple-panel"><h3>글을 만들어요</h3><p class="section-sub">${esc(w.topic || "")}</p><details class="generation-details" id="simple-generation-details"><summary>엔진·예상 요금 <span>${esc(TEXT_ENGINE_NAMES[textEngine] || textEngine)} · 글 ${text ? "완료" : textCost}</span></summary>${engineLine}${costLines}${roomLine}</details>${!job && keyMissing(textEngine, textConfig) ? `<p class="generation-key-note">글을 만들려면 API 키가 필요해요. ${sbtn("키 입력", "text-key", "outline", `data-engine="${esc(textEngine)}"`)}</p>` : ""}${status}</section><div class="wizard-actions">${sbtn("이전", "back")}<span class="wizard-hint">그림은 ④에서 쪽마다 확인하고 만들어요.</span>${text ? sbtn("검수로 가기", "open-review", "green") : "<span></span>"}</div>`;
 }
 const hasImage = (page) =>
   !!(

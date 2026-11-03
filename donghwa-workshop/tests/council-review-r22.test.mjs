@@ -208,16 +208,17 @@ test('R22 ③ of a parked story: the open room, the choice form, 계속 and 다�
   assert.match(html, /data-simple-action="council-continue"[^>]*>이 안으로 계속<\/button>/u);
   assert.doesNotMatch(html, /data-simple-action="(retry|restart|start-text|start-demo|stop|open-review)"/u);
   assert.doesNotMatch(html, /class="simple-progress"/u, 'no progress bar: nothing runs');
-  assert.match(html, /role="switch" aria-checked="true"[^>]*data-simple-action="toggle-council-review" disabled/u, 'frozen on the job');
+  // R55a: the switch left ③ (the setting keeps its default and is still frozen on the job).
+  assert.doesNotMatch(html, /toggle-council-review/u);
   const buttons = [...html.matchAll(/<button\b[^>]*>/g)].map(m => m[0]).filter(tag => !/simple-card|data-simple-nav=/.test(tag));
   assert.ok(buttons.length <= 12, `${buttons.length} buttons: ${buttons.join(' ')}`);
   assert.equal(simpleStepAccess(state, w).find(r => r.step === 3)?.mode, 'status');
   // The setting line before any job: on by default, 끄기 enabled; off → 켜기.
   const fresh = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3});
   const before = renderSimpleCreate(ctx(fresh));
-  assert.match(before, /role="switch" aria-checked="true"[^>]*data-simple-action="toggle-council-review"/u);
+  assert.doesNotMatch(before, /toggle-council-review/u);
   state.settings.councilReview = false;
-  assert.match(renderSimpleCreate(ctx(fresh)), /role="switch" aria-checked="false"[^>]*data-simple-action="toggle-council-review"/u);
+  assert.doesNotMatch(renderSimpleCreate(ctx(fresh)), /toggle-council-review/u);
   // A demo story has no meeting and no line.
   const demo = {...job, id: 'auto-demo', demo: true, status: 'paused', councilCheckpoint: undefined};
   delete demo.councilReview;
