@@ -38,19 +38,33 @@ export const ENGINE_MENU = Object.freeze([
 ]);
 export const engineById = (id) => ENGINE_MENU.find((engine) => engine.id === id) || null;
 const engineMenuText = () => ENGINE_MENU.map((e) => `${e.id} · ${e.name}: ${e.line} (아이가 기다리는 것: ${e.waits})`).join("\n");
-/* ---------- the reader panel: three children and a parent who reads aloud ---------- */
+/* ---------- the reader panel: how a child takes a story in, not what they like ---------- */
 const AGE = Object.freeze({ K1: 4, K2: 5, K3: 7, K4: 9 });
 export function readerYears(input) {
   const ko = String(input?.specs?.ko?.id || "K2");
   return AGE[ko] || 5;
 }
+/** This family's own child, from the first chosen child character (name, age, likes, traits); a plain child when the drawer has none. */
+export function ownChild(input) {
+  const c = list(input?.characters).find((row) => object(row) && row.kind === "child") || null;
+  if (!c) return null;
+  return { name: str(c.name, 30), age: c.age !== undefined && c.age !== "" ? c.age : null, likes: str(c.likes, 60), traits: list(c.traits).slice(0, 3).map((t) => str(t, 20)) };
+}
+/**
+ * R50 (revised the same day): the parent — "a dinosaur-loving five-year-old is
+ * too narrow; set the readers by disposition or some other measure". Four ways
+ * a child takes a story in, all at the book's age, plus this family's own
+ * child from the drawer and the adult who reads aloud.
+ */
 export function readerPanel(input) {
-  const y = readerYears(input);
+  const y = readerYears(input), own = ownChild(input);
   return [
-    { id: "dino", name: `공룡을 좋아하는 ${y}세`, line: "크고 쿵쿵거리는 것, 쫓고 쫓기는 것, 센 소리를 좋아해요. 가만히 있는 쪽에서는 금방 딴 데를 봐요." },
-    { id: "joker", name: `장난이 많은 ${y + 1}세`, line: "틀리는 어른, 뒤집히는 일, 되풀이 끝의 반전에 깔깔 웃어요. 뻔한 농담에는 안 웃어요." },
-    { id: "quiet", name: `조용한 ${y}세`, line: "작은 것, 숨은 것, 마음이 바뀌는 순간을 알아봐요. 무슨 일인지 모르면 조용히 묻어요: '왜?'" },
-    { id: "parent", name: "소리 내어 읽어 주는 부모", line: "입에 붙는 문장, 한 번 더 읽어 달라는 쪽, 읽다가 아이가 끼어드는 쪽을 알아요. 설명이 긴 쪽은 건너뛰고 싶어져요." },
+    { id: "action", name: `사건을 쫓는 ${y}세`, line: "무슨 일이 벌어지는지만 봐요. 다음에 뭐가 되는지 궁금하면 몸을 앞으로 내밀고, 아무 일도 안 일어나는 쪽에서는 딴 데를 봐요." },
+    { id: "laugh", name: `웃을 거리를 찾는 ${y}세`, line: "뒤집히는 일, 틀리는 어른, 셋 다음의 넷째에 깔깔 웃어요. 뻔한 농담, 어느 책에나 있는 개그에는 안 웃어요." },
+    { id: "heart", name: `마음을 읽는 ${y}세`, line: "누가 왜 그러는지를 봐요. 마음이 바뀌는 순간을 알아보고, 왜 그러는지 모르면 '왜?' 하고 물어요." },
+    { id: "eye", name: `그림을 보는 ${y}세`, line: "구석의 작은 것, 주인공이 못 본 것을 먼저 찾아요. 글이 그림을 설명하면 지루해하고, 그림이 보여 줄 것이 없는 쪽은 넘겨 버려요." },
+    { id: "ours", name: own ? `이 집 아이 ${own.name}${own.age !== null ? ` ${own.age}세` : ""}` : `이 집 아이 ${y}세`, line: own ? `${own.likes ? `${own.likes}을(를) 좋아하고` : "제 것을 좋아하고"}${own.traits.length ? `, ${own.traits.join("·")}.` : "."} 제 이름이 나오면 눈이 커지고, 저라면 안 그랬을 일에는 고개를 갸웃해요.` : "제 이름이 나오면 눈이 커지고, 저라면 안 그랬을 일에는 고개를 갸웃해요." },
+    { id: "parent", name: "소리 내어 읽어 주는 어른", line: "입에 붙는 문장, 한 번 더 읽어 달라는 쪽, 읽다가 아이가 끼어드는 쪽을 알아요. 설명이 긴 쪽은 건너뛰고 싶어져요." },
   ];
 }
 const panelText = (input) => readerPanel(input).map((p) => `- ${p.id} · ${p.name}: ${p.line}`).join("\n");
@@ -203,6 +217,7 @@ export function sievePremises(premises, records = [], { count = 3, laughAlike = 
     });
   });
 }
+export const PANEL_IDS = Object.freeze(["action", "laugh", "heart", "eye", "ours", "parent"]);
 /* ---------- round 2: the panel hears the premises ---------- */
 const reaction = {
   type: "object",
@@ -228,8 +243,8 @@ const panelSchema = (count) => ({
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["premise", "dino", "joker", "quiet", "parent"],
-        properties: { premise: { type: "integer", minimum: 1, maximum: count }, dino: reaction, joker: reaction, quiet: reaction, parent: reaction },
+        required: ["premise", ...PANEL_IDS],
+        properties: { premise: { type: "integer", minimum: 1, maximum: count }, ...Object.fromEntries(PANEL_IDS.map((id) => [id, reaction])) },
       },
     },
   },
@@ -237,14 +252,13 @@ const panelSchema = (count) => ({
 export function panelPremisesRequest(input, premises) {
   const rows = list(premises).map((p, i) => `${i + 1}. ${str(p.title, 40)} — ${str(p.line, 300)} / 웃음: ${str(p.laugh, 200)} / 그림: ${str(p.picture, 200)}`).join("\n");
   return {
-    system: `너는 네 사람이에요. 각자 아래 이야기 전제를 듣고 솔직하게 반응해요 — 점수가 아니라 반응이에요. 전제마다 네 사람 각각: 웃었나(laughed), 다음이 궁금했나(curious), 무슨 말인지 몰랐나(lost), 또 들려 달라고 할까(again), 한마디(word). 예의 차리지 말고 그 사람답게. 아이는 뻔한 것에 안 웃고 모르는 것에 금방 흥미를 잃어요.\n\n[네 사람]\n${panelText(input)}`,
+    system: `너는 여섯 사람이에요. 각자 아래 이야기 전제를 듣고 솔직하게 반응해요 — 점수가 아니라 반응이에요. 전제마다 여섯 사람 각각: 웃었나(laughed), 다음이 궁금했나(curious), 무슨 말인지 몰랐나(lost), 또 들려 달라고 할까(again), 한마디(word). 예의 차리지 말고 그 사람답게. 아이는 뻔한 것에 안 웃고 모르는 것에 금방 흥미를 잃어요.\n\n[여섯 사람]\n${panelText(input)}`,
     user: rows,
     jsonSchema: panelSchema(list(premises).length),
     temperature: 0.7,
     maxTokens: 6000,
   };
 }
-const PANEL_IDS = ["dino", "joker", "quiet", "parent"];
 /** Counts, never scores: laughs + curious + again − lost, per premise; ties keep the writer's order. */
 export function countReactions(reactions) {
   const rows = [];
@@ -312,7 +326,7 @@ const readSchema = (count) => ({
           draft: { type: "integer", minimum: 1, maximum: count },
           pages: { type: "array", items: pageReaction },
           again: { type: "array", items: { type: "string", enum: PANEL_IDS } },
-          words: { type: "array", maxItems: 4, items: { type: "string", maxLength: 120 } },
+          words: { type: "array", maxItems: 6, items: { type: "string", maxLength: 120 } },
         },
       },
     },
@@ -321,7 +335,7 @@ const readSchema = (count) => ({
 const draftText = (draft, i) => `=== 초고 ${i + 1} · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`;
 export function panelReadRequest(input, drafts) {
   return {
-    system: `너는 네 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 초고마다, 쪽마다 누가 웃었는지(laughed), 다음이 궁금했는지(curious), 지루해했는지(bored), 무슨 말인지 몰랐는지(lost)를 사람 id로 적어요(없으면 빈 목록). 초고마다 끝에 "또 읽어 줘" 할 사람(again)과 네 사람의 한마디(words)를 적어요. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[네 사람]\n${panelText(input)}`,
+    system: `너는 여섯 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 초고마다, 쪽마다 누가 웃었는지(laughed), 다음이 궁금했는지(curious), 지루해했는지(bored), 무슨 말인지 몰랐는지(lost)를 사람 id로 적어요(없으면 빈 목록). 초고마다 끝에 "또 읽어 줘" 할 사람(again)과 여섯 사람의 한마디(words)를 적어요. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
     user: list(drafts).map(draftText).join("\n\n"),
     jsonSchema: readSchema(list(drafts).length),
     temperature: 0.7,
@@ -340,9 +354,9 @@ export function countReadings(readings) {
         draft: Number(r.draft) || i + 1,
         laughed, curious, bored, lost, again,
         pull: laughed + curious + 2 * again - bored - lost,
-        boredPages: pages.filter((p) => list(p.bored).length >= 2).map((p) => Number(p.page)),
+        boredPages: pages.filter((p) => list(p.bored).length >= 3).map((p) => Number(p.page)),
         lostPages: pages.filter((p) => list(p.lost).length >= 1).map((p) => Number(p.page)),
-        laughPages: pages.filter((p) => list(p.laughed).length >= 2).map((p) => Number(p.page)),
+        laughPages: pages.filter((p) => list(p.laughed).length >= 3).map((p) => Number(p.page)),
         words: list(r.words).map((w) => str(w, 120)).filter(Boolean),
       };
     });
@@ -362,7 +376,7 @@ export function rewriteNotes(row) {
 }
 export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
   return {
-    system: "너는 이 책을 쓴 작가예요. 독자 네 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 그 반응을 받아 책을 통째로 다시 써요 — 쪽을 합치거나 나누거나 빼거나 더해도 돼요. 좋았던 것은 지키고, 지루한 곳은 과감히. 제목도 다시 정해도 돼요.",
+    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 그 반응을 받아 책을 통째로 다시 써요 — 쪽을 합치거나 나누거나 빼거나 더해도 돼요. 좋았던 것은 지키고, 지루한 곳은 과감히. 제목도 다시 정해도 돼요.",
     user: `${roomBrief(input, { records })}\n\n[독자 반응]\n${str(notes, 2000) || "(없음)"}\n\n${draftText(draft, 0)}`,
     jsonSchema: DRAFT_SCHEMA,
     temperature: 0.8,

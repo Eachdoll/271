@@ -53,9 +53,13 @@ test('R50 the cast sheet, the engine menu and the panel', () => {
   assert.equal(new Set(W.ENGINE_MENU.map((e) => e.id)).size, 10);
   assert.equal(W.engineById('reader_knows').name, '독자만 아는 비밀');
   assert.equal(W.engineById('nope'), null);
-  assert.deepEqual(W.readerPanel(input).map((p) => p.id), ['dino', 'joker', 'quiet', 'parent']);
-  assert.match(W.readerPanel(input)[0].name, /5세/);
-  assert.match(W.readerPanel({specs: {ko: {id: 'K1'}}})[1].name, /5세/, 'the joker is a year older than the reader');
+  // The panel is set by how a child takes a story in, never by a taste; this family's own child comes from the drawer.
+  assert.deepEqual(W.readerPanel(input).map((p) => p.id), ['action', 'laugh', 'heart', 'eye', 'ours', 'parent']);
+  assert.deepEqual(W.readerPanel(input).slice(0, 4).map((p) => p.name), ['사건을 쫓는 5세', '웃을 거리를 찾는 5세', '마음을 읽는 5세', '그림을 보는 5세']);
+  assert.equal(W.readerPanel(input)[4].name, '이 집 아이 유하 4세');
+  assert.match(W.readerPanel(input)[4].line, /^공룡, 별, 딸기을\(를\) 좋아하고, 호기심 많음·씩씩함·다정함\./);
+  assert.equal(W.readerPanel({specs: {ko: {id: 'K1'}}})[4].name, '이 집 아이 4세');
+  assert.doesNotMatch(JSON.stringify(W.readerPanel(input)), /공룡을 좋아하는|장난이 많은/);
   assert.equal(W.readerYears({specs: {ko: {id: 'K4'}}}), 9);
 });
 
@@ -84,25 +88,27 @@ test('R50 the requests: premises hear the menu as a menu; drafts are whole books
   assert.equal(W.similarity('', 'x'), 0);
   // The panel on premises: counted, never scored; ties keep the writer's order.
   const r = (laughed, curious, lost, again, word = '') => ({laughed, curious, lost, again, word});
+  const quiet = r(false, false, false, false);
   const reactions = [
-    {premise: 1, dino: r(true, true, false, true, '쿵쿵!'), joker: r(true, false, false, true), quiet: r(false, true, false, false), parent: r(false, true, false, true)},
-    {premise: 2, dino: r(false, false, true, false), joker: r(false, false, true, false, '몰라'), quiet: r(false, false, true, false), parent: r(false, false, false, false)},
-    {premise: 3, dino: r(true, true, false, true), joker: r(true, true, false, true), quiet: r(true, false, false, true), parent: r(true, true, false, true)},
-    {premise: 4, dino: r(true, true, false, true), joker: r(true, false, false, true), quiet: r(false, true, false, false), parent: r(false, true, false, true)},
+    {premise: 1, action: r(true, true, false, true, '쿵쿵!'), laugh: r(true, false, false, true), heart: r(false, true, false, false), eye: quiet, ours: quiet, parent: r(false, true, false, true)},
+    {premise: 2, action: r(false, false, true, false), laugh: r(false, false, true, false, '몰라'), heart: r(false, false, true, false), eye: quiet, ours: quiet, parent: quiet},
+    {premise: 3, action: r(true, true, false, true), laugh: r(true, true, false, true), heart: r(true, false, false, true), eye: quiet, ours: quiet, parent: r(true, true, false, true)},
+    {premise: 4, action: r(true, true, false, true), laugh: r(true, false, false, true), heart: r(false, true, false, false), eye: quiet, ours: quiet, parent: r(false, true, false, true)},
   ];
   const rows = W.countReactions(reactions);
   assert.deepEqual(rows.map((x) => [x.premise, x.pull, x.again]), [[1, 8, 3], [2, -3, 0], [3, 11, 4], [4, 8, 3]]);
-  assert.deepEqual(rows[0].words, ['dino: 쿵쿵!']);
+  assert.deepEqual(rows[0].words, ['action: 쿵쿵!']);
+  assert.deepEqual(W.panelPremisesRequest(input, [premise]).jsonSchema.properties.reactions.items.required, ['premise', ...W.PANEL_IDS]);
   assert.deepEqual(W.pickPremises(rows), [3, 1, 4]);
   assert.equal(W.panelPremisesRequest(input, [premise]).jsonSchema.properties.reactions.maxItems, 1);
   assert.match(W.panelPremisesRequest(input, [premise]).system, /점수가 아니라 반응이에요/);
   // The panel reads drafts page by page; the notes name the pages that dragged, lost or landed.
   const readings = [
-    {draft: 1, pages: [{page: 1, laughed: [], curious: ['dino'], bored: [], lost: []}, {page: 2, laughed: ['dino', 'joker'], curious: [], bored: [], lost: []}, {page: 3, laughed: [], curious: [], bored: ['dino', 'quiet'], lost: ['quiet']}], again: ['dino', 'joker'], words: ['또!']},
-    {draft: 2, pages: [{page: 1, laughed: [], curious: [], bored: ['dino', 'joker', 'quiet'], lost: []}], again: [], words: []},
+    {draft: 1, pages: [{page: 1, laughed: [], curious: ['action'], bored: [], lost: []}, {page: 2, laughed: ['action', 'laugh', 'ours'], curious: [], bored: [], lost: []}, {page: 3, laughed: [], curious: [], bored: ['action', 'eye', 'ours'], lost: ['heart']}], again: ['action', 'laugh'], words: ['또!']},
+    {draft: 2, pages: [{page: 1, laughed: [], curious: [], bored: ['action', 'laugh', 'eye'], lost: []}], again: [], words: []},
   ];
   const read = W.countReadings(readings);
-  assert.deepEqual(read.map((x) => [x.draft, x.pull]), [[1, 1 + 2 + 4 - 2 - 1], [2, -3]]);
+  assert.deepEqual(read.map((x) => [x.draft, x.pull]), [[1, 1 + 3 + 4 - 3 - 1], [2, -3]]);
   assert.equal(W.pickDraft(read), 1);
   assert.equal(W.rewriteNotes(read[0]), '지루해한 쪽: 3 — 줄이거나 사건을 넣어요.\n무슨 말인지 모른 쪽: 3 — 아이가 따라올 수 있게 보여 줘요.\n웃은 쪽: 2 — 숨 쉴 자리를 주고 건드리지 않아요.\n한마디: 또!');
   const rw = W.rewriteRequest(input, {title: '파마 날', pages: [{ko: '싹둑.'}]}, W.rewriteNotes(read[0]));
