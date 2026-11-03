@@ -78,3 +78,13 @@ test('the simple steps allow six friends and four places but preselect three fri
   assert.match(html, /주제가 향하는 곳 위주로 1~5곳/);
   assert.match(html, /서랍에 저장돼 다음 이야기에도 쓸 수 있어요/);
 });
+
+test('R55a-3: the outline stage accepts the seven characters the material plan may deliver', () => {
+  // 2026-11-03 stop report "이야기에 등장할 친구를 1~5명 골라 주세요." at 줄거리:
+  // the parent picked four friends, the planner added two companions (allowed
+  // up to MAX_CAST since 2026-10-20), and the outline stage still capped at five.
+  const seven = inputFor({companions: MAX_CAST - 1});
+  assert.equal(seven.characters.length, MAX_CAST);
+  assert.throws(() => inputFor({companions: MAX_CAST}), new RegExp(`1~${MAX_CAST}명`));
+  assert.throws(() => inputFor({companions: 0}).characters.length && normalizeStoryInput({...inputFor({companions: 1}), characters: []}), /1~7명/);
+});

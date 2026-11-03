@@ -744,7 +744,7 @@ const PINS = {
   // nothing else differs (dump-diffed against 9a58e9d). 9a58e9d: a70bb8d1…6018.
   // 말높임·웃음·비밀 (R49): every new draft's input carries storyManners {version: 1};
   // nothing else differs (dump-diffed against ad90083). ad90083: dcd8e232…6ee4.
-  inputs: '2f3a13a0083e3cbe50300c18f52573529b8862c4b57eca0a2118e65ac52e5414',
+  inputs: '5eccfa64d0337d03eee8f0ff180a68811d4a17cf64c94d0267889053caab832f',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's

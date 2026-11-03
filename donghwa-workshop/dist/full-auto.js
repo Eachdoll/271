@@ -23,6 +23,7 @@ import {
   materializeAutoPlan,
   materialSignature,
   materialSignatureMatches,
+  MAX_CAST,
 } from "./story-generation/auto-materials.js";
 import {
   getActiveWorld,
@@ -276,10 +277,10 @@ export function createFullAutoJob(
   const selected = [...new Set(wizard.characterIds || [])];
   if (
     !selected.length ||
-    selected.length > 5 ||
+    selected.length > MAX_CAST ||
     selected.some((id) => !active(state.characters).some((c) => c.id === id))
   )
-    throw Error("주인공을 포함해 1~5명을 골라 주세요.");
+    throw Error(`주인공을 포함해 1~${MAX_CAST}명을 골라 주세요.`);
   if (
     (wizard.value === "custom" && !wizard.valueCustom?.trim()) ||
     (wizard.ending === "custom" && !wizard.endingCustom?.trim())
