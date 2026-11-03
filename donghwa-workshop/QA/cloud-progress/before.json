@@ -1,0 +1,26 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "synthetic": true,
+  "pageErrors": [],
+  "providerRequests": [],
+  "writes": [],
+  "runs": [
+    {
+      "scenario": "automatic",
+      "inFlight": "클라우드 연결 확인 중",
+      "disabledWhileBusy": true,
+      "finished": "클라우드 저장됨",
+      "enabledAfterFinish": false,
+      "restored": true,
+      "progressShown": false
+    },
+    {
+      "scenario": "choice",
+      "disabledWhileBusy": true,
+      "enabledAfterFinish": false,
+      "localUntouched": true,
+      "libraryGets": 2
+    }
+  ],
+  "passed": false
+}

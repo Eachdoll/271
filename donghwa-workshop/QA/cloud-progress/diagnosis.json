@@ -1,0 +1,8 @@
+{
+  "sampledMediaReads": 40,
+  "statusCounts": {
+    "200": 40
+  },
+  "maxObservedWallMs": 23535,
+  "actualUserRestoreCompletionVerified": false
+}

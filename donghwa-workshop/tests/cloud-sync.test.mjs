@@ -271,3 +271,52 @@ test('R2-8 a rejected refresh promise cannot reject an explicitly queued push',a
   assert.equal(writes(api).length,1);assert.equal(sync.getStatus().phase,'ready');
  } finally {sync.stop();}
 });
+
+test('a first-device restore reports verified file progress and stays busy until the local apply finishes', async () => {
+  const one = await media(imageId, png), two = await media('image-second-sheet-0123456789', png);
+  const remote = library('원격 책장');
+  remote.characters[0].sheet = {imageAssetId: imageId, imageUrl: 'asset:' + imageId};
+  const api = server({state: remote, manifest: [one.asset, two.asset], assets: [one, two]});
+  const download = deferred(), partial = deferred(), applying = deferred(), finish = deferred();
+  api.intercept = async call => { if (call.path.endsWith(two.asset.id)) await download.promise; };
+  const {sync, local} = client(api, library(), {local: {available: false}, onChange: status => {
+    if (status.progress?.completed === 1) partial.resolve();
+  }, applyRemote: async(candidate, meta, target) => { applying.resolve(); await finish.promise; target.state = candidate; }});
+  const opening = sync.start();
+  try {
+    await partial.promise;
+    assert.equal(sync.getStatus().phase, 'syncing');
+    assert.equal(sync.getStatus().busy, true);
+    assert.equal(sync.getStatus().canPull, false);
+    assert.deepEqual(sync.getStatus().progress, {kind: 'pull', stage: 'download', completed: 1, total: 2});
+    const detached = sync.getStatus(); detached.progress.completed = 99;
+    assert.equal(sync.getStatus().progress.completed, 1, 'status consumers cannot change live progress');
+    assert.equal(local.state.characters[0].name, '유하');
+    download.resolve(); await applying.promise;
+    assert.deepEqual(sync.getStatus().progress, {kind: 'pull', stage: 'restoring', completed: 2, total: 2});
+    assert.equal(sync.getStatus().busy, true);
+    finish.resolve(); await opening;
+    assert.equal(sync.getStatus().phase, 'ready');
+    assert.equal(sync.getStatus().busy, false);
+    assert.equal(sync.getStatus().canPull, true);
+    assert.equal(sync.getStatus().progress, null);
+    assert.equal(writes(api).length, 0);
+  } finally { download.resolve(); finish.resolve(); sync.stop(); }
+});
+
+test('a failed local restore clears progress and unlocks retry without committing or replacing the local library', async () => {
+  const asset = await media(imageId, png), remote = library('원격');
+  remote.characters[0].sheet = {imageAssetId: imageId, imageUrl: 'asset:' + imageId};
+  const api = server({state: remote, manifest: [asset.asset], assets: [asset]});
+  const {sync, local, storage} = client(api, library(), {local: {available: false}, applyRemote: async() => { throw Error('기기 저장 실패'); }});
+  try {
+    await sync.start();
+    assert.equal(sync.getStatus().phase, 'error');
+    assert.equal(sync.getStatus().busy, false);
+    assert.equal(sync.getStatus().progress, null);
+    assert.equal(sync.getStatus().canPull, true);
+    assert.equal(local.state.characters[0].name, '유하');
+    assert.equal(storage.getItem(CLOUD_SYNC_STORAGE_KEY), null);
+    assert.equal(writes(api).length, 0);
+  } finally { sync.stop(); }
+});

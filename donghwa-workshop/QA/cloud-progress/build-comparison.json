@@ -1,0 +1,8 @@
+{
+  "compared": [
+    "app.js",
+    "cloud-sync.js",
+    "sw.js"
+  ],
+  "mismatches": []
+}
