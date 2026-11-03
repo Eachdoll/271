@@ -1712,7 +1712,7 @@ function renderGenerateStep(ctx, w) {
   // R51 작가실: the parent's switch (off until R53); a job shows what it was made with.
   const roomOn = job ? job.input?.writersRoom?.version === 1 : settings.writersRoom === true,
     roomLine =
-      job?.demo || textEngine === "demo" || textEngine === "local" || (job && !roomOn)
+      job?.demo || textEngine === "demo" || textEngine === "local"
         ? ""
         : renderActionSwitch({ id: "simple-room-switch", label: "작가실", description: locked ? "이 이야기에 고정된 설정이에요." : "작가가 전제 열두 개를 내고 독자 여섯이 듣고 부모님이 셋 중 하나를 골라요. 규칙은 한 쪽뿐이고, 글 요금이 늘어요.", action: "toggle-writers-room", checked: roomOn, disabled: locked, className: "simple-distilled simple-writers-room" });
   const distilledLine = renderActionSwitch({ id: "simple-distilled-switch", label: "승인 예시 더 참고", description: locked ? "이 이야기에 고정된 설정이에요." : "부모님이 승인한 동화 예시를 더 참고해요. 꺼도 기본 9점 이상 예시는 유지돼요.", action: "toggle-distilled", checked: distilled, disabled: locked, className: "simple-distilled" });
