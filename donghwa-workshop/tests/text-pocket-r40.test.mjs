@@ -159,7 +159,7 @@ test('R40 the typesetting: the frame and the panel, half-spread geometry, the sh
   const css = readFileSync(new URL('../dist/style.css', import.meta.url), 'utf8');
   for (const rule of POCKET_CSS.trim().split('\n').slice(0, 4)) assert.ok(css.includes(rule), rule);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v9[0-9]";/);
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 90, 'v90 or later');
   assert.match(sw, /"\.\/text-pocket\.js",/);
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
   assert.match(app, /illustration\(b, r\.page, \{ words: readerPocketWords\(b, p\) \}\)/);

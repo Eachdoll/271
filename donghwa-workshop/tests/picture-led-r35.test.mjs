@@ -285,6 +285,6 @@ test('R35 the screens: ① offers 책 결 with 그림책 결 selected, the forma
   assert.match(renderStoryQualityPlan({outline, input}), /책 결 · 그림책 결 — 글은 짧게, 그림이 말해요<br>이야기 모양 · [^<]+<br>문체 · [^<]+<br>표현 · /);
   assert.match(renderStoryQualityPlan({outline, input: draft(state, {bookFormatId: 'wordy'})}), /책 결 · 글이 많은 책<br>/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
-  assert.match(sw, /const CACHE = "donghwa-shell-v(?:8[1-9]|9[0-9])";/, 'v81 or later');
+  assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 81, 'v81 or later');
   assert.match(sw, /"\.\/book-format\.js",/);
 });
