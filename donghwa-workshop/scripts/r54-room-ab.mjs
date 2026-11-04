@@ -213,7 +213,8 @@ function measurePages(pages, input, outline = null) {
 }
 /** Who appears where: the chosen cast by name on each page (never a model's count). */
 function castCoverage(pages, input, extraNames = []) {
-  const names = [...(input?.characters || []).map((c) => c.name), ...extraNames].filter(Boolean);
+  // R54f: a new character with a drawer card is in input.characters too — count it once.
+  const names = [...new Set([...(input?.characters || []).map((c) => c.name), ...extraNames].filter(Boolean))];
   return names.map((name) => ({ name, pages: pages.filter((p) => String(p.textKo ?? p.ko ?? "").includes(name)).map((p) => p.pageNo) }));
 }
 function usageSummary(job) {
@@ -380,7 +381,8 @@ function compareReport(results) {
   L.push("| 항목 | " + results.map((r) => r.engine).join(" | ") + " |", "| --- | " + results.map(() => "---").join(" | ") + " |");
   const row = (label, f) => L.push(`| ${label} | ${results.map((r) => cell(f(r))).join(" | ")} |`);
   row("결과", (r) => (r.error ? `실패 — ${r.error}` : `완료 · ${r.job.status}`));
-  row("모델", (r) => r.usage.models.join(", "));
+  // R54f-2: every model the run actually called, in order (the writer first), not the usage rows' stage model.
+  row("모델", (r) => [...new Set((r.exchanges || []).map((x) => x.model).filter(Boolean))].join(", ") || r.usage.models.join(", "));
   row("걸린 시간", (r) => `${r.seconds}초`);
   row("실제 글 요금", (r) => money(r.usage.costUsd));
   row("요청 수", (r) => r.usage.requests);

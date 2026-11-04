@@ -1083,7 +1083,8 @@ export function settleExtraction(raw, input, outline, pages, title) {
       isRefrainPage: false,
     };
   });
-  return { cover: { title: str(raw?.cover?.title, 100) || str(title, 100) || "이야기", sceneAction: str(raw?.cover?.sceneAction, 500) || str(out[0]?.scene.action, 500) || "the hero at the story's place" }, pages: out };
+  // R54f-2: the cover carries the writer's title; the cheap reader rewrote it in both paid A/B runs ("Kongi Hide and Seek").
+  return { cover: { title: str(title, 100) || str(raw?.cover?.title, 100) || "이야기", sceneAction: str(raw?.cover?.sceneAction, 500) || str(out[0]?.scene.action, 500) || "the hero at the story's place" }, pages: out };
 }
 /**
  * The room's third part: the finished text, clamped to the binding, read once

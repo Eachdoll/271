@@ -78,7 +78,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
   assert.ok(pages[11].beatIndex <= 8 && pages[11].beatIndex >= pages[10].beatIndex, 'a beat the outline lacks falls back');
   assert.equal(pages.map((p) => p.textKo).join(' '), draft.pages.map((p) => p.ko).join(' '), 'every Korean word in order');
   assert.equal(pages.map((p) => p.textEn).join(' '), draft.pages.map((p) => p.en).join(' '), 'every English word in order');
-  assert.equal(result.data.cover.title, '파마 날!');
+  assert.equal(result.data.cover.title, '파마 날!', 'R54f-2: the cover title is the writer\'s (the reader\'s own title is ignored)');
   assert.ok(result.meta.checks && typeof result.meta.checks.passed === 'boolean', 'the story checks ran (advisory)');
   // A Korean-only edition fills the English slot with the Korean so the page validator is satisfied; a book with nothing cannot start.
   const settled = W.settleExtraction({pages: []}, input, outline, [{ko: '한글만.'}], '제목');
