@@ -744,7 +744,7 @@ const PINS = {
   // nothing else differs (dump-diffed against 9a58e9d). 9a58e9d: a70bb8d1…6018.
   // 말높임·웃음·비밀 (R49): every new draft's input carries storyManners {version: 1};
   // nothing else differs (dump-diffed against ad90083). ad90083: dcd8e232…6ee4.
-  inputs: '5eccfa64d0337d03eee8f0ff180a68811d4a17cf64c94d0267889053caab832f',
+  inputs: '0871172bf2bb9f7369562c3e712e6f8da66ab87173bb69c29d6eed182c715f9f',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -822,7 +822,7 @@ const PINS = {
   // (dump-diffed against 9a58e9d). 9a58e9d: ce00ecf9…89bb.
   // R49: the two demo jobs' inputs carry storyManners; nothing else differs
   // (dump-diffed against ad90083). ad90083: 239c972b…1f08.
-  fullAutoDemo: 'aefebd86bc0c54745969ad1458ec7db6e58234fbfc91cb92325ed28e673e3821',
+  fullAutoDemo: 'e18da5196586da6bc937eda30f8abe57823b286466f77f8ef76cb3b20b9ac908',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -884,7 +884,7 @@ const PINS = {
   // 한 화면 (R55a): ③ of a new story loses the four legacy switches (회의 후 부모
   // 확인·검사는 최고 모델로·정성 모드·승인 예시 더 참고) and the 에코 모드 button;
   // every other group is unchanged (dump-diffed against 9afba2b). 9afba2b: ab2740aa…4dee.
-  review: '533bb09e6f729cce36018c404d74c21afd44c1853504dd353f0d8e68c0b0c286',
+  review: '7ba913c1be9a768f1361e0370d7862c681d3b6e96f6f18332a2e956513ac522c',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -928,7 +928,7 @@ const PINS = {
   // a third (K1 12쪽 $0.450 → $0.244; K2 16쪽 $1.284 → $0.752; request counts
   // the same); jobs without the policy are the same (dump-diffed against
   // b928880). b928880: 8b673b90…1736.
-  estimates: 'ae79788cc43ccae1b2976069bdc0e9b3c78c2317647afd8f908849d4978f5e6b',
+  estimates: '0b22d8c1a7daea6b5783941bfc56c96c32c36ee7f3aa070a2ec3039865536727',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

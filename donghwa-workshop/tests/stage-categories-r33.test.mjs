@@ -28,7 +28,7 @@ import {renderSimpleCreate, ensureSimpleWizard, preselectMaterials} from '../dis
 const worldLibrary = JSON.parse(await readFile(new URL('../dist/story-quality/data/worlds.json', import.meta.url), 'utf8'));
 const plotPatterns = JSON.parse(await readFile(new URL('../dist/story-quality/data/plot_patterns.json', import.meta.url), 'utf8'));
 const qualityData = {worldLibrary, plotPatterns, goldBooks: [], inventories: {twistTypes: []}};
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha'], backgroundIds: ['home', 'beach'], topic: '유하가 바닷가에서 조개를 찾아요', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const legacy = (input) => { const copy = structuredClone(input); delete copy.promptDiet; return copy; };
 const field = (html, id) => html.match(new RegExp(`<select id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`))?.[1] || '';

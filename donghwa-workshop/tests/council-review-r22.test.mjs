@@ -26,6 +26,7 @@ function setup() {
   const state = seedState();
   migrateWorldState(state);
   migrateReadingSettings(state.settings);
+  state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
   const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '유하와 달토끼의 별 찾기', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
   return {state, wizard};
 }

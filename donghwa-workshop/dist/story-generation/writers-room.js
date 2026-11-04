@@ -431,7 +431,28 @@ export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
 const clone = (value) => JSON.parse(JSON.stringify(value));
 /** The parent's setting (off until R53 turns it on by default) → the marker a new draft freezes, or null. */
 export function writersRoomFor(state, records = []) {
-  return state?.settings?.textGeneration?.writersRoom === true ? writersRoomPolicy(records) : null;
+  // R54c: on by default — the parent's switch stores only `false` (R51–R55a stored `true`; still read as on).
+  return state?.settings?.textGeneration?.writersRoom === false ? null : writersRoomPolicy(records);
+}
+/** R54c: the parent's switch as the settings keep it: off only when `false` is stored. */
+export const writersRoomOn = (settings) => settings?.writersRoom !== false;
+/**
+ * R54c diversity line (free, deterministic): over the family's recent room
+ * books — how many story engines, laughs, new companions and places they used.
+ * One line for the shelf; empty with no room book. A repeated engine among the
+ * last four is named so the parent sees the room leaning on one shape.
+ */
+export function roomDiversityLine(records = [], count = 8) {
+  const rows = list(records).filter((r) => r?.usedElements?.engine || r?.outline?.writersRoom?.premise).slice(0, count);
+  if (!rows.length) return "";
+  const engines = rows.map((r) => str(r.usedElements?.engine || r.outline?.writersRoom?.premise?.engine, 40)).filter(Boolean),
+    laughs = new Set(rows.flatMap((r) => list(r.usedElements?.humor).map((h) => str(h, 120)).filter(Boolean))),
+    places = new Set(rows.flatMap((r) => list(r.usedElements?.places).map((p) => str(p, 60)).filter(Boolean))),
+    newCast = rows.reduce((n, r) => n + list(r.outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).length, 0),
+    recent = engines.slice(0, 4),
+    repeated = recent.find((e, i) => recent.indexOf(e) !== i),
+    name = repeated ? ENGINE_MENU.find((e) => e.id === repeated)?.name || repeated : "";
+  return `최근 작가실 책 ${rows.length}권 · 이야기 장치 ${new Set(engines).size}가지 · 웃음 ${laughs.size}가지 · 새 인물 ${newCast}명 · 장소 ${places.size}곳${name ? ` · 최근 넉 권에 '${name}'이 두 번` : ""}`;
 }
 const ROOM_PROGRESS = Object.freeze({
   premises: "작가실 · 작가가 이야기 전제 열두 개를 내고 있어요.",

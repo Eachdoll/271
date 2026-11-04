@@ -25,7 +25,7 @@ import {ecoOutlinePrompt, ecoJobInit} from '../dist/eco-mode.js';
  * On the diet the story now goes where the topic puts it; drafts without the
  * policy keep every old rule.
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const beachWizard = (extra = {}) => ({characterIds: ['yuha'], backgroundIds: ['beach'], topic: '유하가 바닷가에서 조개를 찾아요', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', simpleFlow: true, ...extra});
 const legacy = (input) => { const copy = structuredClone(input); delete copy.promptDiet; return copy; };
 /** A beach-only outline for the input's beats: every beat at the beach. */

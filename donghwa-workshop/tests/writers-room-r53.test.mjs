@@ -20,7 +20,7 @@ import * as W from '../dist/story-generation/writers-room.js';
  * the beat writers and the pagination request for a room job; a demo job
  * keeps the old path. The estimate prices the room's rounds.
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '뽀글머리', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
 const roomState = () => { const s = setup(); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: true}; return s; };
 const PREMISE = {title: '파마 날', line: '보라의 가게에서', engine: 'three_then_flip', laugh: '엄마 머리가 먼저 뽀글이 돼요', picture: '거울 앞 세 사람', cast: [{name: '보라', isNew: true, want: '쉬고 싶다', flaw: '손이 빠르다', speech: '손님에게 존댓말'}]};

@@ -35,7 +35,7 @@ import {hasStoryChange, storyChangePolicy, settleStoryChange, storyChangeViolati
  * picture-led book may leave one middle page without words. Drafts without
  * the marker are unchanged (R12 pins; the R35–R37 tests on undated inputs).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie'], backgroundIds: ['home', 'beach'], topic: '놀이터에서 자꾸 도망가는 그림자 잡기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `c-${Object.keys(extra).join('-') || 'default'}`});
 const dated = (input) => { const copy = structuredClone(input); delete copy.storyChange; return copy; };

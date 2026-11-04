@@ -25,7 +25,7 @@ import {estimateFullAutoCost} from '../dist/full-auto.js';
  * plot-pattern seed and the spec JSON are not sent. Drafts without the
  * policy are byte-identical (the R12 `requests` pin).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wiz = (extra = {}) => ({characterIds: ['yuha'], backgroundIds: ['home', 'forest'], topic: '유하가 스쿨버스를 타고 해니를 만나 장난치며 유치원에 가는 이야기', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', simpleFlow: true, ...extra});
 const reply = (json) => ({json, usage: {input: 10, output: 5}, meta: {requests: 1, model: 'mock'}});
 const QUOTA = /at least|exactly \d|STORY SPINE|SUSPENSE|SOUND REFRAIN|K1 SOUNDS|FROZEN_LEVEL_SPECS|vocabGrade|ruleVersion|maxOutOfListRatio|DETAILED STORYTELLING|PLACE CANON/u;

@@ -26,7 +26,7 @@ import {renderSimpleCreate, ensureSimpleWizard, formatSummary} from '../dist/sim
  * room, kept on the outline and remembered by the book record. Drafts
  * without the diet are byte-identical (R12 pins).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha'], backgroundIds: ['home', 'beach'], topic: '유하가 바닷가에서 조개를 찾아요', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const legacy = (input) => { const copy = structuredClone(input); delete copy.promptDiet; return copy; };
 const plotPatterns = JSON.parse(await readFile(new URL('../dist/story-quality/data/plot_patterns.json', import.meta.url), 'utf8'));

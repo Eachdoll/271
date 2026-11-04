@@ -129,6 +129,8 @@ import {
 } from "./story-generation/stop-report.js";
 import { councilSummaryLine } from "./story-generation/council.js";
 import { writersRoomFor, roomSummaryLine, roomDraftLine } from "./story-generation/writers-room.js";
+import { isK1Draft } from "./story-generation/k1-book.js";
+import { normalizeReadingLevels } from "./reading-levels.js";
 import {
   councilRoomBlock,
   renderCouncilBudget,
@@ -179,6 +181,12 @@ import {
   unitSpec,
 } from "./book-layout.js";
 import { splitSentences } from "./story-quality/dist/util.js";
+/** R54c: the writers' room decides this story (on, and not a K1 book, which stays on the old path). */
+function roomDecides(state, w) {
+  if (!writersRoomFor(state)) return false;
+  const levels = normalizeReadingLevels(w || {}, state?.settings);
+  return !isK1Draft({ koreanLevel: levels.koreanLevel, language: w?.language || state?.settings?.defaultLanguage, layout: layoutFor({ ...(w || {}), koreanLevel: levels.koreanLevel }) });
+}
 /** R12: an entry's name in messages — '펼침 3 · 5쪽(왼쪽)' (openings) or 'n쪽'. */
 const pageName = (book, index) =>
   layoutOf(book) === "openings" ? unitLabel(book, index) : `${index + 1}쪽`;
@@ -1405,7 +1413,7 @@ function renderTopicStep(ctx, w) {
   const state = ctx.getState(),
     job = jobOfWizard(state, w);
   if (job) return renderFrozenTopic(ctx, w, job);
-  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? esc(ideaNote(w)) : ""}</span></div>${writersRoomFor(state) ? `<p class="small-label simple-defaults-note simple-room-note">작가실이 책의 길이·모양·끝을 정해요. 읽기 등급과 언어는 ‘우리 아이’ 설정을 써요.</p>` : `<div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p>`}</section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
+  return `<section class="panel simple-panel"><h3>어떤 이야기를 만들까요?</h3><p class="section-sub">아이가 좋아하는 것, 오늘 있었던 일을 한 줄로 적어 주세요.</p><div class="field"><label for="topic">이야기 주제</label><textarea id="topic" maxlength="400" placeholder="예: 유하가 공룡 친구와 함께 길을 잃은 별을 찾아주는 이야기">${esc(w.topic)}</textarea></div><div class="chips">${SIMPLE_TOPICS.map((topic) => `<button type="button" class="chip ${w.topic === topic ? "selected" : ""}" data-simple-action="topic" data-topic="${esc(topic)}">${esc(topic)}</button>`).join("")}</div><div class="simple-idea">${sbtn("아이디어 뽑기", "idea", "outline", 'aria-describedby="simple-idea-status"')}<span class="small-label" id="simple-idea-status" role="status" aria-live="polite">${w.simpleIdeaNote && w.simpleIdeaNote === w.topic ? esc(ideaNote(w)) : ""}</span></div>${roomDecides(state, w) ? `<p class="small-label simple-defaults-note simple-room-note">작가실이 책의 길이·모양·끝을 정해요. 읽기 등급과 언어는 ‘우리 아이’ 설정을 써요.</p>` : `<div class="simple-format"><span class="small-label">책 형식</span><strong id="simple-format-summary">${esc(formatSummary(w, activeBackgrounds(state)))}</strong>${sbtn(w.simpleFormatOpen ? "접기" : "바꾸기", "format", "plain", `aria-expanded="${!!w.simpleFormatOpen}" aria-controls="simple-format-panel"`)}</div>${w.simpleFormatOpen ? renderFormatPanel(w, activeBackgrounds(state)) : ""}<p class="small-label simple-defaults-note">마무리·분위기는 부모 설정의 기본값을 써요. 어디서 시작할지와 가치는 ‘바꾸기’에서 고를 수 있어요.</p>`}</section>${renderResumeCards(state, w)}<div class="wizard-actions"><button type="button" class="btn btn-outline" data-action="library">책장으로</button><span class="wizard-hint">부모가 확인하고 아이에게 전해요.</span>${sbtn("다음", "next", "green")}</div>`;
 }
 const PLACE_EMOJI = {
   home: "🏡",
@@ -1710,7 +1718,8 @@ function renderGenerateStep(ctx, w) {
             ? renderActionSwitch({ id: "simple-writer-switch", label: "정성 모드 작가는 최고 모델로", description: locked ? "이 이야기에 고정된 설정이에요." : "끄면(기본) 비트별 작가는 중간 모델이에요. 켜면 요금이 늘어요.", action: "toggle-writer-tier", checked: writerUpper, disabled: locked, className: "simple-distilled simple-writer-tier" })
             : "");
   // R51 작가실: the parent's switch (off until R53); a job shows what it was made with.
-  const roomOn = job ? job.input?.writersRoom?.version === 1 : settings.writersRoom === true,
+  // R54c: on by default (only `false` is stored).
+  const roomOn = job ? job.input?.writersRoom?.version === 1 : settings.writersRoom !== false,
     roomLine =
       job?.demo || textEngine === "demo" || textEngine === "local"
         ? ""
@@ -3411,13 +3420,13 @@ async function handle(ctx, action, el) {
     return;
   }
   if (action === "toggle-writers-room") {
-    // R51: stored only as `writersRoom: true` with the text settings (and the World's copy).
+    // R54c: on by default — stored only as `writersRoom: false` with the text settings (and the World's copy).
     if (jobOfWizard(state, w)) return;
     const text = (state.settings.textGeneration ||= {}),
       world = getActiveWorld(state),
       targets = [text, world?.textGeneration].filter(Boolean),
       before = targets.map((target) => [target, Object.hasOwn(target, "writersRoom"), target.writersRoom]),
-      next = text.writersRoom === true ? undefined : true;
+      next = text.writersRoom === false ? undefined : false;
     for (const target of targets) {
       if (next === undefined) delete target.writersRoom;
       else target.writersRoom = next;

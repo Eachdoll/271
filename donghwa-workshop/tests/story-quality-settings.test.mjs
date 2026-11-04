@@ -17,8 +17,9 @@ test('R54a the parent quality panel is two models: the author (상위) and the e
  const html=renderStoryQualitySettings(state),selector=renderQualityPatternSelector({storyQualityPatternId:'waiting'},{state});
  assert.match(html,/<h3>글 모델<\/h3>/);
  assert.match(html,/id="quality-writers-room" type="checkbox" role="switch"/,'R55a-2: the 작가실 switch lives on the settings panel too');
- assert.doesNotMatch(html,/id="quality-writers-room"[^>]*checked/);
- assert.match(renderStoryQualitySettings({settings:{storyQuality:{},textGeneration:{writersRoom:true}}}),/id="quality-writers-room"[^>]*checked/);
+ assert.match(html,/id="quality-writers-room"[^>]*checked/,'R54c: on by default');
+ assert.doesNotMatch(renderStoryQualitySettings({settings:{storyQuality:{},textGeneration:{writersRoom:false}}}),/id="quality-writers-room"[^>]*checked/);
+ assert.match(renderStoryQualitySettings({settings:{storyQuality:{},textGeneration:{writersRoom:true}}}),/id="quality-writers-room"[^>]*checked/,'a stored true (R51–R55a) still reads as on');
  for(const role of ['outline','cheap'])assert.ok(html.includes(`data-quality-role-engine="${role}"`));
  for(const role of ['prose','coach'])assert.ok(!html.includes(`data-quality-role-engine="${role}"`));
  assert.match(html,/작가 · 상위/);assert.match(html,/독자단·읽기 · 보급형/);
@@ -54,14 +55,14 @@ test('seed chips and folded writer plan stay separate from printable prose; simu
  const report=renderStoryChildGate({pass:true,curiosity:{overall:8},retell:{retell:['유하가 소리를 찾아요.','유하가 통을 살펴봐요.','유하가 직접 소리를 내요.'],missingCore:[]}});assert.match(report,/모의검사/);assert.match(report,/실제 아이의 평가나 공식 읽기 점수가 아닙니다/);assert.match(report,/약 8\/10/);
 });
 
-test('R55a-2 the settings panel switch stores textGeneration.writersRoom only as true through the submit handler',()=>{
+test('R55a-2/R54c the settings panel switch stores textGeneration.writersRoom only as false through the submit handler',()=>{
  state={settings:{storyQuality:{},textGeneration:{engine:'anthropic'}}};
  const form=(checked)=>({id:'story-quality-form',querySelector:selector=>selector==='#quality-writers-room'?{checked}:null,querySelectorAll:()=>[]});
- handlers.submit({target:form(true),preventDefault(){}});
- assert.equal(state.settings.textGeneration.writersRoom,true);
- assert.equal(state.settings.textGeneration.engine,'anthropic','the other text settings stay');
  handlers.submit({target:form(false),preventDefault(){}});
- assert.equal(Object.hasOwn(state.settings.textGeneration,'writersRoom'),false,'off is stored as absent');
+ assert.equal(state.settings.textGeneration.writersRoom,false,'R54c: off is stored as false');
+ assert.equal(state.settings.textGeneration.engine,'anthropic','the other text settings stay');
+ handlers.submit({target:form(true),preventDefault(){}});
+ assert.equal(Object.hasOwn(state.settings.textGeneration,'writersRoom'),false,'on (the default) is stored as absent');
 });
 
 test('R33/R54a saving a stage then auto clears the old default through the actual submit handler; a form without the field keeps the stored stage, pattern and engines',()=>{

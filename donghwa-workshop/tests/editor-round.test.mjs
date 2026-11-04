@@ -264,6 +264,7 @@ function jobState() {
   const state = seedState();
   migrateWorldState(state);
   migrateReadingSettings(state.settings);
+  state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
   return {state, wizard: {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'}};
 }
 const stageResult = (data, stage) => ({data, usage: {input: 10, output: 20, costUsdEstimated: 0.01}, meta: {stage, requests: 1, model: 'mock'}});

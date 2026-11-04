@@ -197,7 +197,7 @@ import {estimateStoryTextCost} from '../dist/text-generation/models.js';
 import {getTextGenerationSettings} from '../dist/text-generation/settings-ui.js';
 
 test('R30 FULL AUTO hands the beat writer its model and journal, keeps the journal across a stop, and prices a new job with the writer', async () => {
-  const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings);
+  const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings); state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
   const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
   const job = createFullAutoJob(state, wizard, {stopBefore: 'text', planMode: 'selection'});
   assert.deepEqual(job.input.orchestrationPolicy, {version: 1, writerTier: 'medium'});

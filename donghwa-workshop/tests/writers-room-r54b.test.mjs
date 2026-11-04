@@ -9,6 +9,9 @@ import {demoOutline} from '../dist/story-generation/demo.js';
 import {validateOpenings} from '../dist/book-layout.js';
 import {createFullAutoJob, runFullAuto} from '../dist/full-auto.js';
 import * as W from '../dist/story-generation/writers-room.js';
+import {renderSimpleCreate, ensureSimpleWizard} from '../dist/simple-create.js';
+import {renderStoryQualitySettings} from '../dist/story-generation/quality-settings.js';
+import {getTextGenerationSettings} from '../dist/text-generation/settings-ui.js';
 
 /**
  * R54b (2026-11-04) 펼침 제본. A room draft keeps the layout the screen asked
@@ -114,4 +117,44 @@ test('R54b FULL AUTO: a room job of an openings book keeps pageCount 16 after th
   assert.equal(job.pagination?.pages?.length, 11, 'eleven entries');
   assert.equal(job.input.pageCount, 16, 'the printed count stays');
   assert.equal(job.sceneBriefs?.length, 0);
+});
+
+/* ---------- R54c (2026-11-04): the room is the default; the shelf's diversity line ---------- */
+test('R54c the writers\' room is on by default: a plain family state carries the marker, only a stored false turns it off, a stored true still reads as on', () => {
+  const plain = setup();
+  assert.deepEqual(W.writersRoomFor(plain), {version: 1}, 'on with nothing stored');
+  assert.equal(W.writersRoomOn(plain.settings.textGeneration), true);
+  assert.deepEqual(normalizeStoryInput({...inputFromWizard(plain, wizard, {layout: 'openings'}).input, bookId: 'd'}).writersRoom, {version: 1});
+  const off = setup(); off.settings.textGeneration = {...(off.settings.textGeneration || {}), writersRoom: false};
+  assert.equal(W.writersRoomFor(off), null);
+  assert.equal(W.writersRoomOn(off.settings.textGeneration), false);
+  assert.equal(getTextGenerationSettings(off).writersRoom, false, 'the settings keep the off');
+  assert.deepEqual(W.writersRoomFor(roomState()), {version: 1}, 'a stored true (R51–R55a) is still on');
+  assert.equal(getTextGenerationSettings(roomState()).writersRoom, undefined, 'and is no longer stored');
+  assert.equal(inputFromWizard(plain, {...wizard, koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, {layout: 'pages'}).input.writersRoom, undefined, 'K1 stays on the old path');
+  assert.match(renderStoryQualitySettings(plain), /id="quality-writers-room"[^>]*checked/, 'the settings switch shows on');
+  assert.doesNotMatch(renderStoryQualitySettings(off), /id="quality-writers-room"[^>]*checked/);
+});
+
+test('R54c the simple ①: a K1 story keeps its format panel even with the room on (the room does not write K1); a K2 story shows the room note', () => {
+  const state = setup();
+  const ctxFor = (w) => ({getState: () => state, getWizard: () => w, setWizard: () => {}, getDraft: () => null, setDraft: () => {}, getEditPage: () => 0, setEditPage: () => {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''});
+  const k1 = ensureSimpleWizard(state, {...structuredClone(wizard), koreanLevel: 'K1', englishLevel: 'E0', pageCount: 8, language: 'dual', simpleStep: 1, simpleFormatOpen: true});
+  const k1Html = renderSimpleCreate(ctxFor(k1));
+  assert.match(k1Html, /id="simple-format-panel"/);
+  assert.doesNotMatch(k1Html, /simple-room-note/);
+  const k2 = ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 1, simpleFormatOpen: true});
+  const k2Html = renderSimpleCreate(ctxFor(k2));
+  assert.match(k2Html, /simple-room-note/);
+  assert.doesNotMatch(k2Html, /id="simple-format-panel"/);
+});
+
+test('R54c the shelf\'s diversity line counts the engines, laughs, new companions and places of the recent room books and names a repeated engine', () => {
+  assert.equal(W.roomDiversityLine([]), '');
+  assert.equal(W.roomDiversityLine([{usedElements: {humor: ['x']}}]), '', 'no room book, no line');
+  const book = (engine, laugh, place, isNew) => ({usedElements: {engine, humor: [laugh], places: [place]}, outline: {writersRoom: {premise: {engine, cast: isNew ? [{name: '보라', isNew: true}] : []}}}});
+  const line = W.roomDiversityLine([book('three_then_flip', '엄마 머리', '미용실', true), book('reader_knows', '모자', '바닷가', false), book('two_threads', '모자', '바닷가', true)]);
+  assert.equal(line, '최근 작가실 책 3권 · 이야기 장치 3가지 · 웃음 2가지 · 새 인물 2명 · 장소 2곳');
+  const leaning = W.roomDiversityLine([book('three_then_flip', 'a', 'p', false), book('reader_knows', 'b', 'q', false), book('three_then_flip', 'c', 'r', false)]);
+  assert.match(leaning, /최근 넉 권에 '되풀이 셋·넷째 뒤집기'이 두 번$/);
 });

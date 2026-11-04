@@ -93,6 +93,7 @@ const buildBook = p => ({id: p.bookId, title: p.outline.titleCandidates[0], char
 const state = seedState();
 migrateWorldState(state);
 migrateReadingSettings(state.settings);
+state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
 const toasts = [], approvals = [], drawn = [], credentialLinks = [];
 let wizard = null, draft = null, editPage = 0, lastAction = null, onSave = null, saveFails = 0;
 // saveFails > 0 makes the next saves report a full storage (save() === false).

@@ -17,7 +17,7 @@ import {topicEndingNote} from '../dist/story-generation/topic-ending.js';
  * for each round, and counting (never scoring) that picks between candidates.
  * Nothing is wired into a draft yet (R51).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '뽀글머리', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
 // R54b: the brief of a page book names no count; an openings book's brief states its binding (tests/writers-room-r54b.test.mjs).
 const draft = (state, w = wizard, extra = {}) => normalizeStoryInput({...inputFromWizard(state, w, {layout: 'pages'}).input, bookId: 'r50', ...extra});

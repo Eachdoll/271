@@ -37,7 +37,7 @@ import {ecoPagesPrompt, ecoOutlinePrompt, ecoJobInit} from '../dist/eco-mode.js'
  * R12 budget byte for byte, and drafts, jobs and books without a format are
  * judged exactly as before (the R12 pins).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie'], backgroundIds: ['home', 'beach'], topic: '유하가 바닷가에서 파도를 처음 만나요', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `b-${Object.keys(extra).join('-') || 'default'}`});
 const REFERENCE = JSON.parse(readFileSync(new URL('./fixtures/picture-led-reference-r35.json', import.meta.url), 'utf8'));
