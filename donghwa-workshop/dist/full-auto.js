@@ -1508,7 +1508,8 @@ export async function runFullAuto(
         (opts) => ops.roomPages(job.input, job.outline, job.roomDraft, opts("pagination")),
         (r) => {
           job.pagination = r.data;
-          job.input.pageCount = r.data.pages.length;
+          // R54b: an openings book keeps its printed count (its entries are C..2C).
+          job.input.pageCount = r.meta?.pageCount || r.data.pages.length;
           job.sceneBriefs = [];
           job.prose = ecoProseFromPages(job.outline, r.data);
           job.storyCheck = r.meta?.checks || inspectStory(job.outline, r.data, job.input);

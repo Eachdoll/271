@@ -19,7 +19,8 @@ import {topicEndingNote} from '../dist/story-generation/topic-ending.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '뽀글머리', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const draft = (state, w = wizard, extra = {}) => normalizeStoryInput({...inputFromWizard(state, w, {layout: 'openings'}).input, bookId: 'r50', ...extra});
+// R54b: the brief of a page book names no count; an openings book's brief states its binding (tests/writers-room-r54b.test.mjs).
+const draft = (state, w = wizard, extra = {}) => normalizeStoryInput({...inputFromWizard(state, w, {layout: 'pages'}).input, bookId: 'r50', ...extra});
 const RECORDS = [{topic: '돌돌 말린 길', outline: {logline: '유하가 방석에서 태양계 여행을 떠나요'}, usedElements: {humor: ['꾸러미가 들썩여요'], engine: 'pile_up'}}];
 
 test('R50 the brief: one page, the chosen characters and places, the level as one line; no fear list, no page count, no shape, no names of real books', () => {

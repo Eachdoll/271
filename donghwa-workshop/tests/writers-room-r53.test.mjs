@@ -45,8 +45,9 @@ test('R53 the binding: 8, 12, 16 or 24 pages, the words untouched — a short bo
 });
 
 test('R53 the extraction: the cheap call names cast IDs, places and beats; made-up IDs and beats fall back; the acceptor builds the pagination; the page count follows the book', async () => {
-  const input = normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'openings'}).input, bookId: 'x'});
-  assert.equal(input.layoutPolicy, undefined, 'a room draft is a page book even when the screen asked for openings');
+  // R54b: a room draft keeps the asked layout; this is the page-book case (openings: tests/writers-room-r54b.test.mjs).
+  const input = normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'pages'}).input, bookId: 'x'});
+  assert.equal(input.layoutPolicy, undefined, 'a page book');
   assert.equal(input.pageCount, 16);
   const outline = {...demoOutline(input), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [{title: '파마 날'}], premises: [PREMISE]}};
   const draft = {title: '파마 날!', language: 'dual', pages: Array.from({length: 10}, (_, i) => ({pageNo: i + 1, ...page(i + 1)}))};
@@ -104,5 +105,5 @@ test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat
   const demo = createFullAutoJob(state, {...wizard, simpleFlow: true}, {allowNew: false, stopBefore: 'text', planMode: 'selection', demo: true});
   assert.equal(demo.demo, true);
   assert.equal(demo.input.writersRoom?.version, 1, 'the marker is on the input');
-  assert.equal(demo.input.layoutPolicy, undefined, 'a room draft is a page book');
+  assert.equal(demo.input.layoutPolicy?.kind, 'openings', 'R54b: the layout follows the screen (K2 dual is an openings book)');
 });

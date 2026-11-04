@@ -157,6 +157,13 @@ const customEnding = (input) => {
   if (input?.endingType !== "custom" || !note) return "";
   return [topicEndingNote(input?.topic, { change: true }), topicEndingNote(input?.topic)].map((v) => str(v, 120)).includes(note) ? "" : note;
 };
+/** R54b: an openings book (K2+ dual, 12 or 16 printed pages) binds the writer's pages into fixed openings. */
+const isOpeningsInput = (input) => input?.layoutPolicy?.kind === "openings";
+const openingCount = (input) => (isOpeningsInput(input) ? Math.max(1, Math.round(Number(input?.pageCount) / 2) || 6) : 0);
+const openingsBrief = (input) => {
+  const c = openingCount(input);
+  return c ? ` 이 책은 펼침 ${c}개(${c * 2}쪽)로 묶어요 — 글 ${c}~${c * 2}쪽이 그대로 들어가고, 한 펼침에 한두 쪽이 놓여요.` : "";
+};
 /** The one-page brief. What it does not say is the point: no fear list, no page count, no shape, no name ban. */
 export function roomBrief(input, { records = [] } = {}) {
   const ko = String(input?.specs?.ko?.id || "K2"),
@@ -170,7 +177,7 @@ export function roomBrief(input, { records = [] } = {}) {
     `[고른 장소] ${placeText(input) || "(없음)"} — 이야기가 원하면 다른 곳도 가요.`,
     ending ? `[끝] ${ending}` : "",
     "[좋은 그림책이 하는 일] 쪽을 넘기고 싶게 해요. 웃음은 벌어지는 일에서 나와요. 어른에게도 제 바람과 결점이 있어요. 아이는 주인공보다 먼저 알아채기를 좋아해요. 끝은 처음과 하나가 달라요. 이건 설명이지 점검표가 아니에요 — 더 좋은 길이 보이면 그리로 가요.",
-    "[길이] 쪽수는 작가가 정해요. 이야기가 원하는 만큼.",
+    `[길이] 쪽수는 작가가 정해요. 이야기가 원하는 만큼.${openingsBrief(input)}`,
     recent.length ? `[이 집에서 최근에 만든 책 — 이것과 다르게]\n${recent.map((line) => `- ${line}`).join("\n")}` : "",
   ]
     .filter(Boolean)
@@ -736,12 +743,14 @@ const sentences = (value) =>
  * sentence; more: the two shortest neighbours are joined. The words never
  * change. A book too short to split stays short (the acceptor reports it).
  */
-export function clampPages(pages) {
+export function clampPages(pages, bounds = null) {
   let rows = list(pages)
     .filter(object)
     .map((p) => ({ ko: str(p.ko, 1200), ...(p.en !== undefined ? { en: str(p.en, 1200) } : {}) }))
     .filter((p) => p.ko);
-  const target = nearestCount(rows.length);
+  // R54b: an openings book takes C..2C entries for its C openings (the writer's
+  // count when it fits); a page book the nearest of 8/12/16/24.
+  const target = bounds ? Math.min(Math.max(rows.length, bounds.min), bounds.max) : nearestCount(rows.length);
   let guard = 64;
   while (rows.length < target && guard-- > 0) {
     const i = rows.reduce((best, p, n) => (sentences(p.ko).length > sentences(rows[best].ko).length ? n : best), 0);
@@ -811,6 +820,19 @@ export function extractRequest(input, outline, pages) {
     maxTokens: 6000,
   };
 }
+/** R54b: the beat of each of N entries in an openings book of C beats (null for a page book or a count outside C..2C). */
+export function openingBeats(input, beats, entries) {
+  const c = openingCount(input);
+  if (!c || list(beats).length !== c || entries < c || entries > 2 * c) return null;
+  const pairs = entries - c,
+    out = [];
+  for (let k = 0; k < c; k++) {
+    const doubled = Math.floor(((k + 1) * pairs) / c) - Math.floor((k * pairs) / c) === 1;
+    out.push(beats[k]);
+    if (doubled) out.push(beats[k]);
+  }
+  return out;
+}
 /** The extraction's rows settled against the cast and the beats (an id or beat the model made up falls back, never fails). */
 export function settleExtraction(raw, input, outline, pages, title) {
   const cast = list(input?.characters).filter(object).map((c) => String(c.id)),
@@ -820,10 +842,15 @@ export function settleExtraction(raw, input, outline, pages, title) {
     rows = list(raw?.pages).filter(object);
   let last = beats[0] || 1;
   const fallbackBeat = (i) => beats[Math.min(beats.length - 1, Math.floor((i * beats.length) / Math.max(1, count)))] || 1;
+  // R54b openings: the entries are dealt into the C openings in order, the
+  // doubled openings spread evenly through the book (entries − C of them);
+  // every entry of opening k sits on approved beat k. Deterministic, never the
+  // model's guess, so the structure the prints read is always valid.
+  const openingBeat = openingBeats(input, beats, count);
   const out = list(pages).map((p, i) => {
     const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
     const who = list(row.who).map(String).filter((id) => castSet.has(id));
-    let beat = Number(row.beatIndex);
+    let beat = openingBeat ? openingBeat[i] : Number(row.beatIndex);
     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
     last = beat;
     const emotion = /^[A-Za-z]+(?:-[A-Za-z]+)?$/u.test(str(row.emotion, 40)) ? str(row.emotion, 40) : "calm";
@@ -855,8 +882,12 @@ export function settleExtraction(raw, input, outline, pages, title) {
  */
 export async function runRoomPages(input, outline, draft, options = {}, services = {}) {
   if (!list(draft?.pages).length) throw new StoryValidationError("pagination", ["작가실 글이 없어요. 초고 단계부터 다시 만들어 주세요."]);
-  const pages = clampPages(draft.pages);
-  const sized = { ...input, pageCount: pages.length };
+  // R54b: an openings book keeps its printed count (12 or 16) and takes C..2C
+  // entries; a page book's count follows the writer (nearest binding).
+  const openings = openingCount(input),
+    pages = clampPages(draft.pages, openings ? { min: openings, max: 2 * openings } : null),
+    printed = openings ? input.pageCount : pages.length;
+  const sized = { ...input, pageCount: printed };
   const journal = ledger("roomPages", sized, options, { version: WRITERS_ROOM_VERSION, pages }, "enrichmentCheckpoint");
   const ask = async (label, request, role) => {
     const response = await journal.call(role, request, services);
@@ -873,7 +904,7 @@ export async function runRoomPages(input, outline, draft, options = {}, services
     return {
       data: pagination,
       usage: journal.usage(),
-      meta: { ...journal.summary(), stage: "roomPages", pageCount: pages.length, checks: report, clamped: pages.length !== list(draft.pages).length },
+      meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length },
     };
   } catch (error) {
     if (error?.name === "AbortError") throw error;

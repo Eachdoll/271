@@ -919,9 +919,11 @@ export function draftStageFor(state, wizard = {}) {
 export function inputFromWizard(state, wizard, { layout: askedLayout = "pages" } = {}) {
   if (askedLayout !== "pages" && askedLayout !== "openings")
     throw new Error("책 구성은 pages 또는 openings여야 해요.");
-  // R53 작가실: the writer sets the length, so a room draft is a page book (openings pair a fixed count).
+  // R53 작가실: the writer sets the length. R54b: a room draft keeps the asked
+  // layout — an openings book binds the room's pages into its fixed openings
+  // (each one or two of the writer's pages), a page book takes the nearest count.
   const room = !isK1Draft({ koreanLevel: normalizeReadingLevels(wizard, state.settings).koreanLevel, language: wizard.language, layout: askedLayout }) && !!writersRoomFor(state),
-    layout = room ? "pages" : askedLayout;
+    layout = askedLayout;
   const openings = layout === "openings";
   if (openings && !OPENING_PAGE_COUNTS.includes(Number(wizard.pageCount || 12)))
     throw new Error("펼침 구성 책은 12쪽이나 16쪽으로 골라 주세요.");
