@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, renderStoryBeatCard} from '../dist/story-generation/ui.js';
+import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse, outlineRequestSchema} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanOpeningsPaginationRules, leanPaginationRules} from '../dist/story-generation/prompt-diet.js';
 import {normalizeOutlineResponse} from '../dist/story-generation/outline-normalize.js';
@@ -176,11 +176,6 @@ test('R36 shown to the parent: the eco picture prompt they copy carries the plan
   const html = renderSimpleCreate({getState: () => stateWithJob, getWizard: () => w, setWizard() {}, getDraft: () => null, setDraft() {}, getEditPage: () => 0, setEditPage() {}, isSimpleView: () => true, isSimpleMode: () => true, materialPortrait: () => '', cover: () => '', illustration: () => ''});
   assert.equal((html.match(/class="simple-plan-note">그림 계획 · /g) || []).length, 8);
   assert.match(html, /그림 계획 · 그림이 말해요 \/ 그림 · the lunch box wedged in the rock[^<]*\/ 가까이 · 여백 많이 · 펼침면 한 장/);
-  // The pro beat card.
-  const card = renderStoryBeatCard({outline, input}, 0);
-  assert.match(card, /<p class="story-note story-plan-note">그림 계획 · 글과 그림이 함께 \/ 그림 · two tiny friends[^<]*\/ 멀리서 · 여백 많이 · 펼침면 한 장<\/p>/);
-  const bareOutline = structuredClone(outline); bareOutline.beats.forEach((b) => delete b.picturePlan);
-  assert.doesNotMatch(renderStoryBeatCard({outline: bareOutline, input}, 0), /그림 계획/);
   assert.equal(picturePlanNote(null), '');
   assert.equal(planOf(outline, 6).carrier, 'picture', 'the turn is told by its picture');
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');

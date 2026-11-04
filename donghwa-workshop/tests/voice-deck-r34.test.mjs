@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, storyVoiceFor, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard, storyVoiceFor} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse} from '../dist/story-generation/pipeline.js';
 import {leanBeatWriterRules, leanProseRules, leanVisibleInput} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline} from '../dist/story-generation/demo.js';
@@ -170,10 +170,7 @@ test('R34 the book remembers its voice, the next book avoids it, and the screens
   state.settings.storyQuality = {...(state.settings.storyQuality || {}), approvedBooks: [{bookId: 'b1', approved: true, createdAt: new Date().toISOString(), topic: input.topic, outline: {beats: outline.beats}, usedElements: record.usedElements}]};
   const next = inputFromWizard(state, wizardOf()).input.storyVoice;
   for (const slot of VOICE_SLOTS) assert.notEqual(next.cards[slot], input.storyVoice.cards[slot], `${slot} differs from the latest book`);
-  // The pro outline card and ③.
-  const card = renderStoryQualityPlan({outline, input});
-  assert.match(card, /문체 · /);
-  assert.doesNotMatch(renderStoryQualityPlan({outline: {...outline, storyShape: undefined}, input}), /문체 · /, 'no voice line without a shape (a legacy outline)');
+  // ③ (R55b: the pro outline card is gone).
   const job = createFullAutoJob(state, wizardOf({simpleFlow: true}), {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false});
   job.status = 'text-review'; job.outline = outline; job.pagination = {pages: []}; job.completed = {outline: true, briefs: true, prose: true, pagination: true};
   job.styleReport = styleReport(['유하는 조개를 주웠어요. 해니가 웃었어요. "또 찾았다!"'], {names: ['유하', '해니']});

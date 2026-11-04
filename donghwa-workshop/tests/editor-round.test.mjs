@@ -321,15 +321,6 @@ test('FULL AUTO: a new job freezes the policy, asks for the read-through with th
 });
 
 test('simple ③ names the read-through once the text is done', async () => {
-  const {renderRevisionNote} = await import('../dist/story-generation/ui.js');
-  const revision = {version: 1, accepted: [{pageNo: 2, languages: ['ko'], reason: '소리를 또렷하게'}], rejected: [], report: {overall: '흐름이 좋아요.', strengths: [], issues: [{pageNo: 5, aspect: 'pageTurn', note: '다음 쪽이 궁금하지 않아요'}]}};
-  const html = renderRevisionNote(revision);
-  assert.match(html, /편집자 통독/);
-  assert.match(html, /책 전체를 읽고 1쪽을 다듬었어요 · 흐름이 좋아요\./);
-  assert.match(html, /2쪽 · 소리를 또렷하게/);
-  assert.match(html, /5쪽 · 다음 쪽 궁금함 · 다음 쪽이 궁금하지 않아요/);
-  assert.equal(renderRevisionNote(null), '');
-  assert.equal(renderRevisionNote({version: 1, skipped: true, accepted: []}), '');
   const simple = await readFile(new URL('../dist/simple-create.js', import.meta.url), 'utf8');
   assert.match(simple, /simple-revision-note/);
   const sw = await readFile(new URL('../dist/sw.js', import.meta.url), 'utf8');

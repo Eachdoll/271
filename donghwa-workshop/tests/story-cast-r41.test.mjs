@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse, outlineRequestSchema} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanVisibleInput, leanOutlineView} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline} from '../dist/story-generation/demo.js';
@@ -94,7 +94,6 @@ test('R41 the outline contract: the schema asks for one relation row per compani
   assert.ok(Object.keys(leanOutlineView({...outline, relations: RELATIONS})).includes('relations'));
   assert.equal(castSummary({...outline, relations: RELATIONS}, led), '관계 · 초록이 같은 그림자를 먼저 잡고 싶은 라이벌 · 토토 따라 하는 꼬마 · 엄마 제 일로 바쁜 어른');
   assert.equal(castSummary(outline, led), '');
-  assert.match(renderStoryQualityPlan({outline: {...outline, relations: RELATIONS, storyShape: structuredClone(led.storyShape)}, input: led}), /<br>관계 · 초록이 같은 그림자를 먼저 잡고 싶은 라이벌 · 토토 따라 하는 꼬마 · 엄마 제 일로 바쁜 어른<\/p>/);
   const job = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true, topic: '숲에서 노래하는 돌 찾기'}), backgroundIds: ['forest']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
   assert.match(ecoOutlinePrompt(job.input), /\nCAST: this story has 4 characters/);
   assert.match(ecoOutlinePrompt(job.input), /"relations"/);

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanOpeningsPaginationRules, leanPaginationRules, leanVisibleInput} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
@@ -282,8 +282,6 @@ test('R35 the screens: ① offers 책 결 with 그림책 결 selected, the forma
   assert.equal(bookFormatLabel(job.input), '그림책 결');
   const input = draft(state), outline = demoOutline(input);
   outline.storyShape = input.storyShape;
-  assert.match(renderStoryQualityPlan({outline, input}), /책 결 · 그림책 결 — 글은 짧게, 그림이 말해요<br>이야기 모양 · [^<]+<br>문체 · [^<]+<br>표현 · /);
-  assert.match(renderStoryQualityPlan({outline, input: draft(state, {bookFormatId: 'wordy'})}), /책 결 · 글이 많은 책<br>/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 81, 'v81 or later');
   assert.match(sw, /"\.\/book-format\.js",/);

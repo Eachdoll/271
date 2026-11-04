@@ -5,7 +5,6 @@ import {normalizeStoryInput, alignEnglishText, alignProseParagraph} from '../dis
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
 import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 import {alignPageEnglish, canAlignEnglish, estimateAlignEnglish, requestPageEnglish} from '../dist/story-generation/page-tools.js';
-import {renderStoryProseParagraphs} from '../dist/story-generation/ui.js';
 
 /**
  * 2026-10-21 R30.1 영어 맞추기: after the parent edits the Korean of a page
@@ -126,7 +125,4 @@ test('R30.1 pro prose: the edited Korean paragraph’s beat gets one matching En
   await alignProseParagraph(edited, 1, outline, inp, {engineId: 'openai', qualityEngines: {prose: roleEngine}});
   assert.equal(roleEngine.calls.length, 1);
   await assert.rejects(alignProseParagraph(edited, 1, outline, inp, {engineId: 'demo'}), /데모/u);
-  // The EN button shows on the Korean tab only when asked.
-  assert.match(renderStoryProseParagraphs(edited, 'ko', outline, {alignEn: true}), /data-story-action="align-paragraph-en"/u);
-  assert.doesNotMatch(renderStoryProseParagraphs(edited, 'ko', outline), /align-paragraph-en/u);
 });

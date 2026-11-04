@@ -13,7 +13,6 @@ import {StoryValidationError} from '../dist/story-generation/schemas.js';
 import {createFullAutoJob, runFullAuto} from '../dist/full-auto.js';
 import {renderFullAutoJobs} from '../dist/full-auto-ui.js';
 import {checkNotes, renderSimpleCreate, ensureSimpleWizard} from '../dist/simple-create.js';
-import {renderStoryChildGate} from '../dist/story-generation/ui.js';
 import {buildStopReport, captureFailure, stopReportAvailable, stopReportFileName, renderStopReportModal} from '../dist/story-generation/stop-report.js';
 
 /**
@@ -103,8 +102,6 @@ test('a child simulator whose answer cannot be read twice is skipped with a note
   assert.equal(result.meta.coherence.passed, true);
   assert.ok(result.usage.input >= 40, 'the three simulator calls and the review are all counted');
   assert.ok(progress.some(p => p.stage === 'childGate' && p.phase === 'unreadable'));
-  assert.match(renderStoryChildGate(result.meta.childGate), /아이 시뮬레이터 · 건너뜀/);
-  assert.equal(renderStoryChildGate({skipped: true, reason: 'disabled'}), '');
 });
 
 // ---- FULL AUTO: notes hold a full run at the text; ③ and the cards say so ----

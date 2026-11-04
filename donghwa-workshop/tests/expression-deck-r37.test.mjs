@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, storyExpressionFor, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard, storyExpressionFor} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanBeatWriterRules, leanProseRules, leanVisibleInput} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline, demoProse} from '../dist/story-generation/demo.js';
@@ -169,7 +169,6 @@ test('R37 the book remembers its cards and the next book draws others; ③ and t
   state.settings.storyQuality = {...(state.settings.storyQuality || {}), approvedBooks: [{bookId: 'b1', approved: true, createdAt: new Date().toISOString(), topic: input.topic, outline: {beats: outline.beats}, usedElements: record.usedElements}]};
   const next = inputFromWizard(state, wizardOf(), {layout: 'openings'}).input.storyExpression;
   for (const slot of EXPRESSION_SLOTS) assert.ok(next.cards[slot].every((id) => !input.storyExpression.cards[slot].includes(id)), `${slot}: the next book draws other cards`);
-  assert.match(renderStoryQualityPlan({outline, input}), /<br>표현 · [^<]+(?:<br>아이디어 · [^<]+)?<br>달라지는 것 · [^<]+(?:<br>시도 · [^<]+)?<\/p>/);
   // ③ (the eco panel shows the line from the start)
   const fresh = setup();
   const job = ecoJobInit(createFullAutoJob(fresh, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState, sceneReferenceRecords} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse, inspectOutlineRules, outlineRequestSchema, inspectStory} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanPaginationRules, leanOpeningsPaginationRules, leanVisibleInput, leanOutlineView, leanBibleBlock, leanPageView} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
@@ -374,7 +374,6 @@ test('R39 the screens, the deck and the shell: ③, the eco outline and the pro 
   const outline = demoOutline(input); outline.storyShape = structuredClone(input.storyShape);
   assert.equal(storyDramaSummary(outline), `시도 · 부탁·힘·기다리 / 비밀 · ${outline.secret} / 조연 · ${outline.companion}`);
   assert.equal(storyDramaSummary(demoOutline(dated(input))), '');
-  assert.match(renderStoryQualityPlan({outline, input}), /<br>달라지는 것 · [^<]+<br>시도 · 부탁·힘·기다리 \/ 비밀 · [^<]+<\/p>/);
   const job = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
   job.outline = demoOutline(normalizeStoryInput(job.input)); job.eco.step = 'pages';
   const withJob = {...state, fullAutoJobs: {...state.fullAutoJobs, [job.id]: job}};
