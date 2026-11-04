@@ -4,7 +4,6 @@ import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {
-  UI_MODE_KEY, readUiMode, writeUiMode, nextUiMode,
   renderSimpleCreate, ensureSimpleWizard, formatSummary,
   missingPageText, pageTextProblemMessage, carryFullAutoFields,
   recommendPlaces, recommendFriends, preselectMaterials,
@@ -51,22 +50,6 @@ function ctxFor(state, wizard, draft = null) {
 function stepButtons(html) {
   return [...html.matchAll(/<button\b[^>]*>/g)].map(m => m[0]).filter(tag => !/simple-card/.test(tag) && !/data-simple-nav=/.test(tag));
 }
-
-test('R55a one screen: the mode is always simple whatever a device stored; writing it stores simple; nothing else is touched', () => {
-  assert.equal(readUiMode(memoryStorage()), 'simple');
-  assert.equal(readUiMode(memoryStorage({[UI_MODE_KEY]: 'pro'})), 'simple', 'a device that stored pro gets the one screen');
-  assert.equal(readUiMode({getItem() { throw new Error('blocked'); }}), 'simple');
-  assert.equal(readUiMode(undefined), 'simple');
-  const storage = memoryStorage();
-  assert.equal(nextUiMode('simple'), 'simple');
-  assert.equal(writeUiMode(nextUiMode(readUiMode(storage)), storage), 'simple');
-  assert.equal(storage.data.get(UI_MODE_KEY), 'simple');
-  assert.equal(writeUiMode('pro', storage), 'simple');
-  assert.equal(writeUiMode('pro', {setItem() { throw new Error('quota'); }}), 'simple');
-  const {state} = setup(), before = JSON.stringify(state);
-  writeUiMode('pro', memoryStorage());
-  assert.equal(JSON.stringify(state), before);
-});
 
 test('each simple step shows at most 12 buttons (material cards and page arrows not counted)', () => {
   const {state, wizard} = setup();
@@ -270,22 +253,9 @@ test('the library review refuses, in both modes, while a simple action or a page
     leave = body.indexOf('return;', refuse);
   assert.ok(guard > 0 && refuse > guard && leave > refuse, body);
   // Nothing closes, opens or changes before the refusal returns.
-  for (const later of ['closeModal()', 'draft = job.book', 'uiMode === "simple"', 'openSimpleJob(']) {
+  for (const later of ['closeModal()', 'openSimpleJob(']) {
     assert.ok(body.indexOf(later) > leave, later);
   }
-});
-
-test('the pro review keeps pictures a runner marked stale on an idle book, as simple ④ does', async () => {
-  const {readFileSync} = await import('node:fs');
-  const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
-  const start = app.indexOf('  openReview: async (job) => {');
-  const body = app.slice(start, app.indexOf('\n  },\n', start));
-  const pro = body.indexOf('closeModal();', body.indexOf('openSimpleJob(')),
-    keep = body.indexOf('keepEditedPictures(job.book)'),
-    idle = body.indexOf('job.status !== "running"'),
-    open = body.indexOf('draft = job.book');
-  assert.ok(pro > 0 && idle > pro && keep > idle && open > keep, body);
-  assert.match(body.slice(keep, open), /save\(\);/);
 });
 
 test('simple settings reuse the existing form ids so the existing handlers save them', () => {
@@ -363,21 +333,17 @@ test('approve-book and finalizeBook draw and price only the planned pages and co
   assert.match(finalize, /if \(cover\) \{[\s\S]*?await generateCover\(/);
 });
 
-test('a FULL AUTO story draft is never rebuilt from the story workflow', async () => {
+test('R55b: \'검수 열기\' refuses while a simple action or a page operation owns the book, before anything opens; every job opens in the simple steps', async () => {
   const {readFileSync} = await import('node:fs');
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
-  const accept = app.slice(app.indexOf('async function acceptStoryResult(result) {'), app.indexOf('function renderStoryQuality('));
-  const guard = accept.indexOf('if (fullAutoJobOfStory(result.id)) throw Error(FULL_AUTO_NOT_REBUILT);');
-  assert.ok(guard > 0, accept);
-  assert.ok(accept.indexOf('buildStoryResultBook(result)') > guard, 'the guard runs before any rebuild');
-  const regenerate = app.slice(app.indexOf('if (a === "regenerate-text") {'), app.indexOf('if (a === "approve-book") {'));
-  assert.ok(regenerate.indexOf('fullAutoJobOfStory(draft.storyDraftId)') < regenerate.indexOf('resumeStoryDraft('), regenerate);
-  // '검수 열기' refuses while a simple action or a page operation owns the book, before anything opens.
-  const open = app.slice(app.indexOf('async function openAutoJobReview(jobId) {'), app.indexOf('async function acceptStoryResult('));
+  const open = app.slice(app.indexOf('async function openAutoJobReview(jobId) {'), app.indexOf('function renderStoryQuality('));
   const busy = open.indexOf('isSimpleBusy() ||'), refuse = open.indexOf('toast("진행 중인 작업이 끝난 뒤 열어 주세요.");');
   assert.ok(busy > 0 && refuse > busy, open);
-  for (const later of ['closeModal()', 'openSimpleJob(', 'openFullAutoReview(']) assert.ok(open.indexOf(later) > refuse, later);
-  assert.match(app, /onReady: acceptStoryResult,\s*openAutoReview: openAutoJobReview,/);
+  for (const later of ['closeModal()', 'openSimpleJob(']) assert.ok(open.indexOf(later) > refuse, later);
+  assert.doesNotMatch(app, /openFullAutoReview|acceptStoryResult|resumeStoryDraft|startStoryWorkflow|configureStoryUI\(/, 'the pro story workflow is gone');
+  const review = app.slice(app.indexOf('openReview: async (job) => {'), app.indexOf('const simpleCtx = {'));
+  assert.match(review, /openSimpleJob\(simpleCtx, job\.id\)/);
+  assert.doesNotMatch(review, /view = "edit"/, 'no pro editor route');
 });
 
 // ---- R11: moving between the five steps ----
@@ -576,7 +542,7 @@ test('R11 simple library: stories being made in simple words, replaced stories l
 test('R11 app wiring: the kept dialog for a draft on ①–③, the drawing note, the simple library on top, one popstate listener', async () => {
   const {readFileSync} = await import('node:fs');
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
-  const open = app.slice(app.indexOf('function simpleDraftOpen() {'), app.indexOf('function uiModeButton('));
+  const open = app.slice(app.indexOf('function simpleDraftOpen() {'), app.indexOf('function rememberSimpleReturn('));
   assert.match(open, /!!draft &&\s*\(Number\(wizard\?\.simpleStep\) >= 4 \|\| !!wizard\?\.simpleJobId\)/);
   const discard = app.slice(app.indexOf('function discardDraft(next, { onCancel = null } = {}) {'), app.indexOf('let readerTouch'));
   assert.ok(discard.length > 100);
@@ -588,9 +554,9 @@ test('R11 app wiring: the kept dialog for a draft on ①–③, the drawing note
   assert.match(discard, /drawing = simpleDrawingInFlight\(\)/);
   assert.match(discard, /지금 그리는 그림은 나가도 계속 만들어 이 이야기에 보관해요\./);
   const library = app.slice(app.indexOf('function libraryPage() {'), app.indexOf('const managementButton'));
-  assert.match(library, /simpleJobs = !childMode && uiMode === "simple"/);
   assert.ok(library.indexOf('renderFullAutoJobs(state, { simple: true })') < library.indexOf('class="shelf-header"'), 'above the books');
-  assert.match(library, /!childMode \? renderFullAutoJobs\(state, \{ rest: simpleJobs \}\) : ""/);
+  // R55b: the rest list (runs the simple panel does not open) always follows the books.
+  assert.match(library, /!childMode \? renderFullAutoJobs\(state, \{ rest: true \}\) : ""/);
   assert.doesNotMatch(app, /pushState|addEventListener\("popstate"/, 'history entries come from the simple screen only');
   const simple = readFileSync(new URL('../dist/simple-create.js', import.meta.url), 'utf8');
   assert.equal((simple.match(/addEventListener\?\.\("popstate"/g) || []).length, 1);

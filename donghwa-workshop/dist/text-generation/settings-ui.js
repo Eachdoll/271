@@ -367,60 +367,6 @@ function hybridLocalFields(settings) {
     : `<h4>하이브리드 로컬 줄거리·초안</h4>${providerPanel(settings, "local", "tg-hybrid")}`;
 }
 /**
- * R30: what a new 12-page story's text costs on these settings — the writers'
- * room, the editor round and (while 정성 모드 is on) the beat writer on the
- * chosen model, as a new draft freezes them.
- */
-export function newStoryTextEstimate(settings, { k1Book = false } = {}) {
-  // R31a: a K1 book has no writers' room and one page-first writer call.
-  if (k1Book)
-    return estimateStoryTextCost({
-      settings,
-      pageCount: 12,
-      editor: true,
-      diet: true,
-      k1Book: true,
-      writerTier: settings.writerTier === "upper" ? "upper" : "medium",
-    });
-  return estimateStoryTextCost({
-    settings,
-    pageCount: 12,
-    editor: true,
-    council: true,
-    diet: true,
-    ...(settings.orchestration !== false
-      ? {
-          orchestration: true,
-          writerTier: settings.writerTier === "upper" ? "upper" : "medium",
-        }
-      : {}),
-  });
-}
-function priceSummary(settings) {
-  const estimate = newStoryTextEstimate(settings),
-    enrichment = estimate.stages.find((stage) => stage.stage === "enrichment"),
-    writer = estimate.stages
-      .filter((stage) => stage.qualityRole === "beatWriter")
-      .reduce((n, stage) => n + stage.requestCount, 0);
-  const prose = estimate.orchestration
-    ? ` + 정성 모드(성장 설계·줄거리 후보 3개, 비트별 작가 약 ${writer}회·${settings.writerTier === "upper" ? "최고" : "중간"} 모델) + 기획 회의·편집자 통독`
-    : estimate.diet
-      ? " + 한글·영어 전문 1회 + 기획 회의·편집자 통독"
-      : estimate.quality
-    ? estimate.twoPass
-      ? " + 한글·영어 풍부화·단순화 4회"
-      : " + 한글·영어 목표 수준 전문 2회"
-    : enrichment
-      ? ` + 한글·영어 문단 풍부화 ${enrichment.requestCount}회 포함`
-      : " · 문단 풍부화 꺼짐";
-  return `<strong>12쪽 이야기 글 예상: 약 $${estimate.costUsd.toFixed(3)}${estimate.pricingUnknown ? " · 일부 요금 미확인" : ""}</strong><br><small>${estimate.pricingUnknown ? "목록에 없는 모델을 쓰는 단계는 요금 정보 없음이라 합계에서 빠졌어요. 요금은 공급자에서 확인해 주세요. " : ""}약 ${estimate.requestCount}회 요청 · 인과·상태표 + 장면 브리프 1회 + 전체 일관성 검사 2회${prose}${estimate.childSimulator ? " + 아이 시뮬레이터 2회" : ""}${estimate.beam ? ` · 비트 탐색은 후보·심사 ${estimate.beatCount * 2}회와 마무리 1회` : ""} (${estimate.beatCount}개 비트 가정). 줄거리 수정·보조 패턴 재생성, 직설어·시뮬레이터 지적 내용 수정, 수기 편집 후 재검사, 검사 단계별 최대 2회 재작성과 후속 검사, 주간 코치는 추가 요금이 들어요. 문단 수·긴 이전 원문·추론 토큰·실제 사용량에 따라 달라져요. ${settings.imageDiversity !== false ? "유사 그림은 책당 확인 후 선택한 쪽만 다시 생성하며 이미지 요금이 별도로 들어요. " : ""}ChatGPT 등 웹 구독과 별도인 API 요금이며 실제 청구액은 공급자에서 확인하세요.</small>`;
-}
-export function renderTextSettings(state) {
-  const settings = getTextGenerationSettings(state);
-  editingSettings = clone(settings);
-  return `<section class="panel" id="text-engine-settings" style="margin:24px 0"><h3>이야기 글 엔진 · 이미지 엔진과 별도</h3><p class="section-sub">글 품질 설정에서 줄거리·전문·심사 엔진을 각각 고를 수 있어요. 여기서는 공급자별 기본 모델과 키, 장면·쪽 나누기 설정을 관리합니다.</p><form id="text-engine-form"><div class="field"><label for="tg-engine">이야기 생성 엔진</label><select id="tg-engine">${options(settings.engine)}</select></div><div id="tg-provider-fields">${providerPanel(settings, settings.engine, "tg")}</div><div class="field" style="margin-top:18px"><label><input id="tg-hybrid" type="checkbox" ${settings.hybrid.enabled ? "checked" : ""}> 하이브리드 · 로컬 줄거리 + API 전문</label><small>기본은 꺼짐이에요. 품질 모드는 로컬 줄거리와 최종 API의 전문·심사 역할을 사용해요. 기존 생성은 로컬 초안을 API로 다듬어요.</small></div><div id="tg-hybrid-fields" ${settings.hybrid.enabled ? "" : "hidden"}><div id="tg-hybrid-local-fields">${hybridLocalFields(settings)}</div><div class="field"><label for="tg-final-engine">하이브리드 최종 API 엔진</label><select id="tg-final-engine">${options(settings.hybrid.finalEngine, false)}</select></div><div id="tg-final-provider-fields">${finalProviderFields(settings)}</div></div><div class="field" style="margin-top:18px"><label><input id="tg-story-enrichment" type="checkbox" ${settings.storyEnrichment ? "checked" : ""}> 기존 생성 · 문단별 풍부화</label><small>장면 디테일을 참고해 감각·행동·대화를 더해요. 품질 모드에서는 역할별 전문 단계를 사용하며, 이 문단별 추가 요청은 실행하지 않아요.</small></div><div class="field"><label><input id="tg-image-diversity" type="checkbox" ${settings.imageDiversity ? "checked" : ""}> 그림 다양성 검사</label><small>이웃한 그림을 비교해 알려드려요. 유료 엔진은 책당 확인 후 선택한 쪽만 다시 그려요.</small></div><div class="field"><label><input id="tg-review-upper" type="checkbox" ${settings.reviewTier === "upper" ? "checked" : ""}> 검사는 최고 모델로</label><small>끄면(기본) 사건 연결 판정은 한 단계 낮은 모델로 해 요금을 줄여요. 글을 쓰고 고치는 모델과 책 전체 통독은 그대로예요. 새 이야기부터 적용돼요.</small></div><div class="field"><label><input id="tg-orchestration" type="checkbox" ${settings.orchestration !== false ? "checked" : ""}> 정성 모드(기본 켜짐)</label><small>성장 설계와 서로 다른 각도의 줄거리 후보 3개를 겨루게 해 고르고, 비트마다 나누어 써요. 글 요금과 시간이 늘어요. 새 이야기부터 적용돼요.</small></div><div class="field"><label><input id="tg-writer-upper" type="checkbox" ${settings.writerTier === "upper" ? "checked" : ""}> 정성 모드 작가는 최고 모델로</label><small>끄면(기본) 비트별 작가는 중간 모델이에요. 켜면 문장이 더 좋아질 수 있지만 요금이 늘어요.</small></div><div class="story-cost" id="tg-price-summary">${priceSummary(freezeReviewTier(settings))}</div><p class="small-label">새 초안부터 적용해요. 이야기의 ‘변경’ 링크로 왔다면 저장 후 이야기로 돌아가 진행 중인 초안에도 적용하세요.</p><p id="tg-error" class="pin-error" role="status" aria-live="polite"></p><div class="modal-actions"><button class="btn btn-green" type="submit">글 엔진 설정 저장</button></div></form></section>`;
-}
-/**
  * Minimal text-engine form for the simple settings page: one engine select and
  * that provider's key fields. It keeps every id the existing change, click and
  * submit handlers read (#tg-hybrid, #tg-final-engine, … stay present but hidden),
@@ -612,8 +558,7 @@ function readProviders(validate = false) {
     });
 }
 function updatePriceSummary() {
-  const el = document.querySelector("#tg-price-summary");
-  if (el) el.innerHTML = priceSummary(editingSettings);
+  // R55b: the pro tab's price line is gone; nothing to refresh.
 }
 function redrawFinal() {
   document.querySelector("#tg-final-provider-fields").innerHTML =

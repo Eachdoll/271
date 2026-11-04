@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {configureStoryQualityUI,renderStoryQualitySettings,renderQualityPatternSelector,validateQualityPatternCards,storyQualityBookRecords,checkDueQualityCoach,cleanupStoryQualityUI} from '../dist/story-generation/quality-settings.js';
+import {configureStoryQualityUI,renderStoryQualitySettings,renderQualityPatternSelector,validateQualityPatternCards,storyQualityBookRecords,cleanupStoryQualityUI} from '../dist/story-generation/quality-settings.js';
 import {renderStoryQualityPlan,renderStoryChildGate} from '../dist/story-generation/ui.js';
 
 const plotPatterns=JSON.parse(await readFile(new URL('../dist/story-quality/data/plot_patterns.json',import.meta.url),'utf8'));
@@ -38,10 +38,6 @@ test('R54a the coach proposal and the pattern cards are not on the screen any mo
 test('R54a the repeat-material log left the screen; the records behind it are unchanged',()=>{
  state={settings:{storyQuality:{approvedBooks:Array.from({length:8},(_,i)=>record(i)),banWindow:2,patternBanWindow:1}},books:[{approved:false,id:'unapproved',outline:{beats:[]}}]};
  const html=renderStoryQualitySettings(state);assert.doesNotMatch(html,/최근 2권|물건 0/);assert.equal(storyQualityBookRecords(state).length,8);
-});
-
-test('R54a the weekly coach never runs on its own: the due check resolves no engine, saves nothing, renders nothing',async()=>{
- state={settings:{storyQuality:{approvedBooks:[record(0),record(1),record(2),record(3)]}}};saves=0;engines=0;renders=0;await checkDueQualityCoach();assert.equal(engines,0);assert.equal(renders,0);assert.equal(saves,0);assert.equal(state.settings.storyQuality.coachLastResult,undefined);
 });
 
 test('no coach proposal is applied merely by viewing it or clicking approval without a selection',()=>{

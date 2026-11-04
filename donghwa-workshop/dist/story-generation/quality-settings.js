@@ -349,42 +349,6 @@ export function validateQualityPatternCards(cards) {
   }
   return { valid: errors.length === 0, errors };
 }
-function renderPatternEditor(state) {
-  const cards = patternsFor(state),
-    input = (index, path, label, value, max = 1000) =>
-      `<label class="field"><span>${label}</span><input data-quality-pattern-index="${index}" data-quality-pattern-field="${path}" maxlength="${max}" value="${esc(value)}"></label>`;
-  return `<details class="story-card quality-patterns"><summary>패턴 카드 편집 · ${cards.length}종</summary><p class="story-note">구성 설명만 편집하세요. 책 제목·캐릭터 이름·본문을 입력하는 칸은 없습니다.</p>${cards
-    .map(
-      (card, index) =>
-        `<details class="quality-pattern-card"><summary>${esc(card.name)}</summary>${input(index, "name", "패턴 이름", card.name, 100)}${input(index, "bestFor", "어울리는 주제 · 쉼표 구분", card.bestFor.join(", "))}${input(index, "emotions", "감정 흐름 · 쉼표 구분", card.emotions.join(", "))}${card.beats
-          .map(
-            (beat, beatIndex) =>
-              `<div class="quality-pattern-beat"><label class="field"><span>비트 ${beatIndex + 1} 유형</span><select data-quality-pattern-index="${index}" data-quality-pattern-field="beats.${beatIndex}.type">${Object.entries(
-                TYPES,
-              )
-                .map(
-                  ([value, label]) =>
-                    `<option value="${value}" ${beat.type === value ? "selected" : ""}>${label}</option>`,
-                )
-                .join(
-                  "",
-                )}</select></label>${input(index, `beats.${beatIndex}.slot`, "구성 설명", beat.slot)}</div>`,
-          )
-          .join(
-            "",
-          )}<label class="field"><span>후렴 방식</span><select data-quality-pattern-index="${index}" data-quality-pattern-field="refrain.type">${Object.entries(
-          { frame: "문장 틀", count: "누적·숫자", question: "질문·답" },
-        )
-          .map(
-            ([value, label]) =>
-              `<option value="${value}" ${card.refrain.type === value ? "selected" : ""}>${label}</option>`,
-          )
-          .join(
-            "",
-          )}</select></label>${input(index, "refrain.hint", "후렴 구성", card.refrain.hint)}${input(index, "pageTurn", "쪽 넘김 구성", card.pageTurn)}${input(index, "avoid", "피할 구성", card.avoid)}</details>`,
-    )
-    .join("")}</details>`;
-}
 function roleFields(state, role) {
   const q = quality(state),
     resolved = resolveQualityStageSettings(
@@ -416,86 +380,6 @@ function roleModelOptions(settings, engine) {
       (row) => `<option value="${esc(row.id)}">${esc(row.label)}</option>`,
     )
     .join("");
-}
-function renderBans(state) {
-  const q = quality(state),
-    bans = buildBanList(storyQualityBookRecords(state), {
-      recentBooks: q.banWindow,
-      recentBooksForPattern: q.patternBanWindow,
-    }),
-    names = new Map(
-      patternsFor(state).map((pattern) => [pattern.id, pattern.name]),
-    ),
-    twists = new Map(
-      list(qualityData?.inventories?.twistTypes).map((row) => [row.id, row.ko]),
-    );
-  return `<details class="story-card"><summary>반복 소재 확인 · 최근 ${q.banWindow}권 / 패턴 ${q.patternBanWindow}권</summary>${Object.entries(
-    {
-      plantedObjects: "심은 물건",
-      creatures: "생물",
-      twistTypes: "반전",
-      places: "세부 장소",
-      patterns: "최근 패턴",
-    },
-  )
-    .map(
-      ([key, label]) =>
-        `<p class="story-note"><strong>${label}</strong> · ${bans[key].map((value) => esc(names.get(value) || twists.get(value) || value)).join(" · ") || "아직 사용 기록이 없어요."}</p>`,
-    )
-    .join(
-      "",
-    )}<p class="story-note">기존 등장인물과 집·배경의 고정된 구조는 유지합니다. 반복 제한은 새 사건에 쓰는 소재를 다양하게 골라요.</p></details>`;
-}
-function renderCoach(state) {
-  const q = state.settings?.storyQuality || {},
-    proposal = q.coachProposal,
-    versions = list(q.ruleVersions),
-    active = versions.at(-1),
-    row = (item, index, type) =>
-      `<label class="quality-coach-option"><input type="checkbox" data-quality-coach-${type}="${index}"><span>${esc(item.text)}${item.why ? `<small>${esc(item.why)}</small>` : ""}${item.replaces ? `<small>현재 ${item.replaces}번 항목 교체</small>` : ""}</span></label>`;
-  return `<section class="story-card quality-coach"><h4>주간 코치 제안</h4><p class="story-note">최근 7일 승인한 책이 3권 이상이면 주 1회 부모 화면 접속 시 검사합니다. 창을 닫은 동안에는 실행하지 않으며 API 요금이 들어요. 제안은 선택해 승인한 항목만 적용합니다.</p>${q.coachLastResult?.skipped ? `<p class="story-note">${esc(q.coachLastResult.skipped)}</p>` : ""}${q.coachLastError ? `<p class="story-error">${esc(q.coachLastError)}</p>` : ""}${
-    proposal && !proposal.appliedAt
-      ? `${list(proposal.recurringWeaknesses)
-          .map(
-            (item) =>
-              `<details class="quality-coach-evidence"><summary>${esc(item.pattern)}</summary><blockquote>${esc(item.evidence)}</blockquote></details>`,
-          )
-          .join("")}<fieldset><legend>규칙 제안 · 최대 7개</legend>${
-          list(proposal.proposedRules)
-            .map((item, index) => row(item, index, "rule"))
-            .join("") || '<p class="story-note">새 규칙 제안 없음</p>'
-        }</fieldset><fieldset><legend>금지 예시 제안 · 최대 4개</legend>${
-          list(proposal.proposedBanExamples)
-            .map((item, index) => row(item, index, "ban"))
-            .join("") || '<p class="story-note">새 금지 예시 제안 없음</p>'
-        }</fieldset><button type="button" class="btn btn-green btn-small" data-quality-action="approve-coach">선택한 제안 승인</button>`
-      : '<p class="story-note">승인할 새 제안이 아직 없어요.</p>'
-  }<div class="story-inline-actions"><button type="button" class="btn btn-outline btn-small" data-quality-action="run-coach" ${coachController ? "disabled" : ""}>${coachController ? "코치 검사 중" : "지금 코치 검사"}</button>${coachController ? '<button type="button" class="btn btn-outline btn-small" data-quality-action="stop-coach">검사 중지</button>' : ""}</div><details><summary>적용 중인 규칙·되돌리기</summary><ol>${list(
-    q.rules,
-  )
-    .map(
-      (item) => `<li>${esc(typeof item === "string" ? item : item.text)}</li>`,
-    )
-    .join("")}</ol><ul>${list(q.banExamples)
-    .map(
-      (item) => `<li>${esc(typeof item === "string" ? item : item.text)}</li>`,
-    )
-    .join(
-      "",
-    )}</ul>${q.rollbackSuggested ? '<p class="story-error">최근 평가가 낮아져 이전 규칙으로 되돌리기를 권합니다.</p>' : ""}${
-    versions.length > 1
-      ? `<label class="field"><span>이전 버전 선택 · 현재 ${Number(active.version)}번</span><select id="quality-rollback-version">${versions
-          .slice(0, -1)
-          .reverse()
-          .map(
-            (version) =>
-              `<option value="${Number(version.version)}">${Number(version.version)}번 · ${esc(version.appliedAt?.slice(0, 10) || "")}</option>`,
-          )
-          .join(
-            "",
-          )}</select></label><button type="button" class="btn btn-outline btn-small" data-quality-action="rollback">선택한 규칙 버전으로 되돌리기</button>`
-      : '<p class="story-note">제안을 승인하면 이전 규칙을 버전으로 보관합니다.</p>'
-  }</details><p id="quality-coach-status" class="story-note" role="status" aria-live="polite"></p></section>`;
 }
 export function renderStoryQualitySettings(state) {
   // R55a-2: the parent could not find the 작가실 switch in ③; it lives here too (the same stored setting).
@@ -622,76 +506,6 @@ export function cleanupStoryQualityUI() {
   coachController?.abort();
   coachController = null;
 }
-export async function maybeRunStoryQualityCoach({ force = false } = {}) {
-  if (!api?.isParent() || coachController) return;
-  // R54a: the weekly coach never runs on its own any more (its screen is gone; a forced run from code only).
-  if (!force) return;
-  const state = api.getState();
-  if (!force && !qualityWeeklyCoachDue(state)) return;
-  const q = quality(state),
-    recent = storyQualityBookRecords(state).filter(
-      (record) => Date.now() - Date.parse(record.createdAt) <= 7 * 86400000,
-    );
-  const controller = new AbortController();
-  coachController = controller;
-  const status = document.querySelector("#quality-coach-status");
-  if (status) status.textContent = "최근 승인한 이야기를 확인하고 있어요.";
-  try {
-    const engine =
-      recent.length >= 3 ? await api.getEngine?.("coach", q) : undefined;
-    if (!api.isParent() || api.getState() !== state)
-      throw new DOMException("부모 화면이 바뀌었어요.", "AbortError");
-    const result = await runQualityWeeklyCoach(state, {
-      engine,
-      signal: controller.signal,
-      force,
-      onProgress: (progress) => {
-        const element = document.querySelector("#quality-coach-status");
-        if (element) element.textContent = progress.message;
-      },
-    });
-    if (api.isParent() && api.getState() === state) {
-      state.settings.storyQuality.coachUsage = [
-        ...list(state.settings.storyQuality.coachUsage),
-        compactUsageRow({ at: new Date().toISOString(), ...result.usage, ...result.meta }),
-      ].slice(-50);
-      api.save();
-      if (force)
-        api.toast(
-          result.meta.skipped ||
-            "코치 제안을 받았어요. 적용할 항목을 골라 주세요.",
-        );
-    }
-  } catch (error) {
-    if (api.isParent() && api.getState() === state) {
-      if (error.usage) {
-        state.settings ||= {};
-        state.settings.storyQuality ||= {};
-        state.settings.storyQuality.coachUsage = [
-          ...list(state.settings.storyQuality.coachUsage),
-          {
-            at: new Date().toISOString(),
-            ...error.usage,
-            ...error.meta,
-            failed: true,
-          },
-        ].slice(-50);
-      }
-      api.save();
-    }
-    if (force && error.name !== "AbortError") displayError(error);
-  } finally {
-    if (coachController === controller) coachController = null;
-    if (
-      api.isParent() &&
-      api.getState() === state &&
-      (api.isSettings?.() ??
-        !!document.querySelector("#story-quality-settings"))
-    )
-      api.render();
-  }
-}
-export const checkDueQualityCoach = () => maybeRunStoryQualityCoach();
 export function configureStoryQualityUI(context) {
   api = context;
   if (context.qualityData) qualityData = context.qualityData;
@@ -808,14 +622,6 @@ export function configureStoryQualityUI(context) {
     const action = element.dataset.qualityAction;
     if (action === "world-topic") {
       void selectWorldTopic(element);
-      return;
-    }
-    if (action === "run-coach") {
-      void maybeRunStoryQualityCoach({ force: true });
-      return;
-    }
-    if (action === "stop-coach") {
-      cleanupStoryQualityUI();
       return;
     }
     try {

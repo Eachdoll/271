@@ -194,28 +194,7 @@ const pageName = (book, index) =>
 /* ---------- per-device mode ---------- */
 export const UI_MODE_KEY = "donghwa-ui-mode";
 export const UI_MODES = Object.freeze(["simple", "pro"]);
-/**
- * R55a (2026-11-03): one screen. The parent — "drop the simple/pro split".
- * The professional screens (the five-step wizard, the outline cards, the
- * prose and page editors, the three settings tabs) were the old path's
- * controls; the writers' room has nothing for them to edit. The mode is
- * always "simple" whatever a device stored; the stored key is ignored.
- */
-export function readUiMode() {
-  return "simple";
-}
-/** Store the mode on this device only; returns the mode actually in effect. */
-export function writeUiMode(mode, storage = globalThis.localStorage) {
-  const next = "simple";
-  try {
-    storage?.setItem(UI_MODE_KEY, next);
-  } catch {
-    /* Private windows may refuse storage; the mode still applies to this page. */
-  }
-  return next;
-}
-export const nextUiMode = () => "simple";
-
+/* R55b: the per-device mode helpers are gone; the app has one screen. */
 /* ---------- small helpers ---------- */
 const esc = (value) =>
   String(value ?? "").replace(

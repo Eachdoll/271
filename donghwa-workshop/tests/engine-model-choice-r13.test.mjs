@@ -16,7 +16,7 @@ import {
 import {fetchProviderModels, parseModelList, modelListRequest, supportsModelList} from '../dist/text-generation/model-list.js';
 import {createTextEngine} from '../dist/text-generation/providers.js';
 import {
-  getTextGenerationSettings, renderTextEngineQuick, renderTextSettings, simpleTextModelValue,
+  getTextGenerationSettings, renderTextEngineQuick, simpleTextModelValue,
   simpleTextModelOptions, applySimpleTextModel, SIMPLE_TEXT_MODEL_NOTE,
 } from '../dist/text-generation/settings-ui.js';
 import {
@@ -403,19 +403,9 @@ test('R13 simple settings: 공급자 + one 모델 select for text and pictures, 
   assert.doesNotMatch(renderImageEngineQuick(state), /ig-google-pro/, 'the model select replaced the Pro checkbox');
 });
 
-test('R13 pro settings: medium/upper list catalog + fetched + typed with a list button; World image settings get a model select', () => {
+test('R13 the stored stage models survive; World image settings get a model select (R55b: the pro text tab is gone)', () => {
   const {state} = setup();
   state.settings.textGeneration = {engine: 'openai', providers: {openai: {fetchedModels: {fetchedAt: '2026-10-19T00:00:00.000Z', models: [{id: 'gpt-5.5-mini'}]}, customModels: ['my-tuned:v2'], stageModels: {medium: 'gpt-5.5-mini', upper: 'gpt-6-astra'}}}};
-  const html = renderTextSettings(state);
-  assert.match(html, /data-text-field="medium"/);
-  assert.match(html, /data-text-field="upper"/);
-  assert.match(html, /<optgroup label="추천 목록 · 요금 확인 2026-10-15">/);
-  assert.match(html, /<optgroup label="불러온 목록 · 2026-10-19">/);
-  assert.match(html, /<optgroup label="직접 입력한 모델">/);
-  assert.match(html, /<option value="gpt-5\.5-mini" selected>gpt-5\.5-mini · 목록에 없는 모델/);
-  assert.match(html, /data-text-setting="fetch-models"/);
-  assert.match(html, /목록에 없는 모델 · 요금 정보 없음/);
-  assert.match(html, /일부 요금 미확인/);
   assert.equal(getTextGenerationSettings(state).providers.openai.stageModels.medium, 'gpt-5.5-mini');
   updateWorldGenerationSettings(state, {imageEngine: 'google'});
   const image = renderImageSettings(state);

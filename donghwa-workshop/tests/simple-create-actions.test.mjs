@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview, renderFullAutoJobs} from '../dist/full-auto-ui.js';
+import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, renderFullAutoJobs} from '../dist/full-auto-ui.js';
 import {createFullAutoJob, estimateFullAutoCost, runFullAuto} from '../dist/full-auto.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
 import {normalizeStoryInput} from '../dist/story-generation/pipeline.js';
@@ -711,15 +711,6 @@ test('이어 만들 이야기: a FULL AUTO draft opens its job review and is nev
   assert.deepEqual(assets(job.book), before, 'every paid picture is still on the book');
   assert.equal(imageRecords(job), usage);
   assert.ok(job.book.pages.every(p => p.imageMeta?.quality === 'final'));
-  // The pro route goes where the library card goes: the editor for a finished book.
-  const reviewed = [];
-  configureFullAutoUI({...fullAutoCtx, openReview: async j => { reviewed.push(j.id); }});
-  try {
-    await openFullAutoReview(job.id);
-  } finally {
-    configureFullAutoUI(fullAutoCtx);
-  }
-  assert.deepEqual(reviewed, [job.id]);
   assert.equal(job.book, book);
   assert.equal(networkCalls, 0);
 });

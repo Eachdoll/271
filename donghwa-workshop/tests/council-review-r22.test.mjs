@@ -7,7 +7,7 @@ import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {createFullAutoJob, runFullAuto, COUNCIL_REVIEW_STATUS, COUNCIL_REVIEW_PHASE, fullAutoProgress} from '../dist/full-auto.js';
-import {renderFullAutoLauncher, renderFullAutoJobs, redirectCouncil} from '../dist/full-auto-ui.js';
+import {renderFullAutoJobs, redirectCouncil} from '../dist/full-auto-ui.js';
 import {estimateCouncilCost} from '../dist/text-generation/models.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
 import {demoSceneBriefs} from '../dist/story-generation/scene-briefs.js';
@@ -166,11 +166,9 @@ test('R22 방향 고쳐 다시 회의: the direction moves onto the input, the m
   assert.deepEqual(estimateCouncilCost(null), {costUsd: 0, pricingUnknown: false});
 });
 
-test('R22 the pro launcher offers the option, the job cards name the parked meeting, the simple library opens it', () => {
-  const {state, wizard} = setup();
-  assert.match(renderFullAutoLauncher(state, wizard), /id="full-auto-council-review" type="checkbox" role="switch"[^>]* checked>/u);
+test('R22 the job cards name the parked meeting, the simple library opens it (R55b: the pro launcher is gone)', () => {
+  const {state} = setup();
   state.settings.councilReview = false;
-  assert.match(renderFullAutoLauncher(state, wizard), /id="full-auto-council-review" type="checkbox" role="switch"[^>]*>/u);
   const job = {id: 'auto-r22', status: COUNCIL_REVIEW_STATUS, phase: COUNCIL_REVIEW_PHASE, stopBefore: null, input: {topic: '달토끼', pageCount: 12, councilPolicy: {version: 1}}, wizard: {topic: '달토끼'}, usage: {calls: []}, imageUsage: {}, notes: [], completed: {}, councilCheckpoint: {record: parkedRecord()}, updatedAt: '2026-10-20T00:00:00Z'};
   state.fullAutoJobs = {[job.id]: job};
   const pro = renderFullAutoJobs(state);

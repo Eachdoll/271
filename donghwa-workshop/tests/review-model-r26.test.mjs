@@ -7,7 +7,7 @@ import {seedState} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
 import {resolveStoryStageSettings, estimateStoryTextCost, freezeReviewTier, reviewTierOf} from '../dist/text-generation/models.js';
-import {getTextGenerationSettings, renderTextSettings} from '../dist/text-generation/settings-ui.js';
+import {getTextGenerationSettings} from '../dist/text-generation/settings-ui.js';
 import {createFullAutoJob, estimateFullAutoCost} from '../dist/full-auto.js';
 import {reviewStoryCoherence, normalizeStoryInput} from '../dist/story-generation/pipeline.js';
 import {demoOutline} from '../dist/story-generation/demo.js';
@@ -109,8 +109,7 @@ test('R26 ③ shows the switch in the folded engine/cost details; locked on a jo
   job.status = 'paused';
   const locked = renderSimpleCreate(ctx(ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 3, simpleJobId: job.id})));
   assert.doesNotMatch(locked, /simple-review-switch/u);
-  assert.match(renderTextSettings(state), /<input id="tg-review-upper" type="checkbox" > 검사는 최고 모델로/u);
+  // R55b: the pro text tab is gone; the stored tier still reads through the settings.
   state.settings.textGeneration = {...state.settings.textGeneration, reviewTier: 'upper'};
-  getActiveWorld(state).textGeneration = {...getActiveWorld(state).textGeneration, reviewTier: 'upper'};
-  assert.match(renderTextSettings(state), /<input id="tg-review-upper" type="checkbox" checked> 검사는 최고 모델로/u);
+  assert.equal(getTextGenerationSettings(state).reviewTier, 'upper');
 });
