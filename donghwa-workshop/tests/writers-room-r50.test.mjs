@@ -73,7 +73,7 @@ test('R50 the requests: premises hear the menu as a menu; drafts are whole books
   assert.match(p.system, /이 책에만 나오는 새 인물은 자유롭게/);
   assert.equal(p.user, W.roomBrief(input, {records: RECORDS}));
   assert.equal(p.jsonSchema.properties.premises.minItems, 12);
-  assert.deepEqual(p.jsonSchema.properties.premises.items.properties.cast.items.required, ['name', 'isNew', 'want', 'flaw', 'speech']);
+  assert.deepEqual(p.jsonSchema.properties.premises.items.properties.cast.items.required, ['name', 'isNew', 'want', 'flaw', 'speech', 'nameEn', 'kind', 'look'], 'R54f: a new character also brings its card');
   assert.equal(p.temperature, 1);
   const premise = {title: '파마 날', line: '보라의 가게에서 유하의 머리가 자꾸 다른 모양이 돼요', engine: 'three_then_flip', laugh: '엄마 머리가 먼저 뽀글이 돼요', picture: '거울 앞 세 사람', cast: [{name: '보라', isNew: true, want: '오늘은 쉬고 싶다', flaw: '손이 빠르다', speech: '손님에게 존댓말'}]};
   const d = W.draftRequest(input, premise);

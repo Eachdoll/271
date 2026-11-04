@@ -243,13 +243,17 @@ const PREMISE_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["name", "isNew", "want", "flaw", "speech"],
+              required: ["name", "isNew", "want", "flaw", "speech", "nameEn", "kind", "look"],
               properties: {
                 name: { type: "string", maxLength: 30 },
                 isNew: { type: "boolean" },
                 want: { type: "string", maxLength: 100 },
                 flaw: { type: "string", maxLength: 100 },
                 speech: { type: "string", maxLength: 100 },
+                // R54f: a new character's card for the drawer — "" for the parent's own characters.
+                nameEn: { type: "string", maxLength: 30 },
+                kind: { type: "string", maxLength: 24 },
+                look: { type: "string", maxLength: 160 },
               },
             },
           },
@@ -261,7 +265,7 @@ const PREMISE_SCHEMA = {
 export function premisesRequest(input, { records = [] } = {}) {
   const brief = roomBrief(input, { records });
   return {
-    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
+    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 크기·색·털이나 머리·옷·눈에 띄는 것 하나)도 적어요; 부모님 인물은 셋 다 빈 문자열). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
     user: brief,
     jsonSchema: PREMISE_SCHEMA,
     temperature: 1,
@@ -567,7 +571,7 @@ const asPitch = (premise, n, row) => ({
   engine: str(premise?.engine, 40),
   laugh: str(premise?.laugh, 200),
   picture: str(premise?.picture, 200),
-  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100) })),
+  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100), ...(c.isNew === true && str(c.look, 160) ? { nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160) } : {}) })),
   ...(row ? { pull: row.pull, laughed: row.laughed, curious: row.curious, again: row.again, lost: row.lost, words: row.words } : {}),
 });
 /**
@@ -910,12 +914,61 @@ export function clampPages(pages, bounds = null) {
   return rows;
 }
 /** The cheap call that reads the finished book and returns what the pictures need: who, where, the action, a feeling, the hour, props, the beat. */
+/* ---------- R54f: a drawer card for every new character the room invented ---------- */
+/**
+ * The chosen premise's new characters (isNew, with a look) that have no drawer
+ * card yet — by name against input.characters. Without a card the pictures
+ * draw them from the page text alone and their look drifts page to page.
+ */
+export function roomNewCast(outline, input) {
+  const known = new Set(list(input?.characters).filter(object).flatMap((c) => [str(c.name, 30), str(c.nameEn, 30)]).filter(Boolean));
+  const seen = new Set();
+  return list(outline?.writersRoom?.premise?.cast)
+    .filter((c) => object(c) && c.isNew === true && str(c.name, 30) && str(c.look, 160))
+    .filter((c) => {
+      const name = str(c.name, 30);
+      if (known.has(name) || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    })
+    .map((c) => ({ name: str(c.name, 30), nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160), want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100) }));
+}
+const KIND_WORDS = Object.freeze({ child: "child", kid: "child", boy: "child", girl: "child", adult: "adult", man: "adult", woman: "adult", grandma: "adult", grandpa: "adult", teacher: "adult" });
+/** The drawer record of one new character — the shape materializeAutoPlan gives a plan's new companion (its sheet is bought like theirs). */
+export function roomCastRecord(c, { id, jobId, now = new Date().toISOString() } = {}) {
+  const kindWord = str(c?.kind, 24).toLowerCase().replace(/[^a-z]/g, "");
+  return {
+    id: String(id || ""),
+    name: str(c?.name, 30),
+    nameEn: str(c?.nameEn, 30) || str(c?.name, 30),
+    role: "조연",
+    kind: KIND_WORDS[kindWord] || kindWord || "friend",
+    gender: "",
+    description: str(c?.look, 160),
+    traits: [str(c?.want, 100), str(c?.flaw, 100)].filter(Boolean).slice(0, 2),
+    catchphrase: "",
+    version: 1,
+    color: "#a8bb91",
+    appearance: str(c?.look, 160),
+    clothes: "",
+    hairColor: "#493b34",
+    skinColor: "#edceb3",
+    wardrobe: [],
+    characterSheets: [],
+    source: "writers-room",
+    autoRunId: String(jobId || ""),
+    autoReviewPending: true,
+    createdAt: now,
+  };
+}
 export function extractRequest(input, outline, pages) {
   const count = list(pages).length,
     cast = list(input?.characters).filter(object).map((c) => `${c.id} = ${str(c.name, 30)}${c.nameEn ? ` (${str(c.nameEn, 30)})` : ""}`).join(", "),
     places = list(input?.backgrounds).filter(object).map((b) => `${b.id} = ${str(b.name, 30)}`).join(", "),
     beats = list(outline?.beats).filter(object).map((b) => `${b.index}: ${str(b.summary || b.title, 200)}`).join("\n"),
-    extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter(Boolean);
+    // R54f: a new character that got a drawer card (roomNewCast → FULL AUTO) is in the cast list by ID.
+    known = new Set(list(input?.characters).filter(object).flatMap((c) => [str(c.name, 30), str(c.nameEn, 30)]).filter(Boolean)),
+    extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter((n) => n && !known.has(n));
   return {
     system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: beatIndex (which approved beat this page belongs to; pages run in order through the beats), who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English). Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}\n[beats]\n${beats || "(none)"}`,
     user: list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}`).join("\n"),
