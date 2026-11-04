@@ -882,6 +882,8 @@ function demoResult(stage, data, input) {
 }
 const demo = (options) =>
   options.engineId === "demo" || options.engine?.id === "demo";
+/** R54d: the writers' room's drafts/pages stages (run from FULL AUTO without a services object) resolve engines through the pipeline too. */
+export const roomServices = () => qualityServices();
 const qualityServices = () => ({
   engineFor,
   complete,

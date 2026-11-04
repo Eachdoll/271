@@ -18,7 +18,9 @@ import { StoryValidationError } from "./schemas.js";
 import { ROOM_PHASES } from "./council-room.js";
 import { checkStory } from "./checker.js";
 import { leanLevelLine } from "./prompt-diet.js";
-import { acceptEcoPagination, inspectStory } from "./pipeline.js";
+import { acceptEcoPagination, inspectStory, roomServices } from "./pipeline.js";
+/** R54d: a caller without an engine resolver (FULL AUTO) gets the pipeline's — the same one the room's premises stage uses. */
+const withEngines = (services) => (typeof services?.engineFor === "function" ? services : { ...roomServices(), ...(services || {}) });
 export { ROOM_PHASES };
 export const WRITERS_ROOM_VERSION = 1;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
@@ -656,6 +658,7 @@ const DRAFT_PROGRESS = Object.freeze({
  * Journaled under writerCheckpoint; a resumed run replays and buys nothing.
  */
 export async function runRoomDrafts(input, outline, options = {}, services = {}) {
+  services = withEngines(services);
   const premise = outline?.writersRoom?.premise;
   if (!object(premise)) throw new StoryValidationError("prose", ["작가실이 고른 전제가 없어요. 줄거리 단계부터 다시 만들어 주세요."]);
   const journal = ledger("roomDrafts", input, options, { version: WRITERS_ROOM_VERSION, premise }, "writerCheckpoint");
@@ -902,6 +905,7 @@ export function settleExtraction(raw, input, outline, pages, title) {
  * count follows the book (the caller updates its frozen input).
  */
 export async function runRoomPages(input, outline, draft, options = {}, services = {}) {
+  services = withEngines(services);
   if (!list(draft?.pages).length) throw new StoryValidationError("pagination", ["작가실 글이 없어요. 초고 단계부터 다시 만들어 주세요."]);
   // R54b: an openings book keeps its printed count (12 or 16) and takes C..2C
   // entries; a page book's count follows the writer (nearest binding).

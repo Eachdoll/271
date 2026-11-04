@@ -158,3 +158,28 @@ test('R54c the shelf\'s diversity line counts the engines, laughs, new companion
   const leaning = W.roomDiversityLine([book('three_then_flip', 'a', 'p', false), book('reader_knows', 'b', 'q', false), book('three_then_flip', 'c', 'r', false)]);
   assert.match(leaning, /최근 넉 권에 '되풀이 셋·넷째 뒤집기'이 두 번$/);
 });
+
+/* ---------- R54d (2026-11-04): FULL AUTO passes no services to the drafts and pages stages ---------- */
+test('R54d the room\'s drafts and pages stages resolve their engines through the pipeline when the caller (FULL AUTO) passes no services', async () => {
+  // The paid A/B run stopped at 초고 쓰기 with "services.engineFor is not a function": FULL AUTO calls
+  // ops.roomDrafts(input, outline, opts) with the step's text options only, as it calls generateOutline.
+  const input = roomInput(), outline = roomOutline(input);
+  const calls = [];
+  const engine = {id: 'openai', async complete(r) {
+    calls.push(r);
+    const schema = r.jsonSchema?.properties || {};
+    if (schema.readings) return reply({readings: [{draft: 1, pages: [{page: 1, laughed: ['action'], curious: ['heart'], lost: [], bored: []}], again: ['ours'], word: '또'}, {draft: 2, pages: [], again: [], word: ''}, {draft: 3, pages: [], again: [], word: ''}]});
+    if (schema.pages && r.system.includes('return, for every page')) {
+      const n = Number(schema.pages.minItems);
+      return reply({cover: {title: '파마 날!', sceneAction: 'Yuha in the salon chair.'}, pages: Array.from({length: n}, (_, i) => ({pageNo: i + 1, beatIndex: 1, who: ['yuha'], where: 'the salon', action: `page ${i + 1}`, emotion: 'curious', timeOfDay: 'day', props: ['mirror']}))});
+    }
+    return reply({title: '파마 날!', pages: Array.from({length: 11}, (_, i) => page(i + 1))});
+  }};
+  // The step's options as FULL AUTO builds them: a role selection per quality role, no services object.
+  const opts = {engineId: 'openai', config: {}, createTextEngine: () => engine, qualityEngines: {outline: {engineId: 'openai', config: {}, createTextEngine: () => engine}, prose: {engineId: 'openai', config: {}, createTextEngine: () => engine}, cheap: {engineId: 'openai', config: {}, createTextEngine: () => engine}}, roomDraftCount: 1, roomRewrite: false, roomPolish: false};
+  const drafts = await W.runRoomDrafts(input, outline, opts);
+  assert.equal(drafts.data.pages.length, 11);
+  const pages = await W.runRoomPages(input, outline, drafts.data, opts);
+  assert.equal(pages.meta.pageCount, 16);
+  assert.ok(calls.length >= 2, 'the writer and the extraction ran without a services object');
+});
