@@ -3181,7 +3181,7 @@ ${paginationRules(input).split("\n").slice(3).join("\n")}`;
  */
 function settleOpenings(data, outline, input, options) {
   const plan = buildOpeningPlan(outline, input.pageCount / 2),
-    fixed = normalizeOpenings(data?.pages, plan, input.specs),
+    fixed = normalizeOpenings(data?.pages, plan, input.specs, { mixGuard: options.roomBinding !== true }),
     next = {
       ...clone(data || {}),
       pages: fixed.pages,

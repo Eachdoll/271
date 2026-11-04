@@ -264,11 +264,12 @@ export function validateQualityPatternCards(cards) {
   }
   return { valid: errors.length === 0, errors };
 }
-function roleFields(state, role) {
+function roleFields(state, role, roomOn = false) {
   const q = quality(state),
     resolved = resolveQualityStageSettings(
       getTextGenerationSettings(state),
-      role,
+      // R54e: with the room on, the author row shows the room's writer (upper on every provider).
+      role === "outline" && roomOn ? "writer" : role,
       q,
     ),
     explicit = q.engines?.[role] || {},
@@ -300,7 +301,7 @@ export function renderStoryQualitySettings(state) {
   // R55a-2: the parent could not find the 작가실 switch in ③; it lives here too (the same stored setting).
   // R54c: on by default; only `false` is stored.
   const roomOn = state?.settings?.textGeneration?.writersRoom !== false;
-  return `<section class="panel" id="story-quality-settings"><h3>글 모델</h3><p class="section-sub">작가실이 쓰는 모델 둘이에요. 이야기의 모양·길이·끝은 작가실이 정하고, 등급과 언어는 '우리 아이' 설정을 써요.</p><form id="story-quality-form">${renderCheckboxSwitch({ id: "quality-writers-room", label: "작가실로 만들기", description: "작가가 전제 열두 개를 내고 독자 여섯이 듣고 부모님이 셋 중 하나를 골라요. 초고 3권을 통째로 쓰고 고쳐 써요. 글 요금이 늘어요. 켜면 다음 새 이야기부터예요.", checked: roomOn, className: "quality-toggle quality-writers-room" })}<div class="quality-role-grid">${SHOWN_ROLES.map((role) => roleFields(state, role)).join("")}</div><div class="form-actions"><button type="submit" class="btn btn-green">모델 저장</button></div><p id="quality-settings-error" class="pin-error" aria-live="polite"></p></form></section>`;
+  return `<section class="panel" id="story-quality-settings"><h3>글 모델</h3><p class="section-sub">작가실이 쓰는 모델 둘이에요. 이야기의 모양·길이·끝은 작가실이 정하고, 등급과 언어는 '우리 아이' 설정을 써요.</p><form id="story-quality-form">${renderCheckboxSwitch({ id: "quality-writers-room", label: "작가실로 만들기", description: "작가가 전제 열두 개를 내고 독자 여섯이 듣고 부모님이 셋 중 하나를 골라요. 초고 3권을 통째로 쓰고 고쳐 써요. 글 요금이 늘어요. 켜면 다음 새 이야기부터예요.", checked: roomOn, className: "quality-toggle quality-writers-room" })}<div class="quality-role-grid">${SHOWN_ROLES.map((role) => roleFields(state, role, roomOn)).join("")}</div><div class="form-actions"><button type="submit" class="btn btn-green">모델 저장</button></div><p id="quality-settings-error" class="pin-error" aria-live="polite"></p></form></section>`;
 }
 function readSettings(form, state) {
   const q = quality(state),

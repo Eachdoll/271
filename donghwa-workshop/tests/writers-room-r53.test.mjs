@@ -90,7 +90,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
 test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat writers, no pagination request); a parked room owes nothing for the premises and the panel; a demo job keeps the old path', () => {
   const settings = {engine: 'openai'};
   const room = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true});
-  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'outline', 'roomDrafts', 'roomRead', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages', 'revision']);
+  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'outline', 'roomDrafts', 'roomRead', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages'], 'R54e: no read-through row — the room pages skip it');
   assert.equal(room.stages.find((s) => s.stage === 'roomDrafts').requestCount, 3);
   assert.equal(room.room, true);
   const plain = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, council: true, orchestration: true});

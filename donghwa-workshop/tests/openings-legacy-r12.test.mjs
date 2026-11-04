@@ -884,7 +884,7 @@ const PINS = {
   // 한 화면 (R55a): ③ of a new story loses the four legacy switches (회의 후 부모
   // 확인·검사는 최고 모델로·정성 모드·승인 예시 더 참고) and the 에코 모드 button;
   // every other group is unchanged (dump-diffed against 9afba2b). 9afba2b: ab2740aa…4dee.
-  review: '7ba913c1be9a768f1361e0370d7862c681d3b6e96f6f18332a2e956513ac522c',
+  review: '23293f61c950bd4749a0a82fe718a73ebbccfbcbfb3f4ca00058758f35bc822d',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -928,7 +928,7 @@ const PINS = {
   // a third (K1 12쪽 $0.450 → $0.244; K2 16쪽 $1.284 → $0.752; request counts
   // the same); jobs without the policy are the same (dump-diffed against
   // b928880). b928880: 8b673b90…1736.
-  estimates: '0b22d8c1a7daea6b5783941bfc56c96c32c36ee7f3aa070a2ec3039865536727',
+  estimates: 'c952c1edb7d74c1ca20f4580bfda473aa7669ede77ff2b50daf3130b7442541f',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

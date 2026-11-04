@@ -1080,7 +1080,8 @@ export async function runFullAuto(
             ? demoEngine()
             : resolveQualityStageSettings(
                 job.textSettings,
-                role,
+                // R54e: a writers' room job's author (the "outline" role) is the upper model on every provider.
+                role === "outline" && hasWritersRoom(job.input) && !job.demo ? "writer" : role,
                 job.input.storyQuality || {},
               ),
         ]).concat(

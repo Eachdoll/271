@@ -27,9 +27,16 @@ const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'],
 const roomState = () => { const s = setup(); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: true}; return s; };
 const premise = (n) => ({title: `전제 ${n}`, line: `${n}번째 이야기: 유하의 머리가 ${n}번 바뀌어요`, engine: n % 2 ? 'three_then_flip' : 'reader_knows', laugh: `엄마 머리가 ${n}번 먼저 뽀글이 돼요`, picture: `거울 앞 ${n}명`, cast: [{name: '보라', isNew: true, want: '쉬고 싶다', flaw: '손이 빠르다', speech: '손님에게 존댓말'}]});
 const PREMISES = {premises: Array.from({length: 12}, (_, i) => premise(i + 1))};
-const r = (laughed, curious, lost, again) => ({laughed, curious, lost, again, word: laughed ? '깔깔' : ''});
-const quiet = r(false, false, false, false);
-const REACTIONS = {reactions: Array.from({length: 12}, (_, i) => ({premise: i + 1, action: i === 6 ? r(true, true, false, true) : i === 2 ? r(true, false, false, true) : quiet, laugh: i === 6 || i === 2 || i === 9 ? r(true, true, false, true) : quiet, heart: i === 6 ? r(false, true, false, true) : quiet, eye: quiet, ours: i === 9 ? r(true, false, false, false) : quiet, parent: i === 6 ? r(true, true, false, true) : quiet}))};
+// R54e: six readers, three ranked picks each — premise 7 leads (17), then 3 (10), then 10 (8).
+const pick = (premise, why, word = '') => ({premise, why, word});
+const REACTIONS = {readers: [
+  {reader: 'action', picks: [pick(7, 'laugh', '깔깔'), pick(3, 'curious'), pick(10, 'again')]},
+  {reader: 'laugh', picks: [pick(7, 'laugh'), pick(3, 'laugh'), pick(10, 'laugh')]},
+  {reader: 'heart', picks: [pick(7, 'heart'), pick(10, 'curious'), pick(3, 'again')]},
+  {reader: 'eye', picks: [pick(7, 'again'), pick(3, 'curious'), pick(1, 'heart')]},
+  {reader: 'ours', picks: [pick(10, 'again'), pick(7, 'laugh'), pick(3, 'laugh')]},
+  {reader: 'parent', picks: [pick(7, 'curious'), pick(3, 'again'), pick(10, 'curious')]},
+]};
 const reply = (json) => ({json, usage: {input: 10, output: 5}, meta: {requests: 1, model: 'mock'}});
 /** A mock engine that answers by what the request asks for; it counts its calls. */
 function mockEngine(input, calls) {
@@ -37,7 +44,7 @@ function mockEngine(input, calls) {
     calls.push(req);
     const schema = req.jsonSchema?.properties || {};
     if (schema.premises) return reply(PREMISES);
-    if (schema.reactions) return reply(REACTIONS);
+    if (schema.readers) return reply(REACTIONS);
     const o = structuredClone(demoOutline(input));
     o.beats[1].summary += ' 유하의 뽀글머리가 거울에 비쳐요.';
     return reply(o);
@@ -75,8 +82,8 @@ test('R51 the room runs: premises (top model) → the panel (cheap) → a counte
   assert.equal(held.kind, 'writersRoom');
   assert.equal(held.phase, 'review');
   assert.equal(held.premises.length, 12);
-  assert.deepEqual(held.shortlist, [7, 3, 10], 'counted: premise 7 pulls most (11), then 3 (5), then 10 (4)');
-  assert.deepEqual(held.pitches.map((p) => [p.title, p.laughed, p.again]), [['전제 7', 3, 4], ['전제 3', 2, 2], ['전제 10', 2, 1]]);
+  assert.deepEqual(held.shortlist, [7, 3, 10], 'counted: premise 7 pulls most (17), then 3 (10), then 10 (8)');
+  assert.deepEqual(held.pitches.map((p) => [p.title, p.laughed, p.again]), [['전제 7', 3, 1], ['전제 3', 2, 2], ['전제 10', 1, 2]]);
   assert.equal(held.recommended, 1);
   assert.deepEqual(progress.filter((p) => p.stage === 'council').map((p) => p.phase), ['premises', 'panel', 'review']);
   // The screens: the room panel while held, the premise form with the R22 names, the folded block afterwards.
