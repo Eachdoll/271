@@ -309,6 +309,7 @@ async function runEngine(engine) {
     draft,
     pages,
     measured,
+    spreadFit: job.spreadFit || null,
     coverage: pages.length ? castCoverage(pages, job.input, extraNames) : [],
     style: pages.length ? styleReport(pages.map((p) => p.textKo), { names: [...(job.input.characters || []).map((c) => c.name), ...extraNames] }) : null,
     usage: usageSummary(job),
@@ -348,7 +349,7 @@ function engineReport(r) {
     L.push("", "## 2부 · 초고 셋, 독자단 읽기, 고쳐쓰기, 영어판", "");
     L.push(`- 초고: ${(d.drafts || []).map((x, i) => `${i + 1}. '${x.title}' ${x.pages}쪽`).join(" / ")}`);
     L.push(`- 독자단 읽기: ${(d.rows || []).map((x) => `${x.draft}번 웃음 ${x.laughed}·궁금 ${x.curious}·모름 ${x.lost}·또 ${x.again}${x.boredPages?.length ? ` 지루 ${x.boredPages.join(",")}쪽` : ""}${x.lostPages?.length ? ` 모름 ${x.lostPages.join(",")}쪽` : ""}`).join(" / ")} → ${d.chosen}번`);
-    L.push(`- 고쳐쓰기 ${d.rewritten ? "함" : "안 함"} · 영어판 ${d.english ? "씀" : "없음"} · 등급 참고 ${(d.levelNotes || []).length}건 → 다듬기 ${d.polished ? `함 (남은 ${(d.levelNotesAfter || []).length}건)` : "안 함"}`);
+    L.push(`- 고쳐쓰기 ${d.rewritten ? `함${d.rewriteChange ? ` (${d.rewriteChange.after}쪽 중 ${d.rewriteChange.changed}쪽 손봄)` : ""}` : d.rewriteSkipped ? "고칠 곳 없어 건너뜀" : "안 함"} · 영어판 ${d.english ? "씀" : "없음"} · 등급 참고 ${(d.levelNotes || []).length}건 → 다듬기 ${d.polished ? `함 (남은 ${(d.levelNotesAfter || []).length}건)` : "안 함"}`);
     if (d.notes) L.push("", "### 고쳐쓰기 메모 (독자단 반응을 정리한 것)", "", "```", d.notes, "```");
     if ((d.levelNotes || []).length) L.push("", "### 등급 참고", "", ...d.levelNotes.map((n) => `- ${cell(typeof n === "string" ? n : n.message || JSON.stringify(n))}`));
   }
@@ -391,7 +392,8 @@ function compareReport(results) {
   row("채택 전제", (r) => (r.room?.premise ? `'${r.room.premise.title}' · ${engineName(r.room.premise.engine)}` : "-"));
   row("초고 쪽수", (r) => (r.draft?.room?.drafts || []).map((d) => d.pages).join(" / ") || "-");
   row("독자단이 고른 초고", (r) => r.draft?.room?.chosen ?? "-");
-  row("고쳐쓰기 / 영어판 / 다듬기", (r) => (r.draft?.room ? `${r.draft.room.rewritten ? "함" : "안 함"} / ${r.draft.room.english ? "씀" : "없음"} / ${r.draft.room.polished ? "함" : "안 함"}` : "-"));
+  row("고쳐쓰기 / 영어판 / 다듬기", (r) => (r.draft?.room ? `${r.draft.room.rewritten ? `함${r.draft.room.rewriteChange ? ` (${r.draft.room.rewriteChange.changed}/${r.draft.room.rewriteChange.after}쪽)` : ""}` : r.draft.room.rewriteSkipped ? "건너뜀" : "안 함"} / ${r.draft.room.english ? "씀" : "없음"} / ${r.draft.room.polished ? "함" : "안 함"}` : "-"));
+  row("펼침 표시 맞춤", (r) => (r.spreadFit ? `표시 ${r.spreadFit.marks} · ${r.spreadFit.fitted ? "맞음" : "못 맞춤"}` : "-"));
   row("등급 참고 (다듬기 전 → 후)", (r) => (r.draft?.room ? `${(r.draft.room.levelNotes || []).length} → ${(r.draft.room.levelNotesAfter || []).length}` : "-"));
   row("최종 항목(펼침면)", (r) => (r.measured ? `${r.measured.totals.pages} (${r.measured.totals.spreads})` : "-"));
   row("한글 문장 / 어절 / 문장당", (r) => (r.measured ? `${r.measured.totals.sentences} / ${r.measured.totals.eojeol} / ${r.measured.totals.averageEojeol}` : "-"));

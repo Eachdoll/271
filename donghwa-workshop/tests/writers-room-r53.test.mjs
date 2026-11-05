@@ -52,7 +52,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
   const outline = {...demoOutline(input), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [{title: '파마 날'}], premises: [PREMISE]}};
   const draft = {title: '파마 날!', language: 'dual', pages: Array.from({length: 10}, (_, i) => ({pageNo: i + 1, ...page(i + 1)}))};
   const req = W.extractRequest(input, outline, draft.pages);
-  assert.match(req.system, /\[cast\] yuha = 유하 \(Yuha\), mom = 엄마 \(Mom\)/);
+  assert.match(req.system, /\[cast\] yuha = 유하 \(Yuha\) — boy, he, mom = 엄마 \(Mom\) — woman, she/);
   assert.match(req.system, /보라 are new to this book and have no ID/);
   assert.match(req.system, /\[beats\]\n1: /);
   assert.equal(req.jsonSchema.properties.pages.minItems, 10, 'the request itself takes what it is given');

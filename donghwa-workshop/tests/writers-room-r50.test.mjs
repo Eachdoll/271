@@ -115,7 +115,7 @@ test('R50 the requests: premises hear the menu as a menu; drafts are whole books
   assert.match(W.panelPremisesRequest(input, [premise]).system, /점수가 아니라 고름이에요/);
   // The panel reads drafts page by page; the notes name the pages that dragged, lost or landed.
   // R54e: each reader names a favourite, the page to skip, the page nobody could follow and the pages that landed.
-  const dr = (draft, skipPage, lostPage, laughPages, word = '') => ({draft, skipPage, lostPage, laughPages, word});
+  const dr = (draft, skipPage, lostPage, laughPages, change = '') => ({draft, skipPage, lostPage, laughPages, change});
   const readings = {readers: [
     {reader: 'action', favorite: 1, again: true, drafts: [dr(1, 3, 3, [2], '또!'), dr(2, 1, 0, [])]},
     {reader: 'laugh', favorite: 1, again: true, drafts: [dr(1, 3, 0, [2]), dr(2, 1, 0, [])]},
@@ -128,7 +128,7 @@ test('R50 the requests: premises hear the menu as a menu; drafts are whole books
   assert.deepEqual(read.map((x) => [x.draft, x.votes, x.again, x.pull]), [[1, 5, 3, 5 * 4 + 3 * 2 + 1 - 1 - 1], [2, 1, 0, 1 * 4 + 0 + 0 - 1 - 0]]);
   assert.deepEqual([read[0].boredPages, read[0].lostPages, read[0].laughPages], [[3], [3], [2]]);
   assert.equal(W.pickDraft(read), 1);
-  assert.equal(W.rewriteNotes(read[0]), '넘기고 싶어한 쪽: 3 — 줄이거나 사건을 넣어요.\n무슨 말인지 모른 쪽: 3 — 아이가 따라올 수 있게 보여 줘요.\n웃은 쪽: 2 — 숨 쉴 자리를 주고 건드리지 않아요.\n한마디: 또!');
+  assert.equal(W.rewriteNotes(read[0]), '넘기고 싶어한 쪽: 3 — 줄이거나 사건을 넣어요.\n무슨 말인지 모른 쪽: 3 — 아이가 따라올 수 있게 보여 줘요.\n웃은 쪽: 2 — 숨 쉴 자리를 주고 건드리지 않아요.\n바꾸고 싶은 것: 또!');
   const rw = W.rewriteRequest(input, {title: '파마 날', pages: [{ko: '싹둑.'}]}, W.rewriteNotes(read[0]));
   assert.match(rw.user, /\[독자 반응\]\n넘기고 싶어한 쪽: 3/);
   assert.match(rw.user, /=== 초고 · 파마 날 ===\n1쪽: 싹둑\./);

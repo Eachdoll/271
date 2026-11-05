@@ -168,7 +168,7 @@ test('R54d the room\'s drafts and pages stages resolve their engines through the
   const engine = {id: 'openai', async complete(r) {
     calls.push(r);
     const schema = r.jsonSchema?.properties || {};
-    if (schema.readers) return reply({readers: ['action', 'laugh', 'heart', 'eye', 'ours', 'parent'].map((reader) => ({reader, favorite: 1, again: reader === 'ours', drafts: [{draft: 1, skipPage: 1, lostPage: 0, laughPages: [1], word: '또'}]}))});
+    if (schema.readers) return reply({readers: ['action', 'laugh', 'heart', 'eye', 'ours', 'parent'].map((reader) => ({reader, favorite: 1, again: reader === 'ours', drafts: [{draft: 1, skipPage: 1, lostPage: 0, laughPages: [1], change: '또'}]}))});
     if (schema.pages && r.system.includes('return, for every page')) {
       const n = Number(schema.pages.minItems);
       return reply({cover: {title: '파마 날!', sceneAction: 'Yuha in the salon chair.'}, pages: Array.from({length: n}, (_, i) => ({pageNo: i + 1, beatIndex: 1, who: ['yuha'], where: 'the salon', action: `page ${i + 1}`, emotion: 'curious', timeOfDay: 'day', props: ['mirror']}))});

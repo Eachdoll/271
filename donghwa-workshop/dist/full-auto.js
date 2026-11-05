@@ -1559,6 +1559,8 @@ export async function runFullAuto(
           job.pagination = r.data;
           // R54b: an openings book keeps its printed count (its entries are C..2C).
           job.input.pageCount = r.meta?.pageCount || r.data.pages.length;
+          // R54g: how the writer's spread marks fitted the binding (shown by the runner; advisory).
+          job.spreadFit = r.meta?.spreadFit ? clone(r.meta.spreadFit) : null;
           job.sceneBriefs = [];
           job.prose = ecoProseFromPages(job.outline, r.data);
           job.storyCheck = r.meta?.checks || inspectStory(job.outline, r.data, job.input);
