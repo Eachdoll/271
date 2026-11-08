@@ -1115,6 +1115,11 @@ export function openingBeats(input, beats, entries, spreads = []) {
 export function settleExtraction(raw, input, outline, pages, title) {
   const cast = list(input?.characters).filter(object).map((c) => String(c.id)),
     castSet = new Set(cast),
+    // R55c-2: the third paid A/B's haiku wrote the new characters by name ("kongi", "uncle bear")
+    // instead of the card ID the [cast] line gave, so every such page lost them — a name or
+    // English name (case and spaces aside) resolves to its ID; anything else is still dropped.
+    castByName = new Map(list(input?.characters).filter(object).flatMap((c) => [c.id, c.name, c.nameEn].filter(Boolean).map((v) => [normName(v), String(c.id)]))),
+    castId = (value) => (castSet.has(String(value)) ? String(value) : castByName.get(normName(value)) || ""),
     beats = list(outline?.beats).filter(object).map((b) => Number(b.index)).filter(Number.isInteger),
     count = list(pages).length,
     rows = list(raw?.pages).filter(object);
@@ -1130,7 +1135,7 @@ export function settleExtraction(raw, input, outline, pages, title) {
     plainOk = wantsPicturePlan(input) && hasStoryDrama(input);
   const out = list(pages).map((p, i) => {
     const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
-    const who = list(row.who).map(String).filter((id) => castSet.has(id));
+    const who = [...new Set(list(row.who).map(castId).filter(Boolean))];
     let beat = openingBeat.length ? openingBeat[i] : Number(row.beatIndex);
     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
     last = beat;

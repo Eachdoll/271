@@ -141,3 +141,11 @@ test('R55c the estimate has no outline row for a room book; the old path keeps i
   const plain = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, council: true, orchestration: true});
   assert.ok(plain.stages.some((s) => s.stage === 'outline'));
 });
+
+test('R55c-2 the reading\'s cast by name: a reader that writes "kongi" or "Uncle Bear" instead of the card ID still puts the character on the page (the third A/B\'s haiku did)', () => {
+  const input = {...roomInput('c6'), characters: [{id: 'yuha', name: '유하', nameEn: 'Yuha'}, {id: 'mom', name: '엄마', nameEn: 'Mom'}, {id: 'character-1', name: '콩이', nameEn: 'Kongi'}, {id: 'character-2', name: '곰돌 아저씨', nameEn: 'Uncle Bear'}]};
+  const outline = W.roomOutline(input, record);
+  const raw = {pages: [{pageNo: 1, who: ['yuha', 'kongi'], where: 'home', action: 'a', emotion: 'happy', timeOfDay: 'day', props: []}, {pageNo: 2, who: ['uncle bear', 'Kongi', '곰돌 아저씨', 'nobody'], where: 'home', action: 'b', emotion: 'happy', timeOfDay: 'day', props: []}, {pageNo: 3, who: ['nobody'], where: 'home', action: 'c', emotion: 'happy', timeOfDay: 'day', props: []}]};
+  const settled = W.settleExtraction(raw, input, outline, [page(1), page(2), page(3)], 't');
+  assert.deepEqual(settled.pages.map((p) => p.scene.who), [['yuha', 'character-1'], ['character-2', 'character-1'], ['yuha']]);
+});
