@@ -49,7 +49,14 @@ export function pagePlace(book, snapshot, index) {
     background: bound || null,
   };
 }
-export function previousSceneReferences(book, snapshot, index) {
+/**
+ * Earlier pages at the same place: the first (canonical) and the latest. R55d:
+ * with `shotOf` (a function page → shot name) the latest page drawn from the
+ * same camera as this page is preferred for the recent-scene slot — a page
+ * from the same angle is a better layout reference than the newest page from
+ * any angle. Without `shotOf` the choice is the old one, byte for byte.
+ */
+export function previousSceneReferences(book, snapshot, index, { shotOf = null } = {}) {
   const place = pagePlace(book, snapshot, index);
   if (!place.key) return [];
   const candidates = (book.pages || [])
@@ -76,8 +83,11 @@ export function previousSceneReferences(book, snapshot, index) {
       );
     });
   if (!candidates.length) return [];
-  const first = candidates[0],
-    latest = candidates.at(-1);
+  const shot = typeof shotOf === "function" ? String(shotOf(book.pages[index]) || "") : "",
+    sameShot = shot ? candidates.filter(({ page }) => String(shotOf(page) || "") === shot) : [],
+    first = candidates[0],
+    latest = sameShot.length ? sameShot.at(-1) : candidates.at(-1),
+    matched = sameShot.length > 0 && latest !== first;
   return [first, ...(first !== latest ? [latest] : [])].map(
     ({ page, index: i }, position) => ({
       imageAssetId: page.imageAssetId || null,
@@ -86,7 +96,7 @@ export function previousSceneReferences(book, snapshot, index) {
         : page.imageUrl,
       role: "background",
       required: position === 0,
-      label: `${position === 0 ? "CANONICAL first scene" : "Recent scene"} at SAME place, page ${i + 1}; architecture/layout only, do not copy cast, pose or temporary props`,
+      label: `${position === 0 ? "CANONICAL first scene" : matched ? `Recent scene from the SAME camera (${shot})` : "Recent scene"} at SAME place, page ${i + 1}; architecture/layout only${matched ? " — the closest layout reference for this page: keep what it shows where it shows it" : ""}, do not copy cast, pose or temporary props`,
       sourcePageIndex: i,
       placeKey: place.key,
     }),

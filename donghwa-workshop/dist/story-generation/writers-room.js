@@ -89,7 +89,7 @@ export function readerPanel(input) {
     { id: "heart", name: `마음을 읽는 ${y}세`, line: "누가 왜 그러는지를 봐요. 마음이 바뀌는 순간을 알아보고, 왜 그러는지 모르면 '왜?' 하고 물어요." },
     { id: "eye", name: `그림을 보는 ${y}세`, line: "구석의 작은 것, 주인공이 못 본 것을 먼저 찾아요. 글이 그림을 설명하면 지루해하고, 그림이 보여 줄 것이 없는 쪽은 넘겨 버려요." },
     { id: "ours", name: own ? `이 집 아이 ${own.name}${own.age !== null ? ` ${own.age}세` : ""}` : `이 집 아이 ${y}세`, line: own ? `${own.likes ? `${own.likes}을(를) 좋아하고` : "제 것을 좋아하고"}${own.traits.length ? `, ${own.traits.join("·")}.` : "."} 제 이름이 나오면 눈이 커지고, 저라면 안 그랬을 일에는 고개를 갸웃해요.` : "제 이름이 나오면 눈이 커지고, 저라면 안 그랬을 일에는 고개를 갸웃해요." },
-    { id: "parent", name: "소리 내어 읽어 주는 어른", line: "입에 붙는 문장, 한 번 더 읽어 달라는 쪽, 읽다가 아이가 끼어드는 쪽을 알아요. 설명이 긴 쪽은 건너뛰고 싶어져요." },
+    { id: "parent", name: "소리 내어 읽어 주는 어른", line: "입에 붙는 문장, 한 번 더 읽어 달라는 쪽, 읽다가 아이가 끼어드는 쪽을 알아요. 설명이 긴 쪽은 건너뛰고 싶어져요. 소리 내어 읽기 힘든 문장과, 누가 누구에게 하는 말인지에 안 맞는 존댓말·반말은 읽다가 바로 걸려요." },
   ];
 }
 const panelText = (input) => readerPanel(input).map((p) => `- ${p.id} · ${p.name}: ${p.line}`).join("\n");
@@ -210,6 +210,8 @@ export function roomBrief(input, { records = [] } = {}) {
     `[꼭 나오는 인물 — 부모님이 골랐어요]\n${castText(input) || "- (없음)"}`,
     `[고른 장소] ${placeText(input) || "(없음)"} — 이야기가 원하면 다른 곳도 가요.`,
     ending ? `[끝] ${ending}` : "",
+    // R55d: the value the parent chose in ①, passed on as the parent's wish — not a rule; nothing when none was chosen.
+    str(input?.moral, 40) ? `[부모님이 아이와 함께 생각하고 싶은 것] ${str(input.moral, 40)} — 말로 가르치지 않고, 이야기 속 일과 행동에 스며들게.` : "",
     "[좋은 그림책이 하는 일] 쪽을 넘기고 싶게 해요. 웃음은 벌어지는 일에서 나와요. 어른에게도 제 바람과 결점이 있어요. 아이는 주인공보다 먼저 알아채기를 좋아해요. 끝은 처음과 하나가 달라요 — 마지막 줄은 뜻을 말하지 않고, 달라진 것은 행동 하나로 보여요. 이건 설명이지 점검표가 아니에요 — 더 좋은 길이 보이면 그리로 가요.",
     `[길이] 쪽수는 작가가 정해요. 이야기가 원하는 만큼.${openingsBrief(input)}${densityBrief(input)}`,
     recent.length ? `[이 집에서 최근에 만든 책 — 이것과 다르게]\n${recent.map((line) => `- ${line}`).join("\n")}` : "",
@@ -265,7 +267,7 @@ const PREMISE_SCHEMA = {
 export function premisesRequest(input, { records = [] } = {}) {
   const brief = roomBrief(input, { records });
   return {
-    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 크기·색·털이나 머리·옷·눈에 띄는 것 하나)도 적어요; 부모님 인물은 셋 다 빈 문자열). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
+    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 주인공과 견준 크기, 색 둘, 한눈에 알아볼 표시 하나(귀·무늬·모자 같은 것); 쪽마다 같은 인물로 그릴 수 있게)도 적어요; 부모님 인물은 셋 다 빈 문자열). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
     user: brief,
     jsonSchema: PREMISE_SCHEMA,
     temperature: 1,
@@ -396,7 +398,7 @@ const spreadLine = (input) => (input?.layoutPolicy?.kind === "openings" ? " 큰 
 const castRows = (premise) => list(premise?.cast).map((c) => `- ${str(c.name, 30)}${c.isNew ? " (이 책의 새 인물)" : ""}: 바람 — ${str(c.want, 100)}; 결점 — ${str(c.flaw, 100)}; 말투 — ${str(c.speech, 100)}`).join("\n");
 export function draftRequest(input, premise, { records = [] } = {}) {
   return {
-    system: `너는 그림책 작가예요. 아래 전제로 책 한 권을 한글로 통째로 써요 — 쪽 단위로, 쪽마다 그 쪽의 글(ko). 쪽수는 네가 정해요. 비트도 설계도 없어요: 쪽을 넘기는 호흡은 네 몫이에요. 그림이 말할 쪽은 글이 짧고, 글이 끌어야 하는 쪽은 조금 길어요. 인물표의 말투대로 말해요. 제목(title)도 정해요 — 이 초고만의 제목으로(전제 제목과 달라도 돼요).${spreadLine(input)}`,
+    system: `너는 그림책 작가예요. 아래 전제로 책 한 권을 한글로 통째로 써요 — 쪽 단위로, 쪽마다 그 쪽의 글(ko). 쪽수는 네가 정해요. 비트도 설계도 없어요: 쪽을 넘기는 호흡은 네 몫이에요. 그림이 말할 쪽은 글이 짧고, 글이 끌어야 하는 쪽은 조금 길어요. 인물표의 말투대로 말해요. 화자는 자유예요 — 이야기꾼이 들려줘도, 주인공이 '나'로 말해도, 조연이나 사물이 말해도, 읽는 아이에게 말을 걸어도 돼요; 이 이야기에 맞는 목소리로. 제목(title)도 정해요 — 이 초고만의 제목으로(전제 제목과 달라도 돼요).${spreadLine(input)}`,
     user: `${roomBrief(input, { records })}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n모양: ${str(premise?.engine, 40)}\n가장 큰 웃음: ${str(premise?.laugh, 200)}\n아이가 보고 싶을 그림: ${str(premise?.picture, 200)}\n\n[인물표]\n${castRows(premise)}`,
     jsonSchema: DRAFT_SCHEMA,
     temperature: 0.9,
@@ -434,7 +436,7 @@ const readSchema = (count) => ({
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["draft", "skipPage", "lostPage", "laughPages", "change"],
+              required: ["draft", "skipPage", "lostPage", "laughPages", "change", "hardPage", "mannersPage"],
               properties: {
                 draft: { type: "integer", minimum: 1, maximum: count },
                 skipPage: { type: "integer", minimum: 1 },
@@ -442,6 +444,9 @@ const readSchema = (count) => ({
                 laughPages: { type: "array", maxItems: 12, items: { type: "integer", minimum: 1 } },
                 // R54g: one concrete thing to change (the A/B's one-word remarks were all praise — nothing to rewrite from).
                 change: { type: "string", maxLength: 160 },
+                // R55d: the adult reader only — a page hard to read aloud, a page whose speech level is wrong (0 = none; children answer 0).
+                hardPage: { type: "integer", minimum: 0 },
+                mannersPage: { type: "integer", minimum: 0 },
               },
             },
           },
@@ -453,7 +458,7 @@ const readSchema = (count) => ({
 const draftText = (draft, i) => `=== 초고 ${i + 1} · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`;
 export function panelReadRequest(input, drafts) {
   return {
-    system: `너는 여섯 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 각자 **다시 읽고 싶은 초고 하나**(favorite)를 고르고, 그 초고를 또 읽어 달라고 할지(again) 말해요. 초고마다: 가장 넘기고 싶은 쪽 하나(skipPage, 꼭 하나), 무슨 말인지 몰랐던 쪽(lostPage, 없으면 0), 웃은 쪽들(laughPages, 없으면 빈 목록), 그 초고에서 **바꾸고 싶은 것 하나**(change — 어느 쪽의 무엇을 어떻게, 한 문장; 정말 없으면 빈 문자열. 칭찬은 쓰지 않아요). 여섯 사람이 같은 초고를 고를 수도 있지만 까닭은 각자 제 식대로. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
+    system: `너는 여섯 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 각자 **다시 읽고 싶은 초고 하나**(favorite)를 고르고, 그 초고를 또 읽어 달라고 할지(again) 말해요. 초고마다: 가장 넘기고 싶은 쪽 하나(skipPage, 꼭 하나), 무슨 말인지 몰랐던 쪽(lostPage, 없으면 0), 웃은 쪽들(laughPages, 없으면 빈 목록), 그 초고에서 **바꾸고 싶은 것 하나**(change — 어느 쪽의 무엇을 어떻게, 한 문장; 정말 없으면 빈 문자열. 칭찬은 쓰지 않아요). 읽어 주는 어른(parent)만 둘을 더 말해요: 소리 내어 읽기 힘든 쪽 하나(hardPage — 입에 안 붙거나 숨이 차는 쪽, 없으면 0)와 존댓말·반말이 어색한 쪽 하나(mannersPage — 누가 누구에게 하는 말인지에 안 맞는 쪽, 없으면 0); 아이들은 둘 다 0. 여섯 사람이 같은 초고를 고를 수도 있지만 까닭은 각자 제 식대로. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
     user: list(drafts).map(draftText).join("\n\n"),
     jsonSchema: readSchema(list(drafts).length),
     temperature: 0.7,
@@ -465,7 +470,7 @@ export function countReadings(answer, count = DRAFT_COUNT) {
   const readers = list(object(answer) && !Array.isArray(answer) ? answer.readers : answer).filter(object),
     rows = new Map(),
     row = (n) => {
-      if (!rows.has(n)) rows.set(n, { draft: n, votes: 0, again: 0, laughed: 0, curious: 0, bored: 0, lost: 0, pull: 0, skip: new Map(), lostAt: new Map(), laughAt: new Map(), words: [] });
+      if (!rows.has(n)) rows.set(n, { draft: n, votes: 0, again: 0, laughed: 0, curious: 0, bored: 0, lost: 0, pull: 0, skip: new Map(), lostAt: new Map(), laughAt: new Map(), hardAt: new Map(), mannersAt: new Map(), words: [] });
       return rows.get(n);
     },
     bump = (map, page) => map.set(page, (map.get(page) || 0) + 1);
@@ -495,6 +500,11 @@ export function countReadings(answer, count = DRAFT_COUNT) {
         bump(r.laughAt, page);
         r.laughed += 1;
       }
+      // R55d: the adult's two pages (0 or absent = none; an answer saved before R55d has neither).
+      const hard = Math.round(Number(d.hardPage)),
+        manners = Math.round(Number(d.mannersPage));
+      if (hard >= 1) bump(r.hardAt, hard);
+      if (manners >= 1) bump(r.mannersAt, manners);
       // R54g: `change` (one thing to change); `word` is read too for an answer saved before R54g.
       if (str(d.change ?? d.word, 160)) r.words.push(str(d.change ?? d.word, 160));
     }
@@ -503,8 +513,11 @@ export function countReadings(answer, count = DRAFT_COUNT) {
     .map((r) => {
       const boredPages = [...r.skip].filter(([, n]) => n >= 2).map(([p]) => p).sort((a, b) => a - b),
         lostPages = [...r.lostAt].map(([p]) => p).sort((a, b) => a - b),
-        laughPages = [...r.laughAt].filter(([, n]) => n >= 2).map(([p]) => p).sort((a, b) => a - b);
-      return { draft: r.draft, votes: r.votes, again: r.again, laughed: r.laughed, curious: r.curious, bored: r.bored, lost: r.lost, pull: r.votes * 4 + r.again * 2 + laughPages.length - boredPages.length - lostPages.length, boredPages, lostPages, laughPages, words: r.words };
+        laughPages = [...r.laughAt].filter(([, n]) => n >= 2).map(([p]) => p).sort((a, b) => a - b),
+        hardPages = [...r.hardAt].map(([p]) => p).sort((a, b) => a - b),
+        mannersPages = [...r.mannersAt].map(([p]) => p).sort((a, b) => a - b);
+      // The pull is unchanged by R55d: the adult's two pages steer the rewrite, not the choice of draft.
+      return { draft: r.draft, votes: r.votes, again: r.again, laughed: r.laughed, curious: r.curious, bored: r.bored, lost: r.lost, pull: r.votes * 4 + r.again * 2 + laughPages.length - boredPages.length - lostPages.length, boredPages, lostPages, laughPages, hardPages, mannersPages, words: r.words };
     });
 }
 export function pickDraft(rows) {
@@ -516,6 +529,9 @@ export function rewriteNotes(row) {
   const lines = [];
   if (row.boredPages?.length) lines.push(`넘기고 싶어한 쪽: ${row.boredPages.join(", ")} — 줄이거나 사건을 넣어요.`);
   if (row.lostPages?.length) lines.push(`무슨 말인지 모른 쪽: ${row.lostPages.join(", ")} — 아이가 따라올 수 있게 보여 줘요.`);
+  // R55d: what the adult who reads aloud hit.
+  if (row.hardPages?.length) lines.push(`소리 내어 읽기 힘든 쪽: ${row.hardPages.join(", ")} — 입에 붙게 다듬어요(뜻은 그대로).`);
+  if (row.mannersPages?.length) lines.push(`존댓말·반말이 어색한 쪽: ${row.mannersPages.join(", ")} — 누가 누구에게 하는 말인지에 맞게 말높임만 고쳐요.`);
   if (row.laughPages?.length) lines.push(`웃은 쪽: ${row.laughPages.join(", ")} — 숨 쉴 자리를 주고 건드리지 않아요.`);
   if (row.words?.length) lines.push(`바꾸고 싶은 것: ${row.words.join(" / ")}`);
   return lines.join("\n");
@@ -523,7 +539,7 @@ export function rewriteNotes(row) {
 export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
   return {
     // R54g: targeted — the A/B's astra rewrote all 14 pages (7% of the words kept) of the draft the panel had chosen.
-    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. 큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요.",
+    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·읽기 힘든 쪽·말높임이 어색한 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. 큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요.",
     // The notes keep their lines (str() would fold them into one).
     user: `${roomBrief(input, { records })}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`,
     jsonSchema: DRAFT_SCHEMA,
@@ -781,7 +797,7 @@ export function rewriteChange(before, after) {
   return { before: prev.length, after: next.length, kept, changed: next.length - kept, share: next.length ? Math.round(((next.length - kept) / next.length) * 100) / 100 : 0 };
 }
 /** The panel named nothing to fix (no page to skip, none lost, nothing to change): the rewrite call is skipped. */
-export const nothingToRewrite = (row) => object(row) && !list(row.boredPages).length && !list(row.lostPages).length && !list(row.words).some((w) => str(w, 160));
+export const nothingToRewrite = (row) => object(row) && !list(row.boredPages).length && !list(row.lostPages).length && !list(row.hardPages).length && !list(row.mannersPages).length && !list(row.words).some((w) => str(w, 160));
 export async function runRoomDrafts(input, outline, options = {}, services = {}) {
   services = withEngines(services);
   const premise = outline?.writersRoom?.premise;

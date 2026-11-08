@@ -1385,6 +1385,7 @@ export async function runFullAuto(
         storyLogic: _freshLogic,
         storyManners: _freshManners,
         writersRoom: _freshRoom,
+        pictureRefs: _freshRefs,
         storyChange: _freshChange,
         storyPlace: _freshPlace,
         storyDrama: _freshDrama,
@@ -1445,6 +1446,8 @@ export async function runFullAuto(
         ...(job.input?.storyManners ? { storyManners: clone(job.input.storyManners) } : {}),
         // R51: the job's own writers' room marker.
         ...(job.input?.writersRoom ? { writersRoom: clone(job.input.writersRoom) } : {}),
+        // R55d: the job's own picture-reference marker.
+        ...(job.input?.pictureRefs ? { pictureRefs: clone(job.input.pictureRefs) } : {}),
         // R38: the job's own change marker and opening place.
         ...(job.input?.storyChange ? { storyChange: clone(job.input.storyChange) } : {}),
         ...(job.input?.storyPlace ? { storyPlace: clone(job.input.storyPlace) } : {}),

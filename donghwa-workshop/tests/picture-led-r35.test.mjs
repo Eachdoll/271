@@ -94,8 +94,9 @@ test('R35 a new K2 openings draft is picture-led; 글이 많은 책 freezes the 
   // R46: the idea cards come last (after the format and the expression cards).
   // R47: then the logic marker.
   // R49: then the manners marker.
-  assert.deepEqual(Object.keys(wordy.input).slice(-4), ['bookFormat', 'storyIdea', 'storyLogic', 'storyManners'], 'the format comes after the voice');
-  assert.deepEqual(Object.keys(led.input).slice(-5), ['bookFormat', 'storyExpression', 'storyIdea', 'storyLogic', 'storyManners']);
+  // R55d: then the picture-reference marker.
+  assert.deepEqual(Object.keys(wordy.input).slice(-5), ['bookFormat', 'storyIdea', 'storyLogic', 'storyManners', 'pictureRefs'], 'the format comes after the voice');
+  assert.deepEqual(Object.keys(led.input).slice(-6), ['bookFormat', 'storyExpression', 'storyIdea', 'storyLogic', 'storyManners', 'pictureRefs']);
   const normalized = normalizeStoryInput({...led.input, bookId: 'n'});
   assert.deepEqual(normalized.bookFormat, {version: 1, id: 'pictureLed'});
   assert.equal(normalizeStoryInput({...led.input, bookFormat: {version: 9, id: 'pictureLed'}, bookId: 'n'}).bookFormat, undefined, 'an unknown format is dropped');

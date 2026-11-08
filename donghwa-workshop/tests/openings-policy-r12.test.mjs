@@ -642,6 +642,7 @@ function legacyInputOf(state, job) {
   delete prepared.input.k1Policy;
   delete prepared.input.topicEndingPolicy;
   delete prepared.input.promptDiet;
+  delete prepared.input.pictureRefs;
   // R33: the shape and stage are the job's own too (a pre-R33 job gains none).
   delete prepared.input.storyShape;
   delete prepared.input.stageCategory;

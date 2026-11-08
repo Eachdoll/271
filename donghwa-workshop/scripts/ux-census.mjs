@@ -91,6 +91,7 @@ const simpleTable = {
   // 더 보기 (opened by this census) holds the two model rows and the image World settings.
   // R55a-2: +1 input, the '작가실로 만들기' switch on the 글 모델 panel.
   '02-settings': { buttons: 19, inputs: 5, selects: 12 },
+  // R55d: with the room on, ① shows one select ('함께 생각하고 싶은 것'); this census runs ① with the room off (format panel), so 0 here.
   '03-step1-topic': { buttons: 10, inputs: 1, selects: 0 },
   '04-step2-materials': { buttons: 13, inputs: 1, selects: 0 },
   '05-step3-generate': { buttons: 9, inputs: 0, selects: 2 },

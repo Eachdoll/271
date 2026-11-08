@@ -38,13 +38,13 @@ test('R54g the panel names one thing to change per draft (change, not a one-word
   const input = roomInput('g1');
   const schema = W.panelReadRequest(input, [{title: 'a', pages: [page(1)]}, {title: 'b', pages: [page(1)]}]).jsonSchema;
   const draft = schema.properties.readers.items.properties.drafts.items;
-  assert.deepEqual(draft.required, ['draft', 'skipPage', 'lostPage', 'laughPages', 'change']);
+  assert.deepEqual(draft.required, ['draft', 'skipPage', 'lostPage', 'laughPages', 'change', 'hardPage', 'mannersPage'], 'R55d: the adult reader\'s two pages');
   assert.match(W.panelReadRequest(input, [{title: 'a', pages: [page(1)]}]).system, /바꾸고 싶은 것 하나\*\*\(change/);
   const rows = W.countReadings({readers: [{reader: 'ours', favorite: 1, again: true, drafts: [{draft: 1, skipPage: 2, lostPage: 0, laughPages: [], change: '2쪽 되풀이를 줄여요'}]}, {reader: 'parent', favorite: 1, again: false, drafts: [{draft: 1, skipPage: 2, lostPage: 0, laughPages: [], word: '옛 답도 읽어요'}]}]}, 1);
   assert.deepEqual(rows[0].words, ['2쪽 되풀이를 줄여요', '옛 답도 읽어요'], 'change, and word for an answer journaled before R54g');
   assert.match(W.rewriteNotes(rows[0]), /^넘기고 싶어한 쪽: 2 — [^\n]*\n바꾸고 싶은 것: 2쪽 되풀이를 줄여요 \/ 옛 답도 읽어요$/);
   const req = W.rewriteRequest(input, {title: 't', pages: [page(1)]}, '넘기고 싶어한 쪽: 2');
-  assert.match(req.system, /가리킨 쪽\(넘기고 싶어한 쪽·모른 쪽·바꾸고 싶은 것\)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고/);
+  assert.match(req.system, /가리킨 쪽\(넘기고 싶어한 쪽·모른 쪽·읽기 힘든 쪽·말높임이 어색한 쪽·바꾸고 싶은 것\)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고/);
   assert.match(req.system, /분량은 늘리지 않아요/);
   assert.match(W.draftRequest(input, PREMISE).system, /이 초고만의 제목으로\(전제 제목과 달라도 돼요\)/);
 });

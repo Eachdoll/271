@@ -11,6 +11,7 @@ import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
 import { hasStoryManners, mannersRef } from "./story-manners.js";
+import { hasReferencePolicy, referencePolicy } from "../image-generation/reference-policy.js";
 import { hasWritersRoom, writersRoomRef, runWritersRoom, attachWritersRoom, roomPremiseBlock } from "./writers-room.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
@@ -461,6 +462,11 @@ function modelVisibleInput(source) {
     const { writersRoom, ...rest } = input;
     input = rest;
   }
+  // R55d: and the picture-reference marker (pictures only).
+  if (input?.pictureRefs) {
+    const { pictureRefs, ...rest } = input;
+    input = rest;
+  }
   // R38: the change marker and the opening place are rule lines, not story data.
   if (input?.storyChange) {
     const { storyChange, ...rest } = input;
@@ -655,6 +661,8 @@ export function normalizeStoryInput(input = {}) {
     ...(mannersRef(input?.storyManners) ? { storyManners: mannersRef(input.storyManners) } : {}),
     // R51: the writers' room in place of the council.
     ...(writersRoomRef(input?.writersRoom) ? { writersRoom: writersRoomRef(input.writersRoom) } : {}),
+    // R55d: page pictures carry the page's cast sheets and prefer a same-camera earlier page.
+    ...(hasReferencePolicy(input) ? { pictureRefs: referencePolicy() } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),

@@ -109,6 +109,7 @@ import {
 } from "./checker.js";
 import { checkRichness } from "./richness.js";
 import { getStylePreset } from "../image-generation/styles.js";
+import { referencePolicy } from "../image-generation/reference-policy.js";
 import { buildSeriesStorySelections } from "./continuity.js";
 import {
   STORY_STRUCTURE_PRESETS,
@@ -474,6 +475,8 @@ export function inputFromWizard(state, wizard, { layout: askedLayout = "pages" }
       storyLogic: storyLogicPolicy(),
       // R49: who speaks politely, laughs from what happens (not the recent books' ones), a secret only when there is one.
       storyManners: mannersPolicy(recentHumorLines(storyQualityBookRecords(state))),
+      // R55d: a page's picture carries the sheets of the characters on it and prefers a same-camera earlier page.
+      pictureRefs: referencePolicy(),
       // R51: the writers' room (the parent's setting; off until R53) in place of the council, not for K1 yet.
       ...(!k1 && writersRoomFor(state) ? { writersRoom: writersRoomFor(state, storyQualityBookRecords(state)) } : {}),
     },

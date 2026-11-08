@@ -1,8 +1,9 @@
 import { genderWord } from "./identity.js";
-import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor } from "./scene-prompt.js";
+import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor, effectiveStaging } from "./scene-prompt.js";
 import { plainBackdropFor } from "../story-generation/story-drama.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
+import { hasReferencePolicy, castSheetsForPage } from "./reference-policy.js";
 import { characterSVG } from "../engine.js";
 import { getStylePreset, validateStylePreset } from "./styles.js";
 import { getImageURL } from "./assets.js";
@@ -830,20 +831,23 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   );
   const validation = validateStylePreset(preset);
   if (!validation.valid) throw new Error(validation.errors.join(" "));
-  const sheets = options.cover
-    ? snapshot.characterSheets?.filter(
-        (sheet) =>
-          sheet.characterId ===
-          (book.characterIds?.[0] ||
-            snapshot.characterSheets?.[0]?.characterId),
-      )
-    : snapshot.characterSheets;
+  // R55d: a page of a pictureRefs book carries only the sheets of the characters on it (every sheet must still be confirmed).
+  const refPolicy = !options.cover && hasReferencePolicy(book.storyInput),
+    allSheets = options.cover
+      ? snapshot.characterSheets?.filter(
+          (sheet) =>
+            sheet.characterId ===
+            (book.characterIds?.[0] ||
+              snapshot.characterSheets?.[0]?.characterId),
+        )
+      : snapshot.characterSheets;
   if (
-    !Array.isArray(sheets) ||
-    !sheets.length ||
-    sheets.some((sheet) => !sheet.confirmedAt || !sheet.imageUrl)
+    !Array.isArray(allSheets) ||
+    !allSheets.length ||
+    allSheets.some((sheet) => !sheet.confirmedAt || !sheet.imageUrl)
   )
     throw new Error("확정된 캐릭터 시트가 모두 필요해요.");
+  const sheets = refPolicy ? castSheetsForPage(allSheets, page) : allSheets;
   const cast = sheets
     .map(
       (sheet, index) =>
@@ -884,7 +888,8 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     })),
     ...(options.cover
       ? []
-      : previousSceneReferences(book, snapshot, pageIndex)),
+      : // R55d: a pictureRefs book prefers the latest same-place page drawn from the same camera.
+        previousSceneReferences(book, snapshot, pageIndex, refPolicy ? { shotOf: (row) => effectiveStaging(book, row).shot || "wide" } : {})),
   ];
   const roleDescriptions = references
     .map(
@@ -1069,7 +1074,12 @@ export function commitSceneResult(state, book, pageIndex, result) {
     result.seed === undefined || result.seed === null
       ? null
       : seedValue(result.seed);
-  const references = sceneReferenceRecords(snapshot, pageIndex, { closeView: closeViewFor(book, page) || plainBackdropFor(book, page) });
+  const references = sceneReferenceRecords(
+    // R55d: the receipt names the sheets the request carried (the page's cast on a pictureRefs book).
+    hasReferencePolicy(book.storyInput) ? { ...snapshot, characterSheets: castSheetsForPage(snapshot.characterSheets, page) } : snapshot,
+    pageIndex,
+    { closeView: closeViewFor(book, page) || plainBackdropFor(book, page) },
+  );
   page.imageAssetId = result.imageAssetId || null;
   page.imageUrl = result.imageAssetId
     ? `asset:${result.imageAssetId}`

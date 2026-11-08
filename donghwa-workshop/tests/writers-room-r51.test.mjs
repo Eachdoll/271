@@ -156,10 +156,12 @@ test('R51 the simple ①: with the room on, the nine format selects are gone and
   const w = (state) => ensureSimpleWizard(state, {...structuredClone(wizard), simpleStep: 1, simpleFormatOpen: true});
   const roomHtml = renderSimpleCreate(ctxFor(on, w(on), 1)), plainHtml = renderSimpleCreate(ctxFor(off, w(off), 1));
   assert.match(roomHtml, /작가실이 책의 길이·모양·끝을 정해요\. 읽기 등급과 언어는 ‘우리 아이’ 설정을 써요\./);
-  assert.doesNotMatch(roomHtml, /simple-format-panel|id="pageCount"|책 형식/);
+  // R55d: the room ① keeps one select — the parent's value (함께 생각하고 싶은 것) — beside the note.
+  assert.doesNotMatch(roomHtml, /id="simple-format-panel"|id="pageCount"|책 형식/);
+  assert.match(roomHtml, /simple-room-value[\s\S]*<select id="value">/);
   assert.match(plainHtml, /id="simple-format-panel"/);
   assert.match(plainHtml, /책 형식/);
-  assert.ok((roomHtml.match(/<select /g) || []).length < (plainHtml.match(/<select /g) || []).length - 5, 'the nine selects are gone');
+  assert.ok((roomHtml.match(/<select /g) || []).length < (plainHtml.match(/<select /g) || []).length - 5, 'the nine selects are gone (one value select stays)');
   assert.match(roomHtml, /id="topic"/);
   assert.match(roomHtml, /아이디어 뽑기/);
 });
