@@ -1,0 +1,86 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "runs": [
+    {
+      "width": 1280,
+      "roomChoosesFormat": true,
+      "roomDefaultOn": true,
+      "onlyRoomSwitch": true,
+      "fee": "약 $1.26",
+      "explicitOff": true,
+      "offFormatRestored": true,
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "room": true,
+        "pages": 13,
+        "requests": 0
+      }
+    },
+    {
+      "width": 390,
+      "roomChoosesFormat": true,
+      "roomDefaultOn": true,
+      "onlyRoomSwitch": true,
+      "fee": "약 $1.26",
+      "explicitOff": true,
+      "offFormatRestored": true,
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "room": true,
+        "pages": 13,
+        "requests": 0
+      }
+    }
+  ],
+  "lastAction": "#pin-form button[type=\"submit\"]",
+  "module": {
+    "quiet": {
+      "rewriteCalls": 0,
+      "skipped": true,
+      "change": null,
+      "line": "작가실 · 초고 3권 중 독자단이 2번을 골라 고칠 곳이 없어 그대로 두고 영어판을 쓰고 등급 참고 28건 중 다듬지 않음 · 8쪽",
+      "titles": [
+        "초고 1",
+        "초고 2",
+        "초고 3"
+      ]
+    },
+    "targeted": {
+      "rewriteCalls": 1,
+      "skipped": false,
+      "change": {
+        "before": 8,
+        "after": 8,
+        "kept": 7,
+        "changed": 1,
+        "share": 0.13
+      },
+      "line": "작가실 · 초고 3권 중 독자단이 2번을 골라 고쳐 쓰고(8쪽 중 1쪽 손봄) 영어판을 쓰고 등급 참고 28건 중 다듬지 않음 · 8쪽",
+      "titles": [
+        "초고 1",
+        "초고 2",
+        "초고 3"
+      ]
+    },
+    "fit": {
+      "fitted": true,
+      "wordsUnchanged": true,
+      "marks": 2,
+      "standaloneSpreads": 2,
+      "paginationEntries": 14,
+      "printedPages": 16
+    },
+    "extractGender": true,
+    "extractSoloCover": true,
+    "progressCaption": true,
+    "inputOpenings": "openings"
+  },
+  "cache": "donghwa-shell-v117",
+  "cloudProgressPreserved": true,
+  "passed": true
+}

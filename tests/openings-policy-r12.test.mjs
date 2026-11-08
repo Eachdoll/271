@@ -604,8 +604,7 @@ test('R12-P1 wizard defaults with the hook on: K2 untouched 16, K1 the settings 
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8'), simple = readFileSync(new URL('../dist/simple-create.js', import.meta.url), 'utf8');
   assert.match(app, /w\.pageCount = snapPageCount\(layoutFor\(w\), w\.pageCount, \{\n\s+defaultPages: state\.settings\.defaultPages,/u);
   assert.match(app, /previous && layoutOf\(previous\) === "openings"\n\s+\? printedPagesOf\(previous\)\n\s+: previous\?\.pageCount;/u);
-  assert.match(app, /wizard\.pageCountTouched = true;/u);
-  assert.match(app, /"이야기 길이",\n\s+pageCountOptions\(w\),/u);
+  // R55b: the pro wizard's touched flag is gone with the pro wizard; the simple panel keeps its own below.
   assert.match(simple, /"쪽 수",\n\s+pageCountOptions\(w\),/u);
   assert.match(simple, /if \(target\.id === "pageCount"\) w\.pageCountTouched = true;\n\s+else snapFormatPageCount\(w, before\);/u);
   // Every new story from an old job's wizard and every unbound render holds a count its
@@ -615,7 +614,8 @@ test('R12-P1 wizard defaults with the hook on: K2 untouched 16, K1 the settings 
   assert.match(simple, /const next = holdPageCount\(wizardFromJob\(old, 3\)\);/u, 'restartStory');
   assert.match(simple, /delete w\.simpleJobId;\n(?:\s+\/\/.*\n)*\s+holdPageCount\(w\);\n\s+w\.simpleStep = 1;/u, '③ 주제·엔진 바꾸기');
   assert.match(simple, /if \(!jobOfWizard\(state, w\)\) holdPageCount\(w\);/u, 'renderSimpleCreate');
-  assert.match(app, /if \(w\.step === 3 && heldPageCount\(w\) !== w\.pageCount\)\n\s+w\.pageCount = heldPageCount\(w\);/u, 'pro step 3');
+  // R55b: the pro wizard (its step 3 hold) is gone; app.js keeps no pro call site.
+  assert.doesNotMatch(app, /w\.step === 3 && heldPageCount/u, 'no pro step 3');
 });
 
 // ---------- FULL AUTO: decided once at creation, read back from job.input on resume ----------

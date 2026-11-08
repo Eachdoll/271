@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState, sceneReferenceRecords} from '../dist/image-generation/world.js';
 import {migrateReadingSettings, bookReadingOptions} from '../dist/reading-ui.js';
-import {inputFromWizard, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse, inspectOutlineRules, outlineRequestSchema, inspectStory} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanBeatWriterRules, leanProseRules, leanPaginationRules, leanOpeningsPaginationRules, leanVisibleInput, leanOutlineView} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
@@ -35,7 +35,7 @@ import {hasStoryChange, storyChangePolicy, settleStoryChange, storyChangeViolati
  * picture-led book may leave one middle page without words. Drafts without
  * the marker are unchanged (R12 pins; the R35–R37 tests on undated inputs).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie'], backgroundIds: ['home', 'beach'], topic: '놀이터에서 자꾸 도망가는 그림자 잡기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `c-${Object.keys(extra).join('-') || 'default'}`});
 const dated = (input) => { const copy = structuredClone(input); delete copy.storyChange; return copy; };
@@ -307,7 +307,6 @@ test('R38 the screens and the shell: ③, the eco outline and the pro card say w
   assert.equal(storyChangeSummary(outline), `달라지는 것 · ${outline.change} (되비추는 끝)`);
   assert.equal(storyChangeSummary({...outline, ending: 'open'}), `달라지는 것 · ${outline.change} (열린 끝)`);
   assert.equal(storyChangeSummary(demoOutline(dated(input))), '');
-  assert.match(renderStoryQualityPlan({outline, input}), /<br>달라지는 것 · 처음엔[^<]+(?:<br>시도 · [^<]+)?<\/p>/);
   const job = ecoJobInit(createFullAutoJob(state, {...wizardOf({simpleFlow: true}), backgroundIds: ['beach']}, {allowNew: false, stopBefore: 'text', planMode: 'selection', councilReview: false}));
   job.outline = demoOutline(normalizeStoryInput(job.input)); job.eco.step = 'pages';
   const withJob = {...state, fullAutoJobs: {...state.fullAutoJobs, [job.id]: job}};

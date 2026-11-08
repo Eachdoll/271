@@ -40,6 +40,7 @@ import {
 import {
   AUTO_MATERIAL_SCHEMA,
   inspectAutoMaterialPlan,
+  MAX_CAST,
 } from "./auto-materials.js";
 import { checkStory, storyCatchphrases } from "./checker.js";
 import { CATCHPHRASE_RULE_EN } from "../story-quality/dist/catchphrase.js";
@@ -531,9 +532,11 @@ export function normalizeStoryInput(input = {}) {
   if (
     !Array.isArray(input.characters) ||
     !input.characters.length ||
-    input.characters.length > 5
+    // R55a-3: the material plan may add companions up to MAX_CAST (seven
+    // since 2026-10-20); the outline stage must accept the same cast.
+    input.characters.length > MAX_CAST
   )
-    throw new Error("이야기에 등장할 친구를 1~5명 골라 주세요.");
+    throw new Error(`이야기에 등장할 친구를 1~${MAX_CAST}명 골라 주세요.`);
   const catchphrasePolicy = normalizeCatchphrasePolicy(input.catchphrasePolicy);
   const characters = input.characters.map((character) => {
     const reference = characterReference(character);
@@ -879,6 +882,8 @@ function demoResult(stage, data, input) {
 }
 const demo = (options) =>
   options.engineId === "demo" || options.engine?.id === "demo";
+/** R54d: the writers' room's drafts/pages stages (run from FULL AUTO without a services object) resolve engines through the pipeline too. */
+export const roomServices = () => qualityServices();
 const qualityServices = () => ({
   engineFor,
   complete,
@@ -3176,7 +3181,7 @@ ${paginationRules(input).split("\n").slice(3).join("\n")}`;
  */
 function settleOpenings(data, outline, input, options) {
   const plan = buildOpeningPlan(outline, input.pageCount / 2),
-    fixed = normalizeOpenings(data?.pages, plan, input.specs),
+    fixed = normalizeOpenings(data?.pages, plan, input.specs, { mixGuard: options.roomBinding !== true }),
     next = {
       ...clone(data || {}),
       pages: fixed.pages,

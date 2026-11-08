@@ -89,7 +89,8 @@ const table = {
 const simpleTable = {
   '01-library': { buttons: 22, inputs: 1, selects: 1 },
   // 더 보기 (opened by this census) holds the two model rows and the image World settings.
-  '02-settings': { buttons: 19, inputs: 4, selects: 12 },
+  // R55a-2: +1 input, the '작가실로 만들기' switch on the 글 모델 panel.
+  '02-settings': { buttons: 19, inputs: 5, selects: 12 },
   '03-step1-topic': { buttons: 10, inputs: 1, selects: 0 },
   '04-step2-materials': { buttons: 13, inputs: 1, selects: 0 },
   '05-step3-generate': { buttons: 9, inputs: 0, selects: 2 },

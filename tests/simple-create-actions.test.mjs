@@ -6,11 +6,10 @@ import assert from 'node:assert/strict';
 import {seedState, safeTopic} from '../dist/engine.js';
 import {migrateWorldState, getActiveWorld} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, openFullAutoReview, renderFullAutoJobs} from '../dist/full-auto-ui.js';
+import {configureFullAutoUI, startFullAutoJob, runFullAutoJob, getFullAutoJob, renderFullAutoJobs} from '../dist/full-auto-ui.js';
 import {createFullAutoJob, estimateFullAutoCost, runFullAuto} from '../dist/full-auto.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
 import {normalizeStoryInput} from '../dist/story-generation/pipeline.js';
-import {configureStoryUI, renderStoryDrafts} from '../dist/story-generation/ui.js';
 import {generateBookPageImage, isPageImageStale, pagesNeedingImages} from '../dist/story-generation/page-tools.js';
 import {IDEA_DECK} from '../dist/story-generation/idea-deck.js';
 const SPARK_TOPICS = IDEA_DECK.spark.flatMap((card) => card.topics);
@@ -93,6 +92,7 @@ const buildBook = p => ({id: p.bookId, title: p.outline.titleCandidates[0], char
 const state = seedState();
 migrateWorldState(state);
 migrateReadingSettings(state.settings);
+state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
 const toasts = [], approvals = [], drawn = [], credentialLinks = [];
 let wizard = null, draft = null, editPage = 0, lastAction = null, onSave = null, saveFails = 0;
 // saveFails > 0 makes the next saves report a full storage (save() === false).
@@ -679,49 +679,6 @@ function withLocks(locks, work) {
   return Promise.resolve().then(work).finally(() => { delete globalThis.navigator.locks; });
 }
 
-test('이어 만들 이야기: a FULL AUTO draft opens its job review and is never rebuilt, so no paid picture is dropped', async () => {
-  reset();
-  const job = await finishedJob('도서관에서 길을 잃은 그림책'), story = state.storyDrafts[job.storyDraftId];
-  assert.equal(story.fullAutoRunId, job.id);
-  const book = job.book, before = assets(book), usage = imageRecords(job);
-  // The list names it as a review, not a resume of the story workflow.
-  const html = renderStoryDrafts(state);
-  assert.ok(html.includes(`data-story-action="open-auto-review" data-id="${story.id}" data-job-id="${job.id}"`), html);
-  assert.ok(!html.includes(`data-story-action="resume" data-id="${story.id}"`));
-  assert.match(html, />검수 열기</);
-  const opened = [], rebuilt = [], workflow = [];
-  configureStoryUI({
-    getState: () => state, save, render() {}, toast: m => toasts.push({message: String(m?.message || m), action: null}),
-    showModal: h => workflow.push(h), closeModal() {}, modalHeader: t => t, protectedAction: f => (lastAction = f()), isParent: () => true,
-    onReady: async payload => { rebuilt.push(payload.id); },
-    // The app's hook: the job's own review (simple ④ here), never the story workflow.
-    openAutoReview: async id => { opened.push(id); await openSimpleJob(ctx, id); },
-  });
-  wizard = null; draft = null;
-  // '검수 열기', and an old card's '이어서 만들기' for the same draft, both open the job's review.
-  await storyClick('open-auto-review', {id: story.id, jobId: job.id});
-  await storyClick('resume', {id: story.id});
-  assert.deepEqual(opened, [job.id, job.id]);
-  assert.deepEqual(workflow, [], 'the story workflow never opened');
-  assert.deepEqual(rebuilt, [], 'nothing was rebuilt');
-  assert.equal(job.book, book, 'the job keeps its own book object');
-  assert.equal(draft, book, '④ shows the job\'s book');
-  assert.equal(wizard.simpleStep, 4);
-  assert.deepEqual(assets(job.book), before, 'every paid picture is still on the book');
-  assert.equal(imageRecords(job), usage);
-  assert.ok(job.book.pages.every(p => p.imageMeta?.quality === 'final'));
-  // The pro route goes where the library card goes: the editor for a finished book.
-  const reviewed = [];
-  configureFullAutoUI({...fullAutoCtx, openReview: async j => { reviewed.push(j.id); }});
-  try {
-    await openFullAutoReview(job.id);
-  } finally {
-    configureFullAutoUI(fullAutoCtx);
-  }
-  assert.deepEqual(reviewed, [job.id]);
-  assert.equal(job.book, book);
-  assert.equal(networkCalls, 0);
-});
 
 test('a text save that fails keeps the picture unless the parent redraws it; a card resume does not buy it', async () => {
   reset();

@@ -29,7 +29,8 @@ function mockEngine(calls, {longDraft = 1} = {}) {
   return {id: 'openai', async complete(req) {
     calls.push(req);
     const props = req.jsonSchema?.properties || {}, items = props.pages?.items?.properties || {};
-    if (props.readings) return reply({readings: [1, 2, 3].map((d) => ({draft: d, pages: [{page: 2, laughed: d === 2 ? ['action', 'laugh', 'ours'] : [], curious: d === 2 ? ['heart'] : [], bored: d === 3 ? ['action', 'eye', 'ours'] : [], lost: []}, {page: 5, laughed: [], curious: [], bored: d === 2 ? ['action', 'eye', 'parent'] : [], lost: d === 2 ? ['heart'] : []}], again: d === 2 ? ['action', 'laugh', 'ours'] : d === 1 ? ['parent'] : [], words: d === 2 ? ['또!'] : []}))});
+    // R54e: the readers choose draft 2 (favourite × 5, again × 3); draft 2's page 5 is skipped by three and lost by one, page 2 landed with four.
+    if (props.readers) return reply({readers: ['action', 'laugh', 'heart', 'eye', 'ours', 'parent'].map((reader, i) => ({reader, favorite: i === 3 ? 3 : 2, again: i < 3, drafts: [1, 2, 3].map((d) => ({draft: d, skipPage: d === 2 ? 5 : d === 3 ? 2 : 1, lostPage: d === 2 && i === 2 ? 5 : 0, laughPages: d === 2 && i < 4 ? [2] : [], change: d === 2 && i === 0 ? '또!' : ''}))}))});
     if (items.en && !items.ko) return reply({pages: Array.from({length: Number(props.pages.minItems)}, (_, i) => ({en: `Snip! Page ${i + 1}.`}))});
     if (items.ko && items.en) return reply({pages: Array.from({length: Number(props.pages.minItems)}, (_, i) => ({ko: i === 1 ? '유하가 큰 거울을 가만히 봐요. 작은 참새가 창밖으로 포르르 날아가요.' : `고친 ${i + 1}쪽.`, en: `Fixed ${i + 1}.`}))});
     const m = /\[초고 (\d)\/(\d)/.exec(req.user);
@@ -64,14 +65,14 @@ test('R52 the drafts round: three whole drafts in parallel, the panel reads, the
   let checkpoint = null;
   const options = {engine, engineId: 'openai', qualityEngines: {prose: engine, cheap: engine}, onProgress: (p) => progress.push(p), onCheckpoint: async (cp) => { checkpoint = cp.writerCheckpoint; }};
   const result = await W.runRoomDrafts(input, outline, options, services(engine));
-  const kinds = calls.map((c) => /\[초고 (\d)/.exec(c.user)?.[1] ? `draft${/\[초고 (\d)/.exec(c.user)[1]}` : c.jsonSchema.properties.readings ? 'read' : /\[독자 반응\]/.test(c.user) ? 'rewrite' : c.jsonSchema.properties.pages.items.properties.en && !c.jsonSchema.properties.pages.items.properties.ko ? 'english' : 'polish');
+  const kinds = calls.map((c) => /\[초고 (\d)/.exec(c.user)?.[1] ? `draft${/\[초고 (\d)/.exec(c.user)[1]}` : c.jsonSchema.properties.readers ? 'read' : /\[독자 반응\]/.test(c.user) ? 'rewrite' : c.jsonSchema.properties.pages.items.properties.en && !c.jsonSchema.properties.pages.items.properties.ko ? 'english' : 'polish');
   assert.deepEqual(kinds, ['draft1', 'draft2', 'draft3', 'read', 'rewrite', 'english', 'polish']);
   assert.match(calls[0].system, /쪽수는 네가 정해요/);
   assert.match(calls[0].user, /\[인물표\]\n- 보라 \(이 책의 새 인물\)/);
   assert.match(calls[3].system, /여섯 사람이에요\. 아래 초고를 한 쪽씩/);
-  assert.match(calls[4].user, /\[독자 반응\]\n지루해한 쪽: 5 — 줄이거나 사건을 넣어요\.\n무슨 말인지 모른 쪽: 5 — 아이가 따라올 수 있게 보여 줘요\.\n웃은 쪽: 2 — 숨 쉴 자리를 주고 건드리지 않아요\.\n한마디: 또!/);
+  assert.match(calls[4].user, /\[독자 반응\]\n넘기고 싶어한 쪽: 5 — 줄이거나 사건을 넣어요\.\n무슨 말인지 모른 쪽: 5 — 아이가 따라올 수 있게 보여 줘요\.\n웃은 쪽: 2 — 숨 쉴 자리를 주고 건드리지 않아요\.\n바꾸고 싶은 것: 또!/);
   assert.match(calls[5].system, /^You are a picture-book author writing the English edition of a finished Korean picture book, page by page\. English E2/);
-  assert.match(calls[5].user, /^1쪽: 싹둑\.\n2쪽: 유하는 거울 앞에/);
+  assert.match(calls[5].user, /^\[cast\] 유하 \(Yuha\) — boy, he; .*\n\n1쪽: 싹둑\.\n2쪽: 유하는 거울 앞에/, 'R54e: the English edition request opens with the cast line (gender, pronoun) and then the numbered Korean pages');
   assert.match(calls[6].system, /그 쪽만 등급 안에서 다시 쓰고/);
   assert.match(calls[6].user, /\[등급 참고\]\n[\s\S]*?2쪽 \(한글\): /);
   const room = result.data.room;
@@ -89,7 +90,7 @@ test('R52 the drafts round: three whole drafts in parallel, the panel reads, the
   assert.ok(progress.some((p) => p.phase === 'request' && p.stage === 'roomDrafts'), 'the journal reports each paid call');
   assert.equal(result.meta.stage, 'roomDrafts');
   assert.equal(result.meta.requests, 7);
-  assert.match(W.roomDraftLine(result.data), /^작가실 · 초고 3권 중 독자단이 2번을 골라 고쳐 쓰고 영어판을 쓰고 등급 참고 \d+건 중 다듬어 \d+건 남음 · 3쪽$/);
+  assert.match(W.roomDraftLine(result.data), /^작가실 · 초고 3권 중 독자단이 2번을 골라 고쳐 쓰고\(3쪽 중 3쪽 손봄\) 영어판을 쓰고 등급 참고 \d+건 중 다듬어 \d+건 남음 · 3쪽$/);
   // Resume: every answer replays from the checkpoint; nothing is bought.
   const again = [], engine2 = mockEngine(again);
   const replay = await W.runRoomDrafts(input, outline, {...options, engine: engine2, qualityEngines: {prose: engine2, cheap: engine2}, writerCheckpoint: checkpoint}, services(engine2));

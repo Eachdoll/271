@@ -9,8 +9,6 @@ import {unitSpec} from '../dist/book-layout.js';
 import {checkStory} from '../dist/story-generation/checker.js';
 import {checkRichness} from '../dist/story-generation/richness.js';
 import {collectBookChecks} from '../dist/checks-panel.js';
-import {renderStoryRichness} from '../dist/story-generation/ui.js';
-
 /**
  * R12-P2: per-unit reading checks and per-opening richness for openings drafts.
  * The branch is chosen by the frozen v4 specs (spec.layout 'openings'), never by
@@ -254,11 +252,8 @@ test('R12-P2 repeated endings reset per unit and are advisory at 4+; direct emot
   const sadReport = checkRichness({pages: sad}, {specs: K2E2, characters: CAST}, {}, []);
   assert.ok(sadReport.issues.some(i => i.code === 'direct_emotion' && i.pageNo === 1));
   assert.deepEqual(sadReport.failedPageNos, [1]);
-  // The pro richness card lists advisories apart; a legacy report renders as before.
-  assert.match(renderStoryRichness(report), /참고\(자동으로 고치지 않아요\)/u);
   const legacyReport = checkRichness({pages}, {specs: freezeReadingLevels({koreanLevel: 'K2', englishLevel: 'E2'}).specs, characters: CAST}, {}, []);
   assert.equal(legacyReport.advisories, undefined);
-  assert.doesNotMatch(renderStoryRichness(legacyReport), /참고\(자동으로/u);
 });
 
 // ---------- the offline recheck ----------

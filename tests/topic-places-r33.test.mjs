@@ -14,7 +14,6 @@ import {topicPlaceIds, topicPlaceNames, missingTopicPlaces, placeKeywords} from 
 import {createFullAutoJob, selectionMaterialPlan} from '../dist/full-auto.js';
 import {inspectAutoMaterialPlan} from '../dist/story-generation/auto-materials.js';
 import {recommendPlaces, simpleStepAccess, renderSimpleCreate, ensureSimpleWizard} from '../dist/simple-create.js';
-import {selectableBeatBackgrounds} from '../dist/story-generation/ui.js';
 import {ecoOutlinePrompt, ecoJobInit} from '../dist/eco-mode.js';
 
 /**
@@ -25,7 +24,7 @@ import {ecoOutlinePrompt, ecoJobInit} from '../dist/eco-mode.js';
  * On the diet the story now goes where the topic puts it; drafts without the
  * policy keep every old rule.
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const beachWizard = (extra = {}) => ({characterIds: ['yuha'], backgroundIds: ['beach'], topic: '유하가 바닷가에서 조개를 찾아요', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', simpleFlow: true, ...extra});
 const legacy = (input) => { const copy = structuredClone(input); delete copy.promptDiet; return copy; };
 /** A beach-only outline for the input's beats: every beat at the beach. */
@@ -108,9 +107,6 @@ test('R33 the outline check accepts a beach-only outline on the diet, notes a to
   // Off the diet the old rules stand.
   const old = inspectOutlineRules(outline, legacy(input)).violations.map(v => v.code);
   assert.ok(old.includes('home_start_end') && old.includes('middle_locations'), old.join(','));
-  // The pro beat chips: every drawer place is usual on the diet; legacy keeps home at the ends.
-  assert.deepEqual(selectableBeatBackgrounds(input, 0, 6).map(b => b.id), input.backgrounds.map(b => b.id), 'every drawer place on the diet');
-  assert.deepEqual(selectableBeatBackgrounds(legacy(input), 0, 6).map(b => b.id), ['home']);
 });
 
 test('R33 a paid outline is not bought again for a home start or a single middle place; the request carries the new place line', async () => {

@@ -129,7 +129,7 @@ test('R44 the cloud: the snapshot sent is compacted; an over-limit library is re
   assert.match(fullAuto, /const row = compactUsageRow\(\{\n\s+\.\.\.clone\(result\.usage\),\n\s+\.\.\.clone\(result\.meta \|\| \{\}\),/);
   const ui = readFileSync(new URL('../dist/story-generation/ui.js', import.meta.url), 'utf8');
   assert.equal((ui.match(/d\.(?:pagination|sceneBriefs)Meta = r\.meta;/g) || []).length, 0);
-  assert.match(ui, /row = compactUsageRow\(\{\n\s+at: new Date\(\)\.toISOString\(\),/);
+  assert.doesNotMatch(ui, /function addUsage\(/, 'R55b: the old workspace (its usage rows) is gone from ui.js');
   const app = readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
   assert.match(app, /const bootCompaction = storageBlocked \? null : compactLibrary\(state\);/);
   assert.match(app, /if \(bootCompaction && bootCompaction\.rows \+ bootCompaction\.metas \+ bootCompaction\.journals > 0\) save\(\);/);

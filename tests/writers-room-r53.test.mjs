@@ -20,7 +20,7 @@ import * as W from '../dist/story-generation/writers-room.js';
  * the beat writers and the pagination request for a room job; a demo job
  * keeps the old path. The estimate prices the room's rounds.
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '뽀글머리', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
 const roomState = () => { const s = setup(); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: true}; return s; };
 const PREMISE = {title: '파마 날', line: '보라의 가게에서', engine: 'three_then_flip', laugh: '엄마 머리가 먼저 뽀글이 돼요', picture: '거울 앞 세 사람', cast: [{name: '보라', isNew: true, want: '쉬고 싶다', flaw: '손이 빠르다', speech: '손님에게 존댓말'}]};
@@ -45,13 +45,14 @@ test('R53 the binding: 8, 12, 16 or 24 pages, the words untouched — a short bo
 });
 
 test('R53 the extraction: the cheap call names cast IDs, places and beats; made-up IDs and beats fall back; the acceptor builds the pagination; the page count follows the book', async () => {
-  const input = normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'openings'}).input, bookId: 'x'});
-  assert.equal(input.layoutPolicy, undefined, 'a room draft is a page book even when the screen asked for openings');
+  // R54b: a room draft keeps the asked layout; this is the page-book case (openings: tests/writers-room-r54b.test.mjs).
+  const input = normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'pages'}).input, bookId: 'x'});
+  assert.equal(input.layoutPolicy, undefined, 'a page book');
   assert.equal(input.pageCount, 16);
   const outline = {...demoOutline(input), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [{title: '파마 날'}], premises: [PREMISE]}};
   const draft = {title: '파마 날!', language: 'dual', pages: Array.from({length: 10}, (_, i) => ({pageNo: i + 1, ...page(i + 1)}))};
   const req = W.extractRequest(input, outline, draft.pages);
-  assert.match(req.system, /\[cast\] yuha = 유하 \(Yuha\), mom = 엄마 \(Mom\)/);
+  assert.match(req.system, /\[cast\] yuha = 유하 \(Yuha\) — boy, he, mom = 엄마 \(Mom\) — woman, she/);
   assert.match(req.system, /보라 are new to this book and have no ID/);
   assert.match(req.system, /\[beats\]\n1: /);
   assert.equal(req.jsonSchema.properties.pages.minItems, 10, 'the request itself takes what it is given');
@@ -77,7 +78,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
   assert.ok(pages[11].beatIndex <= 8 && pages[11].beatIndex >= pages[10].beatIndex, 'a beat the outline lacks falls back');
   assert.equal(pages.map((p) => p.textKo).join(' '), draft.pages.map((p) => p.ko).join(' '), 'every Korean word in order');
   assert.equal(pages.map((p) => p.textEn).join(' '), draft.pages.map((p) => p.en).join(' '), 'every English word in order');
-  assert.equal(result.data.cover.title, '파마 날!');
+  assert.equal(result.data.cover.title, '파마 날!', 'R54f-2: the cover title is the writer\'s (the reader\'s own title is ignored)');
   assert.ok(result.meta.checks && typeof result.meta.checks.passed === 'boolean', 'the story checks ran (advisory)');
   // A Korean-only edition fills the English slot with the Korean so the page validator is satisfied; a book with nothing cannot start.
   const settled = W.settleExtraction({pages: []}, input, outline, [{ko: '한글만.'}], '제목');
@@ -89,7 +90,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
 test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat writers, no pagination request); a parked room owes nothing for the premises and the panel; a demo job keeps the old path', () => {
   const settings = {engine: 'openai'};
   const room = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true});
-  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'outline', 'roomDrafts', 'roomRead', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages', 'revision']);
+  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'outline', 'roomDrafts', 'roomRead', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages'], 'R54e: no read-through row — the room pages skip it');
   assert.equal(room.stages.find((s) => s.stage === 'roomDrafts').requestCount, 3);
   assert.equal(room.room, true);
   const plain = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, council: true, orchestration: true});
@@ -104,5 +105,5 @@ test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat
   const demo = createFullAutoJob(state, {...wizard, simpleFlow: true}, {allowNew: false, stopBefore: 'text', planMode: 'selection', demo: true});
   assert.equal(demo.demo, true);
   assert.equal(demo.input.writersRoom?.version, 1, 'the marker is on the input');
-  assert.equal(demo.input.layoutPolicy, undefined, 'a room draft is a page book');
+  assert.equal(demo.input.layoutPolicy?.kind, 'openings', 'R54b: the layout follows the screen (K2 dual is an openings book)');
 });

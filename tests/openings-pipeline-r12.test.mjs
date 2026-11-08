@@ -9,7 +9,7 @@ import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/d
 import {checkStory} from '../dist/story-generation/checker.js';
 import {checkRichness} from '../dist/story-generation/richness.js';
 import {inspectChildStory} from '../dist/story-generation/quality-gates.js';
-import {configureStoryUI, resumeStoryDraft, cleanupStoryWorkflow, syncStoryDraft, inputFromWizard} from '../dist/story-generation/ui.js';
+import {syncStoryDraft, inputFromWizard} from '../dist/story-generation/ui.js';
 import {createFullAutoJob, runFullAuto} from '../dist/full-auto.js';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
@@ -305,65 +305,6 @@ test('R12-P4 child gate: a post-turn repagination that changes one kind is accep
   assert.equal(result.meta.childGate.proseRevised, true);
 });
 
-// ---------- count guards ----------
-const errorNode = {textContent: ''};
-let currentState, rendered = '', readyCount = 0;
-const handlers = {}, originalDocument = globalThis.document;
-function uiDocument() {
-  globalThis.document = {addEventListener: (type, handler) => { handlers[type] = handler; }, querySelectorAll: () => [], querySelector: selector => (selector === '#story-accept-failures' ? {checked: true} : selector === '#story-error' ? errorNode : null)};
-  configureStoryUI({getState: () => currentState, isParent: () => true, protectedAction: fn => fn(), save: () => true, render: () => {}, toast: () => {}, modalHeader: title => `<h2>${title}</h2>`, showModal: value => { rendered = value; }, closeModal: () => {}, onReady: async () => { readyCount++; }});
-}
-const click = async (action, data = {}) => await handlers.click({target: {closest: () => ({dataset: {storyAction: action, ...data}})}, preventDefault: () => {}});
-test('R12-P4 pro 쪽 나누기 and approval accept 13-entry/16-page and 9-entry/12-page books with 0 engine calls and no count banner', async () => {
-  uiDocument();
-  const priorFetch = globalThis.fetch;
-  let network = 0;
-  globalThis.fetch = async () => { network++; throw Error('no network'); };
-  try {
-    for (const pageCount of [16, 12]) {
-      const {input, outline, prose, pagination} = fixture(pageCount);
-      const textSettings = {engine: 'openai', providers: {openai: {model: 'gpt-6-astra'}}, hybrid: {enabled: false}, storyEnrichment: false};
-      const draft = {id: `openings-ui-${pageCount}`, bookId: `openings-book-${pageCount}`, wizard: {}, input, outline, prose, pagination, textSettings, worldSnapshot: {imageEngine: 'sample'}, readingLevels: {specs: input.specs}, usage: {calls: []}, stage: 'paged', reviewMode: 'pages', demo: true};
-      currentState = {settings: {textGeneration: textSettings}, backgrounds: PLACES, storyDrafts: {[draft.id]: draft}};
-      readyCount = 0; errorNode.textContent = '';
-      resumeStoryDraft(draft.id);
-      assert.match(rendered, new RegExp(`펼침 ${pageCount / 2}개 · ${pageCount}쪽 · 그림 ${pagination.pages.length}장\\(펼침면 3 · 낱쪽 ${pagination.pages.length - 3}\\)`, 'u'));
-      assert.doesNotMatch(rendered, /story-page-count|story-count-warning|split-page|merge-page|fit-page-count|다시 나누기 · API 요청/u);
-      assert.match(rendered, /펼침 1 · 1–2쪽 펼침면/u);
-      assert.match(rendered, /펼침 2 · 3쪽\(왼쪽\)/u);
-      assert.match(rendered, /data-story-action="repaginate"/u);
-      await click('approve-pages');
-      assert.equal(readyCount, 1, errorNode.textContent);
-      // Split/merge refuse on openings drafts; repagination is refused once a picture exists.
-      const saved = () => currentState.storyDrafts[draft.id];
-      Object.assign(saved(), {stage: 'paged', reviewMode: 'pages'});
-      resumeStoryDraft(draft.id);
-      await click('split-page', {index: '1'});
-      assert.match(errorNode.textContent, /AI가 고른 펼침을 그대로/u);
-      Object.assign(saved(), {pictureBook: {pages: [{imageAssetId: 'asset-1'}]}, stage: 'paged', reviewMode: 'pages'});
-      resumeStoryDraft(draft.id);
-      assert.doesNotMatch(rendered, /data-story-action="repaginate"/u);
-      assert.match(rendered, /그림이 있는 책은 쪽을 다시 나누지 않아요/u);
-      errorNode.textContent = '';
-      await click('repaginate');
-      assert.match(errorNode.textContent, /그림이 있는 책은 쪽을 다시 나누지 않아요/u);
-      cleanupStoryWorkflow();
-      // finalizeStoryPagination accepts the same book with no engine call.
-      const final = await finalizeStoryPagination(outline, prose, pagination, input, {engine: engine(), ...OPTS});
-      assert.equal(final.meta.requests, 0);
-      assert.equal(final.meta.checks.needsRepagination, false);
-    }
-    // The beat card names the opening and its printed pages.
-    const {input, outline} = fixture();
-    const {renderStoryBeatCard} = await import('../dist/story-generation/ui.js');
-    assert.match(renderStoryBeatCard({input, outline}, 3), /펼침 4 · 7–8쪽/u);
-    assert.equal(network, 0);
-  } finally {
-    cleanupStoryWorkflow();
-    globalThis.fetch = priorFetch;
-    globalThis.document = originalDocument;
-  }
-});
 
 test('R12-P4 free demo FULL AUTO (stopBefore text) at K2/E2 makes valid openings that pass their own checks (12 and 16 pages)', async () => {
   const priorFetch = globalThis.fetch;

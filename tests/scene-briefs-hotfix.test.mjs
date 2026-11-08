@@ -245,6 +245,7 @@ function jobSetup() {
   const state = seedState();
   migrateWorldState(state);
   migrateReadingSettings(state.settings);
+  state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
   const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '공룡 친구와 소풍', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
   return {state, wizard};
 }

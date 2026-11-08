@@ -188,10 +188,6 @@ export function cleanupFullAuto(hide = false) {
   }
   controller?.abort();
 }
-export function renderFullAutoLauncher(state, wizard) {
-  const estimate = estimateFullAutoCost(state, wizard);
-  return `<section class="full-auto-launcher" aria-label="FULL AUTO MODE"><div><span class="role-tag">FULL AUTO MODE</span><h3>주제만 적고, 한 권을 한 번에</h3><p>고른 친구를 주인공으로 유지해요. 필요한 친구·장소는 서랍에서 고르고, 부족하면 새 시트부터 본문 그림과 표지까지 자동으로 만들어요.</p></div><label class="audio-cache-check"><input id="full-auto-allow-new" type="checkbox" checked> 부족한 재료 자동 추가 · 새 조연 최대 2명, 새 배경 최대 3곳 (주제에 어울리는 재료가 서랍에 없을 때 더하고 서랍에 저장해요)</label>${renderCheckboxSwitch({id: "full-auto-council-review", label: "회의 후 부모 확인", description: "켜면 이야기 안을 직접 고르고, 끄면 봇 추천으로 자동 진행해요.", checked: state.settings?.councilReview !== false})}<p class="small-label">${estimate.pageCount}쪽 · 부모 설정의 글·그림 엔진과 읽기 수준 사용<br>API 예상 약 $${estimate.baseUsd.toFixed(2)} · 새 시트 포함 약 $${estimate.withMaterialsAndRetryUsd.toFixed(2)}${estimate.textPricingUnknown || estimate.imagePricingUnknown ? " · 일부 요금 미확인 (목록에 없는 모델은 요금 정보 없음)" : ""}<br>참고 단가 추정이며 실제 한도가 아닙니다. 글 자동 수정·입력 참조 비용 별도.${estimate.imageEngine === "sample" ? "<br>현재 그림 엔진은 무료 고정 샘플입니다. AI 그림은 부모 설정에서 엔진을 변경해 주세요." : ""}</p><p class="small-label">완료 후 전체 초안을 검토해 책장에 저장해요. 제작 중에도 책장을 둘러볼 수 있어요. 브라우저를 완전히 종료하면 완료한 결과를 보관하고 다음 접속에서 이어 만들어요.</p><div class="story-start-actions"><button type="button" class="btn btn-green" data-action="wizard-next">줄거리부터 함께 만들기</button>${button("FULL AUTO로 한 번에", "start", null, "outline")}</div></section>`;
-}
 /** Simple-mode card status: what the parent would call it, not the runner's phase. */
 function simpleJobLabel(job) {
   const book = job.book,
@@ -695,19 +691,6 @@ export async function stopFullAutoJob(jobId) {
 export function getFullAutoJob(jobId) {
   return autoJobs(connectedApi().getState())[jobId] || null;
 }
-/**
- * Open a job's review the way its library card does: a held job in the simple
- * review (④), any other job in the pro editor once its drawing setup is final.
- * The caller refuses first while a simple action or page operation owns the book.
- */
-export async function openFullAutoReview(jobId) {
-  const job = jobById(jobId);
-  if (isHeld(job) && typeof api.openSimpleReview === "function")
-    return api.openSimpleReview(job.id);
-  assertEditorReady(job);
-  return api.openReview(job);
-}
-
 export function configureFullAutoUI(context) {
   bindCouncilChoiceFeedback();
   api = context;

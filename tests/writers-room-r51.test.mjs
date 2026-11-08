@@ -22,14 +22,21 @@ import * as W from '../dist/story-generation/writers-room.js';
  * on (off until R53); the simple ① then hides the nine format selects.
  * The outline is written from the chosen premise (R52 writes whole drafts).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '뽀글머리', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
 const roomState = () => { const s = setup(); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: true}; return s; };
 const premise = (n) => ({title: `전제 ${n}`, line: `${n}번째 이야기: 유하의 머리가 ${n}번 바뀌어요`, engine: n % 2 ? 'three_then_flip' : 'reader_knows', laugh: `엄마 머리가 ${n}번 먼저 뽀글이 돼요`, picture: `거울 앞 ${n}명`, cast: [{name: '보라', isNew: true, want: '쉬고 싶다', flaw: '손이 빠르다', speech: '손님에게 존댓말'}]});
 const PREMISES = {premises: Array.from({length: 12}, (_, i) => premise(i + 1))};
-const r = (laughed, curious, lost, again) => ({laughed, curious, lost, again, word: laughed ? '깔깔' : ''});
-const quiet = r(false, false, false, false);
-const REACTIONS = {reactions: Array.from({length: 12}, (_, i) => ({premise: i + 1, action: i === 6 ? r(true, true, false, true) : i === 2 ? r(true, false, false, true) : quiet, laugh: i === 6 || i === 2 || i === 9 ? r(true, true, false, true) : quiet, heart: i === 6 ? r(false, true, false, true) : quiet, eye: quiet, ours: i === 9 ? r(true, false, false, false) : quiet, parent: i === 6 ? r(true, true, false, true) : quiet}))};
+// R54e: six readers, three ranked picks each — premise 7 leads (17), then 3 (10), then 10 (8).
+const pick = (premise, why, word = '') => ({premise, why, word});
+const REACTIONS = {readers: [
+  {reader: 'action', picks: [pick(7, 'laugh', '깔깔'), pick(3, 'curious'), pick(10, 'again')]},
+  {reader: 'laugh', picks: [pick(7, 'laugh'), pick(3, 'laugh'), pick(10, 'laugh')]},
+  {reader: 'heart', picks: [pick(7, 'heart'), pick(10, 'curious'), pick(3, 'again')]},
+  {reader: 'eye', picks: [pick(7, 'again'), pick(3, 'curious'), pick(1, 'heart')]},
+  {reader: 'ours', picks: [pick(10, 'again'), pick(7, 'laugh'), pick(3, 'laugh')]},
+  {reader: 'parent', picks: [pick(7, 'curious'), pick(3, 'again'), pick(10, 'curious')]},
+]};
 const reply = (json) => ({json, usage: {input: 10, output: 5}, meta: {requests: 1, model: 'mock'}});
 /** A mock engine that answers by what the request asks for; it counts its calls. */
 function mockEngine(input, calls) {
@@ -37,7 +44,7 @@ function mockEngine(input, calls) {
     calls.push(req);
     const schema = req.jsonSchema?.properties || {};
     if (schema.premises) return reply(PREMISES);
-    if (schema.reactions) return reply(REACTIONS);
+    if (schema.readers) return reply(REACTIONS);
     const o = structuredClone(demoOutline(input));
     o.beats[1].summary += ' 유하의 뽀글머리가 거울에 비쳐요.';
     return reply(o);
@@ -53,8 +60,9 @@ test('R51 the marker: only when the parent\'s 작가실 setting is on; kept by n
   assert.ok(W.hasWritersRoom(input));
   assert.doesNotMatch(JSON.stringify(leanVisibleInput(input, 'outline')), /writersRoom/);
   assert.equal(normalizeStoryInput({...input, writersRoom: {version: 3}}).writersRoom, undefined);
-  assert.equal(getTextGenerationSettings(roomState()).writersRoom, true);
-  assert.equal('writersRoom' in getTextGenerationSettings(setup()), false);
+  // R54c: on is the default and is not stored; a stored true (R51–R55a) is dropped by the settings reader, still read as on.
+  assert.equal(getTextGenerationSettings(roomState()).writersRoom, undefined);
+  assert.equal(getTextGenerationSettings(setup()).writersRoom, false, 'R54c: off is kept as false');
   assert.equal(inputFromWizard(roomState(), {...wizard, koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, {layout: 'pages'}).input.writersRoom, undefined);
   assert.deepEqual(W.writersRoomFor(roomState()), {version: 1});
   assert.equal(W.writersRoomFor(setup()), null);
@@ -74,8 +82,8 @@ test('R51 the room runs: premises (top model) → the panel (cheap) → a counte
   assert.equal(held.kind, 'writersRoom');
   assert.equal(held.phase, 'review');
   assert.equal(held.premises.length, 12);
-  assert.deepEqual(held.shortlist, [7, 3, 10], 'counted: premise 7 pulls most (11), then 3 (5), then 10 (4)');
-  assert.deepEqual(held.pitches.map((p) => [p.title, p.laughed, p.again]), [['전제 7', 3, 4], ['전제 3', 2, 2], ['전제 10', 2, 1]]);
+  assert.deepEqual(held.shortlist, [7, 3, 10], 'counted: premise 7 pulls most (17), then 3 (10), then 10 (8)');
+  assert.deepEqual(held.pitches.map((p) => [p.title, p.laughed, p.again]), [['전제 7', 3, 1], ['전제 3', 2, 2], ['전제 10', 1, 2]]);
   assert.equal(held.recommended, 1);
   assert.deepEqual(progress.filter((p) => p.stage === 'council').map((p) => p.phase), ['premises', 'panel', 'review']);
   // The screens: the room panel while held, the premise form with the R22 names, the folded block afterwards.
@@ -138,7 +146,7 @@ test('R51 the outline stage takes the room instead of the council; the sieve dro
 test('R51 the simple ①: with the room on, the nine format selects are gone and a line says the room decides; off, the panel stays', async () => {
   const {renderSimpleCreate, ensureSimpleWizard} = await import('../dist/simple-create.js');
   const src = readFileSync(new URL('../dist/simple-create.js', import.meta.url), 'utf8');
-  assert.match(src, /writersRoomFor\(state\) \? `<p class="small-label simple-defaults-note simple-room-note">작가실이 책의 길이·모양·끝을 정해요/);
+  assert.match(src, /roomDecides\(state, w\) \? `<p class="small-label simple-defaults-note simple-room-note">작가실이 책의 길이·모양·끝을 정해요/);
   assert.match(src, /action === "toggle-writers-room"/);
   assert.match(src, /label: "작가실"/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');

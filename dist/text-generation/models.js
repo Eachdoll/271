@@ -460,8 +460,13 @@ export function resolveQualityStageSettings(
   role,
   qualitySettings = {},
 ) {
-  if (!["outline", "prose", "cheap", "coach"].includes(role))
+  if (!["outline", "prose", "cheap", "coach", "writer"].includes(role))
     throw new Error("지원하는 글 품질 엔진 역할을 선택해 주세요.");
+  // R54e: "writer" is the writers' room's author — the parent's "작가 · 상위" row (the outline
+  // role's engine choice) resolved to that engine's upper model on every provider. The legacy
+  // outline role keeps its old routing (anthropic medium) so pre-R54e jobs and pins never change.
+  const writer = role === "writer";
+  if (writer) role = "outline";
   const selected = Object.hasOwn(CATALOG, settings.engine)
       ? settings.engine
       : "openai",
@@ -489,9 +494,11 @@ export function resolveQualityStageSettings(
         ? models.medium
         : TEXT_MODELS[engineId].id
       : models[
-          role === "prose" || (role === "outline" && engineId === "anthropic")
-            ? "medium"
-            : "upper"
+          writer
+            ? "upper"
+            : role === "prose" || (role === "outline" && engineId === "anthropic")
+              ? "medium"
+              : "upper"
         ];
   const requested = String(override.model || "").trim(),
     model =
@@ -734,23 +741,23 @@ export function estimateStoryTextCost({
   };
   const stages = [];
   if (room) {
-    const draftOut = 1200 + pages * 160;
+    // R54e: rows from the 2026-11-04 A/B (K2 16쪽, two providers) with about a third of margin —
+    // the old rows priced the openai book at $3.19 against $0.92 measured.
+    // The output sizes are the visible text (the reasoning factor above doubles them for a
+    // reasoning model, which is what the providers billed: premises 5.6k–6.3k, a draft 1.3k–1.7k).
+    const draftOut = 700 + pages * 25;
     stages.push(
-      stageEstimate("roomPremises", 2500, 4500, 1, "outline"),
-      stageEstimate("roomPanel", 4500, 3000, 1, "cheap"),
-      stageEstimate("outline", 5000, beats * 350, 1),
-      stageEstimate("roomDrafts", 3000, draftOut, 3, "outline"),
-      stageEstimate("roomRead", 3000 + pages * 300, 2500, 1, "cheap"),
-      stageEstimate("roomRewrite", 3500 + pages * 120, draftOut, 1, "outline"),
-      stageEstimate("roomEnglish", 2500 + pages * 120, Math.ceil(draftOut * 0.7), 1, "outline"),
-      stageEstimate("roomPolish", 3500 + pages * 200, draftOut, 1, "outline"),
-      stageEstimate("roomPages", 3000 + pages * 200, 300 + pages * 120, 1, "cheap"),
+      stageEstimate("roomPremises", 2500, 3500, 1, "writer"),
+      stageEstimate("roomPanel", 5500, 1700, 1, "cheap"),
+      stageEstimate("outline", 7000, beats * 350, 1),
+      stageEstimate("roomDrafts", 1800, draftOut, 3, "writer"),
+      stageEstimate("roomRead", 5000 + pages * 150, 1500, 1, "cheap"),
+      stageEstimate("roomRewrite", 2200 + pages * 60, draftOut, 1, "writer"),
+      stageEstimate("roomEnglish", 2500 + pages * 80, Math.ceil(draftOut * 0.6), 1, "writer"),
+      stageEstimate("roomPolish", 4000 + pages * 120, draftOut, 1, "writer"),
+      stageEstimate("roomPages", 3500 + pages * 100, 500 + pages * 35, 1, "cheap"),
     );
-    if (editor)
-      stages.push({
-        ...stageEstimate("coherence", 5000 + pages * 125, 800),
-        stage: "revision",
-      });
+    // No read-through (revision) row: the room's pages skip finishPaginationCoherence.
   }
   if (room || k1Book);
   else if (council && orchestration)
@@ -885,7 +892,7 @@ export function estimateStoryTextCost({
   // for a snapshot without reviewTier).
   if (ledger)
     stages.push({ ...stageEstimate("coherenceReview", reviewInput, 1600, 2), stage: "coherence" });
-  if (childSimulator)
+  if (childSimulator && !room)
     stages.push(
       diet
         ? stageEstimate("childSimulator", 6000, 400, 2, "cheap")

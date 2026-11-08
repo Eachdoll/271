@@ -1,0 +1,26 @@
+{
+  "existingArtifact": "QA/r54-room-ab-opus/anthropic.json",
+  "originalEntries": 14,
+  "originalMarks": [
+    10,
+    14
+  ],
+  "fitted": true,
+  "entries": 14,
+  "koPreserved": true,
+  "enPreserved": true,
+  "marked": [
+    {
+      "entry": 11,
+      "opening": 6,
+      "entriesInOpening": 1
+    },
+    {
+      "entry": 14,
+      "opening": 8,
+      "entriesInOpening": 1
+    }
+  ],
+  "paidCalls": 0,
+  "passed": true
+}

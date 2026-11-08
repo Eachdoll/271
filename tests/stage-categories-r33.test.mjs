@@ -11,7 +11,7 @@ import {directionLine} from '../dist/story-generation/council.js';
 import {resolveStoryWorld} from '../dist/story-generation/quality-adapter.js';
 import {normalizeStoryQualitySettings} from '../dist/text-generation/settings-ui.js';
 import {STAGE_CATEGORIES, STAGE_OPTIONS, stageById, worldStageId, stageWorlds, stageFromTopic, stageFor, stagePlaceIds, stageMissing, stageRule, stageDirection, stagePlanLine} from '../dist/story-generation/stage-categories.js';
-import {configureStoryQualityUI, renderQualityWorldSelectors, renderStoryQualitySettings, cleanupStoryQualityUI} from '../dist/story-generation/quality-settings.js';
+import {configureStoryQualityUI, renderStoryQualitySettings, cleanupStoryQualityUI} from '../dist/story-generation/quality-settings.js';
 import {createFullAutoJob} from '../dist/full-auto.js';
 import {ecoOutlinePrompt, ecoJobInit} from '../dist/eco-mode.js';
 import {renderSimpleCreate, ensureSimpleWizard, preselectMaterials} from '../dist/simple-create.js';
@@ -28,7 +28,7 @@ import {renderSimpleCreate, ensureSimpleWizard, preselectMaterials} from '../dis
 const worldLibrary = JSON.parse(await readFile(new URL('../dist/story-quality/data/worlds.json', import.meta.url), 'utf8'));
 const plotPatterns = JSON.parse(await readFile(new URL('../dist/story-quality/data/plot_patterns.json', import.meta.url), 'utf8'));
 const qualityData = {worldLibrary, plotPatterns, goldBooks: [], inventories: {twistTypes: []}};
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha'], backgroundIds: ['home', 'beach'], topic: '유하가 바닷가에서 조개를 찾아요', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const legacy = (input) => { const copy = structuredClone(input); delete copy.promptDiet; return copy; };
 const field = (html, id) => html.match(new RegExp(`<select id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`))?.[1] || '';
@@ -109,36 +109,6 @@ test('R33 the lean outline request carries one STAGE line (the world card\'s own
   assert.doesNotMatch(calls[1].system, /chose the stage/);
 });
 
-test('R33 the pro selectors: a stage select narrows the world cards (the chosen card stays), the settings page has the default, the change handler refills the list', () => {
-  const state = setup();
-  const originalDocument = globalThis.document, handlers = {};
-  globalThis.document = {addEventListener: (name, handler) => { handlers[name] = handler; }, querySelector: () => null, querySelectorAll: () => []};
-  configureStoryQualityUI({qualityData, getState: () => state, isParent: () => true, save: () => true, render: () => {}, toast: () => {}, setWizardTopic: () => {}});
-  try {
-    const all = renderQualityWorldSelectors({}, {state});
-    assert.equal((field(all, 'stageCategoryId').match(/<option /g) || []).length, 11);
-    assert.match(field(all, 'stageCategoryId'), /value="auto" selected/);
-    assert.equal((field(all, 'storyWorldId').match(/<option /g) || []).length, 101, '자동: every card');
-    const sea = renderQualityWorldSelectors({stageCategoryId: 'nature_sea'}, {state});
-    assert.match(field(sea, 'stageCategoryId'), /value="nature_sea" selected/);
-    assert.equal((field(sea, 'storyWorldId').match(/<option /g) || []).length, 10, 'drawer + the nine sea cards');
-    assert.doesNotMatch(field(sea, 'storyWorldId'), /<optgroup label="과거">/);
-    assert.match(field(sea, 'storyWorldId'), /value="drawer" selected/);
-    const kept = renderQualityWorldSelectors({stageCategoryId: 'city', storyWorldId: 'jeju_sea'}, {state});
-    assert.match(field(kept, 'storyWorldId'), /value="jeju_sea" selected/, 'a chosen card outside the stage stays listed');
-    assert.equal((field(kept, 'storyWorldId').match(/<option /g) || []).length, 9, 'drawer + seven city cards + the kept card');
-    // R54a: the settings page no longer shows the stage default (the pro ② selectors keep it).
-    const settings = renderStoryQualitySettings(state);
-    assert.doesNotMatch(settings, /id="quality-default-stageCategoryId"/);
-    const worldSelect = {value: 'drawer', innerHTML: ''}, container = {querySelector: () => worldSelect};
-    handlers.change({target: {dataset: {qualityWorldField: 'stageCategoryId'}, value: 'sky_space', closest: () => container}});
-    assert.equal((worldSelect.innerHTML.match(/<option /g) || []).length, 10, 'drawer + nine sky cards');
-    assert.match(worldSelect.innerHTML, /value="moon_base"/);
-  } finally {
-    cleanupStoryQualityUI();
-    globalThis.document = originalDocument;
-  }
-});
 
 test('R33 the simple screen: ① offers the stage, ② recommends the drawer places that fit it and names a missing one, the eco request carries the STAGE line', () => {
   const state = setup();

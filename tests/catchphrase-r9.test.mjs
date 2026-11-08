@@ -178,45 +178,6 @@ test('R9 fix: checkStory takes the frozen storyInput for the advisory, and the e
  assert.match(app,/draft\.storyCheck = checkStory\(draft\.outline, draft\.pagination, \{\n\s+storyInput: draft\.storyInput,\n\s+specs: draft\.readingLevelSnapshot\.specs,/);
 });
 
-import {configureStoryUI,resumeStoryDraft,cleanupStoryWorkflow} from '../dist/story-generation/ui.js';
-import {demoOutline,demoProse,demoPagination} from '../dist/story-generation/demo.js';
-import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
-const storyUI={ready:[],error:{textContent:''},handlers:{}};
-function configureUI(state){
- globalThis.document={addEventListener:(type,handler)=>{storyUI.handlers[type]=handler;},querySelectorAll:()=>[],querySelector:selector=>selector==='#story-accept-failures'?{checked:true}:selector==='#story-error'?storyUI.error:null};
- configureStoryUI({getState:()=>state,isParent:()=>true,protectedAction:fn=>fn(),save:()=>true,render:()=>{},toast:()=>{},modalHeader:title=>`<h2>${title}</h2>`,showModal:()=>{},closeModal:()=>{},onReady:async payload=>{storyUI.ready.push(payload);}});
-}
-const clickStory=async action=>await storyUI.handlers.click({target:{closest:()=>({dataset:{storyAction:action}})},preventDefault:()=>{}});
-function wizardDraft(pageCount=12){
- const input={characters:[{id:'yuha',name:'유하',nameEn:'Yuha',catchphrase:'같이 가자!'},{id:'green',name:'그린이',nameEn:'Green'}],backgrounds:[{id:'home',name:'유하의 집',type:'home'},{id:'forest',name:'숲길'},{id:'garden',name:'작은 정원'}],topic:'바람 피리',pageCount:12,endingType:'home_sleep',specs,variants:[],catchphrasePolicy:{version:1,limit:1,omit:[],phrases:{yuha:'같이 가자!'},recentBookIds:[]}};
- const outline=demoOutline(input);outline.plotContract=demoPlotContract(outline,input);
- const prose=demoProse(outline,input),pagination=demoPagination(outline,prose,input);
- pagination.pages=pagination.pages.slice(0,pageCount);
- for(const index of [0,2]){const page=pagination.pages[index];page.textKo=`${page.textKo} 유하가 "같이 가자!" 해요.`;}
- const textSettings={engine:'openai',providers:{openai:{model:'gpt-6-astra',proxyEndpoint:'https://story-proxy.invalid',transport:'proxy'}},hybrid:{enabled:false},storyEnrichment:false};
- const draft={id:'r9-wizard-draft',bookId:'r9-wizard-book',wizard:{},input,outline,prose,pagination,textSettings,worldSnapshot:{imageEngine:'openai'},readingLevels:{specs},usage:{calls:[]},stage:'paged',reviewMode:'pages',demo:true};
- return {draft,state:{settings:{textGeneration:textSettings},backgrounds:input.backgrounds,storyDrafts:{[draft.id]:draft}}};
-}
-
-test('R9 fix: a wizard-approved draft keeps the catchphrase-repeat advisory in its storyCheck (approve-pages and fit-page-count)',async()=>{
- const priorDocument=globalThis.document;
- try{
-  const {draft,state}=wizardDraft();configureUI(state);storyUI.ready.length=0;
-  resumeStoryDraft(draft.id);await clickStory('approve-pages');
-  assert.equal(storyUI.ready.length,1,storyUI.error.textContent);
-  const payload=storyUI.ready[0],advisory=payload.storyCheck.warnings.filter(w=>w.code==='catchphrase-repeat');
-  assert.deepEqual(advisory.map(w=>[w.language,w.phrase,w.count,w.pages]),[['ko','같이 가자!',2,[1,3]]]);
-  assert.equal(payload.storyCheck.checks.length,7);
-  cleanupStoryWorkflow();
-
-  const short=wizardDraft(11);configureUI(short.state);
-  resumeStoryDraft(short.draft.id);await clickStory('fit-page-count');
-  const fitted=short.state.storyDrafts[short.draft.id];
-  assert.equal(fitted.pagination.pages.length,12);
-  assert.ok(fitted.storyCheck.warnings.some(w=>w.code==='catchphrase-repeat'&&w.phrase==='같이 가자!'),JSON.stringify(fitted.storyCheck.warnings));
- }finally{cleanupStoryWorkflow();globalThis.document=priorDocument;}
-});
-
 /**
  * Pre-R9 byte identity for drafts frozen without a catchphrase policy: the same
  * legacy input goes through the real app pipeline (quality outline incl. its

@@ -18,7 +18,9 @@ import { StoryValidationError } from "./schemas.js";
 import { ROOM_PHASES } from "./council-room.js";
 import { checkStory } from "./checker.js";
 import { leanLevelLine } from "./prompt-diet.js";
-import { acceptEcoPagination, inspectStory } from "./pipeline.js";
+import { acceptEcoPagination, inspectStory, roomServices } from "./pipeline.js";
+/** R54d: a caller without an engine resolver (FULL AUTO) gets the pipeline's — the same one the room's premises stage uses. */
+const withEngines = (services) => (typeof services?.engineFor === "function" ? services : { ...roomServices(), ...(services || {}) });
 export { ROOM_PHASES };
 export const WRITERS_ROOM_VERSION = 1;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
@@ -102,12 +104,27 @@ export function castSheet(input) {
       name: str(c.name, 30),
       ...(c.nameEn ? { nameEn: str(c.nameEn, 30) } : {}),
       kind: c.kind === "adult" ? "어른" : c.kind === "child" ? "아이" : str(c.kind, 20) || "친구",
+      // R54e: he/she for the English edition — the drawer's gender, else a family role that says it.
+      ...(genderWord(c) ? { gender: genderWord(c) } : {}),
       role: str(c.role, 20) || "친구",
       family: FAMILY.test(`${c.role || ""} ${c.name || ""}`),
       ...(c.age !== undefined && c.age !== "" ? { age: c.age } : {}),
       traits: list(c.traits).slice(0, 3).map((t) => str(t, 20)),
       ...(c.catchphrase ? { catchphrase: str(c.catchphrase, 60) } : {}),
     }));
+}
+const MALE_ROLE = /아빠|아버지|할아버지|삼촌|오빠|형(?![제])/u,
+  FEMALE_ROLE = /엄마|어머니|할머니|이모|고모|누나|언니/u;
+/** "boy"·"girl"·"man"·"woman" from the drawer's gender word or a family role; "" when unknown. */
+export function genderWord(c) {
+  const g = String(c?.gender || ""),
+    adult = c?.kind === "adult",
+    who = `${c?.role || ""} ${c?.name || ""}`;
+  if (/남자|boy|male/iu.test(g)) return adult ? "man" : "boy";
+  if (/여자|girl|female/iu.test(g)) return adult ? "woman" : "girl";
+  if (FEMALE_ROLE.test(who)) return adult || !/누나|언니/u.test(who) ? "woman" : "girl";
+  if (MALE_ROLE.test(who)) return adult || !/오빠|형/u.test(who) ? "man" : "boy";
+  return "";
 }
 const castText = (input) =>
   castSheet(input)
@@ -157,6 +174,30 @@ const customEnding = (input) => {
   if (input?.endingType !== "custom" || !note) return "";
   return [topicEndingNote(input?.topic, { change: true }), topicEndingNote(input?.topic)].map((v) => str(v, 120)).includes(note) ? "" : note;
 };
+/** R54b: an openings book (K2+ dual, 12 or 16 printed pages) binds the writer's pages into fixed openings. */
+const isOpeningsInput = (input) => input?.layoutPolicy?.kind === "openings";
+const openingCount = (input) => (isOpeningsInput(input) ? Math.max(1, Math.round(Number(input?.pageCount) / 2) || 6) : 0);
+const openingsBrief = (input) => {
+  const c = openingCount(input);
+  return c ? ` 이 책은 펼침 ${c}개(${c * 2}쪽)로 묶어요 — 글 ${c}~${c * 2}쪽이 그대로 들어가고, 한 펼침에 한두 쪽이 놓여요.` : "";
+};
+/** R54e: the reading level's page band as a target (never a block): [min, max, target] or null. */
+export function pageBand(input, lang) {
+  const spec = input?.specs?.[lang];
+  if (!spec) return null;
+  const unit = spec.units?.page;
+  if (unit && Number.isFinite(unit.min) && Number.isFinite(unit.max)) return [unit.min, unit.max, Number.isFinite(unit.target) ? unit.target : Math.round((unit.min + unit.max) / 2)];
+  const range = Array.isArray(spec.sentencesPerPageRange) ? spec.sentencesPerPageRange : null;
+  if (range && Number.isFinite(range[0]) && Number.isFinite(range[1])) return [range[0], range[1], Number.isFinite(spec.sentencesPerPage) ? spec.sentencesPerPage : Math.round((range[0] + range[1]) / 2)];
+  return null;
+}
+/** R54e: the A/B showed both writers at 6–12 sentences a page, so the polish rewrote whole books; the target goes to the writer up front. */
+const densityBrief = (input) => {
+  const ko = pageBand(input, "ko"),
+    en = input?.language !== "ko" ? pageBand(input, "en") : null;
+  if (!ko) return "";
+  return ` 그림책 밀도가 목표예요: 한글 한 쪽 ${ko[0]}~${ko[1]}문장(보통 ${ko[2]}문장) — 그림이 말하는 쪽은 한 줄이나 소리 하나여도 돼요.${en ? ` 영어판은 쪽당 ${en[0]}~${en[1]}문장.` : ""}`;
+};
 /** The one-page brief. What it does not say is the point: no fear list, no page count, no shape, no name ban. */
 export function roomBrief(input, { records = [] } = {}) {
   const ko = String(input?.specs?.ko?.id || "K2"),
@@ -169,8 +210,8 @@ export function roomBrief(input, { records = [] } = {}) {
     `[꼭 나오는 인물 — 부모님이 골랐어요]\n${castText(input) || "- (없음)"}`,
     `[고른 장소] ${placeText(input) || "(없음)"} — 이야기가 원하면 다른 곳도 가요.`,
     ending ? `[끝] ${ending}` : "",
-    "[좋은 그림책이 하는 일] 쪽을 넘기고 싶게 해요. 웃음은 벌어지는 일에서 나와요. 어른에게도 제 바람과 결점이 있어요. 아이는 주인공보다 먼저 알아채기를 좋아해요. 끝은 처음과 하나가 달라요. 이건 설명이지 점검표가 아니에요 — 더 좋은 길이 보이면 그리로 가요.",
-    "[길이] 쪽수는 작가가 정해요. 이야기가 원하는 만큼.",
+    "[좋은 그림책이 하는 일] 쪽을 넘기고 싶게 해요. 웃음은 벌어지는 일에서 나와요. 어른에게도 제 바람과 결점이 있어요. 아이는 주인공보다 먼저 알아채기를 좋아해요. 끝은 처음과 하나가 달라요 — 마지막 줄은 뜻을 말하지 않고, 달라진 것은 행동 하나로 보여요. 이건 설명이지 점검표가 아니에요 — 더 좋은 길이 보이면 그리로 가요.",
+    `[길이] 쪽수는 작가가 정해요. 이야기가 원하는 만큼.${openingsBrief(input)}${densityBrief(input)}`,
     recent.length ? `[이 집에서 최근에 만든 책 — 이것과 다르게]\n${recent.map((line) => `- ${line}`).join("\n")}` : "",
   ]
     .filter(Boolean)
@@ -202,13 +243,17 @@ const PREMISE_SCHEMA = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["name", "isNew", "want", "flaw", "speech"],
+              required: ["name", "isNew", "want", "flaw", "speech", "nameEn", "kind", "look"],
               properties: {
                 name: { type: "string", maxLength: 30 },
                 isNew: { type: "boolean" },
                 want: { type: "string", maxLength: 100 },
                 flaw: { type: "string", maxLength: 100 },
                 speech: { type: "string", maxLength: 100 },
+                // R54f: a new character's card for the drawer — "" for the parent's own characters.
+                nameEn: { type: "string", maxLength: 30 },
+                kind: { type: "string", maxLength: 24 },
+                look: { type: "string", maxLength: 160 },
               },
             },
           },
@@ -220,11 +265,11 @@ const PREMISE_SCHEMA = {
 export function premisesRequest(input, { records = [] } = {}) {
   const brief = roomBrief(input, { records });
   return {
-    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
+    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 크기·색·털이나 머리·옷·눈에 띄는 것 하나)도 적어요; 부모님 인물은 셋 다 빈 문자열). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
     user: brief,
     jsonSchema: PREMISE_SCHEMA,
     temperature: 1,
-    maxTokens: 6000,
+    maxTokens: 9000,
   };
 }
 /* ---------- the deterministic sieve: unlike the last books ---------- */
@@ -254,65 +299,83 @@ export function sievePremises(premises, records = [], { count = 3, laughAlike = 
 }
 export const PANEL_IDS = Object.freeze(["action", "laugh", "heart", "eye", "ours", "parent"]);
 /* ---------- round 2: the panel hears the premises ---------- */
-const reaction = {
-  type: "object",
-  additionalProperties: false,
-  required: ["laughed", "curious", "lost", "again", "word"],
-  properties: {
-    laughed: { type: "boolean" },
-    curious: { type: "boolean" },
-    lost: { type: "boolean" },
-    again: { type: "boolean" },
-    word: { type: "string", maxLength: 80 },
-  },
-};
+const PICK_WHY = Object.freeze(["laugh", "curious", "again", "heart"]);
+const PICKS = 3;
+/**
+ * R54e: the panel chooses instead of reacting. The A/B showed six "yes/no"
+ * reactions landing on every premise alike (11 of 12 at the same count), so
+ * the first premise won by the writer's order. Now each of the six names its
+ * three, in order, with one reason each; nothing is said about the rest.
+ */
 const panelSchema = (count) => ({
   type: "object",
   additionalProperties: false,
-  required: ["reactions"],
+  required: ["readers"],
   properties: {
-    reactions: {
+    readers: {
       type: "array",
-      minItems: count,
-      maxItems: count,
+      minItems: PANEL_IDS.length,
+      maxItems: PANEL_IDS.length,
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["premise", ...PANEL_IDS],
-        properties: { premise: { type: "integer", minimum: 1, maximum: count }, ...Object.fromEntries(PANEL_IDS.map((id) => [id, reaction])) },
+        required: ["reader", "picks"],
+        properties: {
+          reader: { type: "string", enum: PANEL_IDS },
+          picks: {
+            type: "array",
+            minItems: Math.min(PICKS, count),
+            maxItems: Math.min(PICKS, count),
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["premise", "why", "word"],
+              properties: { premise: { type: "integer", minimum: 1, maximum: count }, why: { type: "string", enum: PICK_WHY }, word: { type: "string", maxLength: 80 } },
+            },
+          },
+        },
       },
     },
   },
 });
 export function panelPremisesRequest(input, premises) {
-  const rows = list(premises).map((p, i) => `${i + 1}. ${str(p.title, 40)} — ${str(p.line, 300)} / 웃음: ${str(p.laugh, 200)} / 그림: ${str(p.picture, 200)}`).join("\n");
+  const rows = list(premises).map((p, i) => `${i + 1}. ${str(p.title, 40)} — ${str(p.line, 300)} / 웃음: ${str(p.laugh, 200)} / 그림: ${str(p.picture, 200)}`).join("\n"),
+    picks = Math.min(PICKS, list(premises).length);
   return {
-    system: `너는 여섯 사람이에요. 각자 아래 이야기 전제를 듣고 솔직하게 반응해요 — 점수가 아니라 반응이에요. 전제마다 여섯 사람 각각: 웃었나(laughed), 다음이 궁금했나(curious), 무슨 말인지 몰랐나(lost), 또 들려 달라고 할까(again), 한마디(word). 예의 차리지 말고 그 사람답게. 아이는 뻔한 것에 안 웃고 모르는 것에 금방 흥미를 잃어요.\n\n[여섯 사람]\n${panelText(input)}`,
+    system: `너는 여섯 사람이에요. 각자 아래 이야기 전제를 듣고 **${picks}개만** 골라요 — 1순위부터 차례로. 고른 까닭은 하나만: laugh(웃길 것 같다) / curious(다음이 궁금하다) / again(또 듣고 싶을 것 같다) / heart(마음이 간다), 그리고 한마디(word). 고르지 않은 전제에는 아무 말도 하지 않아요. 여섯 사람이 같은 셋을 고르면 안 돼요 — 각자 제 식대로. 점수가 아니라 고름이에요. 예의 차리지 말고 그 사람답게. 아이는 뻔한 것에 안 웃고 모르는 것에 금방 흥미를 잃어요.\n\n[여섯 사람]\n${panelText(input)}`,
     user: rows,
     jsonSchema: panelSchema(list(premises).length),
     temperature: 0.7,
-    maxTokens: 6000,
+    maxTokens: 4000,
   };
 }
-/** Counts, never scores: laughs + curious + again − lost, per premise; ties keep the writer's order. */
-export function countReactions(reactions) {
-  const rows = [];
-  for (const row of list(reactions)) {
-    if (!object(row)) continue;
-    let laughed = 0, curious = 0, lost = 0, again = 0;
-    const words = [];
-    for (const id of PANEL_IDS) {
-      const r = row[id];
-      if (!object(r)) continue;
-      laughed += r.laughed === true ? 1 : 0;
-      curious += r.curious === true ? 1 : 0;
-      lost += r.lost === true ? 1 : 0;
-      again += r.again === true ? 1 : 0;
-      if (str(r.word, 80)) words.push(`${id}: ${str(r.word, 80)}`);
-    }
-    rows.push({ premise: Number(row.premise) || rows.length + 1, laughed, curious, lost, again, pull: laughed + curious + again - lost, words });
+/** Counts, never scores: a first pick is 3, a second 2, a third 1 (pull); the reasons are kept as counts; ties keep the writer's order. */
+export function countReactions(answer, count = PREMISE_COUNT) {
+  const readers = list(object(answer) && !Array.isArray(answer) ? answer.readers : answer).filter(object),
+    rows = new Map();
+  const row = (n) => {
+    if (!rows.has(n)) rows.set(n, { premise: n, laughed: 0, curious: 0, lost: 0, again: 0, heart: 0, picks: 0, pull: 0, words: [] });
+    return rows.get(n);
+  };
+  for (const reader of readers) {
+    const id = PANEL_IDS.includes(reader.reader) ? reader.reader : "?",
+      picks = list(reader.picks).filter(object).slice(0, PICKS),
+      seen = new Set();
+    picks.forEach((pick, rank) => {
+      const n = Math.round(Number(pick.premise));
+      if (!(n >= 1 && n <= count) || seen.has(n)) return;
+      seen.add(n);
+      const r = row(n);
+      r.picks += 1;
+      r.pull += PICKS - rank;
+      if (pick.why === "laugh") r.laughed += 1;
+      else if (pick.why === "curious") r.curious += 1;
+      else if (pick.why === "again") r.again += 1;
+      else if (pick.why === "heart") r.heart += 1;
+      if (str(pick.word, 80)) r.words.push(`${id}: ${str(pick.word, 80)}`);
+    });
   }
-  return rows;
+  return [...rows.values()].sort((a, b) => a.premise - b.premise);
 }
 export function pickPremises(rows, count = SHORTLIST) {
   return [...list(rows)].sort((a, b) => b.pull - a.pull || b.again - a.again || a.premise - b.premise).slice(0, count).map((row) => row.premise);
@@ -324,13 +387,16 @@ const DRAFT_SCHEMA = {
   required: ["title", "pages"],
   properties: {
     title: { type: "string", maxLength: 40 },
-    pages: { type: "array", minItems: 4, maxItems: 40, items: { type: "object", additionalProperties: false, required: ["ko"], properties: { ko: { type: "string", maxLength: 1200 } } } },
+    // R54e: spread — this page is one big picture across both halves (an openings book binds it alone).
+    pages: { type: "array", minItems: 4, maxItems: 40, items: { type: "object", additionalProperties: false, required: ["ko"], properties: { ko: { type: "string", maxLength: 1200 }, spread: { type: "boolean" } } } },
   },
 };
+/** R54e: an openings book — the writer marks the pages that are one big picture. */
+const spreadLine = (input) => (input?.layoutPolicy?.kind === "openings" ? " 큰 그림 한 장이 두 쪽에 걸쳐 맡는 순간은 그 쪽에 spread: true를 적어요(책에 두세 번쯤; 나머지는 적지 않아요)." : "");
 const castRows = (premise) => list(premise?.cast).map((c) => `- ${str(c.name, 30)}${c.isNew ? " (이 책의 새 인물)" : ""}: 바람 — ${str(c.want, 100)}; 결점 — ${str(c.flaw, 100)}; 말투 — ${str(c.speech, 100)}`).join("\n");
 export function draftRequest(input, premise, { records = [] } = {}) {
   return {
-    system: `너는 그림책 작가예요. 아래 전제로 책 한 권을 한글로 통째로 써요 — 쪽 단위로, 쪽마다 그 쪽의 글(ko). 쪽수는 네가 정해요. 비트도 설계도 없어요: 쪽을 넘기는 호흡은 네 몫이에요. 그림이 말할 쪽은 글이 짧고, 글이 끌어야 하는 쪽은 조금 길어요. 인물표의 말투대로 말해요. 제목(title)도 정해요.`,
+    system: `너는 그림책 작가예요. 아래 전제로 책 한 권을 한글로 통째로 써요 — 쪽 단위로, 쪽마다 그 쪽의 글(ko). 쪽수는 네가 정해요. 비트도 설계도 없어요: 쪽을 넘기는 호흡은 네 몫이에요. 그림이 말할 쪽은 글이 짧고, 글이 끌어야 하는 쪽은 조금 길어요. 인물표의 말투대로 말해요. 제목(title)도 정해요 — 이 초고만의 제목으로(전제 제목과 달라도 돼요).${spreadLine(input)}`,
     user: `${roomBrief(input, { records })}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n모양: ${str(premise?.engine, 40)}\n가장 큰 웃음: ${str(premise?.laugh, 200)}\n아이가 보고 싶을 그림: ${str(premise?.picture, 200)}\n\n[인물표]\n${castRows(premise)}`,
     jsonSchema: DRAFT_SCHEMA,
     temperature: 0.9,
@@ -338,30 +404,47 @@ export function draftRequest(input, premise, { records = [] } = {}) {
   };
 }
 /* ---------- round 4: the panel reads the drafts page by page ---------- */
-const pageReaction = {
-  type: "object",
-  additionalProperties: false,
-  required: ["page", "laughed", "curious", "bored", "lost"],
-  properties: { page: { type: "integer", minimum: 1 }, laughed: { type: "array", items: { type: "string", enum: PANEL_IDS } }, curious: { type: "array", items: { type: "string", enum: PANEL_IDS } }, bored: { type: "array", items: { type: "string", enum: PANEL_IDS } }, lost: { type: "array", items: { type: "string", enum: PANEL_IDS } } },
-};
+/**
+ * R54e: each reader names the one draft to read again, and for every draft the
+ * page to skip, the page nobody could follow (0 when none) and the pages that
+ * made them laugh — choices, not a yes/no per page (the A/B had every draft at
+ * the same "curious 18, lost 0").
+ */
 const readSchema = (count) => ({
   type: "object",
   additionalProperties: false,
-  required: ["readings"],
+  required: ["readers"],
   properties: {
-    readings: {
+    readers: {
       type: "array",
-      minItems: count,
-      maxItems: count,
+      minItems: PANEL_IDS.length,
+      maxItems: PANEL_IDS.length,
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["draft", "pages", "again", "words"],
+        required: ["reader", "favorite", "again", "drafts"],
         properties: {
-          draft: { type: "integer", minimum: 1, maximum: count },
-          pages: { type: "array", items: pageReaction },
-          again: { type: "array", items: { type: "string", enum: PANEL_IDS } },
-          words: { type: "array", maxItems: 6, items: { type: "string", maxLength: 120 } },
+          reader: { type: "string", enum: PANEL_IDS },
+          favorite: { type: "integer", minimum: 1, maximum: count },
+          again: { type: "boolean" },
+          drafts: {
+            type: "array",
+            minItems: count,
+            maxItems: count,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["draft", "skipPage", "lostPage", "laughPages", "change"],
+              properties: {
+                draft: { type: "integer", minimum: 1, maximum: count },
+                skipPage: { type: "integer", minimum: 1 },
+                lostPage: { type: "integer", minimum: 0 },
+                laughPages: { type: "array", maxItems: 12, items: { type: "integer", minimum: 1 } },
+                // R54g: one concrete thing to change (the A/B's one-word remarks were all praise — nothing to rewrite from).
+                change: { type: "string", maxLength: 160 },
+              },
+            },
+          },
         },
       },
     },
@@ -370,30 +453,58 @@ const readSchema = (count) => ({
 const draftText = (draft, i) => `=== 초고 ${i + 1} · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`;
 export function panelReadRequest(input, drafts) {
   return {
-    system: `너는 여섯 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 초고마다, 쪽마다 누가 웃었는지(laughed), 다음이 궁금했는지(curious), 지루해했는지(bored), 무슨 말인지 몰랐는지(lost)를 사람 id로 적어요(없으면 빈 목록). 초고마다 끝에 "또 읽어 줘" 할 사람(again)과 여섯 사람의 한마디(words)를 적어요. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
+    system: `너는 여섯 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 각자 **다시 읽고 싶은 초고 하나**(favorite)를 고르고, 그 초고를 또 읽어 달라고 할지(again) 말해요. 초고마다: 가장 넘기고 싶은 쪽 하나(skipPage, 꼭 하나), 무슨 말인지 몰랐던 쪽(lostPage, 없으면 0), 웃은 쪽들(laughPages, 없으면 빈 목록), 그 초고에서 **바꾸고 싶은 것 하나**(change — 어느 쪽의 무엇을 어떻게, 한 문장; 정말 없으면 빈 문자열. 칭찬은 쓰지 않아요). 여섯 사람이 같은 초고를 고를 수도 있지만 까닭은 각자 제 식대로. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
     user: list(drafts).map(draftText).join("\n\n"),
     jsonSchema: readSchema(list(drafts).length),
     temperature: 0.7,
-    maxTokens: 8000,
+    maxTokens: 6000,
   };
 }
-/** Per draft: pages × people counted; pull = laughs + curious + 2·again − bored − lost. */
-export function countReadings(readings) {
-  return list(readings)
-    .filter(object)
-    .map((r, i) => {
-      const pages = list(r.pages).filter(object);
-      const sum = (key) => pages.reduce((n, p) => n + list(p[key]).length, 0);
-      const laughed = sum("laughed"), curious = sum("curious"), bored = sum("bored"), lost = sum("lost"), again = list(r.again).length;
-      return {
-        draft: Number(r.draft) || i + 1,
-        laughed, curious, bored, lost, again,
-        pull: laughed + curious + 2 * again - bored - lost,
-        boredPages: pages.filter((p) => list(p.bored).length >= 3).map((p) => Number(p.page)),
-        lostPages: pages.filter((p) => list(p.lost).length >= 1).map((p) => Number(p.page)),
-        laughPages: pages.filter((p) => list(p.laughed).length >= 3).map((p) => Number(p.page)),
-        words: list(r.words).map((w) => str(w, 120)).filter(Boolean),
-      };
+/** Per draft: favourites × 4 + again × 2 + laughs − skipped pages (named by two) − lost pages (named by one); ties keep the writer's order. */
+export function countReadings(answer, count = DRAFT_COUNT) {
+  const readers = list(object(answer) && !Array.isArray(answer) ? answer.readers : answer).filter(object),
+    rows = new Map(),
+    row = (n) => {
+      if (!rows.has(n)) rows.set(n, { draft: n, votes: 0, again: 0, laughed: 0, curious: 0, bored: 0, lost: 0, pull: 0, skip: new Map(), lostAt: new Map(), laughAt: new Map(), words: [] });
+      return rows.get(n);
+    },
+    bump = (map, page) => map.set(page, (map.get(page) || 0) + 1);
+  for (const reader of readers) {
+    const fav = Math.round(Number(reader.favorite));
+    if (fav >= 1 && fav <= count) {
+      const r = row(fav);
+      r.votes += 1;
+      r.curious += 1;
+      if (reader.again === true) r.again += 1;
+    }
+    for (const d of list(reader.drafts).filter(object)) {
+      const n = Math.round(Number(d.draft));
+      if (!(n >= 1 && n <= count)) continue;
+      const r = row(n),
+        skip = Math.round(Number(d.skipPage)),
+        lost = Math.round(Number(d.lostPage));
+      if (skip >= 1) {
+        bump(r.skip, skip);
+        r.bored += 1;
+      }
+      if (lost >= 1) {
+        bump(r.lostAt, lost);
+        r.lost += 1;
+      }
+      for (const page of list(d.laughPages).map((p) => Math.round(Number(p))).filter((p) => p >= 1)) {
+        bump(r.laughAt, page);
+        r.laughed += 1;
+      }
+      // R54g: `change` (one thing to change); `word` is read too for an answer saved before R54g.
+      if (str(d.change ?? d.word, 160)) r.words.push(str(d.change ?? d.word, 160));
+    }
+  }
+  return Array.from({ length: count }, (_, i) => row(i + 1))
+    .map((r) => {
+      const boredPages = [...r.skip].filter(([, n]) => n >= 2).map(([p]) => p).sort((a, b) => a - b),
+        lostPages = [...r.lostAt].map(([p]) => p).sort((a, b) => a - b),
+        laughPages = [...r.laughAt].filter(([, n]) => n >= 2).map(([p]) => p).sort((a, b) => a - b);
+      return { draft: r.draft, votes: r.votes, again: r.again, laughed: r.laughed, curious: r.curious, bored: r.bored, lost: r.lost, pull: r.votes * 4 + r.again * 2 + laughPages.length - boredPages.length - lostPages.length, boredPages, lostPages, laughPages, words: r.words };
     });
 }
 export function pickDraft(rows) {
@@ -403,15 +514,16 @@ export function pickDraft(rows) {
 export function rewriteNotes(row) {
   if (!object(row)) return "";
   const lines = [];
-  if (row.boredPages?.length) lines.push(`지루해한 쪽: ${row.boredPages.join(", ")} — 줄이거나 사건을 넣어요.`);
+  if (row.boredPages?.length) lines.push(`넘기고 싶어한 쪽: ${row.boredPages.join(", ")} — 줄이거나 사건을 넣어요.`);
   if (row.lostPages?.length) lines.push(`무슨 말인지 모른 쪽: ${row.lostPages.join(", ")} — 아이가 따라올 수 있게 보여 줘요.`);
   if (row.laughPages?.length) lines.push(`웃은 쪽: ${row.laughPages.join(", ")} — 숨 쉴 자리를 주고 건드리지 않아요.`);
-  if (row.words?.length) lines.push(`한마디: ${row.words.join(" / ")}`);
+  if (row.words?.length) lines.push(`바꾸고 싶은 것: ${row.words.join(" / ")}`);
   return lines.join("\n");
 }
 export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
   return {
-    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 그 반응을 받아 책을 통째로 다시 써요 — 쪽을 합치거나 나누거나 빼거나 더해도 돼요. 좋았던 것은 지키고, 지루한 곳은 과감히. 제목도 다시 정해도 돼요.",
+    // R54g: targeted — the A/B's astra rewrote all 14 pages (7% of the words kept) of the draft the panel had chosen.
+    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. 큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요.",
     // The notes keep their lines (str() would fold them into one).
     user: `${roomBrief(input, { records })}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`,
     jsonSchema: DRAFT_SCHEMA,
@@ -424,10 +536,31 @@ export function rewriteRequest(input, draft, notes, { records = [] } = {}) {
 const clone = (value) => JSON.parse(JSON.stringify(value));
 /** The parent's setting (off until R53 turns it on by default) → the marker a new draft freezes, or null. */
 export function writersRoomFor(state, records = []) {
-  return state?.settings?.textGeneration?.writersRoom === true ? writersRoomPolicy(records) : null;
+  // R54c: on by default — the parent's switch stores only `false` (R51–R55a stored `true`; still read as on).
+  return state?.settings?.textGeneration?.writersRoom === false ? null : writersRoomPolicy(records);
+}
+/** R54c: the parent's switch as the settings keep it: off only when `false` is stored. */
+export const writersRoomOn = (settings) => settings?.writersRoom !== false;
+/**
+ * R54c diversity line (free, deterministic): over the family's recent room
+ * books — how many story engines, laughs, new companions and places they used.
+ * One line for the shelf; empty with no room book. A repeated engine among the
+ * last four is named so the parent sees the room leaning on one shape.
+ */
+export function roomDiversityLine(records = [], count = 8) {
+  const rows = list(records).filter((r) => r?.usedElements?.engine || r?.outline?.writersRoom?.premise).slice(0, count);
+  if (!rows.length) return "";
+  const engines = rows.map((r) => str(r.usedElements?.engine || r.outline?.writersRoom?.premise?.engine, 40)).filter(Boolean),
+    laughs = new Set(rows.flatMap((r) => list(r.usedElements?.humor).map((h) => str(h, 120)).filter(Boolean))),
+    places = new Set(rows.flatMap((r) => list(r.usedElements?.places).map((p) => str(p, 60)).filter(Boolean))),
+    newCast = rows.reduce((n, r) => n + list(r.outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).length, 0),
+    recent = engines.slice(0, 4),
+    repeated = recent.find((e, i) => recent.indexOf(e) !== i),
+    name = repeated ? ENGINE_MENU.find((e) => e.id === repeated)?.name || repeated : "";
+  return `최근 작가실 책 ${rows.length}권 · 이야기 장치 ${new Set(engines).size}가지 · 웃음 ${laughs.size}가지 · 새 인물 ${newCast}명 · 장소 ${places.size}곳${name ? ` · 최근 넉 권에 '${name}'이 두 번` : ""}`;
 }
 const ROOM_PROGRESS = Object.freeze({
-  premises: "작가실 · 작가가 이야기 전제 열두 개를 내고 있어요.",
+  premises: "작가실 · 작가가 이야기 전제 열두 개를 내고 있어요. 보통 2~3분 걸려요.",
   panel: "작가실 · 독자 여섯이 전제를 듣고 있어요.",
   review: "작가실 · 독자단이 고른 셋 중 하나를 골라 주세요.",
   done: "작가실이 전제를 정했어요. 줄거리를 씁니다.",
@@ -441,7 +574,7 @@ const asPitch = (premise, n, row) => ({
   engine: str(premise?.engine, 40),
   laugh: str(premise?.laugh, 200),
   picture: str(premise?.picture, 200),
-  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100) })),
+  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100), ...(c.isNew === true && str(c.look, 160) ? { nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160) } : {}) })),
   ...(row ? { pull: row.pull, laughed: row.laughed, curious: row.curious, again: row.again, lost: row.lost, words: row.words } : {}),
 });
 /**
@@ -497,7 +630,7 @@ export async function runWritersRoom(input, options = {}, services = {}) {
     log({ by: "작가", kind: "proposed", what: `전제 ${all.length}개: ${all.map((p) => str(p.title, 24)).join(" / ")}`, why: record.dropped ? `최근 책과 모양·웃음이 닮은 ${record.dropped}개는 뺌` : "브리프 한 쪽으로" });
     await snapshot("panel", ROOM_PROGRESS.panel);
     const heard = await ask("독자단", panelPremisesRequest(input, premises), "cheap");
-    const rows = countReactions(heard.reactions);
+    const rows = countReactions(heard, premises.length);
     record.rows = rows;
     const shortlist = pickPremises(rows, Math.min(SHORTLIST, premises.length));
     record.shortlist = shortlist;
@@ -548,7 +681,7 @@ export function roomSummaryLine(outline) {
 
 /* ---------- R52: whole drafts → the panel reads → rewrite → finishing ---------- */
 const DRAFT_COUNT = 3;
-const pageRows = (draft) => list(draft?.pages).filter(object).map((p) => ({ ko: str(p.ko, 1200) })).filter((p) => p.ko);
+const pageRows = (draft) => list(draft?.pages).filter(object).map((p) => ({ ko: str(p.ko, 1200), ...(p.spread === true ? { spread: true } : {}) })).filter((p) => p.ko);
 const normalizeDraft = (raw, fallbackTitle = "") => {
   const pages = pageRows(raw);
   return pages.length ? { title: str(raw?.title, 40) || fallbackTitle, pages } : null;
@@ -560,11 +693,22 @@ const numbered = (pages, key = "ko") => list(pages).map((p, i) => `${i + 1}쪽: 
  * choose the edition"): page by page, the same events, the same lines, at the
  * English level; it may say less, never something else.
  */
+/** R54e: the A/B's English ran at the Korean's length (E2 page band 1–2) and called the boy "she". */
+const englishBandLine = (input) => {
+  const band = pageBand(input, "en");
+  return band ? ` A page is ${band[0]}–${band[1]} sentences (usually ${band[2]}): keep the event and the spoken line, drop the rest.` : "";
+};
+const englishCastLine = (input) => {
+  const rows = castSheet(input)
+    .filter((c) => c.gender)
+    .map((c) => `${c.name}${c.nameEn ? ` (${c.nameEn})` : ""} — ${c.gender}, ${/^(boy|man)$/u.test(c.gender) ? "he" : "she"}`);
+  return rows.length ? `[cast] ${rows.join("; ")}\n\n` : "";
+};
 export function englishRequest(input, pages) {
   const count = list(pages).length;
   return {
-    system: `You are a picture-book author writing the English edition of a finished Korean picture book, page by page. ${leanLevelLine(input, "en", { vocab: true })} Each page's English follows that page's Korean: the same events in the same order, the same spoken lines in plain English, the same surprise kept for the same page; it may say less when the level needs it, never something else. One idea per sentence; no semicolons. Return exactly ${count} pages in order.`,
-    user: numbered(pages),
+    system: `You are a picture-book author writing the English edition of a finished Korean picture book, page by page. ${leanLevelLine(input, "en", { vocab: true })} Each page's English follows that page's Korean: the same events in the same order, the same spoken lines in plain English, the same surprise kept for the same page; it may say less when the level needs it, never something else.${englishBandLine(input)} One idea per sentence; no semicolons. Return exactly ${count} pages in order.`,
+    user: `${englishCastLine(input)}${numbered(pages)}`,
     jsonSchema: {
       type: "object",
       additionalProperties: false,
@@ -627,12 +771,24 @@ const DRAFT_PROGRESS = Object.freeze({
  * one polish of the pages the level checker names (advisory — never a loop).
  * Journaled under writerCheckpoint; a resumed run replays and buys nothing.
  */
+/* ---------- R54g: the room's deterministic guards around the writer's second and third passes ---------- */
+const flat = (value) => String(value ?? "").replace(/\s+/gu, " ").trim();
+/** How much a rewrite changed, measured (never the model's word): pages kept as they were, pages changed, the count before and after. */
+export function rewriteChange(before, after) {
+  const prev = list(before).map((p) => flat(p?.ko)), next = list(after).map((p) => flat(p?.ko));
+  const have = new Set(prev);
+  const kept = next.filter((t) => have.has(t)).length;
+  return { before: prev.length, after: next.length, kept, changed: next.length - kept, share: next.length ? Math.round(((next.length - kept) / next.length) * 100) / 100 : 0 };
+}
+/** The panel named nothing to fix (no page to skip, none lost, nothing to change): the rewrite call is skipped. */
+export const nothingToRewrite = (row) => object(row) && !list(row.boredPages).length && !list(row.lostPages).length && !list(row.words).some((w) => str(w, 160));
 export async function runRoomDrafts(input, outline, options = {}, services = {}) {
+  services = withEngines(services);
   const premise = outline?.writersRoom?.premise;
   if (!object(premise)) throw new StoryValidationError("prose", ["작가실이 고른 전제가 없어요. 줄거리 단계부터 다시 만들어 주세요."]);
   const journal = ledger("roomDrafts", input, options, { version: WRITERS_ROOM_VERSION, premise }, "writerCheckpoint");
   const count = Math.max(1, Math.min(DRAFT_COUNT, Number(options.roomDraftCount) || DRAFT_COUNT));
-  const record = { kind: "roomDrafts", version: WRITERS_ROOM_VERSION, phase: "drafts", drafts: [], rows: [], chosen: null, notes: "", rewritten: false, english: false, levelNotes: [], polished: false, levelNotesAfter: [] };
+  const record = { kind: "roomDrafts", version: WRITERS_ROOM_VERSION, phase: "drafts", drafts: [], rows: [], chosen: null, notes: "", rewritten: false, rewriteSkipped: false, rewriteChange: null, english: false, levelNotes: [], polished: false, levelNotesAfter: [] };
   const snapshot = async (phase) => {
     record.phase = phase;
     journal.checkpoint.record = clone(record);
@@ -662,7 +818,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     if (drafts.length > 1) {
       await snapshot("read");
       const read = await ask("독자단", panelReadRequest(input, drafts), "cheap");
-      const rows = countReadings(read.readings);
+      const rows = countReadings(read, drafts.length);
       record.rows = rows;
       pick = Math.min(drafts.length, pickDraft(rows));
       chosen = drafts[pick - 1];
@@ -671,13 +827,16 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     record.chosen = pick;
     let pages = chosen.pages,
       title = chosen.title;
-    if (options.roomRewrite !== false && drafts.length > 1) {
+    // R54g: no page to skip, none lost, nothing to change → the panel's pick stands as written (one upper call saved).
+    if (options.roomRewrite !== false && drafts.length > 1 && nothingToRewrite(record.rows.find((row) => row.draft === pick))) record.rewriteSkipped = true;
+    if (options.roomRewrite !== false && drafts.length > 1 && !record.rewriteSkipped) {
       await snapshot("rewrite");
       const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes), "outline"), title);
       if (again) {
         pages = again.pages;
         title = again.title;
         record.rewritten = true;
+        record.rewriteChange = rewriteChange(chosen.pages, pages);
       }
     }
     if (input?.language !== "ko") {
@@ -695,14 +854,14 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       const polished = await ask("다듬기", polishRequest(input, pages, record.levelNotes), "outline");
       const rows = list(polished.pages).filter(object);
       if (rows.length === pages.length) {
-        pages = pages.map((p, i) => ({ ko: str(rows[i].ko, 1200) || p.ko, ...(p.en !== undefined ? { en: str(rows[i].en, 1200) || p.en } : {}) }));
+        pages = pages.map((p, i) => ({ ...(p.spread ? { spread: true } : {}), ko: str(rows[i].ko, 1200) || p.ko, ...(p.en !== undefined ? { en: str(rows[i].en, 1200) || p.en } : {}) }));
         record.polished = true;
         record.levelNotesAfter = levelNotes(outline, pages, input);
       }
     }
     await snapshot("done");
     return {
-      data: { title, language: record.english ? "dual" : "ko", pages: pages.map((p, i) => ({ pageNo: i + 1, ko: p.ko, ...(p.en !== undefined ? { en: p.en } : {}) })), room: clone(record) },
+      data: { title, language: record.english ? "dual" : "ko", pages: pages.map((p, i) => ({ pageNo: i + 1, ko: p.ko, ...(p.en !== undefined ? { en: p.en } : {}), ...(p.spread ? { spread: true } : {}) })), room: clone(record) },
       usage: journal.usage(),
       meta: { ...journal.summary(), stage: "roomDrafts" },
     };
@@ -716,7 +875,8 @@ export function roomDraftLine(draft) {
   const r = draft?.room;
   if (!object(r) || !r.chosen) return "";
   const notes = list(r.levelNotes).length;
-  return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? " 고쳐 쓰고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽`;
+  const change = r.rewriteChange;
+  return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? ` 고쳐 쓰고${change ? `(${change.after}쪽 중 ${change.changed}쪽 손봄)` : ""}` : r.rewriteSkipped ? " 고칠 곳이 없어 그대로 두고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽`;
 }
 
 /* ---------- R53: the finished text becomes the pages the pictures and prints read ---------- */
@@ -736,12 +896,14 @@ const sentences = (value) =>
  * sentence; more: the two shortest neighbours are joined. The words never
  * change. A book too short to split stays short (the acceptor reports it).
  */
-export function clampPages(pages) {
+export function clampPages(pages, bounds = null) {
   let rows = list(pages)
     .filter(object)
-    .map((p) => ({ ko: str(p.ko, 1200), ...(p.en !== undefined ? { en: str(p.en, 1200) } : {}) }))
+    .map((p) => ({ ko: str(p.ko, 1200), ...(p.en !== undefined ? { en: str(p.en, 1200) } : {}), ...(p.spread === true ? { spread: true } : {}) }))
     .filter((p) => p.ko);
-  const target = nearestCount(rows.length);
+  // R54b: an openings book takes C..2C entries for its C openings (the writer's
+  // count when it fits); a page book the nearest of 8/12/16/24.
+  const target = bounds ? Math.min(Math.max(rows.length, bounds.min), bounds.max) : nearestCount(rows.length);
   let guard = 64;
   while (rows.length < target && guard-- > 0) {
     const i = rows.reduce((best, p, n) => (sentences(p.ko).length > sentences(rows[best].ko).length ? n : best), 0);
@@ -750,8 +912,8 @@ export function clampPages(pages) {
     const cut = Math.ceil(ko.length / 2),
       en = rows[i].en !== undefined ? sentences(rows[i].en) : null,
       cutEn = en ? Math.ceil(en.length / 2) : 0;
-    const a = { ko: ko.slice(0, cut).join(" "), ...(en ? { en: en.slice(0, cutEn).join(" ") } : {}) },
-      b = { ko: ko.slice(cut).join(" "), ...(en ? { en: en.slice(cutEn).join(" ") } : {}) };
+    const a = { ko: ko.slice(0, cut).join(" "), ...(en ? { en: en.slice(0, cutEn).join(" ") } : {}), ...(rows[i].spread ? { spread: true } : {}) },
+      b = { ko: ko.slice(cut).join(" "), ...(en ? { en: en.slice(cutEn).join(" ") } : {}), ...(rows[i].spread ? { spread: true } : {}) };
     rows.splice(i, 1, a, b);
   }
   while (rows.length > target) {
@@ -765,19 +927,70 @@ export function clampPages(pages) {
       }
     }
     const [a, b] = [rows[best], rows[best + 1]];
-    rows.splice(best, 2, { ko: `${a.ko} ${b.ko}`.trim(), ...(a.en !== undefined || b.en !== undefined ? { en: `${a.en || ""} ${b.en || ""}`.trim() } : {}) });
+    rows.splice(best, 2, { ko: `${a.ko} ${b.ko}`.trim(), ...(a.en !== undefined || b.en !== undefined ? { en: `${a.en || ""} ${b.en || ""}`.trim() } : {}), ...(a.spread || b.spread ? { spread: true } : {}) });
   }
   return rows;
 }
 /** The cheap call that reads the finished book and returns what the pictures need: who, where, the action, a feeling, the hour, props, the beat. */
+/* ---------- R54f: a drawer card for every new character the room invented ---------- */
+/**
+ * The chosen premise's new characters (isNew, with a look) that have no drawer
+ * card yet — by name against input.characters. Without a card the pictures
+ * draw them from the page text alone and their look drifts page to page.
+ */
+export function roomNewCast(outline, input) {
+  const known = new Set(list(input?.characters).filter(object).flatMap((c) => [str(c.name, 30), str(c.nameEn, 30)]).filter(Boolean));
+  const seen = new Set();
+  return list(outline?.writersRoom?.premise?.cast)
+    .filter((c) => object(c) && c.isNew === true && str(c.name, 30) && str(c.look, 160))
+    .filter((c) => {
+      const name = str(c.name, 30);
+      if (known.has(name) || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    })
+    .map((c) => ({ name: str(c.name, 30), nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160), want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100) }));
+}
+const KIND_WORDS = Object.freeze({ child: "child", kid: "child", boy: "child", girl: "child", adult: "adult", man: "adult", woman: "adult", grandma: "adult", grandpa: "adult", teacher: "adult" });
+/** The drawer record of one new character — the shape materializeAutoPlan gives a plan's new companion (its sheet is bought like theirs). */
+export function roomCastRecord(c, { id, jobId, now = new Date().toISOString() } = {}) {
+  const kindWord = str(c?.kind, 24).toLowerCase().replace(/[^a-z]/g, "");
+  return {
+    id: String(id || ""),
+    name: str(c?.name, 30),
+    nameEn: str(c?.nameEn, 30) || str(c?.name, 30),
+    role: "조연",
+    kind: KIND_WORDS[kindWord] || kindWord || "friend",
+    gender: "",
+    description: str(c?.look, 160),
+    traits: [str(c?.want, 100), str(c?.flaw, 100)].filter(Boolean).slice(0, 2),
+    catchphrase: "",
+    version: 1,
+    color: "#a8bb91",
+    appearance: str(c?.look, 160),
+    clothes: "",
+    hairColor: "#493b34",
+    skinColor: "#edceb3",
+    wardrobe: [],
+    characterSheets: [],
+    source: "writers-room",
+    autoRunId: String(jobId || ""),
+    autoReviewPending: true,
+    createdAt: now,
+  };
+}
 export function extractRequest(input, outline, pages) {
   const count = list(pages).length,
-    cast = list(input?.characters).filter(object).map((c) => `${c.id} = ${str(c.name, 30)}${c.nameEn ? ` (${str(c.nameEn, 30)})` : ""}`).join(", "),
+    // R54g: gender and pronoun per character — the A/B's reader wrote "behind her" for the boy.
+    cast = list(input?.characters).filter(object).map((c) => `${c.id} = ${str(c.name, 30)}${c.nameEn ? ` (${str(c.nameEn, 30)})` : ""}${genderWord(c) ? ` — ${genderWord(c)}, ${/^(boy|man)$/u.test(genderWord(c)) ? "he" : "she"}` : ""}`).join(", "),
+    lead = list(input?.characters).filter(object)[0],
     places = list(input?.backgrounds).filter(object).map((b) => `${b.id} = ${str(b.name, 30)}`).join(", "),
     beats = list(outline?.beats).filter(object).map((b) => `${b.index}: ${str(b.summary || b.title, 200)}`).join("\n"),
-    extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter(Boolean);
+    // R54f: a new character that got a drawer card (roomNewCast → FULL AUTO) is in the cast list by ID.
+    known = new Set(list(input?.characters).filter(object).flatMap((c) => [str(c.name, 30), str(c.nameEn, 30)]).filter(Boolean)),
+    extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter((n) => n && !known.has(n));
   return {
-    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: beatIndex (which approved beat this page belongs to; pages run in order through the beats), who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English). Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}\n[beats]\n${beats || "(none)"}`,
+    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: beatIndex (which approved beat this page belongs to; pages run in order through the beats), who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English). Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}\n[beats]\n${beats || "(none)"}`,
     user: list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}`).join("\n"),
     jsonSchema: {
       type: "object",
@@ -811,6 +1024,47 @@ export function extractRequest(input, outline, pages) {
     maxTokens: 6000,
   };
 }
+/** R54b: the beat of each of N entries in an openings book of C beats (null for a page book or a count outside C..2C). */
+export function openingBeats(input, beats, entries, spreads = []) {
+  const c = openingCount(input);
+  if (!c || list(beats).length !== c || entries < c || entries > 2 * c) return null;
+  const pairs = entries - c;
+  // R54e: the writer's spread marks — a marked page stands alone in its opening;
+  // the pairs go to unmarked neighbours, spread evenly; when the marks leave too
+  // few pairable places the remaining pairs ignore them (the count must fit).
+  const marked = new Set(list(spreads).map((v, i) => (v === true ? i : -1)).filter((i) => i >= 0));
+  const candidates = [];
+  for (let i = 0; i + 1 < entries; i++) if (!marked.has(i) && !marked.has(i + 1)) candidates.push(i);
+  const chosen = new Set();
+  const take = (pool) => {
+    let need = pairs - chosen.size;
+    if (need <= 0 || !pool.length) return;
+    const step = pool.length / need;
+    for (let k = 0; k < need; k++) {
+      const want = Math.floor(k * step + step / 2);
+      let j = want;
+      while (j < pool.length && (chosen.has(pool[j]) || chosen.has(pool[j] - 1) || chosen.has(pool[j] + 1))) j++;
+      if (j >= pool.length) {
+        j = want;
+        while (j >= 0 && (chosen.has(pool[j]) || chosen.has(pool[j] - 1) || chosen.has(pool[j] + 1))) j--;
+      }
+      if (j >= 0 && j < pool.length) chosen.add(pool[j]);
+    }
+  };
+  take(candidates);
+  if (chosen.size < pairs) take(Array.from({ length: entries - 1 }, (_, i) => i));
+  const out = [];
+  let k = 0;
+  for (let i = 0; i < entries; i++) {
+    out.push(beats[Math.min(k, c - 1)]);
+    if (chosen.has(i)) {
+      i += 1;
+      out.push(beats[Math.min(k, c - 1)]);
+    }
+    k += 1;
+  }
+  return out.length === entries ? out : null;
+}
 /** The extraction's rows settled against the cast and the beats (an id or beat the model made up falls back, never fails). */
 export function settleExtraction(raw, input, outline, pages, title) {
   const cast = list(input?.characters).filter(object).map((c) => String(c.id)),
@@ -820,10 +1074,15 @@ export function settleExtraction(raw, input, outline, pages, title) {
     rows = list(raw?.pages).filter(object);
   let last = beats[0] || 1;
   const fallbackBeat = (i) => beats[Math.min(beats.length - 1, Math.floor((i * beats.length) / Math.max(1, count)))] || 1;
+  // R54b openings: the entries are dealt into the C openings in order, the
+  // doubled openings spread evenly through the book (entries − C of them);
+  // every entry of opening k sits on approved beat k. Deterministic, never the
+  // model's guess, so the structure the prints read is always valid.
+  const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true));
   const out = list(pages).map((p, i) => {
     const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
     const who = list(row.who).map(String).filter((id) => castSet.has(id));
-    let beat = Number(row.beatIndex);
+    let beat = openingBeat ? openingBeat[i] : Number(row.beatIndex);
     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
     last = beat;
     const emotion = /^[A-Za-z]+(?:-[A-Za-z]+)?$/u.test(str(row.emotion, 40)) ? str(row.emotion, 40) : "calm";
@@ -844,7 +1103,8 @@ export function settleExtraction(raw, input, outline, pages, title) {
       isRefrainPage: false,
     };
   });
-  return { cover: { title: str(raw?.cover?.title, 100) || str(title, 100) || "이야기", sceneAction: str(raw?.cover?.sceneAction, 500) || str(out[0]?.scene.action, 500) || "the hero at the story's place" }, pages: out };
+  // R54f-2: the cover carries the writer's title; the cheap reader rewrote it in both paid A/B runs ("Kongi Hide and Seek").
+  return { cover: { title: str(title, 100) || str(raw?.cover?.title, 100) || "이야기", sceneAction: str(raw?.cover?.sceneAction, 500) || str(out[0]?.scene.action, 500) || "the hero at the story's place" }, pages: out };
 }
 /**
  * The room's third part: the finished text, clamped to the binding, read once
@@ -853,10 +1113,104 @@ export function settleExtraction(raw, input, outline, pages, title) {
  * The result is the pagination every later stage reads; the input's page
  * count follows the book (the caller updates its frozen input).
  */
+/* ---------- R54g: the writer's spread marks made to fit the binding ---------- */
+const splitPage = (p) => {
+  const ko = sentences(p.ko);
+  if (ko.length < 2) return null;
+  const cut = Math.ceil(ko.length / 2),
+    en = p.en !== undefined ? sentences(p.en) : null,
+    cutEn = en ? Math.ceil(en.length / 2) : 0;
+  return [
+    { ko: ko.slice(0, cut).join(" "), ...(en ? { en: en.slice(0, cutEn).join(" ") } : {}) },
+    { ko: ko.slice(cut).join(" "), ...(en ? { en: en.slice(cutEn).join(" ") } : {}) },
+  ];
+};
+const joinPages = (a, b) => ({ ko: `${a.ko} ${b.ko}`.trim(), ...(a.en !== undefined || b.en !== undefined ? { en: `${a.en || ""} ${b.en || ""}`.trim() } : {}) });
+/** Maximal runs of unmarked entries: [{start, length}]. */
+const unmarkedRuns = (rows) => {
+  const runs = [];
+  let start = -1;
+  rows.forEach((p, i) => {
+    if (p.spread === true) {
+      if (start >= 0) runs.push({ start, length: i - start });
+      start = -1;
+    } else if (start < 0) start = i;
+  });
+  if (start >= 0) runs.push({ start, length: rows.length - start });
+  return runs;
+};
+/**
+ * R54g (A/B 2차 4-2): with M marked pages in a book of C openings, the entries
+ * must number exactly 2C − M and every run of unmarked pages between marks
+ * must be even — otherwise the binding had to break a mark (Opus marked 10 and
+ * 14; the book came out with 13 and 14 as spreads). This makes the count and
+ * the parity fit by splitting the longest page or joining the two shortest
+ * neighbours *inside the unmarked runs* (words untouched), preferring the odd
+ * runs; marks beyond C are dropped from the end; when a run cannot be fixed
+ * the pages are returned as they are (the binding then breaks a mark as before).
+ */
+export function fitSpreadMarks(pages, openings) {
+  const c = Number(openings) || 0;
+  let rows = list(pages).filter(object).map((p) => ({ ...p }));
+  const marked = () => rows.filter((p) => p.spread === true).length;
+  if (!c || !marked()) return { pages: rows, fitted: true, marks: 0, moved: 0 };
+  let moved = 0;
+  for (let i = rows.length - 1; i >= 0 && marked() > c; i--) if (rows[i].spread === true) { delete rows[i].spread; moved += 1; }
+  const target = 2 * c - marked();
+  const inRun = (prefer) => {
+    const runs = unmarkedRuns(rows);
+    const odd = runs.filter((r) => r.length % 2 === 1);
+    return prefer === "odd" && odd.length ? odd : runs;
+  };
+  const split = (runs) => {
+    let best = -1, count = 1;
+    for (const r of runs) for (let i = r.start; i < r.start + r.length; i++) { const n = sentences(rows[i].ko).length; if (n > count) { count = n; best = i; } }
+    if (best < 0) return false;
+    const parts = splitPage(rows[best]);
+    if (!parts) return false;
+    rows.splice(best, 1, ...parts);
+    return true;
+  };
+  const join = (runs) => {
+    let best = -1, size = Infinity;
+    for (const r of runs) for (let i = r.start; i + 1 < r.start + r.length; i++) { const n = rows[i].ko.length + rows[i + 1].ko.length; if (n < size) { size = n; best = i; } }
+    if (best < 0) return false;
+    rows.splice(best, 2, joinPages(rows[best], rows[best + 1]));
+    return true;
+  };
+  let guard = 64;
+  while (rows.length < target && guard-- > 0) if (!split(inRun("odd")) && !split(inRun("any"))) break;
+  while (rows.length > target && guard-- > 0) if (!join(inRun("odd")) && !join(inRun("any"))) break;
+  guard = 32;
+  while (guard-- > 0) {
+    const odd = unmarkedRuns(rows).filter((r) => r.length % 2 === 1);
+    if (odd.length < 2) break;
+    // One odd run grows by a split, another shrinks by a join: the count stays, both turn even.
+    const before = rows.length;
+    let done = false;
+    for (const grow of odd) {
+      if (!split([grow])) continue;
+      const rest = unmarkedRuns(rows).filter((r) => r.length % 2 === 1);
+      done = rest.length > 0 && join([rest[0]]);
+      break;
+    }
+    if (!done || rows.length !== before) break;
+  }
+  const fitted = rows.length === target && !unmarkedRuns(rows).some((r) => r.length % 2 === 1);
+  return { pages: rows, fitted, marks: marked(), moved };
+}
 export async function runRoomPages(input, outline, draft, options = {}, services = {}) {
+  services = withEngines(services);
   if (!list(draft?.pages).length) throw new StoryValidationError("pagination", ["작가실 글이 없어요. 초고 단계부터 다시 만들어 주세요."]);
-  const pages = clampPages(draft.pages);
-  const sized = { ...input, pageCount: pages.length };
+  // R54b: an openings book keeps its printed count (12 or 16) and takes C..2C
+  // entries; a page book's count follows the writer (nearest binding).
+  const openings = openingCount(input),
+    clamped = clampPages(draft.pages, openings ? { min: openings, max: 2 * openings } : null),
+    // R54g: the writer's spread marks are made to fit the binding before the deal.
+    fit = openings ? fitSpreadMarks(clamped, openings) : { pages: clamped, fitted: true, marks: 0, moved: 0 },
+    pages = fit.pages,
+    printed = openings ? input.pageCount : pages.length;
+  const sized = { ...input, pageCount: printed };
   const journal = ledger("roomPages", sized, options, { version: WRITERS_ROOM_VERSION, pages }, "enrichmentCheckpoint");
   const ask = async (label, request, role) => {
     const response = await journal.call(role, request, services);
@@ -868,12 +1222,13 @@ export async function runRoomPages(input, outline, draft, options = {}, services
     options.onProgress?.({ stage: "roomPages", phase: "extract", message: "작가실 · 완성된 글에서 그림에 필요한 것을 읽고 있어요." });
     const raw = await ask("그림 읽기", extractRequest(sized, outline, pages), "cheap");
     const settled = settleExtraction(raw, sized, outline, pages, draft.title);
-    const pagination = acceptEcoPagination(settled, outline, sized, { bookId: sized.bookId });
+    // R54e: the room's binding is the writer's — no "all pairs → last opening a spread" guard.
+    const pagination = acceptEcoPagination(settled, outline, sized, { bookId: sized.bookId, roomBinding: true });
     const report = inspectStory(outline, pagination, sized);
     return {
       data: pagination,
       usage: journal.usage(),
-      meta: { ...journal.summary(), stage: "roomPages", pageCount: pages.length, checks: report, clamped: pages.length !== list(draft.pages).length },
+      meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length, spreadFit: { marks: fit.marks, fitted: fit.fitted, moved: fit.moved } },
     };
   } catch (error) {
     if (error?.name === "AbortError") throw error;

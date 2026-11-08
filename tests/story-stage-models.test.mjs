@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveStoryStageSettings,resolveQualityStageSettings,getStoryStageModels,estimateStoryTextCost,estimateTextCost} from '../dist/text-generation/models.js';
-import {getTextGenerationSettings,renderTextSettings,normalizeStoryQualitySettings} from '../dist/text-generation/settings-ui.js';
+import {getTextGenerationSettings,normalizeStoryQualitySettings} from '../dist/text-generation/settings-ui.js';
 
 test('new stories default to medium outline and pagination, and upper prose for every API provider',()=>{
  for(const [engine,medium,upper] of [['openai','gpt-6.1-sol','gpt-6-astra'],['anthropic','claude-sonnet-5-5','claude-opus-5-5'],['google','gemini-2.5-flash','gemini-4-argon']]){
@@ -58,28 +58,12 @@ test('cost estimate totals actual mixed stage rates and retains final-prose mode
  assert.equal(hybrid.requestCount,21);assert.equal(hybrid.stages[0].costUsd,0);assert.equal(hybrid.stages[2].costUsd,0);assert.equal(hybrid.stages[1].engineId,'google');assert.equal(hybrid.stages[3].engineId,'google');assert.equal(hybrid.stages.at(-1).engineId,'google');
 });
 
-test('parent form exposes stage selectors, API pricing, hybrid configuration, and escaped stored values',()=>{
- const state={settings:{textGeneration:{engine:'openai',providers:{openai:{model:'gpt-4.1-mini'},local:{model:'<img src=x onerror=bad>',baseUrl:'http://localhost:1234/v1'}},hybrid:{enabled:false,finalEngine:'anthropic'}}}};
- const html=renderTextSettings(state);
- assert.match(html,/id="tg-model-medium"[^]*?value="gpt-6.1-sol" selected/);assert.match(html,/id="tg-model-upper"[^]*?value="gpt-6-astra" selected/);
- assert.match(html,/id="tg-final-model-medium"/);assert.match(html,/id="tg-final-model-upper"/);assert.match(html,/id="tg-hybrid-fields" hidden/);
- assert.match(html,/id="tg-hybrid-local-model"/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
- assert.match(html,/100만 토큰당 참고 단가/);assert.match(html,/12쪽 이야기 글 예상/);assert.match(html,/실제 청구액은 공급자/);
- assert.doesNotMatch(html,/<input id="tg-hybrid"[^>]* checked/);
- assert.equal(state.settings.textGeneration.providers.openai.model,'gpt-4.1-mini');assert.equal(state.settings.textGeneration.providers.openai.stageModels,undefined);
-});
-
-
 test('scene options default on, persist through normalized snapshots, and can be independently disabled',()=>{
  const defaults=getTextGenerationSettings({settings:{}});
  assert.equal(defaults.storyEnrichment,true);assert.equal(defaults.imageDiversity,true);
  for(const options of [{storyEnrichment:false,imageDiversity:true},{storyEnrichment:true,imageDiversity:false},{storyEnrichment:false,imageDiversity:false}]){
    const state={settings:{textGeneration:{...defaults,...options}}};
    assert.deepEqual(getTextGenerationSettings(JSON.parse(JSON.stringify(state))),state.settings.textGeneration);
-   const html=renderTextSettings(state);
-   for(const [id,enabled] of [['tg-story-enrichment',options.storyEnrichment],['tg-image-diversity',options.imageDiversity]]){
-     const control=html.match(new RegExp('<input id="'+id+'"[^>]*>'))?.[0];assert.ok(control);assert.equal(control.includes('checked'),enabled);
-   }
  }
 });
 
@@ -92,12 +76,6 @@ test('estimates count per-language paragraphs, mandatory brief, and additional r
  assert.equal(disabled.requestCount,6);assert.equal(disabled.enrichment,false);assert.ok(disabled.stages.some(stage=>stage.stage==='sceneBriefs'));assert.ok(!disabled.stages.some(stage=>stage.stage==='enrichment'));
  assert.ok(disabled.costUsd<estimateStoryTextCost().costUsd);
  const local=estimateStoryTextCost({settings:{engine:'local'}});assert.equal(local.costUsd,0);assert.equal(local.requestCount,20);
- // R30: the summary prices a new story as it is frozen (writers' room, editor round, 정성 모드 while on).
- // R31b: a new story is on the prompt diet — with 정성 모드 off its prose is the one app-path call, not the package's 4 passes.
- const html=renderTextSettings({settings:{textGeneration:{orchestration:false}}});assert.match(html,/장면 브리프 1회/);assert.match(html,/한글·영어 전문 1회/);assert.doesNotMatch(html,/풍부화·단순화 4회/);assert.match(html,/전체 일관성 검사 2회/);assert.match(html,/아이 시뮬레이터 2회/);assert.match(html,/최대 2회 재작성/);assert.match(html,/이미지 요금이 별도/);
- assert.match(renderTextSettings({settings:{textGeneration:{orchestration:false},storyQuality:{enabled:false}}}),/한글·영어 전문 1회/, 'R31b: no per-paragraph enrichment pass on the diet');
- const r30=renderTextSettings({settings:{}});assert.match(r30,/정성 모드\(성장 설계·줄거리 후보 3개, 비트별 작가 약 20회·중간 모델\)/);assert.doesNotMatch(r30,/풍부화·단순화/);
- assert.match(renderTextSettings({settings:{textGeneration:{writerTier:'upper'}}}),/비트별 작가 약 20회·최고 모델/);
 });
 
 test('base cost budgets two complete-story reviews and excludes conditional contract repairs',()=>{
@@ -179,4 +157,4 @@ test('quality snapshots preserve typed world and atmosphere choices, including d
  assert.equal(changedEstimate.requestCount,originalEstimate.requestCount);assert.equal(changedEstimate.costUsd,originalEstimate.costUsd);assert.deepEqual(changedEstimate.stages,originalEstimate.stages);
 });
 
-test('evaluated Anthropic outline defaults to Sonnet while explicit Opus and other providers remain selected',()=>{const settings={engine:'anthropic',providers:{anthropic:{proxyEndpoint:'https://saved-gateway.example',transport:'proxy'}}};const before=structuredClone(settings);assert.equal(resolveQualityStageSettings(settings,'outline').config.model,'claude-sonnet-5-5');assert.equal(resolveQualityStageSettings(settings,'outline',{engines:{outline:{engine:'anthropic',model:'claude-opus-5-5'}}}).config.model,'claude-opus-5-5');assert.equal(resolveQualityStageSettings(settings,'coach').config.model,'claude-opus-5-5');assert.equal(resolveQualityStageSettings({...settings,engine:'openai'},'outline').config.model,'gpt-6-astra');assert.deepEqual(settings,before);});
+test('R54e: the room writer role is the upper model on every provider (Anthropic Opus) while the legacy outline role keeps its Anthropic medium routing; the author row\'s engine choice carries over',()=>{const settings={engine:'anthropic',providers:{anthropic:{proxyEndpoint:'https://saved-gateway.example',transport:'proxy'}}};const before=structuredClone(settings);assert.equal(resolveQualityStageSettings(settings,'writer').config.model,'claude-opus-5-5');assert.equal(resolveQualityStageSettings(settings,'outline').config.model,'claude-sonnet-5-5','legacy outline role unchanged');assert.equal(resolveQualityStageSettings(settings,'writer',{engines:{outline:{engine:'openai'}}}).config.model,'gpt-6-astra','the writer follows the author row (outline) engine choice');assert.equal(resolveQualityStageSettings(settings,'writer',{engines:{outline:{engine:'anthropic',model:'claude-sonnet-5-5'}}}).config.model,'claude-sonnet-5-5','an explicit model on the author row wins');assert.equal(resolveQualityStageSettings({...settings,engine:'openai'},'writer').config.model,'gpt-6-astra');assert.equal(resolveQualityStageSettings({...settings,engine:'google'},'writer').config.model,'gemini-4-argon');assert.deepEqual(settings,before);});

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {seedState} from '../dist/engine.js';
 import {migrateWorldState} from '../dist/image-generation/world.js';
 import {migrateReadingSettings} from '../dist/reading-ui.js';
-import {inputFromWizard, renderStoryQualityPlan} from '../dist/story-generation/ui.js';
+import {inputFromWizard} from '../dist/story-generation/ui.js';
 import {normalizeStoryInput, generateProse} from '../dist/story-generation/pipeline.js';
 import {leanOutlineRules, leanOpeningsPaginationRules, leanPaginationRules, leanVisibleInput} from '../dist/story-generation/prompt-diet.js';
 import {demoOutline, demoProse, demoPagination} from '../dist/story-generation/demo.js';
@@ -37,7 +37,7 @@ import {ecoPagesPrompt, ecoOutlinePrompt, ecoJobInit} from '../dist/eco-mode.js'
  * R12 budget byte for byte, and drafts, jobs and books without a format are
  * judged exactly as before (the R12 pins).
  */
-const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
+const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); s.settings.textGeneration = {...(s.settings.textGeneration || {}), writersRoom: false}; /* R54c: off (the old path / the 'off' case) */ return s; };
 const wizardOf = (extra = {}) => ({characterIds: ['yuha', 'greenie'], backgroundIds: ['home', 'beach'], topic: '유하가 바닷가에서 파도를 처음 만나요', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual', ...extra});
 const draft = (state, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(state, wizardOf(extra), {layout}).input, bookId: `b-${Object.keys(extra).join('-') || 'default'}`});
 const REFERENCE = JSON.parse(readFileSync(new URL('./fixtures/picture-led-reference-r35.json', import.meta.url), 'utf8'));
@@ -282,8 +282,6 @@ test('R35 the screens: ① offers 책 결 with 그림책 결 selected, the forma
   assert.equal(bookFormatLabel(job.input), '그림책 결');
   const input = draft(state), outline = demoOutline(input);
   outline.storyShape = input.storyShape;
-  assert.match(renderStoryQualityPlan({outline, input}), /책 결 · 그림책 결 — 글은 짧게, 그림이 말해요<br>이야기 모양 · [^<]+<br>문체 · [^<]+<br>표현 · /);
-  assert.match(renderStoryQualityPlan({outline, input: draft(state, {bookFormatId: 'wordy'})}), /책 결 · 글이 많은 책<br>/);
   const sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
   assert.ok(Number(sw.match(/const CACHE = "donghwa-shell-v(\d+)";/)?.[1]) >= 81, 'v81 or later');
   assert.match(sw, /"\.\/book-format\.js",/);

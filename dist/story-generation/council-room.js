@@ -219,7 +219,7 @@ export function renderWritersRoomPanel(record, { live = false, hidePitches = fal
       ? `전제 ${list(r.premises).length}개 중 독자단이 셋을 골랐고${r.parentChoice ? " 부모님이" : ""} 하나를 채택했어요.`
       : r.phase === "panel"
         ? `독자 여섯(${list(r.panel).map((p) => str(p.name, 20)).join(", ")})이 전제 ${list(r.premises).length}개를 듣고 있어요.`
-        : "작가가 이야기 전제 열두 개를 내고 있어요. 규칙은 한 쪽뿐이에요.";
+        : "작가가 이야기 전제 열두 개를 내고 있어요. 규칙은 한 쪽뿐이에요. 보통 2~3분 걸려요.";
   const cards = !choosing && !hidePitches && list(r.pitches).length
     ? `<ol class="council-room-pitches">${list(r.pitches).map((p, i) => `<li class="${r.chosen === i + 1 ? "council-chosen" : ""}">${premiseCard(p, i + 1, { chosen: r.chosen === i + 1, recommended: r.recommended === i + 1 && r.chosen !== i + 1 })}</li>`).join("")}</ol>`
     : "";

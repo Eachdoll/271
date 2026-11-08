@@ -1,0 +1,24 @@
+{
+  "appTests": 1128,
+  "qualityTests": 85,
+  "buildPassed": true,
+  "mirrorEqual": true,
+  "legacySha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokePassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "roomDefaultOnVerified": true,
+  "mockRewriteSkippedCalls": 0,
+  "mockRewriteChangedPages": 1,
+  "mockRewriteTotalPages": 8,
+  "existingOpusBindingReplayPassed": true,
+  "existingCloudFixVerified": true,
+  "sourceChangesBeyondUpstream": 0,
+  "paidCalls": 0,
+  "actualNewStoryQualityVerified": false,
+  "actualFamilyCloudAccessed": false,
+  "cache": "donghwa-shell-v117"
+}

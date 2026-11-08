@@ -454,7 +454,7 @@ function placed(entry, plan, side) {
  * Only an approved beat with no entry at all sets needsRepagination (the one paid fix).
  * `units` is the frozen specs ({ ko: { units } }) or { ko: { page, spread } } ranges.
  */
-export function normalizeOpenings(entries, plan, units) {
+export function normalizeOpenings(entries, plan, units, { mixGuard = true } = {}) {
   const ko = units?.ko?.units || units?.ko;
   if (!Array.isArray(plan) || !ko?.page || !ko?.spread)
     throw new Error("펼침 정리에 펼침 계획과 한글 쪽·펼침면 문장 범위가 필요해요.");
@@ -536,7 +536,8 @@ export function normalizeOpenings(entries, plan, units) {
       );
   }
   let mixNote = null;
-  if (!reasons.length && plan.length >= 6) {
+  // R54e: a writers'-room book keeps the writer's pairs (mixGuard false).
+  if (!reasons.length && plan.length >= 6 && mixGuard) {
     if (pages.every((page) => page.kind === "page")) {
       const last = plan.at(-1),
         at = pages.findIndex((page) => page.openingNo === last.openingNo),

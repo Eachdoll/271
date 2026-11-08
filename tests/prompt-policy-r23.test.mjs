@@ -28,7 +28,7 @@ import * as qualityModule from '../story-quality/dist/pipeline.js';
  */
 const clone = v => JSON.parse(JSON.stringify(v));
 function setup() {
-  const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings);
+  const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings); state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
   return state;
 }
 const wizard = {characterIds: ['yuha', 'greenie'], backgroundIds: ['home', 'forest'], topic: '바람 피리 찾기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};

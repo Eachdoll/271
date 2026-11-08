@@ -10,7 +10,6 @@ import {demoPlotContract} from '../dist/story-generation/plot-contract.js';
 import {beatBudgets, checkBeatText, dialogueShare, hasRefrain, BEAT_WRITER_ATTEMPTS, SUMMARY_SWITCH_TOKENS} from '../dist/story-generation/beat-writer.js';
 import {resolveBeatWriterSettings, resolveQualityStageSettings} from '../dist/text-generation/models.js';
 import {TEXT_JOURNALS} from '../dist/finalize-cleanup.js';
-import {applyStoryCheckpoint} from '../dist/story-generation/ui.js';
 import {checkNotes} from '../dist/simple-create.js';
 import {buildStopReport, stopReportAvailable} from '../dist/story-generation/stop-report.js';
 
@@ -174,9 +173,6 @@ test('R30 the writer model: medium unless the draft froze upper; demo and policy
   assert.deepEqual(medium, resolveQualityStageSettings(settings, 'prose', {}));
   assert.notEqual(upper.config.model, medium.config.model);
   assert.ok(TEXT_JOURNALS.includes('writerCheckpoint'));
-  const draft = {};
-  applyStoryCheckpoint(draft, {stage: 'beatWriter', writerCheckpoint: {version: 1, completed: {a: 1}}});
-  assert.deepEqual(draft.writerCheckpoint, {version: 1, completed: {a: 1}}, 'a pro draft keeps the writer journal too');
   const inp = input(), o = outlineOf(inp), engine = writer();
   const demo = await generateProse(o, inp, {engineId: 'demo', qualityEngines: {beatWriter: engine}});
   assert.equal(engine.calls.length, 0);
@@ -197,7 +193,7 @@ import {estimateStoryTextCost} from '../dist/text-generation/models.js';
 import {getTextGenerationSettings} from '../dist/text-generation/settings-ui.js';
 
 test('R30 FULL AUTO hands the beat writer its model and journal, keeps the journal across a stop, and prices a new job with the writer', async () => {
-  const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings);
+  const state = seedState(); migrateWorldState(state); migrateReadingSettings(state.settings); state.settings.textGeneration = {...(state.settings.textGeneration || {}), writersRoom: false}; // R54c: the old path
   const wizard = {characterIds: ['yuha'], backgroundIds: [], topic: '바람 피리', pageCount: 12, koreanLevel: 'K2', englishLevel: 'E0', value: 'none', ending: 'home', language: 'bilingual'};
   const job = createFullAutoJob(state, wizard, {stopBefore: 'text', planMode: 'selection'});
   assert.deepEqual(job.input.orchestrationPolicy, {version: 1, writerTier: 'medium'});
