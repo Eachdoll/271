@@ -12,7 +12,7 @@ import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
 import { hasStoryManners, mannersRef } from "./story-manners.js";
 import { hasReferencePolicy, referencePolicy } from "../image-generation/reference-policy.js";
-import { hasWritersRoom, writersRoomRef, runWritersRoom, attachWritersRoom, roomPremiseBlock } from "./writers-room.js";
+import { hasWritersRoom, writersRoomRef, runWritersRoom, attachWritersRoom, roomPremiseBlock, roomOutline } from "./writers-room.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
 import { hasStoryCast, storyCastRef, withCastSchema, castRule, castPlanRule } from "./story-cast.js";
@@ -2415,6 +2415,21 @@ export async function generateOutline(source, options = {}) {
   // R51: a writers'-room draft runs the room (premises → the panel → the
   // parent) instead of the council; its record rides on the outline the same way.
   const room = hasWritersRoom(input) ? await runWritersRoom(input, options, qualityServices()) : null;
+  // R55c: a room book buys no outline. The writer never read the paid outline
+  // (the drafts come from the brief and the premise) and the pages met it only
+  // by position, so the app writes the skeleton from the chosen premise here and
+  // runRoomPages rebuilds it from the finished pages and the picture reading.
+  if (room) {
+    const data = assertValid("outline", roomOutline(input, room.record), input);
+    if (input.storyShape) data.storyShape = clone(input.storyShape);
+    if (input.stageCategory) data.stageCategory = clone(input.stageCategory);
+    attachWritersRoom(data, room);
+    return {
+      data,
+      usage: mergeStoryUsage([room]),
+      meta: { stage: "outline", requests: Number(room.meta?.requests) || 0, council: room.meta, roomOutline: true, demo: false },
+    };
+  }
   const council = room || (hasCouncilPolicy(input) ? await runStoryCouncil(input, options, qualityServices()) : null);
   const attach = (outline) => (room ? attachWritersRoom(outline, room) : attachCouncil(outline, council));
   // R46: the room gave each candidate its own device; the chosen one is this outline's.

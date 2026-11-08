@@ -131,12 +131,14 @@ test('R51 the outline stage takes the room instead of the council; the sieve dro
   assert.equal(result.data.writersRoom.chosen, 1);
   assert.equal(result.data.council, undefined, 'the council did not meet');
   assert.equal(result.data.bible, undefined);
-  const outlineCall = calls.find((c) => /StoryOutline/.test(c.system));
-  assert.match(outlineCall.system, /THE WRITERS' ROOM CHOSE THIS PREMISE[^\n]*\nTitle "전제 7"/);
-  assert.doesNotMatch(outlineCall.system, /THE WRITERS' ROOM CHOSE THIS PITCH/);
+  // R55c: no outline request at all — the app writes the skeleton from the chosen premise.
+  assert.equal(calls.find((c) => /StoryOutline/.test(c.system)), undefined, 'no paid outline for a room book');
+  assert.equal(result.data.roomOutline?.stage, 'skeleton');
+  assert.equal(result.data.titleCandidates[0], '전제 7');
+  assert.equal(result.meta.roomOutline, true);
   assert.equal(result.meta.council.stage, 'council', 'the room reports under the council\'s stage name (the same checkpoint plumbing)');
   assert.equal(result.meta.council.councilCheckpoint.kind, 'writersRoom');
-  assert.ok(Number(result.meta.requests) >= 3, `${result.meta.requests} requests: the room's two and the outline`);
+  assert.equal(Number(result.meta.requests), 2, `${result.meta.requests} requests: the room's two, no outline`);
   // The sieve: a premise whose engine and laugh echo a recent book is dropped before the panel hears it.
   const records = [{topic: '옛 책', usedElements: {engine: 'reader_knows', humor: ['엄마 머리가 2번 먼저 뽀글이 돼요']}}];
   const sieved = W.sievePremises(PREMISES.premises, records);

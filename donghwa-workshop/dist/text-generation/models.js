@@ -749,7 +749,7 @@ export function estimateStoryTextCost({
     stages.push(
       stageEstimate("roomPremises", 2500, 3500, 1, "writer"),
       stageEstimate("roomPanel", 5500, 1700, 1, "cheap"),
-      stageEstimate("outline", 7000, beats * 350, 1),
+      // R55c: no outline row — the room's outline is the app's (free).
       stageEstimate("roomDrafts", 1800, draftOut, 3, "writer"),
       stageEstimate("roomRead", 5000 + pages * 150, 1500, 1, "cheap"),
       stageEstimate("roomRewrite", 2200 + pages * 60, draftOut, 1, "writer"),

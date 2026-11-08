@@ -14,11 +14,14 @@ import { topicEndingNote } from "./topic-ending.js";
 import { ledger } from "./quality-adapter.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { councilHoldError, normalizeCouncilChoice, appendDecision } from "./council.js";
-import { StoryValidationError } from "./schemas.js";
+import { StoryValidationError, frozenBeatCount } from "./schemas.js";
+import { wantsPicturePlan, settlePicturePlans, SHOTS, SPACES } from "./picture-plan.js";
+import { hasStoryDrama, settleDramaPlans } from "./story-drama.js";
+import { hasTextPocket, settlePockets } from "../text-pocket.js";
 import { ROOM_PHASES } from "./council-room.js";
 import { checkStory } from "./checker.js";
 import { leanLevelLine } from "./prompt-diet.js";
-import { acceptEcoPagination, inspectStory, roomServices } from "./pipeline.js";
+import { acceptEcoPagination, inspectStory, roomServices, storyTopicKeywords } from "./pipeline.js";
 /** R54d: a caller without an engine resolver (FULL AUTO) gets the pipeline's — the same one the room's premises stage uses. */
 const withEngines = (services) => (typeof services?.engineFor === "function" ? services : { ...roomServices(), ...(services || {}) });
 export { ROOM_PHASES };
@@ -995,18 +998,44 @@ export function roomCastRecord(c, { id, jobId, now = new Date().toISOString() } 
     createdAt: now,
   };
 }
+/* ---------- R55c: the picture reading replaces the outline's picture plan ---------- */
+const POCKETS = Object.freeze(["left", "right", "top", "bottom", "none"]);
+const CARRIERS_READ = Object.freeze(["words", "picture", "both"]);
+const BACKDROPS_READ = Object.freeze(["scene", "plain"]);
+/** The reading's extra fields for a picture-led draft (the composition the outline used to plan before anyone wrote). */
+function readingPlanFields(input) {
+  if (!wantsPicturePlan(input)) return { properties: {}, line: "" };
+  const drama = hasStoryDrama(input),
+    pocket = hasTextPocket(input);
+  return {
+    properties: {
+      shot: { type: "string", enum: [...SHOTS] },
+      space: { type: "string", enum: [...SPACES] },
+      carrier: { type: "string", enum: [...CARRIERS_READ] },
+      ...(drama ? { focus: { type: "string", maxLength: 80 }, backdrop: { type: "string", enum: [...BACKDROPS_READ] } } : {}),
+      ...(pocket ? { pocket: { type: "string", enum: [...POCKETS] } } : {}),
+    },
+    line: ` Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}.`,
+  };
+}
+/** The beat of each of N pages when the book is not an openings book: the pages dealt evenly and in order over the beats. */
+export function evenBeats(beats, count) {
+  const rows = list(beats);
+  if (!rows.length || !(count > 0)) return [];
+  return Array.from({ length: count }, (_, i) => rows[Math.min(rows.length - 1, Math.floor((i * rows.length) / count))]);
+}
 export function extractRequest(input, outline, pages) {
   const count = list(pages).length,
+    reading = readingPlanFields(input),
     // R54g: gender and pronoun per character — the A/B's reader wrote "behind her" for the boy.
     cast = list(input?.characters).filter(object).map((c) => `${c.id} = ${str(c.name, 30)}${c.nameEn ? ` (${str(c.nameEn, 30)})` : ""}${genderWord(c) ? ` — ${genderWord(c)}, ${/^(boy|man)$/u.test(genderWord(c)) ? "he" : "she"}` : ""}`).join(", "),
     lead = list(input?.characters).filter(object)[0],
     places = list(input?.backgrounds).filter(object).map((b) => `${b.id} = ${str(b.name, 30)}`).join(", "),
-    beats = list(outline?.beats).filter(object).map((b) => `${b.index}: ${str(b.summary || b.title, 200)}`).join("\n"),
     // R54f: a new character that got a drawer card (roomNewCast → FULL AUTO) is in the cast list by ID.
     known = new Set(list(input?.characters).filter(object).flatMap((c) => [str(c.name, 30), str(c.nameEn, 30)]).filter(Boolean)),
     extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter((n) => n && !known.has(n));
   return {
-    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: beatIndex (which approved beat this page belongs to; pages run in order through the beats), who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English). Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}\n[beats]\n${beats || "(none)"}`,
+    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English).${reading.line} Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}`,
     user: list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}`).join("\n"),
     jsonSchema: {
       type: "object",
@@ -1021,23 +1050,24 @@ export function extractRequest(input, outline, pages) {
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["pageNo", "beatIndex", "who", "where", "action", "emotion", "timeOfDay", "props"],
+            // R55c: no beatIndex — the beats are the app's (dealt over the pages), never the reader's guess; the reading's picture fields for a picture-led draft.
+            required: ["pageNo", "who", "where", "action", "emotion", "timeOfDay", "props", ...Object.keys(reading.properties)],
             properties: {
               pageNo: { type: "integer", minimum: 1 },
-              beatIndex: { type: "integer", minimum: 1 },
               who: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", maxLength: 60 } },
               where: { type: "string", maxLength: 500 },
               action: { type: "string", maxLength: 500 },
               emotion: { type: "string", maxLength: 40 },
               timeOfDay: { type: "string", enum: TIMES },
               props: { type: "array", maxItems: 12, items: { type: "string", maxLength: 80 } },
+              ...reading.properties,
             },
           },
         },
       },
     },
     temperature: 0.2,
-    maxTokens: 6000,
+    maxTokens: 6000 + (Object.keys(reading.properties).length ? count * 60 : 0),
   };
 }
 /** R54b: the beat of each of N entries in an openings book of C beats (null for a page book or a count outside C..2C). */
@@ -1094,11 +1124,14 @@ export function settleExtraction(raw, input, outline, pages, title) {
   // doubled openings spread evenly through the book (entries − C of them);
   // every entry of opening k sits on approved beat k. Deterministic, never the
   // model's guess, so the structure the prints read is always valid.
-  const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true));
+  // R55c: a page book is dealt evenly too (the outline is the app's now; the
+  // reader is not asked for a beat — an older journal's beatIndex is ignored).
+  const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true)) || evenBeats(beats, count),
+    plainOk = wantsPicturePlan(input) && hasStoryDrama(input);
   const out = list(pages).map((p, i) => {
     const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
     const who = list(row.who).map(String).filter((id) => castSet.has(id));
-    let beat = openingBeat ? openingBeat[i] : Number(row.beatIndex);
+    let beat = openingBeat.length ? openingBeat[i] : Number(row.beatIndex);
     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
     last = beat;
     const emotion = /^[A-Za-z]+(?:-[A-Za-z]+)?$/u.test(str(row.emotion, 40)) ? str(row.emotion, 40) : "calm";
@@ -1117,6 +1150,8 @@ export function settleExtraction(raw, input, outline, pages, title) {
       },
       variantByCharacter: {},
       isRefrainPage: false,
+      // R55c: a plain-backdrop page from the reading (settleBackdrops keeps it only where the beat's plan agrees and within the caps).
+      ...(plainOk && str(row.backdrop, 20) === "plain" ? { backdrop: "plain" } : {}),
     };
   });
   // R54f-2: the cover carries the writer's title; the cheap reader rewrote it in both paid A/B runs ("Kongi Hide and Seek").
@@ -1238,16 +1273,143 @@ export async function runRoomPages(input, outline, draft, options = {}, services
     options.onProgress?.({ stage: "roomPages", phase: "extract", message: "작가실 · 완성된 글에서 그림에 필요한 것을 읽고 있어요." });
     const raw = await ask("그림 읽기", extractRequest(sized, outline, pages), "cheap");
     const settled = settleExtraction(raw, sized, outline, pages, draft.title);
+    // R55c: the outline the pictures and prints read is rebuilt from the finished pages and the reading (beat summaries, places, feelings, the per-beat picture plan).
+    const shaped = roomOutlineFromPages(outline, sized, settled.pages, raw);
     // R54e: the room's binding is the writer's — no "all pairs → last opening a spread" guard.
-    const pagination = acceptEcoPagination(settled, outline, sized, { bookId: sized.bookId, roomBinding: true });
-    const report = inspectStory(outline, pagination, sized);
+    // R55c: staging on — the pages get the camera rotation, sides and light the picture requests read (a room book had none before and fell back to the old prompt).
+    const pagination = acceptEcoPagination(settled, shaped, sized, { bookId: sized.bookId, roomBinding: true, staging: true });
+    const report = inspectStory(shaped, pagination, sized);
     return {
       data: pagination,
       usage: journal.usage(),
-      meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length, spreadFit: { marks: fit.marks, fitted: fit.fitted, moved: fit.moved } },
+      meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length, spreadFit: { marks: fit.marks, fitted: fit.fitted, moved: fit.moved }, outline: shaped },
     };
   } catch (error) {
     if (error?.name === "AbortError") throw error;
     throw journal.fail(error);
   }
 }
+
+/* ---------- R55c: the outline is the app's — no paid outline call for a room book ---------- */
+const BEAT_TYPES = (count) => ["setup", "want", ...Array.from({ length: Math.max(0, count - 5) }, () => "attempt"), "turn", "resolution", "close"];
+const BEAT_FEELING = Object.freeze({ setup: "기대", want: "호기심", attempt: "궁금", turn: "놀람", resolution: "기쁨", close: "편안" });
+const normName = (value) => String(value || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+/** 3–5 Korean words for the outline's newWordsKo: the topic's nouns, then the premise's words. */
+function roomWords(input, premise) {
+  const seen = [];
+  const push = (w) => {
+    w = str(w, 30);
+    if (w && w.length >= 2 && !seen.includes(w) && seen.length < 5) seen.push(w);
+  };
+  for (const w of storyTopicKeywords(str(input?.topic, 400))) push(w);
+  for (const text of [premise?.title, premise?.line]) for (const w of str(text, 300).split(/[^\p{L}\p{N}]+/u)) push(w);
+  for (const w of ["이야기", "친구", "하루"]) push(w);
+  return seen.slice(0, 5);
+}
+/**
+ * The skeleton outline of a room book, from the chosen premise: valid for the
+ * app's checks (beats, settings, feelings, titles), never sent to a model. The
+ * second paid A/B read from its exchanges that the writer never saw the paid
+ * outline and the pages met it only by position — so the 18,000-character
+ * request was priced for a binding count and a picture plan the finished text
+ * then contradicted. runRoomPages rebuilds this skeleton from the pages.
+ */
+export function roomOutline(input, record) {
+  const premise = object(record?.premise) ? record.premise : {},
+    count = frozenBeatCount(input) || 8,
+    cast = list(input?.characters).filter(object).map((c) => String(c.id)).slice(0, 5),
+    placeIds = list(input?.backgrounds).filter(object).map((b) => String(b.id)),
+    preferred = list(input?.preferredBackgroundIds).map(String).filter((id) => placeIds.includes(id)),
+    place = preferred[0] || placeIds[0] || "",
+    lead = list(premise.cast).find((c) => object(c) && c.isNew !== true) || list(premise.cast).find(object) || null,
+    line = str(premise.line, 500) || str(input?.topic, 500) || "이야기",
+    titles = [str(premise.title, 100), ...list(record?.pitches).map((p) => str(p?.title, 100))].filter(Boolean).filter((t, i, all) => all.indexOf(t) === i);
+  while (titles.length < 3) titles.push(titles[0] || str(input?.topic, 100) || "이야기");
+  const types = BEAT_TYPES(count),
+    beats = types.map((type, i) => ({ index: i + 1, type, summary: line, characters: cast, settingKey: place || "the story's place" }));
+  return {
+    titleCandidates: titles.slice(0, 3),
+    logline: line,
+    want: str(lead?.want, 500) || line,
+    problem: str(lead?.flaw, 500) || str(premise.laugh, 500) || line,
+    twist: str(premise.laugh, 500) || line,
+    beats,
+    newWordsKo: roomWords(input, premise),
+    newWordsEn: [],
+    settings: beats.map((b) => ({ beatIndex: b.index, ...(place ? { backgroundId: place } : { newPlace: "이야기의 장소" }) })),
+    emotionArc: types.map((type) => BEAT_FEELING[type]),
+    endingType: str(input?.endingType, 20) || "home_sleep",
+    roomOutline: { version: 1, stage: "skeleton" },
+  };
+}
+/**
+ * The outline rebuilt from the finished pages and the reading: every beat's
+ * summary is its pages' Korean, its place the supplied place its pages name
+ * most, its feeling its first page's, and (picture-led drafts) its picture plan
+ * the reading's shot·space·carrier·focus·backdrop·pocket of its first page —
+ * cleaned by the same settlers the writers' outline went through.
+ */
+export function roomOutlineFromPages(outline, input, pages, raw) {
+  const next = clone(object(outline) ? outline : {}),
+    beats = list(next.beats).filter(object),
+    rows = list(raw?.pages).filter(object),
+    backgrounds = list(input?.backgrounds).filter(object),
+    placeOf = (where) => {
+      const key = normName(where);
+      if (!key) return "";
+      const hit = backgrounds.find((b) => [b.id, b.name, b.nameEn].some((v) => normName(v) && normName(v) === key)) || backgrounds.find((b) => String(b.id) && key.includes(normName(b.id)));
+      return hit ? String(hit.id) : "";
+    },
+    groups = new Map(beats.map((b) => [b.index, []]));
+  list(pages).forEach((p, i) => {
+    const group = groups.get(Number(p?.beatIndex));
+    if (group) group.push({ page: p, row: rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {} });
+  });
+  next.settings = list(next.settings).filter(object);
+  next.emotionArc = list(next.emotionArc);
+  const plan = wantsPicturePlan(input),
+    drama = hasStoryDrama(input),
+    pocket = hasTextPocket(input);
+  for (const beat of beats) {
+    const group = groups.get(beat.index) || [];
+    if (!group.length) continue;
+    const ko = group.map((g) => str(g.page.textKo, 2000)).filter(Boolean).join(" ");
+    if (ko) beat.summary = ko.slice(0, 2000);
+    const who = [...new Set(group.flatMap((g) => list(g.page.scene?.who).map(String)))].slice(0, 5);
+    if (who.length) beat.characters = who;
+    const counts = new Map();
+    for (const id of group.map((g) => placeOf(g.page.scene?.where)).filter(Boolean)) counts.set(id, (counts.get(id) || 0) + 1);
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "",
+      where = str(group[0].page.scene?.where, 300);
+    let setting = next.settings.find((s) => Number(s.beatIndex) === beat.index);
+    if (!setting) next.settings.push((setting = { beatIndex: beat.index }));
+    if (top) {
+      setting.backgroundId = top;
+      delete setting.newPlace;
+      beat.settingKey = top;
+    } else if (where) {
+      delete setting.backgroundId;
+      setting.newPlace = where;
+      beat.settingKey = where;
+    }
+    const emotion = str(group[0].page.scene?.emotion, 40);
+    if (/^[A-Za-z]+(?:-[A-Za-z]+)?$/u.test(emotion)) next.emotionArc[beat.index - 1] = emotion;
+    if (plan) {
+      const r = group[0].row;
+      beat.picturePlan = {
+        version: 1,
+        carrier: str(r.carrier, 20) || "both",
+        ...(str(r.shot, 20) ? { shot: str(r.shot, 20) } : {}),
+        ...(str(r.space, 20) ? { space: str(r.space, 20) } : {}),
+        ...(drama ? { ...(str(r.focus, 80) ? { focus: str(r.focus, 80) } : {}), ...(str(r.backdrop, 20) ? { backdrop: str(r.backdrop, 20) } : {}) } : {}),
+        ...(pocket && str(r.pocket, 20) ? { pocket: str(r.pocket, 20) } : {}),
+      };
+    }
+  }
+  settlePicturePlans(next, input);
+  settleDramaPlans(next, input);
+  settlePockets(next, input);
+  next.roomOutline = { version: 1, stage: "pages" };
+  return next;
+}
+

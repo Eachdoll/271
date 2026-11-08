@@ -54,7 +54,9 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
   const req = W.extractRequest(input, outline, draft.pages);
   assert.match(req.system, /\[cast\] yuha = 유하 \(Yuha\) — boy, he, mom = 엄마 \(Mom\) — woman, she/);
   assert.match(req.system, /보라 are new to this book and have no ID/);
-  assert.match(req.system, /\[beats\]\n1: /);
+  // R55c: no beats in the reading (the app deals the pages over its own beats); a picture-led draft's reading carries the picture fields.
+  assert.doesNotMatch(req.system, /\[beats\]/);
+  assert.deepEqual(req.jsonSchema.properties.pages.items.required, ['pageNo', 'who', 'where', 'action', 'emotion', 'timeOfDay', 'props', 'shot', 'space', 'carrier', 'focus', 'backdrop', 'pocket']);
   assert.equal(req.jsonSchema.properties.pages.minItems, 10, 'the request itself takes what it is given');
   assert.match(req.user, /^1쪽: 1쪽이에요\. 유하가 거울을 봐요\. 뽀글머리가 보여요\.\n   EN: Page 1\./);
   const calls = [];
@@ -90,7 +92,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
 test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat writers, no pagination request); a parked room owes nothing for the premises and the panel; a demo job keeps the old path', () => {
   const settings = {engine: 'openai'};
   const room = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true});
-  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'outline', 'roomDrafts', 'roomRead', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages'], 'R54e: no read-through row — the room pages skip it');
+  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'roomDrafts', 'roomRead', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages'], 'R54e: no read-through row — the room pages skip it; R55c: no outline row — the outline is the app\'s');
   assert.equal(room.stages.find((s) => s.stage === 'roomDrafts').requestCount, 3);
   assert.equal(room.room, true);
   const plain = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, council: true, orchestration: true});

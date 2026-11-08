@@ -1560,6 +1560,8 @@ export async function runFullAuto(
         (opts) => ops.roomPages(job.input, job.outline, job.roomDraft, opts("pagination")),
         (r) => {
           job.pagination = r.data;
+          // R55c: the outline rebuilt from the finished pages and the picture reading (summaries, places, the per-beat plan).
+          if (r.meta?.outline) job.outline = clone(r.meta.outline);
           // R54b: an openings book keeps its printed count (its entries are C..2C).
           job.input.pageCount = r.meta?.pageCount || r.data.pages.length;
           // R54g: how the writer's spread marks fitted the binding (shown by the runner; advisory).
