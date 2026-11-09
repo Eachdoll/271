@@ -651,6 +651,8 @@ export function estimateStoryTextCost({
   // role) model, the panel and the page reading on the economy model; no
   // council, no scene briefs, no beat writers, no pagination request.
   room = false,
+  // R55h: a weave room draft buys one more writer call — the cast speaking before the drafts (a room job frozen before R55h has none).
+  roomWeave = room,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -754,7 +756,8 @@ export function estimateStoryTextCost({
       stageEstimate("roomPremises", 2500, Math.ceil(3500 * longHand), 1, "writer"),
       stageEstimate("roomPanel", 5500, 1700, 1, "cheap"),
       // R55c: no outline row — the room's outline is the app's (free).
-      stageEstimate("roomDrafts", 1800, draftOut, 3, "writer"),
+      ...(roomWeave ? [stageEstimate("roomCastNotes", 1500, Math.ceil(700 * longHand), 1, "writer")] : []),
+      stageEstimate("roomDrafts", roomWeave ? 2300 : 1800, draftOut, 3, "writer"),
       stageEstimate("roomRead", 5000 + pages * 150, 1500, 1, "cheap"),
       stageEstimate("roomRewrite", 2200 + pages * 60, draftOut, 1, "writer"),
       stageEstimate("roomEnglish", 2500 + pages * 80, Math.ceil(draftOut * 0.6), 1, "writer"),
@@ -950,6 +953,7 @@ const BUDGET_STEP = {
   // R53 작가실.
   roomPremises: "outline",
   roomPanel: "outline",
+  roomCastNotes: "roomDrafts",
   roomDrafts: "roomDrafts",
   roomRead: "roomDrafts",
   roomRewrite: "roomDrafts",
@@ -992,7 +996,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1 }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1, roomWeave: input.writersRoom?.version === 1 && input.writersRoom?.weave === 1 }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {

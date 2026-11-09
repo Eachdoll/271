@@ -40,13 +40,15 @@ function mockEngine(calls, {longDraft = 1} = {}) {
   }};
 }
 const services = (engine) => ({engineFor: () => engine});
-const roomInput = (bookId) => normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'openings'}).input, bookId});
+/* R55h: a job frozen before R55h has no weave — its requests are the ones this test pins, byte for byte. */
+const preWeave = (input) => { const {weave, ...room} = input.writersRoom; return {...input, writersRoom: room}; };
+const roomInput = (bookId) => preWeave(normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'openings'}).input, bookId}));
 const roomOutline = (input) => ({...demoOutline(input), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [{title: PREMISE.title}], premises: [PREMISE]}});
 
 test('R52 the marker carries the recent books (line, engine, laugh); the brief and the sieve read them from the marker; an approved room book records its engine', () => {
   const records = [{bookId: 'old', approved: true, createdAt: '2026-10-29T00:00:00.000Z', topic: '돌돌 말린 길', outline: {beats: [{index: 1}], logline: '유하가 방석에서 태양계 여행을 떠나요', writersRoom: {premise: {engine: 'pile_up'}}}, usedElements: {humor: ['꾸러미가 들썩여요']}}];
   const policy = W.writersRoomPolicy(records);
-  assert.deepEqual(policy, {version: 1, recent: [{line: '돌돌 말린 길 — 유하가 방석에서 태양계 여행을 떠나요 — 웃음: 꾸러미가 들썩여요', engine: 'pile_up', laugh: '꾸러미가 들썩여요'}]});
+  assert.deepEqual(policy, {version: 1, weave: 1, recent: [{line: '돌돌 말린 길 — 유하가 방석에서 태양계 여행을 떠나요 — 웃음: 꾸러미가 들썩여요', engine: 'pile_up', laugh: '꾸러미가 들썩여요'}]});
   assert.deepEqual(W.writersRoomRef({version: 1, recent: [{line: ' a ', engine: 'x'}, {line: ''}, 3]}), {version: 1, recent: [{line: 'a', engine: 'x'}]});
   assert.equal(W.writersRoomRef({version: 2}), null);
   const input = {...roomInput('m'), writersRoom: policy};

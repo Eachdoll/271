@@ -63,7 +63,9 @@ test('R55e the anthropic writer\'s room rows are 1.6× longer; openai\'s are as 
   assert.ok(out(anthropic, 'roomDrafts') >= Math.floor(out(openai, 'roomDrafts') * 1.5), `${out(anthropic, 'roomDrafts')} vs ${out(openai, 'roomDrafts')}`);
   const total = (est) => est.stages.reduce((sum, r) => sum + (Number(r.costUsd) || 0), 0);
   assert.ok(total(anthropic) > 0.71 * 1.2, `anthropic K2 16쪽 estimate ${total(anthropic).toFixed(3)} should now sit above the third A/B's $0.71 with room to spare`);
-  assert.ok(Math.abs(total(openai) - 1.188) < 0.01, 'openai rows unchanged');
+  assert.ok(Math.abs(total(openai) - 1.288) < 0.01, 'openai rows unchanged by R55e (R55h: + the cast notes call and the notes in the three draft requests, $1.188 → $1.288)');
+  const before = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true, roomWeave: false});
+  assert.ok(Math.abs(total(before) - 1.188) < 0.01, 'a room job frozen before R55h is priced as before');
   assert.ok(out(anthropic, 'roomPremises') > out(openai, 'roomPremises'));
   assert.equal(row(openai, 'roomDrafts').requestCount, 3);
 });
@@ -77,6 +79,7 @@ test('R55e two drafts with the same title are told apart in the record', async (
   let n = 0;
   const engine = {id: 'openai', async complete(r) {
     const props = r.jsonSchema?.properties || {};
+    if (props.notes) return reply({notes: []}); // R55h: the cast speaks first; nothing readable here leaves the drafts without notes
     if (props.readers) return reply({readers: ['action', 'laugh', 'heart', 'eye', 'ours', 'parent'].map((reader) => ({reader, favorite: 1, again: true, drafts: [1, 2, 3].map((d) => ({draft: d, skipPage: 1, lostPage: 0, laughPages: [], change: '', hardPage: 0, mannersPage: 0}))}))});
     if (props.pages?.items?.properties?.en && !props.pages?.items?.properties?.ko) return reply({pages: Array.from({length: Number(props.pages.minItems)}, (_, i) => ({en: `Page ${i + 1}.`}))});
     n += 1;

@@ -311,6 +311,7 @@ async function runEngine(engine) {
     measured,
     spreadFit: job.spreadFit || null,
     pictureReading: job.pictureReading || null,
+    roomWeave: job.roomWeave || null,
     coverage: pages.length ? castCoverage(pages, job.input, extraNames) : [],
     style: pages.length ? styleReport(pages.map((p) => p.textKo), { names: [...(job.input.characters || []).map((c) => c.name), ...extraNames] }) : null,
     usage: usageSummary(job),
@@ -395,6 +396,7 @@ function compareReport(results) {
   row("독자단이 고른 초고", (r) => r.draft?.room?.chosen ?? "-");
   row("고쳐쓰기 / 영어판 / 다듬기", (r) => (r.draft?.room ? `${r.draft.room.rewritten ? `함${r.draft.room.rewriteChange ? ` (${r.draft.room.rewriteChange.changed}/${r.draft.room.rewriteChange.after}쪽)` : ""}` : r.draft.room.rewriteSkipped ? "건너뜀" : "안 함"} / ${r.draft.room.english ? "씀" : "없음"} / ${r.draft.room.polished ? "함" : "안 함"}` : "-"));
   row("펼침 표시 맞춤", (r) => (r.spreadFit ? `표시 ${r.spreadFit.marks} · ${r.spreadFit.fitted ? "맞음" : "못 맞춤"}` : "-"));
+  row("짜임 실측 · 되돌아온 것 / 한 쪽만 나온 인물 / 그림 메모", (r) => (r.roomWeave ? `${r.roomWeave.returning.length}개${r.roomWeave.returning.length ? ` (${r.roomWeave.returning.map((x) => `${x.prop} ${x.from}→${x.to}`).join(", ")})` : ""} / ${r.roomWeave.single.length}명 / ${r.roomWeave.artNotes}쪽` : "-"));
   row("그림 읽기 · 주인공이 못 보는 것 / 다음 쪽까지 감출 것", (r) => (r.pictureReading ? `${r.pictureReading.hidden}쪽 / ${r.pictureReading.holdBack}쪽` : "-"));
   row("등급 참고 (다듬기 전 → 후)", (r) => (r.draft?.room ? `${(r.draft.room.levelNotes || []).length} → ${(r.draft.room.levelNotesAfter || []).length}` : "-"));
   row("최종 항목(펼침면)", (r) => (r.measured ? `${r.measured.totals.pages} (${r.measured.totals.spreads})` : "-"));

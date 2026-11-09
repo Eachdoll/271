@@ -18,7 +18,9 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '숲속에서 자꾸 숨는 아기 사슴', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+/* R55h: a job frozen before R55h has no weave — its requests are the ones this test pins, byte for byte. */
+const preWeave = (input) => { const {weave, ...room} = input.writersRoom; return {...input, writersRoom: room}; };
+const roomInput = (id) => preWeave(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id}));
 const PREMISE = {title: '내 뒤에 누가 있게?', line: '숲에서', engine: 'reader_knows', laugh: '뒤에 숨어요', picture: '큰 귀', cast: [{name: '콩이', isNew: true, want: '놀고 싶다', flaw: '겁', speech: '귀만', nameEn: 'Kongi', kind: 'fawn', look: 'tiny fawn'}]};
 const roomOutline = (input) => ({...demoOutline(input), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [{title: '내 뒤에 누가 있게?'}], premises: [PREMISE]}});
 const reply = (json) => ({json, usage: {input: 10, output: 5}, meta: {requests: 1, model: 'mock'}});

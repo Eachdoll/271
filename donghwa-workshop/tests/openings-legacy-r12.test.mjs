@@ -746,7 +746,8 @@ const PINS = {
   // nothing else differs (dump-diffed against ad90083). ad90083: dcd8e232…6ee4.
   // 그림 참조 (R55d): every new draft's input carries pictureRefs {version: 1};
   // nothing else differs (dump-diffed against eeceff2). eeceff2: 0871172b…5f9f.
-  inputs: '26dda35bcf458814bb856e4ef8dca88c300c8aa3d3c2f68d4085c0a31f183658',
+  // R55h (2026-11-09): the writers' room marker of a new draft carries weave: 1 (the only difference, 2307268 dump compared).
+  inputs: 'e72036429735e581d21c0bbd8ba51ed73e958b345072b955e9498b8652d39206',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -826,7 +827,8 @@ const PINS = {
   // (dump-diffed against ad90083). ad90083: 239c972b…1f08.
   // R55d: the two demo jobs' inputs carry pictureRefs; nothing else differs
   // (dump-diffed against eeceff2). eeceff2: e18da519…c908.
-  fullAutoDemo: '52c9b6fa8488e6ceea2fdc4705bb047aecc9be0211ef0f3d5b71443d0b20a201',
+  // R55h: job.input.writersRoom.weave only.
+  fullAutoDemo: 'd66be3b78c984e7c44cf6a52bae245240a1697a65e709a44bc8e38366a54ce29',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -890,7 +892,8 @@ const PINS = {
   // every other group is unchanged (dump-diffed against 9afba2b). 9afba2b: ab2740aa…4dee.
   // R55c: the room buys no outline — ③'s price line of a new K2 story drops one request
   // (글 약 $1.33 → $1.26); nothing else differs (dump-diffed against 28a3c4a). 28a3c4a: 23293f61…822d.
-  review: '3bfb4ad4c4d0ca7692a4363a8b9ff4e2b82d2d8727cfb91629ef62234f2ca5bd',
+  // R55h: the ③ price of a new room story ($1.26 → $1.36: the cast-notes call).
+  review: '1542b2fbc8243cf9ff051b49db574c07656d6f880c5d8ab8912e9261f75c6001',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -936,7 +939,8 @@ const PINS = {
   // b928880). b928880: 8b673b90…1736.
   // R55c: the room's outline row is gone (−1 request on every fullAuto row of a new
   // K2+ story; estimates.story.* unchanged, dump-diffed against 28a3c4a). 28a3c4a: c952c1ed…541f.
-  estimates: '94243c2edef7122a8c38085dd73d9026bda1a7ce48127141fa2dfe28dca72bb0',
+  // R55h: new-story estimates only (+1 request, +$0.10 text: the cast-notes row and the notes inside the three draft requests).
+  estimates: '076e11114dcf609d9ef461281ba3aeae0607e0fb8223b6acc1cf44db3eed61c0',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';
