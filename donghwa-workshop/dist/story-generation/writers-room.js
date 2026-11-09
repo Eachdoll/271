@@ -831,7 +831,13 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       )
     ).filter(Boolean);
     if (!drafts.length) throw journal.fail(roomError("작가가 쓸 수 있는 초고를 내지 못했어요."));
-    record.drafts = drafts.map((d) => ({ title: d.title, pages: d.pages.length }));
+    // R55e (A/B 3차 4-5): two of astra's three drafts shared a title; the record tells them apart with "(2)" (the drafts themselves are untouched).
+    const seenTitles = new Map();
+    record.drafts = drafts.map((d) => {
+      const n = (seenTitles.get(d.title) || 0) + 1;
+      seenTitles.set(d.title, n);
+      return { title: n > 1 ? `${d.title} (${n})` : d.title, pages: d.pages.length };
+    });
     let pick = 1,
       chosen = drafts[0];
     if (drafts.length > 1) {
@@ -1205,14 +1211,25 @@ const unmarkedRuns = (rows) => {
  * runs; marks beyond C are dropped from the end; when a run cannot be fixed
  * the pages are returned as they are (the binding then breaks a mark as before).
  */
-export function fitSpreadMarks(pages, openings) {
+/** R55e: the most sentences one single page may carry (the page check's rhythm band: max(page.max, ⌈page.max × 1.6⌉) — 5 for a picture-led K2 book), or null. */
+export function pageSentenceCap(spec) {
+  const max = Number(spec?.units?.page?.max);
+  if (!(max > 0)) return null;
+  return Math.max(max, Math.ceil(max * (Number(spec?.rhythm?.pageMaxFactor) || 1.6)));
+}
+export function fitSpreadMarks(pages, openings, { cap = null } = {}) {
   const c = Number(openings) || 0;
   let rows = list(pages).filter(object).map((p) => ({ ...p }));
   const marked = () => rows.filter((p) => p.spread === true).length;
   if (!c || !marked()) return { pages: rows, fitted: true, marks: 0, moved: 0 };
   let moved = 0;
   for (let i = rows.length - 1; i >= 0 && marked() > c; i--) if (rows[i].spread === true) { delete rows[i].spread; moved += 1; }
-  const target = 2 * c - marked();
+  // R55e: a mark the count cannot hold without an oversize page is released (the spread becomes a pair) instead.
+  const release = () => {
+    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].spread === true) { delete rows[i].spread; moved += 1; return true; }
+    return false;
+  };
+  const targetOf = () => 2 * c - marked();
   const inRun = (prefer) => {
     const runs = unmarkedRuns(rows);
     const odd = runs.filter((r) => r.length % 2 === 1);
@@ -1227,32 +1244,48 @@ export function fitSpreadMarks(pages, openings) {
     rows.splice(best, 1, ...parts);
     return true;
   };
+  // R55e (A/B 3차 4-2): a join that would put more sentences on one page than the page check allows is not made
+  // (Opus's 16 entries with two marks were joined into pages of 8 and 6 sentences).
+  const fits = (a, b) => cap === null || sentences(a.ko).length + sentences(b.ko).length <= cap;
   const join = (runs) => {
     let best = -1, size = Infinity;
-    for (const r of runs) for (let i = r.start; i + 1 < r.start + r.length; i++) { const n = rows[i].ko.length + rows[i + 1].ko.length; if (n < size) { size = n; best = i; } }
+    for (const r of runs) for (let i = r.start; i + 1 < r.start + r.length; i++) { const n = rows[i].ko.length + rows[i + 1].ko.length; if (n < size && fits(rows[i], rows[i + 1])) { size = n; best = i; } }
     if (best < 0) return false;
     rows.splice(best, 2, joinPages(rows[best], rows[best + 1]));
     return true;
   };
   let guard = 64;
-  while (rows.length < target && guard-- > 0) if (!split(inRun("odd")) && !split(inRun("any"))) break;
-  while (rows.length > target && guard-- > 0) if (!join(inRun("odd")) && !join(inRun("any"))) break;
-  guard = 32;
-  while (guard-- > 0) {
+  for (let round = 0; round < 8 && guard > 0; round++) {
+    while (rows.length < targetOf() && guard-- > 0) if (!split(inRun("odd")) && !split(inRun("any"))) break;
+    while (rows.length > targetOf() && guard-- > 0) {
+      if (join(inRun("odd")) || join(inRun("any"))) continue;
+      // No join fits: one spread mark less means one page less to shed.
+      if (!release()) break;
+    }
     const odd = unmarkedRuns(rows).filter((r) => r.length % 2 === 1);
-    if (odd.length < 2) break;
+    if (odd.length < 2 || rows.length !== targetOf()) break;
     // One odd run grows by a split, another shrinks by a join: the count stays, both turn even.
-    const before = rows.length;
+    // R55e: when no join fits under the cap the split is undone and the mark after the first odd
+    // run is released instead (the runs around it merge), then the count is balanced again.
+    const before = rows.map((p) => ({ ...p }));
     let done = false;
     for (const grow of odd) {
       if (!split([grow])) continue;
       const rest = unmarkedRuns(rows).filter((r) => r.length % 2 === 1);
       done = rest.length > 0 && join([rest[0]]);
+      if (!done) rows = before.map((p) => ({ ...p }));
       break;
     }
-    if (!done || rows.length !== before) break;
+    if (done) continue;
+    const at = odd[0].start + odd[0].length;
+    if (rows[at]?.spread === true) {
+      delete rows[at].spread;
+      moved += 1;
+      continue;
+    }
+    break;
   }
-  const fitted = rows.length === target && !unmarkedRuns(rows).some((r) => r.length % 2 === 1);
+  const fitted = rows.length === targetOf() && !unmarkedRuns(rows).some((r) => r.length % 2 === 1);
   return { pages: rows, fitted, marks: marked(), moved };
 }
 export async function runRoomPages(input, outline, draft, options = {}, services = {}) {
@@ -1263,7 +1296,8 @@ export async function runRoomPages(input, outline, draft, options = {}, services
   const openings = openingCount(input),
     clamped = clampPages(draft.pages, openings ? { min: openings, max: 2 * openings } : null),
     // R54g: the writer's spread marks are made to fit the binding before the deal.
-    fit = openings ? fitSpreadMarks(clamped, openings) : { pages: clamped, fitted: true, marks: 0, moved: 0 },
+    // R55e: no join may exceed what one page is allowed to carry.
+    fit = openings ? fitSpreadMarks(clamped, openings, { cap: pageSentenceCap(input?.specs?.ko) }) : { pages: clamped, fitted: true, marks: 0, moved: 0 },
     pages = fit.pages,
     printed = openings ? input.pageCount : pages.length;
   const sized = { ...input, pageCount: printed };

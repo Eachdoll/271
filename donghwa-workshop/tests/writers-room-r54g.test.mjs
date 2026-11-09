@@ -98,7 +98,8 @@ test('R54g fitSpreadMarks: Opus\'s marks (10, 14 of 14 entries, 8 openings) now 
   assert.deepEqual(W.fitSpreadMarks(astra, 8).pages, astra, 'already fits: untouched');
   assert.equal(W.fitSpreadMarks(pages(12, 2, []), 8).fitted, true, 'no marks: nothing to fit');
   const many = W.fitSpreadMarks(pages(12, 2, [1, 2, 3, 4, 5, 6, 7, 8, 9]), 8);
-  assert.equal(many.moved, 1, 'the ninth mark is dropped');
+  assert.ok(many.moved >= 1, 'the ninth mark is dropped (R55e: two more are released rather than joining four pages into one)');
+  assert.equal(W.fitSpreadMarks(pages(12, 2, [1, 2, 3, 4, 5, 6, 7, 8, 9]), 8, {cap: 5}).moved, 3);
   const short = W.fitSpreadMarks(pages(9, 1, [9]), 8);
   assert.equal(short.fitted, false, 'one-sentence pages cannot be split: left to the binding');
   assert.equal(short.pages.length, 9);

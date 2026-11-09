@@ -745,9 +745,13 @@ export function estimateStoryTextCost({
     // the old rows priced the openai book at $3.19 against $0.92 measured.
     // The output sizes are the visible text (the reasoning factor above doubles them for a
     // reasoning model, which is what the providers billed: premises 5.6k–6.3k, a draft 1.3k–1.7k).
-    const draftOut = 700 + pages * 25;
+    // R55e (A/B 3차 4-4): Opus wrote far longer than astra (35.7k output tokens, $0.71 against a $0.58
+    // estimate — the first run priced below cost; the 2차 run was $0.54). The anthropic writer's rows
+    // carry ×2 on the output, which puts the 3차 book at about 1.27× and the 2차 book at 1.7×.
+    const longHand = resolveQualityStageSettings(snapshot, "writer", qualitySettings).engineId === "anthropic" ? 2 : 1;
+    const draftOut = Math.ceil((700 + pages * 25) * longHand);
     stages.push(
-      stageEstimate("roomPremises", 2500, 3500, 1, "writer"),
+      stageEstimate("roomPremises", 2500, Math.ceil(3500 * longHand), 1, "writer"),
       stageEstimate("roomPanel", 5500, 1700, 1, "cheap"),
       // R55c: no outline row — the room's outline is the app's (free).
       stageEstimate("roomDrafts", 1800, draftOut, 3, "writer"),
