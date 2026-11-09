@@ -312,6 +312,7 @@ async function runEngine(engine) {
     spreadFit: job.spreadFit || null,
     pictureReading: job.pictureReading || null,
     roomWeave: job.roomWeave || null,
+    roomPlaces: job.roomPlaces || [],
     coverage: pages.length ? castCoverage(pages, job.input, extraNames) : [],
     style: pages.length ? styleReport(pages.map((p) => p.textKo), { names: [...(job.input.characters || []).map((c) => c.name), ...extraNames] }) : null,
     usage: usageSummary(job),
@@ -395,6 +396,8 @@ function compareReport(results) {
   row("초고 쪽수", (r) => (r.draft?.room?.drafts || []).map((d) => d.pages).join(" / ") || "-");
   row("독자단이 고른 초고", (r) => r.draft?.room?.chosen ?? "-");
   row("고쳐쓰기 / 영어판 / 다듬기", (r) => (r.draft?.room ? `${r.draft.room.rewritten ? `함${r.draft.room.rewriteChange ? ` (${r.draft.room.rewriteChange.changed}/${r.draft.room.rewriteChange.after}쪽)` : ""}` : r.draft.room.rewriteSkipped ? "건너뜀" : "안 함"} / ${r.draft.room.english ? "씀" : "없음"} / ${r.draft.room.polished ? "함" : "안 함"}` : "-"));
+  row("전제의 폭 · 열두 개 (작은/여러 곳/여럿) → 보여 준 셋", (r) => (r.room?.scales ? `${["small", "journey", "ensemble"].map((k) => r.room.scales.filter((x) => x === k).length).join("/")} → ${(r.room.pitches || []).map((p) => ({ small: "작은", journey: "여러 곳", ensemble: "여럿" })[p.scale?.kind] || "?").join(" · ")}` : "-"));
+  row("고른 전제 · 인물(새) / 장소(새) / 새 장소 카드", (r) => { const p = (r.room?.pitches || [])[(r.room?.chosen || 1) - 1]; return p?.scale ? `${p.scale.cast}명(${p.scale.newCast.length}) / ${p.scale.places}곳(${p.scale.newPlaces.length}) / ${(r.roomPlaces || []).map((b) => b.name).join(", ") || "없음"}` : "-"; });
   row("흐름 · 독자단이 고른 안 / 심고 거두기 메모", (r) => (r.draft?.room?.flowChosen ? `${(r.draft.room.treatments || []).length}안 중 ${r.draft.room.flowChosen}번 (끌림 ${(r.draft.room.flowRows || []).map((x) => x.pull).join("·") || "-"}) / ${((r.draft.room.treatments || [])[r.draft.room.flowChosen - 1]?.plants || []).length}개` : "-"));
   row("인물 노트 / 인물 사이 / 흐름에 맞춰 고침", (r) => (r.draft?.room?.castNotes ? `${r.draft.room.castNotes.length}명 / ${(r.draft.room.ties || []).length} / ${r.draft.room.castRevised ? "함" : "안 함"}` : "-"));
   row("복선 점검 · 거둔 것 / 놓기만 한 것 / 앞에 없이 나온 것", (r) => (r.draft?.room?.threads ? `${r.draft.room.threads.kept.length} / ${r.draft.room.threads.loose.length} / ${r.draft.room.threads.unplanted.length}` : "-"));
@@ -453,6 +456,7 @@ for (const engine of engines) {
     spreadFit: r.spreadFit,
     pictureReading: r.pictureReading,
     roomWeave: r.roomWeave,
+    roomPlaces: r.roomPlaces,
     coverage: r.coverage,
     style: r.style,
     exchanges: r.exchanges,

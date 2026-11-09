@@ -79,7 +79,7 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
-import { hasRoomStages, hasRoomWeave, hasWritersRoom, roomCastRecord, roomNewCast, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
+import { hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
 import { ecoProseFromPages } from "./eco-mode.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
@@ -444,7 +444,7 @@ export function estimateFullAutoCost(
       // R31b: diet drafts price the app-path outline/prose on the stage models.
       ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
       // R53 작가실: a room job (or a new one while the setting is on) is priced by its rounds.
-      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true } : {}),
+      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true } : {}),
       // R31e: the ledger-based coherence rows only when the job's outline has a ledger.
       ...(job?.outline ? { ledger: !!job.outline.plotContract } : {}),
       ...(k1Book
@@ -643,6 +643,8 @@ async function generateAutoBackground(
     },
   };
 }
+/** R57: a room book goes to five places at most — the parent's and the new ones together (② allows five). */
+const ROOM_PLACES = 5;
 const DEFAULT_OPS = {
   plan: generateMaterialPlan,
   outline: generateOutline,
@@ -1293,7 +1295,8 @@ export async function runFullAuto(
       }
     };
     await buyCharacterSheets(buySheets ? job.plan.characterIds : []);
-    for (const id of buySheets ? job.plan.backgroundIds : []) {
+    const buyBackgroundSheets = async (ids) => {
+    for (const id of ids) {
       const background = state.backgrounds.find((b) => b.id === id);
       if (!background || background.archivedAt)
         throw Error("선택한 배경이 없어 작업을 중지했어요.");
@@ -1351,6 +1354,8 @@ export async function runFullAuto(
         },
       );
     }
+    };
+    await buyBackgroundSheets(buySheets ? job.plan.backgroundIds : []);
     if (!job.completed.input) {
       job.wizard.characterIds = clone(job.plan.characterIds);
       job.wizard.backgroundIds = clone(job.plan.backgroundIds);
@@ -1513,9 +1518,15 @@ export async function runFullAuto(
             room = Math.max(0, MAX_CAST - job.plan.characterIds.length),
             added = fresh.slice(0, room).map((c) =>
               roomCastRecord(c, { id: "character-" + crypto.randomUUID(), jobId: job.id }),
+            ),
+            // R57: the new places of the premise the parent chose get a drawer card too (five places in all, as ② allows).
+            freshPlaces = hasRoomWide(job.input) ? roomNewPlaces(job.outline, job.input) : [],
+            placeRoom = Math.max(0, ROOM_PLACES - job.plan.backgroundIds.length),
+            places = freshPlaces.slice(0, placeRoom).map((p) =>
+              roomPlaceRecord(p, { id: "background-" + crypto.randomUUID(), jobId: job.id }),
             );
           return {
-            data: { added, skipped: fresh.length - added.length },
+            data: { added, skipped: fresh.length - added.length, places, placesSkipped: freshPlaces.length - places.length },
             usage: { input: 0, output: 0, costUsd: 0, costUsdEstimated: 0 },
             meta: { stage: "roomCast", requests: 0 },
           };
@@ -1524,7 +1535,18 @@ export async function runFullAuto(
           job.roomCast = r.data.added.map((c) => ({ id: c.id, name: c.name }));
           if (r.data.skipped)
             job.notes.push(`작가실의 새 인물 ${r.data.skipped}명은 등장인물 상한(${MAX_CAST}명) 때문에 카드 없이 그려져요.`);
-          if (!r.data.added.length) return;
+          const newPlaces = r.data.places || [];
+          job.roomPlaces = newPlaces.map((b) => ({ id: b.id, name: b.name }));
+          if (r.data.placesSkipped)
+            job.notes.push(`작가실의 새 장소 ${r.data.placesSkipped}곳은 장소 상한(${ROOM_PLACES}곳) 때문에 카드 없이 그려져요.`);
+          if (!r.data.added.length && !newPlaces.length) return;
+          for (const background of newPlaces) {
+            if (!state.backgrounds.some((b) => b.id === background.id))
+              state.backgrounds.push(clone(background));
+            (job.plan.newBackgrounds ||= []).push(clone(background));
+            job.plan.backgroundIds.push(background.id);
+            (job.plan.materialSignatures ||= {})[background.id] = materialSignature(background);
+          }
           for (const character of r.data.added) {
             if (!state.characters.some((c) => c.id === character.id))
               state.characters.push(clone(character));
@@ -1533,17 +1555,24 @@ export async function runFullAuto(
             (job.plan.materialSignatures ||= {})[character.id] = materialSignature(character);
           }
           job.wizard.characterIds = clone(job.plan.characterIds);
+          if (newPlaces.length) job.wizard.backgroundIds = clone(job.plan.backgroundIds);
           // The job's own input gains the cards (the drafts' cast sheet, the English
           // edition's he/she, the extraction's ID list); nothing else is re-chosen.
-          const frozenLayout = job.input?.layoutPolicy?.kind === "openings";
-          job.input.characters = clone(
-            ops.prepare(state, job.wizard, { layout: frozenLayout ? "openings" : "pages" }).input.characters,
-          );
+          const frozenLayout = job.input?.layoutPolicy?.kind === "openings",
+            prepared = ops.prepare(state, job.wizard, { layout: frozenLayout ? "openings" : "pages" }).input;
+          if (r.data.added.length) job.input.characters = clone(prepared.characters);
+          // R57: and the new places (the brief's chosen places, the reading's place IDs, the place references).
+          if (newPlaces.length) {
+            job.input.backgrounds = clone(prepared.backgrounds);
+            job.input.preferredBackgroundIds = clone(prepared.preferredBackgroundIds);
+          }
           await persist();
         },
       );
     if (room && job.roomCast?.length)
       await buyCharacterSheets(buySheets ? job.roomCast.map((c) => c.id) : []);
+    if (room && job.roomPlaces?.length)
+      await buyBackgroundSheets(buySheets ? job.roomPlaces.map((b) => b.id) : []);
     if (room)
       await step(
         "roomDrafts",

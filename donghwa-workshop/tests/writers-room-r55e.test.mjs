@@ -65,7 +65,7 @@ test('R55e the anthropic writer\'s room rows are 1.6× longer; openai\'s are as 
   assert.ok(out(anthropic, 'roomDrafts') >= Math.floor(out(openai, 'roomDrafts') * 1.5), `${out(anthropic, 'roomDrafts')} vs ${out(openai, 'roomDrafts')}`);
   const total = (est) => est.stages.reduce((sum, r) => sum + (Number(r.costUsd) || 0), 0);
   assert.ok(total(anthropic) > 0.71 * 1.2, `anthropic K2 16쪽 estimate ${total(anthropic).toFixed(3)} should now sit above the third A/B's $0.71 with room to spare`);
-  assert.ok(Math.abs(total(openai) - 1.704) < 0.01, 'openai rows unchanged by R55e (R55h: + the cast notes, $1.188 → $1.288; R56: + the staged room, → $1.704)');
+  assert.ok(Math.abs(total(openai) - 1.788) < 0.01, 'openai rows unchanged by R55e (R55h: + the cast notes, $1.188 → $1.288; R56: + the staged room, → $1.704; R57: the premises name their places, → $1.788)');
   const before = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true, roomWeave: false});
   assert.ok(Math.abs(total(before) - 1.188) < 0.01, 'a room job frozen before R55h is priced as before');
   assert.ok(out(anthropic, 'roomPremises') > out(openai, 'roomPremises'));

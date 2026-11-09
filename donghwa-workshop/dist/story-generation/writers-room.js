@@ -44,8 +44,19 @@ export const WRITERS_ROOM_VERSION = 1;
  * → the rewrite. Every intermediate document is the writer's own working
  * note: nothing checks it and a draft may leave it. A weave 1 job (R55h)
  * keeps its own requests.
+ *
+ * R57 (2026-11-09): weave 3 — "the cast and the places are too few and the
+ * stories too alike". More cards do not make a story wide; the kind of story
+ * does. So the twelve premises span three widths (one place / a way through
+ * several places / several characters each on their own business), every
+ * premise names the places it goes (new ones with a look, like new
+ * characters), the three shown to the parent are of different widths with
+ * their cast, places and new sheets counted on the card — choosing a premise
+ * is confirming its new characters and places — and a new place gets a
+ * drawer card and a place sheet. A weave 1 or 2 job keeps its own requests
+ * (a job parked at the parent's choice keeps the three it was shown).
  */
-const ROOM_WEAVE = 2;
+const ROOM_WEAVE = 3;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
 export const writersRoomPolicy = (records = []) => {
   const recent = recentRoomBooks(records);
@@ -59,12 +70,14 @@ export const writersRoomRef = (value) => {
     .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
     .filter((r) => r.line)
     .slice(0, 6);
-  return { version: WRITERS_ROOM_VERSION, ...(value.weave === 1 || value.weave === 2 ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
+  return { version: WRITERS_ROOM_VERSION, ...(value.weave === 1 || value.weave === 2 || value.weave === 3 ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
 };
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
-export const hasRoomWeave = (input) => hasWritersRoom(input) && (input.writersRoom.weave === 1 || input.writersRoom.weave === 2);
+export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3].includes(input.writersRoom.weave);
 /** R56: the staged room — treatments, the revised cast, the thread check. */
-export const hasRoomStages = (input) => hasWritersRoom(input) && input.writersRoom.weave === 2;
+export const hasRoomStages = (input) => hasWritersRoom(input) && (input.writersRoom.weave === 2 || input.writersRoom.weave === 3);
+/** R57: premises of three widths, their places named, the shortlist spread by width, new places carded. */
+export const hasRoomWide = (input) => hasWritersRoom(input) && input.writersRoom.weave === 3;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
 const str = (value, max = 200) =>
@@ -290,14 +303,44 @@ const PREMISE_SCHEMA = {
     },
   },
 };
+/** R57: a wide draft's premise also names the places the story goes — the parent's by name, a new one with what a place sheet needs. */
+const WIDE_PREMISE_SCHEMA = {
+  ...PREMISE_SCHEMA,
+  properties: {
+    premises: {
+      ...PREMISE_SCHEMA.properties.premises,
+      items: {
+        ...PREMISE_SCHEMA.properties.premises.items,
+        required: [...PREMISE_SCHEMA.properties.premises.items.required, "places"],
+        properties: {
+          ...PREMISE_SCHEMA.properties.premises.items.properties,
+          places: {
+            type: "array",
+            maxItems: 5,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["name", "isNew", "nameEn", "type", "look"],
+              properties: { name: { type: "string", maxLength: 30 }, isNew: { type: "boolean" }, nameEn: { type: "string", maxLength: 30 }, type: { type: "string", maxLength: 24 }, look: { type: "string", maxLength: 200 } },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+const widePremiseLines = (input) =>
+  hasRoomWide(input)
+    ? ` 가는 곳도 적어요(places — 이 이야기가 실제로 가는 곳을 가는 순서대로, 다섯 곳까지; 부모님이 고른 곳은 이름만 적고 isNew는 false·나머지는 빈 문자열, 이 책에만 나오는 새 장소(isNew true)는 nameEn(영어 이름)·type(영어 한 단어: forest, sea, city, market, park, farm, mountain, station 같은 것)·look(장소 시트용 생김새 한 줄, 영어 — 늘 그 자리에 있는 것 두세 가지와 색; 쪽마다 같은 곳으로 그릴 수 있게)). ${PREMISE_COUNT}개는 폭도 서로 달라요: 넷쯤은 한 곳에서 벌어지는 작은 이야기, 넷쯤은 서너 곳을 지나가는 이야기(길을 떠나거나, 쫓아가거나, 무엇을 전하러 가거나), 넷쯤은 네다섯이 저마다 제 볼일로 움직이는 이야기 — 새 인물과 새 장소를 아끼지 않아도 돼요.`
+    : "";
 export function premisesRequest(input, { records = [] } = {}) {
   const brief = roomBrief(input, { records });
   return {
-    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 주인공과 견준 크기, 색 둘, 한눈에 알아볼 표시 하나(귀·무늬·모자 같은 것); 쪽마다 같은 인물로 그릴 수 있게)도 적어요; 부모님 인물은 셋 다 빈 문자열). ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
+    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 주인공과 견준 크기, 색 둘, 한눈에 알아볼 표시 하나(귀·무늬·모자 같은 것); 쪽마다 같은 인물로 그릴 수 있게)도 적어요; 부모님 인물은 셋 다 빈 문자열).${widePremiseLines(input)} ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
     user: brief,
-    jsonSchema: PREMISE_SCHEMA,
+    jsonSchema: hasRoomWide(input) ? WIDE_PREMISE_SCHEMA : PREMISE_SCHEMA,
     temperature: 1,
-    maxTokens: 9000,
+    maxTokens: hasRoomWide(input) ? 11000 : 9000,
   };
 }
 /* ---------- the deterministic sieve: unlike the last books ---------- */
@@ -407,6 +450,64 @@ export function countReactions(answer, count = PREMISE_COUNT) {
 }
 export function pickPremises(rows, count = SHORTLIST) {
   return [...list(rows)].sort((a, b) => b.pull - a.pull || b.again - a.again || a.premise - b.premise).slice(0, count).map((row) => row.premise);
+}
+/* ---------- R57: how wide a premise is — counted, never asked ---------- */
+/** The places a premise names: one per name, five at most. */
+export function premisePlaces(premise) {
+  const seen = new Set();
+  return list(premise?.places)
+    .filter(object)
+    .map((p) => ({ name: str(p.name, 30), isNew: p.isNew === true, nameEn: str(p.nameEn, 30), type: str(p.type, 24), look: str(p.look, 200) }))
+    .filter((p) => p.name && !seen.has(p.name) && seen.add(p.name))
+    .slice(0, 5);
+}
+export const SCALE_LABELS = Object.freeze({ small: "작은 이야기", journey: "여러 곳을 다니는 이야기", ensemble: "여럿이 나오는 이야기" });
+/**
+ * The width of a premise from its own cast and places: how many characters
+ * (and how many are new), how many places (and how many are new), the new
+ * sheets it would buy, and its kind — three places or more is a journey, four
+ * characters or more an ensemble (the stronger of the two when both), else a
+ * small story.
+ */
+export function premiseScale(premise) {
+  const names = new Set(),
+    cast = list(premise?.cast).filter((c) => object(c) && str(c.name, 30) && !names.has(str(c.name, 30)) && names.add(str(c.name, 30))),
+    places = premisePlaces(premise),
+    newCast = cast.filter((c) => c.isNew === true),
+    newPlaces = places.filter((p) => p.isNew);
+  const wide = places.length >= 3,
+    many = cast.length >= 4;
+  return {
+    cast: cast.length,
+    newCast: newCast.map((c) => str(c.name, 30)),
+    places: places.length,
+    newPlaces: newPlaces.map((p) => p.name),
+    // Only what a sheet can be drawn from buys one.
+    sheets: newCast.filter((c) => str(c.look, 160)).length + newPlaces.filter((p) => p.look).length,
+    kind: wide && many ? (places.length - 3 >= cast.length - 4 ? "journey" : "ensemble") : wide ? "journey" : many ? "ensemble" : "small",
+  };
+}
+/**
+ * R57: the three the parent sees are of different widths when the twelve are —
+ * the panel's best journey, its best ensemble and its best small story, then
+ * the panel's order fills what is left; shown in the panel's order, so the
+ * first is still the one the readers wanted most.
+ */
+export function pickPremisesWide(rows, premises, count = SHORTLIST) {
+  const ranked = [...list(rows)].sort((a, b) => b.pull - a.pull || b.again - a.again || a.premise - b.premise),
+    kindOf = (n) => premiseScale(list(premises)[n - 1]).kind,
+    picked = [];
+  for (const kind of ["journey", "ensemble", "small"]) {
+    if (picked.length >= count) break;
+    const row = ranked.find((r) => !picked.includes(r.premise) && kindOf(r.premise) === kind);
+    if (row) picked.push(row.premise);
+  }
+  for (const row of ranked) {
+    if (picked.length >= count) break;
+    if (!picked.includes(row.premise)) picked.push(row.premise);
+  }
+  const at = (n) => ranked.findIndex((r) => r.premise === n);
+  return picked.sort((a, b) => at(a) - at(b));
 }
 /* ---------- R55h: the cast speaks before the drafts — material, never a rule ---------- */
 const CAST_NOTES_SCHEMA = {
@@ -889,7 +990,7 @@ const ROOM_PROGRESS = Object.freeze({
 });
 const roomError = (message) => new StoryValidationError("council", [message]);
 /** A shortlisted premise as the review screen and the summary read it (a pitch-shaped row). */
-const asPitch = (premise, n, row) => ({
+const asPitch = (premise, n, row, wide = false) => ({
   premise: n,
   title: str(premise?.title, 40) || `전제 ${n}`,
   logline: str(premise?.line, 300),
@@ -898,6 +999,8 @@ const asPitch = (premise, n, row) => ({
   picture: str(premise?.picture, 200),
   cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100), ...(c.isNew === true && str(c.look, 160) ? { nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160) } : {}) })),
   ...(row ? { pull: row.pull, laughed: row.laughed, curious: row.curious, again: row.again, lost: row.lost, words: row.words } : {}),
+  // R57: the places it goes and how wide it is (counted from the premise itself) — what the parent confirms by choosing it.
+  ...(wide ? { places: premisePlaces(premise).map((p) => ({ name: p.name, isNew: p.isNew })), scale: premiseScale(premise) } : {}),
 });
 /**
  * The room's first half: premises (the author — the "outline" role, the
@@ -954,11 +1057,13 @@ export async function runWritersRoom(input, options = {}, services = {}) {
     const heard = await ask("독자단", panelPremisesRequest(input, premises), "cheap");
     const rows = countReactions(heard, premises.length);
     record.rows = rows;
-    const shortlist = pickPremises(rows, Math.min(SHORTLIST, premises.length));
+    const wide = hasRoomWide(input);
+    const shortlist = wide ? pickPremisesWide(rows, premises, Math.min(SHORTLIST, premises.length)) : pickPremises(rows, Math.min(SHORTLIST, premises.length));
     record.shortlist = shortlist;
-    record.pitches = shortlist.map((n, i) => asPitch(premises[n - 1], i + 1, rows.find((row) => row.premise === n)));
+    record.pitches = shortlist.map((n, i) => asPitch(premises[n - 1], i + 1, rows.find((row) => row.premise === n), wide));
+    if (wide) record.scales = premises.map((p) => premiseScale(p).kind);
     record.recommended = 1;
-    log({ by: "독자단", kind: "reviewed", what: `셋을 고름: ${record.pitches.map((p) => `'${p.title}' (웃음 ${p.laughed ?? 0}·궁금 ${p.curious ?? 0}·또 ${p.again ?? 0})`).join(" / ")}`, why: "웃음+궁금+또−모름을 셈 — 점수가 아니라 반응" });
+    log({ by: "독자단", kind: "reviewed", what: `셋을 고름: ${record.pitches.map((p) => `'${p.title}' (웃음 ${p.laughed ?? 0}·궁금 ${p.curious ?? 0}·또 ${p.again ?? 0})`).join(" / ")}`, why: wide ? `독자단의 순서에서 폭이 다른 이야기를 하나씩 — ${record.pitches.map((p) => SCALE_LABELS[p.scale?.kind] || "").join(" / ")}` : "웃음+궁금+또−모름을 셈 — 점수가 아니라 반응" });
     const choice = normalizeCouncilChoice(options.councilChoice, record.pitches.length);
     if (hold && !choice) {
       await snapshot("review", ROOM_PROGRESS.review);
@@ -1369,6 +1474,21 @@ export function roomNewCast(outline, input) {
       return true;
     })
     .map((c) => ({ name: str(c.name, 30), nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160), want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100) }));
+}
+/**
+ * R57: the chosen premise's new places (isNew, with a look) that the drawer
+ * does not have — by name against input.backgrounds. Without a card a place
+ * the story invents is one line of text and every page draws it differently.
+ */
+export function roomNewPlaces(outline, input) {
+  const known = new Set(list(input?.backgrounds).filter(object).flatMap((b) => [str(b.name, 30), str(b.nameEn, 30)]).filter(Boolean));
+  return premisePlaces(outline?.writersRoom?.premise).filter((p) => p.isNew && p.look && !known.has(p.name) && !(p.nameEn && known.has(p.nameEn)));
+}
+/** The drawer record of one new place — the shape materializeAutoPlan gives a plan's new background (its sheet is bought like theirs). */
+export function roomPlaceRecord(p, { id, jobId, now = new Date().toISOString() } = {}) {
+  const look = str(p?.look, 200),
+    type = str(p?.type, 24).toLowerCase().replace(/[^a-z ]/gu, "").trim() || "place";
+  return { id: String(id || ""), name: str(p?.name, 30), nameEn: str(p?.nameEn, 30) || str(p?.name, 30), type, description: look, layout: look, version: 1, source: "writers-room", autoRunId: String(jobId || ""), autoReviewPending: true, createdAt: now };
 }
 const KIND_WORDS = Object.freeze({ child: "child", kid: "child", boy: "child", girl: "child", adult: "adult", man: "adult", woman: "adult", grandma: "adult", grandpa: "adult", teacher: "adult" });
 /** The drawer record of one new character — the shape materializeAutoPlan gives a plan's new companion (its sheet is bought like theirs). */

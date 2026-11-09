@@ -205,10 +205,22 @@ function roomPhaseStrip(record) {
   return `<ol class="council-phases">${ROOM_PHASES.map(([id, label], i) => `<li class="${i < at ? "done" : i === at ? "now" : ""}" data-phase="${id}">${esc(label)}</li>`).join("")}</ol>`;
 }
 /** A shortlisted premise: title, the line, the laugh, the picture, the panel's tally. */
-function premiseCard(p, n, { chosen = false, recommended = false } = {}) {
+const SCALE_TAGS = Object.freeze({ small: "작은 이야기", journey: "여러 곳을 다니는 이야기", ensemble: "여럿이 나오는 이야기" });
+/** R57: what choosing this premise brings — its cast and places (the new ones by name) and the sheets it buys. */
+function premiseScaleLine(p, sheetUsd = 0) {
+  const s = p?.scale;
+  if (!object(s)) return "";
+  const parts = [
+    `인물 ${s.cast}명${list(s.newCast).length ? ` (새 인물 ${s.newCast.length}: ${list(s.newCast).map((v) => str(v, 30)).join(", ")})` : ""}`,
+    s.places ? `장소 ${s.places}곳${list(s.newPlaces).length ? ` (새 장소 ${s.newPlaces.length}: ${list(s.newPlaces).map((v) => str(v, 30)).join(", ")})` : ""}` : "",
+    s.sheets ? `새 시트 ${s.sheets}장${sheetUsd > 0 ? ` · 그림 요금 약 +$${(s.sheets * sheetUsd).toFixed(2)}` : ""}` : "새 시트 없음",
+  ].filter(Boolean);
+  return `<span class="pitch-materials pitch-scale-line">${esc(parts.join(" · "))}</span>`;
+}
+function premiseCard(p, n, { chosen = false, recommended = false, sheetUsd = 0 } = {}) {
   const tally = p?.laughed !== undefined ? `<span class="pitch-score">웃음 ${p.laughed} · 궁금 ${p.curious} · 또 ${p.again}${p.lost ? ` · 모름 ${p.lost}` : ""}</span>` : "";
   const cast = list(p?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter(Boolean);
-  return `<strong>${chosen ? "✓ " : ""}${esc(str(p?.title, 40))}${recommended ? ' <span class="pitch-tag">독자단 1순위</span>' : ""}</strong><span class="pitch-logline">${esc(str(p?.logline, 200))}</span>${p?.laugh ? `<span class="pitch-turn">웃음: ${esc(str(p.laugh, 120))}</span>` : ""}${p?.picture ? `<span class="pitch-materials">그림: ${esc(str(p.picture, 120))}</span>` : ""}${cast.length ? `<span class="pitch-materials">새 인물: ${esc(cast.join(", "))}</span>` : ""}${tally}`;
+  return `<strong>${chosen ? "✓ " : ""}${esc(str(p?.title, 40))}${recommended ? ' <span class="pitch-tag">독자단 1순위</span>' : ""}${SCALE_TAGS[p?.scale?.kind] ? ` <span class="pitch-tag pitch-scale">${esc(SCALE_TAGS[p.scale.kind])}</span>` : ""}</strong><span class="pitch-logline">${esc(str(p?.logline, 200))}</span>${p?.laugh ? `<span class="pitch-turn">웃음: ${esc(str(p.laugh, 120))}</span>` : ""}${p?.picture ? `<span class="pitch-materials">그림: ${esc(str(p.picture, 120))}</span>` : ""}${object(p?.scale) ? premiseScaleLine(p, sheetUsd) : cast.length ? `<span class="pitch-materials">새 인물: ${esc(cast.join(", "))}</span>` : ""}${tally}`;
 }
 export function renderWritersRoomPanel(record, { live = false, hidePitches = false } = {}) {
   const r = object(record) ? record : { phase: "premises", pitches: [] };
@@ -227,14 +239,15 @@ export function renderWritersRoomPanel(record, { live = false, hidePitches = fal
   return `<div class="council-room writers-room ${live ? "live" : ""} phase-${esc(r.phase || "premises")}">${roomPhaseStrip(r)}<p class="council-progress-label">${esc(progress)}</p>${dropped}${cards}</div>`;
 }
 /** The parent's choice among the shortlist (radio name council-pick, note #council-note, so the R22 readers work unchanged). */
-export function renderPremiseChoiceForm(record) {
-  const r = object(record) ? record : {}, pitches = list(r.pitches), recommended = r.recommended || 1;
+export function renderPremiseChoiceForm(record, { sheetUsd = 0 } = {}) {
+  const r = object(record) ? record : {}, pitches = list(r.pitches), recommended = r.recommended || 1,
+    wide = pitches.some((p) => object(p?.scale));
   if (!pitches.length) return "";
   const picks = pitches.map((p, i) => {
     const n = i + 1;
-    return `<div class="council-pick-option"><label class="council-pick${n === recommended ? " council-recommended" : ""}"><input type="radio" name="council-pick" value="${n}" data-pitch-title="${esc(str(p.title, 40))}" ${n === recommended ? "checked" : ""}><span class="council-pick-body">${premiseCard(p, n, { recommended: n === recommended })}</span></label></div>`;
+    return `<div class="council-pick-option"><label class="council-pick${n === recommended ? " council-recommended" : ""}"><input type="radio" name="council-pick" value="${n}" data-pitch-title="${esc(str(p.title, 40))}" ${n === recommended ? "checked" : ""}><span class="council-pick-body">${premiseCard(p, n, { recommended: n === recommended, sheetUsd })}</span></label></div>`;
   }).join("");
-  return `<div class="council-review writers-room-review" id="council-review"><h4 id="council-choice-heading" tabindex="-1">어떤 이야기로 쓸까요?</h4><p class="council-review-intro">독자 여섯이 가장 끌린 순서예요. 하나를 고르거나 그대로 두세요.</p><fieldset class="council-review-picks"><legend>전제 선택</legend>${picks}</fieldset><div class="field"><label for="council-note">작가에게 한마디 (선택)</label><textarea id="council-note" maxlength="300" rows="2" placeholder="예: 엄마가 더 많이 나오게, 끝은 미용실 앞에서"></textarea></div></div>`;
+  return `<div class="council-review writers-room-review" id="council-review"><h4 id="council-choice-heading" tabindex="-1">어떤 이야기로 쓸까요?</h4><p class="council-review-intro">${wide ? "독자 여섯이 끌린 순서예요. 폭이 다른 이야기를 섞어 보여 드려요 — 고르신 이야기의 새 인물과 새 장소는 카드와 시트를 만들어요." : "독자 여섯이 가장 끌린 순서예요. 하나를 고르거나 그대로 두세요."}</p><fieldset class="council-review-picks"><legend>전제 선택</legend>${picks}</fieldset><div class="field"><label for="council-note">작가에게 한마디 (선택)</label><textarea id="council-note" maxlength="300" rows="2" placeholder="예: 엄마가 더 많이 나오게, 끝은 미용실 앞에서"></textarea></div></div>`;
 }
 
 /* ---------- R22 회의 결과 보고 진행: the parent's choice ---------- */
@@ -245,8 +258,8 @@ export function renderPremiseChoiceForm(record) {
  * (계속 · 방향 고쳐 다시 회의) and reads the form with readCouncilChoice /
  * readCouncilDirection. `fee` is the caller's price line for a new meeting.
  */
-export function renderCouncilReviewForm(record, { direction = "", fee = "" } = {}) {
-  if (isRoomRecord(record)) return renderPremiseChoiceForm(record);
+export function renderCouncilReviewForm(record, { direction = "", fee = "", sheetUsd = 0 } = {}) {
+  if (isRoomRecord(record)) return renderPremiseChoiceForm(record, { sheetUsd });
   const r = object(record) ? record : {}, pitches = list(r.pitches), recommended = r.recommended || 1;
   if (!pitches.length) return "";
   const picks = pitches.map((p, i) => {

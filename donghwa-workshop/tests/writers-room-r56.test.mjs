@@ -179,7 +179,7 @@ test('R56 the staged run: cast → three flows → the panel\'s pick → the cas
 
 test('R56 the estimate: the staged room buys six more answers (three flows, their pick, the revised cast, the thread check); an R55h job and an older one are priced as they were', () => {
   const settings = {engine: 'openai'}, base = {settings, pageCount: 16, diet: true, editor: true, room: true};
-  const staged = estimateStoryTextCost(base), r55h = estimateStoryTextCost({...base, roomStages: false}), older = estimateStoryTextCost({...base, roomWeave: false});
+  const staged = estimateStoryTextCost({...base, roomWide: false}), r55h = estimateStoryTextCost({...base, roomStages: false}), older = estimateStoryTextCost({...base, roomWeave: false});
   const requests = (est) => est.stages.reduce((n, s) => n + s.requestCount, 0), total = (est) => est.stages.reduce((n, s) => n + (Number(s.costUsd) || 0), 0);
   assert.deepEqual([requests(older), requests(r55h), requests(staged)], [10, 11, 17]);
   assert.deepEqual(staged.stages.filter((s) => /Flow|Revise|Threads/.test(s.stage)).map((s) => [s.stage, s.requestCount]), [['roomFlows', 3], ['roomFlowPick', 1], ['roomCastRevise', 1], ['roomThreads', 1]]);
@@ -187,6 +187,7 @@ test('R56 the estimate: the staged room buys six more answers (three flows, thei
   const job = (room) => ({status: 'running', input: {writersRoom: room, promptDiet: {version: 1}, pageCount: 16}, completed: {}, textSettings: settings, usage: {calls: []}});
   const left = (room) => jobTextBudget(job(room)).remainingUsd;
   assert.ok(left({version: 1, weave: 2}) > left({version: 1, weave: 1}) && left({version: 1, weave: 1}) > left({version: 1}));
+  assert.ok(left({version: 1, weave: 3}) > left({version: 1, weave: 2}), 'R57: a wide job\'s premises are a longer answer');
 });
 
 test('R56 ③ shows the writer\'s notes folded under the room line (no button added); a job without them shows nothing', async () => {
