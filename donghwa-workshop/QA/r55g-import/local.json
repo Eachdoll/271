@@ -1,0 +1,136 @@
+{
+  "base": "http://127.0.0.1:4178/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "runs": [
+    {
+      "width": 1280,
+      "valueSelectVisible": true,
+      "valueDefault": "none",
+      "noValueWhenNone": true,
+      "roomOn": true,
+      "fee": "약 $1.19",
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "pages": 13,
+        "requests": 0
+      }
+    },
+    {
+      "width": 390,
+      "valueSelectVisible": true,
+      "valueDefault": "none",
+      "noValueWhenNone": true,
+      "roomOn": true,
+      "fee": "약 $1.19",
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "pages": 13,
+        "requests": 0
+      }
+    }
+  ],
+  "lastAction": "#pin-form button[type=\"submit\"]",
+  "module": {
+    "reading": {
+      "hidden": 1,
+      "holdBack": 1
+    },
+    "hiddenSurvived": "Kongi crouches behind Yuha; Yuha faces forward and cannot see Kongi",
+    "hiddenPrompt": true,
+    "heldPrompt": true,
+    "unmarkedPrompt": true,
+    "extractCalls": [
+      {
+        "min": 16,
+        "max": 16
+      }
+    ],
+    "entries": 16,
+    "marks": 0,
+    "maxKo": 5,
+    "maxEn": 4,
+    "lastKo": 2,
+    "lastEn": 2,
+    "preservedKo": true,
+    "preservedEn": true,
+    "plansSurvived": true,
+    "forestSecondPage": "forest",
+    "forestReferences": [
+      "background layout: 초록빛 숲"
+    ],
+    "firstFocus": "separate moment 1",
+    "lastFocus": "the final yellow gate",
+    "lastPlanShot": "wide",
+    "lastRequestWide": true,
+    "lastPocket": "bottom",
+    "firstPocket": "left",
+    "plainThird": true,
+    "plainLocationNone": true,
+    "plainBackgroundRefs": [],
+    "plainPocket": null,
+    "fourthIsScene": true,
+    "effectiveCameras": [
+      "medium",
+      "medium",
+      "closeup",
+      "high_angle",
+      "from_behind",
+      "over_shoulder",
+      "medium",
+      "medium",
+      "low_angle",
+      "medium",
+      "medium",
+      "medium",
+      "medium",
+      "medium",
+      "medium",
+      "wide"
+    ],
+    "uniqueCameras": [
+      "medium",
+      "closeup",
+      "high_angle",
+      "from_behind",
+      "over_shoulder",
+      "low_angle",
+      "wide"
+    ],
+    "fourthCamera": "high_angle",
+    "sixthCamera": "over_shoulder",
+    "ninthCamera": "low_angle",
+    "firstAbsentMom": true,
+    "secondAbsentYuha": true,
+    "firstFronts": [
+      "Yuha original face and identity"
+    ],
+    "sameCamera": [
+      {
+        "label": "Recent scene from the SAME camera (from_behind) at SAME place, page 5; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+        "sourcePageIndex": 4
+      }
+    ],
+    "deer": {
+      "hair": "",
+      "skin": "",
+      "description": "a small spotted deer — a real deer: animal head, face and body (no human face, hair or skin)",
+      "sheetPrompt": "Create a coherent character reference sheet for this original storybook character: 콩이; Kongi; deer; a small spotted deer — a real deer: animal head, face and body (no human face, hair or skin); a small spotted deer — a real deer: animal head, face and body (no human face, hair or skin); body/clothing color #a8bb91; hair color ; skin color . Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams."
+    },
+    "human": {
+      "hair": "#493b34",
+      "skin": "#edceb3"
+    },
+    "editKeptPlan": true,
+    "legacyNoAbsent": true,
+    "coverFronts": [
+      "Yuha original face and identity"
+    ],
+    "compositionFirst": true
+  },
+  "cache": "donghwa-shell-v122",
+  "passed": true
+}

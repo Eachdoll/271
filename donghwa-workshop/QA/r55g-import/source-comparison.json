@@ -1,0 +1,22 @@
+{
+  "dist/full-auto.js": {
+    "source": "e677752590762fd69d462f1bd9385551c8b7ca5617fa3c2c46382f38257ea401",
+    "siteSource": "e677752590762fd69d462f1bd9385551c8b7ca5617fa3c2c46382f38257ea401",
+    "built": "e677752590762fd69d462f1bd9385551c8b7ca5617fa3c2c46382f38257ea401"
+  },
+  "dist/story-generation/picture-plan.js": {
+    "source": "62583a64bf9d38c6d3ed5fc4d5ede1c3abeb265c7be86e5b7f3be4017fdaca89",
+    "siteSource": "62583a64bf9d38c6d3ed5fc4d5ede1c3abeb265c7be86e5b7f3be4017fdaca89",
+    "built": "62583a64bf9d38c6d3ed5fc4d5ede1c3abeb265c7be86e5b7f3be4017fdaca89"
+  },
+  "dist/story-generation/writers-room.js": {
+    "source": "6ebd92b08b62cc0bb85b9f052e09275702d7dfc430e29e1485456653cff05640",
+    "siteSource": "6ebd92b08b62cc0bb85b9f052e09275702d7dfc430e29e1485456653cff05640",
+    "built": "6ebd92b08b62cc0bb85b9f052e09275702d7dfc430e29e1485456653cff05640"
+  },
+  "dist/sw.js": {
+    "source": "58bb9823fb6b4a7cdabf39c22f59225c9d5c32c70625e4b344d57ba9df4dab11",
+    "siteSource": "58bb9823fb6b4a7cdabf39c22f59225c9d5c32c70625e4b344d57ba9df4dab11",
+    "built": "58bb9823fb6b4a7cdabf39c22f59225c9d5c32c70625e4b344d57ba9df4dab11"
+  }
+}

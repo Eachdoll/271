@@ -1,0 +1,35 @@
+{
+  "sourceCommit": "230726875ca25e8b43216b7b8b42a9ba87cf8f4e",
+  "siteSourceCommit": "9ac0b123825ff0ab24be5c5adc57c4c87022a66d",
+  "cache": "donghwa-shell-v122",
+  "tests": {
+    "passed": 1149,
+    "failed": 0
+  },
+  "quality": {
+    "passed": 85,
+    "failed": 0
+  },
+  "build": "PASS",
+  "qualityMirrorIdentical": true,
+  "readerSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "paidCalls": 0,
+  "r12PinsChanged": false,
+  "archiveSha256": "a2bbeb06ed007e554e9def7cd16f845f2d8a0ebdf800d7cac71423ad644ed8bc",
+  "serverChunkSha256": "6f1e1a94f93cf4867c1316fb30a98af596ca946b6b47b1a83360bc55a61ce5a0",
+  "serverChunkUnchanged": true,
+  "productionBrowserPassed": true,
+  "localBrowserPassed": true,
+  "fullFlowSmoke": [
+    {
+      "width": 1280,
+      "passed": true,
+      "paidRequests": 0
+    },
+    {
+      "width": 390,
+      "passed": true,
+      "paidRequests": 0
+    }
+  ]
+}
