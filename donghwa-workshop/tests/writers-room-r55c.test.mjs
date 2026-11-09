@@ -137,7 +137,7 @@ test('R55c the reading asks for the picture of every page (picture-led drafts on
 test('R55c the estimate has no outline row for a room book; the old path keeps its outline row', () => {
   const room = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true});
   assert.ok(!room.stages.some((s) => s.stage === 'outline'));
-  assert.equal(room.stages.length, 9, 'R55h: + the cast notes row');
+  assert.equal(room.stages.length, 13, 'R55h: + the cast notes row; R56: + the flows, their pick, the revised cast, the thread check');
   const plain = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, council: true, orchestration: true});
   assert.ok(plain.stages.some((s) => s.stage === 'outline'));
 });

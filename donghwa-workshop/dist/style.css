@@ -5372,3 +5372,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 .reader-picture .text-pocket [data-reader-word]{border-radius:4px;padding:0 .06em}
 .simple-page-art .pocket-frame{border-radius:10px}
 .simple-page-art .text-pocket{font-size:clamp(12px,1.7vw,18px)}
+
+/* R56: the folded writer's notes on ③ */
+.simple-room-notes ul { margin: 4px 0 10px; padding-left: 18px; }
+.simple-room-notes li { margin: 2px 0; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }

@@ -21,7 +21,9 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '숲속에서 자꾸 숨는 아기 사슴', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+/* R56 moved new drafts to weave 2 (the staged room); this file pins weave 1 — a job frozen by R55h keeps exactly these requests. */
+const freshInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+const roomInput = (id) => { const input = freshInput(id); return {...input, writersRoom: {...input.writersRoom, weave: 1}}; };
 const preWeave = (input) => { const {weave, ...room} = input.writersRoom; return {...input, writersRoom: room}; };
 const PREMISE = {title: '쉿, 콩이', line: '콩이는 늘 유하 등 뒤에 있어요', engine: 'reader_knows', laugh: '엄마도 못 찾아요', picture: '등 뒤의 작은 뿔', cast: [
   {name: '유하', isNew: false, want: '콩이를 찾고 싶다', flaw: '뒤를 안 본다', speech: '"어디 갔지?"', nameEn: '', kind: '', look: ''},
@@ -32,10 +34,13 @@ const NOTES = [{name: '유하', today: '도토리 열 개를 줍는다', unsaid:
 
 test('R55h the marker: a new room draft carries weave 1; normalize keeps it; a marker without it stays without it', () => {
   const input = roomInput('h1');
-  assert.deepEqual(input.writersRoom, {version: 1, weave: 1});
+  assert.deepEqual(freshInput('h1').writersRoom, {version: 1, weave: 2}, 'R56: a new draft is a staged room');
+  assert.deepEqual(normalizeStoryInput(input).writersRoom, {version: 1, weave: 1}, 'an R55h job keeps weave 1');
   assert.equal(W.hasRoomWeave(input), true);
+  assert.equal(W.hasRoomStages(input), false);
+  assert.equal(W.hasRoomWeave(freshInput('h1')) && W.hasRoomStages(freshInput('h1')), true);
   assert.deepEqual(W.writersRoomRef({version: 1}), {version: 1});
-  assert.deepEqual(W.writersRoomRef({version: 1, weave: 2}), {version: 1});
+  assert.deepEqual(W.writersRoomRef({version: 1, weave: 3}), {version: 1});
   assert.equal(W.hasRoomWeave(preWeave(input)), false);
 });
 
@@ -168,7 +173,7 @@ test('R55h measured, not asked: the weave of the finished pages — every charac
 
 test('R55h the estimate: one more writer call for a weave draft; a room job frozen before R55h is priced as before', () => {
   const settings = {engine: 'openai'};
-  const now = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true});
+  const now = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true, roomStages: false});
   const was = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true, roomWeave: false});
   assert.equal(now.stages.find((s) => s.stage === 'roomCastNotes').requestCount, 1);
   assert.equal(was.stages.some((s) => s.stage === 'roomCastNotes'), false);

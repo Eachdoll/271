@@ -16,7 +16,9 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '숲속에서 자꾸 숨는 아기 사슴', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+/* A job frozen before R55h (no weave): the draft round this file pins has no notes and no treatments before it. */
+const preWeave = (input) => { const {weave, ...room} = input.writersRoom; return {...input, writersRoom: room}; };
+const roomInput = (id) => preWeave(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id}));
 const pages = (n, sentencesPer, marks) => Array.from({length: n}, (_, i) => ({ko: Array.from({length: sentencesPer}, (_, k) => `${i + 1}쪽 ${k + 1}문장.`).join(' '), ...(marks.includes(i + 1) ? {spread: true} : {})}));
 const words = (rows) => rows.map((p) => p.ko).join(' ').replace(/\s+/g, '');
 
@@ -63,7 +65,7 @@ test('R55e the anthropic writer\'s room rows are 1.6× longer; openai\'s are as 
   assert.ok(out(anthropic, 'roomDrafts') >= Math.floor(out(openai, 'roomDrafts') * 1.5), `${out(anthropic, 'roomDrafts')} vs ${out(openai, 'roomDrafts')}`);
   const total = (est) => est.stages.reduce((sum, r) => sum + (Number(r.costUsd) || 0), 0);
   assert.ok(total(anthropic) > 0.71 * 1.2, `anthropic K2 16쪽 estimate ${total(anthropic).toFixed(3)} should now sit above the third A/B's $0.71 with room to spare`);
-  assert.ok(Math.abs(total(openai) - 1.288) < 0.01, 'openai rows unchanged by R55e (R55h: + the cast notes call and the notes in the three draft requests, $1.188 → $1.288)');
+  assert.ok(Math.abs(total(openai) - 1.704) < 0.01, 'openai rows unchanged by R55e (R55h: + the cast notes, $1.188 → $1.288; R56: + the staged room, → $1.704)');
   const before = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true, roomWeave: false});
   assert.ok(Math.abs(total(before) - 1.188) < 0.01, 'a room job frozen before R55h is priced as before');
   assert.ok(out(anthropic, 'roomPremises') > out(openai, 'roomPremises'));

@@ -34,8 +34,18 @@ export const WRITERS_ROOM_VERSION = 1;
  * questions for the readers (selection), art notes the pictures carry, and a
  * backward look in the rewrite (process). A job frozen before R55h has no
  * weave and its requests are byte-identical.
+ *
+ * R56 (2026-11-09): weave 2 — the parent asked for the stages a broadcast
+ * writer goes through, so the cast and the foreshadowing are finished over
+ * several passes: the cast speaks and says what stands between them → three
+ * treatments (a half-page flow and a short "plant and pay off" memo), the
+ * panel picks one → the cast notes are revised for that flow → three drafts
+ * of it → the panel reads → an editor's thread check (kept, loose, unplanted)
+ * → the rewrite. Every intermediate document is the writer's own working
+ * note: nothing checks it and a draft may leave it. A weave 1 job (R55h)
+ * keeps its own requests.
  */
-const ROOM_WEAVE = 1;
+const ROOM_WEAVE = 2;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
 export const writersRoomPolicy = (records = []) => {
   const recent = recentRoomBooks(records);
@@ -49,10 +59,12 @@ export const writersRoomRef = (value) => {
     .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
     .filter((r) => r.line)
     .slice(0, 6);
-  return { version: WRITERS_ROOM_VERSION, ...(value.weave === ROOM_WEAVE ? { weave: ROOM_WEAVE } : {}), ...(recent.length ? { recent } : {}) };
+  return { version: WRITERS_ROOM_VERSION, ...(value.weave === 1 || value.weave === 2 ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
 };
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
-export const hasRoomWeave = (input) => hasWritersRoom(input) && input.writersRoom.weave === ROOM_WEAVE;
+export const hasRoomWeave = (input) => hasWritersRoom(input) && (input.writersRoom.weave === 1 || input.writersRoom.weave === 2);
+/** R56: the staged room — treatments, the revised cast, the thread check. */
+export const hasRoomStages = (input) => hasWritersRoom(input) && input.writersRoom.weave === 2;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
 const str = (value, max = 200) =>
@@ -422,11 +434,25 @@ const CAST_NOTES_SCHEMA = {
  * Characters with their own business collide; things unsaid and things carried
  * are what a later page can pick up again. Nothing here must be used.
  */
+const TIES_PROPERTY = {
+  type: "array",
+  maxItems: 8,
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["from", "to", "wants", "knows"],
+    properties: { from: { type: "string", maxLength: 30 }, to: { type: "string", maxLength: 30 }, wants: { type: "string", maxLength: 120 }, knows: { type: "string", maxLength: 120 } },
+  },
+};
+/** R56: the staged room also asks what stands between the characters (who wants what of whom; what one knows and the other does not). */
+const STAGED_CAST_SCHEMA = { ...CAST_NOTES_SCHEMA, required: ["notes", "ties"], properties: { ...CAST_NOTES_SCHEMA.properties, ties: TIES_PROPERTY } };
+const tiesLine = " 그리고 인물 사이(ties — 인물이 둘 이상이면 두 개에서 여섯 개): 누가(from) 누구에게(to) 바라는 것 하나(wants — 해 줬으면 하는 일; 눈에 보이는 것으로)와, from만 알고 to는 모르는 것 하나(knows — 없으면 빈 문자열). 주인공과 조연 사이만이 아니라 조연끼리도요.";
 export function castNotesRequest(input, premise) {
+  const stages = hasRoomStages(input);
   return {
-    system: "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 인물을 한 사람씩 만나 봐요. 인물마다 그 인물의 입으로 짧게 적어요: 오늘 하려던 제 볼일(today — 주인공의 일과 상관없이 이 인물이 오늘 하고 싶었던 일; 눈에 보이는 행동으로), 주인공에게 말하지 않은 것 하나(unsaid — 알면서 말 안 한 것, 감춘 것, 부끄러운 것; 작고 구체적으로), 버릇이나 늘 지니는 물건 하나(habit — 그림에 그릴 수 있는 것). 인물끼리 서로 다르게, 어느 책에나 있는 것 말고 이 인물만의 것으로. 이건 재료예요 — 줄거리를 정하지 않아요.",
+    system: "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 인물을 한 사람씩 만나 봐요. 인물마다 그 인물의 입으로 짧게 적어요: 오늘 하려던 제 볼일(today — 주인공의 일과 상관없이 이 인물이 오늘 하고 싶었던 일; 눈에 보이는 행동으로), 주인공에게 말하지 않은 것 하나(unsaid — 알면서 말 안 한 것, 감춘 것, 부끄러운 것; 작고 구체적으로), 버릇이나 늘 지니는 물건 하나(habit — 그림에 그릴 수 있는 것). 인물끼리 서로 다르게, 어느 책에나 있는 것 말고 이 인물만의 것으로." + (stages ? tiesLine : "") + " 이건 재료예요 — 줄거리를 정하지 않아요.",
     user: `[이 책] 주제: ${str(input?.topic, 80) || "자유"}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n\n[인물표]\n${castRows(premise)}`,
-    jsonSchema: CAST_NOTES_SCHEMA,
+    jsonSchema: stages ? STAGED_CAST_SCHEMA : CAST_NOTES_SCHEMA,
     temperature: 1,
     maxTokens: 2500,
   };
@@ -437,16 +463,172 @@ export function settleCastNotes(raw, premise) {
     seen = new Set();
   return list(raw?.notes)
     .filter(object)
-    .map((n) => ({ name: str(n.name, 30), today: str(n.today, 140), unsaid: str(n.unsaid, 140), habit: str(n.habit, 100) }))
+    .map((n) => ({ name: str(n.name, 30), today: str(n.today, 140), unsaid: str(n.unsaid, 140), habit: str(n.habit, 100), ...(str(n.turn, 120) ? { turn: str(n.turn, 120) } : {}) }))
     .filter((n) => names.has(n.name) && !seen.has(n.name) && (n.today || n.unsaid || n.habit) && seen.add(n.name))
     .slice(0, 8);
 }
-export const castNotesBlock = (notes) =>
-  list(notes).length
-    ? `[인물들이 제 입으로 한 말 — 재료예요, 점검표가 아니에요. 쓰고 싶은 것만 써요]\n${list(notes)
-        .map((n) => `- ${n.name}: ${[n.today && `오늘 하려던 일 — ${n.today}`, n.unsaid && `말 안 한 것 — ${n.unsaid}`, n.habit && `버릇·물건 — ${n.habit}`].filter(Boolean).join("; ")}`)
-        .join("\n")}`
+/** R56: the ties between the premise's own characters — one per ordered pair, with something in it. */
+export function settleTies(raw, premise) {
+  const names = new Set(list(premise?.cast).map((c) => str(c?.name, 30)).filter(Boolean)),
+    seen = new Set();
+  return list(raw?.ties)
+    .filter(object)
+    .map((t) => ({ from: str(t.from, 30), to: str(t.to, 30), wants: str(t.wants, 120), knows: str(t.knows, 120) }))
+    .filter((t) => names.has(t.from) && names.has(t.to) && t.from !== t.to && (t.wants || t.knows) && !seen.has(`${t.from}→${t.to}`) && seen.add(`${t.from}→${t.to}`))
+    .slice(0, 8);
+}
+export const castNotesBlock = (notes, ties = []) =>
+  [
+    list(notes).length
+      ? `[인물들이 제 입으로 한 말 — 재료예요, 점검표가 아니에요. 쓰고 싶은 것만 써요]\n${list(notes)
+          .map((n) => `- ${n.name}: ${[n.today && `오늘 하려던 일 — ${n.today}`, n.unsaid && `말 안 한 것 — ${n.unsaid}`, n.habit && `버릇·물건 — ${n.habit}`, n.turn && `이 이야기에서 — ${n.turn}`].filter(Boolean).join("; ")}`)
+          .join("\n")}`
+      : "",
+    list(ties).length ? `[인물 사이 — 재료예요]\n${list(ties).map((t) => `- ${t.from} → ${t.to}: ${[t.wants && `바라는 것 — ${t.wants}`, t.knows && `혼자 아는 것 — ${t.knows}`].filter(Boolean).join("; ")}`).join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+/* ---------- R56: the treatment — a half-page flow and a short plant-and-pay-off memo, the writer's own working note ---------- */
+export const FLOW_COUNT = 3;
+const FLOW_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["flow", "plants"],
+  properties: {
+    flow: { type: "string", maxLength: 1600 },
+    plants: {
+      type: "array",
+      maxItems: 4,
+      items: { type: "object", additionalProperties: false, required: ["what", "plant", "payoff"], properties: { what: { type: "string", maxLength: 60 }, plant: { type: "string", maxLength: 120 }, payoff: { type: "string", maxLength: 120 } } },
+    },
+  },
+};
+/**
+ * Three treatments, one for each way of weaving (DRAFT_WEAVES), on the
+ * writer's model in parallel. Prose, not a form: how the scenes follow, who
+ * runs into whom, where it turns and how it ends — and up to four things put
+ * down early and picked up later. No page numbers, no beats, nothing checked.
+ */
+export function treatmentRequest(input, premise, { records = [], castNotes = [], ties = [] } = {}, i = 0, count = FLOW_COUNT) {
+  const cast = castNotesBlock(castNotes, ties);
+  return {
+    system: "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 흐름을 반 쪽짜리 줄글로 적어 봐요(flow) — 장면이 어떻게 이어지는지, 누가 무엇을 하다 누구와 부딪치는지, 어디서 뒤집히고 어떻게 끝나는지. 쪽 번호도 비트도 없어요. 그리고 '심고 거두기' 메모(plants — 없어도 되고 넷까지): 앞에 아무렇지 않게 놓였다가 뒤에서 다시 쓰이는 것 — 무엇을(what), 어디에 어떻게 놓고(plant), 어디서 어떻게 거두는지(payoff). 글이 아니라 그림에만 놓아도 돼요. 인물들의 말은 재료예요 — 제 볼일이 있는 인물끼리는 부딪치고, 말 안 한 것과 지닌 물건은 뒤에서 다시 집어 들 수 있어요. 이건 네 작업 노트예요: 초고를 쓰다 더 좋은 길이 보이면 벗어나도 돼요.",
+    user: `${roomBrief(input, { records })}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n모양: ${str(premise?.engine, 40)}\n가장 큰 웃음: ${str(premise?.laugh, 200)}\n아이가 보고 싶을 그림: ${str(premise?.picture, 200)}\n\n[인물표]\n${castRows(premise)}${cast ? `\n\n${cast}` : ""}\n\n[흐름 ${i + 1}/${count} — ${DRAFT_WEAVES[i % DRAFT_WEAVES.length]}]`,
+    jsonSchema: FLOW_SCHEMA,
+    temperature: 0.9,
+    maxTokens: 3000,
+  };
+}
+export function settleTreatment(raw) {
+  const flow = str(raw?.flow, 1600);
+  if (!flow) return null;
+  const plants = list(raw?.plants)
+    .filter(object)
+    .map((p) => ({ what: str(p.what, 60), plant: str(p.plant, 120), payoff: str(p.payoff, 120) }))
+    .filter((p) => p.what && (p.plant || p.payoff))
+    .slice(0, 4);
+  return { flow, plants };
+}
+export const flowBlock = (treatment) =>
+  object(treatment) && treatment.flow
+    ? `[흐름 — 네 작업 노트예요. 쓰다가 더 좋은 길이 보이면 벗어나도 돼요]\n${treatment.flow}${list(treatment.plants).length ? `\n[심고 거두기]\n${treatment.plants.map((p) => `- ${p.what}: ${p.plant || "(앞쪽 어딘가)"} → ${p.payoff || "(뒤에서)"}`).join("\n")}` : ""}`
     : "";
+/** The panel hears the treatments: the one each wants to hear told, the next, and the ones they could not follow. */
+export function panelFlowsRequest(input, treatments) {
+  const count = list(treatments).length;
+  return {
+    system: `너는 여섯 사람이에요. 작가가 책을 쓰기 전에 이야기의 흐름 ${count}가지를 들려줘요. 각자 가장 듣고 싶은 흐름 하나(favorite)와 그다음 하나(second — favorite와 다른 번호), 까닭 한마디(why), 무슨 일이 벌어지는지 따라갈 수 없던 흐름의 번호들(lost — 없으면 빈 목록)을 말해요. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
+    user: list(treatments).map((t, i) => `=== 흐름 ${i + 1} ===\n${str(t?.flow, 1600)}${list(t?.plants).length ? `\n(앞에 놓였다가 뒤에서 다시 쓰이는 것: ${t.plants.map((p) => p.what).join(", ")})` : ""}`).join("\n\n"),
+    jsonSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["readers"],
+      properties: {
+        readers: {
+          type: "array",
+          minItems: PANEL_IDS.length,
+          maxItems: PANEL_IDS.length,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["reader", "favorite", "second", "why", "lost"],
+            properties: { reader: { type: "string", enum: PANEL_IDS }, favorite: { type: "integer", minimum: 1, maximum: count }, second: { type: "integer", minimum: 1, maximum: count }, why: { type: "string", maxLength: 100 }, lost: { type: "array", maxItems: count, items: { type: "integer", minimum: 1, maximum: count } } },
+          },
+        },
+      },
+    },
+    temperature: 0.7,
+    maxTokens: 2500,
+  };
+}
+/** Per treatment: first choices × 3 + second choices − 2 for every reader who could not follow it. */
+export function countFlows(answer, treatments) {
+  const count = list(treatments).length,
+    rows = Array.from({ length: count }, (_, i) => ({ flow: i + 1, first: 0, second: 0, lost: 0, pull: 0, why: [] }));
+  for (const reader of list(answer?.readers).filter(object)) {
+    const fav = Math.round(Number(reader.favorite)),
+      next = Math.round(Number(reader.second));
+    if (fav >= 1 && fav <= count) {
+      rows[fav - 1].first += 1;
+      if (str(reader.why, 100)) rows[fav - 1].why.push(str(reader.why, 100));
+    }
+    if (next >= 1 && next <= count && next !== fav) rows[next - 1].second += 1;
+    for (const n of new Set(list(reader.lost).map((v) => Math.round(Number(v))).filter((v) => v >= 1 && v <= count))) rows[n - 1].lost += 1;
+  }
+  return rows.map((r) => ({ ...r, pull: r.first * 3 + r.second - r.lost * 2, why: r.why.slice(0, 3) }));
+}
+/** The most wanted; a tie goes to the treatment that puts more down to pick up later, then to the writer's order. */
+export function pickFlow(rows, treatments) {
+  const plants = (n) => list(list(treatments)[n - 1]?.plants).length;
+  return [...list(rows)].sort((a, b) => b.pull - a.pull || plants(b.flow) - plants(a.flow) || a.flow - b.flow)[0]?.flow || 1;
+}
+/** R56: the cast notes revised once for the chosen flow (the same three lines, plus what the character decides or how they change in this story). */
+export function castReviseRequest(input, premise, notes, ties, treatment) {
+  return {
+    system: "너는 이 책의 작가예요. 흐름이 정해졌어요. 인물 노트를 이 흐름에 맞춰 한 번 고쳐요: 인물마다 제 볼일(today)·말 안 한 것(unsaid)·버릇이나 지닌 물건(habit)을 이 흐름에서 실제로 쓰이게 다듬고(그대로 좋으면 그대로 돌려줘요), 이 이야기에서 그 인물이 한 번 하는 결정이나 처음과 달라지는 점(turn — 한 줄; 정말 없으면 빈 문자열)을 더해요. 흐름에서 할 일이 없는 인물은 제 볼일이 흐름 옆에서 한 번 보이게 해요. 이건 재료예요 — 초고가 다 쓰지 않아도 돼요.",
+    user: `[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n\n[인물표]\n${castRows(premise)}\n\n${castNotesBlock(notes, ties)}\n\n${flowBlock(treatment)}`,
+    jsonSchema: {
+      ...CAST_NOTES_SCHEMA,
+      properties: { notes: { ...CAST_NOTES_SCHEMA.properties.notes, items: { ...CAST_NOTES_SCHEMA.properties.notes.items, required: ["name", "today", "unsaid", "habit", "turn"], properties: { ...CAST_NOTES_SCHEMA.properties.notes.items.properties, turn: { type: "string", maxLength: 120 } } } } },
+    },
+    temperature: 0.8,
+    maxTokens: 2500,
+  };
+}
+/* ---------- R56: the editor's thread check — what was kept, what was left loose, what came from nowhere ---------- */
+const threadRow = (keys) => ({ type: "array", maxItems: 4, items: { type: "object", additionalProperties: false, required: ["what", ...keys], properties: { what: { type: "string", maxLength: 60 }, ...Object.fromEntries(keys.map((k) => [k, { type: "integer", minimum: 1 }])) } } });
+export function threadCheckRequest(input, draft, treatment) {
+  const plants = list(treatment?.plants);
+  return {
+    system: "너는 이 원고를 처음부터 끝까지 읽는 편집자예요. 고치지 않고 세 가지만 찾아 적어요: 앞에 놓였다가 뒤에서 다시 쓰인 것(kept — 무엇, 놓인 쪽 from, 다시 쓰인 쪽 to), 앞에 눈에 띄게 놓였는데 끝까지 다시 쓰이지 않은 것(loose — 무엇, 놓인 쪽 page), 뒤에서 중요하게 쓰이는데 앞에 한 번도 보이지 않은 것(unplanted — 무엇, 처음 쓰인 쪽 page). 없으면 빈 목록이에요 — 지어내지 않아요. [그림: …]은 그 쪽 그림에만 보이는 것이에요.",
+    user: `${plants.length ? `[작가의 심고 거두기 메모]\n${plants.map((p) => `- ${p.what}: ${p.plant} → ${p.payoff}`).join("\n")}\n\n` : ""}=== 원고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(pageLine).join("\n")}`,
+    jsonSchema: { type: "object", additionalProperties: false, required: ["kept", "loose", "unplanted"], properties: { kept: threadRow(["from", "to"]), loose: threadRow(["page"]), unplanted: threadRow(["page"]) } },
+    temperature: 0.2,
+    maxTokens: 2000,
+  };
+}
+/** Only what names real pages: kept needs an earlier and a later page, the others a page of the draft. */
+export function settleThreads(raw, pageCount) {
+  const page = (v) => {
+    const n = Math.round(Number(v));
+    return n >= 1 && n <= pageCount ? n : 0;
+  };
+  const rows = (key) => list(raw?.[key]).filter(object).map((r) => ({ what: str(r.what, 60), from: page(r.from), to: page(r.to), page: page(r.page) })).filter((r) => r.what);
+  return {
+    kept: rows("kept").filter((r) => r.from && r.to > r.from).map(({ what, from, to }) => ({ what, from, to })).slice(0, 4),
+    loose: rows("loose").filter((r) => r.page).map(({ what, page: at }) => ({ what, page: at })).slice(0, 4),
+    unplanted: rows("unplanted").filter((r) => r.page).map(({ what, page: at }) => ({ what, page: at })).slice(0, 4),
+  };
+}
+export const threadsNeedWork = (threads) => !!(list(threads?.loose).length || list(threads?.unplanted).length);
+export function threadNotes(threads) {
+  if (!object(threads)) return "";
+  const lines = [];
+  if (list(threads.kept).length) lines.push(`심고 거둔 것: ${threads.kept.map((r) => `${r.what} ${r.from}쪽→${r.to}쪽`).join(" / ")} — 그대로 둬요.`);
+  if (list(threads.loose).length) lines.push(`놓기만 하고 다시 쓰지 않은 것: ${threads.loose.map((r) => `${r.what} (${r.page}쪽)`).join(" / ")} — 뒤에서 한 번 쓰거나 빼요.`);
+  if (list(threads.unplanted).length) lines.push(`앞에 없이 나온 것: ${threads.unplanted.map((r) => `${r.what} (${r.page}쪽)`).join(" / ")} — 앞쪽 한 곳에 그림 메모나 한 줄로 먼저 놓아요.`);
+  return lines.join("\n");
+}
 /**
  * R55h: three drafts, three ways of weaving — the panel then has a real choice
  * between a straight book and a layered one (the three used to differ only by
@@ -457,7 +639,13 @@ export const DRAFT_WEAVES = Object.freeze([
   "두 줄기로 써 봐요 — 조연 한 사람의 제 볼일이 주인공의 일 옆에서 따로 흘러가다가 끝에서 두 줄기가 만나요. 둘째 줄기는 글 대신 그림 메모에만 실어도 돼요.",
   "끝에서부터 써 봐요 — 끝 장면을 먼저 정하고, 끝이 쓰는 물건·말·버릇 두세 가지를 앞쪽에 아무렇지 않게 놓아 둬요. 처음 읽을 땐 그냥 지나가고, 다시 읽을 때 '아, 그거!' 하게.",
 ]);
-export const draftWeaveLine = (input, i, count) => (hasRoomWeave(input) ? `[초고 ${i + 1}/${count} — ${DRAFT_WEAVES[i % DRAFT_WEAVES.length]}]` : `[초고 ${i + 1}/${count} — 다른 초고와 다르게, 네 식대로]`);
+export const draftWeaveLine = (input, i, count, treatment = null) =>
+  // R56: with a chosen flow the three drafts share the weave and differ in the telling.
+  hasRoomStages(input) && object(treatment) && treatment.flow
+    ? `[초고 ${i + 1}/${count} — 같은 흐름을 네 식대로: 화자·호흡·무엇을 그림에 맡길지는 이 초고만의 것으로]`
+    : hasRoomWeave(input)
+      ? `[초고 ${i + 1}/${count} — ${DRAFT_WEAVES[i % DRAFT_WEAVES.length]}]`
+      : `[초고 ${i + 1}/${count} — 다른 초고와 다르게, 네 식대로]`;
 /* ---------- round 3: a whole draft per premise ---------- */
 const DRAFT_SCHEMA = {
   type: "object",
@@ -483,8 +671,8 @@ const pageLine = (p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}${str(p?.art, 200) ?
 /** R54e: an openings book — the writer marks the pages that are one big picture. */
 const spreadLine = (input) => (input?.layoutPolicy?.kind === "openings" ? " 큰 그림 한 장이 두 쪽에 걸쳐 맡는 순간은 그 쪽에 spread: true를 적어요(책에 두세 번쯤; 나머지는 적지 않아요)." : "");
 const castRows = (premise) => list(premise?.cast).map((c) => `- ${str(c.name, 30)}${c.isNew ? " (이 책의 새 인물)" : ""}: 바람 — ${str(c.want, 100)}; 결점 — ${str(c.flaw, 100)}; 말투 — ${str(c.speech, 100)}`).join("\n");
-export function draftRequest(input, premise, { records = [], castNotes = [] } = {}) {
-  const notes = hasRoomWeave(input) ? castNotesBlock(castNotes) : "";
+export function draftRequest(input, premise, { records = [], castNotes = [], ties = [], treatment = null } = {}) {
+  const notes = hasRoomWeave(input) ? [castNotesBlock(castNotes, hasRoomStages(input) ? ties : []), hasRoomStages(input) ? flowBlock(treatment) : ""].filter(Boolean).join("\n\n") : "";
   return {
     system: `너는 그림책 작가예요. 아래 전제로 책 한 권을 한글로 통째로 써요 — 쪽 단위로, 쪽마다 그 쪽의 글(ko). 쪽수는 네가 정해요. 비트도 설계도 없어요: 쪽을 넘기는 호흡은 네 몫이에요. 그림이 말할 쪽은 글이 짧고, 글이 끌어야 하는 쪽은 조금 길어요. 인물표의 말투대로 말해요. 화자는 자유예요 — 이야기꾼이 들려줘도, 주인공이 '나'로 말해도, 조연이나 사물이 말해도, 읽는 아이에게 말을 걸어도 돼요; 이 이야기에 맞는 목소리로. 제목(title)도 정해요 — 이 초고만의 제목으로(전제 제목과 달라도 돼요).${spreadLine(input)}${artLine(input)}`,
     user: `${roomBrief(input, { records })}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n모양: ${str(premise?.engine, 40)}\n가장 큰 웃음: ${str(premise?.laugh, 200)}\n아이가 보고 싶을 그림: ${str(premise?.picture, 200)}\n\n[인물표]\n${castRows(premise)}${notes ? `\n\n${notes}` : ""}`,
@@ -644,9 +832,9 @@ export function rewriteNotes(row) {
   if (row.words?.length) lines.push(`바꾸고 싶은 것: ${row.words.join(" / ")}`);
   return lines.join("\n");
 }
-export function rewriteRequest(input, draft, notes, { records = [], castNotes = [] } = {}) {
+export function rewriteRequest(input, draft, notes, { records = [], castNotes = [], ties = [], treatment = null } = {}) {
   const weave = hasRoomWeave(input),
-    cast = weave ? castNotesBlock(castNotes) : "";
+    cast = weave ? [castNotesBlock(castNotes, hasRoomStages(input) ? ties : []), hasRoomStages(input) ? flowBlock(treatment) : ""].filter(Boolean).join("\n\n") : "";
   return {
     // R54g: targeted — the A/B's astra rewrote all 14 pages (7% of the words kept) of the draft the panel had chosen.
     system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·읽기 힘든 쪽·말높임이 어색한 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. 큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요." +
@@ -887,6 +1075,10 @@ export function polishRequest(input, pages, notes) {
 }
 const DRAFT_PROGRESS = Object.freeze({
   cast: "작가실 · 작가가 인물을 한 사람씩 만나 보고 있어요.",
+  flow: "작가실 · 작가가 이야기의 흐름을 세 가지로 적어 보고 있어요.",
+  flowPick: "작가실 · 독자 여섯이 흐름 셋을 듣고 있어요.",
+  castRevise: "작가실 · 고른 흐름에 맞춰 인물을 한 번 더 다듬고 있어요.",
+  threads: "작가실 · 편집자가 앞에 놓인 것이 뒤에서 쓰였는지 보고 있어요.",
   drafts: "작가실 · 작가가 초고 세 권을 통째로 쓰고 있어요.",
   read: "작가실 · 독자 여섯이 초고를 한 쪽씩 읽고 있어요.",
   rewrite: "작가실 · 작가가 독자 반응을 받아 고쳐 쓰고 있어요.",
@@ -933,10 +1125,10 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
   };
   try {
     // R55h: the cast speaks first (one call on the writer's model). Material only — an answer that cannot be read leaves the drafts without it.
-    let castNotes = [];
-    if (hasRoomWeave(input)) {
-      await snapshot("cast");
-      const response = await journal.call("outline", castNotesRequest(input, premise), services);
+    const stages = hasRoomStages(input);
+    // A working note, never a gate: an answer that cannot be read is null and the room goes on without it.
+    const note = async (request, role) => {
+      const response = await journal.call(role, request, services);
       let raw = response?.json;
       if (raw === undefined) {
         try {
@@ -945,15 +1137,54 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
           raw = null;
         }
       }
+      return object(raw) ? raw : null;
+    };
+    let castNotes = [],
+      ties = [],
+      treatment = null;
+    if (hasRoomWeave(input)) {
+      await snapshot("cast");
+      const raw = await note(castNotesRequest(input, premise), "outline");
       castNotes = settleCastNotes(raw, premise);
       record.castNotes = castNotes;
+      if (stages) {
+        ties = settleTies(raw, premise);
+        record.ties = ties;
+      }
+    }
+    // R56: three treatments (the three weaves) → the panel picks → the cast is revised for the chosen flow.
+    if (stages) {
+      await snapshot("flow");
+      const flowCount = Math.max(1, Math.min(FLOW_COUNT, Number(options.roomFlowCount) || FLOW_COUNT));
+      const flows = (await Promise.all(Array.from({ length: flowCount }, (_, i) => note(treatmentRequest(input, premise, { castNotes, ties }, i, flowCount), "outline").then((raw) => settleTreatment(raw))))).filter(Boolean);
+      record.treatments = flows;
+      if (flows.length) {
+        let flowPick = 1;
+        if (flows.length > 1) {
+          await snapshot("flowPick");
+          const rows = countFlows(await note(panelFlowsRequest(input, flows), "cheap"), flows);
+          record.flowRows = rows;
+          flowPick = Math.min(flows.length, pickFlow(rows, flows));
+        }
+        record.flowChosen = flowPick;
+        treatment = flows[flowPick - 1];
+        if (castNotes.length) {
+          await snapshot("castRevise");
+          const revised = settleCastNotes(await note(castReviseRequest(input, premise, castNotes, ties, treatment), "outline"), premise);
+          if (revised.length) {
+            castNotes = revised;
+            record.castNotes = revised;
+            record.castRevised = true;
+          }
+        }
+      }
     }
     await snapshot("drafts");
-    const base = draftRequest(input, premise, { castNotes });
+    const base = draftRequest(input, premise, { castNotes, ties, treatment });
     const drafts = (
       await Promise.all(
         Array.from({ length: count }, (_, i) =>
-          ask(`초고 ${i + 1}`, { ...base, user: `${base.user}\n\n${draftWeaveLine(input, i, count)}` }, "outline").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
+          ask(`초고 ${i + 1}`, { ...base, user: `${base.user}\n\n${draftWeaveLine(input, i, count, treatment)}` }, "outline").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
         ),
       )
     ).filter(Boolean);
@@ -979,11 +1210,20 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     record.chosen = pick;
     let pages = chosen.pages,
       title = chosen.title;
+    // R56: the editor's thread check of the chosen draft (the cheap model) — its notes join the readers' before the rewrite.
+    let threads = null;
+    if (stages && options.roomRewrite !== false && drafts.length > 1) {
+      await snapshot("threads");
+      threads = settleThreads(await note(threadCheckRequest(input, chosen, treatment), "cheap"), chosen.pages.length);
+      record.threads = threads;
+      const more = threadNotes(threads);
+      if (more) record.notes = [record.notes, more].filter(Boolean).join("\n");
+    }
     // R54g: no page to skip, none lost, nothing to change → the panel's pick stands as written (one upper call saved).
-    if (options.roomRewrite !== false && drafts.length > 1 && nothingToRewrite(record.rows.find((row) => row.draft === pick))) record.rewriteSkipped = true;
+    if (options.roomRewrite !== false && drafts.length > 1 && !threadsNeedWork(threads) && nothingToRewrite(record.rows.find((row) => row.draft === pick))) record.rewriteSkipped = true;
     if (options.roomRewrite !== false && drafts.length > 1 && !record.rewriteSkipped) {
       await snapshot("rewrite");
-      const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes, { castNotes }), "outline"), title);
+      const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes, { castNotes, ties, treatment }), "outline"), title);
       if (again) {
         pages = again.pages;
         title = again.title;
@@ -1029,7 +1269,26 @@ export function roomDraftLine(draft) {
   const notes = list(r.levelNotes).length;
   const change = r.rewriteChange,
     echoes = list(list(r.rows).find((row) => row?.draft === r.chosen)?.echoList).length;
-  return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? ` 고쳐 쓰고${change ? `(${change.after}쪽 중 ${change.changed}쪽 손봄)` : ""}` : r.rewriteSkipped ? " 고칠 곳이 없어 그대로 두고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽${list(r.castNotes).length ? ` · 인물 노트 ${list(r.castNotes).length}명` : ""}${list(draft.pages).some((p) => p?.art) ? ` · 그림 메모 ${list(draft.pages).filter((p) => p?.art).length}쪽` : ""}${echoes ? ` · 독자가 알아본 되돌아옴 ${echoes}곳` : ""}`;
+  return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? ` 고쳐 쓰고${change ? `(${change.after}쪽 중 ${change.changed}쪽 손봄)` : ""}` : r.rewriteSkipped ? " 고칠 곳이 없어 그대로 두고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽${list(r.castNotes).length ? ` · 인물 노트 ${list(r.castNotes).length}명` : ""}${list(draft.pages).some((p) => p?.art) ? ` · 그림 메모 ${list(draft.pages).filter((p) => p?.art).length}쪽` : ""}${echoes ? ` · 독자가 알아본 되돌아옴 ${echoes}곳` : ""}${r.flowChosen ? ` · 흐름 ${list(r.treatments).length}안 중 ${r.flowChosen}번` : ""}${object(r.threads) ? ` · 복선 점검: 거둔 것 ${list(r.threads.kept).length} · 고칠 곳 ${list(r.threads.loose).length + list(r.threads.unplanted).length}` : ""}`;
+}
+/**
+ * R56: the writer's working notes of a finished room draft, for the folded
+ * "작가 노트" on ③ — the cast in their own words, what stands between them,
+ * the chosen flow with its plant-and-pay-off memo, the editor's thread check.
+ * Plain text sections (the screen escapes them); null when there are none.
+ */
+export function roomNotesView(draft) {
+  const r = draft?.room;
+  if (!object(r)) return null;
+  const sections = [],
+    flow = list(r.treatments)[Number(r.flowChosen) - 1];
+  if (list(r.castNotes).length) sections.push({ title: `인물 노트${r.castRevised ? " · 흐름에 맞춰 한 번 고침" : ""}`, lines: r.castNotes.map((n) => `${n.name}: ${[n.today && `오늘 하려던 일 — ${n.today}`, n.unsaid && `말 안 한 것 — ${n.unsaid}`, n.habit && `버릇·물건 — ${n.habit}`, n.turn && `이 이야기에서 — ${n.turn}`].filter(Boolean).join(" / ")}`) });
+  if (list(r.ties).length) sections.push({ title: "인물 사이", lines: r.ties.map((t) => `${t.from} → ${t.to}: ${[t.wants && `바라는 것 — ${t.wants}`, t.knows && `혼자 아는 것 — ${t.knows}`].filter(Boolean).join(" / ")}`) });
+  if (object(flow)) sections.push({ title: `흐름 · ${list(r.treatments).length}안 중 독자단이 고른 ${r.flowChosen}번`, lines: [flow.flow, ...list(flow.plants).map((p) => `심고 거두기 · ${p.what}: ${p.plant || "앞쪽"} → ${p.payoff || "뒤에서"}`)] });
+  if (object(r.threads) && (list(r.threads.kept).length || threadsNeedWork(r.threads)))
+    sections.push({ title: "복선 점검 · 고쳐 쓰기 전", lines: [...list(r.threads.kept).map((t) => `거둔 것 · ${t.what} ${t.from}쪽 → ${t.to}쪽`), ...list(r.threads.loose).map((t) => `놓기만 한 것 · ${t.what} (${t.page}쪽)`), ...list(r.threads.unplanted).map((t) => `앞에 없이 나온 것 · ${t.what} (${t.page}쪽)`)] });
+  if (!sections.length) return null;
+  return { summary: `작가 노트 · ${[list(r.castNotes).length && `인물 ${r.castNotes.length}명`, list(r.ties).length && `사이 ${r.ties.length}`, object(flow) && `흐름 · 심고 거두기 ${list(flow.plants).length}`, object(r.threads) && "복선 점검"].filter(Boolean).join(" · ")}`, sections };
 }
 
 /* ---------- R53: the finished text becomes the pages the pictures and prints read ---------- */

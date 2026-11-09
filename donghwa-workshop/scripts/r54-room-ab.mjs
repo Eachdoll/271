@@ -395,6 +395,9 @@ function compareReport(results) {
   row("초고 쪽수", (r) => (r.draft?.room?.drafts || []).map((d) => d.pages).join(" / ") || "-");
   row("독자단이 고른 초고", (r) => r.draft?.room?.chosen ?? "-");
   row("고쳐쓰기 / 영어판 / 다듬기", (r) => (r.draft?.room ? `${r.draft.room.rewritten ? `함${r.draft.room.rewriteChange ? ` (${r.draft.room.rewriteChange.changed}/${r.draft.room.rewriteChange.after}쪽)` : ""}` : r.draft.room.rewriteSkipped ? "건너뜀" : "안 함"} / ${r.draft.room.english ? "씀" : "없음"} / ${r.draft.room.polished ? "함" : "안 함"}` : "-"));
+  row("흐름 · 독자단이 고른 안 / 심고 거두기 메모", (r) => (r.draft?.room?.flowChosen ? `${(r.draft.room.treatments || []).length}안 중 ${r.draft.room.flowChosen}번 (끌림 ${(r.draft.room.flowRows || []).map((x) => x.pull).join("·") || "-"}) / ${((r.draft.room.treatments || [])[r.draft.room.flowChosen - 1]?.plants || []).length}개` : "-"));
+  row("인물 노트 / 인물 사이 / 흐름에 맞춰 고침", (r) => (r.draft?.room?.castNotes ? `${r.draft.room.castNotes.length}명 / ${(r.draft.room.ties || []).length} / ${r.draft.room.castRevised ? "함" : "안 함"}` : "-"));
+  row("복선 점검 · 거둔 것 / 놓기만 한 것 / 앞에 없이 나온 것", (r) => (r.draft?.room?.threads ? `${r.draft.room.threads.kept.length} / ${r.draft.room.threads.loose.length} / ${r.draft.room.threads.unplanted.length}` : "-"));
   row("펼침 표시 맞춤", (r) => (r.spreadFit ? `표시 ${r.spreadFit.marks} · ${r.spreadFit.fitted ? "맞음" : "못 맞춤"}` : "-"));
   row("짜임 실측 · 되돌아온 것 / 한 쪽만 나온 인물 / 그림 메모", (r) => (r.roomWeave ? `${r.roomWeave.returning.length}개${r.roomWeave.returning.length ? ` (${r.roomWeave.returning.map((x) => `${x.prop} ${x.from}→${x.to}`).join(", ")})` : ""} / ${r.roomWeave.single.length}명 / ${r.roomWeave.artNotes}쪽` : "-"));
   row("그림 읽기 · 주인공이 못 보는 것 / 다음 쪽까지 감출 것", (r) => (r.pictureReading ? `${r.pictureReading.hidden}쪽 / ${r.pictureReading.holdBack}쪽` : "-"));
