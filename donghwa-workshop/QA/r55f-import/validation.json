@@ -1,0 +1,26 @@
+{
+  "appTests": 1147,
+  "qualityTests": 85,
+  "buildPassed": true,
+  "mirrorEqual": true,
+  "legacySha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokePassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "stageWrapperAndSceneRequestPassed": true,
+  "actualFamilyCloudAccessed": false,
+  "sourceChangesBeyondUpstream": 0,
+  "paidCalls": 0,
+  "newPaidBookRun": false,
+  "actualNewImageQualityVerified": false,
+  "existingManuscriptWordsPreserved": true,
+  "entriesAfterGuard": 16,
+  "maxEnglishAfterGuard": 4,
+  "lastEnglishAfterGuard": 2,
+  "pagePlanSurvivesEditing": true,
+  "effectiveMockCameraKinds": 7,
+  "cache": "donghwa-shell-v121"
+}
