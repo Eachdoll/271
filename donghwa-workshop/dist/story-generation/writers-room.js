@@ -1026,8 +1026,11 @@ function readingPlanFields(input) {
       carrier: { type: "string", enum: [...CARRIERS_READ] },
       ...(drama ? { focus: { type: "string", maxLength: 80 }, backdrop: { type: "string", enum: [...BACKDROPS_READ] } } : {}),
       ...(pocket ? { pocket: { type: "string", enum: [...POCKETS] } } : {}),
+      // R55g: what the words keep from the hero (the reader sees it) and what the next page reveals — "" when the words say no such thing.
+      hidden: { type: "string", maxLength: 160 },
+      holdBack: { type: "string", maxLength: 120 },
     },
-    line: ` Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}.`,
+    line: ` Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}, hidden (only when the words say someone does not see or notice something that the reader can: what it is, where it is in the frame relative to that character, and which way that character faces — one English sentence; "" otherwise), holdBack (only when the NEXT page reveals something this page must not show yet: what to keep out of this picture, a few words; "" otherwise).`,
   };
 }
 /** The beat of each of N pages when the book is not an openings book: the pages dealt evenly and in order over the beats. */
@@ -1144,6 +1147,9 @@ function pagePlanFromReading(row, input) {
   if (!plan) return null;
   if (plan.backdrop !== "plain") delete plan.backdrop;
   if (plan.pocket && !["left", "right", "top", "bottom"].includes(plan.pocket)) delete plan.pocket;
+  // R55g: the story's logic the picture must keep (both optional; the request says them only when present).
+  if (str(row?.hidden, 160)) plan.hidden = str(row.hidden, 160);
+  if (str(row?.holdBack, 120)) plan.holdBack = str(row.holdBack, 120);
   return plan;
 }
 export function settleExtraction(raw, input, outline, pages, title) {
@@ -1357,7 +1363,9 @@ export async function runRoomPages(input, outline, draft, options = {}, services
     return {
       data: pagination,
       usage: journal.usage(),
-      meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length, spreadFit: { marks: fit.marks, fitted: fit.fitted, moved: fit.moved }, outline: shaped },
+      meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length, spreadFit: { marks: fit.marks, fitted: fit.fitted, moved: fit.moved }, outline: shaped,
+        // R55g: how often the reading found something hidden from the hero or held back for the next page (watched, not enforced).
+        reading: { hidden: list(settled.pages).filter((p) => p.picturePlan?.hidden).length, holdBack: list(settled.pages).filter((p) => p.picturePlan?.holdBack).length } },
     };
   } catch (error) {
     if (error?.name === "AbortError") throw error;

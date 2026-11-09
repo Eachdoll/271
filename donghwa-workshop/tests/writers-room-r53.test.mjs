@@ -56,7 +56,7 @@ test('R53 the extraction: the cheap call names cast IDs, places and beats; made-
   assert.match(req.system, /보라 are new to this book and have no ID/);
   // R55c: no beats in the reading (the app deals the pages over its own beats); a picture-led draft's reading carries the picture fields.
   assert.doesNotMatch(req.system, /\[beats\]/);
-  assert.deepEqual(req.jsonSchema.properties.pages.items.required, ['pageNo', 'who', 'where', 'action', 'emotion', 'timeOfDay', 'props', 'shot', 'space', 'carrier', 'focus', 'backdrop', 'pocket']);
+  assert.deepEqual(req.jsonSchema.properties.pages.items.required, ['pageNo', 'who', 'where', 'action', 'emotion', 'timeOfDay', 'props', 'shot', 'space', 'carrier', 'focus', 'backdrop', 'pocket', 'hidden', 'holdBack']);
   assert.equal(req.jsonSchema.properties.pages.minItems, 10, 'the request itself takes what it is given');
   assert.match(req.user, /^1쪽: 1쪽이에요\. 유하가 거울을 봐요\. 뽀글머리가 보여요\.\n   EN: Page 1\./);
   const calls = [];
