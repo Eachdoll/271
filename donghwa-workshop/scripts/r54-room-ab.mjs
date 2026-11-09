@@ -449,6 +449,10 @@ for (const engine of engines) {
     pagination: r.job.pagination,
     storyCheck: r.job.storyCheck,
     measured: r.measured,
+    // R56 실측: these three were in compare.md only; the saved result carries them too.
+    spreadFit: r.spreadFit,
+    pictureReading: r.pictureReading,
+    roomWeave: r.roomWeave,
     coverage: r.coverage,
     style: r.style,
     exchanges: r.exchanges,
