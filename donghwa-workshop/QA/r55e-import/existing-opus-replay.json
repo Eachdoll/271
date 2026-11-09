@@ -1,0 +1,86 @@
+{
+  "artifact": "QA/r55c-room-ab/anthropic.json",
+  "originalEntries": 16,
+  "originalMarks": [
+    8,
+    13
+  ],
+  "cap": 5,
+  "before": {
+    "entries": 14,
+    "sentences": [
+      2,
+      3,
+      8,
+      4,
+      4,
+      4,
+      5,
+      4,
+      3,
+      4,
+      2,
+      1,
+      6,
+      3
+    ],
+    "marks": 2
+  },
+  "after": {
+    "entries": 15,
+    "sentences": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      5,
+      4,
+      3,
+      4,
+      2,
+      1,
+      4,
+      2,
+      3
+    ],
+    "marks": 1,
+    "moved": 1,
+    "fitted": true
+  },
+  "koPreserved": true,
+  "enPreserved": true,
+  "estimates": {
+    "openai": {
+      "total": 1.1876159999999998,
+      "requests": 10,
+      "stages": [
+        "roomPremises",
+        "roomPanel",
+        "roomDrafts",
+        "roomRead",
+        "roomRewrite",
+        "roomEnglish",
+        "roomPolish",
+        "roomPages"
+      ]
+    },
+    "anthropic": {
+      "total": 0.8951399999999999,
+      "requests": 10,
+      "stages": [
+        "roomPremises",
+        "roomPanel",
+        "roomDrafts",
+        "roomRead",
+        "roomRewrite",
+        "roomEnglish",
+        "roomPolish",
+        "roomPages"
+      ]
+    }
+  },
+  "paidCalls": 0,
+  "passed": true
+}

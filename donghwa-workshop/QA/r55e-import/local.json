@@ -1,0 +1,77 @@
+{
+  "base": "http://127.0.0.1:4960/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "runs": [
+    {
+      "width": 1280,
+      "valueSelectVisible": true,
+      "valueDefault": "none",
+      "noValueWhenNone": true,
+      "roomOn": true,
+      "fee": "약 $1.19",
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "pages": 13,
+        "requests": 0
+      }
+    },
+    {
+      "width": 390,
+      "valueSelectVisible": true,
+      "valueDefault": "none",
+      "noValueWhenNone": true,
+      "roomOn": true,
+      "fee": "약 $1.19",
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "pages": 13,
+        "requests": 0
+      }
+    }
+  ],
+  "lastAction": "#pin-form button[type=\"submit\"]",
+  "module": {
+    "cap": 5,
+    "outlineCalls": 2,
+    "skeleton": true,
+    "noPaidOutline": true,
+    "draftLabels": [
+      "같은 제목",
+      "같은 제목 (2)",
+      "같은 제목 (3)"
+    ],
+    "chosenTitle": "같은 제목",
+    "entries": 16,
+    "spreads": 0,
+    "maxSingleSentences": 4,
+    "namesMapped": true,
+    "compositionFirst": true,
+    "textField": true,
+    "frontLabels": [
+      "Yuha original face and identity"
+    ],
+    "plainFound": true,
+    "plainLocationNone": true,
+    "sameCamera": true,
+    "coverHeroOnly": true,
+    "coverTitle": "실제 고른 제목",
+    "estimates": {
+      "openai": {
+        "total": 1.1876159999999998,
+        "requests": 10,
+        "hasOutline": false
+      },
+      "anthropic": {
+        "total": 0.8951399999999999,
+        "requests": 10,
+        "hasOutline": false
+      }
+    }
+  },
+  "cache": "donghwa-shell-v120",
+  "passed": true
+}
