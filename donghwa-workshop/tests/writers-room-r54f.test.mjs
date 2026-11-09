@@ -66,8 +66,10 @@ test('R54f the premise cast carries a new character\'s card (nameEn, kind, look)
   assert.equal(record.id, 'character-1');
   assert.equal(record.nameEn, 'Hoppy');
   assert.equal(record.kind, 'fawn');
-  assert.equal(record.description, FAWN.look);
-  assert.equal(record.appearance, FAWN.look);
+  // R55f: an animal card says it is a real animal (the paid book's fawn had a child's face) and carries no hair or skin colour.
+  assert.equal(record.description, `${FAWN.look} — a real fawn: animal head, face and body (no human face, hair or skin)`);
+  assert.equal(record.appearance, record.description);
+  assert.deepEqual([record.hairColor, record.skinColor], ['', '']);
   assert.equal(record.role, '조연');
   assert.equal(record.source, 'writers-room');
   assert.equal(record.autoReviewPending, true);
@@ -85,7 +87,7 @@ test('R54f FULL AUTO (full run): the room\'s new character gets a drawer card af
   const card = state.characters.find((c) => c.id === id);
   assert.ok(card, 'the drawer has the card');
   assert.equal(card.name, '폴짝이');
-  assert.equal(card.description, FAWN.look);
+  assert.match(card.description, /^a small spotted fawn with very big ears and a white tail tuft — a real fawn/);
   assert.equal(card.autoRunId, job.id);
   assert.ok(job.plan.characterIds.includes(id), 'the plan counts it');
   assert.ok(job.plan.newCharacters.some((c) => c.id === id));

@@ -85,7 +85,8 @@ export function pocketPromptLine(plan, sized = null) {
 export function pocketOf(book, page) {
   if (!hasTextPocket(book?.storyInput) || !page || page.backdrop === "none") return null;
   const beat = list(book?.outline?.beats).find((row) => Number(row?.index) === Number(page?.beatIndex ?? page?.scene?.beatIndex)),
-    plan = object(beat?.picturePlan) ? beat.picturePlan : null;
+    // R55f: a room page's own reading first (pocket per page, not per beat).
+    plan = object(page?.picturePlan) && page.picturePlan.version === 1 ? page.picturePlan : object(beat?.picturePlan) ? beat.picturePlan : null;
   if (!plan || !SIDES.includes(plan.pocket)) return null;
   // R47: a page whose picture exists keeps the field that picture was asked to leave (its own request says so);
   // otherwise the field is sized to the words the book prints on this page.

@@ -286,6 +286,8 @@ export function dramaPlanNoteParts(plan) {
 export function plainBackdropFor(book, page, { cover = false } = {}) {
   if (cover || !hasStoryDrama(book?.storyInput)) return false;
   if (page?.backdrop === "plain") return true;
+  // R55f: a room page's own reading first.
+  if (object(page?.picturePlan) && page.picturePlan.version === 1) return page.picturePlan.backdrop === "plain";
   const beat = list(book?.outline?.beats).find((row) => Number(row?.index) === Number(page?.beatIndex ?? page?.scene?.beatIndex));
   return object(beat?.picturePlan) && beat.picturePlan.backdrop === "plain";
 }
@@ -323,7 +325,8 @@ export function settleBackdrops(pagination, outline, input) {
   pages.forEach((page, i) => {
     if (!object(page)) return;
     const value = wanted ? str(page.backdrop, 20).toLowerCase() : "",
-      planned = wanted ? planBackdropOf(outline, page.beatIndex) : "",
+      // R55f: a room page's own reading counts as its plan.
+      planned = wanted ? (object(page.picturePlan) && page.picturePlan.version === 1 ? str(page.picturePlan.backdrop, 20).toLowerCase() : planBackdropOf(outline, page.beatIndex)) : "",
       edge = i === 0 || i === pages.length - 1,
       hasText = !blank(page.textKo ?? page.ko) || !blank(page.textEn ?? page.en);
     if (value === "none" && planned === "none" && !edge && hasText && none < 1) {

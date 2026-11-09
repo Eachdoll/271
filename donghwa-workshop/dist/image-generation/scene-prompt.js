@@ -13,6 +13,7 @@ import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CON
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
 import { pocketOf, pocketPromptLine } from "../text-pocket.js";
+import { hasReferencePolicy } from "./reference-policy.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -79,6 +80,8 @@ export function sceneBriefText(book, page) {
 }
 /** R36: the planned picture of the entry's beat, or null. */
 export function pagePlan(book, page) {
+  // R55f: a room page carries its own reading (the beat's plan was shared by both pages of an opening; the paid book's last page took the previous page's close-up).
+  if (page?.picturePlan && typeof page.picturePlan === "object" && page.picturePlan.version === 1) return page.picturePlan;
   return planOf(book?.outline, page?.beatIndex ?? page?.scene?.beatIndex);
 }
 /** R36: the plan text a picture request carries (model-written, lenient scope). */
@@ -101,9 +104,14 @@ export function facingPageLine(book, page) {
   return `FACING PAGE (the other page of this opening) shows: ${moment || "another moment of this beat"}. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. `;
 }
 /** The staging a page is drawn with: the planned shot (R36) over the staging rotation. */
+const MIDDLE_ROTATION = ["medium", "high_angle", "low_angle", "from_behind", "over_shoulder"];
 export function effectiveStaging(book, page, { cover = false } = {}) {
   const planned = cover ? null : pagePlan(book, page);
-  return planned?.shot ? { ...(page?.staging || {}), shot: PLAN_SHOT[planned.shot] } : page?.staging || {};
+  if (!planned?.shot) return page?.staging || {};
+  // R55f: on a pictureRefs book a planned middle distance keeps the staging rotation's own medium-distance camera (high angle, from behind, over the shoulder …) —
+  // the paid book's fifteen pictures used three cameras because every "middle" became the same medium shot.
+  if (planned.shot === "middle" && hasReferencePolicy(book?.storyInput) && MIDDLE_ROTATION.includes(page?.staging?.shot)) return page.staging;
+  return { ...(page?.staging || {}), shot: PLAN_SHOT[planned.shot] };
 }
 /**
  * R38: a close view of an R38 book is drawn without the place reference
@@ -123,6 +131,7 @@ export function buildScenePrompt({
   variants = [],
   earlierPages = [],
   cover = false,
+  absent = [],
 }) {
   const brief = sceneBriefForPage(book, page),
     planned = cover ? null : pagePlan(book, page),
@@ -182,7 +191,7 @@ export function buildScenePrompt({
       page.scene?.prompt ||
       currentNarrative.en ||
       currentNarrative.ko;
-  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
+  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."}${!cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });

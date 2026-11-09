@@ -15,7 +15,7 @@ import { ledger } from "./quality-adapter.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { councilHoldError, normalizeCouncilChoice, appendDecision } from "./council.js";
 import { StoryValidationError, frozenBeatCount } from "./schemas.js";
-import { wantsPicturePlan, settlePicturePlans, SHOTS, SPACES } from "./picture-plan.js";
+import { wantsPicturePlan, settlePicturePlans, normalizePicturePlan, SHOTS, SPACES } from "./picture-plan.js";
 import { hasStoryDrama, settleDramaPlans } from "./story-drama.js";
 import { hasTextPocket, settlePockets } from "../text-pocket.js";
 import { ROOM_PHASES } from "./council-room.js";
@@ -979,23 +979,29 @@ export function roomNewCast(outline, input) {
 const KIND_WORDS = Object.freeze({ child: "child", kid: "child", boy: "child", girl: "child", adult: "adult", man: "adult", woman: "adult", grandma: "adult", grandpa: "adult", teacher: "adult" });
 /** The drawer record of one new character — the shape materializeAutoPlan gives a plan's new companion (its sheet is bought like theirs). */
 export function roomCastRecord(c, { id, jobId, now = new Date().toISOString() } = {}) {
-  const kindWord = str(c?.kind, 24).toLowerCase().replace(/[^a-z]/g, "");
+  const kindWord = str(c?.kind, 24).toLowerCase().replace(/[^a-z]/g, ""),
+    kind = KIND_WORDS[kindWord] || kindWord || "friend",
+    human = kind === "child" || kind === "adult",
+    look = str(c?.look, 160);
+  // R55f (Codex R55e 실측): the fawn's card carried a human hair and skin colour and its sheet came out as a child's face on a deer's body —
+  // an animal card says so and carries no hair or skin colour.
+  const description = human || !look ? look : `${look} — a real ${kind}: animal head, face and body (no human face, hair or skin)`;
   return {
     id: String(id || ""),
     name: str(c?.name, 30),
     nameEn: str(c?.nameEn, 30) || str(c?.name, 30),
     role: "조연",
-    kind: KIND_WORDS[kindWord] || kindWord || "friend",
+    kind,
     gender: "",
-    description: str(c?.look, 160),
+    description,
     traits: [str(c?.want, 100), str(c?.flaw, 100)].filter(Boolean).slice(0, 2),
     catchphrase: "",
     version: 1,
     color: "#a8bb91",
-    appearance: str(c?.look, 160),
+    appearance: description,
     clothes: "",
-    hairColor: "#493b34",
-    skinColor: "#edceb3",
+    hairColor: human ? "#493b34" : "",
+    skinColor: human ? "#edceb3" : "",
     wardrobe: [],
     characterSheets: [],
     source: "writers-room",
@@ -1118,6 +1124,28 @@ export function openingBeats(input, beats, entries, spreads = []) {
   return out.length === entries ? out : null;
 }
 /** The extraction's rows settled against the cast and the beats (an id or beat the model made up falls back, never fails). */
+/** R55f: the supplied place a reading's `where` names first ("forest and home" → forest), by id, name or English name; "" when none. */
+export function placeIdIn(where, backgrounds) {
+  const text = normName(where);
+  if (!text) return "";
+  let best = "", at = Infinity;
+  for (const b of list(backgrounds).filter(object)) {
+    for (const key of [b.id, b.name, b.nameEn].map(normName).filter(Boolean)) {
+      const i = text.indexOf(key);
+      if (i >= 0 && i < at) { at = i; best = String(b.id); }
+    }
+  }
+  return best;
+}
+/** R55f: one page's picture plan from its own reading row (shot·space·carrier·focus·pocket; the backdrop is the page's, settled below). */
+function pagePlanFromReading(row, input) {
+  if (!wantsPicturePlan(input)) return null;
+  const plan = normalizePicturePlan({ carrier: str(row?.carrier, 20) || "both", shot: row?.shot, space: row?.space, focus: row?.focus, backdrop: row?.backdrop, pocket: row?.pocket }, input);
+  if (!plan) return null;
+  if (plan.backdrop !== "plain") delete plan.backdrop;
+  if (plan.pocket && !["left", "right", "top", "bottom"].includes(plan.pocket)) delete plan.pocket;
+  return plan;
+}
 export function settleExtraction(raw, input, outline, pages, title) {
   const cast = list(input?.characters).filter(object).map((c) => String(c.id)),
     castSet = new Set(cast),
@@ -1146,14 +1174,19 @@ export function settleExtraction(raw, input, outline, pages, title) {
     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
     last = beat;
     const emotion = /^[A-Za-z]+(?:-[A-Za-z]+)?$/u.test(str(row.emotion, 40)) ? str(row.emotion, 40) : "calm";
+    // R55f: a supplied place the reading names becomes the page's place id (the staging, the place reference and the earlier-page
+    // references resolve it per page — the paid book's forest page took the home reference because the beat's place was home).
+    const placeId = placeIdIn(row.where, input?.backgrounds),
+      plan = pagePlanFromReading(row, input);
     return {
       pageNo: i + 1,
       beatIndex: beat,
       textKo: p.ko,
       textEn: p.en || p.ko,
+      ...(plan ? { picturePlan: plan } : {}),
       scene: {
         who: who.length ? who : cast.slice(0, 1),
-        where: str(row.where, 500) || "the story's place",
+        where: placeId || str(row.where, 500) || "the story's place",
         action: str(row.action, 500) || str(p.en || p.ko, 500),
         emotion,
         timeOfDay: TIMES.includes(row.timeOfDay) ? row.timeOfDay : "day",
@@ -1217,7 +1250,7 @@ export function pageSentenceCap(spec) {
   if (!(max > 0)) return null;
   return Math.max(max, Math.ceil(max * (Number(spec?.rhythm?.pageMaxFactor) || 1.6)));
 }
-export function fitSpreadMarks(pages, openings, { cap = null } = {}) {
+export function fitSpreadMarks(pages, openings, { cap = null, capEn = null } = {}) {
   const c = Number(openings) || 0;
   let rows = list(pages).filter(object).map((p) => ({ ...p }));
   const marked = () => rows.filter((p) => p.spread === true).length;
@@ -1246,7 +1279,10 @@ export function fitSpreadMarks(pages, openings, { cap = null } = {}) {
   };
   // R55e (A/B 3차 4-2): a join that would put more sentences on one page than the page check allows is not made
   // (Opus's 16 entries with two marks were joined into pages of 8 and 6 sentences).
-  const fits = (a, b) => cap === null || sentences(a.ko).length + sentences(b.ko).length <= cap;
+  // R55f (Codex R55e 실측): the English of a joined page is capped too — the paid book's last page came out 5 Korean / 6 English sentences (E2 allows 4).
+  const fits = (a, b) =>
+    (cap === null || sentences(a.ko).length + sentences(b.ko).length <= cap) &&
+    (capEn === null || (a.en === undefined && b.en === undefined) || sentences(a.en || "").length + sentences(b.en || "").length <= capEn);
   const join = (runs) => {
     let best = -1, size = Infinity;
     for (const r of runs) for (let i = r.start; i + 1 < r.start + r.length; i++) { const n = rows[i].ko.length + rows[i + 1].ko.length; if (n < size && fits(rows[i], rows[i + 1])) { size = n; best = i; } }
@@ -1297,7 +1333,7 @@ export async function runRoomPages(input, outline, draft, options = {}, services
     clamped = clampPages(draft.pages, openings ? { min: openings, max: 2 * openings } : null),
     // R54g: the writer's spread marks are made to fit the binding before the deal.
     // R55e: no join may exceed what one page is allowed to carry.
-    fit = openings ? fitSpreadMarks(clamped, openings, { cap: pageSentenceCap(input?.specs?.ko) }) : { pages: clamped, fitted: true, marks: 0, moved: 0 },
+    fit = openings ? fitSpreadMarks(clamped, openings, { cap: pageSentenceCap(input?.specs?.ko), capEn: pageSentenceCap(input?.specs?.en) }) : { pages: clamped, fitted: true, marks: 0, moved: 0 },
     pages = fit.pages,
     printed = openings ? input.pageCount : pages.length;
   const sized = { ...input, pageCount: printed };
@@ -1393,12 +1429,7 @@ export function roomOutlineFromPages(outline, input, pages, raw) {
     beats = list(next.beats).filter(object),
     rows = list(raw?.pages).filter(object),
     backgrounds = list(input?.backgrounds).filter(object),
-    placeOf = (where) => {
-      const key = normName(where);
-      if (!key) return "";
-      const hit = backgrounds.find((b) => [b.id, b.name, b.nameEn].some((v) => normName(v) && normName(v) === key)) || backgrounds.find((b) => String(b.id) && key.includes(normName(b.id)));
-      return hit ? String(hit.id) : "";
-    },
+    placeOf = (where) => placeIdIn(where, backgrounds),
     groups = new Map(beats.map((b) => [b.index, []]));
   list(pages).forEach((p, i) => {
     const group = groups.get(Number(p?.beatIndex));

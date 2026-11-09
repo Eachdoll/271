@@ -720,7 +720,7 @@ export function splitSpreadText(text) {
 }
 /** `to` with exactly the layout fields of `from` (a rewrite keeps its entry's place). */
 /** R39: the fields a rewrite copies back from the original entry — the layout and the entry's backdrop (plain / text-only). */
-const KEPT_FIELDS = Object.freeze([...LAYOUT_FIELDS, "backdrop"]);
+const KEPT_FIELDS = Object.freeze([...LAYOUT_FIELDS, "backdrop", "picturePlan"]);
 export function copyLayoutFields(from, to) {
   const out = { ...to };
   for (const key of KEPT_FIELDS)
