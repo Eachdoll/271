@@ -512,7 +512,7 @@ const FLOW_SCHEMA = {
 export function treatmentRequest(input, premise, { records = [], castNotes = [], ties = [] } = {}, i = 0, count = FLOW_COUNT) {
   const cast = castNotesBlock(castNotes, ties);
   return {
-    system: "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 흐름을 반 쪽짜리 줄글로 적어 봐요(flow) — 장면이 어떻게 이어지는지, 누가 무엇을 하다 누구와 부딪치는지, 어디서 뒤집히고 어떻게 끝나는지. 쪽 번호도 비트도 없어요. 그리고 '심고 거두기' 메모(plants — 없어도 되고 넷까지): 앞에 아무렇지 않게 놓였다가 뒤에서 다시 쓰이는 것 — 무엇을(what), 어디에 어떻게 놓고(plant), 어디서 어떻게 거두는지(payoff). 글이 아니라 그림에만 놓아도 돼요. 인물들의 말은 재료예요 — 제 볼일이 있는 인물끼리는 부딪치고, 말 안 한 것과 지닌 물건은 뒤에서 다시 집어 들 수 있어요. 이건 네 작업 노트예요: 초고를 쓰다 더 좋은 길이 보이면 벗어나도 돼요.",
+    system: "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 흐름을 반 쪽짜리 줄글로 적어 봐요(flow) — 장면이 어떻게 이어지는지, 누가 무엇을 하다 누구와 부딪치는지, 어디서 뒤집히고 어떻게 끝나는지. 쪽 번호도 비트도 없어요. 그리고 '심고 거두기' 메모(plants — 없어도 되고 넷까지): 앞에 아무렇지 않게 놓였다가 뒤에서 다시 쓰이는 것 — 무엇을(what), 어디에 어떻게 놓고(plant), 어디서 어떻게 거두는지(payoff). 글이 아니라 그림에만 놓아도 돼요." + NO_LETTERS + " 인물들의 말은 재료예요 — 제 볼일이 있는 인물끼리는 부딪치고, 말 안 한 것과 지닌 물건은 뒤에서 다시 집어 들 수 있어요. 이건 네 작업 노트예요: 초고를 쓰다 더 좋은 길이 보이면 벗어나도 돼요.",
     user: `${roomBrief(input, { records })}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n모양: ${str(premise?.engine, 40)}\n가장 큰 웃음: ${str(premise?.laugh, 200)}\n아이가 보고 싶을 그림: ${str(premise?.picture, 200)}\n\n[인물표]\n${castRows(premise)}${cast ? `\n\n${cast}` : ""}\n\n[흐름 ${i + 1}/${count} — ${DRAFT_WEAVES[i % DRAFT_WEAVES.length]}]`,
     jsonSchema: FLOW_SCHEMA,
     temperature: 0.9,
@@ -666,7 +666,13 @@ const WEAVE_DRAFT_SCHEMA = {
   },
 };
 const draftSchema = (input) => (hasRoomWeave(input) ? WEAVE_DRAFT_SCHEMA : DRAFT_SCHEMA);
-const artLine = (input) => (hasRoomWeave(input) ? " 글은 말하지 않고 그림만 보여 줄 것이 있는 쪽에는 그림 메모(art)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼. 없는 쪽은 적지 않아요." : "");
+/**
+ * R56a (실측 2026-11-09): the paid draft carried its second thread as numerals lettered into the corners of
+ * seven pictures ("귀퉁이에 작은 글씨로 '하나'") — the picture request forbids letters, so the thread would
+ * not have been drawn. A fact about the medium, told wherever the writer is told about art notes.
+ */
+const NO_LETTERS = " 그림에는 글자와 숫자를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요.";
+const artLine = (input) => (hasRoomWeave(input) ? ` 글은 말하지 않고 그림만 보여 줄 것이 있는 쪽에는 그림 메모(art)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼. 없는 쪽은 적지 않아요.${NO_LETTERS}` : "");
 const pageLine = (p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}${str(p?.art, 200) ? ` [그림: ${str(p.art, 200)}]` : ""}`;
 /** R54e: an openings book — the writer marks the pages that are one big picture. */
 const spreadLine = (input) => (input?.layoutPolicy?.kind === "openings" ? " 큰 그림 한 장이 두 쪽에 걸쳐 맡는 순간은 그 쪽에 spread: true를 적어요(책에 두세 번쯤; 나머지는 적지 않아요)." : "");
@@ -839,7 +845,7 @@ export function rewriteRequest(input, draft, notes, { records = [], castNotes = 
     // R54g: targeted — the A/B's astra rewrote all 14 pages (7% of the words kept) of the draft the panel had chosen.
     system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·읽기 힘든 쪽·말높임이 어색한 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. 큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요." +
       // R55h: the backward look — how a writer plants: read from the end, and put what the end uses where an early page can show it.
-      (weave ? " 한 가지는 더 해도 돼요: 끝에서 거꾸로 읽어, 끝이 쓰는 물건·말·버릇이 앞에서 한 번도 보이지 않았다면 앞쪽 한 곳에 아무렇지 않게 먼저 놓아요 — 그림 메모(art) 한 줄이면 충분하고, 글은 한 줄까지; 설명은 붙이지 않아요. [그림: …]은 그 쪽의 그림 메모예요 — art로 그대로 돌려주거나 고쳐요." : ""),
+      (weave ? " 한 가지는 더 해도 돼요: 끝에서 거꾸로 읽어, 끝이 쓰는 물건·말·버릇이 앞에서 한 번도 보이지 않았다면 앞쪽 한 곳에 아무렇지 않게 먼저 놓아요 — 그림 메모(art) 한 줄이면 충분하고, 글은 한 줄까지; 설명은 붙이지 않아요. [그림: …]은 그 쪽의 그림 메모예요 — art로 그대로 돌려주거나 고쳐요." + NO_LETTERS + " 그림 메모가 글자나 숫자를 그려 넣으라고 하면 그렇게 바꿔 적어요." : ""),
     // The notes keep their lines (str() would fold them into one).
     user: `${roomBrief(input, { records })}${cast ? `\n\n${cast}` : ""}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(pageLine).join("\n")}`,
     jsonSchema: draftSchema(input),
@@ -1418,7 +1424,7 @@ function readingPlanFields(input) {
       hidden: { type: "string", maxLength: 160 },
       holdBack: { type: "string", maxLength: 120 },
     },
-    line: ` Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}, hidden (only when the words say someone does not see or notice something that the reader can: what it is, where it is in the frame relative to that character, and which way that character faces — one English sentence; "" otherwise), holdBack (only when the NEXT page reveals something this page must not show yet: what to keep out of this picture, a few words; "" otherwise).`,
+    line: ` Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}, hidden (when someone in the story does not see or notice something that the reader can — because this page's words or art note say so, or because an earlier page hid it and nothing has revealed it yet, even when this page's words do not say it again: who does not see it, what it is, where it is in the frame relative to them, and which way they face — one English sentence; "" otherwise), holdBack (only when the NEXT page reveals something this page must not show yet: what to keep out of this picture, a few words; "" otherwise).`,
   };
 }
 /** The beat of each of N pages when the book is not an openings book: the pages dealt evenly and in order over the beats. */
@@ -1439,7 +1445,7 @@ export function extractRequest(input, outline, pages) {
     extra = list(outline?.writersRoom?.premise?.cast).filter((c) => c?.isNew).map((c) => str(c.name, 30)).filter((n) => n && !known.has(n)),
     // R55h: the writer's art notes (what a picture shows and the words do not) reach the illustrator through the reading.
     artNote = list(pages).some((p) => str(p?.art, 400))
-      ? ` A page may carry the writer's art note ([art] …): something its picture shows that the words do not say — put it into that page's action and props${reading.properties.hidden ? ", and into hidden when the hero does not notice it" : ""}.`
+      ? ` A page may carry the writer's art note ([art] …): something its picture shows that the words do not say — put it into that page's action and props${reading.properties.hidden ? ", and into hidden when someone in the story does not notice it" : ""}. A picture cannot hold letters or numerals: when a note asks for written words or numbers in the picture, give countable things or a gesture instead and never write "labeled".`
       : "";
   return {
     system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English).${reading.line}${artNote} Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}`,

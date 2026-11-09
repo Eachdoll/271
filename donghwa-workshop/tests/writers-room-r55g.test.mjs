@@ -27,7 +27,7 @@ test('R55g the reading asks, per page, what the hero does not see and what the n
   const props = req.jsonSchema.properties.pages.items.properties;
   assert.deepEqual([props.hidden.maxLength, props.holdBack.maxLength], [160, 120]);
   assert.ok(req.jsonSchema.properties.pages.items.required.includes('hidden'));
-  assert.match(req.system, /hidden \(only when the words say someone does not see or notice something that the reader can/);
+  assert.match(req.system, /hidden \(when someone in the story does not see or notice something that the reader can — because this page's words or art note say so, or because an earlier page hid it and nothing has revealed it yet, even when this page's words do not say it again: who does not see it/);
   assert.match(req.system, /holdBack \(only when the NEXT page reveals something this page must not show yet/);
   const wordy = roomInput('g2', {bookFormatId: 'wordy'});
   assert.equal('hidden' in W.extractRequest(wordy, outline, [{ko: '가.'}]).jsonSchema.properties.pages.items.properties, false, 'a wordy book plans no picture');
@@ -47,15 +47,16 @@ test('R55g the page plan carries them; the picture request says them; a page wit
   assert.equal(p1.picturePlan.holdBack, 'their noses touching');
   assert.equal('hidden' in p2.picturePlan, false);
   const line = picturePlanPictureLine(p1.picturePlan);
-  assert.match(line, /HIDDEN FROM THE HERO — the reader sees it, the hero does not: Kongi crouches directly behind Yuha; Yuha faces forward and cannot see him; keep it that way \(the hero looks away from it, no eye contact with it\)/);
+  assert.match(line, /UNSEEN IN THE STORY — the reader sees it, the character named here does not: Kongi crouches directly behind Yuha; Yuha faces forward and cannot see him; keep it that way \(that character looks away from it, no eye contact with it\)/);
   assert.match(line, /NOT YET: their noses touching is revealed on the next page — keep it out of this picture/);
-  assert.doesNotMatch(picturePlanPictureLine(p2.picturePlan), /HIDDEN|NOT YET/);
+  assert.doesNotMatch(picturePlanPictureLine(p2.picturePlan), /UNSEEN|HIDDEN|NOT YET/);
+  assert.doesNotMatch(line, /\bhero\b/i, 'R56a: the line names no hero — the one who does not see is whoever the reading named');
   assert.ok(picturePlanText(p1.picturePlan).includes('their noses touching'), 'model-written text rides in the lenient word scope');
   // Through a real picture request.
   const pages = settled.pages.map((p, i) => ({...p, ko: p.textKo, en: p.textEn, staging: {shot: 'medium', characterSide: 'left'}}));
   const book = {id: 'g3', title: 't', characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], language: 'bilingual', storyInput: input, outline, sceneBriefs: [], pages};
   const prompt = sceneGenerationRequest(state, book, 0, {quality: 'final'}).prompt;
-  assert.match(prompt, /^COMPOSITION FIRST[^\n]*HIDDEN FROM THE HERO/);
+  assert.match(prompt, /^COMPOSITION FIRST[^\n]*UNSEEN IN THE STORY/);
   assert.match(prompt, /NOT YET: their noses touching/);
-  assert.doesNotMatch(sceneGenerationRequest(state, book, 1, {quality: 'final'}).prompt, /HIDDEN FROM THE HERO|NOT YET/);
+  assert.doesNotMatch(sceneGenerationRequest(state, book, 1, {quality: 'final'}).prompt, /UNSEEN IN THE STORY|HIDDEN FROM THE HERO|NOT YET/);
 });

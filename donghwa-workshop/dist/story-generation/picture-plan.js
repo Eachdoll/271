@@ -178,7 +178,7 @@ export function picturePlanPictureLine(plan) {
     // R39: where the eye lands, where the secret sits, the plain backdrop (drama plans only; empty otherwise).
     ...dramaPlanPictureParts(plan),
     // R55g: the story's logic the picture must keep — what the hero does not see (the reader does) and what the next page reveals.
-    str(plan.hidden, 160) ? `HIDDEN FROM THE HERO — the reader sees it, the hero does not: ${str(plan.hidden, 160)}; keep it that way (the hero looks away from it, no eye contact with it)` : "",
+    str(plan.hidden, 160) ? `UNSEEN IN THE STORY — the reader sees it, the character named here does not: ${str(plan.hidden, 160)}; keep it that way (that character looks away from it, no eye contact with it)` : "",
     str(plan.holdBack, 120) ? `NOT YET: ${str(plan.holdBack, 120)} is revealed on the next page — keep it out of this picture` : "",
   ].filter(Boolean);
   return parts.length ? `PICTURE PLAN (decided with the story): ${parts.join("; ")}. Keep it within the actual event above.` : "";
