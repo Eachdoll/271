@@ -1,0 +1,193 @@
+{
+  "providerCallsBlocked": 0,
+  "documents": {
+    "original": {
+      "printReady": "ready",
+      "bookFont": "19.5",
+      "overflowOpenings": "0",
+      "imageCount": 17,
+      "imagesLoaded": true,
+      "bodyKo": 17,
+      "bodyEn": 17,
+      "sheets": 8,
+      "pockets": 11,
+      "activePockets": 4,
+      "spreadSheets": 0,
+      "pairedSheets": 8,
+      "leaves": 16,
+      "pocketStyles": [
+        {
+          "side": "bottom",
+          "display": "flex",
+          "background": "rgb(245, 231, 200)",
+          "color": "rgb(43, 43, 43)",
+          "text": "노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척."
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(244, 232, 206)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "top",
+          "display": "none",
+          "background": "rgb(244, 233, 203)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "top",
+          "display": "none",
+          "background": "rgb(246, 242, 232)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(240, 228, 201)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(238, 225, 195)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "right",
+          "display": "flex",
+          "background": "rgb(244, 235, 212)",
+          "color": "rgb(43, 43, 43)",
+          "text": "엄마가 입을 꾹 다물어요. \"음… 엄마는 아무것도 못 봤어.\" 어깨가 들썩들썩, "
+        },
+        {
+          "side": "bottom",
+          "display": "flex",
+          "background": "rgb(237, 224, 194)",
+          "color": "rgb(43, 43, 43)",
+          "text": "이번엔 작은 꽃 뒤. 쏙! …아니네!"
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(240, 226, 196)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "right",
+          "display": "none",
+          "background": "rgb(242, 229, 199)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "right",
+          "display": "flex",
+          "background": "rgb(241, 230, 201)",
+          "color": "rgb(43, 43, 43)",
+          "text": "유하가 생각해요. 앞도 보고 옆도 봤어요. 위도 봤는데…"
+        }
+      ]
+    },
+    "feedback": {
+      "printReady": "ready",
+      "bookFont": "19.5",
+      "overflowOpenings": "0",
+      "imageCount": 17,
+      "imagesLoaded": true,
+      "bodyKo": 17,
+      "bodyEn": 17,
+      "sheets": 8,
+      "pockets": 11,
+      "activePockets": 4,
+      "spreadSheets": 0,
+      "pairedSheets": 8,
+      "leaves": 16,
+      "pocketStyles": [
+        {
+          "side": "bottom",
+          "display": "flex",
+          "background": "rgb(245, 232, 200)",
+          "color": "rgb(43, 43, 43)",
+          "text": "노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척."
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(244, 232, 206)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "top",
+          "display": "none",
+          "background": "rgb(245, 233, 203)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "top",
+          "display": "none",
+          "background": "rgb(246, 242, 232)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(241, 228, 201)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(239, 225, 196)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "right",
+          "display": "flex",
+          "background": "rgb(245, 235, 213)",
+          "color": "rgb(43, 43, 43)",
+          "text": "엄마가 입을 꾹 다물어요. \"음… 엄마는 아무것도 못 봤어.\" 어깨가 들썩들썩, "
+        },
+        {
+          "side": "bottom",
+          "display": "flex",
+          "background": "rgb(238, 224, 195)",
+          "color": "rgb(43, 43, 43)",
+          "text": "이번엔 작은 꽃 뒤. 쏙! …아니네!"
+        },
+        {
+          "side": "bottom",
+          "display": "none",
+          "background": "rgb(240, 226, 197)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "right",
+          "display": "none",
+          "background": "rgb(243, 229, 200)",
+          "color": "rgb(43, 43, 43)",
+          "text": ""
+        },
+        {
+          "side": "right",
+          "display": "flex",
+          "background": "rgb(242, 230, 201)",
+          "color": "rgb(43, 43, 43)",
+          "text": "유하가 생각해요. 앞도 보고 옆도 봤어요. 위도 봤는데…"
+        }
+      ]
+    }
+  }
+}

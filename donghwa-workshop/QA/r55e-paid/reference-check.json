@@ -1,0 +1,284 @@
+{
+  "identityReceiptChecks": [
+    {
+      "entry": 1,
+      "expected": [
+        "Yuha"
+      ],
+      "actual": [
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 2,
+      "expected": [
+        "Kongi"
+      ],
+      "actual": [
+        "Kongi"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 3,
+      "expected": [
+        "Kongi"
+      ],
+      "actual": [
+        "Kongi"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 4,
+      "expected": [
+        "Mom",
+        "Yuha"
+      ],
+      "actual": [
+        "Mom",
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 5,
+      "expected": [
+        "Yuha"
+      ],
+      "actual": [
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 6,
+      "expected": [
+        "Kongi",
+        "Yuha"
+      ],
+      "actual": [
+        "Kongi",
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 7,
+      "expected": [
+        "Mom"
+      ],
+      "actual": [
+        "Mom"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 8,
+      "expected": [
+        "Yuha"
+      ],
+      "actual": [
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 9,
+      "expected": [
+        "Kongi",
+        "Yuha"
+      ],
+      "actual": [
+        "Kongi",
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 10,
+      "expected": [
+        "Kongi",
+        "Yuha"
+      ],
+      "actual": [
+        "Kongi",
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 11,
+      "expected": [
+        "Yuha"
+      ],
+      "actual": [
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 12,
+      "expected": [
+        "Mom"
+      ],
+      "actual": [
+        "Mom"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 13,
+      "expected": [
+        "Yuha"
+      ],
+      "actual": [
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 14,
+      "expected": [
+        "Kongi",
+        "Yuha"
+      ],
+      "actual": [
+        "Kongi",
+        "Yuha"
+      ],
+      "passed": true
+    },
+    {
+      "entry": 15,
+      "expected": [
+        "Kongi",
+        "Mom",
+        "Yuha"
+      ],
+      "actual": [
+        "Kongi",
+        "Mom",
+        "Yuha"
+      ],
+      "passed": true
+    }
+  ],
+  "identityReceiptsPassed": true,
+  "styleRefEntries": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "textFieldEntries": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    12,
+    13
+  ],
+  "effectiveCameraCounts": {
+    "wide establishing shot": 2,
+    "gentle, well-lit close-up shot": 7,
+    "medium shot": 6
+  },
+  "requestedStagingCounts": {
+    "wide": 3,
+    "medium": 3,
+    "closeup": 4,
+    "high_angle": 1,
+    "from_behind": 2,
+    "over_shoulder": 1,
+    "low_angle": 1
+  },
+  "sheets": [
+    {
+      "name": "유하",
+      "kind": "child",
+      "imageAssetId": "image-5e16a6c8-6cd7-4d13-85ce-dd16b28afa44",
+      "engine": "openai",
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "prompt": "Create a coherent character reference sheet for this original storybook character: 유하; Yuha; child; a boy; 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; 짧은 검은 머리 · 동그란 얼굴; 노란 티셔츠 · 초록 반바지; body/clothing color #e9bb4e; hair color #393735; skin color #f0cfb5. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams."
+    },
+    {
+      "name": "엄마",
+      "kind": "adult",
+      "imageAssetId": "image-69ac17f8-b081-4211-bd37-06ddef1dd4d8",
+      "engine": "openai",
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "prompt": "Create a coherent character reference sheet for this original storybook character: 엄마; Mom; adult; 다정한 눈, 갈색 단발머리, 살구색 원피스; 갈색 단발머리 · 다정한 눈; 살구색 원피스; body/clothing color #b88372; hair color #493b34; skin color #edceb3. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams."
+    },
+    {
+      "name": "콩이",
+      "kind": "deer",
+      "imageAssetId": "image-b12d8492-9ad0-4887-938e-2cebb3cd2275",
+      "engine": "openai",
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "prompt": "Create a coherent character reference sheet for this original storybook character: 콩이; Kongi; deer; About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.; About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.; body/clothing color #a8bb91; hair color #493b34; skin color #edceb3. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams."
+    },
+    {
+      "name": "유하네 집",
+      "kind": "집",
+      "imageAssetId": "image-12bc6e09-59a9-4431-94d9-bc3576f37fc6",
+      "engine": "openai",
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "prompt": "Create a reusable environment reference sheet for ONE original children's picture-book location. Location name and requested facts: 유하네 집; type home; 큰 창문, 노란 대문, 포근한 이불; fixed layout . Show three complementary reference panels: a wide establishing view, a closer view from another useful angle, and a small detail view of the important fixed objects. All panels depict the SAME exact place and consistent geometry, wall/roof colors, window and door positions, furniture arrangement, materials, and recurring objects. For an interior show the same bed/table/window positions; for outdoors preserve path, tree and building shapes.  Style images define painting medium only. Empty environment: no people, animals, faces, story action, words, captions, labels, arrows, watermarks, logos, or map text."
+    },
+    {
+      "name": "초록빛 숲",
+      "kind": "숲·바다",
+      "imageAssetId": "image-d3e342f7-a358-4b82-9037-f1072bcbc972",
+      "engine": "openai",
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "prompt": "Create a reusable environment reference sheet for ONE original children's picture-book location. Location name and requested facts: 초록빛 숲; type forest; 둥근 나무, 작은 꽃, 햇살 드는 숲길; fixed layout . Show three complementary reference panels: a wide establishing view, a closer view from another useful angle, and a small detail view of the important fixed objects. All panels depict the SAME exact place and consistent geometry, wall/roof colors, window and door positions, furniture arrangement, materials, and recurring objects. For an interior show the same bed/table/window positions; for outdoors preserve path, tree and building shapes.  Style images define painting medium only. Empty environment: no people, animals, faces, story action, words, captions, labels, arrows, watermarks, logos, or map text."
+    }
+  ],
+  "manualExtraCastEntries": {
+    "2": [
+      "yuha"
+    ],
+    "7": [
+      "yuha"
+    ],
+    "8": [
+      "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+    ],
+    "12": [
+      "yuha"
+    ],
+    "13": [
+      "mom"
+    ]
+  },
+  "manualSpeciesObservation": "Kongi has human face and black hair on deer body; present already on the original character sheet.",
+  "manualGateObservation": "Yellow rounded double gate, stone posts and cream house broadly retained, but page 2 also brings the gate/home scene into the forest; end viewpoint differs so strict left/right geometry is not proven."
+}

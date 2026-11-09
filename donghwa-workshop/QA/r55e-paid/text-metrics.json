@@ -1,0 +1,323 @@
+{
+  "title": "쉿, 콩이는 지금 없어",
+  "entries": 15,
+  "openings": 8,
+  "spreadEntries": 1,
+  "maxSingleKo": 5,
+  "singleCapViolations": [],
+  "requests": 10,
+  "tokenCostUsd": 0.546582,
+  "initialTextEstimateUsd": 0.87,
+  "usage": {
+    "calls": [
+      {
+        "input": 5543,
+        "output": 12072,
+        "costUsdEstimated": 0.2411496,
+        "stage": "writersRoom",
+        "requests": 2,
+        "resumedCalls": 0,
+        "engineId": "anthropic",
+        "modelId": "claude-opus-5-5",
+        "models": [
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "callId": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41:2",
+        "at": "2026-11-09T09:55:20.099Z"
+      },
+      {
+        "input": 16206,
+        "output": 13330,
+        "costUsdEstimated": 0.30232639999999994,
+        "stage": "roomDrafts",
+        "requests": 7,
+        "resumedCalls": 0,
+        "engineId": "anthropic",
+        "modelId": "claude-opus-5-5",
+        "models": [
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "callId": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41:5",
+        "at": "2026-11-09T09:56:40.343Z"
+      },
+      {
+        "input": 1881,
+        "output": 1471,
+        "costUsdEstimated": 0.003106,
+        "stage": "roomPages",
+        "requests": 1,
+        "resumedCalls": 0,
+        "engineId": "openai",
+        "modelId": "gpt-4.1-mini",
+        "models": [
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "pageCount": 16,
+        "entries": 15,
+        "openings": 8,
+        "clamped": true,
+        "spreadFit": {
+          "marks": 1,
+          "fitted": true,
+          "moved": 1
+        },
+        "callId": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41:6",
+        "at": "2026-11-09T09:56:50.542Z"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "page": 1,
+      "kind": "page",
+      "koSentences": 2,
+      "enSentences": 3,
+      "ko": "노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척.",
+      "en": "The yellow gate came open. Yuha walked and did not look back. Step, step, step.",
+      "who": [
+        "yuha"
+      ],
+      "where": "home",
+      "shot": "wide"
+    },
+    {
+      "page": 2,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "ko": "초록빛 숲에는 아기 사슴 콩이가 살아요. 콩이는 숨기 대장이에요. \"쉿, 나 지금 없어.\"",
+      "en": "A little deer called Kongi lived in the green woods. Kongi was so good at hiding. \"Shh, I am not here.\"",
+      "who": [
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "medium"
+    },
+    {
+      "page": 3,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "ko": "그런데 작은 꽃 뒤로 하얀 꼬리가 뿅! 너는 봤지? 유하는 아직 못 봤어요.",
+      "en": "But pop! A white tail came up by a little flower. Did you see it?",
+      "who": [
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "closeup"
+    },
+    {
+      "page": 4,
+      "kind": "page",
+      "koSentences": 2,
+      "enSentences": 3,
+      "ko": "\"엄마, 콩이 어디 숨었어? 내가 꼭 찾을 거야!\"",
+      "en": "Yuha did not see it yet. \"Mom, where is Kongi? I will find Kongi!\"",
+      "who": [
+        "yuha",
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "high_angle"
+    },
+    {
+      "page": 5,
+      "kind": "page",
+      "koSentences": 4,
+      "enSentences": 4,
+      "ko": "둥근 나무 뒤를 쏙. \"여기 있지? 찾았…다? 아니네!\"",
+      "en": "Yuha looked by a round tree. \"Here? Found you? No!\"",
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "from_behind"
+    },
+    {
+      "page": 6,
+      "kind": "page",
+      "koSentences": 4,
+      "enSentences": 3,
+      "ko": "유하가 허리를 숙여요. \"콩이 어디 있지?\" 콩이도 허리를 숙여요. 바로 유하 뒤에서.",
+      "en": "Yuha got down low. \"Where is Kongi?\" Kongi got down low too, right at his back.",
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "over_shoulder"
+    },
+    {
+      "page": 7,
+      "kind": "spread",
+      "koSentences": 4,
+      "enSentences": 4,
+      "ko": "엄마가 입을 꾹 다물어요. \"음… 엄마는 아무것도 못 봤어.\" 어깨가 들썩들썩, 볼이 빵빵. 푸흡!",
+      "en": "Mom shut her lips. \"Hmm, I did not see a thing.\" Her cheeks got big. Pfft!",
+      "who": [
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "medium"
+    },
+    {
+      "page": 8,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 2,
+      "ko": "이번엔 작은 꽃 뒤. 쏙! …아니네!",
+      "en": "Now Yuha looked by a little flower. No!",
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "closeup"
+    },
+    {
+      "page": 9,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "ko": "유하가 뛰어요. 콩이도 뛰어요. 쫄랑쫄랑, 쫄랑쫄랑.",
+      "en": "Yuha ran. Kongi ran too. Hop, hop, hop.",
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "low_angle"
+    },
+    {
+      "page": 10,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "ko": "유하가 멈춰요. 콩이도 멈춰요. 딱!",
+      "en": "Yuha stopped. Kongi stopped too. Stop!",
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "closeup"
+    },
+    {
+      "page": 11,
+      "kind": "page",
+      "koSentences": 5,
+      "enSentences": 3,
+      "ko": "이번엔 커다란 바위 뒤. \"여기 있지? 찾았…다? 아니네!\" 유하가 털썩 앉아요.",
+      "en": "Now Yuha looked by a big stone. \"Not here!\" said Yuha, and he sat down.",
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "from_behind"
+    },
+    {
+      "page": 12,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 2,
+      "ko": "엄마는 말해 주고 싶어서 입이 근질근질해요. 그래도 꾹 참고 물어요. \"유하야, 아직 안 본 데가 어디일까?\"",
+      "en": "Mom wanted to tell him so much. But she just asked, \"Yuha, where did you not look?\"",
+      "who": [
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "wide"
+    },
+    {
+      "page": 13,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "ko": "유하가 생각해요. 앞도 보고 옆도 봤어요. 위도 봤는데…",
+      "en": "Yuha had a think. He looked this way and that way. He looked up too, but…",
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "medium"
+    },
+    {
+      "page": 14,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "ko": "휙! 코랑 코가 콩! \"찾았다!\"",
+      "en": "Whoosh! Nose and nose went bop! \"Found you!\"",
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "closeup"
+    },
+    {
+      "page": 15,
+      "kind": "page",
+      "koSentences": 5,
+      "enSentences": 6,
+      "ko": "콩이가 꼬리를 파르르 떨어요. \"쉿, 나 지금 없어.\" 이번엔 엄마도 하하하 웃어요. 다음 날, 노란 대문이 열려요. 유하는 한 걸음 걷고, 휙 뒤를 돌아봐요.",
+      "en": "Kongi's tail went wag, wag. \"Shh, I am not here.\" This time Mom laughed too. Ha, ha, ha! The next day, the yellow gate came open. Yuha went one step and looked back fast!",
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4",
+        "mom"
+      ],
+      "where": "home",
+      "shot": "wide"
+    }
+  ]
+}

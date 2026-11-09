@@ -1,0 +1,1269 @@
+{
+  "title": "쉿, 콩이는 지금 없어",
+  "entries": 15,
+  "printedPages": 16,
+  "openings": 8,
+  "spreads": 1,
+  "actorNames": {
+    "yuha": "유하",
+    "greenie": "초록이",
+    "toto": "토토",
+    "mom": "엄마",
+    "character-5024d787-0765-4e9e-8c23-e53987b5c3f4": "콩이"
+  },
+  "textRequests": 10,
+  "tokenBasedTextCostUsd": 0.546582,
+  "usage": {
+    "calls": [
+      {
+        "input": 5543,
+        "output": 12072,
+        "costUsdEstimated": 0.2411496,
+        "stage": "writersRoom",
+        "requests": 2,
+        "resumedCalls": 0,
+        "engineId": "anthropic",
+        "modelId": "claude-opus-5-5",
+        "models": [
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "callId": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41:2",
+        "at": "2026-11-09T09:55:20.099Z"
+      },
+      {
+        "input": 16206,
+        "output": 13330,
+        "costUsdEstimated": 0.30232639999999994,
+        "stage": "roomDrafts",
+        "requests": 7,
+        "resumedCalls": 0,
+        "engineId": "anthropic",
+        "modelId": "claude-opus-5-5",
+        "models": [
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          },
+          {
+            "engineId": "anthropic",
+            "modelId": "claude-opus-5-5",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "callId": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41:5",
+        "at": "2026-11-09T09:56:40.343Z"
+      },
+      {
+        "input": 1881,
+        "output": 1471,
+        "costUsdEstimated": 0.003106,
+        "stage": "roomPages",
+        "requests": 1,
+        "resumedCalls": 0,
+        "engineId": "openai",
+        "modelId": "gpt-4.1-mini",
+        "models": [
+          {
+            "engineId": "openai",
+            "modelId": "gpt-4.1-mini",
+            "requests": 1
+          }
+        ],
+        "demo": false,
+        "pageCount": 16,
+        "entries": 15,
+        "openings": 8,
+        "clamped": true,
+        "spreadFit": {
+          "marks": 1,
+          "fitted": true,
+          "moved": 1
+        },
+        "callId": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41:6",
+        "at": "2026-11-09T09:56:50.542Z"
+      }
+    ]
+  },
+  "imageUsage": {
+    "image-5e16a6c8-6cd7-4d13-85ce-dd16b28afa44": {
+      "imageAssetId": "image-5e16a6c8-6cd7-4d13-85ce-dd16b28afa44",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T09:58:00.888Z"
+    },
+    "image-69ac17f8-b081-4211-bd37-06ddef1dd4d8": {
+      "imageAssetId": "image-69ac17f8-b081-4211-bd37-06ddef1dd4d8",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T09:59:13.038Z"
+    },
+    "image-b12d8492-9ad0-4887-938e-2cebb3cd2275": {
+      "imageAssetId": "image-b12d8492-9ad0-4887-938e-2cebb3cd2275",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:00:20.806Z"
+    },
+    "image-12bc6e09-59a9-4431-94d9-bc3576f37fc6": {
+      "imageAssetId": "image-12bc6e09-59a9-4431-94d9-bc3576f37fc6",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:01:48.830Z"
+    },
+    "image-d3e342f7-a358-4b82-9037-f1072bcbc972": {
+      "imageAssetId": "image-d3e342f7-a358-4b82-9037-f1072bcbc972",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:03:23.723Z"
+    },
+    "image-d3799836-3f02-4ab0-9488-dc04b1e9fa78": {
+      "imageAssetId": "image-d3799836-3f02-4ab0-9488-dc04b1e9fa78",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:04:48.502Z"
+    },
+    "image-456a61f0-799e-4d99-8c29-fbf768ab4a19": {
+      "imageAssetId": "image-456a61f0-799e-4d99-8c29-fbf768ab4a19",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:06:17.582Z"
+    },
+    "image-3401ed2f-71d3-476d-9961-149050250ddf": {
+      "imageAssetId": "image-3401ed2f-71d3-476d-9961-149050250ddf",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:07:45.953Z"
+    },
+    "image-fc7bdf71-3166-4691-a7a7-2b8a94ffcf5c": {
+      "imageAssetId": "image-fc7bdf71-3166-4691-a7a7-2b8a94ffcf5c",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:09:20.361Z"
+    },
+    "image-7e62bae3-ee11-40be-b590-c59d06a36e8f": {
+      "imageAssetId": "image-7e62bae3-ee11-40be-b590-c59d06a36e8f",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:10:53.904Z"
+    },
+    "image-96c6957d-cdb4-4551-80c0-7d271f236c53": {
+      "imageAssetId": "image-96c6957d-cdb4-4551-80c0-7d271f236c53",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:12:24.126Z"
+    },
+    "image-20dddcab-84a4-48f5-8941-83219b3a1ffe": {
+      "imageAssetId": "image-20dddcab-84a4-48f5-8941-83219b3a1ffe",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:13:21.639Z"
+    },
+    "image-2d18b275-9580-47c3-b310-0268198c114c": {
+      "imageAssetId": "image-2d18b275-9580-47c3-b310-0268198c114c",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:14:54.274Z"
+    },
+    "image-fd88c74a-dcc8-46d8-b592-2bc7859c317c": {
+      "imageAssetId": "image-fd88c74a-dcc8-46d8-b592-2bc7859c317c",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:16:30.816Z"
+    },
+    "image-aafdccb1-36a9-4cfa-b23a-d02033ee143a": {
+      "imageAssetId": "image-aafdccb1-36a9-4cfa-b23a-d02033ee143a",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:18:11.650Z"
+    },
+    "image-d5c6fb64-6a7c-4421-92ec-f38174b6234b": {
+      "imageAssetId": "image-d5c6fb64-6a7c-4421-92ec-f38174b6234b",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:19:58.259Z"
+    },
+    "image-712e2846-447a-4ade-9558-899d3dfcbf6e": {
+      "imageAssetId": "image-712e2846-447a-4ade-9558-899d3dfcbf6e",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:21:25.017Z"
+    },
+    "image-dd2f3808-b36f-42b1-8c0f-e58546426d09": {
+      "imageAssetId": "image-dd2f3808-b36f-42b1-8c0f-e58546426d09",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:22:43.162Z"
+    },
+    "image-5ec293bd-51b0-423a-9966-3b95d9149d44": {
+      "imageAssetId": "image-5ec293bd-51b0-423a-9966-3b95d9149d44",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:24:14.027Z"
+    },
+    "image-0b20bb21-cd2d-4461-a988-2c2eaf55a3da": {
+      "imageAssetId": "image-0b20bb21-cd2d-4461-a988-2c2eaf55a3da",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:25:43.349Z"
+    },
+    "image-5a11d05c-ff13-48cb-9d15-14f8ddb44e81": {
+      "imageAssetId": "image-5a11d05c-ff13-48cb-9d15-14f8ddb44e81",
+      "engine": "openai",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "quality": "final",
+      "generatedAt": "2026-11-09T10:27:07.360Z"
+    }
+  },
+  "cover": {
+    "hasImage": true,
+    "imageAssetId": "image-5a11d05c-ff13-48cb-9d15-14f8ddb44e81",
+    "meta": {
+      "prompt": "medium shot; Yuha on the center side. Cover: show the main character alone, once, with quiet upper space for a separately typeset title. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. This page's drawable verb: walk. Actual event: Yuha stands alone, looking curious and ready for adventure.. Draw only Yuha on this cover; if that sentence names anyone else, leave them out. Current page narrative: {\"ko\":\"노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척.\",\"en\":\"The yellow gate came open. Yuha walked and did not look back. Step, step, step.\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Companions must not appear on this cover. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.\n\nLocation: {\"name\":\"유하네 집\",\"description\":\"큰 창문, 노란 대문, 포근한 이불\"}. View within this same place: near the gate. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: []. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "model": "gpt-image-2",
+      "requestedSeed": 248559913,
+      "returnedSeed": null,
+      "costUsdEstimated": 0.17,
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 유하네 집"
+        }
+      ]
+    }
+  },
+  "allBodyImages": true,
+  "singleKoOver5": [],
+  "singleEnOver5": [
+    15
+  ],
+  "compositionFirst": true,
+  "shots": [
+    "wide",
+    "medium",
+    "closeup",
+    "high_angle",
+    "from_behind",
+    "over_shoulder",
+    "low_angle"
+  ],
+  "effectiveCameras": [
+    "wide establishing shot",
+    "gentle, well-lit close-up shot",
+    "medium shot"
+  ],
+  "sameCameraEntries": [
+    4,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "rows": [
+    {
+      "entry": 1,
+      "kind": "page",
+      "koSentences": 2,
+      "enSentences": 3,
+      "who": [
+        "yuha"
+      ],
+      "where": "home",
+      "shot": "wide",
+      "effectiveCamera": "wide establishing shot",
+      "hasImage": true,
+      "imageAssetId": "image-d3799836-3f02-4ab0-9488-dc04b1e9fa78",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): wide establishing shot. PICTURE PLAN (decided with the story): wide view: small figures in a big world; a full, busy picture; the eye lands on Yuha walking through the yellow gate. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Kongi hides quietly among the green woods, peeking out slightly. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. wide establishing shot; Yuha on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. This page's drawable verb: walk. Actual event: Yuha walks forward through the open yellow gate, not looking back.. Current page narrative: {\"ko\":\"노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척.\",\"en\":\"The yellow gate came open. Yuha walked and did not look back. Step, step, step.\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"유하네 집\",\"description\":\"큰 창문, 노란 대문, 포근한 이불\"}. View within this same place: near the gate. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: []. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 유하네 집"
+        }
+      ],
+      "requestedSeed": 248559914,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        1
+      ]
+    },
+    {
+      "entry": 2,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "medium",
+      "effectiveCamera": "wide establishing shot",
+      "hasImage": true,
+      "imageAssetId": "image-456a61f0-799e-4d99-8c29-fbf768ab4a19",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): wide establishing shot. PICTURE PLAN (decided with the story): wide view: small figures in a big world; a full, busy picture; the eye lands on Yuha walking through the yellow gate. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha walks forward through the open yellow gate, not looking back. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. wide establishing shot; Kongi on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the bottom 45% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: hide. Actual event: Kongi hides quietly among the green woods, peeking out slightly.. Current page narrative: {\"ko\":\"초록빛 숲에는 아기 사슴 콩이가 살아요. 콩이는 숨기 대장이에요. \\\"쉿, 나 지금 없어.\\\"\",\"en\":\"A little deer called Kongi lived in the green woods. Kongi was so good at hiding. \\\"Shh, I am not here.\\\"\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":1,\"samePlace\":false,\"textKo\":\"노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척.\",\"textEn\":\"The yellow gate came open. Yuha walked and did not look back. Step, step, step.\",\"scene\":{\"who\":[\"yuha\"],\"where\":\"home\",\"action\":\"Yuha walks forward through the open yellow gate, not looking back.\",\"emotion\":\"determined\",\"timeOfDay\":\"morning\",\"props\":[\"yellow gate\",\"pathway\",\"shoes\"],\"index\":0,\"setting\":\"home\",\"object\":\"yellow gate\",\"beatIndex\":1}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the bottom 45% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        }
+      ],
+      "requestedSeed": 248559915,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        2
+      ]
+    },
+    {
+      "entry": 3,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "closeup",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-3401ed2f-71d3-476d-9961-149050250ddf",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): there are almost no words here, so this picture tells the moment; close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on white tail behind flower. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha asks Mom where Kongi is, determined to find him. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. gentle, well-lit close-up shot; Kongi on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the top 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: A white tail pops up behind a small flower in the forest.. Actual event: A white tail pops up behind a small flower in the forest.. Current page narrative: {\"ko\":\"그런데 작은 꽃 뒤로 하얀 꼬리가 뿅! 너는 봤지? 유하는 아직 못 봤어요.\",\"en\":\"But pop! A white tail came up by a little flower. Did you see it?\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: near the flower. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":1,\"samePlace\":false,\"scene\":{\"who\":[\"yuha\"],\"where\":\"home\",\"action\":\"Yuha walks forward through the open yellow gate, not looking back.\",\"emotion\":\"determined\",\"timeOfDay\":\"morning\",\"props\":[\"yellow gate\",\"pathway\",\"shoes\"],\"index\":0,\"setting\":\"home\",\"object\":\"yellow gate\",\"beatIndex\":1}},{\"pageNo\":2,\"samePlace\":true,\"textKo\":\"초록빛 숲에는 아기 사슴 콩이가 살아요. 콩이는 숨기 대장이에요. \\\"쉿, 나 지금 없어.\\\"\",\"textEn\":\"A little deer called Kongi lived in the green woods. Kongi was so good at hiding. \\\"Shh, I am not here.\\\"\",\"scene\":{\"who\":[\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Kongi hides quietly among the green woods, peeking out slightly.\",\"emotion\":\"playful\",\"timeOfDay\":\"morning\",\"props\":[\"green trees\",\"leaves\",\"small flowers\"],\"index\":1,\"setting\":\"forest\",\"object\":\"green trees\",\"beatIndex\":1}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the top 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        }
+      ],
+      "requestedSeed": 248559916,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        3
+      ]
+    },
+    {
+      "entry": 4,
+      "kind": "page",
+      "koSentences": 2,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "high_angle",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-fc7bdf71-3166-4691-a7a7-2b8a94ffcf5c",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): there are almost no words here, so this picture tells the moment; close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on white tail behind flower. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: A white tail pops up behind a small flower in the forest. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. gentle, well-lit close-up shot; Yuha on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the top 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; Mom (mom): 다정한 눈, 갈색 단발머리, 살구색 원피스. This page's drawable verb: find. Actual event: Yuha asks Mom where Kongi is, determined to find him.. Current page narrative: {\"ko\":\"\\\"엄마, 콩이 어디 숨었어? 내가 꼭 찾을 거야!\\\"\",\"en\":\"Yuha did not see it yet. \\\"Mom, where is Kongi? I will find Kongi!\\\"\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 3 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":2,\"samePlace\":true,\"scene\":{\"who\":[\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Kongi hides quietly among the green woods, peeking out slightly.\",\"emotion\":\"playful\",\"timeOfDay\":\"morning\",\"props\":[\"green trees\",\"leaves\",\"small flowers\"],\"index\":1,\"setting\":\"forest\",\"object\":\"green trees\",\"beatIndex\":1}},{\"pageNo\":3,\"samePlace\":true,\"textKo\":\"그런데 작은 꽃 뒤로 하얀 꼬리가 뿅! 너는 봤지? 유하는 아직 못 봤어요.\",\"textEn\":\"But pop! A white tail came up by a little flower. Did you see it?\",\"scene\":{\"who\":[\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"A white tail pops up behind a small flower in the forest.\",\"emotion\":\"mysterious\",\"timeOfDay\":\"morning\",\"props\":[\"small flower\",\"white tail\",\"green grass\"],\"index\":2,\"setting\":\"forest\",\"object\":\"small flower\",\"beatIndex\":2}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the top 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        },
+        {
+          "label": "Mom original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Mom original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Mom original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (closeup) at SAME place, page 3; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 2
+        }
+      ],
+      "requestedSeed": 248559917,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        4
+      ]
+    },
+    {
+      "entry": 5,
+      "kind": "page",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "from_behind",
+      "effectiveCamera": "medium shot",
+      "hasImage": true,
+      "imageAssetId": "image-7e62bae3-ee11-40be-b590-c59d06a36e8f",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. PICTURE PLAN (decided with the story): middle distance; a full, busy picture; the eye lands on Yuha looking behind tree. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha and Kongi both crouch low, Kongi hiding right behind Yuha. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. medium shot; Yuha on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, gentle warm light and soft highlights; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. This page's drawable verb: find. Actual event: Yuha looks behind a round tree, searching carefully.. Current page narrative: {\"ko\":\"둥근 나무 뒤를 쏙. \\\"여기 있지? 찾았…다? 아니네!\\\"\",\"en\":\"Yuha looked by a round tree. \\\"Here? Found you? No!\\\"\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 4 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: near the tree. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":3,\"samePlace\":true,\"scene\":{\"who\":[\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"A white tail pops up behind a small flower in the forest.\",\"emotion\":\"mysterious\",\"timeOfDay\":\"morning\",\"props\":[\"small flower\",\"white tail\",\"green grass\"],\"index\":2,\"setting\":\"forest\",\"object\":\"small flower\",\"beatIndex\":2}},{\"pageNo\":4,\"samePlace\":true,\"textKo\":\"\\\"엄마, 콩이 어디 숨었어? 내가 꼭 찾을 거야!\\\"\",\"textEn\":\"Yuha did not see it yet. \\\"Mom, where is Kongi? I will find Kongi!\\\"\",\"scene\":{\"who\":[\"yuha\",\"mom\"],\"where\":\"forest\",\"action\":\"Yuha asks Mom where Kongi is, determined to find him.\",\"emotion\":\"determined\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"flowers\"],\"index\":3,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":2}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene at SAME place, page 4; architecture/layout only, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 3
+        }
+      ],
+      "requestedSeed": 248559918,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        5
+      ]
+    },
+    {
+      "entry": 6,
+      "kind": "page",
+      "koSentences": 4,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "over_shoulder",
+      "effectiveCamera": "medium shot",
+      "hasImage": true,
+      "imageAssetId": "image-96c6957d-cdb4-4551-80c0-7d271f236c53",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. PICTURE PLAN (decided with the story): middle distance; a full, busy picture; the eye lands on Yuha looking behind tree. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha looks behind a round tree, searching carefully. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. medium shot; Yuha on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: crouch. Actual event: Yuha and Kongi both crouch low, Kongi hiding right behind Yuha.. Current page narrative: {\"ko\":\"유하가 허리를 숙여요. \\\"콩이 어디 있지?\\\" 콩이도 허리를 숙여요. 바로 유하 뒤에서.\",\"en\":\"Yuha got down low. \\\"Where is Kongi?\\\" Kongi got down low too, right at his back.\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 5 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":4,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\",\"mom\"],\"where\":\"forest\",\"action\":\"Yuha asks Mom where Kongi is, determined to find him.\",\"emotion\":\"determined\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"flowers\"],\"index\":3,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":2}},{\"pageNo\":5,\"samePlace\":true,\"textKo\":\"둥근 나무 뒤를 쏙. \\\"여기 있지? 찾았…다? 아니네!\\\"\",\"textEn\":\"Yuha looked by a round tree. \\\"Here? Found you? No!\\\"\",\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha looks behind a round tree, searching carefully.\",\"emotion\":\"hopeful\",\"timeOfDay\":\"morning\",\"props\":[\"round tree\",\"leaves\",\"grass\"],\"index\":4,\"setting\":\"forest\",\"object\":\"round tree\",\"beatIndex\":3}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        },
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (medium) at SAME place, page 5; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 4
+        }
+      ],
+      "requestedSeed": 248559919,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        6
+      ]
+    },
+    {
+      "entry": 7,
+      "kind": "spread",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "medium",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-20dddcab-84a4-48f5-8941-83219b3a1ffe",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on Mom's puffed cheeks. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. wide establishing shot; Mom on the right half. Wide double-page spread in one continuous scene. The book's fold runs down the vertical centre line: keep every face, hand and the key action out of the middle tenth and balance the scene across both halves. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the right 45% of the picture's width as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Mom (mom): 다정한 눈, 갈색 단발머리, 살구색 원피스. This page's drawable verb: hold. Actual event: Mom holds her lips tight, cheeks puffed, trying not to laugh.. Current page narrative: {\"ko\":\"엄마가 입을 꾹 다물어요. \\\"음… 엄마는 아무것도 못 봤어.\\\" 어깨가 들썩들썩, 볼이 빵빵. 푸흡!\",\"en\":\"Mom shut her lips. \\\"Hmm, I did not see a thing.\\\" Her cheeks got big. Pfft!\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this spread may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 6 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":5,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha looks behind a round tree, searching carefully.\",\"emotion\":\"hopeful\",\"timeOfDay\":\"morning\",\"props\":[\"round tree\",\"leaves\",\"grass\"],\"index\":4,\"setting\":\"forest\",\"object\":\"round tree\",\"beatIndex\":3}},{\"pageNo\":6,\"samePlace\":true,\"textKo\":\"유하가 허리를 숙여요. \\\"콩이 어디 있지?\\\" 콩이도 허리를 숙여요. 바로 유하 뒤에서.\",\"textEn\":\"Yuha got down low. \\\"Where is Kongi?\\\" Kongi got down low too, right at his back.\",\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi both crouch low, Kongi hiding right behind Yuha.\",\"emotion\":\"sneaky\",\"timeOfDay\":\"morning\",\"props\":[\"grass\",\"leaves\"],\"index\":5,\"setting\":\"forest\",\"object\":\"grass\",\"beatIndex\":3}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the right 45% of the picture's width as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Mom original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Mom original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Mom original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (closeup) at SAME place, page 4; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 3
+        }
+      ],
+      "requestedSeed": 248559920,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        7,
+        8
+      ]
+    },
+    {
+      "entry": 8,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 2,
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "closeup",
+      "effectiveCamera": "medium shot",
+      "hasImage": true,
+      "imageAssetId": "image-2d18b275-9580-47c3-b310-0268198c114c",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. PICTURE PLAN (decided with the story): middle distance; a full, busy picture; the eye lands on Yuha looking behind flower. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha and Kongi run together through the forest, hopping along. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. medium shot; Yuha on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the bottom 30% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. This page's drawable verb: Yuha looks behind a small flower again, searching carefully.. Actual event: Yuha looks behind a small flower again, searching carefully.. Current page narrative: {\"ko\":\"이번엔 작은 꽃 뒤. 쏙! …아니네!\",\"en\":\"Now Yuha looked by a little flower. No!\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 7 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: near the flower. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":6,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi both crouch low, Kongi hiding right behind Yuha.\",\"emotion\":\"sneaky\",\"timeOfDay\":\"morning\",\"props\":[\"grass\",\"leaves\"],\"index\":5,\"setting\":\"forest\",\"object\":\"grass\",\"beatIndex\":3}},{\"pageNo\":7,\"samePlace\":true,\"textKo\":\"엄마가 입을 꾹 다물어요. \\\"음… 엄마는 아무것도 못 봤어.\\\" 어깨가 들썩들썩, 볼이 빵빵. 푸흡!\",\"textEn\":\"Mom shut her lips. \\\"Hmm, I did not see a thing.\\\" Her cheeks got big. Pfft!\",\"scene\":{\"who\":[\"mom\"],\"where\":\"forest\",\"action\":\"Mom holds her lips tight, cheeks puffed, trying not to laugh.\",\"emotion\":\"amused\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"flowers\"],\"index\":6,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":4}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the bottom 30% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (medium) at SAME place, page 6; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 5
+        }
+      ],
+      "requestedSeed": 248559921,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        9
+      ]
+    },
+    {
+      "entry": 9,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "low_angle",
+      "effectiveCamera": "medium shot",
+      "hasImage": true,
+      "imageAssetId": "image-fd88c74a-dcc8-46d8-b592-2bc7859c317c",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. PICTURE PLAN (decided with the story): middle distance; a full, busy picture; the eye lands on Yuha looking behind flower. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha looks behind a small flower again, searching carefully. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. medium shot; Yuha on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, gentle warm light and soft highlights; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: run. Actual event: Yuha and Kongi run together through the forest, hopping along.. Current page narrative: {\"ko\":\"유하가 뛰어요. 콩이도 뛰어요. 쫄랑쫄랑, 쫄랑쫄랑.\",\"en\":\"Yuha ran. Kongi ran too. Hop, hop, hop.\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 8 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":7,\"samePlace\":true,\"scene\":{\"who\":[\"mom\"],\"where\":\"forest\",\"action\":\"Mom holds her lips tight, cheeks puffed, trying not to laugh.\",\"emotion\":\"amused\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"flowers\"],\"index\":6,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":4}},{\"pageNo\":8,\"samePlace\":true,\"textKo\":\"이번엔 작은 꽃 뒤. 쏙! …아니네!\",\"textEn\":\"Now Yuha looked by a little flower. No!\",\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha looks behind a small flower again, searching carefully.\",\"emotion\":\"curious\",\"timeOfDay\":\"morning\",\"props\":[\"small flower\",\"grass\"],\"index\":7,\"setting\":\"forest\",\"object\":\"small flower\",\"beatIndex\":5}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the bottom 40% of the picture's height as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        },
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (medium) at SAME place, page 8; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 7
+        }
+      ],
+      "requestedSeed": 248559922,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        10
+      ]
+    },
+    {
+      "entry": 10,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "closeup",
+      "effectiveCamera": "medium shot",
+      "hasImage": true,
+      "imageAssetId": "image-aafdccb1-36a9-4cfa-b23a-d02033ee143a",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. PICTURE PLAN (decided with the story): there are almost no words here, so this picture tells the moment; middle distance; lots of quiet empty space around the figures; the eye lands on Yuha and Kongi stopping. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha looks behind a big rock and then sits down, disappointed. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. medium shot; Yuha on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: stand. Actual event: Yuha and Kongi stop suddenly, standing still side by side.. Current page narrative: {\"ko\":\"유하가 멈춰요. 콩이도 멈춰요. 딱!\",\"en\":\"Yuha stopped. Kongi stopped too. Stop!\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 9 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":8,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha looks behind a small flower again, searching carefully.\",\"emotion\":\"curious\",\"timeOfDay\":\"morning\",\"props\":[\"small flower\",\"grass\"],\"index\":7,\"setting\":\"forest\",\"object\":\"small flower\",\"beatIndex\":5}},{\"pageNo\":9,\"samePlace\":true,\"textKo\":\"유하가 뛰어요. 콩이도 뛰어요. 쫄랑쫄랑, 쫄랑쫄랑.\",\"textEn\":\"Yuha ran. Kongi ran too. Hop, hop, hop.\",\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi run together through the forest, hopping along.\",\"emotion\":\"joyful\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"grass\"],\"index\":8,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":5}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": null,
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        },
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (medium) at SAME place, page 9; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 8
+        }
+      ],
+      "requestedSeed": 248559923,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        11
+      ]
+    },
+    {
+      "entry": 11,
+      "kind": "page",
+      "koSentences": 5,
+      "enSentences": 3,
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "from_behind",
+      "effectiveCamera": "medium shot",
+      "hasImage": true,
+      "imageAssetId": "image-d5c6fb64-6a7c-4421-92ec-f38174b6234b",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. PICTURE PLAN (decided with the story): there are almost no words here, so this picture tells the moment; middle distance; lots of quiet empty space around the figures; the eye lands on Yuha and Kongi stopping. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha and Kongi stop suddenly, standing still side by side. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. medium shot; Yuha on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. This page's drawable verb: sit. Actual event: Yuha looks behind a big rock and then sits down, disappointed.. Current page narrative: {\"ko\":\"이번엔 커다란 바위 뒤. \\\"여기 있지? 찾았…다? 아니네!\\\" 유하가 털썩 앉아요.\",\"en\":\"Now Yuha looked by a big stone. \\\"Not here!\\\" said Yuha, and he sat down.\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 10 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: near the rock. ARCHITECTURE LOCK: the approved place sheet and its first canonical scene fix this place's buildings, doors, windows, paths and their positions; change only the camera and the light. Never add an entrance, bridge, tower, staircase or any structure the place references or the story did not establish, and never move a building in from another place. Relight the same geometry for morning. Earlier pages: [{\"pageNo\":9,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi run together through the forest, hopping along.\",\"emotion\":\"joyful\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"grass\"],\"index\":8,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":5}},{\"pageNo\":10,\"samePlace\":true,\"textKo\":\"유하가 멈춰요. 콩이도 멈춰요. 딱!\",\"textEn\":\"Yuha stopped. Kongi stopped too. Stop!\",\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi stop suddenly, standing still side by side.\",\"emotion\":\"alert\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"grass\"],\"index\":9,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":6}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": null,
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "background layout: 초록빛 숲"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (medium) at SAME place, page 10; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 9
+        }
+      ],
+      "requestedSeed": 248559924,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        12
+      ]
+    },
+    {
+      "entry": 12,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 2,
+      "who": [
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "wide",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-712e2846-447a-4ade-9558-899d3dfcbf6e",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on Mom biting lip. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha thinks deeply, looking around in different directions. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. gentle, well-lit close-up shot; Mom on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the right 45% of the picture's width as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Mom (mom): 다정한 눈, 갈색 단발머리, 살구색 원피스. This page's drawable verb: hold. Actual event: Mom bites her lip, wanting to tell Yuha something but holding back.. Current page narrative: {\"ko\":\"엄마는 말해 주고 싶어서 입이 근질근질해요. 그래도 꾹 참고 물어요. \\\"유하야, 아직 안 본 데가 어디일까?\\\"\",\"en\":\"Mom wanted to tell him so much. But she just asked, \\\"Yuha, where did you not look?\\\"\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 11 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":10,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi stop suddenly, standing still side by side.\",\"emotion\":\"alert\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"grass\"],\"index\":9,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":6}},{\"pageNo\":11,\"samePlace\":true,\"textKo\":\"이번엔 커다란 바위 뒤. \\\"여기 있지? 찾았…다? 아니네!\\\" 유하가 털썩 앉아요.\",\"textEn\":\"Now Yuha looked by a big stone. \\\"Not here!\\\" said Yuha, and he sat down.\",\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha looks behind a big rock and then sits down, disappointed.\",\"emotion\":\"disappointed\",\"timeOfDay\":\"morning\",\"props\":[\"big rock\",\"grass\",\"leaves\"],\"index\":10,\"setting\":\"forest\",\"object\":\"big rock\",\"beatIndex\":6}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the right 45% of the picture's width as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Mom original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Mom original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Mom original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (closeup) at SAME place, page 7; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 6
+        }
+      ],
+      "requestedSeed": 248559925,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        13
+      ]
+    },
+    {
+      "entry": 13,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "medium",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-dd2f3808-b36f-42b1-8c0f-e58546426d09",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on Mom biting lip. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Mom bites her lip, wanting to tell Yuha something but holding back. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. gentle, well-lit close-up shot; Yuha on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up. TEXT FIELD: leave the right 42% of the picture's width as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n\nTime and light: morning, soft neutral light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. This page's drawable verb: Yuha thinks deeply, looking around in different directions.. Actual event: Yuha thinks deeply, looking around in different directions.. Current page narrative: {\"ko\":\"유하가 생각해요. 앞도 보고 옆도 봤어요. 위도 봤는데…\",\"en\":\"Yuha had a think. He looked this way and that way. He looked up too, but…\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 12 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":11,\"samePlace\":true,\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha looks behind a big rock and then sits down, disappointed.\",\"emotion\":\"disappointed\",\"timeOfDay\":\"morning\",\"props\":[\"big rock\",\"grass\",\"leaves\"],\"index\":10,\"setting\":\"forest\",\"object\":\"big rock\",\"beatIndex\":6}},{\"pageNo\":12,\"samePlace\":true,\"textKo\":\"엄마는 말해 주고 싶어서 입이 근질근질해요. 그래도 꾹 참고 물어요. \\\"유하야, 아직 안 본 데가 어디일까?\\\"\",\"textEn\":\"Mom wanted to tell him so much. But she just asked, \\\"Yuha, where did you not look?\\\"\",\"scene\":{\"who\":[\"mom\"],\"where\":\"forest\",\"action\":\"Mom bites her lip, wanting to tell Yuha something but holding back.\",\"emotion\":\"anxious\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"flowers\"],\"index\":11,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":7}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": "TEXT FIELD: leave the right 42% of the picture's width as one flat, even field of a single quiet colour from the style palette with nothing drawn in it — no details, no gradients, no figures, no texture; the words of this page will be printed there. Keep the figures and the action in the rest of the picture.\n",
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (closeup) at SAME place, page 12; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 11
+        }
+      ],
+      "requestedSeed": 248559926,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        14
+      ]
+    },
+    {
+      "entry": 14,
+      "kind": "page",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4"
+      ],
+      "where": "forest",
+      "shot": "closeup",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-5ec293bd-51b0-423a-9966-3b95d9149d44",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): there are almost no words here, so this picture tells the moment; close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on noses touching. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Kongi wags tail while Mom laughs and Yuha steps and looks back quickly at the yellow gate. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. gentle, well-lit close-up shot; Yuha on the left side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the left page of a two-page opening; keep faces and hands a tenth of the width away from the right (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.\n\nTime and light: morning, clear gentle contrast, slightly cooler light; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: touch. Actual event: Yuha and Kongi's noses touch suddenly with a 'bop!'. Current page narrative: {\"ko\":\"휙! 코랑 코가 콩! \\\"찾았다!\\\"\",\"en\":\"Whoosh! Nose and nose went bop! \\\"Found you!\\\"\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. CAMERA VARIETY: this is page 13 in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"초록빛 숲\",\"description\":\"둥근 나무, 작은 꽃, 햇살 드는 숲길\"}. View within this same place: within the established location. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":12,\"samePlace\":true,\"scene\":{\"who\":[\"mom\"],\"where\":\"forest\",\"action\":\"Mom bites her lip, wanting to tell Yuha something but holding back.\",\"emotion\":\"anxious\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"flowers\"],\"index\":11,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":7}},{\"pageNo\":13,\"samePlace\":true,\"textKo\":\"유하가 생각해요. 앞도 보고 옆도 봤어요. 위도 봤는데…\",\"textEn\":\"Yuha had a think. He looked this way and that way. He looked up too, but…\",\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha thinks deeply, looking around in different directions.\",\"emotion\":\"thoughtful\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"sky\"],\"index\":12,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":7}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": null,
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        },
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 2; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 1
+        },
+        {
+          "role": "background",
+          "label": "Recent scene from the SAME camera (closeup) at SAME place, page 13; architecture/layout only — the closest layout reference for this page: keep what it shows where it shows it, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 12
+        }
+      ],
+      "requestedSeed": 248559927,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        15
+      ]
+    },
+    {
+      "entry": 15,
+      "kind": "page",
+      "koSentences": 5,
+      "enSentences": 6,
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4",
+        "mom"
+      ],
+      "where": "home",
+      "shot": "wide",
+      "effectiveCamera": "gentle, well-lit close-up shot",
+      "hasImage": true,
+      "imageAssetId": "image-0b20bb21-cd2d-4461-a988-2c2eaf55a3da",
+      "prompt": "COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): gentle, well-lit close-up shot. PICTURE PLAN (decided with the story): there are almost no words here, so this picture tells the moment; close view: faces and hands fill the picture (gentle, well lit); lots of quiet empty space around the figures; the eye lands on noses touching. Keep it within the actual event above. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. FACING PAGE (the other page of this opening) shows: Yuha and Kongi's noses touch suddenly with a 'bop!'. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. gentle, well-lit close-up shot; Yuha on the right side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the right page of a two-page opening; keep faces and hands a tenth of the width away from the left (binding) edge. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.\n\nTime and light: morning, gentle warm light and soft highlights; use only the approved preset palette; no new colors or frightening darkness. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.\n\nCharacters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; Mom (mom): 다정한 눈, 갈색 단발머리, 살구색 원피스; Kongi (character-5024d787-0765-4e9e-8c23-e53987b5c3f4): About Yuha's height; caramel-brown body with cream spots; a big fluffy white tail that always sticks up.. This page's drawable verb: step. Actual event: Kongi wags tail while Mom laughs and Yuha steps and looks back quickly at the yellow gate.. Current page narrative: {\"ko\":\"콩이가 꼬리를 파르르 떨어요. \\\"쉿, 나 지금 없어.\\\" 이번엔 엄마도 하하하 웃어요. 다음 날, 노란 대문이 열려요. 유하는 한 걸음 걷고, 휙 뒤를 돌아봐요.\",\"en\":\"Kongi's tail went wag, wag. \\\"Shh, I am not here.\\\" This time Mom laughed too. Ha, ha, ha! The next day, the yellow gate came open. Yuha went one step and looked back fast!\"}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. Show only selected characters required by this event, each character once. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium. Draw ONLY the single moment in Actual event; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.\n\nProps and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character. DAYTIME SKY: it is daytime; no moon and no stars in the sky.\n\nLocation: {\"name\":\"유하네 집\",\"description\":\"큰 창문, 노란 대문, 포근한 이불\"}. View within this same place: near the gate. This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for morning. Earlier pages: [{\"pageNo\":13,\"samePlace\":false,\"scene\":{\"who\":[\"yuha\"],\"where\":\"forest\",\"action\":\"Yuha thinks deeply, looking around in different directions.\",\"emotion\":\"thoughtful\",\"timeOfDay\":\"morning\",\"props\":[\"trees\",\"sky\"],\"index\":12,\"setting\":\"forest\",\"object\":\"trees\",\"beatIndex\":7}},{\"pageNo\":14,\"samePlace\":false,\"textKo\":\"휙! 코랑 코가 콩! \\\"찾았다!\\\"\",\"textEn\":\"Whoosh! Nose and nose went bop! \\\"Found you!\\\"\",\"scene\":{\"who\":[\"yuha\",\"character-5024d787-0765-4e9e-8c23-e53987b5c3f4\"],\"where\":\"forest\",\"action\":\"Yuha and Kongi's noses touch suddenly with a 'bop!'\",\"emotion\":\"surprised\",\"timeOfDay\":\"morning\",\"props\":[\"grass\",\"flowers\"],\"index\":13,\"setting\":\"forest\",\"object\":\"grass\",\"beatIndex\":8}}]. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.",
+      "compositionFirst": true,
+      "textField": null,
+      "locationNone": false,
+      "fronts": [
+        {
+          "label": "Yuha original face and identity"
+        },
+        {
+          "label": "Mom original face and identity"
+        },
+        {
+          "label": "Kongi original face and identity"
+        }
+      ],
+      "referenceImages": [
+        {
+          "role": "character_front",
+          "label": "Yuha original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Mom original face and identity"
+        },
+        {
+          "role": "character_front",
+          "label": "Kongi original face and identity"
+        },
+        {
+          "role": "character_full",
+          "label": "Yuha original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Mom original full body and clothes"
+        },
+        {
+          "role": "character_full",
+          "label": "Kongi original full body and clothes"
+        },
+        {
+          "role": "style_sheet",
+          "label": "authoritative rendering style 1"
+        },
+        {
+          "role": "background",
+          "label": "CANONICAL first scene at SAME place, page 1; architecture/layout only, do not copy cast, pose or temporary props",
+          "sourcePageIndex": 0
+        }
+      ],
+      "requestedSeed": 248559928,
+      "returnedSeed": null,
+      "model": "gpt-image-2",
+      "costUsd": null,
+      "costUsdEstimated": 0.17,
+      "printedPages": [
+        16
+      ]
+    }
+  ]
+}

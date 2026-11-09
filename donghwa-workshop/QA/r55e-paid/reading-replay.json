@@ -1,0 +1,435 @@
+{
+  "passed": false,
+  "checks": [
+    {
+      "id": "duplicate_pages",
+      "label": "중복 쪽",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "id": "repeated_suffix",
+      "label": "꼬리말 반복",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "id": "beat_mapping",
+      "label": "비트 누락·순서",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "id": "refrain",
+      "label": "후렴 횟수·위치",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "id": "level",
+      "label": "읽기 수준 범위",
+      "passed": false,
+      "violations": [
+        {
+          "type": "level",
+          "kind": "page",
+          "pageNo": 15,
+          "language": "en",
+          "message": "영어 낱쪽 문장 6개 (권장 1~2 · 1~4개를 벗어나면 고쳐 써요)"
+        }
+      ]
+    },
+    {
+      "id": "drawable_scene",
+      "label": "그릴 수 있는 장면",
+      "passed": true,
+      "violations": []
+    },
+    {
+      "id": "moral_tail",
+      "label": "교훈 꼬리말",
+      "passed": true,
+      "violations": []
+    }
+  ],
+  "warnings": [
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.4,
+      "max": 0.15,
+      "words": [
+        "gate",
+        "yuha",
+        "back",
+        "step"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 1,
+      "message": "영어 등급 외 어휘 40% · 참고 (목록 밖: gate, yuha, back, step)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.23809523809523808,
+      "max": 0.15,
+      "words": [
+        "deer",
+        "kongi",
+        "green",
+        "shh"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 2,
+      "message": "영어 등급 외 어휘 23.8% · 참고 (목록 밖: deer, kongi, green, shh)"
+    },
+    {
+      "code": "unit-length-note",
+      "language": "en",
+      "severity": "warning",
+      "advisory": true,
+      "unit": "page",
+      "offSentences": 1,
+      "mean": 7,
+      "sentenceCount": 3,
+      "expected": {
+        "min": 1,
+        "max": 2
+      },
+      "pageNo": 2,
+      "message": "영어 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 7단어 · 문장 3개(권장 1~2)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.35714285714285715,
+      "max": 0.15,
+      "words": [
+        "yuha",
+        "yet",
+        "mom",
+        "kongi"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 4,
+      "message": "영어 등급 외 어휘 35.7% · 참고 (목록 밖: yuha, yet, mom, kongi)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.4375,
+      "max": 0.15,
+      "words": [
+        "yuha",
+        "low",
+        "kongi",
+        "right",
+        "back"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 6,
+      "message": "영어 등급 외 어휘 43.8% · 참고 (목록 밖: yuha, low, kongi, right, back)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.3125,
+      "max": 0.15,
+      "words": [
+        "mom",
+        "shut",
+        "hmm",
+        "cheeks",
+        "pfft"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 7,
+      "message": "영어 등급 외 어휘 31.3% · 참고 (목록 밖: mom, shut, hmm, cheeks, pfft)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.25,
+      "max": 0.15,
+      "words": [
+        "yuha",
+        "kongi"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 9,
+      "message": "영어 등급 외 어휘 25% · 참고 (목록 밖: yuha, kongi)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.3333333333333333,
+      "max": 0.15,
+      "words": [
+        "yuha",
+        "kongi"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 10,
+      "message": "영어 등급 외 어휘 33.3% · 참고 (목록 밖: yuha, kongi)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.23529411764705882,
+      "max": 0.15,
+      "words": [
+        "mom",
+        "tell",
+        "much",
+        "yuha"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 12,
+      "message": "영어 등급 외 어휘 23.5% · 참고 (목록 밖: mom, tell, much, yuha)"
+    },
+    {
+      "code": "unit-length-note",
+      "language": "en",
+      "severity": "warning",
+      "advisory": true,
+      "unit": "page",
+      "offSentences": 1,
+      "mean": 8.5,
+      "sentenceCount": 2,
+      "expected": {
+        "min": 1,
+        "max": 2
+      },
+      "pageNo": 12,
+      "message": "영어 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 8.5단어 · 문장 2개(권장 1~2)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.375,
+      "max": 0.15,
+      "words": [
+        "whoosh",
+        "nose"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 14,
+      "message": "영어 등급 외 어휘 37.5% · 참고 (목록 밖: whoosh, nose)"
+    },
+    {
+      "code": "out-of-vocabulary",
+      "language": "en",
+      "actual": 0.38235294117647056,
+      "max": 0.15,
+      "words": [
+        "kongi's",
+        "shh",
+        "mom",
+        "laughed",
+        "ha",
+        "next",
+        "gate",
+        "yuha",
+        "step",
+        "back",
+        "fast"
+      ],
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 15,
+      "message": "영어 등급 외 어휘 38.2% · 참고 (목록 밖: kongi's, shh, mom, laughed, ha, next, gate, yuha …)"
+    },
+    {
+      "type": "level",
+      "code": "book-sentence-total",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 11,
+      "language": "ko",
+      "message": "한글 책 전체 문장 51개가 목표 6~26개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 1개)."
+    },
+    {
+      "type": "level",
+      "code": "book-sentence-total",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 15,
+      "language": "ko",
+      "message": "한글 책 전체 문장 51개가 목표 6~26개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 1개)."
+    },
+    {
+      "type": "level",
+      "code": "book-sentence-total",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 15,
+      "language": "en",
+      "message": "영어 책 전체 문장 47개가 목표 6~24개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 6개, 보통 1개)."
+    },
+    {
+      "type": "level",
+      "code": "book-sentence-total",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 5,
+      "language": "en",
+      "message": "영어 책 전체 문장 47개가 목표 6~24개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 1개)."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 1,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 2,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 4,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 5,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 6,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 7,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 8,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 9,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 10,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 11,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 12,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 13,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 14,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "level",
+      "code": "book-new-words",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 15,
+      "language": "en",
+      "message": "영어 책 전체 새 단어 25개가 허용 10개를 넘었어요."
+    },
+    {
+      "type": "drawable_scene",
+      "code": "no-drawable-verb",
+      "severity": "warning",
+      "advisory": true,
+      "pageNo": 3,
+      "message": "장면에 그릴 수 있는 동작이 없어요. 동작·위치·소품을 써 주세요."
+    }
+  ],
+  "violations": [
+    {
+      "type": "level",
+      "kind": "page",
+      "pageNo": 15,
+      "language": "en",
+      "message": "영어 낱쪽 문장 6개 (권장 1~2 · 1~4개를 벗어나면 고쳐 써요)"
+    }
+  ],
+  "failedPageNos": [
+    15
+  ],
+  "needsRepagination": false
+}

@@ -1,0 +1,456 @@
+{
+  "started": "2026-11-09T09:53:05.282Z",
+  "finished": "2026-11-09T10:27:27.026Z",
+  "providerCalls": [
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:53:14.310Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T09:55:15.271Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:55:21.079Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:55:21.080Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:55:21.080Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T09:55:45.038Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:55:52.120Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:56:07.394Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-09T09:56:24.876Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T09:56:40.366Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T09:56:54.468Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T09:58:01.612Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T09:59:13.973Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:00:21.480Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:01:49.795Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:03:25.031Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:04:50.358Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:06:18.873Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:07:47.986Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:09:21.982Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:10:55.929Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:12:25.844Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:13:22.738Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:14:56.453Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:16:32.100Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:18:13.083Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:19:59.741Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:21:26.084Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:22:44.781Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:24:15.383Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-09T10:25:44.357Z"
+    }
+  ],
+  "stages": [
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "줄거리 만들기",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:53:14.549Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "council-review",
+      "phase": "기획 회의 결과 확인 · 피치를 고르거나 방향을 고쳐 주세요",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:55:20.924Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "작가실 · 초고 쓰기",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:55:23.313Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "작가실 · 쪽과 그림 읽기",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:56:41.539Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "text-review",
+      "phase": "글 완성 · 쪽 검수",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:56:51.569Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "유하 캐릭터 시트 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:56:54.242Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "엄마 캐릭터 시트 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:58:02.580Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "콩이 캐릭터 시트 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T09:59:13.075Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "유하네 집 고정 배경 시트 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T10:00:21.407Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "초록빛 숲 고정 배경 시트 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T10:01:49.826Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 1 / 15장 · 펼침 1 · 1쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-09T10:03:24.294Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 2 / 15장 · 펼침 1 · 2쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 1,
+      "cover": false,
+      "at": "2026-11-09T10:04:48.725Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 3 / 15장 · 펼침 2 · 3쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 2,
+      "cover": false,
+      "at": "2026-11-09T10:06:17.659Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 4 / 15장 · 펼침 2 · 4쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 3,
+      "cover": false,
+      "at": "2026-11-09T10:07:46.150Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 5 / 15장 · 펼침 3 · 5쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 4,
+      "cover": false,
+      "at": "2026-11-09T10:09:20.689Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 6 / 15장 · 펼침 3 · 6쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 5,
+      "cover": false,
+      "at": "2026-11-09T10:10:55.212Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 7 / 15장 · 펼침 4 · 7–8쪽 펼침면 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 6,
+      "cover": false,
+      "at": "2026-11-09T10:12:25.863Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 8 / 15장 · 펼침 5 · 9쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 7,
+      "cover": false,
+      "at": "2026-11-09T10:13:22.747Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 9 / 15장 · 펼침 5 · 10쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 8,
+      "cover": false,
+      "at": "2026-11-09T10:14:55.249Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 10 / 15장 · 펼침 6 · 11쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 9,
+      "cover": false,
+      "at": "2026-11-09T10:16:32.112Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 11 / 15장 · 펼침 6 · 12쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 10,
+      "cover": false,
+      "at": "2026-11-09T10:18:13.098Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 12 / 15장 · 펼침 7 · 13쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 11,
+      "cover": false,
+      "at": "2026-11-09T10:19:59.754Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 13 / 15장 · 펼침 7 · 14쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 12,
+      "cover": false,
+      "at": "2026-11-09T10:21:26.284Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 14 / 15장 · 펼침 8 · 15쪽(왼쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 13,
+      "cover": false,
+      "at": "2026-11-09T10:22:44.816Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "그림 15 / 15장 · 펼침 8 · 16쪽(오른쪽) 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 14,
+      "cover": false,
+      "at": "2026-11-09T10:24:15.395Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "running",
+      "phase": "표지 그림 만들기",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 15,
+      "cover": false,
+      "at": "2026-11-09T10:25:43.941Z"
+    },
+    {
+      "id": "auto-cab8c5c0-25a8-4c89-acfd-6e85f4c2fc41",
+      "status": "review",
+      "phase": "완성 초안 · 부모 검토",
+      "error": null,
+      "book": true,
+      "pages": 15,
+      "done": 15,
+      "cover": true,
+      "at": "2026-11-09T10:27:08.432Z"
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+{
+  "source": "one paid R55e Opus K2/E2 book, no new API calls",
+  "cap": 5,
+  "fitResult": {
+    "pages": [
+      {
+        "pageNo": 1,
+        "ko": "노란 대문이 열리면, 유하는 앞만 보고 걸어요. 척, 척, 척.",
+        "en": "The yellow gate came open. Yuha walked and did not look back. Step, step, step."
+      },
+      {
+        "pageNo": 2,
+        "ko": "초록빛 숲에는 아기 사슴 콩이가 살아요. 콩이는 숨기 대장이에요. \"쉿, 나 지금 없어.\"",
+        "en": "A little deer called Kongi lived in the green woods. Kongi was so good at hiding. \"Shh, I am not here.\""
+      },
+      {
+        "ko": "그런데 작은 꽃 뒤로 하얀 꼬리가 뿅! 너는 봤지? 유하는 아직 못 봤어요.",
+        "en": "But pop! A white tail came up by a little flower. Did you see it?"
+      },
+      {
+        "ko": "\"엄마, 콩이 어디 숨었어? 내가 꼭 찾을 거야!\"",
+        "en": "Yuha did not see it yet. \"Mom, where is Kongi? I will find Kongi!\""
+      },
+      {
+        "pageNo": 5,
+        "ko": "둥근 나무 뒤를 쏙. \"여기 있지? 찾았…다? 아니네!\"",
+        "en": "Yuha looked by a round tree. \"Here? Found you? No!\""
+      },
+      {
+        "pageNo": 6,
+        "ko": "유하가 허리를 숙여요. \"콩이 어디 있지?\" 콩이도 허리를 숙여요. 바로 유하 뒤에서.",
+        "en": "Yuha got down low. \"Where is Kongi?\" Kongi got down low too, right at his back."
+      },
+      {
+        "pageNo": 7,
+        "ko": "엄마가 입을 꾹 다물어요. \"음… 엄마는 아무것도 못 봤어.\" 어깨가 들썩들썩, 볼이 빵빵. 푸흡!",
+        "en": "Mom shut her lips. \"Hmm, I did not see a thing.\" Her cheeks got big. Pfft!",
+        "spread": true
+      },
+      {
+        "pageNo": 8,
+        "ko": "이번엔 작은 꽃 뒤. 쏙! …아니네!",
+        "en": "Now Yuha looked by a little flower. No!"
+      },
+      {
+        "pageNo": 9,
+        "ko": "유하가 뛰어요. 콩이도 뛰어요. 쫄랑쫄랑, 쫄랑쫄랑.",
+        "en": "Yuha ran. Kongi ran too. Hop, hop, hop."
+      },
+      {
+        "pageNo": 10,
+        "ko": "유하가 멈춰요. 콩이도 멈춰요. 딱!",
+        "en": "Yuha stopped. Kongi stopped too. Stop!"
+      },
+      {
+        "pageNo": 11,
+        "ko": "이번엔 커다란 바위 뒤. \"여기 있지? 찾았…다? 아니네!\" 유하가 털썩 앉아요.",
+        "en": "Now Yuha looked by a big stone. \"Not here!\" said Yuha, and he sat down."
+      },
+      {
+        "pageNo": 12,
+        "ko": "엄마는 말해 주고 싶어서 입이 근질근질해요. 그래도 꾹 참고 물어요. \"유하야, 아직 안 본 데가 어디일까?\"",
+        "en": "Mom wanted to tell him so much. But she just asked, \"Yuha, where did you not look?\""
+      },
+      {
+        "pageNo": 13,
+        "ko": "유하가 생각해요. 앞도 보고 옆도 봤어요. 위도 봤는데…",
+        "en": "Yuha had a think. He looked this way and that way. He looked up too, but…"
+      },
+      {
+        "pageNo": 14,
+        "ko": "휙! 코랑 코가 콩! \"찾았다!\"",
+        "en": "Whoosh! Nose and nose went bop! \"Found you!\""
+      },
+      {
+        "ko": "콩이가 꼬리를 파르르 떨어요. \"쉿, 나 지금 없어.\" 이번엔 엄마도 하하하 웃어요. 다음 날, 노란 대문이 열려요. 유하는 한 걸음 걷고, 휙 뒤를 돌아봐요.",
+        "en": "Kongi's tail went wag, wag. \"Shh, I am not here.\" This time Mom laughed too. Ha, ha, ha! The next day, the yellow gate came open. Yuha went one step and looked back fast!"
+      }
+    ],
+    "fitted": true,
+    "marks": 1,
+    "moved": 1
+  },
+  "before": [
+    {
+      "entry": 1,
+      "ko": 2,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 2,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 3,
+      "ko": 3,
+      "en": 4,
+      "spread": false
+    },
+    {
+      "entry": 4,
+      "ko": 2,
+      "en": 2,
+      "spread": false
+    },
+    {
+      "entry": 5,
+      "ko": 4,
+      "en": 4,
+      "spread": true
+    },
+    {
+      "entry": 6,
+      "ko": 4,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 7,
+      "ko": 4,
+      "en": 4,
+      "spread": true
+    },
+    {
+      "entry": 8,
+      "ko": 3,
+      "en": 2,
+      "spread": false
+    },
+    {
+      "entry": 9,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 10,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 11,
+      "ko": 5,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 12,
+      "ko": 3,
+      "en": 2,
+      "spread": false
+    },
+    {
+      "entry": 13,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 14,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 15,
+      "ko": 3,
+      "en": 4,
+      "spread": false
+    },
+    {
+      "entry": 16,
+      "ko": 2,
+      "en": 2,
+      "spread": false
+    }
+  ],
+  "after": [
+    {
+      "entry": 1,
+      "ko": 2,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 2,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 3,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 4,
+      "ko": 2,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 5,
+      "ko": 4,
+      "en": 4,
+      "spread": false
+    },
+    {
+      "entry": 6,
+      "ko": 4,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 7,
+      "ko": 4,
+      "en": 4,
+      "spread": true
+    },
+    {
+      "entry": 8,
+      "ko": 3,
+      "en": 2,
+      "spread": false
+    },
+    {
+      "entry": 9,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 10,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 11,
+      "ko": 5,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 12,
+      "ko": 3,
+      "en": 2,
+      "spread": false
+    },
+    {
+      "entry": 13,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 14,
+      "ko": 3,
+      "en": 3,
+      "spread": false
+    },
+    {
+      "entry": 15,
+      "ko": 5,
+      "en": 6,
+      "spread": false
+    }
+  ],
+  "sourceLastTwo": [
+    {
+      "pageNo": 15,
+      "ko": "콩이가 꼬리를 파르르 떨어요. \"쉿, 나 지금 없어.\" 이번엔 엄마도 하하하 웃어요.",
+      "en": "Kongi's tail went wag, wag. \"Shh, I am not here.\" This time Mom laughed too. Ha, ha, ha!"
+    },
+    {
+      "pageNo": 16,
+      "ko": "다음 날, 노란 대문이 열려요. 유하는 한 걸음 걷고, 휙 뒤를 돌아봐요.",
+      "en": "The next day, the yellow gate came open. Yuha went one step and looked back fast!"
+    }
+  ],
+  "actualLastPage": {
+    "pageNo": 15,
+    "beatIndex": 8,
+    "textKo": "콩이가 꼬리를 파르르 떨어요. \"쉿, 나 지금 없어.\" 이번엔 엄마도 하하하 웃어요. 다음 날, 노란 대문이 열려요. 유하는 한 걸음 걷고, 휙 뒤를 돌아봐요.",
+    "textEn": "Kongi's tail went wag, wag. \"Shh, I am not here.\" This time Mom laughed too. Ha, ha, ha! The next day, the yellow gate came open. Yuha went one step and looked back fast!",
+    "scene": {
+      "who": [
+        "yuha",
+        "character-5024d787-0765-4e9e-8c23-e53987b5c3f4",
+        "mom"
+      ],
+      "where": "home",
+      "action": "Kongi wags tail while Mom laughs and Yuha steps and looks back quickly at the yellow gate.",
+      "emotion": "happy",
+      "timeOfDay": "morning",
+      "props": [
+        "yellow gate",
+        "tail",
+        "flowers"
+      ],
+      "index": 14,
+      "setting": "home",
+      "object": "yellow gate",
+      "beatIndex": 8
+    },
+    "variantByCharacter": {},
+    "isRefrainPage": false,
+    "kind": "page",
+    "side": "right",
+    "openingNo": 8,
+    "entryId": "b8-right",
+    "cue": null,
+    "staging": {
+      "shot": "wide",
+      "characterSide": "right",
+      "textSide": "left",
+      "lightMood": "gentle warm light and soft highlights; use only the approved preset palette; no new colors or frightening darkness",
+      "subLocation": "near the gate",
+      "verb": "step",
+      "seed": 248559928
+    },
+    "ko": "콩이가 꼬리를 파르르 떨어요. \"쉿, 나 지금 없어.\" 이번엔 엄마도 하하하 웃어요. 다음 날, 노란 대문이 열려요. 유하는 한 걸음 걷고, 휙 뒤를 돌아봐요.",
+    "en": "Kongi's tail went wag, wag. \"Shh, I am not here.\" This time Mom laughed too. Ha, ha, ha! The next day, the yellow gate came open. Yuha went one step and looked back fast!",
+    "artVariant": 0
+  },
+  "koPreserved": true,
+  "enPreserved": true,
+  "freeReplayedEnglishSix": true
+}

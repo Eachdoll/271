@@ -1,0 +1,163 @@
+{
+  "pages": 10,
+  "blankPdfPages": [],
+  "rows": [
+    {
+      "entry": 1,
+      "printedPages": [
+        1
+      ],
+      "pdfPage": 2,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 2,
+      "printedPages": [
+        2
+      ],
+      "pdfPage": 2,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 3,
+      "printedPages": [
+        3
+      ],
+      "pdfPage": 3,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 4,
+      "printedPages": [
+        4
+      ],
+      "pdfPage": 3,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 5,
+      "printedPages": [
+        5
+      ],
+      "pdfPage": 4,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 6,
+      "printedPages": [
+        6
+      ],
+      "pdfPage": 4,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 7,
+      "printedPages": [
+        7,
+        8
+      ],
+      "pdfPage": 5,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 8,
+      "printedPages": [
+        9
+      ],
+      "pdfPage": 6,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 9,
+      "printedPages": [
+        10
+      ],
+      "pdfPage": 6,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 10,
+      "printedPages": [
+        11
+      ],
+      "pdfPage": 7,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 11,
+      "printedPages": [
+        12
+      ],
+      "pdfPage": 7,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 12,
+      "printedPages": [
+        13
+      ],
+      "pdfPage": 8,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 13,
+      "printedPages": [
+        14
+      ],
+      "pdfPage": 8,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 14,
+      "printedPages": [
+        15
+      ],
+      "pdfPage": 9,
+      "koPresent": true,
+      "enPresent": true
+    },
+    {
+      "entry": 15,
+      "printedPages": [
+        16
+      ],
+      "pdfPage": 9,
+      "koPresent": true,
+      "enPresent": true
+    }
+  ],
+  "allTextPresent": true,
+  "files": {
+    "r55e-feedback.html": {
+      "bytes": 756928,
+      "sha256": "572b63b571f8da6c0517c69fa0736c841769d1aa2a2a0ba6a5888de6d8ed14e9"
+    },
+    "r55e-original.pdf": {
+      "bytes": 61318238,
+      "sha256": "ec719265cebada336b502105ea05e25f639897985ee6fa94047c5e976ed3d107"
+    },
+    "r55e-original.html": {
+      "bytes": 74152742,
+      "sha256": "aa9bc8473b74eb6102f84eef8bccd026a649eb520885e3038224cdb0837570e8"
+    },
+    "r55e-feedback.pdf": {
+      "bytes": 821983,
+      "sha256": "bc2607cde9da6429c5113db149067af25c4da8eea17c70b3cfdf9b08b0d663cc"
+    }
+  },
+  "pdfReductionPercent": 98.65948039798535,
+  "htmlReductionPercent": 98.97923127374035
+}
