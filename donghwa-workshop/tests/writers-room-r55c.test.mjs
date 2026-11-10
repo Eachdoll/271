@@ -72,7 +72,7 @@ test('R55c the reading asks for the picture of every page (picture-led drafts on
   const input = roomInput('c4');
   const outline = {...W.roomOutline(input, record), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: record.pitches, premises: [PREMISE]}};
   const req = W.extractRequest(input, outline, [page(1)]);
-  assert.deepEqual(req.jsonSchema.properties.pages.items.required, ['pageNo', 'who', 'where', 'action', 'emotion', 'timeOfDay', 'props', 'shot', 'space', 'carrier', 'focus', 'backdrop', 'pocket', 'hidden', 'holdBack']);
+  assert.deepEqual(req.jsonSchema.properties.pages.items.required, ['pageNo', 'who', 'where', 'action', 'emotion', 'timeOfDay', 'props', 'shot', 'space', 'carrier', 'focus', 'backdrop', 'pocket', 'hidden', 'holdBack', 'lettering', 'letteringOn']);
   assert.match(req.system, /shot \(wide = small figures in a big world; middle; close = faces and hands fill the frame/);
   assert.match(req.system, /pocket \(where the printed words sit on the picture/);
   assert.doesNotMatch(req.system, /beatIndex|\[beats\]/);

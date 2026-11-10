@@ -403,7 +403,7 @@ function compareReport(results) {
   row("복선 점검 · 거둔 것 / 놓기만 한 것 / 앞에 없이 나온 것", (r) => (r.draft?.room?.threads ? `${r.draft.room.threads.kept.length} / ${r.draft.room.threads.loose.length} / ${r.draft.room.threads.unplanted.length}` : "-"));
   row("펼침 표시 맞춤", (r) => (r.spreadFit ? `표시 ${r.spreadFit.marks} · ${r.spreadFit.fitted ? "맞음" : "못 맞춤"}` : "-"));
   row("짜임 실측 · 되돌아온 것 / 한 쪽만 나온 인물 / 그림 메모", (r) => (r.roomWeave ? `${r.roomWeave.returning.length}개${r.roomWeave.returning.length ? ` (${r.roomWeave.returning.map((x) => `${x.prop} ${x.from}→${x.to}`).join(", ")})` : ""} / ${r.roomWeave.single.length}명 / ${r.roomWeave.artNotes}쪽` : "-"));
-  row("그림 읽기 · 주인공이 못 보는 것 / 다음 쪽까지 감출 것", (r) => (r.pictureReading ? `${r.pictureReading.hidden}쪽 / ${r.pictureReading.holdBack}쪽` : "-"));
+  row("그림 읽기 · 못 보는 것 / 다음 쪽까지 감출 것 / 물건의 글자", (r) => (r.pictureReading ? `${r.pictureReading.hidden}쪽 / ${r.pictureReading.holdBack}쪽 / ${r.pictureReading.lettering ?? 0}쪽` : "-"));
   row("등급 참고 (다듬기 전 → 후)", (r) => (r.draft?.room ? `${(r.draft.room.levelNotes || []).length} → ${(r.draft.room.levelNotesAfter || []).length}` : "-"));
   row("최종 항목(펼침면)", (r) => (r.measured ? `${r.measured.totals.pages} (${r.measured.totals.spreads})` : "-"));
   row("한글 문장 / 어절 / 문장당", (r) => (r.measured ? `${r.measured.totals.sentences} / ${r.measured.totals.eojeol} / ${r.measured.totals.averageEojeol}` : "-"));

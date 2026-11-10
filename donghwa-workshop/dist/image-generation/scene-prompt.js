@@ -8,7 +8,7 @@ import { pictureCarriesPage } from "../page-rhythm.js";
 import { craftPictureRules } from "../story-generation/craft-rules.js";
 import { biblePictureRules } from "../story-generation/council.js";
 import { genderWord } from "./identity.js";
-import { planOf, picturePlanPictureLine, picturePlanText } from "../story-generation/picture-plan.js";
+import { planOf, picturePlanPictureLine, picturePlanText, planLettering } from "../story-generation/picture-plan.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
@@ -230,13 +230,16 @@ export function buildScenePrompt({
     : plot
     ? `LOCKED EVENT AND STATE LEDGER (scope: entire beat, not every page): ${json(plot)}. Draw ONLY the moment narrated on this page. Use earlier page consequences and the current narrative to determine which intermediate state applies. Do not jump to the beat's final result early, duplicate the whole beat, reintroduce a discarded prop, change its owner, or invent a new solution/structure. Approved setup/payoff references explain continuity; they are not visible text.`
     : "";
+  // R58: a page whose plan names one piece of lettering keeps the ban on every other word.
+  const NO_WORDS = "No words, captions, watermark or logos.";
+  const placed = !cover && planLettering(planned) ? location.replace(NO_WORDS, "No words, captions, watermark or logos other than the one piece of lettering named in the picture plan.") : location;
   return [
     composition,
     lighting,
     atmosphere,
     character,
     detail,
-    location,
+    placed,
     continuity,
   ]
     .filter(Boolean)

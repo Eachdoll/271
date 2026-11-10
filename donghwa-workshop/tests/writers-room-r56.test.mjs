@@ -49,7 +49,7 @@ test('R56 stage 3 — the treatment: prose and a short plant-and-pay-off memo, o
   const req = W.treatmentRequest(input, PREMISE, {castNotes: NOTES, ties: TIES}, 1, 3);
   assert.match(req.system, /흐름을 반 쪽짜리 줄글로 적어 봐요\(flow\)/);
   assert.match(req.system, /쪽 번호도 비트도 없어요\./);
-  assert.match(req.system, /글이 아니라 그림에만 놓아도 돼요\. 그림에는 글자와 숫자를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요\./, 'R56a: the paid run planted numerals in the corners of seven pictures');
+  assert.match(req.system, /글이 아니라 그림에만 놓아도 돼요\. 그림에는 설명하는 글자나 숫자\(자막, 귀퉁이의 표시\)를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요\. 물건에 원래 적혀 있는 짧은 글자\(로켓의 이름, 버스 번호, 간판\)는 한 그림에 하나까지 돼요 — 숫자와 영문 대문자만, 그림 메모에 따옴표로 그대로 적어요\("13", "APOLLO 13"\)\./, 'R56a: the paid run planted numerals in the corners of seven pictures');
   assert.match(req.system, /이건 네 작업 노트예요: 초고를 쓰다 더 좋은 길이 보이면 벗어나도 돼요\.$/);
   assert.match(req.user, /\[인물 사이 — 재료예요\][\s\S]*\n\n\[흐름 2\/3 — 두 줄기로 써 봐요/);
   assert.deepEqual(Object.keys(req.jsonSchema.properties), ['flow', 'plants'], 'two fields — not a form');

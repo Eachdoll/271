@@ -56,7 +56,7 @@ test('R55h material: the cast speaks before the drafts — own business, a thing
   assert.equal(W.castNotesBlock([]), '');
   const draft = W.draftRequest(input, PREMISE, {castNotes: NOTES});
   assert.match(draft.user, /\n\n\[인물들이 제 입으로 한 말 — 재료예요, 점검표가 아니에요\. 쓰고 싶은 것만 써요\]\n- 유하: 오늘 하려던 일 — 도토리 열 개를 줍는다; 말 안 한 것 — 어제 콩이 밥그릇을 엎었다; 버릇·물건 — 주머니에 돌멩이\n- 엄마: /);
-  assert.match(draft.system, /그림 메모\(art\)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼\. 없는 쪽은 적지 않아요\. 그림에는 글자와 숫자를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요\.$/);
+  assert.match(draft.system, /그림 메모\(art\)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼\. 없는 쪽은 적지 않아요\. 그림에는 설명하는 글자나 숫자\(자막, 귀퉁이의 표시\)를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요\. 물건에 원래 적혀 있는 짧은 글자\(로켓의 이름, 버스 번호, 간판\)는 한 그림에 하나까지 돼요 — 숫자와 영문 대문자만, 그림 메모에 따옴표로 그대로 적어요\("13", "APOLLO 13"\)\.$/);
   assert.equal(draft.jsonSchema.properties.pages.items.properties.art.maxLength, 200);
   assert.deepEqual(draft.jsonSchema.properties.pages.items.required, ['ko'], 'an art note is never required');
   // A job frozen before R55h: no notes, no art, the old schema object.
@@ -103,7 +103,7 @@ test('R55h selection: the readers say what came back and whom the story would no
   assert.equal(W.nothingToRewrite({boredPages: [], lostPages: [], hardPages: [], mannersPages: [], words: [], flatCast: ['엄마']}), false);
   const rewrite = W.rewriteRequest(input, drafts[0], notes, {castNotes: NOTES});
   assert.match(rewrite.system, /끝에서 거꾸로 읽어, 끝이 쓰는 물건·말·버릇이 앞에서 한 번도 보이지 않았다면 앞쪽 한 곳에 아무렇지 않게 먼저 놓아요 — 그림 메모\(art\) 한 줄이면 충분하고, 글은 한 줄까지; 설명은 붙이지 않아요\./);
-  assert.match(rewrite.system, /그림에는 글자와 숫자를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요\. 그림 메모가 글자나 숫자를 그려 넣으라고 하면 그렇게 바꿔 적어요\.$/, 'R56a');
+  assert.match(rewrite.system, /그림에는 설명하는 글자나 숫자\(자막, 귀퉁이의 표시\)를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요\. 물건에 원래 적혀 있는 짧은 글자\(로켓의 이름, 버스 번호, 간판\)는 한 그림에 하나까지 돼요 — 숫자와 영문 대문자만, 그림 메모에 따옴표로 그대로 적어요\("13", "APOLLO 13"\)\. 그림 메모가 설명하는 글자를 그려 넣으라고 하면 그렇게 바꿔 적어요\.$/, 'R56a');
   assert.match(rewrite.user, /\[인물들이 제 입으로 한 말[^\n]*\n- 유하: [^\n]*\n- 엄마: [^\n]*\n- 콩이: [^\n]*\n\n\[독자 반응\]/);
   assert.match(rewrite.user, /1쪽: 가\. \[그림: 창밖에 노란 장화\]/);
   assert.doesNotMatch(W.rewriteRequest(preWeave(input), drafts[0], notes, {castNotes: NOTES}).system, /거꾸로/);
@@ -146,7 +146,7 @@ test('R55h the run: cast notes first, then the three woven drafts; the art notes
   const joined = W.clampPages([{ko: '가.', art: 'a'}, {ko: '나.', art: 'b'}, {ko: '다.'}], {min: 2, max: 2});
   assert.equal(joined.find((p) => p.art).art, 'a / b', 'joined pages keep both notes');
   const reading = W.extractRequest(input, outline, clamped);
-  assert.match(reading.system, /A page may carry the writer's art note \(\[art\] …\): something its picture shows that the words do not say — put it into that page's action and props, and into hidden when someone in the story does not notice it\. A picture cannot hold letters or numerals: when a note asks for written words or numbers in the picture, give countable things or a gesture instead and never write "labeled"\./);
+  assert.match(reading.system, /A page may carry the writer's art note \(\[art\] …\): something its picture shows that the words do not say — put it into that page's action and props, and into hidden when someone in the story does not notice it\. A picture cannot hold captions or labels: when a note asks for explanatory words or numbers in the picture \(a count in a corner, a caption\), give countable things or a gesture instead and never write "labeled"; writing that is on a thing in the story's world goes into lettering\./);
   assert.match(reading.user, /2쪽: [^\n]*\n   EN: Page 2\.\n   \[art\] 엄마 옷깃에 빨래집게 하나/);
   assert.doesNotMatch(W.extractRequest(input, outline, [{ko: '가.'}]).system, /A page may carry the writer's art note/, 'no art note, no sentence');
   // Unreadable notes: the drafts are written without them.

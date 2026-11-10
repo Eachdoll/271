@@ -180,11 +180,25 @@ export function picturePlanPictureLine(plan) {
     // R55g: the story's logic the picture must keep — what the hero does not see (the reader does) and what the next page reveals.
     str(plan.hidden, 160) ? `UNSEEN IN THE STORY — the reader sees it, the character named here does not: ${str(plan.hidden, 160)}; keep it that way (that character looks away from it, no eye contact with it)` : "",
     str(plan.holdBack, 120) ? `NOT YET: ${str(plan.holdBack, 120)} is revealed on the next page — keep it out of this picture` : "",
+    // R58: the one piece of writing this picture carries — on a thing, spelled exactly; every other letter stays out.
+    pictureLettering(plan.lettering) && str(plan.letteringOn, 80) ? `LETTERING — the only writing in this picture: "${pictureLettering(plan.lettering)}" ${str(plan.letteringOn, 80)}, in plain block capitals, spelled exactly as given; no other letters or numbers anywhere` : "",
   ].filter(Boolean);
   return parts.length ? `PICTURE PLAN (decided with the story): ${parts.join("; ")}. Keep it within the actual event above.` : "";
 }
 /** Model-written plan text a picture request carries (the lenient forbidden-word scope). */
-export const picturePlanText = (plan) => (plan ? [plan.picture, plan.hook, plan.words, plan.hidden, plan.holdBack].filter(Boolean) : []);
+export const picturePlanText = (plan) => (plan ? [plan.picture, plan.hook, plan.words, plan.hidden, plan.holdBack, plan.lettering, plan.letteringOn].filter(Boolean) : []);
+/**
+ * R58: writing on a thing in a picture — digits and capital Latin letters
+ * only (a picture model garbles Hangul), twelve characters at most, with at
+ * least one letter or digit; anything else is no lettering at all (a longer
+ * string is dropped, never cut — half a name is a wrong name).
+ */
+export function pictureLettering(value) {
+  const text = String(value ?? "").toUpperCase().replace(/[^A-Z0-9 \-]/gu, " ").replace(/\s+/gu, " ").trim();
+  return text.length <= 12 && /[A-Z0-9]/u.test(text) ? text : "";
+}
+/** The page's lettering when its plan has one with the thing it is on, else "". */
+export const planLettering = (plan) => (plan && pictureLettering(plan.lettering) && str(plan.letteringOn, 80) ? pictureLettering(plan.lettering) : "");
 /** The parent's one line (pro outline card, eco). */
 export function picturePlanNote(plan) {
   if (!plan) return "";
