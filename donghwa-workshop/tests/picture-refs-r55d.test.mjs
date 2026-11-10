@@ -49,7 +49,7 @@ function book(state, {marker}) {
     {pageNo: 3, ko: '유하가 웃어요.', en: 'Yuha laughs.', scene: {who: ['yuha'], where: 'home', action: 'Yuha laughs behind the curtain.', timeOfDay: 'day'}, staging: {shot: 'wide', characterSide: 'left'}},
     {pageNo: 4, ko: '둘이 함께 앉아요.', en: 'They sit together.', scene: {who: ['yuha'], where: 'home', action: 'Yuha sits on the sofa.', timeOfDay: 'day'}, staging: {shot: 'wide', characterSide: 'right'}},
   ];
-  return {id: 'b-' + (marker ? 'refs' : 'plain'), title: '숨바꼭질', characterIds: ['yuha', 'mom'], backgroundIds: ['home'], language: 'bilingual', pages, ...(marker ? {storyInput: {pictureRefs: referencePolicy()}} : {})};
+  return {id: 'b-' + (marker ? 'refs' : 'plain'), title: '숨바꼭질', characterIds: ['yuha', 'mom'], backgroundIds: ['home'], language: 'bilingual', pages, ...(marker ? {storyInput: {pictureRefs: {version: 1}}} : {})  /* R59: this file pins the R55d (version 1) requests */};
 }
 
 test('R55d a pictureRefs page carries only the sheets of its cast; a book without the marker carries every sheet (byte-identical to before)', () => {

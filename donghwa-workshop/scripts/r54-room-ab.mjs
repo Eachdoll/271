@@ -17,6 +17,10 @@
  *
  *   node scripts/r54-room-ab.mjs QA/r54-room-ab --paid [--engines openai,anthropic]
  *   node scripts/r54-room-ab.mjs /tmp/ab --demo            (free: the demo engine, plumbing only)
+ * R59 options (all with `=`): --topic=주제 (another topic), --weave=1..4 (run the room as an older
+ * version froze it — 3 is the room before R59: three drafts), --premise-from=QA/…/anthropic.json
+ * (take the chosen premise of a saved run: the premise round is not bought again, so two
+ * versions are compared on the same premise).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -35,7 +39,8 @@ import { analyzeEstimatedPage, splitSentences } from "../dist/reading-checker.js
 import { describeReadingViolation } from "../dist/reading-messages.js";
 import { styleReport, styleSummaryLine } from "../dist/story-generation/style-report.js";
 import { splitAtEllipsis, hasShortSentences } from "../dist/short-sentences.js";
-import { ENGINE_MENU } from "../dist/story-generation/writers-room.js";
+import { ENGINE_MENU, attachWritersRoom, roomOutline, textLikeness, textWeave } from "../dist/story-generation/writers-room.js";
+import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2),
   flags = new Map(args.filter((a) => a.startsWith("--")).map((a) => a.slice(2).split("=")).map(([k, v]) => [k, v ?? true])),
@@ -44,6 +49,14 @@ const outDir = resolve(positional[0] || "QA/r54-room-ab"),
   demo = flags.has("demo"),
   paid = flags.has("paid"),
   engines = String(flags.get("engines") || "openai,anthropic").split(",").map((s) => s.trim()).filter(Boolean);
+// R59: the topic, the room version and a saved premise can be fixed for a comparison.
+const weaveFlag = [1, 2, 3, 4].includes(Number(flags.get("weave"))) ? Number(flags.get("weave")) : null,
+  premiseFrom = typeof flags.get("premise-from") === "string" ? resolve(flags.get("premise-from")) : null,
+  savedRoom = premiseFrom ? JSON.parse(readFileSync(premiseFrom, "utf8")).room : null;
+if (premiseFrom && !savedRoom?.premise) {
+  console.error(`${premiseFrom}에 고른 전제가 없어요.`);
+  process.exit(2);
+}
 if (!demo && !paid) {
   console.error("유료 실행입니다. 부모님 승인 뒤 --paid 를 붙여 주세요 (무료 배선 점검은 --demo).");
   process.exit(2);
@@ -56,7 +69,7 @@ const KEY_SHAPE = /\b(sk-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,})/u;
 const wizard = {
   characterIds: ["yuha", "mom"],
   backgroundIds: ["home", "forest"],
-  topic: "숲속에서 자꾸 숨는 아기 사슴",
+  topic: typeof flags.get("topic") === "string" && flags.get("topic").trim() ? flags.get("topic").trim() : "숲속에서 자꾸 숨는 아기 사슴",
   pageCount: 16,
   koreanLevel: "K2",
   englishLevel: "E2",
@@ -264,6 +277,11 @@ async function runEngine(engine) {
     demo,
     councilReview: false, // the room adopts the panel's first; nothing parks for a click
   });
+  // R59 --weave: the job is frozen as that version of the room froze it (its requests are that version's).
+  if (weaveFlag && job.input.writersRoom) {
+    job.input.writersRoom = { ...job.input.writersRoom, weave: weaveFlag };
+    if (weaveFlag < 4 && job.input.pictureRefs) job.input.pictureRefs = { version: 1 };
+  }
   const estimate = demo ? null : estimateFullAutoCost(state, wizard, { job });
   log(`[${engine}] 시작 · 작가실 ${job.input.writersRoom?.version ? "켬" : "꺼짐"} · ${job.input.layoutPolicy?.kind === "openings" ? "펼침" : "낱쪽"} ${wizard.pageCount}쪽 · 추정 글 요금 ${estimate ? money(estimate.textUsd) : "무료(데모)"}`);
   const exchanges = [], progress = [];
@@ -272,6 +290,8 @@ async function runEngine(engine) {
   let error = null;
   try {
     await runFullAuto(state, job, {
+      // R59 --premise-from: the saved run's room record stands in for the premise round (no call, the same premise).
+      ...(savedRoom ? { operations: { outline: async (input) => ({ data: attachWritersRoom(roomOutline(input, savedRoom), { record: savedRoom }), usage: { inputTokens: 0, outputTokens: 0, requests: 0 }, meta: { stage: "outline", requests: 0, roomOutline: true, premiseFrom: true } }) } } : {}),
       credentials,
       buildBook,
       save: () => true,
@@ -312,6 +332,7 @@ async function runEngine(engine) {
     spreadFit: job.spreadFit || null,
     pictureReading: job.pictureReading || null,
     roomWeave: job.roomWeave || null,
+    roomPockets: job.roomPockets || null,
     roomPlaces: job.roomPlaces || [],
     coverage: pages.length ? castCoverage(pages, job.input, extraNames) : [],
     style: pages.length ? styleReport(pages.map((p) => p.textKo), { names: [...(job.input.characters || []).map((c) => c.name), ...extraNames] }) : null,
@@ -402,7 +423,15 @@ function compareReport(results) {
   row("인물 노트 / 인물 사이 / 흐름에 맞춰 고침", (r) => (r.draft?.room?.castNotes ? `${r.draft.room.castNotes.length}명 / ${(r.draft.room.ties || []).length} / ${r.draft.room.castRevised ? "함" : "안 함"}` : "-"));
   row("복선 점검 · 거둔 것 / 놓기만 한 것 / 앞에 없이 나온 것", (r) => (r.draft?.room?.threads ? `${r.draft.room.threads.kept.length} / ${r.draft.room.threads.loose.length} / ${r.draft.room.threads.unplanted.length}` : "-"));
   row("펼침 표시 맞춤", (r) => (r.spreadFit ? `표시 ${r.spreadFit.marks} · ${r.spreadFit.fitted ? "맞음" : "못 맞춤"}` : "-"));
-  row("짜임 실측 · 되돌아온 것 / 한 쪽만 나온 인물 / 그림 메모", (r) => (r.roomWeave ? `${r.roomWeave.returning.length}개${r.roomWeave.returning.length ? ` (${r.roomWeave.returning.map((x) => `${x.prop} ${x.from}→${x.to}`).join(", ")})` : ""} / ${r.roomWeave.single.length}명 / ${r.roomWeave.artNotes}쪽` : "-"));
+  // R59: counted from the Korean words (textWeave) — the English last-word count is shown only for a run that still made it.
+  const text = (r) => r.roomWeave?.text || (r.draft?.pages ? textWeave(r.draft.pages, { cast: (r.room?.premise?.cast || []).map((c, i) => ({ id: `c${i}`, name: c.name })) }) : null);
+  row("글 셈 · 인물이 글에 나온 쪽 (그림 메모에만 나온 쪽)", (r) => { const t = text(r); return t?.castText?.length ? t.castText.map((c) => `${c.name} ${c.pages.length}쪽${c.artOnly ? ` (+메모만 ${c.artOnly.length})` : ""}`).join(" · ") : "-"; });
+  row("글 셈 · 조연이 글에 나온 쪽 / 전체", (r) => { const t = text(r); return t ? `${t.companions.length} / ${t.pages}` : "-"; });
+  row("글 셈 · 끝 네 쪽 글에 처음 나오는 낱말 (*는 앞 그림 메모에 먼저)", (r) => { const t = text(r); return t ? `${t.lateWords.length}개${t.lateWords.length ? ` — ${t.lateWords.map((w) => `${w.word}${w.artFirst ? "*" : ""}(${w.page})`).join(", ")}` : ""}` : "-"; });
+  row("글 셈 · 되풀이되는 짧은 줄 / 그림 메모 글자 ÷ 글 글자", (r) => { const t = text(r); return t ? `${t.refrains.length}줄${t.refrains.length ? ` (${t.refrains.map((x) => `${x.line} ${x.pages.join("·")}쪽`).join(", ")})` : ""} / ${t.artShare}` : "-"; });
+  row("글 셈 · 흐름끼리 닮음 (2글자 자카드)", (r) => { const f = (r.draft?.room?.treatments || []).map((t) => t.flow); return f.length > 1 ? f.flatMap((a, i) => f.slice(i + 1).map((b) => textLikeness(a, b))).join(" · ") : "-"; });
+  row("펼침 표시 · 고쳐쓰기 전 → 후 (앱이 되살린 수) / 글 자리를 받은 쪽", (r) => `${r.draft?.room?.spreadMarks ? `${r.draft.room.spreadMarks.before} → ${r.draft.room.spreadMarks.after} (${r.draft.room.spreadMarks.restored})` : "-"} / ${r.roomPockets ? `${r.roomPockets.placed}/${r.roomPockets.pages}` : "-"}`);
+  row("짜임 실측(옛 셈) · 되돌아온 것 / 한 쪽만 나온 인물 / 그림 메모", (r) => (r.roomWeave ? `${r.roomWeave.returning ? `${r.roomWeave.returning.length}개${r.roomWeave.returning.length ? ` (${r.roomWeave.returning.map((x) => `${x.prop} ${x.from}→${x.to}`).join(", ")})` : ""}` : "세지 않음"} / ${r.roomWeave.single.length}명 / ${r.roomWeave.artNotes}쪽` : "-"));
   row("그림 읽기 · 못 보는 것 / 다음 쪽까지 감출 것 / 물건의 글자", (r) => (r.pictureReading ? `${r.pictureReading.hidden}쪽 / ${r.pictureReading.holdBack}쪽 / ${r.pictureReading.lettering ?? 0}쪽` : "-"));
   row("등급 참고 (다듬기 전 → 후)", (r) => (r.draft?.room ? `${(r.draft.room.levelNotes || []).length} → ${(r.draft.room.levelNotesAfter || []).length}` : "-"));
   row("최종 항목(펼침면)", (r) => (r.measured ? `${r.measured.totals.pages} (${r.measured.totals.spreads})` : "-"));
@@ -456,6 +485,7 @@ for (const engine of engines) {
     spreadFit: r.spreadFit,
     pictureReading: r.pictureReading,
     roomWeave: r.roomWeave,
+    roomPockets: r.roomPockets,
     roomPlaces: r.roomPlaces,
     coverage: r.coverage,
     style: r.style,

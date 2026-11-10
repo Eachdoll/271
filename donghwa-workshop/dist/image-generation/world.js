@@ -3,7 +3,7 @@ import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor, effectiv
 import { plainBackdropFor } from "../story-generation/story-drama.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
-import { hasReferencePolicy, castSheetsForPage } from "./reference-policy.js";
+import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin } from "./reference-policy.js";
 import { characterSVG } from "../engine.js";
 import { getStylePreset, validateStylePreset } from "./styles.js";
 import { getImageURL } from "./assets.js";
@@ -833,6 +833,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
   if (!validation.valid) throw new Error(validation.errors.join(" "));
   // R55d: a page of a pictureRefs book carries only the sheets of the characters on it (every sheet must still be confirmed).
   const refPolicy = !options.cover && hasReferencePolicy(book.storyInput),
+    hygiene = refPolicy && hasReferenceHygiene(book.storyInput),
     allSheets = options.cover
       ? snapshot.characterSheets?.filter(
           (sheet) =>
@@ -890,8 +891,12 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     })),
     ...(options.cover
       ? []
-      : // R55d: a pictureRefs book prefers the latest same-place page drawn from the same camera.
-        previousSceneReferences(book, snapshot, pageIndex, refPolicy ? { shotOf: (row) => effectiveStaging(book, row).shot || "wide" } : {})),
+      : // R59: a version 2 book attaches no earlier page to a close or plain-backdrop page (its place reference is left out for the same reason:
+        // the figures fill the frame), and elsewhere only an earlier page whose cast is on this page too.
+        hygiene && (closeViewFor(book, page) || plainBackdropFor(book, page))
+        ? []
+        : // R55d: a pictureRefs book prefers the latest same-place page drawn from the same camera.
+          previousSceneReferences(book, snapshot, pageIndex, refPolicy ? { shotOf: (row) => effectiveStaging(book, row).shot || "wide", ...(hygiene ? { rides: (prior) => castWithin(prior, page) } : {}) } : {})),
   ];
   const roleDescriptions = references
     .map(

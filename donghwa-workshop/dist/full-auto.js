@@ -79,7 +79,7 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
-import { hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
+import { hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
 import { ecoProseFromPages } from "./eco-mode.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
@@ -444,7 +444,7 @@ export function estimateFullAutoCost(
       // R31b: diet drafts price the app-path outline/prose on the stage models.
       ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
       // R53 작가실: a room job (or a new one while the setting is on) is priced by its rounds.
-      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true } : {}),
+      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true, roomLean: job ? hasRoomLean(job.input) : true } : {}),
       // R31e: the ledger-based coherence rows only when the job's outline has a ledger.
       ...(job?.outline ? { ledger: !!job.outline.plotContract } : {}),
       ...(k1Book
@@ -1599,6 +1599,8 @@ export async function runFullAuto(
           job.pictureReading = r.meta?.reading ? clone(r.meta.reading) : null;
           // R55h: the measured weave of the finished pages (cast page counts, things that come back, art notes).
           job.roomWeave = r.meta?.weave ? clone(r.meta.weave) : null;
+          // R59: how many pages got a text field from the app (lean rooms).
+          job.roomPockets = r.meta?.pockets ? clone(r.meta.pockets) : null;
           job.sceneBriefs = [];
           job.prose = ecoProseFromPages(job.outline, r.data);
           job.storyCheck = r.meta?.checks || inspectStory(job.outline, r.data, job.input);

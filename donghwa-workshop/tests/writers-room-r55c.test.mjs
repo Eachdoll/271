@@ -24,7 +24,9 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'beach'], topic: '바닷가에서 자꾸 숨는 아기 게', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id, extra = {}, layout = 'openings') => normalizeStoryInput({...inputFromWizard(setup(), {...wizard, ...extra}, {layout}).input, bookId: id});
+/* R59 moved new drafts to weave 4 (one draft, the app's text fields) and pictureRefs 2 (request hygiene); this file pins the room as R58 left it. */
+const asR58 = (input) => ({...input, writersRoom: {...input.writersRoom, weave: 3}, ...(input.pictureRefs ? {pictureRefs: {version: 1}} : {})});
+const roomInput = (id, extra = {}, layout = 'openings') => asR58(normalizeStoryInput({...inputFromWizard(setup(), {...wizard, ...extra}, {layout}).input, bookId: id}));
 const PREMISE = {title: '게야, 어디 있니?', line: '바닷가에서 아기 게가 자꾸 숨어요.', engine: 'reader_knows', laugh: '모래 속에서 집게만 보여요', picture: '큰 집게', cast: [{name: '유하', isNew: false, want: '게와 놀고 싶다', flaw: '서두른다', speech: '짧게', nameEn: '', kind: '', look: ''}, {name: '또각이', isNew: true, want: '숨고 싶다', flaw: '겁', speech: '집게만', nameEn: 'Ttogak', kind: 'crab', look: 'tiny red crab'}]};
 const record = {premise: PREMISE, pitches: [{title: '게야, 어디 있니?'}, {title: '모래성 손님'}, {title: '파도 세기'}]};
 const reply = (json) => ({json, usage: {input: 10, output: 5}, meta: {requests: 1, model: 'mock'}});

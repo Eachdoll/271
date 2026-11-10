@@ -11,7 +11,7 @@ import { hasEnglishMirror, englishMirrorPolicy } from "./english-mirror.js";
 import { storyIdeaRef, ideaInputFor } from "./idea-deck.js";
 import { hasStoryLogic, storyLogicPolicy } from "./story-logic.js";
 import { hasStoryManners, mannersRef } from "./story-manners.js";
-import { hasReferencePolicy, referencePolicy } from "../image-generation/reference-policy.js";
+import { hasReferencePolicy, referencePolicyRef } from "../image-generation/reference-policy.js";
 import { hasWritersRoom, writersRoomRef, runWritersRoom, attachWritersRoom, roomPremiseBlock, roomOutline } from "./writers-room.js";
 import { withStoryDramaSchema, withDramaPlanSchema, storyDramaViolations, hasStoryDrama, storyDramaPolicy, withBackdropSchema, settleBackdrops } from "./story-drama.js";
 import { hasTextPocket, textPocketPolicy, withPocketSchema } from "../text-pocket.js";
@@ -662,7 +662,7 @@ export function normalizeStoryInput(input = {}) {
     // R51: the writers' room in place of the council.
     ...(writersRoomRef(input?.writersRoom) ? { writersRoom: writersRoomRef(input.writersRoom) } : {}),
     // R55d: page pictures carry the page's cast sheets and prefer a same-camera earlier page.
-    ...(hasReferencePolicy(input) ? { pictureRefs: referencePolicy() } : {}),
+    ...(hasReferencePolicy(input) ? { pictureRefs: referencePolicyRef(input) } : {}),
     // R38: the outline says what changes at the end; the parent's opening place (a drawer id).
     ...(hasStoryChange(input) ? { storyChange: storyChangeRef(input.storyChange) } : {}),
     ...(storyPlaceRef(input.storyPlace, input.backgrounds) ? { storyPlace: storyPlaceRef(input.storyPlace, input.backgrounds) } : {}),

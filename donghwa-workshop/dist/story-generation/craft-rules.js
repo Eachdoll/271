@@ -154,11 +154,13 @@ export function samePlaceStreak(page, earlierPages = []) {
 }
 const DAYTIME = new Set(["morning", "day", "afternoon"]);
 /** Extra lines of a page's picture request (craft drafts only; never the cover). */
-export function craftPictureRules({ book, page, brief, earlierPages = [], time, cover = false }) {
+export function craftPictureRules({ book, page, brief, earlierPages = [], time, cover = false, variety = true }) {
   if (cover || !hasCraftPolicy(book?.storyInput)) return "";
   const lines = [],
     streak = samePlaceStreak(page, earlierPages);
-  if (streak >= 2)
+  // R59: a request-hygiene book passes variety: false — its camera is planned per page, and this line ("a wide view from the
+  // other side") was sent beside "from the same side, nothing is mirrored".
+  if (variety && streak >= 2)
     lines.push(
       `CAMERA VARIETY: this is page ${streak + 1} in a row at this place. Frame it differently from the previous pages: change the distance (a close view of the hands or the key object, or a wide view from the other side), the side the characters face and the part of the place in view. Never repeat the previous page's framing.`,
     );

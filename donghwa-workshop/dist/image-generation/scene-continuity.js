@@ -55,14 +55,17 @@ export function pagePlace(book, snapshot, index) {
  * same camera as this page is preferred for the recent-scene slot — a page
  * from the same angle is a better layout reference than the newest page from
  * any angle. Without `shotOf` the choice is the old one, byte for byte.
+ * R59: with `rides` only the earlier pages it accepts are candidates.
  */
-export function previousSceneReferences(book, snapshot, index, { shotOf = null } = {}) {
+export function previousSceneReferences(book, snapshot, index, { shotOf = null, rides = null } = {}) {
   const place = pagePlace(book, snapshot, index);
   if (!place.key) return [];
   const candidates = (book.pages || [])
     .slice(0, index)
     .map((page, i) => ({ page, index: i }))
     .filter(({ page, index: i }) => {
+      // R59: `rides` (earlier page → boolean) keeps out a page that shows someone this page does not (reference-policy.js castWithin).
+      if (typeof rides === "function" && !rides(page)) return false;
       const image = page.imageAssetId || page.imageUrl;
       // A text-edit stale mark covers only the image it was set on; a redrawn page is a reference again.
       if (

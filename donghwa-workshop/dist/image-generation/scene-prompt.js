@@ -13,7 +13,7 @@ import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CON
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
 import { pocketOf, pocketPromptLine } from "../text-pocket.js";
-import { hasReferencePolicy } from "./reference-policy.js";
+import { hasReferencePolicy, hasReferenceHygiene, castWithin } from "./reference-policy.js";
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -23,9 +23,12 @@ const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
  * today's composition plus its binding edge. Text is always printed below:
  * no quiet text half, no textSide, and the cue is never sent.
  */
-function openingComposition(page, staging, leadName) {
+function openingComposition(page, staging, leadName, { once = false, pocket = false } = {}) {
   const panels =
     "One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.";
+  // R59 (version 2 pictureRefs books): the camera was already named by the sentence that opens the request (`once`),
+  // and a page with a text field is not also told that its words are printed below the picture (`pocket`).
+  const below = pocket ? "" : " Story text is printed below the illustration; use the full picture area and keep the important action clearly visible.";
   if (page.kind === "spread") {
     const shot = SPREAD_SHOTS.includes(staging.shot) ? staging.shot : "wide",
       side =
@@ -34,10 +37,10 @@ function openingComposition(page, staging, leadName) {
           : Number(page.openingNo) % 2 === 0
             ? "right"
             : "left";
-    return `${SHOT_TEXT[shot]}; ${leadName} on the ${side} half. Wide double-page spread in one continuous scene. The book's fold runs down the vertical centre line: keep every face, hand and the key action out of the middle tenth and balance the scene across both halves. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. ${panels}`;
+    return `${once ? `${leadName} on the ${side} half` : `${SHOT_TEXT[shot]}; ${leadName} on the ${side} half`}. Wide double-page spread in one continuous scene. The book's fold runs down the vertical centre line: keep every face, hand and the key action out of the middle tenth and balance the scene across both halves.${below} ${panels}`;
   }
   const right = page.side === "right";
-  return `${SHOT_TEXT[staging.shot] || SHOT_TEXT.wide}; ${leadName} on the ${staging.characterSide || (right ? "right" : "left")} side. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. This is the ${right ? "right" : "left"} page of a two-page opening; keep faces and hands a tenth of the width away from the ${right ? "left" : "right"} (binding) edge. ${panels}`;
+  return `${once ? "" : `${SHOT_TEXT[staging.shot] || SHOT_TEXT.wide}; `}${leadName} on the ${staging.characterSide || (right ? "right" : "left")} side.${below} This is the ${right ? "right" : "left"} page of a two-page opening; keep faces and hands a tenth of the width away from the ${right ? "left" : "right"} (binding) edge. ${panels}`;
 }
 const SHOT_TEXT = {
   wide: "wide establishing shot",
@@ -100,6 +103,12 @@ export function facingPageLine(book, page) {
   if (!page || page.kind !== "page" || page.openingNo == null) return "";
   const sibling = (book?.pages || []).find((row) => row && row !== page && row.kind === "page" && row.openingNo === page.openingNo);
   if (!sibling) return "";
+  // R59: a version 2 book names the facing page by its camera, never by its moment — the moment's sentence carried the names of
+  // characters who are not on this page into this page's request.
+  if (hasReferenceHygiene(book?.storyInput)) {
+    const camera = SHOT_TEXT[effectiveStaging(book, sibling).shot];
+    return `FACING PAGE: the other page of this opening is a separate picture${camera ? ` (a ${camera})` : ""}. Draw this page as its own, clearly different moment — different gestures and places for the figures, not the same picture a second time. `;
+  }
   const moment = String(sibling.scene?.action || sibling.scene?.prompt || sibling.en || sibling.textEn || "").replace(/\s+/gu, " ").trim().slice(0, 240).replace(/[.。]+$/u, "");
   return `FACING PAGE (the other page of this opening) shows: ${moment || "another moment of this beat"}. This page is a clearly different moment: a different distance or angle, different gestures and places for the figures — not the same picture a second time. `;
 }
@@ -148,6 +157,8 @@ export function buildScenePrompt({
     pocketLine = !cover && pocketOf(book, page) ? pocketPromptLine(planned, pocketOf(book, page).share) : "",
     // R48: the facing page of a pair (낱쪽 둘) is a different moment, never the same picture twice.
     facing = framed && !cover ? facingPageLine(book, page) : "",
+    // R59: request hygiene (reference-policy.js) — nobody absent is named, each thing is said once.
+    hygiene = !cover && hasReferenceHygiene(book.storyInput),
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -163,10 +174,12 @@ export function buildScenePrompt({
   const shot = cover ? "medium" : staging.shot || "wide";
   const openings = !cover && layoutOf(book) === "openings";
   // R36: the composition planned with the story (picture-led books only; empty otherwise).
-  const plan = picturePlanPictureLine(planned);
+  // R59: a focus that names a character who is not on this page is dropped, and the plan does not name the camera a second time.
+  const named = (value) => absent.some((who) => who && String(value ?? "").toLowerCase().includes(String(who).toLowerCase()));
+  const plan = hygiene && planned ? picturePlanPictureLine({ ...planned, ...(named(planned.focus) ? { focus: "" } : {}), ...(framed ? { shot: "" } : {}) }) : picturePlanPictureLine(planned);
   const composition = openings
-    ? `${framed && !cover ? framedLead(shot, plan) : ""}${facing}${openingComposition(page, staging, leadName)}${pocketLine ? ` ${pocketLine}` : ""}`
-    : `${framed && !cover ? framedLead(shot, plan) : ""}${SHOT_TEXT[shot] || SHOT_TEXT.wide}; ${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
+    ? `${framed && !cover ? framedLead(shot, plan) : ""}${facing}${openingComposition(page, staging, leadName, hygiene ? { once: framed, pocket: !!pocketLine } : {})}${pocketLine ? ` ${pocketLine}` : ""}`
+    : `${framed && !cover ? framedLead(shot, plan) : ""}${hygiene && framed ? "" : `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; `}${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
   const time = brief?.timeOfDay || page.scene?.timeOfDay || "day";
   const mood = book.outline?.quality?.worldMood || book.storyQuality?.worldMood;
   const atmosphere = mood
@@ -191,8 +204,8 @@ export function buildScenePrompt({
       page.scene?.prompt ||
       currentNarrative.en ||
       currentNarrative.ko;
-  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."}${!cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
-  const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover });
+  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."}${hygiene ? (absent.length ? " Nobody else is in this picture: a figure that a reference image shows and this list does not name is not drawn here." : "") : !cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
+  const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover, variety: !hygiene });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });
   const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan && !(framed && !cover) ? ` ${plan}` : ""}`;
@@ -213,17 +226,20 @@ export function buildScenePrompt({
   // last two pages and the ledger to this beat's three lines; the picture
   // model then reads the event instead of a wall of text.
   const lean = hasPromptPolicy(book.storyInput);
+  // R59: an earlier page rides along in the continuity line only when everyone on it is on this page too.
+  const earlier = hygiene ? earlierPages.filter((prior) => castWithin(prior, page)) : earlierPages,
+    recent = earlier.slice(-PICTURE_CONTINUITY_PAGES);
   const location = plain
     ? `Location: none. This page has no place: ${leadName} alone on a flat, single-colour background taken from the style palette, with big quiet empty space around the figure — a thought, a line spoken to the reader. No place reference image is attached; draw no room, no ground line, no scenery, no props beyond what the figure holds. Light as ${time}, within the style palette only.${
-        earlierPages.length ? ` Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep the figure's state as it was.` : ""
+        earlier.length ? ` Earlier pages: ${json(recent)}. Keep the figure's state as it was.` : ""
       } Style references define rendering only. No words, captions, watermark or logos.`
     : closeView
     ? `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}This is a close view: no place reference image is attached; keep the place's colours, materials and light from these facts, and let the figures fill the frame. Relight for ${time}.${
-        earlierPages.length ? ` Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep prior consequences; previous poses and temporary props are not instructions to repeat.` : ""
+        earlier.length ? ` Earlier pages: ${json(recent)}. Keep prior consequences; previous poses and temporary props are not instructions to repeat.` : ""
       } Style references define rendering only. No words, captions, watermark or logos.`
     : lean
-    ? `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}${ARCHITECTURE_LOCK_SHORT} Relight the same geometry for ${time}. Earlier pages: ${json(earlierPages.slice(-PICTURE_CONTINUITY_PAGES))}. Keep prior consequences; previous poses and temporary props are not instructions to repeat. Style references define rendering only. No words, captions, watermark or logos.`
-    : `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}ARCHITECTURE LOCK: the approved place sheet is authoritative; the CANONICAL first scene establishes previously unspecified visible geometry. Preserve the exact doorway silhouette (arch/rectangle), door count, frame color, handle, windows, wall materials, roof, paths and relative structural positions across every view. Camera angle may change; the physical building must not. Background references define layout only: relight the SAME geometry for ${time}; prior daytime lighting must not override the brief. Recent scenes are secondary continuity references and cannot override the canonical layout. Never invent an extra entrance, bridge, tower, staircase or decorative structure to fill the composition. A sub-location must already exist in the place facts/reference; otherwise change only the camera position. Draw only architecture and props established by the place references or current story. A new permanent structure requires explicit story content. Do not transfer buildings from a different place. Earlier page continuity: ${json(earlierPages)}. Preserve prior action consequences while depicting this page event. Previous poses and temporary props are not instructions to duplicate them. Style references define rendering only. No words, captions, watermark or logos.`;
+    ? `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}${ARCHITECTURE_LOCK_SHORT} Relight the same geometry for ${time}.${hygiene && !earlier.length ? "" : ` Earlier pages: ${json(recent)}. Keep prior consequences; previous poses and temporary props are not instructions to repeat.`} Style references define rendering only. No words, captions, watermark or logos.`
+    : `Location: ${json(facts)}. ${staging.subLocation ? `View within this same place: ${staging.subLocation}. ` : ""}ARCHITECTURE LOCK: the approved place sheet is authoritative; the CANONICAL first scene establishes previously unspecified visible geometry. Preserve the exact doorway silhouette (arch/rectangle), door count, frame color, handle, windows, wall materials, roof, paths and relative structural positions across every view. Camera angle may change; the physical building must not. Background references define layout only: relight the SAME geometry for ${time}; prior daytime lighting must not override the brief. Recent scenes are secondary continuity references and cannot override the canonical layout. Never invent an extra entrance, bridge, tower, staircase or decorative structure to fill the composition. A sub-location must already exist in the place facts/reference; otherwise change only the camera position. Draw only architecture and props established by the place references or current story. A new permanent structure requires explicit story content. Do not transfer buildings from a different place. Earlier page continuity: ${json(earlier)}. Preserve prior action consequences while depicting this page event. Previous poses and temporary props are not instructions to duplicate them. Style references define rendering only. No words, captions, watermark or logos.`;
   const plot = plotContextForPage(book.outline, page);
   const continuity = plot && lean
     ? compactPlotLines(plot)

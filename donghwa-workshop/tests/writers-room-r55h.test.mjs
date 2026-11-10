@@ -34,7 +34,7 @@ const NOTES = [{name: '유하', today: '도토리 열 개를 줍는다', unsaid:
 
 test('R55h the marker: a new room draft carries weave 1; normalize keeps it; a marker without it stays without it', () => {
   const input = roomInput('h1');
-  assert.deepEqual(freshInput('h1').writersRoom, {version: 1, weave: 3}, 'R56: a new draft is a staged room; R57: and a wide one');
+  assert.deepEqual(freshInput('h1').writersRoom, {version: 1, weave: 4}, 'R56: a new draft is a staged room; R57: and a wide one; R59: and a lean one');
   assert.deepEqual(normalizeStoryInput(input).writersRoom, {version: 1, weave: 1}, 'an R55h job keeps weave 1');
   assert.equal(W.hasRoomWeave(input), true);
   assert.equal(W.hasRoomStages(input), false);

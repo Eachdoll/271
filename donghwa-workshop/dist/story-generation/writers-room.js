@@ -55,8 +55,27 @@ export const WRITERS_ROOM_VERSION = 1;
  * is confirming its new characters and places — and a new place gets a
  * drawer card and a place sheet. A weave 1 or 2 job keeps its own requests
  * (a job parked at the parent's choice keeps the three it was shown).
+ *
+ * R59 (2026-11-10): weave 4 — what three reviewers agreed after reading the
+ * paid run and what the parent then decided ("remove the contradictions, then
+ * one draft instead of three"). A weave 4 draft (hasRoomLean):
+ *   - writes ONE draft from the flow the panel chose (the three flows differ,
+ *     the three drafts were one book: 13 of 47 sentences word for word); the
+ *     panel still reads it and the writer still rewrites what two readers
+ *     named;
+ *   - keeps the writer's spread marks through the rewrite (the rewrite was
+ *     never shown them: three marks went in, none came out) — the manuscript
+ *     line carries the mark and the app copies it onto a page the rewrite
+ *     returned word for word;
+ *   - asks the readers nothing about echoes or characters the story would not
+ *     miss (all six readers answered yes for all three drafts), passes a
+ *     reader's "change" on only when two readers name the same page, and the
+ *     editor's thread check no longer starts a rewrite by itself;
+ *   - leaves the place of the printed words to the app (the cheap reading no
+ *     longer picks a pocket: 4 of 11 were usable).
+ * A weave 1–3 job keeps its own requests.
  */
-const ROOM_WEAVE = 3;
+const ROOM_WEAVE = 4;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
 export const writersRoomPolicy = (records = []) => {
   const recent = recentRoomBooks(records);
@@ -70,14 +89,16 @@ export const writersRoomRef = (value) => {
     .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
     .filter((r) => r.line)
     .slice(0, 6);
-  return { version: WRITERS_ROOM_VERSION, ...(value.weave === 1 || value.weave === 2 || value.weave === 3 ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
+  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
 };
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
-export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3].includes(input.writersRoom.weave);
+export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4].includes(input.writersRoom.weave);
 /** R56: the staged room — treatments, the revised cast, the thread check. */
-export const hasRoomStages = (input) => hasWritersRoom(input) && (input.writersRoom.weave === 2 || input.writersRoom.weave === 3);
+export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4].includes(input.writersRoom.weave);
 /** R57: premises of three widths, their places named, the shortlist spread by width, new places carded. */
-export const hasRoomWide = (input) => hasWritersRoom(input) && input.writersRoom.weave === 3;
+export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4].includes(input.writersRoom.weave);
+/** R59: one draft, spread marks kept, the readers' two extra questions gone, the pocket decided by the app. */
+export const hasRoomLean = (input) => hasWritersRoom(input) && input.writersRoom.weave === 4;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
 const str = (value, max = 200) =>
@@ -778,6 +799,8 @@ const draftSchema = (input) => (hasRoomWeave(input) ? WEAVE_DRAFT_SCHEMA : DRAFT
 const NO_LETTERS = ' 그림에는 설명하는 글자나 숫자(자막, 귀퉁이의 표시)를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요. 물건에 원래 적혀 있는 짧은 글자(로켓의 이름, 버스 번호, 간판)는 한 그림에 하나까지 돼요 — 숫자와 영문 대문자만, 그림 메모에 따옴표로 그대로 적어요("13", "APOLLO 13").';
 const artLine = (input) => (hasRoomWeave(input) ? ` 글은 말하지 않고 그림만 보여 줄 것이 있는 쪽에는 그림 메모(art)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼. 없는 쪽은 적지 않아요.${NO_LETTERS}` : "");
 const pageLine = (p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}${str(p?.art, 200) ? ` [그림: ${str(p.art, 200)}]` : ""}`;
+/** R59: the same line with the writer's spread mark — the rewrite is shown what it is told to keep. */
+const markedPageLine = (p, n) => `${n + 1}쪽${p?.spread === true ? " (큰 그림)" : ""}: ${str(p?.ko, 1200)}${str(p?.art, 200) ? ` [그림: ${str(p.art, 200)}]` : ""}`;
 /** R54e: an openings book — the writer marks the pages that are one big picture. */
 const spreadLine = (input) => (input?.layoutPolicy?.kind === "openings" ? " 큰 그림 한 장이 두 쪽에 걸쳐 맡는 순간은 그 쪽에 spread: true를 적어요(책에 두세 번쯤; 나머지는 적지 않아요)." : "");
 const castRows = (premise) => list(premise?.cast).map((c) => `- ${str(c.name, 30)}${c.isNew ? " (이 책의 새 인물)" : ""}: 바람 — ${str(c.want, 100)}; 결점 — ${str(c.flaw, 100)}; 말투 — ${str(c.speech, 100)}`).join("\n");
@@ -798,7 +821,7 @@ export function draftRequest(input, premise, { records = [], castNotes = [], tie
  * made them laugh — choices, not a yes/no per page (the A/B had every draft at
  * the same "curious 18, lost 0").
  */
-const readSchema = (count, weave = false) => ({
+const readSchema = (count, weave = false, lean = false) => ({
   type: "object",
   additionalProperties: false,
   required: ["readers"],
@@ -822,7 +845,7 @@ const readSchema = (count, weave = false) => ({
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["draft", "skipPage", "lostPage", "laughPages", "change", "hardPage", "mannersPage", ...(weave ? ["echoFrom", "echoTo", "echo", "flat"] : [])],
+              required: ["draft", "skipPage", "lostPage", "laughPages", "change", "hardPage", "mannersPage", ...(lean ? ["changePage"] : weave ? ["echoFrom", "echoTo", "echo", "flat"] : [])],
               properties: {
                 draft: { type: "integer", minimum: 1, maximum: count },
                 skipPage: { type: "integer", minimum: 1 },
@@ -834,7 +857,8 @@ const readSchema = (count, weave = false) => ({
                 hardPage: { type: "integer", minimum: 0 },
                 mannersPage: { type: "integer", minimum: 0 },
                 // R55h: something from an early page that comes back later ("아, 그거!") — 0·0·"" when none; and a character the story would not miss.
-                ...(weave ? { echoFrom: { type: "integer", minimum: 0 }, echoTo: { type: "integer", minimum: 0 }, echo: { type: "string", maxLength: 80 }, flat: { type: "string", maxLength: 30 } } : {}),
+                // R59: a lean room asks neither; it asks which page the change is about, so the app can tell when two readers mean the same page.
+                ...(lean ? { changePage: { type: "integer", minimum: 0 } } : weave ? { echoFrom: { type: "integer", minimum: 0 }, echoTo: { type: "integer", minimum: 0 }, echo: { type: "string", maxLength: 80 }, flat: { type: "string", maxLength: 30 } } : {}),
               },
             },
           },
@@ -845,7 +869,18 @@ const readSchema = (count, weave = false) => ({
 });
 const draftText = (draft, i) => `=== 초고 ${i + 1} · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(pageLine).join("\n")}`;
 export function panelReadRequest(input, drafts) {
-  const weave = hasRoomWeave(input);
+  const weave = hasRoomWeave(input),
+    lean = hasRoomLean(input),
+    one = list(drafts).length === 1;
+  // R59: one book is read (nothing to choose between), a change names its page, and the two R55h questions are not asked.
+  if (lean)
+    return {
+      system: `너는 여섯 사람이에요. 아래 ${one ? "책을" : "초고를"} 한 쪽씩 읽어 주는 자리에 있어요. ${one ? "각자 이 책을 또 읽어 달라고 할지(again) 말해요(favorite은 1)." : "각자 **다시 읽고 싶은 초고 하나**(favorite)를 고르고, 그 초고를 또 읽어 달라고 할지(again) 말해요."} ${one ? "그리고" : "초고마다:"} 가장 넘기고 싶은 쪽 하나(skipPage, 꼭 하나), 무슨 말인지 몰랐던 쪽(lostPage, 없으면 0), 웃은 쪽들(laughPages, 없으면 빈 목록), **바꾸고 싶은 것 하나**(change — 무엇을 어떻게, 한 문장; 그 쪽 번호는 changePage에. 정말 없으면 빈 문자열과 0. 칭찬은 쓰지 않아요). 읽어 주는 어른(parent)만 둘을 더 말해요: 소리 내어 읽기 힘든 쪽 하나(hardPage — 입에 안 붙거나 숨이 차는 쪽, 없으면 0)와 존댓말·반말이 어색한 쪽 하나(mannersPage — 누가 누구에게 하는 말인지에 안 맞는 쪽, 없으면 0); 아이들은 둘 다 0. [그림: …]은 그 쪽 그림에만 보이는 것이에요. 까닭은 각자 제 식대로. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
+      user: list(drafts).map(draftText).join("\n\n"),
+      jsonSchema: readSchema(list(drafts).length, weave, true),
+      temperature: 0.7,
+      maxTokens: 6000,
+    };
   return {
     system: `너는 여섯 사람이에요. 아래 초고를 한 쪽씩 읽어 주는 자리에 있어요. 각자 **다시 읽고 싶은 초고 하나**(favorite)를 고르고, 그 초고를 또 읽어 달라고 할지(again) 말해요. 초고마다: 가장 넘기고 싶은 쪽 하나(skipPage, 꼭 하나), 무슨 말인지 몰랐던 쪽(lostPage, 없으면 0), 웃은 쪽들(laughPages, 없으면 빈 목록), 그 초고에서 **바꾸고 싶은 것 하나**(change — 어느 쪽의 무엇을 어떻게, 한 문장; 정말 없으면 빈 문자열. 칭찬은 쓰지 않아요). 읽어 주는 어른(parent)만 둘을 더 말해요: 소리 내어 읽기 힘든 쪽 하나(hardPage — 입에 안 붙거나 숨이 차는 쪽, 없으면 0)와 존댓말·반말이 어색한 쪽 하나(mannersPage — 누가 누구에게 하는 말인지에 안 맞는 쪽, 없으면 0); 아이들은 둘 다 0.${weave ? " 여섯 사람 모두 둘을 더 말해요: 앞쪽에 나온 것(물건·말·버릇·그림 속 작은 것)이 뒤에서 다시 쓰여 '아, 그거!' 한 순간이 있으면 처음 나온 쪽(echoFrom)·다시 쓰인 쪽(echoTo)·그게 무엇인지(echo)를 적어요 — 없으면 0·0·빈 문자열, 있는 척하지 않아요; 빠져도 이야기가 그대로일 인물이 있으면 그 이름 하나(flat, 없으면 빈 문자열). [그림: …]은 그 쪽 그림에만 보이는 것이에요." : ""} 여섯 사람이 같은 초고를 고를 수도 있지만 까닭은 각자 제 식대로. 점수는 없어요. 예의 차리지 말고 그 사람답게.\n\n[여섯 사람]\n${panelText(input)}`,
     user: list(drafts).map(draftText).join("\n\n"),
@@ -855,11 +890,11 @@ export function panelReadRequest(input, drafts) {
   };
 }
 /** Per draft: favourites × 4 + again × 2 + laughs − skipped pages (named by two) − lost pages (named by one); ties keep the writer's order. */
-export function countReadings(answer, count = DRAFT_COUNT) {
+export function countReadings(answer, count = DRAFT_COUNT, { agree = false } = {}) {
   const readers = list(object(answer) && !Array.isArray(answer) ? answer.readers : answer).filter(object),
     rows = new Map(),
     row = (n) => {
-      if (!rows.has(n)) rows.set(n, { draft: n, votes: 0, again: 0, laughed: 0, curious: 0, bored: 0, lost: 0, pull: 0, skip: new Map(), lostAt: new Map(), laughAt: new Map(), hardAt: new Map(), mannersAt: new Map(), words: [], echoReaders: 0, echoAt: new Map(), flatAt: new Map() });
+      if (!rows.has(n)) rows.set(n, { draft: n, votes: 0, again: 0, laughed: 0, curious: 0, bored: 0, lost: 0, pull: 0, skip: new Map(), lostAt: new Map(), laughAt: new Map(), hardAt: new Map(), mannersAt: new Map(), words: [], echoReaders: 0, echoAt: new Map(), flatAt: new Map(), changeAt: new Map() });
       return rows.get(n);
     },
     bump = (map, page) => map.set(page, (map.get(page) || 0) + 1);
@@ -895,7 +930,13 @@ export function countReadings(answer, count = DRAFT_COUNT) {
       if (hard >= 1) bump(r.hardAt, hard);
       if (manners >= 1) bump(r.mannersAt, manners);
       // R54g: `change` (one thing to change); `word` is read too for an answer saved before R54g.
-      if (str(d.change ?? d.word, 160)) r.words.push(str(d.change ?? d.word, 160));
+      // R59 (`agree`): a change reaches the writer only when two readers name the same page — one reader's complaint erased the
+      // book's only line spoken to the child. Every change is still kept on the row (`heard`) for the parent and the runner.
+      const changePage = Math.round(Number(d.changePage));
+      if (str(d.change ?? d.word, 160)) {
+        r.words.push(str(d.change ?? d.word, 160));
+        if (changePage >= 1) (r.changeAt.get(changePage) || r.changeAt.set(changePage, []).get(changePage)).push(str(d.change, 160));
+      }
       // R55h: an echo counts when it names an earlier and a later page; a flat character when a name is given.
       const from = Math.round(Number(d.echoFrom)),
         to = Math.round(Number(d.echoTo));
@@ -920,7 +961,8 @@ export function countReadings(answer, count = DRAFT_COUNT) {
       // The pull is unchanged by R55d: the adult's two pages steer the rewrite, not the choice of draft.
       // R55h: a draft whose early pages come back later gains up to 3 (one per reader who saw it) — a nudge beside the votes (4 each), so a
       // layered draft the readers also liked wins a tie against a straight one; an answer saved before R55h has no echo and counts as before.
-      return { draft: r.draft, votes: r.votes, again: r.again, laughed: r.laughed, curious: r.curious, bored: r.bored, lost: r.lost, pull: r.votes * 4 + r.again * 2 + laughPages.length - boredPages.length - lostPages.length + Math.min(3, r.echoReaders), boredPages, lostPages, laughPages, hardPages, mannersPages, words: r.words, ...(r.echoReaders ? { echoes: r.echoReaders, echoList } : {}), ...(flatCast.length ? { flatCast } : {}) };
+      const agreed = [...r.changeAt].filter(([, texts]) => texts.length >= 2).sort((a, b) => a[0] - b[0]).map(([page, texts]) => `${page}쪽 — ${texts.join(" / ")}`);
+      return { draft: r.draft, votes: r.votes, again: r.again, laughed: r.laughed, curious: r.curious, bored: r.bored, lost: r.lost, pull: r.votes * 4 + r.again * 2 + laughPages.length - boredPages.length - lostPages.length + Math.min(3, r.echoReaders), boredPages, lostPages, laughPages, hardPages, mannersPages, words: agree ? agreed : r.words, ...(agree ? { heard: r.words.length } : {}), ...(r.echoReaders ? { echoes: r.echoReaders, echoList } : {}), ...(flatCast.length ? { flatCast } : {}) };
     });
 }
 export function pickDraft(rows) {
@@ -947,11 +989,13 @@ export function rewriteRequest(input, draft, notes, { records = [], castNotes = 
     cast = weave ? [castNotesBlock(castNotes, hasRoomStages(input) ? ties : []), hasRoomStages(input) ? flowBlock(treatment) : ""].filter(Boolean).join("\n\n") : "";
   return {
     // R54g: targeted — the A/B's astra rewrote all 14 pages (7% of the words kept) of the draft the panel had chosen.
-    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·읽기 힘든 쪽·말높임이 어색한 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. 큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요." +
+    system: "너는 이 책을 쓴 작가예요. 독자 여섯 사람이 한 쪽씩 읽는 자리에 있었고, 아래는 그들의 반응이에요. 독자단이 이 초고를 골랐으니 책은 이대로 살려요: 반응이 가리킨 쪽(넘기고 싶어한 쪽·모른 쪽·읽기 힘든 쪽·말높임이 어색한 쪽·바꾸고 싶은 것)과 그 앞뒤 한 쪽만 손대고, 웃은 쪽은 글자 하나 바꾸지 않고, 나머지 쪽도 바꿀 까닭이 없으면 그대로 돌려줘요. 손대는 쪽에서는 합치거나 나누거나 빼거나 더해도 돼요. 분량은 늘리지 않아요 — 그림책이에요. 제목은 다시 정해도 돼요. " +
+      // R59: the mark is on the line the writer reads (it was not, and three marks came back as none).
+      (hasRoomLean(input) ? "쪽 번호 옆의 (큰 그림)은 그 쪽이 두 쪽에 걸친 큰 그림 한 장이라는 표시예요 — 돌려줄 때 그 쪽에 spread: true를 그대로 적어요(손댄 쪽은 새로 정해도 돼요)." : "큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요.") +
       // R55h: the backward look — how a writer plants: read from the end, and put what the end uses where an early page can show it.
       (weave ? " 한 가지는 더 해도 돼요: 끝에서 거꾸로 읽어, 끝이 쓰는 물건·말·버릇이 앞에서 한 번도 보이지 않았다면 앞쪽 한 곳에 아무렇지 않게 먼저 놓아요 — 그림 메모(art) 한 줄이면 충분하고, 글은 한 줄까지; 설명은 붙이지 않아요. [그림: …]은 그 쪽의 그림 메모예요 — art로 그대로 돌려주거나 고쳐요." + NO_LETTERS + " 그림 메모가 설명하는 글자를 그려 넣으라고 하면 그렇게 바꿔 적어요." : ""),
     // The notes keep their lines (str() would fold them into one).
-    user: `${roomBrief(input, { records })}${cast ? `\n\n${cast}` : ""}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(pageLine).join("\n")}`,
+    user: `${roomBrief(input, { records })}${cast ? `\n\n${cast}` : ""}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(hasRoomLean(input) ? markedPageLine : pageLine).join("\n")}`,
     jsonSchema: draftSchema(input),
     temperature: 0.8,
     maxTokens: 8000,
@@ -1187,6 +1231,11 @@ export function polishRequest(input, pages, notes) {
     maxTokens: 8000,
   };
 }
+/** R59: the wording when the room writes one draft. */
+const ONE_DRAFT_PROGRESS = Object.freeze({
+  drafts: "작가실 · 작가가 고른 흐름으로 책을 통째로 쓰고 있어요.",
+  read: "작가실 · 독자 여섯이 책을 한 쪽씩 읽고 있어요.",
+});
 const DRAFT_PROGRESS = Object.freeze({
   cast: "작가실 · 작가가 인물을 한 사람씩 만나 보고 있어요.",
   flow: "작가실 · 작가가 이야기의 흐름을 세 가지로 적어 보고 있어요.",
@@ -1216,6 +1265,20 @@ export function rewriteChange(before, after) {
   const kept = next.filter((t) => have.has(t)).length;
   return { before: prev.length, after: next.length, kept, changed: next.length - kept, share: next.length ? Math.round(((next.length - kept) / next.length) * 100) / 100 : 0 };
 }
+/**
+ * R59: a page the rewrite returned word for word keeps the spread mark it had (the app's copy — the rewrite may forget it,
+ * and a page the writer left alone was not re-decided). Returns the pages and how many marks were put back.
+ */
+export function keepSpreadMarks(before, after) {
+  const marked = new Set(list(before).filter((p) => p?.spread === true).map((p) => flat(p?.ko)).filter(Boolean));
+  let restored = 0;
+  const pages = list(after).map((p) => {
+    if (p?.spread === true || !marked.has(flat(p?.ko))) return p;
+    restored += 1;
+    return { ...p, spread: true };
+  });
+  return { pages, restored };
+}
 /** The panel named nothing to fix (no page to skip, none lost, nothing to change): the rewrite call is skipped. */
 export const nothingToRewrite = (row) => object(row) && !list(row.boredPages).length && !list(row.lostPages).length && !list(row.hardPages).length && !list(row.mannersPages).length && !list(row.flatCast).length && !list(row.words).some((w) => str(w, 160));
 export async function runRoomDrafts(input, outline, options = {}, services = {}) {
@@ -1223,13 +1286,15 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
   const premise = outline?.writersRoom?.premise;
   if (!object(premise)) throw new StoryValidationError("prose", ["작가실이 고른 전제가 없어요. 줄거리 단계부터 다시 만들어 주세요."]);
   const journal = ledger("roomDrafts", input, options, { version: WRITERS_ROOM_VERSION, premise }, "writerCheckpoint");
-  const count = Math.max(1, Math.min(DRAFT_COUNT, Number(options.roomDraftCount) || DRAFT_COUNT));
+  // R59: a lean room writes one draft (its three flows are where the book is chosen).
+  const lean = hasRoomLean(input);
+  const count = Math.max(1, Math.min(DRAFT_COUNT, Number(options.roomDraftCount) || (lean ? 1 : DRAFT_COUNT)));
   const record = { kind: "roomDrafts", version: WRITERS_ROOM_VERSION, phase: "drafts", drafts: [], rows: [], chosen: null, notes: "", rewritten: false, rewriteSkipped: false, rewriteChange: null, english: false, levelNotes: [], polished: false, levelNotesAfter: [] };
   const snapshot = async (phase) => {
     record.phase = phase;
     journal.checkpoint.record = clone(record);
     await journal.save();
-    options.onProgress?.({ stage: "roomDrafts", phase, message: DRAFT_PROGRESS[phase], room: clone(record) });
+    options.onProgress?.({ stage: "roomDrafts", phase, message: (count === 1 && ONE_DRAFT_PROGRESS[phase]) || DRAFT_PROGRESS[phase], room: clone(record) });
   };
   const ask = async (label, request, role) => {
     const response = await journal.call(role, request, services);
@@ -1298,7 +1363,8 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     const drafts = (
       await Promise.all(
         Array.from({ length: count }, (_, i) =>
-          ask(`초고 ${i + 1}`, { ...base, user: `${base.user}\n\n${draftWeaveLine(input, i, count, treatment)}` }, "outline").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
+          // R59: one draft carries no "draft n of m" tail — there is no other draft to differ from.
+          ask(`초고 ${i + 1}`, lean && count === 1 ? base : { ...base, user: `${base.user}\n\n${draftWeaveLine(input, i, count, treatment)}` }, "outline").then((raw) => normalizeDraft(raw, `${str(premise.title, 40)} ${i + 1}`)),
         ),
       )
     ).filter(Boolean);
@@ -1312,10 +1378,12 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     });
     let pick = 1,
       chosen = drafts[0];
-    if (drafts.length > 1) {
+    // R59: a lean room's single draft is read too (the readers' pages are what the rewrite works from).
+    const reads = lean || drafts.length > 1;
+    if (reads) {
       await snapshot("read");
       const read = await ask("독자단", panelReadRequest(input, drafts), "cheap");
-      const rows = countReadings(read, drafts.length);
+      const rows = countReadings(read, drafts.length, { agree: lean });
       record.rows = rows;
       pick = Math.min(drafts.length, pickDraft(rows));
       chosen = drafts[pick - 1];
@@ -1326,7 +1394,9 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       title = chosen.title;
     // R56: the editor's thread check of the chosen draft (the cheap model) — its notes join the readers' before the rewrite.
     let threads = null;
-    if (stages && options.roomRewrite !== false && drafts.length > 1) {
+    // R59: in a lean room the thread check cannot start a rewrite — it runs only when the readers already did, and its notes ride along.
+    const readersAsk = reads && !nothingToRewrite(record.rows.find((row) => row.draft === pick));
+    if (stages && options.roomRewrite !== false && (lean ? readersAsk : drafts.length > 1)) {
       await snapshot("threads");
       threads = settleThreads(await note(threadCheckRequest(input, chosen, treatment), "cheap"), chosen.pages.length);
       record.threads = threads;
@@ -1334,8 +1404,8 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       if (more) record.notes = [record.notes, more].filter(Boolean).join("\n");
     }
     // R54g: no page to skip, none lost, nothing to change → the panel's pick stands as written (one upper call saved).
-    if (options.roomRewrite !== false && drafts.length > 1 && !threadsNeedWork(threads) && nothingToRewrite(record.rows.find((row) => row.draft === pick))) record.rewriteSkipped = true;
-    if (options.roomRewrite !== false && drafts.length > 1 && !record.rewriteSkipped) {
+    if (options.roomRewrite !== false && reads && (lean ? !readersAsk : !threadsNeedWork(threads) && nothingToRewrite(record.rows.find((row) => row.draft === pick)))) record.rewriteSkipped = true;
+    if (options.roomRewrite !== false && reads && !record.rewriteSkipped) {
       await snapshot("rewrite");
       const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes, { castNotes, ties, treatment }), "outline"), title);
       if (again) {
@@ -1343,6 +1413,12 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
         title = again.title;
         record.rewritten = true;
         record.rewriteChange = rewriteChange(chosen.pages, pages);
+        // R59: the marks of the pages the rewrite left alone are the app's to keep.
+        if (lean) {
+          const kept = keepSpreadMarks(chosen.pages, pages);
+          pages = kept.pages;
+          record.spreadMarks = { before: chosen.pages.filter((p) => p.spread).length, after: pages.filter((p) => p.spread).length, restored: kept.restored };
+        }
       }
     }
     if (input?.language !== "ko") {
@@ -1383,7 +1459,9 @@ export function roomDraftLine(draft) {
   const notes = list(r.levelNotes).length;
   const change = r.rewriteChange,
     echoes = list(list(r.rows).find((row) => row?.draft === r.chosen)?.echoList).length;
-  return `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라${r.rewritten ? ` 고쳐 쓰고${change ? `(${change.after}쪽 중 ${change.changed}쪽 손봄)` : ""}` : r.rewriteSkipped ? " 고칠 곳이 없어 그대로 두고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽${list(r.castNotes).length ? ` · 인물 노트 ${list(r.castNotes).length}명` : ""}${list(draft.pages).some((p) => p?.art) ? ` · 그림 메모 ${list(draft.pages).filter((p) => p?.art).length}쪽` : ""}${echoes ? ` · 독자가 알아본 되돌아옴 ${echoes}곳` : ""}${r.flowChosen ? ` · 흐름 ${list(r.treatments).length}안 중 ${r.flowChosen}번` : ""}${object(r.threads) ? ` · 복선 점검: 거둔 것 ${list(r.threads.kept).length} · 고칠 곳 ${list(r.threads.loose).length + list(r.threads.unplanted).length}` : ""}`;
+  // R59: one draft — nothing was chosen between.
+  const lead = list(r.drafts).length === 1 ? `작가실 · 초고를${list(r.rows).length ? " 독자단이 읽고" : " 쓰고"}` : `작가실 · 초고 ${list(r.drafts).length}권 중 독자단이 ${r.chosen}번을 골라`;
+  return `${lead}${r.rewritten ? ` 고쳐 쓰고${change ? `(${change.after}쪽 중 ${change.changed}쪽 손봄)` : ""}` : r.rewriteSkipped ? " 고칠 곳이 없어 그대로 두고" : ""}${r.english ? " 영어판을 쓰고" : ""}${notes ? ` 등급 참고 ${notes}건 중 ${r.polished ? `다듬어 ${list(r.levelNotesAfter).length}건 남음` : "다듬지 않음"}` : " 등급 참고 없음"} · ${list(draft.pages).length}쪽${list(r.castNotes).length ? ` · 인물 노트 ${list(r.castNotes).length}명` : ""}${list(draft.pages).some((p) => p?.art) ? ` · 그림 메모 ${list(draft.pages).filter((p) => p?.art).length}쪽` : ""}${echoes ? ` · 독자가 알아본 되돌아옴 ${echoes}곳` : ""}${r.flowChosen ? ` · 흐름 ${list(r.treatments).length}안 중 ${r.flowChosen}번` : ""}${object(r.threads) ? ` · 복선 점검: 거둔 것 ${list(r.threads.kept).length} · 고칠 곳 ${list(r.threads.loose).length + list(r.threads.unplanted).length}` : ""}`;
 }
 /**
  * R56: the writer's working notes of a finished room draft, for the folded
@@ -1535,7 +1613,8 @@ const BACKDROPS_READ = Object.freeze(["scene", "plain"]);
 function readingPlanFields(input) {
   if (!wantsPicturePlan(input)) return { properties: {}, line: "" };
   const drama = hasStoryDrama(input),
-    pocket = hasTextPocket(input);
+    // R59: a lean room does not ask the reading where the words sit (placeRoomPockets decides).
+    pocket = hasTextPocket(input) && !hasRoomLean(input);
   return {
     properties: {
       shot: { type: "string", enum: [...SHOTS] },
@@ -1871,7 +1950,7 @@ export function fitSpreadMarks(pages, openings, { cap = null, capEn = null } = {
  * page only, and the things named on a page, absent for two pages or more, and
  * named again. A reference for the parent and the runner — nothing is checked.
  */
-export function weaveReport(pages, { artNotes = 0 } = {}) {
+export function weaveReport(pages, { artNotes = 0, returning: wanted = true } = {}) {
   const rows = list(pages).filter(object),
     castPages = new Map(),
     seen = new Map();
@@ -1892,8 +1971,123 @@ export function weaveReport(pages, { artNotes = 0 } = {}) {
     pages: rows.length,
     cast: [...castPages].map(([id, count]) => ({ id, pages: count })),
     single: [...castPages].filter(([, count]) => count === 1).map(([id]) => id),
-    returning: returning.slice(0, 8),
+    ...(wanted ? { returning: returning.slice(0, 8) } : {}),
     artNotes,
+  };
+}
+/* ---------- R59: the app places the printed words; the book is counted from its own Korean words ---------- */
+const wordUnits = (text) => [...String(text ?? "")].reduce((n, ch) => n + (/[\u3131-\uD7A3]/u.test(ch) ? 1 : 0.5), 0);
+/** The most letters (Korean 1, others ½) a page may carry and still get a field inside its picture. */
+export const POCKET_WORDS_MAX = 60;
+/**
+ * R59: where the words of a lean room page sit. The cheap reading used to pick a side for every page (4 of 11 fields
+ * were usable, and each request also said "the text is printed below"). Now the app decides, from what it already
+ * knows: a field only on a wide picture whose words are short, on the side away from the figure (the side the
+ * composition sentence gives the lead, so the two sentences agree); every other page prints its words below the
+ * picture. Mutates the accepted pages' own plans; returns how many pages got a field.
+ */
+export function placeRoomPockets(pagination, input) {
+  if (!hasTextPocket(input)) return 0;
+  let placed = 0;
+  for (const page of list(pagination?.pages)) {
+    const plan = object(page?.picturePlan) ? page.picturePlan : null;
+    if (!plan) continue;
+    delete plan.pocket;
+    if (plan.shot !== "wide" || plan.backdrop === "plain" || page.backdrop) continue;
+    const words = input?.language === "en" ? page.textEn ?? page.en : page.textKo ?? page.ko;
+    if (!str(words, 1200) || wordUnits(words) > POCKET_WORDS_MAX) continue;
+    const side = page.staging?.characterSide,
+      lead = side === "left" || side === "right" ? side : side ? "" : page.kind === "spread" ? (Number(page.openingNo) % 2 === 0 ? "right" : "left") : page.side === "right" ? "right" : "left";
+    if (!lead) continue;
+    plan.pocket = lead === "left" ? "right" : "left";
+    placed += 1;
+  }
+  return placed;
+}
+const KO_PARTICLES = Object.freeze([
+  ["에서는", 0], ["에게서", 0], ["한테서", 0], ["으로는", 1], ["이랑은", 1], ["에서", 0], ["에게", 0], ["한테", 0], ["까지", 0], ["부터", 0], ["처럼", 0], ["보다", 0], ["마다", 0], ["하고", 0], ["으로", 1], ["이랑", 1],
+  ["은", 1], ["이", 1], ["을", 1], ["과", 1], ["아", 1], ["는", 2], ["가", 2], ["를", 2], ["와", 2], ["로", 2], ["랑", 2], ["야", 2], ["에", 0], ["의", 0], ["도", 0], ["만", 0],
+]);
+/** Everyday nouns whose last letter looks like a predicate ending (바다, 강아지 …) — kept as they are. */
+const KO_NOUNS_LIKE_PREDICATES = new Set("바다 강아지 송아지 망아지 돼지 편지 바지 가지 딸기지 반지 먼지 할머니 어머니 아주머니 주머니 그네 가게 무게 날개지 담요 창고 최고 사고 냉장고 상어 문어 고등어 붕어 잉어 단어 의자 모자 과자 피자 국자 그림자 상자 아기 고기 이야기 소리 다리 머리 꼬리 도토리 개구리 오리".split(" "));
+const batchim = (ch) => {
+  const code = String(ch || "").codePointAt(0) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0;
+};
+/** A Korean word with its particle taken off by the sound it follows (1 = after a consonant, 2 = after a vowel); "" for what reads as a predicate. */
+function koStem(word) {
+  const w = String(word || "");
+  if (w.length < 2) return "";
+  if (KO_NOUNS_LIKE_PREDICATES.has(w)) return w;
+  if (/(요|다|죠|까|니|네|지|고|며|서|면|게|어|아|해|여|러|려|듯|던)$/u.test(w)) return "";
+  for (const [particle, after] of KO_PARTICLES) {
+    // A particle chosen by sound may leave a one-letter word (코가 → 코, 집으로 → 집); the others (도·만·에·의) need two letters before them (파도 stays 파도).
+    if (!w.endsWith(particle) || w.length - particle.length < (after ? 1 : 2)) continue;
+    const before = w[w.length - particle.length - 1];
+    if (after === 1 && !batchim(before)) continue;
+    if (after === 2 && batchim(before)) continue;
+    return w.slice(0, -particle.length);
+  }
+  return /(은|는|을)$/u.test(w) ? "" : w;
+}
+const koWords = (text) => (String(text ?? "").match(/[가-힣]+/gu) || []).map(koStem).filter(Boolean);
+const bigrams = (text) => {
+  const t = String(text ?? "").replace(/[^가-힣]+/gu, "");
+  return new Set(Array.from({ length: Math.max(0, t.length - 1) }, (_, i) => t.slice(i, i + 2)));
+};
+/** How alike two Korean texts are: Jaccard over their two-letter runs (0–1, two decimals). */
+export function textLikeness(a, b) {
+  const x = bigrams(a),
+    y = bigrams(b);
+  if (!x.size || !y.size) return 0;
+  let both = 0;
+  for (const g of x) if (y.has(g)) both += 1;
+  return Math.round((both / (x.size + y.size - both)) * 100) / 100;
+}
+/**
+ * R59: the book counted from its own Korean words — never from a model's list (the R55h count took the last English
+ * word of the cheap reading's props: "forest floor" counted as a returning "floor", the acorns were missed). A
+ * reference for the parent and the runner; nothing is checked and no stem rule is exact (particles are taken off by
+ * sound, predicates dropped by their endings), so the words are listed beside every number.
+ *   castText   who is named in the words, on which pages (cast = [{id, name}]; the first is the hero)
+ *   companions pages whose words name anyone but the hero
+ *   artOnly    per character, pages where only the art note names them
+ *   lateWords  words first heard in the last four pages (a pay-off the listener was never given the plant for);
+ *              `artFirst` marks those an earlier art note had already named
+ *   refrains   short lines (≤ 12 letters) that come back on another page
+ *   artShare   letters of the art notes ÷ letters of the words
+ */
+export function textWeave(pages, { cast = [] } = {}) {
+  const rows = list(pages).filter(object).map((p) => ({ ko: String(p.textKo ?? p.ko ?? ""), art: String(p.art ?? "") })),
+    names = list(cast).filter(object).map((c) => ({ id: String(c.id ?? ""), name: str(c.name, 30) })).filter((c) => c.name),
+    pagesOf = (name, key) => rows.map((r, i) => (r[key].includes(name) ? i + 1 : 0)).filter(Boolean),
+    castText = names.map((c) => {
+      const text = pagesOf(c.name, "ko"),
+        art = pagesOf(c.name, "art").filter((n) => !text.includes(n));
+      return { id: c.id, name: c.name, pages: text, ...(art.length ? { artOnly: art } : {}) };
+    }),
+    others = names.slice(1),
+    companions = rows.map((r, i) => (others.some((c) => r.ko.includes(c.name)) ? i + 1 : 0)).filter(Boolean),
+    tail = Math.max(0, rows.length - 4),
+    early = new Set(rows.slice(0, tail).flatMap((r) => koWords(r.ko))),
+    earlyArt = new Set(rows.slice(0, tail).flatMap((r) => koWords(r.art))),
+    known = new Set(names.map((c) => c.name)),
+    late = [];
+  rows.slice(tail).forEach((r, k) => {
+    for (const w of koWords(r.ko)) if (!early.has(w) && ![...known].some((name) => name.startsWith(w)) && !late.some((x) => x.word === w)) late.push({ word: w, page: tail + k + 1, ...(earlyArt.has(w) ? { artFirst: true } : {}) });
+  });
+  const lines = new Map();
+  rows.forEach((r, i) => {
+    for (const line of new Set(sentences(r.ko).map((t) => flat(t)).filter((t) => t && [...t.replace(/[^가-힣]/gu, "")].length <= 12 && /[가-힣]/u.test(t)))) (lines.get(line) || lines.set(line, []).get(line)).push(i + 1);
+  });
+  const letters = (key) => rows.reduce((n, r) => n + r[key].replace(/[^가-힣]/gu, "").length, 0);
+  return {
+    pages: rows.length,
+    castText,
+    companions,
+    lateWords: late.slice(0, 16),
+    refrains: [...lines].filter(([, at]) => at.length >= 2).map(([line, at]) => ({ line, pages: at })).slice(0, 8),
+    artShare: letters("ko") ? Math.round((letters("art") / letters("ko")) * 100) / 100 : 0,
   };
 }
 export async function runRoomPages(input, outline, draft, options = {}, services = {}) {
@@ -1925,6 +2119,9 @@ export async function runRoomPages(input, outline, draft, options = {}, services
     // R54e: the room's binding is the writer's — no "all pairs → last opening a spread" guard.
     // R55c: staging on — the pages get the camera rotation, sides and light the picture requests read (a room book had none before and fell back to the old prompt).
     const pagination = acceptEcoPagination(settled, shaped, sized, { bookId: sized.bookId, roomBinding: true, staging: true });
+    // R59: a lean room's text fields are the app's (after the staging, so the field is on the side away from the figure).
+    const lean = hasRoomLean(sized),
+      pockets = lean ? placeRoomPockets(pagination, sized) : null;
     const report = inspectStory(shaped, pagination, sized);
     return {
       data: pagination,
@@ -1933,7 +2130,9 @@ export async function runRoomPages(input, outline, draft, options = {}, services
         // R55g: how often the reading found something hidden from the hero or held back for the next page (watched, not enforced).
         reading: { hidden: list(settled.pages).filter((p) => p.picturePlan?.hidden).length, holdBack: list(settled.pages).filter((p) => p.picturePlan?.holdBack).length, lettering: list(settled.pages).filter((p) => p.picturePlan?.lettering).length },
         // R55h: measured from the finished pages, never asked of a model — who is on how many pages, and which things come back after a gap.
-        weave: weaveReport(settled.pages, { artNotes: pages.filter((p) => p.art).length }) },
+        // R59: a lean room is counted from its Korean words (textWeave); the English last-word count of returning props is not made for it.
+        weave: { ...weaveReport(settled.pages, { artNotes: pages.filter((p) => p.art).length, returning: !lean }), text: textWeave(pages, { cast: list(sized.characters) }) },
+        ...(lean ? { pockets: { placed: pockets, pages: list(pagination.pages).length } } : {}) },
     };
   } catch (error) {
     if (error?.name === "AbortError") throw error;

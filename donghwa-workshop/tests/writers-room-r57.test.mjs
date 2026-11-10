@@ -22,7 +22,9 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '할머니 댁에 호박 가져다 드리기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+/* R59 moved new drafts to weave 4 (one draft, the app's text fields) and pictureRefs 2 (request hygiene); this file pins the room as R58 left it. */
+const asR58 = (input) => ({...input, writersRoom: {...input.writersRoom, weave: 3}, ...(input.pictureRefs ? {pictureRefs: {version: 1}} : {})});
+const roomInput = (id) => asR58(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id}));
 const preWide = (input) => ({...input, writersRoom: {...input.writersRoom, weave: 2}});
 const who = (name, isNew = false, look = '') => ({name, isNew, want: `${name}의 바람`, flaw: '', speech: '', nameEn: isNew ? `${name}En` : '', kind: isNew ? 'animal' : '', look});
 const place = (name, isNew = false, look = '') => ({name, isNew, nameEn: isNew ? `${name} place` : '', type: isNew ? 'stream' : '', look});
@@ -34,6 +36,7 @@ const ENSEMBLE = (n) => premise(`여럿 ${n}`, [who('유하'), who('엄마'), wh
 test('R57 the marker: a new room draft is weave 3 (wide, and still staged); a weave 2 job is staged but not wide', () => {
   const input = roomInput('w1');
   assert.deepEqual(input.writersRoom, {version: 1, weave: 3});
+  assert.deepEqual(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'w1b'}).writersRoom, {version: 1, weave: 4}, 'R59: a new draft is weave 4 — still wide and staged');
   assert.deepEqual([W.hasRoomWeave(input), W.hasRoomStages(input), W.hasRoomWide(input)], [true, true, true]);
   assert.deepEqual([W.hasRoomStages(preWide(input)), W.hasRoomWide(preWide(input))], [true, false]);
   assert.deepEqual(W.writersRoomRef({version: 1, weave: 3}), {version: 1, weave: 3});
@@ -196,7 +199,8 @@ test('R57 FULL AUTO (text hold): the place card is made but no sheet is bought u
 test('R57 the estimate: the wider premise answer is priced; a staged job frozen before R57 is priced as it was', () => {
   const base = {settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true};
   const total = (est) => est.stages.reduce((n, s) => n + (Number(s.costUsd) || 0), 0), requests = (est) => est.stages.reduce((n, s) => n + s.requestCount, 0);
-  const wide = estimateStoryTextCost(base), staged = estimateStoryTextCost({...base, roomWide: false});
+  // R59: a new job writes one draft; `wide` here is a job frozen at R57/R58 (roomLean: false).
+  const wide = estimateStoryTextCost({...base, roomLean: false}), staged = estimateStoryTextCost({...base, roomWide: false});
   assert.equal(requests(wide), requests(staged), 'no new call');
   assert.ok(Math.abs(total(staged) - 1.704) < 0.01 && Math.abs(total(wide) - 1.788) < 0.01, `${total(staged).toFixed(3)} ${total(wide).toFixed(3)}`);
 });

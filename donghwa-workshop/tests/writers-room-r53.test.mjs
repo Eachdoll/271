@@ -46,7 +46,8 @@ test('R53 the binding: 8, 12, 16 or 24 pages, the words untouched — a short bo
 
 test('R53 the extraction: the cheap call names cast IDs, places and beats; made-up IDs and beats fall back; the acceptor builds the pagination; the page count follows the book', async () => {
   // R54b: a room draft keeps the asked layout; this is the page-book case (openings: tests/writers-room-r54b.test.mjs).
-  const input = normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'pages'}).input, bookId: 'x'});
+  // R59: this test pins the reading as R58 left it (weave 3, pictureRefs 1).
+  const input = ((i) => ({...i, writersRoom: {...i.writersRoom, weave: 3}, pictureRefs: {version: 1}}))(normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'pages'}).input, bookId: 'x'}));
   assert.equal(input.layoutPolicy, undefined, 'a page book');
   assert.equal(input.pageCount, 16);
   const outline = {...demoOutline(input), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [{title: '파마 날'}], premises: [PREMISE]}};
@@ -93,7 +94,8 @@ test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat
   const settings = {engine: 'openai'};
   const room = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true});
   assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'roomCastNotes', 'roomFlows', 'roomFlowPick', 'roomCastRevise', 'roomDrafts', 'roomRead', 'roomThreads', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages'], 'R54e: no read-through row — the room pages skip it; R55c: no outline row — the outline is the app\'s');
-  assert.equal(room.stages.find((s) => s.stage === 'roomDrafts').requestCount, 3);
+  assert.equal(room.stages.find((s) => s.stage === 'roomDrafts').requestCount, 1, 'R59: a new room job writes one draft');
+  assert.equal(estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true, roomLean: false}).stages.find((s) => s.stage === 'roomDrafts').requestCount, 3, 'a job frozen before R59 writes three');
   assert.equal(room.room, true);
   const plain = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, council: true, orchestration: true});
   assert.ok(plain.stages.some((s) => s.stage === 'sceneBriefs') && !plain.stages.some((s) => /^room/.test(s.stage)));

@@ -57,8 +57,9 @@ test('R55e the page cap comes from the spec (5 for a picture-led K2 book); a joi
 });
 
 test('R55e the anthropic writer\'s room rows are 1.6× longer; openai\'s are as before', () => {
-  const openai = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true});
-  const anthropic = estimateStoryTextCost({settings: {engine: 'anthropic'}, pageCount: 16, diet: true, editor: true, room: true});
+  // R59: new jobs write one draft; these rows are a job's frozen before R59 (roomLean: false).
+  const openai = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true, roomLean: false});
+  const anthropic = estimateStoryTextCost({settings: {engine: 'anthropic'}, pageCount: 16, diet: true, editor: true, room: true, roomLean: false});
   const row = (est, stage) => est.stages.find((s) => s.stage === stage);
   const out = (est, stage) => Number(row(est, stage).outputTokensEstimated);
   // Both providers' writers are reasoning models (×2); the anthropic rows add ×1.6 on top.
@@ -66,7 +67,7 @@ test('R55e the anthropic writer\'s room rows are 1.6× longer; openai\'s are as 
   const total = (est) => est.stages.reduce((sum, r) => sum + (Number(r.costUsd) || 0), 0);
   assert.ok(total(anthropic) > 0.71 * 1.2, `anthropic K2 16쪽 estimate ${total(anthropic).toFixed(3)} should now sit above the third A/B's $0.71 with room to spare`);
   assert.ok(Math.abs(total(openai) - 1.788) < 0.01, 'openai rows unchanged by R55e (R55h: + the cast notes, $1.188 → $1.288; R56: + the staged room, → $1.704; R57: the premises name their places, → $1.788)');
-  const before = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true, roomWeave: false});
+  const before = estimateStoryTextCost({settings: {engine: 'openai'}, pageCount: 16, diet: true, editor: true, room: true, roomWeave: false, roomLean: false});
   assert.ok(Math.abs(total(before) - 1.188) < 0.01, 'a room job frozen before R55h is priced as before');
   assert.ok(out(anthropic, 'roomPremises') > out(openai, 'roomPremises'));
   assert.equal(row(openai, 'roomDrafts').requestCount, 3);

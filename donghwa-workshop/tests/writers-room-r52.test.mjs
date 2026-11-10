@@ -48,7 +48,7 @@ const roomOutline = (input) => ({...demoOutline(input), writersRoom: {kind: 'wri
 test('R52 the marker carries the recent books (line, engine, laugh); the brief and the sieve read them from the marker; an approved room book records its engine', () => {
   const records = [{bookId: 'old', approved: true, createdAt: '2026-10-29T00:00:00.000Z', topic: '돌돌 말린 길', outline: {beats: [{index: 1}], logline: '유하가 방석에서 태양계 여행을 떠나요', writersRoom: {premise: {engine: 'pile_up'}}}, usedElements: {humor: ['꾸러미가 들썩여요']}}];
   const policy = W.writersRoomPolicy(records);
-  assert.deepEqual(policy, {version: 1, weave: 3, recent: [{line: '돌돌 말린 길 — 유하가 방석에서 태양계 여행을 떠나요 — 웃음: 꾸러미가 들썩여요', engine: 'pile_up', laugh: '꾸러미가 들썩여요'}]});
+  assert.deepEqual(policy, {version: 1, weave: 4, recent: [{line: '돌돌 말린 길 — 유하가 방석에서 태양계 여행을 떠나요 — 웃음: 꾸러미가 들썩여요', engine: 'pile_up', laugh: '꾸러미가 들썩여요'}]});
   assert.deepEqual(W.writersRoomRef({version: 1, recent: [{line: ' a ', engine: 'x'}, {line: ''}, 3]}), {version: 1, recent: [{line: 'a', engine: 'x'}]});
   assert.equal(W.writersRoomRef({version: 2}), null);
   const input = {...roomInput('m'), writersRoom: policy};

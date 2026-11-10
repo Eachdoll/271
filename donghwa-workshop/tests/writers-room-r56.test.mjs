@@ -21,7 +21,9 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '숲속에서 자꾸 숨는 아기 사슴', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+/* R59 moved new drafts to weave 4 (one draft, the app's text fields) and pictureRefs 2 (request hygiene); this file pins the room as R58 left it. */
+const asR58 = (input) => ({...input, writersRoom: {...input.writersRoom, weave: 3}, ...(input.pictureRefs ? {pictureRefs: {version: 1}} : {})});
+const roomInput = (id) => asR58(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id}));
 const weave1 = (input) => ({...input, writersRoom: {...input.writersRoom, weave: 1}});
 const PREMISE = {title: '쉿, 콩이', line: '콩이는 늘 유하 등 뒤에 있어요', engine: 'reader_knows', laugh: '엄마도 못 찾아요', picture: '등 뒤의 작은 뿔', cast: [
   {name: '유하', isNew: false, want: '콩이를 찾고 싶다', flaw: '뒤를 안 본다', speech: '"어디 갔지?"', nameEn: '', kind: '', look: ''},

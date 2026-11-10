@@ -56,7 +56,7 @@ test('R51 the marker: only when the parent\'s 작가실 setting is on; kept by n
   const plain = normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'p'});
   assert.equal(plain.writersRoom, undefined);
   const input = normalizeStoryInput({...inputFromWizard(roomState(), wizard, {layout: 'openings'}).input, bookId: 'r'});
-  assert.deepEqual(input.writersRoom, {version: 1, weave: 3});
+  assert.deepEqual(input.writersRoom, {version: 1, weave: 4});
   assert.ok(W.hasWritersRoom(input));
   assert.doesNotMatch(JSON.stringify(leanVisibleInput(input, 'outline')), /writersRoom/);
   assert.equal(normalizeStoryInput({...input, writersRoom: {version: 3}}).writersRoom, undefined);
@@ -64,7 +64,7 @@ test('R51 the marker: only when the parent\'s 작가실 setting is on; kept by n
   assert.equal(getTextGenerationSettings(roomState()).writersRoom, undefined);
   assert.equal(getTextGenerationSettings(setup()).writersRoom, false, 'R54c: off is kept as false');
   assert.equal(inputFromWizard(roomState(), {...wizard, koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, {layout: 'pages'}).input.writersRoom, undefined);
-  assert.deepEqual(W.writersRoomFor(roomState()), {version: 1, weave: 3});
+  assert.deepEqual(W.writersRoomFor(roomState()), {version: 1, weave: 4});
   assert.equal(W.writersRoomFor(setup()), null);
 });
 
