@@ -1,0 +1,25 @@
+{
+  "appTests": 1192,
+  "qualityTests": 85,
+  "buildPassed": true,
+  "mirrorEqual": true,
+  "legacySha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokePassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "stageWrapperAndSceneRequestPassed": true,
+  "actualFamilyCloudAccessed": false,
+  "sourceChangesBeyondUpstream": 0,
+  "paidCalls": 0,
+  "newPaidBookRun": false,
+  "actualNewImageQualityVerified": false,
+  "weave": 5,
+  "textStageRequestEstimate": 14,
+  "sampleSheetGateVerified": true,
+  "sampleRedrawOneSheet": true,
+  "sampleAcceptContinuesToAllPictures": true,
+  "cache": "donghwa-shell-v129"
+}

@@ -1,0 +1,31 @@
+{
+  "newCharacters": [
+    {
+      "id": "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+      "name": "콩이",
+      "nameEn": "Kongi",
+      "kind": "deer",
+      "build": "four-legged",
+      "sheetKit": 1,
+      "description": "A baby deer, back about as high as Yuha's waist. Warm light-brown coat with white spots along the back; white fluffy underside of the short tail. One ear has a small folded-over tip. Wears a tiny brass bell on a red thread tied at the tail.",
+      "appearance": "",
+      "color": "",
+      "hairColor": "",
+      "skinColor": "",
+      "archived": false,
+      "sheetSeen": false,
+      "sheets": 0
+    }
+  ],
+  "newPlaces": [],
+  "roomSheets": {
+    "cast": [
+      {
+        "id": "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+        "pages": 10
+      }
+    ],
+    "places": []
+  },
+  "notes": []
+}

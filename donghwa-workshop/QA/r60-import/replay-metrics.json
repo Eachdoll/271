@@ -1,0 +1,29 @@
+{
+  "marker": {
+    "version": 1,
+    "weave": 5
+  },
+  "pictureRefs": {
+    "version": 2
+  },
+  "oldPaidReplay": true,
+  "newPaidCalls": 0,
+  "firstHeard": "끝이 쓰는 것이 글에 처음 들리는 쪽 (글만 듣는 아이 기준): 도토리 세 알: 글에는 14쪽에 처음 나와요 — 그 앞은 그림 메모뿐(1쪽) / 콩콩이의 숨 참기 세기: 글에는 나오지 않아요 / 엄마의 나무 국자: 글에는 15쪽에 처음 나와요 — 그 앞은 그림 메모뿐(2·10쪽)",
+  "estimate": {
+    "openaiNow": {
+      "requests": 14,
+      "cost": 1.4235280000000001,
+      "castRevise": false
+    },
+    "openaiBefore": {
+      "requests": 15,
+      "cost": 1.5075280000000002,
+      "castRevise": true
+    },
+    "anthropicNow": {
+      "requests": 14,
+      "cost": 1.0563200000000001,
+      "castRevise": false
+    }
+  }
+}

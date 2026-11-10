@@ -1,0 +1,128 @@
+{
+  "stages": [
+    {
+      "id": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500",
+      "status": "running",
+      "phase": "줄거리 만들기",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-10T11:53:23.198Z"
+    },
+    {
+      "id": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500",
+      "status": "council-review",
+      "phase": "기획 회의 결과 확인 · 피치를 고르거나 방향을 고쳐 주세요",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-10T11:55:45.706Z"
+    },
+    {
+      "id": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500",
+      "status": "running",
+      "phase": "작가실 · 초고 쓰기",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-10T11:55:48.096Z"
+    },
+    {
+      "id": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500",
+      "status": "running",
+      "phase": "작가실 · 쪽과 그림 읽기",
+      "error": null,
+      "book": false,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-10T11:58:24.765Z"
+    },
+    {
+      "id": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500",
+      "status": "text-review",
+      "phase": "글 완성 · 쪽 검수",
+      "error": null,
+      "book": true,
+      "pages": 16,
+      "done": 0,
+      "cover": false,
+      "at": "2026-11-10T11:58:36.813Z"
+    }
+  ],
+  "providerCalls": [
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:53:22.981Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-10T11:55:40.077Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:55:45.852Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:56:06.981Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:56:06.983Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:56:06.985Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-10T11:56:35.132Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:56:39.468Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-10T11:57:17.505Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-10T11:57:21.065Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:57:22.172Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:57:42.546Z"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "at": "2026-11-10T11:58:00.029Z"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "at": "2026-11-10T11:58:23.137Z"
+    }
+  ],
+  "imageAttempts": 0
+}

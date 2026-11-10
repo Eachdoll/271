@@ -1,0 +1,43 @@
+{
+  "paid": true,
+  "writerEngine": "anthropic",
+  "imageEngine": "openai",
+  "topic": "숲속에서 자꾸 숨는 아기 사슴",
+  "started": "2026-11-10T11:53:13.161Z",
+  "finished": "2026-11-10T11:58:39.239Z",
+  "cache": "donghwa-shell-v129",
+  "jobId": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500",
+  "initialEstimate": "글 만들기\n약 $1.03\n그림 8~15장 + 표지 (펼침면 수에 따라)\n약 $1.53~$2.72\n검사 후 자동 수정: 보통 6~13회 · 최대 16회\n약 $0.19~$0.42 (최대 $0.59)\n새 시트가 필요하면\n최대 $1.70\n그림은 다음 단계에서 · 지금은 글만 만들어요. 참고 단가 추정이며 실제 청구액은 공급자에서 확인해 주세요.",
+  "textCostUsd": 0.8178784,
+  "textRequests": 14,
+  "imageAttempts": 0,
+  "uiSawCastRevision": false,
+  "premiseMaximumLabel": true,
+  "castRevised": false,
+  "passed": true,
+  "actualFamilyCloudAccessed": false,
+  "scope": "one live text-only book; no images or sheets purchased",
+  "title": "쉿, 콩이는 어디 있게?",
+  "status": "text-review",
+  "marker": {
+    "version": 1,
+    "weave": 5
+  },
+  "pictureRefs": {
+    "version": 2
+  },
+  "pages": 16,
+  "bodyImages": 0,
+  "coverImage": false,
+  "pageErrors": [],
+  "modelRequests": {
+    "claude-opus-5-5": 9,
+    "gpt-4.1-mini": 5
+  },
+  "durationSeconds": 326.078,
+  "costMeaning": "provider-reported input/output tokens multiplied by app model price table; not provider invoice",
+  "onePageNewCastObserved": false,
+  "actualNewImageQualityVerified": false,
+  "koSentenceMax": 5,
+  "enSentenceMax": 4
+}

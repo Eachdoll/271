@@ -1,0 +1,652 @@
+{
+  "storyCheck": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "duplicate_pages",
+        "label": "중복 쪽",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "repeated_suffix",
+        "label": "꼬리말 반복",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "beat_mapping",
+        "label": "비트 누락·순서",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "refrain",
+        "label": "후렴 횟수·위치",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "level",
+        "label": "읽기 수준 범위",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "drawable_scene",
+        "label": "그릴 수 있는 장면",
+        "passed": true,
+        "violations": []
+      },
+      {
+        "id": "moral_tail",
+        "label": "교훈 꼬리말",
+        "passed": true,
+        "violations": []
+      }
+    ],
+    "warnings": [
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.19047619047619047,
+        "max": 0.15,
+        "words": [
+          "acorn",
+          "pocket",
+          "today",
+          "oh"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "message": "영어 등급 외 어휘 19% · 참고 (목록 밖: acorn, pocket, today, oh)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "en",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 1,
+        "mean": 7,
+        "sentenceCount": 3,
+        "expected": {
+          "min": 1,
+          "max": 2
+        },
+        "pageNo": 1,
+        "message": "영어 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 7단어 · 문장 3개(권장 1~2)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.23809523809523808,
+        "max": 0.15,
+        "words": [
+          "deer",
+          "green",
+          "shh",
+          "ding",
+          "bell"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "message": "영어 등급 외 어휘 23.8% · 참고 (목록 밖: deer, green, shh, ding, bell)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.3333333333333333,
+        "max": 0.15,
+        "words": [
+          "back",
+          "shh",
+          "ding"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "message": "영어 등급 외 어휘 33.3% · 참고 (목록 밖: back, shh, ding)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "en",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 1,
+        "mean": 6.5,
+        "sentenceCount": 2,
+        "expected": {
+          "min": 1,
+          "max": 2
+        },
+        "pageNo": 5,
+        "message": "영어 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 6.5단어 · 문장 2개(권장 1~2)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "en",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 1,
+        "mean": 5.25,
+        "sentenceCount": 4,
+        "expected": {
+          "min": 1,
+          "max": 2
+        },
+        "pageNo": 6,
+        "message": "영어 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 5.3단어 · 문장 4개(권장 1~2)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.22727272727272727,
+        "max": 0.15,
+        "words": [
+          "cocoa",
+          "ear",
+          "ferns",
+          "finger",
+          "shh"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 7,
+        "message": "영어 등급 외 어휘 22.7% · 참고 (목록 밖: cocoa, ear, ferns, finger, shh)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.16666666666666666,
+        "max": 0.15,
+        "words": [
+          "yelled",
+          "voice",
+          "ferns"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 8,
+        "message": "영어 등급 외 어휘 16.7% · 참고 (목록 밖: yelled, voice, ferns)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.35294117647058826,
+        "max": 0.15,
+        "words": [
+          "ding",
+          "fell",
+          "cocoa",
+          "splash",
+          "bump"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 11,
+        "message": "영어 등급 외 어휘 35.3% · 참고 (목록 밖: ding, fell, cocoa, splash, bump)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.15384615384615385,
+        "max": 0.15,
+        "words": [
+          "ground",
+          "last",
+          "yelled",
+          "yell"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 13,
+        "message": "영어 등급 외 어휘 15.4% · 참고 (목록 밖: ground, last, yelled, yell)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 1,
+        "mean": 8,
+        "sentenceCount": 3,
+        "expected": {
+          "min": 1,
+          "max": 3
+        },
+        "pageNo": 14,
+        "message": "한글 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 8어절 · 문장 3개(권장 1~3)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.19230769230769232,
+        "max": 0.15,
+        "words": [
+          "acorn",
+          "line",
+          "flat",
+          "finger",
+          "shh"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 14,
+        "message": "영어 등급 외 어휘 19.2% · 참고 (목록 밖: acorn, line, flat, finger, shh)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "en",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 2,
+        "mean": 8.67,
+        "sentenceCount": 3,
+        "expected": {
+          "min": 1,
+          "max": 2
+        },
+        "pageNo": 14,
+        "message": "영어 낱쪽 참고 · 짧거나 긴 문장 2개 · 평균 8.7단어 · 문장 3개(권장 1~2)"
+      },
+      {
+        "code": "out-of-vocabulary",
+        "language": "en",
+        "actual": 0.5,
+        "max": 0.15,
+        "words": [
+          "ding",
+          "bell",
+          "near"
+        ],
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 15,
+        "message": "영어 등급 외 어휘 50% · 참고 (목록 밖: ding, bell, near)"
+      },
+      {
+        "code": "unit-length-note",
+        "language": "ko",
+        "severity": "warning",
+        "advisory": true,
+        "unit": "page",
+        "offSentences": 1,
+        "mean": 5.25,
+        "sentenceCount": 4,
+        "expected": {
+          "min": 1,
+          "max": 3
+        },
+        "pageNo": 16,
+        "message": "한글 낱쪽 참고 · 짧거나 긴 문장 1개 · 평균 5.3어절 · 문장 4개(권장 1~3)"
+      },
+      {
+        "type": "level",
+        "code": "book-sentence-total",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "language": "ko",
+        "message": "한글 책 전체 문장 58개가 목표 6~26개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 1개)."
+      },
+      {
+        "type": "level",
+        "code": "book-sentence-total",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "language": "ko",
+        "message": "한글 책 전체 문장 58개가 목표 6~26개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 5개, 보통 1개)."
+      },
+      {
+        "type": "level",
+        "code": "book-sentence-total",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "language": "en",
+        "message": "영어 책 전체 문장 54개가 목표 6~26개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 1개)."
+      },
+      {
+        "type": "level",
+        "code": "book-sentence-total",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "language": "en",
+        "message": "영어 책 전체 문장 54개가 목표 6~26개를 넘었어요. 이 쪽의 문장을 줄여 주세요(이 쪽 4개, 보통 1개)."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 1,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 2,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 4,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 6,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 7,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 8,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 9,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 10,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 11,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 12,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 13,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 14,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 15,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      },
+      {
+        "type": "level",
+        "code": "book-new-words",
+        "severity": "warning",
+        "advisory": true,
+        "pageNo": 16,
+        "language": "en",
+        "message": "영어 책 전체 새 단어 27개가 허용 10개를 넘었어요."
+      }
+    ],
+    "violations": [],
+    "failedPageNos": [],
+    "needsRepagination": false
+  },
+  "spreadFit": {
+    "marks": 0,
+    "fitted": true,
+    "moved": 5
+  },
+  "roomWeave": {
+    "pages": 16,
+    "cast": [
+      {
+        "id": "yuha",
+        "pages": 10
+      },
+      {
+        "id": "mom",
+        "pages": 8
+      },
+      {
+        "id": "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+        "pages": 10
+      }
+    ],
+    "single": [],
+    "artNotes": 12,
+    "text": {
+      "pages": 16,
+      "castText": [
+        {
+          "id": "yuha",
+          "name": "유하",
+          "pages": [
+            1,
+            4,
+            6,
+            8,
+            13,
+            14,
+            16
+          ],
+          "artOnly": [
+            2,
+            3,
+            15
+          ]
+        },
+        {
+          "id": "mom",
+          "name": "엄마",
+          "pages": [
+            1,
+            7,
+            10,
+            11,
+            12,
+            14
+          ],
+          "artOnly": [
+            8,
+            16
+          ]
+        },
+        {
+          "id": "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+          "name": "콩이",
+          "pages": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            8,
+            9,
+            11,
+            12,
+            13,
+            16
+          ],
+          "artOnly": [
+            10,
+            15
+          ]
+        }
+      ],
+      "companions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16
+      ],
+      "lateWords": [
+        {
+          "word": "찧",
+          "page": 13
+        },
+        {
+          "word": "지난번에",
+          "page": 13
+        },
+        {
+          "word": "소리쳤",
+          "page": 13
+        },
+        {
+          "word": "이번엔",
+          "page": 13
+        },
+        {
+          "word": "납작",
+          "page": 14
+        },
+        {
+          "word": "줄로",
+          "page": 14
+        },
+        {
+          "word": "소리",
+          "page": 15
+        },
+        {
+          "word": "점점",
+          "page": 15
+        },
+        {
+          "word": "해",
+          "page": 16,
+          "artFirst": true
+        },
+        {
+          "word": "꼭대기",
+          "page": 16,
+          "artFirst": true
+        },
+        {
+          "word": "나",
+          "page": 16,
+          "artFirst": true
+        },
+        {
+          "word": "킁킁",
+          "page": 16
+        },
+        {
+          "word": "나란히",
+          "page": 16
+        },
+        {
+          "word": "아주",
+          "page": 16
+        }
+      ],
+      "refrains": [
+        {
+          "line": "콩이는 어디 있게?",
+          "pages": [
+            3,
+            5,
+            8,
+            9
+          ]
+        },
+        {
+          "line": "\"찾았다!\"",
+          "pages": [
+            4,
+            8
+          ]
+        },
+        {
+          "line": "쉿.",
+          "pages": [
+            7,
+            14
+          ]
+        }
+      ],
+      "artShare": 0.83
+    }
+  },
+  "pictureReading": {
+    "hidden": 1,
+    "holdBack": 0,
+    "lettering": 0
+  },
+  "richnessCheck": null,
+  "pageCoherence": null,
+  "childGate": null
+}

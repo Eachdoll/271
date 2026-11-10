@@ -1,0 +1,227 @@
+{
+  "id": "book-85d7c0fa-db5a-4413-8612-db88fe88e076",
+  "pages": [
+    {
+      "entry": 1,
+      "kind": "page",
+      "ko": "노란 대문 집의 아침이에요. 유하는 주머니에 도토리 모자를 불룩불룩 채워요. \"콩이 주고 오늘은 꼭 친구 할 거야!\" 엄마는 보온병을 챙기며 말해요. \"어머나, 그렇구나.\"",
+      "en": "Yuha put acorn caps in his pocket. \"These are for Kongi. Today we will be friends!\" Mom said, \"Oh, I see.\"",
+      "koSentences": 5,
+      "enSentences": 4,
+      "who": [
+        "yuha",
+        "mom"
+      ],
+      "where": "home",
+      "shot": "middle"
+    },
+    {
+      "entry": 2,
+      "kind": "page",
+      "ko": "초록빛 숲에는 아기 사슴 콩이가 살아요. 콩이는 숨는 걸 제일 좋아해요. \"쉿!\" 딸랑, 꼬리 방울이 울려요.",
+      "en": "Kongi was a little deer in the green woods. Kongi liked to hide. \"Shh!\" Ding went the bell on Kongi's tail.",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "wide"
+    },
+    {
+      "entry": 3,
+      "kind": "page",
+      "ko": "콩이는 어디 있게?",
+      "en": "Where is Kongi?",
+      "koSentences": 1,
+      "enSentences": 1,
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 4,
+      "kind": "page",
+      "ko": "거기? 유하가 휙 돌아보며 외쳐요. \"찾았다!\" 콩이는 \"쉿!\" 딸랑딸랑, 후다닥 달아나요.",
+      "en": "Yuha looked back. \"Found you!\" \"Shh!\" Ding, ding, and Kongi ran away.",
+      "koSentences": 5,
+      "enSentences": 4,
+      "who": [
+        "yuha",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 5,
+      "kind": "page",
+      "ko": "콩이는 어디 있게? 큰 나무 뒤에서 하얀 꼬리가 살랑살랑!",
+      "en": "Where is Kongi? A little white tail went wag by the big tree.",
+      "koSentences": 2,
+      "enSentences": 2,
+      "who": [
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 6,
+      "kind": "page",
+      "ko": "유하가 달려가 소리쳐요. \"찾았다! …아니다.\" 나무 뒤엔 아무도 없고, 저 멀리서 딸랑.",
+      "en": "Yuha ran to the tree. \"Found you! Oh, no.\" No one was there, but a bell went ding, way over there.",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "yuha"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 7,
+      "kind": "page",
+      "ko": "엄마는 코코아를 홀짝홀짝. 고사리 위에 귀 하나가 쫑긋! 엄마는 빙그레 웃으며 손가락을 입에 대요. 쉿.",
+      "en": "Mom had a sip of cocoa. She saw one ear up in the ferns. She put a finger on her lip. Shh.",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "mom",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 8,
+      "kind": "page",
+      "ko": "콩이는 어디 있게? \"찾았다!\" 유하 목소리가 숲을 쩌렁쩌렁 울려요. 콩이는 고사리 속으로 더 깊이 쏙.",
+      "en": "Where is Kongi? \"Found you!\" Yuha yelled in a big, big voice. Kongi hid down in the ferns.",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "yuha",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "wide"
+    },
+    {
+      "entry": 9,
+      "kind": "page",
+      "ko": "콩이는 어디 있게? 고사리 옆에 갈색 동그란 바위가 있어요. 어, 바위가 살짝 움찔했어요!",
+      "en": "Where is Kongi? There was a round brown stone by the ferns. The stone did a little hop!",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 10,
+      "kind": "page",
+      "ko": "\"어디 갔지?\" 엄마가 두리번거려요. \"아이, 다리 아파. 이 동그란 바위에 잠깐 앉아야겠다.\"",
+      "en": "\"Where did Kongi go?\" Mom said. \"My legs are sore. I will sit on this round stone.\"",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 11,
+      "kind": "page",
+      "ko": "딸랑! 콩이가 펄쩍! 엄마는 철퍼덕, 코코아는 출렁. 콩이도 쿵, 엉덩방아를 찧었어요.",
+      "en": "Ding! Kongi jumped up! Mom fell down, and the cocoa went splash. Bump, Kongi fell down, too.",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "mom",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 12,
+      "kind": "page",
+      "ko": "엄마가 눈을 가늘게 뜨고 멈춰 서요. \"어머나, 그렇구나. 바위가 아니라 콩이였구나.\"",
+      "en": "Mom stopped and looked. \"Oh, I see. It was not a stone. It was Kongi!\"",
+      "koSentences": 3,
+      "enSentences": 4,
+      "who": [
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "close"
+    },
+    {
+      "entry": 13,
+      "kind": "page",
+      "ko": "유하는 엉덩방아 찧은 콩이를 봐요. 지난번에도 봤어요. 유하가 \"찾았다!\" 하고 소리쳤을 때요. 이번엔 유하가 소리치지 않아요.",
+      "en": "Yuha looked at Kongi on the ground. He saw this last time, too. It was when he yelled, \"Found you!\" This time Yuha did not yell.",
+      "koSentences": 5,
+      "enSentences": 4,
+      "who": [
+        "yuha",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "close"
+    },
+    {
+      "entry": 14,
+      "kind": "page",
+      "ko": "유하는 납작 바위 위에 도토리 모자를 한 줄로 세워요. 그리고 엄마처럼 손가락을 입에 대고, 쪼그려 앉아요. 쉿.",
+      "en": "Yuha put the acorn caps in a line on a flat stone. Then he sat down and put a finger on his lip, like Mom. Shh.",
+      "koSentences": 3,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 15,
+      "kind": "page",
+      "ko": "딸랑… 딸랑… 이번엔 방울 소리가 점점 가까워져요.",
+      "en": "Ding... ding... This time the bell came near.",
+      "koSentences": 1,
+      "enSentences": 3,
+      "who": [
+        "yuha",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e"
+      ],
+      "where": "forest",
+      "shot": "middle"
+    },
+    {
+      "entry": 16,
+      "kind": "page",
+      "ko": "해가 큰 나무 꼭대기에 걸렸어요. 콩이가 걸어 나와 도토리 모자를 킁킁, 그리고 유하 옆에 나란히 앉았어요. \"찾았다.\" 유하가 아주 작게 속삭였어요.",
+      "en": "The sun sat on top of the big tree. Kongi came out and sniffed the acorn caps. Then Kongi sat down by Yuha. \"Found you,\" Yuha said in a little, little voice.",
+      "koSentences": 4,
+      "enSentences": 4,
+      "who": [
+        "yuha",
+        "character-8a7cec43-e106-4ec4-be6c-3fc10a33a88e",
+        "mom"
+      ],
+      "where": "forest",
+      "shot": "wide"
+    }
+  ],
+  "bodyImages": 0,
+  "coverImage": false
+}

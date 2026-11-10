@@ -1,0 +1,127 @@
+{
+  "base": "http://127.0.0.1:4980/",
+  "pageErrors": [],
+  "paidRequests": [],
+  "steps": [],
+  "runs": [
+    {
+      "width": 1280,
+      "valueSelectVisible": true,
+      "valueDefault": "none",
+      "noValueWhenNone": true,
+      "roomOn": true,
+      "fee": "약 $1.42",
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "pages": 13,
+        "requests": 0
+      }
+    },
+    {
+      "width": 390,
+      "valueSelectVisible": true,
+      "valueDefault": "none",
+      "noValueWhenNone": true,
+      "roomOn": true,
+      "fee": "약 $1.42",
+      "demo": {
+        "status": "text-review",
+        "demo": true,
+        "pages": 13,
+        "requests": 0
+      }
+    }
+  ],
+  "lastAction": "[data-simple-action=\"sheet-accept\"]",
+  "module": {
+    "marker": {
+      "version": 1,
+      "weave": 5
+    },
+    "refs": {
+      "version": 2
+    },
+    "premiseLookAsked": false,
+    "habitAsked": false,
+    "tiesMax": 3,
+    "oldHabitKept": true,
+    "callOrder": [
+      "cast",
+      "flow",
+      "flow",
+      "flow",
+      "flowPick",
+      "draft",
+      "read",
+      "threads",
+      "rewrite",
+      "english"
+    ],
+    "estimates": {
+      "openai": {
+        "requests": 14,
+        "cost": 1.4235280000000001,
+        "castRevise": false
+      },
+      "anthropic": {
+        "requests": 14,
+        "cost": 1.0563200000000001,
+        "castRevise": false
+      }
+    },
+    "animalPrompt": "Create a coherent character reference sheet for this original storybook character: Hoppy, a fawn. a small fawn, half Yuha height, tan coat with cream spots and a white tail; wears nothing It is a real animal standing on four legs, with an animal head and muzzle, its body and head covered in fur or hide — not a person in a costume. Show a front full-body view, side full-body view, back full-body view, four expressions shown with the eyes, ears and tail (joy, surprise, sadness, upset), and two poses (standing and walking) on one clean neutral background. Keep the exact shape, proportions, markings and colors consistent in every view; it wears and carries only what the description names. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. No labels, text, English view names, captions or diagrams.",
+    "owlPrompt": "Create a coherent character reference sheet for this original storybook character: Owl, a owl. a owl It is a real bird with a beak, wings and feathers over its whole head and body. Show a front full-body view, side full-body view, back full-body view, four expressions shown with the eyes, ears and tail (joy, surprise, sadness, upset), and two poses (standing and walking) on one clean neutral background. Keep the exact shape, proportions, markings and colors consistent in every view; it wears and carries only what the description names. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. No labels, text, English view names, captions or diagrams.",
+    "robotPrompt": "Create a coherent character reference sheet for this original storybook character: Bot, a robot. a robot It is an object that is a character: keep its shape, size and material the same in every view; a small simple face only where the description gives one. Show a front full-body view, side full-body view, back full-body view, four moods shown by its pose and its face if it has one (joy, surprise, sadness, upset), and two poses (standing and walking) on one clean neutral background. Keep the exact shape, proportions, markings and colors consistent in every view; it wears and carries only what the description names. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. No labels, text, English view names, captions or diagrams.",
+    "placePrompt": "Create a reusable environment reference sheet for ONE original children's picture-book location. Location name and requested facts: 개울; type river; green moss and a blue brook; seen from the front: left: reeds; right: a log; far: a stone. Show two reference panels: a wide establishing view from the front, as the book will see it, with everything in the place where these facts put it, and a small detail view of the important fixed objects. Both panels depict the SAME exact place with consistent geometry, colors, materials and recurring objects. Neutral, even daylight.  Style images define painting medium only. Empty environment: no people, animals, faces, story action, words, captions, labels, arrows, watermarks, logos, or map text.",
+    "single": {
+      "status": "pages-ready",
+      "archived": true,
+      "sheetCalls": 0,
+      "notes": [
+        "무료 샘플은 배경 시트를 생성하지 않으며 본문도 고정 그림 템플릿이에요.",
+        "작가실의 새 인물 1명은 한 쪽에만 나와 시트를 사지 않고 그 쪽 글로 그려요."
+      ],
+      "listed": false,
+      "sceneListed": false
+    },
+    "textHold": {
+      "status": "text-review",
+      "sheetCalls": 0
+    },
+    "held": {
+      "id": "auto-6a2cdbc0-a8d1-47e0-b5b0-1d1cf924722f",
+      "cardId": "character-b60e4cda-f35f-4976-8f2b-ac1b3790255d",
+      "status": "sheets-review",
+      "sheetCalls": 1,
+      "sheetCount": 1,
+      "seen": false,
+      "needsReview": 1
+    }
+  },
+  "fixtureMismatches": [],
+  "sheetUi": {
+    "heading": "새 인물·장소 시트를 먼저 보여 드려요",
+    "images": 1,
+    "imageLoaded": true,
+    "redraw": 1,
+    "accept": 1,
+    "unseenInMaterials": 0,
+    "afterRedraw": {
+      "status": "sheets-review",
+      "sheets": 2,
+      "bodyImages": 0,
+      "cover": false
+    },
+    "afterAccept": {
+      "status": "review",
+      "sheets": 2,
+      "seen": true,
+      "bodyImages": 12,
+      "total": 12,
+      "cover": true
+    }
+  },
+  "cache": "donghwa-shell-v129",
+  "passed": true
+}

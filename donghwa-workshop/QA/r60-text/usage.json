@@ -1,0 +1,137 @@
+{
+  "calls": [
+    {
+      "input": 6045,
+      "output": 14179,
+      "costUsdEstimated": 0.2838496,
+      "stage": "writersRoom",
+      "requests": 2,
+      "resumedCalls": 0,
+      "engineId": "anthropic",
+      "modelId": "claude-opus-5-5",
+      "models": [
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "openai",
+          "modelId": "gpt-4.1-mini",
+          "requests": 1
+        }
+      ],
+      "demo": false,
+      "callId": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500:2",
+      "at": "2026-11-10T11:55:45.358Z"
+    },
+    {
+      "input": 34865,
+      "output": 21468,
+      "costUsdEstimated": 0.5294768,
+      "stage": "roomDrafts",
+      "requests": 11,
+      "resumedCalls": 0,
+      "engineId": "anthropic",
+      "modelId": "claude-opus-5-5",
+      "models": [
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "openai",
+          "modelId": "gpt-4.1-mini",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "openai",
+          "modelId": "gpt-4.1-mini",
+          "requests": 1
+        },
+        {
+          "engineId": "openai",
+          "modelId": "gpt-4.1-mini",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        },
+        {
+          "engineId": "anthropic",
+          "modelId": "claude-opus-5-5",
+          "requests": 1
+        }
+      ],
+      "demo": false,
+      "callId": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500:5",
+      "at": "2026-11-10T11:58:23.098Z"
+    },
+    {
+      "input": 3084,
+      "output": 2074,
+      "costUsdEstimated": 0.004552,
+      "stage": "roomPages",
+      "requests": 1,
+      "resumedCalls": 0,
+      "engineId": "openai",
+      "modelId": "gpt-4.1-mini",
+      "models": [
+        {
+          "engineId": "openai",
+          "modelId": "gpt-4.1-mini",
+          "requests": 1
+        }
+      ],
+      "demo": false,
+      "pageCount": 16,
+      "entries": 16,
+      "openings": 8,
+      "clamped": false,
+      "spreadFit": {
+        "marks": 0,
+        "fitted": true,
+        "moved": 5
+      },
+      "reading": {
+        "hidden": 1,
+        "holdBack": 0,
+        "lettering": 0
+      },
+      "pockets": {
+        "placed": 2,
+        "pages": 16
+      },
+      "callId": "auto-728e3ff8-9a95-4aa6-b0a1-a8e55f28f500:6",
+      "at": "2026-11-10T11:58:35.995Z"
+    }
+  ]
+}
