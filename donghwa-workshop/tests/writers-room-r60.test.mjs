@@ -32,7 +32,7 @@ const LOOKS = {looks: [{name: '폴짝이', build: 'four-legged', look: 'a fawn h
 
 test('R60 the marker and the premises: a new room draft is weave 5; the twelve premises carry no look; the card says "at most"', () => {
   const input = roomInput('p1');
-  assert.deepEqual(input.writersRoom, {version: 1, weave: 5});
+  assert.deepEqual(input.writersRoom, {version: 1, weave: 6});
   assert.equal(W.hasRoomCounted(input) && W.hasRoomLean(input) && W.hasRoomWide(input) && W.hasRoomStages(input), true);
   const req = W.premisesRequest(input);
   const items = req.jsonSchema.properties.premises.items.properties;
@@ -145,9 +145,11 @@ test('R60 the kit cards and their sheets: no default colours, the look once, a b
 
 /* A FULL AUTO run of a counted room (the R54f harness, weave 5). */
 const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
-const run = async (stopBefore, {fawnPages = 99, state = setup(), job = null} = {}) => {
+const run = async (stopBefore, {fawnPages = 99, state = setup(), job = null, weave = null} = {}) => {
   const sheets = [];
   job ||= createFullAutoJob(state, {...wizard, simpleFlow: true}, {allowNew: false, planMode: 'selection', stopBefore});
+  // R61: a weave-5 job keeps the R60 behaviour (a one-page character leaves the pages).
+  if (weave) job.input.writersRoom = {...job.input.writersRoom, weave};
   job.stopBefore = stopBefore;
   const engine = {id: 'openai', async complete(r) {
     const n = Number(r.jsonSchema.properties.pages.minItems);
@@ -197,7 +199,7 @@ test('R60 FULL AUTO: the new card gets its look before any sheet; the sheet is b
 });
 
 test('R60 FULL AUTO: a new character on one page only gets no sheet, leaves the cast and the pages, and its card is archived; a text hold buys nothing', async () => {
-  const one = await run('pages', {fawnPages: 1});
+  const one = await run('pages', {fawnPages: 1, weave: 5});
   assert.ok(one.job.failure == null, one.job.failure?.message || '');
   const id = one.job.roomSheets.cast[0].id, card = one.state.characters.find((c) => c.id === id);
   assert.equal(one.job.roomSheets.cast[0].pages, 1);

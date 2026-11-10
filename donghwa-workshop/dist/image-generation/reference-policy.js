@@ -56,12 +56,15 @@ export function pageCastIds(page) {
  * When the page names nobody the sheets know, every sheet (the old behaviour) —
  * a page is never drawn without a face to copy.
  */
-export function castSheetsForPage(sheets, page) {
+export function castSheetsForPage(sheets, page, { strict = false } = {}) {
   const all = list(sheets).filter(Boolean),
     who = new Set(pageCastIds(page));
-  if (!who.size) return all;
+  // R61 (audit B/I, `strict` = request hygiene): a picture with no one in it carries no sheet, and a page whose cast has
+  // no sheet (a one-page character drawn from its description) carries none of the others' — never "all of them".
+  if (strict && page?.scene?.nobody === true) return [];
+  if (!who.size) return strict ? [] : all;
   const picked = all.filter((sheet) => who.has(String(sheet?.characterId ?? "")));
-  return picked.length ? picked : all;
+  return picked.length || strict ? picked : all;
 }
 /**
  * R59: may an earlier page ride along with this page (its image as a
@@ -71,8 +74,9 @@ export function castSheetsForPage(sheets, page) {
  * nobody may show anyone, so it does not.
  */
 export function castWithin(prior, page) {
-  const now = pageCastIds(page);
-  if (!now.length) return true;
+  const now = page?.scene?.nobody === true ? [] : pageCastIds(page);
+  // R61: a picture with no one in it takes only an earlier picture with no one in it.
+  if (!now.length) return pageCastIds(prior).length === 0 || prior?.scene?.nobody === true;
   const then = pageCastIds(prior);
   return then.length > 0 && then.every((id) => now.includes(id));
 }

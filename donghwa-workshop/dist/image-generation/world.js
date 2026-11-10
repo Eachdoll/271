@@ -3,7 +3,7 @@ import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor, effectiv
 import { plainBackdropFor } from "../story-generation/story-drama.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
-import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin } from "./reference-policy.js";
+import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin, pageCastIds } from "./reference-policy.js";
 import { characterSVG } from "../engine.js";
 import { getStylePreset, validateStylePreset } from "./styles.js";
 import { getImageURL } from "./assets.js";
@@ -873,7 +873,14 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     allSheets.some((sheet) => !sheet.confirmedAt || !sheet.imageUrl)
   )
     throw new Error("확정된 캐릭터 시트가 모두 필요해요.");
-  const sheets = refPolicy ? castSheetsForPage(allSheets, page) : allSheets;
+  const sheets = refPolicy ? castSheetsForPage(allSheets, page, { strict: hygiene }) : allSheets;
+  // R61 (audit B): a character on this page with no sheet (a one-page new character) is drawn from its card's words.
+  const unsheeted = hygiene && page?.scene?.nobody !== true
+    ? pageCastIds(page)
+        .filter((id) => !allSheets.some((sheet) => sheet.characterId === id))
+        .map((id) => state.characters?.find((c) => c.id === id))
+        .filter(Boolean)
+    : [];
   // R55f: the characters the page leaves out are named (the paid book drew an absent character on 5 of 15 pages).
   const absent = refPolicy ? allSheets.filter((sheet) => !sheets.includes(sheet)).map((sheet) => sheet.characterSnapshot?.nameEn || sheet.characterSnapshot?.name || sheet.characterId) : [];
   const cast = sheets
@@ -1041,6 +1048,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
             earlierPages,
             cover: !!options.cover,
             absent,
+            unsheeted,
           })
         : `Illustrate page ${pageIndex + 1} of an original children's picture book. Scene: ${scene}. Scene context: ${JSON.stringify(page.scene || {})}. Selected original cast: ${cast}. Reference roles in transmission order: ${roleDescriptions}. Keep the exact face, age and body proportions from each character_front reference. Use character_variant clothes, accessories or hair for this page when present, replacing that character's original full-body clothing; otherwise retain original clothes. ${selectedVariants.length ? `This page's requested variants: ${selectedVariants.map((v) => `${v.characterId}: ${v.description}`).join("; ")}.` : ""} Style references define rendering only; background references define place layout only. Established place facts: ${JSON.stringify(placeFacts)}. ARCHITECTURE LOCK: the approved place sheet is authoritative; the CANONICAL first scene establishes previously unspecified visible geometry. Preserve the exact doorway silhouette (arch/rectangle), door count, frame color, handle, windows, wall materials, roof, paths and relative structural positions across every view. Camera angle may change; the physical building must not. Recent scenes are secondary continuity references and cannot override the canonical layout. Never invent an extra entrance, bridge, tower, staircase or decorative structure to fill the composition. Draw only architecture and props established by the place references or current story. A new permanent structure requires explicit story content. Do not transfer buildings from a different place. Current page narrative: ${JSON.stringify({ ko: page.ko ?? page.textKo ?? "", en: page.en ?? page.textEn ?? "" })}. Earlier page continuity: ${JSON.stringify(earlierPages)}. Preserve the consequences of prior actions, while depicting only this page event. Prior scene characters, poses and movable objects are not instructions to duplicate them. Reference-sheet panels are not part of the story illustration: render one continuous scene, never reproduce grids, borders, or multiple-view panels. Show only the selected cast required by the scene, each visible character once. Character images define appearance, not an instruction to copy an old flat drawing medium. One readable composition with space for separately typeset story text. No words, captions, watermark or logos.${openings && !options.cover ? ` ${openingFallbackSentence(page)}` : ""}`,
     stylePreset: preset,

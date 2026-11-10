@@ -36,7 +36,7 @@ const ENSEMBLE = (n) => premise(`여럿 ${n}`, [who('유하'), who('엄마'), wh
 test('R57 the marker: a new room draft is weave 3 (wide, and still staged); a weave 2 job is staged but not wide', () => {
   const input = roomInput('w1');
   assert.deepEqual(input.writersRoom, {version: 1, weave: 3});
-  assert.deepEqual(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'w1b'}).writersRoom, {version: 1, weave: 5}, 'R59/R60: a new draft is weave 5 — still wide and staged');
+  assert.deepEqual(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'w1b'}).writersRoom, {version: 1, weave: 6}, 'R59/R60: a new draft is weave 5 — still wide and staged');
   assert.deepEqual([W.hasRoomWeave(input), W.hasRoomStages(input), W.hasRoomWide(input)], [true, true, true]);
   assert.deepEqual([W.hasRoomStages(preWide(input)), W.hasRoomWide(preWide(input))], [true, false]);
   assert.deepEqual(W.writersRoomRef({version: 1, weave: 3}), {version: 1, weave: 3});

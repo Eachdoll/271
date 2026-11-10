@@ -8,7 +8,7 @@ import { pictureCarriesPage } from "../page-rhythm.js";
 import { craftPictureRules } from "../story-generation/craft-rules.js";
 import { biblePictureRules } from "../story-generation/council.js";
 import { genderWord } from "./identity.js";
-import { planOf, picturePlanPictureLine, picturePlanText, planLettering } from "../story-generation/picture-plan.js";
+import { planOf, picturePlanPictureLine, picturePlanText, planLettering, pageTextKey } from "../story-generation/picture-plan.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
@@ -146,6 +146,7 @@ export function buildScenePrompt({
   earlierPages = [],
   cover = false,
   absent = [],
+  unsheeted = [],
 }) {
   const brief = sceneBriefForPage(book, page),
     planned = cover ? null : pagePlan(book, page),
@@ -164,6 +165,9 @@ export function buildScenePrompt({
     facing = framed && !cover ? facingPageLine(book, page) : "",
     // R59: request hygiene (reference-policy.js) — nobody absent is named, each thing is said once.
     hygiene = !cover && hasReferenceHygiene(book.storyInput),
+    // R61 (audit A): the words changed after this page's picture was read — draw what the words say now.
+    stale = hygiene && !!page?.scene?.textKey && page.scene.textKey !== pageTextKey(page.ko ?? page.textKo ?? "", page.en ?? page.textEn ?? page.ko ?? page.textKo ?? ""),
+    nobody = hygiene && page?.scene?.nobody === true,
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -171,7 +175,8 @@ export function buildScenePrompt({
     sheet.characterSnapshot?.nameEn ||
     sheet.characterSnapshot?.name ||
     sheet.characterId;
-  const leadName = lead ? name(lead) : "the main character";
+  // R61: a page drawn only from a sheetless character's words leads with that character; a picture with no one in it with its focus.
+  const leadName = lead ? name(lead) : unsheeted[0] ? unsheeted[0].nameEn || unsheeted[0].name : nobody ? "the focus of the picture" : "the main character";
   const stagedText =
     (book.printSettings?.textPosition ||
       book.printOptions?.textPosition ||
@@ -181,7 +186,9 @@ export function buildScenePrompt({
   // R36: the composition planned with the story (picture-led books only; empty otherwise).
   // R59: a focus that names a character who is not on this page is dropped, and the plan does not name the camera a second time.
   const named = (value) => absent.some((who) => who && String(value ?? "").toLowerCase().includes(String(who).toLowerCase()));
-  const plan = hygiene && planned ? picturePlanPictureLine({ ...planned, ...(named(planned.focus) ? { focus: "" } : {}), ...(framed ? { shot: "" } : {}) }) : picturePlanPictureLine(planned);
+  // R61: a stale plan keeps only its camera and space — what it showed belonged to the old words.
+  const kept = stale && planned ? { version: planned.version, carrier: planned.carrier, space: planned.space, ...(framed ? {} : { shot: planned.shot }) } : planned;
+  const plan = hygiene && kept ? picturePlanPictureLine({ ...kept, ...(named(kept.focus) ? { focus: "" } : {}), ...(framed ? { shot: "" } : {}) }) : picturePlanPictureLine(planned);
   const composition = openings
     ? `${framed && !cover ? framedLead(shot, plan) : ""}${facing}${openingComposition(page, staging, leadName, hygiene ? { once: framed, pocket: !!pocketLine } : {})}${pocketLine ? ` ${pocketLine}` : ""}`
     : `${framed && !cover ? framedLead(shot, plan) : ""}${hygiene && framed ? "" : `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; `}${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
@@ -191,12 +198,14 @@ export function buildScenePrompt({
     ? `Seasonal atmosphere only: ${mood.stateLabel?.en || ""}; weather ${mood.weather?.en || ""}; light ${mood.light?.en || ""}; ${mood.styleLine || ""}. The current page time (${time}) and approved plot progression take precedence over the book's general time. Interpret this weather/light within the selected style palette and existing geometry. Do not add catalogue landmarks, buildings, doors, tunnels, characters or props solely to express a season.`
     : "";
   const lighting = `Time and light: ${[time, en(brief?.weather), en(brief?.light), text(staging.lightMood)].filter(Boolean).join(", ")}. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.`;
+  const sheetless = unsheeted.map((c) => `${c.nameEn || c.name} (no reference image — draw from these words, the same way on every page): ${c.kind && !["child", "adult", "friend"].includes(c.kind) ? `a ${c.kind}, ` : ""}${c.description || c.kind || "original character"}`);
   const cast = (cover ? [lead] : sheets)
     .filter(Boolean)
     .map(
       (sheet) =>
         `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${hygiene && kindWord(sheet.characterSnapshot) ? `a ${kindWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
     )
+    .concat(nobody ? [] : sheetless)
     .join("; ");
   const currentNarrative = {
     ko: page.ko ?? page.textKo ?? "",
@@ -204,18 +213,23 @@ export function buildScenePrompt({
   };
   const action = cover
     ? book.pagination?.cover?.sceneAction || book.topic || book.title
+    : stale
+    ? `${currentNarrative.en || currentNarrative.ko} (the words of this page were changed after its picture was planned: draw what they say now)`
     : page.imagePrompt ||
       page.scene?.action ||
       page.scene?.prompt ||
       currentNarrative.en ||
       currentNarrative.ko;
-  const character = `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."}${hygiene ? (absent.length ? " Nobody else is in this picture: a figure that a reference image shows and this list does not name is not drawn here." : "") : !cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
+  const character = nobody ? `Characters: none — no person or animal is in this picture. Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}.` : `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."}${hygiene ? (absent.length ? " Nobody else is in this picture: a figure that a reference image shows and this list does not name is not drawn here." : "") : !cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover, variety: !hygiene });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });
   const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan && !(framed && !cover) ? ` ${plan}` : ""}`;
   const background = place.background;
-  const facts = background
+  // R61 (audit B): a one-page new place has no sheet; its words ride on the page (scene.placeNote).
+  const facts = !background && hygiene && page?.scene?.placeNote
+    ? { name: String(page.scene.where || ""), description: String(page.scene.placeNote) }
+    : background
     ? {
         name: background.nameEn || background.name,
         description:

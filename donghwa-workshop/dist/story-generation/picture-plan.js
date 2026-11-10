@@ -181,12 +181,24 @@ export function picturePlanPictureLine(plan) {
     str(plan.hidden, 160) ? `UNSEEN IN THE STORY — the reader sees it, the character named here does not: ${str(plan.hidden, 160)}; keep it that way (that character looks away from it, no eye contact with it)` : "",
     str(plan.holdBack, 120) ? `NOT YET: ${str(plan.holdBack, 120)} is revealed on the next page — keep it out of this picture` : "",
     // R58: the one piece of writing this picture carries — on a thing, spelled exactly; every other letter stays out.
+    // R61 (audit E): what a thing really is when someone in the story takes it for something else.
+    str(plan.seenAs, 160) ? `WHAT IT REALLY IS: ${str(plan.seenAs, 160)} — draw the real thing so that the clue named here shows; the character in the story may still take it for the other` : "",
     pictureLettering(plan.lettering) && str(plan.letteringOn, 80) ? `LETTERING — the only writing in this picture: "${pictureLettering(plan.lettering)}" ${str(plan.letteringOn, 80)}, in plain block capitals, spelled exactly as given; no other letters or numbers anywhere` : "",
   ].filter(Boolean);
   return parts.length ? `PICTURE PLAN (decided with the story): ${parts.join("; ")}. Keep it within the actual event above.` : "";
 }
 /** Model-written plan text a picture request carries (the lenient forbidden-word scope). */
-export const picturePlanText = (plan) => (plan ? [plan.picture, plan.hook, plan.words, plan.hidden, plan.holdBack, plan.lettering, plan.letteringOn].filter(Boolean) : []);
+export const picturePlanText = (plan) => (plan ? [plan.picture, plan.hook, plan.words, plan.hidden, plan.holdBack, plan.lettering, plan.letteringOn, plan.seenAs].filter(Boolean) : []);
+/**
+ * R61 (audit A): a short key of a page's words (Korean and English, spaces folded) — the reading records the key it
+ * read; a picture request that finds other words knows the plan is stale. djb2, base 36.
+ */
+export function pageTextKey(ko, en = "") {
+  const text = `${String(ko ?? "").replace(/\s+/gu, " ").trim()}\u0001${String(en ?? "").replace(/\s+/gu, " ").trim()}`;
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
 /**
  * R58: writing on a thing in a picture — digits and capital Latin letters
  * only (a picture model garbles Hangul), twelve characters at most, with at

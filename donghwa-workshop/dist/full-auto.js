@@ -42,6 +42,7 @@ import {
   backgroundSettingsKey,
 } from "./background-sheets.js";
 import { generateImage } from "./image-generation/providers.js";
+import { effectiveStaging } from "./image-generation/scene-prompt.js";
 import { saveImage } from "./image-generation/assets.js";
 import { getCredential } from "./image-generation/vault.js";
 import { getTextGenerationSettings } from "./text-generation/settings-ui.js";
@@ -79,7 +80,7 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
-import { hasRoomCounted, roomCardWithLook, roomSheetChoice, hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
+import { hasRoomCounted, hasRoomKept, roomCardWithLook, roomSheetChoice, hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
 import { ecoProseFromPages } from "./eco-mode.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
@@ -1619,6 +1620,9 @@ export async function runFullAuto(
         (opts) => ops.roomDrafts(job.input, job.outline, opts("prose")),
         async (r) => {
           job.roomDraft = r.data;
+          // R61 (audit H): pages whose English never came back are named for the parent (④ '영어를 한글에 맞추기' writes them).
+          const missingEn = list(r.data?.room?.englishMissing);
+          if (missingEn.length) job.notes.push(`영어판에 ${missingEn.join("·")}쪽 영어가 오지 않았어요. 그 쪽은 한글이 영어 자리에 들어가 있으니 ④에서 '영어를 한글에 맞추기'로 써 주세요.`);
           // R60: the new cards get the looks the cast notes gave (before any sheet is bought); a card without one keeps its kind.
           const looks = r.data?.room?.looks;
           if (counted && looks && (looks.cast?.length || looks.places?.length)) {
@@ -1672,17 +1676,28 @@ export async function runFullAuto(
           // pages or more, a place in two wide or middle pictures or more. The others are drawn from the words: they leave
           // the cast and the pages' who/where, and their drawer card is archived (the parent never saw it).
           if (counted && (job.roomCast?.length || job.roomPlaces?.length)) {
-            const choice = roomSheetChoice(r.data.pages, { cast: list(job.roomCast).map((c) => c.id), places: list(job.roomPlaces).map((b) => b.id) }),
+            const shotBook = { storyInput: job.input, outline: job.outline };
+            const choice = roomSheetChoice(r.data.pages, { cast: list(job.roomCast).map((c) => c.id), places: list(job.roomPlaces).map((b) => b.id), shotOf: (p) => effectiveStaging(shotBook, p).shot }),
               dropCast = new Set(choice.cast.drop),
               dropPlaces = new Set(choice.places.drop),
               at = new Date().toISOString();
             job.roomSheets = { cast: choice.cast.counts, places: choice.places.counts };
+            // R61 (audit B, kept rooms): a one-page character keeps its place on its page and its card (the picture request
+            // draws it from the card's words, with no sheet); a one-page place keeps its words on the page (scene.placeNote).
+            const keepOne = hasRoomKept(job.input);
             if (dropCast.size || dropPlaces.size) {
               for (const page of r.data.pages) {
-                if (page?.scene?.who) page.scene.who = page.scene.who.filter((id) => !dropCast.has(String(id)));
-                if (page?.scene && dropPlaces.has(String(page.scene.where))) page.scene.where = state.backgrounds.find((b) => b.id === page.scene.where)?.name || "the story's place";
+                if (page?.scene?.who && !keepOne) page.scene.who = page.scene.who.filter((id) => !dropCast.has(String(id)));
+                if (page?.scene && dropPlaces.has(String(page.scene.where))) {
+                  const card = state.backgrounds.find((b) => b.id === page.scene.where);
+                  page.scene.where = card?.name || "the story's place";
+                  if (keepOne && card) {
+                    const note = [card.descriptionEn || card.description, card.layoutEn || card.layout].map((v) => String(v || "").trim()).filter(Boolean).join(" ");
+                    if (note) page.scene.placeNote = note.slice(0, 400);
+                  }
+                }
               }
-              for (const card of [...state.characters.filter((c) => dropCast.has(c.id)), ...state.backgrounds.filter((b) => dropPlaces.has(b.id))]) card.archivedAt = at;
+              for (const card of [...(keepOne ? [] : state.characters.filter((c) => dropCast.has(c.id))), ...state.backgrounds.filter((b) => dropPlaces.has(b.id))]) card.archivedAt = at;
               job.plan.characterIds = job.plan.characterIds.filter((id) => !dropCast.has(id));
               job.plan.backgroundIds = job.plan.backgroundIds.filter((id) => !dropPlaces.has(id));
               if (job.plan.newCharacters) job.plan.newCharacters = job.plan.newCharacters.filter((c) => !dropCast.has(c.id));
@@ -1690,13 +1705,16 @@ export async function runFullAuto(
               for (const id of [...dropCast, ...dropPlaces]) delete job.plan.materialSignatures?.[id];
               job.wizard.characterIds = clone(job.plan.characterIds);
               job.wizard.backgroundIds = clone(job.plan.backgroundIds);
-              if (job.input.characters) job.input.characters = job.input.characters.filter((c) => !dropCast.has(c.id));
+              if (job.input.characters && !keepOne) job.input.characters = job.input.characters.filter((c) => !dropCast.has(c.id));
               job.roomCast = list(job.roomCast).filter((c) => !dropCast.has(c.id));
               job.roomPlaces = list(job.roomPlaces).filter((b) => !dropPlaces.has(b.id));
-              if (dropCast.size) job.notes.push(`작가실의 새 인물 ${dropCast.size}명은 한 쪽에만 나와 시트를 사지 않고 그 쪽 글로 그려요.`);
+              if (dropCast.size) job.notes.push(keepOne ? `작가실의 새 인물 ${dropCast.size}명은 한 쪽에만 나와 시트를 사지 않고, 그 쪽에서 인물 카드의 생김새 글로 그려요.` : `작가실의 새 인물 ${dropCast.size}명은 한 쪽에만 나와 시트를 사지 않고 그 쪽 글로 그려요.`);
               if (dropPlaces.size) job.notes.push(`작가실의 새 장소 ${dropPlaces.size}곳은 넓은 그림이 한 장뿐이라 시트를 사지 않고 그 쪽 글로 그려요.`);
             }
           }
+          // R61 (audit I): pages the picture reading did not return are drawn from their words alone — said once.
+          const unread = list(r.data.pages).map((p, n) => (p?.scene?.readingMissing ? n + 1 : 0)).filter(Boolean);
+          if (unread.length) job.notes.push(`그림 읽기가 ${unread.join("·")}쪽을 돌려주지 않아 그 쪽 그림은 글만 보고 그려요.`);
           job.sceneBriefs = [];
           job.prose = ecoProseFromPages(job.outline, r.data);
           job.storyCheck = r.meta?.checks || inspectStory(job.outline, r.data, job.input);

@@ -15,7 +15,7 @@ import { ledger } from "./quality-adapter.js";
 import { parseJsonLenient } from "./outline-normalize.js";
 import { councilHoldError, normalizeCouncilChoice, appendDecision } from "./council.js";
 import { StoryValidationError, frozenBeatCount } from "./schemas.js";
-import { wantsPicturePlan, settlePicturePlans, normalizePicturePlan, SHOTS, SPACES, pictureLettering } from "./picture-plan.js";
+import { pageTextKey, wantsPicturePlan, settlePicturePlans, normalizePicturePlan, SHOTS, SPACES, pictureLettering } from "./picture-plan.js";
 import { hasStoryDrama, settleDramaPlans } from "./story-drama.js";
 import { hasTextPocket, settlePockets } from "../text-pocket.js";
 import { ROOM_PHASES } from "./council-room.js";
@@ -96,8 +96,29 @@ export const WRITERS_ROOM_VERSION = 1;
  *   - tells the rewrite where the things the ending uses are first HEARD
  *     (the words, not the art notes).
  * A weave 1–4 job keeps its own requests.
+ *
+ * R61 (2026-11-10): weave 6 — what the Codex R60 audit reproduced for free
+ * (CODEX_R60_STORY_IMAGE_AUDIT_2026-11-10.md): the facts of the book were
+ * lost between the stages. A weave 6 draft (hasRoomKept):
+ *   - hears the facts the last book settled (its title, what it left for the
+ *     next one, its final pages as the parent kept them) in the brief and the
+ *     cast notes — a sequel's requests were byte-identical with or without it;
+ *   - binds the Korean into its pages BEFORE the English (one sentence cap for
+ *     every join; a join that would break it moves sentences to a neighbour
+ *     instead), and the English follows the bound pages by number — a missing
+ *     page is asked once more, never filled with the Korean in silence;
+ *   - keeps a rewrite to the pages the readers named (and their neighbours; a
+ *     page outside may only gain one sentence — a plant), never touches a page
+ *     they laughed at, and a polish to the pages and languages the level check
+ *     named;
+ *   - reads the pictures with parts and mistakes in mind (ears over a bush are
+ *     the fawn; a rock that is the fawn says so), keeps an empty picture empty,
+ *     marks a page the reading did not return, and records which words each
+ *     page's picture was read from (a later edit makes the plan stale);
+ *   - asks nothing must exist: a character's secret, a page's props.
+ * A weave 1–5 job keeps its own requests.
  */
-const ROOM_WEAVE = 5;
+const ROOM_WEAVE = 6;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
 export const writersRoomPolicy = (records = []) => {
   const recent = recentRoomBooks(records);
@@ -111,18 +132,20 @@ export const writersRoomRef = (value) => {
     .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
     .filter((r) => r.line)
     .slice(0, 6);
-  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4, 5].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
+  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4, 5, 6].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
 };
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
-export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4, 5].includes(input.writersRoom.weave);
+export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4, 5, 6].includes(input.writersRoom.weave);
 /** R56: the staged room — treatments, the revised cast, the thread check. */
-export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4, 5].includes(input.writersRoom.weave);
+export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4, 5, 6].includes(input.writersRoom.weave);
 /** R57: premises of three widths, their places named, the shortlist spread by width, new places carded. */
-export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4, 5].includes(input.writersRoom.weave);
+export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4, 5, 6].includes(input.writersRoom.weave);
 /** R59: one draft, spread marks kept, the readers' two extra questions gone, the pocket decided by the app. */
-export const hasRoomLean = (input) => hasWritersRoom(input) && [4, 5].includes(input.writersRoom.weave);
+export const hasRoomLean = (input) => hasWritersRoom(input) && [4, 5, 6].includes(input.writersRoom.weave);
 /** R60: no cast revision, no habit, no look in the premises; sheets bought for what the finished pages need. */
-export const hasRoomCounted = (input) => hasWritersRoom(input) && input.writersRoom.weave === 5;
+export const hasRoomCounted = (input) => hasWritersRoom(input) && [5, 6].includes(input.writersRoom.weave);
+/** R61: the facts kept between the stages (sequel facts, binding before English, scoped edits, a careful reading). */
+export const hasRoomKept = (input) => hasWritersRoom(input) && input.writersRoom.weave === 6;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
 const str = (value, max = 200) =>
@@ -204,8 +227,9 @@ export function genderWord(c) {
   const g = String(c?.gender || ""),
     adult = c?.kind === "adult",
     who = `${c?.role || ""} ${c?.name || ""}`;
-  if (/남자|boy|male/iu.test(g)) return adult ? "man" : "boy";
-  if (/여자|girl|female/iu.test(g)) return adult ? "woman" : "girl";
+  // R61 (audit 7): "female" contains "male" — the female words are read first.
+  if (/여자|girl|female|woman/iu.test(g)) return adult ? "woman" : "girl";
+  if (/남자|boy|male|man/iu.test(g)) return adult ? "man" : "boy";
   if (FEMALE_ROLE.test(who)) return adult || !/누나|언니/u.test(who) ? "woman" : "girl";
   if (MALE_ROLE.test(who)) return adult || !/오빠|형/u.test(who) ? "man" : "boy";
   return "";
@@ -283,6 +307,27 @@ const densityBrief = (input) => {
   return ` 그림책 밀도가 목표예요: 한글 한 쪽 ${ko[0]}~${ko[1]}문장(보통 ${ko[2]}문장) — 그림이 말하는 쪽은 한 줄이나 소리 하나여도 돼요.${en ? ` 영어판은 쪽당 ${en[0]}~${en[1]}문장.` : ""}`;
 };
 /** The one-page brief. What it does not say is the point: no fear list, no page count, no shape, no name ban. */
+/**
+ * R61 (audit C): what the last book settled, for a sequel — its title, what it left for the next one, and its final
+ * pages as the parent kept them (the parent's edits are the facts). Stated as facts to continue, apart from what the
+ * writer will invent; "" for a book that is not a sequel.
+ */
+export function sequelBlock(input) {
+  const prev = object(input?.previousStory) ? input.previousStory : null,
+    summary = str(input?.previousSummary || prev?.summaryForNext, 600);
+  if (!prev && !summary) return "";
+  const pages = list(prev?.pages).map((p) => str(p?.textKo ?? p?.ko, 300)).filter(Boolean),
+    tail = pages.slice(-2);
+  return [
+    `[앞 이야기에서 정해진 것 — 이어 가요. 바꾸지 않아요]`,
+    str(prev?.title, 60) ? `- 앞 책: ${str(prev.title, 60)}` : "",
+    summary ? `- 다음 책에 남긴 것: ${summary}` : "",
+    tail.length ? `- 앞 책의 마지막 쪽(부모님이 고친 그대로):\n${tail.map((t) => `  · ${t}`).join("\n")}` : "",
+    "- 새 책의 바람과 일은 새로 지어요. 앞 책에서 끝난 일을 다시 하지 않고, 남은 약속·지닌 물건·달라진 사이는 이어 가요.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 export function roomBrief(input, { records = [] } = {}) {
   const ko = String(input?.specs?.ko?.id || "K2"),
     lang = input?.language === "ko" ? "한글" : input?.language === "en" ? "영어" : "한글과 영어",
@@ -299,6 +344,7 @@ export function roomBrief(input, { records = [] } = {}) {
     "[좋은 그림책이 하는 일] 쪽을 넘기고 싶게 해요. 웃음은 벌어지는 일에서 나와요. 어른에게도 제 바람과 결점이 있어요. 아이는 주인공보다 먼저 알아채기를 좋아해요. 끝은 처음과 하나가 달라요 — 마지막 줄은 뜻을 말하지 않고, 달라진 것은 행동 하나로 보여요. 이건 설명이지 점검표가 아니에요 — 더 좋은 길이 보이면 그리로 가요.",
     `[길이] 쪽수는 작가가 정해요. 이야기가 원하는 만큼.${openingsBrief(input)}${densityBrief(input)}`,
     recent.length ? `[이 집에서 최근에 만든 책 — 이것과 다르게]\n${recent.map((line) => `- ${line}`).join("\n")}` : "",
+    hasRoomKept(input) ? sequelBlock(input) : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -655,11 +701,11 @@ export function castNotesRequest(input, premise) {
     const places = premisePlaces(premise).filter((p) => p.isNew);
     return {
       system:
-        "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 인물을 한 사람씩 만나 봐요. 인물마다 그 인물의 입으로 짧게 적어요: 오늘 하려던 제 볼일(today — 이 인물이 오늘 하고 싶었던 일; 눈에 보이는 행동으로), 주인공에게 말하지 않은 것 하나(unsaid — 알면서 말 안 한 것, 감춘 것, 부끄러운 것; 작고 구체적으로). 인물끼리 서로 다르게, 어느 책에나 있는 것 말고 이 인물만의 것으로." +
+        `너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 인물을 한 사람씩 만나 봐요. 인물마다 그 인물의 입으로 짧게 적어요: 오늘 하려던 제 볼일(today — 이 인물이 오늘 하고 싶었던 일; 눈에 보이는 행동으로), 주인공에게 말하지 않은 것 하나(unsaid — 알면서 말 안 한 것, 감춘 것, 부끄러운 것; 작고 구체적으로${hasRoomKept(input) ? "; 그런 것이 없는 인물은 빈 문자열" : ""}). 인물끼리 서로 다르게, 어느 책에나 있는 것 말고 이 인물만의 것으로.` +
         " 인물 사이(ties)는 없어도 되고 셋까지예요: 누가(from) 누구에게(to) 바라는 것 하나(wants — 해 줬으면 하는 일; 눈에 보이는 것으로)와, from만 알고 to는 모르는 것 하나(knows — 없으면 빈 문자열)." +
         lookLines(premise) +
         " 이건 재료예요 — 줄거리를 정하지 않아요.",
-      user: `[이 책] 주제: ${str(input?.topic, 80) || "자유"}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n\n[인물표]\n${castRows(premise)}${places.length ? `\n\n[새 장소]\n${places.map((p) => `- ${p.name}${p.type ? ` (${p.type})` : ""}`).join("\n")}` : ""}`,
+      user: `[이 책] 주제: ${str(input?.topic, 80) || "자유"}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n\n[인물표]\n${castRows(premise)}${places.length ? `\n\n[새 장소]\n${places.map((p) => `- ${p.name}${p.type ? ` (${p.type})` : ""}`).join("\n")}` : ""}${hasRoomKept(input) && sequelBlock(input) ? `\n\n${sequelBlock(input)}` : ""}`,
       jsonSchema: COUNTED_NOTES_SCHEMA(premise),
       temperature: 1,
       maxTokens: 3000,
@@ -938,7 +984,9 @@ const draftSchema = (input) => (hasRoomWeave(input) ? WEAVE_DRAFT_SCHEMA : DRAFT
 // (a caption, a count in the corner) stays out; writing that is on a thing in the story's world (a rocket's name, a bus
 // number, a sign) is allowed, one per picture, in digits and capital Latin letters only (the picture model garbles Hangul).
 const NO_LETTERS = ' 그림에는 설명하는 글자나 숫자(자막, 귀퉁이의 표시)를 넣을 수 없어요 — 세는 것은 물건의 개수나 몸짓으로 보여요. 물건에 원래 적혀 있는 짧은 글자(로켓의 이름, 버스 번호, 간판)는 한 그림에 하나까지 돼요 — 숫자와 영문 대문자만, 그림 메모에 따옴표로 그대로 적어요("13", "APOLLO 13").';
-const artLine = (input) => (hasRoomWeave(input) ? ` 글은 말하지 않고 그림만 보여 줄 것이 있는 쪽에는 그림 메모(art)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼. 없는 쪽은 적지 않아요.${NO_LETTERS}` : "");
+// R61 (audit 4): a plant the ending needs to be understood is heard once in the words; a picture-only plant is the joy of a second look.
+const HEARD_LINE = " 끝을 이해하는 데 꼭 필요한 것은 앞쪽 글에서 한 번은 들리게 해요(한 줄이면 돼요). 그림 메모에만 두는 것은 다시 볼 때 찾는 즐거움이에요.";
+const artLine = (input) => (hasRoomWeave(input) ? ` 글은 말하지 않고 그림만 보여 줄 것이 있는 쪽에는 그림 메모(art)를 한 줄 적어요 — 뒤에서 쓰일 것을 미리 놓아 두거나, 조연이 제 볼일을 하는 모습처럼. 없는 쪽은 적지 않아요.${NO_LETTERS}${hasRoomKept(input) ? HEARD_LINE : ""}` : "");
 const pageLine = (p, n) => `${n + 1}쪽: ${str(p?.ko, 1200)}${str(p?.art, 200) ? ` [그림: ${str(p.art, 200)}]` : ""}`;
 /** R59: the same line with the writer's spread mark — the rewrite is shown what it is told to keep. */
 const markedPageLine = (p, n) => `${n + 1}쪽${p?.spread === true ? " (큰 그림)" : ""}: ${str(p?.ko, 1200)}${str(p?.art, 200) ? ` [그림: ${str(p.art, 200)}]` : ""}`;
@@ -1031,7 +1079,7 @@ export function panelReadRequest(input, drafts) {
   };
 }
 /** Per draft: favourites × 4 + again × 2 + laughs − skipped pages (named by two) − lost pages (named by one); ties keep the writer's order. */
-export function countReadings(answer, count = DRAFT_COUNT, { agree = false } = {}) {
+export function countReadings(answer, count = DRAFT_COUNT, { agree = false, unique = false } = {}) {
   const readers = list(object(answer) && !Array.isArray(answer) ? answer.readers : answer).filter(object),
     rows = new Map(),
     row = (n) => {
@@ -1039,7 +1087,11 @@ export function countReadings(answer, count = DRAFT_COUNT, { agree = false } = {
       return rows.get(n);
     },
     bump = (map, page) => map.set(page, (map.get(page) || 0) + 1);
+  // R61 (audit 7, `unique`): one reader is one vote — a repeated reader id is read once (two rows of "action" made the two-reader agreement).
+  const once = new Set();
   for (const reader of readers) {
+    if (unique && (once.has(String(reader.reader)) || !PANEL_IDS.includes(String(reader.reader)))) continue;
+    once.add(String(reader.reader));
     const fav = Math.round(Number(reader.favorite));
     if (fav >= 1 && fav <= count) {
       const r = row(fav);
@@ -1134,7 +1186,7 @@ export function rewriteRequest(input, draft, notes, { records = [], castNotes = 
       // R59: the mark is on the line the writer reads (it was not, and three marks came back as none).
       (hasRoomLean(input) ? "쪽 번호 옆의 (큰 그림)은 그 쪽이 두 쪽에 걸친 큰 그림 한 장이라는 표시예요 — 돌려줄 때 그 쪽에 spread: true를 그대로 적어요(손댄 쪽은 새로 정해도 돼요)." : "큰 그림 한 장이 맡는 쪽의 spread: true 표시는 그대로 두거나 새로 정해요.") +
       // R55h: the backward look — how a writer plants: read from the end, and put what the end uses where an early page can show it.
-      (weave ? " 한 가지는 더 해도 돼요: 끝에서 거꾸로 읽어, 끝이 쓰는 물건·말·버릇이 앞에서 한 번도 보이지 않았다면 앞쪽 한 곳에 아무렇지 않게 먼저 놓아요 — 그림 메모(art) 한 줄이면 충분하고, 글은 한 줄까지; 설명은 붙이지 않아요. [그림: …]은 그 쪽의 그림 메모예요 — art로 그대로 돌려주거나 고쳐요." + NO_LETTERS + " 그림 메모가 설명하는 글자를 그려 넣으라고 하면 그렇게 바꿔 적어요." : ""),
+      (weave ? (hasRoomKept(input) ? " 한 가지는 더 해도 돼요: 끝에서 거꾸로 읽어, 끝을 이해하는 데 꼭 필요한 물건·말·버릇이 앞쪽 글에서 한 번도 들리지 않았다면 앞쪽 한 곳의 글에 한 줄로 먼저 놓아요(그 쪽에는 한 줄만 더해요). 다시 볼 때 즐거운 것은 그림 메모(art)로 충분해요; 설명은 붙이지 않아요." : " 한 가지는 더 해도 돼요: 끝에서 거꾸로 읽어, 끝이 쓰는 물건·말·버릇이 앞에서 한 번도 보이지 않았다면 앞쪽 한 곳에 아무렇지 않게 먼저 놓아요 — 그림 메모(art) 한 줄이면 충분하고, 글은 한 줄까지; 설명은 붙이지 않아요.") + " [그림: …]은 그 쪽의 그림 메모예요 — art로 그대로 돌려주거나 고쳐요." + NO_LETTERS + " 그림 메모가 설명하는 글자를 그려 넣으라고 하면 그렇게 바꿔 적어요." : ""),
     // The notes keep their lines (str() would fold them into one).
     user: `${roomBrief(input, { records })}${cast ? `\n\n${cast}` : ""}\n\n[독자 반응]\n${String(notes ?? "").trim().slice(0, 2000) || "(없음)"}\n\n=== 초고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(hasRoomLean(input) ? markedPageLine : pageLine).join("\n")}`,
     jsonSchema: draftSchema(input),
@@ -1320,8 +1372,37 @@ const englishCastLine = (input) => {
     .map((c) => `${c.name}${c.nameEn ? ` (${c.nameEn})` : ""} — ${c.gender}, ${/^(boy|man)$/u.test(c.gender) ? "he" : "she"}`);
   return rows.length ? `[cast] ${rows.join("; ")}\n\n` : "";
 };
-export function englishRequest(input, pages) {
+/** R61: the English answer by page number (1..count); an answer without numbers counts only when it has every page. */
+export function englishByPage(answer, count) {
+  const rows = list(answer?.pages).filter(object),
+    out = new Map();
+  const numbered = rows.every((r) => Number.isInteger(Number(r.pageNo)) && Number(r.pageNo) >= 1);
+  if (numbered) for (const r of rows) {
+    const n = Number(r.pageNo);
+    if (n <= count && str(r.en, 1200) && !out.has(n)) out.set(n, str(r.en, 1200));
+  }
+  else if (rows.length === count) rows.forEach((r, i) => str(r.en, 1200) && out.set(i + 1, str(r.en, 1200)));
+  return out;
+}
+export function englishRequest(input, pages, { only = null } = {}) {
   const count = list(pages).length;
+  // R61: each English page names its page number; `only` asks for the missing pages alone (the whole book is context).
+  if (hasRoomKept(input)) {
+    const want = only ? list(only) : null,
+      n = want ? want.length : count;
+    return {
+      system: `You are a picture-book author writing the English edition of a finished Korean picture book, page by page. ${leanLevelLine(input, "en", { vocab: true })} Each page's English follows that page's Korean: the same events in the same order, the same spoken lines, nothing the Korean has not yet said. It may say less; it never says something else. Return pageNo with each page's English.${want ? ` Return ONLY pages ${want.join(", ")}.` : ""}`,
+      user: `${englishCastLine(input)}${numbered(pages)}`,
+      jsonSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["pages"],
+        properties: { pages: { type: "array", minItems: n, maxItems: n, items: { type: "object", additionalProperties: false, required: ["pageNo", "en"], properties: { pageNo: { type: "integer", minimum: 1, maximum: count }, en: { type: "string", maxLength: 1200 } } } } },
+      },
+      temperature: 0.4,
+      maxTokens: 6000,
+    };
+  }
   return {
     system: `You are a picture-book author writing the English edition of a finished Korean picture book, page by page. ${leanLevelLine(input, "en", { vocab: true })} Each page's English follows that page's Korean: the same events in the same order, the same spoken lines in plain English, the same surprise kept for the same page; it may say less when the level needs it, never something else.${englishBandLine(input)} One idea per sentence; no semicolons. Return exactly ${count} pages in order.`,
     user: `${englishCastLine(input)}${numbered(pages)}`,
@@ -1419,6 +1500,53 @@ export function keepSpreadMarks(before, after) {
     return { ...p, spread: true };
   });
   return { pages, restored };
+}
+/**
+ * R61 (audit D): the pages a rewrite may touch — every page the readers' notes name (skipped by two, lost, hard to
+ * read aloud, wrong speech level, a change two agreed on, the editor's loose and unplanted pages) and its
+ * neighbours; never a page they laughed at. 1-based page numbers.
+ */
+export function rewriteScope(row, threads = null, pageCount = 0) {
+  const named = new Set(),
+    add = (n) => {
+      const p = Math.round(Number(n));
+      if (p >= 1 && (!pageCount || p <= pageCount)) [p - 1, p, p + 1].filter((x) => x >= 1 && (!pageCount || x <= pageCount)).forEach((x) => named.add(x));
+    };
+  for (const key of ["boredPages", "lostPages", "hardPages", "mannersPages"]) list(row?.[key]).forEach(add);
+  for (const w of list(row?.words)) add((/^(\d+)쪽/u.exec(String(w)) || [])[1]);
+  for (const t of [...list(threads?.loose), ...list(threads?.unplanted)]) add(t?.page);
+  for (const p of list(row?.laughPages)) named.delete(Math.round(Number(p)));
+  return { pages: [...named].sort((a, b) => a - b), laughs: list(row?.laughPages).map((p) => Math.round(Number(p))).filter((p) => p >= 1) };
+}
+/**
+ * R61: a rewrite merged into the draft it rewrote, when it kept the page count — a page outside the scope stays as it
+ * was unless the rewrite only ADDED one sentence to it (a plant), a page the readers laughed at stays word for word.
+ * A rewrite that changed the page count is taken whole (it merged or split pages; nothing to align). Returns the
+ * pages and the page numbers it put back.
+ */
+export function mergeRewrite(before, after, scope) {
+  const old = list(before),
+    next = list(after);
+  if (!old.length || old.length !== next.length) return { pages: next, restored: [], structural: old.length !== next.length };
+  const allowed = new Set(list(scope?.pages)),
+    laughs = new Set(list(scope?.laughs)),
+    restored = [];
+  const pages = next.map((p, i) => {
+    const n = i + 1,
+      was = old[i];
+    if (flat(p?.ko) === flat(was?.ko)) return p;
+    if (laughs.has(n)) {
+      restored.push(n);
+      return { ...p, ko: was.ko };
+    }
+    if (allowed.has(n)) return p;
+    const added = flat(p?.ko).startsWith(flat(was?.ko)) || flat(p?.ko).endsWith(flat(was?.ko)),
+      extra = sentences(flat(p?.ko)).length - sentences(flat(was?.ko)).length;
+    if (added && extra === 1) return p;
+    restored.push(n);
+    return { ...p, ko: was.ko, ...("art" in was || "art" in p ? artOf(was) : {}) };
+  });
+  return { pages, restored, structural: false };
 }
 /** The panel named nothing to fix (no page to skip, none lost, nothing to change): the rewrite call is skipped. */
 export const nothingToRewrite = (row) => object(row) && !list(row.boredPages).length && !list(row.lostPages).length && !list(row.hardPages).length && !list(row.mannersPages).length && !list(row.flatCast).length && !list(row.words).some((w) => str(w, 160));
@@ -1527,7 +1655,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
     if (reads) {
       await snapshot("read");
       const read = await ask("독자단", panelReadRequest(input, drafts), "cheap");
-      const rows = countReadings(read, drafts.length, { agree: lean });
+      const rows = countReadings(read, drafts.length, { agree: lean, unique: hasRoomKept(input) });
       record.rows = rows;
       pick = Math.min(drafts.length, pickDraft(rows));
       chosen = drafts[pick - 1];
@@ -1559,6 +1687,14 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
         title = again.title;
         record.rewritten = true;
         record.rewriteChange = rewriteChange(chosen.pages, pages);
+        // R61: a rewrite stays inside the pages the readers named (and their neighbours); a laughed-at page is never touched.
+        if (hasRoomKept(input)) {
+          const scope = rewriteScope(record.rows.find((row) => row.draft === pick), threads, chosen.pages.length),
+            merged = mergeRewrite(chosen.pages, pages, scope);
+          pages = merged.pages;
+          record.rewriteScope = { pages: [...scope.pages].sort((a, b) => a - b), restored: merged.restored, structural: merged.structural };
+          record.rewriteChange = rewriteChange(chosen.pages, pages);
+        }
         // R59: the marks of the pages the rewrite left alone are the app's to keep.
         if (lean) {
           const kept = keepSpreadMarks(chosen.pages, pages);
@@ -1567,13 +1703,41 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
         }
       }
     }
+    // R61 (audit G): the Korean is bound into the book's pages before the English is written (one sentence cap for
+    // every join), so the English follows the pages the book prints and no page is cut in two languages separately.
+    if (hasRoomKept(input)) {
+      const openings = openingCount(input),
+        cap = pageSentenceCap(input?.specs?.ko),
+        before = pages.length,
+        bound = clampPages(pages, openings ? { min: openings, max: 2 * openings } : null, { cap }),
+        fit = openings ? fitSpreadMarks(bound, openings, { cap }) : { pages: bound, fitted: true, marks: 0, moved: 0 };
+      pages = fit.pages;
+      record.binding = { before, after: pages.length, cap, fitted: fit.fitted, marks: fit.marks, moved: fit.moved, over: pages.filter((p) => sentences(p.ko).length > cap).map((_, n) => n + 1).length };
+    }
     if (input?.language !== "ko") {
       await snapshot("english");
       const en = await ask("영어판", englishRequest(input, pages), "outline");
-      const rows = list(en.pages).map((p) => str(p?.en, 1200));
-      if (rows.length === pages.length) {
-        pages = pages.map((p, i) => ({ ...p, en: rows[i] }));
-        record.english = true;
+      if (hasRoomKept(input)) {
+        // R61 (audit H): the English is matched to its page by number; a missing page is asked for once more, alone;
+        // still missing, it is recorded (the page keeps no English of its own) — never silently filled with the Korean.
+        const byPage = englishByPage(en, pages.length);
+        let missing = pages.map((_, n) => n + 1).filter((n) => !byPage.has(n));
+        if (missing.length && missing.length < pages.length) {
+          const more = await ask("영어판 보충", englishRequest(input, pages, { only: missing }), "outline");
+          for (const [n, text] of englishByPage(more, pages.length)) if (missing.includes(n)) byPage.set(n, text);
+          missing = missing.filter((n) => !byPage.has(n));
+        }
+        if (byPage.size) {
+          pages = pages.map((p, i) => (byPage.has(i + 1) ? { ...p, en: byPage.get(i + 1) } : p));
+          record.english = true;
+        }
+        if (missing.length) record.englishMissing = missing;
+      } else {
+        const rows = list(en.pages).map((p) => str(p?.en, 1200));
+        if (rows.length === pages.length) {
+          pages = pages.map((p, i) => ({ ...p, en: rows[i] }));
+          record.english = true;
+        }
       }
     }
     record.levelNotes = levelNotes(outline, pages, input);
@@ -1581,8 +1745,11 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       await snapshot("polish");
       const polished = await ask("다듬기", polishRequest(input, pages, record.levelNotes), "outline");
       const rows = list(polished.pages).filter(object);
+      // R61 (audit D): only the pages and the languages the level check named take the polish.
+      const named = hasRoomKept(input) ? new Set(record.levelNotes.map((n) => `${n.pageNo}:${n.language === "en" ? "en" : "ko"}`)) : null,
+        may = (i, lang) => !named || named.has(`${i + 1}:${lang}`);
       if (rows.length === pages.length) {
-        pages = pages.map((p, i) => ({ ...(p.spread ? { spread: true } : {}), ko: str(rows[i].ko, 1200) || p.ko, ...(p.en !== undefined ? { en: str(rows[i].en, 1200) || p.en } : {}), ...artOf(p) }));
+        pages = pages.map((p, i) => ({ ...(p.spread ? { spread: true } : {}), ko: (may(i, "ko") && str(rows[i].ko, 1200)) || p.ko, ...(p.en !== undefined ? { en: (may(i, "en") && str(rows[i].en, 1200)) || p.en } : {}), ...artOf(p) }));
         record.polished = true;
         record.levelNotesAfter = levelNotes(outline, pages, input);
       }
@@ -1646,7 +1813,7 @@ const sentences = (value) =>
  * sentence; more: the two shortest neighbours are joined. The words never
  * change. A book too short to split stays short (the acceptor reports it).
  */
-export function clampPages(pages, bounds = null) {
+export function clampPages(pages, bounds = null, { cap = 0 } = {}) {
   let rows = list(pages)
     .filter(object)
     .map((p) => ({ ko: str(p.ko, 1200), ...(p.en !== undefined ? { en: str(p.en, 1200) } : {}), ...(p.spread === true ? { spread: true } : {}), ...artOf(p) }))
@@ -1670,7 +1837,11 @@ export function clampPages(pages, bounds = null) {
   while (rows.length > target) {
     let best = 0,
       size = Infinity;
+    // R61 (audit G, `cap`): the same sentence cap as the spread fit — a pair that fits is joined first.
+    const fits = (n) => !cap || sentences(rows[n].ko).length + sentences(rows[n + 1].ko).length <= cap;
+    const anyFits = !cap || rows.some((_, n) => n + 1 < rows.length && fits(n));
     for (let n = 0; n + 1 < rows.length; n++) {
+      if (anyFits && !fits(n)) continue;
       const together = rows[n].ko.length + rows[n + 1].ko.length;
       if (together < size) {
         size = together;
@@ -1679,6 +1850,39 @@ export function clampPages(pages, bounds = null) {
     }
     const [a, b] = [rows[best], rows[best + 1]];
     rows.splice(best, 2, { ko: `${a.ko} ${b.ko}`.trim(), ...(a.en !== undefined || b.en !== undefined ? { en: `${a.en || ""} ${b.en || ""}`.trim() } : {}), ...(a.spread || b.spread ? { spread: true } : {}), ...joinArt(a, b) });
+  }
+  // R61 (audit G): a join that had to break the cap moves sentences to a neighbour with room (words unchanged, the
+  // Korean only — the English is written after the binding). A page that cannot be relieved stays as it is.
+  if (cap && rows.every((r) => r.en === undefined)) {
+    for (let pass = 0; pass < rows.length * cap; pass++) {
+      const i = rows.findIndex((r) => sentences(r.ko).length > cap);
+      if (i === -1) break;
+      // The nearest page with room (no spread-marked page in between): each page on the way passes one sentence on,
+      // so only the over-cap page loses one and only the page with room gains one; the words keep their order.
+      const room = (k) => rows[k] && !rows[k].spread && sentences(rows[k].ko).length < cap;
+      const reach = (step) => {
+        for (let k = i + step; k >= 0 && k < rows.length; k += step) {
+          if (rows[k].spread) return -1;
+          if (room(k)) return k;
+        }
+        return -1;
+      };
+      const ahead = reach(1),
+        behind = ahead === -1 ? reach(-1) : -1;
+      if (ahead !== -1) {
+        for (let k = ahead - 1; k >= i; k--) {
+          const ko = sentences(rows[k].ko);
+          rows[k] = { ...rows[k], ko: ko.slice(0, -1).join(" ") };
+          rows[k + 1] = { ...rows[k + 1], ko: `${ko.at(-1)} ${rows[k + 1].ko}`.trim() };
+        }
+      } else if (behind !== -1) {
+        for (let k = behind + 1; k <= i; k++) {
+          const ko = sentences(rows[k].ko);
+          rows[k] = { ...rows[k], ko: ko.slice(1).join(" ") };
+          rows[k - 1] = { ...rows[k - 1], ko: `${rows[k - 1].ko} ${ko[0]}`.trim() };
+        }
+      } else break;
+    }
   }
   return rows;
 }
@@ -1815,11 +2019,13 @@ const placePicture = (page) => {
  * who), a place in two wide or middle pictures or more (a close picture carries no place sheet). One page has no
  * other page to match, so it is drawn from its words. Returns the ids to keep and to drop, with the counts.
  */
-export function roomSheetChoice(pages, { cast = [], places = [] } = {}) {
+export function roomSheetChoice(pages, { cast = [], places = [], shotOf = null } = {}) {
   const rows = list(pages).filter(object),
-    count = (fn) => rows.filter(fn).length;
+    count = (fn) => rows.filter(fn).length,
+    // R61 (audit C): the camera the picture request will really use (effectiveStaging) when the caller can say it.
+    wideEnough = (p) => (typeof shotOf === "function" ? !["closeup", "over_shoulder"].includes(String(shotOf(p) || "")) : placePicture(p));
   const castCounts = list(cast).map((id) => ({ id: String(id), pages: count((p) => list(p?.scene?.who).map(String).includes(String(id))) })),
-    placeCounts = list(places).map((id) => ({ id: String(id), pages: count((p) => String(p?.scene?.where || "") === String(id) && placePicture(p)) }));
+    placeCounts = list(places).map((id) => ({ id: String(id), pages: count((p) => String(p?.scene?.where || "") === String(id) && wideEnough(p)) }));
   return {
     cast: { keep: castCounts.filter((c) => c.pages >= 2).map((c) => c.id), drop: castCounts.filter((c) => c.pages < 2).map((c) => c.id), counts: castCounts },
     places: { keep: placeCounts.filter((c) => c.pages >= 2).map((c) => c.id), drop: placeCounts.filter((c) => c.pages < 2).map((c) => c.id), counts: placeCounts },
@@ -1848,8 +2054,10 @@ function readingPlanFields(input) {
       // R58: the one piece of writing a thing in this picture carries (digits and capital Latin letters) and the thing it is on — "" when none.
       lettering: { type: "string", maxLength: 24 },
       letteringOn: { type: "string", maxLength: 80 },
+      // R61 (audit E): what a thing in the picture really is when someone in the story takes it for something else — "" when nothing is.
+      ...(hasRoomKept(input) ? { seenAs: { type: "string", maxLength: 160 } } : {}),
     },
-    line: ` Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}, hidden (when someone in the story does not see or notice something that the reader can — because this page's words or art note say so, or because an earlier page hid it and nothing has revealed it yet, even when this page's words do not say it again: who does not see it, what it is, where it is in the frame relative to them, and which way they face — one English sentence; "" otherwise), holdBack (only when the NEXT page reveals something this page must not show yet: what to keep out of this picture, a few words; "" otherwise), lettering (only when the words or the art note put writing on a thing in the story's world — a rocket's name, a bus number, a shop sign: the exact characters, digits and capital Latin letters only, 12 at most, one per page; a Korean name is given by its number or its English capitals (아폴로 13호 → APOLLO 13); "" otherwise) and letteringOn (the thing it is written on and where on it, a few English words; "" when there is no lettering).`,
+    line: `${hasRoomKept(input) ? " seenAs (only when someone in the story takes a thing in the picture for something else, or a character is hidden as or inside something: what it really is, what the character thinks it is, and the one clue the reader can see — e.g. \"the brown rock is Kongi curled up; Mom thinks it is a rock; one white ear tip shows\"; \"\" otherwise)." : ""} Also, for the picture of each page: shot (wide = small figures in a big world; middle; close = faces and hands fill the frame — vary it page to page as the moment asks), space (full = a busy picture; airy = lots of quiet empty space), carrier (words = the text carries this moment and the picture is quiet; picture = the text is short and the picture tells it; both)${drama ? ", focus (the one thing the eye lands on, a few English words), backdrop (scene = the place is drawn; plain = the character alone on a flat single-colour background — a thought or a line to the reader; at most two pages in the book, never the first or last)" : ""}${pocket ? ", pocket (where the printed words sit on the picture: left, right, top or bottom — the part with no action, bigger when the words carry the page; none only for a page of one shouted word)" : ""}, hidden (when someone in the story does not see or notice something that the reader can — because this page's words or art note say so, or because an earlier page hid it and nothing has revealed it yet, even when this page's words do not say it again: who does not see it, what it is, where it is in the frame relative to them, and which way they face — one English sentence; "" otherwise), holdBack (only when the NEXT page reveals something this page must not show yet: what to keep out of this picture, a few words; "" otherwise), lettering (only when the words or the art note put writing on a thing in the story's world — a rocket's name, a bus number, a shop sign: the exact characters, digits and capital Latin letters only, 12 at most, one per page; a Korean name is given by its number or its English capitals (아폴로 13호 → APOLLO 13); "" otherwise) and letteringOn (the thing it is written on and where on it, a few English words; "" when there is no lettering).`,
   };
 }
 /** The beat of each of N pages when the book is not an openings book: the pages dealt evenly and in order over the beats. */
@@ -1873,7 +2081,7 @@ export function extractRequest(input, outline, pages) {
       ? ` A page may carry the writer's art note ([art] …): something its picture shows that the words do not say — put it into that page's action and props${reading.properties.hidden ? ", and into hidden when someone in the story does not notice it" : ""}. A picture cannot hold captions or labels: when a note asks for explanatory words or numbers in the picture (a count in a corner, a caption), give countable things or a gesture instead and never write "labeled"${reading.properties.lettering ? "; writing that is on a thing in the story's world goes into lettering" : ""}.`
       : "";
   return {
-    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: who (the character IDs on the page, 1–5, from the cast list only${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (2–6 concrete things in English).${reading.line}${artNote} Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}`,
+    system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: who (${hasRoomKept(input) ? "the IDs of every character any part of whom is in the picture — a pair of ears over a bush or a tail behind a tree is that character; a narrator who only speaks from outside the picture is not in it; [] when no one is in the picture; from the cast list only" : "the character IDs on the page, 1–5, from the cast list only"}${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame${hasRoomKept(input) ? "; a character seen only in part is described by the part that shows" : ""}), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (${hasRoomKept(input) ? "0–6 concrete things in English the picture needs" : "2–6 concrete things in English"}).${reading.line}${artNote} Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}`,
     user: list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}${str(p.art, 400) ? `\n   [art] ${str(p.art, 400)}` : ""}`).join("\n"),
     jsonSchema: {
       type: "object",
@@ -1972,6 +2180,8 @@ function pagePlanFromReading(row, input) {
   if (plan.pocket && !["left", "right", "top", "bottom"].includes(plan.pocket)) delete plan.pocket;
   // R55g: the story's logic the picture must keep (both optional; the request says them only when present).
   if (str(row?.hidden, 160)) plan.hidden = str(row.hidden, 160);
+  // R61: a thing someone in the story takes for something else (the reading's seenAs).
+  if (str(row?.seenAs, 160)) plan.seenAs = str(row.seenAs, 160);
   if (str(row?.holdBack, 120)) plan.holdBack = str(row.holdBack, 120);
   // R58: writing on a thing — only what a picture model can spell (digits and capital Latin letters), and only with the thing it is on.
   const lettering = pictureLettering(row?.lettering);
@@ -2001,10 +2211,15 @@ export function settleExtraction(raw, input, outline, pages, title) {
   // R55c: a page book is dealt evenly too (the outline is the app's now; the
   // reader is not asked for a beat — an older journal's beatIndex is ignored).
   const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true)) || evenBeats(beats, count),
-    plainOk = wantsPicturePlan(input) && hasStoryDrama(input);
+    plainOk = wantsPicturePlan(input) && hasStoryDrama(input),
+    kept = hasRoomKept(input);
   const out = list(pages).map((p, i) => {
-    const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
-    const who = [...new Set(list(row.who).map(castId).filter(Boolean))];
+    const found = rows.find((r) => Number(r.pageNo) === i + 1) || (kept ? null : rows[i]),
+      row = found || {};
+    const who = [...new Set(list(row.who).map(castId).filter(Boolean))],
+      // R61 (audit I): an explicit empty who is a picture with no one in it (the validator needs one ID, so the hero
+      // stays listed and the page is marked); a page the reading did not return is marked missing, never made up quietly.
+      nobody = kept && !!found && Array.isArray(found.who) && found.who.length === 0;
     let beat = openingBeat.length ? openingBeat[i] : Number(row.beatIndex);
     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
     last = beat;
@@ -2026,6 +2241,10 @@ export function settleExtraction(raw, input, outline, pages, title) {
         emotion,
         timeOfDay: TIMES.includes(row.timeOfDay) ? row.timeOfDay : "day",
         props: list(row.props).map((v) => str(v, 80)).filter(Boolean).slice(0, 12),
+        // R61 (audit A): the words this page's picture was read from — a later edit of the words makes the plan stale.
+        ...(kept ? { textKey: pageTextKey(p.ko, p.en || p.ko) } : {}),
+        ...(nobody ? { nobody: true } : {}),
+        ...(kept && !found ? { readingMissing: true } : {}),
       },
       variantByCharacter: {},
       isRefrainPage: false,

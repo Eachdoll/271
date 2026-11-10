@@ -749,7 +749,7 @@ const PINS = {
   // R55h (2026-11-09): the writers' room marker of a new draft carries weave: 1 (the only difference, 2307268 dump compared).
   // R56 (2026-11-09): the staged room — the marker's weave is 2 (the only difference, ba03a5f dump compared).
   // R57 (2026-11-09): the wide room — the marker's weave is 3 (the only difference, 3322553 dump compared).
-  inputs: '9cfdc7017c9cfa06d17b42806e97c20da832db20bb525885aadf3e2c0256ec38',
+  inputs: '3c47cafb297d9fe2e6e3b44d40b03edc4e1403c87cf7c61836abc6623d16b482',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -832,7 +832,7 @@ const PINS = {
   // R55h: job.input.writersRoom.weave only.
   // R56: job.input.writersRoom.weave 1 → 2 only.
   // R57: job.input.writersRoom.weave 2 → 3 only.
-  fullAutoDemo: '74f1b50ce92b98360be7ad9a9c36de77f02198cab79d66124fc7782bd747625d',
+  fullAutoDemo: '559e4ff1dffde231e1952a601e2cc7cedd01ef390a6effe262e3a9fb0d417506',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.

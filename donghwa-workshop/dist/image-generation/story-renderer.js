@@ -43,7 +43,7 @@ export function renderImageRequest(request = {}, capabilities = {}) {
   const stylePrompt = String(
     request.stylePrompt ?? stylePreset.stylePrompt ?? "",
   );
-  const negativePrompt = String(
+  let negativePrompt = String(
     request.negativePrompt ?? stylePreset.negativePrompt ?? "",
   ).trim();
   if (!Array.isArray(request.referenceImages ?? []))
@@ -102,7 +102,12 @@ export function renderImageRequest(request = {}, capabilities = {}) {
     parts.push(
       "Use ALL attached reference images together. Preserve character identities, proportions, clothing and distinctive details from character sheets. Follow the palette, materials and rendering of style references. Render a new scene matching the prompt.",
     );
-  parts.push("No text, no letters, no captions, no logos, no watermarks.");
+  // R61 (audit F): one writing policy per request — a scene that names one piece of lettering on a thing keeps it;
+  // every other word, caption, logo and watermark stays out (the style's negative words lose "text, letters" too).
+  const lettering = /LETTERING — the only writing in this picture: "([^"]{1,24})"/u.exec(scenePrompt)?.[1] || "";
+  parts.push(lettering ? `No text, letters, captions, logos or watermarks other than the lettering "${lettering}" named above.` : "No text, no letters, no captions, no logos, no watermarks.");
+  if (lettering && negativePrompt)
+    negativePrompt = negativePrompt.split(",").map((w) => w.trim()).filter((w) => w && !/^(text|letters)$/iu.test(w)).join(", ");
   if (negativePrompt && !capabilities.supportsNegative)
     parts.push(`Avoid: ${negativePrompt}`);
   return {

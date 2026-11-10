@@ -42,7 +42,7 @@ const savedAnswer = (i) => {
 test('R59 the markers: a new room draft is weave 4 (lean, still wide and staged) and pictureRefs 2 (request hygiene); normalize keeps 1–4 and 1–2', () => {
   const input = roomInput('m1');
   assert.deepEqual(input.writersRoom, {version: 1, weave: 4});
-  assert.deepEqual(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'm1b'}).writersRoom, {version: 1, weave: 5}, 'R60: a new draft is weave 5');
+  assert.deepEqual(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'm1b'}).writersRoom, {version: 1, weave: 6}, 'R60: a new draft is weave 5');
   assert.deepEqual(input.pictureRefs, {version: 2});
   assert.deepEqual(referencePolicy(), {version: 2});
   assert.equal(W.hasRoomLean(input) && W.hasRoomWide(input) && W.hasRoomStages(input) && W.hasRoomWeave(input), true);
