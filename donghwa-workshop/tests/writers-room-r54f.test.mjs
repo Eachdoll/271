@@ -35,6 +35,7 @@ const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcS
 const run = async (stopBefore, sheets, calls) => {
   const state = setup();
   const job = createFullAutoJob(state, {...wizard, simpleFlow: true}, {allowNew: false, planMode: 'selection', stopBefore});
+  job.input.writersRoom = {...job.input.writersRoom, weave: 4};
   const engine = extractor(calls);
   const draft = {title: '숨바꼭질 사슴', language: 'dual', pages: Array.from({length: 12}, (_, i) => ({pageNo: i + 1, ...page(i + 1)}))};
   const ops = {
@@ -55,7 +56,8 @@ const run = async (stopBefore, sheets, calls) => {
 };
 
 test('R54f the premise cast carries a new character\'s card (nameEn, kind, look); roomNewCast lists only new ones with a look and no drawer card; roomCastRecord is a drawer record', () => {
-  const schema = W.premisesRequest(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'x'})).jsonSchema;
+  // R60: this file pins the room before R60 (weave 4 — the look in the premises, the sheet bought right after the cards).
+  const schema = W.premisesRequest(((i) => ({...i, writersRoom: {...i.writersRoom, weave: 4}}))(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'x'}))).jsonSchema;
   const cast = schema.properties.premises.items.properties.cast.items;
   assert.deepEqual(cast.required, ['name', 'isNew', 'want', 'flaw', 'speech', 'nameEn', 'kind', 'look']);
   assert.match(W.premisesRequest({characters: [], specs: {}}).system, /nameEn\(영어 이름\)·kind\(child, adult, 또는 동물·존재의 영어 한 단어\)·look\(/);

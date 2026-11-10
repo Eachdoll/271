@@ -25,7 +25,8 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '숲속에서 자꾸 숨는 아기 사슴', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id) => normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id});
+/* R60 moved new drafts to weave 5; this file pins weave 4 (R59). */
+const roomInput = (id) => ((i) => ({...i, writersRoom: {...i.writersRoom, weave: 4}}))(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: id}));
 const PREMISE = {title: '쉿, 콩이', line: '콩이는 늘 유하 등 뒤에 있어요', engine: 'reader_knows', laugh: '엄마도 못 찾아요', picture: '등 뒤의 작은 뿔', cast: [
   {name: '유하', isNew: false, want: '콩이를 찾고 싶다', flaw: '뒤를 안 본다', speech: '"어디 갔지?"', nameEn: '', kind: '', look: ''},
   {name: '엄마', isNew: false, want: '빨래를 걷고 싶다', flaw: '바쁘다', speech: '"응, 그래."', nameEn: '', kind: '', look: ''}]};
@@ -41,6 +42,7 @@ const savedAnswer = (i) => {
 test('R59 the markers: a new room draft is weave 4 (lean, still wide and staged) and pictureRefs 2 (request hygiene); normalize keeps 1–4 and 1–2', () => {
   const input = roomInput('m1');
   assert.deepEqual(input.writersRoom, {version: 1, weave: 4});
+  assert.deepEqual(normalizeStoryInput({...inputFromWizard(setup(), wizard, {layout: 'openings'}).input, bookId: 'm1b'}).writersRoom, {version: 1, weave: 5}, 'R60: a new draft is weave 5');
   assert.deepEqual(input.pictureRefs, {version: 2});
   assert.deepEqual(referencePolicy(), {version: 2});
   assert.equal(W.hasRoomLean(input) && W.hasRoomWide(input) && W.hasRoomStages(input) && W.hasRoomWeave(input), true);
@@ -203,10 +205,11 @@ test('R59 counted from the Korean words (the paid R56 book): who is named where,
 test('R59 the estimate: one draft and a shorter read — 17 → 15 requests, openai $1.788 → $1.508, anthropic $1.319 → $1.114; a job frozen before R59 is priced as it was', () => {
   const base = {pageCount: 16, diet: true, editor: true, room: true};
   const total = (est) => est.stages.reduce((n, s) => n + (Number(s.costUsd) || 0), 0), requests = (est) => est.stages.reduce((n, s) => n + s.requestCount, 0);
-  const lean = estimateStoryTextCost({...base, settings: {engine: 'openai'}}), wide = estimateStoryTextCost({...base, settings: {engine: 'openai'}, roomLean: false});
+  // R60: a weave 4 job (roomCounted: false) — a new job also drops the revised cast.
+  const lean = estimateStoryTextCost({...base, settings: {engine: 'openai'}, roomCounted: false}), wide = estimateStoryTextCost({...base, settings: {engine: 'openai'}, roomLean: false});
   assert.deepEqual([requests(wide), requests(lean)], [17, 15]);
   assert.ok(Math.abs(total(wide) - 1.788) < 0.01 && Math.abs(total(lean) - 1.508) < 0.01, `${total(wide).toFixed(3)} ${total(lean).toFixed(3)}`);
-  const a = estimateStoryTextCost({...base, settings: {engine: 'anthropic'}});
+  const a = estimateStoryTextCost({...base, settings: {engine: 'anthropic'}, roomCounted: false});
   assert.ok(Math.abs(total(a) - 1.114) < 0.01, total(a).toFixed(3));
   const job = (room) => ({status: 'running', input: {writersRoom: room, promptDiet: {version: 1}, pageCount: 16}, completed: {}, textSettings: {engine: 'openai'}, usage: {calls: []}});
   assert.ok(jobTextBudget(job({version: 1, weave: 3})).remainingUsd > jobTextBudget(job({version: 1, weave: 4})).remainingUsd);

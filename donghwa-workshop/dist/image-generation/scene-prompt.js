@@ -14,6 +14,11 @@ import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
 import { pocketOf, pocketPromptLine } from "../text-pocket.js";
 import { hasReferencePolicy, hasReferenceHygiene, castWithin } from "./reference-policy.js";
+/** R60: the species a version 2 request names on the cast line (the paid book's fawn was "Kongi: caramel-brown body…" on 7 of 7 pages, never a deer). */
+const kindWord = (snapshot) => {
+  const k = String(snapshot?.kind || "").trim().toLowerCase();
+  return k && !["child", "adult", "friend", "original character"].includes(k) && !String(snapshot?.description || "").toLowerCase().includes(k) ? k : "";
+};
 /** R12 openings: shots a spread may use (no close-ups across the fold). */
 const SPREAD_SHOTS = ["wide", "medium", "high_angle", "from_behind"];
 /**
@@ -190,7 +195,7 @@ export function buildScenePrompt({
     .filter(Boolean)
     .map(
       (sheet) =>
-        `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
+        `${name(sheet)} (${sheet.characterSnapshot?.character_token || sheet.characterSnapshot?.characterToken || sheet.characterId}): ${genderWord(sheet.characterSnapshot) ? `a ${genderWord(sheet.characterSnapshot)}, ` : ""}${hygiene && kindWord(sheet.characterSnapshot) ? `a ${kindWord(sheet.characterSnapshot)}, ` : ""}${sheet.characterSnapshot?.description || sheet.characterSnapshot?.kind || "original character"}`,
     )
     .join("; ");
   const currentNarrative = {

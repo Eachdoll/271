@@ -213,7 +213,8 @@ function premiseScaleLine(p, sheetUsd = 0) {
   const parts = [
     `인물 ${s.cast}명${list(s.newCast).length ? ` (새 인물 ${s.newCast.length}: ${list(s.newCast).map((v) => str(v, 30)).join(", ")})` : ""}`,
     s.places ? `장소 ${s.places}곳${list(s.newPlaces).length ? ` (새 장소 ${s.newPlaces.length}: ${list(s.newPlaces).map((v) => str(v, 30)).join(", ")})` : ""}` : "",
-    s.sheets ? `새 시트 ${s.sheets}장${sheetUsd > 0 ? ` · 그림 요금 약 +$${(s.sheets * sheetUsd).toFixed(2)}` : ""}` : "새 시트 없음",
+    // R60: a counted room buys a sheet only for a new card on two pages or more — the card says "at most".
+    s.sheets ? (s.counted ? `새 시트 최대 ${s.sheets}장${sheetUsd > 0 ? ` · 그림 요금 최대 +$${(s.sheets * sheetUsd).toFixed(2)}` : ""} (두 쪽 이상 나오는 인물·장소만)` : `새 시트 ${s.sheets}장${sheetUsd > 0 ? ` · 그림 요금 약 +$${(s.sheets * sheetUsd).toFixed(2)}` : ""}`) : "새 시트 없음",
   ].filter(Boolean);
   return `<span class="pitch-materials pitch-scale-line">${esc(parts.join(" · "))}</span>`;
 }

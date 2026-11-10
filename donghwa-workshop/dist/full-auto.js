@@ -79,13 +79,14 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
-import { hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
+import { hasRoomCounted, roomCardWithLook, roomSheetChoice, hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
 import { ecoProseFromPages } from "./eco-mode.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
 import { hasK1Policy, isK1Draft } from "./story-generation/k1-book.js";
 import { hasTopicEnding } from "./story-generation/topic-ending.js";
 import { hasEditorPolicy } from "./story-generation/book-revision.js";
+const list = (value) => (Array.isArray(value) ? value : []);
 const clone = (value) => structuredClone(value),
   now = () => new Date().toISOString(),
   active = (list) => (list || []).filter((item) => !item.archivedAt);
@@ -97,6 +98,38 @@ const abort = (signal) => {
 export const FULL_AUTO_STOPS = Object.freeze(["text", "pages", null]);
 /** R22: the job status and phase of a run parked after the writers' room. */
 export const COUNCIL_REVIEW_STATUS = "council-review";
+/** R60: a picture run of a counted room parks here once its new sheets are bought, before any page picture (one tap: redraw or go on). */
+export const SHEETS_REVIEW_STATUS = "sheets-review";
+/** R60: the new room cards of a job that have a sheet now (characters, then places) — what the parent sees before the pages are drawn. */
+export function roomSheetsToReview(state, job) {
+  if (!hasRoomCounted(job?.input) || job?.demo) return [];
+  const cast = list(job.roomCast).map((c) => state.characters?.find((x) => x.id === c.id)).filter((c) => c && !c.archivedAt && getCharacterSheet(state, c.id)),
+    places = list(job.roomPlaces).map((b) => state.backgrounds?.find((x) => x.id === b.id)).filter((b) => b && !b.archivedAt && (getWorldBackgroundSnapshot(state, b).imageAssetId || getWorldBackgroundSnapshot(state, b).imageUrl));
+  return [...cast.map((c) => ({ kind: "character", id: c.id, name: c.name, sheet: getCharacterSheet(state, c.id) })), ...places.map((b) => ({ kind: "place", id: b.id, name: b.name, sheet: getWorldBackgroundSnapshot(state, b) }))];
+}
+/** R60: the parent looked at the new sheets — the cards may join the drawer (②) and the pictures may be drawn. */
+export function acceptRoomSheets(state, job, now = new Date().toISOString()) {
+  job.roomSheetsSeen = now;
+  for (const row of roomSheetsToReview(state, job)) {
+    const card = (row.kind === "character" ? state.characters : state.backgrounds).find((x) => x.id === row.id);
+    if (card) card.sheetSeenAt = now;
+  }
+  return job;
+}
+/**
+ * R60: the parent asked for a character's new sheet again — the confirmed sheet is set aside (kept in the history,
+ * no longer confirmed), the sheet step is reopened and the frozen snapshot dropped, so the next run buys one sheet
+ * (about $0.17) and parks here again.
+ */
+export function redrawRoomSheet(state, job, characterId) {
+  const character = state.characters?.find((c) => c.id === characterId);
+  if (!character || !list(job?.roomCast).some((c) => c.id === characterId)) throw Error("다시 그릴 새 인물을 찾지 못했어요.");
+  for (const sheet of list(character.characterSheets)) if (sheet?.confirmedAt) { sheet.retiredAt = new Date().toISOString(); delete sheet.confirmedAt; }
+  delete job.completed?.["character:" + characterId];
+  if (job.book) delete job.book.generationSnapshot;
+  delete job.roomSheetsSeen;
+  return job;
+}
 export const COUNCIL_REVIEW_PHASE = "기획 회의 결과 확인 · 피치를 고르거나 방향을 고쳐 주세요";
 
 const PLAN_MODES = ["auto", "selection"];
@@ -152,6 +185,10 @@ export function deleteFullAutoJob(state, jobId) {
     draftRemoved = true;
   }
   delete state.fullAutoJobs[jobId];
+  // R60: the new writers'-room cards of this job that the parent never saw (no sheet looked at) leave the drawer with it.
+  const at = new Date().toISOString();
+  for (const card of [...(state.characters || []), ...(state.backgrounds || [])])
+    if (card?.sheetKit === 1 && card.autoRunId === jobId && !card.sheetSeenAt && !card.archivedAt && !savedBook) card.archivedAt = at;
   return {
     jobId,
     title: job.book?.title || job.input?.topic || job.wizard?.topic || "이야기",
@@ -444,7 +481,7 @@ export function estimateFullAutoCost(
       // R31b: diet drafts price the app-path outline/prose on the stage models.
       ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
       // R53 작가실: a room job (or a new one while the setting is on) is priced by its rounds.
-      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true, roomLean: job ? hasRoomLean(job.input) : true } : {}),
+      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true, roomLean: job ? hasRoomLean(job.input) : true, roomCounted: job ? hasRoomCounted(job.input) : true } : {}),
       // R31e: the ledger-based coherence rows only when the job's outline has a ledger.
       ...(job?.outline ? { ledger: !!job.outline.plotContract } : {}),
       ...(k1Book
@@ -1517,13 +1554,13 @@ export async function runFullAuto(
           const fresh = roomNewCast(job.outline, job.input),
             room = Math.max(0, MAX_CAST - job.plan.characterIds.length),
             added = fresh.slice(0, room).map((c) =>
-              roomCastRecord(c, { id: "character-" + crypto.randomUUID(), jobId: job.id }),
+              roomCastRecord(c, { id: "character-" + crypto.randomUUID(), jobId: job.id, kit: hasRoomCounted(job.input) }),
             ),
             // R57: the new places of the premise the parent chose get a drawer card too (five places in all, as ② allows).
             freshPlaces = hasRoomWide(job.input) ? roomNewPlaces(job.outline, job.input) : [],
             placeRoom = Math.max(0, ROOM_PLACES - job.plan.backgroundIds.length),
             places = freshPlaces.slice(0, placeRoom).map((p) =>
-              roomPlaceRecord(p, { id: "background-" + crypto.randomUUID(), jobId: job.id }),
+              roomPlaceRecord(p, { id: "background-" + crypto.randomUUID(), jobId: job.id, kit: hasRoomCounted(job.input) }),
             );
           return {
             data: { added, skipped: fresh.length - added.length, places, placesSkipped: freshPlaces.length - places.length },
@@ -1569,16 +1606,46 @@ export async function runFullAuto(
           await persist();
         },
       );
-    if (room && job.roomCast?.length)
+    // R60: a counted room buys its new sheets only once the finished pages say which cards need one (below).
+    const counted = room && hasRoomCounted(job.input);
+    if (room && !counted && job.roomCast?.length)
       await buyCharacterSheets(buySheets ? job.roomCast.map((c) => c.id) : []);
-    if (room && job.roomPlaces?.length)
+    if (room && !counted && job.roomPlaces?.length)
       await buyBackgroundSheets(buySheets ? job.roomPlaces.map((b) => b.id) : []);
     if (room)
       await step(
         "roomDrafts",
         "작가실 · 초고 쓰기",
         (opts) => ops.roomDrafts(job.input, job.outline, opts("prose")),
-        (r) => (job.roomDraft = r.data),
+        async (r) => {
+          job.roomDraft = r.data;
+          // R60: the new cards get the looks the cast notes gave (before any sheet is bought); a card without one keeps its kind.
+          const looks = r.data?.room?.looks;
+          if (counted && looks && (looks.cast?.length || looks.places?.length)) {
+            const patch = (rows, lookRows, ids) => {
+              for (const id of ids) {
+                const at = rows.findIndex((x) => x.id === id);
+                if (at === -1) continue;
+                const entry = lookRows.find((l) => l.name === rows[at].name);
+                if (!entry) continue;
+                rows[at] = roomCardWithLook(rows[at], entry);
+              }
+            };
+            const castIds = list(job.roomCast).map((c) => c.id),
+              placeIds = list(job.roomPlaces).map((b) => b.id);
+            patch(state.characters, looks.cast || [], castIds);
+            patch(state.backgrounds, looks.places || [], placeIds);
+            if (job.plan.newCharacters) patch(job.plan.newCharacters, looks.cast || [], castIds);
+            if (job.plan.newBackgrounds) patch(job.plan.newBackgrounds, looks.places || [], placeIds);
+            if (job.input.characters) patch(job.input.characters, looks.cast || [], castIds);
+            if (job.input.backgrounds) patch(job.input.backgrounds, looks.places || [], placeIds);
+            for (const id of [...castIds, ...placeIds]) {
+              const card = state.characters.find((c) => c.id === id) || state.backgrounds.find((b) => b.id === id);
+              if (card) (job.plan.materialSignatures ||= {})[id] = materialSignature(card);
+            }
+            await persist();
+          }
+        },
       );
     if (room) {
       // R53: the finished text becomes the pages; no scene briefs, no beat
@@ -1601,6 +1668,35 @@ export async function runFullAuto(
           job.roomWeave = r.meta?.weave ? clone(r.meta.weave) : null;
           // R59: how many pages got a text field from the app (lean rooms).
           job.roomPockets = r.meta?.pockets ? clone(r.meta.pockets) : null;
+          // R60: a new card stays in the book (and gets a sheet) only when the finished pages need one — a character on two
+          // pages or more, a place in two wide or middle pictures or more. The others are drawn from the words: they leave
+          // the cast and the pages' who/where, and their drawer card is archived (the parent never saw it).
+          if (counted && (job.roomCast?.length || job.roomPlaces?.length)) {
+            const choice = roomSheetChoice(r.data.pages, { cast: list(job.roomCast).map((c) => c.id), places: list(job.roomPlaces).map((b) => b.id) }),
+              dropCast = new Set(choice.cast.drop),
+              dropPlaces = new Set(choice.places.drop),
+              at = new Date().toISOString();
+            job.roomSheets = { cast: choice.cast.counts, places: choice.places.counts };
+            if (dropCast.size || dropPlaces.size) {
+              for (const page of r.data.pages) {
+                if (page?.scene?.who) page.scene.who = page.scene.who.filter((id) => !dropCast.has(String(id)));
+                if (page?.scene && dropPlaces.has(String(page.scene.where))) page.scene.where = state.backgrounds.find((b) => b.id === page.scene.where)?.name || "the story's place";
+              }
+              for (const card of [...state.characters.filter((c) => dropCast.has(c.id)), ...state.backgrounds.filter((b) => dropPlaces.has(b.id))]) card.archivedAt = at;
+              job.plan.characterIds = job.plan.characterIds.filter((id) => !dropCast.has(id));
+              job.plan.backgroundIds = job.plan.backgroundIds.filter((id) => !dropPlaces.has(id));
+              if (job.plan.newCharacters) job.plan.newCharacters = job.plan.newCharacters.filter((c) => !dropCast.has(c.id));
+              if (job.plan.newBackgrounds) job.plan.newBackgrounds = job.plan.newBackgrounds.filter((b) => !dropPlaces.has(b.id));
+              for (const id of [...dropCast, ...dropPlaces]) delete job.plan.materialSignatures?.[id];
+              job.wizard.characterIds = clone(job.plan.characterIds);
+              job.wizard.backgroundIds = clone(job.plan.backgroundIds);
+              if (job.input.characters) job.input.characters = job.input.characters.filter((c) => !dropCast.has(c.id));
+              job.roomCast = list(job.roomCast).filter((c) => !dropCast.has(c.id));
+              job.roomPlaces = list(job.roomPlaces).filter((b) => !dropPlaces.has(b.id));
+              if (dropCast.size) job.notes.push(`작가실의 새 인물 ${dropCast.size}명은 한 쪽에만 나와 시트를 사지 않고 그 쪽 글로 그려요.`);
+              if (dropPlaces.size) job.notes.push(`작가실의 새 장소 ${dropPlaces.size}곳은 넓은 그림이 한 장뿐이라 시트를 사지 않고 그 쪽 글로 그려요.`);
+            }
+          }
           job.sceneBriefs = [];
           job.prose = ecoProseFromPages(job.outline, r.data);
           job.storyCheck = r.meta?.checks || inspectStory(job.outline, r.data, job.input);
@@ -1610,6 +1706,9 @@ export async function runFullAuto(
         },
       );
     }
+    // R60: the kept cards' sheets, now that the pages are known (a text hold buys none; releasing it buys them with the plan's).
+    if (counted && job.roomCast?.length) await buyCharacterSheets(buySheets ? job.roomCast.map((c) => c.id) : []);
+    if (counted && job.roomPlaces?.length) await buyBackgroundSheets(buySheets ? job.roomPlaces.map((b) => b.id) : []);
     if (!room)
     await step(
       "briefs",
@@ -1774,6 +1873,9 @@ export async function runFullAuto(
         state.storyDrafts[job.storyDraftId].pictureBook = job.book;
       await persist();
     }
+    // R60: the parent sees a counted room's new sheets before any page is drawn with them (simple flow; one tap: redraw or go on).
+    if (hasRoomCounted(job.input) && job.wizard?.simpleFlow && !job.roomSheetsSeen && roomSheetsToReview(state, job).length)
+      return await holdAt(SHEETS_REVIEW_STATUS, "새 인물·장소 시트 확인");
     if (hold === "pages") return await holdAt("pages-ready", "그림 준비 완료");
     for (let index = 0; index < job.book.pages.length; index++) {
       const page = job.book.pages[index],

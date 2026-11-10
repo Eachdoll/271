@@ -74,8 +74,30 @@ export const WRITERS_ROOM_VERSION = 1;
  *   - leaves the place of the printed words to the app (the cheap reading no
  *     longer picks a pocket: 4 of 11 were usable).
  * A weave 1–3 job keeps its own requests.
+ *
+ * R60 (2026-11-10): weave 5 — what ten reviewers agreed about the cast and
+ * the sheets, and the parent approved ("진행해"). A weave 5 draft
+ * (hasRoomCounted):
+ *   - drops the cast revision (its `turn` copied the chosen flow and pulled
+ *     each character's own business back to the hero; nine of nine lines
+ *     changed, no new noun) and the `habit` field (it gave every character a
+ *     prop — five prop threads in a 163-word book); `today` is no longer told
+ *     to be "unrelated to the hero", and the ties are optional, three at most;
+ *   - writes no look into the twelve premises (19 written, 1 used, twelve
+ *     near-identical fawns): a new character or place is named, typed and
+ *     looked at once — in the cast-notes call of the chosen premise, as an
+ *     instruction to the illustrator (build, size against the hero, colours
+ *     and where they are, one mark seen from front and back, what it wears;
+ *     a place's colours and what stands left, right and far);
+ *   - buys a new card's sheet only when the finished pages need it — a
+ *     character on two pages or more, a place in two wide or middle pictures
+ *     or more (full-auto.js); the rest are drawn from the words and leave the
+ *     book (the card is archived);
+ *   - tells the rewrite where the things the ending uses are first HEARD
+ *     (the words, not the art notes).
+ * A weave 1–4 job keeps its own requests.
  */
-const ROOM_WEAVE = 4;
+const ROOM_WEAVE = 5;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
 export const writersRoomPolicy = (records = []) => {
   const recent = recentRoomBooks(records);
@@ -89,16 +111,18 @@ export const writersRoomRef = (value) => {
     .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
     .filter((r) => r.line)
     .slice(0, 6);
-  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
+  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4, 5].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
 };
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
-export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4].includes(input.writersRoom.weave);
+export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4, 5].includes(input.writersRoom.weave);
 /** R56: the staged room — treatments, the revised cast, the thread check. */
-export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4].includes(input.writersRoom.weave);
+export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4, 5].includes(input.writersRoom.weave);
 /** R57: premises of three widths, their places named, the shortlist spread by width, new places carded. */
-export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4].includes(input.writersRoom.weave);
+export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4, 5].includes(input.writersRoom.weave);
 /** R59: one draft, spread marks kept, the readers' two extra questions gone, the pocket decided by the app. */
-export const hasRoomLean = (input) => hasWritersRoom(input) && input.writersRoom.weave === 4;
+export const hasRoomLean = (input) => hasWritersRoom(input) && [4, 5].includes(input.writersRoom.weave);
+/** R60: no cast revision, no habit, no look in the premises; sheets bought for what the finished pages need. */
+export const hasRoomCounted = (input) => hasWritersRoom(input) && input.writersRoom.weave === 5;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
 const str = (value, max = 200) =>
@@ -350,16 +374,38 @@ const WIDE_PREMISE_SCHEMA = {
     },
   },
 };
+/** R60: the premise schemas without a look (a new character keeps nameEn and kind, a new place nameEn and type). */
+const withoutLook = (schema) => {
+  const items = schema.properties.premises.items,
+    cast = items.properties.cast.items,
+    places = items.properties.places?.items;
+  const strip = (row) => {
+    const { look, ...props } = row.properties;
+    return { ...row, required: row.required.filter((k) => k !== "look"), properties: props };
+  };
+  return {
+    ...schema,
+    properties: {
+      premises: {
+        ...schema.properties.premises,
+        items: { ...items, properties: { ...items.properties, cast: { ...items.properties.cast, items: strip(cast) }, ...(places ? { places: { ...items.properties.places, items: strip(places) } } : {}) } },
+      },
+    },
+  };
+};
+const COUNTED_PREMISE_SCHEMA = withoutLook(WIDE_PREMISE_SCHEMA);
 const widePremiseLines = (input) =>
-  hasRoomWide(input)
+  hasRoomCounted(input)
+    ? ` 가는 곳도 적어요(places — 이 이야기가 실제로 가는 곳을 가는 순서대로, 다섯 곳까지; 부모님이 고른 곳은 이름만 적고 isNew는 false·나머지는 빈 문자열, 이 책에만 나오는 새 장소(isNew true)는 nameEn(영어 이름)·type(영어 한 단어: forest, sea, city, market, park, farm, mountain, station 같은 것)). ${PREMISE_COUNT}개는 폭도 서로 달라요: 넷쯤은 한 곳에서 벌어지는 작은 이야기, 넷쯤은 서너 곳을 지나가는 이야기(길을 떠나거나, 쫓아가거나, 무엇을 전하러 가거나), 넷쯤은 네다섯이 저마다 제 볼일로 움직이는 이야기 — 새 인물과 새 장소를 아끼지 않아도 돼요.`
+    : hasRoomWide(input)
     ? ` 가는 곳도 적어요(places — 이 이야기가 실제로 가는 곳을 가는 순서대로, 다섯 곳까지; 부모님이 고른 곳은 이름만 적고 isNew는 false·나머지는 빈 문자열, 이 책에만 나오는 새 장소(isNew true)는 nameEn(영어 이름)·type(영어 한 단어: forest, sea, city, market, park, farm, mountain, station 같은 것)·look(장소 시트용 생김새 한 줄, 영어 — 늘 그 자리에 있는 것 두세 가지와 색; 쪽마다 같은 곳으로 그릴 수 있게)). ${PREMISE_COUNT}개는 폭도 서로 달라요: 넷쯤은 한 곳에서 벌어지는 작은 이야기, 넷쯤은 서너 곳을 지나가는 이야기(길을 떠나거나, 쫓아가거나, 무엇을 전하러 가거나), 넷쯤은 네다섯이 저마다 제 볼일로 움직이는 이야기 — 새 인물과 새 장소를 아끼지 않아도 돼요.`
     : "";
 export function premisesRequest(input, { records = [] } = {}) {
   const brief = roomBrief(input, { records });
   return {
-    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. 새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 주인공과 견준 크기, 색 둘, 한눈에 알아볼 표시 하나(귀·무늬·모자 같은 것); 쪽마다 같은 인물로 그릴 수 있게)도 적어요; 부모님 인물은 셋 다 빈 문자열).${widePremiseLines(input)} ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
+    system: `너는 그림책 작가실의 작가예요. 아래 브리프로 서로 다른 이야기 전제 ${PREMISE_COUNT}개를 내요. 전제마다: 제목, 한 줄 줄거리(line), 이 이야기의 모양(engine — 아래 메뉴의 id 하나, 또는 네가 만든 모양 이름; 메뉴는 참고일 뿐 안 써도 돼요), 가장 큰 웃음 한 장면(laugh — 벌어지는 일로), 아이가 보고 싶어 할 그림 한 장(picture), 인물표(cast — 부모님이 고른 인물은 모두, 이 책에만 나오는 새 인물은 자유롭게; 각자 바람·결점·말투. ${hasRoomCounted(input) ? "새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)도 적어요; 부모님 인물은 둘 다 빈 문자열)." : "새 인물(isNew)에는 nameEn(영어 이름)·kind(child, adult, 또는 동물·존재의 영어 한 단어)·look(그림 시트용 생김새 한 줄, 영어 — 주인공과 견준 크기, 색 둘, 한눈에 알아볼 표시 하나(귀·무늬·모자 같은 것); 쪽마다 같은 인물로 그릴 수 있게)도 적어요; 부모님 인물은 셋 다 빈 문자열)."}${widePremiseLines(input)} ${PREMISE_COUNT}개는 모양도 웃음도 서로 달라야 해요. 안전한 것보다 아이가 깔깔 웃거나 "그래서?" 하고 매달릴 것을.\n\n[이야기 모양 메뉴 — 참고]\n${engineMenuText()}`,
     user: brief,
-    jsonSchema: hasRoomWide(input) ? WIDE_PREMISE_SCHEMA : PREMISE_SCHEMA,
+    jsonSchema: hasRoomCounted(input) ? COUNTED_PREMISE_SCHEMA : hasRoomWide(input) ? WIDE_PREMISE_SCHEMA : PREMISE_SCHEMA,
     temperature: 1,
     maxTokens: hasRoomWide(input) ? 11000 : 9000,
   };
@@ -490,7 +536,7 @@ export const SCALE_LABELS = Object.freeze({ small: "작은 이야기", journey: 
  * characters or more an ensemble (the stronger of the two when both), else a
  * small story.
  */
-export function premiseScale(premise) {
+export function premiseScale(premise, { counted = false } = {}) {
   const names = new Set(),
     cast = list(premise?.cast).filter((c) => object(c) && str(c.name, 30) && !names.has(str(c.name, 30)) && names.add(str(c.name, 30))),
     places = premisePlaces(premise),
@@ -503,8 +549,10 @@ export function premiseScale(premise) {
     newCast: newCast.map((c) => str(c.name, 30)),
     places: places.length,
     newPlaces: newPlaces.map((p) => p.name),
-    // Only what a sheet can be drawn from buys one.
-    sheets: newCast.filter((c) => str(c.look, 160)).length + newPlaces.filter((p) => p.look).length,
+    // Only what a sheet can be drawn from buys one. R60: a counted room's premises carry no look — every new character
+    // and place may get one, and only those on two pages or more do (the card says "at most").
+    sheets: counted ? newCast.length + newPlaces.length : newCast.filter((c) => str(c.look, 160)).length + newPlaces.filter((p) => p.look).length,
+    ...(counted ? { counted: true } : {}),
     kind: wide && many ? (places.length - 3 >= cast.length - 4 ? "journey" : "ensemble") : wide ? "journey" : many ? "ensemble" : "small",
   };
 }
@@ -569,8 +617,54 @@ const TIES_PROPERTY = {
 /** R56: the staged room also asks what stands between the characters (who wants what of whom; what one knows and the other does not). */
 const STAGED_CAST_SCHEMA = { ...CAST_NOTES_SCHEMA, required: ["notes", "ties"], properties: { ...CAST_NOTES_SCHEMA.properties, ties: TIES_PROPERTY } };
 const tiesLine = " 그리고 인물 사이(ties — 인물이 둘 이상이면 두 개에서 여섯 개): 누가(from) 누구에게(to) 바라는 것 하나(wants — 해 줬으면 하는 일; 눈에 보이는 것으로)와, from만 알고 to는 모르는 것 하나(knows — 없으면 빈 문자열). 주인공과 조연 사이만이 아니라 조연끼리도요.";
+/** R60: the body kinds a new character's sheet is drawn from (an animal sheet is not a child's sheet with a muzzle). */
+export const BUILDS = Object.freeze(["human", "four-legged", "upright-animal", "bird", "object", "other"]);
+const COUNTED_NOTES_SCHEMA = (premise) => {
+  const cast = list(premise?.cast).filter((c) => object(c) && c.isNew === true && str(c.name, 30)),
+    places = premisePlaces(premise).filter((p) => p.isNew);
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["notes", "ties", ...(cast.length ? ["looks"] : []), ...(places.length ? ["placeLooks"] : [])],
+    properties: {
+      notes: { type: "array", minItems: 1, maxItems: 8, items: { type: "object", additionalProperties: false, required: ["name", "today", "unsaid"], properties: { name: { type: "string", maxLength: 30 }, today: { type: "string", maxLength: 140 }, unsaid: { type: "string", maxLength: 140 } } } },
+      ties: { ...TIES_PROPERTY, maxItems: 3 },
+      ...(cast.length ? { looks: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false, required: ["name", "build", "look"], properties: { name: { type: "string", maxLength: 30 }, build: { type: "string", enum: [...BUILDS] }, look: { type: "string", maxLength: 240 } } } } } : {}),
+      ...(places.length ? { placeLooks: { type: "array", maxItems: 5, items: { type: "object", additionalProperties: false, required: ["name", "look", "layout"], properties: { name: { type: "string", maxLength: 30 }, look: { type: "string", maxLength: 200 }, layout: { type: "string", maxLength: 200 } } } } } : {}),
+    },
+  };
+};
+/** R60: the illustrator's lines for the chosen premise's new characters and places (an instruction to the artist, not the writer). */
+const lookLines = (premise) => {
+  const cast = list(premise?.cast).filter((c) => object(c) && c.isNew === true && str(c.name, 30)),
+    places = premisePlaces(premise).filter((p) => p.isNew);
+  return [
+    cast.length
+      ? ` 이 책의 새 인물(${cast.map((c) => str(c.name, 30)).join(", ")})은 그림 시트를 그릴 화가에게 한 줄씩 적어 줘요(looks, 영어): build(몸 종류 — human, four-legged, upright-animal, bird, object, other 중 하나)와 look — 처음 보는 화가에게 말하듯, 주인공과 견준 키, 색과 그 색이 있는 곳, 앞에서도 뒤에서도 보이는 표시 하나, 입거나 늘 지닌 것(없으면 nothing). 다른 인물에 빗대지 않고, 이 책에서 하는 일·표정·자세·드는 물건은 적지 않아요.`
+      : "",
+    places.length
+      ? ` 이 책의 새 장소(${places.map((p) => p.name).join(", ")})도 화가에게 적어 줘요(placeLooks, 영어): look — 땅·벽·하늘 같은 큰 색 둘과 아이가 알아볼 붙박이 하나; layout — 한 자리에서 본 모습: 왼쪽에 무엇, 오른쪽에 무엇, 가운데 뒤에 무엇. 사람·날씨·시간은 적지 않아요.`
+      : "",
+  ].join("");
+};
 export function castNotesRequest(input, premise) {
   const stages = hasRoomStages(input);
+  // R60: no habit (it gave every character a prop), today not told to stay away from the hero, the ties optional and few;
+  // the looks of the chosen premise's new characters and places are asked here, once.
+  if (hasRoomCounted(input)) {
+    const places = premisePlaces(premise).filter((p) => p.isNew);
+    return {
+      system:
+        "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 인물을 한 사람씩 만나 봐요. 인물마다 그 인물의 입으로 짧게 적어요: 오늘 하려던 제 볼일(today — 이 인물이 오늘 하고 싶었던 일; 눈에 보이는 행동으로), 주인공에게 말하지 않은 것 하나(unsaid — 알면서 말 안 한 것, 감춘 것, 부끄러운 것; 작고 구체적으로). 인물끼리 서로 다르게, 어느 책에나 있는 것 말고 이 인물만의 것으로." +
+        " 인물 사이(ties)는 없어도 되고 셋까지예요: 누가(from) 누구에게(to) 바라는 것 하나(wants — 해 줬으면 하는 일; 눈에 보이는 것으로)와, from만 알고 to는 모르는 것 하나(knows — 없으면 빈 문자열)." +
+        lookLines(premise) +
+        " 이건 재료예요 — 줄거리를 정하지 않아요.",
+      user: `[이 책] 주제: ${str(input?.topic, 80) || "자유"}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n\n[인물표]\n${castRows(premise)}${places.length ? `\n\n[새 장소]\n${places.map((p) => `- ${p.name}${p.type ? ` (${p.type})` : ""}`).join("\n")}` : ""}`,
+      jsonSchema: COUNTED_NOTES_SCHEMA(premise),
+      temperature: 1,
+      maxTokens: 3000,
+    };
+  }
   return {
     system: "너는 그림책 작가예요. 초고를 쓰기 전에 이 책의 인물을 한 사람씩 만나 봐요. 인물마다 그 인물의 입으로 짧게 적어요: 오늘 하려던 제 볼일(today — 주인공의 일과 상관없이 이 인물이 오늘 하고 싶었던 일; 눈에 보이는 행동으로), 주인공에게 말하지 않은 것 하나(unsaid — 알면서 말 안 한 것, 감춘 것, 부끄러운 것; 작고 구체적으로), 버릇이나 늘 지니는 물건 하나(habit — 그림에 그릴 수 있는 것). 인물끼리 서로 다르게, 어느 책에나 있는 것 말고 이 인물만의 것으로." + (stages ? tiesLine : "") + " 이건 재료예요 — 줄거리를 정하지 않아요.",
     user: `[이 책] 주제: ${str(input?.topic, 80) || "자유"}\n\n[전제]\n${str(premise?.title, 40)} — ${str(premise?.line, 300)}\n\n[인물표]\n${castRows(premise)}`,
@@ -588,6 +682,53 @@ export function settleCastNotes(raw, premise) {
     .map((n) => ({ name: str(n.name, 30), today: str(n.today, 140), unsaid: str(n.unsaid, 140), habit: str(n.habit, 100), ...(str(n.turn, 120) ? { turn: str(n.turn, 120) } : {}) }))
     .filter((n) => names.has(n.name) && !seen.has(n.name) && (n.today || n.unsaid || n.habit) && seen.add(n.name))
     .slice(0, 8);
+}
+/**
+ * R60: the looks the cast-notes call gave for the chosen premise's NEW characters and places — by name, one each;
+ * anything else (a parent's character, a made-up name, an empty line) is dropped. An unreadable answer gives none,
+ * and the cards keep the kind alone.
+ */
+export function settleRoomLooks(raw, premise) {
+  const newCast = new Set(list(premise?.cast).filter((c) => object(c) && c.isNew === true).map((c) => str(c.name, 30)).filter(Boolean)),
+    newPlaces = new Set(premisePlaces(premise).filter((p) => p.isNew).map((p) => p.name)),
+    seen = new Set();
+  const cast = list(raw?.looks)
+    .filter(object)
+    .map((l) => ({ name: str(l.name, 30), build: BUILDS.includes(str(l.build, 20)) ? str(l.build, 20) : "other", look: str(l.look, 240) }))
+    .filter((l) => newCast.has(l.name) && l.look && !seen.has(l.name) && seen.add(l.name));
+  const places = list(raw?.placeLooks)
+    .filter(object)
+    .map((l) => ({ name: str(l.name, 30), look: str(l.look, 200), layout: str(l.layout, 200) }))
+    .filter((l) => newPlaces.has(l.name) && (l.look || l.layout) && !seen.has(`@${l.name}`) && seen.add(`@${l.name}`));
+  return { cast, places };
+}
+/**
+ * R60: where the things the ending uses are first HEARD — counted from the words of each page, not the art notes
+ * (the paid book's ladle was in an art note on page 2 and first in the words on page 15, and the thread check counted
+ * the note as the plant). Things whose first page in the words is among the last four are listed, with the earlier
+ * pages whose art note named them. A fact for the rewrite, never a rule: "" when nothing comes late.
+ */
+export function firstHeardNotes(pages, things = [], { names = [] } = {}) {
+  const rows = list(pages).filter(object),
+    tail = Math.max(1, rows.length - 3),
+    cast = list(names).map((n) => str(n, 30)).filter(Boolean),
+    seen = new Set(),
+    out = [];
+  for (const raw of list(things)) {
+    const what = str(raw, 40),
+      // The head noun of the phrase ("엄마의 나무 국자" → 국자); a nominalized verb ("…찍기") falls back to the first noun ("장화").
+      stems = koWords(what).filter((w) => w.length >= 2 && !cast.some((n) => n.startsWith(w) || w.startsWith(n))),
+      head = stems.length ? (/기$/u.test(stems.at(-1)) ? stems[0] : stems.at(-1)) : "";
+    if (!what || !head || seen.has(what)) continue;
+    seen.add(what);
+    const heard = (text) => koWords(text).includes(head);
+    const first = rows.findIndex((p) => heard(p.ko ?? p.textKo));
+    if (first !== -1 && first + 1 < tail) continue;
+    const art = rows.map((p, i) => (heard(p.art) && (first === -1 || i < first) ? i + 1 : 0)).filter(Boolean);
+    out.push(`${what}: ${first === -1 ? "글에는 나오지 않아요" : `글에는 ${first + 1}쪽에 처음 나와요`}${art.length ? ` — 그 앞은 그림 메모뿐(${art.join("·")}쪽)` : ""}`);
+    if (out.length >= 4) break;
+  }
+  return out.length ? `끝이 쓰는 것이 글에 처음 들리는 쪽 (글만 듣는 아이 기준): ${out.join(" / ")}` : "";
 }
 /** R56: the ties between the premise's own characters — one per ordered pair, with something in it. */
 export function settleTies(raw, premise) {
@@ -722,7 +863,7 @@ const threadRow = (keys) => ({ type: "array", maxItems: 4, items: { type: "objec
 export function threadCheckRequest(input, draft, treatment) {
   const plants = list(treatment?.plants);
   return {
-    system: "너는 이 원고를 처음부터 끝까지 읽는 편집자예요. 고치지 않고 세 가지만 찾아 적어요: 앞에 놓였다가 뒤에서 다시 쓰인 것(kept — 무엇, 놓인 쪽 from, 다시 쓰인 쪽 to), 앞에 눈에 띄게 놓였는데 끝까지 다시 쓰이지 않은 것(loose — 무엇, 놓인 쪽 page), 뒤에서 중요하게 쓰이는데 앞에 한 번도 보이지 않은 것(unplanted — 무엇, 처음 쓰인 쪽 page). 없으면 빈 목록이에요 — 지어내지 않아요. [그림: …]은 그 쪽 그림에만 보이는 것이에요.",
+    system: "너는 이 원고를 처음부터 끝까지 읽는 편집자예요. 고치지 않고 세 가지만 찾아 적어요: 앞에 놓였다가 뒤에서 다시 쓰인 것(kept — 무엇, 놓인 쪽 from, 다시 쓰인 쪽 to), 앞에 눈에 띄게 놓였는데 끝까지 다시 쓰이지 않은 것(loose — 무엇, 놓인 쪽 page), 뒤에서 중요하게 쓰이는데 앞에 한 번도 보이지 않은 것(unplanted — 무엇, 처음 쓰인 쪽 page). 없으면 빈 목록이에요 — 지어내지 않아요. [그림: …]은 그 쪽 그림에만 보이는 것이에요." + (hasRoomCounted(input) ? " 놓인 쪽(from)은 글에 처음 나온 쪽이에요 — [그림: …]에만 있던 것은 글을 듣는 아이에게는 아직 놓이지 않은 것이라, 글에 처음 나오는 쪽이 뒤라면 unplanted로 적어요." : ""),
     user: `${plants.length ? `[작가의 심고 거두기 메모]\n${plants.map((p) => `- ${p.what}: ${p.plant} → ${p.payoff}`).join("\n")}\n\n` : ""}=== 원고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map(pageLine).join("\n")}`,
     jsonSchema: { type: "object", additionalProperties: false, required: ["kept", "loose", "unplanted"], properties: { kept: threadRow(["from", "to"]), loose: threadRow(["page"]), unplanted: threadRow(["page"]) } },
     temperature: 0.2,
@@ -1037,17 +1178,17 @@ const ROOM_PROGRESS = Object.freeze({
 });
 const roomError = (message) => new StoryValidationError("council", [message]);
 /** A shortlisted premise as the review screen and the summary read it (a pitch-shaped row). */
-const asPitch = (premise, n, row, wide = false) => ({
+const asPitch = (premise, n, row, wide = false, counted = false) => ({
   premise: n,
   title: str(premise?.title, 40) || `전제 ${n}`,
   logline: str(premise?.line, 300),
   engine: str(premise?.engine, 40),
   laugh: str(premise?.laugh, 200),
   picture: str(premise?.picture, 200),
-  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100), ...(c.isNew === true && str(c.look, 160) ? { nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160) } : {}) })),
+  cast: list(premise?.cast).filter(object).map((c) => ({ name: str(c.name, 30), isNew: c.isNew === true, want: str(c.want, 100), flaw: str(c.flaw, 100), speech: str(c.speech, 100), ...(c.isNew === true && str(c.look, 160) ? { nameEn: str(c.nameEn, 30), kind: str(c.kind, 24), look: str(c.look, 160) } : counted && c.isNew === true ? { nameEn: str(c.nameEn, 30), kind: str(c.kind, 24) } : {}) })),
   ...(row ? { pull: row.pull, laughed: row.laughed, curious: row.curious, again: row.again, lost: row.lost, words: row.words } : {}),
   // R57: the places it goes and how wide it is (counted from the premise itself) — what the parent confirms by choosing it.
-  ...(wide ? { places: premisePlaces(premise).map((p) => ({ name: p.name, isNew: p.isNew })), scale: premiseScale(premise) } : {}),
+  ...(wide ? { places: premisePlaces(premise).map((p) => ({ name: p.name, isNew: p.isNew })), scale: premiseScale(premise, { counted }) } : {}),
 });
 /**
  * The room's first half: premises (the author — the "outline" role, the
@@ -1107,7 +1248,7 @@ export async function runWritersRoom(input, options = {}, services = {}) {
     const wide = hasRoomWide(input);
     const shortlist = wide ? pickPremisesWide(rows, premises, Math.min(SHORTLIST, premises.length)) : pickPremises(rows, Math.min(SHORTLIST, premises.length));
     record.shortlist = shortlist;
-    record.pitches = shortlist.map((n, i) => asPitch(premises[n - 1], i + 1, rows.find((row) => row.premise === n), wide));
+    record.pitches = shortlist.map((n, i) => asPitch(premises[n - 1], i + 1, rows.find((row) => row.premise === n), wide, hasRoomCounted(input)));
     if (wide) record.scales = premises.map((p) => premiseScale(p).kind);
     record.recommended = 1;
     log({ by: "독자단", kind: "reviewed", what: `셋을 고름: ${record.pitches.map((p) => `'${p.title}' (웃음 ${p.laughed ?? 0}·궁금 ${p.curious ?? 0}·또 ${p.again ?? 0})`).join(" / ")}`, why: wide ? `독자단의 순서에서 폭이 다른 이야기를 하나씩 — ${record.pitches.map((p) => SCALE_LABELS[p.scale?.kind] || "").join(" / ")}` : "웃음+궁금+또−모름을 셈 — 점수가 아니라 반응" });
@@ -1326,6 +1467,8 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       const raw = await note(castNotesRequest(input, premise), "outline");
       castNotes = settleCastNotes(raw, premise);
       record.castNotes = castNotes;
+      // R60: the illustrator's lines for the new characters and places (FULL AUTO puts them on the cards before any sheet).
+      if (hasRoomCounted(input)) record.looks = settleRoomLooks(raw, premise);
       if (stages) {
         ties = settleTies(raw, premise);
         record.ties = ties;
@@ -1347,7 +1490,8 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
         }
         record.flowChosen = flowPick;
         treatment = flows[flowPick - 1];
-        if (castNotes.length) {
+        // R60: no cast revision in a counted room (it restated the flow and erased the characters' own business).
+        if (castNotes.length && !hasRoomCounted(input)) {
           await snapshot("castRevise");
           const revised = settleCastNotes(await note(castReviseRequest(input, premise, castNotes, ties, treatment), "outline"), premise);
           if (revised.length) {
@@ -1400,7 +1544,9 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       await snapshot("threads");
       threads = settleThreads(await note(threadCheckRequest(input, chosen, treatment), "cheap"), chosen.pages.length);
       record.threads = threads;
-      const more = threadNotes(threads);
+      // R60: and where the things the ending uses are first heard (counted from the words; a counted room only).
+      const heard = hasRoomCounted(input) ? firstHeardNotes(chosen.pages, [...list(treatment?.plants).map((x) => x.what), ...list(threads?.kept).map((x) => x.what)], { names: list(premise?.cast).map((c) => c?.name) }) : "";
+      const more = [threadNotes(threads), heard].filter(Boolean).join("\n");
       if (more) record.notes = [record.notes, more].filter(Boolean).join("\n");
     }
     // R54g: no page to skip, none lost, nothing to change → the panel's pick stands as written (one upper call saved).
@@ -1547,7 +1693,8 @@ export function roomNewCast(outline, input) {
   const known = new Set(list(input?.characters).filter(object).flatMap((c) => [str(c.name, 30), str(c.nameEn, 30)]).filter(Boolean));
   const seen = new Set();
   return list(outline?.writersRoom?.premise?.cast)
-    .filter((c) => object(c) && c.isNew === true && str(c.name, 30) && str(c.look, 160))
+    // R60: a counted room's premises carry no look (it comes from the cast notes) — a new character needs a kind or an English name.
+    .filter((c) => object(c) && c.isNew === true && str(c.name, 30) && (str(c.look, 160) || (hasRoomCounted(input) && (str(c.kind, 24) || str(c.nameEn, 30)))))
     .filter((c) => {
       const name = str(c.name, 30);
       if (known.has(name) || seen.has(name)) return false;
@@ -1563,21 +1710,64 @@ export function roomNewCast(outline, input) {
  */
 export function roomNewPlaces(outline, input) {
   const known = new Set(list(input?.backgrounds).filter(object).flatMap((b) => [str(b.name, 30), str(b.nameEn, 30)]).filter(Boolean));
-  return premisePlaces(outline?.writersRoom?.premise).filter((p) => p.isNew && p.look && !known.has(p.name) && !(p.nameEn && known.has(p.nameEn)));
+  return premisePlaces(outline?.writersRoom?.premise).filter((p) => p.isNew && (p.look || (hasRoomCounted(input) && (p.type || p.nameEn))) && !known.has(p.name) && !(p.nameEn && known.has(p.nameEn)));
 }
 /** The drawer record of one new place — the shape materializeAutoPlan gives a plan's new background (its sheet is bought like theirs). */
-export function roomPlaceRecord(p, { id, jobId, now = new Date().toISOString() } = {}) {
+export function roomPlaceRecord(p, { id, jobId, now = new Date().toISOString(), kit = false } = {}) {
   const look = str(p?.look, 200),
     type = str(p?.type, 24).toLowerCase().replace(/[^a-z ]/gu, "").trim() || "place";
+  // R60 (kit): the look and the layout are two fields (the R57 card copied one line into both, so the sheet request said it twice);
+  // the sheet is drawn from the kit's two-panel template (background-sheets.js). The look arrives with the cast notes.
+  if (kit) return { id: String(id || ""), name: str(p?.name, 30), nameEn: str(p?.nameEn, 30) || str(p?.name, 30), type, description: look || `a ${type}`, layout: str(p?.layout, 200), version: 1, source: "writers-room", sheetKit: 1, autoRunId: String(jobId || ""), autoReviewPending: true, createdAt: now };
   return { id: String(id || ""), name: str(p?.name, 30), nameEn: str(p?.nameEn, 30) || str(p?.name, 30), type, description: look, layout: look, version: 1, source: "writers-room", autoRunId: String(jobId || ""), autoReviewPending: true, createdAt: now };
 }
 const KIND_WORDS = Object.freeze({ child: "child", kid: "child", boy: "child", girl: "child", adult: "adult", man: "adult", woman: "adult", grandma: "adult", grandpa: "adult", teacher: "adult" });
 /** The drawer record of one new character — the shape materializeAutoPlan gives a plan's new companion (its sheet is bought like theirs). */
-export function roomCastRecord(c, { id, jobId, now = new Date().toISOString() } = {}) {
+/** R60: the body kind a card's sheet is drawn from — the cast notes' build, else a guess from the kind. */
+export function buildOf(kind, build = "") {
+  if (BUILDS.includes(build)) return build;
+  const k = String(kind || "").toLowerCase();
+  if (k === "child" || k === "adult") return "human";
+  if (/^(bird|owl|duck|chick|hen|crow|sparrow|penguin|parrot|eagle|swan|goose)$/u.test(k)) return "bird";
+  if (/^(robot|doll|toy|teddy|ball|cup|kettle|spoon|shoe|hat|cloud|star|moon|sun|lamp|book|box|clock|car|train|boat)$/u.test(k)) return "object";
+  if (/^(deer|fawn|dog|puppy|cat|kitten|rabbit|bunny|fox|wolf|bear|cub|horse|pony|cow|pig|sheep|lamb|goat|mouse|squirrel|hedgehog|raccoon|tiger|lion|elephant|giraffe|zebra|dinosaur|dino|turtle|frog|lizard|otter|badger|mole|calf|foal|kid)$/u.test(k)) return "four-legged";
+  return "other";
+}
+export function roomCastRecord(c, { id, jobId, now = new Date().toISOString(), kit = false } = {}) {
   const kindWord = str(c?.kind, 24).toLowerCase().replace(/[^a-z]/g, ""),
     kind = KIND_WORDS[kindWord] || kindWord || "friend",
     human = kind === "child" || kind === "adult",
     look = str(c?.look, 160);
+  // R60 (kit): no default colours (the fawn's card carried a green body colour), the look once (not as description and
+  // appearance), the body kind for the sheet template (world.js); the look arrives with the cast notes (roomCardWithLook).
+  if (kit) {
+    const build = buildOf(kind, str(c?.build, 20));
+    return {
+      id: String(id || ""),
+      name: str(c?.name, 30),
+      nameEn: str(c?.nameEn, 30) || str(c?.name, 30),
+      role: "조연",
+      kind,
+      build,
+      gender: "",
+      description: look || `a ${kind}`,
+      traits: [str(c?.want, 100), str(c?.flaw, 100)].filter(Boolean).slice(0, 2),
+      catchphrase: "",
+      version: 1,
+      color: "",
+      appearance: "",
+      clothes: "",
+      hairColor: "",
+      skinColor: "",
+      wardrobe: [],
+      characterSheets: [],
+      source: "writers-room",
+      sheetKit: 1,
+      autoRunId: String(jobId || ""),
+      autoReviewPending: true,
+      createdAt: now,
+    };
+  }
   // R55f (Codex R55e 실측): the fawn's card carried a human hair and skin colour and its sheet came out as a child's face on a deer's body —
   // an animal card says so and carries no hair or skin colour.
   const description = human || !look ? look : `${look} — a real ${kind}: animal head, face and body (no human face, hair or skin)`;
@@ -1603,6 +1793,36 @@ export function roomCastRecord(c, { id, jobId, now = new Date().toISOString() } 
     autoRunId: String(jobId || ""),
     autoReviewPending: true,
     createdAt: now,
+  };
+}
+/**
+ * R60: a kit card with the look the cast notes gave it — a character's description and body kind, a place's
+ * description and layout. Returns a new record (the version is unchanged: the card has no sheet yet).
+ */
+export function roomCardWithLook(card, entry) {
+  if (!object(card) || !object(entry)) return card;
+  if ("layout" in entry) return { ...card, ...(str(entry.look, 200) ? { description: str(entry.look, 200) } : {}), ...(str(entry.layout, 200) ? { layout: str(entry.layout, 200) } : {}) };
+  return { ...card, ...(str(entry.look, 240) ? { description: str(entry.look, 240) } : {}), build: buildOf(card.kind, entry.build) };
+}
+/** R60: a page's picture is drawn wide or from the middle distance (a place sheet is attached to those only). */
+const placePicture = (page) => {
+  const shot = page?.picturePlan?.shot || "";
+  if (shot) return shot === "wide" || shot === "middle";
+  return !["closeup", "over_shoulder"].includes(String(page?.staging?.shot || ""));
+};
+/**
+ * R60: which new cards the finished pages need a sheet for — a character named on two pages or more (the reading's
+ * who), a place in two wide or middle pictures or more (a close picture carries no place sheet). One page has no
+ * other page to match, so it is drawn from its words. Returns the ids to keep and to drop, with the counts.
+ */
+export function roomSheetChoice(pages, { cast = [], places = [] } = {}) {
+  const rows = list(pages).filter(object),
+    count = (fn) => rows.filter(fn).length;
+  const castCounts = list(cast).map((id) => ({ id: String(id), pages: count((p) => list(p?.scene?.who).map(String).includes(String(id))) })),
+    placeCounts = list(places).map((id) => ({ id: String(id), pages: count((p) => String(p?.scene?.where || "") === String(id) && placePicture(p)) }));
+  return {
+    cast: { keep: castCounts.filter((c) => c.pages >= 2).map((c) => c.id), drop: castCounts.filter((c) => c.pages < 2).map((c) => c.id), counts: castCounts },
+    places: { keep: placeCounts.filter((c) => c.pages >= 2).map((c) => c.id), drop: placeCounts.filter((c) => c.pages < 2).map((c) => c.id), counts: placeCounts },
   };
 }
 /* ---------- R55c: the picture reading replaces the outline's picture plan ---------- */

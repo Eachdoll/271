@@ -749,7 +749,7 @@ const PINS = {
   // R55h (2026-11-09): the writers' room marker of a new draft carries weave: 1 (the only difference, 2307268 dump compared).
   // R56 (2026-11-09): the staged room — the marker's weave is 2 (the only difference, ba03a5f dump compared).
   // R57 (2026-11-09): the wide room — the marker's weave is 3 (the only difference, 3322553 dump compared).
-  inputs: '2cf12bfd636f3998eea219513e0898d80577bb1177958fa75518272bcc9c23c0',
+  inputs: '9cfdc7017c9cfa06d17b42806e97c20da832db20bb525885aadf3e2c0256ec38',
   validation: '4cc17c73b28f39909a913561e31ccc3252a9a206f1e0f49fa6d662555114fe44',
   requests: '7c04f7970b0878f5dd0a2bed0513ec8895e1fc4093a6ce8954d769eaa429bb12',
   // Re-pinned for hotfix 4 (2026-10-19, scene-brief checks): the demo stage's
@@ -832,7 +832,7 @@ const PINS = {
   // R55h: job.input.writersRoom.weave only.
   // R56: job.input.writersRoom.weave 1 → 2 only.
   // R57: job.input.writersRoom.weave 2 → 3 only.
-  fullAutoDemo: '2366a0bb0a449975f090d26aa00b407be384a7fbb47907d882b1b6e6656595c4',
+  fullAutoDemo: '74f1b50ce92b98360be7ad9a9c36de77f02198cab79d66124fc7782bd747625d',
   // 2026-10-20 identity line: every scene request names a character's gender
   // when the record has one (the seed protagonist does), so an outfit never
   // redraws the child. Existing books change on purpose. 263beca: 73b3552a…3a91.
@@ -899,7 +899,7 @@ const PINS = {
   // R55h: the ③ price of a new room story ($1.26 → $1.36: the cast-notes call).
   // R56: the ③ price of a new room story ($1.36 → $1.78: three flows, their pick, the revised cast, the thread check).
   // R57: the ③ price of a new room story ($1.78 → $1.86: the premises name their places).
-  review: '3ac295eb4a5072de53f94a99b9f26a22f608747de0eac8825b5ab6d8aba5bdc3',
+  review: 'b28c3c5f650b226a14f89150effeb38b37949609652af1db9f4228265ca6c8f5',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -948,7 +948,7 @@ const PINS = {
   // R55h: new-story estimates only (+1 request, +$0.10 text: the cast-notes row and the notes inside the three draft requests).
   // R56: new-story estimates only (+6 requests, about +$0.42 text on the default engine).
   // R57: new-story estimates only (the longer premise answer; no new request).
-  estimates: 'e66a3162a2577b884f1c3f0b068aa9a3b4e3ab154e79a714472ac64d588f6618',
+  estimates: '06ab2e44a043a269859a0ce84cea8d0a59b03f4f2c8d4e6b7da64c065cb60121',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

@@ -5380,3 +5380,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #292929; }
 /* R57: the width of a premise on its card */
 .pitch-tag.pitch-scale { background: transparent; border: 1px solid currentColor; }
 .pitch-scale-line { font-weight: 600; }
+/* R60: a counted room's new sheets, shown once before any page is drawn with them */
+.simple-sheet-review .simple-sheet-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin:12px 0}
+.simple-sheet-card{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:10px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--panel,#fff)}
+.simple-sheet-card img{width:100%;height:auto;border-radius:8px}

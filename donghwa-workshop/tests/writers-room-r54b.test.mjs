@@ -122,14 +122,14 @@ test('R54b FULL AUTO: a room job of an openings book keeps pageCount 16 after th
 /* ---------- R54c (2026-11-04): the room is the default; the shelf's diversity line ---------- */
 test('R54c the writers\' room is on by default: a plain family state carries the marker, only a stored false turns it off, a stored true still reads as on', () => {
   const plain = setup();
-  assert.deepEqual(W.writersRoomFor(plain), {version: 1, weave: 4}, 'on with nothing stored');
+  assert.deepEqual(W.writersRoomFor(plain), {version: 1, weave: 5}, 'on with nothing stored');
   assert.equal(W.writersRoomOn(plain.settings.textGeneration), true);
-  assert.deepEqual(normalizeStoryInput({...inputFromWizard(plain, wizard, {layout: 'openings'}).input, bookId: 'd'}).writersRoom, {version: 1, weave: 4});
+  assert.deepEqual(normalizeStoryInput({...inputFromWizard(plain, wizard, {layout: 'openings'}).input, bookId: 'd'}).writersRoom, {version: 1, weave: 5});
   const off = setup(); off.settings.textGeneration = {...(off.settings.textGeneration || {}), writersRoom: false};
   assert.equal(W.writersRoomFor(off), null);
   assert.equal(W.writersRoomOn(off.settings.textGeneration), false);
   assert.equal(getTextGenerationSettings(off).writersRoom, false, 'the settings keep the off');
-  assert.deepEqual(W.writersRoomFor(roomState()), {version: 1, weave: 4}, 'a stored true (R51–R55a) is still on');
+  assert.deepEqual(W.writersRoomFor(roomState()), {version: 1, weave: 5}, 'a stored true (R51–R55a) is still on');
   assert.equal(getTextGenerationSettings(roomState()).writersRoom, undefined, 'and is no longer stored');
   assert.equal(inputFromWizard(plain, {...wizard, koreanLevel: 'K1', englishLevel: 'E0', pageCount: 12}, {layout: 'pages'}).input.writersRoom, undefined, 'K1 stays on the old path');
   assert.match(renderStoryQualitySettings(plain), /id="quality-writers-room"[^>]*checked/, 'the settings switch shows on');

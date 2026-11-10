@@ -17,7 +17,7 @@
  *
  *   node scripts/r54-room-ab.mjs QA/r54-room-ab --paid [--engines openai,anthropic]
  *   node scripts/r54-room-ab.mjs /tmp/ab --demo            (free: the demo engine, plumbing only)
- * R59 options (all with `=`): --topic=주제 (another topic), --weave=1..4 (run the room as an older
+ * R59 options (all with `=`): --topic=주제 (another topic), --weave=1..5 (run the room as an older
  * version froze it — 3 is the room before R59: three drafts), --premise-from=QA/…/anthropic.json
  * (take the chosen premise of a saved run: the premise round is not bought again, so two
  * versions are compared on the same premise).
@@ -50,7 +50,7 @@ const outDir = resolve(positional[0] || "QA/r54-room-ab"),
   paid = flags.has("paid"),
   engines = String(flags.get("engines") || "openai,anthropic").split(",").map((s) => s.trim()).filter(Boolean);
 // R59: the topic, the room version and a saved premise can be fixed for a comparison.
-const weaveFlag = [1, 2, 3, 4].includes(Number(flags.get("weave"))) ? Number(flags.get("weave")) : null,
+const weaveFlag = [1, 2, 3, 4, 5].includes(Number(flags.get("weave"))) ? Number(flags.get("weave")) : null,
   premiseFrom = typeof flags.get("premise-from") === "string" ? resolve(flags.get("premise-from")) : null,
   savedRoom = premiseFrom ? JSON.parse(readFileSync(premiseFrom, "utf8")).room : null;
 if (premiseFrom && !savedRoom?.premise) {
@@ -333,6 +333,8 @@ async function runEngine(engine) {
     pictureReading: job.pictureReading || null,
     roomWeave: job.roomWeave || null,
     roomPockets: job.roomPockets || null,
+    roomSheets: job.roomSheets || null,
+    roomLooks: job.roomDraft?.room?.looks || null,
     roomPlaces: job.roomPlaces || [],
     coverage: pages.length ? castCoverage(pages, job.input, extraNames) : [],
     style: pages.length ? styleReport(pages.map((p) => p.textKo), { names: [...(job.input.characters || []).map((c) => c.name), ...extraNames] }) : null,
@@ -431,6 +433,8 @@ function compareReport(results) {
   row("글 셈 · 되풀이되는 짧은 줄 / 그림 메모 글자 ÷ 글 글자", (r) => { const t = text(r); return t ? `${t.refrains.length}줄${t.refrains.length ? ` (${t.refrains.map((x) => `${x.line} ${x.pages.join("·")}쪽`).join(", ")})` : ""} / ${t.artShare}` : "-"; });
   row("글 셈 · 흐름끼리 닮음 (2글자 자카드)", (r) => { const f = (r.draft?.room?.treatments || []).map((t) => t.flow); return f.length > 1 ? f.flatMap((a, i) => f.slice(i + 1).map((b) => textLikeness(a, b))).join(" · ") : "-"; });
   row("펼침 표시 · 고쳐쓰기 전 → 후 (앱이 되살린 수) / 글 자리를 받은 쪽", (r) => `${r.draft?.room?.spreadMarks ? `${r.draft.room.spreadMarks.before} → ${r.draft.room.spreadMarks.after} (${r.draft.room.spreadMarks.restored})` : "-"} / ${r.roomPockets ? `${r.roomPockets.placed}/${r.roomPockets.pages}` : "-"}`);
+  // R60: the new cards' looks (from the cast notes) and the pages that decided their sheets.
+  row("새 카드 · 생김새를 받은 인물/장소 · 시트를 살 쪽수(인물 who / 장소 넓은·중간)", (r) => `${r.roomLooks ? `${(r.roomLooks.cast || []).length}/${(r.roomLooks.places || []).length}` : "-"} · ${r.roomSheets ? [...(r.roomSheets.cast || []).map((c) => `인물 ${c.pages}쪽`), ...(r.roomSheets.places || []).map((c) => `장소 ${c.pages}쪽`)].join(", ") || "없음" : "-"}`);
   row("짜임 실측(옛 셈) · 되돌아온 것 / 한 쪽만 나온 인물 / 그림 메모", (r) => (r.roomWeave ? `${r.roomWeave.returning ? `${r.roomWeave.returning.length}개${r.roomWeave.returning.length ? ` (${r.roomWeave.returning.map((x) => `${x.prop} ${x.from}→${x.to}`).join(", ")})` : ""}` : "세지 않음"} / ${r.roomWeave.single.length}명 / ${r.roomWeave.artNotes}쪽` : "-"));
   row("그림 읽기 · 못 보는 것 / 다음 쪽까지 감출 것 / 물건의 글자", (r) => (r.pictureReading ? `${r.pictureReading.hidden}쪽 / ${r.pictureReading.holdBack}쪽 / ${r.pictureReading.lettering ?? 0}쪽` : "-"));
   row("등급 참고 (다듬기 전 → 후)", (r) => (r.draft?.room ? `${(r.draft.room.levelNotes || []).length} → ${(r.draft.room.levelNotesAfter || []).length}` : "-"));
@@ -486,6 +490,8 @@ for (const engine of engines) {
     pictureReading: r.pictureReading,
     roomWeave: r.roomWeave,
     roomPockets: r.roomPockets,
+    roomSheets: r.roomSheets,
+    roomLooks: r.roomLooks,
     roomPlaces: r.roomPlaces,
     coverage: r.coverage,
     style: r.style,

@@ -738,6 +738,28 @@ export function captureBookGenerationSnapshot(state, book) {
   return book.generationSnapshot;
 }
 
+/** R60: what a body kind looks like, said positively (an image model follows "a deer muzzle" better than "no human face"). */
+const BUILD_LINES = Object.freeze({
+  "four-legged": "a real animal standing on four legs, with an animal head and muzzle, its body and head covered in fur or hide — not a person in a costume",
+  "upright-animal": "an animal that stands and walks on two legs, with an animal head and muzzle and fur or feathers over its whole head and body — not a person in a costume",
+  bird: "a real bird with a beak, wings and feathers over its whole head and body",
+  object: "an object that is a character: keep its shape, size and material the same in every view; a small simple face only where the description gives one",
+});
+const BUILD_EXPRESSIONS = Object.freeze({
+  human: "four face expressions (joy, surprise, sadness, upset)",
+  object: "four moods shown by its pose and its face if it has one (joy, surprise, sadness, upset)",
+});
+/** R60: the sheet prompt of a kit card, from its kind, body kind and look — no empty hair/skin/clothing fields, no default colour. */
+function kitSheetPrompt(character, previousSheet) {
+  const build = character.build || "other",
+    human = build === "human",
+    kind = character.kind && !["child", "adult", "friend"].includes(character.kind) ? character.kind : "",
+    who = [character.nameEn || character.name, kind ? `a ${kind}` : "", genderWord(character) ? `a ${genderWord(character)}` : ""].filter(Boolean).join(", "),
+    body = BUILD_LINES[build] || "",
+    expressions = BUILD_EXPRESSIONS[build] || "four expressions shown with the eyes, ears and tail (joy, surprise, sadness, upset)",
+    poses = human ? "two action poses (walking and waving)" : "two poses (standing and walking)";
+  return `Create a coherent character reference sheet for this original storybook character: ${who}. ${character.description || ""}${body ? ` It is ${body}.` : ""} Show a front full-body view, side full-body view, back full-body view, ${expressions}, and ${poses} on one clean neutral background. Keep the exact shape, proportions, markings and colors consistent in every view${human ? ", with the same face, hair and clothes" : "; it wears and carries only what the description names"}. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. No labels, text, English view names, captions or diagrams.`;
+}
 export function createCharacterSheetRequest(state, characterId, options = {}) {
   const world = getActiveWorld(state);
   const character = characterById(state, characterId);
@@ -768,6 +790,9 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
     .filter(Boolean)
     .join("; ");
   const styleReferences = getWorldStyleReferences(state, world, preset);
+  // R60: a writers'-room kit card (sheetKit) is drawn from a template for its body kind — the R55e fawn's sheet request
+  // said deer once and hairstyle, clothing, hair colour, skin colour and waving six times, with a default green body.
+  const kit = character.sheetKit === 1 ? kitSheetPrompt(character, previousSheet) : "";
   return {
     // Character fields are parent text: strict, each on its own, no name exemption
     // ("토토로부터" is refused here and in every scene that would draw it). A friend
@@ -783,7 +808,7 @@ export function createCharacterSheetRequest(state, characterId, options = {}) {
       ]),
       names: castNames(state),
     }),
-    prompt: `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
+    prompt: kit || `Create a coherent character reference sheet for this original storybook character: ${identity}. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. ${previousSheet ? "The FIRST attached image is identity-only: preserve recognizable facial and clothing features, but do NOT copy its drawing medium, flat geometric simplification, texture, outlines or shading. All later images are authoritative STYLE references." : "All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene."} Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.`,
     stylePreset: clone(preset),
     referenceImages: [
       ...(previousSheet

@@ -33,7 +33,12 @@ import {
   COUNCIL_REVIEW_STATUS,
   createFullAutoJob,
   fullAutoPayload,
+  SHEETS_REVIEW_STATUS,
+  roomSheetsToReview,
+  acceptRoomSheets,
+  redrawRoomSheet,
 } from "./full-auto.js";
+import { getImageURL } from "./image-generation/assets.js";
 import {
   ECO_STATUS,
   ECO_STEP_LABELS,
@@ -338,7 +343,11 @@ const TEXT_ENGINE_NAMES = {
   local: "로컬 · LM Studio / Ollama",
   demo: "데모 글 · 무료",
 };
-const HELD = ["text-review", "pages-ready", "review"];
+// R60: sheets-review — a counted room's new sheets are shown before any page is drawn with them.
+const HELD = ["text-review", "pages-ready", "review", "sheets-review"];
+/** R60: a writers'-room card whose sheet the parent has not seen stays out of ② (the R55e fawn with a child's face stayed in the drawer). */
+const unseenRoomCard = (card) => card?.sheetKit === 1 && card.source === "writers-room" && !card.sheetSeenAt;
+const drawerOf = (rows) => rows.filter((card) => !unseenRoomCard(card));
 // R22: parked after the writers' room (no text yet): ③ shows the choice.
 const councilHeld = (job) => job?.status === COUNCIL_REVIEW_STATUS;
 const RESUMABLE = ["ready", "running", "paused", "failed", COUNCIL_REVIEW_STATUS, ECO_STATUS, ...HELD];
@@ -473,8 +482,8 @@ export function preselectMaterials(state, wizard) {
     pickKey = `${topic}${stage ? `|${stage}` : ""}${placeId ? `|place:${placeId}` : ""}`;
   if (wizard.simplePicksTouched || wizard.simplePickedFor === pickKey)
     return wizard;
-  const characters = activeCharacters(state),
-    backgrounds = activeBackgrounds(state),
+  const characters = drawerOf(activeCharacters(state)),
+    backgrounds = drawerOf(activeBackgrounds(state)),
     protagonist =
       wizard.characterIds?.find((id) => characters.some((c) => c.id === id)) ||
       characters[0]?.id,
@@ -1347,6 +1356,7 @@ function resumeLabel(job) {
   if (councilHeld(job)) return "기획 회의 결과 확인";
   if (job.status === "text-review") return "글 검수 대기";
   if (job.status === "pages-ready") return "그림 준비 완료";
+  if (job.status === SHEETS_REVIEW_STATUS) return "새 시트 확인";
   if (job.status === "review") return "그림 완성 · 마지막 확인";
   if (job.status === "failed") return "멈춤 · 다시 시도";
   if (runIsLive(job)) return job.book ? "그림 만드는 중" : "글 만드는 중";
@@ -1452,8 +1462,8 @@ function renderMaterialsStep(ctx, w) {
   const job = jobOfWizard(ctx.getState(), w);
   if (job) return renderFrozenMaterials(ctx, w, job);
   const state = ctx.getState(),
-    characters = activeCharacters(state),
-    backgrounds = activeBackgrounds(state),
+    characters = drawerOf(activeCharacters(state)),
+    backgrounds = drawerOf(activeBackgrounds(state)),
     // R33: a place the topic names that the drawer lacks is said here, not forced later.
     missingPlaces = missingTopicPlaces(w.topic, backgrounds),
     // R33: a chosen stage with no fitting drawer place is said here too.
@@ -1799,6 +1809,23 @@ export function imageCountLabel(book) {
 }
 const INTERRUPTED_NOTE =
   '<div class="notice simple-interrupted">그림 만들기가 중간에 멈췄어요(창이 닫혔거나 새로 열었어요). ‘이어서 만들기’를 누르면 남은 그림만 만들어요. 이미 만든 그림은 다시 만들지 않아요.</div>';
+/**
+ * R60: the new characters' and places' sheets of a counted room, shown once before any page is drawn with them —
+ * redraw a character's sheet (one sheet, about $0.17) or go on as it is. Nothing is bought by looking.
+ */
+function sheetsReviewPanel(state, job) {
+  if (job?.status !== SHEETS_REVIEW_STATUS) return "";
+  const rows = roomSheetsToReview(state, job);
+  if (!rows.length) return "";
+  const src = (sheet) => (sheet?.imageAssetId ? getImageURL(sheet.imageAssetId) : sheet?.imageUrl) || "";
+  const cards = rows
+    .map((row) => {
+      const url = src(row.sheet);
+      return `<article class="simple-sheet-card">${url ? `<img src="${esc(url)}" alt="${esc(row.name)} 시트">` : ""}<strong>${esc(row.name)}</strong><span class="small-label">${row.kind === "character" ? "새 인물" : "새 장소"}</span>${row.kind === "character" ? sbtn("다시 그리기", "sheet-redraw", "outline", `data-id="${esc(row.id)}"`) : ""}</article>`;
+    })
+    .join("");
+  return `<section class="panel simple-panel simple-sheet-review"><h3>새 인물·장소 시트를 먼저 보여 드려요</h3><p class="section-sub">그림을 그리기 전에 한 번 봐 주세요. 마음에 안 드는 인물은 그 시트만 다시 그려요(한 장). 보신 시트만 다음 이야기의 재료 서랍에 들어가요.</p><div class="simple-sheet-cards">${cards}</div><div class="simple-start">${sbtn("이대로 그림 만들기", "sheet-accept", "primary")}</div></section>`;
+}
 function renderReviewStep(ctx, w) {
   const state = ctx.getState(),
     book = ctx.getDraft();
@@ -1881,7 +1908,7 @@ function renderReviewStep(ctx, w) {
             "green",
             busy || editing ? "disabled" : "",
           );
-  return `<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span>${openings ? `<span class="small-label simple-openings-mix">${esc(openingsMix(book))}<br>AI가 펼침마다 펼침면/낱쪽을 골랐어요</span>` : ""}</div><div class="simple-review-actions">${topAction}${eco ? "" : sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${eco ? ECO_UPLOAD_INPUT : ""}${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${pager()}<div class="simple-page${openings ? ` simple-page-${kind}` : ""}"><div class="simple-page-art">${art}${cue}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${pageLabel} · 한글`) : ""}${counter}${needsEn(book) ? text("en", `English · ${openings ? pageLabel : index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div>${openings ? pager(" simple-pager-bottom") : ""}</section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">${eco ? "그림은 쪽마다 직접 올려요 · 요금 없음" : "글을 고쳐도 그림은 묻고 나서만 다시 만들어요."}</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
+  return `${sheetsReviewPanel(state, job)}<section class="panel simple-panel simple-review"><div class="simple-review-top"><div><strong class="simple-book-title">${esc(book.title)}</strong><span class="small-label"><span id="simple-image-count">${esc(imageCountLabel(book))}</span> · 좋아요 ${reviewed} / ${total}</span>${openings ? `<span class="small-label simple-openings-mix">${esc(openingsMix(book))}<br>AI가 펼침마다 펼침면/낱쪽을 골랐어요</span>` : ""}</div><div class="simple-review-actions">${topAction}${eco ? "" : sbtn("이야기 전체 다시 만들기", "restart", "plain", busy || editing ? "disabled" : "")}</div></div>${eco ? ECO_UPLOAD_INPUT : ""}${running}${interrupted ? INTERRUPTED_NOTE : ""}${job?.error && !live ? `<p class="pin-error">${esc(job.error)}</p>` : ""}${pager()}<div class="simple-page${openings ? ` simple-page-${kind}` : ""}"><div class="simple-page-art">${art}${cue}</div><div class="simple-page-text">${needsKo(book) ? text("ko", `${pageLabel} · 한글`) : ""}${counter}${needsEn(book) ? text("en", `English · ${openings ? pageLabel : index + 1}`) : ""}<button type="button" class="simple-badge simple-badge-${badge.state}" data-simple-action="badge" aria-expanded="${!!w.simpleBadgeOpen}" id="simple-reading-badge">${esc(badge.label)}</button>${w.simpleBadgeOpen && badge.items.length ? `<ul class="check-issues simple-badge-list">${badge.items.map((item) => `<li class="check-advisory">${esc(item.code || item.violations ? describeReadingViolation(item) : item.message)}</li>`).join("")}</ul>` : ""}<div class="simple-page-actions">${pageActions}</div></div></div>${openings ? pager(" simple-pager-bottom") : ""}</section><div class="wizard-actions">${live || pageOp || interrupted ? sbtn("중지", "stop") : sbtn("이전", "back", "outline", editing ? "disabled" : "")}<span class="wizard-hint">${eco ? "그림은 쪽마다 직접 올려요 · 요금 없음" : "글을 고쳐도 그림은 묻고 나서만 다시 만들어요."}</span>${sbtn("동화책 만들기", "to-finish", "green", busy || editing ? "disabled" : "")}</div>`;
 }
 function renderFinishStep(ctx, w) {
   const state = ctx.getState(),
@@ -2483,7 +2510,15 @@ async function drawPage(
     );
     if (!ok) return;
   }
-  if (prepare) await runJob(ctx, job.id, "pages", "pages");
+  if (prepare) {
+    job.sheetReviewResume = "page";
+    await runJob(ctx, job.id, "pages", "pages");
+  }
+  // R60: the run parked to show the new sheets first — the page is drawn after the parent's look.
+  if (getFullAutoJob(job.id)?.status === SHEETS_REVIEW_STATUS) {
+    ctx.render();
+    return ctx.toast("새 인물 시트를 먼저 확인해 주세요. 그다음에 그림을 만들어요.");
+  }
   // The parent may have opened another book while the sheets were prepared, or
   // pressed 중지: a run that finds every sheet ready can still reach the hold
   // after a stop, and that must not buy this page.
@@ -2916,6 +2951,7 @@ async function drawAll(
     // A run left 'running' by a closed tab is recovered inside the run lock;
     // when it has nothing left to buy it is finished there without the runner
     // (no image key), and while another tab holds the run the runner refuses.
+    job.sheetReviewResume = "all";
     return await runJob(ctx, job.id, null, "images", { redraw: chosen });
   } finally {
     // The chosen redraw belongs to this run: a page it did not reach (stopped,
@@ -3492,6 +3528,35 @@ async function handle(ctx, action, el) {
     }
     ctx.render();
     return;
+  }
+  // R60: the parent looked at the new sheets: go on drawing (all pictures, or prepare for the page they asked for).
+  if (action === "sheet-accept" || action === "sheet-redraw") {
+    const book = ctx.getDraft(),
+      job = book ? jobOfBook(state, book) : jobOfWizard(state, w);
+    if (job?.status !== SHEETS_REVIEW_STATUS || runIsLive(job)) return ctx.render();
+    if (action === "sheet-redraw") {
+      const id = el?.dataset?.id,
+        costs = estimateSimpleCosts(state, book),
+        one = costs.imagePricingUnknown ? "" : ` (약 ${usd(Number(costs.sheetsUpperUsd) / 10 || 0)})`;
+      if (!(await confirmModal(ctx, "이 인물 시트를 다시 그릴까요?", `시트 한 장을 새로 만들어요${one}. 다른 시트와 그림은 그대로예요.`, "다시 그리기"))) return;
+      try {
+        redrawRoomSheet(state, job, id);
+      } catch (error) {
+        return ctx.toast(error);
+      }
+      if (ctx.save() === false) return ctx.toast("저장하지 못했어요. 저장 공간을 확인해 주세요.");
+      await runJob(ctx, job.id, "pages", "pages");
+      return ctx.render();
+    }
+    acceptRoomSheets(state, job);
+    if (ctx.save() === false) return ctx.toast("저장하지 못했어요. 저장 공간을 확인해 주세요.");
+    if (job.sheetReviewResume === "page") {
+      await runJob(ctx, job.id, "pages", "pages");
+      ctx.render();
+      return ctx.toast("시트를 확인했어요. 이제 쪽 그림을 만들 수 있어요.");
+    }
+    await drawAll(ctx, { book: ctx.getDraft(), job, confirmed: true });
+    return ctx.render();
   }
   if (action === "council-continue") {
     // R22: the parent's pitch and note go on the job; the run replays the

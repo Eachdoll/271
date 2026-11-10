@@ -659,6 +659,8 @@ export function estimateStoryTextCost({
   roomWide = roomStages,
   // R59: a lean room draft writes one draft (not three) and the panel reads one book.
   roomLean = roomWide,
+  // R60: a counted room draft revises no cast (one writer answer fewer); its cast notes also carry the new cards' looks.
+  roomCounted = roomLean,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -762,12 +764,12 @@ export function estimateStoryTextCost({
       stageEstimate("roomPremises", roomWide ? 2900 : 2500, Math.ceil((roomWide ? 4300 : 3500) * longHand), 1, "writer"),
       stageEstimate("roomPanel", 5500, 1700, 1, "cheap"),
       // R55c: no outline row — the room's outline is the app's (free).
-      ...(roomWeave ? [stageEstimate("roomCastNotes", 1500, Math.ceil((roomStages ? 900 : 700) * longHand), 1, "writer")] : []),
+      ...(roomWeave ? [stageEstimate("roomCastNotes", 1500, Math.ceil((roomCounted ? 1100 : roomStages ? 900 : 700) * longHand), 1, "writer")] : []),
       ...(roomStages
         ? [
             stageEstimate("roomFlows", 2600, Math.ceil(600 * longHand), 3, "writer"),
             stageEstimate("roomFlowPick", 3500, 600, 1, "cheap"),
-            stageEstimate("roomCastRevise", 2400, Math.ceil(800 * longHand), 1, "writer"),
+            ...(roomCounted ? [] : [stageEstimate("roomCastRevise", 2400, Math.ceil(800 * longHand), 1, "writer")]),
           ]
         : []),
       stageEstimate("roomDrafts", roomStages ? 2900 : roomWeave ? 2300 : 1800, draftOut, roomLean ? 1 : 3, "writer"),
@@ -1014,7 +1016,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1, roomWeave: input.writersRoom?.version === 1 && [1, 2, 3, 4].includes(input.writersRoom?.weave), roomStages: input.writersRoom?.version === 1 && [2, 3, 4].includes(input.writersRoom?.weave), roomLean: input.writersRoom?.version === 1 && input.writersRoom?.weave === 4, roomWide: input.writersRoom?.version === 1 && [3, 4].includes(input.writersRoom?.weave) }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1, roomWeave: input.writersRoom?.version === 1 && [1, 2, 3, 4, 5].includes(input.writersRoom?.weave), roomStages: input.writersRoom?.version === 1 && [2, 3, 4, 5].includes(input.writersRoom?.weave), roomLean: input.writersRoom?.version === 1 && [4, 5].includes(input.writersRoom?.weave), roomCounted: input.writersRoom?.version === 1 && input.writersRoom?.weave === 5, roomWide: input.writersRoom?.version === 1 && [3, 4, 5].includes(input.writersRoom?.weave) }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {
