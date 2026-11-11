@@ -1,0 +1,111 @@
+{
+  "source": "32c854d",
+  "weave": 6,
+  "edited": {
+    "ko": "엄마가 집에서 물을 마셔요.",
+    "en": "Yuha climbs a tall tree in the forest.",
+    "actualEvent": "Yuha climbs a tall tree in the forest. (the words of this page were changed after its picture was planned: draw what they say now). ",
+    "refs": [
+      "Yuha original face and identity",
+      "Yuha original full body and clothes"
+    ],
+    "oldPlaceStillPresent": true,
+    "oldCast": [
+      "yuha"
+    ]
+  },
+  "rewrite": {
+    "structural": true,
+    "outsideText": "외계인이 유하를 화성으로 데려가요.",
+    "laughProtected": false,
+    "outsideArt": "A monster destroys the house.",
+    "outsideAppend": "원래 8쪽이에요. 외계인이 왔어요."
+  },
+  "english": {
+    "calls": 2,
+    "missing": [
+      3
+    ],
+    "draftEnglish": null,
+    "pageEnglish": "콩이는 어디 있게?",
+    "legacyEnglish": "콩이는 어디 있게?",
+    "ko": "콩이는 어디 있게?"
+  },
+  "identity": {
+    "beforeHasGoldEar": true,
+    "afterHasGoldEar": false,
+    "afterHasDragon": true,
+    "afterDeleteHasIdentity": false,
+    "frozenInputHasGoldEar": true,
+    "beforeRefs": []
+  },
+  "rewritePipeline": {
+    "stageCalls": [
+      "cast",
+      "flow",
+      "draft",
+      "read",
+      "threads",
+      "rewrite",
+      "english"
+    ],
+    "scope": {
+      "pages": [
+        1,
+        2,
+        3
+      ],
+      "restored": [],
+      "structural": true
+    },
+    "acceptedAlien": true,
+    "pages": 9
+  },
+  "lettering": [
+    {
+      "id": "watercolor",
+      "style": "soft watercolor children's picture book illustration, visible paper texture, gentle wet-on-wet washes, loose ink outlines, warm pastel palette, simple friendly shapes, generous white space, cozy and calm mood, children's picture book scene, no text, no logos. Original children's picture-book illustration matching the attached cover illustration’s rendering: richly layered translucent watercolor and delicate colored-pencil brushwork on warm ivory cotton paper, visible fine paper grain, softly feathered edges, nuanced pigment variations and hand-painted foliage. Warm natural sunlight, softly modeled rounded forms with subtle volume and gentle shadows, expressive softly shaded faces with rosy cheeks and fine wispy hair strands. A tender, detailed and dimensional painted storybook feeling. The cover image is the authoritative visual style reference; character identity references define appearance only and must be repainted in this rendering. Preserve requested clothing and colors rather than copying the cover character.",
+      "negative": "captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery, flat vector art, geometric clip art, solid uniform color blocks, sticker graphics, icon design, rigid outlines, simplistic face dots, glossy 3D rendering, inconsistent character features",
+      "positiveNoText": true,
+      "finalException": true
+    },
+    {
+      "id": "crayon",
+      "style": "children's book illustration in soft pastel crayon and colored pencil, visible waxy strokes and paper grain, rounded simple characters, bright but gentle colors, naive playful style, flat perspective, children's picture book scene, no text, no logos",
+      "negative": "captions, watermark, logo, signature, known cartoon characters, photorealistic, extra fingers, distorted face, dark or scary imagery",
+      "positiveNoText": true,
+      "finalException": true
+    },
+    {
+      "id": "comic",
+      "style": "Original children’s comic illustration with clear rounded ink contours, simple warm color fills, readable silhouettes, lively but gentle facial expressions, light cel shading and an uncluttered single-scene composition.",
+      "negative": "photorealism, aggressive sharp linework, dark frightening imagery, complex panels, speech bubbles, watermark, logos, inconsistent character features",
+      "positiveNoText": false,
+      "finalException": true
+    }
+  ],
+  "compatibility": {
+    "weave": 5,
+    "pictureRefs": {
+      "version": 2
+    },
+    "oldEmptyRefs": [
+      "Yuha original face and identity",
+      "Mom original face and identity",
+      "Yuha original full body and clothes",
+      "Mom original full body and clothes"
+    ],
+    "newEmptyRefs": [],
+    "sceneRequestEqual": false,
+    "letteringRequestEqual": false
+  },
+  "acceptance": {
+    "editedPageUsesCurrentKo": false,
+    "scopedRewritePreservesOtherPages": false,
+    "missingEnglishIsNotKorean": false,
+    "oneOffIdentityIsFrozen": false,
+    "letteringHasNoConflictingStyle": false
+  },
+  "blockingFindings": 5,
+  "networkCalls": 0
+}

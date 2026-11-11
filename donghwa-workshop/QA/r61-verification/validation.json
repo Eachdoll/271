@@ -1,0 +1,49 @@
+{
+  "reviewedCommit": "32c854d788fab6f1d0858b82ea398165d36c828b",
+  "appTests": {
+    "pass": 1203,
+    "fail": 0,
+    "skipped": 0
+  },
+  "qualityTests": {
+    "pass": 85,
+    "fail": 0
+  },
+  "mirrorsEqual": true,
+  "legacyReaderSha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "census": {
+    "tableMatches": true,
+    "pageErrors": 0,
+    "paidRequests": 0
+  },
+  "smoke": [
+    {
+      "width": 1280,
+      "passed": true,
+      "pageErrors": 0,
+      "paidRequests": 0
+    },
+    {
+      "width": 390,
+      "passed": true,
+      "pageErrors": 0,
+      "paidRequests": 0
+    }
+  ],
+  "additionalAcceptance": {
+    "editedPageUsesCurrentKo": false,
+    "scopedRewritePreservesOtherPages": false,
+    "missingEnglishIsNotKorean": false,
+    "oneOffIdentityIsFrozen": false,
+    "letteringHasNoConflictingStyle": false
+  },
+  "blockingFindings": 5,
+  "paidProviderCalls": 0,
+  "productionSourceChanged": false,
+  "deployed": false,
+  "operatingVersion": 66,
+  "operatingCache": "donghwa-shell-v129",
+  "candidateCache": "donghwa-shell-v130",
+  "workerBuildRun": false,
+  "decision": "Hold deployment for five reproduced defects and clarify the existing-book compatibility scope."
+}
