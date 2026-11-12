@@ -315,3 +315,30 @@ test('R61b Codex\'s free recheck (QA/r61-verification/tools/recheck.mjs): every 
   assert.deepEqual(r.acceptance, {editedPageUsesCurrentKo: true, scopedRewritePreservesOtherPages: true, missingEnglishIsNotKorean: true, oneOffIdentityIsFrozen: true, letteringHasNoConflictingStyle: true});
   assert.equal(r.networkCalls, 0);
 });
+
+test('R61b Codex follow-up: missing English survives the actual openings wrapper without swallowing its neighbour', async () => {
+  const {normalizeOpenings} = await import('../dist/book-layout.js');
+  const d = Array.from({length: 16}, (_, i) => ({ko: `유하가 ${i + 1}번째 나무를 봐요.`, ...(i === 2 ? {} : {en: `Yuha sees tree ${i + 1}.`})}));
+  const engine = {id: 'openai', async complete() { return {json: {cover: {title: '숲의 하루', sceneAction: 'Yuha walks.'}, pages: d.map((p, i) => ({pageNo: i + 1, who: ['yuha'], where: 'forest', action: 'Yuha walks.', emotion: 'happy', timeOfDay: 'day', props: [], shot: 'middle', space: 'airy', carrier: 'both', focus: 'tree', backdrop: 'scene'}))}, meta: {requests: 1}, usage: {input: 0, output: 0}}; }};
+  const paged = await W.runRoomPages(input, outline, {title: '숲의 하루', pages: d}, {engine, engineId: 'openai'}, {engineFor: () => engine});
+  const final = toLegacyPages(paged.data);
+  assert.equal(final.length, d.length);
+  assert.deepEqual(final.map(p => p.ko), d.map(p => p.ko));
+  assert.deepEqual(final.map(p => p.en), d.map(p => p.en ?? ''));
+  assert.equal(final[2].scene.englishMissing, true);
+  const pair = clone(paged.data.pages.slice(2, 4)).map(p => ({...p, beatIndex: 1}));
+  const plan = [{beatIndex: 1, openingNo: 1}];
+  assert.equal(normalizeOpenings(pair, plan, input.specs).pages.length, 2);
+  delete pair[0].scene.englishMissing;
+  assert.equal(normalizeOpenings(pair, plan, input.specs).pages.length, 1, 'legacy empty-language pairs retain their original merge rule');
+});
+
+test('R61b Codex follow-up: if the entire requested English edition is missing, every page stays marked and blank', () => {
+  const d = pages.slice(0, 4).map(p => ({ko: p.ko}));
+  const r = W.settleExtraction({pages: []}, input, outline, d, 't');
+  assert(r.pages.every(p => p.textEn === '' && p.scene.englishMissing === true));
+  const old = W.settleExtraction({pages: []}, {...input, writersRoom: {version: 1, weave: 5}}, outline, d, 't');
+  assert.deepEqual(old.pages.map(p => p.textEn), d.map(p => p.ko), 'old frozen input retains its old fallback');
+  const ko = W.settleExtraction({pages: []}, {...input, language: 'ko'}, outline, d, 't');
+  assert(ko.pages.every(p => !p.scene.englishMissing), 'a Korean-only book never claims missing English');
+});

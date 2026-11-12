@@ -511,7 +511,9 @@ export function normalizeOpenings(entries, plan, units, { mixGuard = true } = {}
     }
     if (list.length === 2) {
       const empty = list.some(
-          (entry) => blank(entry.textKo) || blank(entry.textEn),
+          // R61b: a missing English reply is explicit, not a broken pair.
+          // Keep its page (and notice) instead of replacing it with its neighbour's English.
+          (entry) => blank(entry.textKo) || (blank(entry.textEn) && entry.scene?.englishMissing !== true),
         ),
         outside = list.some(
           (entry) => !inBand(sentenceCount(entry.textKo), pageBand),

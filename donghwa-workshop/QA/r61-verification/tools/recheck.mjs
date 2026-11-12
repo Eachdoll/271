@@ -49,7 +49,7 @@ function snapshot(book,state=s){const w=G.getActiveWorld(state);book.generationS
  const extractor={id:'openai',async complete(req){return response({cover:{title:'숲의 하루',sceneAction:'Yuha alone'},pages:Array.from({length:req.jsonSchema.properties.pages.minItems},(_,i)=>({pageNo:i+1,who:['yuha'],where:'forest',action:'Yuha walks.',emotion:'calm',timeOfDay:'day',props:[],shot:'middle',space:'airy',carrier:'both',focus:'Yuha',backdrop:'scene',hidden:'',holdBack:'',lettering:'',letteringOn:'',seenAs:''}))});}};
  const paged=await W.runRoomPages(input,outline,draft.data,{engine:extractor,engineId:'openai'},{engineFor:()=>extractor});
  const legacy=toLegacyPages(paged.data);
- r.english={calls:englishCalls,missing:draft.data.room.englishMissing,draftEnglish:draft.data.pages[2].en??null,pageEnglish:paged.data.pages[2].textEn,legacyEnglish:legacy[2].en,ko:legacy[2].ko};
+ r.english={calls:englishCalls,missing:draft.data.room.englishMissing,draftEnglish:draft.data.pages[2].en??null,pageEnglish:paged.data.pages[2].textEn,legacyEnglish:legacy[2].en,ko:legacy[2].ko,originalKo:draft.data.pages[2].ko,missingFlag:legacy[2].scene?.englishMissing===true,draftPages:draft.data.pages.length,pageEntries:legacy.length};
 
 }
 // B: keep the new cast in a real FULL AUTO book and see what later drawer edits do to its image.
@@ -98,6 +98,6 @@ if(process.env.DONGHWA_R60_ROOT){
  const letter={prompt:'LETTERING — the only writing in this picture: \"APOLLO 13\" on the rocket.',stylePreset:getStylePreset('watercolor'),referenceImages:[]};
  r.compatibility={weave:5,pictureRefs:b.storyInput.pictureRefs,oldEmptyRefs:before.referenceImages.map(x=>x.label),newEmptyRefs:after.referenceImages.map(x=>x.label),sceneRequestEqual:JSON.stringify(before)===JSON.stringify(after),letteringRequestEqual:oldRender(letter).composedPrompt===renderImageRequest(letter).composedPrompt};
 }
-r.acceptance={editedPageUsesCurrentKo:!r.edited.actualEvent?.includes('climbs a tall tree')&&!r.edited.oldPlaceStillPresent,scopedRewritePreservesOtherPages:!r.rewritePipeline.acceptedAlien&&r.rewrite.laughProtected&&r.rewrite.outsideArt==='a tree',missingEnglishIsNotKorean:r.english.legacyEnglish!==r.english.ko,oneOffIdentityIsFrozen:r.identity.afterHasGoldEar&&r.identity.afterDeleteHasIdentity,letteringHasNoConflictingStyle:!r.lettering.some(x=>x.positiveNoText)};
+r.acceptance={editedPageUsesCurrentKo:!r.edited.actualEvent?.includes('climbs a tall tree')&&!r.edited.oldPlaceStillPresent,scopedRewritePreservesOtherPages:!r.rewritePipeline.acceptedAlien&&r.rewrite.laughProtected&&r.rewrite.outsideArt==='a tree',missingEnglishIsNotKorean:r.english.legacyEnglish===''&&r.english.missingFlag&&r.english.ko===r.english.originalKo&&r.english.draftPages===r.english.pageEntries,oneOffIdentityIsFrozen:r.identity.afterHasGoldEar&&r.identity.afterDeleteHasIdentity,letteringHasNoConflictingStyle:!r.lettering.some(x=>x.positiveNoText)};
 r.blockingFindings=Object.values(r.acceptance).filter(x=>!x).length;
 assert.equal(calls,0);r.networkCalls=calls;fs.writeFileSync(out+'/recheck.json',JSON.stringify(r,null,2));console.log(JSON.stringify(r,null,2));

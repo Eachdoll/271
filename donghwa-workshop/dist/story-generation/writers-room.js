@@ -2494,7 +2494,7 @@ export function settleExtraction(raw, input, outline, pages, title) {
   const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true)) || evenBeats(beats, count),
     plainOk = wantsPicturePlan(input) && hasStoryDrama(input),
     kept = hasRoomKept(input),
-    bilingualDraft = list(pages).some((q) => typeof q?.en === "string" && q.en.trim()),
+    wantsEnglish = ["dual", "bilingual", "en"].includes(input?.language),
     clear = hasRoomClear(input);
   // R62: a character other than the hero is on a page only when the words or art note of that page (or the one before or
   // after) name them — the paid book drew the dinosaur and the deer into pages whose words never mention them.
@@ -2520,7 +2520,7 @@ export function settleExtraction(raw, input, outline, pages, title) {
   const out = list(pages).map((p, i) => {
     const found = rows.find((r) => Number(r.pageNo) === i + 1) || (kept ? null : rows[i]),
       row = found || {};
-    const missingEn = kept && bilingualDraft && !(typeof p.en === "string" && p.en.trim());
+    const missingEn = kept && wantsEnglish && !(typeof p.en === "string" && p.en.trim());
     const named = [...new Set(list(row.who).map(castId).filter(Boolean))].filter((id) => !clear || grounded(id, i)),
       // R61a: a crowded picture (six or more of the cast — the paid '구름 주문' book stopped here) keeps five on who (the
       // validator's limit), the hero first, and the rest on scene.extra; the picture request still draws them all.
