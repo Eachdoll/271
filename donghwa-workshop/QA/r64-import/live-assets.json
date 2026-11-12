@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "files": [
+    {
+      "file": "sw.js",
+      "sha256": "1aca7076b9823819ef9b67813640c8fc6ba6d355b0d18c7db85b387c7d814855",
+      "equal": true
+    },
+    {
+      "file": "book-layout.js",
+      "sha256": "63c1750a6ced745b98ac653128fb0b95d69e2dd1695567e33cb729c8209df58c",
+      "equal": true
+    },
+    {
+      "file": "story-generation/writers-room.js",
+      "sha256": "11b9ae6beff009a5a04bcb7f0cec0c13c81503c22f1138c2087b74d210c8cc40",
+      "equal": true
+    },
+    {
+      "file": "image-generation/scene-continuity.js",
+      "sha256": "688793d55d77ed13d98ebb8716e8d0cd6ef28e8538722229e0d00480dd7028df",
+      "equal": true
+    },
+    {
+      "file": "image-generation/world.js",
+      "sha256": "2f74abbaf41ffa43eea9c3b46f1491bf8f2291daef7dde2ded965065485cf851",
+      "equal": true
+    },
+    {
+      "file": "image-generation/scene-prompt.js",
+      "sha256": "a4b99ae8bf395bcc515274c5b4c0714a934c6261a9a2379f3623cc6f01c67a3b",
+      "equal": true
+    },
+    {
+      "file": "text-generation/models.js",
+      "sha256": "9260cefebfd89090ee6465e05a6098b40680c58347af2d3155183c6ebc73aef4",
+      "equal": true
+    },
+    {
+      "file": "full-auto.js",
+      "sha256": "2c5bbf6d9b00c60413ef257492011b1532739256f8e0ab71ca60b155d17fd373",
+      "equal": true
+    }
+  ]
+}

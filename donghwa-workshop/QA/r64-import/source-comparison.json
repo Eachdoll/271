@@ -1,0 +1,9 @@
+{
+  "upstream": "498c89d558d8337131b06290e0fc4eb8601747d7",
+  "intentionalRuntimeDifferences": [
+    "dist/book-layout.js",
+    "dist/story-generation/writers-room.js"
+  ],
+  "builtMismatches": [],
+  "hostingManifestUnchanged": true
+}

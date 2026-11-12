@@ -1,0 +1,426 @@
+{
+  "generatedAt": "2026-11-12T01:24:38.507Z",
+  "base": "http://127.0.0.1:4981/",
+  "viewport": "1280x900",
+  "rules": "보이는 버튼 수. 모드 전환 버튼은 modeToggle로 따로 셉니다. 쉬운 모드 단계의 stepButtons는 재료 카드(.simple-card)와 쪽 이동 화살표·단계 표시 버튼([data-simple-nav])을 빼고 셉니다(R9-B2 3, R11).",
+  "proMatchesWorkOrderTable": true,
+  "proCheck": {
+    "01-library": {
+      "expected": {
+        "buttons": 22,
+        "inputs": 1,
+        "selects": 1
+      },
+      "got": {
+        "buttons": 22,
+        "inputs": 1,
+        "selects": 1
+      },
+      "same": true
+    },
+    "02-settings": {
+      "expected": {
+        "buttons": 19,
+        "inputs": 5,
+        "selects": 12
+      },
+      "got": {
+        "buttons": 19,
+        "inputs": 5,
+        "selects": 12
+      },
+      "same": true
+    },
+    "03-step1-topic": {
+      "expected": {
+        "buttons": 10,
+        "inputs": 1,
+        "selects": 0
+      },
+      "got": {
+        "buttons": 10,
+        "inputs": 1,
+        "selects": 0
+      },
+      "same": true
+    },
+    "04-step2-materials": {
+      "expected": {
+        "buttons": 13,
+        "inputs": 1,
+        "selects": 0
+      },
+      "got": {
+        "buttons": 13,
+        "inputs": 1,
+        "selects": 0
+      },
+      "same": true
+    },
+    "05-step3-generate": {
+      "expected": {
+        "buttons": 9,
+        "inputs": 0,
+        "selects": 2
+      },
+      "got": {
+        "buttons": 9,
+        "inputs": 0,
+        "selects": 2
+      },
+      "same": true
+    },
+    "06-step4-review": {
+      "expected": {
+        "buttons": 15,
+        "inputs": 2,
+        "selects": 0
+      },
+      "got": {
+        "buttons": 15,
+        "inputs": 2,
+        "selects": 0
+      },
+      "same": true
+    },
+    "07-step5-finish": {
+      "expected": {
+        "buttons": 7,
+        "inputs": 3,
+        "selects": 0
+      },
+      "got": {
+        "buttons": 7,
+        "inputs": 3,
+        "selects": 0
+      },
+      "same": true
+    }
+  },
+  "simpleStepsWithinLimit": true,
+  "simpleSteps": {
+    "03-step1-topic": {
+      "stepButtons": 10,
+      "allButtons": 10,
+      "inputs": 1,
+      "selects": 0,
+      "withinLimit": true,
+      "overflowX": 0
+    },
+    "03-step1-format-open": {
+      "stepButtons": 10,
+      "allButtons": 10,
+      "inputs": 1,
+      "selects": 9,
+      "withinLimit": true,
+      "overflowX": 0
+    },
+    "04-step2-materials": {
+      "stepButtons": 2,
+      "allButtons": 13,
+      "inputs": 1,
+      "selects": 0,
+      "withinLimit": true,
+      "overflowX": 0
+    },
+    "05-step3-generate": {
+      "stepButtons": 7,
+      "allButtons": 9,
+      "inputs": 0,
+      "selects": 2,
+      "withinLimit": true,
+      "overflowX": 0
+    },
+    "06-step4-review": {
+      "stepButtons": 9,
+      "allButtons": 15,
+      "inputs": 2,
+      "selects": 0,
+      "withinLimit": true,
+      "overflowX": 0
+    },
+    "06-step4-review-editing": {
+      "stepButtons": 8,
+      "allButtons": 10,
+      "inputs": 2,
+      "selects": 0,
+      "withinLimit": true,
+      "overflowX": 0
+    },
+    "07-step5-finish": {
+      "stepButtons": 3,
+      "allButtons": 7,
+      "inputs": 3,
+      "selects": 0,
+      "withinLimit": true,
+      "overflowX": 0
+    }
+  },
+  "pro": {},
+  "simple": {
+    "storedMode": null,
+    "01-library": {
+      "buttons": 22,
+      "modeToggle": 0,
+      "stepButtons": 22,
+      "inputs": 1,
+      "selects": 1,
+      "details": 0,
+      "headings": [
+        "우리 책장",
+        "아이의 오늘이,한 권의 동화로.",
+        "보관 공간"
+      ],
+      "buttonLabels": [
+        "가족 아이디로 로그인",
+        "다른 로그인",
+        "기기 이동 · 복구",
+        "새 이야기 만들기",
+        "재료 둘러보기",
+        "전체4",
+        "즐겨찾기",
+        "시리즈",
+        "인쇄 전",
+        "우리 아이의 작은 모험 · 1번째 이야기유하",
+        "유하와 초록빛 공룡",
+        "우리 아이의 작은 모험 · 1번째 이야기달까",
+        "달까지, 사뿐사뿐",
+        "우리 아이의 작은 모험 · 1번째 이야기빗방",
+        "빗방울도 친구가 돼요",
+        "우리 아이의 작은 모험 · 1번째 이야기바다",
+        "바다가 보내 온 선물",
+        "오래된 작업 기록 정리"
+      ],
+      "scrollH": 1525,
+      "overflowX": 0
+    },
+    "02-settings": {
+      "buttons": 19,
+      "modeToggle": 0,
+      "stepButtons": 19,
+      "inputs": 5,
+      "selects": 12,
+      "details": 1,
+      "headings": [
+        "부모 설정",
+        "우리 아이",
+        "엔진과 키",
+        "글 모델",
+        "이미지 엔진 · 우리 집 World",
+        "World의 그림을 정해요",
+        "World의 캐릭터 시트",
+        "화풍 프리셋 테이블",
+        "잠금",
+        "보관"
+      ],
+      "buttonLabels": [
+        "이름·모습 바꾸기",
+        "키 암호화 저장",
+        "저장된 키 삭제",
+        "완성된 캐릭터 그림 가져오기 · 무료",
+        "모델 저장",
+        "완성된 캐릭터 그림 가져오기 · 무료",
+        "World 설정 저장",
+        "연결 설정 초기화",
+        "시트 생성",
+        "시트 생성",
+        "시트 생성",
+        "시트 생성",
+        "부모 PIN 바꾸기",
+        "가족 아이디로 로그인",
+        "가족 계정 만들기",
+        "다른 기기로 옮기기 · 가져오기",
+        "전체 라이브러리 ZIP 백업",
+        "JSON · ZIP 백업 가져오기",
+        "설정 모두 저장"
+      ],
+      "scrollH": 2452,
+      "overflowX": 0
+    },
+    "03-step1-topic": {
+      "buttons": 10,
+      "modeToggle": 0,
+      "stepButtons": 10,
+      "inputs": 1,
+      "selects": 0,
+      "details": 0,
+      "headings": [
+        "이야기 만들기",
+        "어떤 이야기를 만들까요?"
+      ],
+      "buttonLabels": [
+        "공룡 친구와 소풍",
+        "달에 놀러 간 날",
+        "비 오는 날의 모험",
+        "바닷속 보물 찾기",
+        "처음 유치원에 간 날",
+        "친구의 생일 파티",
+        "아이디어 뽑기",
+        "바꾸기",
+        "책장으로",
+        "다음"
+      ],
+      "scrollH": 992,
+      "overflowX": 0
+    },
+    "03-step1-format-open": {
+      "buttons": 10,
+      "modeToggle": 0,
+      "stepButtons": 10,
+      "inputs": 1,
+      "selects": 9,
+      "details": 0,
+      "headings": [
+        "이야기 만들기",
+        "어떤 이야기를 만들까요?"
+      ],
+      "buttonLabels": [
+        "공룡 친구와 소풍",
+        "달에 놀러 간 날",
+        "비 오는 날의 모험",
+        "바닷속 보물 찾기",
+        "처음 유치원에 간 날",
+        "친구의 생일 파티",
+        "아이디어 뽑기",
+        "접기",
+        "책장으로",
+        "다음"
+      ],
+      "scrollH": 1439,
+      "overflowX": 0
+    },
+    "04-step2-materials": {
+      "buttons": 13,
+      "modeToggle": 0,
+      "stepButtons": 2,
+      "inputs": 1,
+      "selects": 0,
+      "details": 0,
+      "headings": [
+        "이야기 만들기",
+        "누구와 어디로 갈까요?"
+      ],
+      "buttonLabels": [
+        "✓주제 넣기",
+        "3생성",
+        "유하주인공",
+        "초록이상상 친구추천",
+        "토토동물 친구",
+        "엄마가족",
+        "🏡유하네 집집",
+        "🌳초록빛 숲둥근 나무, 작은 꽃, 햇살 드",
+        "🌙반짝이는 달말랑한 달 언덕과 반짝이는 작",
+        "🌳빗방울 정원물웅덩이와 꽃밭, 무지개가 뜨",
+        "🐚조개빛 바닷가잔잔한 물결, 폭신한 모래,",
+        "이전",
+        "다음"
+      ],
+      "scrollH": 1167,
+      "overflowX": 0
+    },
+    "05-step3-generate": {
+      "buttons": 9,
+      "modeToggle": 0,
+      "stepButtons": 7,
+      "inputs": 0,
+      "selects": 2,
+      "details": 1,
+      "headings": [
+        "이야기 만들기",
+        "글을 만들어요"
+      ],
+      "buttonLabels": [
+        "✓주제 넣기",
+        "✓재료 고르기",
+        "키 입력",
+        "바꾸기",
+        "키 입력",
+        "글 만들기",
+        "데모로 체험",
+        "이전"
+      ],
+      "scrollH": 900,
+      "overflowX": 0
+    },
+    "06-step4-review": {
+      "buttons": 15,
+      "modeToggle": 0,
+      "stepButtons": 9,
+      "inputs": 2,
+      "selects": 0,
+      "details": 0,
+      "headings": [
+        "이야기 만들기"
+      ],
+      "buttonLabels": [
+        "✓주제 넣기",
+        "✓재료 고르기",
+        "✓생성",
+        "5동화책 만들기",
+        "모든 쪽 그림 만들기",
+        "이야기 전체 다시 만들기",
+        "‹",
+        "›",
+        "이 쪽 그림 만들기",
+        "읽기 쉬움 ✓ · 참고 2",
+        "글 고치기",
+        "글 다시 만들기",
+        "좋아요",
+        "이전",
+        "동화책 만들기"
+      ],
+      "scrollH": 1023,
+      "overflowX": 0
+    },
+    "06-step4-review-editing": {
+      "buttons": 10,
+      "modeToggle": 0,
+      "stepButtons": 8,
+      "inputs": 2,
+      "selects": 0,
+      "details": 0,
+      "headings": [
+        "이야기 만들기"
+      ],
+      "buttonLabels": [
+        "모든 쪽 그림 만들기",
+        "이야기 전체 다시 만들기",
+        "‹",
+        "›",
+        "이 쪽 그림 만들기",
+        "읽기 쉬움 ✓ · 참고 2",
+        "저장",
+        "취소",
+        "이전",
+        "동화책 만들기"
+      ],
+      "scrollH": 1010,
+      "overflowX": 0
+    },
+    "07-step5-finish": {
+      "buttons": 7,
+      "modeToggle": 0,
+      "stepButtons": 3,
+      "inputs": 3,
+      "selects": 0,
+      "details": 0,
+      "headings": [
+        "이야기 만들기",
+        "동화책으로 엮어요"
+      ],
+      "buttonLabels": [
+        "✓주제 넣기",
+        "✓재료 고르기",
+        "✓생성",
+        "✓쪽마다 검수",
+        "인쇄 미리보기",
+        "책장에 저장",
+        "이전"
+      ],
+      "scrollH": 900,
+      "overflowX": 0
+    }
+  },
+  "pageErrors": [],
+  "paidRequests": []
+}

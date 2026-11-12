@@ -1,0 +1,142 @@
+[
+  {
+    "path": "CLAUDE.md",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "CODEX_WORK_ORDER_R62_2026-11-12.md",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "CODEX_WORK_ORDER_R63_2026-11-12.md",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r62-feedback/REVIEW_2026-11-12.md",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r63-review/PICTURE_EXPERT_REVIEW_2026-11-12.md",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/0-yuha-sheet-request.txt",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/1-page01-request.txt",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/2-page03-request.txt",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/3-page15-request.txt",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/REPORT_2026-11-12.md",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/tools/stage-run.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "QA/r64-stage/tools/variants.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/full-auto.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/image-generation/reference-policy.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/image-generation/scene-continuity.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/image-generation/scene-prompt.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/image-generation/world.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/story-generation/writers-room.js",
+    "mergedCodexFix": true
+  },
+  {
+    "path": "dist/sw.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "dist/text-generation/models.js",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/openings-legacy-r12.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/picture-lettering-r58.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r50.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r51.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r52.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r53.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r54b.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r55c.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r55g.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r55h.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r57.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r59.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r60.test.mjs",
+    "mergedCodexFix": false
+  },
+  {
+    "path": "tests/writers-room-r61.test.mjs",
+    "mergedCodexFix": true
+  },
+  {
+    "path": "tests/writers-room-r62.test.mjs",
+    "mergedCodexFix": false
+  }
+]

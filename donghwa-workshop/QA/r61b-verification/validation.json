@@ -1,0 +1,31 @@
+{
+  "upstream": "24aa60b411a11c2cbaa4becca61c22fc4d633736",
+  "nativeBase": "d00d3e9dd7f1c95a5c28a5bb5ecfcd5476caa93a",
+  "appTests": 1211,
+  "qualityTests": 85,
+  "buildPassed": true,
+  "mirrorEqual": true,
+  "legacySha256": "0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16",
+  "censusPassed": true,
+  "smokePassed": true,
+  "smokeWidths": [
+    1280,
+    390
+  ],
+  "recheckAcceptance": {
+    "editedPageUsesCurrentKo": true,
+    "scopedRewritePreservesOtherPages": true,
+    "missingEnglishIsNotKorean": true,
+    "oneOffIdentityIsFrozen": true,
+    "letteringHasNoConflictingStyle": true
+  },
+  "fixedSeedLegacyRequestEqual": true,
+  "crowdResumeNewCalls": 0,
+  "actualFamilyCloudAccessed": false,
+  "paidCalls": 0,
+  "actualNewImageQualityVerified": false,
+  "weave": 6,
+  "cache": "donghwa-shell-v132",
+  "codexExtraFix": "preserve missing English pages through openings binding; mark all-missing English; omit build-only K1 measurement fixture from offline runtime",
+  "pinsChangedByCodex": false
+}
