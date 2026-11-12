@@ -563,7 +563,8 @@ export function validateStoryPage(page, input = {}, outline, { wordless = false 
   )
     errors.push("비트 번호가 잘못됐어요.");
   // R38: the one wordless entry of a picture-led book carries no text.
-  if (!wordless && (!text(page.textKo, 6000) || !text(page.textEn, 8000)))
+  // R61b: a writers' room page whose English never came back is marked (scene.englishMissing) and kept empty.
+  if (!wordless && (!text(page.textKo, 6000) || (!text(page.textEn, 8000) && page.scene?.englishMissing !== true)))
     errors.push("쪽에 한글·영어 글이 모두 필요해요.");
   const scene = page.scene,
     cast = new Set((input.characters || []).map((c) => c.id));

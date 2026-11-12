@@ -1516,7 +1516,9 @@ export function rewriteScope(row, threads = null, pageCount = 0) {
   for (const w of list(row?.words)) add((/^(\d+)쪽/u.exec(String(w)) || [])[1]);
   for (const t of [...list(threads?.loose), ...list(threads?.unplanted)]) add(t?.page);
   for (const p of list(row?.laughPages)) named.delete(Math.round(Number(p)));
-  return { pages: [...named].sort((a, b) => a - b), laughs: list(row?.laughPages).map((p) => Math.round(Number(p))).filter((p) => p >= 1) };
+  // R61b: the things a plant on an outside page may carry (the editor's loose and unplanted threads, by name).
+  const plants = [...list(threads?.loose), ...list(threads?.unplanted)].map((t) => str(t?.what, 80)).filter(Boolean);
+  return { pages: [...named].sort((a, b) => a - b), laughs: list(row?.laughPages).map((p) => Math.round(Number(p))).filter((p) => p >= 1), plants };
 }
 /**
  * R61: a rewrite merged into the draft it rewrote, when it kept the page count — a page outside the scope stays as it
@@ -1527,24 +1529,47 @@ export function rewriteScope(row, threads = null, pageCount = 0) {
 export function mergeRewrite(before, after, scope) {
   const old = list(before),
     next = list(after);
-  if (!old.length || old.length !== next.length) return { pages: next, restored: [], structural: old.length !== next.length };
+  if (!old.length) return { pages: next, restored: [], structural: false };
   const allowed = new Set(list(scope?.pages)),
     laughs = new Set(list(scope?.laughs)),
-    restored = [];
+    same = (a, b) => flat(a?.ko) === flat(b?.ko) && str(a?.art, 200) === str(b?.art, 200) && !!a?.spread === !!b?.spread;
+  // R61b (Codex V2): a rewrite that changed the page count is aligned by the pages it left alone at the front and back;
+  // the pages in between must all be pages it was asked about (and no laugh page) — else the draft stays as it was.
+  if (old.length !== next.length) {
+    let head = 0;
+    while (head < old.length && head < next.length && same(old[head], next[head])) head++;
+    let tail = 0;
+    while (tail < old.length - head && tail < next.length - head && same(old[old.length - 1 - tail], next[next.length - 1 - tail])) tail++;
+    const span = Array.from({ length: old.length - head - tail }, (_, k) => head + k + 1),
+      touched = span.length ? span : [head, head + 1].filter((n) => n >= 1 && n <= old.length);
+    const ok = touched.length && touched.every((n) => allowed.has(n) && !laughs.has(n));
+    if (!ok) return { pages: old.map((p) => ({ ...p })), restored: span, structural: "rejected" };
+    return { pages: [...old.slice(0, head), ...next.slice(head, next.length - tail), ...old.slice(old.length - tail)], restored: [], structural: true };
+  }
+  const plantWords = list(scope?.plants).flatMap((w) => String(w).split(/\s+/u)).map((w) => w.replace(/[^\p{L}\p{N}]/gu, "")).filter((w) => w.length >= 2);
+  let planted = 0;
+  const restored = [];
   const pages = next.map((p, i) => {
     const n = i + 1,
       was = old[i];
-    if (flat(p?.ko) === flat(was?.ko)) return p;
+    if (same(p, was)) return p;
+    // R61b: a page the readers laughed at, or a page outside the scope, keeps its whole page — words, art note, spread mark.
     if (laughs.has(n)) {
       restored.push(n);
-      return { ...p, ko: was.ko };
+      return { ...was };
     }
     if (allowed.has(n)) return p;
-    const added = flat(p?.ko).startsWith(flat(was?.ko)) || flat(p?.ko).endsWith(flat(was?.ko)),
-      extra = sentences(flat(p?.ko)).length - sentences(flat(was?.ko)).length;
-    if (added && extra === 1) return p;
+    // A plant: one sentence added to an outside page, carrying a thing the editor named, at most two pages.
+    const before = flat(was?.ko),
+      now = flat(p?.ko),
+      added = now.startsWith(before) ? now.slice(before.length) : now.endsWith(before) ? now.slice(0, now.length - before.length) : null,
+      extra = sentences(now).length - sentences(before).length;
+    if (added !== null && extra === 1 && planted < 2 && plantWords.some((w) => added.includes(w))) {
+      planted++;
+      return { ...was, ko: p.ko };
+    }
     restored.push(n);
-    return { ...p, ko: was.ko, ...("art" in was || "art" in p ? artOf(was) : {}) };
+    return { ...was };
   });
   return { pages, restored, structural: false };
 }
@@ -2212,10 +2237,12 @@ export function settleExtraction(raw, input, outline, pages, title) {
   // reader is not asked for a beat — an older journal's beatIndex is ignored).
   const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true)) || evenBeats(beats, count),
     plainOk = wantsPicturePlan(input) && hasStoryDrama(input),
-    kept = hasRoomKept(input);
+    kept = hasRoomKept(input),
+    bilingualDraft = list(pages).some((q) => typeof q?.en === "string" && q.en.trim());
   const out = list(pages).map((p, i) => {
     const found = rows.find((r) => Number(r.pageNo) === i + 1) || (kept ? null : rows[i]),
       row = found || {};
+    const missingEn = kept && bilingualDraft && !(typeof p.en === "string" && p.en.trim());
     const named = [...new Set(list(row.who).map(castId).filter(Boolean))],
       // R61a: a crowded picture (six or more of the cast — the paid '구름 주문' book stopped here) keeps five on who (the
       // validator's limit), the hero first, and the rest on scene.extra; the picture request still draws them all.
@@ -2237,7 +2264,8 @@ export function settleExtraction(raw, input, outline, pages, title) {
       pageNo: i + 1,
       beatIndex: beat,
       textKo: p.ko,
-      textEn: p.en || p.ko,
+      // R61b (Codex V3): a kept book's page whose English never came back keeps an empty English, marked — never the Korean.
+      textEn: missingEn ? "" : p.en || p.ko,
       ...(plan ? { picturePlan: plan } : {}),
       scene: {
         who: who.length ? who : cast.slice(0, 1),
@@ -2247,7 +2275,8 @@ export function settleExtraction(raw, input, outline, pages, title) {
         timeOfDay: TIMES.includes(row.timeOfDay) ? row.timeOfDay : "day",
         props: list(row.props).map((v) => str(v, 80)).filter(Boolean).slice(0, 12),
         // R61 (audit A): the words this page's picture was read from — a later edit of the words makes the plan stale.
-        ...(kept ? { textKey: pageTextKey(p.ko, p.en || p.ko) } : {}),
+        ...(kept ? { textKey: pageTextKey(p.ko, p.en || p.ko), koKey: pageTextKey(p.ko), enKey: pageTextKey(missingEn ? "" : p.en || p.ko) } : {}),
+        ...(missingEn ? { englishMissing: true } : {}),
         ...(extra.length ? { extra } : {}),
         ...(nobody ? { nobody: true } : {}),
         ...(kept && !found ? { readingMissing: true } : {}),

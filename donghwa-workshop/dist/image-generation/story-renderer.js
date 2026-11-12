@@ -40,9 +40,15 @@ export function renderImageRequest(request = {}, capabilities = {}) {
     request.stylePreset && typeof request.stylePreset === "object"
       ? request.stylePreset
       : {};
-  const stylePrompt = String(
-    request.stylePrompt ?? stylePreset.stylePrompt ?? "",
-  );
+  // R61b (Codex V5): a scene that names its one lettering takes "no text" out of the style's positive words as well.
+  const lettered = /LETTERING — the only writing in this picture: "[^"]{1,24}"/u.test(scenePrompt);
+  const stylePrompt = lettered
+    ? String(request.stylePrompt ?? stylePreset.stylePrompt ?? "")
+        .replace(/,?\s*\bno (?:text|letters|lettering|words|writing)\b/giu, "")
+        .replace(/^\s*,\s*/u, "")
+    : String(
+        request.stylePrompt ?? stylePreset.stylePrompt ?? "",
+      );
   let negativePrompt = String(
     request.negativePrompt ?? stylePreset.negativePrompt ?? "",
   ).trim();
@@ -105,7 +111,7 @@ export function renderImageRequest(request = {}, capabilities = {}) {
   // R61 (audit F): one writing policy per request — a scene that names one piece of lettering on a thing keeps it;
   // every other word, caption, logo and watermark stays out (the style's negative words lose "text, letters" too).
   const lettering = /LETTERING — the only writing in this picture: "([^"]{1,24})"/u.exec(scenePrompt)?.[1] || "";
-  parts.push(lettering ? `No text, letters, captions, logos or watermarks other than the lettering "${lettering}" named above.` : "No text, no letters, no captions, no logos, no watermarks.");
+  parts.push(lettering ? `Nothing written other than the lettering "${lettering}" named above: no other words, letters, captions, logos or watermarks.` : "No text, no letters, no captions, no logos, no watermarks.");
   if (lettering && negativePrompt)
     negativePrompt = negativePrompt.split(",").map((w) => w.trim()).filter((w) => w && !/^(text|letters)$/iu.test(w)).join(", ");
   if (negativePrompt && !capabilities.supportsNegative)

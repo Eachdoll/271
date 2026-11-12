@@ -8,7 +8,8 @@ import { pictureCarriesPage } from "../page-rhythm.js";
 import { craftPictureRules } from "../story-generation/craft-rules.js";
 import { biblePictureRules } from "../story-generation/council.js";
 import { genderWord } from "./identity.js";
-import { planOf, picturePlanPictureLine, picturePlanText, planLettering, pageTextKey } from "../story-generation/picture-plan.js";
+import { planOf, picturePlanPictureLine, picturePlanText, planLettering, pageTextState } from "../story-generation/picture-plan.js";
+import { hasKeptRoom } from "./reference-policy.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
@@ -166,8 +167,11 @@ export function buildScenePrompt({
     // R59: request hygiene (reference-policy.js) — nobody absent is named, each thing is said once.
     hygiene = !cover && hasReferenceHygiene(book.storyInput),
     // R61 (audit A): the words changed after this page's picture was read — draw what the words say now.
-    stale = hygiene && !!page?.scene?.textKey && page.scene.textKey !== pageTextKey(page.ko ?? page.textKo ?? "", page.en ?? page.textEn ?? page.ko ?? page.textKo ?? ""),
-    nobody = hygiene && page?.scene?.nobody === true,
+    // R61b: the R61 page behaviours are a kept book's (weave 6) — Codex found weave 5 requests changed under request hygiene.
+    keptRoom = !cover && hasKeptRoom(book.storyInput),
+    wordsNow = keptRoom ? pageTextState(page) : null,
+    stale = !!wordsNow?.stale,
+    nobody = keptRoom && page?.scene?.nobody === true,
     sheets = snapshot.characterSheets || [];
   const leadId = book.protagonistId || book.characterIds?.[0],
     lead = sheets.find((sheet) => sheet.characterId === leadId) || sheets[0];
@@ -207,14 +211,17 @@ export function buildScenePrompt({
     )
     .concat(nobody ? [] : sheetless)
     .join("; ");
-  const currentNarrative = {
-    ko: page.ko ?? page.textKo ?? "",
-    en: page.en ?? page.textEn ?? "",
-  };
+  // R61b (Codex V1): an English that a Korean edit left behind is not the page's story — the narrative is the Korean alone.
+  const currentNarrative = stale && !wordsNow.englishCurrent
+    ? { ko: page.ko ?? page.textKo ?? "" }
+    : {
+        ko: page.ko ?? page.textKo ?? "",
+        en: page.en ?? page.textEn ?? "",
+      };
   const action = cover
     ? book.pagination?.cover?.sceneAction || book.topic || book.title
     : stale
-    ? `${currentNarrative.en || currentNarrative.ko} (the words of this page were changed after its picture was planned: draw what they say now)`
+    ? `${wordsNow.englishCurrent ? `${currentNarrative.en} — ` : ""}${currentNarrative.ko} (the words of this page were changed after its picture was planned: draw what they say now${wordsNow.englishCurrent ? "" : "; the Korean is the page's text"})`
     : page.imagePrompt ||
       page.scene?.action ||
       page.scene?.prompt ||
@@ -227,7 +234,7 @@ export function buildScenePrompt({
   const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan && !(framed && !cover) ? ` ${plan}` : ""}`;
   const background = place.background;
   // R61 (audit B): a one-page new place has no sheet; its words ride on the page (scene.placeNote).
-  const facts = !background && hygiene && page?.scene?.placeNote
+  const facts = !background && keptRoom && page?.scene?.placeNote
     ? { name: String(page.scene.where || ""), description: String(page.scene.placeNote) }
     : background
     ? {

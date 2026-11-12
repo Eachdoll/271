@@ -3,7 +3,8 @@ import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor, effectiv
 import { plainBackdropFor } from "../story-generation/story-drama.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
-import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin, pageCastIds } from "./reference-policy.js";
+import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin, pageCastIds, hasKeptRoom } from "./reference-policy.js";
+import { pageTextState } from "../story-generation/picture-plan.js";
 import { characterSVG } from "../engine.js";
 import { getStylePreset, validateStylePreset } from "./styles.js";
 import { getImageURL } from "./assets.js";
@@ -847,10 +848,43 @@ function openingFallbackSentence(page) {
     ? "Wide double-page spread in one continuous scene. The book's fold runs down the vertical centre line: keep every face, hand and the key action out of the middle tenth and balance the scene across both halves. Draw ONLY the single moment in the scene; the narrative on this spread may include lead-in and follow-up sentences, which are context, not extra moments."
     : `This is the ${page?.side === "right" ? "right" : "left"} page of a two-page opening; keep faces and hands a tenth of the width away from the ${page?.side === "right" ? "left" : "right"} (binding) edge. Draw ONLY the single moment in the scene; the narrative on this page may include lead-in and follow-up sentences, which are context, not extra moments.`;
 }
+/**
+ * R61b (Codex V1): a kept book's page whose words changed after its picture was read is drawn as its words say now — the
+ * cast its current words name (frozen book cards and sheets), the place its words name (else no place at all), no old
+ * action, props or plan subject. Returns null when the page is not stale.
+ */
+function wordsNowView(book, snapshot, page) {
+  const now = pageTextState(page);
+  if (!now.stale) return null;
+  const words = `${now.ko} ${now.englishCurrent ? now.en : ""}`.toLowerCase();
+  const fold = (v) => String(v || "").trim().toLowerCase();
+  const people = [...(book.storyInput?.characters || []), ...(snapshot.characterSheets || []).map((s) => ({ id: s.characterId, ...(s.characterSnapshot || {}) }))];
+  const who = [];
+  for (const c of people) if (c?.id && !who.includes(c.id) && [c.name, c.nameEn].map(fold).some((n) => n && words.includes(n))) who.push(c.id);
+  const head = (name) => fold(name).split(/\s+/).filter(Boolean).at(-1) || "";
+  const places = [...(snapshot.backgrounds || []), ...(book.storyInput?.backgrounds || [])];
+  const place = places.find((b) => [b.name, b.nameEn].map(fold).some((n) => n && words.includes(n))) || places.find((b) => [b.name, b.nameEn].map(head).some((n) => n && words.includes(n)));
+  const scene = { ...(page.scene || {}), who: who.length ? who.slice(0, 5) : (Array.isArray(page.scene?.who) ? page.scene.who : []), where: place?.id || "the place this page's words describe", props: [], action: "" };
+  delete scene.extra;
+  delete scene.backgroundId;
+  delete scene.setting;
+  delete scene.nobody;
+  const view = { ...page, scene, beatIndex: undefined, backgroundId: place?.id };
+  delete view.imagePrompt;
+  delete view.picturePlan;
+  return { page: view, placeId: place?.id || null };
+}
 export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
-  const page = book.pages?.[pageIndex];
+  let page = book.pages?.[pageIndex];
   if (!page) throw new Error("이야기 쪽을 찾을 수 없어요.");
-  const snapshot = captureBookGenerationSnapshot(state, book);
+  let snapshot = captureBookGenerationSnapshot(state, book);
+  // R61b: a stale page of a kept book is asked as its words say now (the stored page and book are not changed).
+  const wordsNow = !options.cover && hasKeptRoom(book.storyInput) ? wordsNowView(book, snapshot, page) : null;
+  if (wordsNow) {
+    page = wordsNow.page;
+    book = { ...book, pages: book.pages.map((p, i) => (i === pageIndex ? page : p)) };
+    snapshot = { ...snapshot, backgroundReferenceByPage: { ...(snapshot.backgroundReferenceByPage || {}), [pageIndex]: wordsNow.placeId ? [wordsNow.placeId] : [] } };
+  }
   const preset = clone(
     snapshot.stylePreset || getStylePreset(snapshot.stylePresetId),
   );
@@ -873,12 +907,15 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
     allSheets.some((sheet) => !sheet.confirmedAt || !sheet.imageUrl)
   )
     throw new Error("확정된 캐릭터 시트가 모두 필요해요.");
-  const sheets = refPolicy ? castSheetsForPage(allSheets, page, { strict: hygiene }) : allSheets;
+  // R61b (Codex §3): the R61 cast behaviours are a kept book's (weave 6); a weave 5 book asks as R60 did.
+  const keptRoom = hasKeptRoom(book.storyInput);
+  const sheets = refPolicy ? castSheetsForPage(allSheets, page, { strict: refPolicy && keptRoom }) : allSheets;
   // R61 (audit B): a character on this page with no sheet (a one-page new character) is drawn from its card's words.
-  const unsheeted = hygiene && page?.scene?.nobody !== true
+  // R61b (Codex V4): from the card frozen into the book (storyInput) first — a later drawer edit or delete does not reach a made book.
+  const unsheeted = refPolicy && keptRoom && page?.scene?.nobody !== true
     ? pageCastIds(page)
         .filter((id) => !allSheets.some((sheet) => sheet.characterId === id))
-        .map((id) => state.characters?.find((c) => c.id === id))
+        .map((id) => (book.storyInput?.characters || []).find((c) => c?.id === id) || state.characters?.find((c) => c.id === id))
         .filter(Boolean)
     : [];
   // R55f: the characters the page leaves out are named (the paid book drew an absent character on 5 of 15 pages).

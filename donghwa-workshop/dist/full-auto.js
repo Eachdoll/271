@@ -1622,7 +1622,7 @@ export async function runFullAuto(
           job.roomDraft = r.data;
           // R61 (audit H): pages whose English never came back are named for the parent (④ '영어를 한글에 맞추기' writes them).
           const missingEn = list(r.data?.room?.englishMissing);
-          if (missingEn.length) job.notes.push(`영어판에 ${missingEn.join("·")}쪽 영어가 오지 않았어요. 그 쪽은 한글이 영어 자리에 들어가 있으니 ④에서 '영어를 한글에 맞추기'로 써 주세요.`);
+          if (missingEn.length) job.notes.push(`영어판에 ${missingEn.join("·")}쪽 영어가 오지 않았어요. 그 쪽 영어는 비어 있으니 ④에서 '영어를 한글에 맞추기'로 써 주세요.`);
           // R60: the new cards get the looks the cast notes gave (before any sheet is bought); a card without one keeps its kind.
           const looks = r.data?.room?.looks;
           if (counted && looks && (looks.cast?.length || looks.places?.length)) {

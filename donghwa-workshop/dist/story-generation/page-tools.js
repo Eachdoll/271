@@ -206,6 +206,8 @@ function writePageText(state, book, index, ko, en) {
     row.textKo = ko;
     row.textEn = en;
   }
+  // R61b: an English written for a page whose English never came back clears its mark.
+  if (String(en).trim()) for (const sc of [page.scene, row?.scene]) if (sc?.englishMissing) delete sc.englishMissing;
   book.readingCheck = null;
   delete page.reviewed;
   delete page.reviewedAt;

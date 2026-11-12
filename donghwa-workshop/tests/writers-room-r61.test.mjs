@@ -142,7 +142,7 @@ test('R61 (audit F) one writing policy per request: the named lettering survives
   const r = renderImageRequest({prompt: scene, stylePreset: getStylePreset('watercolor'), referenceImages: []});
   assert.match(r.composedPrompt, /"APOLLO 13"/);
   assert.doesNotMatch(r.composedPrompt, /No text, no letters, no captions/);
-  assert.match(r.composedPrompt, /other than the lettering "APOLLO 13" named above/);
+  assert.match(r.composedPrompt, /Nothing written other than the lettering "APOLLO 13" named above/);
   assert.equal(r.negativePrompt.split(',').map((x) => x.trim()).includes('text'), false);
   const plain = renderImageRequest({prompt: 'A forest.', stylePreset: getStylePreset('watercolor'), referenceImages: []});
   assert.match(plain.composedPrompt, /No text, no letters, no captions, no logos, no watermarks\./, 'no lettering: the ban as before');
@@ -161,12 +161,25 @@ test('R61 (audit I) the reading: a missing row is marked, an empty who is "nobod
   assert.equal(shuffled.pages[1].scene.readingMissing, true);
 });
 
-test('R61 (audit A) a page whose words changed after the reading is drawn from its words now', () => {
-  const book = {storyInput: input, outline, characterIds: ['yuha'], pages: [{ko: '유하가 새로 쓴 글이에요.', en: 'Yuha has new words.', scene: {who: ['yuha'], where: 'forest', action: 'Yuha climbs a tall old tree.', emotion: 'calm', timeOfDay: 'day', props: ['tree'], textKey: pageTextKey('유하가 옛 글이에요.', 'Yuha has old words.')}, imagePrompt: 'Yuha climbs a tall old tree.'}]};
+test('R61 (audit A) + R61b (V1) a page whose words changed after the reading is drawn from its words now — the Korean first', () => {
   const sheet = {characterId: 'yuha', characterSnapshot: {id: 'yuha', name: '유하', nameEn: 'Yuha'}, confirmedAt: 'now', imageUrl: 'x'};
-  const prompt = S.buildScenePrompt({book, page: book.pages[0], pageIndex: 0, snapshot: {characterSheets: [sheet], backgrounds: []}, place: {}, sheets: [sheet]});
-  assert.match(prompt, /the words of this page were changed after its picture was planned: draw what they say now/);
-  assert.match(prompt, /Yuha has new words/);
+  const ask = (scene, ko, en) => {
+    const book = {storyInput: input, outline, characterIds: ['yuha'], pages: [{ko, en, scene: {who: ['yuha'], where: 'forest', action: 'Yuha climbs a tall old tree.', emotion: 'calm', timeOfDay: 'day', props: ['tree'], ...scene}, imagePrompt: 'Yuha climbs a tall old tree.'}]};
+    return S.buildScenePrompt({book, page: book.pages[0], pageIndex: 0, snapshot: {characterSheets: [sheet], backgrounds: []}, place: {}, sheets: [sheet]});
+  };
+  // Only the joint key: the Korean alone (an English a Korean edit left behind is the old story).
+  const joint = ask({textKey: pageTextKey('유하가 옛 글이에요.', 'Yuha has old words.')}, '유하가 새로 쓴 글이에요.', 'Yuha has old words.');
+  assert.match(joint, /the words of this page were changed after its picture was planned: draw what they say now/);
+  assert.match(joint, /유하가 새로 쓴 글이에요/);
+  assert.doesNotMatch(joint, /Yuha has old words|climbs a tall old tree/);
+  // Per-language keys: the Korean changed and the English did not — still the Korean alone.
+  const koOnly = ask({koKey: pageTextKey('유하가 옛 글이에요.'), enKey: pageTextKey('Yuha has old words.')}, '유하가 새로 쓴 글이에요.', 'Yuha has old words.');
+  assert.doesNotMatch(koOnly, /Yuha has old words/);
+  // Both changed (the English was aligned after the edit) — the English joins the Korean.
+  const both = ask({koKey: pageTextKey('유하가 옛 글이에요.'), enKey: pageTextKey('Yuha has old words.')}, '유하가 새로 쓴 글이에요.', 'Yuha has new words.');
+  assert.match(both, /Yuha has new words/);
+  // Unchanged words: the plan as before.
+  assert.doesNotMatch(ask({koKey: pageTextKey('같은 글이에요.'), enKey: pageTextKey('Same.')}, '같은 글이에요.', 'Same.'), /were changed after/);
 });
 
 test('R61 (audit §7) the sheet choice uses the camera the picture will use; female reads as woman; a reader counts once', () => {
@@ -217,4 +230,87 @@ test('R61a a crowded picture (six of the cast) keeps five on who, the hero first
   }
   const five = W.settleExtraction({pages: two.map((p, i) => ({pageNo: i + 1, who: ['c1', 'yuha'], where: 'hill', action: 'x', emotion: 'happy', timeOfDay: 'day', props: []}))}, inp, outline, two, 't');
   assert.deepEqual(five.pages[0].scene.who, ['c1', 'yuha'], 'order unchanged when it fits');
+});
+
+test('R61b (V1) a Korean edit through the real page tools: the request names the cast and place the new words name, not the old ones', async () => {
+  const {applyPageText} = await import('../dist/story-generation/page-tools.js');
+  const s = setup(), before = {ko: '유하가 숲에서 큰 나무를 올라가요.', en: 'Yuha climbs a tall tree in the forest.'};
+  const p = {...before, staging: {shot: 'medium', characterSide: 'left', textSide: 'right'}, textKo: before.ko, textEn: before.en, scene: {who: ['yuha'], where: 'forest', action: before.en, props: ['tree'], timeOfDay: 'day', emotion: 'calm', textKey: pageTextKey(before.ko, before.en), koKey: pageTextKey(before.ko), enKey: pageTextKey(before.en)}};
+  const b = {id: 'edit', storyInput: input, outline, characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], pages: [p], pagination: {pages: [clone(p)]}};
+  const w = G.getActiveWorld(s);
+  b.generationSnapshot = {worldId: w.id, imageEngine: 'sample', stylePresetId: w.stylePresetId, stylePreset: getStylePreset(w.stylePresetId), styleReferences: [], characterSheets: b.characterIds.map((id) => ({id: 's-' + id, characterId: id, confirmedAt: 'now', imageUrl: 'https://qa.invalid/' + id + '.png', characterSnapshot: clone(s.characters.find((c) => c.id === id))})), backgrounds: s.backgrounds.filter((x) => b.backgroundIds.includes(x.id))};
+  await applyPageText(s, b, 0, {ko: '엄마가 집에서 물을 마셔요.', en: before.en, save: () => true});
+  const req = G.sceneGenerationRequest(s, b, 0);
+  assert.doesNotMatch(req.prompt, /climbs a tall tree|forest/i);
+  assert.deepEqual(req.referenceImages.filter((r) => r.role !== 'background').map((r) => r.label).filter((l) => /Yuha|Mom/.test(l)).map((l) => l.split(' ')[0]), ['Mom', 'Mom']);
+  assert.match(req.prompt, /Location: \{"name":"유하네 집"/, 'the home place the new words name');
+  assert.equal(b.pages[0].scene.where, 'forest', 'the stored page is not changed');
+});
+
+test('R61b (V2) a rewrite that changes the page count keeps every page it was not asked about; an outside page keeps its art; a plant needs a named thread', () => {
+  const before = Array.from({length: 8}, (_, i) => ({ko: `원래 ${i + 1}쪽이에요.`, art: 'a tree'}));
+  const alien = clone(before);
+  alien[7].ko = '외계인이 유하를 화성으로 데려가요.';
+  alien.push({ko: '새 끝이에요.'});
+  const rejected = W.mergeRewrite(before, alien, {pages: [1, 2, 3], laughs: [8]});
+  assert.equal(rejected.structural, 'rejected');
+  assert.deepEqual(rejected.pages.map((p) => p.ko), before.map((p) => p.ko));
+  // A split inside the scope is taken: page 2 becomes two pages, the rest are the originals.
+  const split = clone(before);
+  split.splice(1, 1, {ko: '원래 2쪽 앞이에요.'}, {ko: '원래 2쪽 뒤예요.'});
+  const ok = W.mergeRewrite(before, split, {pages: [1, 2, 3], laughs: []});
+  assert.equal(ok.structural, true);
+  assert.equal(ok.pages.length, 9);
+  assert.equal(ok.pages[8].ko, before[7].ko);
+  const art = clone(before);
+  art[7].art = 'A monster destroys the house.';
+  assert.equal(W.mergeRewrite(before, art, {pages: [1, 2, 3], laughs: []}).pages[7].art, 'a tree');
+  const append = clone(before);
+  append[6].ko += ' 외계인이 왔어요.';
+  assert.equal(W.mergeRewrite(before, append, {pages: [1, 2, 3], laughs: []}).pages[6].ko, before[6].ko, 'no thread, no plant');
+  const plant = clone(before);
+  plant[6].ko += ' 도토리가 하나 떨어져 있어요.';
+  assert.match(W.mergeRewrite(before, plant, {pages: [1, 2, 3], laughs: [], plants: ['도토리']}).pages[6].ko, /도토리/, 'a plant of a named thread');
+  assert.deepEqual(W.rewriteScope({boredPages: [2]}, {loose: [{what: '빨간 도토리', page: 5}], unplanted: []}, 8).plants, ['빨간 도토리']);
+});
+
+test('R61b (V3) a page whose English never came back keeps an empty English, marked — it validates, and writing its English clears the mark', async () => {
+  const {validateStoryPage} = await import('../dist/story-generation/schemas.js');
+  const d = pages.slice(0, 4).map((p, i) => (i === 2 ? {ko: p.ko} : p));
+  const r = W.settleExtraction({pages: d.map((p, i) => ({pageNo: i + 1, who: ['yuha'], where: 'forest', action: 'x', emotion: 'calm', timeOfDay: 'day', props: []}))}, input, outline, d, 't');
+  assert.equal(r.pages[2].textEn, '');
+  assert.equal(r.pages[2].scene.englishMissing, true);
+  assert.deepEqual(validateStoryPage(r.pages[2], input, outline).errors, []);
+  assert.equal(r.pages[1].textEn, d[1].en);
+  const old = W.settleExtraction({pages: []}, {...input, writersRoom: {version: 1, weave: 5}}, outline, d, 't');
+  assert.equal(old.pages[2].textEn, d[2].ko, 'weave 5 as before');
+  const {applyPageText} = await import('../dist/story-generation/page-tools.js');
+  const s = setup(), page = {...r.pages[2], ko: r.pages[2].textKo, en: ''};
+  const book = {id: 'en', storyInput: input, outline, characterIds: ['yuha'], pages: [page], pagination: {pages: [clone(r.pages[2])]}};
+  await applyPageText(s, book, 0, {ko: page.ko, en: 'Yuha sees tree 3.', save: () => true});
+  assert.equal(book.pages[0].scene.englishMissing, undefined);
+  assert.equal(book.pagination.pages[0].scene.englishMissing, undefined);
+});
+
+test('R61b (V5) one writing policy: the style\'s own "no text" leaves when a lettering is named (every built-in style)', () => {
+  for (const id of ['watercolor', 'crayon', 'comic']) {
+    const x = renderImageRequest({prompt: 'LETTERING — the only writing in this picture: "APOLLO 13" on the rocket.', stylePreset: getStylePreset(id), referenceImages: []});
+    assert.doesNotMatch(x.stylePrompt, /\bno text\b/i, id);
+    assert.doesNotMatch(x.composedPrompt, /\bno text\b/i, id);
+    assert.match(x.composedPrompt, /other than the lettering "APOLLO 13"/, id);
+  }
+  const plain = renderImageRequest({prompt: 'A forest.', stylePreset: getStylePreset('watercolor'), referenceImages: []});
+  assert.equal(plain.stylePrompt, getStylePreset('watercolor').stylePrompt, 'no lettering: the style as it is');
+});
+
+test('R61b Codex\'s free recheck (QA/r61-verification/tools/recheck.mjs): every acceptance value is true', async () => {
+  const {execFileSync} = await import('node:child_process');
+  const {mkdtempSync, readFileSync} = await import('node:fs');
+  const {tmpdir} = await import('node:os');
+  const {join} = await import('node:path');
+  const out = mkdtempSync(join(tmpdir(), 'r61b-'));
+  execFileSync(process.execPath, ['QA/r61-verification/tools/recheck.mjs'], {env: {...process.env, DONGHWA_APP_ROOT: process.cwd(), DONGHWA_AUDIT_OUT: out}, stdio: 'pipe'});
+  const r = JSON.parse(readFileSync(join(out, 'recheck.json'), 'utf8'));
+  assert.deepEqual(r.acceptance, {editedPageUsesCurrentKo: true, scopedRewritePreservesOtherPages: true, missingEnglishIsNotKorean: true, oneOffIdentityIsFrozen: true, letteringHasNoConflictingStyle: true});
+  assert.equal(r.networkCalls, 0);
 });

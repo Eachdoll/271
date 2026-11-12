@@ -193,6 +193,23 @@ export const picturePlanText = (plan) => (plan ? [plan.picture, plan.hook, plan.
  * R61 (audit A): a short key of a page's words (Korean and English, spaces folded) — the reading records the key it
  * read; a picture request that finds other words knows the plan is stale. djb2, base 36.
  */
+/**
+ * R61b (Codex V1): the page's words now against the words its picture was read from. Korean is the source: a page whose
+ * Korean changed is drawn from its Korean, and its English counts only when the English was rewritten after the reading
+ * too (an English left behind by a Korean edit is the old story). `scene.koKey`/`scene.enKey` say which side changed;
+ * a page that only has the joint `textKey` (no per-language keys) trusts the Korean alone once it is stale.
+ */
+export function pageTextState(page) {
+  const ko = String(page?.ko ?? page?.textKo ?? ""),
+    en = String(page?.en ?? page?.textEn ?? ""),
+    sc = page?.scene || {};
+  const split = !!sc.koKey;
+  const koChanged = split ? sc.koKey !== pageTextKey(ko) : false,
+    enChanged = split && sc.enKey !== undefined ? sc.enKey !== pageTextKey(en) : false,
+    joint = !split && !!sc.textKey && sc.textKey !== pageTextKey(ko, en || ko);
+  const stale = koChanged || enChanged || joint;
+  return { stale, koChanged: koChanged || joint, enChanged, englishCurrent: !!en.trim() && (!stale || (split && (!koChanged || enChanged))), ko, en };
+}
 export function pageTextKey(ko, en = "") {
   const text = `${String(ko ?? "").replace(/\s+/gu, " ").trim()}\u0001${String(en ?? "").replace(/\s+/gu, " ").trim()}`;
   let h = 5381;
