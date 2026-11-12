@@ -3,7 +3,7 @@ import { buildScenePrompt, sceneBriefText, scenePlanText, closeViewFor, effectiv
 import { plainBackdropFor } from "../story-generation/story-drama.js";
 import { seedForPage } from "../story-generation/staging.js";
 import { pagePlace, previousSceneReferences } from "./scene-continuity.js";
-import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin, pageCastIds, hasKeptRoom } from "./reference-policy.js";
+import { hasReferencePolicy, hasReferenceHygiene, castSheetsForPage, castWithin, pageCastIds, hasKeptRoom, hasClearRoom } from "./reference-policy.js";
 import { pageTextState } from "../story-generation/picture-plan.js";
 import { characterSVG } from "../engine.js";
 import { getStylePreset, validateStylePreset } from "./styles.js";
@@ -965,7 +965,7 @@ export function sceneGenerationRequest(state, book, pageIndex, options = {}) {
         hygiene && (closeViewFor(book, page) || plainBackdropFor(book, page))
         ? []
         : // R55d: a pictureRefs book prefers the latest same-place page drawn from the same camera.
-          previousSceneReferences(book, snapshot, pageIndex, refPolicy ? { shotOf: (row) => effectiveStaging(book, row).shot || "wide", ...(hygiene ? { rides: (prior) => castWithin(prior, page) } : {}) } : {})),
+          previousSceneReferences(book, snapshot, pageIndex, refPolicy ? { shotOf: (row) => effectiveStaging(book, row).shot || "wide", ...(hygiene ? { rides: (prior) => castWithin(prior, page) } : {}), ...(hygiene && hasClearRoom(book.storyInput) ? { canonicalAlways: true } : {}) } : {})),
   ];
   const roleDescriptions = references
     .map(

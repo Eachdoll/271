@@ -64,15 +64,16 @@ export function pagePlace(book, snapshot, index) {
  * any angle. Without `shotOf` the choice is the old one, byte for byte.
  * R59: with `rides` only the earlier pages it accepts are candidates.
  */
-export function previousSceneReferences(book, snapshot, index, { shotOf = null, rides = null } = {}) {
+export function previousSceneReferences(book, snapshot, index, { shotOf = null, rides = null, canonicalAlways = false } = {}) {
   const place = pagePlace(book, snapshot, index);
   if (!place.key) return [];
-  const candidates = (book.pages || [])
+  // R64: with `canonicalAlways` the first picture of this place is the place's reference whoever is in it (a later page with
+  // fewer people lost its stage when page 1 had a friend in it); `rides` then only chooses the recent-scene slot.
+  const drawnHere = (book.pages || [])
     .slice(0, index)
     .map((page, i) => ({ page, index: i }))
     .filter(({ page, index: i }) => {
-      // R59: `rides` (earlier page → boolean) keeps out a page that shows someone this page does not (reference-policy.js castWithin).
-      if (typeof rides === "function" && !rides(page)) return false;
+      if (!canonicalAlways && typeof rides === "function" && !rides(page)) return false;
       const image = page.imageAssetId || page.imageUrl;
       // A text-edit stale mark covers only the image it was set on; a redrawn page is a reference again.
       if (
@@ -92,12 +93,15 @@ export function previousSceneReferences(book, snapshot, index, { shotOf = null, 
         (captured?.placeKey || pagePlace(book, snapshot, i).key) === place.key
       );
     });
-  if (!candidates.length) return [];
+  if (!drawnHere.length) return [];
+  const candidates = canonicalAlways && typeof rides === "function" ? drawnHere.filter(({ page }) => rides(page)) : drawnHere;
   const shot = typeof shotOf === "function" ? String(shotOf(book.pages[index]) || "") : "",
     sameShot = shot ? candidates.filter(({ page }) => String(shotOf(page) || "") === shot) : [],
-    first = candidates[0],
-    latest = sameShot.length ? sameShot.at(-1) : candidates.at(-1),
-    matched = sameShot.length > 0 && latest !== first;
+    first = drawnHere[0],
+    latest = sameShot.length ? sameShot.at(-1) : candidates.at(-1) || first,
+    matched = sameShot.length > 0 && latest !== first,
+    // R64: the canonical picture rode along although someone in it is not on this page.
+    peopled = canonicalAlways && typeof rides === "function" && !rides(first.page);
   return [first, ...(first !== latest ? [latest] : [])].map(
     ({ page, index: i }, position) => ({
       imageAssetId: page.imageAssetId || null,
@@ -106,7 +110,7 @@ export function previousSceneReferences(book, snapshot, index, { shotOf = null, 
         : page.imageUrl,
       role: "background",
       required: position === 0,
-      label: `${position === 0 ? "CANONICAL first scene" : matched ? `Recent scene from the SAME camera (${shot})` : "Recent scene"} at SAME place, page ${i + 1}; architecture/layout only${matched ? " — the closest layout reference for this page: keep what it shows where it shows it" : ""}, do not copy cast, pose or temporary props`,
+      label: `${position === 0 ? "CANONICAL first scene" : matched ? `Recent scene from the SAME camera (${shot})` : "Recent scene"} at SAME place, page ${i + 1}; architecture/layout only${matched ? " — the closest layout reference for this page: keep what it shows where it shows it" : ""}, do not copy cast, pose or temporary props${position === 0 && peopled ? " — PLACE ONLY: the people in this image are not in this picture unless they are in \"Everyone in this picture\"" : ""}`,
       sourcePageIndex: i,
       placeKey: place.key,
     }),

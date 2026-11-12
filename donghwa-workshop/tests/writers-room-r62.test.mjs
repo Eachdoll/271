@@ -275,3 +275,20 @@ test('R63 the room run: binding, then the editor (the writer\'s model), then the
   await W.runRoomDrafts({...input, bookId: 'r63-run6', writersRoom: {version: 1, weave: 6}}, outline, {engine, engineId: 'openai', roomFlowCount: 1, roomPolish: false}, {engineFor: () => engine});
   assert.equal(order.includes('pageEdit'), false);
 });
+
+test('R64 the stage\'s first picture rides along on a later page of the same stage even when someone in it is not on that page (labelled PLACE ONLY); a weave 6 book keeps the R59 rule', async () => {
+  const {previousSceneReferences} = await import('../dist/image-generation/scene-continuity.js');
+  const {castWithin} = await import('../dist/image-generation/reference-policy.js');
+  const stage = {name: 'village gate', map: 'the oak at the LEFT, the bakery at the RIGHT'};
+  const p = (who, extra = {}) => ({scene: {who, where: 'village gate', stage, action: 'x'}, ...extra});
+  const make = (weave) => ({storyInput: {...input, writersRoom: {version: 1, weave}}, pages: [p(['yuha', 'toto'], {imageUrl: 'data:image/png;base64,AA'}), p(['yuha'], {imageUrl: 'data:image/png;base64,BB'}), p(['yuha'])]});
+  const snap = {backgrounds: []};
+  const ask = (book, canonicalAlways) => previousSceneReferences(book, snap, 2, {rides: (prior) => castWithin(prior, book.pages[2]), canonicalAlways});
+  const seven = ask(make(7), true);
+  assert.equal(seven[0].sourcePageIndex, 0, 'page 1 is still the stage\'s first picture');
+  assert.match(seven[0].label, /PLACE ONLY: the people in this image are not in this picture unless they are in "Everyone in this picture"/);
+  assert.equal(seven[1].sourcePageIndex, 1, 'the recent slot keeps the cast rule');
+  const six = ask(make(6), false);
+  assert.equal(six[0].sourcePageIndex, 1, 'R59: the page with Toto does not ride');
+  assert.equal(six.length, 1);
+});
