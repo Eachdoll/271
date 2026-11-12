@@ -1,0 +1,5 @@
+REFERENCES:
+
+
+PROMPT:
+Create a coherent character reference sheet for this original storybook character: 유하; Yuha; child; a boy; 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지; 짧은 검은 머리 · 동그란 얼굴; 노란 티셔츠 · 초록 반바지; body/clothing color #e9bb4e; hair color #393735; skin color #f0cfb5. Show a front full-body view, side full-body view, back full-body view, four face expressions (joy, surprise, sadness, upset), and two action poses (walking and waving) on one clean neutral background. Keep the exact face, proportions, hairstyle, requested clothing and colors consistent in every view. All attached images are authoritative STYLE references, not a request to copy their characters, clothes or scene. Repaint every view from scratch in the selected visual style. Style reference rendering takes priority over the old sheet rendering. No labels, text, English view names, captions or diagrams.

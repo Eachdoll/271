@@ -1,0 +1,17 @@
+REFERENCES:
+- character_front: Yuha original face and identity
+- character_full: Yuha original full body and clothes
+- background: CANONICAL first scene at SAME place, page 1; architecture/layout only, do not copy cast, pose or temporary props
+
+PROMPT:
+THIS PAGE MUST SHOW (draw exactly): 1) the bakery tiny and far at the right end of the road. 2) Yuha back under the arrow sign, surprised. Everyone in this picture: Yuha. No other people or animals. If any line below disagrees with THIS PAGE MUST SHOW or POSE, follow THIS PAGE MUST SHOW and POSE.
+
+COMPOSITION FIRST (decided with the story; it takes precedence over the viewpoint of every reference image): medium shot. Draw this page from this camera — closer, farther, higher or lower than the place reference, but from the same side: what stands on the left of the place stays on the left, nothing is mirrored, and the story's things stay where the earlier pages put them. Where each figure stands follows the STAGE MAP and THIS PAGE MUST SHOW. Story text is printed below the illustration; use the full picture area and keep the important action clearly visible. One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.
+
+Time and light: day. Interpret this lighting ONLY within the exact selected style palette; never switch medium or introduce a different palette.
+
+Characters: Yuha (yuha): a boy, 짧은 검은 머리, 동그란 얼굴, 노란 티셔츠와 초록 반바지. Actual event: The bakery far down the road looks smaller; Yuha stands back under the arrow sign, surprised.. Current page narrative: {"ko":"빵집이 점점 작아졌어요. 유하는 화살표 밑에 쭈욱 밀려나 있었어요.","en":"But he is under the arrow!"}. The actual event says what happens; THIS PAGE MUST SHOW and POSE above say how it looks. Never invent a new action for variety. Draw each one once. Anyone a reference image shows who is not in "Everyone in this picture" is not drawn here. Preserve each face, age, body proportions and identity from character_front references. Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.
+
+Props and small creatures: only those established in the current story or place references. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add anyone not named above. DAYTIME SKY: it is daytime; no moon and no stars in the sky. THE SAME THING ON EVERY PAGE (drawn exactly so wherever it appears): the arrow sign — one rectangular pale-wood board hung from a short iron bracket on the old oak at Yuha's head height; one thick red arrow painted on it pointing straight down; no letters.
+
+Location: village gate. STAGE MAP (the same place on every page here): the old oak with the arrow sign at the LEFT edge; the dirt road runs from left to right; the bakery with a green-and-cream striped awning at the far RIGHT end of the road. Keep these positions relative to each other; the camera may show only part of the place. An earlier picture of this place, when attached as the CANONICAL first scene, fixes its layout and the things in it. Relight for day. Just before this page: Yuha runs forward toward the bakery with all his strength. Style references define rendering only. No words, captions, watermark or logos.
