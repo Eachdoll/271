@@ -18,7 +18,8 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '숲속에서 자꾸 숨는 아기 사슴', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id, extra = {}) => normalizeStoryInput({...inputFromWizard(setup(), {...wizard, ...extra}, {layout: 'openings'}).input, bookId: id});
+// R63: pinned to weave 6 — a weave 7 picture request opens with THIS PAGE MUST SHOW (tests/writers-room-r62.test.mjs).
+const roomInput = (id, extra = {}) => normalizeStoryInput({...inputFromWizard(setup(), {...wizard, ...extra}, {layout: 'openings'}).input, bookId: id, writersRoom: {version: 1, weave: 6}});
 
 test('R55g the reading asks, per page, what the hero does not see and what the next page reveals — only for picture-led drafts, "" when the words say nothing', () => {
   const input = roomInput('g1');

@@ -94,7 +94,7 @@ test('R53 the estimate prices the room\'s rounds (no council, no briefs, no beat
   const settings = {engine: 'openai'};
   const room = estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true});
   // R60: a new room job revises no cast (no roomCastRevise row).
-  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'roomCastNotes', 'roomFlows', 'roomFlowPick', 'roomDrafts', 'roomRead', 'roomThreads', 'roomListen', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages'], 'R54e: no read-through row — the room pages skip it; R55c: no outline row — the outline is the app\'s; R62: + the listener');
+  assert.deepEqual(room.stages.map((s) => s.stage), ['roomPremises', 'roomPanel', 'roomCastNotes', 'roomFlows', 'roomFlowPick', 'roomDrafts', 'roomRead', 'roomThreads', 'roomListen', 'roomPageEdit', 'roomRewrite', 'roomEnglish', 'roomPolish', 'roomPages', 'roomDirector'], 'R54e: no read-through row — the room pages skip it; R55c: no outline row — the outline is the app\'s; R62: + the listener; R63: + the page editor and the art director');
   assert.equal(room.stages.find((s) => s.stage === 'roomDrafts').requestCount, 1, 'R59: a new room job writes one draft');
   assert.equal(estimateStoryTextCost({settings, pageCount: 16, diet: true, editor: true, room: true, roomLean: false}).stages.find((s) => s.stage === 'roomDrafts').requestCount, 3, 'a job frozen before R59 writes three');
   assert.equal(room.room, true);

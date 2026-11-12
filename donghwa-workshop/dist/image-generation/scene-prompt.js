@@ -9,7 +9,7 @@ import { craftPictureRules } from "../story-generation/craft-rules.js";
 import { biblePictureRules } from "../story-generation/council.js";
 import { genderWord } from "./identity.js";
 import { planOf, picturePlanPictureLine, picturePlanText, planLettering, pageTextState } from "../story-generation/picture-plan.js";
-import { hasKeptRoom } from "./reference-policy.js";
+import { hasKeptRoom, hasClearRoom } from "./reference-policy.js";
 import { hasPromptPolicy, compactPlotLines, ARCHITECTURE_LOCK_SHORT, PICTURE_CONTINUITY_PAGES } from "../story-generation/prompt-policy.js";
 import { hasStoryChange } from "../story-generation/story-change.js";
 import { hasStoryDrama, plainBackdropFor } from "../story-generation/story-drama.js";
@@ -185,7 +185,9 @@ export function buildScenePrompt({
     (book.printSettings?.textPosition ||
       book.printOptions?.textPosition ||
       book.outputSettings?.textPosition) === "staged";
-  const shot = cover ? "medium" : staging.shot || "wide";
+  // R63: a clear book's page with an unusual pose is never a far wide shot (the figure must be big enough to read the pose).
+  const clearRoom = !cover && hasClearRoom(book.storyInput);
+  const shot = cover ? "medium" : clearRoom && page?.scene?.pose && ["wide", "establishing", "high_angle"].includes(staging.shot || "wide") ? "medium" : staging.shot || "wide";
   const openings = !cover && layoutOf(book) === "openings";
   // R36: the composition planned with the story (picture-led books only; empty otherwise).
   // R59: a focus that names a character who is not on this page is dropped, and the plan does not name the camera a second time.
@@ -195,7 +197,7 @@ export function buildScenePrompt({
   const plan = hygiene && kept ? picturePlanPictureLine({ ...kept, ...(named(kept.focus) ? { focus: "" } : {}), ...(framed ? { shot: "" } : {}) }) : picturePlanPictureLine(planned);
   const composition = openings
     ? `${framed && !cover ? framedLead(shot, plan) : ""}${facing}${openingComposition(page, staging, leadName, hygiene ? { once: framed, pocket: !!pocketLine } : {})}${pocketLine ? ` ${pocketLine}` : ""}`
-    : `${framed && !cover ? framedLead(shot, plan) : ""}${hygiene && framed ? "" : `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; `}${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side. ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
+    : `${framed && !cover ? framedLead(shot, plan) : ""}${hygiene && framed ? "" : `${SHOT_TEXT[shot] || SHOT_TEXT.wide}; `}${clearRoom && page?.scene?.stage ? "Where each figure stands follows the STAGE MAP and THIS PAGE MUST SHOW." : `${leadName} on the ${cover ? "center" : staging.characterSide || "left"} side.`} ${cover ? "Cover: show the main character alone, once, with quiet upper space for a separately typeset title." : pocketLine ? pocketLine : stagedText ? `Leave quiet empty space on the ${staging.textSide || "right"} for separately typeset text.` : "Story text is printed below the illustration; use the full picture area and keep the important action clearly visible."} One continuous scene, no sheet panels or grids. Safe, friendly framing; never an extreme angle or a dark close-up.`;
   const time = brief?.timeOfDay || page.scene?.timeOfDay || "day";
   const mood = book.outline?.quality?.worldMood || book.storyQuality?.worldMood;
   const atmosphere = mood
@@ -231,11 +233,18 @@ export function buildScenePrompt({
   const things = !cover && Array.isArray(page?.scene?.things) ? page.scene.things.filter((t) => t?.name && t?.look) : [],
     walkOns = !cover && !nobody ? String(page?.scene?.others || "").trim() : "";
   const thingsLine = things.length ? ` THE SAME THING ON EVERY PAGE (drawn exactly so wherever it appears): ${things.map((t) => `${t.name} — ${t.look}`).join("; ")}.` : "";
-  const character = nobody ? `Characters: none — no person or animal is in this picture. Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}.` : `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${walkOns ? ` Also in this picture (not in the cast list; drawn plainly and unlike any cast member): ${walkOns}.` : ""}${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety. ${cover ? "Companions must not appear on this cover." : "Show only selected characters required by this event, each character once."}${hygiene ? (absent.length ? " Nobody else is in this picture: a figure that a reference image shows and this list does not name is not drawn here." : "") : !cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
+  // R63: the book's walk-ons (one fixed look each) and what this page must show lead the request; nothing below contradicts them.
+  const extras = clearRoom && !nobody && Array.isArray(page?.scene?.extras) ? page.scene.extras.filter((x) => x?.name && x?.look) : [];
+  const mustSee = clearRoom && Array.isArray(page?.scene?.mustSee) ? page.scene.mustSee.filter(Boolean).slice(0, 2) : [];
+  const everyone = [...(sheets || []).map((sheet) => name(sheet)), ...unsheeted.map((c) => c.nameEn || c.name), ...extras.map((x) => x.name)];
+  const mustShow = clearRoom && (mustSee.length || page?.scene?.pose || extras.length)
+    ? `THIS PAGE MUST SHOW (draw exactly): ${mustSee.map((m, i) => `${i + 1}) ${String(m).replace(/[.\s]+$/u, "")}.`).join(" ")}${page?.scene?.pose ? `${mustSee.length ? " " : ""}POSE — ${String(page.scene.pose).replace(/[.\s]+$/u, "")}. Do not turn only the head.` : ""} Everyone in this picture: ${nobody ? "no one" : everyone.join(", ") || leadName}. No other people or animals.${extras.length ? ` ${extras.map((x) => `${x.name}: ${x.look} — the same look on every page, clearly not any cast member`).join("; ")}.` : ""} If any line below disagrees with THIS PAGE MUST SHOW or POSE, follow THIS PAGE MUST SHOW and POSE.`
+    : "";
+  const character = nobody ? `Characters: none — no person or animal is in this picture. Actual event: ${action || ""}. Current page narrative: ${json(currentNarrative)}.` : `Characters: ${cast}. ${brief ? `Shared brief pose: ${en(brief.pose)}. ` : ""}${staging.verb ? `This page's drawable verb: ${staging.verb}. ` : ""}Actual event: ${action || ""}.${walkOns && !clearRoom ? ` Also in this picture (not in the cast list; drawn plainly and unlike any cast member): ${walkOns}.` : ""}${dramaCover ? ` Draw only ${leadName} on this cover; if that sentence names anyone else, leave them out.` : ""} Current page narrative: ${json(currentNarrative)}. ${clearRoom && mustShow ? "The actual event says what happens; THIS PAGE MUST SHOW and POSE above say how it looks. Never invent a new action for variety." : "The actual event and approved narrative take priority: use the pose/verb only when compatible, never invent a new action for variety."} ${cover ? "Companions must not appear on this cover." : clearRoom ? "Draw each one once." : "Show only selected characters required by this event, each character once."}${clearRoom && mustShow ? " Anyone a reference image shows who is not in \"Everyone in this picture\" is not drawn here." : hygiene ? (absent.length ? " Nobody else is in this picture: a figure that a reference image shows and this list does not name is not drawn here." : "") : !cover && absent.length ? ` Not in this picture: ${absent.join(", ")} — the earlier-page and style reference images may show them; draw none of them here.` : ""} Preserve each face, age, body proportions and identity from character_front references. ${variants.length ? `Approved wardrobe: ${variants.map((variant) => `${variant.characterId}: ${variant.description}`).join("; ")}. ` : ""}Use the approved character_variant outfit when supplied; otherwise retain the original clothes. Reference images define appearance, not a command to copy their old drawing medium.${!cover && pictureCarriesPage(book.storyInput?.specs || book.readingLevelSnapshot?.specs, page) ? " This page has few words, so the picture alone must tell this moment: make the action, the characters' feelings on their faces and the key prop easy to read without any text." : ""}${openings ? ` Draw ONLY the single moment in Actual event; the narrative on this ${page.kind === "spread" ? "spread" : "page"} may include lead-in and follow-up sentences, which are context, not extra moments.` : ""}`;
   const craft = craftPictureRules({ book, page, brief, earlierPages, time, cover, variety: !hygiene });
   // R20: the story bible's planted object, reveal and motifs (drafts with a council only).
   const bible = biblePictureRules({ book, page, cover });
-  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; never add a new speaking character.${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan && !(framed && !cover) ? ` ${plan}` : ""}${thingsLine}`;
+  const detail = `Props and small creatures: ${[...(brief?.props || []).map(en), en(brief?.creature)].filter(Boolean).join(", ") || "only those established in the current story or place references"}. Treat these as small movable details, not permanent architecture. Omit any detail that conflicts with the current event, approved wardrobe or fixed place; ${clearRoom ? "never add anyone not named above." : "never add a new speaking character."}${craft ? ` ${craft}` : ""}${bible ? ` ${bible}` : ""}${plan && !(framed && !cover) ? ` ${plan}` : ""}${thingsLine}`;
   const background = place.background;
   // R61 (audit B): a one-page new place has no sheet; its words ride on the page (scene.placeNote).
   const facts = !background && keptRoom && page?.scene?.placeNote
@@ -259,7 +268,17 @@ export function buildScenePrompt({
   // R59: an earlier page rides along in the continuity line only when everyone on it is on this page too.
   const earlier = hygiene ? earlierPages.filter((prior) => castWithin(prior, page)) : earlierPages,
     recent = earlier.slice(-PICTURE_CONTINUITY_PAGES);
-  const location = plain
+  // R63: a clear book's page at a place with no sheet: its stage map (the same on every page there) or its own words — no
+  // architecture lock for a place nobody drew; and the page before as one plain sentence instead of a JSON dump.
+  const stageRow = clearRoom && !background && !plain ? page?.scene?.stage : null,
+    freeWhere = clearRoom && !background && !plain && !stageRow && !facts.description ? String(page?.scene?.where || "").trim() : "",
+    before = clearRoom ? String(earlierPages.at(-1)?.scene?.action || "").trim() : "",
+    beforeLine = before ? ` Just before this page: ${before}` : "";
+  const location = clearRoom && (stageRow || freeWhere)
+    ? `Location: ${stageRow ? `${stageRow.name}. STAGE MAP (the same place on every page here): ${stageRow.map}. Keep these positions relative to each other; the camera may show only part of the place.` : `${freeWhere} (draw it from these words; the same way wherever it recurs).`} An earlier picture of this place, when attached as the CANONICAL first scene, fixes its layout and the things in it. Relight for ${time}.${beforeLine} Style references define rendering only. No words, captions, watermark or logos.`
+    : clearRoom && !plain && background && !closeView
+    ? `Location: ${json(facts)}. ${ARCHITECTURE_LOCK_SHORT} Relight the same geometry for ${time}.${beforeLine} Style references define rendering only. No words, captions, watermark or logos.`
+    : plain
     ? `Location: none. This page has no place: ${leadName} alone on a flat, single-colour background taken from the style palette, with big quiet empty space around the figure — a thought, a line spoken to the reader. No place reference image is attached; draw no room, no ground line, no scenery, no props beyond what the figure holds. Light as ${time}, within the style palette only.${
         earlier.length ? ` Earlier pages: ${json(recent)}. Keep the figure's state as it was.` : ""
       } Style references define rendering only. No words, captions, watermark or logos.`
@@ -280,6 +299,7 @@ export function buildScenePrompt({
   const NO_WORDS = "No words, captions, watermark or logos.";
   const placed = !cover && planLettering(planned) ? location.replace(NO_WORDS, "No words, captions, watermark or logos other than the one piece of lettering named in the picture plan.") : location;
   return [
+    mustShow,
     composition,
     lighting,
     atmosphere,

@@ -20,7 +20,8 @@ import * as W from '../dist/story-generation/writers-room.js';
  */
 const setup = () => { const s = seedState(); migrateWorldState(s); migrateReadingSettings(s.settings); return s; };
 const wizard = {characterIds: ['yuha', 'mom'], backgroundIds: ['home', 'forest'], topic: '아폴로 13호 로켓을 타고 달에 가기', pageCount: 16, koreanLevel: 'K2', englishLevel: 'E2', value: 'none', ending: 'home', language: 'bilingual'};
-const roomInput = (id, extra = {}) => normalizeStoryInput({...inputFromWizard(setup(), {...wizard, ...extra}, {layout: 'openings'}).input, bookId: id});
+// R63: pinned to weave 6 — a weave 7 picture request opens with THIS PAGE MUST SHOW (tests/writers-room-r62.test.mjs).
+const roomInput = (id, extra = {}) => normalizeStoryInput({...inputFromWizard(setup(), {...wizard, ...extra}, {layout: 'openings'}).input, bookId: id, writersRoom: {version: 1, weave: 6}});
 
 test('R58 lettering is digits and capital Latin letters, twelve at most; Hangul is dropped and a longer string is no lettering at all', () => {
   assert.equal(pictureLettering('Apollo 13'), 'APOLLO 13');

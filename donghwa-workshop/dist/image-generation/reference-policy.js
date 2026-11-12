@@ -48,6 +48,8 @@ const list = (value) => (Array.isArray(value) ? value : []);
 /** The character IDs a page's scene names (strings, in order, no repeats). */
 /** R61b: a kept writers' room book (weave 6) — the R61 image behaviours apply to it only, so older books ask as before. */
 export const hasKeptRoom = (input) => Number(input?.writersRoom?.weave) >= 6;
+/** R63: a clear writers' room book (weave 7) — the picture request leads with what the page must show. */
+export const hasClearRoom = (input) => Number(input?.writersRoom?.weave) >= 7;
 export function pageCastIds(page) {
   const out = [];
   // R61a: scene.extra holds the cast beyond the five a page's who may list (a crowded picture) — they are on the page too.

@@ -778,10 +778,14 @@ export function estimateStoryTextCost({
       roomLean ? stageEstimate("roomRead", 3000 + pages * 60, 1100, 1, "cheap") : stageEstimate("roomRead", 5000 + pages * 150, 1500, 1, "cheap"),
       ...(roomStages ? [stageEstimate("roomThreads", 2500 + pages * 120, 500, 1, "cheap")] : []),
       ...(roomClear ? [stageEstimate("roomListen", 1500 + pages * 80, 600, 1, "cheap")] : []),
+      // R63: the page editor reads the bound pages once (the writer's model).
+      ...(roomClear ? [stageEstimate("roomPageEdit", 1800 + pages * 90, Math.ceil(900 * longHand), 1, "writer")] : []),
       stageEstimate("roomRewrite", (roomStages ? 3300 : 2200) + pages * 60, draftOut, 1, "writer"),
       stageEstimate("roomEnglish", 2500 + pages * 80, Math.ceil(draftOut * 0.6), 1, "writer"),
       stageEstimate("roomPolish", 4000 + pages * 120, draftOut, 1, "writer"),
       stageEstimate("roomPages", 3500 + pages * 100, 500 + pages * 35, 1, "cheap"),
+      // R63: the art director checks every page's picture plan against its words (the middle model, once).
+      ...(roomClear ? [stageEstimate("roomDirector", 2000 + pages * 220, 400 + pages * 70, 1, "prose")] : []),
     );
     // No read-through (revision) row: the room's pages skip finishPaginationCoherence.
   }
@@ -978,6 +982,8 @@ const BUDGET_STEP = {
   roomCastRevise: "roomDrafts",
   roomThreads: "roomDrafts",
   roomListen: "roomDrafts",
+  roomPageEdit: "roomDrafts",
+  roomDirector: "pagination",
   roomDrafts: "roomDrafts",
   roomRead: "roomDrafts",
   roomRewrite: "roomDrafts",

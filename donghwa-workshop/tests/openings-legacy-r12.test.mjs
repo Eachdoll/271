@@ -899,7 +899,7 @@ const PINS = {
   // R55h: the ③ price of a new room story ($1.26 → $1.36: the cast-notes call).
   // R56: the ③ price of a new room story ($1.36 → $1.78: three flows, their pick, the revised cast, the thread check).
   // R57: the ③ price of a new room story ($1.78 → $1.86: the premises name their places).
-  review: 'b28c3c5f650b226a14f89150effeb38b37949609652af1db9f4228265ca6c8f5',
+  review: 'bf6eb86f268d5976dc8a0300ea12d7afb18e2be3bb5545706e9ae9c02b030018',
   checks: '60a704ac41283bf82a3e193c2f736e5ca1b3409b63e766c8118408b22d7b5cf6',
   // Editor round: FULL AUTO/simple estimates for a NEW job include the
   // read-through (+1 request) and the author-model simplify; estimateStoryTextCost
@@ -948,7 +948,7 @@ const PINS = {
   // R55h: new-story estimates only (+1 request, +$0.10 text: the cast-notes row and the notes inside the three draft requests).
   // R56: new-story estimates only (+6 requests, about +$0.42 text on the default engine).
   // R57: new-story estimates only (the longer premise answer; no new request).
-  estimates: '84bcf6c6a6b06ab7e4cecaa41e55873b8c8bdb99743b015f5b467295cf02b957',
+  estimates: '4c42b3c23731f3e04a53ab6d903f77de1c345ff1e1883fd53918058b13a32c2a',
 };
 /** scripts/r12-legacy-dom.mjs on 5f8d2f7's dist: the seed book's and the legacy page book's reader at 390px and 1280px. */
 const READER_DOM_SHA256 = '0e5035cff5dcd72be00b346b4cb67aa455c1eab8c848b3fcc3a4e6e4b81f6c16';

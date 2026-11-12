@@ -92,13 +92,17 @@ test('R62 the room run: the listener hears the chosen draft and starts the rewri
   assert.equal(calls.includes('rewrite'), false);
 });
 
-test('R62 the reading: who is grounded in the words (page ±1), the things that come back keep one look, walk-ons are kept, the body of an unusual move is asked for', () => {
+test('R62/R63 the reading: who is grounded in the words (page ±1); things, walk-ons (extras) and recurring places (stages) keep one look/map; mustSee and a side-view pose per page', () => {
   const req = W.extractRequest(input, outline, [{ko: '유하가 뛰어요.'}]);
-  assert.ok(req.jsonSchema.properties.things, 'things asked');
-  assert.ok(req.jsonSchema.properties.pages.items.properties.others, 'others asked');
-  assert.equal(req.jsonSchema.properties.pages.items.properties.who.minItems, 0, 'an empty picture can say so');
-  assert.match(req.system, /which way the chest and face point and which way the feet step/);
-  assert.match(req.system, /the look is repeated word for word/);
+  const props = req.jsonSchema.properties, page = props.pages.items.properties;
+  assert.ok(props.things && props.extras && props.stages, 'book-level things, extras, stages');
+  assert.deepEqual(['mustSee', 'pose', 'extras', 'stage'].filter((k) => !page[k]), []);
+  assert.ok(['mustSee', 'pose', 'extras', 'stage'].every((k) => props.pages.items.required.includes(k)), 'required, not optional');
+  assert.ok(req.jsonSchema.required.includes('extras') && req.jsonSchema.required.includes('stages'));
+  assert.equal(page.who.minItems, 0, 'an empty picture can say so');
+  assert.ok(req.system.indexOf('MOST IMPORTANT') < req.system.indexOf('[cast]'), 'the clear instructions come before the data');
+  assert.match(req.system, /seen FROM THE SIDE/);
+  assert.doesNotMatch(req.system, /toward the bakery/, 'no book-specific example');
   const old = W.extractRequest({...input, writersRoom: {version: 1, weave: 6}}, outline, [{ko: '유하가 뛰어요.'}]);
   assert.equal(old.jsonSchema.properties.things, undefined, 'weave 6 unchanged');
   const pages = [
@@ -108,36 +112,79 @@ test('R62 the reading: who is grounded in the words (page ±1), the things that 
     {ko: '새로 온 아이가 화살표 밑에 와요.', en: 'A new kid is under the arrow.'},
   ];
   const r = W.settleExtraction({
-    things: [{name: 'the upside-down arrow sign', look: 'a weathered wooden board, arrow pointing down, nailed to the old oak at the village gate', pages: [1, 4, 77]}, {name: 'once', look: 'x', pages: [2]}],
+    things: [{name: 'the arrow sign', look: 'one rectangular pale-wood board, one thick red arrow pointing straight down', pages: [1, 4, 77]}, {name: 'once', look: 'x', pages: [2]}],
+    extras: [{name: 'new girl', look: 'a girl smaller than Yuha, red cap, blue overalls'}, {name: 'ghost', look: ''}],
+    stages: [{name: 'village gate', map: 'the old oak with the sign at the LEFT; the road runs left to right; the bakery at the RIGHT end'}],
     pages: [
-      {pageNo: 1, who: ['yuha', 'greenie'], where: 'gate', action: 'Yuha stands under the sign.', emotion: 'happy', timeOfDay: 'day', props: [], others: ''},
-      {pageNo: 2, who: ['yuha', 'toto'], where: 'gate', action: 'Yuha runs.', emotion: 'happy', timeOfDay: 'day', props: [], others: ''},
-      {pageNo: 3, who: ['toto', 'greenie'], where: 'gate', action: 'Toto counts.', emotion: 'calm', timeOfDay: 'day', props: [], others: ''},
-      {pageNo: 4, who: ['yuha'], where: 'gate', action: 'A new kid arrives.', emotion: 'calm', timeOfDay: 'day', props: [], others: 'a small girl in a red cap with a backpack'},
+      {pageNo: 1, who: ['yuha', 'greenie'], where: 'village gate', action: 'Yuha stands under the sign.', emotion: 'happy', timeOfDay: 'day', props: [], mustSee: ['Yuha under the arrow sign', 'the bakery far away'], pose: '', extras: [], stage: 'village gate'},
+      {pageNo: 2, who: ['yuha', 'toto'], where: 'village gate', action: 'Yuha runs.', emotion: 'happy', timeOfDay: 'day', props: [], mustSee: ['Yuha running'], pose: 'seen from the side: faces LEFT, moves RIGHT', extras: [], stage: 'village gate'},
+      {pageNo: 3, who: ['toto', 'greenie'], where: 'home', action: 'Toto counts.', emotion: 'calm', timeOfDay: 'day', props: [], mustSee: ['Toto counting'], pose: '', extras: [], stage: 'village gate'},
+      {pageNo: 4, who: ['yuha'], where: 'village gate', action: 'A new kid arrives.', emotion: 'calm', timeOfDay: 'day', props: [], mustSee: ['the new girl under the sign'], pose: '', extras: ['New Girl', 'nobody'], stage: 'nowhere'},
     ],
   }, input, outline, pages, 't');
   assert.deepEqual(r.pages[0].scene.who, ['yuha'], 'the dinosaur is named nowhere near page 1');
   assert.deepEqual(r.pages[1].scene.who, ['yuha', 'toto'], 'Toto is named on the next page');
   assert.deepEqual(r.pages[2].scene.who, ['toto'], 'the hero is never added, the dinosaur dropped');
-  assert.deepEqual(r.pages[0].scene.things, [{name: 'the upside-down arrow sign', look: 'a weathered wooden board, arrow pointing down, nailed to the old oak at the village gate'}]);
-  assert.equal(r.pages[1].scene.things, undefined);
-  assert.equal(r.pages[3].scene.others, 'a small girl in a red cap with a backpack');
-  // A weave 6 draft keeps the reading's who as it was.
+  assert.equal(r.pages[0].scene.things[0].name, 'the arrow sign');
+  assert.equal(r.pages[1].scene.things[0].name, 'the arrow sign', 'R63: a stage page whose map names the thing carries its look too');
+  assert.equal(r.pages[2].scene.things, undefined, 'a supplied place without the thing');
+  assert.deepEqual(r.pages[0].scene.mustSee, ['Yuha under the arrow sign', 'the bakery far away']);
+  assert.equal(r.pages[1].scene.pose, 'seen from the side: faces LEFT, moves RIGHT');
+  assert.deepEqual(r.pages[3].scene.extras, [{name: 'new girl', look: 'a girl smaller than Yuha, red cap, blue overalls'}], 'the book-level look, by name');
+  assert.deepEqual(r.pages[0].scene.stage, {name: 'village gate', map: 'the old oak with the sign at the LEFT; the road runs left to right; the bakery at the RIGHT end'});
+  assert.equal(r.pages[2].scene.stage, undefined, 'a supplied place is not a stage');
+  assert.equal(r.pages[3].scene.stage, undefined, 'an unknown stage name is dropped');
   const six = W.settleExtraction({pages: [{pageNo: 1, who: ['yuha', 'greenie'], where: 'gate', action: 'x', emotion: 'happy', timeOfDay: 'day', props: []}]}, {...input, writersRoom: {version: 1, weave: 6}}, outline, pages.slice(0, 1), 't');
-  assert.deepEqual(six.pages[0].scene.who, ['yuha', 'greenie']);
+  assert.deepEqual(six.pages[0].scene.who, ['yuha', 'greenie'], 'weave 6 keeps the reading as it was');
 });
 
-test('R62 the picture request: the thing that comes back is drawn the same, the walk-on is in the picture; a page without them is unchanged', () => {
+test('R63 the picture request of a clear book leads with what the page must show and who is in it; no line below contradicts it; a stage keeps its map and never falls back to the beat\'s place', async () => {
+  const {pagePlace} = await import('../dist/image-generation/scene-continuity.js');
   const sheet = {characterId: 'yuha', characterSnapshot: {id: 'yuha', name: '유하', nameEn: 'Yuha'}, confirmedAt: 'now', imageUrl: 'x'};
-  const ask = (scene) => {
-    const book = {storyInput: input, outline, characterIds: ['yuha'], pages: [{ko: '새로 온 아이가 화살표 밑에 와요.', en: 'A new kid is under the arrow.', scene: {who: ['yuha'], where: 'gate', action: 'A new kid arrives under the sign.', emotion: 'calm', timeOfDay: 'day', props: [], ...scene}}]};
-    return S.buildScenePrompt({book, page: book.pages[0], pageIndex: 0, snapshot: {characterSheets: [sheet], backgrounds: []}, place: {}, sheets: [sheet]});
+  const stage = {name: 'village gate', map: 'the old oak with the sign at the LEFT; the bakery at the RIGHT end'};
+  const ask = (scene, extra = {}) => {
+    const book = {storyInput: input, outline, characterIds: ['yuha'], pages: [{ko: '새로 온 아이가 화살표 밑에 와요.', en: 'A new kid is under the arrow.', scene: {who: ['yuha'], where: 'village gate', action: 'A new girl arrives under the sign.', emotion: 'calm', timeOfDay: 'day', props: [], ...scene}, staging: {shot: 'wide'}, ...extra}]};
+    return S.buildScenePrompt({book, page: book.pages[0], pageIndex: 0, snapshot: {characterSheets: [sheet], backgrounds: []}, place: pagePlace(book, {backgrounds: []}, 0), sheets: [sheet], earlierPages: [{scene: {action: 'Yuha waits with one leg up.'}}]});
   };
-  const withBoth = ask({things: [{name: 'the upside-down arrow sign', look: 'a weathered wooden board nailed to the old oak'}], others: 'a small girl in a red cap'});
-  assert.match(withBoth, /THE SAME THING ON EVERY PAGE \(drawn exactly so wherever it appears\): the upside-down arrow sign — a weathered wooden board nailed to the old oak\./);
-  assert.match(withBoth, /Also in this picture \(not in the cast list; drawn plainly and unlike any cast member\): a small girl in a red cap\./);
-  const plain = ask({});
-  assert.doesNotMatch(plain, /THE SAME THING ON EVERY PAGE|Also in this picture/);
+  const p = ask({mustSee: ['the new girl under the arrow sign', 'Yuha turned away, one leg up'], extras: [{name: 'new girl', look: 'a girl smaller than Yuha, red cap, blue overalls'}], things: [{name: 'the arrow sign', look: 'one pale-wood board, a red arrow pointing down'}], stage, pose: 'seen from the side: faces LEFT, moves RIGHT'});
+  assert.match(p, /^THIS PAGE MUST SHOW \(draw exactly\): 1\) the new girl under the arrow sign\. 2\) Yuha turned away, one leg up\. POSE — seen from the side: faces LEFT, moves RIGHT\. Do not turn only the head\. Everyone in this picture: Yuha, new girl\. No other people or animals\. new girl: a girl smaller than Yuha, red cap, blue overalls — the same look on every page, clearly not any cast member\. If any line below disagrees with THIS PAGE MUST SHOW or POSE, follow THIS PAGE MUST SHOW and POSE\./);
+  assert.match(p, /Anyone a reference image shows who is not in "Everyone in this picture" is not drawn here\./);
+  assert.doesNotMatch(p, /take priority/);
+  assert.doesNotMatch(p, /Show only selected characters|never add a new speaking character|ARCHITECTURE LOCK|유하네 집|Earlier pages:/);
+  assert.match(p, /Location: village gate\. STAGE MAP \(the same place on every page here\): the old oak with the sign at the LEFT; the bakery at the RIGHT end\. Keep these positions relative to each other; the camera may show only part of the place\. An earlier picture of this place, when attached as the CANONICAL first scene, fixes its layout/);
+  assert.match(p, /Just before this page: Yuha waits with one leg up\./);
+  assert.match(p, /THE SAME THING ON EVERY PAGE/);
+  assert.doesNotMatch(p, /wide establishing/i, 'a pose page is not a far wide shot');
+  const free = ask({mustSee: ['Yuha at the road']});
+  assert.match(free, /Location: village gate \(draw it from these words; the same way wherever it recurs\)\./);
+  // A weave 6 book: no lead line, the old request.
+  const six = (() => {
+    const book = {storyInput: {...input, writersRoom: {version: 1, weave: 6}}, outline, characterIds: ['yuha'], pages: [{ko: 'x', en: 'x', scene: {who: ['yuha'], where: 'home', action: 'x', emotion: 'calm', timeOfDay: 'day', props: [], mustSee: ['x']}}]};
+    return S.buildScenePrompt({book, page: book.pages[0], pageIndex: 0, snapshot: {characterSheets: [sheet], backgrounds: []}, place: {}, sheets: [sheet]});
+  })();
+  assert.doesNotMatch(six, /THIS PAGE MUST SHOW/);
+});
+
+test('R63 the art director corrects the picture fields only: a shifted action, a missing counter (named in the words), a missing pose; never a name the words do not have', () => {
+  const pages = [
+    {textKo: '토토가 손가락을 접으며 셌어요. "하나… 두울…"', textEn: 'Toto counts.', scene: {who: ['yuha'], action: 'Yuha bites a bun.', mustSee: ['a bun']}},
+    {textKo: '유하도 뒤로 휙 돌아 뛰었어요.', textEn: 'Yuha runs backwards.', scene: {who: ['yuha'], action: 'Yuha runs.', mustSee: ['Yuha']}, backdrop: 'plain'},
+  ];
+  const req = W.directorRequest(input, pages);
+  assert.match(req.user, /1쪽: 토토가 손가락을/);
+  assert.match(req.system, /never the words/);
+  const r = W.applyDirector(pages, {fixes: [
+    {page: 1, action: 'Toto folds her fingers counting while Yuha dashes off.', mustSee: ['Toto counting on her fingers'], pose: '', addWho: ['토토', '초록이'], scene: false, why: 'the action was the bun page'},
+    {page: 2, action: '', mustSee: [], pose: 'seen from the side: faces LEFT, moves RIGHT', addWho: [], scene: true, why: 'pose'},
+  ], notes: ['마을의 규칙이 글에 없어요.']}, input);
+  assert.equal(pages[0].scene.action, 'Toto folds her fingers counting while Yuha dashes off.');
+  assert.deepEqual(pages[0].scene.who, ['yuha', 'toto'], 'Toto is named in the words; Greenie is not');
+  assert.ok(r.refused.some((x) => /초록이/.test(x)));
+  assert.equal(pages[1].scene.pose, 'seen from the side: faces LEFT, moves RIGHT');
+  assert.equal(pages[1].backdrop, undefined, 'a pose page is drawn at its place');
+  assert.equal(pages[0].textKo, '토토가 손가락을 접으며 셌어요. "하나… 두울…"', 'the words are never touched');
+  assert.deepEqual(r.notes, ['마을의 규칙이 글에 없어요.']);
+  assert.deepEqual(W.applyDirector(pages, null, input).fixed, [], 'an unreadable answer changes nothing');
 });
 
 test('R62 the estimate: one listener row (economy) for a new room book; a weave 6 job keeps its room rows (the R61 job estimate counted weaves 1–5 only)', () => {
@@ -146,10 +193,85 @@ test('R62 the estimate: one listener row (economy) for a new room book; a weave 
   assert.ok(now.stages.some((s) => s.stage === 'roomListen' && s.requestCount === 1));
   assert.equal(six.stages.some((s) => s.stage === 'roomListen'), false);
   const total = (est) => est.stages.reduce((n, s) => n + (Number(s.costUsd) || 0), 0);
-  assert.ok(total(now) - total(six) < 0.01, `the listener costs under a cent (${(total(now) - total(six)).toFixed(4)})`);
+  const row = (est, stage) => est.stages.find((s) => s.stage === stage);
+  assert.ok(Number(row(now, 'roomListen').costUsd) < 0.01, 'the listener costs under a cent');
+  assert.ok(row(now, 'roomPageEdit') && row(now, 'roomPageEdit').requestCount === 1, 'R63: one page editor call (the writer)');
+  assert.ok(row(now, 'roomDirector') && row(now, 'roomDirector').requestCount === 1, 'R63: one art director call (the middle model)');
+  assert.ok(Math.abs(total(now) - total(six) - ['roomListen', 'roomPageEdit', 'roomDirector'].reduce((n, k) => n + Number(row(now, k).costUsd), 0)) < 1e-9, 'the three rows are the whole difference');
   const s = setup();
   const stagesOf = (weave) => jobTextBudget({input: {...input, writersRoom: {version: 1, weave}}, wizard: {pageCount: 16}, usage: {calls: []}, completed: {}, textSettings: s.settings.textGeneration}).stages.map((x) => x.stage);
   assert.ok(stagesOf(6).includes('roomCastNotes') && stagesOf(6).includes('roomThreads'), 'a weave 6 job keeps its staged rows');
   assert.equal(stagesOf(6).includes('roomListen'), false);
   assert.ok(stagesOf(7).includes('roomListen'));
+});
+
+test('R63 the page editor: a boundary moves by one sentence within the cap, a small fix is taken, a big one, a laughed page and a spread are refused, a continuity note joins the art', () => {
+  const pages = [
+    {ko: '토토가 물었어요. "어디 가?"'},
+    {ko: '"빵집!" 유하가 대답했어요. 둘이 걸었어요.'},
+    {ko: '하나, 둘, 셋! 빵집이 멀어졌어요.', art: 'the bakery shrinks'},
+    {ko: '쿵! 엉덩방아를 찧었어요.'},
+    {ko: '큰 그림이에요.', spread: true},
+  ];
+  const raw = {
+    moves: [{after: 1, shift: 1}, {after: 4, shift: 1}, {after: 9, shift: 1}],
+    fixes: [
+      {page: 3, ko: '유하가 화살표 밑에서 뛰었어요. 하나, 둘, 셋! 빵집이 멀어졌어요.', why: '누가 뛰는지 없었어요'},
+      {page: 4, ko: '완전히 다른 이야기예요. 외계인이 왔어요. 화성에 갔어요.', why: 'x'},
+    ],
+    art: [{page: 3, note: 'same village gate as page 2; Toto still beside Yuha'}, {page: 99, note: 'x'}],
+  };
+  const r = W.applyPageEdit(pages, raw, {cap: 5, guarded: []});
+  assert.equal(r.pages[0].ko, '토토가 물었어요. "어디 가?" "빵집!"', 'the answer joins its question');
+  assert.equal(r.pages[1].ko, '유하가 대답했어요. 둘이 걸었어요.');
+  assert.deepEqual(r.applied.moves, [{after: 1, shift: 1}]);
+  assert.ok(r.refused.some((x) => /큰 그림/.test(x)), 'never across a spread');
+  assert.equal(r.pages[2].ko, '유하가 화살표 밑에서 뛰었어요. 하나, 둘, 셋! 빵집이 멀어졌어요.');
+  assert.equal(r.pages[3].ko, '쿵! 엉덩방아를 찧었어요.', 'a rewrite of the page is refused');
+  assert.equal(r.pages[2].art, 'the bakery shrinks / same village gate as page 2; Toto still beside Yuha');
+  assert.equal(r.applied.art, 1);
+  const guarded = W.applyPageEdit(pages, {moves: [], fixes: [raw.fixes[0]], art: []}, {cap: 5, guarded: ['하나, 둘, 셋! 빵집이 멀어졌어요.']});
+  assert.equal(guarded.pages[2].ko, pages[2].ko, 'a page the readers laughed at keeps its words');
+  assert.deepEqual(W.applyPageEdit(pages, null).pages, pages, 'an unreadable answer changes nothing');
+  const req = W.pageEditRequest(input, pages, [{name: '토토', who: '친구'}]);
+  assert.match(req.system, /한 쪽을 듣고 쪽을 넘겨요/);
+  assert.match(req.user, /5쪽 \(큰 그림\): 큰 그림이에요\./);
+  assert.match(req.user, /\[인물\]\n토토 — 친구/);
+});
+
+test('R63 the room run: binding, then the editor (the writer\'s model), then the English; a weave 6 draft has no editor', async () => {
+  const order = [];
+  const kind = (req) => {
+    const p = req.jsonSchema?.properties || {}, items = p.pages?.items?.properties || {};
+    if (p.moves) return 'pageEdit';
+    if (p.strange) return 'listen';
+    if (p.ties) return 'cast';
+    if (p.flow) return 'flow';
+    if (p.kept) return 'threads';
+    if (p.readers) return p.readers.items.properties.second ? 'flowPick' : 'read';
+    if (items.en && !items.ko) return 'english';
+    return req.user.includes('[독자 반응]') ? 'rewrite' : 'draft';
+  };
+  const pages = Array.from({length: 8}, (_, i) => ({ko: `유하가 ${i + 1}번 뛰어요.`}));
+  const engine = {id: 'openai', async complete(req) {
+    const k = kind(req);
+    order.push(k);
+    if (k === 'pageEdit') return reply({moves: [], fixes: [{page: 2, ko: '유하가 화살표 밑에서 2번 뛰어요.', why: '어디인지'}], art: [{page: 2, note: 'still at the village gate'}]});
+    if (k === 'listen') return reply({strange: false, rule: '', want: '빵', who: [], lost: []});
+    if (k === 'cast') return reply({notes: [], ties: [], looks: [], placeLooks: []});
+    if (k === 'flow') return reply({flow: '길', plants: []});
+    if (k === 'flowPick') return reply({readers: W.PANEL_IDS.map((reader) => ({reader, favorite: 1, second: 0, why: '', lost: []}))});
+    if (k === 'read') return reply({readers: W.PANEL_IDS.map((reader) => ({reader, favorite: 1, again: true, drafts: [{draft: 1, skipPage: 0, lostPage: 0, laughPages: [], change: '', changePage: 0, hardPage: 0, mannersPage: 0}]}))});
+    if (k === 'english') return reply({pages: Array.from({length: req.jsonSchema.properties.pages.minItems}, (_, i) => ({pageNo: i + 1, en: `Yuha runs ${i + 1}.`}))});
+    return reply({title: 't', pages});
+  }};
+  const r = await W.runRoomDrafts({...input, bookId: 'r63-run'}, outline, {engine, engineId: 'openai', roomFlowCount: 1, roomPolish: false}, {engineFor: () => engine});
+  assert.ok(order.indexOf('pageEdit') > 0 && order.indexOf('pageEdit') < order.indexOf('english'), order.join(','));
+  const at = r.data.pages.findIndex((p) => p.ko === '유하가 화살표 밑에서 2번 뛰어요.');
+  assert.ok(at >= 0, 'the fix is in the book');
+  assert.match(r.data.pages[at].art || '', /still at the village gate/);
+  assert.deepEqual(r.data.room.pageEdit.fixes, [{page: 2, why: '어디인지'}]);
+  order.length = 0;
+  await W.runRoomDrafts({...input, bookId: 'r63-run6', writersRoom: {version: 1, weave: 6}}, outline, {engine, engineId: 'openai', roomFlowCount: 1, roomPolish: false}, {engineFor: () => engine});
+  assert.equal(order.includes('pageEdit'), false);
 });

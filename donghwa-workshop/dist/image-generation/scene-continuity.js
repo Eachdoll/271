@@ -28,6 +28,13 @@ export function pagePlace(book, snapshot, index) {
         ),
     )
     .find(Boolean);
+  // R63: a clear book's page at a place that is not a supplied place stays there (its stage or its own words) — it never
+  // falls back to the beat's place (the paid book's village gate became "유하네 집" with its architecture lock).
+  const where = String(page.scene?.where || "").trim();
+  if (!direct && Number(book.storyInput?.writersRoom?.weave) >= 7 && where && !page.backgroundId && !page.scene?.backgroundId) {
+    const name = page.scene?.stage?.name || where;
+    return { key: `place:${norm(name)}`, background: null };
+  }
   const bound =
     direct ||
     backgrounds.find((bg) => bg.id === setting?.backgroundId) ||

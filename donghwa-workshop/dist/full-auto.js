@@ -1668,6 +1668,11 @@ export async function runFullAuto(
           job.spreadFit = r.meta?.spreadFit ? clone(r.meta.spreadFit) : null;
           // R55g: how often the reading found something hidden from the hero / held back (watched in the runner).
           job.pictureReading = r.meta?.reading ? clone(r.meta.reading) : null;
+          // R63: the art director's lines for the parent (what the words never make clear) and how many pages it corrected.
+          if (r.meta?.director) {
+            job.pictureDirector = clone(r.meta.director);
+            for (const line of list(r.meta.director.notes)) job.notes.push(`그림 감독: ${line}`);
+          }
           // R55h: the measured weave of the finished pages (cast page counts, things that come back, art notes).
           job.roomWeave = r.meta?.weave ? clone(r.meta.weave) : null;
           // R59: how many pages got a text field from the app (lean rooms).

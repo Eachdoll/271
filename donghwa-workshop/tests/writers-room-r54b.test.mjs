@@ -71,7 +71,7 @@ test('R54b the room pages of an openings book pass the app\'s opening structure 
   const input = roomInput(), outline = roomOutline(input);
   const draft = {title: '파마 날!', language: 'dual', pages: Array.from({length: 11}, (_, i) => ({pageNo: i + 1, ...page(i + 1)}))};
   const calls = [], engine = extractor(calls);
-  const result = await W.runRoomPages(input, outline, draft, {engine, engineId: 'openai', qualityEngines: {cheap: engine, prose: engine}}, {engineFor: () => engine});
+  const result = await W.runRoomPages(input, outline, draft, {engine, engineId: 'openai', qualityEngines: {cheap: engine, prose: engine}, roomDirector: false}, {engineFor: () => engine});
   assert.equal(calls.length, 1);
   assert.equal(result.meta.pageCount, 16, 'the printed count');
   assert.equal(result.meta.entries, 11);
@@ -105,7 +105,7 @@ test('R54b FULL AUTO: a room job of an openings book keeps pageCount 16 after th
     backgroundSheet: async () => { throw Error('no background sheet'); },
     outline: async () => ({data: outline, usage: {input: 1, output: 1}, meta: {stage: 'outline', requests: 1, model: 'mock'}}),
     roomDrafts: async () => ({data: draft, usage: {input: 1, output: 1}, meta: {stage: 'roomDrafts', requests: 1, model: 'mock'}}),
-    roomPages: (input, o, d, opts) => W.runRoomPages(input, o, d, {...opts, engine, engineId: 'openai', qualityEngines: {cheap: engine, prose: engine}}, {engineFor: () => engine}),
+    roomPages: (input, o, d, opts) => W.runRoomPages(input, o, d, {...opts, engine, engineId: 'openai', qualityEngines: {cheap: engine, prose: engine}, roomDirector: false}, {engineFor: () => engine}),
     briefs: async () => { throw Error('a room job has no scene briefs'); },
     prose: async () => { throw Error('a room job has no beat writers'); },
     pagination: async () => { throw Error('a room job has no pagination request'); },
