@@ -1688,6 +1688,7 @@ export async function runFullAuto(
             if (dropCast.size || dropPlaces.size) {
               for (const page of r.data.pages) {
                 if (page?.scene?.who && !keepOne) page.scene.who = page.scene.who.filter((id) => !dropCast.has(String(id)));
+                if (page?.scene?.extra && !keepOne) page.scene.extra = page.scene.extra.filter((id) => !dropCast.has(String(id)));
                 if (page?.scene && dropPlaces.has(String(page.scene.where))) {
                   const card = state.backgrounds.find((b) => b.id === page.scene.where);
                   page.scene.where = card?.name || "the story's place";

@@ -199,3 +199,22 @@ test('R61 (audit E) a mistaken thing: the reading\'s seenAs reaches the picture 
   const old = W.extractRequest({...input, writersRoom: {version: 1, weave: 5}}, outline, pages.slice(0, 8));
   assert.equal(old.jsonSchema.properties.pages.items.properties.seenAs, undefined, 'weave 5 unchanged');
 });
+
+test('R61a a crowded picture (six of the cast) keeps five on who, the hero first, the rest on extra — it validates and every sheet still goes to the picture', async () => {
+  const {validateStoryPage} = await import('../dist/story-generation/schemas.js');
+  const ids = ['yuha', 'mom', 'c1', 'c2', 'c3', 'c4'];
+  const inp = {...input, characters: ids.map((id) => ({id, name: id}))};
+  const two = [{ko: '모두 모였어요.', en: 'Everyone is here.'}, {ko: '끝이에요.', en: 'The end.'}];
+  for (const weave of [5, 6]) {
+    const w = {...inp, writersRoom: {version: 1, weave}};
+    const r = W.settleExtraction({pages: two.map((p, i) => ({pageNo: i + 1, who: i === 0 ? ['c4', 'c3', 'c2', 'c1', 'mom', 'yuha'] : ['yuha'], where: 'hill', action: 'All gather.', emotion: 'happy', timeOfDay: 'day', props: []}))}, w, outline, two, 't');
+    assert.deepEqual(r.pages[0].scene.who, ['yuha', 'c4', 'c3', 'c2', 'c1'], `weave ${weave}: hero first, five`);
+    assert.deepEqual(r.pages[0].scene.extra, ['mom']);
+    assert.deepEqual(validateStoryPage(r.pages[0], w, outline).errors, [], 'the validator\'s five-ID limit holds');
+    assert.equal(r.pages[1].scene.extra, undefined, 'a page of five or fewer is as before');
+    const sheets = ids.map((id) => ({characterId: id, confirmedAt: 'now', imageUrl: 'x'}));
+    assert.equal(castSheetsForPage(sheets, r.pages[0], {strict: true}).length, 6, 'all six are drawn (none named absent)');
+  }
+  const five = W.settleExtraction({pages: two.map((p, i) => ({pageNo: i + 1, who: ['c1', 'yuha'], where: 'hill', action: 'x', emotion: 'happy', timeOfDay: 'day', props: []}))}, inp, outline, two, 't');
+  assert.deepEqual(five.pages[0].scene.who, ['c1', 'yuha'], 'order unchanged when it fits');
+});

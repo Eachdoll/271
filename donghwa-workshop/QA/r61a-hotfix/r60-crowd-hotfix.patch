@@ -1,0 +1,61 @@
+diff --git a/donghwa-workshop/dist/full-auto.js b/donghwa-workshop/dist/full-auto.js
+index e58ebee..42e5b69 100644
+--- a/donghwa-workshop/dist/full-auto.js
++++ b/donghwa-workshop/dist/full-auto.js
+@@ -1680,6 +1680,7 @@ export async function runFullAuto(
+             if (dropCast.size || dropPlaces.size) {
+               for (const page of r.data.pages) {
+                 if (page?.scene?.who) page.scene.who = page.scene.who.filter((id) => !dropCast.has(String(id)));
++                if (page?.scene?.extra) page.scene.extra = page.scene.extra.filter((id) => !dropCast.has(String(id)));
+                 if (page?.scene && dropPlaces.has(String(page.scene.where))) page.scene.where = state.backgrounds.find((b) => b.id === page.scene.where)?.name || "the story's place";
+               }
+               for (const card of [...state.characters.filter((c) => dropCast.has(c.id)), ...state.backgrounds.filter((b) => dropPlaces.has(b.id))]) card.archivedAt = at;
+diff --git a/donghwa-workshop/dist/image-generation/reference-policy.js b/donghwa-workshop/dist/image-generation/reference-policy.js
+index 4207b71..d7bb27b 100644
+--- a/donghwa-workshop/dist/image-generation/reference-policy.js
++++ b/donghwa-workshop/dist/image-generation/reference-policy.js
+@@ -48,7 +48,8 @@ const list = (value) => (Array.isArray(value) ? value : []);
+ /** The character IDs a page's scene names (strings, in order, no repeats). */
+ export function pageCastIds(page) {
+   const out = [];
+-  for (const id of list(page?.scene?.who).map((v) => String(v ?? "").trim()).filter(Boolean)) if (!out.includes(id)) out.push(id);
++  // R61a: scene.extra holds the cast beyond the five a page's who may list (a crowded picture) — they are on the page too.
++  for (const id of [...list(page?.scene?.who), ...list(page?.scene?.extra)].map((v) => String(v ?? "").trim()).filter(Boolean)) if (!out.includes(id)) out.push(id);
+   return out;
+ }
+ /**
+diff --git a/donghwa-workshop/dist/story-generation/writers-room.js b/donghwa-workshop/dist/story-generation/writers-room.js
+index a571cc6..be3eed7 100644
+--- a/donghwa-workshop/dist/story-generation/writers-room.js
++++ b/donghwa-workshop/dist/story-generation/writers-room.js
+@@ -1818,7 +1818,7 @@ const placePicture = (page) => {
+ export function roomSheetChoice(pages, { cast = [], places = [] } = {}) {
+   const rows = list(pages).filter(object),
+     count = (fn) => rows.filter(fn).length;
+-  const castCounts = list(cast).map((id) => ({ id: String(id), pages: count((p) => list(p?.scene?.who).map(String).includes(String(id))) })),
++  const castCounts = list(cast).map((id) => ({ id: String(id), pages: count((p) => [...list(p?.scene?.who), ...list(p?.scene?.extra)].map(String).includes(String(id))) })),
+     placeCounts = list(places).map((id) => ({ id: String(id), pages: count((p) => String(p?.scene?.where || "") === String(id) && placePicture(p)) }));
+   return {
+     cast: { keep: castCounts.filter((c) => c.pages >= 2).map((c) => c.id), drop: castCounts.filter((c) => c.pages < 2).map((c) => c.id), counts: castCounts },
+@@ -2004,7 +2004,12 @@ export function settleExtraction(raw, input, outline, pages, title) {
+     plainOk = wantsPicturePlan(input) && hasStoryDrama(input);
+   const out = list(pages).map((p, i) => {
+     const row = rows.find((r) => Number(r.pageNo) === i + 1) || rows[i] || {};
+-    const who = [...new Set(list(row.who).map(castId).filter(Boolean))];
++    const named = [...new Set(list(row.who).map(castId).filter(Boolean))],
++      // R61a: a crowded picture (six or more of the cast) keeps five on who (the validator's limit), the hero first,
++      // and the rest on scene.extra; the picture request still draws them all.
++      crowd = named.length > 5 ? (named.includes(cast[0]) ? [cast[0], ...named.filter((id) => id !== cast[0])] : named) : named,
++      who = crowd.slice(0, 5),
++      extra = crowd.slice(5);
+     let beat = openingBeat.length ? openingBeat[i] : Number(row.beatIndex);
+     if (!beats.includes(beat) || beat < last) beat = Math.max(last, fallbackBeat(i));
+     last = beat;
+@@ -2026,6 +2031,7 @@ export function settleExtraction(raw, input, outline, pages, title) {
+         emotion,
+         timeOfDay: TIMES.includes(row.timeOfDay) ? row.timeOfDay : "day",
+         props: list(row.props).map((v) => str(v, 80)).filter(Boolean).slice(0, 12),
++        ...(extra.length ? { extra } : {}),
+       },
+       variantByCharacter: {},
+       isRefrainPage: false,

@@ -2024,7 +2024,7 @@ export function roomSheetChoice(pages, { cast = [], places = [], shotOf = null }
     count = (fn) => rows.filter(fn).length,
     // R61 (audit C): the camera the picture request will really use (effectiveStaging) when the caller can say it.
     wideEnough = (p) => (typeof shotOf === "function" ? !["closeup", "over_shoulder"].includes(String(shotOf(p) || "")) : placePicture(p));
-  const castCounts = list(cast).map((id) => ({ id: String(id), pages: count((p) => list(p?.scene?.who).map(String).includes(String(id))) })),
+  const castCounts = list(cast).map((id) => ({ id: String(id), pages: count((p) => [...list(p?.scene?.who), ...list(p?.scene?.extra)].map(String).includes(String(id))) })),
     placeCounts = list(places).map((id) => ({ id: String(id), pages: count((p) => String(p?.scene?.where || "") === String(id) && wideEnough(p)) }));
   return {
     cast: { keep: castCounts.filter((c) => c.pages >= 2).map((c) => c.id), drop: castCounts.filter((c) => c.pages < 2).map((c) => c.id), counts: castCounts },
@@ -2216,7 +2216,12 @@ export function settleExtraction(raw, input, outline, pages, title) {
   const out = list(pages).map((p, i) => {
     const found = rows.find((r) => Number(r.pageNo) === i + 1) || (kept ? null : rows[i]),
       row = found || {};
-    const who = [...new Set(list(row.who).map(castId).filter(Boolean))],
+    const named = [...new Set(list(row.who).map(castId).filter(Boolean))],
+      // R61a: a crowded picture (six or more of the cast — the paid '구름 주문' book stopped here) keeps five on who (the
+      // validator's limit), the hero first, and the rest on scene.extra; the picture request still draws them all.
+      crowd = named.length > 5 ? (named.includes(cast[0]) ? [cast[0], ...named.filter((id) => id !== cast[0])] : named) : named,
+      who = crowd.slice(0, 5),
+      extra = crowd.slice(5),
       // R61 (audit I): an explicit empty who is a picture with no one in it (the validator needs one ID, so the hero
       // stays listed and the page is marked); a page the reading did not return is marked missing, never made up quietly.
       nobody = kept && !!found && Array.isArray(found.who) && found.who.length === 0;
@@ -2243,6 +2248,7 @@ export function settleExtraction(raw, input, outline, pages, title) {
         props: list(row.props).map((v) => str(v, 80)).filter(Boolean).slice(0, 12),
         // R61 (audit A): the words this page's picture was read from — a later edit of the words makes the plan stale.
         ...(kept ? { textKey: pageTextKey(p.ko, p.en || p.ko) } : {}),
+        ...(extra.length ? { extra } : {}),
         ...(nobody ? { nobody: true } : {}),
         ...(kept && !found ? { readingMissing: true } : {}),
       },

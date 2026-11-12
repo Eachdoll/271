@@ -48,7 +48,8 @@ const list = (value) => (Array.isArray(value) ? value : []);
 /** The character IDs a page's scene names (strings, in order, no repeats). */
 export function pageCastIds(page) {
   const out = [];
-  for (const id of list(page?.scene?.who).map((v) => String(v ?? "").trim()).filter(Boolean)) if (!out.includes(id)) out.push(id);
+  // R61a: scene.extra holds the cast beyond the five a page's who may list (a crowded picture) — they are on the page too.
+  for (const id of [...list(page?.scene?.who), ...list(page?.scene?.extra)].map((v) => String(v ?? "").trim()).filter(Boolean)) if (!out.includes(id)) out.push(id);
   return out;
 }
 /**
