@@ -28,8 +28,9 @@ const response = (json) => ({json, usage: {input: 0, output: 0}, meta: {requests
 const pages = Array.from({length: 16}, (_, i) => ({ko: `유하가 ${i + 1}번째 나무를 봐요.`, en: `Yuha sees tree ${i + 1}.`}));
 const looks = {cast: [{name: '폴짝이', build: 'four-legged', look: 'a tiny blue fawn with one gold ear and striped legs'}], places: []};
 
-test('R61 the marker: a new room draft is weave 6 (kept); weave 5 and below stay as they were', () => {
-  assert.deepEqual(input.writersRoom, {version: 1, weave: 6});
+test('R61 the marker: a new room draft is kept (R62: weave 7, still kept); weave 5 and below stay as they were', () => {
+  assert.deepEqual(input.writersRoom, {version: 1, weave: 7});
+  assert.equal(W.hasRoomKept({...input, writersRoom: {version: 1, weave: 6}}), true);
   assert.equal(W.hasRoomKept(input), true);
   assert.equal(W.hasRoomCounted(input), true, 'still counted');
   assert.equal(W.hasRoomKept({...input, writersRoom: {version: 1, weave: 5}}), false);
@@ -228,7 +229,7 @@ test('R61a a crowded picture (six of the cast) keeps five on who, the hero first
     const sheets = ids.map((id) => ({characterId: id, confirmedAt: 'now', imageUrl: 'x'}));
     assert.equal(castSheetsForPage(sheets, r.pages[0], {strict: true}).length, 6, 'all six are drawn (none named absent)');
   }
-  const five = W.settleExtraction({pages: two.map((p, i) => ({pageNo: i + 1, who: ['c1', 'yuha'], where: 'hill', action: 'x', emotion: 'happy', timeOfDay: 'day', props: []}))}, inp, outline, two, 't');
+  const five = W.settleExtraction({pages: two.map((p, i) => ({pageNo: i + 1, who: ['c1', 'yuha'], where: 'hill', action: 'x', emotion: 'happy', timeOfDay: 'day', props: []}))}, {...inp, writersRoom: {version: 1, weave: 6}}, outline, two, 't');
   assert.deepEqual(five.pages[0].scene.who, ['c1', 'yuha'], 'order unchanged when it fits');
 });
 

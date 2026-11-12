@@ -118,7 +118,7 @@ export const WRITERS_ROOM_VERSION = 1;
  *   - asks nothing must exist: a character's secret, a page's props.
  * A weave 1–5 job keeps its own requests.
  */
-const ROOM_WEAVE = 6;
+const ROOM_WEAVE = 7;
 /** The marker for a new draft; the family's recent books ride inside it (never story data): [{line, engine?, laugh?}]. */
 export const writersRoomPolicy = (records = []) => {
   const recent = recentRoomBooks(records);
@@ -132,20 +132,22 @@ export const writersRoomRef = (value) => {
     .map((r) => ({ line: str(r.line, 200), ...(str(r.engine, 40) ? { engine: str(r.engine, 40) } : {}), ...(str(r.laugh, 120) ? { laugh: str(r.laugh, 120) } : {}) }))
     .filter((r) => r.line)
     .slice(0, 6);
-  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4, 5, 6].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
+  return { version: WRITERS_ROOM_VERSION, ...([1, 2, 3, 4, 5, 6, 7].includes(value.weave) ? { weave: value.weave } : {}), ...(recent.length ? { recent } : {}) };
 };
 export const hasWritersRoom = (input) => input?.writersRoom?.version === WRITERS_ROOM_VERSION;
-export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4, 5, 6].includes(input.writersRoom.weave);
+export const hasRoomWeave = (input) => hasWritersRoom(input) && [1, 2, 3, 4, 5, 6, 7].includes(input.writersRoom.weave);
 /** R56: the staged room — treatments, the revised cast, the thread check. */
-export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4, 5, 6].includes(input.writersRoom.weave);
+export const hasRoomStages = (input) => hasWritersRoom(input) && [2, 3, 4, 5, 6, 7].includes(input.writersRoom.weave);
 /** R57: premises of three widths, their places named, the shortlist spread by width, new places carded. */
-export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4, 5, 6].includes(input.writersRoom.weave);
+export const hasRoomWide = (input) => hasWritersRoom(input) && [3, 4, 5, 6, 7].includes(input.writersRoom.weave);
 /** R59: one draft, spread marks kept, the readers' two extra questions gone, the pocket decided by the app. */
-export const hasRoomLean = (input) => hasWritersRoom(input) && [4, 5, 6].includes(input.writersRoom.weave);
+export const hasRoomLean = (input) => hasWritersRoom(input) && [4, 5, 6, 7].includes(input.writersRoom.weave);
 /** R60: no cast revision, no habit, no look in the premises; sheets bought for what the finished pages need. */
-export const hasRoomCounted = (input) => hasWritersRoom(input) && [5, 6].includes(input.writersRoom.weave);
+export const hasRoomCounted = (input) => hasWritersRoom(input) && [5, 6, 7].includes(input.writersRoom.weave);
 /** R61: the facts kept between the stages (sequel facts, binding before English, scoped edits, a careful reading). */
-export const hasRoomKept = (input) => hasWritersRoom(input) && input.writersRoom.weave === 6;
+export const hasRoomKept = (input) => hasWritersRoom(input) && [6, 7].includes(input.writersRoom.weave);
+/** R62: a clear room draft (weave 7) — a listener hears the words without pictures, and the reading grounds the pictures in the words. */
+export const hasRoomClear = (input) => hasWritersRoom(input) && input.writersRoom.weave === 7;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const list = (value) => (Array.isArray(value) ? value : []);
 const str = (value, max = 200) =>
@@ -929,6 +931,62 @@ export function settleThreads(raw, pageCount) {
     unplanted: rows("unplanted").filter((r) => r.page).map(({ what, page: at }) => ({ what, page: at })).slice(0, 4),
   };
 }
+/* ---------- R62: the listener — the words alone, no pictures ---------- */
+/**
+ * R62: a parent reads the book aloud to a child who cannot see the pictures yet. One cheap call answers what a child
+ * needs to follow the story from the words alone: why the strange thing happens, who each one is when they first act,
+ * and the pages where you cannot tell what happened or who did it. Its answer is a note for the rewrite, never a gate.
+ */
+export function listenRequest(input, draft) {
+  return {
+    system: "너는 그림을 볼 수 없는 다섯 살 아이와 함께 이 책을 처음 듣는 어른이에요. 글만 들어요(그림 메모는 없어요). 고치지 않고, 들은 대로만 적어요: strange — 이 이야기에 보통과 다른 일(거꾸로 가는 길, 말하는 물건 같은)이 있으면 true; rule — 그 일이 왜·어떻게 일어나는지 글에서 들은 대로 한 문장(글이 말해 주지 않으면 빈 문자열); want — 주인공이 바라는 것 한 문장; who — 글에서 무언가 하거나 말하는 모든 인물(사람·동물·말하는 물건)과 처음 무언가 하는 쪽(page), 그 쪽에서 글이 누구인지(이름이나 무엇인지) 알려 주었는지(introduced); lost — 글만 들어서는 무슨 일인지, 누가 그랬는지, 왜 그런지 모르겠는 쪽(page)과 그 물음(question), 4개까지. 모르겠는 게 없으면 빈 목록 — 지어내지 않아요.",
+    user: `=== 원고 · ${str(draft?.title, 40)} ===\n${list(draft?.pages).map((p, i) => `${i + 1}쪽: ${str(p?.ko, 1200)}`).join("\n")}`,
+    jsonSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["strange", "rule", "want", "who", "lost"],
+      properties: {
+        strange: { type: "boolean" },
+        rule: { type: "string", maxLength: 200 },
+        want: { type: "string", maxLength: 160 },
+        who: { type: "array", maxItems: 8, items: { type: "object", additionalProperties: false, required: ["name", "page", "introduced"], properties: { name: { type: "string", maxLength: 30 }, page: { type: "integer", minimum: 1 }, introduced: { type: "boolean" } } } },
+        lost: { type: "array", maxItems: 4, items: { type: "object", additionalProperties: false, required: ["page", "question"], properties: { page: { type: "integer", minimum: 1 }, question: { type: "string", maxLength: 140 } } } },
+      },
+    },
+    temperature: 0.2,
+    maxTokens: 1500,
+  };
+}
+/** The listener's answer with real pages only (an unreadable answer is null: the rewrite goes on without it). */
+export function settleListen(raw, pageCount) {
+  if (!object(raw)) return null;
+  const page = (v) => {
+    const n = Math.round(Number(v));
+    return n >= 1 && n <= pageCount ? n : 0;
+  };
+  return {
+    strange: raw.strange === true,
+    rule: str(raw.rule, 200),
+    want: str(raw.want, 160),
+    who: list(raw.who).filter(object).map((r) => ({ name: str(r.name, 30), page: page(r.page), introduced: r.introduced !== false })).filter((r) => r.name && r.page).slice(0, 8),
+    lost: list(raw.lost).filter(object).map((r) => ({ page: page(r.page), question: str(r.question, 140) })).filter((r) => r.page && r.question).slice(0, 4),
+  };
+}
+export const listenNeedsWork = (listen) => !!(listen && ((listen.strange && !listen.rule) || listen.who.some((w) => !w.introduced) || listen.lost.length));
+/** The pages the listener points at (for the rewrite's scope): the lost pages, the first pages of the unintroduced, and the opening when the rule is never said. */
+export function listenPages(listen) {
+  if (!listen) return [];
+  return [...listen.lost.map((r) => r.page), ...listen.who.filter((w) => !w.introduced).map((w) => w.page), ...(listen.strange && !listen.rule ? [1, 2] : [])];
+}
+export function listenNotes(listen) {
+  if (!listen) return "";
+  const lines = [];
+  if (listen.strange && !listen.rule) lines.push("그림 없이 들으면 이 이야기의 신기한 일이 왜·어떻게 일어나는지 알 수 없어요 — 앞쪽에서 한 번은 글로 분명히 알려 줘요(인물의 말이나 행동으로, 그림에만 맡기지 않아요).");
+  const strangers = listen.who.filter((w) => !w.introduced);
+  if (strangers.length) lines.push(`누구인지 모른 채 나오는 인물: ${strangers.map((w) => `${w.name}(${w.page}쪽)`).join(" / ")} — 처음 나오는 쪽에서 누구인지 한 줄로 알려 줘요.`);
+  if (listen.lost.length) lines.push(`그림 없이 들으면 모르는 곳: ${listen.lost.map((r) => `${r.page}쪽 — ${r.question}`).join(" / ")} — 그 쪽 글이 답하게 고쳐요.`);
+  return lines.join("\n");
+}
 export const threadsNeedWork = (threads) => !!(list(threads?.loose).length || list(threads?.unplanted).length);
 export function threadNotes(threads) {
   if (!object(threads)) return "";
@@ -1506,7 +1564,7 @@ export function keepSpreadMarks(before, after) {
  * read aloud, wrong speech level, a change two agreed on, the editor's loose and unplanted pages) and its
  * neighbours; never a page they laughed at. 1-based page numbers.
  */
-export function rewriteScope(row, threads = null, pageCount = 0) {
+export function rewriteScope(row, threads = null, pageCount = 0, listen = null) {
   const named = new Set(),
     add = (n) => {
       const p = Math.round(Number(n));
@@ -1515,6 +1573,8 @@ export function rewriteScope(row, threads = null, pageCount = 0) {
   for (const key of ["boredPages", "lostPages", "hardPages", "mannersPages"]) list(row?.[key]).forEach(add);
   for (const w of list(row?.words)) add((/^(\d+)쪽/u.exec(String(w)) || [])[1]);
   for (const t of [...list(threads?.loose), ...list(threads?.unplanted)]) add(t?.page);
+  // R62: and the pages the listener could not follow.
+  for (const p of listenPages(listen)) add(p);
   for (const p of list(row?.laughPages)) named.delete(Math.round(Number(p)));
   // R61b: the things a plant on an outside page may carry (the editor's loose and unplanted threads, by name).
   const plants = [...list(threads?.loose), ...list(threads?.unplanted)].map((t) => str(t?.what, 80)).filter(Boolean);
@@ -1702,8 +1762,18 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
       const more = [threadNotes(threads), heard].filter(Boolean).join("\n");
       if (more) record.notes = [record.notes, more].filter(Boolean).join("\n");
     }
+    // R62: a clear room lets a listener hear the chosen draft without pictures (the cheap model); what they could not follow
+    // joins the notes and starts the rewrite even when the readers asked for nothing.
+    let listen = null;
+    if (hasRoomClear(input) && options.roomRewrite !== false && reads) {
+      await snapshot("listen");
+      listen = settleListen(await note(listenRequest(input, chosen), "cheap"), chosen.pages.length);
+      record.listen = listen;
+      const heard = listenNotes(listen);
+      if (heard) record.notes = [record.notes, heard].filter(Boolean).join("\n");
+    }
     // R54g: no page to skip, none lost, nothing to change → the panel's pick stands as written (one upper call saved).
-    if (options.roomRewrite !== false && reads && (lean ? !readersAsk : !threadsNeedWork(threads) && nothingToRewrite(record.rows.find((row) => row.draft === pick)))) record.rewriteSkipped = true;
+    if (options.roomRewrite !== false && reads && (lean ? !readersAsk && !listenNeedsWork(listen) : !threadsNeedWork(threads) && nothingToRewrite(record.rows.find((row) => row.draft === pick)))) record.rewriteSkipped = true;
     if (options.roomRewrite !== false && reads && !record.rewriteSkipped) {
       await snapshot("rewrite");
       const again = normalizeDraft(await ask("고쳐쓰기", rewriteRequest(input, chosen, record.notes, { castNotes, ties, treatment }), "outline"), title);
@@ -1714,7 +1784,7 @@ export async function runRoomDrafts(input, outline, options = {}, services = {})
         record.rewriteChange = rewriteChange(chosen.pages, pages);
         // R61: a rewrite stays inside the pages the readers named (and their neighbours); a laughed-at page is never touched.
         if (hasRoomKept(input)) {
-          const scope = rewriteScope(record.rows.find((row) => row.draft === pick), threads, chosen.pages.length),
+          const scope = rewriteScope(record.rows.find((row) => row.draft === pick), threads, chosen.pages.length, listen),
             merged = mergeRewrite(chosen.pages, pages, scope);
           pages = merged.pages;
           record.rewriteScope = { pages: [...scope.pages].sort((a, b) => a - b), restored: merged.restored, structural: merged.structural };
@@ -2105,15 +2175,17 @@ export function extractRequest(input, outline, pages) {
     artNote = list(pages).some((p) => str(p?.art, 400))
       ? ` A page may carry the writer's art note ([art] …): something its picture shows that the words do not say — put it into that page's action and props${reading.properties.hidden ? ", and into hidden when someone in the story does not notice it" : ""}. A picture cannot hold captions or labels: when a note asks for explanatory words or numbers in the picture (a count in a corner, a caption), give countable things or a gesture instead and never write "labeled"${reading.properties.lettering ? "; writing that is on a thing in the story's world goes into lettering" : ""}.`
       : "";
-  return {
+  const request = {
     system: `You read a finished Korean picture book (with its English edition when given) and return, for every page, what the illustrator needs — never rewriting the words. Per page: who (${hasRoomKept(input) ? "the IDs of every character any part of whom is in the picture — a pair of ears over a bush or a tail behind a tree is that character; a narrator who only speaks from outside the picture is not in it; [] when no one is in the picture; from the cast list only" : "the character IDs on the page, 1–5, from the cast list only"}${extra.length ? `; ${extra.join(", ")} are new to this book and have no ID — describe them inside action instead` : ""}), where (one line in English, naming a supplied place ID when the page is there), action (one English sentence of the picture: who does what, with what, where in the frame${hasRoomKept(input) ? "; a character seen only in part is described by the part that shows" : ""}), emotion (one English word), timeOfDay (${TIMES.join("/")}), props (${hasRoomKept(input) ? "0–6 concrete things in English the picture needs" : "2–6 concrete things in English"}).${reading.line}${artNote} Also cover: title (the book's title as given) and sceneAction (one English sentence for the cover picture: ${lead ? `${str(lead.name, 30)} alone` : "the main character alone"} — no companion on the cover). Return exactly ${count} pages in order.\n\n[cast] ${cast || "(none)"}\n[places] ${places || "(none)"}`,
     user: list(pages).map((p, i) => `${i + 1}쪽: ${str(p.ko, 1200)}${p.en ? `\n   EN: ${str(p.en, 1200)}` : ""}${str(p.art, 400) ? `\n   [art] ${str(p.art, 400)}` : ""}`).join("\n"),
     jsonSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["cover", "pages"],
+      required: ["cover", "pages", ...(hasRoomClear(input) ? ["things"] : [])],
       properties: {
         cover: { type: "object", additionalProperties: false, required: ["title", "sceneAction"], properties: { title: { type: "string", maxLength: 100 }, sceneAction: { type: "string", maxLength: 500 } } },
+        // R62: the things that matter and come back (a sign, a toy, a door) — one fixed look each, drawn the same on every page.
+        ...(hasRoomClear(input) ? { things: { type: "array", maxItems: 4, items: { type: "object", additionalProperties: false, required: ["name", "look", "pages"], properties: { name: { type: "string", maxLength: 40 }, look: { type: "string", maxLength: 220 }, pages: { type: "array", maxItems: 40, items: { type: "integer", minimum: 1 } } } } } } : {}),
         pages: {
           type: "array",
           minItems: count,
@@ -2125,7 +2197,9 @@ export function extractRequest(input, outline, pages) {
             required: ["pageNo", "who", "where", "action", "emotion", "timeOfDay", "props", ...Object.keys(reading.properties)],
             properties: {
               pageNo: { type: "integer", minimum: 1 },
-              who: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", maxLength: 60 } },
+              who: { type: "array", minItems: hasRoomKept(input) ? 0 : 1, maxItems: 5, items: { type: "string", maxLength: 60 } },
+              // R62: people or animals in the picture who have no ID (a new child, a crowd) — drawn, not left out.
+              ...(hasRoomClear(input) ? { others: { type: "string", maxLength: 160 } } : {}),
               where: { type: "string", maxLength: 500 },
               action: { type: "string", maxLength: 500 },
               emotion: { type: "string", maxLength: 40 },
@@ -2138,8 +2212,14 @@ export function extractRequest(input, outline, pages) {
       },
     },
     temperature: 0.2,
-    maxTokens: 6000 + (Object.keys(reading.properties).length ? count * 60 : 0),
+    maxTokens: 6000 + (Object.keys(reading.properties).length ? count * 60 : 0) + (hasRoomClear(input) ? count * 40 + 600 : 0),
   };
+  // R62: a clear room's reading also draws the things that come back the same way, draws the unnamed walk-ons, and says
+  // which way a body faces when someone moves in an unusual way (the paid book's "walking backwards" came out as a
+  // forward walk with the head turned).
+  if (hasRoomClear(input))
+    request.system += " Also: things (the objects that matter to the story and appear on two or more pages — a sign, a toy, a door, a cart: for each, a short English name, ONE fixed look — material, shape, colours, size against the hero, where it stands or hangs — and the page numbers it is on; the look is repeated word for word on every one of those pages; [] when none). Per page: others (people or animals in the picture who are not in the cast list — a new child, a crowd, a shopkeeper with no ID: who they are and how they look, so they are drawn and not left out; \"\" when none); and when someone moves in an unusual way (walking backwards, upside down, sideways, crawling), action says the body plainly: which way the chest and face point and which way the feet step (e.g. \"walks backwards toward the bakery: back toward the bakery, chest and face toward the viewer, heels stepping toward the bakery\"). who names only those the words or the art note of this page (or the page just before or after) put in the picture — not every member of the cast.";
+  return request;
 }
 /** R54b: the beat of each of N entries in an openings book of C beats (null for a page book or a count outside C..2C). */
 export function openingBeats(input, beats, entries, spreads = []) {
@@ -2238,12 +2318,29 @@ export function settleExtraction(raw, input, outline, pages, title) {
   const openingBeat = openingBeats(input, beats, count, list(pages).map((p) => p?.spread === true)) || evenBeats(beats, count),
     plainOk = wantsPicturePlan(input) && hasStoryDrama(input),
     kept = hasRoomKept(input),
-    bilingualDraft = list(pages).some((q) => typeof q?.en === "string" && q.en.trim());
+    bilingualDraft = list(pages).some((q) => typeof q?.en === "string" && q.en.trim()),
+    clear = hasRoomClear(input);
+  // R62: a character other than the hero is on a page only when the words or art note of that page (or the one before or
+  // after) name them — the paid book drew the dinosaur and the deer into pages whose words never mention them.
+  const GENERIC = new Set(["아저씨", "아줌마", "할머니", "할아버지", "아이", "친구", "엄마", "아빠"]);
+  const wordsAt = (i) => [pages[i - 1], pages[i], pages[i + 1]].filter(object).map((q) => `${q.ko || ""} ${q.en || ""} ${q.art || ""}`).join(" ").toLowerCase();
+  const namesOf = (id) => {
+    const c = list(input?.characters).find((x) => String(x?.id) === id);
+    if (!c) return [];
+    const whole = [c.name, c.nameEn].map((n) => String(n || "").trim().toLowerCase()).filter(Boolean);
+    const parts = String(c.name || "").split(/\s+/u).filter((t) => t.length >= 2 && !GENERIC.has(t));
+    return [...whole, ...(whole.length && String(c.name || "").includes(" ") ? parts.map((t) => t.toLowerCase()) : [])];
+  };
+  const grounded = (id, i) => id === cast[0] || namesOf(id).some((n) => wordsAt(i).includes(n));
+  // R62: the things that come back, by page.
+  const things = clear
+    ? list(raw?.things).filter(object).map((t) => ({ name: str(t.name, 40), look: str(t.look, 220), pages: [...new Set(list(t.pages).map((n) => Math.round(Number(n))).filter((n) => n >= 1 && n <= count))] })).filter((t) => t.name && t.look && t.pages.length >= 2).slice(0, 4)
+    : [];
   const out = list(pages).map((p, i) => {
     const found = rows.find((r) => Number(r.pageNo) === i + 1) || (kept ? null : rows[i]),
       row = found || {};
     const missingEn = kept && bilingualDraft && !(typeof p.en === "string" && p.en.trim());
-    const named = [...new Set(list(row.who).map(castId).filter(Boolean))],
+    const named = [...new Set(list(row.who).map(castId).filter(Boolean))].filter((id) => !clear || grounded(id, i)),
       // R61a: a crowded picture (six or more of the cast — the paid '구름 주문' book stopped here) keeps five on who (the
       // validator's limit), the hero first, and the rest on scene.extra; the picture request still draws them all.
       crowd = named.length > 5 ? (named.includes(cast[0]) ? [cast[0], ...named.filter((id) => id !== cast[0])] : named) : named,
@@ -2278,6 +2375,8 @@ export function settleExtraction(raw, input, outline, pages, title) {
         ...(kept ? { textKey: pageTextKey(p.ko, p.en || p.ko), koKey: pageTextKey(p.ko), enKey: pageTextKey(missingEn ? "" : p.en || p.ko) } : {}),
         ...(missingEn ? { englishMissing: true } : {}),
         ...(extra.length ? { extra } : {}),
+        ...(clear && str(row.others, 160) ? { others: str(row.others, 160) } : {}),
+        ...(things.some((t) => t.pages.includes(i + 1)) ? { things: things.filter((t) => t.pages.includes(i + 1)).map(({ name, look }) => ({ name, look })) } : {}),
         ...(nobody ? { nobody: true } : {}),
         ...(kept && !found ? { readingMissing: true } : {}),
       },
@@ -2602,7 +2701,7 @@ export async function runRoomPages(input, outline, draft, options = {}, services
       usage: journal.usage(),
       meta: { ...journal.summary(), stage: "roomPages", pageCount: printed, entries: pages.length, openings: openings || 0, checks: report, clamped: pages.length !== list(draft.pages).length, spreadFit: { marks: fit.marks, fitted: fit.fitted, moved: fit.moved }, outline: shaped,
         // R55g: how often the reading found something hidden from the hero or held back for the next page (watched, not enforced).
-        reading: { hidden: list(settled.pages).filter((p) => p.picturePlan?.hidden).length, holdBack: list(settled.pages).filter((p) => p.picturePlan?.holdBack).length, lettering: list(settled.pages).filter((p) => p.picturePlan?.lettering).length },
+        reading: { hidden: list(settled.pages).filter((p) => p.picturePlan?.hidden).length, holdBack: list(settled.pages).filter((p) => p.picturePlan?.holdBack).length, lettering: list(settled.pages).filter((p) => p.picturePlan?.lettering).length, ...(hasRoomClear(input) ? { things: new Set(list(settled.pages).flatMap((p) => list(p.scene?.things).map((t) => t.name))).size, others: list(settled.pages).filter((p) => p.scene?.others).length } : {}) },
         // R55h: measured from the finished pages, never asked of a model — who is on how many pages, and which things come back after a gap.
         // R59: a lean room is counted from its Korean words (textWeave); the English last-word count of returning props is not made for it.
         weave: { ...weaveReport(settled.pages, { artNotes: pages.filter((p) => p.art).length, returning: !lean }), text: textWeave(pages, { cast: list(sized.characters) }) },

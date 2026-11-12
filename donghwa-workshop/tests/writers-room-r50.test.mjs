@@ -43,7 +43,7 @@ test('R50 the brief: one page, the chosen characters and places, the level as on
   assert.ok(placeless.endingNote);
   assert.doesNotMatch(W.roomBrief(placeless), /\[끝\]/, 'the wizard\'s own R38 note is not the parent\'s wish');
   assert.equal(W.hasWritersRoom(input), false, 'not frozen on drafts yet (R51)');
-  assert.deepEqual(W.writersRoomPolicy(), {version: 1, weave: 6});
+  assert.deepEqual(W.writersRoomPolicy(), {version: 1, weave: 7});
 });
 
 test('R50 the cast sheet, the engine menu and the panel', () => {

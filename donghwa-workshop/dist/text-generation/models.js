@@ -661,6 +661,8 @@ export function estimateStoryTextCost({
   roomLean = roomWide,
   // R60: a counted room draft revises no cast (one writer answer fewer); its cast notes also carry the new cards' looks.
   roomCounted = roomLean,
+  // R62: a clear room draft lets one listener hear the chosen draft without pictures (economy).
+  roomClear = roomCounted,
 } = {}) {
   const snapshot = { ...settings, engine: settings.engine || engineId },
     hybrid = settings.hybrid?.enabled === true;
@@ -775,6 +777,7 @@ export function estimateStoryTextCost({
       stageEstimate("roomDrafts", roomStages ? 2900 : roomWeave ? 2300 : 1800, draftOut, roomLean ? 1 : 3, "writer"),
       roomLean ? stageEstimate("roomRead", 3000 + pages * 60, 1100, 1, "cheap") : stageEstimate("roomRead", 5000 + pages * 150, 1500, 1, "cheap"),
       ...(roomStages ? [stageEstimate("roomThreads", 2500 + pages * 120, 500, 1, "cheap")] : []),
+      ...(roomClear ? [stageEstimate("roomListen", 1500 + pages * 80, 600, 1, "cheap")] : []),
       stageEstimate("roomRewrite", (roomStages ? 3300 : 2200) + pages * 60, draftOut, 1, "writer"),
       stageEstimate("roomEnglish", 2500 + pages * 80, Math.ceil(draftOut * 0.6), 1, "writer"),
       stageEstimate("roomPolish", 4000 + pages * 120, draftOut, 1, "writer"),
@@ -974,6 +977,7 @@ const BUDGET_STEP = {
   roomFlowPick: "roomDrafts",
   roomCastRevise: "roomDrafts",
   roomThreads: "roomDrafts",
+  roomListen: "roomDrafts",
   roomDrafts: "roomDrafts",
   roomRead: "roomDrafts",
   roomRewrite: "roomDrafts",
@@ -1016,7 +1020,7 @@ export function jobTextBudget(job = {}, { parked = job?.status === "council-revi
   const input = job.input || {},
     done = job.completed || {},
     settings = job.textSettings || {},
-    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1, roomWeave: input.writersRoom?.version === 1 && [1, 2, 3, 4, 5].includes(input.writersRoom?.weave), roomStages: input.writersRoom?.version === 1 && [2, 3, 4, 5].includes(input.writersRoom?.weave), roomLean: input.writersRoom?.version === 1 && [4, 5].includes(input.writersRoom?.weave), roomCounted: input.writersRoom?.version === 1 && input.writersRoom?.weave === 5, roomWide: input.writersRoom?.version === 1 && [3, 4, 5].includes(input.writersRoom?.weave) }),
+    estimate = estimateStoryTextCost({ settings, pageCount: input.pageCount || job.wizard?.pageCount || 12, layout: input.specs?.ko?.units ? "openings" : undefined, specs: input.specs, editor: input.editorPolicy?.version === 1, council: parked || input.councilPolicy?.version === 1, ...(input.orchestrationPolicy?.version === 1 ? { orchestration: true, writerTier: input.orchestrationPolicy.writerTier } : {}), ...(input.k1Policy?.version === 1 ? { k1Book: true } : {}), ...(input.promptDiet?.version === 1 ? { diet: true } : {}), ledger: job.outline ? !!job.outline.plotContract : input.promptDiet?.version !== 1 , room: input.writersRoom?.version === 1, roomWeave: input.writersRoom?.version === 1 && [1, 2, 3, 4, 5, 6, 7].includes(input.writersRoom?.weave), roomStages: input.writersRoom?.version === 1 && [2, 3, 4, 5, 6, 7].includes(input.writersRoom?.weave), roomLean: input.writersRoom?.version === 1 && [4, 5, 6, 7].includes(input.writersRoom?.weave), roomCounted: input.writersRoom?.version === 1 && [5, 6, 7].includes(input.writersRoom?.weave), roomWide: input.writersRoom?.version === 1 && [3, 4, 5, 6, 7].includes(input.writersRoom?.weave), roomClear: input.writersRoom?.version === 1 && input.writersRoom?.weave === 7 }),
     council = estimate.stages.find((row) => row.stage === "council"),
     rows = [];
   for (const row of estimate.stages) {

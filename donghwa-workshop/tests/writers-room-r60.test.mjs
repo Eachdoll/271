@@ -32,7 +32,7 @@ const LOOKS = {looks: [{name: '폴짝이', build: 'four-legged', look: 'a fawn h
 
 test('R60 the marker and the premises: a new room draft is weave 5; the twelve premises carry no look; the card says "at most"', () => {
   const input = roomInput('p1');
-  assert.deepEqual(input.writersRoom, {version: 1, weave: 6});
+  assert.deepEqual(input.writersRoom, {version: 1, weave: 7});
   assert.equal(W.hasRoomCounted(input) && W.hasRoomLean(input) && W.hasRoomWide(input) && W.hasRoomStages(input), true);
   const req = W.premisesRequest(input);
   const items = req.jsonSchema.properties.premises.items.properties;
@@ -71,7 +71,8 @@ test('R60 the cast notes: no habit, today no longer "unrelated to the hero", tie
 });
 
 test('R60 the room run: no cast revision; the looks ride on the record; the rewrite is told where the things the ending uses are first heard', async () => {
-  const input = roomInput('p3');
+  // R62: pinned to weave 6 (a weave 7 draft adds the listener).
+  const input = {...roomInput('p3'), writersRoom: {version: 1, weave: 6}};
   const outline = {...W.roomOutline(input, {premise: PREMISE, pitches: []}), writersRoom: {kind: 'writersRoom', version: 1, chosen: 1, premise: PREMISE, pitches: [], premises: [PREMISE]}};
   const reply = (json) => ({json, usage: {input: 10, output: 5}, meta: {requests: 1, model: 'mock'}});
   const calls = [];
@@ -222,11 +223,11 @@ test('R60 FULL AUTO: a new character on one page only gets no sheet, leaves the 
 test('R60 the estimate: no revised cast — 15 → 14 requests, openai $1.508 → $1.424, anthropic $1.114 → $1.056', () => {
   const base = {pageCount: 16, diet: true, editor: true, room: true};
   const total = (est) => est.stages.reduce((n, s) => n + (Number(s.costUsd) || 0), 0), requests = (est) => est.stages.reduce((n, s) => n + s.requestCount, 0);
-  const now = estimateStoryTextCost({...base, settings: {engine: 'openai'}}), was = estimateStoryTextCost({...base, settings: {engine: 'openai'}, roomCounted: false});
+  const now = estimateStoryTextCost({...base, settings: {engine: 'openai'}, roomClear: false}), was = estimateStoryTextCost({...base, settings: {engine: 'openai'}, roomCounted: false, roomClear: false});
   assert.deepEqual([requests(was), requests(now)], [15, 14]);
   assert.equal(now.stages.some((s) => s.stage === 'roomCastRevise'), false);
   assert.ok(Math.abs(total(was) - 1.508) < 0.01 && Math.abs(total(now) - 1.424) < 0.01, `${total(was).toFixed(3)} ${total(now).toFixed(3)}`);
-  assert.ok(Math.abs(total(estimateStoryTextCost({...base, settings: {engine: 'anthropic'}})) - 1.056) < 0.01);
+  assert.ok(Math.abs(total(estimateStoryTextCost({...base, settings: {engine: 'anthropic'}, roomClear: false})) - 1.056) < 0.01);
 });
 
 test('R60 the screens: ④ shows the new sheet with "다시 그리기" and "이대로 그림 만들기"; ② leaves out a card whose sheet nobody has seen', async () => {

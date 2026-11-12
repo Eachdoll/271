@@ -80,7 +80,7 @@ import { describeStoryError } from "./story-generation/schemas.js";
 import { captureFailure } from "./story-generation/stop-report.js";
 import { hasArcPolicy } from "./story-generation/arc-rules.js";
 import { hasCouncilPolicy, isCouncilHold } from "./story-generation/council.js";
-import { hasRoomCounted, hasRoomKept, roomCardWithLook, roomSheetChoice, hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
+import { hasRoomCounted, hasRoomKept, hasRoomClear, roomCardWithLook, roomSheetChoice, hasRoomLean, hasRoomStages, hasRoomWeave, hasRoomWide, hasWritersRoom, roomCastRecord, roomNewCast, roomNewPlaces, roomPlaceRecord, runRoomDrafts, runRoomPages, writersRoomFor } from "./story-generation/writers-room.js";
 import { ecoProseFromPages } from "./eco-mode.js";
 import { hasPromptPolicy } from "./story-generation/prompt-policy.js";
 import { hasOrchestrationPolicy, orchestrationPolicyFor } from "./story-generation/orchestration.js";
@@ -482,7 +482,7 @@ export function estimateFullAutoCost(
       // R31b: diet drafts price the app-path outline/prose on the stage models.
       ...(job ? (job.input?.promptDiet?.version === 1 ? { diet: true } : {}) : { diet: true }),
       // R53 작가실: a room job (or a new one while the setting is on) is priced by its rounds.
-      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true, roomLean: job ? hasRoomLean(job.input) : true, roomCounted: job ? hasRoomCounted(job.input) : true } : {}),
+      ...((job ? hasWritersRoom(job.input) : !k1Book && writersRoomFor(state)) ? { room: true, roomWeave: job ? hasRoomWeave(job.input) : true, roomStages: job ? hasRoomStages(job.input) : true, roomWide: job ? hasRoomWide(job.input) : true, roomLean: job ? hasRoomLean(job.input) : true, roomCounted: job ? hasRoomCounted(job.input) : true, roomClear: job ? hasRoomClear(job.input) : true } : {}),
       // R31e: the ledger-based coherence rows only when the job's outline has a ledger.
       ...(job?.outline ? { ledger: !!job.outline.plotContract } : {}),
       ...(k1Book
