@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.2';
+const APP_VERSION = '15.3';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -259,7 +259,7 @@ function pageAuth(mode = 'login', notice = '') {
   $('#app').innerHTML = `
   <div class="auth">
     <div class="auth-card">
-      <div class="brand big"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> 서울세미텍 시스템</div>
+      <div class="brand big"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"></div>
       <p class="muted" lang="en">Spotless and Safe, through Technology</p>
       <p class="app-version">버전 ${APP_VERSION}</p>
       <div class="tabs"><button data-m="login" class="${mode === 'login' ? 'on' : ''}">로그인</button><button data-m="register" class="${mode === 'register' ? 'on' : ''}">가입</button></div>
