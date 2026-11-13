@@ -284,3 +284,6 @@ tr[hidden] { display: none !important; }
 .line-info { display: block; white-space: normal; overflow-wrap: anywhere; }
 
 @media print { [data-line-meta], [data-actual-open] { display: none !important; } }
+
+/* 생산일정 카드: 수량·입력자·계획/실적 문구 사이 간격 */
+.sc-item > .small { margin-left: 8px; }

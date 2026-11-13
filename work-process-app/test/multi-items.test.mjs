@@ -113,10 +113,10 @@ test('Edits keep typed size/units and synchronize request quantity and LOT; semi
  const result=await batch('request',{type:'voc',customer:'VOC고객',data:{extra:'확인 요청'}},[{item:'글러브',spec:'XL',qty:3,unit:'EA',lot:'OLD-LOT'}]);const row=result.body.rows[0];
  const changed=await staff('PUT',`/api/requests/${row.id}`,{type:'voc',title:row.title,customer:row.customer,data:{qty:8,lot:'NEW-LOT',extra:'수량 정정'}});
  assert.equal(changed.body.qty,8);assert.equal(changed.body.data.qty,8);assert.equal(changed.body.lot,'NEW-LOT');assert.equal(changed.body.spec,'XL');assert.equal(changed.body.unit,'EA');
- const plans=await batch('schedule',{kind:'semi',period:'month',start_date:'2026-12-12'},[{bom_id:rawBom.id,qty:10,spec:'원단 M'},{item:'수기 반제품',qty:5,unit:'kg',spec:'L'}]);
- assert.equal(plans.status,200);const plan=plans.body.rows[0];assert.equal(plan.start_date,'2026-12-01');assert.equal(plan.unit,'kg');
- const endpoint=`/api/schedules/${plan.id}/actuals`;assert.equal((await staff('POST',endpoint,{production_date:'2026-12-31',qty:0,request_id:crypto.randomUUID()})).status,200);
- assert.equal((await staff('POST',endpoint,{production_date:'2027-01-01',qty:1,request_id:crypto.randomUUID()})).status,400);
- assert.equal((await staff('POST',endpoint,{production_date:'2026-12-31',qty:12.5,request_id:crypto.randomUUID()})).status,200);
+ const plans=await batch('schedule',{kind:'semi',period:'month',start_date:'2026-10-12'},[{bom_id:rawBom.id,qty:10,spec:'원단 M'},{item:'수기 반제품',qty:5,unit:'kg',spec:'L'}]);
+ assert.equal(plans.status,200);const plan=plans.body.rows[0];assert.equal(plan.start_date,'2026-10-01');assert.equal(plan.unit,'kg');
+ const endpoint=`/api/schedules/${plan.id}/actuals`;assert.equal((await staff('POST',endpoint,{production_date:'2026-10-31',qty:0,request_id:crypto.randomUUID()})).status,200);
+ assert.equal((await staff('POST',endpoint,{production_date:'2026-11-01',qty:1,request_id:crypto.randomUUID()})).status,400);
+ assert.equal((await staff('POST',endpoint,{production_date:'2026-10-31',qty:12.5,request_id:crypto.randomUUID()})).status,200);
  const totals=(await staff('GET',endpoint)).body;assert.equal(totals.actual_qty,12.5);assert.equal(totals.achievement_rate,125);
 });

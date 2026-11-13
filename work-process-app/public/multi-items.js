@@ -83,12 +83,19 @@ async function installMultiItems(legacy, entity, type = '') {
         status.textContent = `${payload.items.length}품목을 저장하고 있습니다…`;
         saved = await api('POST','/api/batches/' + entity,payload);
         remaining = saved.rows.slice(); $('[data-multi-fields]',form).disabled = true;
+        // Show the saved rows right away so nobody re-enters them while photos upload or retry.
+        $('#main form.list-filters')?.requestSubmit();
       }
       while (remaining.length) {
         const row = remaining[0]; status.textContent = `품목 저장 완료 · 공통 사진 저장 ${saved.rows.length - remaining.length + 1}/${saved.rows.length}`;
         if (draft.photos.length) {
           if (entity === 'laundry') await api('PUT','/api/laundry/' + row.id,{ ...row, keep_photos: row.photos || [], photos: draft.photos });
-          else await api('PUT',`/api/attachments/${entity}/${row.id}`,{ photos: draft.photos });
+          else {
+            // New rows start at revision 0. A 409 means an earlier attempt already stored these photos
+            // (e.g. the response was lost), so skip instead of uploading a duplicate set.
+            try { await api('PUT',`/api/attachments/${entity}/${row.id}`,{ photos: draft.photos, revision: 0 }); }
+            catch (error) { if (error.status !== 409) throw error; }
+          }
         }
         remaining.shift();
       }
@@ -97,7 +104,7 @@ async function installMultiItems(legacy, entity, type = '') {
       await render();
       const prefix = {shipment:'sh',other_receipt:'other',laundry:'ln'}[entity]; const date = payload.common.ship_date || payload.common.received_date || payload.common.in_date;
       if (prefix && date && $('#' + prefix + 'Filters')) { $('#' + prefix + 'From').value = date; $('#' + prefix + 'To').value = date; $('#' + prefix + 'Filters').requestSubmit(); }
-    } catch(error) { status.textContent = saved ? `품목은 이미 저장되었습니다. 사진 저장 실패: ${error.message} 아래 재시도 버튼을 누르세요.` : error.message; fail(error); }
+    } catch(error) { status.textContent = saved ? `${saved.rows.length}품목은 이미 저장되었습니다(아래 목록에 표시). 다시 등록하지 말고 사진만 재시도하세요. 사진 저장 실패: ${error.message}` : error.message; fail(error); }
     finally { busy = false; submit.disabled = false; updateCount(); }
   };
 }
@@ -125,7 +132,7 @@ async function openProductionActuals(id) {
     const date = todayStr() < s.start_date || todayStr() > last ? s.start_date : todayStr();
     $('[data-actual-content]',box.el).innerHTML = `<h4>${esc(s.product)} ${esc(s.spec)} · ${esc(unit)}</h4><p>계획 ${fmtNum(s.qty)} / 실제 누적 <b>${fmtNum(result.actual_qty)}</b> / 차이 ${fmtNum(result.variance_qty)} / 달성률 ${result.achievement_rate ?? '—'}%</p><p class="small muted">${esc(s.start_date)} ~ ${esc(last)} · 완료 체크와 별도로 실제 생산한 수량만 입력하세요. 같은 생산실적을 여러 일정에 중복 입력하지 마세요.</p>${result.can_write ? `<form class="stack" data-actual-form><div class="form-grid">${multiInput('production_date','생산일','date',date)}<label>실제 생산량 *<input name="qty" type="number" min="0" step="any" required></label>${multiInput('note','작업·변동 메모','text','',false)}</div><p role="status" data-actual-status class="small muted"></p><div class="actions"><button class="btn primary">생산실적 추가</button></div></form>` : '<p class="muted">생산 담당자 또는 일정 등록자가 실적을 입력할 수 있습니다.</p>'}<div class="table-wrap"><table class="grid"><thead><tr><th>생산일</th><th>실제 수량</th><th>입력자 / 입력시각</th><th>메모</th><th></th></tr></thead><tbody>${history.map(a => `<tr><td>${esc(a.production_date)}</td><td>${fmtNum(a.qty)}${a.voided_at ? ' (취소)' : ''}</td><td>${esc(a.author_name)}<br>${esc(a.created_at)}</td><td>${esc(a.note)}${a.voided_at ? `<br>취소: ${esc(a.voided_by)} · ${esc(a.void_reason)}` : ''}</td><td>${result.can_write && !a.voided_at ? `<button class="btn small danger" data-actual-void="${a.id}">입력 취소</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5">아직 입력한 생산실적이 없습니다.</td></tr>'}</tbody></table></div>${next ? '<button class="btn small" data-actual-more>이전 실적 더 보기</button>' : ''}`;
     const form = $('[data-actual-form]',box.el);
-    if (form) { form.elements.production_date.min = s.start_date; form.elements.production_date.max = last; }
+    if (form) { form.elements.production_date.min = s.start_date; form.elements.production_date.max = last < todayStr() ? last : todayStr(); }
     if (form) form.onsubmit = async event => {
       event.preventDefault(); if (busy) return; busy = true; const button = $('button',form); button.disabled = true;
       let stored = false;

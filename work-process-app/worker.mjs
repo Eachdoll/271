@@ -83,10 +83,12 @@ function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul
 function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev'].includes(role) && roles.includes(role + '_approver')); }
+function isRequestApprover(user, type) {
+  return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
+}
 function requireRequestApprover(user, type) {
-  const role = { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type];
   const label = { voc: '품질팀장(품질책임자)', analysis: '품질책임자', development: '개발책임자', sample: '생산담당자' }[type];
-  if (!hasRole(user, role)) throw new HttpError(403, `${label}(승인권자)만 승인·반려할 수 있습니다. 관리자에게 책임자 지정을 요청하세요.`);
+  if (!isRequestApprover(user, type)) throw new HttpError(403, `${label}(승인권자)만 승인·반려할 수 있습니다. 관리자에게 책임자 지정을 요청하세요.`);
 }
 function requireRole(user, role, label) { if (!hasRole(user, role)) throw new HttpError(403, `${label} 담당자만 할 수 있습니다. (관리자에게 권한 요청)`); }
 function requireAdmin(user) { if (!user.is_admin) throw new HttpError(403, '관리자만 할 수 있습니다.'); }
@@ -517,15 +519,17 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
   if (!(isMgr || (r.requester_id === user.id && ['pending', 'rejected'].includes(r.status)))) throw new HttpError(403, '접수대기 중인 본인 의뢰만 수정할 수 있습니다.');
   const f = requestFields(r.type, body);
   if (r.source_type) {
+    // Receipt-created analyses keep the receipt snapshot; corrections belong in comments.
     const original = JSON.parse(r.data || '{}');
-    for (const key of ['source_label', 'received_date', 'item_category', 'received_qty', 'coa_requested', 'purchase_req_no', 'bom_id', 'product_code', 'unit']) f.data[key] = original[key];
+    for (const key of ['source_label', 'received_date', 'item_category', 'received_qty', 'coa_requested', 'purchase_req_no', 'bom_id', 'product_code', 'unit', 'spec', 'lot', 'lot_etc', 'qty', 'sample_qty']) f.data[key] = original[key];
+    f.title = r.title; f.customer = r.customer;
   }
   const priorData = JSON.parse(r.data || '{}');
   const meta = lineMeta({ spec: r.source_type ? r.spec || priorData.spec || '' : body.spec ?? body.data?.spec ?? r.spec,
     unit: r.source_type ? r.unit || priorData.unit || '' : body.unit ?? body.data?.unit ?? (r.unit || priorData.unit || ''),
     lot: (r.source_type ? undefined : body.lot ?? (r.type === 'analysis' ? body.data?.lot_etc : body.data?.lot)) ?? (r.lot || priorData.lot_etc || (r.type === 'voc' ? priorData.lot : '') || '') }, r);
   let lineQty = r.qty;
-  if (r.qty !== null || r.type === 'voc') {
+  if (!r.source_type && (r.qty !== null || r.type === 'voc')) {
     const supplied = r.type === 'analysis' ? f.data.sample_qty : r.type === 'sample' ? f.data.req_qty : f.data.qty;
     if (supplied !== undefined && supplied !== '') { lineQty = num(supplied,'품목 수량'); if (lineQty <= 0) throw bad('품목 수량은 0보다 커야 합니다.'); }
     if (lineQty !== null) f.data.qty = lineQty;
@@ -564,8 +568,10 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
 });
 route('DELETE', '/api/requests/:id', async ({ user, params }) => {
   const r = (await getRequest(params.id));
-  const own = r.requester_id === user.id && ['pending', 'rejected'].includes(r.status);
-  if (!(own || user.is_admin || hasRole(user, REQUEST_TYPES[r.type]))) throw new HttpError(403, '삭제 권한이 없습니다.');
+  const intake = ['pending', 'rejected'].includes(r.status);
+  const own = r.requester_id === user.id && intake;
+  // Before approval, only the requester or an approver may remove it; team staff cannot bypass approval by deleting.
+  if (!(own || user.is_admin || (intake ? isRequestApprover(user, r.type) : hasRole(user, REQUEST_TYPES[r.type])))) throw new HttpError(403, intake ? '접수대기 의뢰는 의뢰자 본인 또는 승인권자만 삭제할 수 있습니다.' : '삭제 권한이 없습니다.');
   await deleteEntityWithAttachments('request', 'requests', r.id); return { ok: true };
 });
 
@@ -825,7 +831,7 @@ route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
   if (!own && !hasRole(user,role)) throw new HttpError(403,'등록자 또는 담당자만 규격·단위를 수정할 수 있습니다.');
   const meta = lineMeta(body,row);
   if (params.entity === 'schedule' && await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id)) {
-    if (['spec','unit','lot'].some(key => meta[key] !== (key === 'unit' ? row.unit || JSON.parse(row.bom_snapshot || '{}').unit || '' : row[key]))) throw bad('실적이 있는 생산일정의 규격·단위는 변경할 수 없습니다.');
+    if (['spec','unit'].some(key => meta[key] !== (key === 'unit' ? row.unit || JSON.parse(row.bom_snapshot || '{}').unit || '' : row[key]))) throw bad('실적이 있는 생산일정의 규격·단위는 변경할 수 없습니다.');
   }
   if (['schedule','other_receipt'].includes(params.entity) && row.bom_id && meta.unit !== (JSON.parse(row.bom_snapshot).unit || '')) throw bad('BOM 품목의 단위는 BOM에 저장된 단위를 사용하세요.');
   if (row.source_type) { const snapshot = JSON.parse(row.data || '{}'); if (meta.spec !== (row.spec || snapshot.spec || '') || meta.unit !== (row.unit || snapshot.unit || '') || meta.lot !== (row.lot || snapshot.lot_etc || snapshot.lot || '')) throw bad('입고 자동분석의 품목 정보는 입고 당시 스냅샷을 유지합니다. 정정사항은 코멘트에 남기세요.'); }
@@ -859,6 +865,7 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const date = dateStr(body.production_date, '생산일'); const qty = num(body.qty, '실제 생산량');
   const end = schedule.period === 'day' ? schedule.start_date : (await db.prepare(`SELECT date(?,${schedule.period === 'week' ? "'+6 days'" : "'+1 month','-1 day'"}) AS end`).get(schedule.start_date)).end;
   if (date < schedule.start_date || date > end) throw bad('생산일은 해당 계획의 기간 안에서 선택하세요.');
+  if (date > today()) throw bad('아직 지나지 않은 날짜의 생산실적은 입력할 수 없습니다.');
   const key = reqStr(body.request_id, '실적 요청 번호', 80);
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('실적 요청 번호를 확인하세요.');
   const note = str(body.note, 1000);
@@ -902,7 +909,8 @@ async function mustGet(table, id) { const r = (await db.prepare(`SELECT * FROM $
 return { async fetch(req) {
   const res = new Headers({ 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' });
   try {
-    const url = new URL(req.url); const p = decodeURIComponent(url.pathname);
+    const url = new URL(req.url); let p;
+    try { p = decodeURIComponent(url.pathname); } catch { throw new HttpError(400, '잘못된 주소입니다.'); }
     if (p.startsWith('/api/')) {
       if (!['GET', 'HEAD'].includes(req.method)) {
         const origin = req.headers.get('origin');

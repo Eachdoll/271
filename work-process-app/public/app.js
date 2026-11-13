@@ -43,7 +43,7 @@ async function api(method, url, body) {
   const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && ME) { ME = null; render(); }
-  if (!res.ok) throw new Error(data.error || '요청에 실패했습니다.');
+  if (!res.ok) throw Object.assign(new Error(data.error || '요청에 실패했습니다.'), { status: res.status });
   return data;
 }
 function toast(msg, kind = 'ok') {
