@@ -101,7 +101,15 @@ test('Built artifact is self-contained and uses the same D1/R2 API', async () =>
   const { default: built } = await import('../dist/server/index.js');
   assert.equal((await built.fetch(new Request('https://work.test/api/me'), env)).status, 200);
   const page = await built.fetch(new Request('https://work.test/'), env);
-  assert.match(await page.text(), /서울세미텍 시스템/);
+  const html = await page.text();
+  assert.match(html, /서울세미텍 시스템/);
+  for (const [, src] of html.matchAll(/<script src="([^"]+)"/g)) assert.equal((await built.fetch(new Request('https://work.test' + src), env)).status, 200, src);
+  const report = await built.fetch(new Request('https://work.test/api/reports?from=2026-11-01&to=2026-11-13'), env);
+  assert.equal(report.status, 401);
+  const session = sqlite.prepare('SELECT token FROM sessions LIMIT 1').get();
+  const authenticatedReport = await built.fetch(new Request('https://work.test/api/reports?from=2026-11-01&to=2026-11-13', { headers: { Cookie: 'wpa_sid=' + session.token } }), env);
+  assert.equal(authenticatedReport.status, 200);
+  assert.equal((await authenticatedReport.json()).range.timezone, 'Asia/Seoul');
   const logo = await built.fetch(new Request('https://work.test/assets/seoulsemi-logo-blue.png'), env);
   assert.equal(logo.headers.get('content-type'), 'image/png');
   assert.deepEqual([...new Uint8Array(await logo.arrayBuffer()).slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);

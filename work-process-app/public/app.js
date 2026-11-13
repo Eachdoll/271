@@ -29,6 +29,7 @@ let ME = null;
 function showInputAuthors() {
   if (!ME) return;
   for (const form of document.querySelectorAll('form')) {
+    if (form.dataset.readOnly === 'true') continue;
     let label = form.querySelector(':scope > [data-input-author]');
     if (!label) { label = document.createElement('p'); label.dataset.inputAuthor = ''; label.className = 'small muted input-author'; form.prepend(label); }
     const original = form.dataset.entryAuthor;
@@ -169,7 +170,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 
 // ───────────── 레이아웃 / 라우팅 ─────────────
 const NAV = [
-  { group: '홈', items: [['#/', '대시보드 · 업무흐름']] },
+  { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
   { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/laundry', '세탁관리']] },
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
@@ -178,6 +179,7 @@ const NAV = [
 ];
 const PAGES = {
   '#/': pageHome,
+  '#/reports': pageReports,
   '#/purchase/po': pagePO,
   '#/purchase/laundry': pageLaundry,
   '#/quality/request': () => pageIntake('analysis'),

@@ -1,5 +1,6 @@
 // Cloudflare Worker: request-scoped D1/R2 bindings; no third-party runtime packages.
 import { database } from './storage.mjs';
+import { buildReport } from './reports.mjs';
 const SESSION_DAYS = 30;
 const MAX_BODY = 30 * 1024 * 1024;
 const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
@@ -344,8 +345,11 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
   for (const id of uniqueIds) rows.push(await mustGet('purchase_orders', id));
   const queries = [];
   for (const row of rows) {
-    queries.push({ sql: 'UPDATE purchase_orders SET recv_status=?, recv_qty=?, recv_note=?, recv_by=?, recv_at=? WHERE id=?',
-      args: [status, status === 'ok' ? row.qty : recvQty, str(body.note, 500), status ? user.name : null, status ? now() : null, row.id] });
+    queries.push({ sql: `UPDATE purchase_orders SET recv_status=?,
+      recv_qty=CASE WHEN recv_status='ok' AND ?='ok' THEN COALESCE(recv_qty,qty) ELSE ? END,recv_note=?,
+      recv_by=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_by ELSE ? END,
+      recv_at=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_at ELSE ? END WHERE id=?`,
+      args: [status, status, status === 'ok' ? row.qty : recvQty, str(body.note, 500), status, status ? user.name : null, status, status ? now() : null, row.id] });
     if (status === 'ok') queries.push(receiptAnalysisQuery('purchase_order', row.id, user));
   }
   const results = await db.batch(queries);
@@ -622,6 +626,8 @@ route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
   await deleteEntityWithAttachments('shipment', 'shipments', row.id); return { ok: true };
 });
 
+route('GET', '/api/reports', async ({ query }) => buildReport(db, query, today()));
+
 // ── 대시보드 ──
 route('GET', '/api/dashboard', async () => {
   const c = async (sql, ...a) => (await db.prepare(sql).get(...a)).c;
@@ -673,7 +679,7 @@ return { async fetch(req) {
     if (!['GET', 'HEAD'].includes(req.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     return env.ASSETS.fetch(req);
   } catch (e) {
-    if (!(e instanceof HttpError)) console.error(e);
+    if (!e.status || e.status >= 500) console.error(e);
     return Response.json({ error: e.status && e.status < 500 ? e.message : '서버 오류가 발생했습니다.' }, { status: e.status || 500, headers: res });
   }
 } };
