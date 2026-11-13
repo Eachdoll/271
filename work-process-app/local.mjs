@@ -52,7 +52,7 @@ export function localEnvironment(dataDir, inviteCode) {
   const ASSETS = { async fetch(req) {
     const pathname = new URL(req.url).pathname;
     const name = pathname === '/' ? 'index.html' : pathname.slice(1);
-    if (!['index.html', 'app.js', 'forms.js', 'style.css', 'assets/seoulsemi-logo.png'].includes(name)) return new Response('Not found', { status: 404 });
+    if (!['index.html', 'app.js', 'forms.js', 'style.css', 'assets/seoulsemi-logo-blue.png'].includes(name)) return new Response('Not found', { status: 404 });
     return new Response(req.method === 'HEAD' ? null : fs.readFileSync(path.join(root, 'public', name)), { headers: { 'Content-Type': name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } });
   } };
   return { env: { DB, BUCKET, ASSETS, INVITE_CODE: inviteCode }, sqlite };

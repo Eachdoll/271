@@ -107,8 +107,8 @@ Dockerfile과 railway.json은 기존 Node 로컬 실행 경로를 위한 참고 
 - `0001_purchasing_and_receipts.sql`이 기존 기록을 유지하면서 새 컬럼과 기타입고 표를 추가합니다. 기존 발주 분류는 임의로 지정하지 않고 미분류로 표시합니다.
 - 전체 백업에 기타입고도 포함합니다.
 
-공식 로고 출처: https://seoulsemi.com/images/logo/logo_white.png (2026-11-13 확보).
-로고 원본을 `public/assets/seoulsemi-logo.png`에 보관하고 배포 번들에 포함하여 외부 홈페이지 상태와 무관하게 표시합니다.
+공식 로고 출처: https://seoulsemi.com/images/logo/logo.png (2026-11-13 확보).
+로고 원본을 `public/assets/seoulsemi-logo-blue.png`에 보관하고 배포 번들에 포함하여 외부 홈페이지 상태와 무관하게 표시합니다.
 
 ## 입고 자동 수입검사
 

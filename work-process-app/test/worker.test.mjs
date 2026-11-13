@@ -102,7 +102,7 @@ test('Built artifact is self-contained and uses the same D1/R2 API', async () =>
   assert.equal((await built.fetch(new Request('https://work.test/api/me'), env)).status, 200);
   const page = await built.fetch(new Request('https://work.test/'), env);
   assert.match(await page.text(), /서울세미텍 시스템/);
-  const logo = await built.fetch(new Request('https://work.test/assets/seoulsemi-logo.png'), env);
+  const logo = await built.fetch(new Request('https://work.test/assets/seoulsemi-logo-blue.png'), env);
   assert.equal(logo.headers.get('content-type'), 'image/png');
   assert.deepEqual([...new Uint8Array(await logo.arrayBuffer()).slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 });
