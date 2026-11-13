@@ -292,6 +292,9 @@ function receiptAnalysisQuery(sourceType, id, user) {
           'source_label',?,'received_date',${date},'item_category',src.item_category,
           'received_qty',${qty},'coa_requested',${coa},
           'purchase_req_no',${purchase ? 'src.req_no' : "''"},
+          'bom_id',${purchase ? 'NULL' : 'src.bom_id'},
+          'product_code',${purchase ? "''" : "COALESCE(json_extract(src.bom_snapshot,'$.product_code'),'')"},
+          'unit',${purchase ? "''" : "COALESCE(json_extract(src.bom_snapshot,'$.unit'),'')"},
           'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note),
         ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id
       FROM ${table} src WHERE src.id=${id == null ? 'last_insert_rowid()' : '?'}
@@ -416,7 +419,7 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
   const f = requestFields(r.type, body);
   if (r.source_type) {
     const original = JSON.parse(r.data || '{}');
-    for (const key of ['source_label', 'received_date', 'item_category', 'received_qty', 'coa_requested', 'purchase_req_no']) f.data[key] = original[key];
+    for (const key of ['source_label', 'received_date', 'item_category', 'received_qty', 'coa_requested', 'purchase_req_no', 'bom_id', 'product_code', 'unit']) f.data[key] = original[key];
   }
   const status = r.status === 'rejected' && !isMgr ? 'pending' : r.status; // 반려건 수정 시 재접수
   (await db.prepare("UPDATE requests SET title=?,customer=?,due_date=?,category=?,target_price=?,data=?,status=?,updated_at=datetime('now','+9 hours') WHERE id=?")
@@ -457,33 +460,36 @@ route('DELETE', '/api/requests/:id', async ({ user, params }) => {
 
 // ── 관리자 BOM ──
 function bomFields(body) {
+  const category = itemCategory(body.item_category);
   const kind = String(body.kind || 'finished');
   if (!['finished', 'semi'].includes(kind)) throw bad('완제품/반제품 구분을 선택하세요.');
   const baseQty = num(body.base_qty, '기준 생산수량');
   if (baseQty <= 0) throw bad('기준 생산수량은 0보다 커야 합니다.');
-  if (!Array.isArray(body.materials) || !body.materials.length || body.materials.length > 100) throw bad('자재를 1~100개 등록하세요.');
+  if (!Array.isArray(body.materials) || body.materials.length > 100 || (category === '제품' && !body.materials.length)) throw bad('제품 BOM은 자재를 1~100개 등록하세요.');
   const materials = body.materials.map(m => {
     if (!m || typeof m !== 'object' || Array.isArray(m)) throw bad('자재 항목을 확인하세요.');
     const qty = num(m.qty, '자재 사용량'); if (qty <= 0) throw bad('자재 사용량은 0보다 커야 합니다.');
     return { item: reqStr(m.item, '자재명', 200), item_category: itemCategory(m.item_category), qty, unit: reqStr(m.unit, '자재 단위', 20) };
   });
-  return [reqStr(body.product, '제품명', 200), str(body.product_code, 80), kind, baseQty, reqStr(body.unit, '생산 단위', 20), JSON.stringify(materials), str(body.note, 500), body.active === false || body.active === 0 ? 0 : 1];
+  return [reqStr(body.product, '품목명', 200), str(body.product_code, 80), kind, baseQty, reqStr(body.unit, '단위', 20), JSON.stringify(materials), str(body.note, 500), body.active === false || body.active === 0 ? 0 : 1, category];
 }
 function decodeBom(row) { return { ...row, materials: JSON.parse(row.materials) }; }
 route('GET', '/api/boms', async ({ user, query }) => {
   const where = []; const args = [];
   if (query.include_archived === '1') requireAdmin(user); else where.push('active=1');
   if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분이 올바르지 않습니다.'); where.push('kind=?'); args.push(query.kind); }
+  if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
+  if (query.q) { const q = '%' + str(query.q, 200) + '%'; where.push('(product LIKE ? OR product_code LIKE ?)'); args.push(q, q); }
   return (await db.prepare(`SELECT * FROM boms ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY product,id`).all(...args)).map(decodeBom);
 });
 route('POST', '/api/boms', async ({ user, body }) => {
   requireAdmin(user);
-  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(...bomFields(body), user.name);
+  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)').run(...bomFields(body), user.name);
   return decodeBom(await mustGet('boms', result.lastInsertRowid));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   requireAdmin(user); await mustGet('boms', params.id);
-  await db.prepare("UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(...bomFields(body), params.id);
+  await db.prepare("UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(...bomFields(body), params.id);
   return decodeBom(await mustGet('boms', params.id));
 });
 route('DELETE', '/api/boms/:id', async ({ user, params }) => {
@@ -552,8 +558,20 @@ route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
 });
 
 // ── 물류: 발주 없는 기타입고 ──
-function otherReceiptFields(b) {
-  return [dateStr(b.received_date, '입고일'), reqStr(b.item, '품목명', 200), itemCategory(b.item_category), num(b.qty, '입고수량'), reqStr(b.vendor, '입고처', 100), str(b.note, 500)];
+async function otherReceiptFields(b, previous = null) {
+  const bomId = b.bom_id === undefined ? previous?.bom_id || null : b.bom_id === null || b.bom_id === '' ? null : Number(b.bom_id);
+  let snapshot = {};
+  if (bomId !== null) {
+    if (!Number.isSafeInteger(bomId) || bomId <= 0) throw bad('BOM 품목을 선택하세요.');
+    if (previous?.bom_id === bomId) snapshot = JSON.parse(previous.bom_snapshot);
+    else {
+      const bom = await mustGet('boms', bomId);
+      if (!bom.active) throw bad('사용 중지된 BOM 품목입니다.');
+      snapshot = { id: bom.id, product: bom.product, product_code: bom.product_code, item_category: bom.item_category, unit: bom.unit };
+    }
+    if (!ITEM_CATEGORIES.includes(snapshot.item_category)) throw bad('관리자가 BOM 품목의 분류를 먼저 지정해야 합니다.');
+  } else if (!previous || previous.bom_id) throw bad('BOM을 검색하여 입고할 품목을 선택하세요.');
+  return [dateStr(b.received_date, '입고일'), bomId ? snapshot.product : reqStr(b.item, '품목명', 200), bomId ? snapshot.item_category : itemCategory(b.item_category), num(b.qty, '입고수량'), reqStr(b.vendor, '입고처', 100), str(b.note, 500), bomId, JSON.stringify(snapshot)];
 }
 route('GET', '/api/other-receipts', async ({ query }) => {
   const where = []; const args = [];
@@ -564,8 +582,9 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   return await db.prepare(`SELECT other_receipts.*, ${attachmentSummary('other_receipt','other_receipts')} FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
+  const fields = await otherReceiptFields(body);
   const results = await db.batch([
-    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,created_by) VALUES(?,?,?,?,?,?,?)', args: [...otherReceiptFields(body), user.name] },
+    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [...fields, user.name] },
     receiptAnalysisQuery('other_receipt', null, user),
   ]);
   return await mustGet('other_receipts', results[0].meta.last_row_id);
@@ -573,7 +592,8 @@ route('POST', '/api/other-receipts', async ({ user, body }) => {
 route('PUT', '/api/other-receipts/:id', async ({ user, params, body }) => {
   const row = await mustGet('other_receipts', params.id);
   if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
-  await db.prepare('UPDATE other_receipts SET received_date=?,item=?,item_category=?,qty=?,vendor=?,note=? WHERE id=?').run(...otherReceiptFields(body), row.id);
+  const fields = await otherReceiptFields(body, row);
+  await db.prepare('UPDATE other_receipts SET received_date=?,item=?,item_category=?,qty=?,vendor=?,note=?,bom_id=?,bom_snapshot=? WHERE id=?').run(...fields, row.id);
   return await mustGet('other_receipts', row.id);
 });
 route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {

@@ -218,3 +218,9 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
 [data-photo-view], [data-photo-preview] img { cursor: zoom-in; }
 .sc-item .btn { white-space: nowrap; }
 caption { text-align: left; padding: 8px 0; font-weight: 600; color: var(--muted); }
+
+.receipt-tabs { margin: 12px 0; }
+.receipt-tabs a { display: inline-block; padding: 10px 18px; border-bottom: 2px solid transparent; color: var(--muted); }
+.receipt-tabs a.on { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.input-author { padding: 8px 10px; margin: 0 0 10px; background: var(--accent-soft); border-radius: 6px; }
+input[readonly] { background: var(--bg); }

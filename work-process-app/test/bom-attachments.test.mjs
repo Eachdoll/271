@@ -22,7 +22,7 @@ function client() {
 }
 const admin = client(), owner = client(), other = client(), anon = client();
 let bom, plan;
-const bomBody = { product: '완제품 A', product_code: 'A-001', kind: 'finished', base_qty: 10, unit: 'EA', materials: [{ item: '원단', item_category: '원자재', qty: 2, unit: 'kg' }, { item: '포장재', item_category: '부자재', qty: 0.5, unit: 'BOX' }] };
+const bomBody = { item_category: '제품', product: '완제품 A', product_code: 'A-001', kind: 'finished', base_qty: 10, unit: 'EA', materials: [{ item: '원단', item_category: '원자재', qty: 2, unit: 'kg' }, { item: '포장재', item_category: '부자재', qty: 0.5, unit: 'BOX' }] };
 before(async () => {
   for (const [user, name] of [[admin, 'BOM관리자'], [owner, '담당자'], [other, '다른사용자']]) assert.equal((await user('POST', '/api/auth/register', { name, password: 'test-password', invite: 'bom-photos' })).status, 200);
 });
@@ -102,7 +102,8 @@ test('Shipment photos, damage judgement and revision checks persist without losi
 });
 
 test('Incoming analysis keeps access to receipt evidence after the source is deleted', async () => {
-  const receipt = (await owner('POST', '/api/other-receipts', { received_date: '2026-11-13', item: '파손입고', item_category: '상품', qty: 2, vendor: '공급사' })).body;
+  const catalog = (await admin('POST', '/api/boms', { ...bomBody, product: '파손입고', item_category: '상품', materials: [] })).body;
+  const receipt = (await owner('POST', '/api/other-receipts', { bom_id: catalog.id, received_date: '2026-11-13', item: '파손입고', item_category: '상품', qty: 2, vendor: '공급사' })).body;
   const endpoint = `/api/attachments/other_receipt/${receipt.id}`;
   const record = await owner('PUT', endpoint, { photos: [png], inspection_status: 'abnormal', note: '박스 눌림' });
   assert.equal(record.status, 200); const file = record.body.photos[0];

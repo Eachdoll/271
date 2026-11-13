@@ -124,14 +124,15 @@ test('Purchasing classification and COA checkbox persist through edits and recei
 });
 
 test('Other receipts support classification, filters and logistics authorization', async () => {
-  const body = { received_date: '2026-11-13', item: '발주 없는 샘플', item_category: '부자재', qty: 10, vendor: '기타입고처', note: '무상 제공' };
+  const catalog = (await admin('POST', '/api/boms', { product: '발주 없는 샘플', item_category: '부자재', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const body = { bom_id: catalog.id, received_date: '2026-11-13', item: '발주 없는 샘플', item_category: '부자재', qty: 10, vendor: '기타입고처', note: '무상 제공' };
   assert.equal((await anon('POST', '/api/other-receipts', body)).status, 401);
   const created = await staff('POST', '/api/other-receipts', body);
   assert.equal(created.status, 200); assert.equal(created.body.item_category, '부자재');
   const id = created.body.id;
   assert.equal((await staff('GET', '/api/other-receipts?from=2026-11-13&to=2026-11-13&q=' + encodeURIComponent('기타입고처'))).body.length, 1);
   assert.equal((await staff('GET', '/api/other-receipts?item_category=' + encodeURIComponent('제품'))).body.length, 0);
-  assert.equal((await staff('POST', '/api/other-receipts', { ...body, item_category: '' })).status, 400);
+  assert.equal((await staff('POST', '/api/other-receipts', { ...body, bom_id: '' })).status, 400);
   assert.equal((await staff('POST', '/api/other-receipts', { ...body, qty: -1 })).status, 400);
   const other = client();
   const account = await other('POST', '/api/auth/register', { name: '물류담당', password: 'password', invite: 'test-invite' });

@@ -24,6 +24,20 @@ const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', ch
 
 let ME = null;
 
+// Every current and dynamically opened form shows the signed-in operator.
+// This is display-only; the server records authors from its authenticated session.
+function showInputAuthors() {
+  if (!ME) return;
+  for (const form of document.querySelectorAll('form')) {
+    let label = form.querySelector(':scope > [data-input-author]');
+    if (!label) { label = document.createElement('p'); label.dataset.inputAuthor = ''; label.className = 'small muted input-author'; form.prepend(label); }
+    const original = form.dataset.entryAuthor;
+    const text = original !== undefined ? '입력자: ' + (original || '기존 기록: 미기록') + ' · 현재 작업자: ' + ME.name : '입력자(자동 기록): ' + ME.name;
+    if (label.textContent !== text) label.textContent = text;
+  }
+}
+new MutationObserver(showInputAuthors).observe(document.body, { childList: true, subtree: true });
+
 async function api(method, url, body) {
   const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const data = await res.json().catch(() => ({}));
@@ -116,7 +130,7 @@ function inspectionFields() {
   return `<label>이상 여부<select name="inspection_status">${Object.entries(INSPECTION).map(([key,label]) => `<option value="${key}">${label}</option>`).join('')}</select></label><label class="span2">판정 메모<input name="inspection_note" maxlength="1000" placeholder="박스 파손, 찌그러짐, 젖음 등"></label>`;
 }
 function photosHTML(record) {
-  return `<p><span class="chip ${record.inspection_status === 'abnormal' ? 'red' : record.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[record.inspection_status] || '미판정'}</span> ${esc(record.note || '')}</p><div class="thumbs">${record.photos.map(file => `<img src="/uploads/${esc(file)}" data-photo-view="/uploads/${esc(file)}" alt="첨부 사진" loading="lazy">`).join('') || '<span class="muted small">첨부된 사진이 없습니다.</span>'}</div>${record.updated_by ? `<p class="small muted">${esc(record.updated_by)} · ${esc(record.updated_at)}</p>` : ''}`;
+  return `<p><span class="chip ${record.inspection_status === 'abnormal' ? 'red' : record.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[record.inspection_status] || '미판정'}</span> ${esc(record.note || '')}</p><div class="thumbs">${record.photos.map(file => `<img src="/uploads/${esc(file)}" data-photo-view="/uploads/${esc(file)}" alt="첨부 사진" loading="lazy">`).join('') || '<span class="muted small">첨부된 사진이 없습니다.</span>'}</div>${record.updated_by ? `<p class="small muted">기록 입력자: ${esc(record.updated_by)} · ${esc(record.updated_at)}</p>` : ''}`;
 }
 function bindPhotoViews(root) { $$('[data-photo-view]', root).forEach(image => image.onclick = () => lightbox(image.dataset.photoView)); }
 async function renderAttachmentPreview(root, entity, id) {
@@ -160,7 +174,7 @@ const NAV = [
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정']] },
-  { group: '물류', items: [['#/logistics/receive', '발주입고목록'], ['#/logistics/other', '기타입고'], ['#/logistics/ship', '출하목록']] },
+  { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록']] },
 ];
 const PAGES = {
   '#/': pageHome,
@@ -174,16 +188,16 @@ const PAGES = {
   '#/prod/list': () => pageWorkList('sample'),
   '#/prod/finished': () => pageSchedule('finished'),
   '#/prod/semi': () => pageSchedule('semi'),
-  '#/logistics/receive': pageReceive,
+  '#/logistics/receive': main => pageReceipts(main, 'purchase'),
   '#/logistics/ship': pageShip,
-  '#/logistics/other': pageOtherReceipts,
+  '#/logistics/other': main => pageReceipts(main, 'other'),
   '#/admin': pageAdmin,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
 };
 
 function shell() {
-  const cur = location.hash || '#/';
+  const cur = location.hash === '#/logistics/other' ? '#/logistics/receive' : location.hash || '#/';
   const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`).join('')}</div>`).join('')
     + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a><a href="#/admin/bom" class="${cur === '#/admin/bom' ? 'active' : ''}">BOM 관리</a></div>` : '');
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
@@ -258,7 +272,7 @@ async function pageHome(main) {
   </table></div>
   <h2>업무 흐름</h2>
   <div class="flows">
-    ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">발주입고목록</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
+    ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">입고목록 → 발주입고</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
     ${flow('품질 (분석)', ['<b>누구나</b> <a href="#/quality/request">분석의뢰</a> 양식 작성', '접수대기 목록에 등록', '<b>품질담당자</b> 승인 → 접수번호 발급', '<a href="#/quality/list">분석리스트</a>에서 대기 → 진행 → 완료', '수입·의뢰·출하·공정검사 구분'])}
     ${flow('개발', ['<b>누구나</b> <a href="#/dev/request">개발의뢰</a> 작성 (타겟제품·타겟단가)', '접수대기 목록에 등록', '<b>연구소담당자</b> 승인', '<a href="#/dev/list">개발리스트</a>에서 대기 → 진행 → 완료'])}
     ${flow('생산', ['<b>누구나</b> <a href="#/prod/request">샘플의뢰</a> 작성', '<b>생산담당자</b> 승인 → <a href="#/prod/list">샘플리스트</a>', '<a href="#/prod/finished">완제품</a> / <a href="#/prod/semi">반제품</a> 생산일정 일·주·월 입력'])}
@@ -310,7 +324,7 @@ async function pagePO(main) {
     const rows = await api('GET', `/api/po?q=${encodeURIComponent($('#poQ').value)}&recv=${$('#poF').value}&item_category=${encodeURIComponent($('#poCategory').value)}`);
     const t = todayStr();
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>등록</th><th></th></tr></thead>
+      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
@@ -320,7 +334,7 @@ async function pagePO(main) {
       : '<div class="empty">등록된 발주가 없습니다.</div>';
     $$('[data-edit]').forEach((b) => (b.onclick = () => {
       const p = rows.find((x) => x.id == b.dataset.edit);
-      const m = modal(`<h3>발주 수정</h3><form>${poForm(p)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
+      const m = modal(`<h3>발주 수정</h3><form data-entry-author="${esc(p.created_by)}">${poForm(p)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
       $('form', m.el).onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/po/' + p.id, formObj(e.target)); m.close(); toast('수정했습니다.'); load(); } catch (err) { fail(err); } };
     }));
     $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 발주를 삭제할까요?')) { try { await api('DELETE', '/api/po/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
@@ -333,10 +347,15 @@ async function pagePO(main) {
 }
 
 // ───────────── 물류: 발주입고목록 ─────────────
+async function pageReceipts(main, tab) {
+  main.innerHTML = `<h1>입고목록 <span class="dept">물류</span></h1><div class="tabs receipt-tabs"><a href="#/logistics/receive" class="${tab === 'purchase' ? 'on' : ''}">발주입고</a><a href="#/logistics/other" class="${tab === 'other' ? 'on' : ''}">기타입고</a></div><section id="receiptContent"></section>`;
+  if (tab === 'other') await pageOtherReceipts($('#receiptContent', main));
+  else await pageReceive($('#receiptContent', main));
+}
 async function pageReceive(main) {
   main.innerHTML = `
-  <h1>발주입고목록 <span class="dept">물류</span></h1>
-  <p class="muted">입고된 항목을 체크하고 버튼을 누르세요. 구매 발주목록에도 같은 색으로 표시됩니다. <b>입고확인</b> 시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
+  <h2>발주입고</h2>
+  <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
   <div class="toolbar">
     <select id="rcF"><option value="open">미완료 (미입고·확인중·수량상이)</option><option value="">전체</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select>
     <input type="search" id="rcQ" placeholder="검색">
@@ -358,14 +377,14 @@ async function pageReceive(main) {
     if (f === 'open') rows = rows.filter((p) => p.recv_status !== 'ok');
     const t = todayStr();
     $('#rcList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>확인자</th><th>사진·검수</th></tr></thead>
+      <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>입력자</th><th>입고 처리자</th><th>사진·검수</th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td><input type="checkbox" class="rc-check" value="${p.id}" aria-label="선택"></td>
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
-        <td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td><button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
+        <td class="small muted">${esc(p.created_by || '기존 기록: 미기록')}</td><td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td><button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 발주가 없습니다.</div>';
     const all = $('#rcAll'); if (all) all.onchange = () => { $$('.rc-check').forEach((c) => (c.checked = all.checked)); updateCount(); };
     $$('.rc-check').forEach((c) => (c.onchange = updateCount));
@@ -398,16 +417,52 @@ async function pageReceive(main) {
 function otherReceiptForm(row = {}) {
   return `<div class="form-grid">
     <label>입고일 *<input name="received_date" type="date" required value="${esc(row.received_date || todayStr())}"></label>
-    ${categoryField(row.item_category)}
-    <label>품목명 *<input name="item" required maxlength="200" value="${esc(row.item)}"></label>
+    <label class="span2">BOM 검색<input data-receipt-bom-search type="search" placeholder="품목명 또는 품목코드 검색"></label>
+    <label class="span2">BOM 품목 *<select name="bom_id" data-receipt-bom ${row.id && !row.bom_id ? '' : 'required'}><option value="">${row.id && !row.bom_id ? '기존 수기 등록 품목' : 'BOM 품목을 선택하세요'}</option></select></label>
+    <label>품목명<input name="item" required maxlength="200" value="${esc(row.item)}" ${row.id && !row.bom_id ? '' : 'readonly'}></label>
+    <label>분류<input name="item_category" readonly value="${esc(row.item_category)}"></label>
     <label>입고수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(row.qty)}"></label>
+    <label>단위<input data-receipt-unit readonly></label>
     <label>입고처 *<input name="vendor" required maxlength="100" value="${esc(row.vendor)}"></label>
     <label>비고<input name="note" maxlength="500" value="${esc(row.note)}" placeholder="발주 없이 입고된 사유 등"></label>
   </div>`;
 }
+function receiptBomSnapshot(row) { return typeof row.bom_snapshot === 'string' ? JSON.parse(row.bom_snapshot) : row.bom_snapshot || {}; }
+function bindReceiptBom(form, row = {}) {
+  const select = $('[data-receipt-bom]', form); const search = $('[data-receipt-bom-search]', form);
+    const original = row.bom_id ? receiptBomSnapshot(row) : null;
+  let choices = new Map(); let serial = 0;
+  const apply = () => {
+    const chosen = choices.get(Number(select.value));
+    form.elements.item.readOnly = !!chosen || !row.id || !!row.bom_id;
+    if (chosen) {
+      form.elements.item.value = chosen.product; form.elements.item_category.value = chosen.item_category;
+      $('[data-receipt-unit]', form).value = chosen.unit || '';
+    } else {
+      form.elements.item.value = row.id && !row.bom_id ? row.item : '';
+      form.elements.item_category.value = row.id && !row.bom_id ? row.item_category : '';
+      $('[data-receipt-unit]', form).value = '';
+    }
+  };
+  const load = async () => {
+    const request = ++serial; const selected = select.value || (original ? String(row.bom_id) : '');
+    const previous = choices.get(Number(selected));
+    const results = await api('GET', '/api/boms?q=' + encodeURIComponent(search.value));
+    if (request !== serial || !form.isConnected) return;
+    choices = new Map(results.map(bom => [bom.id, bom]));
+    if (previous && !choices.has(previous.id)) choices.set(previous.id, previous);
+    if (original) choices.set(Number(row.bom_id), { ...original, id: Number(row.bom_id) });
+    select.innerHTML = `<option value="">${row.id && !row.bom_id ? '기존 수기 등록 품목' : 'BOM 품목을 선택하세요'}</option>` + [...choices.values()].map(bom => `<option value="${bom.id}" ${ITEM_CATEGORIES.includes(bom.item_category) ? '' : 'disabled'}>${esc(bom.product)}${bom.product_code ? ' · ' + esc(bom.product_code) : ''} / ${esc(bom.item_category || '미분류: 관리자 지정 필요')}</option>`).join('');
+    select.value = choices.has(Number(selected)) ? selected : ''; apply();
+  };
+  select.onchange = apply;
+  let timer; search.oninput = () => { clearTimeout(timer); timer = setTimeout(() => load().catch(fail), 250); };
+  form.addEventListener('reset', () => queueMicrotask(() => { select.value = ''; apply(); }));
+  load().catch(fail);
+}
 async function pageOtherReceipts(main) {
-  main.innerHTML = `<h1>기타입고 <span class="dept">물류</span></h1>
-    <p class="muted">발주서를 내지 않은 품목의 입고를 등록합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
+  main.innerHTML = `<h2>기타입고</h2>
+    <p class="muted">BOM에서 품목을 검색·선택하여 발주 없는 입고를 입력합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
     <form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="form-grid">${photoPicker()}${inspectionFields()}</div><div class="actions"><button class="btn primary">등록</button></div></form>
     <div class="toolbar">
       <label class="inline">기간 <input type="date" id="otherFrom" value="${monthStart(todayStr())}"> ~ <input type="date" id="otherTo" value="${todayStr()}"></label>
@@ -418,12 +473,13 @@ async function pageOtherReceipts(main) {
     const params = new URLSearchParams({ from: $('#otherFrom').value, to: $('#otherTo').value, item_category: $('#otherCategory').value, q: $('#otherQ').value });
     const rows = await api('GET', '/api/other-receipts?' + params);
     $('#otherCount').textContent = `${rows.length}건`;
-    $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>등록자</th><th></th></tr></thead>
-      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}</td><td class="r">${fmtNum(row.qty)}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap"><button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+    $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
+      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap"><button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
-      const box = modal(`<h3>기타입고 수정</h3><form>${otherReceiptForm(row)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
+      const box = modal(`<h3>기타입고 수정</h3><form data-entry-author="${esc(row.created_by)}">${otherReceiptForm(row)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
+      bindReceiptBom($('form', box.el), row);
       $('form', box.el).onsubmit = async event => {
         event.preventDefault();
         try { await api('PUT', '/api/other-receipts/' + row.id, formObj(event.target)); box.close(); toast('수정했습니다.'); await load(); } catch (error) { fail(error); }
@@ -435,6 +491,7 @@ async function pageOtherReceipts(main) {
     });
   };
   const otherDraft = bindPhotoDraft($('#otherNew'));
+  bindReceiptBom($('#otherNew'));
   $('#otherNew').onsubmit = async event => {
     event.preventDefault(); if (otherDraft.busy) return; const button = $('button.primary', event.target); button.disabled = true;
     try {
@@ -481,13 +538,13 @@ async function pageLaundry(main) {
         <div class="ln-head"><b>${esc(r.in_date)} (${dow(r.in_date)})</b><span class="chip red">폐기 ${fmtNum(r.discard_qty)}</span>${r.in_qty != null ? `<span class="chip">입고 ${fmtNum(r.in_qty)}</span>` : ''}</div>
         ${r.note ? `<p>${esc(r.note)}</p>` : ''}
         <div class="thumbs">${r.photos.map((f) => `<img src="/uploads/${esc(f)}" data-big="/uploads/${esc(f)}" alt="불량폐기 사진" loading="lazy">`).join('') || '<span class="muted small">사진 없음</span>'}</div>
-        <div class="ln-foot"><span class="small muted">${esc(r.created_by)}</span><span><button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></span></div>
+        <div class="ln-foot"><span class="small muted">입력자: ${esc(r.created_by)}</span><span><button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></span></div>
       </div>`).join('') : '<div class="empty">이 달의 기록이 없습니다.</div>';
     $$('#lnList [data-big]').forEach((i) => (i.onclick = () => lightbox(i.dataset.big)));
     $$('#lnList [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 기록과 사진을 삭제할까요?')) { try { await api('DELETE', '/api/laundry/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
     $$('#lnList [data-edit]').forEach((b) => (b.onclick = () => {
       const r = rows.find((x) => x.id == b.dataset.edit); let add = [];
-      const m = modal(`<h3>세탁 기록 수정</h3><form><div class="form-grid">
+      const m = modal(`<h3>세탁 기록 수정</h3><form data-entry-author="${esc(r.created_by)}"><div class="form-grid">
         <label>입고일 *<input name="in_date" type="date" required value="${esc(r.in_date)}"></label>
         <label>입고수량<input name="in_qty" type="number" min="0" step="any" value="${esc(r.in_qty)}"></label>
         <label>폐기수량 *<input name="discard_qty" type="number" min="0" step="any" required value="${esc(r.discard_qty)}"></label>
@@ -540,7 +597,7 @@ function fieldValue(f, r) {
   return s;
 }
 function requestForm(type, r) {
-  return `<form class="req-form"><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample'].includes(type) ? photoPicker() : ''}</div>
+  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample'].includes(type) ? photoPicker() : ''}</div>
     <div class="actions"><button class="btn primary">${r ? '저장' : '의뢰 접수'}</button></div></form>`;
 }
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
@@ -556,8 +613,8 @@ function requestDetail(type, r, reload) {
       <tr><th>접수번호</th><td>${esc(r.req_no || '(승인 시 발급)')}</td></tr>
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
       <tr><th>입고일 / 분류</th><td>${esc(r.data.received_date || '')} / ${esc(r.data.item_category || '미분류')}</td></tr>
-      <tr><th>입고수량 / COA</th><td>${fmtNum(r.data.received_qty)} / ${r.data.coa_requested ? 'COA 요청' : '요청 없음'}</td></tr>` : ''}
-      <tr><th>의뢰자</th><td>${esc(r.requester_name)} · ${esc(r.created_at.slice(0, 16))}</td></tr>
+      <tr><th>입고수량 / COA</th><td>${fmtNum(r.data.received_qty)} ${esc(r.data.unit || '')} / ${r.data.coa_requested ? 'COA 요청' : '요청 없음'}</td></tr>` : ''}
+      <tr><th>입력자(의뢰자)</th><td>${esc(r.requester_name)} · ${esc(r.created_at.slice(0, 16))}</td></tr>
       ${r.approver_name ? `<tr><th>${r.status === 'rejected' ? '반려자' : '접수자'}</th><td>${esc(r.approver_name)}${r.approved_at ? ' · ' + esc(r.approved_at.slice(0, 16)) : ''}</td></tr>` : ''}
       ${r.reject_reason ? `<tr><th>반려 사유</th><td class="red-text">${esc(r.reject_reason)}</td></tr>` : ''}
       ${rows}
@@ -608,7 +665,7 @@ async function pageIntake(type) {
   const load = async () => {
     const rows = await api('GET', `/api/requests?type=${type}&scope=intake`);
     $('#intakeList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
-      <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>완료희망일</th><th>의뢰자</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}">
         <td>${statusChip(r.status)}</td><td><b>${esc(r.title)}</b></td>${type === 'analysis' ? `<td>${esc(r.category)}</td>` : ''}${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td><td>${esc(r.due_date || '')}</td><td>${esc(r.requester_name)}</td><td class="small muted">${esc(r.created_at.slice(0, 10))}</td>
@@ -645,7 +702,7 @@ async function pageWorkList(type) {
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
     $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
-      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>의뢰자</th><th>완료희망일</th><th>상태</th></tr></thead>
+      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>입력자(의뢰자)</th><th>완료희망일</th><th>상태</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${r.status === 'done' ? 'row-done' : ''}">
         <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
         <td><b>${esc(r.title)}</b>${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
@@ -669,14 +726,14 @@ function bomMaterialRow(material = {}) {
   return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'EA')}" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
 }
 function bomForm(bom = {}) {
-  return `<form class="stack"><div class="form-grid"><label>제품명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label><label>제품코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">위 기준 생산수량을 만드는 데 필요한 자재 사용량을 입력하세요. 예: 제품 100개 기준 원자재 5kg.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || [{}]).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 생산에서 선택 가능</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
+  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·상품은 구성자재 없이 입고 품목으로 등록할 수 있습니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>BOM 관리</h1><p class="muted">제품별 구성 자재와 기준 사용량을 등록합니다. 생산일정에서 BOM을 선택하면 소요량을 계산합니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button><div id="bomList"></div>';
+  main.innerHTML = '<h1>BOM 관리</h1><p class="muted">품목을 원자재·부자재·제품·상품으로 분류하여 등록합니다. 생산과 기타입고에서 BOM을 검색·선택합니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button><div class="toolbar"><select id="bomCategory" aria-label="BOM 품목 분류">' + categoryOptions('', true) + '</select><input type="search" id="bomSearch" placeholder="품목명·코드 검색"></div><div id="bomList"></div>';
   const load = async () => {
-    const boms = await api('GET', '/api/boms?include_archived=1');
-    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}</h3><p>${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><div class="actions"><button class="btn" data-bom-edit="${bom.id}">수정</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    const boms = await api('GET', '/api/boms?include_archived=1&item_category=' + encodeURIComponent($('#bomCategory').value) + '&q=' + encodeURIComponent($('#bomSearch').value));
+    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span> ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions"><button class="btn" data-bom-edit="${bom.id}">수정</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
     const edit = bom => {
       const box = modal(`<h3>${bom ? 'BOM 수정' : '새 BOM 등록'}</h3>${bomForm(bom)}`, { wide: true });
       const form = $('form', box.el); const rows = $('[data-material-rows]', form);
@@ -697,6 +754,8 @@ async function pageBoms(main) {
       try { await api('DELETE', '/api/boms/' + button.dataset.bomDisable); await load(); } catch (error) { fail(error); }
     });
   };
+  $('#bomCategory').onchange = () => load().catch(fail);
+  let searchTimer; $('#bomSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => load().catch(fail), 250); };
   await load();
 }
 
@@ -710,8 +769,8 @@ async function pageSchedule(kind) {
   <form class="card" id="scNew"><h3>일정 입력</h3><div class="form-grid">
     <fieldset class="span3"><legend>구분 *</legend><div class="opts">${Object.entries(PERIOD).map(([k, v]) => `<label class="opt"><input type="radio" name="period" value="${k}" ${k === 'day' ? 'checked' : ''}> ${v}</label>`).join('')}</div></fieldset>
     <label>날짜 * <span class="hint" id="scHint">(그날)</span><input name="start_date" type="date" required value="${todayStr()}"></label>
-    <label class="span2">BOM에서 가져오기<select name="bom_id" id="scBom"><option value="">직접 입력</option>${boms.map(bom => `<option value="${bom.id}">${esc(bom.product)}${bom.product_code ? ' · ' + esc(bom.product_code) : ''} (기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)})</option>`).join('')}</select></label>
-    <label>제품명 *<input name="product" required></label>
+    <label class="span2">BOM에서 가져오기<select name="bom_id" id="scBom"><option value="">직접 입력</option>${boms.map(bom => `<option value="${bom.id}">[${esc(bom.item_category || '미분류')}] ${esc(bom.product)}${bom.product_code ? ' · ' + esc(bom.product_code) : ''} (기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)})</option>`).join('')}</select></label>
+    <label>품목명 *<input name="product" required></label>
     <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
     <label class="span3">비고<input name="note"></label><div class="span3" id="scRequirements"></div></div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
@@ -731,7 +790,7 @@ async function pageSchedule(kind) {
   $('#scBom').onchange = previewBom; $('#scNew [name=qty]').oninput = previewBom;
   $$('#scNew [name=period]').forEach((r) => (r.onchange = () => { $('#scHint').textContent = hints[r.value]; }));
   const range = () => view === 'day' ? [base, base] : view === 'week' ? [mondayOf(base), addDays(mondayOf(base), 6)] : [monthStart(base), monthEnd(base)];
-  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
+  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
     const [from, to] = range();
@@ -755,7 +814,7 @@ async function pageSchedule(kind) {
     $('#scBody').innerHTML = body;
     $$('[data-bom-view]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.bomView)); const snapshot = row.bom_snapshot;
-      modal(`<h3>${esc(row.product)} · 생산 ${fmtNum(row.qty)} ${esc(snapshot.unit)}</h3><p class="muted small">일정 등록 당시 BOM 기준입니다. 기준 생산수량: ${fmtNum(snapshot.base_qty)} ${esc(snapshot.unit)}</p>${materialTable(snapshot.requirements || [])}`, { wide: true });
+      modal(`<h3>${esc(row.product)} · 생산 ${fmtNum(row.qty)} ${esc(snapshot.unit)}</h3><p class="muted small">입력자: ${esc(row.created_by || '기존 기록: 미기록')} · 일정 등록 당시 BOM 기준입니다. 기준 생산수량: ${fmtNum(snapshot.base_qty)} ${esc(snapshot.unit)}</p>${materialTable(snapshot.requirements || [])}`, { wide: true });
     });
     $$('#scBody [data-done]').forEach((c) => (c.onchange = async () => { try { await api('PUT', '/api/schedules/' + c.dataset.done, { toggle_done: true }); load(); } catch (e) { fail(e); } }));
     $$('#scBody [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 일정을 삭제할까요?')) { try { await api('DELETE', '/api/schedules/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
@@ -788,7 +847,7 @@ async function pageShip(main) {
     const rows = await api('GET', `/api/shipments?from=${$('#shFrom').value}&to=${$('#shTo').value || $('#shFrom').value}`);
     $('#shSum').innerHTML = `${rows.length}건 · 수량 합계 <b>${fmtNum(rows.reduce((a, r) => a + r.qty, 0))}</b>`;
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력</th><th></th></tr></thead>
+      <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>
         <td class="nowrap"><button class="btn small" data-ship-photo="${r.id}">사진·이상 여부</button>${inspectionBadge(r)} <button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당 기간 출하가 없습니다.</div>';
@@ -796,7 +855,7 @@ async function pageShip(main) {
     $$('#shList [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 출하 기록을 삭제할까요?')) { try { await api('DELETE', '/api/shipments/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
     $$('#shList [data-edit]').forEach((b) => (b.onclick = () => {
       const r = rows.find((x) => x.id == b.dataset.edit);
-      const m = modal(`<h3>출하 수정</h3><form><div class="form-grid">
+      const m = modal(`<h3>출하 수정</h3><form data-entry-author="${esc(r.created_by)}"><div class="form-grid">
         <label>출고일<input name="ship_date" type="date" required value="${esc(r.ship_date)}"></label><label>품목명<input name="item" required value="${esc(r.item)}"></label>
         <label>수량<input name="qty" type="number" min="0" step="any" required value="${esc(r.qty)}"></label><label>거래처<input name="customer" required value="${esc(r.customer)}"></label>
         <label>LOT<input name="lot" maxlength="100" value="${esc(r.lot)}"></label>

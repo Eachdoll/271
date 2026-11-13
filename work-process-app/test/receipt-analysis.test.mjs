@@ -21,11 +21,13 @@ function client() {
 }
 const admin = client(); const receiver = client();
 const orderBody = suffix => ({ req_no: 'PR-' + suffix, vendor: '공급사', item: '검사품목 ' + suffix, qty: 12, due_date: '2026-11-20', item_category: '원자재', coa_requested: true });
-const receiptBody = suffix => ({ received_date: '2026-11-13', item: '기타입고 ' + suffix, vendor: '입고처', qty: 3, item_category: '제품', note: '발주 없는 입고' });
+const catalogIds = {};
+const receiptBody = (suffix, category = '제품') => ({ bom_id: catalogIds[category], received_date: '2026-11-13', item: '기타입고 ' + suffix, vendor: '입고처', qty: 3, item_category: '제품', note: '발주 없는 입고' });
 const analyses = async () => (await admin('GET', '/api/requests?type=analysis&scope=list')).body;
 before(async () => {
   assert.equal((await admin('POST', '/api/auth/register', { name: '관리자', password: 'pass1234', invite: 'receipt-test' })).status, 200);
   assert.equal((await receiver('POST', '/api/auth/register', { name: '입고담당', password: 'pass1234', invite: 'receipt-test' })).status, 200);
+  for (const category of ['제품','상품','원자재','부자재']) { const r = await admin('POST', '/api/boms', { product: '기타입고 ' + category, item_category: category, base_qty: 1, unit: 'EA', materials: [{ item: '원단', item_category: '원자재', qty: 1, unit: 'kg' }] }); assert.equal(r.status, 200); catalogIds[category] = r.body.id; }
 });
 after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
@@ -71,7 +73,7 @@ test('Other receipt registration atomically creates a waiting inspection for eve
   const before = (await analyses()).length;
   const receipts = [];
   for (const item_category of ['제품', '상품', '원자재', '부자재']) {
-    const result = await receiver('POST', '/api/other-receipts', { ...receiptBody(item_category), item_category });
+    const result = await receiver('POST', '/api/other-receipts', { ...receiptBody(item_category, item_category), item_category });
     assert.equal(result.status, 200); receipts.push(result.body);
   }
   const rows = await analyses(); assert.equal(rows.length, before + 4);
