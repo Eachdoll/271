@@ -23,6 +23,11 @@ h4 { margin: 0 0 8px; font-size: 14px; }
 .top { position: sticky; top: 0; z-index: 20; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .brand.big { font-size: 22px; justify-content: center; }
+.brand-logo { width: 106px; height: 42px; object-fit: contain; padding: 6px; background: #231815; border-radius: 6px; }
+.brand.big { flex-direction: column; }
+.brand.big .brand-logo { width: 166px; height: 64px; padding: 10px; }
+.coa-field { align-self: end; min-height: 40px; }
+.coa-field input { width: auto; }
 .logo { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #fff; font-size: 16px; }
 .who { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .who a { color: var(--text); }

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { localEnvironment } from '../local.mjs';
 import worker from '../worker.mjs';
+import { DatabaseSync } from 'node:sqlite';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wpa-worker-'));
 let env, sqlite, admin, staff, anon;
 function client() {
@@ -38,7 +39,7 @@ test('Concurrent registration assigns exactly one administrator', async () => {
   assert.ok(results.every(r => r.status === 200));
   assert.equal(results.filter(r => r.body.user.is_admin).length, 1);
   if (!results[0].body.user.is_admin) [admin, staff] = [staff, admin];
-  assert.match(results[0].headers.get('set-cookie'), /HttpOnly.*SameSite=Lax.*Secure/);
+  assert.match(results[0].headers.get('set-cookie'), /^wpa_sid=.*HttpOnly.*SameSite=None; Secure; Partitioned/);
   env.INVITE_CODE = 'changed-in-env';
   assert.equal((await anon('POST', '/api/auth/register', { name: '새 사용자', password: 'password', invite: 'changed-in-env' })).status, 400);
 });
@@ -100,5 +101,70 @@ test('Built artifact is self-contained and uses the same D1/R2 API', async () =>
   const { default: built } = await import('../dist/server/index.js');
   assert.equal((await built.fetch(new Request('https://work.test/api/me'), env)).status, 200);
   const page = await built.fetch(new Request('https://work.test/'), env);
-  assert.match(await page.text(), /업무프로세스 허브/);
+  assert.match(await page.text(), /서울세미텍 시스템/);
+  const logo = await built.fetch(new Request('https://work.test/assets/seoulsemi-logo.png'), env);
+  assert.equal(logo.headers.get('content-type'), 'image/png');
+  assert.deepEqual([...new Uint8Array(await logo.arrayBuffer()).slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+});
+
+test('Purchasing classification and COA checkbox persist through edits and receipts', async () => {
+  const body = { req_no: 'COA-01', vendor: '공급사', item: '품목', qty: 4, due_date: '2026-11-20', item_category: '원자재', coa_requested: ['1'] };
+  const created = await staff('POST', '/api/po', body);
+  assert.equal(created.status, 200); assert.equal(created.body.coa_requested, 1); assert.equal(created.body.item_category, '원자재');
+  const id = created.body.id;
+  const filtered = await staff('GET', '/api/po?item_category=' + encodeURIComponent('원자재'));
+  assert.ok(filtered.body.some(r => r.id === id));
+  assert.equal((await staff('PUT', '/api/po/' + id, { ...body, coa_requested: [], item_category: '상품' })).body.coa_requested, 0);
+  assert.equal((await staff('POST', '/api/po/receive', { ids: [id], status: 'ok' })).status, 200);
+  const received = (await staff('GET', '/api/po?recv=ok')).body.find(r => r.id === id);
+  assert.equal(received.item_category, '상품'); assert.equal(received.coa_requested, 0);
+  for (const item_category of ['제품', '상품', '원자재', '부자재']) assert.equal((await staff('POST', '/api/po', { ...body, item_category })).status, 200);
+  assert.equal((await staff('POST', '/api/po', { ...body, item_category: '잘못된 분류' })).status, 400);
+  assert.equal((await staff('POST', '/api/po', { ...body, coa_requested: 'false' })).status, 400);
+});
+
+test('Other receipts support classification, filters and logistics authorization', async () => {
+  const body = { received_date: '2026-11-13', item: '발주 없는 샘플', item_category: '부자재', qty: 10, vendor: '기타입고처', note: '무상 제공' };
+  assert.equal((await anon('POST', '/api/other-receipts', body)).status, 401);
+  const created = await staff('POST', '/api/other-receipts', body);
+  assert.equal(created.status, 200); assert.equal(created.body.item_category, '부자재');
+  const id = created.body.id;
+  assert.equal((await staff('GET', '/api/other-receipts?from=2026-11-13&to=2026-11-13&q=' + encodeURIComponent('기타입고처'))).body.length, 1);
+  assert.equal((await staff('GET', '/api/other-receipts?item_category=' + encodeURIComponent('제품'))).body.length, 0);
+  assert.equal((await staff('POST', '/api/other-receipts', { ...body, item_category: '' })).status, 400);
+  assert.equal((await staff('POST', '/api/other-receipts', { ...body, qty: -1 })).status, 400);
+  const other = client();
+  const account = await other('POST', '/api/auth/register', { name: '물류담당', password: 'password', invite: 'test-invite' });
+  assert.equal((await other('PUT', '/api/other-receipts/' + id, body)).status, 403);
+  assert.equal((await other('DELETE', '/api/other-receipts/' + id)).status, 403);
+  assert.equal((await admin('PUT', '/api/admin/users/' + account.body.user.id, { roles: ['logistics'] })).status, 200);
+  assert.equal((await other('PUT', '/api/other-receipts/' + id, { ...body, item_category: '제품', qty: 12 })).body.qty, 12);
+  const tables = (await admin('GET', '/api/admin/backup')).body.tables;
+  assert.ok(tables.includes('other_receipts'));
+  assert.equal((await admin('GET', '/api/admin/backup?table=other_receipts')).body.rows[0].id, id);
+  assert.equal((await other('DELETE', '/api/other-receipts/' + id)).status, 200);
+});
+
+test('Shipment LOT persists on create, list and edit', async () => {
+  const body = { ship_date: '2026-11-13', item: 'LOT 테스트', qty: 2, customer: '거래처', lot: 'LOT-2026-A' };
+  const row = await staff('POST', '/api/shipments', body);
+  assert.equal(row.status, 200); assert.equal(row.body.lot, 'LOT-2026-A');
+  assert.equal((await staff('PUT', '/api/shipments/' + row.body.id, { ...body, lot: 'LOT-2026-B' })).body.lot, 'LOT-2026-B');
+  assert.equal((await staff('GET', '/api/shipments?from=2026-11-13')).body.find(r => r.id === row.body.id).lot, 'LOT-2026-B');
+});
+
+test('Append-only migration preserves existing orders, shipments and accounts', () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wpa-migration-'));
+  const old = new DatabaseSync(path.join(dataDir, 'app.db'));
+  old.exec(fs.readFileSync(new URL('../drizzle/0000_work_process.sql', import.meta.url), 'utf8'));
+  old.exec("CREATE TABLE _local_migrations(name TEXT PRIMARY KEY); INSERT INTO _local_migrations VALUES('0000_work_process.sql'); INSERT INTO users(name,pw_salt,pw_hash,is_admin) VALUES('기존관리자','salt','hash',1); INSERT INTO purchase_orders(req_no,vendor,item,qty) VALUES('OLD','공급사','기존품목',3); INSERT INTO shipments(ship_date,item,qty,customer) VALUES('2026-11-12','기존출하',4,'거래처');");
+  old.close();
+  const { sqlite: upgraded } = localEnvironment(dataDir, 'test-invite');
+  try {
+    assert.equal(upgraded.prepare('SELECT COUNT(*) c FROM users').get().c, 1);
+    const order = upgraded.prepare('SELECT * FROM purchase_orders').get();
+    assert.equal(order.item, '기존품목'); assert.equal(order.item_category, ''); assert.equal(order.coa_requested, 0);
+    assert.equal(upgraded.prepare('SELECT * FROM shipments').get().lot, '');
+    assert.equal(upgraded.prepare('SELECT COUNT(*) c FROM other_receipts').get().c, 0);
+  } finally { upgraded.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
 });

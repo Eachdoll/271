@@ -22,7 +22,7 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { console.error(error); res.writeHead(500); res.end('Local server error'); }
 });
 if (require.main === module) {
-  ready.then(() => server.listen(Number(process.env.PORT || 3000), () => console.log(`업무프로세스 허브: http://localhost:${server.address().port}`)));
+  ready.then(() => server.listen(Number(process.env.PORT || 3000), () => console.log(`서울세미텍 시스템: http://localhost:${server.address().port}`)));
   for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => { sqlite?.close(); process.exit(0); }));
 }
 module.exports = { server, ready, get db() { return sqlite; } };

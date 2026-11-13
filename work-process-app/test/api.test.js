@@ -39,8 +39,8 @@ test('관리자가 초대코드 변경', async () => {
 });
 
 test('발주 → 물류 입고확인 색상 상태', async () => {
-  const a = (await admin('POST', '/api/po', { req_no: 'PR-001', vendor: 'A상사', item: '니트릴 글러브', qty: 100, due_date: '2026-11-20' })).body;
-  const b = (await admin('POST', '/api/po', { req_no: 'PR-002', vendor: 'B상사', item: '와이퍼', qty: 50, due_date: '2026-11-21' })).body;
+  const a = (await admin('POST', '/api/po', { item_category: '상품', req_no: 'PR-001', vendor: 'A상사', item: '니트릴 글러브', qty: 100, due_date: '2026-11-20' })).body;
+  const b = (await admin('POST', '/api/po', { item_category: '원자재', req_no: 'PR-002', vendor: 'B상사', item: '와이퍼', qty: 50, due_date: '2026-11-21' })).body;
   assert.equal((await user('POST', '/api/po/receive', { ids: [a.id], status: 'ok' })).status, 200);
   assert.equal((await user('POST', '/api/po/receive', { ids: [b.id], status: 'mismatch' })).status, 400); // 수량 필요
   assert.equal((await user('POST', '/api/po/receive', { ids: [b.id], status: 'mismatch', recv_qty: 45 })).status, 200);

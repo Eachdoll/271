@@ -16,6 +16,17 @@ const REQUEST_TYPES = { analysis: 'quality', development: 'dev', sample: 'produc
 const REQUEST_PREFIX = { analysis: 'Q', development: 'D', sample: 'S' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
 const WORK_STATUSES = ['waiting', 'progress', 'done'];
+const ITEM_CATEGORIES = ['제품', '상품', '원자재', '부자재'];
+function itemCategory(value) {
+  if (!ITEM_CATEGORIES.includes(value)) throw bad('품목 분류를 선택하세요.');
+  return value;
+}
+function checked(value) {
+  if (Array.isArray(value)) return value.some(v => ['1', 'on', true, 1].includes(v)) ? 1 : 0;
+  if (['1', 'on', true, 1].includes(value)) return 1;
+  if ([undefined, null, '', '0', false, 0].includes(value)) return 0;
+  throw bad('COA 요청 여부가 올바르지 않습니다.');
+}
 
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const bad = (m) => new HttpError(400, m);
@@ -77,7 +88,7 @@ function parseCookies(req) {
   const out = {}; for (const part of (req.headers.get('cookie') || '').split(';')) { const i = part.indexOf('='); if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim()); } return out;
 }
 async function currentUser(req) {
-  const token = parseCookies(req).sid; if (!token) return null;
+  const token = sessionToken(req); if (!token) return null;
   const row = (await db.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>?').get(token, Date.now()));
   return row || null;
 }
@@ -85,8 +96,19 @@ async function startSession(req, res, userId) {
   const token = randomHex(32);
   (await db.prepare('INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)').run(token, userId, Date.now() + SESSION_DAYS * 864e5));
   (await db.prepare('DELETE FROM sessions WHERE expires_at<?').run(Date.now()));
-  const secure = new URL(req.url).protocol === 'https:' ? '; Secure' : '';
-  res.set('Set-Cookie', `sid=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}`);
+  res.set('Set-Cookie', `wpa_sid=${token}; HttpOnly; Path=/; Max-Age=${SESSION_DAYS * 86400}; ${sessionCookiePolicy(req)}`);
+}
+
+// Sites may render inside ChatGPT/Codex. CHIPS keeps the HttpOnly session
+// available in that embedded context even when third-party cookies are blocked.
+function sessionCookiePolicy(req) {
+  return new URL(req.url).protocol === 'https:'
+    ? 'SameSite=None; Secure; Partitioned'
+    : 'SameSite=Lax';
+}
+function sessionToken(req) {
+  const cookies = parseCookies(req);
+  return cookies.wpa_sid || cookies.sid;
 }
 
 // ───────────────────────── 라우터 ─────────────────────────
@@ -126,8 +148,9 @@ route('POST', '/api/auth/login', async ({ body, req, res }) => {
 }, { auth: false });
 
 route('POST', '/api/auth/logout', async ({ req, res }) => {
-  const t = parseCookies(req).sid; if (t) (await db.prepare('DELETE FROM sessions WHERE token=?').run(t));
-  res.set('Set-Cookie', 'sid=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0');
+  const t = sessionToken(req); if (t) (await db.prepare('DELETE FROM sessions WHERE token=?').run(t));
+  res.append('Set-Cookie', `wpa_sid=; HttpOnly; Path=/; Max-Age=0; ${sessionCookiePolicy(req)}`);
+  res.append('Set-Cookie', 'sid=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0');
   return { ok: true };
 }, { auth: false });
 
@@ -176,7 +199,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -190,22 +213,23 @@ route('GET', '/api/admin/backup', async ({ user, query }) => {
 
 // ── 구매: 발주목록 ──
 function poFields(b) {
-  return [reqStr(b.req_no, '구매의뢰번호', 50), reqStr(b.vendor, '거래처', 100), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), dateStr(b.due_date, '납기일'), str(b.note, 500)];
+  return [reqStr(b.req_no, '구매의뢰번호', 50), reqStr(b.vendor, '거래처', 100), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), dateStr(b.due_date, '납기일'), str(b.note, 500), itemCategory(b.item_category), checked(b.coa_requested)];
 }
 route('GET', '/api/po', async ({ query }) => {
   const where = []; const args = [];
   if (query.q) { where.push('(req_no LIKE ? OR vendor LIKE ? OR item LIKE ?)'); const q = `%${query.q}%`; args.push(q, q, q); }
   if (query.recv === 'none') where.push("recv_status=''");
   else if (query.recv) { where.push('recv_status=?'); args.push(query.recv); }
+  if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
   return (await db.prepare(`SELECT * FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
 route('POST', '/api/po', async ({ user, body }) => {
-  const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,created_by) VALUES(?,?,?,?,?,?,?)').run(...poFields(body), user.name));
+  const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(...poFields(body), user.name));
   return (await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(r.lastInsertRowid));
 });
 route('PUT', '/api/po/:id', async ({ user, params, body }) => {
   const row = (await mustGet('purchase_orders', params.id)); if (!canModify(user, row) && !hasRole(user, 'purchase')) throw new HttpError(403, '등록자 또는 구매 담당자만 수정할 수 있습니다.');
-  (await db.prepare('UPDATE purchase_orders SET req_no=?,vendor=?,item=?,qty=?,due_date=?,note=? WHERE id=?').run(...poFields(body), row.id));
+  (await db.prepare('UPDATE purchase_orders SET req_no=?,vendor=?,item=?,qty=?,due_date=?,note=?,item_category=?,coa_requested=? WHERE id=?').run(...poFields(body), row.id));
   return (await mustGet('purchase_orders', row.id));
 });
 route('DELETE', '/api/po/:id', async ({ user, params }) => {
@@ -369,19 +393,48 @@ route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
   (await db.prepare('DELETE FROM schedules WHERE id=?').run(row.id)); return { ok: true };
 });
 
+// ── 물류: 발주 없는 기타입고 ──
+function otherReceiptFields(b) {
+  return [dateStr(b.received_date, '입고일'), reqStr(b.item, '품목명', 200), itemCategory(b.item_category), num(b.qty, '입고수량'), reqStr(b.vendor, '입고처', 100), str(b.note, 500)];
+}
+route('GET', '/api/other-receipts', async ({ query }) => {
+  const where = []; const args = [];
+  if (query.from) { where.push('received_date>=?'); args.push(dateStr(query.from, '시작일')); }
+  if (query.to) { where.push('received_date<=?'); args.push(dateStr(query.to, '종료일')); }
+  if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
+  if (query.q) { where.push('(item LIKE ? OR vendor LIKE ?)'); args.push('%' + str(query.q, 200) + '%', '%' + str(query.q, 200) + '%'); }
+  return await db.prepare(`SELECT * FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
+});
+route('POST', '/api/other-receipts', async ({ user, body }) => {
+  const r = await db.prepare('INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,created_by) VALUES(?,?,?,?,?,?,?)').run(...otherReceiptFields(body), user.name);
+  return await mustGet('other_receipts', r.lastInsertRowid);
+});
+route('PUT', '/api/other-receipts/:id', async ({ user, params, body }) => {
+  const row = await mustGet('other_receipts', params.id);
+  if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
+  await db.prepare('UPDATE other_receipts SET received_date=?,item=?,item_category=?,qty=?,vendor=?,note=? WHERE id=?').run(...otherReceiptFields(body), row.id);
+  return await mustGet('other_receipts', row.id);
+});
+route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {
+  const row = await mustGet('other_receipts', params.id);
+  if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
+  await db.prepare('DELETE FROM other_receipts WHERE id=?').run(row.id);
+  return { ok: true };
+});
+
 // ── 물류: 출하목록 ──
-function shipFields(b) { return [dateStr(b.ship_date, '출고일'), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), reqStr(b.customer, '거래처', 100), str(b.note, 500)]; }
+function shipFields(b) { return [dateStr(b.ship_date, '출고일'), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), reqStr(b.customer, '거래처', 100), str(b.note, 500), str(b.lot, 100)]; }
 route('GET', '/api/shipments', async ({ query }) => {
   const from = query.from || today(); const to = query.to || from;
   return (await db.prepare('SELECT * FROM shipments WHERE ship_date BETWEEN ? AND ? ORDER BY ship_date DESC, id DESC').all(from, to));
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
-  const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,created_by) VALUES(?,?,?,?,?,?)').run(...shipFields(body), user.name));
+  const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by) VALUES(?,?,?,?,?,?,?)').run(...shipFields(body), user.name));
   return (await mustGet('shipments', r.lastInsertRowid));
 });
 route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
-  (await db.prepare('UPDATE shipments SET ship_date=?,item=?,qty=?,customer=?,note=? WHERE id=?').run(...shipFields(body), row.id)); return (await mustGet('shipments', row.id));
+  (await db.prepare('UPDATE shipments SET ship_date=?,item=?,qty=?,customer=?,note=?,lot=? WHERE id=?').run(...shipFields(body), row.id)); return (await mustGet('shipments', row.id));
 });
 route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');

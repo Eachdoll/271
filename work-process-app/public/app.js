@@ -1,4 +1,4 @@
-// 업무프로세스 허브 프런트엔드 (빌드 도구 없음, 해시 라우팅)
+// 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
 // ───────────── 공통 도구 ─────────────
@@ -99,7 +99,7 @@ const NAV = [
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정']] },
-  { group: '물류', items: [['#/logistics/receive', '발주입고목록'], ['#/logistics/ship', '출하목록']] },
+  { group: '물류', items: [['#/logistics/receive', '발주입고목록'], ['#/logistics/other', '기타입고'], ['#/logistics/ship', '출하목록']] },
 ];
 const PAGES = {
   '#/': pageHome,
@@ -115,6 +115,7 @@ const PAGES = {
   '#/prod/semi': () => pageSchedule('semi'),
   '#/logistics/receive': pageReceive,
   '#/logistics/ship': pageShip,
+  '#/logistics/other': pageOtherReceipts,
   '#/admin': pageAdmin,
   '#/me': pageMe,
 };
@@ -127,7 +128,7 @@ function shell() {
   $('#app').innerHTML = `
   <header class="top">
     <button class="menu-btn" aria-label="메뉴">☰</button>
-    <a href="#/" class="brand"><span class="logo">▤</span> <span class="brand-text">업무프로세스 허브</span></a>
+    <a href="#/" class="brand"><img class="brand-logo" src="/assets/seoulsemi-logo.png" alt="SEOUL SEMITECH"> <span class="brand-text">서울세미텍 시스템</span></a>
     <div class="who"><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
@@ -151,7 +152,7 @@ function pageAuth(mode = 'login') {
   $('#app').innerHTML = `
   <div class="auth">
     <div class="auth-card">
-      <div class="brand big"><span class="logo">▤</span> 업무프로세스 허브</div>
+      <div class="brand big"><img class="brand-logo" src="/assets/seoulsemi-logo.png" alt="SEOUL SEMITECH"> 서울세미텍 시스템</div>
       <p class="muted">구매 · 품질 · 개발 · 생산 · 물류 업무를 한 곳에서</p>
       <div class="tabs"><button data-m="login" class="${mode === 'login' ? 'on' : ''}">로그인</button><button data-m="register" class="${mode === 'register' ? 'on' : ''}">가입</button></div>
       <form class="stack" id="authForm">
@@ -205,10 +206,20 @@ async function pageHome(main) {
 }
 
 // ───────────── 구매: 발주목록 ─────────────
+const ITEM_CATEGORIES = ['제품', '상품', '원자재', '부자재'];
+function categoryOptions(value = '', all = false) {
+  return `<option value="">${all ? '전체 분류' : '분류 선택'}</option>` + ITEM_CATEGORIES.map(category => `<option value="${category}" ${value === category ? 'selected' : ''}>${category}</option>`).join('');
+}
+function categoryField(value = '') {
+  return `<label>분류 *<select name="item_category" required>${categoryOptions(value)}</select></label>`;
+}
+function coaChip(value) { return value ? '<span class="chip">COA 요청</span>' : '<span class="muted">—</span>'; }
 function poForm(po = {}) {
   return `<div class="form-grid">
     <label>구매의뢰번호 *<input name="req_no" required value="${esc(po.req_no)}"></label>
     <label>거래처 *<input name="vendor" required value="${esc(po.vendor)}"></label>
+    ${categoryField(po.item_category)}
+    <label class="inline coa-field"><input name="coa_requested" type="checkbox" value="1" ${po.coa_requested ? 'checked' : ''}> COA 요청</label>
     <label class="span2">품목명 *<input name="item" required value="${esc(po.item)}"></label>
     <label>수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(po.qty)}"></label>
     <label>납기일 *<input name="due_date" type="date" required value="${esc(po.due_date)}"></label>
@@ -228,17 +239,18 @@ async function pagePO(main) {
   <form class="card" id="poNew"><h3>발주 등록</h3>${poForm()}<div class="actions"><button class="btn primary">등록</button></div></form>
   <div class="toolbar">
     <input type="search" id="poQ" placeholder="의뢰번호·거래처·품목 검색">
+    <select id="poCategory" aria-label="품목 분류">${categoryOptions('', true)}</select>
     <select id="poF"><option value="">전체</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select>
     <div class="legend"><span class="chip green">입고완료</span><span class="chip red">수량상이</span><span class="chip yellow">확인중</span></div>
   </div>
   <div id="poList"></div>`;
   const load = async () => {
-    const rows = await api('GET', `/api/po?q=${encodeURIComponent($('#poQ').value)}&recv=${$('#poF').value}`);
+    const rows = await api('GET', `/api/po?q=${encodeURIComponent($('#poQ').value)}&recv=${$('#poF').value}&item_category=${encodeURIComponent($('#poCategory').value)}`);
     const t = todayStr();
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>등록</th><th></th></tr></thead>
+      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>등록</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
@@ -254,6 +266,7 @@ async function pagePO(main) {
   $('#poNew').onsubmit = async (e) => { e.preventDefault(); try { await api('POST', '/api/po', formObj(e.target)); e.target.reset(); toast('발주를 등록했습니다.'); load(); } catch (err) { fail(err); } };
   let t; $('#poQ').oninput = () => { clearTimeout(t); t = setTimeout(load, 250); };
   $('#poF').onchange = load;
+  $('#poCategory').onchange = load;
   await load();
 }
 
@@ -283,10 +296,10 @@ async function pageReceive(main) {
     if (f === 'open') rows = rows.filter((p) => p.recv_status !== 'ok');
     const t = todayStr();
     $('#rcList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>확인자</th></tr></thead>
+      <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>확인자</th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td><input type="checkbox" class="rc-check" value="${p.id}" aria-label="선택"></td>
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
@@ -315,6 +328,58 @@ async function pageReceive(main) {
   }));
   $('#rcF').onchange = load;
   let t; $('#rcQ').oninput = () => { clearTimeout(t); t = setTimeout(load, 250); };
+  await load();
+}
+
+// ───────────── 물류: 기타입고 ─────────────
+function otherReceiptForm(row = {}) {
+  return `<div class="form-grid">
+    <label>입고일 *<input name="received_date" type="date" required value="${esc(row.received_date || todayStr())}"></label>
+    ${categoryField(row.item_category)}
+    <label>품목명 *<input name="item" required maxlength="200" value="${esc(row.item)}"></label>
+    <label>입고수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(row.qty)}"></label>
+    <label>입고처 *<input name="vendor" required maxlength="100" value="${esc(row.vendor)}"></label>
+    <label>비고<input name="note" maxlength="500" value="${esc(row.note)}" placeholder="발주 없이 입고된 사유 등"></label>
+  </div>`;
+}
+async function pageOtherReceipts(main) {
+  main.innerHTML = `<h1>기타입고 <span class="dept">물류</span></h1>
+    <p class="muted">발주서를 내지 않은 품목의 입고를 등록합니다. 발주입고목록과 별도로 관리됩니다.</p>
+    <form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="actions"><button class="btn primary">등록</button></div></form>
+    <div class="toolbar">
+      <label class="inline">기간 <input type="date" id="otherFrom" value="${monthStart(todayStr())}"> ~ <input type="date" id="otherTo" value="${todayStr()}"></label>
+      <select id="otherCategory" aria-label="품목 분류">${categoryOptions('', true)}</select>
+      <input id="otherQ" type="search" placeholder="품목명·입고처 검색"><span class="muted" id="otherCount"></span>
+    </div><div id="otherList"></div>`;
+  const load = async () => {
+    const params = new URLSearchParams({ from: $('#otherFrom').value, to: $('#otherTo').value, item_category: $('#otherCategory').value, q: $('#otherQ').value });
+    const rows = await api('GET', '/api/other-receipts?' + params);
+    $('#otherCount').textContent = `${rows.length}건`;
+    $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>등록자</th><th></th></tr></thead>
+      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}</td><td class="r">${fmtNum(row.qty)}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap"><button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+    $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
+      const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
+      const box = modal(`<h3>기타입고 수정</h3><form>${otherReceiptForm(row)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
+      $('form', box.el).onsubmit = async event => {
+        event.preventDefault();
+        try { await api('PUT', '/api/other-receipts/' + row.id, formObj(event.target)); box.close(); toast('수정했습니다.'); await load(); } catch (error) { fail(error); }
+      };
+    });
+    $$('[data-other-del]', main).forEach(button => button.onclick = async () => {
+      if (!await confirmBox('이 기타입고 기록을 삭제할까요?')) return;
+      try { await api('DELETE', '/api/other-receipts/' + button.dataset.otherDel); await load(); } catch (error) { fail(error); }
+    });
+  };
+  $('#otherNew').onsubmit = async event => {
+    event.preventDefault(); const button = $('button', event.target); button.disabled = true;
+    try {
+      const value = formObj(event.target); await api('POST', '/api/other-receipts', value);
+      event.target.reset(); $('#otherFrom').value = monthStart(value.received_date); $('#otherTo').value = value.received_date;
+      $('#otherQ').value = ''; $('#otherCategory').value = ''; toast('기타입고를 등록했습니다.'); await load();
+    } catch (error) { fail(error); } finally { button.disabled = false; }
+  };
+  for (const id of ['otherFrom', 'otherTo', 'otherCategory']) $('#' + id).onchange = () => load().catch(fail);
+  let timer; $('#otherQ').oninput = () => { clearTimeout(timer); timer = setTimeout(() => load().catch(fail), 250); };
   await load();
 }
 
@@ -586,6 +651,7 @@ async function pageShip(main) {
     <label>품목명 *<input name="item" required></label>
     <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
     <label>거래처 *<input name="customer" required></label>
+    <label>LOT<input name="lot" maxlength="100" placeholder="LOT 번호 (선택)"></label>
     <label class="span2">비고<input name="note"></label></div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
   <div class="toolbar"><label class="inline">기간 <input type="date" id="shFrom" value="${todayStr()}"> ~ <input type="date" id="shTo" value="${todayStr()}"></label><button class="btn small" id="shToday">오늘</button><span id="shSum" class="muted"></span></div>
@@ -594,8 +660,8 @@ async function pageShip(main) {
     const rows = await api('GET', `/api/shipments?from=${$('#shFrom').value}&to=${$('#shTo').value || $('#shFrom').value}`);
     $('#shSum').innerHTML = `${rows.length}건 · 수량 합계 <b>${fmtNum(rows.reduce((a, r) => a + r.qty, 0))}</b>`;
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th>출고일</th><th>품목명</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력</th><th></th></tr></thead>
-      <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>
+      <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력</th><th></th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>
         <td class="nowrap"><button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당 기간 출하가 없습니다.</div>';
     $$('#shList [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 출하 기록을 삭제할까요?')) { try { await api('DELETE', '/api/shipments/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
@@ -604,13 +670,14 @@ async function pageShip(main) {
       const m = modal(`<h3>출하 수정</h3><form><div class="form-grid">
         <label>출고일<input name="ship_date" type="date" required value="${esc(r.ship_date)}"></label><label>품목명<input name="item" required value="${esc(r.item)}"></label>
         <label>수량<input name="qty" type="number" min="0" step="any" required value="${esc(r.qty)}"></label><label>거래처<input name="customer" required value="${esc(r.customer)}"></label>
+        <label>LOT<input name="lot" maxlength="100" value="${esc(r.lot)}"></label>
         <label class="span2">비고<input name="note" value="${esc(r.note)}"></label></div><div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
       $('form', m.el).onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/shipments/' + r.id, formObj(e.target)); m.close(); load(); } catch (err) { fail(err); } };
     }));
   };
   $('#shNew').onsubmit = async (e) => {
     e.preventDefault(); const v = formObj(e.target);
-    try { await api('POST', '/api/shipments', v); ['item', 'qty', 'customer', 'note'].forEach((k) => (e.target[k].value = '')); toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); }
+    try { await api('POST', '/api/shipments', v); ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); }
   };
   $('#shFrom').onchange = () => { if ($('#shTo').value < $('#shFrom').value) $('#shTo').value = $('#shFrom').value; load(); };
   $('#shTo').onchange = load;
