@@ -208,3 +208,13 @@ body { word-break: keep-all; overflow-wrap: anywhere; }
   .who .tag { display: none; }
   .top { gap: 8px; padding: 0 12px; }
 }
+
+/* BOM과 첨부 사진 */
+.bom-materials { min-width: 640px; }
+.bom-materials input, .bom-materials select { width: 100%; min-width: 90px; }
+.bom-materials td:first-child input { min-width: 180px; }
+.photo-picker { border: 1px dashed var(--line); border-radius: var(--radius); padding: 12px; }
+.photo-picker .thumbs { margin-top: 8px; }
+[data-photo-view], [data-photo-preview] img { cursor: zoom-in; }
+.sc-item .btn { white-space: nowrap; }
+caption { text-align: left; padding: 8px 0; font-weight: 600; color: var(--muted); }

@@ -22,6 +22,13 @@
       "when": 1794558300000,
       "tag": "0002_receipt_analysis_links",
       "breakpoints": false
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794559000000,
+      "tag": "0003_bom_and_attachments",
+      "breakpoints": false
     }
   ]
 }

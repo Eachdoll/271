@@ -82,6 +82,40 @@ async function removePhotos(files) {
   for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(f)) await env.BUCKET.delete(f);
 }
 
+const attachmentTables = { request: 'requests', purchase_order: 'purchase_orders', other_receipt: 'other_receipts', shipment: 'shipments' };
+function attachmentSummary(entity, table) {
+  return `COALESCE((SELECT inspection_status FROM attachments a WHERE a.entity_type='${entity}' AND a.entity_id=${table}.id),'unchecked') AS inspection_status,
+    COALESCE((SELECT json_array_length(photos) FROM attachments a WHERE a.entity_type='${entity}' AND a.entity_id=${table}.id),0) AS photo_count`;
+}
+async function attachmentEntity(type, id, user, write = false) {
+  const table = attachmentTables[type];
+  if (!Object.hasOwn(attachmentTables, type) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) throw bad('첨부 대상을 확인하세요.');
+  const row = await db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(Number(id));
+  if (!row) {
+    // Incoming inspection evidence remains readable after the original receipt is removed.
+    if (!write && ['purchase_order', 'other_receipt'].includes(type) && await db.prepare('SELECT 1 FROM requests WHERE source_type=? AND source_id=?').get(type, Number(id))) return;
+    throw new HttpError(404, '첨부할 기록을 찾을 수 없습니다.');
+  }
+  if (type === 'request' && !['development','sample'].includes(row.type)) throw bad('개발·샘플 의뢰서에 사진을 첨부할 수 있습니다.');
+  if (write) {
+    if (type === 'request') {
+      if (!(hasRole(user, REQUEST_TYPES[row.type]) || (row.requester_id === user.id && ['pending','rejected'].includes(row.status)))) throw new HttpError(403, '의뢰자 또는 담당자만 사진을 변경할 수 있습니다.');
+    } else if (type !== 'purchase_order' && !canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 사진·검수 기록을 변경할 수 있습니다.');
+  }
+  return row;
+}
+function decodeAttachment(row) {
+  return row ? { ...row, photos: JSON.parse(row.photos) } : { photos: [], inspection_status: 'unchecked', note: '', revision: 0, updated_by: null, updated_at: null };
+}
+async function deleteEntityWithAttachments(type, table, id) {
+  const record = await db.prepare('SELECT * FROM attachments WHERE entity_type=? AND entity_id=?').get(type, id);
+  const preserve = ['purchase_order','other_receipt'].includes(type) && await db.prepare('SELECT 1 FROM requests WHERE source_type=? AND source_id=?').get(type, id);
+  const queries = [{ sql: `DELETE FROM ${table} WHERE id=?`, args: [id] }];
+  if (!preserve) queries.push({ sql: 'DELETE FROM attachments WHERE entity_type=? AND entity_id=?', args: [type, id] });
+  await db.batch(queries);
+  if (record && !preserve) await removePhotos(JSON.parse(record.photos));
+}
+
 // ───────────────────────── 인증 ─────────────────────────
 // Login throttling is persisted in D1 across Worker instances.
 function parseCookies(req) {
@@ -119,6 +153,34 @@ function route(method, pattern, handler, { auth = true } = {}) {
 }
 
 // 인증
+route('GET', '/api/attachments/:entity/:id', async ({ user, params }) => {
+  await attachmentEntity(params.entity, params.id, user);
+  return decodeAttachment(await db.prepare('SELECT * FROM attachments WHERE entity_type=? AND entity_id=?').get(params.entity, Number(params.id)));
+});
+route('PUT', '/api/attachments/:entity/:id', async ({ user, params, body }) => {
+  await attachmentEntity(params.entity, params.id, user, true);
+  const current = decodeAttachment(await db.prepare('SELECT * FROM attachments WHERE entity_type=? AND entity_id=?').get(params.entity, Number(params.id)));
+  if (body.revision !== undefined && Number(body.revision) !== current.revision) throw new HttpError(409, '사진 기록이 변경되었습니다. 다시 열어 확인하세요.');
+  const keep = body.keep_photos === undefined ? current.photos : body.keep_photos;
+  if (!Array.isArray(keep) || new Set(keep).size !== keep.length || keep.some(file => !current.photos.includes(file))) throw bad('유지할 사진을 다시 확인하세요.');
+  if (body.photos !== undefined && !Array.isArray(body.photos)) throw bad('첨부 사진 형식을 확인하세요.');
+  if (keep.length + (body.photos || []).length > 10) throw bad('사진은 최대 10장까지 첨부할 수 있습니다.');
+  const status = body.inspection_status ?? current.inspection_status;
+  if (!['unchecked','normal','abnormal'].includes(status)) throw bad('이상 여부를 확인하세요.');
+  const note = body.note === undefined ? current.note : str(body.note, 1000);
+  const added = await savePhotos(body.photos);
+  try {
+    const result = await db.prepare(`INSERT INTO attachments(entity_type,entity_id,photos,inspection_status,note,revision,updated_by)
+      VALUES(?,?,?,?,?,1,?) ON CONFLICT(entity_type,entity_id) DO UPDATE SET
+      photos=excluded.photos,inspection_status=excluded.inspection_status,note=excluded.note,revision=attachments.revision+1,
+      updated_by=excluded.updated_by,updated_at=datetime('now','+9 hours') WHERE attachments.revision=?`)
+      .run(params.entity, Number(params.id), JSON.stringify(keep.concat(added)), status, note, user.name, current.revision);
+    if (!result.changes) throw new HttpError(409, '다른 사용자가 사진 기록을 변경했습니다. 다시 열어 확인하세요.');
+  } catch (error) { await removePhotos(added); throw error; }
+  await removePhotos(current.photos.filter(file => !keep.includes(file)));
+  return decodeAttachment(await db.prepare('SELECT * FROM attachments WHERE entity_type=? AND entity_id=?').get(params.entity, Number(params.id)));
+});
+
 route('POST', '/api/auth/register', async ({ body, req, res }) => {
   const name = reqStr(body.name, '이름', 30);
   const password = String(body.password || '');
@@ -199,7 +261,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -249,7 +311,7 @@ route('GET', '/api/po', async ({ query }) => {
   if (query.recv === 'none') where.push("recv_status=''");
   else if (query.recv) { where.push('recv_status=?'); args.push(query.recv); }
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
-  return (await db.prepare(`SELECT * FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
+  return (await db.prepare(`SELECT purchase_orders.*, ${attachmentSummary('purchase_order','purchase_orders')} FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
 route('POST', '/api/po', async ({ user, body }) => {
   const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(...poFields(body), user.name));
@@ -262,7 +324,7 @@ route('PUT', '/api/po/:id', async ({ user, params, body }) => {
 });
 route('DELETE', '/api/po/:id', async ({ user, params }) => {
   const row = (await mustGet('purchase_orders', params.id)); if (!canModify(user, row) && !hasRole(user, 'purchase')) throw new HttpError(403, '등록자 또는 구매 담당자만 삭제할 수 있습니다.');
-  (await db.prepare('DELETE FROM purchase_orders WHERE id=?').run(row.id)); return { ok: true };
+  await deleteEntityWithAttachments('purchase_order', 'purchase_orders', row.id); return { ok: true };
 });
 // ── 물류: 발주입고 확인 (ok=초록, mismatch=빨강, checking=노랑, ''=미입고) ──
 route('POST', '/api/po/receive', async ({ user, body }) => {
@@ -390,7 +452,44 @@ route('DELETE', '/api/requests/:id', async ({ user, params }) => {
   const r = (await getRequest(params.id));
   const own = r.requester_id === user.id && ['pending', 'rejected'].includes(r.status);
   if (!(own || user.is_admin || hasRole(user, REQUEST_TYPES[r.type]))) throw new HttpError(403, '삭제 권한이 없습니다.');
-  (await db.prepare('DELETE FROM requests WHERE id=?').run(r.id)); return { ok: true };
+  await deleteEntityWithAttachments('request', 'requests', r.id); return { ok: true };
+});
+
+// ── 관리자 BOM ──
+function bomFields(body) {
+  const kind = String(body.kind || 'finished');
+  if (!['finished', 'semi'].includes(kind)) throw bad('완제품/반제품 구분을 선택하세요.');
+  const baseQty = num(body.base_qty, '기준 생산수량');
+  if (baseQty <= 0) throw bad('기준 생산수량은 0보다 커야 합니다.');
+  if (!Array.isArray(body.materials) || !body.materials.length || body.materials.length > 100) throw bad('자재를 1~100개 등록하세요.');
+  const materials = body.materials.map(m => {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) throw bad('자재 항목을 확인하세요.');
+    const qty = num(m.qty, '자재 사용량'); if (qty <= 0) throw bad('자재 사용량은 0보다 커야 합니다.');
+    return { item: reqStr(m.item, '자재명', 200), item_category: itemCategory(m.item_category), qty, unit: reqStr(m.unit, '자재 단위', 20) };
+  });
+  return [reqStr(body.product, '제품명', 200), str(body.product_code, 80), kind, baseQty, reqStr(body.unit, '생산 단위', 20), JSON.stringify(materials), str(body.note, 500), body.active === false || body.active === 0 ? 0 : 1];
+}
+function decodeBom(row) { return { ...row, materials: JSON.parse(row.materials) }; }
+route('GET', '/api/boms', async ({ user, query }) => {
+  const where = []; const args = [];
+  if (query.include_archived === '1') requireAdmin(user); else where.push('active=1');
+  if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분이 올바르지 않습니다.'); where.push('kind=?'); args.push(query.kind); }
+  return (await db.prepare(`SELECT * FROM boms ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY product,id`).all(...args)).map(decodeBom);
+});
+route('POST', '/api/boms', async ({ user, body }) => {
+  requireAdmin(user);
+  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(...bomFields(body), user.name);
+  return decodeBom(await mustGet('boms', result.lastInsertRowid));
+});
+route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
+  requireAdmin(user); await mustGet('boms', params.id);
+  await db.prepare("UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(...bomFields(body), params.id);
+  return decodeBom(await mustGet('boms', params.id));
+});
+route('DELETE', '/api/boms/:id', async ({ user, params }) => {
+  requireAdmin(user); await mustGet('boms', params.id);
+  await db.prepare("UPDATE boms SET active=0,updated_at=datetime('now','+9 hours') WHERE id=?").run(params.id);
+  return { ok: true };
 });
 
 // ── 생산: 완제품/반제품 생산일정 ──
@@ -400,11 +499,31 @@ function normStart(period, d) {
   if (period === 'month') dt.setUTCDate(1);
   return dt.toISOString().slice(0, 10);
 }
-function schedFields(b) {
+async function schedFields(b, previous = null) {
   const kind = String(b.kind); if (!['finished', 'semi'].includes(kind)) throw bad('완제품/반제품 구분이 올바르지 않습니다.');
   const period = String(b.period); if (!['day', 'week', 'month'].includes(period)) throw bad('일간/주간/월간을 선택하세요.');
-  return { kind, period, start_date: normStart(period, dateStr(b.start_date, '날짜')), product: reqStr(b.product, '제품명', 200), qty: num(b.qty, '수량'), note: str(b.note, 500) };
+  const qty = num(b.qty, '수량');
+  const bomId = b.bom_id === undefined ? previous?.bom_id || null : b.bom_id === '' || b.bom_id === null ? null : Number(b.bom_id);
+  let snapshot = {};
+  if (bomId !== null) {
+    if (!Number.isSafeInteger(bomId) || bomId <= 0) throw bad('BOM을 선택하세요.');
+    if (previous?.bom_id === bomId) snapshot = JSON.parse(previous.bom_snapshot);
+    else {
+      const bom = await mustGet('boms', bomId);
+      if (!bom.active) throw bad('사용 중지된 BOM입니다.');
+      snapshot = decodeBom(bom);
+    }
+    if (snapshot.kind !== kind) throw bad('완제품/반제품 구분에 맞는 BOM을 선택하세요.');
+    snapshot.production_qty = qty;
+    snapshot.requirements = snapshot.materials.map(material => {
+      const amount = material.qty * (qty / snapshot.base_qty);
+      if (!Number.isFinite(amount)) throw bad('자재 소요량이 너무 큽니다.');
+      return { ...material, qty: Number(amount.toPrecision(12)) };
+    });
+  }
+  return { kind, period, start_date: normStart(period, dateStr(b.start_date, '날짜')), product: bomId ? snapshot.product : reqStr(b.product, '제품명', 200), qty, note: str(b.note, 500), bom_id: bomId, bom_snapshot: JSON.stringify(snapshot) };
 }
+function decodeSchedule(row) { return { ...row, bom_snapshot: JSON.parse(row.bom_snapshot || '{}') }; }
 route('GET', '/api/schedules', async ({ query }) => {
   const kind = String(query.kind || 'finished');
   const from = dateStr(query.from, 'from'); const to = dateStr(query.to, 'to');
@@ -413,19 +532,19 @@ route('GET', '/api/schedules', async ({ query }) => {
       (period='day' AND start_date BETWEEN ? AND ?) OR
       (period='week' AND start_date<=? AND date(start_date,'+6 days')>=?) OR
       (period='month' AND start_date<=? AND date(start_date,'+1 month','-1 day')>=?)
-    ) ORDER BY start_date, period, id`).all(kind, from, to, to, from, to, from));
+    ) ORDER BY start_date, period, id`).all(kind, from, to, to, from, to, from)).map(decodeSchedule);
 });
 route('POST', '/api/schedules', async ({ user, body }) => {
-  const f = schedFields(body);
-  const r = (await db.prepare('INSERT INTO schedules(kind,period,start_date,product,qty,note,created_by) VALUES(?,?,?,?,?,?,?)').run(f.kind, f.period, f.start_date, f.product, f.qty, f.note, user.name));
-  return (await mustGet('schedules', r.lastInsertRowid));
+  const f = await schedFields(body);
+  const r = await db.prepare('INSERT INTO schedules(kind,period,start_date,product,qty,note,created_by,bom_id,bom_snapshot) VALUES(?,?,?,?,?,?,?,?,?)').run(f.kind, f.period, f.start_date, f.product, f.qty, f.note, user.name, f.bom_id, f.bom_snapshot);
+  return decodeSchedule(await mustGet('schedules', r.lastInsertRowid));
 });
 route('PUT', '/api/schedules/:id', async ({ user, params, body }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
-  if (body.toggle_done) { (await db.prepare('UPDATE schedules SET done=1-done WHERE id=?').run(row.id)); return (await mustGet('schedules', row.id)); }
-  const f = schedFields({ ...body, kind: row.kind });
-  (await db.prepare('UPDATE schedules SET period=?,start_date=?,product=?,qty=?,note=? WHERE id=?').run(f.period, f.start_date, f.product, f.qty, f.note, row.id));
-  return (await mustGet('schedules', row.id));
+  if (body.toggle_done) { await db.prepare('UPDATE schedules SET done=1-done WHERE id=?').run(row.id); return decodeSchedule(await mustGet('schedules', row.id)); }
+  const f = await schedFields({ ...body, kind: row.kind }, row);
+  await db.prepare('UPDATE schedules SET period=?,start_date=?,product=?,qty=?,note=?,bom_id=?,bom_snapshot=? WHERE id=?').run(f.period, f.start_date, f.product, f.qty, f.note, f.bom_id, f.bom_snapshot, row.id);
+  return decodeSchedule(await mustGet('schedules', row.id));
 });
 route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제할 수 있습니다.');
@@ -442,7 +561,7 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   if (query.to) { where.push('received_date<=?'); args.push(dateStr(query.to, '종료일')); }
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
   if (query.q) { where.push('(item LIKE ? OR vendor LIKE ?)'); args.push('%' + str(query.q, 200) + '%', '%' + str(query.q, 200) + '%'); }
-  return await db.prepare(`SELECT * FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
+  return await db.prepare(`SELECT other_receipts.*, ${attachmentSummary('other_receipt','other_receipts')} FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
   const results = await db.batch([
@@ -460,7 +579,7 @@ route('PUT', '/api/other-receipts/:id', async ({ user, params, body }) => {
 route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {
   const row = await mustGet('other_receipts', params.id);
   if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
-  await db.prepare('DELETE FROM other_receipts WHERE id=?').run(row.id);
+  await deleteEntityWithAttachments('other_receipt', 'other_receipts', row.id);
   return { ok: true };
 });
 
@@ -468,7 +587,7 @@ route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {
 function shipFields(b) { return [dateStr(b.ship_date, '출고일'), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), reqStr(b.customer, '거래처', 100), str(b.note, 500), str(b.lot, 100)]; }
 route('GET', '/api/shipments', async ({ query }) => {
   const from = query.from || today(); const to = query.to || from;
-  return (await db.prepare('SELECT * FROM shipments WHERE ship_date BETWEEN ? AND ? ORDER BY ship_date DESC, id DESC').all(from, to));
+  return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ship_date BETWEEN ? AND ? ORDER BY ship_date DESC, id DESC`).all(from, to));
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
   const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by) VALUES(?,?,?,?,?,?,?)').run(...shipFields(body), user.name));
@@ -480,7 +599,7 @@ route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
 });
 route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
-  (await db.prepare('DELETE FROM shipments WHERE id=?').run(row.id)); return { ok: true };
+  await deleteEntityWithAttachments('shipment', 'shipments', row.id); return { ok: true };
 });
 
 // ── 대시보드 ──

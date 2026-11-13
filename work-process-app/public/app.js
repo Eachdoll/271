@@ -92,6 +92,67 @@ function resizeImage(file, max = 1600) {
 }
 function lightbox(src) { modal(`<img class="lightbox" src="${esc(src)}" alt="사진">`, { wide: true }); }
 
+const INSPECTION = { unchecked: '미판정', normal: '이상 없음', abnormal: '이상 있음' };
+function inspectionBadge(row) { return `<span class="chip ${row.inspection_status === 'abnormal' ? 'red' : row.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[row.inspection_status] || '미판정'}</span>${row.photo_count ? ` <span class="small muted">사진 ${row.photo_count}장</span>` : ''}`; }
+function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><span class="muted small">사진을 눌러 크게 확인할 수 있습니다.</span><div class="thumbs" data-photo-preview></div></label>'; }
+function bindPhotoDraft(form, initial = []) {
+  const state = { photos: [...initial], busy: false };
+  const input = $('[data-photo-input]', form); const preview = $('[data-photo-preview]', form);
+  const show = () => { if (!preview) return; preview.innerHTML = state.photos.map(src => `<img src="${esc(src)}" alt="첨부 미리보기">`).join(''); $$('img', preview).forEach(image => image.onclick = event => { event.preventDefault(); event.stopPropagation(); lightbox(image.src); }); };
+  if (input) input.onchange = async () => {
+    const submit = $('button[type=submit], button.primary', form);
+    state.busy = true; if (submit) submit.disabled = true;
+    try {
+      if (input.files.length > 10) throw new Error('사진은 최대 10장까지 선택하세요.');
+      const photos = await Promise.all([...input.files].map(file => resizeImage(file)));
+      state.photos = photos; show();
+    } catch (error) { fail(error); input.value = ''; }
+    finally { state.busy = false; if (submit) submit.disabled = false; }
+  };
+  state.reset = () => { state.photos = []; if (input) input.value = ''; show(); };
+  show(); return state;
+}
+function inspectionFields() {
+  return `<label>이상 여부<select name="inspection_status">${Object.entries(INSPECTION).map(([key,label]) => `<option value="${key}">${label}</option>`).join('')}</select></label><label class="span2">판정 메모<input name="inspection_note" maxlength="1000" placeholder="박스 파손, 찌그러짐, 젖음 등"></label>`;
+}
+function photosHTML(record) {
+  return `<p><span class="chip ${record.inspection_status === 'abnormal' ? 'red' : record.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[record.inspection_status] || '미판정'}</span> ${esc(record.note || '')}</p><div class="thumbs">${record.photos.map(file => `<img src="/uploads/${esc(file)}" data-photo-view="/uploads/${esc(file)}" alt="첨부 사진" loading="lazy">`).join('') || '<span class="muted small">첨부된 사진이 없습니다.</span>'}</div>${record.updated_by ? `<p class="small muted">${esc(record.updated_by)} · ${esc(record.updated_at)}</p>` : ''}`;
+}
+function bindPhotoViews(root) { $$('[data-photo-view]', root).forEach(image => image.onclick = () => lightbox(image.dataset.photoView)); }
+async function renderAttachmentPreview(root, entity, id) {
+  try { const record = await api('GET', `/api/attachments/${entity}/${id}`); root.innerHTML = photosHTML(record); bindPhotoViews(root); }
+  catch (error) { root.textContent = error.message; }
+}
+async function openAttachments(entity, id, title, { editable = true, initialPhotos = [], initialStatus, initialNote } = {}) {
+  try {
+    const record = await api('GET', `/api/attachments/${entity}/${id}`);
+    if (initialStatus !== undefined) record.inspection_status = initialStatus;
+    if (initialNote !== undefined) record.note = initialNote;
+    const box = modal(`<h3>${esc(title)} · ${entity === 'request' ? '첨부 사진' : '사진·검수'}</h3><div>${photosHTML(record)}</div>${editable ? `<form class="stack"><div class="thumbs">${record.photos.map(file => `<label class="keep"><input type="checkbox" name="keep_photos" value="${esc(file)}" checked>사진 유지<img src="/uploads/${esc(file)}" alt="기존 사진"></label>`).join('')}</div>${photoPicker()}${entity === 'request' ? '' : `<label>이상 여부<select name="inspection_status">${Object.entries(INSPECTION).map(([key,label]) => `<option value="${key}" ${record.inspection_status === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`}<label>${entity === 'request' ? '사진 설명' : '판정 메모'}<textarea name="inspection_note" maxlength="1000" rows="3">${esc(record.note)}</textarea></label><div class="actions"><button type="submit" class="btn primary">저장</button></div></form>` : ''}`, { wide: true });
+    bindPhotoViews(box.el);
+    if (!editable) return;
+    const form = $('form', box.el); const draft = bindPhotoDraft(form, initialPhotos);
+    form.onsubmit = async event => {
+      event.preventDefault(); if (draft.busy) return;
+      const values = formObj(form); const button = $('button.primary', form); button.disabled = true;
+      try {
+        await api('PUT', `/api/attachments/${entity}/${id}`, { photos: draft.photos, keep_photos: values.keep_photos || [], revision: record.revision, inspection_status: values.inspection_status || record.inspection_status, note: values.inspection_note });
+        box.close(); toast('사진과 기록을 저장했습니다.'); render();
+      } catch (error) { fail(error); } finally { button.disabled = false; }
+    };
+  } catch (error) { fail(error); }
+}
+async function saveNewAttachments(entity, row, draft, form) {
+  const values = formObj(form); const photos = [...draft.photos];
+  if (!photos.length && (!values.inspection_status || values.inspection_status === 'unchecked') && !values.inspection_note) return true;
+  try { await api('PUT', `/api/attachments/${entity}/${row.id}`, { photos, inspection_status: values.inspection_status || 'unchecked', note: values.inspection_note || '' }); return true; }
+  catch (error) {
+    fail(new Error('기록은 저장했으나 사진·판정 저장에 실패했습니다. 열린 사진 창에서 다시 저장하세요.'));
+    await openAttachments(entity, row.id, row.title || row.item, { initialPhotos: photos, initialStatus: values.inspection_status || 'unchecked', initialNote: values.inspection_note || '' });
+    return false;
+  }
+}
+
 // ───────────── 레이아웃 / 라우팅 ─────────────
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름']] },
@@ -117,13 +178,14 @@ const PAGES = {
   '#/logistics/ship': pageShip,
   '#/logistics/other': pageOtherReceipts,
   '#/admin': pageAdmin,
+  '#/admin/bom': pageBoms,
   '#/me': pageMe,
 };
 
 function shell() {
   const cur = location.hash || '#/';
   const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`).join('')}</div>`).join('')
-    + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a></div>` : '');
+    + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a><a href="#/admin/bom" class="${cur === '#/admin/bom' ? 'active' : ''}">BOM 관리</a></div>` : '');
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   $('#app').innerHTML = `
   <header class="top">
@@ -296,19 +358,20 @@ async function pageReceive(main) {
     if (f === 'open') rows = rows.filter((p) => p.recv_status !== 'ok');
     const t = todayStr();
     $('#rcList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>확인자</th></tr></thead>
+      <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>확인자</th><th>사진·검수</th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td><input type="checkbox" class="rc-check" value="${p.id}" aria-label="선택"></td>
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
-        <td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td></tr>`).join('')}</tbody></table></div>`
+        <td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td><button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 발주가 없습니다.</div>';
     const all = $('#rcAll'); if (all) all.onchange = () => { $$('.rc-check').forEach((c) => (c.checked = all.checked)); updateCount(); };
     $$('.rc-check').forEach((c) => (c.onchange = updateCount));
     // 행 클릭으로도 체크
-    $$('#rcList tbody tr').forEach((tr) => (tr.onclick = (e) => { if (e.target.tagName !== 'INPUT') { const c = $('.rc-check', tr); c.checked = !c.checked; updateCount(); } }));
+    $$('#rcList tbody tr').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('input,button')) { const c = $('.rc-check', tr); c.checked = !c.checked; updateCount(); } }));
+    $$('#rcList [data-receipt-photo]').forEach(button => button.onclick = () => openAttachments('purchase_order', Number(button.dataset.receiptPhoto), rows.find(row => row.id === Number(button.dataset.receiptPhoto)).item));
     updateCount();
   };
   $$('.actionbar [data-st]').forEach((b) => (b.onclick = async () => {
@@ -345,7 +408,7 @@ function otherReceiptForm(row = {}) {
 async function pageOtherReceipts(main) {
   main.innerHTML = `<h1>기타입고 <span class="dept">물류</span></h1>
     <p class="muted">발주서를 내지 않은 품목의 입고를 등록합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
-    <form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="actions"><button class="btn primary">등록</button></div></form>
+    <form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="form-grid">${photoPicker()}${inspectionFields()}</div><div class="actions"><button class="btn primary">등록</button></div></form>
     <div class="toolbar">
       <label class="inline">기간 <input type="date" id="otherFrom" value="${monthStart(todayStr())}"> ~ <input type="date" id="otherTo" value="${todayStr()}"></label>
       <select id="otherCategory" aria-label="품목 분류">${categoryOptions('', true)}</select>
@@ -356,7 +419,8 @@ async function pageOtherReceipts(main) {
     const rows = await api('GET', '/api/other-receipts?' + params);
     $('#otherCount').textContent = `${rows.length}건`;
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>등록자</th><th></th></tr></thead>
-      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}</td><td class="r">${fmtNum(row.qty)}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap"><button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}</td><td class="r">${fmtNum(row.qty)}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap"><button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+    $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
       const box = modal(`<h3>기타입고 수정</h3><form>${otherReceiptForm(row)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
@@ -370,12 +434,13 @@ async function pageOtherReceipts(main) {
       try { await api('DELETE', '/api/other-receipts/' + button.dataset.otherDel); await load(); } catch (error) { fail(error); }
     });
   };
+  const otherDraft = bindPhotoDraft($('#otherNew'));
   $('#otherNew').onsubmit = async event => {
-    event.preventDefault(); const button = $('button', event.target); button.disabled = true;
+    event.preventDefault(); if (otherDraft.busy) return; const button = $('button.primary', event.target); button.disabled = true;
     try {
-      const value = formObj(event.target); await api('POST', '/api/other-receipts', value);
-      event.target.reset(); $('#otherFrom').value = monthStart(value.received_date); $('#otherTo').value = value.received_date;
-      $('#otherQ').value = ''; $('#otherCategory').value = ''; toast('기타입고와 분석리스트에 등록했습니다.'); await load();
+      const value = formObj(event.target); const saved = await api('POST', '/api/other-receipts', value); const photoSaved = await saveNewAttachments('other_receipt', saved, otherDraft, event.target);
+      event.target.reset(); otherDraft.reset(); $('#otherFrom').value = monthStart(value.received_date); $('#otherTo').value = value.received_date;
+      $('#otherQ').value = ''; $('#otherCategory').value = ''; if (photoSaved) toast('기타입고와 분석리스트에 등록했습니다.'); await load();
     } catch (error) { fail(error); } finally { button.disabled = false; }
   };
   for (const id of ['otherFrom', 'otherTo', 'otherCategory']) $('#' + id).onchange = () => load().catch(fail);
@@ -475,7 +540,7 @@ function fieldValue(f, r) {
   return s;
 }
 function requestForm(type, r) {
-  return `<form class="req-form"><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}</div>
+  return `<form class="req-form"><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample'].includes(type) ? photoPicker() : ''}</div>
     <div class="actions"><button class="btn primary">${r ? '저장' : '의뢰 접수'}</button></div></form>`;
 }
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
@@ -498,17 +563,22 @@ function requestDetail(type, r, reload) {
       ${rows}
       ${r.result_note ? `<tr><th>결과/메모</th><td>${esc(r.result_note)}</td></tr>` : ''}
     </table>
+    ${['development','sample'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>
+      ${['development','sample'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn" data-a="edit">수정</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
       ${mgr && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
       ${mgr && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn" data-a="status">상태/결과 변경</button>' : ''}
     </div>`, { wide: true });
+  if (['development','sample'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
+  else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
+      if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); return; }
       if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.label}리스트에 등록됨`); }
       if (a === 'reject') { const v = await promptBox('반려 사유', '<label>사유 *<textarea name="reason" required rows="3"></textarea></label>'); if (!v) return; await api('POST', `/api/requests/${r.id}/reject`, v); toast('반려했습니다.'); }
@@ -516,7 +586,8 @@ function requestDetail(type, r, reload) {
       if (a === 'status') { const v = await promptBox('상태/결과 변경', `<label>상태<select name="status">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select></label><label>결과/메모<textarea name="result_note" rows="3">${esc(r.result_note)}</textarea></label>`); if (!v) return; await api('POST', `/api/requests/${r.id}/status`, v); toast('변경했습니다.'); }
       if (a === 'edit') {
         m.close(); const e2 = modal(`<h3>${cfg.label}의뢰 수정</h3>${requestForm(type, r)}`, { wide: true });
-        $('form', e2.el).onsubmit = async (ev) => { ev.preventDefault(); try { await api('PUT', `/api/requests/${r.id}`, collectRequest(type, ev.target)); e2.close(); toast('저장했습니다.'); reload(); } catch (err) { fail(err); } };
+        const editForm = $('form', e2.el); const draft = bindPhotoDraft(editForm);
+        editForm.onsubmit = async (ev) => { ev.preventDefault(); if (draft.busy) return; try { const saved = await api('PUT', `/api/requests/${r.id}`, collectRequest(type, ev.target)); const photoSaved = await saveNewAttachments('request', saved, draft, editForm); e2.close(); if (photoSaved) toast('저장했습니다.'); reload(); } catch (err) { fail(err); } };
         return;
       }
       m.close(); reload();
@@ -546,9 +617,11 @@ async function pageIntake(type) {
     $$('#intakeList tr[data-id]').forEach((tr) => (tr.onclick = (e) => { if (e.target.closest('button')) return; requestDetail(type, rows.find((x) => x.id == tr.dataset.id), load); }));
     $$('#intakeList [data-ok]').forEach((b) => (b.onclick = async () => { try { const r = await api('POST', `/api/requests/${b.dataset.ok}/approve`); toast(`승인 완료 · 접수번호 ${r.req_no}`); load(); } catch (e) { fail(e); } }));
   };
-  $('.req-form', main).onsubmit = async (e) => {
-    e.preventDefault();
-    try { await api('POST', '/api/requests', collectRequest(type, e.target)); e.target.reset(); toast('의뢰를 접수했습니다. 접수대기 목록을 확인하세요.'); load(); } catch (err) { fail(err); }
+  const newForm = $('.req-form', main); const draft = bindPhotoDraft(newForm);
+  newForm.onsubmit = async (e) => {
+    e.preventDefault(); if (draft.busy) return;
+    const button = $('button.primary', newForm); button.disabled = true;
+    try { const saved = await api('POST', '/api/requests', collectRequest(type, e.target)); const photoSaved = await saveNewAttachments('request', saved, draft, newForm); e.target.reset(); draft.reset(); if (photoSaved) toast('의뢰를 접수했습니다. 접수대기 목록을 확인하세요.'); load(); } catch (err) { fail(err); } finally { button.disabled = false; }
   };
   await load();
 }
@@ -589,18 +662,58 @@ async function pageWorkList(type) {
 }
 
 // ───────────── 생산일정 (완제품/반제품) ─────────────
+function materialTable(materials, caption = '자재 소요량') {
+  return `<div class="table-wrap"><table class="grid"><caption>${esc(caption)}</caption><thead><tr><th>자재명</th><th>분류</th><th class="r">수량</th><th>단위</th></tr></thead><tbody>${materials.map(m => `<tr><td>${esc(m.item)}</td><td>${esc(m.item_category)}</td><td class="r">${fmtNum(m.qty)}</td><td>${esc(m.unit)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function bomMaterialRow(material = {}) {
+  return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'EA')}" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
+}
+function bomForm(bom = {}) {
+  return `<form class="stack"><div class="form-grid"><label>제품명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label><label>제품코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">위 기준 생산수량을 만드는 데 필요한 자재 사용량을 입력하세요. 예: 제품 100개 기준 원자재 5kg.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || [{}]).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 생산에서 선택 가능</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
+}
+async function pageBoms(main) {
+  if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
+  main.innerHTML = '<h1>BOM 관리</h1><p class="muted">제품별 구성 자재와 기준 사용량을 등록합니다. 생산일정에서 BOM을 선택하면 소요량을 계산합니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button><div id="bomList"></div>';
+  const load = async () => {
+    const boms = await api('GET', '/api/boms?include_archived=1');
+    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}</h3><p>${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><div class="actions"><button class="btn" data-bom-edit="${bom.id}">수정</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    const edit = bom => {
+      const box = modal(`<h3>${bom ? 'BOM 수정' : '새 BOM 등록'}</h3>${bomForm(bom)}`, { wide: true });
+      const form = $('form', box.el); const rows = $('[data-material-rows]', form);
+      $('[data-material-add]', form).onclick = () => rows.insertAdjacentHTML('beforeend', bomMaterialRow());
+      rows.onclick = event => { const button = event.target.closest('[data-material-remove]'); if (button) button.closest('tr').remove(); };
+      form.onsubmit = async event => {
+        event.preventDefault(); const button = $('button.primary', form); button.disabled = true;
+        const values = formObj(form);
+        const materials = $$('[data-material-row]', form).map(row => ({ item: $('[data-material-item]', row).value, item_category: $('[data-material-category]', row).value, qty: $('[data-material-qty]', row).value, unit: $('[data-material-unit]', row).value }));
+        try { await api(bom ? 'PUT' : 'POST', '/api/boms' + (bom ? '/' + bom.id : ''), { ...values, active: form.elements.active.checked, materials }); box.close(); toast('BOM을 저장했습니다.'); await load(); }
+        catch (error) { fail(error); } finally { button.disabled = false; }
+      };
+    };
+    $('#newBom').onclick = () => edit();
+    $$('[data-bom-edit]', main).forEach(button => button.onclick = () => edit(boms.find(bom => bom.id === Number(button.dataset.bomEdit))));
+    $$('[data-bom-disable]', main).forEach(button => button.onclick = async () => {
+      if (!await confirmBox('이 BOM을 생산 선택 목록에서 사용 중지할까요? 기존 생산일정은 유지됩니다.')) return;
+      try { await api('DELETE', '/api/boms/' + button.dataset.bomDisable); await load(); } catch (error) { fail(error); }
+    });
+  };
+  await load();
+}
+
 const PERIOD = { day: '일간', week: '주간', month: '월간' };
 async function pageSchedule(kind) {
   const main = $('#main'); const label = kind === 'finished' ? '완제품' : '반제품';
+  const boms = await api('GET', '/api/boms?kind=' + kind);
   let view = 'week'; let base = todayStr();
   main.innerHTML = `
   <h1>${label} 생산일정 <span class="dept">생산</span></h1>
   <form class="card" id="scNew"><h3>일정 입력</h3><div class="form-grid">
     <fieldset class="span3"><legend>구분 *</legend><div class="opts">${Object.entries(PERIOD).map(([k, v]) => `<label class="opt"><input type="radio" name="period" value="${k}" ${k === 'day' ? 'checked' : ''}> ${v}</label>`).join('')}</div></fieldset>
     <label>날짜 * <span class="hint" id="scHint">(그날)</span><input name="start_date" type="date" required value="${todayStr()}"></label>
+    <label class="span2">BOM에서 가져오기<select name="bom_id" id="scBom"><option value="">직접 입력</option>${boms.map(bom => `<option value="${bom.id}">${esc(bom.product)}${bom.product_code ? ' · ' + esc(bom.product_code) : ''} (기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)})</option>`).join('')}</select></label>
     <label>제품명 *<input name="product" required></label>
     <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
-    <label class="span3">비고<input name="note"></label></div>
+    <label class="span3">비고<input name="note"></label><div class="span3" id="scRequirements"></div></div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
   <div class="toolbar">
     <div class="seg" id="vSeg">${Object.entries(PERIOD).map(([k, v]) => `<button data-v="${k}" class="${k === view ? 'on' : ''}">${v}</button>`).join('')}</div>
@@ -608,9 +721,17 @@ async function pageSchedule(kind) {
   </div>
   <div id="scBody"></div>`;
   const hints = { day: '(그날)', week: '(그 주의 아무 날 → 월요일 시작 주로 저장)', month: '(그 달의 아무 날 → 그 달로 저장)' };
+  const previewBom = () => {
+    const form = $('#scNew'); const bom = boms.find(bom => bom.id === Number($('#scBom').value));
+    form.elements.product.readOnly = !!bom;
+    if (bom) form.elements.product.value = bom.product;
+    const qty = Number(form.elements.qty.value || 0);
+    $('#scRequirements').innerHTML = bom ? materialTable(bom.materials.map(m => ({ ...m, qty: Number((m.qty * qty / bom.base_qty).toPrecision(12)) })), `생산 ${fmtNum(qty)} ${bom.unit} 기준 소요량`) : '';
+  };
+  $('#scBom').onchange = previewBom; $('#scNew [name=qty]').oninput = previewBom;
   $$('#scNew [name=period]').forEach((r) => (r.onchange = () => { $('#scHint').textContent = hints[r.value]; }));
   const range = () => view === 'day' ? [base, base] : view === 'week' ? [mondayOf(base), addDays(mondayOf(base), 6)] : [monthStart(base), monthEnd(base)];
-  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
+  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
     const [from, to] = range();
@@ -632,6 +753,10 @@ async function pageSchedule(kind) {
     }
     body += `<div class="card"><h4>일간 합계 (제품별)</h4>${totals(days)}</div>`;
     $('#scBody').innerHTML = body;
+    $$('[data-bom-view]', main).forEach(button => button.onclick = () => {
+      const row = rows.find(row => row.id === Number(button.dataset.bomView)); const snapshot = row.bom_snapshot;
+      modal(`<h3>${esc(row.product)} · 생산 ${fmtNum(row.qty)} ${esc(snapshot.unit)}</h3><p class="muted small">일정 등록 당시 BOM 기준입니다. 기준 생산수량: ${fmtNum(snapshot.base_qty)} ${esc(snapshot.unit)}</p>${materialTable(snapshot.requirements || [])}`, { wide: true });
+    });
     $$('#scBody [data-done]').forEach((c) => (c.onchange = async () => { try { await api('PUT', '/api/schedules/' + c.dataset.done, { toggle_done: true }); load(); } catch (e) { fail(e); } }));
     $$('#scBody [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 일정을 삭제할까요?')) { try { await api('DELETE', '/api/schedules/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
   };
@@ -640,7 +765,7 @@ async function pageSchedule(kind) {
   $('#prev').onclick = () => step(-1); $('#next').onclick = () => step(1); $('#today').onclick = () => { base = todayStr(); load(); };
   $('#scNew').onsubmit = async (e) => {
     e.preventDefault(); const v = formObj(e.target);
-    try { await api('POST', '/api/schedules', { ...v, kind }); toast(`${PERIOD[v.period]} 일정을 등록했습니다.`); e.target.product.value = ''; e.target.qty.value = ''; e.target.note.value = ''; base = v.start_date; load(); } catch (err) { fail(err); }
+    try { await api('POST', '/api/schedules', { ...v, kind }); toast(`${PERIOD[v.period]} 일정을 등록했습니다.`); e.target.qty.value = ''; e.target.note.value = ''; if (!v.bom_id) e.target.product.value = ''; previewBom(); base = v.start_date; load(); } catch (err) { fail(err); }
   };
   await load();
 }
@@ -655,7 +780,7 @@ async function pageShip(main) {
     <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
     <label>거래처 *<input name="customer" required></label>
     <label>LOT<input name="lot" maxlength="100" placeholder="LOT 번호 (선택)"></label>
-    <label class="span2">비고<input name="note"></label></div>
+    <label class="span2">비고<input name="note"></label>${photoPicker()}${inspectionFields()}</div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
   <div class="toolbar"><label class="inline">기간 <input type="date" id="shFrom" value="${todayStr()}"> ~ <input type="date" id="shTo" value="${todayStr()}"></label><button class="btn small" id="shToday">오늘</button><span id="shSum" class="muted"></span></div>
   <div id="shList"></div>`;
@@ -665,8 +790,9 @@ async function pageShip(main) {
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력</th><th></th></tr></thead>
       <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>
-        <td class="nowrap"><button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
+        <td class="nowrap"><button class="btn small" data-ship-photo="${r.id}">사진·이상 여부</button>${inspectionBadge(r)} <button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당 기간 출하가 없습니다.</div>';
+    $$('#shList [data-ship-photo]').forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.shipPhoto)); openAttachments('shipment', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('#shList [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 출하 기록을 삭제할까요?')) { try { await api('DELETE', '/api/shipments/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
     $$('#shList [data-edit]').forEach((b) => (b.onclick = () => {
       const r = rows.find((x) => x.id == b.dataset.edit);
@@ -678,9 +804,10 @@ async function pageShip(main) {
       $('form', m.el).onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/shipments/' + r.id, formObj(e.target)); m.close(); load(); } catch (err) { fail(err); } };
     }));
   };
+  const shipDraft = bindPhotoDraft($('#shNew'));
   $('#shNew').onsubmit = async (e) => {
-    e.preventDefault(); const v = formObj(e.target);
-    try { await api('POST', '/api/shipments', v); ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); }
+    e.preventDefault(); if (shipDraft.busy) return; const v = formObj(e.target); const button = $('button.primary', e.target); button.disabled = true;
+    try { const saved = await api('POST', '/api/shipments', v); const photoSaved = await saveNewAttachments('shipment', saved, shipDraft, e.target); shipDraft.reset(); e.target.inspection_status.value = 'unchecked'; e.target.inspection_note.value = ''; ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); if (photoSaved) toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); } finally { button.disabled = false; }
   };
   $('#shFrom').onchange = () => { if ($('#shTo').value < $('#shFrom').value) $('#shTo').value = $('#shFrom').value; load(); };
   $('#shTo').onchange = load;
@@ -719,7 +846,7 @@ async function pageAdmin(main) {
           backup.tables[table].push(...page.rows); after = page.next;
         } while (after !== null);
       }
-      const photos = [...new Set(backup.tables.laundry.flatMap(row => JSON.parse(row.photos)))];
+      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || []).flatMap(row => JSON.parse(row.photos)))];
       for (const [i, file] of photos.entries()) {
         status.textContent = `사진을 저장하고 있습니다… (${i + 1}/${photos.length})`;
         const response = await fetch('/uploads/' + encodeURIComponent(file));
