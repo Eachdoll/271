@@ -12,7 +12,7 @@ async function getSetting(k) { const r = (await db.prepare('SELECT value FROM se
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
 // ───────────────────────── 공통 ─────────────────────────
-const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics'];
+const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver'];
 const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production' };
 const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
@@ -82,7 +82,7 @@ function applyInspectionFilter(where, args, query, entity, table) {
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
-function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production'].includes(role) && roles.includes(role + '_approver')); }
+function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isRequestApprover(user, type) {
   return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
 }
@@ -321,7 +321,7 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
   if (body.is_admin && target.approval_status !== 'approved') throw bad('가입 승인 후 관리자 권한을 부여하세요.');
   if (body.roles !== undefined) {
     const roles = [...new Set((Array.isArray(body.roles) ? body.roles : []).filter((r) => ROLES.includes(r)))];
-    if (target.approval_status !== 'approved' && roles.some(r => ['quality_approver','dev_approver','production_approver'].includes(r))) throw bad('가입 승인 후 책임자로 지정하세요.');
+    if (target.approval_status !== 'approved' && roles.some(r => ['quality_approver','dev_approver','production_approver','logistics_approver'].includes(r))) throw bad('가입 승인 후 책임자로 지정하세요.');
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));
   }
   if (body.is_admin !== undefined) {
@@ -343,7 +343,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -400,7 +400,9 @@ route('GET', '/api/po', async ({ query }) => {
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
   if (query.coa_requested) { if (!['0','1'].includes(query.coa_requested)) throw bad('COA 요청 조건을 확인하세요.'); where.push('coa_requested=?'); args.push(Number(query.coa_requested)); }
   applyInspectionFilter(where, args, query, 'purchase_order', 'purchase_orders');
-  return (await db.prepare(`SELECT purchase_orders.*, ${attachmentSummary('purchase_order','purchase_orders')} FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
+  return (await db.prepare(`SELECT purchase_orders.*, ${attachmentSummary('purchase_order','purchase_orders')},
+    (SELECT json_object('id',c.id,'action',c.action,'new_recv_qty',c.new_recv_qty,'reason',c.reason,'requested_by',c.requested_by,'requested_by_id',c.requested_by_id,'requested_at',c.requested_at) FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending') AS pending_change
+    FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
 route('POST', '/api/po', async ({ user, body }) => {
   const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(...poFields(body), user.name));
@@ -428,16 +430,27 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
   // Validate every source before executing any writes, then commit one atomic batch.
   const rows = [];
   for (const id of uniqueIds) rows.push(await mustGet('purchase_orders', id));
+  // A recorded receipt quantity changes only through an approved request. Allowed directly:
+  // confirming again (ok→ok), closing a short receipt (mismatch→ok keeps the received qty),
+  // and re-saving the same mismatch quantity.
+  const locked = rows.filter(row => ['ok', 'mismatch'].includes(row.recv_status)
+    && !(status === 'ok' || (status === 'mismatch' && row.recv_status === 'mismatch' && recvQty === row.recv_qty)));
+  if (locked.length) throw new HttpError(409, `입고 수량이 기록된 항목(${locked.map(r => r.item).join(', ')})은 바로 바꿀 수 없습니다. 항목의 '수량 수정 요청' 또는 '입고 취소 요청'으로 팀장 승인을 받으세요.`);
+  const pending = [];
+  for (const row of rows) if (await db.prepare("SELECT 1 FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(row.id)) pending.push(row.item);
+  if (pending.length) throw new HttpError(409, `승인 대기 중인 수정 요청이 있는 항목(${pending.join(', ')})은 처리 후 다시 시도하세요.`);
   const queries = [];
   for (const row of rows) {
     queries.push({ sql: `UPDATE purchase_orders SET recv_status=?,
       recv_qty=CASE WHEN recv_status='ok' AND ?='ok' THEN COALESCE(recv_qty,qty) ELSE ? END,recv_note=?,
       recv_by=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_by ELSE ? END,
       recv_at=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_at ELSE ? END WHERE id=?`,
-      args: [status, status, status === 'ok' ? row.qty : recvQty, str(body.note, 500), status, status ? user.name : null, status, status ? now() : null, row.id] });
+      args: [status, status, status === 'ok' ? (row.recv_status === 'mismatch' ? row.recv_qty : row.qty) : recvQty, str(body.note, 500), status, status ? user.name : null, status, status ? now() : null, row.id] });
     // Anyone may confirm a receipt; the append-only comment keeps who did what even after later status changes.
     const label = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
-    const detail = status === 'mismatch' ? ` · 실입고 ${recvQty} (발주 ${row.qty})` : status === 'ok' ? ` · 수량 ${row.recv_status === 'ok' ? row.recv_qty ?? row.qty : row.qty}` : '';
+    const detail = status === 'mismatch' ? ` · 실입고 ${recvQty} (발주 ${row.qty})`
+      : status === 'ok' && row.recv_status === 'mismatch' ? ` · 수량상이 종결 · 실입고 ${row.recv_qty} (발주 ${row.qty}), 이후 입고분은 기타입고`
+      : status === 'ok' ? ` · 수량 ${row.recv_status === 'ok' ? row.recv_qty ?? row.qty : row.qty}` : '';
     queries.push({ sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)',
       args: ['purchase_order', row.id, `[입고 처리] ${label[row.recv_status] ?? row.recv_status} → ${label[status]}${detail}${str(body.note, 500) ? ' · ' + str(body.note, 500) : ''}`, user.id, user.name] });
     if (['ok', 'mismatch'].includes(status)) queries.push(receiptAnalysisQuery('purchase_order', row.id, user));
@@ -445,6 +458,86 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
   const results = await db.batch(queries);
   const per = ['ok', 'mismatch'].includes(status) ? 3 : 2;
   return { ok: true, analysis_created: per === 3 ? results.filter((_, i) => i % 3 === 2).reduce((sum, r) => sum + r.meta.changes, 0) : 0 };
+});
+
+// ── 물류: 기록된 입고 수량 수정·입고 취소 요청 (물류팀장 승인 후 반영) ──
+function requireReceiptApprover(user) {
+  if (!user.is_admin && !publicUser(user).roles.includes('logistics_approver')) throw new HttpError(403, '물류팀장(입고 수량 수정 승인권자)만 승인·반려할 수 있습니다. 관리자에게 지정을 요청하세요.');
+}
+route('POST', '/api/po/:id/receipt-changes', async ({ user, params, body }) => {
+  const row = await mustGet('purchase_orders', params.id);
+  if (!['ok', 'mismatch'].includes(row.recv_status)) throw bad('입고 수량이 기록된 항목만 수정·취소 요청할 수 있습니다.');
+  const action = String(body.action || '');
+  if (!['qty', 'revert'].includes(action)) throw bad('요청 종류를 확인하세요.');
+  const reason = reqStr(body.reason, action === 'qty' ? '수정 사유' : '취소 사유', 500);
+  const newQty = action === 'qty' ? num(body.recv_qty, '실입고 수량') : null;
+  if (action === 'qty' && newQty === row.recv_qty) throw bad('바뀐 수량이 없습니다.');
+  const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  const same = c => c.po_id === row.id && c.action === action && c.requested_by_id === user.id && c.new_recv_qty === newQty && c.reason === reason;
+  const old = await db.prepare('SELECT * FROM receipt_qty_changes WHERE request_id=?').get(key);
+  if (old) { if (!same(old)) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return { pending: old.status === 'pending', change: old }; }
+  if (await db.prepare("SELECT 1 FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(row.id)) throw new HttpError(409, '이 항목에는 이미 승인 대기 중인 요청이 있습니다.');
+  try {
+    const r = await db.prepare('INSERT INTO receipt_qty_changes(po_id,action,request_id,old_status,old_recv_qty,new_recv_qty,reason,requested_by_id,requested_by) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(row.id, action, key, row.recv_status, row.recv_qty, newQty, reason, user.id, user.name);
+    return { pending: true, change: await db.prepare('SELECT * FROM receipt_qty_changes WHERE id=?').get(r.lastInsertRowid) };
+  } catch (error) {
+    const saved = await db.prepare('SELECT * FROM receipt_qty_changes WHERE request_id=?').get(key);
+    if (saved && same(saved)) return { pending: true, change: saved };
+    if (await db.prepare("SELECT 1 FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(row.id)) throw new HttpError(409, '이 항목에는 이미 승인 대기 중인 요청이 있습니다.');
+    throw error;
+  }
+});
+const receiptChangeSelect = `SELECT c.*, p.req_no, p.vendor, p.item, p.spec, p.unit, p.qty AS order_qty, p.recv_status AS current_status, p.recv_qty AS current_recv_qty
+  FROM receipt_qty_changes c LEFT JOIN purchase_orders p ON p.id=c.po_id`;
+route('GET', '/api/receipt-changes', async ({ query }) => {
+  const where = [], args = [];
+  if (query.status) { if (!['pending','approved','rejected','cancelled'].includes(query.status)) throw bad('요청 상태를 확인하세요.'); where.push('c.status=?'); args.push(query.status); }
+  if (query.po_id) { if (!/^[1-9]\d*$/.test(query.po_id)) throw bad('발주 번호를 확인하세요.'); where.push('c.po_id=?'); args.push(Number(query.po_id)); }
+  return db.prepare(`${receiptChangeSelect} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.id DESC LIMIT 200`).all(...args);
+});
+async function pendingReceiptChange(id) {
+  if (!/^[1-9]\d*$/.test(String(id))) throw bad('요청 번호를 확인하세요.');
+  const change = await db.prepare('SELECT * FROM receipt_qty_changes WHERE id=?').get(Number(id));
+  if (!change) throw new HttpError(404, '수정 요청을 찾을 수 없습니다.');
+  if (change.status !== 'pending') throw new HttpError(409, '이미 처리된 요청입니다.');
+  return change;
+}
+route('POST', '/api/receipt-changes/:id/approve', async ({ user, params, body }) => {
+  requireReceiptApprover(user);
+  const change = await pendingReceiptChange(params.id); const stamp = now();
+  const row = await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(change.po_id);
+  if (!row || row.recv_status !== change.old_status || row.recv_qty !== change.old_recv_qty) throw new HttpError(409, '요청 이후 입고 내용이 바뀌었습니다. 반려하고 새로 요청하세요.');
+  const text = change.action === 'qty'
+    ? `[입고 수량 수정 승인] 실입고 ${change.old_recv_qty} → ${change.new_recv_qty} (발주 ${row.qty}) · 사유: ${change.reason} · 요청 ${change.requested_by}`
+    : `[입고 취소 승인] ${change.old_status === 'ok' ? '입고완료' : '수량상이'} ${change.old_recv_qty} → 미입고 · 사유: ${change.reason} · 요청 ${change.requested_by}`;
+  const applied = "EXISTS(SELECT 1 FROM receipt_qty_changes WHERE id=? AND status='approved' AND reviewed_at=?)";
+  const results = await db.batch([
+    { sql: "UPDATE receipt_qty_changes SET status='approved',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'", args: [user.name, stamp, str(body.note, 500), change.id] },
+    change.action === 'qty'
+      ? { sql: `UPDATE purchase_orders SET recv_qty=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND ${applied}`, args: [change.new_recv_qty, row.id, change.old_status, change.old_recv_qty, change.id, stamp] }
+      : { sql: `UPDATE purchase_orders SET recv_status='',recv_qty=NULL,recv_note='',recv_by=NULL,recv_at=NULL WHERE id=? AND recv_status=? AND recv_qty IS ? AND ${applied}`, args: [row.id, change.old_status, change.old_recv_qty, change.id, stamp] },
+    { sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'purchase_order',?,?,?,? WHERE ${applied}`, args: [row.id, text, user.id, user.name, change.id, stamp] },
+    // The linked inspection keeps its receipt snapshot; the correction is noted on it instead.
+    { sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'request',id,?,?,? FROM requests WHERE source_type='purchase_order' AND source_id=? AND ${applied}`, args: [text, user.id, user.name, row.id, change.id, stamp] },
+  ]);
+  if (!results[0].meta.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return db.prepare(`${receiptChangeSelect} WHERE c.id=?`).get(change.id);
+});
+route('POST', '/api/receipt-changes/:id/reject', async ({ user, params, body }) => {
+  requireReceiptApprover(user);
+  const change = await pendingReceiptChange(params.id);
+  const r = await db.prepare("UPDATE receipt_qty_changes SET status='rejected',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'").run(user.name, now(), reqStr(body.note, '반려 사유', 500), change.id);
+  if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return db.prepare(`${receiptChangeSelect} WHERE c.id=?`).get(change.id);
+});
+route('POST', '/api/receipt-changes/:id/cancel', async ({ user, params }) => {
+  const change = await pendingReceiptChange(params.id);
+  if (change.requested_by_id !== user.id && !user.is_admin) throw new HttpError(403, '요청한 사람만 철회할 수 있습니다.');
+  const r = await db.prepare("UPDATE receipt_qty_changes SET status='cancelled',reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'").run(user.name, now(), change.id);
+  if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return { ok: true };
 });
 
 // ── 구매: 세탁관리 ──
@@ -987,6 +1080,7 @@ route('GET', '/api/dashboard', async () => {
     laundryMonth: (await db.prepare("SELECT COALESCE(SUM(discard_qty),0) c FROM laundry WHERE substr(in_date,1,7)=?").get(t.slice(0, 7))).c,
     schedulesToday: (await c("SELECT COUNT(*) c FROM schedules WHERE period='day' AND start_date=?", t)),
     actualChangesPending: (await c("SELECT COUNT(*) c FROM production_actual_changes WHERE status='pending'")),
+    receiptChangesPending: (await c("SELECT COUNT(*) c FROM receipt_qty_changes WHERE status='pending'")),
   };
 });
 

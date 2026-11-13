@@ -63,7 +63,12 @@ test('Repeated, concurrent and reverted confirmations do not duplicate or reset 
   assert.equal(rows.length, 2); assert.equal(new Set(rows.map(r => r.req_no)).size, 2);
   const row = rows[0];
   assert.equal((await admin('POST', '/api/requests/' + row.id + '/status', { status: 'done', result_note: '검사 완료' })).status, 200);
-  await receiver('POST', '/api/po/receive', { ids, status: '' });
+  assert.equal((await receiver('POST', '/api/po/receive', { ids, status: '' })).status, 409, 'reverting a recorded receipt needs approval');
+  for (const id of ids) {
+    const req = await receiver('POST', `/api/po/${id}/receipt-changes`, { action: 'revert', reason: '오입력' });
+    assert.equal((await admin('POST', `/api/receipt-changes/${req.body.change.id}/approve`, {})).status, 200);
+  }
+  assert.ok((await receiver('GET', '/api/po')).body.filter(p => ids.includes(p.id)).every(p => p.recv_status === ''));
   const repeated = await receiver('POST', '/api/po/receive', { ids, status: 'ok' });
   assert.equal(repeated.body.analysis_created, 0);
   rows = await analyses();

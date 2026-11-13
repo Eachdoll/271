@@ -83,11 +83,14 @@ test('Receipt actions by anyone leave a permanent named trail, and a quantity mi
   assert.equal(r.body.analysis_created, 1);
   const analysis = (await staff('GET', '/api/requests?type=analysis&scope=list')).body.find(x => x.source_id === po.id);
   assert.equal(analysis.qty, 9); assert.equal(analysis.data.received_qty, 9);
-  await quality('POST', '/api/po/receive', { ids: [po.id], status: '' });
+  const closed = await quality('POST', '/api/po/receive', { ids: [po.id], status: 'ok' });
+  assert.equal(closed.status, 200); assert.equal(closed.body.analysis_created, 0);
+  const row = (await staff('GET', '/api/po')).body.find(p => p.id === po.id);
+  assert.equal(row.recv_status, 'ok'); assert.equal(row.recv_qty, 9, 'closing a short receipt keeps the quantity actually received');
   const trail = (await staff('GET', `/api/comments/purchase_order/${po.id}`)).body.rows.map(c => [c.author_name, c.content]);
   assert.deepEqual(trail.map(t => t[0]), ['품질담당', '직원']);
   assert.match(trail[1][1], /미입고 → 수량상이 · 실입고 9 \(발주 12\) · 3개 부족/);
-  assert.match(trail[0][1], /수량상이 → 미입고/);
+  assert.match(trail[0][1], /수량상이 → 입고완료 · 수량상이 종결 · 실입고 9 \(발주 12\)/);
 });
 
 test('Correcting or cancelling a recorded actual needs the production team lead; zero quantities are allowed', async () => {

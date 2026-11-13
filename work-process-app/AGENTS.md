@@ -46,6 +46,9 @@ INVITE_CODE=local-test-code npm start
 
 ## 입고 → 분석 자동 등록
 - 발주입고는 recv_status=ok 또는 mismatch로 처리할 때(수량상이는 실입고 수량 기준), 기타입고는 POST 등록 시 analysis/waiting/수입검사를 자동 생성합니다. checking은 생성하지 않습니다. 수량상이 후 ok로 바뀌어도 분석은 추가로 만들지 않고 처음 스냅샷을 유지합니다.
+- 수량상이(mismatch) 항목을 ok로 처리하면 **입고 종결**입니다. recv_qty는 실입고 수량 그대로 유지하고(발주수량으로 덮어쓰지 않음) 남은 수량은 기타입고로 받습니다. 화면에서는 `입고완료 · 90/100 종결`로 표시합니다.
+- 입고 수량이 기록된(ok/mismatch) 발주는 /api/po/receive로 바로 바꿀 수 없습니다(409). 허용: ok→ok 재확인, mismatch→ok 종결, 같은 수량 mismatch 재저장. 수량 변경·미입고/확인중 되돌리기는 0009 receipt_qty_changes 요청(POST /api/po/:id/receipt-changes, action=qty|revert)을 logistics_approver(물류팀장) 또는 관리자가 /api/receipt-changes/:id/approve|reject 해야 반영됩니다. 요청자는 /cancel로 철회합니다. 발주당 pending 1건이며 pending 중에는 입고 처리도 막습니다.
+- 승인 시 현재 값이 요청 당시와 같은지 확인하고, 발주와 연결된 자동분석 양쪽 progress_comments에 수정 내용을 남깁니다. 자동분석의 입고 스냅샷은 바꾸지 않습니다. 입고 취소 승인 후에도 기존 분석 이력은 남습니다.
 - 발주입고 처리는 로그인 사용자 누구나 할 수 있습니다. 상태를 바꿀 때마다 같은 batch에서 progress_comments에 `[입고 처리] 이전 → 이후` 기록(처리자 이름)을 남겨, 나중에 상태가 바뀌어도 처리한 사람이 보존되게 하세요.
 - 입고 자동분석을 수정해도 title/customer/qty/sample_qty/spec/lot/lot_etc는 입고 스냅샷으로 유지합니다. 접수대기·반려 의뢰 삭제는 의뢰자 본인·승인권자·관리자만 가능합니다.
 - receiptAnalysisQuery()가 원본 스냅샷과 Q 접수번호를 만들고 입고 쓰기와 D1 batch로 원자적으로 저장합니다.

@@ -64,6 +64,13 @@
       "when": 1794600000000,
       "tag": "0008_production_actual_changes",
       "breakpoints": false
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794610000000,
+      "tag": "0009_receipt_qty_changes",
+      "breakpoints": false
     }
   ]
 }

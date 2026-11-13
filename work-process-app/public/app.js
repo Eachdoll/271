@@ -18,7 +18,7 @@ const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const dow = (s) => WEEK[parseD(s).getDay()];
 const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko-KR'));
 
-const ROLE_LABEL = { purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류' };
+const ROLE_LABEL = { purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -289,6 +289,7 @@ async function pageHome(main) {
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
     <a class="kpi red" href="#/logistics/receive"><b>${d.po.mismatch}</b><span>수량상이</span></a>
+    ${d.receiptChangesPending ? `<a class="kpi yellow" href="#/logistics/receive"><b>${d.receiptChangesPending}</b><span>입고 수량 수정 승인대기</span></a>` : ''}
     ${d.actualChangesPending ? `<a class="kpi yellow" href="#/prod/finished"><b>${d.actualChangesPending}</b><span>생산실적 수정 승인대기</span></a>` : ''}
     <a class="kpi" href="#/quality/request"><b>${r.analysis.pending}</b><span>분석 접수대기</span></a>
     <a class="kpi" href="#/quality/voc/request"><b>${r.voc.pending}</b><span>VOC 승인대기</span></a>
@@ -337,7 +338,47 @@ function poForm(po = {}) {
 }
 function recvChip(po) {
   const cls = { ok: 'green', mismatch: 'red', checking: 'yellow' }[po.recv_status] || '';
-  return `<span class="chip ${cls}">${RECV[po.recv_status]}${po.recv_status === 'mismatch' ? ` (${fmtNum(po.recv_qty)})` : ''}</span>`;
+  const shortClosed = po.recv_status === 'ok' && po.recv_qty != null && po.recv_qty !== po.qty;
+  return `<span class="chip ${cls}">${RECV[po.recv_status]}${po.recv_status === 'mismatch' ? ` (${fmtNum(po.recv_qty)})` : ''}${shortClosed ? ` · ${fmtNum(po.recv_qty)}/${fmtNum(po.qty)} 종결` : ''}</span>${receiptChangeInfo(po)}`;
+}
+// ── 기록된 입고 수량 수정·입고 취소 요청 (물류팀장 승인 후 반영) ──
+const canApproveReceipt = () => ME && (ME.is_admin || ME.roles.includes('logistics_approver'));
+function pendingReceipt(po) { try { return typeof po.pending_change === 'string' ? JSON.parse(po.pending_change) : po.pending_change || null; } catch { return null; } }
+function receiptChangeText(c, po = {}) { return c.action === 'qty' ? `실입고 ${fmtNum(c.old_recv_qty ?? po.recv_qty)} → ${fmtNum(c.new_recv_qty)} 수정` : '입고 취소(미입고로)'; }
+function receiptChangeInfo(po) {
+  const c = pendingReceipt(po);
+  if (c) return `<div class="small"><span class="chip yellow">승인 대기</span> ${receiptChangeText(c, po)} · ${esc(c.reason)} · ${esc(c.requested_by)}</div>${receiptChangeButtons(c)}`;
+  return ['ok', 'mismatch'].includes(po.recv_status) ? `<div class="small"><button class="btn small" data-receipt-qty="${po.id}">수량 수정 요청</button> <button class="btn small danger" data-receipt-revert="${po.id}">입고 취소 요청</button></div>` : '';
+}
+function receiptChangeButtons(c) {
+  return `${canApproveReceipt() ? `<button class="btn small primary" data-rchange-approve="${c.id}">승인</button> <button class="btn small danger" data-rchange-reject="${c.id}">반려</button>` : ''}${c.requested_by_id === ME.id ? ` <button class="btn small" data-rchange-cancel="${c.id}">요청 철회</button>` : ''}`;
+}
+function bindReceiptChanges(root, rows, after) {
+  const run = async (button, task) => { if (button.disabled) return; button.disabled = true; try { await task(); await after(); } catch (error) { fail(error); } finally { button.disabled = false; } };
+  $$('[data-receipt-qty]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
+    const po = rows.find(row => row.id === Number(button.dataset.receiptQty));
+    const v = await promptBox('입고 수량 수정 요청', `<p class="small muted">${esc(po.item)} · 발주 ${fmtNum(po.qty)} / 현재 실입고 <b>${fmtNum(po.recv_qty)}</b>. 물류팀장이 승인하면 반영됩니다.</p><label>바른 실입고 수량 *<input name="recv_qty" type="number" min="0" step="any" required value="${esc(po.recv_qty)}"></label><label>수정 사유 *<input name="reason" required maxlength="500"></label>`);
+    if (!v) return; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', ...v, request_id: crypto.randomUUID() }); toast('수정 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
+  }); });
+  $$('[data-receipt-revert]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
+    const po = rows.find(row => row.id === Number(button.dataset.receiptRevert));
+    const v = await promptBox('입고 취소 요청', `<p class="small muted">${esc(po.item)} · 승인되면 미입고로 돌아갑니다. 이미 등록된 수입검사 이력은 남습니다.</p><label>취소 사유 *<input name="reason" required maxlength="500"></label>`);
+    if (!v) return; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'revert', ...v, request_id: crypto.randomUUID() }); toast('입고 취소 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
+  }); });
+  $$('[data-rchange-approve]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => { await api('POST', `/api/receipt-changes/${button.dataset.rchangeApprove}/approve`, {}); toast('승인했습니다. 입고 내용에 반영되었습니다.'); }); });
+  $$('[data-rchange-reject]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
+    const v = await promptBox('입고 수정 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return;
+    await api('POST', `/api/receipt-changes/${button.dataset.rchangeReject}/reject`, v); toast('반려했습니다.');
+  }); });
+  $$('[data-rchange-cancel]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
+    if (!(await confirmBox('이 요청을 철회할까요?'))) return; await api('POST', `/api/receipt-changes/${button.dataset.rchangeCancel}/cancel`); toast('요청을 철회했습니다.');
+  }); });
+}
+async function renderReceiptChanges(root) {
+  if (!root) return;
+  const rows = await api('GET', '/api/receipt-changes?status=pending');
+  if (!root.isConnected) return;
+  root.innerHTML = rows.length ? `<div class="card"><h3>입고 수량 수정·취소 승인 대기 <span class="chip yellow">${rows.length}건</span></h3><p class="small muted">${canApproveReceipt() ? '승인하면 입고 수량에 바로 반영되고 진행 코멘트에 기록됩니다.' : '물류팀장 승인 후 반영됩니다.'}</p><div class="table-wrap"><table class="grid"><thead><tr><th>발주</th><th>요청 내용</th><th>사유</th><th>요청자</th><th></th></tr></thead><tbody>${rows.map(c => `<tr><td>${esc(c.req_no)} · ${esc(c.vendor)}<div><b>${esc(c.item)}</b> <span class="small muted">발주 ${fmtNum(c.order_qty)}</span></div></td><td>${receiptChangeText(c)}</td><td>${esc(c.reason)}</td><td>${esc(c.requested_by)}<br><span class="small muted">${esc(c.requested_at)}</span></td><td class="nowrap">${receiptChangeButtons(c)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
 }
 const rowClass = (po) => ({ ok: 'row-green', mismatch: 'row-red', checking: 'row-yellow' }[po.recv_status] || '');
 
@@ -365,6 +406,7 @@ async function pagePO(main) {
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
         <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 발주가 없습니다.</div>';
+    bindReceiptChanges($('#poList'), rows, load);
     $$('[data-edit]').forEach((b) => (b.onclick = () => {
       const p = rows.find((x) => x.id == b.dataset.edit);
       const m = modal(`<h3>발주 수정</h3><form data-entry-author="${esc(p.created_by)}">${poForm(p)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
@@ -386,11 +428,12 @@ async function pageReceipts(main, tab) {
 async function pageReceive(main) {
   main.innerHTML = `
   <h2>발주입고</h2>
-  <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 또는 <b>수량상이</b> 처리 시 분석리스트에 수입검사(대기)가 자동 등록됩니다(수량상이는 실입고 수량 기준). 누구나 처리할 수 있으며, 처리한 사람과 내용은 각 항목의 <b>진행 코멘트</b>에 자동으로 남습니다.</p>
+  <div id="receiptChanges"></div>
+  <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 또는 <b>수량상이</b> 처리 시 분석리스트에 수입검사(대기)가 자동 등록됩니다(수량상이는 실입고 수량 기준). 누구나 처리할 수 있으며, 처리한 사람과 내용은 각 항목의 <b>진행 코멘트</b>에 자동으로 남습니다.<br>수량상이 항목에 <b>입고확인·완료</b>를 누르면 실입고 수량 그대로 <b>입고 종결</b>됩니다(예: 100개 중 90개). 나중에 들어오는 나머지는 <b>기타입고</b>로 등록하세요. 이미 기록된 입고 수량의 수정·입고 취소는 <b>물류팀장 승인</b> 후 반영됩니다.</p>
   ${listControls('rc', { dateLabel: '납기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>입고 상태<select name="recv" id="rcF"><option value="open">미완료</option><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>분류<select name="item_category">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}
   <div class="actionbar">
     <span id="rcSelectedCount" class="muted">0개 선택</span>
-    <button class="btn green" data-st="ok">✔ 입고확인</button>
+    <button class="btn green" data-st="ok" title="수량상이 항목은 실입고 수량 그대로 입고 종결">✔ 입고확인·완료</button>
     <button class="btn red" data-st="mismatch">수량상이</button>
     <button class="btn yellow" data-st="checking">확인중</button>
     <button class="btn" data-st="">미입고로 되돌리기</button>
@@ -421,6 +464,8 @@ async function pageReceive(main) {
     $$('.rc-check').forEach((c) => (c.onchange = updateCount));
     // 행 클릭으로도 체크
     $$('#rcList tbody tr').forEach((tr) => (tr.onclick = (e) => { if (!e.target.closest('input,button')) { const c = $('.rc-check', tr); c.checked = !c.checked; updateCount(); } }));
+    bindReceiptChanges($('#rcList'), rows, load);
+    renderReceiptChanges($('#receiptChanges')).then(() => bindReceiptChanges($('#receiptChanges'), rows, load)).catch(fail);
     $$('#rcList [data-receipt-photo]').forEach(button => button.onclick = () => openAttachments('purchase_order', Number(button.dataset.receiptPhoto), rows.find(row => row.id === Number(button.dataset.receiptPhoto)).item));
     updateCount();
   };
@@ -959,7 +1004,7 @@ async function pageAdmin(main) {
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
     <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>
-      ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
+      ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver","logistics_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
       <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
       <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
