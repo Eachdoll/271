@@ -13,8 +13,8 @@ async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,va
 
 // ───────────────────────── 공통 ─────────────────────────
 const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'logistics'];
-const REQUEST_TYPES = { analysis: 'quality', development: 'dev', sample: 'production' };
-const REQUEST_PREFIX = { analysis: 'Q', development: 'D', sample: 'S' };
+const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production' };
+const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
 const WORK_STATUSES = ['waiting', 'progress', 'done'];
 const ITEM_CATEGORIES = ['제품', '상품', '원자재', '부자재'];
@@ -84,8 +84,8 @@ function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev'].includes(role) && roles.includes(role + '_approver')); }
 function requireRequestApprover(user, type) {
-  const role = { analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type];
-  const label = { analysis: '품질책임자', development: '개발책임자', sample: '생산담당자' }[type];
+  const role = { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type];
+  const label = { voc: '품질팀장(품질책임자)', analysis: '품질책임자', development: '개발책임자', sample: '생산담당자' }[type];
   if (!hasRole(user, role)) throw new HttpError(403, `${label}(승인권자)만 승인·반려할 수 있습니다. 관리자에게 책임자 지정을 요청하세요.`);
 }
 function requireRole(user, role, label) { if (!hasRole(user, role)) throw new HttpError(403, `${label} 담당자만 할 수 있습니다. (관리자에게 권한 요청)`); }
@@ -127,7 +127,7 @@ async function attachmentEntity(type, id, user, write = false) {
     if (!write && ['purchase_order', 'other_receipt'].includes(type) && await db.prepare('SELECT 1 FROM requests WHERE source_type=? AND source_id=?').get(type, Number(id))) return;
     throw new HttpError(404, '첨부할 기록을 찾을 수 없습니다.');
   }
-  if (type === 'request' && !['development','sample'].includes(row.type)) throw bad('개발·샘플 의뢰서에 사진을 첨부할 수 있습니다.');
+  if (type === 'request' && !['development','sample','voc'].includes(row.type)) throw bad('개발·샘플 의뢰서와 VOC에 사진을 첨부할 수 있습니다.');
   if (write) {
     if (type === 'request') {
       if (!(hasRole(user, REQUEST_TYPES[row.type]) || (row.requester_id === user.id && ['pending','rejected'].includes(row.status)))) throw new HttpError(403, '의뢰자 또는 담당자만 사진을 변경할 수 있습니다.');
@@ -474,15 +474,23 @@ route('DELETE', '/api/laundry/:id', async ({ user, params }) => {
 
 // ── 의뢰 (분석/개발/샘플): 누구나 의뢰 → 접수대기 → 담당자 승인 → 리스트(대기/진행/완료) ──
 function requestFields(type, b) {
+  if (type === 'voc' && (!b.data || typeof b.data !== 'object' || Array.isArray(b.data) || JSON.stringify(b.data).length > 20000)) throw bad('VOC 입력 내용을 확인하세요.');
   const data = typeof b.data === 'object' && b.data ? JSON.parse(JSON.stringify(b.data).slice(0, 20000)) : {};
-  const f = { title: reqStr(b.title, type === 'development' ? '타겟제품' : '샘플명', 200), customer: str(b.customer, 100), due_date: dateStr(b.due_date, '완료 희망일', { required: false }), category: '', target_price: '', data };
+  const f = { title: reqStr(b.title, type === 'voc' ? '제품명' : type === 'development' ? '타겟제품' : '샘플명', 200), customer: str(b.customer, 100), due_date: dateStr(b.due_date, '완료 희망일', { required: false }), category: '', target_price: '', data };
   if (type === 'analysis') { f.category = str(b.category, 20); if (!ANALYSIS_CATEGORIES.includes(f.category)) throw bad('검사 구분을 선택하세요.'); }
+  if (type === 'voc') {
+    f.customer = reqStr(b.customer, '고객사', 100);
+    if (!['number','string'].includes(typeof data.qty)) throw bad('수량을 입력하세요.');
+    const qty = num(data.qty, '수량');
+    if (qty <= 0) throw bad('수량은 0보다 커야 합니다.');
+    f.data = { ...data, qty, lot: str(data.lot, 100), unit: str(data.unit, 20), extra: reqStr(data.extra, 'VOC 내용', 2000) };
+  }
   if (type === 'development') f.target_price = reqStr(b.target_price, '타겟단가', 100);
   return f;
 }
 function decodeRequest(r) { return { ...r, data: JSON.parse(r.data || '{}') }; }
 async function getRequest(id) { const r = (await db.prepare('SELECT * FROM requests WHERE id=?').get(id)); if (!r) throw new HttpError(404, '의뢰를 찾을 수 없습니다.'); return r; }
-function roleLabel(type) { return { analysis: '품질', development: '연구소', sample: '생산' }[type]; }
+function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산' }[type]; }
 
 route('GET', '/api/requests', async ({ query }) => {
   const type = String(query.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
@@ -493,7 +501,7 @@ route('GET', '/api/requests', async ({ query }) => {
   if (query.status) { if (!['pending','rejected','waiting','progress','done'].includes(query.status)) throw bad('의뢰 상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   if (query.category) { if (type !== 'analysis' || !ANALYSIS_CATEGORIES.includes(query.category)) throw bad('검사 구분을 확인하세요.'); where.push('category=?'); args.push(query.category); }
   applyListDates(where, args, query, 'substr(created_at,1,10)');
-  applyListKeyword(where, args, query.q, ['req_no','title','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')"]);
+  applyListKeyword(where, args, query.q, ['req_no','title','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')", "json_extract(data,'$.lot')"]);
   return (await db.prepare(`SELECT * FROM requests WHERE ${where.join(' AND ')} ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'progress' THEN 1 WHEN 'waiting' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END, id DESC`).all(...args)).map(decodeRequest);
 });
 route('POST', '/api/requests', async ({ user, body }) => {

@@ -53,7 +53,7 @@ function toast(msg, kind = 'ok') {
 const fail = (e) => toast(e.message || String(e), 'err');
 const userHasRole = (user, r) => user.roles.includes(r) || (['quality','dev'].includes(r) && user.roles.includes(r + '_approver'));
 const hasRole = (r) => ME && (ME.is_admin || userHasRole(ME, r));
-const canApproveRequest = (type) => hasRole({ analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
+const canApproveRequest = (type) => hasRole({ voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
 function formObj(form) {
   const o = {};
   for (const el of form.elements) {
@@ -197,7 +197,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
   { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/laundry', '세탁관리']] },
-  { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
+  { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정']] },
   { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록']] },
@@ -209,6 +209,8 @@ const PAGES = {
   '#/purchase/laundry': pageLaundry,
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
+  '#/quality/voc/request': () => pageIntake('voc'),
+  '#/quality/voc/list': () => pageWorkList('voc'),
   '#/dev/request': () => pageIntake('development'),
   '#/dev/list': () => pageWorkList('development'),
   '#/prod/request': () => pageIntake('sample'),
@@ -288,6 +290,7 @@ async function pageHome(main) {
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
     <a class="kpi red" href="#/logistics/receive"><b>${d.po.mismatch}</b><span>수량상이</span></a>
     <a class="kpi" href="#/quality/request"><b>${r.analysis.pending}</b><span>분석 접수대기</span></a>
+    <a class="kpi" href="#/quality/voc/request"><b>${r.voc.pending}</b><span>VOC 승인대기</span></a>
     <a class="kpi" href="#/dev/request"><b>${r.development.pending}</b><span>개발 접수대기</span></a>
     <a class="kpi" href="#/prod/request"><b>${r.sample.pending}</b><span>샘플 접수대기</span></a>
     <a class="kpi" href="#/logistics/ship"><b>${d.shipmentsToday}</b><span>오늘 출하</span></a>
@@ -296,12 +299,13 @@ async function pageHome(main) {
   <h2>진행 현황</h2>
   <div class="table-wrap"><table class="grid">
     <thead><tr><th>구분</th><th>접수대기</th><th>대기</th><th>진행</th><th>완료</th></tr></thead>
-    <tbody>${['analysis', 'development', 'sample'].map((t) => `<tr><td><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></td><td>${r[t].pending}</td><td>${r[t].waiting}</td><td>${r[t].progress}</td><td>${r[t].done}</td></tr>`).join('')}</tbody>
+    <tbody>${['analysis', 'development', 'sample', 'voc'].map((t) => `<tr><td><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></td><td>${r[t].pending}</td><td>${r[t].waiting}</td><td>${r[t].progress}</td><td>${r[t].done}</td></tr>`).join('')}</tbody>
   </table></div>
   <h2>업무 흐름</h2>
   <div class="flows">
     ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">입고목록 → 발주입고</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
     ${flow('품질 (분석)', ['<b>누구나</b> <a href="#/quality/request">분석의뢰</a> 양식 작성', '접수대기 목록에 등록', '<b>품질담당자</b> 승인 → 접수번호 발급', '<a href="#/quality/list">분석리스트</a>에서 대기 → 진행 → 완료', '수입·의뢰·출하·공정검사 구분'])}
+    ${flow('품질 (VOC)', ['<b>누구나</b> <a href="#/quality/voc/request">VOC 접수</a> (고객사·제품·수량·LOT·사진)', '<b>품질팀장(품질책임자)</b> 승인', '<a href="#/quality/voc/list">VOC 처리목록</a>에서 대기 → 진행 → 완료', '진행 코멘트에 처리사항 기록'])}
     ${flow('개발', ['<b>누구나</b> <a href="#/dev/request">개발의뢰</a> 작성 (타겟제품·타겟단가)', '접수대기 목록에 등록', '<b>연구소담당자</b> 승인', '<a href="#/dev/list">개발리스트</a>에서 대기 → 진행 → 완료'])}
     ${flow('생산', ['<b>누구나</b> <a href="#/prod/request">샘플의뢰</a> 작성', '<b>생산담당자</b> 승인 → <a href="#/prod/list">샘플리스트</a>', '<a href="#/prod/finished">완제품</a> / <a href="#/prod/semi">반제품</a> 생산일정 일·주·월 입력'])}
     ${flow('구매 (세탁) · 물류 (출하)', ['세탁 입고분 불량 폐기 → <a href="#/purchase/laundry">세탁관리</a>에 사진·수량', '매일 출고 품목 → <a href="#/logistics/ship">출하목록</a> 입력'])}
@@ -602,7 +606,7 @@ function fieldInput(f, r = {}) {
   const etc = (r.data || {})[f.k + '_etc'] || '';
   const label = `${esc(f.label)}${f.req ? ' *' : ''}${f.hint ? ` <span class="hint">(${esc(f.hint)})</span>` : ''}`;
   const cls = f.full || f.t === 'textarea' || f.t === 'checks' || (f.t === 'radio' && f.opts.length > 3) ? 'span3' : f.t === 'radio' ? 'span2' : '';
-  if (f.t === 'textarea') return `<label class="${cls}">${label}<textarea name="${f.k}" rows="3">${esc(v)}</textarea></label>`;
+  if (f.t === 'textarea') return `<label class="${cls}">${label}<textarea name="${f.k}" rows="3" ${f.req ? 'required' : ''}>${esc(v)}</textarea></label>`;
   if (f.t === 'radio' || f.t === 'checks') {
     const type = f.t === 'radio' ? 'radio' : 'checkbox';
     const sel = f.t === 'checks' ? (Array.isArray(v) ? v : []) : [v];
@@ -610,7 +614,7 @@ function fieldInput(f, r = {}) {
       : f.otherOn ? `<input name="${f.k}_etc" value="${esc(etc)}" class="etc" placeholder="${esc(f.otherPh || '')}">` : '';
     return `<fieldset class="${cls}"><legend>${label}</legend><div class="opts">${f.opts.map((o) => `<label class="opt"><input type="${type}" name="${f.k}" value="${esc(o)}" ${sel.includes(o) ? 'checked' : ''} ${f.req && type === 'radio' ? 'required' : ''}> ${esc(o)}</label>`).join('')}${etcInput}</div></fieldset>`;
   }
-  return `<label class="${cls}">${label}<input name="${f.k}" type="${f.t === 'date' ? 'date' : 'text'}" value="${esc(v)}" ${f.req ? 'required' : ''} placeholder="${esc(f.ph || '')}"></label>`;
+  return `<label class="${cls}">${label}<input name="${f.k}" type="${f.t === 'date' ? 'date' : f.t === 'number' ? 'number' : 'text'}" value="${esc(v)}" ${f.req ? 'required' : ''} ${f.t === 'number' ? `min="${f.min ?? 0}" step="${f.step || 'any'}"` : ''} placeholder="${esc(f.ph || '')}"></label>`;
 }
 function collectRequest(type, form) {
   const o = formObj(form); const out = { type, data: {} };
@@ -627,8 +631,8 @@ function fieldValue(f, r) {
   return s;
 }
 function requestForm(type, r) {
-  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample'].includes(type) ? photoPicker() : ''}</div>
-    <div class="actions"><button class="btn primary">${r ? '저장' : '의뢰 접수'}</button></div></form>`;
+  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','voc'].includes(type) ? photoPicker() : ''}</div>
+    <div class="actions"><button class="btn primary">${r ? '저장' : (REQ[type].submitLabel || '의뢰 접수')}</button></div></form>`;
 }
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
 
@@ -638,7 +642,7 @@ function requestDetail(type, r, reload) {
   const rows = cfg.fields.map((f) => `<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(f, r)) || '<span class="muted">-</span>'}</td></tr>`).join('');
   const m = modal(`
     <div class="print-area">
-    <h3>${cfg.label}의뢰서 ${statusChip(r.status)}</h3>
+    <h3>${cfg.documentTitle || cfg.label + '의뢰서'} ${statusChip(r.status)}</h3>
     <table class="kv">
       <tr><th>접수번호</th><td>${esc(r.req_no || '(승인 시 발급)')}</td></tr>
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
@@ -650,24 +654,24 @@ function requestDetail(type, r, reload) {
       ${rows}
       ${r.result_note ? `<tr><th>결과/메모</th><td>${esc(r.result_note)}</td></tr>` : ''}
     </table>
-    ${['development','sample'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    ${['development','sample','voc'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>${commentButton("request", r.id, r.title)}
-      ${['development','sample'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
+      ${['development','sample','voc'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn" data-a="edit">수정</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
       ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
       ${approver && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn" data-a="status">상태/결과 변경</button>' : ''}
     </div>`, { wide: true });
-  if (['development','sample'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
+  if (['development','sample','voc'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); return; }
-      if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.label}리스트에 등록됨`); }
+      if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.listTitle || cfg.label + '리스트'}에 등록됨`); }
       if (a === 'reject') { const v = await promptBox('반려 사유', '<label>사유 *<textarea name="reason" required rows="3"></textarea></label>'); if (!v) return; await api('POST', `/api/requests/${r.id}/reject`, v); toast('반려했습니다.'); }
       if (a === 'del') { if (!(await confirmBox('이 의뢰를 삭제할까요?'))) return; await api('DELETE', `/api/requests/${r.id}`); toast('삭제했습니다.'); }
       if (a === 'status') { const v = await promptBox('상태/결과 변경', `<label>상태<select name="status">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select></label><label>결과/메모<textarea name="result_note" rows="3">${esc(r.result_note)}</textarea></label>`); if (!v) return; await api('POST', `/api/requests/${r.id}/status`, v); toast('변경했습니다.'); }
@@ -686,13 +690,13 @@ function requestDetail(type, r, reload) {
 // 의뢰 접수 페이지: 양식 + 접수대기 목록
 async function pageIntake(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = canApproveRequest(type);
-  const managers = ['analysis','development'].includes(type) ? (await api('GET', '/api/approval-managers'))[type] : null;
+  const managers = ['analysis','development','voc'].includes(type) ? (await api('GET', '/api/approval-managers'))[type === 'voc' ? 'analysis' : type] : null;
   main.innerHTML = `
-  <h1>${cfg.label}의뢰 <span class="dept">${cfg.dept}</span></h1>
-  <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.label}리스트</a>에 올라갑니다.
+  <h1>${cfg.intakeTitle || cfg.label + '의뢰'} <span class="dept">${cfg.dept}</span></h1>
+  <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.listTitle || cfg.label + '리스트'}</a>에 올라갑니다.
   ${managers ? `<br>지정 승인권자: ${managers.length ? managers.map(u => esc(u.name)).join(', ') : '미지정 · 관리자에게 책임자 지정을 요청하세요.'} (관리자도 승인 가능)` : ''}
   ${mgr ? `<br><span class="tag">${cfg.mgr} 권한</span> 아래 목록에서 바로 승인/반려할 수 있습니다.` : ''}</p>
-  <details class="card" id="reqNewBox" open><summary><h3>새 ${cfg.label}의뢰 작성</h3></summary>${requestForm(type)}</details>
+  <details class="card" id="reqNewBox" open><summary><h3>새 ${cfg.intakeTitle || cfg.label + '의뢰'} 작성</h3></summary>${requestForm(type)}</details>
   <h2>접수대기 목록</h2>${listControls('intake', { dateLabel: '등록', placeholder: '품목·고객사·입력자·메모', extra: `<label>상태<select name="status"><option value="">전체 접수대기·반려</option><option value="pending">접수대기</option><option value="rejected">반려</option></select></label>${type === 'analysis' ? '<label>검사 구분<select name="category"><option value="">전체 검사</option>' + ['수입검사','의뢰검사','출하검사','공정검사'].map(category => `<option>${category}</option>`).join('') + '</select></label>' : ''}` })}<div id="intakeList"></div>`;
   const filterForm = $('#intakeFilters', main); let queryVersion = 0;
   const load = async () => {
@@ -703,10 +707,10 @@ async function pageIntake(type) {
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
     $('#intakeList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
-      <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
+      <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}">
         <td>${statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td><td><b>${esc(r.title)}</b></td>${type === 'analysis' ? `<td>${esc(r.category)}</td>` : ''}${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
-        <td>${esc(r.customer)}</td><td>${esc(r.due_date || '')}</td><td>${esc(r.requester_name)}</td><td class="small muted">${esc(r.created_at.slice(0, 10))}</td>
+        <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.due_date || '')}</td><td>${esc(r.requester_name)}</td><td class="small muted">${esc(r.created_at.slice(0, 10))}</td>
         ${mgr ? `<td class="nowrap">${r.status === 'pending' ? `<button class="btn small primary" data-ok="${r.id}">승인</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">접수대기 중인 의뢰가 없습니다.</div>';
     $$('#intakeList tr[data-id]').forEach((tr) => (tr.onclick = (e) => { if (e.target.closest('button')) return; requestDetail(type, rows.find((x) => x.id == tr.dataset.id), load); }));
@@ -727,7 +731,7 @@ async function pageWorkList(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = hasRole(cfg.role);
   let status = ''; let category = '';
   main.innerHTML = `
-  <h1>${cfg.label}리스트 <span class="dept">${cfg.dept}</span></h1>
+  <h1>${cfg.listTitle || cfg.label + '리스트'} <span class="dept">${cfg.dept}</span></h1>
   <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다.</p>
   <div class="toolbar">
     <div class="seg" id="stSeg">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div>
@@ -746,11 +750,11 @@ async function pageWorkList(type) {
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
     $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
-      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>입력자(의뢰자)</th><th>완료희망일</th><th>상태</th></tr></thead>
+      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th><th>완료희망일</th><th>상태</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${r.status === 'done' ? 'row-done' : ''}">
         <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
         <td><b>${esc(r.title)}</b>${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
-        <td>${esc(r.customer)}</td><td>${esc(r.requester_name)}</td>
+        <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>
         <td class="${r.status !== 'done' && r.due_date && r.due_date < t ? 'overdue' : ''}">${esc(r.due_date || '')}</td>
         <td>${mgr ? `<select class="st-select st-${r.status}" data-st="${r.id}" aria-label="상태">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select>` : statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 항목이 없습니다.</div>';
@@ -948,7 +952,7 @@ async function pageAdmin(main) {
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
   <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
-    <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
+    <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰·VOC 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
     <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>

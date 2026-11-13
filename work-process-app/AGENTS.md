@@ -99,3 +99,10 @@ INVITE_CODE=local-test-code npm start
 - public/comments.js의 공통 창과 commentButton()을 모든 업무 목록에 연결합니다. 클릭 캡처로 행 선택/상세 열기와 충돌하지 않게 하고 모든 사용자 입력은 esc()로 출력하세요.
 - 코멘트는 진행상태나 결과 메모를 변경하지 않습니다. 수정/삭제 API 없이 이력을 보존하고 author_id는 사용자 삭제 시 NULL, author_name은 보존합니다. 원본 업무 삭제 시에도 코멘트를 일괄 삭제하지 마세요.
 - comments.js를 HTML/로컬 ASSETS/운영 빌드에 포함하고, progress_comments는 관리자 전체 백업 대상입니다.
+
+## VOC
+- VOC는 별도 테이블 대신 requests.type=voc로 저장합니다. REQUEST_TYPES.voc=quality, 접수번호 접두어 V, 승인/반려는 quality_approver(품질팀장/품질책임자) 또는 관리자입니다.
+- 고객사/제품명/수량(양수)/VOC 내용은 필수이며 data.qty/lot/unit/extra에 저장합니다. LOT는 미확인 시 빈 문자열을 허용합니다. 승인 전에는 intake, 승인 후 waiting/progress/done은 list에 표시합니다.
+- 품질 메뉴 #/quality/voc/request 및 #/quality/voc/list는 공통 의뢰 UI를 사용하며 수량·LOT 컬럼, 사진 첨부, request 댓글을 제공합니다.
+- VOC 첨부는 entity=request로 기존 권한·R2 검증/제한을 유지합니다. 일반 의뢰자가 접수/반려 상태에 첨부하고 승인 후 품질 담당자가 관리합니다.
+- approval-managers의 analysis 승인권자와 VOC 승인권자는 동일한 quality_approver입니다. 기존 승인권자 API 형태는 유지합니다. 기존 분석 리포트에 VOC를 합산하지 마세요.

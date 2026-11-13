@@ -5,6 +5,21 @@
 //  - t: text | number | date | textarea | radio | checks
 //  - other: true → '기타' 직접입력칸(<키>_etc) 추가
 window.REQ = {
+  voc: {
+    label: 'VOC', dept: '품질', role: 'quality', mgr: '품질팀장(품질책임자)',
+    intake: '#/quality/voc/request', list: '#/quality/voc/list',
+    intakeTitle: 'VOC 접수', listTitle: 'VOC 처리목록', documentTitle: 'VOC 접수서', submitLabel: 'VOC 접수',
+    titleLabel: '제품명',
+    fields: [
+      { k: 'customer', label: '고객사', t: 'text', core: true, req: true },
+      { k: 'title', label: '제품명', t: 'text', core: true, req: true },
+      { k: 'qty', label: '수량', t: 'number', req: true, min: 0, step: 'any' },
+      { k: 'unit', label: '단위', t: 'text', ph: '예) EA, BOX, kg' },
+      { k: 'lot', label: 'LOT', t: 'text', ph: '미확인 시 빈칸으로 접수 가능' },
+      { k: 'due_date', label: '처리 희망일', t: 'date', core: true },
+      { k: 'extra', label: 'VOC 내용', t: 'textarea', full: true, req: true },
+    ],
+  },
   analysis: {
     label: '분석', dept: '품질', role: 'quality', mgr: '품질책임자',
     intake: '#/quality/request', list: '#/quality/list',
