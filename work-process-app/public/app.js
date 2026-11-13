@@ -1,3 +1,5 @@
+// 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
+const APP_VERSION = '15.1';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -233,7 +235,7 @@ function shell() {
   $('#app').innerHTML = `
   <header class="top">
     <button class="menu-btn" aria-label="메뉴">☰</button>
-    <a href="#/" class="brand"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> <span class="brand-text">서울세미텍 시스템</span></a>
+    <a href="#/" class="brand"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> <span class="brand-text">서울세미텍 시스템</span><span class="app-version">버전 ${APP_VERSION}</span></a>
     <div class="who"><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
@@ -259,6 +261,7 @@ function pageAuth(mode = 'login', notice = '') {
     <div class="auth-card">
       <div class="brand big"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> 서울세미텍 시스템</div>
       <p class="muted">구매 · 품질 · 개발 · 생산 · 물류 업무를 한 곳에서</p>
+      <p class="app-version">버전 ${APP_VERSION}</p>
       <div class="tabs"><button data-m="login" class="${mode === 'login' ? 'on' : ''}">로그인</button><button data-m="register" class="${mode === 'register' ? 'on' : ''}">가입</button></div>
       <p id="authNotice" role="status" class="muted">${esc(notice)}</p>
       <form class="stack" id="authForm">
