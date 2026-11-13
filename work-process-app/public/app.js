@@ -358,7 +358,7 @@ async function pagePO(main) {
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
@@ -410,7 +410,7 @@ async function pageReceive(main) {
       <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>입력자</th><th>입고 처리자</th><th>사진·검수</th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td><input type="checkbox" class="rc-check" value="${p.id}" aria-label="선택"></td>
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
@@ -503,7 +503,7 @@ async function pageOtherReceipts(main) {
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
-      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
@@ -566,7 +566,7 @@ async function pageLaundry(main) {
     const sumD = rows.reduce((a, r) => a + (r.discard_qty || 0), 0); const sumI = rows.reduce((a, r) => a + (r.in_qty || 0), 0);
     $('#lnSum').innerHTML = `${rows.length}건 · 폐기 합계 <b>${fmtNum(sumD)}</b>${sumI ? ` / 입고 ${fmtNum(sumI)} (폐기율 ${(sumD / sumI * 100).toFixed(1)}%)` : ''}`;
     $('#lnList').innerHTML = rows.length ? rows.map((r) => `<div class="card ln">
-        <div class="ln-head"><b>${esc(r.in_date)} (${dow(r.in_date)})</b><span class="chip red">폐기 ${fmtNum(r.discard_qty)}</span>${r.in_qty != null ? `<span class="chip">입고 ${fmtNum(r.in_qty)}</span>` : ''}</div>
+        <h4>${esc(r.item || '기존 세탁기록')}${lineInfo(r)}</h4><div class="ln-head"><b>${esc(r.in_date)} (${dow(r.in_date)})</b><span class="chip red">폐기 ${fmtNum(r.discard_qty)}</span>${r.in_qty != null ? `<span class="chip">입고 ${fmtNum(r.in_qty)}</span>` : ''}</div>
         ${r.note ? `<p>${esc(r.note)}</p>` : ''}
         <div class="thumbs">${r.photos.map((f) => `<img src="/uploads/${esc(f)}" data-big="/uploads/${esc(f)}" alt="불량폐기 사진" loading="lazy">`).join('') || '<span class="muted small">사진 없음</span>'}</div>
         <div class="ln-foot"><span class="small muted">입력자: ${esc(r.created_by)}</span><span>${commentButton("laundry", r.id, r.in_date + " 세탁 기록")} <button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></span></div>
@@ -642,7 +642,7 @@ function requestDetail(type, r, reload) {
   const rows = cfg.fields.map((f) => `<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(f, r)) || '<span class="muted">-</span>'}</td></tr>`).join('');
   const m = modal(`
     <div class="print-area">
-    <h3>${cfg.documentTitle || cfg.label + '의뢰서'} ${statusChip(r.status)}</h3>
+    <h3>${cfg.documentTitle || cfg.label + '의뢰서'} ${statusChip(r.status)}</h3>${lineInfo(r)}
     <table class="kv">
       <tr><th>접수번호</th><td>${esc(r.req_no || '(승인 시 발급)')}</td></tr>
       ${r.source_type ? `<tr><th>입고 출처</th><td><a href="${r.source_type === 'purchase_order' ? '#/logistics/receive' : '#/logistics/other'}">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} #${esc(r.source_id)}</a>${r.data.purchase_req_no ? ' · 구매의뢰번호 ' + esc(r.data.purchase_req_no) : ''}</td></tr>
@@ -709,7 +709,7 @@ async function pageIntake(type) {
     $('#intakeList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
       <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}">
-        <td>${statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td><td><b>${esc(r.title)}</b></td>${type === 'analysis' ? `<td>${esc(r.category)}</td>` : ''}${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
+        <td>${statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td><td><b>${esc(r.title)}</b>${lineInfo(r)}</td>${type === 'analysis' ? `<td>${esc(r.category)}</td>` : ''}${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.due_date || '')}</td><td>${esc(r.requester_name)}</td><td class="small muted">${esc(r.created_at.slice(0, 10))}</td>
         ${mgr ? `<td class="nowrap">${r.status === 'pending' ? `<button class="btn small primary" data-ok="${r.id}">승인</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">접수대기 중인 의뢰가 없습니다.</div>';
@@ -753,7 +753,7 @@ async function pageWorkList(type) {
       <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th><th>완료희망일</th><th>상태</th></tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${r.status === 'done' ? 'row-done' : ''}">
         <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
-        <td><b>${esc(r.title)}</b>${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
+        <td><b>${esc(r.title)}</b>${lineInfo(r)}${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>
         <td class="${r.status !== 'done' && r.due_date && r.due_date < t ? 'overdue' : ''}">${esc(r.due_date || '')}</td>
         <td>${mgr ? `<select class="st-select st-${r.status}" data-st="${r.id}" aria-label="상태">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select>` : statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td></tr>`).join('')}</tbody></table></div>`
@@ -820,7 +820,7 @@ const PERIOD = { day: '일간', week: '주간', month: '월간' };
 async function pageSchedule(kind) {
   const main = $('#main'); const label = kind === 'finished' ? '완제품' : '반제품';
   const boms = await api('GET', '/api/boms?kind=' + kind);
-  let view = 'week'; let base = todayStr();
+  let view = 'week'; let base = scheduleFocusDate();
   main.innerHTML = `
   <h1>${label} 생산일정 <span class="dept">생산</span></h1>
   <form class="card" id="scNew"><h3>일정 입력</h3><div class="form-grid">
@@ -849,7 +849,7 @@ async function pageSchedule(kind) {
   $('#scBom').onchange = previewBom; $('#scNew [name=qty]').oninput = previewBom;
   $$('#scNew [name=period]').forEach((r) => (r.onchange = () => { $('#scHint').textContent = hints[r.value]; }));
   const range = () => view === 'day' ? [base, base] : view === 'week' ? [mondayOf(base), addDays(mondayOf(base), 6)] : [monthStart(base), monthEnd(base)];
-  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
+  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<span class="small">계획 ${fmtNum(s.qty)} / 실제 ${s.actual_count ? fmtNum(s.actual_qty || 0) : '미입력'} / 달성률 ${s.qty ? Math.round((s.actual_qty || 0) / s.qty * 1000) / 10 : '—'}%</span><button class="btn small" data-actual-open="${s.id}">생산실적 입력·조회</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
     if (!main.isConnected) return;
@@ -917,7 +917,7 @@ async function pageShip(main) {
     $('#shSum').innerHTML = `${rows.length}건 · 수량 합계 <b>${fmtNum(rows.reduce((a, r) => a + r.qty, 0))}</b>`;
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
-      <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>
+      <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}${lineInfo(r)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>
         <td class="nowrap">${commentButton("shipment", r.id, r.item)} <button class="btn small" data-ship-photo="${r.id}">사진·이상 여부</button>${inspectionBadge(r)} <button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당 기간 출하가 없습니다.</div>';
     $$('#shList [data-ship-photo]').forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.shipPhoto)); openAttachments('shipment', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });

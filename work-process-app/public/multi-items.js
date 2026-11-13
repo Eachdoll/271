@@ -1,0 +1,159 @@
+// Shared multi-item input; each line remains independently trackable after saving.
+function lineEntity(row) {
+  return row.type ? 'request' : row.req_no !== undefined ? 'purchase_order' : row.ship_date ? 'shipment' : row.received_date ? 'other_receipt' : row.in_date ? 'laundry' : row.product !== undefined && row.period ? 'schedule' : '';
+}
+function lineInfo(row) {
+  const data = typeof row.data === 'string' ? JSON.parse(row.data || '{}') : row.data || {};
+  const snapshot = typeof row.bom_snapshot === 'string' ? JSON.parse(row.bom_snapshot || '{}') : row.bom_snapshot || {};
+  const unit = row.unit || data.unit || snapshot.unit || '';
+  const parts = [row.spec || data.spec, unit, row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
+  if (row.type && row.type !== 'voc' && (row.qty ?? data.qty) != null) parts.push('수량 ' + fmtNum(row.qty ?? data.qty));
+  if (row.batch_id) parts.push('묶음 ' + row.batch_id.slice(-8));
+  const entity = lineEntity(row);
+  return `<span class="small muted line-info">${parts.map(esc).join(' · ')} ${entity ? `<button type="button" class="btn small" data-line-meta="${esc(entity)}" data-line-id="${row.id}" data-line-spec="${esc(row.spec)}" data-line-unit="${esc(unit)}" data-line-lot="${esc(row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : ''))}" data-line-name="${esc(row.item)}">규격·단위</button>` : ''}</span>`;
+}
+function scheduleFocusDate() { try { const date = sessionStorage.getItem('newScheduleDate'); sessionStorage.removeItem('newScheduleDate'); return date || todayStr(); } catch { return todayStr(); } }
+function rememberScheduleDate(date) { try { sessionStorage.setItem('newScheduleDate',date); } catch {} }
+function multiInput(name, label, type = 'text', value = '', required = true) {
+  return `<label>${label}${required ? ' *' : ''}<input name="${name}" type="${type}" value="${esc(value)}" ${required ? 'required' : ''}></label>`;
+}
+function multiPayload(form, entity, type, kind, requestId) {
+  const common = entity === 'request' ? collectRequest(type,form) : formObj(form);
+  if (entity === 'schedule') common.kind = kind;
+  const items = $$('[data-multi-row]',form).map(row => Object.fromEntries($$('[data-line-key]',row).map(input => [input.dataset.lineKey,input.type === 'checkbox' ? input.checked : input.value])));
+  return { common, items, request_id: requestId };
+}
+async function installMultiItems(legacy, entity, type = '') {
+  if (legacy.dataset.multiInstalled) return;
+  legacy.dataset.multiInstalled = 'true';
+  const kind = location.hash.includes('/semi') ? 'semi' : 'finished';
+  const titles = { purchase_order: '발주', shipment: '출하', laundry: '세탁', other_receipt: '기타입고', schedule: '생산계획', request: (REQ[type]?.label || '') + ' 접수' };
+  let header = '';
+  if (entity === 'purchase_order') header = multiInput('req_no','구매의뢰번호') + multiInput('vendor','거래처') + multiInput('due_date','납기일','date');
+  if (entity === 'shipment') header = multiInput('ship_date','출고일','date',todayStr()) + multiInput('customer','거래처');
+  if (entity === 'other_receipt') header = multiInput('received_date','입고일','date',todayStr()) + multiInput('vendor','입고처');
+  if (entity === 'laundry') header = multiInput('in_date','세탁 입고일','date',todayStr());
+  if (entity === 'schedule') header = `<label>일정 기준<select name="period"><option value="day">일간</option><option value="week">주간 (월요일 시작)</option><option value="month">월간 (1일 시작)</option></select></label>${multiInput('start_date','계획일','date',todayStr())}`;
+  if (entity === 'request') header = REQ[type].fields.filter(f => !['title','qty','lot','unit','req_qty','sample_qty','target_price'].includes(f.k)).map(f => fieldInput(f)).join('');
+  else header += multiInput('note','공통 비고','text','',false);
+  const withPhotos = ['purchase_order','shipment','other_receipt','laundry'].includes(entity) || (entity === 'request' && ['voc','sample','development'].includes(type));
+  const form = document.createElement('form'); form.className = 'card multi-form';
+  form.innerHTML = `<h3>${titles[entity]} · 여러 품목 한 번에 등록</h3><p class="small muted">공통 정보는 한 번 입력하고 품목 추가로 규격·사이즈별 수량을 입력하세요. 저장 후 품목별로 상태와 코멘트를 관리합니다. 최대 30품목입니다.</p><fieldset data-multi-fields><div class="form-grid">${header}</div><div data-multi-rows></div><button type="button" class="btn" data-add-item>＋ 품목 추가</button>${withPhotos ? `<p class="small muted">공통 첨부 사진은 등록하는 모든 품목에 적용됩니다. 품목별 사진은 저장 후 각 항목에서 추가할 수 있습니다.</p>${photoPicker()}` : ''}</fieldset><p role="status" data-multi-status class="small muted"></p><div class="actions"><button class="btn primary" data-multi-submit>1품목 함께 등록</button></div>`;
+  const host = legacy.id ? legacy : legacy.closest('#reqNewBox');
+  if (!host) return;
+  host.before(form);
+  if (host.tagName === 'DETAILS') { host.open = false; $('summary',host).textContent = '단일 품목 입력 (기존 상세 양식)'; }
+  else { const details = document.createElement('details'); details.className = 'card'; details.innerHTML = '<summary>단일 품목 입력 (기존 상세 양식)</summary>'; host.before(details); details.append(host); }
+  const rowsRoot = $('[data-multi-rows]',form), status = $('[data-multi-status]',form), submit = $('[data-multi-submit]',form);
+  let boms = [], loadingBoms = ['other_receipt','schedule'].includes(entity);
+  const draft = withPhotos ? bindPhotoDraft(form) : { photos: [], busy: false, reset() {} };
+  const key = () => crypto.randomUUID(); let requestId = key(), saved = null, payload = null, remaining = [], busy = false;
+  const updateCount = () => { const count = $$('[data-multi-row]',form).length; submit.textContent = saved ? '사진 저장 재시도' : `${count}품목 함께 등록`; $('[data-add-item]',form).disabled = count >= 30; };
+  const optionHtml = () => `<option value="">${entity === 'schedule' ? '직접 입력 (BOM 선택 가능)' : 'BOM 품목을 선택하세요'}</option>${boms.filter(b => entity !== 'schedule' || b.kind === kind).map(b => `<option value="${b.id}">[${esc(b.item_category)}] ${esc(b.product)} ${esc(b.product_code)}</option>`).join('')}`;
+  const add = () => {
+    if ($$('[data-multi-row]',form).length >= 30) return;
+    const row = document.createElement('fieldset'); row.dataset.multiRow = ''; row.className = 'multi-row';
+    row.innerHTML = `<legend>품목</legend><div class="form-grid">${['other_receipt','schedule'].includes(entity) ? `<label>BOM 검색<input type="search" data-bom-search placeholder="품목·코드 검색"></label><label class="span2">BOM 품목<select data-line-key="bom_id" ${entity === 'other_receipt' ? 'required' : ''}>${optionHtml()}</select></label>` : ''}<label>${entity === 'laundry' ? '옷 종류 (원피스·투피스 등)' : '품목명 / 제품명'} *<input data-line-key="item" required ${entity === 'other_receipt' ? 'readonly' : ''} maxlength="200"></label><label>규격·사이즈<input data-line-key="spec" maxlength="100" placeholder="예) S / M / L"></label><label>${entity === 'laundry' ? '입고' : entity === 'schedule' ? '계획' : ''}수량 *<input data-line-key="qty" type="number" min="0" step="any" required></label><label>단위<input data-line-key="unit" maxlength="20" placeholder="예) EA / BOX / 벌" ${entity === 'other_receipt' ? 'readonly' : ''}></label><label>LOT<input data-line-key="lot" maxlength="100"></label>${entity === 'purchase_order' ? `<label>분류 *<select data-line-key="item_category" required>${categoryOptions('',true).replace('전체 분류','분류 선택')}</select></label><label class="inline"><input data-line-key="coa_requested" type="checkbox">COA 요청</label>` : ''}${entity === 'laundry' ? '<label>폐기수량 *<input data-line-key="discard_qty" type="number" min="0" step="any" value="0" required></label>' : ''}${type === 'development' ? '<label>타겟단가 *<input data-line-key="target_price" required></label>' : ''}</div><div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div>`;
+    rowsRoot.append(row);
+    $('[data-remove-item]',row).onclick = () => { if ($$('[data-multi-row]',form).length === 1) return toast('품목은 1개 이상 필요합니다.','err'); row.remove(); updateCount(); };
+    const select = $('[data-line-key=bom_id]',row);
+    if (select) {
+      select.onchange = () => {
+        const bom = boms.find(b => b.id === Number(select.value));
+        $('[data-line-key=item]',row).readOnly = !!bom || entity === 'other_receipt'; $('[data-line-key=unit]',row).readOnly = !!bom || entity === 'other_receipt';
+        if (bom) { $('[data-line-key=item]',row).value = bom.product; $('[data-line-key=unit]',row).value = bom.unit; }
+      };
+      $('[data-bom-search]',row).oninput = event => { const q = event.target.value.toLocaleLowerCase(); [...select.options].forEach(option => { option.hidden = !!option.value && !option.textContent.toLocaleLowerCase().includes(q); }); };
+    }
+    updateCount();
+  };
+  add(); $('[data-add-item]',form).onclick = add;
+  if (loadingBoms) {
+    submit.disabled = true;
+    try { boms = await api('GET','/api/boms'); $$('[data-line-key=bom_id]',form).forEach(select => { select.innerHTML = optionHtml(); }); status.textContent = ''; loadingBoms = false; }
+    catch(error) { status.textContent = 'BOM을 불러오지 못했습니다. 화면을 새로고침하세요. ' + error.message; }
+    finally { submit.disabled = loadingBoms; }
+  }
+  form.onsubmit = async event => {
+    event.preventDefault(); if (busy || draft.busy || loadingBoms) return;
+    busy = true; submit.disabled = true;
+    try {
+      if (!saved) {
+        payload = multiPayload(form,entity,type,kind,requestId);
+        status.textContent = `${payload.items.length}품목을 저장하고 있습니다…`;
+        saved = await api('POST','/api/batches/' + entity,payload);
+        remaining = saved.rows.slice(); $('[data-multi-fields]',form).disabled = true;
+      }
+      while (remaining.length) {
+        const row = remaining[0]; status.textContent = `품목 저장 완료 · 공통 사진 저장 ${saved.rows.length - remaining.length + 1}/${saved.rows.length}`;
+        if (draft.photos.length) {
+          if (entity === 'laundry') await api('PUT','/api/laundry/' + row.id,{ ...row, keep_photos: row.photos || [], photos: draft.photos });
+          else await api('PUT',`/api/attachments/${entity}/${row.id}`,{ photos: draft.photos });
+        }
+        remaining.shift();
+      }
+      toast(`${saved.rows.length}품목을 등록했습니다. 묶음 ${saved.batch_id.slice(-8)}`);
+      if (entity === 'schedule') rememberScheduleDate(payload.common.start_date);
+      await render();
+      const prefix = {shipment:'sh',other_receipt:'other',laundry:'ln'}[entity]; const date = payload.common.ship_date || payload.common.received_date || payload.common.in_date;
+      if (prefix && date && $('#' + prefix + 'Filters')) { $('#' + prefix + 'From').value = date; $('#' + prefix + 'To').value = date; $('#' + prefix + 'Filters').requestSubmit(); }
+    } catch(error) { status.textContent = saved ? `품목은 이미 저장되었습니다. 사진 저장 실패: ${error.message} 아래 재시도 버튼을 누르세요.` : error.message; fail(error); }
+    finally { busy = false; submit.disabled = false; updateCount(); }
+  };
+}
+function enhanceMultiForms() {
+  if (!ME) return;
+  const configs = [['#poNew','purchase_order'],['#shNew','shipment'],['#otherNew','other_receipt'],['#lnNew','laundry'],['#scNew','schedule']];
+  for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) installMultiItems(form,entity).catch(fail); }
+  const form = $('#reqNewBox .req-form');
+  if (form && !form.dataset.multiInstalled) {
+    const type = location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';
+    installMultiItems(form,'request',type).catch(fail);
+  }
+}
+document.addEventListener('DOMContentLoaded',() => { enhanceMultiForms(); new MutationObserver(enhanceMultiForms).observe(document.body,{childList:true,subtree:true}); });
+
+async function openProductionActuals(id) {
+  const box = modal('<h3>생산실적 · 실제 생산량</h3><div data-actual-content>불러오는 중…</div>',{wide:true});
+  let requestId = crypto.randomUUID(), history = [], next = null, busy = false;
+  const load = async (previous = false) => {
+    const result = await api('GET',`/api/schedules/${id}/actuals` + (previous ? '?before=' + next : ''));
+    if (!box.el.isConnected) return;
+    history = previous ? history.concat(result.rows) : result.rows; next = result.next;
+    const s = result.schedule; const unit = s.unit || s.bom_snapshot?.unit || '단위 미지정';
+    const last = s.period === 'day' ? s.start_date : s.period === 'week' ? addDays(s.start_date,6) : monthEnd(s.start_date);
+    const date = todayStr() < s.start_date || todayStr() > last ? s.start_date : todayStr();
+    $('[data-actual-content]',box.el).innerHTML = `<h4>${esc(s.product)} ${esc(s.spec)} · ${esc(unit)}</h4><p>계획 ${fmtNum(s.qty)} / 실제 누적 <b>${fmtNum(result.actual_qty)}</b> / 차이 ${fmtNum(result.variance_qty)} / 달성률 ${result.achievement_rate ?? '—'}%</p><p class="small muted">${esc(s.start_date)} ~ ${esc(last)} · 완료 체크와 별도로 실제 생산한 수량만 입력하세요. 같은 생산실적을 여러 일정에 중복 입력하지 마세요.</p>${result.can_write ? `<form class="stack" data-actual-form><div class="form-grid">${multiInput('production_date','생산일','date',date)}<label>실제 생산량 *<input name="qty" type="number" min="0" step="any" required></label>${multiInput('note','작업·변동 메모','text','',false)}</div><p role="status" data-actual-status class="small muted"></p><div class="actions"><button class="btn primary">생산실적 추가</button></div></form>` : '<p class="muted">생산 담당자 또는 일정 등록자가 실적을 입력할 수 있습니다.</p>'}<div class="table-wrap"><table class="grid"><thead><tr><th>생산일</th><th>실제 수량</th><th>입력자 / 입력시각</th><th>메모</th><th></th></tr></thead><tbody>${history.map(a => `<tr><td>${esc(a.production_date)}</td><td>${fmtNum(a.qty)}${a.voided_at ? ' (취소)' : ''}</td><td>${esc(a.author_name)}<br>${esc(a.created_at)}</td><td>${esc(a.note)}${a.voided_at ? `<br>취소: ${esc(a.voided_by)} · ${esc(a.void_reason)}` : ''}</td><td>${result.can_write && !a.voided_at ? `<button class="btn small danger" data-actual-void="${a.id}">입력 취소</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5">아직 입력한 생산실적이 없습니다.</td></tr>'}</tbody></table></div>${next ? '<button class="btn small" data-actual-more>이전 실적 더 보기</button>' : ''}`;
+    const form = $('[data-actual-form]',box.el);
+    if (form) { form.elements.production_date.min = s.start_date; form.elements.production_date.max = last; }
+    if (form) form.onsubmit = async event => {
+      event.preventDefault(); if (busy) return; busy = true; const button = $('button',form); button.disabled = true;
+      let stored = false;
+      try { await api('POST',`/api/schedules/${id}/actuals`,{ ...formObj(form),request_id:requestId }); stored = true; form.reset(); requestId = crypto.randomUUID(); await load(); render(); toast('생산실적을 기록했습니다.'); }
+      catch(error) { $('[data-actual-status]',form).textContent = stored ? '실적은 저장되었습니다. 조회에 실패했으니 다시 열어 확인하세요.' : error.message; fail(error); }
+      finally { busy = false; button.disabled = false; }
+    };
+    $$('[data-actual-void]',box.el).forEach(button => button.onclick = async () => {
+      if (busy) return;
+      const value = await promptBox('생산실적 입력 취소','<label>취소 사유 *<input name="reason" required maxlength="500"></label>');
+      if (!value) return;
+      busy = true;
+      try { await api('POST',`/api/schedules/${id}/actuals/${button.dataset.actualVoid}/void`,value); await load(); render(); }
+      catch(error) { fail(error); } finally { busy = false; }
+    });
+    const more = $('[data-actual-more]',box.el); if (more) more.onclick = () => load(true).catch(fail);
+  };
+  await load();
+}
+document.addEventListener('click',event => {
+  const button = event.target.closest('[data-actual-open]'); if (!button) return;
+  event.preventDefault(); event.stopPropagation(); openProductionActuals(button.dataset.actualOpen).catch(fail);
+},true);
+
+document.addEventListener('click',async event => {
+  const button = event.target.closest('[data-line-meta]'); if (!button) return;
+  event.preventDefault(); event.stopPropagation();
+  const value = await promptBox('품목 규격·사이즈·단위', `${button.dataset.lineMeta === 'laundry' ? multiInput('item','옷 종류','text',button.dataset.lineName) : ''}${multiInput('spec','규격·사이즈','text',button.dataset.lineSpec,false)}${multiInput('unit','단위','text',button.dataset.lineUnit,false)}${multiInput('lot','LOT','text',button.dataset.lineLot,false)}`);
+  if (!value) return;
+  try { await api('PUT',`/api/items/${button.dataset.lineMeta}/${button.dataset.lineId}`,value); render(); toast('품목 규격을 저장했습니다.'); } catch(error) { fail(error); }
+},true);

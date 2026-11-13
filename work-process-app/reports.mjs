@@ -46,6 +46,7 @@ export async function buildReport(db, query, today) {
   const category = query.item_category || ''; const q = String(query.q || '').trim();
   if (category && !REPORT_CATEGORIES.includes(category)) throw reportError('품목 분류를 확인하세요.');
   if (q.length > 200) throw reportError('검색어는 200자까지 입력하세요.');
+  const lineName = (column, spec) => `${column} || CASE WHEN ${spec}<>'' THEN ' [' || ${spec} || ']' ELSE '' END`;
   const normalizedCategory = column => `COALESCE(NULLIF(${column},''),'미분류')`;
   const normalizedUnit = (column, item) => `COALESCE(NULLIF(${column},''),'${REPORT_UNKNOWN_UNIT} · ' || ${item})`;
   const filter = (date, categoryColumn, item, partner) => {
@@ -55,19 +56,19 @@ export async function buildReport(db, query, today) {
     return { sql: where.join(' AND '), args };
   };
   const analysisDate = "substr(r.created_at,1,10)";
-  const af = filter(analysisDate, "json_extract(r.data,'$.item_category')", 'r.title', 'r.customer');
-  const pf = filter('substr(p.recv_at,1,10)', 'p.item_category', 'p.item', 'p.vendor');
-  const of = filter('o.received_date', 'o.item_category', 'o.item', 'o.vendor');
-  const sf = filter('s.start_date', "json_extract(s.bom_snapshot,'$.item_category')", 's.product');
-  const hf = filter('h.ship_date', "''", 'h.item', 'h.customer');
+  const af = filter(analysisDate, "json_extract(r.data,'$.item_category')", lineName('r.title','r.spec'), 'r.customer');
+  const pf = filter('substr(p.recv_at,1,10)', 'p.item_category', lineName('p.item','p.spec'), 'p.vendor');
+  const of = filter('o.received_date', 'o.item_category', lineName('o.item','o.spec'), 'o.vendor');
+  const sf = filter('s.start_date', "json_extract(s.bom_snapshot,'$.item_category')", lineName('s.product','s.spec'));
+  const hf = filter('h.ship_date', "''", lineName('h.item','h.spec'), 'h.customer');
   const receiptCte = `WITH incoming AS (
-    SELECT substr(p.recv_at,1,10) AS received_date,p.item,${normalizedCategory('p.item_category')} AS item_category,
-      ${normalizedUnit("''", 'p.item')} AS unit,'purchase' AS source,COALESCE(p.recv_qty,p.qty) AS qty,
+    SELECT substr(p.recv_at,1,10) AS received_date,${lineName('p.item','p.spec')} AS item,${normalizedCategory('p.item_category')} AS item_category,
+      ${normalizedUnit("p.unit", lineName('p.item','p.spec'))} AS unit,'purchase' AS source,COALESCE(p.recv_qty,p.qty) AS qty,
       CASE WHEN a.inspection_status='abnormal' THEN 1 ELSE 0 END AS abnormal
       FROM purchase_orders p LEFT JOIN attachments a ON a.entity_type='purchase_order' AND a.entity_id=p.id
       WHERE p.recv_status IN ('ok','mismatch') AND p.recv_at IS NOT NULL AND ${pf.sql}
     UNION ALL
-    SELECT o.received_date,o.item,${normalizedCategory('o.item_category')},${normalizedUnit("json_extract(o.bom_snapshot,'$.unit')", 'o.item')},'other',o.qty,
+    SELECT o.received_date,${lineName('o.item','o.spec')},${normalizedCategory('o.item_category')},${normalizedUnit("COALESCE(NULLIF(o.unit,''),json_extract(o.bom_snapshot,'$.unit'))", lineName('o.item','o.spec'))},'other',o.qty,
       CASE WHEN a.inspection_status='abnormal' THEN 1 ELSE 0 END
       FROM other_receipts o LEFT JOIN attachments a ON a.entity_type='other_receipt' AND a.entity_id=o.id
       WHERE ${of.sql}
@@ -75,10 +76,10 @@ export async function buildReport(db, query, today) {
   const queries = [
     { sql: `SELECT ${reportBucketExpression(analysisDate, grain)} AS bucket,r.status,COUNT(*) AS count FROM requests r WHERE r.type='analysis' AND ${af.sql} GROUP BY bucket,r.status ORDER BY bucket,r.status LIMIT 20001`, args: af.args },
     { sql: `${receiptCte} SELECT ${reportBucketExpression('received_date', grain)} AS bucket,item,item_category,unit,source,COUNT(*) AS count,SUM(qty) AS qty,SUM(abnormal) AS abnormal FROM incoming GROUP BY bucket,item,item_category,unit,source ORDER BY bucket,item,unit,source LIMIT 20001`, args: [...pf.args, ...of.args] },
-    { sql: `SELECT ${reportBucketExpression('s.start_date', grain)} AS bucket,s.product AS item,${normalizedCategory("json_extract(s.bom_snapshot,'$.item_category')")} AS item_category,
-        ${normalizedUnit("json_extract(s.bom_snapshot,'$.unit')", 's.product')} AS unit,s.kind,COUNT(*) AS plans,SUM(CASE WHEN s.done=1 THEN 1 ELSE 0 END) AS done_plans,SUM(s.qty) AS planned_qty,SUM(CASE WHEN s.done=1 THEN s.qty ELSE 0 END) AS completed_qty
-        FROM schedules s WHERE s.period=? AND ${sf.sql} GROUP BY bucket,item,item_category,unit,s.kind ORDER BY bucket,item,unit LIMIT 20001`, args: [planPeriod, ...sf.args] },
-    { sql: `SELECT ${reportBucketExpression('h.ship_date', grain)} AS bucket,h.item,'미분류' AS item_category,${normalizedUnit("''", 'h.item')} AS unit,COUNT(*) AS count,SUM(h.qty) AS qty FROM shipments h WHERE ${hf.sql} GROUP BY bucket,h.item ORDER BY bucket,h.item LIMIT 20001`, args: hf.args },
+    { sql: `SELECT ${reportBucketExpression('s.start_date', grain)} AS bucket,${lineName('s.product','s.spec')} AS item,${normalizedCategory("json_extract(s.bom_snapshot,'$.item_category')")} AS item_category,
+        ${normalizedUnit("COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'))", lineName('s.product','s.spec'))} AS unit,s.kind,COUNT(*) AS plans,SUM(CASE WHEN s.done=1 THEN 1 ELSE 0 END) AS done_plans,SUM(s.qty) AS planned_qty,SUM(CASE WHEN s.done=1 THEN s.qty ELSE 0 END) AS completed_qty, SUM(COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL),0)) AS actual_qty
+        FROM schedules s WHERE s.period=? AND ${sf.sql} GROUP BY 1,2,3,4,5 ORDER BY bucket,item,unit LIMIT 20001`, args: [planPeriod, ...sf.args] },
+    { sql: `SELECT ${reportBucketExpression('h.ship_date', grain)} AS bucket,${lineName('h.item','h.spec')} AS item,'미분류' AS item_category,${normalizedUnit("h.unit", lineName('h.item','h.spec'))} AS unit,COUNT(*) AS count,SUM(h.qty) AS qty FROM shipments h WHERE ${hf.sql} GROUP BY bucket,h.item,h.spec,h.unit ORDER BY bucket,h.item LIMIT 20001`, args: hf.args },
   ];
   const results = await db.batch(queries);
   const [analysisRows, receiptRows, productionRows, shipmentRows] = results.map(result => result.results);
@@ -97,9 +98,10 @@ export async function buildReport(db, query, today) {
     items: reportRanking(receiptRows, ['qty', 'count', 'abnormal']),
   };
   const production = { plans: reportSum(productionRows, 'plans'), done_plans: reportSum(productionRows, 'done_plans'),
-    by_unit: productionUnits.map(unit => ({ unit, planned_qty: reportSum(productionRows.filter(row => row.unit === unit), 'planned_qty'), completed_qty: reportSum(productionRows.filter(row => row.unit === unit), 'completed_qty') })),
-    series: productionRows, items: reportRanking(productionRows, ['planned_qty', 'completed_qty', 'plans']),
+    by_unit: productionUnits.map(unit => ({ unit, planned_qty: reportSum(productionRows.filter(row => row.unit === unit), 'planned_qty'), completed_qty: reportSum(productionRows.filter(row => row.unit === unit), 'completed_qty'), actual_qty: reportSum(productionRows.filter(row => row.unit === unit), 'actual_qty') })),
+    series: productionRows, items: reportRanking(productionRows, ['planned_qty', 'completed_qty', 'actual_qty', 'plans']),
   };
+  for (const row of [...production.by_unit,...production.series,...production.items]) { row.variance_qty = row.actual_qty - row.planned_qty; row.achievement_rate = row.planned_qty ? Math.round(row.actual_qty / row.planned_qty * 1000) / 10 : null; }
   const shipments = { count: reportSum(shipmentRows, 'count'), by_unit: shipmentUnits.map(unit => ({ unit, qty: reportSum(shipmentRows.filter(row => row.unit === unit), 'qty') })), series: shipmentRows };
   return {
     range: { from, to, grain, plan_period: planPeriod, item_category: category, q, timezone: 'Asia/Seoul' },
@@ -108,8 +110,8 @@ export async function buildReport(db, query, today) {
     definitions: {
       analysis: '선택 기간에 등록된 분석의뢰의 현재 상태입니다. 완료 건수와 완료율도 해당 등록 건을 기준으로 합니다.',
       receipts: '발주입고의 입고확인·수량상이 실입고수량과 기타입고 등록수량을 입고일 기준으로 집계합니다. 판정은 현재 검수 기록 기준입니다.',
-      production: '선택한 일간·주간·월간 일정의 시작일 기준 계획수량과 현재 완료 체크된 일정수량입니다. 완료 체크 수량은 별도 실적 입력값이 아닙니다.',
-      units: '수량은 단위별로 구분합니다. 단위 정보가 없는 발주입고·출하·기존 수기 일정은 단위 미지정으로 표시하고 품목별로 나눕니다.',
+      production: '선택한 일간·주간·월간 일정의 시작일 기준 계획수량과 연결된 실제 생산실적 누적량입니다. 실제 생산일은 실적 상세에서 확인하며 취소된 실적은 제외합니다. 완료 체크 수량은 기존 계획 완료 표시로 실제 생산량과 별개입니다.',
+      units: '수량은 단위별로 구분합니다. 단위 정보가 없는 기존 발주입고·출하·수기 일정은 단위 미지정으로 표시하고 품목별로 나눕니다.',
       categories: '분류 필터는 저장된 분류를 기준으로 합니다. 분류가 없는 기록과 출하는 미분류에 포함됩니다.',
     },
   };

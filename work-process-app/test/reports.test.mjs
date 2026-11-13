@@ -56,7 +56,7 @@ test('Receipts use actual mismatch quantities and keep units and unassigned item
 test('Daily, weekly and monthly production plans are selected independently', async () => {
   const report = (await api(range)).body;
   assert.equal(report.production.plans, 5); assert.equal(report.production.done_plans, 3);
-  assert.deepEqual(report.production.by_unit.find(row => row.unit === 'EA'), { unit: 'EA', planned_qty: 30, completed_qty: 10 });
+  assert.deepEqual(report.production.by_unit.find(row => row.unit === 'EA'), { unit: 'EA', planned_qty: 30, completed_qty: 10, actual_qty: 0, variance_qty: -30, achievement_rate: 0 });
   assert.equal(report.production.by_unit.find(row => row.unit === '단위 미지정 · 미지정 Z').completed_qty, 3);
   assert.equal((await api({ ...range, plan_period: 'week' })).body.production.by_unit[0].planned_qty, 500);
   assert.equal((await api({ ...range, plan_period: 'month' })).body.production.by_unit[0].planned_qty, 1000);

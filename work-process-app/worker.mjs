@@ -341,13 +341,13 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
   if (!backupTables.includes(query.table)) throw bad('백업할 표가 올바르지 않습니다.');
-  const key = query.table === 'settings' ? 'key' : 'id';
-  const after = key === 'key' ? String(query.after || '') : Number(query.after || 0);
+  const key = query.table === 'settings' ? 'key' : query.table === 'item_batches' ? 'batch_id' : 'id';
+  const after = key !== 'id' ? String(query.after || '') : Number(query.after || 0);
   if (typeof after === 'number' && (!Number.isSafeInteger(after) || after < 0)) throw bad('백업 위치가 올바르지 않습니다.');
   const rows = await db.prepare(`SELECT * FROM ${query.table} WHERE ${key}>? ORDER BY ${key} LIMIT 200`).all(after);
   return { rows, next: rows.length === 200 ? rows.at(-1)[key] : null };
@@ -364,7 +364,7 @@ function receiptAnalysisQuery(sourceType, id, user) {
   const date = purchase ? 'substr(src.recv_at,1,10)' : 'src.received_date';
   const prefix = `Q-${today().slice(2).replace(/-/g, '')}-`;
   return {
-    sql: `INSERT INTO requests(type,status,req_no,title,customer,category,data,requester_id,requester_name,approver_name,approved_at,source_type,source_id)
+    sql: `INSERT INTO requests(type,status,req_no,title,customer,category,data,requester_id,requester_name,approver_name,approved_at,source_type,source_id,batch_id,spec,unit,lot,qty)
       SELECT 'analysis','waiting',
         ? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(req_no,length(?) + 1) AS INTEGER)),0)+1 FROM requests WHERE req_no LIKE ?)),
         src.item,src.vendor,'수입검사',
@@ -374,9 +374,9 @@ function receiptAnalysisQuery(sourceType, id, user) {
           'purchase_req_no',${purchase ? 'src.req_no' : "''"},
           'bom_id',${purchase ? 'NULL' : 'src.bom_id'},
           'product_code',${purchase ? "''" : "COALESCE(json_extract(src.bom_snapshot,'$.product_code'),'')"},
-          'unit',${purchase ? "''" : "COALESCE(json_extract(src.bom_snapshot,'$.unit'),'')"},
+          'unit',COALESCE(NULLIF(src.unit,''),${purchase ? "''" : "json_extract(src.bom_snapshot,'$.unit')"},''),'spec',src.spec,'lot',src.lot,'lot_etc',src.lot,'qty',${qty},
           'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note),
-        ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id
+        ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id,src.batch_id,src.spec,src.unit,src.lot,${qty}
       FROM ${table} src WHERE src.id=${id == null ? 'last_insert_rowid()' : '?'}
         ${purchase ? "AND src.recv_status='ok'" : ''}
         AND NOT EXISTS(SELECT 1 FROM requests WHERE source_type=? AND source_id=src.id)
@@ -443,7 +443,7 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
 route('GET', '/api/laundry', async ({ query }) => {
   const args = [], where = [];
   applyListDates(where, args, query, 'in_date');
-  applyListKeyword(where, args, query.q, ['note','created_by']);
+  applyListKeyword(where, args, query.q, ['item','spec','lot','note','created_by']);
   if (query.has_photos) { if (!['0','1'].includes(query.has_photos)) throw bad('사진 조건을 확인하세요.'); where.push(query.has_photos === '1' ? 'json_array_length(photos)>0' : 'json_array_length(photos)=0'); }
   return (await db.prepare(`SELECT * FROM laundry ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY in_date DESC, id DESC`).all(...args)).map((r) => ({ ...r, photos: JSON.parse(r.photos) }));
 });
@@ -501,7 +501,7 @@ route('GET', '/api/requests', async ({ query }) => {
   if (query.status) { if (!['pending','rejected','waiting','progress','done'].includes(query.status)) throw bad('의뢰 상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   if (query.category) { if (type !== 'analysis' || !ANALYSIS_CATEGORIES.includes(query.category)) throw bad('검사 구분을 확인하세요.'); where.push('category=?'); args.push(query.category); }
   applyListDates(where, args, query, 'substr(created_at,1,10)');
-  applyListKeyword(where, args, query.q, ['req_no','title','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')", "json_extract(data,'$.lot')"]);
+  applyListKeyword(where, args, query.q, ['req_no','title','spec','lot','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')", "json_extract(data,'$.lot')"]);
   return (await db.prepare(`SELECT * FROM requests WHERE ${where.join(' AND ')} ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'progress' THEN 1 WHEN 'waiting' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END, id DESC`).all(...args)).map(decodeRequest);
 });
 route('POST', '/api/requests', async ({ user, body }) => {
@@ -520,9 +520,21 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
     const original = JSON.parse(r.data || '{}');
     for (const key of ['source_label', 'received_date', 'item_category', 'received_qty', 'coa_requested', 'purchase_req_no', 'bom_id', 'product_code', 'unit']) f.data[key] = original[key];
   }
+  const priorData = JSON.parse(r.data || '{}');
+  const meta = lineMeta({ spec: r.source_type ? r.spec || priorData.spec || '' : body.spec ?? body.data?.spec ?? r.spec,
+    unit: r.source_type ? r.unit || priorData.unit || '' : body.unit ?? body.data?.unit ?? (r.unit || priorData.unit || ''),
+    lot: (r.source_type ? undefined : body.lot ?? (r.type === 'analysis' ? body.data?.lot_etc : body.data?.lot)) ?? (r.lot || priorData.lot_etc || (r.type === 'voc' ? priorData.lot : '') || '') }, r);
+  let lineQty = r.qty;
+  if (r.qty !== null || r.type === 'voc') {
+    const supplied = r.type === 'analysis' ? f.data.sample_qty : r.type === 'sample' ? f.data.req_qty : f.data.qty;
+    if (supplied !== undefined && supplied !== '') { lineQty = num(supplied,'품목 수량'); if (lineQty <= 0) throw bad('품목 수량은 0보다 커야 합니다.'); }
+    if (lineQty !== null) f.data.qty = lineQty;
+  }
+  f.data.spec = meta.spec; f.data.unit = meta.unit;
+  if (r.type === 'voc') f.data.lot = meta.lot;
   const status = r.status === 'rejected' && !isMgr ? 'pending' : r.status; // 반려건 수정 시 재접수
-  (await db.prepare("UPDATE requests SET title=?,customer=?,due_date=?,category=?,target_price=?,data=?,status=?,updated_at=datetime('now','+9 hours') WHERE id=?")
-    .run(f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), status, r.id));
+  (await db.prepare("UPDATE requests SET title=?,customer=?,due_date=?,category=?,target_price=?,data=?,status=?,spec=?,unit=?,lot=?,qty=?,updated_at=datetime('now','+9 hours') WHERE id=?")
+    .run(f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), status, meta.spec, meta.unit, meta.lot, lineQty, r.id));
   return decodeRequest((await getRequest(r.id)));
 });
 route('POST', '/api/requests/:id/approve', async ({ user, params }) => {
@@ -636,11 +648,11 @@ route('GET', '/api/schedules', async ({ query }) => {
   const from = listFilterDate(query.from, '시작일'), to = listFilterDate(query.to, '종료일');
   if (!from || !to || from > to) throw bad('생산 조회 기간을 확인하세요.');
   const where = [], args = [kind, from, to, to, from, to, from];
-  applyListKeyword(where, args, query.q, ['product','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
+  applyListKeyword(where, args, query.q, ['product','spec','lot','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
   if (query.done) { if (!['0','1'].includes(query.done)) throw bad('완료 상태를 확인하세요.'); where.push('done=?'); args.push(Number(query.done)); }
   if (query.period) { if (!['day','week','month'].includes(query.period)) throw bad('일정 기준을 확인하세요.'); where.push('period=?'); args.push(query.period); }
   // 기간과 겹치는 일정: 일간(그날), 주간(월~일), 월간(그 달)
-  return (await db.prepare(`SELECT * FROM schedules WHERE kind=? AND (
+  return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) AS actual_qty,(SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) AS actual_count FROM schedules WHERE kind=? AND (
       (period='day' AND start_date BETWEEN ? AND ?) OR
       (period='week' AND start_date<=? AND date(start_date,'+6 days')>=?) OR
       (period='month' AND start_date<=? AND date(start_date,'+1 month','-1 day')>=?)
@@ -653,13 +665,17 @@ route('POST', '/api/schedules', async ({ user, body }) => {
 });
 route('PUT', '/api/schedules/:id', async ({ user, params, body }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
+  const hasActuals = await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id);
+  if (hasActuals && (['product','kind','bom_id','spec','unit'].some(key => body[key] !== undefined && String(body[key] ?? '') !== String(row[key] ?? '')))) throw bad('생산실적이 있는 일정의 품목·규격·단위·BOM은 변경할 수 없습니다.');
   if (body.toggle_done) { await db.prepare('UPDATE schedules SET done=1-done WHERE id=?').run(row.id); return decodeSchedule(await mustGet('schedules', row.id)); }
   const f = await schedFields({ ...body, kind: row.kind }, row);
+  if (hasActuals && ['product','period','start_date','bom_id'].some(key => f[key] !== row[key])) throw bad('생산실적이 있는 일정의 품목·기간·BOM은 변경할 수 없습니다.');
   await db.prepare('UPDATE schedules SET period=?,start_date=?,product=?,qty=?,note=?,bom_id=?,bom_snapshot=? WHERE id=?').run(f.period, f.start_date, f.product, f.qty, f.note, f.bom_id, f.bom_snapshot, row.id);
   return decodeSchedule(await mustGet('schedules', row.id));
 });
 route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제할 수 있습니다.');
+  if (await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id)) throw bad('생산실적이 있는 일정은 삭제할 수 없습니다. 실적 이력을 확인하세요.');
   (await db.prepare('DELETE FROM schedules WHERE id=?').run(row.id)); return { ok: true };
 });
 
@@ -683,7 +699,7 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   const where = []; const args = [];
   applyListDates(where, args, query, 'received_date');
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
-  applyListKeyword(where, args, query.q, ['item','vendor','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
+  applyListKeyword(where, args, query.q, ['item','spec','lot','vendor','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
   applyInspectionFilter(where, args, query, 'other_receipt', 'other_receipts');
   return await db.prepare(`SELECT other_receipts.*, ${attachmentSummary('other_receipt','other_receipts')} FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
@@ -715,7 +731,7 @@ route('GET', '/api/shipments', async ({ query }) => {
   const from = query.from || today(); const to = query.to || from;
   const where = [], args = [];
   applyListDates(where, args, { from, to }, 'ship_date');
-  applyListKeyword(where, args, query.q, ['item','customer','lot','note','created_by']);
+  applyListKeyword(where, args, query.q, ['item','spec','customer','lot','note','created_by']);
   applyInspectionFilter(where, args, query, 'shipment', 'shipments');
   return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ${where.join(' AND ')} ORDER BY ship_date DESC, id DESC`).all(...args));
 });
@@ -730,6 +746,134 @@ route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
 route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
   await deleteEntityWithAttachments('shipment', 'shipments', row.id); return { ok: true };
+});
+
+// One submission creates independently tracked item rows in a single D1 transaction.
+const BATCH_TABLES = { purchase_order: 'purchase_orders', request: 'requests', other_receipt: 'other_receipts', shipment: 'shipments', schedule: 'schedules', laundry: 'laundry' };
+function lineMeta(body, previous = {}) {
+  return Object.fromEntries(['spec','unit','lot'].map(key => [key, body[key] === undefined ? previous[key] || '' : str(body[key], key === 'unit' ? 20 : 100)]));
+}
+function insertItem(table, record) {
+  const columns = Object.keys(record);
+  return { sql: `INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, args: Object.values(record) };
+}
+async function batchRows(entity, batchId) {
+  const rows = await db.prepare(`SELECT * FROM ${BATCH_TABLES[entity]} WHERE batch_id=? ORDER BY id`).all(batchId);
+  return rows.map(row => entity === 'request' ? decodeRequest(row) : entity === 'schedule' ? decodeSchedule(row) : entity === 'laundry' ? { ...row, photos: JSON.parse(row.photos) } : row);
+}
+route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
+  const entity = params.entity;
+  if (!Object.hasOwn(BATCH_TABLES, entity)) throw bad('여러 품목을 등록할 목록을 확인하세요.');
+  if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 30) throw bad('품목은 한 번에 1~30개 등록하세요.');
+  if (body.common !== undefined && (!body.common || typeof body.common !== 'object' || Array.isArray(body.common))) throw bad('공통 입력 내용을 확인하세요.');
+  const batchId = body.request_id || randomHex(16);
+  if (typeof batchId !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(batchId)) throw bad('등록 요청 번호를 확인하세요.');
+  const fingerprint = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([body.common || {}, body.items])))));
+  const existing = await db.prepare('SELECT * FROM item_batches WHERE batch_id=?').get(batchId);
+  const replay = async saved => {
+    if (saved.entity_type !== entity || saved.author_id !== user.id || saved.payload_hash !== fingerprint) throw new HttpError(409, '이미 사용된 등록 요청입니다. 새로 열어 등록하세요.');
+    return { batch_id: batchId, rows: await batchRows(entity, batchId), replayed: true };
+  };
+  if (existing) return replay(existing);
+  const commands = [insertItem('item_batches', { batch_id: batchId, entity_type: entity, payload_hash: fingerprint, author_id: user.id, author_name: user.name })];
+  for (const [index, item] of body.items.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw bad(`${index + 1}번째 품목을 확인하세요.`);
+    const b = { ...(body.common || {}), ...item }; const meta = lineMeta(b); let record;
+    try {
+      if (entity === 'purchase_order') {
+        record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key,i) => [key, poFields(b)[i]]));
+      } else if (entity === 'shipment') {
+        record = Object.fromEntries(['ship_date','item','qty','customer','note','lot'].map((key,i) => [key, shipFields(b)[i]]));
+      } else if (entity === 'other_receipt') {
+        const fields = await otherReceiptFields(b);
+        record = Object.fromEntries(['received_date','item','item_category','qty','vendor','note','bom_id','bom_snapshot'].map((key,i) => [key, fields[i]]));
+        meta.unit = JSON.parse(record.bom_snapshot).unit || '';
+      } else if (entity === 'schedule') {
+        record = await schedFields({ ...b, product: b.product || b.item });
+        if (record.bom_id) meta.unit = JSON.parse(record.bom_snapshot).unit || '';
+      } else if (entity === 'laundry') {
+        record = { in_date: dateStr(b.in_date, '입고일'), item: reqStr(b.item, '옷 종류', 200), in_qty: num(b.in_qty ?? b.qty, '입고수량'), discard_qty: num(b.discard_qty ?? 0, '폐기수량'), note: str(b.note, 500), photos: '[]' };
+        if (record.discard_qty > record.in_qty) throw bad('폐기수량이 입고수량을 넘을 수 없습니다.');
+      } else {
+        const type = String(b.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류를 확인하세요.');
+        const qty = num(b.qty, '수량'); if (qty <= 0) throw bad('수량은 0보다 커야 합니다.');
+        const data = { ...(b.data || {}), qty, spec: meta.spec, unit: meta.unit };
+        if (type === 'analysis') { data.sample_qty = String(qty); data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; }
+        else { data.lot = meta.lot; if (type === 'sample') data.req_qty = String(qty); }
+        const f = requestFields(type, { ...b, title: b.title || b.item, data });
+        record = { type, title: f.title, customer: f.customer, due_date: f.due_date, category: f.category, target_price: f.target_price, data: JSON.stringify(f.data), qty, requester_id: user.id, requester_name: user.name };
+      }
+      if (entity !== 'request') record.created_by = user.name;
+      commands.push(insertItem(BATCH_TABLES[entity], { ...record, ...meta, batch_id: batchId }));
+      if (entity === 'other_receipt') commands.push(receiptAnalysisQuery('other_receipt', null, user));
+    } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 품목: ${error.message}`); throw error; }
+  }
+  try { await db.batch(commands); }
+  catch (error) {
+    const saved = await db.prepare('SELECT * FROM item_batches WHERE batch_id=?').get(batchId);
+    if (saved) return replay(saved);
+    throw error;
+  }
+  return { batch_id: batchId, rows: await batchRows(entity, batchId), replayed: false };
+});
+
+route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
+  if (!Object.hasOwn(BATCH_TABLES,params.entity)) throw bad('품목 목록을 확인하세요.');
+  const row = await mustGet(BATCH_TABLES[params.entity],params.id);
+  const role = { purchase_order:'purchase',shipment:'logistics',other_receipt:'logistics',laundry:'purchase',schedule:'production',request:REQUEST_TYPES[row.type] }[params.entity];
+  const own = params.entity === 'request' ? row.requester_id === user.id && ['pending','rejected'].includes(row.status) : canModify(user,row);
+  if (!own && !hasRole(user,role)) throw new HttpError(403,'등록자 또는 담당자만 규격·단위를 수정할 수 있습니다.');
+  const meta = lineMeta(body,row);
+  if (params.entity === 'schedule' && await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id)) {
+    if (['spec','unit','lot'].some(key => meta[key] !== (key === 'unit' ? row.unit || JSON.parse(row.bom_snapshot || '{}').unit || '' : row[key]))) throw bad('실적이 있는 생산일정의 규격·단위는 변경할 수 없습니다.');
+  }
+  if (['schedule','other_receipt'].includes(params.entity) && row.bom_id && meta.unit !== (JSON.parse(row.bom_snapshot).unit || '')) throw bad('BOM 품목의 단위는 BOM에 저장된 단위를 사용하세요.');
+  if (row.source_type) { const snapshot = JSON.parse(row.data || '{}'); if (meta.spec !== (row.spec || snapshot.spec || '') || meta.unit !== (row.unit || snapshot.unit || '') || meta.lot !== (row.lot || snapshot.lot_etc || snapshot.lot || '')) throw bad('입고 자동분석의 품목 정보는 입고 당시 스냅샷을 유지합니다. 정정사항은 코멘트에 남기세요.'); }
+  const set = ['spec=?','unit=?','lot=?']; const args = [meta.spec,meta.unit,meta.lot];
+  if (params.entity === 'laundry') { set.push('item=?'); args.push(reqStr(body.item ?? row.item,'옷 종류',200)); }
+  if (params.entity === 'request') {
+    const data = JSON.parse(row.data || '{}'); data.spec = meta.spec; data.unit = meta.unit;
+    if (row.type === 'analysis') { data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; } else data.lot = meta.lot;
+    set.push('data=?'); args.push(JSON.stringify(data));
+  }
+  await db.prepare(`UPDATE ${BATCH_TABLES[params.entity]} SET ${set.join(',')} WHERE id=?`).run(...args,row.id);
+  return mustGet(BATCH_TABLES[params.entity],row.id);
+});
+
+// Actual production is an append-only dated log, distinct from completion checkboxes.
+async function actualSchedule(user, id, write = false) {
+  const row = await mustGet('schedules', id);
+  if (write && !canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 생산실적을 입력할 수 있습니다.');
+  return row;
+}
+route('GET', '/api/schedules/:id/actuals', async ({ user, params, query }) => {
+  const schedule = await actualSchedule(user, params.id);
+  if (query.before !== undefined && (!/^[1-9]\d*$/.test(query.before) || !Number.isSafeInteger(Number(query.before)))) throw bad('생산실적 조회 위치를 확인하세요.');
+  const rows = await db.prepare(`SELECT * FROM production_actuals WHERE schedule_id=? ${query.before ? 'AND id<?' : ''} ORDER BY id DESC LIMIT 51`).all(schedule.id, ...(query.before ? [Number(query.before)] : []));
+  const page = rows.slice(0,50);
+  const actual = (await db.prepare('SELECT COALESCE(SUM(qty),0) AS qty FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL').get(schedule.id)).qty;
+  return { schedule: decodeSchedule(schedule), rows: page, next: rows.length > 50 ? page.at(-1).id : null, actual_qty: actual, variance_qty: actual - schedule.qty, achievement_rate: schedule.qty ? Math.round(actual / schedule.qty * 1000) / 10 : null, can_write: canModify(user, schedule) || hasRole(user, 'production') };
+});
+route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
+  const schedule = await actualSchedule(user, params.id, true);
+  const date = dateStr(body.production_date, '생산일'); const qty = num(body.qty, '실제 생산량');
+  const end = schedule.period === 'day' ? schedule.start_date : (await db.prepare(`SELECT date(?,${schedule.period === 'week' ? "'+6 days'" : "'+1 month','-1 day'"}) AS end`).get(schedule.start_date)).end;
+  if (date < schedule.start_date || date > end) throw bad('생산일은 해당 계획의 기간 안에서 선택하세요.');
+  const key = reqStr(body.request_id, '실적 요청 번호', 80);
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('실적 요청 번호를 확인하세요.');
+  const note = str(body.note, 1000);
+  const old = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key);
+  const matches = row => row.schedule_id === schedule.id && row.author_id === user.id && row.production_date === date && row.qty === qty && row.note === note;
+  if (old) { if (!matches(old)) throw new HttpError(409, '이미 사용된 실적 요청 번호입니다.'); return old; }
+  try { const result = await db.prepare('INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id) VALUES(?,?,?,?,?,?,?)').run(schedule.id,date,qty,note,user.id,user.name,key); return db.prepare('SELECT * FROM production_actuals WHERE id=?').get(result.lastInsertRowid); }
+  catch (error) { const saved = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key); if (saved && matches(saved)) return saved; throw error; }
+});
+route('POST', '/api/schedules/:id/actuals/:actualId/void', async ({ user, params, body }) => {
+  await actualSchedule(user, params.id, true);
+  const row = await db.prepare('SELECT * FROM production_actuals WHERE id=? AND schedule_id=?').get(params.actualId,params.id);
+  if (!row) throw new HttpError(404, '생산실적을 찾을 수 없습니다.');
+  await db.prepare('UPDATE production_actuals SET voided_at=?,voided_by=?,void_reason=? WHERE id=? AND voided_at IS NULL').run(now(),user.name,reqStr(body.reason,'취소 사유',500),row.id);
+  return { ok: true };
 });
 
 route('GET', '/api/reports', async ({ query }) => buildReport(db, query, today()));

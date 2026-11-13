@@ -106,3 +106,15 @@ INVITE_CODE=local-test-code npm start
 - 품질 메뉴 #/quality/voc/request 및 #/quality/voc/list는 공통 의뢰 UI를 사용하며 수량·LOT 컬럼, 사진 첨부, request 댓글을 제공합니다.
 - VOC 첨부는 entity=request로 기존 권한·R2 검증/제한을 유지합니다. 일반 의뢰자가 접수/반려 상태에 첨부하고 승인 후 품질 담당자가 관리합니다.
 - approval-managers의 analysis 승인권자와 VOC 승인권자는 동일한 quality_approver입니다. 기존 승인권자 API 형태는 유지합니다. 기존 분석 리포트에 VOC를 합산하지 마세요.
+
+## 다품목 등록·생산 실적
+- public/multi-items.js는 기본 다품목 입력, 품목 메타데이터, 생산실적 창을 제공합니다. 기존 상세 입력은 접힌 양식으로 유지합니다. HTML/ASSETS/빌드에 포함하세요.
+- POST /api/batches/:entity는 purchase_order/request/other_receipt/shipment/schedule/laundry를 허용합니다. common+items(1~30개)를 검증한 뒤 item_batches 헤더와 모든 품목·자동분석을 하나의 db.batch로 저장합니다. 클라이언트 request_id와 payload_hash/작성자로 재시도 중복·타인 재사용을 막습니다.
+- 각 행은 기존 테이블에 독립 ID를 갖고 batch_id로 묶입니다. spec/unit/lot는 별도 컬럼이며 laundry.item은 옷 종류, requests.qty는 다품목 수량입니다. 이전 기록의 빈 메타데이터는 추정·일괄 덮어쓰지 마세요.
+- 기타입고는 각 행별 활성 BOM을 확인하고 단위는 BOM 스냅샷에서 결정합니다. 입고 자동분석에 batch_id/spec/unit/lot/qty도 스냅샷으로 전달하며 기존 자동분석 중복 방지와 트랜잭션을 유지합니다.
+- PUT /api/items/:entity/:id로 본인/담당자가 규격·단위·LOT를 정정합니다. 입고 자동분석의 스냅샷과 실적 있는 일정의 품목 정체성·기간·단위는 보호합니다.
+- production_actuals는 schedule_id별 날짜/수량의 누적 이력이며 request_id로 중복 쓰기를 막습니다. 계획 기간 안 날짜만 허용합니다. 입력은 일정 등록자/production/관리자, 조회는 로그인 사용자입니다.
+- POST /api/schedules/:id/actuals, GET 동경로, POST /api/schedules/:id/actuals/:actualId/void. 취소는 삭제가 아니며 취소자·시각·사유를 남기고 합계에서 제외합니다. 실적 이력 있는 일정은 삭제 금지입니다.
+- done은 기존 완료 체크로만 유지하고 실제 생산량으로 이관/간주하지 마세요. actual_qty/actual_count는 취소 제외 실적에서 계산합니다.
+- 리포트는 기존 plan_period 하나/계획 시작일 기준을 유지하면서 실제 실적 누적량·차이·달성률을 추가합니다. SUM 상관 서브쿼리로 여러 실적 때문에 계획수량이 중복 합산되지 않도록 하세요. 규격과 단위를 구분합니다.
+- item_batches 백업 커서는 id가 아닌 batch_id 문자열입니다. production_actuals 취소 이력과 함께 전체 백업에 포함합니다. 0007 마이그레이션은 기존 완료 체크를 실적으로 자동 변환하지 않습니다.
