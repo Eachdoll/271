@@ -36,6 +36,13 @@
       "when": 1794560000000,
       "tag": "0004_bom_categories_receipt_selection",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794561000000,
+      "tag": "0005_signup_approval",
+      "breakpoints": false
     }
   ]
 }

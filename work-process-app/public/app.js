@@ -249,27 +249,28 @@ async function render() {
 window.addEventListener('hashchange', render);
 
 // ───────────── 로그인 / 가입 ─────────────
-function pageAuth(mode = 'login') {
+function pageAuth(mode = 'login', notice = '') {
   $('#app').innerHTML = `
   <div class="auth">
     <div class="auth-card">
       <div class="brand big"><img class="brand-logo" src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"> 서울세미텍 시스템</div>
       <p class="muted">구매 · 품질 · 개발 · 생산 · 물류 업무를 한 곳에서</p>
       <div class="tabs"><button data-m="login" class="${mode === 'login' ? 'on' : ''}">로그인</button><button data-m="register" class="${mode === 'register' ? 'on' : ''}">가입</button></div>
+      <p id="authNotice" role="status" class="muted">${esc(notice)}</p>
       <form class="stack" id="authForm">
         <label>이름<input name="name" autocomplete="username" required maxlength="30" placeholder="예) 홍길동"></label>
         <label>비밀번호<input name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required minlength="4"></label>
         ${mode === 'register' ? '<label>초대코드<input name="invite" required placeholder="관리자에게 받은 초대코드"></label>' : ''}
         <button class="btn primary block">${mode === 'login' ? '로그인' : '가입하기'}</button>
       </form>
-      ${mode === 'register' ? '<p class="muted small">처음 가입하는 사람이 관리자가 됩니다.</p>' : ''}
+      ${mode === 'register' ? '<p class="muted small">가입 신청 후 관리자 승인이 필요합니다. 첫 계정만 자동으로 관리자가 됩니다.</p>' : ''}
     </div>
   </div>`;
   $$('.tabs button').forEach((b) => (b.onclick = () => pageAuth(b.dataset.m)));
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
-    try { const r = await api('POST', mode === 'login' ? '/api/auth/login' : '/api/auth/register', formObj(e.target)); ME = r.user; if (!location.hash) location.hash = '#/'; render(); }
-    catch (err) { fail(err); }
+    try { const r = await api('POST', mode === 'login' ? '/api/auth/login' : '/api/auth/register', formObj(e.target)); if (r.pending) { pageAuth('login', '가입 신청이 완료되었습니다. 관리자 승인 후 로그인해 주세요.'); return; } ME = r.user; if (!location.hash) location.hash = '#/'; render(); }
+    catch (err) { $('#authNotice').textContent = err.message; fail(err); }
   };
 }
 
@@ -942,22 +943,22 @@ async function pageAdmin(main) {
   <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
-  <div class="card"><h3>사용자 · 담당자 권한</h3>
+  <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
     <p class="muted small">품질 = 분석의뢰 승인 · 개발 = 개발의뢰 승인(연구소담당자) · 생산 = 샘플의뢰 승인 · 구매/물류 = 다른 사람 등록건 수정·삭제</p>
-    ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
-    <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
-    <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td>
+    ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
+    <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
+    <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>
       ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
-      <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id ? 'disabled' : ''} aria-label="관리자"></td>
+      <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
-      <td class="nowrap"><button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+      <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
   $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
   const userFilter = $('#usersFilters', main);
   const filterUsers = () => {
     const values = formObj(userFilter); const q = values.q.trim().toLocaleLowerCase(); let count = 0;
     $$('tr[data-u]', main).forEach(tr => {
       const user = users.find(user => user.id === Number(tr.dataset.u));
-      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.role || (values.role === 'admin' ? user.is_admin : user.roles.includes(values.role)));
+      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.approval || user.approval_status === values.approval) && (!values.role || (values.role === 'admin' ? user.is_admin : user.roles.includes(values.role)));
       tr.hidden = !visible; if (visible) count++;
     });
     listCount(userFilter, count);
@@ -996,6 +997,9 @@ async function pageAdmin(main) {
     const save = async (body) => { try { const changed = await api('PUT', '/api/admin/users/' + id, body); Object.assign(users.find(user => user.id === Number(id)), changed); filterUsers(); toast('저장했습니다.'); if (Number(id) === ME.id) { ME = (await api('GET', '/api/me')).user; } } catch (e) { fail(e); render(); } };
     $$('[data-role]', tr).forEach((c) => (c.onchange = () => save({ roles: $$('[data-role]:checked', tr).map((x) => x.dataset.role) })));
     $('[data-admin]', tr).onchange = (e) => save({ is_admin: e.target.checked });
+    const review = async (status, note = '') => { try { await api('POST', '/api/admin/users/' + id + '/approval', { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); render(); } catch (e) { fail(e); } };
+    const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
+    const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
     $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
     const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
   });

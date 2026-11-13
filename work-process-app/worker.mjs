@@ -81,7 +81,7 @@ function applyInspectionFilter(where, args, query, entity, table) {
 }
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
-function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at }; }
+function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
 function hasRole(user, role) { return user.is_admin || publicUser(user).roles.includes(role); }
 function requireRole(user, role, label) { if (!hasRole(user, role)) throw new HttpError(403, `${label} 담당자만 할 수 있습니다. (관리자에게 권한 요청)`); }
 function requireAdmin(user) { if (!user.is_admin) throw new HttpError(403, '관리자만 할 수 있습니다.'); }
@@ -149,7 +149,7 @@ function parseCookies(req) {
 }
 async function currentUser(req) {
   const token = sessionToken(req); if (!token) return null;
-  const row = (await db.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>?').get(token, Date.now()));
+  const row = (await db.prepare("SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires_at>? AND u.approval_status='approved'").get(token, Date.now()));
   return row || null;
 }
 async function startSession(req, res, userId) {
@@ -215,9 +215,11 @@ route('POST', '/api/auth/register', async ({ body, req, res }) => {
   await db.prepare("INSERT INTO settings(key,value) VALUES('invite_code',?) ON CONFLICT(key) DO NOTHING").run(await getSetting('invite_code'));
   if ((await db.prepare('SELECT 1 FROM users WHERE name=?').get(name))) throw bad('이미 가입된 이름입니다. 로그인하세요.');
   const salt = randomHex(16);
-  const r = (await db.prepare('INSERT INTO users(name,pw_salt,pw_hash,is_admin) SELECT ?,?,?,NOT EXISTS(SELECT 1 FROM users)').run(name, salt, (await hashPw(password, salt))));
-  (await startSession(req, res, Number(r.lastInsertRowid)));
-  return { user: publicUser((await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid))) };
+  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,approval_status) SELECT ?,?,?,NOT EXISTS(SELECT 1 FROM users),CASE WHEN EXISTS(SELECT 1 FROM users) THEN 'pending' ELSE 'approved' END").run(name, salt, await hashPw(password, salt));
+  const account = await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
+  if (account.approval_status !== 'approved') return { user: null, pending: true, account: { id: account.id, name: account.name, approval_status: account.approval_status } };
+  await startSession(req, res, account.id);
+  return { user: publicUser(account) };
 }, { auth: false });
 
 route('POST', '/api/auth/login', async ({ body, req, res }) => {
@@ -231,6 +233,8 @@ route('POST', '/api/auth/login', async ({ body, req, res }) => {
     throw new HttpError(401, '이름 또는 비밀번호가 올바르지 않습니다.');
   }
   await db.prepare('DELETE FROM login_attempts WHERE name=?').run(name);
+  if (u.approval_status === 'pending') throw new HttpError(403, '관리자 승인 대기 중입니다. 승인 후 로그인해 주세요.');
+  if (u.approval_status !== 'approved') throw new HttpError(403, '가입이 반려되었습니다. 관리자에게 문의하세요.' + (u.approval_note ? ' 사유: ' + u.approval_note : ''));
   (await startSession(req, res, u.id));
   return { user: publicUser(u) };
 }, { auth: false });
@@ -261,9 +265,21 @@ route('PUT', '/api/admin/invite', async ({ user, body }) => {
   (await setSetting('invite_code', code)); return { invite_code: code };
 });
 route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); return (await db.prepare('SELECT * FROM users ORDER BY id').all()).map(publicUser); });
+route('POST', '/api/admin/users/:id/approval', async ({ user, params, body }) => {
+  requireAdmin(user);
+  const target = await db.prepare('SELECT * FROM users WHERE id=?').get(params.id);
+  if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
+  if (!['approved', 'rejected'].includes(body.status)) throw bad('승인 또는 반려를 선택하세요.');
+  if (body.status === 'rejected' && (target.id === user.id || target.is_admin)) throw bad('관리자 계정은 반려할 수 없습니다.');
+  const commands = [{ sql: 'UPDATE users SET approval_status=?,approval_note=?,reviewed_by=?,reviewed_at=? WHERE id=?', args: [body.status, str(body.note, 500), user.name, now(), target.id] }];
+  if (body.status === 'rejected') commands.push({ sql: 'DELETE FROM sessions WHERE user_id=?', args: [target.id] });
+  await db.batch(commands);
+  return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(target.id));
+});
 route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
   requireAdmin(user);
   const target = (await db.prepare('SELECT * FROM users WHERE id=?').get(params.id)); if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
+  if (body.is_admin && target.approval_status !== 'approved') throw bad('가입 승인 후 관리자 권한을 부여하세요.');
   if (body.roles !== undefined) {
     const roles = (Array.isArray(body.roles) ? body.roles : []).filter((r) => ROLES.includes(r));
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));

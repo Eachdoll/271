@@ -1,3 +1,4 @@
+import approvedRegistration from './helpers.cjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,7 +25,7 @@ const admin = client(), owner = client(), other = client(), anon = client();
 let bom, plan;
 const bomBody = { item_category: '제품', product: '완제품 A', product_code: 'A-001', kind: 'finished', base_qty: 10, unit: 'EA', materials: [{ item: '원단', item_category: '원자재', qty: 2, unit: 'kg' }, { item: '포장재', item_category: '부자재', qty: 0.5, unit: 'BOX' }] };
 before(async () => {
-  for (const [user, name] of [[admin, 'BOM관리자'], [owner, '담당자'], [other, '다른사용자']]) assert.equal((await user('POST', '/api/auth/register', { name, password: 'test-password', invite: 'bom-photos' })).status, 200);
+  for (const [user, name] of [[admin, 'BOM관리자'], [owner, '담당자'], [other, '다른사용자']]) assert.equal((await approvedRegistration(admin, user, { name, password: 'test-password', invite: 'bom-photos' })).status, 200);
 });
 after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 

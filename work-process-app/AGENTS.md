@@ -84,3 +84,8 @@ INVITE_CODE=local-test-code npm start
 - 사진 검수는 applyInspectionFilter()로 unchecked/normal/abnormal 조건을 적용합니다.
 - 화면의 listControls()/bindListControls()는 읽기 전용 필터 폼, 검색/초기화/건수를 공통 처리합니다.
 - 페이지별 queryVersion 검사로 오래된 응답이 새 결과나 발주입고 선택 데이터를 덮어쓰지 않게 합니다.
+
+## 가입 승인
+- users.approval_status: pending/approved/rejected. 0005 마이그레이션은 기존 계정을 approved로 보존합니다. 신규 가입은 첫 관리자만 자동 승인하고 나머지는 pending이며 세션을 발급하지 않습니다.
+- 관리자 POST /api/admin/users/:id/approval로 승인·반려하고 검토자/시각/사유를 기록합니다. 관리자 계정 반려는 금지하며 반려 시 세션을 삭제합니다. currentUser도 approved를 검사해야 합니다.
+- 가입 승인과 업무 의뢰 승인은 별개입니다. 기존 업무 권한 규칙을 유지하세요.

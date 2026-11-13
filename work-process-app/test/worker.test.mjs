@@ -1,3 +1,4 @@
+import approvedRegistration from './helpers.cjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -37,9 +38,14 @@ test('Worker health, static assets and method boundaries', async () => {
 test('Concurrent registration assigns exactly one administrator', async () => {
   const results = await Promise.all([admin('POST', '/api/auth/register', { name: '관리자', password: 'password', invite: 'test-invite' }), staff('POST', '/api/auth/register', { name: '담당자', password: 'password', invite: 'test-invite' })]);
   assert.ok(results.every(r => r.status === 200));
-  assert.equal(results.filter(r => r.body.user.is_admin).length, 1);
-  if (!results[0].body.user.is_admin) [admin, staff] = [staff, admin];
-  assert.match(results[0].headers.get('set-cookie'), /^wpa_sid=.*HttpOnly.*SameSite=None; Secure; Partitioned/);
+  assert.equal(results.filter(r => r.body.user?.is_admin).length, 1);
+  if (!results[0].body.user?.is_admin) [admin, staff] = [staff, admin];
+  const bootstrap = results.find(r => r.body.user?.is_admin);
+  const pending = results.find(r => r.body.pending);
+  assert.equal(pending.headers.get('set-cookie'), null);
+  assert.equal((await admin('POST', `/api/admin/users/${pending.body.account.id}/approval`, { status: 'approved' })).status, 200);
+  assert.equal((await staff('POST', '/api/auth/login', { name: pending.body.account.name, password: 'password' })).status, 200);
+  assert.match(bootstrap.headers.get('set-cookie'), /^wpa_sid=.*HttpOnly.*SameSite=None; Secure; Partitioned/);
   env.INVITE_CODE = 'changed-in-env';
   assert.equal((await anon('POST', '/api/auth/register', { name: '새 사용자', password: 'password', invite: 'changed-in-env' })).status, 400);
 });
@@ -143,7 +149,7 @@ test('Other receipts support classification, filters and logistics authorization
   assert.equal((await staff('POST', '/api/other-receipts', { ...body, bom_id: '' })).status, 400);
   assert.equal((await staff('POST', '/api/other-receipts', { ...body, qty: -1 })).status, 400);
   const other = client();
-  const account = await other('POST', '/api/auth/register', { name: '물류담당', password: 'password', invite: 'test-invite' });
+  const account = await approvedRegistration(admin, other, { name: '물류담당', password: 'password', invite: 'test-invite' });
   assert.equal((await other('PUT', '/api/other-receipts/' + id, body)).status, 403);
   assert.equal((await other('DELETE', '/api/other-receipts/' + id)).status, 403);
   assert.equal((await admin('PUT', '/api/admin/users/' + account.body.user.id, { roles: ['logistics'] })).status, 200);

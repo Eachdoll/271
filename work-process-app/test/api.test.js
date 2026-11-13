@@ -1,3 +1,4 @@
+const approvedRegistration = require('./helpers.cjs');
 'use strict';
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
@@ -26,7 +27,7 @@ test('가입: 초대코드 필요, 첫 가입자는 관리자', async () => {
   assert.equal((await admin('POST', '/api/auth/register', { name: '이치원', password: '0000', invite: 'wrong' })).status, 400);
   const r = await admin('POST', '/api/auth/register', { name: '이치원', password: '0000', invite: 'sst3554766' });
   assert.equal(r.status, 200); assert.equal(r.body.user.is_admin, true);
-  const u = await user('POST', '/api/auth/register', { name: '김품질', password: '1234', invite: 'sst3554766' });
+  const u = await approvedRegistration(admin, user, { name: '김품질', password: '1234', invite: 'sst3554766' });
   assert.equal(u.body.user.is_admin, false);
   assert.equal((await anon('GET', '/api/po')).status, 401);
 });

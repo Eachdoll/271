@@ -1,3 +1,4 @@
+import approvedRegistration from './helpers.cjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -26,7 +27,7 @@ const receiptBody = (suffix, category = '제품') => ({ bom_id: catalogIds[categ
 const analyses = async () => (await admin('GET', '/api/requests?type=analysis&scope=list')).body;
 before(async () => {
   assert.equal((await admin('POST', '/api/auth/register', { name: '관리자', password: 'pass1234', invite: 'receipt-test' })).status, 200);
-  assert.equal((await receiver('POST', '/api/auth/register', { name: '입고담당', password: 'pass1234', invite: 'receipt-test' })).status, 200);
+  assert.equal((await approvedRegistration(admin, receiver, { name: '입고담당', password: 'pass1234', invite: 'receipt-test' })).status, 200);
   for (const category of ['제품','상품','원자재','부자재']) { const r = await admin('POST', '/api/boms', { product: '기타입고 ' + category, item_category: category, base_qty: 1, unit: 'EA', materials: [{ item: '원단', item_category: '원자재', qty: 1, unit: 'kg' }] }); assert.equal(r.status, 200); catalogIds[category] = r.body.id; }
 });
 after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
