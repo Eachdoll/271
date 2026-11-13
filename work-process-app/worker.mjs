@@ -12,7 +12,7 @@ async function getSetting(k) { const r = (await db.prepare('SELECT value FROM se
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
 // ───────────────────────── 공통 ─────────────────────────
-const ROLES = ['purchase', 'quality', 'dev', 'production', 'logistics'];
+const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'logistics'];
 const REQUEST_TYPES = { analysis: 'quality', development: 'dev', sample: 'production' };
 const REQUEST_PREFIX = { analysis: 'Q', development: 'D', sample: 'S' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
@@ -82,7 +82,12 @@ function applyInspectionFilter(where, args, query, entity, table) {
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
-function hasRole(user, role) { return user.is_admin || publicUser(user).roles.includes(role); }
+function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev'].includes(role) && roles.includes(role + '_approver')); }
+function requireRequestApprover(user, type) {
+  const role = { analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type];
+  const label = { analysis: '품질책임자', development: '개발책임자', sample: '생산담당자' }[type];
+  if (!hasRole(user, role)) throw new HttpError(403, `${label}(승인권자)만 승인·반려할 수 있습니다. 관리자에게 책임자 지정을 요청하세요.`);
+}
 function requireRole(user, role, label) { if (!hasRole(user, role)) throw new HttpError(403, `${label} 담당자만 할 수 있습니다. (관리자에게 권한 요청)`); }
 function requireAdmin(user) { if (!user.is_admin) throw new HttpError(403, '관리자만 할 수 있습니다.'); }
 function canModify(user, row) { return user.is_admin || row.created_by === user.name; }
@@ -264,6 +269,13 @@ route('PUT', '/api/admin/invite', async ({ user, body }) => {
   if (code.length < 4) throw bad('초대코드는 4자 이상으로 정하세요.');
   (await setSetting('invite_code', code)); return { invite_code: code };
 });
+route('GET', '/api/approval-managers', async () => {
+  const users = await db.prepare("SELECT id,name,is_admin,roles FROM users WHERE approval_status='approved' ORDER BY id").all();
+  return {
+    analysis: users.filter(u => (u.roles || '').split(',').includes('quality_approver')).map(u => ({ id: u.id, name: u.name })),
+    development: users.filter(u => (u.roles || '').split(',').includes('dev_approver')).map(u => ({ id: u.id, name: u.name })),
+  };
+});
 route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); return (await db.prepare('SELECT * FROM users ORDER BY id').all()).map(publicUser); });
 route('POST', '/api/admin/users/:id/approval', async ({ user, params, body }) => {
   requireAdmin(user);
@@ -281,7 +293,8 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
   const target = (await db.prepare('SELECT * FROM users WHERE id=?').get(params.id)); if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
   if (body.is_admin && target.approval_status !== 'approved') throw bad('가입 승인 후 관리자 권한을 부여하세요.');
   if (body.roles !== undefined) {
-    const roles = (Array.isArray(body.roles) ? body.roles : []).filter((r) => ROLES.includes(r));
+    const roles = [...new Set((Array.isArray(body.roles) ? body.roles : []).filter((r) => ROLES.includes(r)))];
+    if (target.approval_status !== 'approved' && roles.some(r => ['quality_approver','dev_approver'].includes(r))) throw bad('가입 승인 후 책임자로 지정하세요.');
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));
   }
   if (body.is_admin !== undefined) {
@@ -480,7 +493,7 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
   return decodeRequest((await getRequest(r.id)));
 });
 route('POST', '/api/requests/:id/approve', async ({ user, params }) => {
-  const r = (await getRequest(params.id)); requireRole(user, REQUEST_TYPES[r.type], roleLabel(r.type));
+  const r = (await getRequest(params.id)); requireRequestApprover(user, r.type);
   if (!['pending', 'rejected'].includes(r.status)) throw bad('이미 승인된 의뢰입니다.');
   const ymd = today().slice(2).replace(/-/g, ''); const prefix = `${REQUEST_PREFIX[r.type]}-${ymd}-`;
   // Allocate and transition in one SQLite statement; D1 serializes the write.
@@ -492,7 +505,7 @@ route('POST', '/api/requests/:id/approve', async ({ user, params }) => {
   return decodeRequest((await getRequest(r.id)));
 });
 route('POST', '/api/requests/:id/reject', async ({ user, params, body }) => {
-  const r = (await getRequest(params.id)); requireRole(user, REQUEST_TYPES[r.type], roleLabel(r.type));
+  const r = (await getRequest(params.id)); requireRequestApprover(user, r.type);
   if (r.status !== 'pending') throw bad('접수대기 중인 의뢰만 반려할 수 있습니다.');
   (await db.prepare("UPDATE requests SET status='rejected', reject_reason=?, approver_name=?, updated_at=datetime('now','+9 hours') WHERE id=?").run(reqStr(body.reason, '반려 사유', 500), user.name, r.id));
   return decodeRequest((await getRequest(r.id)));

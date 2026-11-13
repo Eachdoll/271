@@ -18,7 +18,7 @@ const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const dow = (s) => WEEK[parseD(s).getDay()];
 const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko-KR'));
 
-const ROLE_LABEL = { purchase: '구매', quality: '품질', dev: '개발(연구소)', production: '생산', logistics: '물류' };
+const ROLE_LABEL = { purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', logistics: '물류' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -51,7 +51,9 @@ function toast(msg, kind = 'ok') {
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.className = ''), 2600);
 }
 const fail = (e) => toast(e.message || String(e), 'err');
-const hasRole = (r) => ME && (ME.is_admin || ME.roles.includes(r));
+const userHasRole = (user, r) => user.roles.includes(r) || (['quality','dev'].includes(r) && user.roles.includes(r + '_approver'));
+const hasRole = (r) => ME && (ME.is_admin || userHasRole(ME, r));
+const canApproveRequest = (type) => hasRole({ analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
 function formObj(form) {
   const o = {};
   for (const el of form.elements) {
@@ -631,7 +633,7 @@ function requestForm(type, r) {
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
 
 function requestDetail(type, r, reload) {
-  const cfg = REQ[type]; const mgr = hasRole(cfg.role);
+  const cfg = REQ[type]; const mgr = hasRole(cfg.role); const approver = canApproveRequest(type);
   const mine = r.requester_id === ME.id;
   const rows = cfg.fields.map((f) => `<tr><th>${esc(f.label)}</th><td>${esc(fieldValue(f, r)) || '<span class="muted">-</span>'}</td></tr>`).join('');
   const m = modal(`
@@ -655,8 +657,8 @@ function requestDetail(type, r, reload) {
       ${['development','sample'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn" data-a="edit">수정</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
-      ${mgr && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
-      ${mgr && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
+      ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
+      ${approver && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn" data-a="status">상태/결과 변경</button>' : ''}
     </div>`, { wide: true });
   if (['development','sample'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
@@ -683,10 +685,12 @@ function requestDetail(type, r, reload) {
 
 // 의뢰 접수 페이지: 양식 + 접수대기 목록
 async function pageIntake(type) {
-  const cfg = REQ[type]; const main = $('#main'); const mgr = hasRole(cfg.role);
+  const cfg = REQ[type]; const main = $('#main'); const mgr = canApproveRequest(type);
+  const managers = ['analysis','development'].includes(type) ? (await api('GET', '/api/approval-managers'))[type] : null;
   main.innerHTML = `
   <h1>${cfg.label}의뢰 <span class="dept">${cfg.dept}</span></h1>
   <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.label}리스트</a>에 올라갑니다.
+  ${managers ? `<br>지정 승인권자: ${managers.length ? managers.map(u => esc(u.name)).join(', ') : '미지정 · 관리자에게 책임자 지정을 요청하세요.'} (관리자도 승인 가능)` : ''}
   ${mgr ? `<br><span class="tag">${cfg.mgr} 권한</span> 아래 목록에서 바로 승인/반려할 수 있습니다.` : ''}</p>
   <details class="card" id="reqNewBox" open><summary><h3>새 ${cfg.label}의뢰 작성</h3></summary>${requestForm(type)}</details>
   <h2>접수대기 목록</h2>${listControls('intake', { dateLabel: '등록', placeholder: '품목·고객사·입력자·메모', extra: `<label>상태<select name="status"><option value="">전체 접수대기·반려</option><option value="pending">접수대기</option><option value="rejected">반려</option></select></label>${type === 'analysis' ? '<label>검사 구분<select name="category"><option value="">전체 검사</option>' + ['수입검사','의뢰검사','출하검사','공정검사'].map(category => `<option>${category}</option>`).join('') + '</select></label>' : ''}` })}<div id="intakeList"></div>`;
@@ -944,11 +948,11 @@ async function pageAdmin(main) {
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
   <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
-    <p class="muted small">품질 = 분석의뢰 승인 · 개발 = 개발의뢰 승인(연구소담당자) · 생산 = 샘플의뢰 승인 · 구매/물류 = 다른 사람 등록건 수정·삭제</p>
+    <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
     <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>
-      ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
+      ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
       <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
       <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
@@ -958,7 +962,7 @@ async function pageAdmin(main) {
     const values = formObj(userFilter); const q = values.q.trim().toLocaleLowerCase(); let count = 0;
     $$('tr[data-u]', main).forEach(tr => {
       const user = users.find(user => user.id === Number(tr.dataset.u));
-      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.approval || user.approval_status === values.approval) && (!values.role || (values.role === 'admin' ? user.is_admin : user.roles.includes(values.role)));
+      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.approval || user.approval_status === values.approval) && (!values.role || (values.role === 'admin' ? user.is_admin : userHasRole(user, values.role)));
       tr.hidden = !visible; if (visible) count++;
     });
     listCount(userFilter, count);

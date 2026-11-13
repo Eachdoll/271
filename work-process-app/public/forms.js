@@ -6,7 +6,7 @@
 //  - other: true → '기타' 직접입력칸(<키>_etc) 추가
 window.REQ = {
   analysis: {
-    label: '분석', dept: '품질', role: 'quality', mgr: '품질담당자',
+    label: '분석', dept: '품질', role: 'quality', mgr: '품질책임자',
     intake: '#/quality/request', list: '#/quality/list',
     titleLabel: '샘플명',
     fields: [
@@ -26,7 +26,7 @@ window.REQ = {
     ],
   },
   development: {
-    label: '개발', dept: '개발', role: 'dev', mgr: '연구소담당자',
+    label: '개발', dept: '개발', role: 'dev', mgr: '개발책임자',
     intake: '#/dev/request', list: '#/dev/list',
     titleLabel: '타겟제품',
     fields: [

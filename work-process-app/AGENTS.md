@@ -16,7 +16,9 @@
 ## 규칙
 - 외부 패키지를 추가하지 마세요. Workers에서는 fs, node:sqlite, Node HTTP 서버를 사용할 수 없습니다.
 - 의뢰 상태: pending → waiting → progress → done, 반려는 rejected.
-- 승인/반려/상태변경 권한: analysis=quality, development=dev, sample=production.
+- 의뢰 승인/반려 권한: analysis=quality_approver(품질책임자), development=dev_approver(개발책임자), sample=production. 관리자도 승인할 수 있습니다.
+- 일반 상태/결과 변경 등 업무 권한: analysis=quality, development=dev, sample=production. quality_approver/dev_approver는 각각 팀 업무 권한도 포함합니다. 일반 quality/dev를 승인권자로 자동 승격하지 마세요.
+- 책임자 역할은 가입 승인된 사용자에게만 관리자가 지정합니다. GET /api/approval-managers는 지정된 승인권자 id/이름만 로그인 사용자에게 제공합니다.
 - 발주 입고 상태 recv_status: 빈 값(미입고), ok(초록), mismatch(빨강, recv_qty 필수), checking(노랑).
 - 생산일정 period: day/week(월요일로 정규화)/month(1일로 정규화).
 - 사용자 입력은 화면에 넣기 전에 반드시 esc()로 이스케이프하세요.

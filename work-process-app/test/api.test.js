@@ -52,12 +52,14 @@ test('발주 → 물류 입고확인 색상 상태', async () => {
   assert.equal((await admin('GET', '/api/po?recv=checking')).body.length, 1);
 });
 
-test('분석의뢰: 누구나 의뢰 → 품질담당자 승인 → 분석리스트', async () => {
+test('분석의뢰: 누구나 의뢰 → 품질책임자 승인 → 분석리스트', async () => {
   const me = (await user('GET', '/api/me')).body.user;
   const r = (await user('POST', '/api/requests', { type: 'analysis', title: '니트릴 글러브', category: '수입검사', data: { items: ['외관', '파티클'] } })).body;
   assert.equal(r.status, 'pending'); assert.equal(r.requester_name, '김품질');
   assert.equal((await user('POST', `/api/requests/${r.id}/approve`)).status, 403); // 권한 없음
   await admin('PUT', `/api/admin/users/${me.id}`, { roles: ['quality'] });
+  assert.equal((await user('POST', `/api/requests/${r.id}/approve`)).status, 403); // 일반 품질담당자는 승인 불가
+  await admin('PUT', `/api/admin/users/${me.id}`, { roles: ['quality', 'quality_approver'] });
   const ok = (await user('POST', `/api/requests/${r.id}/approve`)).body;
   assert.equal(ok.status, 'waiting'); assert.match(ok.req_no, /^Q-\d{6}-\d+$/);
   assert.equal((await user('GET', '/api/requests?type=analysis&scope=intake')).body.length, 0);
