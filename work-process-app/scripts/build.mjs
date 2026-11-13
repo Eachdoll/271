@@ -8,7 +8,7 @@ if (!manifest.project_id) throw new Error('Missing Sites project_id');
 fs.rmSync(path.join(root, 'dist'), { recursive: true, force: true });
 fs.mkdirSync(path.join(root, 'dist/server'), { recursive: true });
 fs.mkdirSync(path.join(root, 'dist/.openai'), { recursive: true });
-const assets = Object.fromEntries(['index.html', 'app.js', 'forms.js', 'reports.js', 'style.css'].map(file => ['/' + file, read('public/' + file)]));
+const assets = Object.fromEntries(['index.html', 'app.js', 'forms.js', 'reports.js', 'comments.js', 'style.css'].map(file => ['/' + file, read('public/' + file)]));
 assets['/assets/seoulsemi-logo-blue.png'] = { base64: fs.readFileSync(path.join(root, 'public/assets/seoulsemi-logo-blue.png')).toString('base64'), contentType: 'image/png' };
 const staticCode = `\nconst assets = ${JSON.stringify(assets)};\nconst ASSETS = { fetch(req) { const p = new URL(req.url).pathname; const name = p === '/' ? '/index.html' : p; const text = assets[name]; if (text === undefined) return new Response('Not found', { status: 404 }); const body = typeof text === 'object' ? Uint8Array.from(atob(text.base64), c => c.charCodeAt(0)) : text; return new Response(req.method === 'HEAD' ? null : body, { headers: { 'Content-Type': text.contentType || (name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8'), 'X-Content-Type-Options': 'nosniff' } }); } };\n`;
 let worker = read('worker.mjs').replace("import { database } from './storage.mjs';", read('storage.mjs').replace('export function database', 'function database'));

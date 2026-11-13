@@ -91,3 +91,11 @@ INVITE_CODE=local-test-code npm start
 - users.approval_status: pending/approved/rejected. 0005 마이그레이션은 기존 계정을 approved로 보존합니다. 신규 가입은 첫 관리자만 자동 승인하고 나머지는 pending이며 세션을 발급하지 않습니다.
 - 관리자 POST /api/admin/users/:id/approval로 승인·반려하고 검토자/시각/사유를 기록합니다. 관리자 계정 반려는 금지하며 반려 시 세션을 삭제합니다. currentUser도 approved를 검사해야 합니다.
 - 가입 승인과 업무 의뢰 승인은 별개입니다. 기존 업무 권한 규칙을 유지하세요.
+
+## 진행현황 코멘트
+- progress_comments는 entity_type/entity_id별 누적 코멘트입니다. 대상은 purchase_order/request/other_receipt/shipment/schedule/laundry/bom이며 테이블 이름은 COMMENT_TABLES 허용 목록만 사용하세요.
+- GET/POST /api/comments/:entity/:id는 승인된 로그인 사용자만 접근합니다. 원본 존재 여부와 사용 중지 BOM 권한을 확인하고 작성자/한국 시각은 서버에서 결정합니다.
+- 본문은 1~2,000자, GET은 최신 50건과 next 커서를 반환합니다. before는 양의 정수 ID이며 오래된 기록 방향으로 조회합니다.
+- public/comments.js의 공통 창과 commentButton()을 모든 업무 목록에 연결합니다. 클릭 캡처로 행 선택/상세 열기와 충돌하지 않게 하고 모든 사용자 입력은 esc()로 출력하세요.
+- 코멘트는 진행상태나 결과 메모를 변경하지 않습니다. 수정/삭제 API 없이 이력을 보존하고 author_id는 사용자 삭제 시 NULL, author_name은 보존합니다. 원본 업무 삭제 시에도 코멘트를 일괄 삭제하지 마세요.
+- comments.js를 HTML/로컬 ASSETS/운영 빌드에 포함하고, progress_comments는 관리자 전체 백업 대상입니다.
