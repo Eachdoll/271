@@ -511,5 +511,7 @@ const server = http.createServer(async (req, res) => {
 
 if (require.main === module) {
   server.listen(PORT, () => console.log(`업무프로세스 웹앱: http://localhost:${PORT}  (데이터: ${DATA_DIR})`));
+  // 재배포/중지 시 DB를 깨끗하게 닫기
+  for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); try { db.close(); } catch {} process.exit(0); });
 }
 module.exports = { server, db };

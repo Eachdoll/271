@@ -56,5 +56,8 @@ npm start              # http://localhost:3000
 
 ## 배포
 
+**단계별 안내는 [DEPLOY.md](DEPLOY.md)** (Railway + 코덱스, 또는 Docker).
+
+
 SQLite 파일을 쓰므로 **디스크가 유지되는 서버**가 필요합니다 (사내 PC/서버, NAS, Railway·Render·Fly.io의 볼륨 등).
 `DATA_DIR`을 영구 볼륨으로 지정하고 `npm start`로 실행하면 됩니다. HTTPS 프록시 뒤에서는 로그인 쿠키에 `Secure`가 자동으로 붙습니다.
