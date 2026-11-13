@@ -54,6 +54,31 @@ function dateStr(v, label, { required = true } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || isNaN(Date.parse(s))) throw bad(`${label} 형식이 올바르지 않습니다.`);
   return s;
 }
+function listFilterDate(value, label) {
+  if (!value) return '';
+  const date = new Date(String(value) + 'T00:00:00Z');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw bad(label + '을 확인하세요.');
+  return value;
+}
+function applyListDates(where, args, query, column) {
+  const from = listFilterDate(query.from, '시작일'), to = listFilterDate(query.to, '종료일');
+  if (from && to && from > to) throw bad('시작일은 종료일 이전이어야 합니다.');
+  if (from) { where.push(column + '>=?'); args.push(from); }
+  if (to) { where.push(column + '<=?'); args.push(to); }
+}
+function applyListKeyword(where, args, value, columns) {
+  const q = String(value || '').trim(); if (!q) return;
+  if (q.length > 200) throw bad('검색어는 200자까지 입력하세요.');
+  const pattern = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+  where.push('(' + columns.map(column => `${column} LIKE ? ESCAPE '\\'`).join(' OR ') + ')');
+  args.push(...columns.map(() => pattern));
+}
+function applyInspectionFilter(where, args, query, entity, table) {
+  if (!query.inspection_status) return;
+  if (!['unchecked', 'normal', 'abnormal'].includes(query.inspection_status)) throw bad('검수 상태를 확인하세요.');
+  where.push(`COALESCE((SELECT a.inspection_status FROM attachments a WHERE a.entity_type='${entity}' AND a.entity_id=${table}.id),'unchecked')=?`);
+  args.push(query.inspection_status);
+}
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at }; }
@@ -311,10 +336,14 @@ function poFields(b) {
 }
 route('GET', '/api/po', async ({ query }) => {
   const where = []; const args = [];
-  if (query.q) { where.push('(req_no LIKE ? OR vendor LIKE ? OR item LIKE ?)'); const q = `%${query.q}%`; args.push(q, q, q); }
+  applyListKeyword(where, args, query.q, ['req_no','vendor','item','note','created_by','recv_by','recv_note']);
+  applyListDates(where, args, query, 'due_date');
   if (query.recv === 'none') where.push("recv_status=''");
-  else if (query.recv) { where.push('recv_status=?'); args.push(query.recv); }
+  else if (query.recv === 'open') where.push("recv_status IN ('','checking','mismatch')");
+  else if (query.recv) { if (!['ok','checking','mismatch'].includes(query.recv)) throw bad('입고 상태를 확인하세요.'); where.push('recv_status=?'); args.push(query.recv); }
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
+  if (query.coa_requested) { if (!['0','1'].includes(query.coa_requested)) throw bad('COA 요청 조건을 확인하세요.'); where.push('coa_requested=?'); args.push(Number(query.coa_requested)); }
+  applyInspectionFilter(where, args, query, 'purchase_order', 'purchase_orders');
   return (await db.prepare(`SELECT purchase_orders.*, ${attachmentSummary('purchase_order','purchase_orders')} FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
 route('POST', '/api/po', async ({ user, body }) => {
@@ -358,10 +387,11 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
 
 // ── 구매: 세탁관리 ──
 route('GET', '/api/laundry', async ({ query }) => {
-  const args = []; let where = '';
-  if (query.from) { where += ' AND in_date>=?'; args.push(query.from); }
-  if (query.to) { where += ' AND in_date<=?'; args.push(query.to); }
-  return (await db.prepare(`SELECT * FROM laundry WHERE 1=1 ${where} ORDER BY in_date DESC, id DESC`).all(...args)).map((r) => ({ ...r, photos: JSON.parse(r.photos) }));
+  const args = [], where = [];
+  applyListDates(where, args, query, 'in_date');
+  applyListKeyword(where, args, query.q, ['note','created_by']);
+  if (query.has_photos) { if (!['0','1'].includes(query.has_photos)) throw bad('사진 조건을 확인하세요.'); where.push(query.has_photos === '1' ? 'json_array_length(photos)>0' : 'json_array_length(photos)=0'); }
+  return (await db.prepare(`SELECT * FROM laundry ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY in_date DESC, id DESC`).all(...args)).map((r) => ({ ...r, photos: JSON.parse(r.photos) }));
 });
 route('POST', '/api/laundry', async ({ user, body }) => {
   const in_date = dateStr(body.in_date, '입고일'); const discard = num(body.discard_qty, '폐기수량'); const inQty = num(body.in_qty, '입고수량', { required: false });
@@ -401,16 +431,19 @@ async function getRequest(id) { const r = (await db.prepare('SELECT * FROM reque
 function roleLabel(type) { return { analysis: '품질', development: '연구소', sample: '생산' }[type]; }
 
 route('GET', '/api/requests', async ({ query }) => {
-  const type = String(query.type || ''); if (!REQUEST_TYPES[type]) throw bad('의뢰 종류가 올바르지 않습니다.');
+  const type = String(query.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
   const where = ['type=?']; const args = [type];
+  if (query.scope && !['intake','list'].includes(query.scope)) throw bad('의뢰 목록 구분을 확인하세요.');
   if (query.scope === 'intake') where.push("status IN ('pending','rejected')");
   else if (query.scope === 'list') where.push("status IN ('waiting','progress','done')");
-  if (query.status) { where.push('status=?'); args.push(query.status); }
-  if (query.category) { where.push('category=?'); args.push(query.category); }
+  if (query.status) { if (!['pending','rejected','waiting','progress','done'].includes(query.status)) throw bad('의뢰 상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
+  if (query.category) { if (type !== 'analysis' || !ANALYSIS_CATEGORIES.includes(query.category)) throw bad('검사 구분을 확인하세요.'); where.push('category=?'); args.push(query.category); }
+  applyListDates(where, args, query, 'substr(created_at,1,10)');
+  applyListKeyword(where, args, query.q, ['req_no','title','customer','requester_name','result_note',"json_extract(data,'$.extra')", "json_extract(data,'$.purpose')", "json_extract(data,'$.lot_etc')"]);
   return (await db.prepare(`SELECT * FROM requests WHERE ${where.join(' AND ')} ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'progress' THEN 1 WHEN 'waiting' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END, id DESC`).all(...args)).map(decodeRequest);
 });
 route('POST', '/api/requests', async ({ user, body }) => {
-  const type = String(body.type || ''); if (!REQUEST_TYPES[type]) throw bad('의뢰 종류가 올바르지 않습니다.');
+  const type = String(body.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
   const f = requestFields(type, body);
   const r = (await db.prepare('INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name) VALUES(?,?,?,?,?,?,?,?,?)')
     .run(type, f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), user.id, user.name));
@@ -483,7 +516,8 @@ route('GET', '/api/boms', async ({ user, query }) => {
   if (query.include_archived === '1') requireAdmin(user); else where.push('active=1');
   if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분이 올바르지 않습니다.'); where.push('kind=?'); args.push(query.kind); }
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
-  if (query.q) { const q = '%' + str(query.q, 200) + '%'; where.push('(product LIKE ? OR product_code LIKE ?)'); args.push(q, q); }
+  applyListKeyword(where, args, query.q, ['product','product_code','created_by','note']);
+  if (query.active) { if (!['0','1'].includes(query.active)) throw bad('BOM 사용 상태를 확인하세요.'); where.push('active=?'); args.push(Number(query.active)); }
   return (await db.prepare(`SELECT * FROM boms ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY product,id`).all(...args)).map(decodeBom);
 });
 route('POST', '/api/boms', async ({ user, body }) => {
@@ -536,13 +570,19 @@ async function schedFields(b, previous = null) {
 function decodeSchedule(row) { return { ...row, bom_snapshot: JSON.parse(row.bom_snapshot || '{}') }; }
 route('GET', '/api/schedules', async ({ query }) => {
   const kind = String(query.kind || 'finished');
-  const from = dateStr(query.from, 'from'); const to = dateStr(query.to, 'to');
+  if (!['finished','semi'].includes(kind)) throw bad('생산 구분을 확인하세요.');
+  const from = listFilterDate(query.from, '시작일'), to = listFilterDate(query.to, '종료일');
+  if (!from || !to || from > to) throw bad('생산 조회 기간을 확인하세요.');
+  const where = [], args = [kind, from, to, to, from, to, from];
+  applyListKeyword(where, args, query.q, ['product','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
+  if (query.done) { if (!['0','1'].includes(query.done)) throw bad('완료 상태를 확인하세요.'); where.push('done=?'); args.push(Number(query.done)); }
+  if (query.period) { if (!['day','week','month'].includes(query.period)) throw bad('일정 기준을 확인하세요.'); where.push('period=?'); args.push(query.period); }
   // 기간과 겹치는 일정: 일간(그날), 주간(월~일), 월간(그 달)
   return (await db.prepare(`SELECT * FROM schedules WHERE kind=? AND (
       (period='day' AND start_date BETWEEN ? AND ?) OR
       (period='week' AND start_date<=? AND date(start_date,'+6 days')>=?) OR
       (period='month' AND start_date<=? AND date(start_date,'+1 month','-1 day')>=?)
-    ) ORDER BY start_date, period, id`).all(kind, from, to, to, from, to, from)).map(decodeSchedule);
+    ) ${where.length ? 'AND ' + where.join(' AND ') : ''} ORDER BY start_date, period, id`).all(...args)).map(decodeSchedule);
 });
 route('POST', '/api/schedules', async ({ user, body }) => {
   const f = await schedFields(body);
@@ -579,10 +619,10 @@ async function otherReceiptFields(b, previous = null) {
 }
 route('GET', '/api/other-receipts', async ({ query }) => {
   const where = []; const args = [];
-  if (query.from) { where.push('received_date>=?'); args.push(dateStr(query.from, '시작일')); }
-  if (query.to) { where.push('received_date<=?'); args.push(dateStr(query.to, '종료일')); }
+  applyListDates(where, args, query, 'received_date');
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
-  if (query.q) { where.push('(item LIKE ? OR vendor LIKE ?)'); args.push('%' + str(query.q, 200) + '%', '%' + str(query.q, 200) + '%'); }
+  applyListKeyword(where, args, query.q, ['item','vendor','note','created_by',"json_extract(bom_snapshot,'$.product_code')"]);
+  applyInspectionFilter(where, args, query, 'other_receipt', 'other_receipts');
   return await db.prepare(`SELECT other_receipts.*, ${attachmentSummary('other_receipt','other_receipts')} FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
@@ -611,7 +651,11 @@ route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {
 function shipFields(b) { return [dateStr(b.ship_date, '출고일'), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), reqStr(b.customer, '거래처', 100), str(b.note, 500), str(b.lot, 100)]; }
 route('GET', '/api/shipments', async ({ query }) => {
   const from = query.from || today(); const to = query.to || from;
-  return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ship_date BETWEEN ? AND ? ORDER BY ship_date DESC, id DESC`).all(from, to));
+  const where = [], args = [];
+  applyListDates(where, args, { from, to }, 'ship_date');
+  applyListKeyword(where, args, query.q, ['item','customer','lot','note','created_by']);
+  applyInspectionFilter(where, args, query, 'shipment', 'shipments');
+  return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ${where.join(' AND ')} ORDER BY ship_date DESC, id DESC`).all(...args));
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
   const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by) VALUES(?,?,?,?,?,?,?)').run(...shipFields(body), user.name));

@@ -62,6 +62,29 @@ function formObj(form) {
   }
   return o;
 }
+function listControls(prefix, { placeholder = '검색어 입력', dateLabel = '', from = '', to = '', requiredDates = false, extra = '' } = {}) {
+  return `<form id="${prefix}Filters" class="toolbar list-filters" data-read-only="true">
+    ${dateLabel ? `<label>${dateLabel} 시작일<input type="date" name="from" id="${prefix}From" value="${from}" ${requiredDates ? 'required' : ''}></label><label>${dateLabel} 종료일<input type="date" name="to" id="${prefix}To" value="${to}" ${requiredDates ? 'required' : ''}></label>` : ''}
+    <label class="list-search">키워드 검색<input type="search" name="q" id="${prefix}Q" maxlength="200" placeholder="${esc(placeholder)}"></label>${extra}
+    <button type="submit" class="btn primary">검색</button><button type="button" class="btn" data-clear-filters>초기화</button><span class="small muted" id="${prefix}Count" data-list-count role="status"></span></form>`;
+}
+function listInspectionSelect() { return `<label>검수 상태<select name="inspection_status"><option value="">전체 검수</option>${Object.entries(INSPECTION).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label>`; }
+function bindListControls(form, load, reset = () => {}) {
+  let timer;
+  const run = () => {
+    clearTimeout(timer);
+    if (!form.checkValidity()) { $('[data-list-count]', form).textContent = '조회 조건을 확인하세요.'; return; }
+    Promise.resolve().then(load).catch(error => { if (form.isConnected) { $('[data-list-count]', form).textContent = '조회 실패 · 이전 결과'; fail(error); } });
+  };
+  form.onsubmit = event => { event.preventDefault(); run(); };
+  $$('input,select', form).forEach(input => {
+    if (input.type === 'search') { input.oninput = () => { clearTimeout(timer); timer = setTimeout(run, 250); }; input.onsearch = run; }
+    else input.onchange = run;
+  });
+  $('[data-clear-filters]', form).onclick = () => { form.reset(); reset(); run(); };
+}
+function listLoading(form) { $('[data-list-count]', form).textContent = '조회 중…'; }
+function listCount(form, count) { $('[data-list-count]', form).textContent = `${count}건 조회`; }
 
 function modal(html, { wide = false } = {}) {
   const wrap = document.createElement('div');
@@ -315,15 +338,15 @@ async function pagePO(main) {
   <h1>발주목록 <span class="dept">구매</span></h1>
   <p class="muted">발주서를 보낸 항목을 입력합니다. 물류에서 입고 확인하면 색이 바뀝니다.</p>
   <form class="card" id="poNew"><h3>발주 등록</h3>${poForm()}<div class="actions"><button class="btn primary">등록</button></div></form>
-  <div class="toolbar">
-    <input type="search" id="poQ" placeholder="의뢰번호·거래처·품목 검색">
-    <select id="poCategory" aria-label="품목 분류">${categoryOptions('', true)}</select>
-    <select id="poF"><option value="">전체</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select>
-    <div class="legend"><span class="chip green">입고완료</span><span class="chip red">수량상이</span><span class="chip yellow">확인중</span></div>
-  </div>
-  <div id="poList"></div>`;
+  ${listControls('po', { dateLabel: '납기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>분류<select name="item_category" id="poCategory">${categoryOptions('', true)}</select></label><label>입고 상태<select name="recv" id="poF"><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>COA 요청<select name="coa_requested"><option value="">전체</option><option value="1">요청</option><option value="0">미요청</option></select></label>` })}
+  <div class="legend"><span class="chip green">입고완료</span><span class="chip red">수량상이</span><span class="chip yellow">확인중</span></div><div id="poList"></div>`;
+  const filterForm = $('#poFilters', main); let queryVersion = 0;
   const load = async () => {
-    const rows = await api('GET', `/api/po?q=${encodeURIComponent($('#poQ').value)}&recv=${$('#poF').value}&item_category=${encodeURIComponent($('#poCategory').value)}`);
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const rows = await api('GET', '/api/po?' + new URLSearchParams(formObj(filterForm)));
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, rows.length);
     const t = todayStr();
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
@@ -342,9 +365,7 @@ async function pagePO(main) {
     $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 발주를 삭제할까요?')) { try { await api('DELETE', '/api/po/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
   };
   $('#poNew').onsubmit = async (e) => { e.preventDefault(); try { await api('POST', '/api/po', formObj(e.target)); e.target.reset(); toast('발주를 등록했습니다.'); load(); } catch (err) { fail(err); } };
-  let t; $('#poQ').oninput = () => { clearTimeout(t); t = setTimeout(load, 250); };
-  $('#poF').onchange = load;
-  $('#poCategory').onchange = load;
+  bindListControls(filterForm, load);
   await load();
 }
 
@@ -358,25 +379,25 @@ async function pageReceive(main) {
   main.innerHTML = `
   <h2>발주입고</h2>
   <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
-  <div class="toolbar">
-    <select id="rcF"><option value="open">미완료 (미입고·확인중·수량상이)</option><option value="">전체</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select>
-    <input type="search" id="rcQ" placeholder="검색">
-  </div>
+  ${listControls('rc', { dateLabel: '납기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>입고 상태<select name="recv" id="rcF"><option value="open">미완료</option><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>분류<select name="item_category">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}
   <div class="actionbar">
-    <span id="rcCount" class="muted">0개 선택</span>
+    <span id="rcSelectedCount" class="muted">0개 선택</span>
     <button class="btn green" data-st="ok">✔ 입고확인</button>
     <button class="btn red" data-st="mismatch">수량상이</button>
     <button class="btn yellow" data-st="checking">확인중</button>
     <button class="btn" data-st="">미입고로 되돌리기</button>
   </div>
   <div id="rcList"></div>`;
-  let rows = [];
+  let rows = []; const filterForm = $('#rcFilters', main); let queryVersion = 0;
   const selected = () => $$('.rc-check:checked').map((c) => Number(c.value));
-  const updateCount = () => { $('#rcCount').textContent = `${selected().length}개 선택`; };
+  const updateCount = () => { $('#rcSelectedCount').textContent = `${selected().length}개 선택`; };
   const load = async () => {
-    const f = $('#rcF').value;
-    rows = await api('GET', `/api/po?q=${encodeURIComponent($('#rcQ').value)}&recv=${f === 'open' ? '' : f}`);
-    if (f === 'open') rows = rows.filter((p) => p.recv_status !== 'ok');
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const found = await api('GET', '/api/po?' + new URLSearchParams(formObj(filterForm)));
+    if (version !== queryVersion || !main.isConnected) return;
+    rows = found;
+    listCount(filterForm, rows.length);
     const t = todayStr();
     $('#rcList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>입력자</th><th>입고 처리자</th><th>사진·검수</th></tr></thead>
@@ -410,8 +431,7 @@ async function pageReceive(main) {
     }
     try { const result = await api('POST', '/api/po/receive', { ids, status, ...extra }); toast(`${ids.length}건 → ${RECV[status]}${result.analysis_created ? ` · 분석 ${result.analysis_created}건 자동 등록` : ''}`); load(); } catch (e) { fail(e); }
   }));
-  $('#rcF').onchange = load;
-  let t; $('#rcQ').oninput = () => { clearTimeout(t); t = setTimeout(load, 250); };
+  bindListControls(filterForm, load);
   await load();
 }
 
@@ -466,15 +486,15 @@ async function pageOtherReceipts(main) {
   main.innerHTML = `<h2>기타입고</h2>
     <p class="muted">BOM에서 품목을 검색·선택하여 발주 없는 입고를 입력합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
     <form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="form-grid">${photoPicker()}${inspectionFields()}</div><div class="actions"><button class="btn primary">등록</button></div></form>
-    <div class="toolbar">
-      <label class="inline">기간 <input type="date" id="otherFrom" value="${monthStart(todayStr())}"> ~ <input type="date" id="otherTo" value="${todayStr()}"></label>
-      <select id="otherCategory" aria-label="품목 분류">${categoryOptions('', true)}</select>
-      <input id="otherQ" type="search" placeholder="품목명·입고처 검색"><span class="muted" id="otherCount"></span>
-    </div><div id="otherList"></div>`;
+    ${listControls('other', { dateLabel: '입고', from: monthStart(todayStr()), to: todayStr(), placeholder: '품목·코드·입고처·입력자·메모', extra: `<label>분류<select name="item_category" id="otherCategory">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}<div id="otherList"></div>`;
+  const filterForm = $('#otherFilters', main); let queryVersion = 0;
   const load = async () => {
-    const params = new URLSearchParams({ from: $('#otherFrom').value, to: $('#otherTo').value, item_category: $('#otherCategory').value, q: $('#otherQ').value });
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const params = new URLSearchParams(formObj(filterForm));
     const rows = await api('GET', '/api/other-receipts?' + params);
-    $('#otherCount').textContent = `${rows.length}건`;
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, rows.length);
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap"><button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
@@ -498,12 +518,11 @@ async function pageOtherReceipts(main) {
     event.preventDefault(); if (otherDraft.busy) return; const button = $('button.primary', event.target); button.disabled = true;
     try {
       const value = formObj(event.target); const saved = await api('POST', '/api/other-receipts', value); const photoSaved = await saveNewAttachments('other_receipt', saved, otherDraft, event.target);
-      event.target.reset(); otherDraft.reset(); $('#otherFrom').value = monthStart(value.received_date); $('#otherTo').value = value.received_date;
+      event.target.reset(); otherDraft.reset(); filterForm.reset(); $('#otherFrom').value = monthStart(value.received_date); $('#otherTo').value = value.received_date;
       $('#otherQ').value = ''; $('#otherCategory').value = ''; if (photoSaved) toast('기타입고와 분석리스트에 등록했습니다.'); await load();
     } catch (error) { fail(error); } finally { button.disabled = false; }
   };
-  for (const id of ['otherFrom', 'otherTo', 'otherCategory']) $('#' + id).onchange = () => load().catch(fail);
-  let timer; $('#otherQ').oninput = () => { clearTimeout(timer); timer = setTimeout(() => load().catch(fail), 250); };
+  bindListControls(filterForm, load);
   await load();
 }
 
@@ -524,16 +543,19 @@ async function pageLaundry(main) {
     <div class="thumbs" id="lnPrev"></div>
     <div class="actions"><button class="btn primary">등록</button></div>
   </form>
-  <div class="toolbar"><label class="inline">조회월 <input type="month" id="lnM" value="${month}"></label><span id="lnSum" class="muted"></span></div>
+  ${listControls('ln', { dateLabel: '입고', from: month + '-01', to: monthEnd(month + '-01'), placeholder: '메모·입력자 검색', extra: `<label>조회월<input type="month" id="lnM" value="${month}"></label><label>사진<select name="has_photos"><option value="">전체 사진</option><option value="1">사진 있음</option><option value="0">사진 없음</option></select></label><button type="button" class="btn" id="lnAllDates">전체 기간</button>` })}<p id="lnSum" class="muted small"></p>
   <div id="lnList" class="cards"></div>`;
-  let pending = [];
+  let pending = []; const filterForm = $('#lnFilters', main); let queryVersion = 0;
   $('[name=photos]').onchange = async (e) => {
     try { pending = await Promise.all([...e.target.files].map((f) => resizeImage(f))); } catch (err) { fail(err); pending = []; }
     $('#lnPrev').innerHTML = pending.map((s) => `<img src="${s}" alt="미리보기">`).join('');
   };
   const load = async () => {
-    const m = $('#lnM').value || month;
-    const rows = await api('GET', `/api/laundry?from=${m}-01&to=${monthEnd(m + '-01')}`);
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const rows = await api('GET', '/api/laundry?' + new URLSearchParams(formObj(filterForm)));
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, rows.length);
     const sumD = rows.reduce((a, r) => a + (r.discard_qty || 0), 0); const sumI = rows.reduce((a, r) => a + (r.in_qty || 0), 0);
     $('#lnSum').innerHTML = `${rows.length}건 · 폐기 합계 <b>${fmtNum(sumD)}</b>${sumI ? ` / 입고 ${fmtNum(sumI)} (폐기율 ${(sumD / sumI * 100).toFixed(1)}%)` : ''}`;
     $('#lnList').innerHTML = rows.length ? rows.map((r) => `<div class="card ln">
@@ -564,7 +586,10 @@ async function pageLaundry(main) {
     try { await api('POST', '/api/laundry', { ...formObj(e.target), photos: pending }); e.target.reset(); e.target.in_date.value = todayStr(); pending = []; $('#lnPrev').innerHTML = ''; toast('등록했습니다.'); load(); }
     catch (err) { fail(err); } finally { btn.disabled = false; }
   };
-  $('#lnM').onchange = load;
+  bindListControls(filterForm, load);
+  $('#lnM').onchange = () => { const value = $('#lnM').value; $('#lnFrom').value = value ? value + '-01' : ''; $('#lnTo').value = value ? monthEnd(value + '-01') : ''; load().catch(fail); };
+  for (const id of ['lnFrom','lnTo']) $('#' + id).addEventListener('change', () => { $('#lnM').value = ''; });
+  $('#lnAllDates').onclick = () => { $('#lnM').value = ''; $('#lnFrom').value = ''; $('#lnTo').value = ''; load().catch(fail); };
   await load();
 }
 
@@ -663,9 +688,15 @@ async function pageIntake(type) {
   <p class="muted">누구나 의뢰할 수 있습니다. 접수대기 목록에 올라가고, <b>${cfg.mgr}</b>가 승인하면 <a href="${cfg.list}">${cfg.label}리스트</a>에 올라갑니다.
   ${mgr ? `<br><span class="tag">${cfg.mgr} 권한</span> 아래 목록에서 바로 승인/반려할 수 있습니다.` : ''}</p>
   <details class="card" id="reqNewBox" open><summary><h3>새 ${cfg.label}의뢰 작성</h3></summary>${requestForm(type)}</details>
-  <h2>접수대기 목록</h2><div id="intakeList"></div>`;
+  <h2>접수대기 목록</h2>${listControls('intake', { dateLabel: '등록', placeholder: '품목·고객사·입력자·메모', extra: `<label>상태<select name="status"><option value="">전체 접수대기·반려</option><option value="pending">접수대기</option><option value="rejected">반려</option></select></label>${type === 'analysis' ? '<label>검사 구분<select name="category"><option value="">전체 검사</option>' + ['수입검사','의뢰검사','출하검사','공정검사'].map(category => `<option>${category}</option>`).join('') + '</select></label>' : ''}` })}<div id="intakeList"></div>`;
+  const filterForm = $('#intakeFilters', main); let queryVersion = 0;
   const load = async () => {
-    const rows = await api('GET', `/api/requests?type=${type}&scope=intake`);
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const params = new URLSearchParams({ ...formObj(filterForm), type, scope: 'intake' });
+    const rows = await api('GET', '/api/requests?' + params);
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, rows.length);
     $('#intakeList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
       <thead><tr><th>상태</th><th>${cfg.titleLabel}</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th><th>완료희망일</th><th>입력자(의뢰자)</th><th>의뢰일</th>${mgr ? '<th></th>' : ''}</tr></thead>
       <tbody>${rows.map((r) => `<tr data-id="${r.id}">
@@ -677,6 +708,7 @@ async function pageIntake(type) {
     $$('#intakeList [data-ok]').forEach((b) => (b.onclick = async () => { try { const r = await api('POST', `/api/requests/${b.dataset.ok}/approve`); toast(`승인 완료 · 접수번호 ${r.req_no}`); load(); } catch (e) { fail(e); } }));
   };
   const newForm = $('.req-form', main); const draft = bindPhotoDraft(newForm);
+  bindListControls(filterForm, load);
   newForm.onsubmit = async (e) => {
     e.preventDefault(); if (draft.busy) return;
     const button = $('button.primary', newForm); button.disabled = true;
@@ -697,10 +729,15 @@ async function pageWorkList(type) {
     ${type === 'analysis' ? `<div class="seg" id="catSeg">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div>` : ''}
   </div>
   <div id="workCounts" class="counts"></div>
-  <div id="workList"></div>`;
+  ${listControls('work', { dateLabel: '등록', placeholder: '접수번호·품목·고객사·입력자·메모' })}<div id="workList"></div>`;
+  const filterForm = $('#workFilters', main); let queryVersion = 0;
   const load = async () => {
-    const all = await api('GET', `/api/requests?type=${type}&scope=list${category ? '&category=' + encodeURIComponent(category) : ''}`);
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const all = await api('GET', '/api/requests?' + new URLSearchParams({ ...formObj(filterForm), type, scope: 'list', category }));
+    if (version !== queryVersion || !main.isConnected) return;
     const rows = status ? all.filter((r) => r.status === status) : all;
+    listCount(filterForm, rows.length);
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
     $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
@@ -715,8 +752,13 @@ async function pageWorkList(type) {
     $$('#workList tr[data-id]').forEach((tr) => (tr.onclick = (e) => { if (e.target.closest('select')) return; requestDetail(type, rows.find((x) => x.id == tr.dataset.id), load); }));
     $$('#workList [data-st]').forEach((s) => (s.onchange = async () => { try { await api('POST', `/api/requests/${s.dataset.st}/status`, { status: s.value }); toast(`${STATUS[s.value]}(으)로 변경`); load(); } catch (e) { fail(e); load(); } }));
   };
-  $$('#stSeg button').forEach((b) => (b.onclick = () => { status = b.dataset.s; $$('#stSeg button').forEach((x) => x.classList.toggle('on', x === b)); load(); }));
-  $$('#catSeg button').forEach((b) => (b.onclick = () => { category = b.dataset.c; $$('#catSeg button').forEach((x) => x.classList.toggle('on', x === b)); load(); }));
+  $$('#stSeg button').forEach((b) => (b.onclick = () => { status = b.dataset.s; $$('#stSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
+  $$('#catSeg button').forEach((b) => (b.onclick = () => { category = b.dataset.c; $$('#catSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
+  bindListControls(filterForm, load, () => {
+    status = ''; category = '';
+    $$('#stSeg button', main).forEach(button => button.classList.toggle('on', !button.dataset.s));
+    $$('#catSeg button', main).forEach(button => button.classList.toggle('on', !button.dataset.c));
+  });
   await load();
 }
 
@@ -732,9 +774,14 @@ function bomForm(bom = {}) {
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>BOM 관리</h1><p class="muted">품목을 원자재·부자재·제품·상품으로 분류하여 등록합니다. 생산과 기타입고에서 BOM을 검색·선택합니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button><div class="toolbar"><select id="bomCategory" aria-label="BOM 품목 분류">' + categoryOptions('', true) + '</select><input type="search" id="bomSearch" placeholder="품목명·코드 검색"></div><div id="bomList"></div>';
+  main.innerHTML = '<h1>BOM 관리</h1><p class="muted">품목을 원자재·부자재·제품·상품으로 분류하여 등록합니다. 생산과 기타입고에서 BOM을 검색·선택합니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label>` }) + '<div id="bomList"></div>';
+  const filterForm = $('#bomFilters', main); let queryVersion = 0;
   const load = async () => {
-    const boms = await api('GET', '/api/boms?include_archived=1&item_category=' + encodeURIComponent($('#bomCategory').value) + '&q=' + encodeURIComponent($('#bomSearch').value));
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, boms.length);
     $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span> ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions"><button class="btn" data-bom-edit="${bom.id}">수정</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
     const edit = bom => {
       const box = modal(`<h3>${bom ? 'BOM 수정' : '새 BOM 등록'}</h3>${bomForm(bom)}`, { wide: true });
@@ -756,8 +803,7 @@ async function pageBoms(main) {
       try { await api('DELETE', '/api/boms/' + button.dataset.bomDisable); await load(); } catch (error) { fail(error); }
     });
   };
-  $('#bomCategory').onchange = () => load().catch(fail);
-  let searchTimer; $('#bomSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => load().catch(fail), 250); };
+  bindListControls(filterForm, load);
   await load();
 }
 
@@ -776,11 +822,13 @@ async function pageSchedule(kind) {
     <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
     <label class="span3">비고<input name="note"></label><div class="span3" id="scRequirements"></div></div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
+  ${listControls('sc', { placeholder: '제품명·BOM 코드·메모·입력자', extra: '<label>완료 상태<select name="done"><option value="">전체 완료 상태</option><option value="0">미완료</option><option value="1">완료</option></select></label><label>일정 기준<select name="period"><option value="">전체 일정</option><option value="day">일간 일정</option><option value="week">주간 일정</option><option value="month">월간 일정</option></select></label>' })}
   <div class="toolbar">
     <div class="seg" id="vSeg">${Object.entries(PERIOD).map(([k, v]) => `<button data-v="${k}" class="${k === view ? 'on' : ''}">${v}</button>`).join('')}</div>
     <div class="nav-date"><button class="btn small" id="prev">◀</button><b id="rangeLabel"></b><button class="btn small" id="next">▶</button><button class="btn small" id="today">오늘</button></div>
   </div>
   <div id="scBody"></div>`;
+  const filterForm = $('#scFilters', main); let queryVersion = 0;
   const hints = { day: '(그날)', week: '(그 주의 아무 날 → 월요일 시작 주로 저장)', month: '(그 달의 아무 날 → 그 달로 저장)' };
   const previewBom = () => {
     const form = $('#scNew'); const bom = boms.find(bom => bom.id === Number($('#scBom').value));
@@ -795,9 +843,13 @@ async function pageSchedule(kind) {
   const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
     const [from, to] = range();
     $('#rangeLabel').textContent = view === 'day' ? `${from} (${dow(from)})` : view === 'week' ? `${from} ~ ${to.slice(5)}` : `${from.slice(0, 7)}`;
-    const rows = await api('GET', `/api/schedules?kind=${kind}&from=${from}&to=${to}`);
+    const rows = await api('GET', '/api/schedules?' + new URLSearchParams({ ...formObj(filterForm), kind, from, to }));
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, rows.length);
     const days = rows.filter((s) => s.period === 'day'); const weeks = rows.filter((s) => s.period === 'week'); const months = rows.filter((s) => s.period === 'month');
     const plans = (title, list, fmt) => list.length ? `<div class="card"><h4>${title}</h4>${list.map((s) => `<div class="plan-row"><span class="small muted">${fmt(s)}</span>${item(s)}</div>`).join('')}</div>` : '';
     let body = '';
@@ -812,7 +864,7 @@ async function pageSchedule(kind) {
       for (let d = start; d <= to || parseD(d).getDay() !== 1; d = addDays(d, 1)) cells.push(d);
       body += `<div class="month"><div class="mh">${['월', '화', '수', '목', '금', '토', '일'].map((w) => `<div>${w}</div>`).join('')}</div><div class="mg">${cells.map((d) => `<div class="day ${d.slice(0, 7) !== from.slice(0, 7) ? 'out' : ''} ${d === todayStr() ? 'today' : ''}"><div class="dh">${Number(d.slice(8))}</div>${days.filter((s) => s.start_date === d).map(item).join('')}</div>`).join('')}</div></div>`;
     }
-    body += `<div class="card"><h4>일간 합계 (제품별)</h4>${totals(days)}</div>`;
+    body += `<div class="card"><h4>조회 조건 기준 일간 합계 (제품별)</h4>${totals(days)}</div>`;
     $('#scBody').innerHTML = body;
     $$('[data-bom-view]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.bomView)); const snapshot = row.bom_snapshot;
@@ -821,7 +873,8 @@ async function pageSchedule(kind) {
     $$('#scBody [data-done]').forEach((c) => (c.onchange = async () => { try { await api('PUT', '/api/schedules/' + c.dataset.done, { toggle_done: true }); load(); } catch (e) { fail(e); } }));
     $$('#scBody [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 일정을 삭제할까요?')) { try { await api('DELETE', '/api/schedules/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
   };
-  $$('#vSeg button').forEach((b) => (b.onclick = () => { view = b.dataset.v; $$('#vSeg button').forEach((x) => x.classList.toggle('on', x === b)); load(); }));
+  bindListControls(filterForm, load);
+  $$('#vSeg button').forEach((b) => (b.onclick = () => { view = b.dataset.v; $$('#vSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
   const step = (n) => { base = view === 'day' ? addDays(base, n) : view === 'week' ? addDays(base, 7 * n) : addMonths(base, n); load(); };
   $('#prev').onclick = () => step(-1); $('#next').onclick = () => step(1); $('#today').onclick = () => { base = todayStr(); load(); };
   $('#scNew').onsubmit = async (e) => {
@@ -843,10 +896,15 @@ async function pageShip(main) {
     <label>LOT<input name="lot" maxlength="100" placeholder="LOT 번호 (선택)"></label>
     <label class="span2">비고<input name="note"></label>${photoPicker()}${inspectionFields()}</div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
-  <div class="toolbar"><label class="inline">기간 <input type="date" id="shFrom" value="${todayStr()}"> ~ <input type="date" id="shTo" value="${todayStr()}"></label><button class="btn small" id="shToday">오늘</button><span id="shSum" class="muted"></span></div>
+  ${listControls('sh', { dateLabel: '출고', from: todayStr(), to: todayStr(), requiredDates: true, placeholder: '품목·거래처·LOT·메모·입력자', extra: listInspectionSelect() + '<button type="button" class="btn" id="shToday">오늘</button>' })}<p id="shSum" class="muted small"></p>
   <div id="shList"></div>`;
+  const filterForm = $('#shFilters', main); let queryVersion = 0;
   const load = async () => {
-    const rows = await api('GET', `/api/shipments?from=${$('#shFrom').value}&to=${$('#shTo').value || $('#shFrom').value}`);
+    if (!main.isConnected) return;
+    const version = ++queryVersion; listLoading(filterForm);
+    const rows = await api('GET', '/api/shipments?' + new URLSearchParams(formObj(filterForm)));
+    if (version !== queryVersion || !main.isConnected) return;
+    listCount(filterForm, rows.length);
     $('#shSum').innerHTML = `${rows.length}건 · 수량 합계 <b>${fmtNum(rows.reduce((a, r) => a + r.qty, 0))}</b>`;
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
@@ -870,9 +928,8 @@ async function pageShip(main) {
     e.preventDefault(); if (shipDraft.busy) return; const v = formObj(e.target); const button = $('button.primary', e.target); button.disabled = true;
     try { const saved = await api('POST', '/api/shipments', v); const photoSaved = await saveNewAttachments('shipment', saved, shipDraft, e.target); shipDraft.reset(); e.target.inspection_status.value = 'unchecked'; e.target.inspection_note.value = ''; ['item', 'qty', 'customer', 'note', 'lot'].forEach((k) => (e.target[k].value = '')); if (photoSaved) toast('출하를 등록했습니다.'); if (v.ship_date < $('#shFrom').value || v.ship_date > $('#shTo').value) { $('#shFrom').value = $('#shTo').value = v.ship_date; } load(); } catch (err) { fail(err); } finally { button.disabled = false; }
   };
-  $('#shFrom').onchange = () => { if ($('#shTo').value < $('#shFrom').value) $('#shTo').value = $('#shFrom').value; load(); };
-  $('#shTo').onchange = load;
-  $('#shToday').onclick = () => { $('#shFrom').value = $('#shTo').value = todayStr(); load(); };
+  bindListControls(filterForm, load);
+  $('#shToday').onclick = () => { $('#shFrom').value = $('#shTo').value = todayStr(); load().catch(fail); };
   await load();
 }
 
@@ -887,6 +944,7 @@ async function pageAdmin(main) {
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
   <div class="card"><h3>사용자 · 담당자 권한</h3>
     <p class="muted small">품질 = 분석의뢰 승인 · 개발 = 개발의뢰 승인(연구소담당자) · 생산 = 샘플의뢰 승인 · 구매/물류 = 다른 사람 등록건 수정·삭제</p>
+    ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
     <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td>
       ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
@@ -894,6 +952,17 @@ async function pageAdmin(main) {
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
       <td class="nowrap"><button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
   $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
+  const userFilter = $('#usersFilters', main);
+  const filterUsers = () => {
+    const values = formObj(userFilter); const q = values.q.trim().toLocaleLowerCase(); let count = 0;
+    $$('tr[data-u]', main).forEach(tr => {
+      const user = users.find(user => user.id === Number(tr.dataset.u));
+      const visible = user.name.toLocaleLowerCase().includes(q) && (!values.role || (values.role === 'admin' ? user.is_admin : user.roles.includes(values.role)));
+      tr.hidden = !visible; if (visible) count++;
+    });
+    listCount(userFilter, count);
+  };
+  bindListControls(userFilter, filterUsers); filterUsers();
   $('#backupBtn').onclick = async (e) => {
     const button = e.currentTarget; const status = $('#backupStatus'); button.disabled = true;
     try {
@@ -924,7 +993,7 @@ async function pageAdmin(main) {
   };
   $$('tr[data-u]').forEach((tr) => {
     const id = tr.dataset.u; const name = $('b', tr).textContent;
-    const save = async (body) => { try { await api('PUT', '/api/admin/users/' + id, body); toast('저장했습니다.'); if (Number(id) === ME.id) { ME = (await api('GET', '/api/me')).user; } } catch (e) { fail(e); render(); } };
+    const save = async (body) => { try { const changed = await api('PUT', '/api/admin/users/' + id, body); Object.assign(users.find(user => user.id === Number(id)), changed); filterUsers(); toast('저장했습니다.'); if (Number(id) === ME.id) { ME = (await api('GET', '/api/me')).user; } } catch (e) { fail(e); render(); } };
     $$('[data-role]', tr).forEach((c) => (c.onchange = () => save({ roles: $$('[data-role]:checked', tr).map((x) => x.dataset.role) })));
     $('[data-admin]', tr).onchange = (e) => save({ is_admin: e.target.checked });
     $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };

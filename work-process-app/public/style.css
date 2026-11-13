@@ -262,3 +262,12 @@ input[readonly] { background: var(--bg); }
   body.printing-report .report-chart-scroll { overflow: visible; }
   body.printing-report .report-chart-scroll svg { min-width: 0 !important; width: 100%; }
 }
+
+/* 목록 검색과 필터 */
+.list-filters { align-items: flex-end; gap: 10px; margin: 14px 0; }
+.list-filters label { display: flex; flex-direction: column; gap: 4px; min-width: 125px; font-size: 12.5px; color: var(--muted); }
+.list-filters .list-search { flex: 1; min-width: min(280px, 100%); }
+.list-filters input, .list-filters select { width: 100%; color: var(--text); }
+.list-filters [data-list-count] { padding: 8px 0; white-space: nowrap; }
+tr[hidden] { display: none !important; }
+@media (max-width: 560px) { .list-filters label { flex: 1 1 140px; } .list-filters .list-search { flex-basis: 100%; } }
