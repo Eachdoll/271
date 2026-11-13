@@ -1,6 +1,6 @@
 {
   "name": "work-process-app",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "구매/품질/개발/생산/물류 업무프로세스 웹앱",
   "main": "server.js",
@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node --no-warnings=ExperimentalWarning server.js",
     "dev": "node --no-warnings=ExperimentalWarning --watch server.js",
-    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
+    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js test/*.test.mjs",
+    "build": "node scripts/build.mjs"
   }
 }

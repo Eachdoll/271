@@ -2,27 +2,28 @@
 
 구매 · 품질 · 개발 · 생산 · 물류의 업무 흐름을 한 곳에서 입력하고 확인하는 사내 웹앱입니다.
 
-- **의존성 없음**: Node.js 22.13 이상만 있으면 됩니다. 서버는 내장 `http`, DB는 내장 `node:sqlite`를 씁니다.
-- 데이터는 `data/app.db`(SQLite)와 `data/uploads/`(세탁 불량 사진)에 저장됩니다.
+- **운영 배포**: Codex Sites의 Cloudflare Workers + D1(DB) + R2(사진)를 사용합니다.
+- **외부 패키지 없음**: 로컬 개발·테스트는 Node.js 22.13 이상과 내장 `node:sqlite`를 사용합니다.
+- 로컬 데이터는 `data/app.db`와 `data/uploads/`, 운영 데이터는 영구 D1/R2에 저장됩니다.
 
 ## 실행
 
 ```bash
 cd work-process-app
-npm start              # http://localhost:3000
+INVITE_CODE=local-test-code npm start  # http://localhost:3000
 ```
 
 | 환경변수 | 기본값 | 설명 |
 |---|---|---|
 | `PORT` | `3000` | 서버 포트 |
 | `DATA_DIR` | `./data` | DB·사진 저장 위치 (서버를 옮길 때 이 폴더만 백업) |
-| `INVITE_CODE` | `sst3554766` | **최초 실행 시** 초대코드. 이후에는 관리자 화면에서 변경 |
+| `INVITE_CODE` | 없음 | **최초 가입 시** 초기 초대코드. 운영은 Sites 비밀 환경변수로 설정. 이후에는 관리자 화면에서 변경 |
 
 테스트: `npm test`
 
 ## 가입 / 권한
 
-- 가입: **이름 / 비밀번호 / 초대코드** (예: `이치원`, `0000`, `sst3554766`)
+- 가입: **이름 / 비밀번호 / 초대코드** (설정한 초대코드 사용)
 - **처음 가입한 사람이 관리자**가 됩니다. 관리자는 `관리자 설정`에서
   - 초대코드 변경
   - 사용자별 담당 권한 지정: 구매 · 품질 · 개발(연구소) · 생산 · 물류, 관리자 지정
@@ -56,8 +57,9 @@ npm start              # http://localhost:3000
 
 ## 배포
 
-**단계별 안내는 [DEPLOY.md](DEPLOY.md)** (Railway + 코덱스, 또는 Docker).
+**[Codex Sites 배포·백업 안내](DEPLOY.md)**를 따릅니다.
+운영은 D1과 R2를 사용하므로 Railway나 `/data` 볼륨을 설정할 필요가 없습니다.
+관리자 설정에서 업무 기록과 사진을 포함한 전체 백업을 다운로드할 수 있습니다.
 
-
-SQLite 파일을 쓰므로 **디스크가 유지되는 서버**가 필요합니다 (사내 PC/서버, NAS, Railway·Render·Fly.io의 볼륨 등).
-`DATA_DIR`을 영구 볼륨으로 지정하고 `npm start`로 실행하면 됩니다. HTTPS 프록시 뒤에서는 로그인 쿠키에 `Secure`가 자동으로 붙습니다.
+검증: `npm test` / 배포 산출물: `npm run build`.
+로컬 테스트는 Worker 로직을 SQLite/R2 호환 어댑터로 실행하며 실제 Cloudflare 런타임 검증을 대체하지는 않습니다.

@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = name => fs.readFileSync(path.join(root, name), 'utf8');
+const manifest = JSON.parse(read('.openai/hosting.json'));
+if (!manifest.project_id) throw new Error('Missing Sites project_id');
+fs.rmSync(path.join(root, 'dist'), { recursive: true, force: true });
+fs.mkdirSync(path.join(root, 'dist/server'), { recursive: true });
+fs.mkdirSync(path.join(root, 'dist/.openai'), { recursive: true });
+const assets = Object.fromEntries(['index.html', 'app.js', 'forms.js', 'style.css'].map(file => ['/' + file, read('public/' + file)]));
+const staticCode = `\nconst assets = ${JSON.stringify(assets)};\nconst ASSETS = { fetch(req) { const p = new URL(req.url).pathname; const name = p === '/' ? '/index.html' : p; const text = assets[name]; if (text === undefined) return new Response('Not found', { status: 404 }); return new Response(req.method === 'HEAD' ? null : text, { headers: { 'Content-Type': name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } }); } };\n`;
+let worker = read('worker.mjs').replace("import { database } from './storage.mjs';", read('storage.mjs').replace('export function database', 'function database'));
+worker = worker.replace('createApp(env).fetch(request)', 'createApp({ ...env, ASSETS }).fetch(request)');
+fs.writeFileSync(path.join(root, 'dist/server/index.js'), staticCode + worker);
+fs.writeFileSync(path.join(root, 'dist/.openai/hosting.json'), JSON.stringify(manifest, null, 2));
+fs.cpSync(path.join(root, 'drizzle'), path.join(root, 'dist/drizzle'), { recursive: true });
+console.log('Built Worker with embedded application assets and D1 migrations.');

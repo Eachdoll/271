@@ -624,6 +624,7 @@ async function pageAdmin(main) {
   const [s, users] = await Promise.all([api('GET', '/api/admin/settings'), api('GET', '/api/admin/users')]);
   main.innerHTML = `
   <h1>관리자 설정</h1>
+  <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
   <div class="card"><h3>사용자 · 담당자 권한</h3>
@@ -635,6 +636,34 @@ async function pageAdmin(main) {
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
       <td class="nowrap"><button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
   $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
+  $('#backupBtn').onclick = async (e) => {
+    const button = e.currentTarget; const status = $('#backupStatus'); button.disabled = true;
+    try {
+      const info = await api('GET', '/api/admin/backup');
+      const backup = { format: info.format, created_at: new Date().toISOString(), tables: {}, photos: {} };
+      for (const table of info.tables) {
+        status.textContent = '업무 기록을 저장하고 있습니다…';
+        backup.tables[table] = []; let after = '';
+        do {
+          const page = await api('GET', `/api/admin/backup?table=${encodeURIComponent(table)}&after=${encodeURIComponent(after)}`);
+          backup.tables[table].push(...page.rows); after = page.next;
+        } while (after !== null);
+      }
+      const photos = [...new Set(backup.tables.laundry.flatMap(row => JSON.parse(row.photos)))];
+      for (const [i, file] of photos.entries()) {
+        status.textContent = `사진을 저장하고 있습니다… (${i + 1}/${photos.length})`;
+        const response = await fetch('/uploads/' + encodeURIComponent(file));
+        if (!response.ok) throw new Error('사진을 백업하지 못했습니다. 다시 시도하세요.');
+        const data = await response.blob();
+        backup.photos[file] = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(data); });
+      }
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
+      const link = document.createElement('a'); link.href = url; link.download = `work-process-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      status.textContent = '백업 파일을 다운로드했습니다. 다운로드 폴더에서 확인하세요.';
+    } catch (error) { status.textContent = '백업에 실패했습니다. 다시 시도해 주세요.'; fail(error); }
+    finally { button.disabled = false; }
+  };
   $$('tr[data-u]').forEach((tr) => {
     const id = tr.dataset.u; const name = $('b', tr).textContent;
     const save = async (body) => { try { await api('PUT', '/api/admin/users/' + id, body); toast('저장했습니다.'); if (Number(id) === ME.id) { ME = (await api('GET', '/api/me')).user; } } catch (e) { fail(e); render(); } };

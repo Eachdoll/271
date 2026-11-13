@@ -1,113 +1,99 @@
-# 배포 안내 (Railway + Codex)
+# Codex Sites 배포 안내
 
-## 먼저 알아둘 점: 코덱스는 "서버"가 아닙니다
+## 배포 구조
 
-코덱스(Codex)는 코드를 고치고 명령을 실행해 주는 **작업 도구**입니다.
-코덱스 클라우드 작업 환경은 작업이 끝나면 사라지는 **임시 컨테이너**라서, 여기서 앱을 띄워도
-작업이 끝나면 앱과 데이터가 같이 없어지고 다른 사람이 접속할 주소도 생기지 않습니다.
+이 앱은 Codex의 Sites 플러그인을 통해 배포합니다. 운영 서버는 Cloudflare Workers,
+업무 DB는 D1(`DB` 바인딩), 사진은 비공개 R2(`BUCKET` 바인딩)를 사용합니다.
+`DATA_DIR`, Railway Volume, Docker 컨테이너는 Sites에서 사용하지 않습니다.
+외부 npm 패키지 없이 기존 화면과 API를 유지했습니다.
 
-그래서 역할을 이렇게 나눕니다.
+- 운영 주소: https://eachdoll-work-process-hub.seoulsemitec-3654.chatgpt.site
+- 배포 대상은 저장소의 `work-process-app/` 내용만입니다. 저장소 루트의 다른 프로젝트는 배포하지 않습니다.
+- `.openai/hosting.json`의 `project_id`가 기존 Site를 식별합니다. 후속 작업에서 새 Site를 만들거나 이 값을 바꾸지 마세요.
+- Sites 소스 저장소는 GitHub 원본 저장소와 별개입니다. GitHub에 커밋하는 것만으로 Sites가 자동 재배포되지는 않습니다.
 
-| 누가 | 하는 일 |
-|---|---|
-| **Railway** (호스팅) | 앱을 24시간 실행, 접속 주소(https) 제공, 데이터 보관 |
-| **코덱스** | 코드 수정 → GitHub에 커밋/푸시 → Railway가 자동으로 재배포 |
-| **나** | Railway 최초 설정 1회 (아래 1~7단계, 약 10분) |
+## 처음 사용하기
 
-한 번 설정해 두면 이후에는 **코덱스에 "○○ 기능 추가해줘"라고 말하고 푸시만 하면 자동 배포**됩니다.
+1. 위 주소를 열고 ChatGPT 계정으로 로그인합니다. 현재 Site는 소유자 전용입니다.
+2. 앱의 **가입** 화면에서 이름, 비밀번호, 설정한 초대코드를 입력합니다.
+3. 앱에 처음 가입한 계정이 관리자입니다. 아직 운영 계정이 없으므로 먼저 직접 가입하세요.
+4. **관리자 설정**에서 초대코드를 변경하고 담당자의 구매·품질·개발·생산·물류 권한을 지정합니다.
+5. 직원에게 접근을 허용하려면 Sites의 공유 설정에서 대상 사용자를 추가해야 합니다.
+   ChatGPT Site 접근 권한과 앱 내부 가입·업무 권한은 별도로 적용됩니다.
+   현재 소유자 전용 설정은 배포 과정에서 유지합니다.
 
----
+## 환경변수
 
-## 0. 준비
+`INVITE_CODE`는 Sites의 운영 환경변수에 **비밀 값**으로 설정합니다.
+최초 가입 때 초기 초대코드로 사용하며 이후에는 DB의 관리자 설정값을 유지합니다.
+코드, 브라우저 번들, `.openai/hosting.json`에는 초대코드를 넣지 마세요.
+`PORT`와 `DATA_DIR`은 로컬 개발에서만 사용합니다.
 
-- 이 코드가 GitHub `eachdoll/271` 저장소의 **main 브랜치**에 있어야 합니다.
-  (지금은 `claude/youthful-franklin-xe84pq` 브랜치에 있으니 GitHub에서 PR을 만들어 main에 합치세요.)
-- 배포에 필요한 파일은 이미 들어 있습니다: `Dockerfile`, `railway.json`, `.dockerignore`
+## 이후 Codex로 수정·배포
 
-## 1. Railway 가입
+Codex에 다음처럼 요청하세요.
 
-https://railway.com → **Login → GitHub로 로그인**.
-볼륨(데이터 저장)을 쓰려면 **Hobby 플랜(월 $5부터)** 이 필요합니다.
+> Eachdoll/271의 work-process-app을 수정해줘. AGENTS.md부터 읽고,
+> 기존 .openai/hosting.json의 Site ID와 D1/R2를 유지해.
+> npm test 통과 후 작업 브랜치에 커밋하고 같은 Sites에 배포해줘.
 
-## 2. 프로젝트 만들기
+Codex가 해야 할 순서:
 
-**New Project → Deploy from GitHub repo → `eachdoll/271`** 선택.
-(저장소가 안 보이면 *Configure GitHub App*에서 이 저장소 접근을 허용)
+1. `work-process-app/`만 작업합니다. 기존 Site의 접근 설정을 확인합니다.
+2. `npm test`로 업무 API와 Worker 검증을 실행합니다.
+3. `npm run build`로 `dist/server/index.js`를 만듭니다. 정적 화면도 이 Worker에 포함됩니다.
+4. 해당 폴더의 소스만 Sites가 지정한 소스 저장소에 커밋·푸시합니다.
+5. `dist/`의 산출물과 `.openai/hosting.json`, D1 마이그레이션을 묶어 버전 저장 후 배포합니다.
+6. Sites의 배포 결과가 성공인지 확인합니다. 공유 대상을 바꾸려면 별도 사용자 지시가 필요합니다.
 
-## 3. 폴더 지정 ← 중요
+`drizzle/0000_work_process.sql`은 최초 D1 스키마입니다. 적용한 마이그레이션은 수정하지 말고
+후속 변경은 새 SQL 파일과 저널 항목으로 추가하세요. 요청 처리 중 테이블을 만들거나 변경하지 않습니다.
 
-서비스 클릭 → **Settings → Source → Root Directory** = `work-process-app`
+## 도메인
 
-(저장소에 다른 프로젝트도 있어서, 이 폴더만 배포하도록 지정해야 합니다.
-`railway.json`이 Dockerfile 빌드를 자동으로 선택합니다.)
-
-## 4. 데이터 저장공간(Volume) 연결 ← 가장 중요
-
-서비스 위에서 **우클릭(또는 ⌘K) → Add Volume** → **Mount Path** = `/data`
-
-> ⚠ 이걸 빼먹으면 **재배포할 때마다 모든 데이터(가입자·발주·사진)가 사라집니다.**
-
-## 5. 환경변수
-
-서비스 → **Variables** 탭 → 추가:
-
-| 이름 | 값 | 설명 |
-|---|---|---|
-| `DATA_DIR` | `/data` | 데이터 저장 위치 (Dockerfile 기본값도 /data) |
-| `INVITE_CODE` | `sst3554766` | **처음 실행할 때만** 쓰이는 초대코드. 이후엔 관리자 화면에서 변경 |
-
-`PORT`는 Railway가 자동으로 넣어 주므로 설정하지 않습니다.
-
-## 6. 접속 주소 만들기
-
-**Settings → Networking → Generate Domain** → `https://○○○.up.railway.app` 주소가 생깁니다.
-배포 상태가 **Active(초록)** 가 되면 접속하세요.
-
-## 7. 관리자 가입 ← 가장 먼저
-
-주소로 들어가 **가입** 탭에서 `이치원 / 비밀번호 / sst3554766` 으로 가입.
-**처음 가입한 사람이 관리자**입니다. 다른 사람에게 주소를 알리기 전에 꼭 먼저 가입하세요.
-그다음 `관리자 설정`에서 품질·개발(연구소)·생산 담당자 권한을 지정합니다.
-
----
-
-## 이후 코덱스로 수정·배포하기
-
-코덱스에 이렇게 말하면 됩니다:
-
-```
-eachdoll/271 저장소의 work-process-app 폴더 작업이야. AGENTS.md를 먼저 읽어.
-(원하는 수정 내용)
-수정 후 npm test 통과 확인하고 main 브랜치에 커밋해줘.
-```
-
-main에 푸시(또는 PR 머지)되면 Railway가 자동으로 다시 빌드·배포합니다. 데이터는 Volume에 있어 유지됩니다.
-
-> DB 표(컬럼)를 바꾸는 수정이라면 "기존 데이터가 유지되도록 ALTER TABLE로 마이그레이션해줘"라고 덧붙이세요.
-
-## 배포가 실패할 때 코덱스에 할 말
-
-Railway 서비스 → **Deployments → 실패한 배포 → View Logs** 내용을 복사해서:
-
-```
-work-process-app을 Railway에 배포했는데 아래 로그로 실패했어. 원인 찾아서 고쳐줘.
-(로그 붙여넣기)
-```
+기본 HTTPS 주소는 Sites가 생성하며 별도의 Railway 도메인 설정은 필요 없습니다.
+회사 소유 도메인을 쓰려면 Codex에 정확한 도메인을 알려주고 Sites 연결을 요청하세요.
+연결 도구가 돌려주는 DNS 레코드를 도메인 관리 화면에 입력한 뒤 검증이 완료되면 사용할 수 있습니다.
 
 ## 백업
 
-데이터는 Volume의 `/data` 안에 있습니다 (`app.db` = DB, `uploads/` = 세탁 사진).
+1. 관리자 계정으로 로그인하고 **관리자 설정 → 전체 백업 다운로드**를 누릅니다.
+2. 백업 중에는 다른 사용자의 입력·수정·사진 삭제를 잠시 멈춥니다. 표별로 나누어 읽으므로
+   사용 중의 전체 데이터에 대한 단일 시점 스냅샷은 아닙니다.
+3. 다운로드 폴더에서 `work-process-backup-YYYY-MM-DD.json` 파일을 확인합니다.
+4. 파일에는 업무 기록, 계정의 비밀번호 검증값, 초대코드, 사진 원본이 포함됩니다.
+   로그인 세션은 제외합니다. 접근이 제한된 회사 백업 저장소에 보관하세요.
+5. 재배포는 기존 D1/R2를 유지하므로 데이터를 초기화하지 않습니다. Site 자체를 삭제하지 마세요.
 
-Railway에서 **Volume 클릭 → Backups** 탭에서 백업 일정을 설정하세요 (권장: 매일). 문제가 생기면 같은 화면에서 복원할 수 있습니다.
+백업은 서버에서 200행씩 읽고 사진을 차례로 받아 브라우저에서 파일로 만듭니다.
+사진이 많으면 브라우저 메모리와 다운로드 시간이 늘어납니다. 실패 메시지가 나오면 해당 파일을
+완전한 백업으로 취급하지 말고 다시 받으세요. 자동 백업 일정은 아직 설정하지 않았습니다.
 
-## (선택) 회사 PC / NAS에서 Docker로 직접 실행
+복원은 자동 덮어쓰기 버튼을 제공하지 않습니다. 복원 전에 현재 DB/사진을 별도로 백업하고,
+백업 형식·계정·사진 참조를 검증한 뒤 관리 권한이 있는 작업으로 진행해야 합니다.
+소스 버전 되돌리기는 데이터 복원과 다릅니다.
 
-Railway 대신 사내 서버에서 돌리려면 (Docker 설치 필요):
+## 기존 Node.js 버전 데이터
+
+이번 배포는 새 D1/R2로 시작합니다. 기존 `data/app.db`나 사진을 제공받지 않았으므로 자동 이관하지 않았습니다.
+기존 데이터가 있다면 먼저 앱을 중지하고 `data/` 전체를 별도로 백업하세요.
+기존 버전은 scrypt, Sites 버전은 Web Crypto PBKDF2-SHA256(100,000회)을 사용합니다.
+기존 계정의 해시를 그대로 복사하면 로그인할 수 없으므로 별도 데이터 이관과 비밀번호 재설정 계획이 필요합니다.
+
+## 로컬 실행과 확인
+
+Node.js 22.13 이상에서:
 
 ```bash
 cd work-process-app
-docker build -t work-process-app .
-docker run -d --name wpa --restart unless-stopped -p 3000:3000 -v wpa-data:/data -e INVITE_CODE=sst3554766 work-process-app
+INVITE_CODE=local-test-code npm start
+npm test
+npm run build
 ```
 
-사내망에서 `http://<그 PC의 IP>:3000` 으로 접속합니다.
+로컬은 `local.mjs`가 SQLite와 파일 저장을 통해 동일한 Worker API를 실행합니다.
+운영 D1/R2와 로컬 `data/`는 별개입니다.
+`GET /api/me`는 앱 인증 없이 HTTP 200과 `{"user":null}`을 반환합니다.
+비공개 Sites 운영 주소에서는 그 앞단의 ChatGPT 접근 인증이 먼저 적용됩니다.
+
+Dockerfile과 railway.json은 기존 Node 로컬 실행 경로를 위한 참고 파일로 남아 있으며 Sites 배포에는 사용하지 않습니다.
