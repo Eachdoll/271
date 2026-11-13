@@ -212,6 +212,34 @@ route('GET', '/api/admin/backup', async ({ user, query }) => {
 });
 
 // ── 구매: 발주목록 ──
+function receiptAnalysisQuery(sourceType, id, user) {
+  const purchase = sourceType === 'purchase_order';
+  if (!purchase && sourceType !== 'other_receipt') throw new Error('Unknown receipt source');
+  const table = purchase ? 'purchase_orders' : 'other_receipts';
+  const label = purchase ? '발주입고' : '기타입고';
+  const qty = purchase ? 'COALESCE(src.recv_qty, src.qty)' : 'src.qty';
+  const coa = purchase ? 'src.coa_requested' : '0';
+  const date = purchase ? 'substr(src.recv_at,1,10)' : 'src.received_date';
+  const prefix = `Q-${today().slice(2).replace(/-/g, '')}-`;
+  return {
+    sql: `INSERT INTO requests(type,status,req_no,title,customer,category,data,requester_id,requester_name,approver_name,approved_at,source_type,source_id)
+      SELECT 'analysis','waiting',
+        ? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(req_no,length(?) + 1) AS INTEGER)),0)+1 FROM requests WHERE req_no LIKE ?)),
+        src.item,src.vendor,'수입검사',
+        json_object('purpose','입고 수입검사','sample_qty',CAST(${qty} AS TEXT),
+          'source_label',?,'received_date',${date},'item_category',src.item_category,
+          'received_qty',${qty},'coa_requested',${coa},
+          'purchase_req_no',${purchase ? 'src.req_no' : "''"},
+          'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note),
+        ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id
+      FROM ${table} src WHERE src.id=${id == null ? 'last_insert_rowid()' : '?'}
+        ${purchase ? "AND src.recv_status='ok'" : ''}
+        AND NOT EXISTS(SELECT 1 FROM requests WHERE source_type=? AND source_id=src.id)
+      ON CONFLICT(source_type,source_id) DO NOTHING`,
+    args: [prefix, prefix, prefix + '%', label, user.id, user.name, sourceType, ...(id == null ? [] : [id]), sourceType],
+  };
+}
+
 function poFields(b) {
   return [reqStr(b.req_no, '구매의뢰번호', 50), reqStr(b.vendor, '거래처', 100), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), dateStr(b.due_date, '납기일'), str(b.note, 500), itemCategory(b.item_category), checked(b.coa_requested)];
 }
@@ -244,12 +272,19 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
   if (!['ok', 'mismatch', 'checking', ''].includes(status)) throw bad('상태 값이 올바르지 않습니다.');
   const recvQty = status === 'mismatch' ? num(body.recv_qty, '실입고 수량') : null;
   if (status === 'mismatch' && ids.length !== 1) throw bad('수량상이는 한 항목씩 실입고 수량을 입력하세요.');
-  const st = db.prepare('UPDATE purchase_orders SET recv_status=?, recv_qty=?, recv_note=?, recv_by=?, recv_at=? WHERE id=?');
-  for (const id of ids) {
-    const row = (await mustGet('purchase_orders', id));
-    (await st.run(status, status === 'ok' ? row.qty : recvQty, str(body.note, 500), status ? user.name : null, status ? now() : null, id));
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length > 100) throw bad('입고 처리는 한 번에 100건까지 가능합니다.');
+  // Validate every source before executing any writes, then commit one atomic batch.
+  const rows = [];
+  for (const id of uniqueIds) rows.push(await mustGet('purchase_orders', id));
+  const queries = [];
+  for (const row of rows) {
+    queries.push({ sql: 'UPDATE purchase_orders SET recv_status=?, recv_qty=?, recv_note=?, recv_by=?, recv_at=? WHERE id=?',
+      args: [status, status === 'ok' ? row.qty : recvQty, str(body.note, 500), status ? user.name : null, status ? now() : null, row.id] });
+    if (status === 'ok') queries.push(receiptAnalysisQuery('purchase_order', row.id, user));
   }
-  return { ok: true };
+  const results = await db.batch(queries);
+  return { ok: true, analysis_created: status === 'ok' ? results.filter((_, i) => i % 2 === 1).reduce((sum, r) => sum + r.meta.changes, 0) : 0 };
 });
 
 // ── 구매: 세탁관리 ──
@@ -317,6 +352,10 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
   const isMgr = hasRole(user, REQUEST_TYPES[r.type]);
   if (!(isMgr || (r.requester_id === user.id && ['pending', 'rejected'].includes(r.status)))) throw new HttpError(403, '접수대기 중인 본인 의뢰만 수정할 수 있습니다.');
   const f = requestFields(r.type, body);
+  if (r.source_type) {
+    const original = JSON.parse(r.data || '{}');
+    for (const key of ['source_label', 'received_date', 'item_category', 'received_qty', 'coa_requested', 'purchase_req_no']) f.data[key] = original[key];
+  }
   const status = r.status === 'rejected' && !isMgr ? 'pending' : r.status; // 반려건 수정 시 재접수
   (await db.prepare("UPDATE requests SET title=?,customer=?,due_date=?,category=?,target_price=?,data=?,status=?,updated_at=datetime('now','+9 hours') WHERE id=?")
     .run(f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), status, r.id));
@@ -406,8 +445,11 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   return await db.prepare(`SELECT * FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
-  const r = await db.prepare('INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,created_by) VALUES(?,?,?,?,?,?,?)').run(...otherReceiptFields(body), user.name);
-  return await mustGet('other_receipts', r.lastInsertRowid);
+  const results = await db.batch([
+    { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,created_by) VALUES(?,?,?,?,?,?,?)', args: [...otherReceiptFields(body), user.name] },
+    receiptAnalysisQuery('other_receipt', null, user),
+  ]);
+  return await mustGet('other_receipts', results[0].meta.last_row_id);
 });
 route('PUT', '/api/other-receipts/:id', async ({ user, params, body }) => {
   const row = await mustGet('other_receipts', params.id);

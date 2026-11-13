@@ -19,16 +19,22 @@ export function localEnvironment(dataDir, inviteCode) {
   }
   function prepare(sql) {
     let args = [];
+    const executeAll = () => {
+      const results = sqlite.prepare(sql).all(...args);
+      const meta = sqlite.prepare('SELECT changes() AS changes, last_insert_rowid() AS last_row_id').get();
+      return { results, success: true, meta };
+    };
     return {
       bind(...values) { args = values; return this; },
       async first() { return sqlite.prepare(sql).get(...args) || null; },
-      async all() { return { results: sqlite.prepare(sql).all(...args), success: true }; },
+      async all() { return executeAll(); },
+      executeAll,
       async run() { const r = sqlite.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; },
     };
   }
   const DB = { prepare, async batch(statements) {
     sqlite.exec('BEGIN');
-    try { const out = []; for (const s of statements) out.push(await s.all()); sqlite.exec('COMMIT'); return out; }
+    try { const out = statements.map(s => s.executeAll()); sqlite.exec('COMMIT'); return out; }
     catch (e) { sqlite.exec('ROLLBACK'); throw e; }
   } };
   const filePath = key => {

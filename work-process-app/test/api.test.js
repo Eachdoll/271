@@ -58,9 +58,9 @@ test('분석의뢰: 누구나 의뢰 → 품질담당자 승인 → 분석리스
   assert.equal((await user('POST', `/api/requests/${r.id}/approve`)).status, 403); // 권한 없음
   await admin('PUT', `/api/admin/users/${me.id}`, { roles: ['quality'] });
   const ok = (await user('POST', `/api/requests/${r.id}/approve`)).body;
-  assert.equal(ok.status, 'waiting'); assert.match(ok.req_no, /^Q-\d{6}-01$/);
+  assert.equal(ok.status, 'waiting'); assert.match(ok.req_no, /^Q-\d{6}-\d+$/);
   assert.equal((await user('GET', '/api/requests?type=analysis&scope=intake')).body.length, 0);
-  assert.equal((await user('GET', '/api/requests?type=analysis&scope=list&category=수입검사')).body.length, 1);
+  assert.ok((await user('GET', '/api/requests?type=analysis&scope=list&category=수입검사')).body.some(row => row.id === r.id));
   assert.equal((await user('POST', `/api/requests/${r.id}/status`, { status: 'progress' })).body.status, 'progress');
   // 개발의뢰는 연구소(dev) 권한 필요
   const d = (await user('POST', '/api/requests', { type: 'development', title: '블루 글러브', target_price: '8~9만원/BOX' })).body;
