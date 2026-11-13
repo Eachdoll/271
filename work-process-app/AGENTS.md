@@ -45,7 +45,9 @@ INVITE_CODE=local-test-code npm start
 - HTTPS 세션 쿠키는 wpa_sid, HttpOnly/Secure/SameSite=None/Partitioned입니다. Sites의 포함 화면에서 로그인 상태가 끊기지 않도록 정책을 유지하세요.
 
 ## 입고 → 분석 자동 등록
-- 발주입고는 recv_status=ok로 처리할 때만, 기타입고는 POST 등록 시 analysis/waiting/수입검사를 자동 생성합니다.
+- 발주입고는 recv_status=ok 또는 mismatch로 처리할 때(수량상이는 실입고 수량 기준), 기타입고는 POST 등록 시 analysis/waiting/수입검사를 자동 생성합니다. checking은 생성하지 않습니다. 수량상이 후 ok로 바뀌어도 분석은 추가로 만들지 않고 처음 스냅샷을 유지합니다.
+- 발주입고 처리는 로그인 사용자 누구나 할 수 있습니다. 상태를 바꿀 때마다 같은 batch에서 progress_comments에 `[입고 처리] 이전 → 이후` 기록(처리자 이름)을 남겨, 나중에 상태가 바뀌어도 처리한 사람이 보존되게 하세요.
+- 입고 자동분석을 수정해도 title/customer/qty/sample_qty/spec/lot/lot_etc는 입고 스냅샷으로 유지합니다. 접수대기·반려 의뢰 삭제는 의뢰자 본인·승인권자·관리자만 가능합니다.
 - receiptAnalysisQuery()가 원본 스냅샷과 Q 접수번호를 만들고 입고 쓰기와 D1 batch로 원자적으로 저장합니다.
 - requests(source_type, source_id)의 UNIQUE 인덱스가 중복을 막습니다. source_type은 purchase_order/other_receipt입니다.
 - 입고 재확인은 기존 분석 상태·결과를 초기화하지 않습니다. 원본 수정·삭제도 이미 생성한 분석 이력을 덮어쓰거나 삭제하지 않습니다.
@@ -114,7 +116,9 @@ INVITE_CODE=local-test-code npm start
 - 기타입고는 각 행별 활성 BOM을 확인하고 단위는 BOM 스냅샷에서 결정합니다. 입고 자동분석에 batch_id/spec/unit/lot/qty도 스냅샷으로 전달하며 기존 자동분석 중복 방지와 트랜잭션을 유지합니다.
 - PUT /api/items/:entity/:id로 본인/담당자가 규격·단위·LOT를 정정합니다. 입고 자동분석의 스냅샷과 실적 있는 일정의 품목 정체성·기간·단위는 보호합니다.
 - production_actuals는 schedule_id별 날짜/수량의 누적 이력이며 request_id로 중복 쓰기를 막습니다. 계획 기간 안 날짜만 허용합니다. 입력은 일정 등록자/production/관리자, 조회는 로그인 사용자입니다.
-- POST /api/schedules/:id/actuals, GET 동경로, POST /api/schedules/:id/actuals/:actualId/void. 취소는 삭제가 아니며 취소자·시각·사유를 남기고 합계에서 제외합니다. 실적 이력 있는 일정은 삭제 금지입니다.
+- POST /api/schedules/:id/actuals, GET 동경로. 실제 생산량 0은 허용합니다. 오늘(KST) 이후 날짜는 거부합니다. 실적 이력 있는 일정은 삭제 금지입니다. 실적이 있는 일정도 LOT 정정은 허용하고 규격·단위는 잠급니다.
+- 입력된 실적의 수정·취소는 바로 반영하지 않습니다(0008 production_actual_changes). POST .../actuals/:actualId/changes(수정: 생산일·수량·메모, 지난 기간 포함) 또는 .../void(취소)는 사유와 함께 pending 요청을 만들고, production_approver(생산팀장) 또는 관리자가 POST /api/actual-changes/:id/approve|reject 해야 반영됩니다. 요청자는 /cancel로 철회합니다. 실적당 pending 요청은 1건(부분 UNIQUE 인덱스)이고 request_id로 재시도 중복을 막습니다.
+- 승인은 요청 당시 값(old_*)이 현재 실적과 같을 때만 반영하고, 반영 시 corrected_at/corrected_by(수정) 또는 voided_*(취소)를 남깁니다. 요청 이력은 삭제하지 않으며 백업 대상입니다. production_approver는 production 업무 권한을 포함하지만 일반 production을 승인권자로 승격하지 마세요. GET /api/approval-managers 응답 형태는 그대로 둡니다.
 - done은 기존 완료 체크로만 유지하고 실제 생산량으로 이관/간주하지 마세요. actual_qty/actual_count는 취소 제외 실적에서 계산합니다.
 - 리포트는 기존 plan_period 하나/계획 시작일 기준을 유지하면서 실제 실적 누적량·차이·달성률을 추가합니다. SUM 상관 서브쿼리로 여러 실적 때문에 계획수량이 중복 합산되지 않도록 하세요. 규격과 단위를 구분합니다.
 - item_batches 백업 커서는 id가 아닌 batch_id 문자열입니다. production_actuals 취소 이력과 함께 전체 백업에 포함합니다. 0007 마이그레이션은 기존 완료 체크를 실적으로 자동 변환하지 않습니다.

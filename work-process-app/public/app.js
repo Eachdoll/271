@@ -18,7 +18,7 @@ const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const dow = (s) => WEEK[parseD(s).getDay()];
 const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko-KR'));
 
-const ROLE_LABEL = { purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', logistics: '물류' };
+const ROLE_LABEL = { purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -289,6 +289,7 @@ async function pageHome(main) {
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
     <a class="kpi red" href="#/logistics/receive"><b>${d.po.mismatch}</b><span>수량상이</span></a>
+    ${d.actualChangesPending ? `<a class="kpi yellow" href="#/prod/finished"><b>${d.actualChangesPending}</b><span>생산실적 수정 승인대기</span></a>` : ''}
     <a class="kpi" href="#/quality/request"><b>${r.analysis.pending}</b><span>분석 접수대기</span></a>
     <a class="kpi" href="#/quality/voc/request"><b>${r.voc.pending}</b><span>VOC 승인대기</span></a>
     <a class="kpi" href="#/dev/request"><b>${r.development.pending}</b><span>개발 접수대기</span></a>
@@ -385,7 +386,7 @@ async function pageReceipts(main, tab) {
 async function pageReceive(main) {
   main.innerHTML = `
   <h2>발주입고</h2>
-  <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
+  <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 또는 <b>수량상이</b> 처리 시 분석리스트에 수입검사(대기)가 자동 등록됩니다(수량상이는 실입고 수량 기준). 누구나 처리할 수 있으며, 처리한 사람과 내용은 각 항목의 <b>진행 코멘트</b>에 자동으로 남습니다.</p>
   ${listControls('rc', { dateLabel: '납기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>입고 상태<select name="recv" id="rcF"><option value="open">미완료</option><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>분류<select name="item_category">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}
   <div class="actionbar">
     <span id="rcSelectedCount" class="muted">0개 선택</span>
@@ -823,6 +824,7 @@ async function pageSchedule(kind) {
   let view = 'week'; let base = scheduleFocusDate();
   main.innerHTML = `
   <h1>${label} 생산일정 <span class="dept">생산</span></h1>
+  <div id="actualChanges"></div>
   <form class="card" id="scNew"><h3>일정 입력</h3><div class="form-grid">
     <fieldset class="span3"><legend>구분 *</legend><div class="opts">${Object.entries(PERIOD).map(([k, v]) => `<label class="opt"><input type="radio" name="period" value="${k}" ${k === 'day' ? 'checked' : ''}> ${v}</label>`).join('')}</div></fieldset>
     <label>날짜 * <span class="hint" id="scHint">(그날)</span><input name="start_date" type="date" required value="${todayStr()}"></label>
@@ -883,6 +885,7 @@ async function pageSchedule(kind) {
     $$('#scBody [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 일정을 삭제할까요?')) { try { await api('DELETE', '/api/schedules/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
   };
   bindListControls(filterForm, load);
+  renderActualChanges($('#actualChanges', main), kind).catch(fail);
   $$('#vSeg button').forEach((b) => (b.onclick = () => { view = b.dataset.v; $$('#vSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
   const step = (n) => { base = view === 'day' ? addDays(base, n) : view === 'week' ? addDays(base, 7 * n) : addMonths(base, n); load(); };
   $('#prev').onclick = () => step(-1); $('#next').onclick = () => step(1); $('#today').onclick = () => { base = todayStr(); load(); };
@@ -956,7 +959,7 @@ async function pageAdmin(main) {
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
     <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>
-      ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
+      ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
       <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
       <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;

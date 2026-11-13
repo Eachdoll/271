@@ -12,7 +12,7 @@ async function getSetting(k) { const r = (await db.prepare('SELECT value FROM se
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
 // ───────────────────────── 공통 ─────────────────────────
-const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'logistics'];
+const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics'];
 const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production' };
 const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
@@ -82,7 +82,7 @@ function applyInspectionFilter(where, args, query, entity, table) {
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
-function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev'].includes(role) && roles.includes(role + '_approver')); }
+function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production'].includes(role) && roles.includes(role + '_approver')); }
 function isRequestApprover(user, type) {
   return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
 }
@@ -321,7 +321,7 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
   if (body.is_admin && target.approval_status !== 'approved') throw bad('가입 승인 후 관리자 권한을 부여하세요.');
   if (body.roles !== undefined) {
     const roles = [...new Set((Array.isArray(body.roles) ? body.roles : []).filter((r) => ROLES.includes(r)))];
-    if (target.approval_status !== 'approved' && roles.some(r => ['quality_approver','dev_approver'].includes(r))) throw bad('가입 승인 후 책임자로 지정하세요.');
+    if (target.approval_status !== 'approved' && roles.some(r => ['quality_approver','dev_approver','production_approver'].includes(r))) throw bad('가입 승인 후 책임자로 지정하세요.');
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));
   }
   if (body.is_admin !== undefined) {
@@ -343,7 +343,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -380,7 +380,7 @@ function receiptAnalysisQuery(sourceType, id, user) {
           'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note),
         ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id,src.batch_id,src.spec,src.unit,src.lot,${qty}
       FROM ${table} src WHERE src.id=${id == null ? 'last_insert_rowid()' : '?'}
-        ${purchase ? "AND src.recv_status='ok'" : ''}
+        ${purchase ? "AND src.recv_status IN ('ok','mismatch')" : ''}
         AND NOT EXISTS(SELECT 1 FROM requests WHERE source_type=? AND source_id=src.id)
       ON CONFLICT(source_type,source_id) DO NOTHING`,
     args: [prefix, prefix, prefix + '%', label, user.id, user.name, sourceType, ...(id == null ? [] : [id]), sourceType],
@@ -435,10 +435,16 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
       recv_by=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_by ELSE ? END,
       recv_at=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_at ELSE ? END WHERE id=?`,
       args: [status, status, status === 'ok' ? row.qty : recvQty, str(body.note, 500), status, status ? user.name : null, status, status ? now() : null, row.id] });
-    if (status === 'ok') queries.push(receiptAnalysisQuery('purchase_order', row.id, user));
+    // Anyone may confirm a receipt; the append-only comment keeps who did what even after later status changes.
+    const label = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
+    const detail = status === 'mismatch' ? ` · 실입고 ${recvQty} (발주 ${row.qty})` : status === 'ok' ? ` · 수량 ${row.recv_status === 'ok' ? row.recv_qty ?? row.qty : row.qty}` : '';
+    queries.push({ sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)',
+      args: ['purchase_order', row.id, `[입고 처리] ${label[row.recv_status] ?? row.recv_status} → ${label[status]}${detail}${str(body.note, 500) ? ' · ' + str(body.note, 500) : ''}`, user.id, user.name] });
+    if (['ok', 'mismatch'].includes(status)) queries.push(receiptAnalysisQuery('purchase_order', row.id, user));
   }
   const results = await db.batch(queries);
-  return { ok: true, analysis_created: status === 'ok' ? results.filter((_, i) => i % 2 === 1).reduce((sum, r) => sum + r.meta.changes, 0) : 0 };
+  const per = ['ok', 'mismatch'].includes(status) ? 3 : 2;
+  return { ok: true, analysis_created: per === 3 ? results.filter((_, i) => i % 3 === 2).reduce((sum, r) => sum + r.meta.changes, 0) : 0 };
 });
 
 // ── 구매: 세탁관리 ──
@@ -858,12 +864,14 @@ route('GET', '/api/schedules/:id/actuals', async ({ user, params, query }) => {
   const rows = await db.prepare(`SELECT * FROM production_actuals WHERE schedule_id=? ${query.before ? 'AND id<?' : ''} ORDER BY id DESC LIMIT 51`).all(schedule.id, ...(query.before ? [Number(query.before)] : []));
   const page = rows.slice(0,50);
   const actual = (await db.prepare('SELECT COALESCE(SUM(qty),0) AS qty FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL').get(schedule.id)).qty;
-  return { schedule: decodeSchedule(schedule), rows: page, next: rows.length > 50 ? page.at(-1).id : null, actual_qty: actual, variance_qty: actual - schedule.qty, achievement_rate: schedule.qty ? Math.round(actual / schedule.qty * 1000) / 10 : null, can_write: canModify(user, schedule) || hasRole(user, 'production') };
+  const pending = await db.prepare("SELECT * FROM production_actual_changes WHERE schedule_id=? AND status='pending'").all(schedule.id);
+  const changes = await db.prepare('SELECT * FROM production_actual_changes WHERE schedule_id=? ORDER BY id DESC LIMIT 50').all(schedule.id);
+  return { schedule: decodeSchedule(schedule), rows: page.map(row => ({ ...row, pending_change: pending.find(c => c.actual_id === row.id) || null })), changes, can_approve: !!user.is_admin || publicUser(user).roles.includes('production_approver'), next: rows.length > 50 ? page.at(-1).id : null, actual_qty: actual, variance_qty: actual - schedule.qty, achievement_rate: schedule.qty ? Math.round(actual / schedule.qty * 1000) / 10 : null, can_write: canModify(user, schedule) || hasRole(user, 'production') };
 });
 route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const schedule = await actualSchedule(user, params.id, true);
   const date = dateStr(body.production_date, '생산일'); const qty = num(body.qty, '실제 생산량');
-  const end = schedule.period === 'day' ? schedule.start_date : (await db.prepare(`SELECT date(?,${schedule.period === 'week' ? "'+6 days'" : "'+1 month','-1 day'"}) AS end`).get(schedule.start_date)).end;
+  const end = await actualPeriodEnd(schedule);
   if (date < schedule.start_date || date > end) throw bad('생산일은 해당 계획의 기간 안에서 선택하세요.');
   if (date > today()) throw bad('아직 지나지 않은 날짜의 생산실적은 입력할 수 없습니다.');
   const key = reqStr(body.request_id, '실적 요청 번호', 80);
@@ -875,11 +883,89 @@ route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   try { const result = await db.prepare('INSERT INTO production_actuals(schedule_id,production_date,qty,note,author_id,author_name,request_id) VALUES(?,?,?,?,?,?,?)').run(schedule.id,date,qty,note,user.id,user.name,key); return db.prepare('SELECT * FROM production_actuals WHERE id=?').get(result.lastInsertRowid); }
   catch (error) { const saved = await db.prepare('SELECT * FROM production_actuals WHERE request_id=?').get(key); if (saved && matches(saved)) return saved; throw error; }
 });
-route('POST', '/api/schedules/:id/actuals/:actualId/void', async ({ user, params, body }) => {
-  await actualSchedule(user, params.id, true);
-  const row = await db.prepare('SELECT * FROM production_actuals WHERE id=? AND schedule_id=?').get(params.actualId,params.id);
+// Recorded actuals change only through a request approved by a production team lead (production_approver) or admin.
+async function actualPeriodEnd(schedule) {
+  return schedule.period === 'day' ? schedule.start_date : (await db.prepare(`SELECT date(?,${schedule.period === 'week' ? "'+6 days'" : "'+1 month','-1 day'"}) AS end`).get(schedule.start_date)).end;
+}
+async function requestActualChange(user, params, body, action) {
+  const schedule = await actualSchedule(user, params.id, true);
+  const row = await db.prepare('SELECT * FROM production_actuals WHERE id=? AND schedule_id=?').get(params.actualId, schedule.id);
   if (!row) throw new HttpError(404, '생산실적을 찾을 수 없습니다.');
-  await db.prepare('UPDATE production_actuals SET voided_at=?,voided_by=?,void_reason=? WHERE id=? AND voided_at IS NULL').run(now(),user.name,reqStr(body.reason,'취소 사유',500),row.id);
+  if (row.voided_at) throw bad('이미 취소된 생산실적입니다.');
+  const reason = reqStr(body.reason, action === 'void' ? '취소 사유' : '수정 사유', 500);
+  const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  let next = { date: null, qty: null, note: null };
+  if (action === 'edit') {
+    next = { date: dateStr(body.production_date ?? row.production_date, '생산일'), qty: num(body.qty ?? row.qty, '실제 생산량'), note: body.note === undefined ? row.note : str(body.note, 1000) };
+    if (next.date < schedule.start_date || next.date > await actualPeriodEnd(schedule)) throw bad('생산일은 해당 계획의 기간 안에서 선택하세요.');
+    if (next.date > today()) throw bad('아직 지나지 않은 날짜의 생산실적은 입력할 수 없습니다.');
+    if (next.date === row.production_date && next.qty === row.qty && next.note === row.note) throw bad('바뀐 내용이 없습니다.');
+  }
+  const same = c => c.actual_id === row.id && c.action === action && c.requested_by_id === user.id && c.new_date === next.date && c.new_qty === next.qty && c.new_note === next.note && c.reason === reason;
+  const old = await db.prepare('SELECT * FROM production_actual_changes WHERE request_id=?').get(key);
+  if (old) { if (!same(old)) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return { pending: old.status === 'pending', change: old }; }
+  if (await db.prepare("SELECT 1 FROM production_actual_changes WHERE actual_id=? AND status='pending'").get(row.id)) throw new HttpError(409, '이 실적에는 이미 승인 대기 중인 수정·취소 요청이 있습니다.');
+  try {
+    const r = await db.prepare('INSERT INTO production_actual_changes(actual_id,schedule_id,action,request_id,old_date,old_qty,old_note,new_date,new_qty,new_note,reason,requested_by_id,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(row.id, schedule.id, action, key, row.production_date, row.qty, row.note, next.date, next.qty, next.note, reason, user.id, user.name);
+    return { pending: true, change: await db.prepare('SELECT * FROM production_actual_changes WHERE id=?').get(r.lastInsertRowid) };
+  } catch (error) {
+    const saved = await db.prepare('SELECT * FROM production_actual_changes WHERE request_id=?').get(key);
+    if (saved && same(saved)) return { pending: true, change: saved };
+    if (await db.prepare("SELECT 1 FROM production_actual_changes WHERE actual_id=? AND status='pending'").get(row.id)) throw new HttpError(409, '이 실적에는 이미 승인 대기 중인 수정·취소 요청이 있습니다.');
+    throw error;
+  }
+}
+route('POST', '/api/schedules/:id/actuals/:actualId/void', async ({ user, params, body }) => requestActualChange(user, params, body, 'void'));
+route('POST', '/api/schedules/:id/actuals/:actualId/changes', async ({ user, params, body }) => requestActualChange(user, params, body, 'edit'));
+const actualChangeSelect = `SELECT c.*, s.product, s.spec, s.kind, s.period, s.start_date, COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit
+  FROM production_actual_changes c JOIN schedules s ON s.id=c.schedule_id`;
+route('GET', '/api/actual-changes', async ({ query }) => {
+  const where = [], args = [];
+  if (query.status) { if (!['pending','approved','rejected','cancelled'].includes(query.status)) throw bad('요청 상태를 확인하세요.'); where.push('c.status=?'); args.push(query.status); }
+  if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분을 확인하세요.'); where.push('s.kind=?'); args.push(query.kind); }
+  if (query.schedule_id) { if (!/^[1-9]\d*$/.test(query.schedule_id)) throw bad('일정 번호를 확인하세요.'); where.push('c.schedule_id=?'); args.push(Number(query.schedule_id)); }
+  return db.prepare(`${actualChangeSelect} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.id DESC LIMIT 200`).all(...args);
+});
+async function pendingChange(id) {
+  if (!/^[1-9]\d*$/.test(String(id))) throw bad('요청 번호를 확인하세요.');
+  const change = await db.prepare('SELECT * FROM production_actual_changes WHERE id=?').get(Number(id));
+  if (!change) throw new HttpError(404, '수정 요청을 찾을 수 없습니다.');
+  if (change.status !== 'pending') throw new HttpError(409, '이미 처리된 요청입니다.');
+  return change;
+}
+function requireActualApprover(user) {
+  if (!user.is_admin && !publicUser(user).roles.includes('production_approver')) throw new HttpError(403, '생산팀장(실적 수정 승인권자)만 승인·반려할 수 있습니다. 관리자에게 지정을 요청하세요.');
+}
+route('POST', '/api/actual-changes/:id/approve', async ({ user, params, body }) => {
+  requireActualApprover(user);
+  const change = await pendingChange(params.id); const stamp = now();
+  const actual = await db.prepare('SELECT * FROM production_actuals WHERE id=?').get(change.actual_id);
+  if (!actual || actual.voided_at || actual.production_date !== change.old_date || actual.qty !== change.old_qty || actual.note !== change.old_note) throw new HttpError(409, '요청 이후 실적이 바뀌었습니다. 반려하고 새로 요청하세요.');
+  if (change.action === 'edit' && change.new_date > today()) throw bad('아직 지나지 않은 날짜로는 승인할 수 없습니다.');
+  // The status guard runs first; the actual update only applies once that request is approved.
+  const results = await db.batch([
+    { sql: "UPDATE production_actual_changes SET status='approved',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'", args: [user.name, stamp, str(body.note, 500), change.id] },
+    change.action === 'edit'
+      ? { sql: "UPDATE production_actuals SET production_date=?,qty=?,note=?,corrected_at=?,corrected_by=? WHERE id=? AND voided_at IS NULL AND EXISTS(SELECT 1 FROM production_actual_changes WHERE id=? AND status='approved' AND reviewed_at=?)", args: [change.new_date, change.new_qty, change.new_note, stamp, user.name, change.actual_id, change.id, stamp] }
+      : { sql: "UPDATE production_actuals SET voided_at=?,voided_by=?,void_reason=? WHERE id=? AND voided_at IS NULL AND EXISTS(SELECT 1 FROM production_actual_changes WHERE id=? AND status='approved' AND reviewed_at=?)", args: [stamp, `${change.requested_by} (승인: ${user.name})`, change.reason, change.actual_id, change.id, stamp] },
+  ]);
+  if (!results[0].meta.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return db.prepare(`${actualChangeSelect} WHERE c.id=?`).get(change.id);
+});
+route('POST', '/api/actual-changes/:id/reject', async ({ user, params, body }) => {
+  requireActualApprover(user);
+  const change = await pendingChange(params.id);
+  const r = await db.prepare("UPDATE production_actual_changes SET status='rejected',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'").run(user.name, now(), reqStr(body.note, '반려 사유', 500), change.id);
+  if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return db.prepare(`${actualChangeSelect} WHERE c.id=?`).get(change.id);
+});
+route('POST', '/api/actual-changes/:id/cancel', async ({ user, params }) => {
+  const change = await pendingChange(params.id);
+  if (change.requested_by_id !== user.id && !user.is_admin) throw new HttpError(403, '요청한 사람만 철회할 수 있습니다.');
+  const r = await db.prepare("UPDATE production_actual_changes SET status='cancelled',reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'").run(user.name, now(), change.id);
+  if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
   return { ok: true };
 });
 
@@ -900,6 +986,7 @@ route('GET', '/api/dashboard', async () => {
     shipmentsToday: (await c('SELECT COUNT(*) c FROM shipments WHERE ship_date=?', t)),
     laundryMonth: (await db.prepare("SELECT COALESCE(SUM(discard_qty),0) c FROM laundry WHERE substr(in_date,1,7)=?").get(t.slice(0, 7))).c,
     schedulesToday: (await c("SELECT COUNT(*) c FROM schedules WHERE period='day' AND start_date=?", t)),
+    actualChangesPending: (await c("SELECT COUNT(*) c FROM production_actual_changes WHERE status='pending'")),
   };
 });
 

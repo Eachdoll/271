@@ -76,3 +76,60 @@ test('Actuals cannot be dated in the future; LOT can still be recorded after pro
 test('A malformed URL is a 400, not a server error', async () => {
   assert.equal((await staff('GET', '/api/po/%E0%A4%A')).status, 400);
 });
+
+test('Receipt actions by anyone leave a permanent named trail, and a quantity mismatch still creates the inspection', async () => {
+  const po = (await staff('POST', '/api/batches/purchase_order', { common: { req_no: 'PR-T', vendor: '공급사', due_date: '2026-11-20' }, items: [{ item: '트레일', qty: 12, item_category: '원자재' }], request_id: crypto.randomUUID() })).body.rows[0];
+  const r = await staff('POST', '/api/po/receive', { ids: [po.id], status: 'mismatch', recv_qty: 9, note: '3개 부족' });
+  assert.equal(r.body.analysis_created, 1);
+  const analysis = (await staff('GET', '/api/requests?type=analysis&scope=list')).body.find(x => x.source_id === po.id);
+  assert.equal(analysis.qty, 9); assert.equal(analysis.data.received_qty, 9);
+  await quality('POST', '/api/po/receive', { ids: [po.id], status: '' });
+  const trail = (await staff('GET', `/api/comments/purchase_order/${po.id}`)).body.rows.map(c => [c.author_name, c.content]);
+  assert.deepEqual(trail.map(t => t[0]), ['품질담당', '직원']);
+  assert.match(trail[1][1], /미입고 → 수량상이 · 실입고 9 \(발주 12\) · 3개 부족/);
+  assert.match(trail[0][1], /수량상이 → 미입고/);
+});
+
+test('Correcting or cancelling a recorded actual needs the production team lead; zero quantities are allowed', async () => {
+  const users = (await admin('GET', '/api/admin/users')).body;
+  const lead = client(), worker2 = client();
+  await approvedRegistration(admin, lead, { name: '생산팀장', password: 'password', invite: 'review-test' });
+  await approvedRegistration(admin, worker2, { name: '생산직원', password: 'password', invite: 'review-test' });
+  const all = (await admin('GET', '/api/admin/users')).body;
+  await admin('PUT', `/api/admin/users/${all.find(u => u.name === '생산팀장').id}`, { roles: ['production_approver'] });
+  await admin('PUT', `/api/admin/users/${all.find(u => u.name === '생산직원').id}`, { roles: ['production'] });
+  assert.ok(users.length < all.length);
+  const plan = (await worker2('POST', '/api/schedules', { kind: 'semi', period: 'month', start_date: '2026-10-01', product: '반제품', qty: 100 })).body;
+  const endpoint = `/api/schedules/${plan.id}/actuals`;
+  const zero = await worker2('POST', endpoint, { production_date: '2026-10-03', qty: 0, request_id: crypto.randomUUID() });
+  assert.equal(zero.status, 200);
+  const actual = (await worker2('POST', endpoint, { production_date: '2026-10-05', qty: 40, note: '1차', request_id: crypto.randomUUID() })).body;
+
+  const key = crypto.randomUUID();
+  const req = await worker2('POST', `${endpoint}/${actual.id}/changes`, { production_date: '2026-10-06', qty: 0, note: '정정', reason: '날짜·수량 오기', request_id: key });
+  assert.equal(req.status, 200); assert.equal(req.body.pending, true);
+  assert.equal((await worker2('POST', `${endpoint}/${actual.id}/changes`, { production_date: '2026-10-06', qty: 0, note: '정정', reason: '날짜·수량 오기', request_id: key })).body.change.id, req.body.change.id, 'retry is idempotent');
+  assert.equal((await worker2('GET', endpoint)).body.actual_qty, 40, 'unchanged until approved');
+  assert.equal((await worker2('POST', `${endpoint}/${actual.id}/void`, { reason: '중복' })).status, 409, 'one pending request per actual');
+  assert.equal((await worker2('POST', `/api/actual-changes/${req.body.change.id}/approve`, {})).status, 403, 'production staff cannot approve');
+  assert.equal((await staff('POST', `${endpoint}/${actual.id}/changes`, { qty: 1, reason: 'x' })).status, 403, 'only actual writers can request');
+  const approved = await lead('POST', `/api/actual-changes/${req.body.change.id}/approve`, { note: '확인' });
+  assert.equal(approved.status, 200); assert.equal(approved.body.status, 'approved'); assert.equal(approved.body.reviewed_by, '생산팀장');
+  assert.equal((await lead('POST', `/api/actual-changes/${req.body.change.id}/approve`, {})).status, 409);
+  let log = (await worker2('GET', endpoint)).body;
+  const edited = log.rows.find(r => r.id === actual.id);
+  assert.equal(edited.production_date, '2026-10-06'); assert.equal(edited.qty, 0); assert.equal(edited.corrected_by, '생산팀장');
+  assert.equal(log.actual_qty, 0); assert.equal(log.changes[0].old_qty, 40);
+
+  const v = await worker2('POST', `${endpoint}/${zero.body.id}/void`, { reason: '잘못 입력' });
+  assert.equal((await lead('POST', `/api/actual-changes/${v.body.change.id}/reject`, {})).status, 400, 'rejection needs a reason');
+  assert.equal((await lead('POST', `/api/actual-changes/${v.body.change.id}/reject`, { note: '실제 생산 없음 기록 유지' })).status, 200);
+  assert.equal((await worker2('GET', endpoint)).body.rows.find(r => r.id === zero.body.id).voided_at, null);
+  const c = await worker2('POST', `${endpoint}/${zero.body.id}/changes`, { qty: 5, reason: '수량 정정' });
+  assert.equal((await lead('POST', `/api/actual-changes/${c.body.change.id}/cancel`)).status, 403);
+  assert.equal((await worker2('POST', `/api/actual-changes/${c.body.change.id}/cancel`)).status, 200);
+  assert.equal((await worker2('GET', '/api/actual-changes?status=pending')).body.length, 0);
+  const future = new Date(); future.setUTCDate(future.getUTCDate() + 40);
+  assert.equal((await worker2('POST', `${endpoint}/${zero.body.id}/changes`, { production_date: future.toISOString().slice(0, 10), reason: '미래' })).status, 400);
+  assert.equal((await worker2('POST', `${endpoint}/${zero.body.id}/changes`, { reason: '변경 없음' })).status, 400);
+});

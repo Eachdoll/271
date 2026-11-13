@@ -90,8 +90,10 @@ test('Multiple production plans preserve BOM snapshots per size and actual produ
  await staff('PUT',`/api/schedules/${row.id}`,{toggle_done:true});assert.equal((await staff('GET',endpoint)).body.actual_qty,115);
  assert.equal((await staff('POST',endpoint,{production_date:'2026-11-16',qty:1,request_id:crypto.randomUUID()})).status,400);
  assert.equal((await staff('POST',endpoint,{production_date:'2026-11-12',qty:-1,request_id:crypto.randomUUID()})).status,400);
- const log=totals.rows[0];assert.equal((await staff('POST',`${endpoint}/${log.id}/void`,{reason:'중복 입력 취소'})).status,200);
- assert.equal((await staff('POST',`${endpoint}/${log.id}/void`,{reason:'다시 취소'})).status,200);
+ const log=totals.rows[0];const voidRequest=await staff('POST',`${endpoint}/${log.id}/void`,{reason:'중복 입력 취소'});assert.equal(voidRequest.status,200);assert.equal(voidRequest.body.pending,true);
+ assert.equal((await staff('GET',endpoint)).body.actual_qty,115,'a cancellation waits for the production lead');
+ assert.equal((await staff('POST',`${endpoint}/${log.id}/void`,{reason:'다시 취소'})).status,409);
+ assert.equal((await admin('POST',`/api/actual-changes/${voidRequest.body.change.id}/approve`,{})).status,200);
  totals=(await staff('GET',endpoint)).body;assert.equal(totals.actual_qty,60);assert.equal(totals.rows.length,2);assert.equal(totals.rows.find(r=>r.id===log.id).void_reason,'중복 입력 취소');
  assert.equal((await staff('DELETE',`/api/schedules/${row.id}`)).status,400);
  assert.equal((await staff('PUT',`/api/items/schedule/${row.id}`,{spec:'XL',unit:'BOX'})).status,400);
