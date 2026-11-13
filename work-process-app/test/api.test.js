@@ -48,7 +48,9 @@ test('발주 → 물류 입고확인 색상 상태', async () => {
   const list = (await admin('GET', '/api/po')).body;
   assert.equal(list.find((p) => p.id === a.id).recv_status, 'ok');
   const pb = list.find((p) => p.id === b.id); assert.equal(pb.recv_status, 'mismatch'); assert.equal(pb.recv_qty, 45);
-  await user('POST', '/api/po/receive', { ids: [b.id], status: 'checking' });
+  assert.equal((await user('POST', '/api/po/receive', { ids: [b.id], status: 'checking' })).status, 409, '기록된 입고 수량은 승인 요청으로만 변경');
+  const c = (await admin('POST', '/api/po', { item_category: '부자재', req_no: 'PR-003', vendor: 'C상사', item: '마스크', qty: 30, due_date: '2026-11-22' })).body;
+  await user('POST', '/api/po/receive', { ids: [c.id], status: 'checking' });
   assert.equal((await admin('GET', '/api/po?recv=checking')).body.length, 1);
 });
 

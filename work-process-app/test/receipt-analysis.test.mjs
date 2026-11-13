@@ -32,20 +32,21 @@ before(async () => {
 });
 after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 
-test('Only confirmed purchase receipts enter the analysis work list immediately', async () => {
+test('Confirmed and quantity-mismatch receipts enter the analysis work list immediately; checking does not', async () => {
   const order = await receiver('POST', '/api/po', orderBody('trigger'));
   assert.equal((await analyses()).length, 0);
   assert.equal((await receiver('POST', '/api/po/receive', { ids: [order.body.id], status: 'checking' })).status, 200);
   assert.equal((await analyses()).length, 0);
-  assert.equal((await receiver('POST', '/api/po/receive', { ids: [order.body.id], status: 'mismatch', recv_qty: 10 })).status, 200);
-  assert.equal((await analyses()).length, 0);
+  const mismatch = await receiver('POST', '/api/po/receive', { ids: [order.body.id], status: 'mismatch', recv_qty: 10 });
+  assert.equal(mismatch.status, 200); assert.equal(mismatch.body.analysis_created, 1);
   const result = await receiver('POST', '/api/po/receive', { ids: [order.body.id], status: 'ok' });
-  assert.equal(result.status, 200); assert.equal(result.body.analysis_created, 1);
+  assert.equal(result.status, 200); assert.equal(result.body.analysis_created, 0, 'later confirmation does not duplicate the inspection');
+  assert.equal((await analyses()).length, 1);
   const row = (await analyses())[0];
   assert.equal(row.status, 'waiting'); assert.equal(row.category, '수입검사'); assert.match(row.req_no, /^Q-\d{6}-\d+$/);
   assert.equal(row.source_type, 'purchase_order'); assert.equal(row.source_id, order.body.id);
   assert.equal(row.title, order.body.item); assert.equal(row.customer, '공급사'); assert.equal(row.requester_name, '입고담당');
-  assert.equal(row.data.received_qty, 12); assert.equal(row.data.item_category, '원자재');
+  assert.equal(row.data.received_qty, 10, 'snapshot keeps the quantity actually received at inspection time'); assert.equal(row.data.item_category, '원자재');
   assert.equal(row.data.coa_requested, 1); assert.equal(row.data.result_type, 'COA발행');
   assert.equal(row.data.purchase_req_no, 'PR-trigger');
   assert.equal((await receiver('GET', '/api/requests?type=analysis&scope=intake')).body.length, 0);
@@ -62,7 +63,12 @@ test('Repeated, concurrent and reverted confirmations do not duplicate or reset 
   assert.equal(rows.length, 2); assert.equal(new Set(rows.map(r => r.req_no)).size, 2);
   const row = rows[0];
   assert.equal((await admin('POST', '/api/requests/' + row.id + '/status', { status: 'done', result_note: '검사 완료' })).status, 200);
-  await receiver('POST', '/api/po/receive', { ids, status: '' });
+  assert.equal((await receiver('POST', '/api/po/receive', { ids, status: '' })).status, 409, 'reverting a recorded receipt needs approval');
+  for (const id of ids) {
+    const req = await receiver('POST', `/api/po/${id}/receipt-changes`, { action: 'revert', reason: '오입력' });
+    assert.equal((await admin('POST', `/api/receipt-changes/${req.body.change.id}/approve`, {})).status, 200);
+  }
+  assert.ok((await receiver('GET', '/api/po')).body.filter(p => ids.includes(p.id)).every(p => p.recv_status === ''));
   const repeated = await receiver('POST', '/api/po/receive', { ids, status: 'ok' });
   assert.equal(repeated.body.analysis_created, 0);
   rows = await analyses();
