@@ -1064,6 +1064,34 @@ route('POST', '/api/actual-changes/:id/cancel', async ({ user, params }) => {
 
 route('GET', '/api/reports', async ({ query }) => buildReport(db, query, today()));
 
+// ── 내가 처리할 일: 내가 승인할 수 있는 대기 건과 내가 올린 요청의 상태 ──
+route('GET', '/api/my-tasks', async ({ user }) => {
+  const roles = publicUser(user).roles;
+  const approvals = { requests: {} };
+  for (const type of Object.keys(REQUEST_TYPES)) {
+    if (!isRequestApprover(user, type)) continue;
+    const count = (await db.prepare("SELECT COUNT(*) c FROM requests WHERE type=? AND status='pending'").get(type)).c;
+    const items = count ? await db.prepare("SELECT id,title,customer,requester_name,created_at FROM requests WHERE type=? AND status='pending' ORDER BY id LIMIT 5").all(type) : [];
+    approvals.requests[type] = { count, items };
+  }
+  if (user.is_admin || roles.includes('production_approver')) {
+    const items = await db.prepare(`${actualChangeSelect} WHERE c.status='pending' ORDER BY c.id LIMIT 50`).all();
+    approvals.actual_changes = { count: items.length, finished: items.filter(c => c.kind === 'finished').length, semi: items.filter(c => c.kind === 'semi').length, items: items.slice(0, 5) };
+  }
+  if (user.is_admin || roles.includes('logistics_approver')) {
+    const items = await db.prepare(`${receiptChangeSelect} WHERE c.status='pending' ORDER BY c.id LIMIT 50`).all();
+    approvals.receipt_changes = { count: items.length, items: items.slice(0, 5) };
+  }
+  // My own requests still waiting, plus rejections from the last 7 days so the requester notices them.
+  const recent = "(c.status='pending' OR (c.status='rejected' AND c.reviewed_at>=date('now','+9 hours','-7 days')))";
+  const mine = {
+    requests: await db.prepare("SELECT id,type,status,title,reject_reason,approver_name,created_at FROM requests WHERE requester_id=? AND status IN ('pending','rejected') ORDER BY id DESC LIMIT 20").all(user.id),
+    actual_changes: await db.prepare(`${actualChangeSelect} WHERE c.requested_by_id=? AND ${recent} ORDER BY c.id DESC LIMIT 20`).all(user.id),
+    receipt_changes: await db.prepare(`${receiptChangeSelect} WHERE c.requested_by_id=? AND ${recent} ORDER BY c.id DESC LIMIT 20`).all(user.id),
+  };
+  return { approvals, mine };
+});
+
 // ── 대시보드 ──
 route('GET', '/api/dashboard', async () => {
   const c = async (sql, ...a) => (await db.prepare(sql).get(...a)).c;

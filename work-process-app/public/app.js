@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.3';
+const APP_VERSION = '15.4';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -49,9 +49,18 @@ async function api(method, url, body) {
   return data;
 }
 function toast(msg, kind = 'ok') {
-  const t = $('#toast'); t.textContent = msg; t.className = 'show ' + kind;
-  clearTimeout(toast._t); toast._t = setTimeout(() => (t.className = ''), 2600);
+  const t = $('#toast'); clearTimeout(toast._t);
+  if (kind === 'err') {
+    // Errors often say what to do next, so they stay until dismissed (or the next message / page change).
+    t.innerHTML = `<span>${esc(msg)}</span><button type="button" aria-label="닫기">×</button>`;
+    t.className = 'show err'; t.onclick = hideToast;
+  } else {
+    t.textContent = msg; t.className = 'show ' + kind; t.onclick = null;
+    toast._t = setTimeout(hideToast, 2600);
+  }
 }
+function hideToast() { const t = $('#toast'); if (t) t.className = ''; }
+window.addEventListener('hashchange', hideToast);
 const fail = (e) => toast(e.message || String(e), 'err');
 const userHasRole = (user, r) => user.roles.includes(r) || (['quality','dev'].includes(r) && user.roles.includes(r + '_approver'));
 const hasRole = (r) => ME && (ME.is_admin || userHasRole(ME, r));
@@ -136,21 +145,30 @@ function lightbox(src) { modal(`<img class="lightbox" src="${esc(src)}" alt="사
 
 const INSPECTION = { unchecked: '미판정', normal: '이상 없음', abnormal: '이상 있음' };
 function inspectionBadge(row) { return `<span class="chip ${row.inspection_status === 'abnormal' ? 'red' : row.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[row.inspection_status] || '미판정'}</span>${row.photo_count ? ` <span class="small muted">사진 ${row.photo_count}장</span>` : ''}`; }
-function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><span class="muted small">사진을 눌러 크게 확인할 수 있습니다.</span><div class="thumbs" data-photo-preview></div></label>'; }
+function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><input data-photo-camera type="file" accept="image/*" capture="environment" hidden><span class="photo-tools"><button type="button" class="btn small" data-photo-shoot>📷 바로 촬영</button> <span class="muted small">촬영한 사진은 이어서 추가됩니다. 사진을 눌러 크게 보고, ×로 뺄 수 있습니다.</span></span><div class="thumbs" data-photo-preview></div></label>'; }
 function bindPhotoDraft(form, initial = []) {
   const state = { photos: [...initial], busy: false };
   const input = $('[data-photo-input]', form); const preview = $('[data-photo-preview]', form);
-  const show = () => { if (!preview) return; preview.innerHTML = state.photos.map(src => `<img src="${esc(src)}" alt="첨부 미리보기">`).join(''); $$('img', preview).forEach(image => image.onclick = event => { event.preventDefault(); event.stopPropagation(); lightbox(image.src); }); };
-  if (input) input.onchange = async () => {
+  const camera = $('[data-photo-camera]', form); const shoot = $('[data-photo-shoot]', form);
+  const show = () => {
+    if (!preview) return;
+    preview.innerHTML = state.photos.map((src, i) => `<span class="thumb"><img src="${esc(src)}" alt="첨부 미리보기"><button type="button" data-photo-remove="${i}" aria-label="이 사진 빼기">×</button></span>`).join('');
+    $$('img', preview).forEach(image => image.onclick = event => { event.preventDefault(); event.stopPropagation(); lightbox(image.src); });
+    $$('[data-photo-remove]', preview).forEach(button => button.onclick = event => { event.preventDefault(); event.stopPropagation(); if (state.busy) return; state.photos.splice(Number(button.dataset.photoRemove), 1); if (input) input.value = ''; show(); });
+  };
+  // Picking from the gallery replaces the selection; camera shots are appended one by one.
+  const take = async (source, append) => {
     const submit = $('button[type=submit], button.primary', form);
     state.busy = true; if (submit) submit.disabled = true;
     try {
-      if (input.files.length > 10) throw new Error('사진은 최대 10장까지 선택하세요.');
-      const photos = await Promise.all([...input.files].map(file => resizeImage(file)));
-      state.photos = photos; show();
-    } catch (error) { fail(error); input.value = ''; }
-    finally { state.busy = false; if (submit) submit.disabled = false; }
+      if ((append ? state.photos.length : 0) + source.files.length > 10) throw new Error('사진은 최대 10장까지 첨부할 수 있습니다.');
+      const photos = await Promise.all([...source.files].map(file => resizeImage(file)));
+      state.photos = append ? state.photos.concat(photos) : photos; show();
+    } catch (error) { fail(error); }
+    finally { if (append || !state.photos.length) source.value = ''; state.busy = false; if (submit) submit.disabled = false; }
   };
+  if (input) input.onchange = () => take(input, false);
+  if (camera && shoot) { shoot.onclick = event => { event.preventDefault(); if (!state.busy) camera.click(); }; camera.onchange = () => { if (camera.files.length) take(camera, true); }; }
   state.reset = () => { state.photos = []; if (input) input.value = ''; show(); };
   show(); return state;
 }
@@ -248,6 +266,7 @@ function shell() {
 async function render() {
   if (!ME) return pageAuth();
   shell();
+  refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
   try { await page($('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   window.scrollTo(0, 0);
@@ -282,12 +301,60 @@ function pageAuth(mode = 'login', notice = '') {
 }
 
 // ───────────── 홈: 대시보드 + 업무흐름 ─────────────
+// ── 내가 처리할 일: 승인 대기 배지와 대시보드 카드 ──
+function taskBadgeCounts(tasks) {
+  const counts = {}; const a = tasks.approvals;
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) counts[REQ[type].intake] = group.count;
+  if (a.actual_changes?.finished) counts['#/prod/finished'] = a.actual_changes.finished;
+  if (a.actual_changes?.semi) counts['#/prod/semi'] = a.actual_changes.semi;
+  if (a.receipt_changes?.count) counts['#/logistics/receive'] = a.receipt_changes.count;
+  return counts;
+}
+async function refreshNavBadges() {
+  try {
+    const counts = taskBadgeCounts(await api('GET', '/api/my-tasks'));
+    $$('.side a').forEach(link => {
+      $('.nav-badge', link)?.remove();
+      const n = counts[link.getAttribute('href')];
+      if (n) link.insertAdjacentHTML('beforeend', ` <span class="nav-badge" title="내가 승인할 대기 ${n}건">${n}</span>`);
+    });
+  } catch { /* badges are a convenience; the pages still work without them */ }
+}
+function tasksCard(tasks) {
+  const a = tasks.approvals, m = tasks.mine; const todo = [], mine = [];
+  const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
+  if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
+  if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
+  const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
+  for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
+  for (const c of m.actual_changes) mine.push(`<li>${state(c)} <a href="${c.kind === 'semi' ? '#/prod/semi' : '#/prod/finished'}">생산실적 · ${esc(c.product)}</a> <span class="small">${changeSummary(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes;
+  return `<div class="card tasks"><h3>내가 처리할 일</h3><div class="tasks-grid">
+    ${canApprove ? `<section><h4>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h4>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
+    <section><h4>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h4>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
+  </div></div>`;
+}
+
+// 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
+function labelGridTables() {
+  $$('table.grid:not([data-labeled])').forEach(table => {
+    table.dataset.labeled = 'true';
+    if (!table.classList.contains('keep-table')) table.classList.add('cards'); // small numeric tables opt out with keep-table
+    const heads = $$('thead th', table).map(th => th.textContent.trim());
+    $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
+  });
+}
+new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
+
 async function pageHome(main) {
-  const d = await api('GET', '/api/dashboard');
+  const [d, tasks] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks')]);
   const r = d.requests;
   const flow = (title, steps) => `<div class="flow"><h4>${title}</h4><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
   main.innerHTML = `
   <h1>대시보드 <span class="muted small">${d.today} (${dow(d.today)})</span></h1>
+  ${tasksCard(tasks)}
   <div class="kpis">
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
@@ -302,7 +369,7 @@ async function pageHome(main) {
     <a class="kpi" href="#/purchase/laundry"><b>${fmtNum(d.laundryMonth)}</b><span>이번달 세탁 폐기</span></a>
   </div>
   <h2>진행 현황</h2>
-  <div class="table-wrap"><table class="grid">
+  <div class="table-wrap"><table class="grid keep-table">
     <thead><tr><th>구분</th><th>접수대기</th><th>대기</th><th>진행</th><th>완료</th></tr></thead>
     <tbody>${['analysis', 'development', 'sample', 'voc'].map((t) => `<tr><td><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></td><td>${r[t].pending}</td><td>${r[t].waiting}</td><td>${r[t].progress}</td><td>${r[t].done}</td></tr>`).join('')}</tbody>
   </table></div>
