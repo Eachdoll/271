@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.28';
+const APP_VERSION = '15.30';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -268,7 +268,7 @@ const PAGES = {
 function shell() {
   const cur = location.hash === '#/logistics/other' ? '#/logistics/receive' : location.hash || '#/';
   const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`).join('')}</div>`).join('')
-    + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a><a href="#/admin/bom" class="${cur === '#/admin/bom' ? 'active' : ''}">BOM 관리</a></div>` : '');
+    + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a><a href="#/admin/bom" class="${cur === '#/admin/bom' ? 'active' : ''}">제품등록</a></div>` : '');
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   $('#app').innerHTML = `
   <header class="top">
@@ -958,11 +958,11 @@ function bomMaterialRow(material = {}) {
   return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'yd')}" placeholder="yd" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
 }
 function bomForm(bom = {}) {
-  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>1차 분류<input name="cat1" maxlength="50" list="bomCat1" value="${esc(bom.cat1)}" placeholder="예) 글러브"></label><label>2차 분류<input name="cat2" maxlength="50" list="bomCat2" value="${esc(bom.cat2)}" placeholder="예) 니트릴"></label><label>3차 분류<input name="cat3" maxlength="50" list="bomCat3" value="${esc(bom.cat3)}" placeholder="예) 12인치"></label><datalist id="bomCat1"></datalist><datalist id="bomCat2"></datalist><datalist id="bomCat3"></datalist><label>반제품 종류 <span class="hint">(분류가 반제품일 때)</span><select name="semi_type"><option value="">해당 없음</option>${[['부직포와이퍼', '와이퍼 · 부직포와이퍼'], ['천와이퍼', '와이퍼 · 천와이퍼'], ['스무드', '심리스글러브 · 스무드'], ['타키', '심리스글러브 · 타키']].map(([value, label]) => `<option value="${value}" ${bom.semi_type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 반제품에 <b>반제품 종류</b>를 지정하면 커팅/융착·세탁 입력에서 그 종류의 품목(모델)으로 나오고, 구성자재를 넣으면 생산량만큼 자재 재고가 차감됩니다. 1차·2차·3차 분류는 선택이며, 이미 쓴 값이 자동완성으로 나옵니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
+  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>1차 분류<select name="cat1" data-cat-level="1"></select></label><label>2차 분류 <span class="hint">(선택)</span><select name="cat2" data-cat-level="2"></select></label><label>3차 분류 <span class="hint">(선택)</span><select name="cat3" data-cat-level="3"></select></label><p class="span3 small" data-cat-kind role="status"></p><div class="span3 semi-use" data-semi-use><label class="inline"><input type="checkbox" name="semi_enabled" ${bom.semi_type && bom.item_category !== '반제품' ? 'checked' : ''}> 반제품으로도 사용 <span class="hint">(커팅/융착·세탁에서 이 제품코드를 고릅니다)</span></label><div class="form-grid" data-semi-fields><label>생산 종류 *<select name="semi_type"><option value="">선택</option>${Object.entries(SEMI_KIND_LABEL).map(([v, l]) => `<option value="${v}" ${bom.semi_type === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>생산 기록 단위 *<input name="semi_unit" maxlength="20" list="unitSuggestions" value="${esc(bom.semi_unit || '')}" placeholder="예) 매 / 켤레"></label><label data-pack-row>단위 환산 * <span class="hint" data-pack-text></span><input name="pack_qty" type="number" min="0.000001" step="any" value="${esc(bom.pack_qty ?? '')}" placeholder="예) 1000"></label></div><p class="small muted" data-semi-note></p></div><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 1차·2차·3차 세부 분류는 「분류 관리」에서 미리 만든 것 중에서 고릅니다. 반제품은 생산 종류가 지정된 분류(예: 와이퍼 › 천와이퍼)를 고르고 제품코드를 넣으면 커팅/융착·세탁 입력에서 바로 고를 수 있습니다. 반제품에 구성자재를 넣으면 생산량만큼 자재 재고가 차감됩니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">저장</button></div></form>`;
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>BOM · 품목코드 관리</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 분류하고, 필요하면 1차·2차·3차 분류까지 지정합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="tablist">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
   const load = async () => {
     if (!main.isConnected) return;
@@ -970,29 +970,27 @@ async function pageBoms(main) {
     const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, boms.length);
-    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.semi_type ? ` <span class="chip green">반제품 종류: ${esc(bom.semi_type)}</span>` : ''}${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
-    const edit = bom => {
-      const box = modal(`<h3>${bom ? 'BOM 수정' : '새 BOM 등록'}</h3>${bomForm(bom)}`, { wide: true });
+    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span>` : ''}${bom.sizes?.length ? ` <span class="chip">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    const edit = async bom => {
+      let nodes; try { nodes = await api('GET', '/api/item-categories'); } catch (error) { fail(error); return; }
+      const box = modal(`<h3>${bom ? (bom.is_temp ? '정식 코드로 확정' : '제품 수정') : '새 제품 등록'}</h3>${bomForm(bom)}`, { wide: true });
       const form = $('form', box.el); const rows = $('[data-material-rows]', form);
-      // Suggest category values already in use; lower levels narrow to the level above.
-      api('GET', '/api/boms/categories').then(cats => {
-        const fill = () => { const uniq = list => [...new Set(list.filter(Boolean))].map(v => `<option value="${esc(v)}">`).join('');
-          $('#bomCat1', form).innerHTML = uniq(cats.map(c => c.cat1));
-          $('#bomCat2', form).innerHTML = uniq(cats.filter(c => !form.cat1.value || c.cat1 === form.cat1.value).map(c => c.cat2));
-          $('#bomCat3', form).innerHTML = uniq(cats.filter(c => (!form.cat1.value || c.cat1 === form.cat1.value) && (!form.cat2.value || c.cat2 === form.cat2.value)).map(c => c.cat3)); };
-        fill(); form.cat1.oninput = fill; form.cat2.oninput = fill;
-      }).catch(() => {});
+      const picker = bindCategoryPicker(form, nodes, bom || {});
+
       $('[data-material-add]', form).onclick = () => rows.insertAdjacentHTML('beforeend', bomMaterialRow());
       rows.onclick = event => { const button = event.target.closest('[data-material-remove]'); if (button) button.closest('tr').remove(); };
       form.onsubmit = async event => {
-        event.preventDefault(); const button = $('button.primary', form); button.disabled = true;
-        const values = formObj(form);
+        event.preventDefault();
+        const problem = picker.problem(); if (problem) { toast(problem, 'err'); return; }
+        const button = $('button.primary', form); button.disabled = true;
+        const values = { ...formObj(form), cat1: form.elements.cat1.value, cat2: form.elements.cat2.value, cat3: form.elements.cat3.value }; // empty levels are disabled selects but must still be sent
         const materials = $$('[data-material-row]', form).map(row => ({ item: $('[data-material-item]', row).value, item_category: $('[data-material-category]', row).value, qty: $('[data-material-qty]', row).value, unit: $('[data-material-unit]', row).value }));
-        try { await api(bom ? 'PUT' : 'POST', '/api/boms' + (bom ? '/' + bom.id : ''), { ...values, active: form.elements.active.checked, materials }); box.close(); toast('BOM을 저장했습니다.'); await load(); refreshNavBadges(); }
+        try { await api(bom ? 'PUT' : 'POST', '/api/boms' + (bom ? '/' + bom.id : ''), { ...values, active: form.elements.active.checked, materials }); box.close(); toast('저장했습니다.'); await load(); refreshNavBadges(); }
         catch (error) { fail(error); } finally { button.disabled = false; }
       };
     };
     $('#newBom').onclick = () => edit();
+    $('#catManage').onclick = () => manageItemCategories(filterForm.elements.item_category.value || '원자재');
     $$('[data-bom-merge]', main).forEach(button => button.onclick = async () => {
       const temp = boms.find(bom => bom.id === Number(button.dataset.bomMerge));
       const targets = (await api('GET', '/api/boms')).filter(bom => bom.id !== temp.id);
@@ -1008,6 +1006,101 @@ async function pageBoms(main) {
     });
   };
   bindListControls(filterForm, load);
+  const tabs = $('#bomClassTabs', main), classSelect = filterForm.elements.item_category;
+  const markTab = () => $$('[data-class-tab]', tabs).forEach(b => b.classList.toggle('on', b.dataset.classTab === classSelect.value));
+  $$('[data-class-tab]', tabs).forEach(b => b.onclick = () => { classSelect.value = b.dataset.classTab; markTab(); classSelect.dispatchEvent(new Event('change', { bubbles: true })); });
+  classSelect.addEventListener('change', markTab); markTab();
+  await load();
+}
+
+// ── 제품등록: 미리 만든 세부 분류에서 고르기 ──
+const SEMI_KIND_LABEL = { '부직포와이퍼': '와이퍼 · 부직포와이퍼', '천와이퍼': '와이퍼 · 천와이퍼', '스무드': '심리스글러브 · 스무드', '타키': '심리스글러브 · 타키' };
+function bindCategoryPicker(form, nodes, bom) {
+  const classSelect = form.elements.item_category, selects = [1, 2, 3].map(level => form.elements['cat' + level]), hint = $('[data-cat-kind]', form);
+  // An older 반제품 that only had a kind starts on the matching prepared path.
+  let start = [bom.cat1 || '', bom.cat2 || '', bom.cat3 || ''];
+  if (!start[0] && bom.semi_type) { const node = nodes.find(n => n.item_class === '반제품' && n.active && n.semi_type === bom.semi_type); if (node) { const parent = nodes.find(n => n.id === node.parent_id); start = node.level === 2 && parent ? [parent.name, node.name, ''] : [node.name, '', '']; } }
+  const childrenOf = (level, parentId) => nodes.filter(n => n.item_class === classSelect.value && n.level === level && (n.parent_id || 0) === parentId);
+  const chosen = () => { const path = []; let parent = 0; for (const [i, select] of selects.entries()) { const node = childrenOf(i + 1, parent).find(n => n.name === select.value); if (!node) break; path.push(node); parent = node.id; } return path; };
+  const fill = (level, wanted) => {
+    const parent = level === 1 ? 0 : chosen()[level - 2]?.id; const select = selects[level - 1];
+    const options = parent === undefined ? [] : childrenOf(level, parent).filter(n => n.active || n.name === wanted);
+    select.innerHTML = `<option value="">${!classSelect.value ? '품목 분류를 먼저 선택' : parent === undefined ? '상위 분류를 먼저 선택' : options.length ? '선택 안 함' : '하위 분류 없음'}</option>` + options.map(n => `<option value="${esc(n.name)}">${esc(n.name)}${n.active ? '' : ' (사용 중지)'}</option>`).join('');
+    select.value = options.some(n => n.name === wanted) ? wanted : ''; select.disabled = !options.length;
+  };
+  const kind = () => chosen().reduce((found, n) => n.semi_type || found, '');
+  const update = () => {
+    const semi = classSelect.value === '반제품', type = kind();
+    form.elements.product_code.required = semi; form.elements.product_code.closest('label').firstChild.textContent = semi ? '품목코드 * ' : '품목코드';
+    hint.className = 'span3 small ' + (semi && !type ? 'red-text' : 'muted');
+    hint.textContent = !classSelect.value ? '품목 분류를 먼저 고르면 세부 분류가 나옵니다.' : semi ? (type ? `커팅/융착·세탁 입력에서 「${SEMI_KIND_LABEL[type] || type}」 품목으로 고를 수 있습니다. 제품코드는 필수입니다.` : '반제품은 생산 종류가 지정된 분류를 골라야 커팅/융착·세탁에서 고를 수 있습니다. (분류 관리에서 지정)') : '';
+  };
+  const refresh = (from, values) => { for (let level = from; level <= 3; level++) fill(level, values[level - 1]); update(); };
+  classSelect.addEventListener('change', () => { refresh(1, ['', '', '']); if (form.elements.kind) form.elements.kind.value = classSelect.value === '반제품' ? 'semi' : 'finished'; });
+  selects.forEach((select, i) => select.onchange = () => refresh(i + 2, selects.map(s => s.value)));
+  refresh(1, start);
+  // '반제품으로도 사용': kind, production unit and box conversion for items that are not 반제품.
+  const use = $('[data-semi-use]', form), on = form.elements.semi_enabled, fields = $('[data-semi-fields]', form);
+  const unitInput = form.elements.unit, semiUnit = form.elements.semi_unit, pack = form.elements.pack_qty, packRow = $('[data-pack-row]', form);
+  const syncUse = () => {
+    const show = classSelect.value && classSelect.value !== '반제품'; use.hidden = !show; on.disabled = !show;
+    const active = show && on.checked; fields.hidden = !active;
+    for (const el of [form.elements.semi_type, semiUnit, pack]) el.disabled = !active;
+    form.elements.semi_type.required = semiUnit.required = active;
+    if (active && !semiUnit.value) semiUnit.value = ['스무드', '타키'].includes(form.elements.semi_type.value) ? '켤레' : '매';
+    const differs = active && semiUnit.value.trim() && semiUnit.value.trim() !== unitInput.value.trim();
+    packRow.hidden = !differs; pack.disabled = !differs; pack.required = !!differs;
+    $('[data-pack-text]', form).textContent = differs ? `(1 ${unitInput.value || '단위'} = 몇 ${semiUnit.value}?)` : '';
+    $('[data-semi-note]', form).textContent = active ? `발주·출하는 ${unitInput.value || '생산 단위'}, 커팅/융착·세탁 기록은 ${semiUnit.value || '생산 기록 단위'}로 남습니다.${differs ? ' 재고 화면에서 두 단위를 서로 환산해 보여 줍니다.' : ''}` : '';
+    if (active) { form.elements.product_code.required = true; form.elements.product_code.closest('label').firstChild.textContent = '품목코드 * '; }
+  };
+  on.addEventListener('change', syncUse); form.elements.semi_type.addEventListener('change', () => { if (['스무드', '타키'].includes(form.elements.semi_type.value) && semiUnit.value === '매') semiUnit.value = '켤레'; else if (!['스무드', '타키'].includes(form.elements.semi_type.value) && semiUnit.value === '켤레') semiUnit.value = '매'; syncUse(); });
+  semiUnit.addEventListener('input', syncUse); unitInput.addEventListener('input', syncUse); classSelect.addEventListener('change', syncUse); syncUse();
+  return { problem: () => classSelect.value === '반제품' && !kind() ? '반제품은 생산 종류가 지정된 분류(예: 와이퍼 › 천와이퍼)를 선택하세요.' : '' };
+}
+
+// ── 제품등록: 세부 분류 관리 (관리자) ──
+async function manageItemCategories(startClass = '원자재') {
+  let nodes = [], current = ITEM_CATEGORIES.includes(startClass) ? startClass : '원자재';
+  const box = modal(`<h3>분류 관리</h3><p class="small muted">품목 분류마다 1차·2차·3차 세부 분류를 미리 만들어 두면 제품등록에서 고를 수 있습니다(2·3차는 없어도 됩니다). 방진복처럼 사이즈가 정해진 분류에는 사이즈 묶음을 넣으면, 그 아래 품목은 발주·기타입고·출하에서 사이즈별 수량으로 한 번에 입력합니다. 이름을 바꾸면 그 분류로 등록된 품목에도 반영됩니다. 쓰지 않는 분류는 사용 중지하면 새 등록에서만 빠집니다. 반제품 분류에는 커팅/융착·세탁에서 쓸 생산 종류를 지정합니다(하위 분류는 물려받음).</p><div class="seg class-tabs" data-cat-tabs>${ITEM_CATEGORIES.map(c => `<button type="button" data-cat-tab="${c}">${c}</button>`).join('')}</div><div data-cat-tree></div><div class="actions"><button type="button" class="btn" data-cat-close>닫기</button><button type="button" class="btn primary" data-cat-add-root>1차 분류 추가</button></div>`, { wide: true });
+  const tree = $('[data-cat-tree]', box.el);
+  const sizeField = value => `<label>사이즈 묶음 <span class="hint">(쉼표로 구분 · 비우면 상위 분류를 따름)</span><input name="sizes" maxlength="200" value="${esc(value)}" placeholder="예) XS,S,M,L,XL"></label><div class="actions wrap" style="justify-content:flex-start;margin-top:0">${['XS,S,M,L,XL', 'S,M,L,XL,2XL', 'XS,S,M,L,XL,2XL,3XL'].map(v => `<button type="button" class="btn small" data-size-preset="${v}">${v.split(',')[0]}~${v.split(',').at(-1)}</button>`).join('')}</div>`;
+  box.el.ownerDocument.addEventListener('click', event => { const b = event.target.closest('[data-size-preset]'); if (b) b.closest('form').elements.sizes.value = b.dataset.sizePreset; });
+  const kindSelect = value => `<label>생산 종류 <span class="hint">(커팅/세탁에서 고를 종류, 비우면 상위 분류를 따름)</span><select name="semi_type"><option value="">지정 안 함</option>${Object.entries(SEMI_KIND_LABEL).map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
+  const draw = () => {
+    $$('[data-cat-tab]', box.el).forEach(b => b.classList.toggle('on', b.dataset.catTab === current));
+    const branch = (parentId, level) => {
+      const list = nodes.filter(n => n.item_class === current && (n.parent_id || 0) === parentId && n.level === level);
+      if (!list.length) return level === 1 ? '<p class="muted">아직 세부 분류가 없습니다. 「1차 분류 추가」로 시작하세요.</p>' : '';
+      return `<ul class="cat-tree">${list.map(n => `<li><div class="cat-node ${n.active ? '' : 'off'}"><b>${esc(n.name)}</b> <span class="small muted">${level}차</span>${n.semi_type ? ` <span class="chip green">${esc(SEMI_KIND_LABEL[n.semi_type] || n.semi_type)}</span>` : ''}${n.sizes ? ` <span class="chip">사이즈 ${esc(n.sizes.replaceAll(',', '·'))}</span>` : ''}${n.active ? '' : ' <span class="chip">사용 중지</span>'}
+        <span class="cat-actions">${level < 3 && n.active ? `<button type="button" class="btn small" data-cat-add="${n.id}">하위 추가</button>` : ''}<button type="button" class="btn small" data-cat-edit="${n.id}">수정</button><button type="button" class="btn small ${n.active ? 'danger' : ''}" data-cat-toggle="${n.id}">${n.active ? '사용 중지' : '다시 사용'}</button></span></div>${branch(n.id, level + 1)}</li>`).join('')}</ul>`;
+    };
+    tree.innerHTML = branch(0, 1);
+  };
+  const load = async () => { nodes = await api('GET', '/api/item-categories'); if (box.el.isConnected) draw(); };
+  const add = async parent => {
+    const title = parent ? `${parent.name} 아래 ${parent.level + 1}차 분류 추가` : `${current} 1차 분류 추가`;
+    await promptBox(title, `<label>분류 이름 *<input name="name" required maxlength="50" placeholder="예) ${parent ? '천와이퍼' : '와이퍼'}"></label>${current === '반제품' ? kindSelect('') : ''}${sizeField('')}`, { submit: v => api('POST', '/api/item-categories', { item_class: current, parent_id: parent ? parent.id : null, ...v }) }) && toast('분류를 추가했습니다.');
+    await load();
+  };
+  box.el.addEventListener('click', async event => {
+    const b = event.target.closest('button'); if (!b) return;
+    try {
+      if (b.dataset.catTab) { current = b.dataset.catTab; draw(); }
+      else if (b.hasAttribute('data-cat-close')) box.close();
+      else if (b.hasAttribute('data-cat-add-root')) await add(null);
+      else if (b.dataset.catAdd) await add(nodes.find(n => n.id === Number(b.dataset.catAdd)));
+      else if (b.dataset.catEdit) {
+        const n = nodes.find(x => x.id === Number(b.dataset.catEdit));
+        if (await promptBox(`분류 수정 · ${n.name}`, `<label>분류 이름 *<input name="name" required maxlength="50" value="${esc(n.name)}"></label>${n.item_class === '반제품' ? kindSelect(n.semi_type) : ''}${sizeField(n.sizes || '')}<p class="small muted">이름을 바꾸면 이 분류로 등록된 품목의 분류 이름도 함께 바뀝니다.</p>`, { submit: v => api('PUT', `/api/item-categories/${n.id}`, v) })) toast('분류를 수정했습니다.');
+        await load();
+      } else if (b.dataset.catToggle) {
+        const n = nodes.find(x => x.id === Number(b.dataset.catToggle));
+        if (n.active && !(await confirmBox(`「${n.name}」을(를) 사용 중지할까요? 이미 등록된 품목은 그대로이고, 새 등록에서만 고를 수 없게 됩니다.`))) return;
+        await api('PUT', `/api/item-categories/${n.id}`, { active: !n.active }); await load();
+      }
+    } catch (error) { fail(error); }
+  });
   await load();
 }
 

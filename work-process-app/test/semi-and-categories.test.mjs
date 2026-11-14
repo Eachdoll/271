@@ -35,6 +35,11 @@ after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); 
 test('반제품 is an item class; catalog items carry three category levels that reach the stock view', async () => {
   const base = { kind: 'semi', base_qty: 1, unit: 'EA', materials: [] };
   assert.equal((await admin('POST', '/api/boms', { ...base, product: '잘못', item_category: '반제품', cat2: '와이퍼' })).status, 400, '2차 needs 1차');
+  // 15.29: sub-categories are prepared first and then picked (free text is refused).
+  assert.equal((await admin('POST', '/api/boms', { ...base, product: '자유입력', item_category: '상품', cat1: '없는분류' })).status, 400);
+  const ensure = async (item_class, parent_id, name) => { const made = await admin('POST', '/api/item-categories', { item_class, parent_id, name }); if (made.status === 200) return made.body.id; return (await admin('GET', '/api/item-categories')).body.find(n => n.item_class === item_class && (n.parent_id || null) === (parent_id || null) && n.name === name).id; };
+  const wiper = await ensure('반제품', null, '와이퍼'); await ensure('반제품', await ensure('반제품', wiper, '부직포'), '9인치');
+  await ensure('상품', await ensure('상품', null, '글러브'), '니트릴');
   const semi = (await admin('POST', '/api/boms', { ...base, product: '부직포와이퍼 원단', product_code: 'SF-001', item_category: '반제품', cat1: '와이퍼', cat2: '부직포', cat3: '9인치' })).body;
   assert.deepEqual([semi.item_category, semi.cat1, semi.cat2, semi.cat3], ['반제품', '와이퍼', '부직포', '9인치']);
   await admin('POST', '/api/boms', { ...base, kind: 'finished', product: '니트릴 글러브', product_code: 'GL-001', item_category: '상품', cat1: '글러브', cat2: '니트릴' });

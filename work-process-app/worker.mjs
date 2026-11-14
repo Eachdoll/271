@@ -360,7 +360,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1082,11 +1082,21 @@ function bomFields(body) {
   });
   return [reqStr(body.product, '품목명', 200), str(body.product_code, 80), kind, baseQty, reqStr(body.unit, '단위', 20), JSON.stringify(materials), str(body.note, 500), body.active === false || body.active === 0 ? 0 : 1, category];
 }
-// Optional sub-classification under the item class. A lower level needs the level above it.
-function bomCategories(body, previous = {}) {
+// 1차·2차·3차 세부 분류는 미리 만든 분류(item_category_nodes)에서만 고른다. 바꾸지 않은 기존 경로는 그대로 둔다.
+// 반제품은 경로에서 가장 깊은 생산 종류(semi_type)를 물려받아 커팅/융착·세탁 입력에 나온다.
+async function bomCategoryPath(body, category, previous = {}) {
   const cats = ['cat1', 'cat2', 'cat3'].map(key => body[key] === undefined ? previous[key] || '' : str(body[key], 50));
-  if ((cats[1] && !cats[0]) || (cats[2] && !cats[1])) throw bad('2차 분류는 1차, 3차 분류는 2차를 먼저 입력하세요.');
-  return cats;
+  if ((cats[1] && !cats[0]) || (cats[2] && !cats[1])) throw bad('2차 분류는 1차, 3차 분류는 2차를 먼저 선택하세요.');
+  const unchanged = previous.item_category === category && cats.every((value, i) => value === (previous['cat' + (i + 1)] || ''));
+  let parent = 0, semiType = '';
+  for (const [i, name] of cats.entries()) {
+    if (!name) break;
+    const node = await db.prepare('SELECT * FROM item_category_nodes WHERE item_class=? AND level=? AND COALESCE(parent_id,0)=? AND name=?').get(category, i + 1, parent, name);
+    if (!node || (!node.active && !unchanged)) throw bad(`${i + 1}차 분류 「${name}」는 ${category}의 세부 분류에 없습니다. 분류 관리에서 먼저 만들어 주세요.`);
+    if (node.semi_type) semiType = node.semi_type;
+    parent = node.id;
+  }
+  return { cats, semiType };
 }
 // Which semi-finished kind a catalog item is, so work records can offer the right models.
 const SEMI_TYPE_NAMES = ['부직포와이퍼', '천와이퍼', '스무드', '타키'];
@@ -1107,25 +1117,51 @@ route('GET', '/api/boms', async ({ user, query }) => {
   applyListKeyword(where, args, query.q, ['product','product_code','created_by','note','cat1','cat2','cat3']);
   for (const key of ['cat1', 'cat2', 'cat3', 'semi_type']) if (query[key]) { where.push(key + '=?'); args.push(str(query[key], 50)); }
   if (query.active) { if (!['0','1'].includes(query.active)) throw bad('BOM 사용 상태를 확인하세요.'); where.push('active=?'); args.push(Number(query.active)); }
-  return (await db.prepare(`SELECT * FROM boms ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY product,id`).all(...args)).map(decodeBom);
+  const sizesOf = await sizeSets();
+  return (await db.prepare(`SELECT * FROM boms ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY product,id`).all(...args)).map(row => ({ ...decodeBom(row), sizes: sizesOf(row.item_category, [row.cat1, row.cat2, row.cat3]) }));
 });
 // Category values already in use, for suggestions and filters.
 route('GET', '/api/boms/categories', async () => db.prepare("SELECT DISTINCT cat1,cat2,cat3 FROM boms WHERE active=1 AND cat1<>'' ORDER BY cat1,cat2,cat3 LIMIT 2000").all());
+// The production kind of a 반제품 comes from its category; an item without a category keeps the older explicit value.
+const isChecked = v => Array.isArray(v) ? v.length > 0 : v === true || v === 1 || v === "1" || v === "on";
+// 반제품 품목은 분류에서 생산 종류를 정한다. 다른 품목은 '반제품으로도 사용'을 켜고 종류·생산 단위·환산을 직접 정한다.
+async function bomPlacement(body, category, previous = {}, unit = '') {
+  const { cats, semiType } = await bomCategoryPath(body, category, previous);
+  if (category === '반제품') {
+    const explicit = body.semi_type === undefined && !cats[0] ? previous.semi_type || '' : str(body.semi_type, 20);
+    if (explicit && !SEMI_TYPE_NAMES.includes(explicit)) throw bad('반제품 종류를 다시 선택하세요.');
+    return { cats, semiType: cats[0] ? semiType || (cats.every((v, i) => v === (previous['cat' + (i + 1)] || '')) ? previous.semi_type || '' : '') : explicit, semiUnit: '', packQty: null };
+  }
+  const enabled = body.semi_enabled === undefined ? !!previous.semi_type : isChecked(body.semi_enabled);
+  if (!enabled) { if (str(body.semi_type, 20)) throw bad('반제품이 아닌 품목은 「반제품으로도 사용」을 켜야 생산 종류를 지정할 수 있습니다.'); return { cats, semiType: '', semiUnit: '', packQty: null }; }
+  const type = str(body.semi_type === undefined ? previous.semi_type : body.semi_type, 20);
+  if (!SEMI_TYPE_NAMES.includes(type)) throw bad('반제품으로도 사용할 때는 생산 종류를 선택하세요.');
+  const semiUnit = str(body.semi_unit === undefined ? previous.semi_unit : body.semi_unit, 20) || (['스무드', '타키'].includes(type) ? '켤레' : '매');
+  let packQty = null;
+  if (semiUnit !== unit) {
+    const raw = body.pack_qty === undefined ? previous.pack_qty : body.pack_qty;
+    packQty = Number(raw); if (!Number.isFinite(packQty) || packQty <= 0) throw bad(`단위 환산을 입력하세요. (1 ${unit} = 몇 ${semiUnit}인지)`);
+  }
+  return { cats, semiType: type, semiUnit, packQty };
+}
 route('POST', '/api/boms', async ({ user, body }) => {
   requireAdmin(user);
-  const fields = bomFields(body), cats = bomCategories(body);
-  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, bomSemiType(body, fields[8]));
-  return decodeBom(await mustGet('boms', result.lastInsertRowid));
+  const fields = bomFields(body), { cats, semiType, semiUnit, packQty } = await bomPlacement(body, fields[8], {}, fields[4]);
+  if (semiType && !fields[1]) throw bad('커팅/융착·세탁에서 고를 품목은 제품코드가 필요합니다.');
+  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType, semiUnit, packQty);
+  return withSizes(decodeBom(await mustGet('boms', result.lastInsertRowid)));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   requireAdmin(user); const before = await mustGet('boms', params.id); const fields = bomFields(body);
-  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,cat1=?,cat2=?,cat3=?,semi_type=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, ...bomCategories(body, before), bomSemiType(body, fields[8], before), before.id] }];
+  const { cats, semiType, semiUnit, packQty } = await bomPlacement(body, fields[8], before, fields[4]);
+  if (semiType && !fields[1]) throw bad('커팅/융착·세탁에서 고를 품목은 제품코드가 필요합니다.');
+  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,cat1=?,cat2=?,cat3=?,semi_type=?,semi_unit=?,pack_qty=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, ...cats, semiType, semiUnit, packQty, before.id] }];
   if (before.is_temp) {
     if (/^TMP-/i.test(fields[1])) throw bad('임시 코드(TMP-)를 정식 제품코드로 바꿔 저장하세요.');
     commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
   }
   await db.batch(commands);
-  return decodeBom(await mustGet('boms', params.id));
+  return withSizes(decodeBom(await mustGet('boms', params.id)));
 });
 // Rows that used a temporary item follow it to its confirmed name/code. Inspection snapshots are left as recorded.
 function relinkCatalog(temp, target) {
@@ -1141,6 +1177,81 @@ route('POST', '/api/boms/:id/merge', async ({ user, params, body }) => {
   if (target.id === temp.id || target.is_temp || !target.active) throw bad('합칠 대상은 사용 중인 정식 품목이어야 합니다.');
   await db.batch([...relinkCatalog(temp, target), { sql: "UPDATE boms SET active=0,note=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [`${target.product}(${target.product_code || '코드 없음'})로 합침 · ${user.name}`, temp.id] }]);
   return { ok: true, target: decodeBom(target) };
+});
+// ── 제품등록: 세부 분류 관리 ──
+route('GET', '/api/item-categories', async () => (await db.prepare('SELECT id,item_class,parent_id,level,name,semi_type,sizes,sort_order,active FROM item_category_nodes ORDER BY item_class,level,sort_order,name,id').all()).map(n => ({ ...n, active: !!n.active })));
+// 사이즈 묶음: 쉼표로 구분, 최대 20개. 하위 분류는 가장 가까운 상위 분류의 묶음을 따른다.
+function categorySizes(value) {
+  const list = [...new Set(String(value ?? '').split(/[,\s]+/).map(v => v.trim().toUpperCase()).filter(Boolean))];
+  if (list.length > 20 || list.some(v => v.length > 10)) throw bad('사이즈는 20개 이내, 각 10자 이내로 입력하세요.');
+  return list.join(',');
+}
+async function sizeSets() {
+  const nodes = await db.prepare('SELECT id,item_class,parent_id,level,name,sizes FROM item_category_nodes').all();
+  return (category, cats) => {
+    let parent = 0, sizes = '';
+    for (const [i, name] of cats.entries()) { if (!name) break; const node = nodes.find(n => n.item_class === category && n.level === i + 1 && (n.parent_id || 0) === parent && n.name === name); if (!node) break; if (node.sizes) sizes = node.sizes; parent = node.id; }
+    return sizes ? sizes.split(',') : [];
+  };
+}
+async function withSizes(bom) { return { ...bom, sizes: (await sizeSets())(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]) }; }
+function categorySemiType(value, itemClass) {
+  const type = str(value, 20); if (!type) return '';
+  if (itemClass !== '반제품') throw bad('생산 종류는 반제품 분류에만 지정합니다.');
+  if (!SEMI_TYPE_NAMES.includes(type)) throw bad('생산 종류를 다시 선택하세요.');
+  return type;
+}
+async function categoryPathOf(node) {
+  const names = []; let cursor = node;
+  while (cursor) { names.unshift(cursor.name); cursor = cursor.parent_id ? await db.prepare('SELECT * FROM item_category_nodes WHERE id=?').get(cursor.parent_id) : null; }
+  return names;
+}
+// Items under a node take the deepest production kind found along their category path.
+async function semiTypeUpdates(itemClass) {
+  if (itemClass !== '반제품') return [];
+  const nodes = await db.prepare("SELECT * FROM item_category_nodes WHERE item_class='반제품'").all();
+  const find = (level, parent, name) => nodes.find(n => n.level === level && (n.parent_id || 0) === parent && n.name === name);
+  const items = await db.prepare("SELECT id,cat1,cat2,cat3,semi_type FROM boms WHERE item_category='반제품' AND cat1<>''").all();
+  const commands = [];
+  for (const item of items) {
+    let parent = 0, kind = '';
+    for (const [i, name] of [item.cat1, item.cat2, item.cat3].entries()) { if (!name) break; const node = find(i + 1, parent, name); if (!node) break; if (node.semi_type) kind = node.semi_type; parent = node.id; }
+    if (kind !== item.semi_type) commands.push({ sql: "UPDATE boms SET semi_type=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [kind, item.id] });
+  }
+  return commands;
+}
+const categoryConflict = error => { if (String(error.message).includes('UNIQUE')) throw new HttpError(409, '같은 위치에 같은 이름의 분류가 이미 있습니다.'); throw error; };
+route('POST', '/api/item-categories', async ({ user, body }) => {
+  requireAdmin(user);
+  const itemClass = itemCategory(body.item_class), name = reqStr(body.name, '분류 이름', 50);
+  let level = 1, parentId = null;
+  if (body.parent_id !== undefined && body.parent_id !== null && body.parent_id !== '') {
+    const parent = await mustGet('item_category_nodes', Number(body.parent_id) || 0);
+    if (parent.item_class !== itemClass) throw bad('상위 분류의 품목 분류가 다릅니다.');
+    if (parent.level >= 3) throw bad('세부 분류는 3차까지 만들 수 있습니다.');
+    level = parent.level + 1; parentId = parent.id;
+  }
+  let id; try { id = Number((await db.prepare('INSERT INTO item_category_nodes(item_class,parent_id,level,name,semi_type,sizes,created_by) VALUES(?,?,?,?,?,?,?)').run(itemClass, parentId, level, name, categorySemiType(body.semi_type, itemClass), categorySizes(body.sizes), user.name)).lastInsertRowid); } catch (error) { categoryConflict(error); }
+  const updates = await semiTypeUpdates(itemClass); if (updates.length) await db.batch(updates);
+  return { id };
+});
+route('PUT', '/api/item-categories/:id', async ({ user, params, body }) => {
+  requireAdmin(user);
+  const node = await mustGet('item_category_nodes', params.id);
+  const name = body.name === undefined ? node.name : reqStr(body.name, '분류 이름', 50);
+  const semiType = body.semi_type === undefined ? node.semi_type : categorySemiType(body.semi_type, node.item_class);
+  const active = body.active === undefined ? node.active : body.active === false || body.active === 0 ? 0 : 1;
+  const sizes = body.sizes === undefined ? node.sizes : categorySizes(body.sizes);
+  const commands = [{ sql: 'UPDATE item_category_nodes SET name=?,semi_type=?,sizes=?,active=? WHERE id=?', args: [name, semiType, sizes, active, node.id] }];
+  // A rename follows through to the items filed under this node (their category text holds the name).
+  if (name !== node.name) {
+    const path = await categoryPathOf(node), column = 'cat' + node.level;
+    const where = path.map((_, i) => `cat${i + 1}=?`).join(' AND ');
+    commands.push({ sql: `UPDATE boms SET ${column}=?,updated_at=datetime('now','+9 hours') WHERE item_category=? AND ${where}`, args: [name, node.item_class, ...path] });
+  }
+  try { await db.batch(commands); } catch (error) { categoryConflict(error); }
+  const updates = await semiTypeUpdates(node.item_class); if (updates.length) await db.batch(updates);
+  return { ok: true };
 });
 route('DELETE', '/api/boms/:id', async ({ user, params }) => {
   requireAdmin(user); await mustGet('boms', params.id);
@@ -1183,7 +1294,7 @@ function decodeSchedule(row) { return { ...row, bom_snapshot: JSON.parse(row.bom
 // Narrow read models for the operator UI. No prices, BOM recipes, or other users' logs.
 route('GET', '/api/operator/catalog', async () => ({
   units: await db.prepare('SELECT id,kind,name,active FROM production_units WHERE active=1 ORDER BY sort_order,name').all(),
-  models: await db.prepare("SELECT id,product,product_code,semi_type,unit FROM boms WHERE active=1 AND is_temp=0 AND item_category='반제품' AND semi_type<>'' ORDER BY product").all(),
+  models: await db.prepare("SELECT id,product,product_code,semi_type,CASE WHEN semi_unit<>'' THEN semi_unit ELSE unit END AS unit FROM boms WHERE active=1 AND is_temp=0 AND semi_type<>'' ORDER BY product").all(),
 }));
 function operatorDate(value) {
   const date = listFilterDate(value, '생산일');
@@ -1615,11 +1726,11 @@ async function semiFields(body, process, previous = null) {
   if (!unit.active && previous?.unit_id !== unit.id) throw bad('사용 중지된 라인·호기입니다.');
   if(process==='wash' && body.entry_mode==='wash_quantity'){const total=num(body.qty,'세탁수량'),defect=previous?.defect_qty||0;if(total<defect)throw bad('과거 불량 이력을 보존하려면 세탁수량이 '+defect+' 이상이어야 합니다.');body={...body,qty:total-defect,defect_qty:defect,defect_reason:previous?.defect_reason||''};
     // The wash screen asks only for the product code: kind and unit come from that item (an unchanged item keeps its old unit/spec).
-    if(body.bom_id!==undefined&&body.bom_id!==''&&body.bom_id!==null){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(model.item_category!=='반제품'||!model.semi_type)throw bad('반제품 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));const same=previous?.bom_id===model.id;body={...body,product_group:group,product_type:model.semi_type,unit:same?previous.unit:(model.unit||(group==='seamless'?'켤레':'매')),spec:same?previous.spec:''};}
+    if(body.bom_id!==undefined&&body.bom_id!==''&&body.bom_id!==null){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(!model.semi_type)throw bad('반제품으로 쓰는 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));const same=previous?.bom_id===model.id;body={...body,product_group:group,product_type:model.semi_type,unit:same?previous.unit:(model.semi_unit||(model.item_category==='반제품'?model.unit:'')||(group==='seamless'?'켤레':'매')),spec:same?previous.spec:''};}
     // A run time is required for counting washer runs; left blank on a new record it means "now" (KST).
     if(!previous&&!str(body.start_time,5))body={...body,start_time:now().slice(11,16)};}
   const codeEntry = process === 'cut' && body.entry_mode === 'code';
-  if(codeEntry){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(model.item_category!=='반제품'||!model.semi_type)throw bad('반제품 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));body={...body,product_group:group,product_type:model.semi_type,unit:previous?.bom_id===model.id?previous.unit:group==='seamless'?'켤레':'매',spec:previous?.bom_id===model.id?previous.spec:''};if(!previous)body={...body,break_minutes:0,workers:null};if(!body.start_time||!body.end_time)throw bad('시작 시각과 종료 시각을 입력하세요.');}
+  if(codeEntry){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(!model.semi_type)throw bad('반제품으로 쓰는 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));body={...body,product_group:group,product_type:model.semi_type,unit:previous?.bom_id===model.id?previous.unit:model.semi_unit||(group==='seamless'?'켤레':'매'),spec:previous?.bom_id===model.id?previous.spec:''};if(!previous)body={...body,break_minutes:0,workers:null};if(!body.start_time||!body.end_time)throw bad('시작 시각과 종료 시각을 입력하세요.');}
   const group = String(body.product_group || ''); if (!Object.hasOwn(SEMI_PRODUCTS, group)) throw bad('와이퍼/심리스글러브를 선택하세요.');
   const type = str(body.product_type, 40);
   if (process === 'cut' && !type) throw bad('품목(종류)을 선택하세요.');
@@ -1633,9 +1744,9 @@ async function semiFields(body, process, previous = null) {
     else {
       const bom = await mustGet('boms', bomId);
       if (!bom.active) throw bad('사용 중지된 품목입니다.');
-      if (bom.item_category !== '반제품' || !bom.semi_type) throw bad('반제품 종류가 지정된 반제품 품목을 선택하세요.');
+      if (!bom.semi_type) throw bad('반제품 종류가 지정된 품목을 선택하세요.');
       link = { bom_id: bom.id, item_name: bom.product, product_code: bom.product_code, bom_snapshot: JSON.stringify({ id: bom.id, product: bom.product, product_code: bom.product_code, unit: bom.unit, base_qty: bom.base_qty, materials: JSON.parse(bom.materials) }) };
-      modelUnit = bom.unit;
+      modelUnit = bom.semi_unit || bom.unit;
     }
     const kind = (await db.prepare('SELECT semi_type FROM boms WHERE id=?').get(bomId))?.semi_type;
     if (kind !== type) throw bad(`선택한 품목(모델)은 ${type ? '이 종류의 품목이 아닙니다' : '종류를 함께 선택해야 합니다'}.`);
@@ -1946,8 +2057,10 @@ route('GET', '/api/inventory', async ({ user, query }) => {
     return { ...r, received: stockRound(r.received), produced: stockRound(r.produced), used: stockRound(r.used), shipped: stockRound(r.shipped), adjusted: stockRound(r.adjusted), stock, min_qty: min, low: min !== null && stock < min, negative: stock < 0 && stockRound(totals.get(r.item + '\u0000' + r.unit)) < 0 };
   });
   // The catalog is the authority for an item's class, code and sub-classes; unregistered items keep what their records say.
-  const catalog = new Map(); for (const b of await db.prepare('SELECT product,product_code,item_category,cat1,cat2,cat3 FROM boms WHERE active=1 ORDER BY is_temp DESC, id DESC').all()) catalog.set(nameKey(b.product), b);
-  list = list.map(r => { const c = catalog.get(nameKey(r.item)); return { ...r, category: c?.item_category || r.category, product_code: c?.product_code || '', cat1: c?.cat1 || '', cat2: c?.cat2 || '', cat3: c?.cat3 || '' }; });
+  const catalog = new Map(); for (const b of await db.prepare('SELECT product,product_code,item_category,cat1,cat2,cat3,unit,semi_unit,pack_qty FROM boms WHERE active=1 ORDER BY is_temp DESC, id DESC').all()) catalog.set(nameKey(b.product), b);
+  // An item counted both in boxes (orders, shipments) and in sheets (cutting) shows each line converted to the other unit.
+  const convert = (c, r) => !c?.pack_qty || !c.semi_unit ? null : r.unit === c.semi_unit ? { qty: stockRound(r.stock / c.pack_qty), unit: c.unit } : r.unit === c.unit ? { qty: stockRound(r.stock * c.pack_qty), unit: c.semi_unit } : null;
+  list = list.map(r => { const c = catalog.get(nameKey(r.item)); return { ...r, category: c?.item_category || r.category, product_code: c?.product_code || '', cat1: c?.cat1 || '', cat2: c?.cat2 || '', cat3: c?.cat3 || '', converted: convert(c, r) }; });
   if (query.item_category) { const c = itemCategory(query.item_category); list = list.filter(r => r.category === c); }
   for (const key of ['cat1', 'cat2', 'cat3']) if (query[key]) list = list.filter(r => r[key] === query[key]);
   if (query.state === 'low') list = list.filter(r => r.low); else if (query.state === 'negative') list = list.filter(r => r.negative);

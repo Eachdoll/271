@@ -18,10 +18,33 @@ function rememberScheduleDate(date) { try { sessionStorage.setItem('newScheduleD
 function multiInput(name, label, type = 'text', value = '', required = true) {
   return `<label>${label}${required ? ' *' : ''}<input name="${name}" type="${type}" value="${esc(value)}" ${required ? 'required' : ''}></label>`;
 }
+// Items whose category has a size set (e.g. 방진복 XS~XL) take one quantity per size instead of spec + quantity.
+function sizeGrid(row, sizes) {
+  $('[data-size-grid]', row)?.remove();
+  const qty = $('[data-line-key=qty]', row), spec = $('[data-line-key=spec]', row);
+  const on = sizes.length > 0;
+  for (const input of [qty, spec].filter(Boolean)) { input.closest('label').hidden = on; input.disabled = on; }
+  if (qty) qty.required = !on;
+  if (!on) return;
+  const grid = document.createElement('div'); grid.className = 'span3 size-grid'; grid.dataset.sizeGrid = '';
+  grid.innerHTML = `<b>사이즈별 수량</b> <span class="hint">(입력한 사이즈만 줄로 등록)</span><div class="size-cells">${sizes.map(size => `<label>${esc(size)}<input type="number" min="0" step="any" inputmode="decimal" data-line-key="size:${esc(size)}"></label>`).join('')}</div><span class="small muted" data-size-total></span>`;
+  qty.closest('label').after(grid);
+  const total = () => { const sum = $$('[data-line-key^="size:"]', grid).reduce((n, input) => n + (Number(input.value) || 0), 0); $('[data-size-total]', grid).textContent = sum ? `합계 ${fmtNum(sum)}` : ''; };
+  grid.addEventListener('input', total);
+}
 function multiPayload(form, entity, type, kind, requestId) {
   const common = entity === 'request' ? collectRequest(type,form) : formObj(form);
   if (entity === 'schedule') common.kind = kind;
-  const items = $$('[data-multi-row]',form).map(row => Object.fromEntries($$('[data-line-key]',row).map(input => [input.dataset.lineKey,input.type === 'checkbox' ? input.checked : input.value])));
+  const items = $$('[data-multi-row]',form).flatMap(row => {
+    const item = Object.fromEntries($$('[data-line-key]',row).filter(input => !input.dataset.lineKey.startsWith('size:')).map(input => [input.dataset.lineKey,input.type === 'checkbox' ? input.checked : input.value]));
+    const sizes = $$('[data-line-key^="size:"]',row);
+    if (!sizes.length) return [item];
+    // One line per size with a quantity; the size becomes the line's spec.
+    const lines = sizes.filter(input => Number(input.value) > 0).map(input => ({ ...item, spec: input.dataset.lineKey.slice(5), qty: input.value }));
+    if (!lines.length) throw new Error(`${item.item || '사이즈 품목'}: 사이즈별 수량을 하나 이상 입력하세요.`);
+    return lines;
+  });
+  if (items.length > 30) throw new Error(`사이즈별로 나누면 ${items.length}줄입니다. 한 번에 30줄까지 등록할 수 있습니다.`);
   return { common, items, request_id: requestId };
 }
 async function installMultiItems(legacy, entity, type = '') {
@@ -71,6 +94,7 @@ async function installMultiItems(legacy, entity, type = '') {
         const bom = boms.find(b => b.id === Number(select.value));
         $('[data-line-key=item]',row).readOnly = !!bom || entity === 'other_receipt'; $('[data-line-key=unit]',row).readOnly = !!bom || entity === 'other_receipt';
         if (bom) { $('[data-line-key=item]',row).value = bom.product; $('[data-line-key=unit]',row).value = bom.unit; }
+        sizeGrid(row, bom?.sizes || []);
         const category = $('[data-line-key=item_category]',row);
         if (bom && category && [...category.options].some(option => option.value === bom.item_category)) category.value = bom.item_category;
       };
@@ -106,6 +130,7 @@ async function installMultiItems(legacy, entity, type = '') {
         const row = add();
         for (const [key, val] of values) { const input = $$('[data-line-key]', row).find(el => el.dataset.lineKey === key); if (!input) continue; if (input.type === 'checkbox') input.checked = val === true; else input.value = String(val ?? ''); }
         $('[data-line-key=bom_id]', row)?.onchange?.();
+        for (const [key, val] of values) { const input = $$('[data-line-key]', row).find(el => el.dataset.lineKey === key); if (input && key.startsWith('size:')) input.value = String(val ?? ''); }
       }
       if (!rowsRoot.children.length) add();
       if (typeof value.requestId === 'string') requestId = value.requestId;

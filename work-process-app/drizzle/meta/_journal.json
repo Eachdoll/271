@@ -162,6 +162,20 @@
       "when": 1794740003000,
       "tag": "0022_quality_inspections",
       "breakpoints": false
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1794740004000,
+      "tag": "0023_item_category_tree",
+      "breakpoints": false
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1794740005000,
+      "tag": "0024_sizes_and_semi_units",
+      "breakpoints": false
     }
   ]
 }
