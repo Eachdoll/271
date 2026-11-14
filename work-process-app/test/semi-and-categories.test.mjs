@@ -222,3 +222,50 @@ test('Good and defect quantities are counted separately; clock times give work h
   const after = (await staff('GET', `/api/semi-records?process=cut&unit_id=${line.id}&from=2026-10-05&to=2026-10-05`)).body[0];
   assert.deepEqual([after.qty, after.defect_qty, after.start_time, after.work_hours, after.workers], [990, 50, '08:00', 8, 4], 'fields the old request did not know are untouched');
 });
+
+test('Semi-finished plans take actuals from cutting records only; batch entry, defect reasons and the yield series', async () => {
+  const line = (await prod('POST', '/api/production-units', { kind: 'line', name: '4동 계획라인' })).body;
+  // several lines for one date and line in one submission
+  const key = crypto.randomUUID();
+  const body = { process: 'cut', common: { work_date: '2026-09-08', unit_id: line.id }, request_id: key, items: [
+    { product_group: 'seamless', product_type: '스무드', spec: 'M', qty: 400, defect_qty: 20, defect_reason: '융착 불량', unit: '켤레', start_time: '08:00', end_time: '12:00', workers: 3 },
+    { product_group: 'seamless', product_type: '스무드', spec: 'L', qty: 300, defect_qty: 5, unit: '켤레' },
+    { product_group: 'seamless', product_type: '타키', spec: 'M', qty: 100, defect_qty: 0, defect_reason: '오염', unit: '켤레' }] };
+  const saved = await staff('POST', '/api/semi-batches', body);
+  assert.equal(saved.status, 200); assert.equal(saved.body.rows.length, 3); assert.equal(saved.body.replayed, false);
+  assert.deepEqual(saved.body.rows.map(r => [r.spec, r.qty, r.defect_reason, r.unit_name]), [['M', 400, '융착 불량', '4동 계획라인'], ['L', 300, '', '4동 계획라인'], ['M', 100, '', '4동 계획라인']], 'no reason is kept without defects');
+  const again = await staff('POST', '/api/semi-batches', body);
+  assert.equal(again.body.replayed, true); assert.deepEqual(again.body.rows.map(r => r.id), saved.body.rows.map(r => r.id));
+  assert.equal((await prod('POST', '/api/semi-batches', body)).status, 409, 'another user cannot reuse the request');
+  const bad = await staff('POST', '/api/semi-batches', { process: 'cut', common: body.common, items: [body.items[0], { product_group: 'seamless', product_type: '스무드', qty: 1 }] });
+  assert.equal(bad.status, 400); assert.match(bad.body.error, /^2번째 줄: 사이즈/);
+  assert.equal((await staff('GET', `/api/semi-records?process=cut&unit_id=${line.id}`)).body.length, 3, 'a bad line saves nothing');
+  assert.equal((await staff('POST', '/api/semi-batches', { process: 'cut', common: body.common, items: [{ ...body.items[0], defect_reason: '없는 사유' }] })).status, 400);
+  assert.equal((await staff('POST', '/api/semi-batches', { process: 'cut', common: body.common, items: [] })).status, 400);
+
+  // a semi-finished plan finds those records by product name, size and period
+  const plans = (await staff('POST', '/api/batches/schedule', { common: { kind: 'semi', period: 'week', start_date: '2026-09-08' }, request_id: crypto.randomUUID(),
+    items: [{ item: '심리스스무드', qty: 1000, unit: '켤레' }, { item: '심리스 스무드', spec: 'm', qty: 500, unit: '켤레' }, { item: '부직포와이퍼', spec: '9', qty: 100, unit: '매' }] })).body.rows;
+  assert.deepEqual(plans.map(p => p.spec), ['', 'M', '9인치'], 'plan sizes are stored the way records store them');
+  const listed = (await staff('GET', '/api/schedules?kind=semi&from=2026-09-07&to=2026-09-13')).body;
+  const byId = id => listed.find(s => s.id === id);
+  assert.deepEqual([byId(plans[0].id).actual_qty, byId(plans[0].id).actual_count, byId(plans[1].id).actual_qty, byId(plans[2].id).actual_qty], [700, 2, 400, 0]);
+  const refused = await staff('POST', `/api/schedules/${plans[0].id}/actuals`, { production_date: '2026-09-08', qty: 5, request_id: crypto.randomUUID() });
+  assert.equal(refused.status, 400); assert.match(refused.body.error, /커팅\/융착 기록에서 자동/);
+  const detail = (await staff('GET', `/api/schedules/${plans[0].id}/actuals`)).body;
+  assert.deepEqual([detail.auto, detail.can_write, detail.actual_qty, detail.cut_qty, detail.manual_qty, detail.achievement_rate, detail.cut_rows.length], [true, false, 700, 700, 0, 70, 2]);
+  const stock = (await staff('GET', '/api/inventory?group=spec&asof=2026-09-30')).body.rows.filter(r => r.item === '심리스 스무드');
+  assert.deepEqual(stock.map(r => [r.spec, r.stock]).sort(), [['L', 300], ['M', 400]], 'counted once, from the cutting records');
+  const planReport = (await staff('GET', '/api/reports?from=2026-09-01&to=2026-09-30&plan_period=week')).body.production.items.find(r => r.item === '심리스스무드');
+  assert.deepEqual([planReport.planned_qty, planReport.actual_qty, planReport.achievement_rate], [1000, 700, 70]);
+  const finished = (await staff('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: '2026-09-08', product: '심리스 스무드', qty: 10 })).body;
+  assert.equal((await staff('GET', '/api/schedules?kind=finished&from=2026-09-08&to=2026-09-08')).body.find(s => s.id === finished.id).actual_qty, 0, 'only semi-finished plans are matched');
+
+  // defect reasons and the yield series
+  await staff('PUT', `/api/semi-records/${saved.body.rows[1].id}`, { ...body.common, ...body.items[1], defect_reason: '치수 불량' });
+  await staff('POST', '/api/semi-batches', { process: 'cut', common: { work_date: '2026-09-15', unit_id: line.id }, items: [{ product_group: 'seamless', product_type: '스무드', spec: 'M', qty: 90, defect_qty: 10, unit: '켤레' }] });
+  const semi = (await staff('GET', '/api/reports?from=2026-09-01&to=2026-09-30&grain=week')).body.semi;
+  assert.deepEqual(semi.reasons.filter(r => r.process === 'cut').map(r => [r.reason, r.defect_qty, r.share, r.unit]), [['융착 불량', 20, 57.1, '켤레'], ['미지정', 10, 28.6, '켤레'], ['치수 불량', 5, 14.3, '켤레']]);
+  assert.deepEqual(semi.series.filter(r => r.process === 'cut').map(r => [r.bucket, r.group, r.qty, r.defect_qty, r.yield_rate]), [['2026-09-07', '심리스글러브', 800, 25, 97], ['2026-09-14', '심리스글러브', 90, 10, 90]]);
+  assert.equal((await staff('GET', '/api/reports?from=2026-09-01&to=2026-09-30&q=' + q('없는라인'))).body.semi.series.length, 0);
+});

@@ -853,7 +853,9 @@ route('GET', '/api/schedules', async ({ query }) => {
   if (query.done) { if (!['0','1'].includes(query.done)) throw bad('완료 상태를 확인하세요.'); where.push('done=?'); args.push(Number(query.done)); }
   if (query.period) { if (!['day','week','month'].includes(query.period)) throw bad('일정 기준을 확인하세요.'); where.push('period=?'); args.push(query.period); }
   // 기간과 겹치는 일정: 일간(그날), 주간(월~일), 월간(그 달)
-  return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) AS actual_qty,(SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) AS actual_count FROM schedules WHERE kind=? AND (
+  return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS actual_qty,
+      (SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) + (SELECT COUNT(*) FROM semi_records c WHERE ${semiCutMatch('schedules')}) AS actual_count,
+      COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty FROM schedules WHERE kind=? AND (
       (period='day' AND start_date BETWEEN ? AND ?) OR
       (period='week' AND start_date<=? AND date(start_date,'+6 days')>=?) OR
       (period='month' AND start_date<=? AND date(start_date,'+1 month','-1 day')>=?)
@@ -1009,6 +1011,8 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
       } else if (entity === 'schedule') {
         record = await schedFields({ ...b, product: b.product || b.item });
         if (record.bom_id) meta.unit = JSON.parse(record.bom_snapshot).unit || '';
+        // Write the size the way cutting/fusing records store it, so the plan finds its actuals.
+        if (record.kind === 'semi' && meta.spec) { const group = semiGroupOfLabel(record.product); if (group) meta.spec = semiSpec(group, meta.spec, false); }
       } else if (entity === 'laundry') {
         record = { in_date: dateStr(b.in_date, '입고일'), item: reqStr(b.item, '옷 종류', 200), in_qty: num(b.in_qty ?? b.qty, '입고수량'), discard_qty: num(b.discard_qty ?? 0, '폐기수량'), note: str(b.note, 500), photos: '[]' };
         if (record.discard_qty > record.in_qty) throw bad('폐기수량이 입고수량을 넘을 수 없습니다.');
@@ -1069,13 +1073,17 @@ route('GET', '/api/schedules/:id/actuals', async ({ user, params, query }) => {
   if (query.before !== undefined && (!/^[1-9]\d*$/.test(query.before) || !Number.isSafeInteger(Number(query.before)))) throw bad('생산실적 조회 위치를 확인하세요.');
   const rows = await db.prepare(`SELECT * FROM production_actuals WHERE schedule_id=? ${query.before ? 'AND id<?' : ''} ORDER BY id DESC LIMIT 51`).all(schedule.id, ...(query.before ? [Number(query.before)] : []));
   const page = rows.slice(0,50);
-  const actual = (await db.prepare('SELECT COALESCE(SUM(qty),0) AS qty FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL').get(schedule.id)).qty;
+  const manual = (await db.prepare('SELECT COALESCE(SUM(qty),0) AS qty FROM production_actuals WHERE schedule_id=? AND voided_at IS NULL').get(schedule.id)).qty;
+  const cutRows = schedule.kind === 'semi' ? await db.prepare(`SELECT c.* FROM semi_records c, schedules s WHERE s.id=? AND ${semiCutMatch('s')} ORDER BY c.work_date DESC, c.id DESC LIMIT 200`).all(schedule.id) : [];
+  const cutQty = schedule.kind === 'semi' ? (await db.prepare(`SELECT COALESCE(SUM(c.qty),0) AS qty FROM semi_records c, schedules s WHERE s.id=? AND ${semiCutMatch('s')}`).get(schedule.id)).qty : 0;
+  const actual = manual + cutQty;
   const pending = await db.prepare("SELECT * FROM production_actual_changes WHERE schedule_id=? AND status='pending'").all(schedule.id);
   const changes = await db.prepare('SELECT * FROM production_actual_changes WHERE schedule_id=? ORDER BY id DESC LIMIT 50').all(schedule.id);
-  return { schedule: decodeSchedule(schedule), rows: page.map(row => ({ ...row, pending_change: pending.find(c => c.actual_id === row.id) || null })), changes, can_approve: !!user.is_admin || publicUser(user).roles.includes('production_approver'), next: rows.length > 50 ? page.at(-1).id : null, actual_qty: actual, variance_qty: actual - schedule.qty, achievement_rate: schedule.qty ? Math.round(actual / schedule.qty * 1000) / 10 : null, can_write: canModify(user, schedule) || hasRole(user, 'production') };
+  return { schedule: decodeSchedule(schedule), rows: page.map(row => ({ ...row, pending_change: pending.find(c => c.actual_id === row.id) || null })), changes, can_approve: !!user.is_admin || publicUser(user).roles.includes('production_approver'), next: rows.length > 50 ? page.at(-1).id : null, actual_qty: actual, variance_qty: actual - schedule.qty, achievement_rate: schedule.qty ? Math.round(actual / schedule.qty * 1000) / 10 : null, can_write: schedule.kind !== 'semi' && (canModify(user, schedule) || hasRole(user, 'production')), auto: schedule.kind === 'semi', cut_rows: cutRows, cut_qty: cutQty, manual_qty: manual };
 });
 route('POST', '/api/schedules/:id/actuals', async ({ user, params, body }) => {
   const schedule = await actualSchedule(user, params.id, true);
+  if (schedule.kind === 'semi') throw bad('반제품 실적은 생산 → 반제품 · 커팅/융착 기록에서 자동으로 집계됩니다. 그 화면에서 입력하세요.');
   const date = dateStr(body.production_date, '생산일'); const qty = num(body.qty, '실제 생산량');
   const end = await actualPeriodEnd(schedule);
   if (date < schedule.start_date || date > end) throw bad('생산일은 해당 계획의 기간 안에서 선택하세요.');
@@ -1191,6 +1199,17 @@ function semiSpec(group, value, required) {
   return `${inch}인치`;
 }
 const SEMI_UNIT_KIND = { cut: 'line', wash: 'washer' };
+const SEMI_DEFECT_REASONS = { cut: ['오염', '치수 불량', '융착 불량', '커팅 불량', '찢어짐·구멍', '이물', '기타'], wash: ['오염 잔류', '손상·찢어짐', '변색', '이물', '기타'] };
+// A semi-finished plan is matched to cutting/fusing records by product name (spaces/case ignored), size when the plan
+// names one, and work dates inside the plan period. Its actuals are never typed in twice.
+const SEMI_CUT_LABEL = "CASE c.product_group WHEN 'seamless' THEN '심리스 ' || c.product_type ELSE c.product_type END";
+const semiCutMatch = s => `${s}.kind='semi' AND c.process='cut' AND REPLACE(LOWER(${SEMI_CUT_LABEL}),' ','')=REPLACE(LOWER(${s}.product),' ','') AND (${s}.spec='' OR c.spec=${s}.spec)
+  AND c.work_date BETWEEN ${s}.start_date AND CASE ${s}.period WHEN 'day' THEN ${s}.start_date WHEN 'week' THEN date(${s}.start_date,'+6 days') ELSE date(${s}.start_date,'+1 month','-1 day') END`;
+function semiGroupOfLabel(name) {
+  const key = nameKey(name);
+  for (const [group, product] of Object.entries(SEMI_PRODUCTS)) if (product.types.some(type => nameKey((group === 'seamless' ? '심리스 ' : '') + type) === key)) return group;
+  return null;
+}
 const canManageProduction = user => hasRole(user, 'production');
 route('GET', '/api/production-units', async ({ query }) => {
   const where = [], args = [];
@@ -1229,11 +1248,11 @@ async function semiFields(body, process, previous = null) {
   const type = str(body.product_type, 40);
   if (process === 'cut' && !type) throw bad('품목(종류)을 선택하세요.');
   if (type && !SEMI_PRODUCTS[group].types.includes(type)) throw bad('품목(종류)을 다시 선택하세요.');
-  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut'), ...semiWorkDetails(body, previous), qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
+  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut'), ...semiWorkDetails(body, previous, process), qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
 }
 // 수량(qty)은 양품 수량이고 불량수량은 따로 셉니다. 총 수량 = 양품 + 불량.
 // 작업시간은 시작·종료 시각에서 계산합니다(종료가 시작보다 이르면 자정을 넘긴 작업).
-function semiWorkDetails(body, previous) {
+function semiWorkDetails(body, previous, process) {
   const clock = (key, label) => {
     if (body[key] === undefined) return previous ? previous[key] : null;
     const value = str(body[key], 5); if (!value) return null;
@@ -1247,7 +1266,10 @@ function semiWorkDetails(body, previous) {
   let workers = previous ? previous.workers : null;
   if (body.workers !== undefined) { workers = num(body.workers, '생산인원', { required: false }); if (workers !== null && (!Number.isInteger(workers) || workers > 10000)) throw bad('생산인원은 정수로 입력하세요.'); }
   const defect = body.defect_qty === undefined ? (previous ? previous.defect_qty : 0) : num(body.defect_qty, '불량수량', { required: false }) ?? 0;
-  return { start_time: start, end_time: end, work_hours: hours, workers, defect_qty: defect };
+  let reason = body.defect_reason === undefined ? (previous ? previous.defect_reason : '') : str(body.defect_reason, 40);
+  if (reason && !SEMI_DEFECT_REASONS[process].includes(reason)) throw bad('불량 사유를 다시 선택하세요.');
+  if (!defect) reason = '';
+  return { start_time: start, end_time: end, work_hours: hours, workers, defect_qty: defect, defect_reason: reason };
 }
 function semiProcess(value) { const process = String(value || ''); if (!Object.hasOwn(SEMI_UNIT_KIND, process)) throw bad('작업 구분을 확인하세요.'); return process; }
 route('GET', '/api/semi-records', async ({ query }) => {
@@ -1267,13 +1289,35 @@ route('POST', '/api/semi-records', async ({ user, body }) => {
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
   const old = await db.prepare('SELECT * FROM semi_records WHERE request_id=?').get(key);
   if (old) { if (old.created_by_id !== user.id || old.process !== process || old.unit_id !== f.unit_id || old.qty !== f.qty || old.work_date !== f.work_date) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
-  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,spec,start_time,end_time,work_hours,workers,defect_qty,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.start_time, f.end_time, f.work_hours, f.workers, f.defect_qty, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
+  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,spec,start_time,end_time,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.start_time, f.end_time, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
   return mustGet('semi_records', r.lastInsertRowid);
 });
+// ── 1) several lines for one date and line/washer in a single, all-or-nothing submission ──
+route('POST', '/api/semi-batches', async ({ user, body }) => {
+  const process = semiProcess(body.process);
+  if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 30) throw bad('기록은 한 번에 1~30줄 등록하세요.');
+  if (body.common !== undefined && (!body.common || typeof body.common !== 'object' || Array.isArray(body.common))) throw bad('공통 입력 내용을 확인하세요.');
+  const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
+  if (!/^[a-zA-Z0-9-]{16,60}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  const saved = () => db.prepare("SELECT * FROM semi_records WHERE request_id LIKE ? ESCAPE '\\' ORDER BY id").all(key.replace(/[\\%_]/g, '\\$&') + ':%');
+  const replay = rows => { if (rows.some(r => r.created_by_id !== user.id || r.process !== process) || rows.length !== body.items.length) throw new HttpError(409, '이미 사용된 요청 번호입니다. 새로 열어 등록하세요.'); return { rows, replayed: true }; };
+  const existing = await saved(); if (existing.length) return replay(existing);
+  const commands = [];
+  for (const [index, item] of body.items.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw bad(`${index + 1}번째 줄을 확인하세요.`);
+    let f; try { f = await semiFields({ ...(body.common || {}), ...item }, process); }
+    catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 줄: ${error.message}`); throw error; }
+    commands.push({ sql: 'INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,spec,start_time,end_time,work_hours,workers,defect_qty,defect_reason,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      args: [process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.start_time, f.end_time, f.work_hours, f.workers, f.defect_qty, f.defect_reason, f.qty, f.unit, f.lot, f.note, `${key}:${index}`, user.id, user.name] });
+  }
+  try { await db.batch(commands); }
+  catch (error) { const rows = await saved(); if (rows.length) return replay(rows); throw error; }
+  return { rows: await saved(), replayed: false };
+});
 // Recorded quantities change only with a production team lead's approval; LOT and notes can be fixed directly.
-const SEMI_FIELDS = ['work_date', 'unit_id', 'unit_name', 'product_group', 'product_type', 'spec', 'qty', 'defect_qty', 'unit', 'start_time', 'end_time', 'work_hours', 'workers', 'lot', 'note'];
-const SEMI_DIRECT_FIELDS = ['defect_qty', 'start_time', 'end_time', 'work_hours', 'workers', 'lot', 'note']; // good quantity and identity need approval; these do not move stock
+const SEMI_FIELDS = ['work_date', 'unit_id', 'unit_name', 'product_group', 'product_type', 'spec', 'qty', 'defect_qty', 'unit', 'start_time', 'end_time', 'work_hours', 'workers', 'defect_reason', 'lot', 'note'];
+const SEMI_DIRECT_FIELDS = ['defect_qty', 'defect_reason', 'start_time', 'end_time', 'work_hours', 'workers', 'lot', 'note']; // good quantity and identity need approval; these do not move stock
 const SEMI_APPROVAL_FIELDS = ['work_date', 'unit_id', 'product_group', 'product_type', 'spec', 'qty', 'unit'];
 // A request stays approvable as long as the fields it recorded are unchanged (older requests know fewer fields).
 const semiUnchanged = (row, oldData) => { const old = JSON.parse(oldData); return Object.keys(old).every(key => old[key] === row[key]); };
@@ -1306,7 +1350,7 @@ route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   if (SEMI_APPROVAL_FIELDS.every(key => f[key] === row[key])) {
     if (SEMI_DIRECT_FIELDS.every(key => f[key] === row[key])) throw bad('바뀐 내용이 없습니다.');
     if (await semiPending(row.id)) throw new HttpError(409, '승인 대기 중인 요청이 처리된 뒤에 수정하세요.');
-    await db.prepare('UPDATE semi_records SET defect_qty=?,start_time=?,end_time=?,work_hours=?,workers=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?').run(f.defect_qty, f.start_time, f.end_time, f.work_hours, f.workers, f.lot, f.note, user.name, now(), row.id);
+    await db.prepare('UPDATE semi_records SET defect_qty=?,defect_reason=?,start_time=?,end_time=?,work_hours=?,workers=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?').run(f.defect_qty, f.defect_reason, f.start_time, f.end_time, f.work_hours, f.workers, f.lot, f.note, user.name, now(), row.id);
     return { pending: false, record: await mustGet('semi_records', row.id) };
   }
   return requestSemiChange(user, row, 'edit', f, body);

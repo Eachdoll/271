@@ -331,3 +331,9 @@ input[data-photo-camera] { display: none !important; }
 
 /* 반제품 기록 목록: 라인 이름과 숫자 칸은 한 줄로 */
 @media (min-width: 701px) { #semiList td:nth-child(2), #semiList td.r { white-space: nowrap; } }
+
+/* 반제품 리포트: 목표 수율 입력 · 불량 사유 비중 막대 */
+.semi-report-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.semi-report-head input { width: 84px; min-height: 32px; padding: 4px 8px; }
+.share-bar { background: var(--bg); border-radius: 99px; height: 10px; overflow: hidden; }
+.share-bar i { display: block; height: 100%; background: var(--red); border-radius: 99px; }

@@ -120,6 +120,13 @@
       "when": 1794710000000,
       "tag": "0016_semi_record_times",
       "breakpoints": false
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794720000000,
+      "tag": "0017_semi_defect_reason",
+      "breakpoints": false
     }
   ]
 }

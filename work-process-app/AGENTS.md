@@ -68,6 +68,10 @@
 - 0014 semi_record_changes: 반제품 기록의 수량·품목·사이즈·단위·작업일·라인 변경과 삭제는 PUT/DELETE /api/semi-records/:id가 사유와 함께 pending 요청을 만들고, production_approver(생산팀장)·관리자가 POST /api/semi-changes/:id/approve|reject 해야 반영됩니다(요청자는 /cancel). LOT·비고만 바뀌면 바로 반영합니다. 기록당 pending 1건, 승인 시 old_data가 현재 기록과 같아야 합니다. my-tasks에 semi_changes가 포함됩니다.
 - 샘플의뢰(상품)의 승인자는 purchase 역할(구매 담당자)·관리자로 확정되었습니다.
 - 0015/0016: semi_records.defect_qty(불량수량, 기본 0)·workers(생산인원, 정수)·start_time/end_time('HH:MM')·work_hours. **수량(qty)은 양품 수량이고 불량은 따로 셉니다**(총 수량 = 양품 + 불량). 재고에는 qty(양품)만 들어갑니다. work_hours는 시작·종료 시각에서 서버가 계산하며(종료가 시작 이전이면 자정을 넘긴 것으로 +24시간) 직접 입력받지 않습니다. 양품수량·품목·사이즈·단위·작업일·라인 변경과 삭제는 생산팀장 승인 대상이고, 불량수량·시각·생산인원·LOT·비고는 등록자·생산 담당자·관리자가 바로 수정합니다(SEMI_DIRECT_FIELDS).
+- **반제품 생산일정(schedules.kind='semi')의 실적은 커팅/융착 기록에서 자동 집계**합니다(semiCutMatch: 품목명 공백·대소문자 무시 일치, 계획에 spec이 있으면 같은 spec, 작업일이 계획 기간 안). 반제품 일정에 production_actuals를 새로 입력하는 것은 서버가 400으로 막습니다(이전에 입력된 실적은 그대로 보존·합산). 재고는 커팅/융착 기록에서만 잡히므로 이중 계상되지 않습니다. 완제품 일정은 종전과 같습니다. reports.mjs의 생산 실적 식에도 같은 조건이 들어 있으니 한쪽만 고치지 마세요.
+- POST /api/semi-batches: 같은 작업일·라인(호기)의 1~30줄을 한 db.batch로 저장합니다(한 줄이라도 잘못되면 전체 거부, `n번째 줄:` 접두 오류). request_id는 줄마다 `요청번호:순번`으로 저장해 재시도 중복을 막습니다. 화면의 입력 양식은 이 API만 사용합니다.
+- 0017 semi_records.defect_reason: SEMI_DEFECT_REASONS(커팅/융착·세탁별 목록, worker.mjs와 public/semi.js에 같이 있음) 중 하나 또는 빈 값. 불량이 0이면 서버가 비웁니다. 바로 수정 가능한 항목입니다.
+- 리포트 semi.reasons(공정·단위별 불량 사유 비중, 사유 없음은 '미지정')와 semi.series(집계 단위 × 공정 × 와이퍼/심리스글러브별 수율)를 한 번의 GROUP BY 결과에서 계산합니다. 수율 추이 그래프의 목표 수율은 브라우저 localStorage(semiYieldTarget, 기본 95)에만 저장합니다.
 - 리포트의 semi(reports.mjs semiReport, public/semi.js semiReportSection): 작업일 기준 커팅/융착·세탁별 품목별/라인(호기)별/상세 합계와 수율(양품÷(양품+불량))·불량률(불량÷(양품+불량))·인시당 양품(시간과 인원을 모두 입력한 기록만). 단위가 다른 수량은 합치지 않습니다. 리포트 분류 필터에 반제품을 포함합니다.
 - 빌드 산출물 검사(test/worker.test.mjs)는 번들 안의 `fs.`·`require(`·`process.env` 문자열을 금지합니다. public/*.js에서도 `diffs.`처럼 `fs.`로 끝나는 식별자 사용을 피하세요.
 - 발주의 LOT는 선택입니다. public/semi.js를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. production_units·semi_records는 전체 백업 대상입니다.
