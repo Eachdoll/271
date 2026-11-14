@@ -1,0 +1,140 @@
+/* 토스스타일 base.css — 공개 TDS 가이드(라이트·다크)에서 자주 쓰는 색·버튼·입력·카드를 모은 파일.
+   서체는 시스템 한글 고딕으로 대체한다(토스 전용 서체·로고는 쓰지 않는다). */
+:root {
+  /* 색 */
+  --color-brand: #0064ff; /* 로고 전용. 버튼·링크에 쓰지 않는다 */
+  --color-primary-50: #e8f3ff;
+  --color-primary-100: #c9e2ff;
+  --color-primary-200: #90c2ff;
+  --color-primary-300: #64a8ff;
+  --color-primary-400: #4593fc;
+  --color-primary-500: #3182f6;
+  --color-primary-600: #2272eb;
+  --color-primary-700: #1b64da;
+  --color-primary-800: #1957c2;
+  --color-primary-900: #194aa6;
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f9fafb;
+  --color-neutral-100: #f2f4f6;
+  --color-neutral-200: #e5e8eb;
+  --color-neutral-300: #d1d6db;
+  --color-neutral-400: #b0b8c1;
+  --color-neutral-500: #8b95a1;
+  --color-neutral-600: #6b7684;
+  --color-neutral-700: #4e5968;
+  --color-neutral-800: #333d4b;
+  --color-neutral-900: #191f28;
+  --color-success-bg: #f0faf6; --color-success-fg: #029359;
+  --color-warning-bg: #fff9e7; --color-warning-fg: #dd7d02;
+  --color-error-bg: #ffeeee;   --color-error-fg: #d22030;
+  --color-info-bg: #e8f3ff;    --color-info-fg: #1b64da;
+  --color-danger: #f04452;
+  --bg-base: #ffffff;
+  --bg-subtle: #f2f4f6;
+  --bg-elevated: #ffffff;
+  --text-primary: #191f28;
+  --text-secondary: #4e5968;
+  --text-tertiary: #6b7684;
+  --text-on-primary: #ffffff;
+  --text-disabled: #b0b8c1;
+  --border-default: #e5e8eb;
+  --border-subtle: #f2f4f6;
+  --border-focus: #3182f6;
+  --button-primary: #3182f6;
+  --button-primary-hover: #2272eb;
+  --button-primary-active: #1b64da;
+  --color-link: #1b64da;
+  --focus-ring: #1b64da;
+  --font-brand: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', system-ui, sans-serif;
+
+  /* 간격 */
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px; --space-3xl: 64px;
+  --container-max: 1184px; --container-gutter: 24px;
+
+  /* 둥글기 */
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-scene: 40px; --radius-full: 9999px;
+
+  /* 그림자: 기본은 없음. 떠 있는 창에만 */
+  --shadow-sm: 0 2px 6px rgba(0, 23, 51, .04);
+  --shadow-md: 0 8px 24px rgba(0, 23, 51, .08);
+  --shadow-lg: 0 16px 40px rgba(0, 23, 51, .12);
+
+  /* 움직임 */
+  --duration-fast: 150ms; --duration-base: 220ms; --ease-out: cubic-bezier(.22, 1, .36, 1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  /* 가이드에 있는 다크 값: 바탕 #17171C, 면 #202027, 경계 #3C3C47, 글자 #FFFFFF, 흐린 글자 #9E9EA4, 파랑 #3485FA.
+     보조 글자·상태색 다크 값은 가이드에 없어 대비를 맞춰 정한 값(추정)이다. */
+  :root {
+    --bg-base: #17171c; --bg-subtle: #17171c; --bg-elevated: #202027;
+    --text-primary: #ffffff; --text-secondary: #c3c3c6; --text-tertiary: #9e9ea4; --text-disabled: #62626d;
+    --border-default: #3c3c47; --border-subtle: #2c2c35;
+    --button-primary: #3485fa; --button-primary-hover: #4593fc; --button-primary-active: #2272eb;
+    --color-primary-50: #1c2b44; --color-primary-100: #22385a; --color-link: #64a8ff; --focus-ring: #64a8ff; --border-focus: #3485fa;
+    --color-success-bg: #13302a; --color-success-fg: #3fd599;
+    --color-warning-bg: #3a2e12; --color-warning-fg: #ffc342;
+    --color-error-bg: #3d1d22;   --color-error-fg: #ff6b75;
+    color-scheme: dark;
+  }
+}
+
+body { margin: 0; background: var(--bg-subtle); color: var(--text-primary); font: 400 15px/1.5 var(--font-brand); letter-spacing: -.02em; }
+h1 { font-size: 26px; font-weight: 700; line-height: 1.35; letter-spacing: -.03em; }
+h2 { font-size: 22px; font-weight: 700; letter-spacing: -.025em; }
+h3 { font-size: 17px; font-weight: 700; }
+a { color: var(--color-link); }
+
+/* 버튼: 주요=파랑 채움, 보조=옅은 파랑, 기본=옅은 회색(weak), 위험=빨강 */
+.toss-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 12px 20px; border: 0; border-radius: var(--radius-md);
+  font: 600 16px/1.4 var(--font-brand); letter-spacing: -.02em; cursor: pointer; text-decoration: none;
+  background: var(--bg-subtle); color: var(--text-secondary);
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+.toss-btn:hover { background: var(--border-default); }
+.toss-btn:active { transform: scale(.98); }
+.toss-btn--primary { background: var(--button-primary); color: var(--text-on-primary); }
+.toss-btn--primary:hover { background: var(--button-primary-hover); }
+.toss-btn--primary:active { background: var(--button-primary-active); }
+.toss-btn--secondary { background: var(--color-primary-50); color: var(--color-link); }
+.toss-btn--secondary:hover { background: var(--color-primary-100); }
+.toss-btn--danger { background: var(--color-error-bg); color: var(--color-error-fg); }
+.toss-btn--danger-fill { background: var(--color-danger); color: #fff; }
+.toss-btn--small { min-height: 32px; padding: 6px 12px; font-size: 13px; border-radius: var(--radius-sm); }
+.toss-btn:disabled { opacity: .4; cursor: default; pointer-events: none; }
+.toss-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+
+/* 입력: label은 위, 오류 문장은 바로 아래 */
+.toss-field { display: grid; gap: 8px; color: var(--text-secondary); font: 500 15px/1.5 var(--font-brand); }
+.toss-field input, .toss-field select, .toss-field textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 52px;
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  padding: 12px 16px; background: var(--bg-elevated); color: var(--text-primary); font: 400 17px/1.5 var(--font-brand);
+}
+.toss-field input::placeholder { color: var(--text-tertiary); }
+.toss-field input:focus, .toss-field select:focus, .toss-field textarea:focus { outline: 2px solid var(--border-focus); outline-offset: -1px; border-color: transparent; }
+.toss-field [aria-invalid="true"] { border-color: var(--color-error-fg); }
+.toss-field input:disabled { background: var(--bg-subtle); color: var(--text-disabled); }
+.toss-field-error { color: var(--color-error-fg); font-size: 13px; }
+
+/* 면: 회색 바탕 위 흰 면. 테두리·그림자 없이 */
+.toss-card { padding: 24px; border-radius: var(--radius-xl); background: var(--bg-elevated); color: var(--text-primary); }
+.toss-card--emphasis { background: var(--color-primary-50); }
+.toss-card--outline { border: 1px solid var(--border-default); }
+
+/* 배지: 정말 필요할 때만 */
+.toss-badge { display: inline-flex; padding: 4px 8px; border-radius: var(--radius-sm); font: 600 13px/1.5 var(--font-brand); }
+.toss-badge--blue { background: var(--color-primary-50); color: var(--color-link); }
+.toss-badge--green { background: var(--color-success-bg); color: var(--color-success-fg); }
+.toss-badge--yellow { background: var(--color-warning-bg); color: var(--color-warning-fg); }
+.toss-badge--red { background: var(--color-error-bg); color: var(--color-error-fg); }
+
+/* 떠 있는 창 */
+.toss-modal { background: var(--bg-elevated); border-radius: var(--radius-xl); padding: 24px; box-shadow: var(--shadow-md); }
+
+@media (prefers-reduced-motion: reduce) {
+  .toss-btn { transition: none; }
+  .toss-btn:active { transform: none; }
+}
