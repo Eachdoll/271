@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.25';
+const APP_VERSION = '15.28';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -120,11 +120,21 @@ function confirmBox(msg) {
     $('[data-yes]', m.el).onclick = () => { resolve(true); m.close(); };
   });
 }
-function promptBox(title, fieldsHtml) {
+// With { submit }, the dialog stays open while the values are saved; a rejected save keeps everything typed.
+function promptBox(title, fieldsHtml, { submit = null } = {}) {
   return new Promise((resolve) => {
+    let busy = false;
     const m = modal(`<h3>${esc(title)}</h3><form class="stack">${fieldsHtml}<div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">확인</button></div></form>`, { onClose: () => resolve(null) });
-    $('[data-no]', m.el).onclick = () => { m.close(); resolve(null); };
-    $('form', m.el).onsubmit = (e) => { e.preventDefault(); const v = formObj(e.target); resolve(v); m.close(); };
+    $('[data-no]', m.el).onclick = () => { if (busy) return; m.close(); resolve(null); };
+    $('form', m.el).onsubmit = async (e) => {
+      e.preventDefault(); if (busy) return;
+      const v = formObj(e.target);
+      if (!submit) { resolve(v); m.close(); return; }
+      busy = true; e.target.inert = true;
+      try { const result = await submit(v); resolve(result ?? v); m.close(); }
+      catch (error) { fail(error); }
+      finally { busy = false; e.target.inert = false; }
+    };
   });
 }
 
