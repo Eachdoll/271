@@ -35,7 +35,7 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick } = {}) {
 
 async function pageVendors(main) {
   main.innerHTML = `
-  <h1>거래처 관리 <span class="dept">구매</span></h1>
+  <h1>거래처 관리 <span class="dept">관리</span></h1>
   <p class="muted">누구나 거래처를 등록·수정할 수 있습니다. 발주·입고·출하 입력에서 거래처 이름을 고르면 담당자와 연락처가 함께 보이고, 발주에서는 그 거래처의 최근 매입 품목을 바로 불러올 수 있습니다. 입력 화면에서 새 이름을 쓰면 자동으로 이 목록에 추가됩니다.</p>
   <form class="card" id="vendorNew"><h3>거래처 등록</h3><div class="form-grid">
     <label>거래처 이름 *<input name="name" required maxlength="100"></label>

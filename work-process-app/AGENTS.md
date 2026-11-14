@@ -335,3 +335,8 @@ INVITE_CODE=local-test-code npm start
 - 검사: 폼에 novalidate를 켜고 document 캡처 단계 submit에서 checkValidity를 먼저 봅니다. 실패하면 각 칸 label 안(라디오·체크 묶음은 fieldset 안)에 span.field-error로 해결 방법을 적고 aria-invalid·aria-describedby를 붙인 뒤 첫 칸으로 이동하고, 원래 submit 처리는 실행하지 않습니다. 통과하면 원래 처리로 그대로 넘깁니다. 코드에서 부르는 `form.reportValidity()`도 같은 안내를 씁니다(프로토타입 교체).
 - 상태: 제출 후 버튼에 `.is-loading`(aria-busy) → 성공 토스트가 오면 `.is-done`(✓), 오류 토스트가 오면 해제 후 버튼 위 `[data-fx-form-error]`(role=alert)에 안내합니다. api()를 감싸 마지막 HTTP 상태를 기억해 500·연결 실패·409를 구분하고, 400 문구에 칸 이름이 있으면 그 칸 아래에도 붙입니다. 12초 또는 다른 곳을 누르면 처리 중 표시를 풉니다. 기존 토스트는 그대로 뜹니다.
 - 칸 이름은 label 글자 → aria-label → 표 머리글(data-label) → placeholder → (칸 하나뿐인 폼) 폼 제목 순서로 찾습니다. 안내 문구를 추가하면 4개 언어 사전에도 넣으세요.
+
+## 관리 메뉴 정리 (15.38)
+- 거래처 관리(#/purchase/vendors)와 검사규격 설정(#/quality/specs)을 구매·품질 메뉴에서 「관리」 묶음으로 옮겼습니다. 주소·권한은 그대로입니다.
+- 「관리」 묶음은 모든 사용자에게 보이며 NAV_MANAGE(기준 정보)는 모두에게, NAV_ADMIN(관리자 설정·제품등록)은 관리자에게만 붙습니다. 화면 안의 수정 권한은 각 화면과 서버가 전과 같이 판단합니다.
+- 품질의 「수입·출하 검사」 하위 메뉴는 항목이 하나만 남아 「수입·출하 검사 이력」 단일 링크로 바꿨습니다. 거래처 관리 제목 옆 부서 표시는 「관리」입니다.

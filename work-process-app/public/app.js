@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.37';
+const APP_VERSION = '15.38';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -245,12 +245,11 @@ const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
-    ['#/purchase/vendors', '거래처 관리'],
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
   { group: '품질', items: [
-    { sub: '수입·출하 검사', items: [['#/quality/inspections', '검사 이력'], ['#/quality/specs', '검사규격 설정']] },
+    ['#/quality/inspections', '수입·출하 검사 이력'],
     { sub: '분석', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
     { sub: 'VOC', items: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   ] },
@@ -268,6 +267,9 @@ const NAV = [
     ['#/logistics/stock', '재고 현황'],
   ] },
 ];
+// 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
+const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];
+const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/bom', '제품등록']];
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -390,7 +392,8 @@ function shell() {
   const entry = item => Array.isArray(item) ? link(item)
     : `<details class="nav-sub" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
   const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(entry).join('')}</div>`).join('')
-    + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a><a href="#/admin/bom" class="${cur === '#/admin/bom' ? 'active' : ''}">제품등록</a></div>` : '');
+    // 관리: 기준 정보 화면(모든 사용자에게 보임, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
+    + `<div class="nav-group"><div class="nav-title">관리</div>${[...NAV_MANAGE, ...(ME.is_admin ? NAV_ADMIN : [])].map(link).join('')}</div>`;
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   $('#app').innerHTML = `
   <header class="top">
