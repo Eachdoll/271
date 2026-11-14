@@ -5,7 +5,7 @@ const SEMI_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
 // 불량 사유를 바꾸려면 worker.mjs의 SEMI_DEFECT_REASONS와 함께 고치세요.
 const SEMI_DEFECT_REASONS = { cut: ['오염', '치수 불량', '융착 불량', '커팅 불량', '찢어짐·구멍', '이물', '기타'], wash: ['오염 잔류', '손상·찢어짐', '변색', '이물', '기타'] };
 const SEMI_PAGE = {
-  cut: { title: '커팅/융착관리', unitKind: 'line', unitLabel: '라인', manage: '라인 관리', intro: '라인별로 와이퍼(부직포와이퍼·천와이퍼)와 심리스글러브(스무드·타키)를 얼마나 생산했는지 기록합니다. 제품코드·품명으로 BOM · 품목코드 관리에 등록된 반제품 품목(모델)을 고릅니다. 양품수량이 그 품목의 반제품 재고로 잡히고, 품목에 구성자재가 있으면 원자재가 함께 차감됩니다.' },
+  cut: { title: '커팅/융착관리', unitKind: 'line', unitLabel: '라인', manage: '라인 관리', intro: '라인별로 와이퍼(부직포와이퍼·천와이퍼)와 심리스글러브(스무드·타키)를 얼마나 생산했는지 기록합니다. 제품코드·품명으로 「제품등록」에 등록된 반제품 품목(모델)을 고릅니다. 양품수량이 그 품목의 반제품 재고로 잡히고, 품목에 구성자재가 있으면 원자재가 함께 차감됩니다.' },
   wash: { title: '세탁관리 (호기별)', unitKind: 'washer', unitLabel: '세탁 호기', manage: '호기 관리', intro: '세탁 호기마다 와이퍼와 심리스글러브를 얼마나 세탁했는지 기록합니다. 세탁 입고분의 불량 폐기는 구매 → 세탁관리에서 기록합니다.' },
 };
 const semiTypeLabel = record => record.product_type ? (record.product_group === 'seamless' ? '심리스 ' : '') + record.product_type : SEMI_PRODUCTS[record.product_group].label;

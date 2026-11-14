@@ -10,7 +10,8 @@ function lineInfo(row) {
   const parts = [code, row.spec || data.spec, unit, row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
   if (row.type && row.type !== 'voc' && (row.qty ?? data.qty) != null) parts.push('수량 ' + fmtNum(row.qty ?? data.qty));
   if (row.batch_id) parts.push('묶음 ' + row.batch_id.slice(-8));
-  const entity = lineEntity(row);
+  const fromCatalog = (row.product_code && !/^TMP-/.test(row.product_code)) || row.bom_id || (data.product_code && !/^TMP-/.test(data.product_code));
+  const entity = fromCatalog ? '' : lineEntity(row);
   return `<span class="small muted line-info">${parts.map(esc).join(' · ')} ${entity ? `<button type="button" class="btn small" data-line-meta="${esc(entity)}" data-line-id="${row.id}" data-line-spec="${esc(row.spec)}" data-line-unit="${esc(unit)}" data-line-lot="${esc(row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : ''))}" data-line-name="${esc(row.item)}">규격·단위</button>` : ''}</span>`;
 }
 function scheduleFocusDate() { try { const date = sessionStorage.getItem('newScheduleDate'); sessionStorage.removeItem('newScheduleDate'); return date || todayStr(); } catch { return todayStr(); } }

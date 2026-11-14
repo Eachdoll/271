@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.33';
+const APP_VERSION = '15.34';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -9,7 +9,8 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
 const fmtDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const todayStr = () => fmtDate(new Date());
+// 「오늘」은 기기 시간대가 아니라 한국 시간 기준입니다(서버의 날짜 검사와 같게). 베트남·캄보디아 시간으로 맞춘 휴대폰에서도 같은 날짜가 나옵니다.
+const todayStr = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
 const parseD = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return fmtDate(d); };
 const mondayOf = (s) => { const d = parseD(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return fmtDate(d); };
@@ -277,6 +278,13 @@ const VIEW_SPLIT = {
 };
 // Parts before the list filters are the entry part; the filters and everything after them are the list part.
 // Approval boxes at the top belong to the list. The multi-item form is added later and is hidden by CSS in the list view.
+function foldHelp(main) {
+  for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
+    if (p.textContent.trim().length < 80 || p.closest('details')) continue;
+    const details = document.createElement('details'); details.className = 'help';
+    details.innerHTML = '<summary>도움말 · 이 화면 설명</summary>'; p.replaceWith(details); details.append(p);
+  }
+}
 function applyView(main, route) {
   const split = VIEW_SPLIT[route]; if (!split) return;
   const [, view, title, other, otherLabel] = split;
@@ -291,9 +299,38 @@ function applyView(main, route) {
   }
   const h1 = $('h1', main);
   if (h1) { const text = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (text) text.nodeValue = title + ' '; }
-  const link = document.createElement('p'); link.className = 'view-switch';
-  link.innerHTML = `<a class="btn small" href="${other}">${view === 'entry' ? '' : '＋ '}${esc(otherLabel)}${view === 'entry' ? ' →' : ''}</a>`;
-  (h1 || main.firstElementChild)?.after(link);
+  const link = document.createElement('a'); link.className = `btn view-switch ${view === 'list' ? 'primary' : ''}`; link.href = other;
+  link.textContent = (view === 'entry' ? '' : '＋ ') + otherLabel + (view === 'entry' ? ' →' : '');
+  if (h1) h1.append(link); else main.prepend(link);
+  if (view === 'entry') showRecentEntries(main, route);
+}
+// 11) Entry screens: what I entered today, so nothing is entered twice. Refreshes after each success message.
+const RECENT_SOURCES = {
+  '#/purchase/po/new': () => '/api/po',
+  '#/logistics/ship/new': t => `/api/shipments?from=${t}&to=${t}`,
+  '#/logistics/other/new': t => `/api/other-receipts?from=${addDays(t, -31)}&to=${t}`,
+  '#/purchase/laundry/new': t => `/api/laundry?from=${addDays(t, -31)}&to=${t}`,
+  '#/prod/finished/new': t => `/api/schedules?kind=finished&from=${addDays(t, -62)}&to=${addDays(t, 62)}`,
+  '#/prod/semi/new': t => `/api/schedules?kind=semi&from=${addDays(t, -62)}&to=${addDays(t, 62)}`,
+  '#/prod/semi/cut/new': t => `/api/semi-records?process=cut&from=${addDays(t, -7)}&to=${t}`,
+  '#/prod/semi/wash/new': t => `/api/semi-records?process=wash&from=${addDays(t, -7)}&to=${t}`,
+};
+function showRecentEntries(main, route) {
+  const source = RECENT_SOURCES[route]; if (!source) return;
+  const box = document.createElement('section'); box.className = 'card recent-mine'; box.dataset.recent = ''; main.append(box);
+  const load = async () => {
+    if (!box.isConnected) return;
+    const t = todayStr();
+    try {
+      const rows = (await api('GET', source(t))).filter(r => r.created_by === ME.name && String(r.created_at || '').startsWith(t)).sort((a, b) => b.id - a.id);
+      if (!box.isConnected) return;
+      box.innerHTML = `<h3>오늘 내가 입력한 것 <span class="chip">${rows.length}</span></h3>${rows.length ? `<ul>${rows.slice(0, 5).map(r => `<li><b>${esc(r.item || r.product || r.item_name || r.title || '')}</b>${r.spec ? ` <span class="muted">${esc(r.spec)}</span>` : ''} <span>${r.discard_qty != null && r.qty == null ? fmtNum(r.discard_qty) : fmtNum(r.qty)} ${esc(r.unit || '')}</span> <span class="small muted">${esc([r.req_no, r.vendor || r.customer, r.unit_name, r.start_time, String(r.created_at).slice(11, 16)].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>${rows.length > 5 ? `<p class="small muted">외 ${rows.length - 5}건</p>` : ''}` : '<p class="small muted">아직 없습니다.</p>'}`;
+    } catch { box.remove(); }
+  };
+  load();
+  const toastBox = $('#toast');
+  const watch = new MutationObserver(() => { if (!box.isConnected) return watch.disconnect(); if (toastBox.classList.contains('show') && !toastBox.classList.contains('err')) setTimeout(load, 400); });
+  watch.observe(toastBox, { attributes: true, attributeFilter: ['class'] });
 }
 const PAGES = {
   '#/': pageHome,
@@ -369,7 +406,7 @@ async function render() {
   shell();
   refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
-  try { await page($('#main')); applyView($('#main'), route); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); applyView($('#main'), route); foldHelp($('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
@@ -407,7 +444,7 @@ function pageAuth(mode = 'login', notice = '') {
 function alertsCard(a) {
   if (!a) return '';
   const items = []; const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
-  if (a.overdue_po_count) items.push(`<li><a href="#/logistics/receive"><b>납기가 지난 미입고 발주 ${a.overdue_po_count}건</b></a><div class="small muted">${a.overdue_pos.map(p => `${esc(p.due_date)} ${esc(p.vendor)} · ${esc(p.item)}${p.spec ? ' ' + esc(p.spec) : ''}`).join(' / ')}${more(a.overdue_po_count, a.overdue_pos.length)}</div></li>`);
+  if (a.overdue_po_count) items.push(`<li><a href="#/logistics/receive"><b>납기가 지난 미입고 발주 ${a.overdue_po_count}건</b></a><ul class="alert-lines small muted">${a.overdue_pos.slice(0, 5).map(p => `<li>${esc(p.due_date)} · ${esc(p.vendor)} · ${esc(p.item)}${p.spec ? ' ' + esc(p.spec) : ''}</li>`).join('')}</ul><div class="small muted">${more(a.overdue_po_count, a.overdue_pos.length)}</div></li>`);
   if (a.overdue_request_count) items.push(`<li><b>완료 희망일이 지난 의뢰 ${a.overdue_request_count}건</b><div class="small muted">${a.overdue_requests.map(r => `<a href="${REQ[r.type] ? (r.status === 'pending' ? REQ[r.type].intake : REQ[r.type].list) : '#/'}">${esc(r.due_date)} ${esc(REQ[r.type]?.label || r.type)} · ${esc(r.title)} (${esc(STATUS[r.status] || r.status)})</a>`).join(' / ')}${more(a.overdue_request_count, a.overdue_requests.length)}</div></li>`);
   const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
   for (const s of a.stale_approvals) { const [label, href] = staleLabel(s); items.push(`<li><a href="${href}"><b>${esc(label)} 대기 3일 초과 ${s.count}건</b></a><div class="small muted">가장 오래된 요청 ${esc(String(s.oldest).slice(0, 10))}</div></li>`); }
@@ -472,14 +509,74 @@ function tasksCard(tasks) {
 }
 
 // 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
+// Phone cards show the main fields; the rest (memo, entered by, row buttons…) opens with 「자세히」. Long lists show 30 at a time.
+const CARD_SECONDARY = new Set(['COA 요청', '비고', '메모', '입력자', '입고 처리자', '처리자', '사진·검수', 'LOT', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '사용', '출하', '조정', '안전재고', '최근 일자', '입력자 · 검사일', '입력자 / 입력시각', '수정', '사유', '거래처 · 담당', '시작', '종료', '작업시간', '인원', '불량 사유', '단가', '비용']);
+const NOWRAP_HEADS = new Set(['분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
     if (!table.classList.contains('keep-table')) table.classList.add('as-cards'); // small numeric tables opt out with keep-table
     const heads = $$('thead th', table).map(th => th.textContent.trim());
-    $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
+    const rows = $$('tbody tr', table);
+    rows.forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
+    // Desktop: columns that are empty on every row are left out; short values stay on one line.
+    const ths = $$('thead th', table);
+    heads.forEach((head, i) => {
+      const cells = rows.map(tr => tr.children[i]).filter(Boolean);
+      if (head && rows.length && cells.every(td => !td.textContent.trim() || td.textContent.trim() === '—')) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
+      if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
+    });
+    if (!table.classList.contains('as-cards')) return;
+    let secondary = 0;
+    rows.forEach(tr => [...tr.children].forEach(td => {
+      const label = td.dataset.label;
+      if (!td.querySelector('input, select, button') && (!td.textContent.trim() || td.textContent.trim() === '—')) td.classList.add('cell-empty');
+      const isSecondary = CARD_SECONDARY.has(label) || (!label && !td.querySelector('input[type=checkbox]') && td.querySelector('button, a.btn'));
+      if (isSecondary && td.textContent.trim() !== '') { td.classList.add('card-secondary'); secondary++; }
+    }));
+    if (secondary) rows.forEach(tr => {
+      if (!tr.querySelector('.card-secondary')) return;
+      const primary = [...tr.children].filter(td => !td.classList.contains('card-secondary') && !td.classList.contains('cell-empty') && !td.querySelector('input[type=checkbox]'));
+      const first = primary.find(td => ['품목명', '품목', '제품', '품명 · LOT'].includes(td.dataset.label)) || primary[0] || tr.children[0];
+      const more = document.createElement('button'); more.type = 'button'; more.className = 'card-more'; more.textContent = '자세히';
+      more.onclick = event => { event.stopPropagation(); tr.classList.toggle('card-open'); more.textContent = tr.classList.contains('card-open') ? '접기' : '자세히'; };
+      first.append(more);
+    });
+    if (rows.length > 30) {
+      rows.forEach((tr, i) => { if (i >= 30) tr.classList.add('card-later'); });
+      const wrap = table.closest('.table-wrap') || table;
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'btn block cards-more';
+      const label = () => { const left = $$('tr.card-later', table).length; button.textContent = `더 보기 (${left}건 남음)`; if (!left) button.remove(); };
+      button.onclick = () => { $$('tr.card-later', table).slice(0, 30).forEach(tr => tr.classList.remove('card-later')); label(); };
+      label(); wrap.after(button);
+    }
   });
 }
+// 4) Phone: list filters fold behind 「조건」 next to the keyword; the button shows how many conditions are changed.
+function foldListFilters() {
+  $$('form.list-filters:not([data-folded])').forEach(form => {
+    form.dataset.folded = 'true';
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'btn filter-toggle';
+    const changed = () => [...form.querySelectorAll('input, select')].filter(el => el.name && el.name !== 'q' && el.type !== 'search' && !el.disabled && (
+      el.tagName === 'SELECT' ? el.value !== ([...el.options].find(o => o.defaultSelected) || el.options[0] || {}).value
+      : el.type === 'checkbox' ? el.checked !== el.defaultChecked : el.value !== el.defaultValue)).length;
+    const update = () => { const n = changed(); button.textContent = (form.classList.contains('show-all') ? '조건 닫기' : n ? `조건 ${n}개 적용 중` : '조건') + (form.classList.contains('show-all') ? ' ▴' : ' ▾'); button.classList.toggle('primary', !!n && !form.classList.contains('show-all')); };
+    button.onclick = () => { form.classList.toggle('show-all'); update(); };
+    form.addEventListener('change', update); form.addEventListener('input', update); form.addEventListener('click', () => setTimeout(update));
+    const search = form.querySelector('.list-search'); if (search) search.after(button); else form.prepend(button);
+    update();
+  });
+}
+new MutationObserver(foldListFilters).observe(document.body, { childList: true, subtree: true });
+// 13) Phone: report sections fold to their titles (tap a title to open).
+function foldReportSections() {
+  $$('.report-chart-grid > section.card:not([data-fold]), #semiReportRoot section.card:not([data-fold])').forEach((section, i) => {
+    section.dataset.fold = ''; const title = section.querySelector('h3'); if (!title) return;
+    if (i > 0) section.classList.add('fold-closed');
+    title.classList.add('fold-title'); title.onclick = () => section.classList.toggle('fold-closed');
+  });
+}
+new MutationObserver(foldReportSections).observe(document.body, { childList: true, subtree: true });
 new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
@@ -639,7 +736,7 @@ async function pageReceive(main) {
   <h2>발주입고</h2>
   <div id="receiptChanges"></div>
   <p class="muted">구매의 발주목록을 불러옵니다. 입고된 항목을 체크하고 버튼을 누르세요. <b>입고확인</b> 또는 <b>수량상이</b> 처리 시 분석리스트에 수입검사(대기)가 자동 등록됩니다(수량상이는 실입고 수량 기준). 누구나 처리할 수 있으며, 처리한 사람과 내용은 각 항목의 <b>진행 코멘트</b>에 자동으로 남습니다.<br>수량상이 항목에 <b>입고확인·완료</b>를 누르면 실입고 수량 그대로 <b>입고 종결</b>됩니다(예: 100개 중 90개). 나중에 들어오는 나머지는 <b>기타입고</b>로 등록하세요. 이미 기록된 입고 수량의 수정·입고 취소는 <b>물류팀장 승인</b> 후 반영됩니다.</p>
-  ${listControls('rc', { dateLabel: '납기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>입고 상태<select name="recv" id="rcF"><option value="open">미완료</option><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>분류<select name="item_category">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}
+  ${listControls('rc', { dateLabel: '납기', dateFold: '납기일로 찾기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>입고 상태<select name="recv" id="rcF"><option value="open">미완료</option><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>분류<select name="item_category">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}
   <div class="actionbar">
     <span id="rcSelectedCount" class="muted">0개 선택</span>
     <button class="btn green" data-st="ok" title="수량상이 항목은 실입고 수량 그대로 입고 종결">✔ 입고확인·완료</button>
@@ -1183,6 +1280,10 @@ async function manageItemCategories(startClass = '원자재') {
 }
 
 const PERIOD = { day: '일간', week: '주간', month: '월간' };
+function planProgress(s) {
+  const rate = s.qty ? Math.round((s.actual_qty || 0) / s.qty * 1000) / 10 : 0;
+  return `<span class="plan-progress" title="달성률 ${rate}%"><span class="plan-bar"><i style="width:${Math.min(100, rate)}%"></i></span><span class="small">실적 ${s.actual_count ? fmtNum(s.actual_qty || 0) : '미입력'} / 계획 ${fmtNum(s.qty)} · ${rate}%</span></span>`;
+}
 async function pageSchedule(kind) {
   const main = $('#main'); const label = kind === 'finished' ? '완제품' : '반제품';
   const boms = await api('GET', '/api/boms?kind=' + kind);
@@ -1218,7 +1319,7 @@ async function pageSchedule(kind) {
   $('#scBom').onchange = previewBom; $('#scNew [name=qty]').oninput = previewBom;
   $$('#scNew [name=period]').forEach((r) => (r.onchange = () => { $('#scHint').textContent = hints[r.value]; }));
   const range = () => view === 'day' ? [base, base] : view === 'week' ? [mondayOf(base), addDays(mondayOf(base), 6)] : [monthStart(base), monthEnd(base)];
-  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<span class="small">계획 ${fmtNum(s.qty)} / 실제 ${s.actual_count ? fmtNum(s.actual_qty || 0) : '미입력'} / 달성률 ${s.qty ? Math.round((s.actual_qty || 0) / s.qty * 1000) / 10 : '—'}%</span><button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
+  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${planProgress(s)}<button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
     uxWrite(calendarKey, { view, base });

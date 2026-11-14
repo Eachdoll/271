@@ -306,3 +306,11 @@ INVITE_CODE=local-test-code npm start
 - 새 입력+목록 화면을 만들 때는 입력 양식을 목록 검색 양식(`listControls` / `.list-filters`)보다 앞에 두고 VIEW_SPLIT·PAGES·NAV에 두 주소를 등록하세요.
 - listControls의 `dateFold` 옵션은 기간 검색을 「…로 찾기」 접힘 안에 넣습니다(발주 목록의 납기일). 저장된 조회 조건에 날짜가 있으면 펼칩니다.
 - 사진 첨부 칸(.photo-picker)은 block으로 표시합니다(인라인이면 점선 테두리가 줄마다 끊김).
+
+## 화면 점검 개선 (15.34)
+- todayStr는 기기 시간대가 아닌 한국 시간(Asia/Seoul)으로 오늘 날짜를 냅니다(서버 날짜와 맞추기 위함). 해외 시간대 기기에서도 오늘 기준 조회가 같습니다.
+- applyView가 입력↔목록 전환 버튼(`.view-switch`)을 제목(h1) 오른쪽에 넣고, 입력 화면에는 「오늘 내가 입력한 것」(showRecentEntries, RECENT_SOURCES의 API에서 오늘·본인 작성분)을 붙입니다. 저장 성공 토스트가 뜨면 다시 불러옵니다. 입력 화면의 중복 카드 제목(h3)은 CSS로 숨깁니다.
+- foldHelp: 80자 이상 안내문(p.muted)은 「도움말 · 이 화면 설명」 접힘으로 바꿉니다.
+- labelGridTables: PC 표는 모든 행이 비었거나 「—」인 열을 숨기고(col-empty) 짧은 값 열은 한 줄로 둡니다(nowrap-cell). 휴대폰 카드는 CARD_SECONDARY 열을 숨기고 「자세히/접기」로 펼치며, 30건 초과는 「더 보기」로 나눠 보여 줍니다. 빈 칸(cell-empty)은 접힌 카드에서 숨깁니다.
+- foldListFilters: 휴대폰에서 목록 검색 조건을 「조건」 버튼 뒤로 접고 적용 중인 조건 수를 표시합니다. foldReportSections: 휴대폰 보고서의 두 번째 섹션부터 접어 둡니다.
+- 대시보드 납기 지난 발주는 한 줄씩 최대 5건, 생산계획 카드는 진행 막대(planProgress)로 보여 줍니다. 「규격·단위」 버튼은 직접 입력(임시 코드) 품목에만 표시합니다. 화면 모드 아이콘은 SVG입니다.
