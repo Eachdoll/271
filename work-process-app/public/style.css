@@ -592,3 +592,23 @@ input[type=date], input[type=time], input[type=month] { min-width: 0; max-width:
 .legend { flex-wrap: wrap; } /* 긴 번역(크메르어 등)에서도 범례가 화면 밖으로 나가지 않게 */
 .side-prefs { display: none; gap: 8px; align-items: center; padding: 4px 4px 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
 .side-prefs .lang-select { flex: 1; max-width: none; }
+
+/* 사진 첨부 칸 (15.33): 글자처럼 줄바꿈되며 점선 테두리가 끊기던 문제 */
+.photo-picker { display: block; }
+.photo-picker .photo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.photo-picker .thumbs:empty { display: none; }
+/* 다단 메뉴 · 입력/목록 화면 나누기 (15.33) */
+.nav-sub { margin: 2px 0; }
+.nav-sub > summary { list-style: none; cursor: pointer; padding: 9px 12px; border-radius: var(--radius-md, 12px); color: var(--text-2, var(--text)); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.nav-sub > summary::-webkit-details-marker { display: none; }
+.nav-sub > summary::after { content: '›'; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.nav-sub[open] > summary::after { transform: rotate(90deg); }
+.nav-sub > summary:hover { background: var(--bg); }
+.nav-sub > a { padding-left: 26px !important; font-size: 14px; }
+#main[data-view="entry"] [data-list-part] { display: none !important; }
+#main[data-view="list"] [data-entry-part], #main[data-view="list"] .multi-form, #main[data-view="list"] details:has(> #poNew), #main[data-view="list"] details:has(> #shNew) { display: none !important; }
+.view-switch { margin: 4px 0 12px; }
+.date-fold { flex-basis: 100%; }
+.date-fold > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; padding: 4px 0; }
+.date-fold-body { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+#main[data-view="list"] details:has(> form:not(.list-filters)) { display: none !important; }

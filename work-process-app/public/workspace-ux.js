@@ -76,6 +76,7 @@ function rememberList(form) {
   form.dataset.viewRemembered = 'true'; form.dataset.readOnly = 'true';
   const key = uxKey('filters', (location.hash || '#/') + ':' + form.id);
   const saved = uxRead(key); if (saved) uxFormRestore(form, saved);
+  const fold = form.querySelector?.('details.date-fold'); if (fold && [...fold.querySelectorAll('input')].some(input => input.value)) fold.open = true;
   const save = () => uxWrite(key, uxFormRead(form));
   form.addEventListener('input', save); form.addEventListener('change', save);
   form.addEventListener('submit', save);

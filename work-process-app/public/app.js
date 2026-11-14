@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.32';
+const APP_VERSION = '15.33';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -76,10 +76,11 @@ function formObj(form) {
   }
   return o;
 }
-function listControls(prefix, { placeholder = '검색어 입력', dateLabel = '', from = '', to = '', requiredDates = false, extra = '' } = {}) {
+function listControls(prefix, { placeholder = '검색어 입력', dateLabel = '', dateFold = '', from = '', to = '', requiredDates = false, extra = '' } = {}) {
+  const dates = dateLabel ? `<label>${dateLabel} 시작일<input type="date" name="from" id="${prefix}From" value="${from}" ${requiredDates ? 'required' : ''}></label><label>${dateLabel} 종료일<input type="date" name="to" id="${prefix}To" value="${to}" ${requiredDates ? 'required' : ''}></label>` : '';
+  // dateFold: an optional period, folded away after the keyword and other filters (opens when a date is set).
   return `<form id="${prefix}Filters" class="toolbar list-filters" data-read-only="true">
-    ${dateLabel ? `<label>${dateLabel} 시작일<input type="date" name="from" id="${prefix}From" value="${from}" ${requiredDates ? 'required' : ''}></label><label>${dateLabel} 종료일<input type="date" name="to" id="${prefix}To" value="${to}" ${requiredDates ? 'required' : ''}></label>` : ''}
-    <label class="list-search">키워드 검색<input type="search" name="q" id="${prefix}Q" maxlength="200" placeholder="${esc(placeholder)}"></label>${extra}
+    ${dateFold ? '' : dates}<label class="list-search">키워드 검색<input type="search" name="q" id="${prefix}Q" maxlength="200" placeholder="${esc(placeholder)}"></label>${extra}${dateFold ? `<details class="date-fold" ${from || to ? 'open' : ''}><summary>${dateFold}</summary><div class="date-fold-body">${dates}</div></details>` : ''}
     <button type="submit" class="btn primary">검색</button><button type="button" class="btn" data-clear-filters>초기화</button><span class="small muted" id="${prefix}Count" data-list-count role="status"></span></form>`;
 }
 function listInspectionSelect() { return `<label>검수 상태<select name="inspection_status"><option value="">전체 검수</option>${Object.entries(INSPECTION).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label>`; }
@@ -226,19 +227,81 @@ async function saveNewAttachments(entity, row, draft, form) {
 }
 
 // ───────────── 레이아웃 / 라우팅 ─────────────
+// 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
-  { group: '품질', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/specs', '검사규격 설정'], ['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
+  { group: '구매', items: [
+    { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+    ['#/purchase/vendors', '거래처 관리'],
+    { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
+    { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
+  ] },
+  { group: '품질', items: [
+    { sub: '수입·출하 검사', items: [['#/quality/inspections', '검사 이력'], ['#/quality/specs', '검사규격 설정']] },
+    { sub: '분석', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트']] },
+    { sub: 'VOC', items: [['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
+  ] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
-  { group: '생산', items: [['#/prod/request', '샘플의뢰(제품)'], ['#/prod/list', '샘플리스트(제품)'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정'], ['#/prod/semi/cut', '반제품 · 커팅/융착'], ['#/prod/semi/wash', '반제품 · 세탁(호기별)']] },
-  { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록'], ['#/logistics/stock', '재고 현황']] },
+  { group: '생산', items: [
+    { sub: '샘플(제품)', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트']] },
+    { sub: '완제품 생산', items: [['#/prod/finished/new', '생산계획 입력'], ['#/prod/finished', '생산일정 · 실적']] },
+    { sub: '반제품 생산', items: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
+    { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
+    { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
+  ] },
+  { group: '물류', items: [
+    { sub: '입고', items: [['#/logistics/receive', '발주입고 확인'], ['#/logistics/other/new', '기타입고 입력'], ['#/logistics/other', '기타입고 목록']] },
+    { sub: '출하', items: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
+    ['#/logistics/stock', '재고 현황'],
+  ] },
 ];
+// Entry and list screens built from one page: the page renders both parts and the view hides one.
+// key: route → [page route, view, title, other route, link label]
+const VIEW_SPLIT = {
+  '#/purchase/po/new': ['#/purchase/po', 'entry', '발주 입력', '#/purchase/po', '발주 목록 보기'],
+  '#/purchase/po': ['#/purchase/po', 'list', '발주 목록', '#/purchase/po/new', '발주 입력'],
+  '#/purchase/laundry/new': ['#/purchase/laundry', 'entry', '세탁 불량·폐기 입력', '#/purchase/laundry', '불량·폐기 목록 보기'],
+  '#/purchase/laundry': ['#/purchase/laundry', 'list', '세탁 불량·폐기 목록', '#/purchase/laundry/new', '불량·폐기 입력'],
+  '#/prod/finished/new': ['#/prod/finished', 'entry', '완제품 생산계획 입력', '#/prod/finished', '생산일정 보기'],
+  '#/prod/finished': ['#/prod/finished', 'list', '완제품 생산일정 · 실적', '#/prod/finished/new', '생산계획 입력'],
+  '#/prod/semi/new': ['#/prod/semi', 'entry', '반제품 생산계획 입력', '#/prod/semi', '생산일정 보기'],
+  '#/prod/semi': ['#/prod/semi', 'list', '반제품 생산일정', '#/prod/semi/new', '생산계획 입력'],
+  '#/prod/semi/cut/new': ['#/prod/semi/cut', 'entry', '커팅/융착 작업 입력', '#/prod/semi/cut', '작업 기록 보기'],
+  '#/prod/semi/cut': ['#/prod/semi/cut', 'list', '커팅/융착 작업 기록', '#/prod/semi/cut/new', '작업 입력'],
+  '#/prod/semi/wash/new': ['#/prod/semi/wash', 'entry', '세탁 작업 입력', '#/prod/semi/wash', '작업 기록 보기'],
+  '#/prod/semi/wash': ['#/prod/semi/wash', 'list', '세탁 작업 기록', '#/prod/semi/wash/new', '작업 입력'],
+  '#/logistics/other/new': ['#/logistics/other', 'entry', '기타입고 입력', '#/logistics/other', '기타입고 목록 보기'],
+  '#/logistics/other': ['#/logistics/other', 'list', '기타입고 목록', '#/logistics/other/new', '기타입고 입력'],
+  '#/logistics/ship/new': ['#/logistics/ship', 'entry', '출하 입력', '#/logistics/ship', '출하 목록 보기'],
+  '#/logistics/ship': ['#/logistics/ship', 'list', '출하 목록', '#/logistics/ship/new', '출하 입력'],
+};
+// Parts before the list filters are the entry part; the filters and everything after them are the list part.
+// Approval boxes at the top belong to the list. The multi-item form is added later and is hidden by CSS in the list view.
+function applyView(main, route) {
+  const split = VIEW_SPLIT[route]; if (!split) return;
+  const [, view, title, other, otherLabel] = split;
+  main.dataset.view = view;
+  const filters = $('form.list-filters', main);
+  if (filters) {
+    let sibling = filters; while (sibling) { sibling.dataset.listPart = ''; sibling = sibling.nextElementSibling; }
+    for (let el = filters.previousElementSibling; el; el = el.previousElementSibling) {
+      if (el.matches('#semiPending, #actualChanges, #receiptChanges')) el.dataset.listPart = '';
+      else if (el.matches('form, details, .card, .multi-form')) el.dataset.entryPart = '';
+    }
+  }
+  const h1 = $('h1', main);
+  if (h1) { const text = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (text) text.nodeValue = title + ' '; }
+  const link = document.createElement('p'); link.className = 'view-switch';
+  link.innerHTML = `<a class="btn small" href="${other}">${view === 'entry' ? '' : '＋ '}${esc(otherLabel)}${view === 'entry' ? ' →' : ''}</a>`;
+  (h1 || main.firstElementChild)?.after(link);
+}
 const PAGES = {
   '#/': pageHome,
   '#/reports': pageReports,
   '#/purchase/po': pagePO,
+  '#/purchase/po/new': pagePO,
   '#/purchase/laundry': pageLaundry,
+  '#/purchase/laundry/new': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
   '#/quality/inspections': pageInspections,
   '#/quality/specs': pageInspectionSpecs,
@@ -251,24 +314,33 @@ const PAGES = {
   '#/prod/request': () => pageIntake('sample'),
   '#/prod/list': () => pageWorkList('sample'),
   '#/prod/finished': () => pageSchedule('finished'),
+  '#/prod/finished/new': () => pageSchedule('finished'),
   '#/prod/semi': () => pageSchedule('semi'),
+  '#/prod/semi/new': () => pageSchedule('semi'),
   '#/logistics/receive': main => pageReceipts(main, 'purchase'),
   '#/logistics/ship': pageShip,
+  '#/logistics/ship/new': pageShip,
   '#/logistics/other': main => pageReceipts(main, 'other'),
+  '#/logistics/other/new': main => pageReceipts(main, 'other'),
   '#/logistics/stock': main => pageStock(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),
   '#/purchase/sample/list': () => pageWorkList('sample_goods'),
   '#/prod/semi/cut': main => pageSemi(main, 'cut'),
+  '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
+  '#/prod/semi/wash/new': main => pageSemi(main, 'wash'),
   '#/admin': pageAdmin,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
 };
 
 function shell() {
-  const cur = location.hash === '#/logistics/other' ? '#/logistics/receive' : location.hash || '#/';
-  const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`).join('')}</div>`).join('')
+  const cur = location.hash || '#/';
+  const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`;
+  const entry = item => Array.isArray(item) ? link(item)
+    : `<details class="nav-sub" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
+  const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(entry).join('')}</div>`).join('')
     + (ME.is_admin ? `<div class="nav-group"><div class="nav-title">관리</div><a href="#/admin" class="${cur === '#/admin' ? 'active' : ''}">관리자 설정</a><a href="#/admin/bom" class="${cur === '#/admin/bom' ? 'active' : ''}">제품등록</a></div>` : '');
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   $('#app').innerHTML = `
@@ -297,7 +369,7 @@ async function render() {
   shell();
   refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
-  try { await page($('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); applyView($('#main'), route); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
@@ -371,6 +443,11 @@ async function refreshNavBadges() {
       $('.nav-badge', link)?.remove();
       const n = counts[link.getAttribute('href')];
       if (n) link.insertAdjacentHTML('beforeend', ` <span class="nav-badge" title="내가 승인할 대기 ${n}건">${n}</span>`);
+    });
+    $$('.side .nav-sub').forEach(sub => {
+      const summary = $('summary', sub); $('.nav-badge', summary)?.remove();
+      const n = $$('a', sub).reduce((sum, a) => sum + (counts[a.getAttribute('href')] || 0), 0);
+      if (n) summary.insertAdjacentHTML('beforeend', ` <span class="nav-badge">${n}</span>`);
     });
   } catch { /* badges are a convenience; the pages still work without them */ }
 }
@@ -519,7 +596,7 @@ async function pagePO(main) {
   <h1>발주목록 <span class="dept">구매</span></h1>
   <p class="muted">발주서를 보낸 항목을 입력합니다. 물류에서 입고 확인하면 색이 바뀝니다.</p>
   <form class="card" id="poNew"><h3>발주 등록</h3>${poForm()}<div class="actions"><button class="btn primary">등록</button></div></form>
-  ${listControls('po', { dateLabel: '납기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>분류<select name="item_category" id="poCategory">${categoryOptions('', true)}</select></label><label>입고 상태<select name="recv" id="poF"><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>COA 요청<select name="coa_requested"><option value="">전체</option><option value="1">요청</option><option value="0">미요청</option></select></label>` })}
+  ${listControls('po', { dateLabel: '납기', dateFold: '납기일로 찾기', placeholder: '의뢰번호·거래처·품목·입력자·메모', extra: `<label>분류<select name="item_category" id="poCategory">${categoryOptions('', true)}</select></label><label>입고 상태<select name="recv" id="poF"><option value="">전체 입고</option><option value="none">미입고</option><option value="checking">확인중</option><option value="mismatch">수량상이</option><option value="ok">입고완료</option></select></label><label>COA 요청<select name="coa_requested"><option value="">전체</option><option value="1">요청</option><option value="0">미요청</option></select></label>` })}
   <div class="legend"><span class="chip green">입고완료</span><span class="chip red">수량상이</span><span class="chip yellow">확인중</span></div><div id="poList"></div>`;
   const filterForm = $('#poFilters', main); let queryVersion = 0;
   const load = async () => {
