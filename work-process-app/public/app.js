@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.30';
+const APP_VERSION = '15.32';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -36,7 +36,8 @@ function showInputAuthors() {
     if (!label) { label = document.createElement('p'); label.dataset.inputAuthor = ''; label.className = 'small muted input-author'; form.prepend(label); }
     const original = form.dataset.entryAuthor;
     const text = original !== undefined ? '입력자: ' + (original || '기존 기록: 미기록') + ' · 현재 작업자: ' + ME.name : '입력자(자동 기록): ' + ME.name;
-    if (label.textContent !== text) label.textContent = text;
+    // Compare with what we last wrote, not the visible text (the language layer may have translated it).
+    if (label.dataset.inputAuthor !== text) { label.dataset.inputAuthor = text; label.textContent = text; }
   }
 }
 new MutationObserver(showInputAuthors).observe(document.body, { childList: true, subtree: true });
