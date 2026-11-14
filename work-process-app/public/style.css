@@ -308,16 +308,16 @@ tr[hidden] { display: none !important; }
 .thumb { position: relative; display: inline-block; }
 .thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: #1b2333; color: #fff; font-size: 14px; line-height: 1; cursor: pointer; }
 
-/* 좁은 화면: 표를 카드로 (labelGridTables가 cards 클래스와 data-label을 붙임) */
+/* 좁은 화면: 표를 카드로 (labelGridTables가 as-cards 클래스와 data-label을 붙임) */
 @media (max-width: 700px) {
-  .table-wrap:has(> table.cards) { background: none; border: 0; box-shadow: none; overflow: visible; }
-  table.grid.cards, table.grid.cards tbody { display: block; }
-  table.grid.cards thead { display: none; }
-  table.grid.cards tbody tr { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 10px; padding: 6px 0; overflow: hidden; }
-  table.grid.cards td, table.grid.cards td.r, table.grid.cards td.c { display: block; position: relative; border: 0; padding: 4px 12px 4px 108px; min-height: 28px; white-space: normal; text-align: left; }
-  table.grid.cards td::before { content: attr(data-label); position: absolute; left: 12px; top: 5px; width: 90px; color: var(--muted); font-size: 12px; line-height: 1.35; text-align: left; font-weight: 400; }
-  table.grid.cards td[data-label=""] { padding-left: 12px; }
-  table.grid.cards td:empty { display: none; }
+  .table-wrap:has(> table.as-cards) { background: none; border: 0; box-shadow: none; overflow: visible; }
+  table.grid.as-cards, table.grid.as-cards tbody { display: block; }
+  table.grid.as-cards thead { display: none; }
+  table.grid.as-cards tbody tr { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 10px; padding: 6px 0; overflow: hidden; }
+  table.grid.as-cards td, table.grid.as-cards td.r, table.grid.as-cards td.c { display: block; position: relative; border: 0; padding: 4px 12px 4px 108px; min-height: 28px; white-space: normal; text-align: left; }
+  table.grid.as-cards td::before { content: attr(data-label); position: absolute; left: 12px; top: 5px; width: 90px; color: var(--muted); font-size: 12px; line-height: 1.35; text-align: left; font-weight: 400; }
+  table.grid.as-cards td[data-label=""] { padding-left: 12px; }
+  table.grid.as-cards td:empty { display: none; }
   table.grid.keep-table td, table.grid.keep-table th { padding: 8px 6px; }
 }
 #toast.err { width: min(520px, calc(100vw - 32px)); }

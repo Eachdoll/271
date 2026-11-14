@@ -40,6 +40,13 @@
 - photoPicker()는 파일 선택(교체)과 '바로 촬영'(capture, 이어 붙이기), 미리보기 × 빼기를 제공합니다. 최대 10장 규칙을 유지하세요.
 - 700px 이하에서는 table.grid를 카드로 표시합니다. labelGridTables()가 thead 글자를 각 td의 data-label로 붙이므로 새 표도 thead를 갖춘 table.grid로 만드세요. 열이 적은 숫자 요약표는 `keep-table` 클래스로 표 형태를 유지합니다.
 
+## 재고 현황 (15.5)
+- 재고는 저장하지 않고 worker.mjs의 STOCK_MOVEMENTS(UNION ALL)로 계산합니다: 발주입고(ok/mismatch의 recv_qty) + 기타입고 + 생산실적(취소 제외) − 생산 투입(실적 × BOM 스냅샷 자재량 ÷ 기준수량) − 출하 ± stock_adjustments. 재고에 영향을 주는 새 기록 종류를 만들면 여기에 한 줄을 추가하세요.
+- 합산 키는 TRIM(품목명)+단위(+규격)입니다. BOM 자재에는 규격이 없으므로 기본 보기는 품목+단위 합계(group=item)이고, group=spec에서는 생산 투입이 규격 없는 줄에 나옵니다. 품목명·단위를 임의로 보정·추정하지 마세요.
+- 0010: stock_adjustments(기초재고 opening / 실사 count / 조정 adjust, 추가만 가능·request_id 중복 방지)와 stock_levels(품목+단위별 안전재고). 입력은 logistics_approver(물류팀장)·관리자만, 조회는 로그인 사용자. 실사는 기준일 장부 수량과의 차이를 qty로, 센 수량을 counted_qty로 저장합니다.
+- 승인 대기 중인 입고 수정·실적 수정 요청은 재고에 반영하지 않습니다(승인 후 원본이 바뀌면 자동 반영). 미래 기준일은 거부합니다.
+- public/stock.js(화면·CSV)를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. 두 표는 전체 백업 대상이며 stock_levels 백업 커서는 rowid입니다.
+
 ## 확인
 ```bash
 npm test

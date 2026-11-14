@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.4';
+const APP_VERSION = '15.5';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -220,7 +220,7 @@ const NAV = [
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정']] },
-  { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록']] },
+  { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록'], ['#/logistics/stock', '재고 현황']] },
 ];
 const PAGES = {
   '#/': pageHome,
@@ -240,6 +240,7 @@ const PAGES = {
   '#/logistics/receive': main => pageReceipts(main, 'purchase'),
   '#/logistics/ship': pageShip,
   '#/logistics/other': main => pageReceipts(main, 'other'),
+  '#/logistics/stock': main => pageStock(main),
   '#/admin': pageAdmin,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
@@ -341,7 +342,7 @@ function tasksCard(tasks) {
 function labelGridTables() {
   $$('table.grid:not([data-labeled])').forEach(table => {
     table.dataset.labeled = 'true';
-    if (!table.classList.contains('keep-table')) table.classList.add('cards'); // small numeric tables opt out with keep-table
+    if (!table.classList.contains('keep-table')) table.classList.add('as-cards'); // small numeric tables opt out with keep-table
     const heads = $$('thead th', table).map(th => th.textContent.trim());
     $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
   });
@@ -361,6 +362,8 @@ async function pageHome(main) {
     <a class="kpi red" href="#/logistics/receive"><b>${d.po.mismatch}</b><span>수량상이</span></a>
     ${d.receiptChangesPending ? `<a class="kpi yellow" href="#/logistics/receive"><b>${d.receiptChangesPending}</b><span>입고 수량 수정 승인대기</span></a>` : ''}
     ${d.actualChangesPending ? `<a class="kpi yellow" href="#/prod/finished"><b>${d.actualChangesPending}</b><span>생산실적 수정 승인대기</span></a>` : ''}
+    ${d.stock?.low ? `<a class="kpi yellow" href="#/logistics/stock"><b>${d.stock.low}</b><span>안전재고 미달 품목</span></a>` : ''}
+    ${d.stock?.negative ? `<a class="kpi red" href="#/logistics/stock"><b>${d.stock.negative}</b><span>재고 음수 품목 (기록 확인)</span></a>` : ''}
     <a class="kpi" href="#/quality/request"><b>${r.analysis.pending}</b><span>분석 접수대기</span></a>
     <a class="kpi" href="#/quality/voc/request"><b>${r.voc.pending}</b><span>VOC 승인대기</span></a>
     <a class="kpi" href="#/dev/request"><b>${r.development.pending}</b><span>개발 접수대기</span></a>

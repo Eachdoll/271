@@ -71,6 +71,13 @@
       "when": 1794610000000,
       "tag": "0009_receipt_qty_changes",
       "breakpoints": false
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794650000000,
+      "tag": "0010_inventory",
+      "breakpoints": false
     }
   ]
 }

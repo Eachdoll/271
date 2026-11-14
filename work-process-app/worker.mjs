@@ -343,15 +343,15 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
   if (!backupTables.includes(query.table)) throw bad('백업할 표가 올바르지 않습니다.');
-  const key = query.table === 'settings' ? 'key' : query.table === 'item_batches' ? 'batch_id' : 'id';
-  const after = key !== 'id' ? String(query.after || '') : Number(query.after || 0);
+  const key = query.table === 'settings' ? 'key' : query.table === 'item_batches' ? 'batch_id' : query.table === 'stock_levels' ? 'rowid' : 'id';
+  const after = ['id', 'rowid'].includes(key) ? Number(query.after || 0) : String(query.after || '');
   if (typeof after === 'number' && (!Number.isSafeInteger(after) || after < 0)) throw bad('백업 위치가 올바르지 않습니다.');
-  const rows = await db.prepare(`SELECT * FROM ${query.table} WHERE ${key}>? ORDER BY ${key} LIMIT 200`).all(after);
+  const rows = await db.prepare(`SELECT ${key === 'rowid' ? 'rowid,' : ''}* FROM ${query.table} WHERE ${key}>? ORDER BY ${key} LIMIT 200`).all(after);
   return { rows, next: rows.length === 200 ? rows.at(-1)[key] : null };
 });
 
@@ -1064,6 +1064,102 @@ route('POST', '/api/actual-changes/:id/cancel', async ({ user, params }) => {
 
 route('GET', '/api/reports', async ({ query }) => buildReport(db, query, today()));
 
+// ── 물류: 재고 현황 (입고 + 생산실적 − 생산 투입 − 출하 ± 재고 조정으로 계산) ──
+// Stock is derived, never stored: each source row is one movement. BOM materials have no size,
+// so material use is booked without a spec; the default view therefore totals by item + unit.
+const STOCK_MOVEMENTS = `
+  SELECT TRIM(item) AS item, spec, TRIM(unit) AS unit, item_category AS category, recv_qty AS qty, 'po' AS src,
+    COALESCE(substr(recv_at,1,10), due_date, '0000-00-00') AS d, id AS ref, req_no || ' · ' || vendor AS memo
+    FROM purchase_orders WHERE recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL
+  UNION ALL
+  SELECT TRIM(item), spec, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')), item_category, qty, 'other', received_date, id, vendor
+    FROM other_receipts
+  UNION ALL
+  SELECT TRIM(s.product), s.spec, TRIM(COALESCE(NULLIF(s.unit,''), json_extract(s.bom_snapshot,'$.unit'), '')),
+    COALESCE(NULLIF(json_extract(s.bom_snapshot,'$.item_category'),''), CASE s.kind WHEN 'finished' THEN '제품' ELSE '' END), a.qty, 'prod', a.production_date, a.id, a.author_name
+    FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.voided_at IS NULL
+  UNION ALL
+  SELECT TRIM(json_extract(m.value,'$.item')), '', TRIM(COALESCE(json_extract(m.value,'$.unit'),'')), COALESCE(json_extract(m.value,'$.item_category'),''),
+    -a.qty * json_extract(m.value,'$.qty') / json_extract(s.bom_snapshot,'$.base_qty'), 'use', a.production_date, a.id, s.product || ' 생산 투입'
+    FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id, json_each(s.bom_snapshot,'$.materials') m
+    WHERE a.voided_at IS NULL AND s.bom_id IS NOT NULL AND json_extract(s.bom_snapshot,'$.base_qty')>0
+  UNION ALL
+  SELECT TRIM(item), spec, TRIM(unit), '', -qty, 'ship', ship_date, id, customer FROM shipments
+  UNION ALL
+  SELECT TRIM(item), spec, TRIM(unit), '', qty, 'adjust', adj_date, id, reason || ' · ' || created_by FROM stock_adjustments`;
+const stockRound = n => Math.round((Number(n) || 0) * 1e6) / 1e6;
+const canAdjustStock = user => !!user.is_admin || publicUser(user).roles.includes('logistics_approver');
+function stockAsOf(value) { const d = listFilterDate(value, '기준일') || today(); if (d > today()) throw bad('기준일은 오늘 이전으로 선택하세요.'); return d; }
+async function stockQuantity(item, unit, spec, asof) {
+  const row = await db.prepare(`SELECT COALESCE(SUM(qty),0) AS qty FROM (${STOCK_MOVEMENTS}) WHERE item=? AND unit=? ${spec === null ? '' : 'AND spec=?'} AND d<=?`).get(...(spec === null ? [item, unit, asof] : [item, unit, spec, asof]));
+  return stockRound(row.qty);
+}
+route('GET', '/api/inventory', async ({ user, query }) => {
+  const asof = stockAsOf(query.asof); const bySpec = query.group === 'spec';
+  if (query.group && !['item', 'spec'].includes(query.group)) throw bad('보기 기준을 확인하세요.');
+  const where = ['d<=?'], args = [asof];
+  applyListKeyword(where, args, query.q, ['item', 'spec']);
+  const rows = await db.prepare(`SELECT item, ${bySpec ? 'spec' : "''"} AS spec, unit, MAX(category) AS category,
+      SUM(CASE WHEN src IN ('po','other') THEN qty ELSE 0 END) AS received, SUM(CASE WHEN src='prod' THEN qty ELSE 0 END) AS produced,
+      SUM(CASE WHEN src='use' THEN -qty ELSE 0 END) AS used, SUM(CASE WHEN src='ship' THEN -qty ELSE 0 END) AS shipped,
+      SUM(CASE WHEN src='adjust' THEN qty ELSE 0 END) AS adjusted, SUM(qty) AS stock, MAX(d) AS last_date
+    FROM (${STOCK_MOVEMENTS}) WHERE ${where.join(' AND ')} GROUP BY 1,2,3 ORDER BY item, spec, unit LIMIT 5001`).all(...args);
+  if (rows.length > 5000) throw bad('품목이 너무 많습니다. 검색어로 범위를 좁히세요.');
+  const levels = new Map((await db.prepare('SELECT * FROM stock_levels').all()).map(l => [l.item + '\u0000' + l.unit, l.min_qty]));
+  // By size, BOM material use sits on the unsized row; only flag a shortage when the item as a whole is short.
+  const totals = new Map(); for (const r of rows) totals.set(r.item + '\u0000' + r.unit, (totals.get(r.item + '\u0000' + r.unit) || 0) + r.stock);
+  let list = rows.map(r => {
+    const min = bySpec ? null : levels.get(r.item + '\u0000' + r.unit) ?? null; const stock = stockRound(r.stock);
+    return { ...r, received: stockRound(r.received), produced: stockRound(r.produced), used: stockRound(r.used), shipped: stockRound(r.shipped), adjusted: stockRound(r.adjusted), stock, min_qty: min, low: min !== null && stock < min, negative: stock < 0 && stockRound(totals.get(r.item + '\u0000' + r.unit)) < 0 };
+  });
+  if (query.item_category) { const c = itemCategory(query.item_category); list = list.filter(r => r.category === c); }
+  if (query.state === 'low') list = list.filter(r => r.low); else if (query.state === 'negative') list = list.filter(r => r.negative);
+  else if (query.state === 'instock') list = list.filter(r => r.stock > 0); else if (query.state) throw bad('재고 상태를 확인하세요.');
+  return { asof, group: bySpec ? 'spec' : 'item', rows: list, can_adjust: canAdjustStock(user) };
+});
+route('GET', '/api/inventory/movements', async ({ query }) => {
+  const item = reqStr(query.item, '품목명', 200), unit = str(query.unit, 20); const asof = stockAsOf(query.asof);
+  const bySpec = query.spec !== undefined;
+  const rows = await db.prepare(`SELECT * FROM (${STOCK_MOVEMENTS}) WHERE item=? AND unit=? ${bySpec ? 'AND spec=?' : ''} AND d<=? ORDER BY d DESC, src, ref DESC LIMIT 201`).all(...(bySpec ? [item, unit, str(query.spec, 100), asof] : [item, unit, asof]));
+  return { rows: rows.slice(0, 200).map(r => ({ ...r, qty: stockRound(r.qty) })), more: rows.length > 200, stock: await stockQuantity(item, unit, bySpec ? str(query.spec, 100) : null, asof) };
+});
+// Opening stock, stock counts and corrections: logistics lead or admin only, append-only.
+route('POST', '/api/inventory/adjustments', async ({ user, body }) => {
+  if (!canAdjustStock(user)) throw new HttpError(403, '재고 조정은 물류팀장 또는 관리자만 할 수 있습니다.');
+  const item = reqStr(body.item, '품목명', 200), spec = str(body.spec, 100), unit = str(body.unit, 20);
+  const kind = String(body.kind || ''); if (!['opening', 'count', 'adjust'].includes(kind)) throw bad('조정 종류를 선택하세요.');
+  const date = dateStr(body.adj_date || today(), '기준일'); if (date > today()) throw bad('기준일은 오늘 이전으로 선택하세요.');
+  const reason = reqStr(body.reason, '사유', 500);
+  const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  const old = await db.prepare('SELECT * FROM stock_adjustments WHERE request_id=?').get(key);
+  if (old) { if (old.created_by_id !== user.id || old.item !== item || old.unit !== unit || old.spec !== spec || old.kind !== kind) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
+  let qty, counted = null;
+  if (kind === 'count') {
+    // A stock count records the difference between what was counted and what the records say on that date.
+    counted = num(body.counted_qty, '실사 수량');
+    qty = stockRound(counted - await stockQuantity(item, unit, body.spec === undefined || body.by_item ? null : spec, date));
+  } else {
+    qty = Number(body.qty); if (body.qty === '' || body.qty == null || !Number.isFinite(qty) || qty === 0) throw bad('조정 수량을 입력하세요. (감소는 음수)');
+    if (kind === 'opening' && qty < 0) throw bad('기초재고는 0보다 커야 합니다.');
+  }
+  const r = await db.prepare('INSERT INTO stock_adjustments(adj_date,item,spec,unit,qty,kind,counted_qty,reason,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(date, item, spec, unit, qty, kind, counted, reason, key, user.id, user.name);
+  return db.prepare('SELECT * FROM stock_adjustments WHERE id=?').get(r.lastInsertRowid);
+});
+route('PUT', '/api/inventory/levels', async ({ user, body }) => {
+  if (!canAdjustStock(user)) throw new HttpError(403, '안전재고 기준은 물류팀장 또는 관리자만 정할 수 있습니다.');
+  const item = reqStr(body.item, '품목명', 200), unit = str(body.unit, 20);
+  if (body.min_qty === '' || body.min_qty == null) { await db.prepare('DELETE FROM stock_levels WHERE item=? AND unit=?').run(item, unit); return { item, unit, min_qty: null }; }
+  const min = num(body.min_qty, '안전재고');
+  await db.prepare("INSERT INTO stock_levels(item,unit,min_qty,updated_by) VALUES(?,?,?,?) ON CONFLICT(item,unit) DO UPDATE SET min_qty=excluded.min_qty,updated_by=excluded.updated_by,updated_at=datetime('now','+9 hours')").run(item, unit, min, user.name);
+  return { item, unit, min_qty: min };
+});
+async function stockAlerts() {
+  const rows = await db.prepare(`SELECT item, unit, SUM(qty) AS stock FROM (${STOCK_MOVEMENTS}) WHERE d<=? GROUP BY 1,2`).all(today());
+  const levels = new Map((await db.prepare('SELECT * FROM stock_levels').all()).map(l => [l.item + '\u0000' + l.unit, l.min_qty]));
+  return { low: rows.filter(r => levels.has(r.item + '\u0000' + r.unit) && stockRound(r.stock) < levels.get(r.item + '\u0000' + r.unit)).length, negative: rows.filter(r => stockRound(r.stock) < 0).length };
+}
+
 // ── 내가 처리할 일: 내가 승인할 수 있는 대기 건과 내가 올린 요청의 상태 ──
 route('GET', '/api/my-tasks', async ({ user }) => {
   const roles = publicUser(user).roles;
@@ -1109,6 +1205,7 @@ route('GET', '/api/dashboard', async () => {
     schedulesToday: (await c("SELECT COUNT(*) c FROM schedules WHERE period='day' AND start_date=?", t)),
     actualChangesPending: (await c("SELECT COUNT(*) c FROM production_actual_changes WHERE status='pending'")),
     receiptChangesPending: (await c("SELECT COUNT(*) c FROM receipt_qty_changes WHERE status='pending'")),
+    stock: await stockAlerts(),
   };
 });
 
