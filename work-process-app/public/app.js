@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.3';
+const APP_VERSION = '15.9';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -49,13 +49,22 @@ async function api(method, url, body) {
   return data;
 }
 function toast(msg, kind = 'ok') {
-  const t = $('#toast'); t.textContent = msg; t.className = 'show ' + kind;
-  clearTimeout(toast._t); toast._t = setTimeout(() => (t.className = ''), 2600);
+  const t = $('#toast'); clearTimeout(toast._t);
+  if (kind === 'err') {
+    // Errors often say what to do next, so they stay until dismissed (or the next message / page change).
+    t.innerHTML = `<span>${esc(msg)}</span><button type="button" aria-label="닫기">×</button>`;
+    t.className = 'show err'; t.onclick = hideToast;
+  } else {
+    t.textContent = msg; t.className = 'show ' + kind; t.onclick = null;
+    toast._t = setTimeout(hideToast, 2600);
+  }
 }
+function hideToast() { const t = $('#toast'); if (t) t.className = ''; }
+window.addEventListener('hashchange', hideToast);
 const fail = (e) => toast(e.message || String(e), 'err');
 const userHasRole = (user, r) => user.roles.includes(r) || (['quality','dev'].includes(r) && user.roles.includes(r + '_approver'));
 const hasRole = (r) => ME && (ME.is_admin || userHasRole(ME, r));
-const canApproveRequest = (type) => hasRole({ voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
+const canApproveRequest = (type) => hasRole({ voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase' }[type]);
 function formObj(form) {
   const o = {};
   for (const el of form.elements) {
@@ -136,21 +145,30 @@ function lightbox(src) { modal(`<img class="lightbox" src="${esc(src)}" alt="사
 
 const INSPECTION = { unchecked: '미판정', normal: '이상 없음', abnormal: '이상 있음' };
 function inspectionBadge(row) { return `<span class="chip ${row.inspection_status === 'abnormal' ? 'red' : row.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[row.inspection_status] || '미판정'}</span>${row.photo_count ? ` <span class="small muted">사진 ${row.photo_count}장</span>` : ''}`; }
-function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><span class="muted small">사진을 눌러 크게 확인할 수 있습니다.</span><div class="thumbs" data-photo-preview></div></label>'; }
+function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><input data-photo-camera type="file" accept="image/*" capture="environment" hidden><span class="photo-tools"><button type="button" class="btn small" data-photo-shoot>📷 바로 촬영</button> <span class="muted small">촬영한 사진은 이어서 추가됩니다. 사진을 눌러 크게 보고, ×로 뺄 수 있습니다.</span></span><div class="thumbs" data-photo-preview></div></label>'; }
 function bindPhotoDraft(form, initial = []) {
   const state = { photos: [...initial], busy: false };
   const input = $('[data-photo-input]', form); const preview = $('[data-photo-preview]', form);
-  const show = () => { if (!preview) return; preview.innerHTML = state.photos.map(src => `<img src="${esc(src)}" alt="첨부 미리보기">`).join(''); $$('img', preview).forEach(image => image.onclick = event => { event.preventDefault(); event.stopPropagation(); lightbox(image.src); }); };
-  if (input) input.onchange = async () => {
+  const camera = $('[data-photo-camera]', form); const shoot = $('[data-photo-shoot]', form);
+  const show = () => {
+    if (!preview) return;
+    preview.innerHTML = state.photos.map((src, i) => `<span class="thumb"><img src="${esc(src)}" alt="첨부 미리보기"><button type="button" data-photo-remove="${i}" aria-label="이 사진 빼기">×</button></span>`).join('');
+    $$('img', preview).forEach(image => image.onclick = event => { event.preventDefault(); event.stopPropagation(); lightbox(image.src); });
+    $$('[data-photo-remove]', preview).forEach(button => button.onclick = event => { event.preventDefault(); event.stopPropagation(); if (state.busy) return; state.photos.splice(Number(button.dataset.photoRemove), 1); if (input) input.value = ''; show(); });
+  };
+  // Picking from the gallery replaces the selection; camera shots are appended one by one.
+  const take = async (source, append) => {
     const submit = $('button[type=submit], button.primary', form);
     state.busy = true; if (submit) submit.disabled = true;
     try {
-      if (input.files.length > 10) throw new Error('사진은 최대 10장까지 선택하세요.');
-      const photos = await Promise.all([...input.files].map(file => resizeImage(file)));
-      state.photos = photos; show();
-    } catch (error) { fail(error); input.value = ''; }
-    finally { state.busy = false; if (submit) submit.disabled = false; }
+      if ((append ? state.photos.length : 0) + source.files.length > 10) throw new Error('사진은 최대 10장까지 첨부할 수 있습니다.');
+      const photos = await Promise.all([...source.files].map(file => resizeImage(file)));
+      state.photos = append ? state.photos.concat(photos) : photos; show();
+    } catch (error) { fail(error); }
+    finally { if (append || !state.photos.length) source.value = ''; state.busy = false; if (submit) submit.disabled = false; }
   };
+  if (input) input.onchange = () => take(input, false);
+  if (camera && shoot) { shoot.onclick = event => { event.preventDefault(); if (!state.busy) camera.click(); }; camera.onchange = () => { if (camera.files.length) take(camera, true); }; }
   state.reset = () => { state.photos = []; if (input) input.value = ''; show(); };
   show(); return state;
 }
@@ -198,11 +216,11 @@ async function saveNewAttachments(entity, row, draft, form) {
 // ───────────── 레이아웃 / 라우팅 ─────────────
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/laundry', '세탁관리']] },
+  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)']] },
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
-  { group: '생산', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정']] },
-  { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록']] },
+  { group: '생산', items: [['#/prod/request', '샘플의뢰(제품)'], ['#/prod/list', '샘플리스트(제품)'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정'], ['#/prod/semi/cut', '반제품 · 커팅/융착'], ['#/prod/semi/wash', '반제품 · 세탁(호기별)']] },
+  { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록'], ['#/logistics/stock', '재고 현황']] },
 ];
 const PAGES = {
   '#/': pageHome,
@@ -222,6 +240,12 @@ const PAGES = {
   '#/logistics/receive': main => pageReceipts(main, 'purchase'),
   '#/logistics/ship': pageShip,
   '#/logistics/other': main => pageReceipts(main, 'other'),
+  '#/logistics/stock': main => pageStock(main),
+  '#/purchase/vendors': main => pageVendors(main),
+  '#/purchase/sample/request': () => pageIntake('sample_goods'),
+  '#/purchase/sample/list': () => pageWorkList('sample_goods'),
+  '#/prod/semi/cut': main => pageSemi(main, 'cut'),
+  '#/prod/semi/wash': main => pageSemi(main, 'wash'),
   '#/admin': pageAdmin,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
@@ -248,6 +272,7 @@ function shell() {
 async function render() {
   if (!ME) return pageAuth();
   shell();
+  refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
   try { await page($('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   window.scrollTo(0, 0);
@@ -282,18 +307,74 @@ function pageAuth(mode = 'login', notice = '') {
 }
 
 // ───────────── 홈: 대시보드 + 업무흐름 ─────────────
+// ── 내가 처리할 일: 승인 대기 배지와 대시보드 카드 ──
+function taskBadgeCounts(tasks) {
+  const counts = {}; const a = tasks.approvals;
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) counts[REQ[type].intake] = group.count;
+  if (a.actual_changes?.finished) counts['#/prod/finished'] = a.actual_changes.finished;
+  if (a.actual_changes?.semi) counts['#/prod/semi'] = a.actual_changes.semi;
+  if (a.receipt_changes?.count) counts['#/logistics/receive'] = a.receipt_changes.count;
+  if (a.semi_changes?.cut) counts['#/prod/semi/cut'] = a.semi_changes.cut;
+  if (a.semi_changes?.wash) counts['#/prod/semi/wash'] = a.semi_changes.wash;
+  if (a.temp_items?.count) counts['#/admin/bom'] = a.temp_items.count;
+  return counts;
+}
+async function refreshNavBadges() {
+  try {
+    const counts = taskBadgeCounts(await api('GET', '/api/my-tasks'));
+    $$('.side a').forEach(link => {
+      $('.nav-badge', link)?.remove();
+      const n = counts[link.getAttribute('href')];
+      if (n) link.insertAdjacentHTML('beforeend', ` <span class="nav-badge" title="내가 승인할 대기 ${n}건">${n}</span>`);
+    });
+  } catch { /* badges are a convenience; the pages still work without them */ }
+}
+function tasksCard(tasks) {
+  const a = tasks.approvals, m = tasks.mine; const todo = [], mine = [];
+  const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
+  for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
+  if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
+  if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
+  if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
+  if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
+  const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
+  for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
+  for (const c of m.actual_changes) mine.push(`<li>${state(c)} <a href="${c.kind === 'semi' ? '#/prod/semi' : '#/prod/finished'}">생산실적 · ${esc(c.product)}</a> <span class="small">${changeSummary(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items;
+  return `<div class="card tasks"><h3>내가 처리할 일</h3><div class="tasks-grid">
+    ${canApprove ? `<section><h4>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h4>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
+    <section><h4>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h4>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
+  </div></div>`;
+}
+
+// 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
+function labelGridTables() {
+  $$('table.grid:not([data-labeled])').forEach(table => {
+    table.dataset.labeled = 'true';
+    if (!table.classList.contains('keep-table')) table.classList.add('as-cards'); // small numeric tables opt out with keep-table
+    const heads = $$('thead th', table).map(th => th.textContent.trim());
+    $$('tbody tr', table).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
+  });
+}
+new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
+
 async function pageHome(main) {
-  const d = await api('GET', '/api/dashboard');
+  const [d, tasks] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks')]);
   const r = d.requests;
   const flow = (title, steps) => `<div class="flow"><h4>${title}</h4><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
   main.innerHTML = `
   <h1>대시보드 <span class="muted small">${d.today} (${dow(d.today)})</span></h1>
+  ${tasksCard(tasks)}
   <div class="kpis">
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
     <a class="kpi red" href="#/logistics/receive"><b>${d.po.mismatch}</b><span>수량상이</span></a>
     ${d.receiptChangesPending ? `<a class="kpi yellow" href="#/logistics/receive"><b>${d.receiptChangesPending}</b><span>입고 수량 수정 승인대기</span></a>` : ''}
     ${d.actualChangesPending ? `<a class="kpi yellow" href="#/prod/finished"><b>${d.actualChangesPending}</b><span>생산실적 수정 승인대기</span></a>` : ''}
+    ${d.stock?.low ? `<a class="kpi yellow" href="#/logistics/stock"><b>${d.stock.low}</b><span>안전재고 미달 품목</span></a>` : ''}
+    ${d.stock?.negative ? `<a class="kpi red" href="#/logistics/stock"><b>${d.stock.negative}</b><span>재고 음수 품목 (기록 확인)</span></a>` : ''}
     <a class="kpi" href="#/quality/request"><b>${r.analysis.pending}</b><span>분석 접수대기</span></a>
     <a class="kpi" href="#/quality/voc/request"><b>${r.voc.pending}</b><span>VOC 승인대기</span></a>
     <a class="kpi" href="#/dev/request"><b>${r.development.pending}</b><span>개발 접수대기</span></a>
@@ -302,9 +383,9 @@ async function pageHome(main) {
     <a class="kpi" href="#/purchase/laundry"><b>${fmtNum(d.laundryMonth)}</b><span>이번달 세탁 폐기</span></a>
   </div>
   <h2>진행 현황</h2>
-  <div class="table-wrap"><table class="grid">
+  <div class="table-wrap"><table class="grid keep-table">
     <thead><tr><th>구분</th><th>접수대기</th><th>대기</th><th>진행</th><th>완료</th></tr></thead>
-    <tbody>${['analysis', 'development', 'sample', 'voc'].map((t) => `<tr><td><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></td><td>${r[t].pending}</td><td>${r[t].waiting}</td><td>${r[t].progress}</td><td>${r[t].done}</td></tr>`).join('')}</tbody>
+    <tbody>${['analysis', 'development', 'sample', 'sample_goods', 'voc'].map((t) => `<tr><td><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></td><td>${r[t].pending}</td><td>${r[t].waiting}</td><td>${r[t].progress}</td><td>${r[t].done}</td></tr>`).join('')}</tbody>
   </table></div>
   <h2>업무 흐름</h2>
   <div class="flows">
@@ -319,7 +400,7 @@ async function pageHome(main) {
 }
 
 // ───────────── 구매: 발주목록 ─────────────
-const ITEM_CATEGORIES = ['제품', '상품', '원자재', '부자재'];
+const ITEM_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품'];
 function categoryOptions(value = '', all = false) {
   return `<option value="">${all ? '전체 분류' : '분류 선택'}</option>` + ITEM_CATEGORIES.map(category => `<option value="${category}" ${value === category ? 'selected' : ''}>${category}</option>`).join('');
 }
@@ -525,7 +606,7 @@ function bindReceiptBom(form, row = {}) {
   const load = async () => {
     const request = ++serial; const selected = select.value || (original ? String(row.bom_id) : '');
     const previous = choices.get(Number(selected));
-    const results = await api('GET', '/api/boms?q=' + encodeURIComponent(search.value));
+    const results = await api('GET', '/api/boms?temp=1&q=' + encodeURIComponent(search.value));
     if (request !== serial || !form.isConnected) return;
     choices = new Map(results.map(bom => [bom.id, bom]));
     if (previous && !choices.has(previous.id)) choices.set(previous.id, previous);
@@ -680,7 +761,7 @@ function fieldValue(f, r) {
   return s;
 }
 function requestForm(type, r) {
-  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','voc'].includes(type) ? photoPicker() : ''}</div>
+  return `<form class="req-form" ${r ? `data-entry-author="${esc(r.requester_name)}"` : ''}><div class="form-grid">${REQ[type].fields.map((f) => fieldInput(f, r)).join('')}${['development','sample','sample_goods','voc'].includes(type) ? photoPicker() : ''}</div>
     <div class="actions"><button class="btn primary">${r ? '저장' : (REQ[type].submitLabel || '의뢰 접수')}</button></div></form>`;
 }
 function statusChip(s) { return `<span class="chip st-${s}">${STATUS[s]}</span>`; }
@@ -703,18 +784,18 @@ function requestDetail(type, r, reload) {
       ${rows}
       ${r.result_note ? `<tr><th>결과/메모</th><td>${esc(r.result_note)}</td></tr>` : ''}
     </table>
-    ${['development','sample','voc'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
+    ${['development','sample','sample_goods','voc'].includes(type) || r.source_type ? '<h4>첨부 사진 · 기록</h4><div data-request-photos></div>' : ''}
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>${commentButton("request", r.id, r.title)}
-      ${['development','sample','voc'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
+      ${['development','sample','sample_goods','voc'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn" data-a="edit">수정</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
       ${approver && r.status === 'pending' ? '<button class="btn red" data-a="reject">반려</button><button class="btn primary" data-a="approve">승인</button>' : ''}
       ${approver && r.status === 'rejected' ? '<button class="btn primary" data-a="approve">승인</button>' : ''}
       ${mgr && ['waiting', 'progress', 'done'].includes(r.status) ? '<button class="btn" data-a="status">상태/결과 변경</button>' : ''}
     </div>`, { wide: true });
-  if (['development','sample','voc'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
+  if (['development','sample','sample_goods','voc'].includes(type)) renderAttachmentPreview($('[data-request-photos]', m.el), 'request', r.id);
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
@@ -828,11 +909,11 @@ function bomMaterialRow(material = {}) {
   return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'EA')}" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
 }
 function bomForm(bom = {}) {
-  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·상품은 구성자재 없이 입고 품목으로 등록할 수 있습니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
+  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>1차 분류<input name="cat1" maxlength="50" list="bomCat1" value="${esc(bom.cat1)}" placeholder="예) 글러브"></label><label>2차 분류<input name="cat2" maxlength="50" list="bomCat2" value="${esc(bom.cat2)}" placeholder="예) 니트릴"></label><label>3차 분류<input name="cat3" maxlength="50" list="bomCat3" value="${esc(bom.cat3)}" placeholder="예) 12인치"></label><datalist id="bomCat1"></datalist><datalist id="bomCat2"></datalist><datalist id="bomCat3"></datalist><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 1차·2차·3차 분류는 선택이며, 이미 쓴 값이 자동완성으로 나옵니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>BOM 관리</h1><p class="muted">품목을 원자재·부자재·제품·상품으로 분류하여 등록합니다. 생산과 기타입고에서 BOM을 검색·선택합니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>BOM · 품목코드 관리</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 분류하고, 필요하면 1차·2차·3차 분류까지 지정합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><button class="btn primary" id="newBom">새 BOM 등록</button>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
   const load = async () => {
     if (!main.isConnected) return;
@@ -840,21 +921,37 @@ async function pageBoms(main) {
     const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, boms.length);
-    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span> ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}<button class="btn" data-bom-edit="${bom.id}">수정</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
     const edit = bom => {
       const box = modal(`<h3>${bom ? 'BOM 수정' : '새 BOM 등록'}</h3>${bomForm(bom)}`, { wide: true });
       const form = $('form', box.el); const rows = $('[data-material-rows]', form);
+      // Suggest category values already in use; lower levels narrow to the level above.
+      api('GET', '/api/boms/categories').then(cats => {
+        const fill = () => { const uniq = list => [...new Set(list.filter(Boolean))].map(v => `<option value="${esc(v)}">`).join('');
+          $('#bomCat1', form).innerHTML = uniq(cats.map(c => c.cat1));
+          $('#bomCat2', form).innerHTML = uniq(cats.filter(c => !form.cat1.value || c.cat1 === form.cat1.value).map(c => c.cat2));
+          $('#bomCat3', form).innerHTML = uniq(cats.filter(c => (!form.cat1.value || c.cat1 === form.cat1.value) && (!form.cat2.value || c.cat2 === form.cat2.value)).map(c => c.cat3)); };
+        fill(); form.cat1.oninput = fill; form.cat2.oninput = fill;
+      }).catch(() => {});
       $('[data-material-add]', form).onclick = () => rows.insertAdjacentHTML('beforeend', bomMaterialRow());
       rows.onclick = event => { const button = event.target.closest('[data-material-remove]'); if (button) button.closest('tr').remove(); };
       form.onsubmit = async event => {
         event.preventDefault(); const button = $('button.primary', form); button.disabled = true;
         const values = formObj(form);
         const materials = $$('[data-material-row]', form).map(row => ({ item: $('[data-material-item]', row).value, item_category: $('[data-material-category]', row).value, qty: $('[data-material-qty]', row).value, unit: $('[data-material-unit]', row).value }));
-        try { await api(bom ? 'PUT' : 'POST', '/api/boms' + (bom ? '/' + bom.id : ''), { ...values, active: form.elements.active.checked, materials }); box.close(); toast('BOM을 저장했습니다.'); await load(); }
+        try { await api(bom ? 'PUT' : 'POST', '/api/boms' + (bom ? '/' + bom.id : ''), { ...values, active: form.elements.active.checked, materials }); box.close(); toast('BOM을 저장했습니다.'); await load(); refreshNavBadges(); }
         catch (error) { fail(error); } finally { button.disabled = false; }
       };
     };
     $('#newBom').onclick = () => edit();
+    $$('[data-bom-merge]', main).forEach(button => button.onclick = async () => {
+      const temp = boms.find(bom => bom.id === Number(button.dataset.bomMerge));
+      const targets = (await api('GET', '/api/boms')).filter(bom => bom.id !== temp.id);
+      if (!targets.length) return toast('합칠 정식 품목이 없습니다. 먼저 정식 코드로 확정하세요.', 'err');
+      const value = await promptBox(`${temp.product} (${temp.product_code}) 합치기`, `<p class="small muted">이 임시 품목으로 등록된 발주·출하·기타입고가 선택한 품목의 이름과 코드로 바뀌고, 임시 품목은 사용 중지됩니다. 수입검사 기록은 입고 당시 이름을 유지합니다.</p><label>합칠 품목 *<select name="target_id" required><option value="">선택</option>${targets.map(bom => `<option value="${bom.id}">[${esc(bom.item_category || '미분류')}] ${esc(bom.product)} ${esc(bom.product_code)}</option>`).join('')}</select></label>`);
+      if (!value) return;
+      try { await api('POST', `/api/boms/${temp.id}/merge`, value); toast('기존 품목으로 합쳤습니다.'); await load(); refreshNavBadges(); } catch (error) { fail(error); }
+    });
     $$('[data-bom-edit]', main).forEach(button => button.onclick = () => edit(boms.find(bom => bom.id === Number(button.dataset.bomEdit))));
     $$('[data-bom-disable]', main).forEach(button => button.onclick = async () => {
       if (!await confirmBox('이 BOM을 생산 선택 목록에서 사용 중지할까요? 기존 생산일정은 유지됩니다.')) return;

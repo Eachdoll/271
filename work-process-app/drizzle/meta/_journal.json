@@ -71,6 +71,41 @@
       "when": 1794610000000,
       "tag": "0009_receipt_qty_changes",
       "breakpoints": false
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794650000000,
+      "tag": "0010_inventory",
+      "breakpoints": false
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794660000000,
+      "tag": "0011_vendors_and_product_codes",
+      "breakpoints": false
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794670000000,
+      "tag": "0012_categories_lines_semi_records",
+      "breakpoints": false
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1794680000000,
+      "tag": "0013_semi_record_spec",
+      "breakpoints": false
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1794690000000,
+      "tag": "0014_semi_record_changes",
+      "breakpoints": false
     }
   ]
 }

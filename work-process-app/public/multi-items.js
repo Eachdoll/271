@@ -6,7 +6,8 @@ function lineInfo(row) {
   const data = typeof row.data === 'string' ? JSON.parse(row.data || '{}') : row.data || {};
   const snapshot = typeof row.bom_snapshot === 'string' ? JSON.parse(row.bom_snapshot || '{}') : row.bom_snapshot || {};
   const unit = row.unit || data.unit || snapshot.unit || '';
-  const parts = [row.spec || data.spec, unit, row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
+  const code = row.product_code ? (/^TMP-/.test(row.product_code) ? '임시코드 ' : '') + row.product_code : '';
+  const parts = [code, row.spec || data.spec, unit, row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
   if (row.type && row.type !== 'voc' && (row.qty ?? data.qty) != null) parts.push('수량 ' + fmtNum(row.qty ?? data.qty));
   if (row.batch_id) parts.push('묶음 ' + row.batch_id.slice(-8));
   const entity = lineEntity(row);
@@ -36,7 +37,8 @@ async function installMultiItems(legacy, entity, type = '') {
   if (entity === 'schedule') header = `<label>일정 기준<select name="period"><option value="day">일간</option><option value="week">주간 (월요일 시작)</option><option value="month">월간 (1일 시작)</option></select></label>${multiInput('start_date','계획일','date',todayStr())}`;
   if (entity === 'request') header = REQ[type].fields.filter(f => !['title','qty','lot','unit','req_qty','sample_qty','target_price'].includes(f.k)).map(f => fieldInput(f)).join('');
   else header += multiInput('note','공통 비고','text','',false);
-  const withPhotos = ['purchase_order','shipment','other_receipt','laundry'].includes(entity) || (entity === 'request' && ['voc','sample','development'].includes(type));
+  if (['purchase_order','shipment','other_receipt'].includes(entity)) header += '<div class="span3 small partner-hint" data-partner-hint></div>';
+  const withPhotos = ['purchase_order','shipment','other_receipt','laundry'].includes(entity) || (entity === 'request' && ['voc','sample','sample_goods','development'].includes(type));
   const form = document.createElement('form'); form.className = 'card multi-form';
   form.innerHTML = `<h3>${titles[entity]} · 여러 품목 한 번에 등록</h3><p class="small muted">공통 정보는 한 번 입력하고 품목 추가로 규격·사이즈별 수량을 입력하세요. 저장 후 품목별로 상태와 코멘트를 관리합니다. 최대 30품목입니다.</p><fieldset data-multi-fields><div class="form-grid">${header}</div><div data-multi-rows></div><button type="button" class="btn" data-add-item>＋ 품목 추가</button>${withPhotos ? `<p class="small muted">공통 첨부 사진은 등록하는 모든 품목에 적용됩니다. 품목별 사진은 저장 후 각 항목에서 추가할 수 있습니다.</p>${photoPicker()}` : ''}</fieldset><p role="status" data-multi-status class="small muted"></p><div class="actions"><button class="btn primary" data-multi-submit>1품목 함께 등록</button></div>`;
   const host = legacy.id ? legacy : legacy.closest('#reqNewBox');
@@ -45,15 +47,18 @@ async function installMultiItems(legacy, entity, type = '') {
   if (host.tagName === 'DETAILS') { host.open = false; $('summary',host).textContent = '단일 품목 입력 (기존 상세 양식)'; }
   else { const details = document.createElement('details'); details.className = 'card'; details.innerHTML = '<summary>단일 품목 입력 (기존 상세 양식)</summary>'; host.before(details); details.append(host); }
   const rowsRoot = $('[data-multi-rows]',form), status = $('[data-multi-status]',form), submit = $('[data-multi-submit]',form);
-  let boms = [], loadingBoms = ['other_receipt','schedule'].includes(entity);
+  // Items come from the product catalog by default; purchase orders and shipments may also be typed in,
+  // in which case the server issues a temporary code for an administrator to tidy up.
+  const picker = ['other_receipt','schedule','purchase_order','shipment'].includes(entity), freeEntry = ['purchase_order','shipment'].includes(entity);
+  let boms = [], loadingBoms = picker;
   const draft = withPhotos ? bindPhotoDraft(form) : { photos: [], busy: false, reset() {} };
   const key = () => crypto.randomUUID(); let requestId = key(), saved = null, payload = null, remaining = [], busy = false;
   const updateCount = () => { const count = $$('[data-multi-row]',form).length; submit.textContent = saved ? '사진 저장 재시도' : `${count}품목 함께 등록`; $('[data-add-item]',form).disabled = count >= 30; };
-  const optionHtml = () => `<option value="">${entity === 'schedule' ? '직접 입력 (BOM 선택 가능)' : 'BOM 품목을 선택하세요'}</option>${boms.filter(b => entity !== 'schedule' || b.kind === kind).map(b => `<option value="${b.id}">[${esc(b.item_category)}] ${esc(b.product)} ${esc(b.product_code)}</option>`).join('')}`;
+  const optionHtml = () => `<option value="">${entity === 'schedule' ? '직접 입력 (BOM 선택 가능)' : freeEntry ? '직접 입력 (임시 제품코드 부여)' : 'BOM 품목을 선택하세요'}</option>${boms.filter(b => entity !== 'schedule' || (b.kind === kind && !b.is_temp)).map(b => `<option value="${b.id}">[${esc(b.item_category || '미분류')}] ${esc(b.product)} ${esc(b.product_code)}${b.is_temp ? ' (임시)' : ''}</option>`).join('')}`;
   const add = () => {
     if ($$('[data-multi-row]',form).length >= 30) return;
     const row = document.createElement('fieldset'); row.dataset.multiRow = ''; row.className = 'multi-row';
-    row.innerHTML = `<legend>품목</legend><div class="form-grid">${['other_receipt','schedule'].includes(entity) ? `<label>BOM 검색<input type="search" data-bom-search placeholder="품목·코드 검색"></label><label class="span2">BOM 품목<select data-line-key="bom_id" ${entity === 'other_receipt' ? 'required' : ''}>${optionHtml()}</select></label>` : ''}<label>${entity === 'laundry' ? '옷 종류 (원피스·투피스 등)' : '품목명 / 제품명'} *<input data-line-key="item" required ${entity === 'other_receipt' ? 'readonly' : ''} maxlength="200"></label><label>규격·사이즈<input data-line-key="spec" maxlength="100" placeholder="예) S / M / L"></label><label>${entity === 'laundry' ? '입고' : entity === 'schedule' ? '계획' : ''}수량 *<input data-line-key="qty" type="number" min="0" step="any" required></label><label>단위<input data-line-key="unit" maxlength="20" placeholder="예) EA / BOX / 벌" ${entity === 'other_receipt' ? 'readonly' : ''}></label><label>LOT<input data-line-key="lot" maxlength="100"></label>${entity === 'purchase_order' ? `<label>분류 *<select data-line-key="item_category" required>${categoryOptions('',true).replace('전체 분류','분류 선택')}</select></label><label class="inline"><input data-line-key="coa_requested" type="checkbox">COA 요청</label>` : ''}${entity === 'laundry' ? '<label>폐기수량 *<input data-line-key="discard_qty" type="number" min="0" step="any" value="0" required></label>' : ''}${type === 'development' ? '<label>타겟단가 *<input data-line-key="target_price" required></label>' : ''}</div><div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div>`;
+    row.innerHTML = `<legend>품목</legend><div class="form-grid">${picker ? `<label>${freeEntry ? '품목 검색' : 'BOM 검색'}<input type="search" data-bom-search placeholder="품목·코드 검색"></label><label class="span2">${freeEntry ? '제품코드로 불러오기' : 'BOM 품목'}<select data-line-key="bom_id" ${entity === 'other_receipt' ? 'required' : ''}>${optionHtml()}</select></label>` : ''}<label>${entity === 'laundry' ? '옷 종류 (원피스·투피스 등)' : '품목명 / 제품명'} *<input data-line-key="item" required ${entity === 'other_receipt' ? 'readonly' : ''} maxlength="200"></label><label>규격·사이즈<input data-line-key="spec" maxlength="100" placeholder="예) S / M / L"></label><label>${entity === 'laundry' ? '입고' : entity === 'schedule' ? '계획' : ''}수량 *<input data-line-key="qty" type="number" min="0" step="any" required></label><label>단위<input data-line-key="unit" maxlength="20" placeholder="예) EA / BOX / 벌" ${entity === 'other_receipt' ? 'readonly' : ''}></label><label>LOT <span class="hint">(선택${entity === 'purchase_order' ? ' · 모르면 비워 두고 입고 후 입력' : ''})</span><input data-line-key="lot" maxlength="100"></label>${entity === 'purchase_order' ? `<label>분류 *<select data-line-key="item_category" required>${categoryOptions('',true).replace('전체 분류','분류 선택')}</select></label><label class="inline"><input data-line-key="coa_requested" type="checkbox">COA 요청</label>` : ''}${entity === 'laundry' ? '<label>폐기수량 *<input data-line-key="discard_qty" type="number" min="0" step="any" value="0" required></label>' : ''}${type === 'development' ? '<label>타겟단가 *<input data-line-key="target_price" required></label>' : ''}</div><div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div>`;
     rowsRoot.append(row);
     $('[data-remove-item]',row).onclick = () => { if ($$('[data-multi-row]',form).length === 1) return toast('품목은 1개 이상 필요합니다.','err'); row.remove(); updateCount(); };
     const select = $('[data-line-key=bom_id]',row);
@@ -62,15 +67,28 @@ async function installMultiItems(legacy, entity, type = '') {
         const bom = boms.find(b => b.id === Number(select.value));
         $('[data-line-key=item]',row).readOnly = !!bom || entity === 'other_receipt'; $('[data-line-key=unit]',row).readOnly = !!bom || entity === 'other_receipt';
         if (bom) { $('[data-line-key=item]',row).value = bom.product; $('[data-line-key=unit]',row).value = bom.unit; }
+        const category = $('[data-line-key=item_category]',row);
+        if (bom && category && [...category.options].some(option => option.value === bom.item_category)) category.value = bom.item_category;
       };
       $('[data-bom-search]',row).oninput = event => { const q = event.target.value.toLocaleLowerCase(); [...select.options].forEach(option => { option.hidden = !!option.value && !option.textContent.toLocaleLowerCase().includes(q); }); };
     }
-    updateCount();
+    updateCount(); return row;
   };
   add(); $('[data-add-item]',form).onclick = add;
+  const partner = $('[name=vendor],[name=customer]',form);
+  if (partner) bindPartnerPicker(partner, $('[data-partner-hint]',form), { recent: entity === 'purchase_order', onPick: item => {
+    // Fill the first blank line (or a new one) from a recent purchase; quantity is left for the user.
+    const row = $$('[data-multi-row]',form).find(r => !$('[data-line-key=item]',r).value.trim()) || add(); if (!row) return toast('품목은 30개까지 등록할 수 있습니다.','err');
+    const select = $('[data-line-key=bom_id]',row); const bom = item.product_code && boms.find(b => b.product_code === item.product_code);
+    if (select && bom) { select.value = String(bom.id); select.onchange(); } else $('[data-line-key=item]',row).value = item.item;
+    $('[data-line-key=spec]',row).value = item.spec || '';
+    const unit = $('[data-line-key=unit]',row); if (!unit.readOnly) unit.value = item.unit || '';
+    const category = $('[data-line-key=item_category]',row); if (category && item.item_category) category.value = item.item_category;
+    $('[data-line-key=qty]',row).focus();
+  } }).catch(() => {});
   if (loadingBoms) {
     submit.disabled = true;
-    try { boms = await api('GET','/api/boms'); $$('[data-line-key=bom_id]',form).forEach(select => { select.innerHTML = optionHtml(); }); status.textContent = ''; loadingBoms = false; }
+    try { boms = await api('GET','/api/boms?temp=1'); $$('[data-line-key=bom_id]',form).forEach(select => { select.innerHTML = optionHtml(); }); status.textContent = ''; loadingBoms = false; }
     catch(error) { status.textContent = 'BOM을 불러오지 못했습니다. 화면을 새로고침하세요. ' + error.message; }
     finally { submit.disabled = loadingBoms; }
   }
@@ -114,7 +132,7 @@ function enhanceMultiForms() {
   for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) installMultiItems(form,entity).catch(fail); }
   const form = $('#reqNewBox .req-form');
   if (form && !form.dataset.multiInstalled) {
-    const type = location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';
+    const type = location.hash.includes('/purchase/sample') ? 'sample_goods' : location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';
     installMultiItems(form,'request',type).catch(fail);
   }
 }

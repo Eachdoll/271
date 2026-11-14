@@ -34,6 +34,41 @@
 - 버전은 Git 커밋과 함께 관리하는 앱 버전이며 Sites의 배포 버전 번호와 별개입니다. 빌드·재배포만으로 올리지 마세요.
 - 화면 버전과 변경 사항을 확인하고 같은 Site에 배포합니다.
 
+## 화면 공통 (15.4)
+- GET /api/my-tasks: 내가 승인할 수 있는 대기 건(의뢰 승인권자·production_approver·logistics_approver·관리자만 해당 항목 포함)과 내가 올린 요청(대기 + 최근 7일 반려)을 반환합니다. 대시보드 '내가 처리할 일' 카드와 사이드 메뉴 배지가 사용합니다. 새 승인 흐름을 만들면 여기에도 추가하세요.
+- toast(msg,'err')는 닫을 때까지 유지하고 일반 안내는 2.6초 뒤 사라집니다.
+- photoPicker()는 파일 선택(교체)과 '바로 촬영'(capture, 이어 붙이기), 미리보기 × 빼기를 제공합니다. 최대 10장 규칙을 유지하세요.
+- 700px 이하에서는 table.grid를 카드로 표시합니다. labelGridTables()가 thead 글자를 각 td의 data-label로 붙이므로 새 표도 thead를 갖춘 table.grid로 만드세요. 열이 적은 숫자 요약표는 `keep-table` 클래스로 표 형태를 유지합니다.
+
+## 재고 현황 (15.5)
+- 재고는 저장하지 않고 worker.mjs의 STOCK_MOVEMENTS(UNION ALL)로 계산합니다: 발주입고(ok/mismatch의 recv_qty) + 기타입고 + 생산실적(취소 제외) − 생산 투입(실적 × BOM 스냅샷 자재량 ÷ 기준수량) − 출하 ± stock_adjustments. 재고에 영향을 주는 새 기록 종류를 만들면 여기에 한 줄을 추가하세요.
+- 합산 키는 TRIM(품목명)+단위(+규격)입니다. BOM 자재에는 규격이 없으므로 기본 보기는 품목+단위 합계(group=item)이고, group=spec에서는 생산 투입이 규격 없는 줄에 나옵니다. 품목명·단위를 임의로 보정·추정하지 마세요.
+- 0010: stock_adjustments(기초재고 opening / 실사 count / 조정 adjust, 추가만 가능·request_id 중복 방지)와 stock_levels(품목+단위별 안전재고). 입력은 logistics_approver(물류팀장)·관리자만, 조회는 로그인 사용자. 실사는 기준일 장부 수량과의 차이를 qty로, 센 수량을 counted_qty로 저장합니다.
+- 승인 대기 중인 입고 수정·실적 수정 요청은 재고에 반영하지 않습니다(승인 후 원본이 바뀌면 자동 반영). 미래 기준일은 거부합니다.
+- public/stock.js(화면·CSV)를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. 두 표는 전체 백업 대상이며 stock_levels 백업 커서는 rowid입니다.
+
+## 거래처·제품코드 (15.6)
+- 0011: vendors(name, name_key UNIQUE, contact_name, phone)와 boms.is_temp, purchase_orders/shipments.product_code. 기존 행의 product_code는 빈 값으로 두고 추정·일괄 채우기를 하지 마세요.
+- 거래처는 로그인 사용자 누구나 등록·수정합니다(삭제는 등록자·관리자). 발주·기타입고·출하에서 쓴 이름은 ensureVendor()가 자동 등록합니다. 기록에는 이름 문자열을 저장하므로 거래처 삭제·개명은 과거 기록을 바꾸지 않습니다.
+- 이름 비교는 nameKey()(공백 제거·소문자)로 합니다. GET /api/vendors/recent-items?vendor= 는 그 거래처의 최근 발주 품목(품목·규격·단위별 최신 1건)을 돌려주고, 발주 다품목 양식이 '최근 매입 품목' 버튼으로 보여 줍니다.
+- 품목(boms)이 제품코드 원본입니다. 발주·출하는 catalogItem()으로 연결합니다: bom_id 선택 > 같은 이름(공백·대소문자 무시)의 활성 품목 > 없으면 is_temp=1 임시 품목 생성(TMP-0000 형식). 저장되는 품목명은 품목 원본의 이름입니다.
+- GET /api/boms는 기본적으로 임시 품목을 제외합니다(생산 BOM 선택용). 품목 선택기는 temp=1, 관리자 목록은 include_archived=1, 정리 대상만은 temp=only.
+- 임시 품목 정리는 관리자만: PUT /api/boms/:id로 정식 코드 저장(TMP- 코드는 거부) 또는 POST /api/boms/:id/merge {target_id}로 기존 품목에 합치기. 두 경우 모두 relinkCatalog()가 그 임시 코드를 쓴 발주·출하·기타입고의 품목명/코드를 한 batch로 바꿉니다. 수입검사 스냅샷은 바꾸지 않습니다. 정식 품목의 일반 수정은 과거 기록을 바꾸지 않습니다.
+- public/master.js(거래처 화면·선택 도우미)를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. vendors는 전체 백업 대상입니다. my-tasks는 관리자에게 임시 품목 수(temp_items)를 알려 줍니다.
+
+## 분류·샘플의뢰(상품)·반제품 기록 (15.7)
+- 품목 분류는 원자재/부자재/반제품/제품/상품입니다(서버·화면의 ITEM_CATEGORIES 순서 유지). other_receipts 테이블의 CHECK는 기존 4개 분류 그대로이므로 반제품은 기타입고로 받지 않습니다(서버가 400으로 안내). 테이블을 다시 만들어 제약을 바꾸지 마세요.
+- 0012: boms.cat1/cat2/cat3(선택, 하위 단계는 상위 단계 필요), production_units(라인 line / 세탁 호기 washer), semi_records(커팅/융착 cut = 라인별, 세탁 wash = 호기별).
+- 재고 현황의 분류·제품코드·1~3차 분류는 품목(boms)에 같은 이름이 등록되어 있으면 그 값을 우선합니다. 등록되지 않은 품목은 기록에 있는 분류를 씁니다. 반제품 생산일정 실적은 분류 '반제품'으로 잡습니다.
+- requests.type=sample_goods(샘플의뢰(상품)): 접수번호 G, 승인·상태 변경은 purchase 역할 또는 관리자. 기존 sample은 화면 이름만 샘플의뢰(제품)로 바꿨고 규칙은 그대로입니다. 새 의뢰 종류를 만들면 worker의 REQUEST_* 표, forms.js의 REQ, app.js의 PAGES/NAV/canApproveRequest, multi-items.js의 종류 판별을 함께 고치세요.
+- 라인·호기는 production 역할/관리자가 추가·이름 변경·사용 중지합니다(삭제 없음). semi_records.unit_name은 입력 당시 이름의 스냅샷입니다.
+- 반제품 품목은 worker.mjs와 public/semi.js의 SEMI_PRODUCTS(와이퍼: 부직포와이퍼·천와이퍼 / 심리스글러브: 스무드·타키)입니다. 커팅/융착은 종류 필수, 세탁은 와이퍼/심리스글러브만으로도 기록합니다. 입력은 로그인 사용자, 수정·삭제는 등록자·production·관리자. 미래 작업일은 거부합니다.
+- 0013: semi_records.spec. 심리스글러브는 사이즈 XS/S/M/L/XL(SEMI_SIZES), 와이퍼는 인치 규격을 `9인치` 형식으로 저장합니다(semiSpec()이 9, 9인치, 9" 입력을 정규화). 커팅/융착은 필수, 세탁은 선택입니다. 사이즈를 품목 이름이나 코드에 넣지 말고 spec에 두세요.
+- 커팅/융착(process='cut') 기록은 STOCK_MOVEMENTS에 반제품 생산으로 들어갑니다(품목명: 부직포와이퍼·천와이퍼·심리스 스무드·심리스 타키, 규격 = spec). 세탁 기록은 같은 물건의 공정이라 재고에 넣지 않습니다. 같은 생산량을 반제품 생산일정 실적에도 입력하면 재고가 이중으로 잡히니 화면 안내를 유지하세요.
+- 0014 semi_record_changes: 반제품 기록의 수량·품목·사이즈·단위·작업일·라인 변경과 삭제는 PUT/DELETE /api/semi-records/:id가 사유와 함께 pending 요청을 만들고, production_approver(생산팀장)·관리자가 POST /api/semi-changes/:id/approve|reject 해야 반영됩니다(요청자는 /cancel). LOT·비고만 바뀌면 바로 반영합니다. 기록당 pending 1건, 승인 시 old_data가 현재 기록과 같아야 합니다. my-tasks에 semi_changes가 포함됩니다.
+- 샘플의뢰(상품)의 승인자는 purchase 역할(구매 담당자)·관리자로 확정되었습니다.
+- 발주의 LOT는 선택입니다. public/semi.js를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. production_units·semi_records는 전체 백업 대상입니다.
+
 ## 확인
 ```bash
 npm test

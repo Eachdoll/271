@@ -290,3 +290,41 @@ tr[hidden] { display: none !important; }
 
 .app-version { font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
 .auth-card > .app-version { text-align: center; }
+
+/* 오류 안내: 닫을 때까지 유지 */
+#toast.err { pointer-events: auto; cursor: pointer; border-radius: 14px; display: flex; align-items: flex-start; gap: 10px; text-align: left; line-height: 1.45; }
+#toast.err button { border: 0; background: none; color: #fff; font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px; flex: none; }
+
+/* 내가 처리할 일 · 메뉴 배지 */
+.nav-badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 99px; background: var(--red); color: #fff; font-size: 11.5px; font-weight: 700; text-align: center; line-height: 20px; }
+.tasks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 28px; }
+.tasks ul { list-style: none; margin: 0; padding: 0; }
+.tasks li { padding: 7px 0; border-top: 1px solid var(--line); }
+.tasks li:first-child { border-top: 0; }
+.tasks h4 { display: flex; align-items: center; gap: 6px; }
+
+/* 사진: 바로 촬영 · 빼기 */
+.photo-tools { display: block; margin-top: 6px; font-weight: 400; }
+.thumb { position: relative; display: inline-block; }
+.thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: #1b2333; color: #fff; font-size: 14px; line-height: 1; cursor: pointer; }
+
+/* 좁은 화면: 표를 카드로 (labelGridTables가 as-cards 클래스와 data-label을 붙임) */
+@media (max-width: 700px) {
+  .table-wrap:has(> table.as-cards) { background: none; border: 0; box-shadow: none; overflow: visible; }
+  table.grid.as-cards, table.grid.as-cards tbody { display: block; }
+  table.grid.as-cards thead { display: none; }
+  table.grid.as-cards tbody tr { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 10px; padding: 6px 0; overflow: hidden; }
+  table.grid.as-cards td, table.grid.as-cards td.r, table.grid.as-cards td.c { display: block; position: relative; border: 0; padding: 4px 12px 4px 108px; min-height: 28px; white-space: normal; text-align: left; }
+  table.grid.as-cards td::before { content: attr(data-label); position: absolute; left: 12px; top: 5px; width: 90px; color: var(--muted); font-size: 12px; line-height: 1.35; text-align: left; font-weight: 400; }
+  table.grid.as-cards td[data-label=""] { padding-left: 12px; }
+  table.grid.as-cards td:empty { display: none; }
+  table.grid.keep-table td, table.grid.keep-table th { padding: 8px 6px; }
+}
+#toast.err { width: min(520px, calc(100vw - 32px)); }
+#toast.err span { flex: 1; }
+input[data-photo-camera] { display: none !important; }
+
+/* 거래처 안내 · 최근 매입 품목 */
+.partner-hint:empty { display: none; }
+.recent-items { margin-top: 6px; }
+.recent-items .btn { margin: 4px 4px 0 0; font-weight: 400; }

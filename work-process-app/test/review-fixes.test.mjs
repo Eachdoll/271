@@ -136,3 +136,25 @@ test('Correcting or cancelling a recorded actual needs the production team lead;
   assert.equal((await worker2('POST', `${endpoint}/${zero.body.id}/changes`, { production_date: future.toISOString().slice(0, 10), reason: '미래' })).status, 400);
   assert.equal((await worker2('POST', `${endpoint}/${zero.body.id}/changes`, { reason: '변경 없음' })).status, 400);
 });
+
+test('My tasks lists only what I may approve and the state of my own requests', async () => {
+  const mineBefore = (await staff('GET', '/api/my-tasks')).body;
+  assert.deepEqual(Object.keys(mineBefore.approvals.requests), [], 'no approval rights → nothing to approve');
+  assert.equal(mineBefore.approvals.actual_changes, undefined); assert.equal(mineBefore.approvals.receipt_changes, undefined);
+  const made = (await staff('POST', '/api/requests', { type: 'analysis', title: '내 할일 시료', category: '수입검사' })).body;
+  assert.ok((await staff('GET', '/api/my-tasks')).body.mine.requests.some(r => r.id === made.id && r.status === 'pending'));
+  const forApprover = (await approver('GET', '/api/my-tasks')).body.approvals;
+  assert.deepEqual(Object.keys(forApprover.requests).sort(), ['analysis', 'voc']);
+  assert.ok(forApprover.requests.analysis.items.some(r => r.id === made.id)); assert.ok(forApprover.requests.analysis.count >= 1);
+  assert.equal((await quality('GET', '/api/my-tasks')).body.approvals.requests.analysis, undefined, 'team staff are not approvers');
+  await approver('POST', `/api/requests/${made.id}/reject`, { reason: '시료 부족' });
+  const rejected = (await staff('GET', '/api/my-tasks')).body.mine.requests.find(r => r.id === made.id);
+  assert.equal(rejected.status, 'rejected'); assert.equal(rejected.reject_reason, '시료 부족');
+  const po = (await staff('POST', '/api/po', { req_no: 'PR-MT', vendor: 'V', item: '할일', qty: 10, due_date: '2026-11-20', item_category: '원자재' })).body;
+  await staff('POST', '/api/po/receive', { ids: [po.id], status: 'ok' });
+  const change = (await staff('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', recv_qty: 9, reason: '재검수' })).body.change;
+  assert.ok((await staff('GET', '/api/my-tasks')).body.mine.receipt_changes.some(c => c.id === change.id));
+  const adminTasks = (await admin('GET', '/api/my-tasks')).body.approvals;
+  assert.ok(adminTasks.receipt_changes.items.some(c => c.id === change.id)); assert.ok('actual_changes' in adminTasks);
+  assert.equal((await client()('GET', '/api/my-tasks')).status, 401);
+});
