@@ -322,3 +322,9 @@ INVITE_CODE=local-test-code npm start
 - 저장 버튼 상태: 저장 중(`.is-loading`, disabled, form aria-busy, 「저장 중…」) → 저장됨(`.is-done`, 「저장됨 ✓」) → 0.5초 뒤 닫힘. 실패하면 버튼을 다시 켭니다. 결과는 `[data-save-status]`(aria-live)로도 알립니다.
 - 하한·상한은 `type=text inputmode=decimal`입니다(number 칸은 잘못 친 값을 빈 값으로 바꿔 오류 안내를 할 수 없음). data-k 이름·보내는 값은 그대로입니다.
 - modal()은 Tab/Shift+Tab을 창 안에서 순환시키고 닫을 때 연 버튼으로 포커스를 돌려줍니다(맨 위 창만 키 처리). 폼은 저장 후 다시 그려진 목록의 버튼으로 포커스를 돌려줍니다.
+
+## 대시보드 화면 구성 (15.36)
+- pageHome은 같은 데이터(/api/dashboard, /api/my-tasks, /api/alerts)·같은 숫자·같은 링크를 그대로 쓰고 배치만 바꿨습니다: 제목+날짜 → 내가 처리할 일·확인이 필요한 일(넓은 화면 2열) → 「현황 한눈에」(구매·물류 / 재고·생산 / 의뢰 접수 대기 묶음) → 진행 현황 표 → 업무 흐름(휴대폰은 접힘, 넓은 화면은 펼침).
+- KPI 타일은 `kpi(href, 값, 이름, tone, note)`로 만들고 0건은 `.is-zero`로 흐리게 합니다. 조건부 타일(입고 수정 승인대기, 안전재고 미달, 재고 음수, 생산실적 수정 승인대기)의 표시 조건은 이전과 같습니다. 휴대폰에서는 2열입니다.
+- 제목 계층: h1 대시보드 → h2 카드·섹션 → h3 하위(tasksCard·alertsCard도 h2/h3로 바뀜). 진행 현황 표는 caption(sr-only)과 th scope를 씁니다. 문장 속 링크는 밑줄로도 구분합니다.
+- 라이트 모드 노란 글자(.chip.yellow, .kpi.yellow 숫자)는 대비 4.5:1을 위해 진하게 덮어씁니다. 다크는 기존 색 유지. axe-core(wcag2a/aa·best-practice)로 휴대폰 라이트·다크와 PC에서 위반 0건을 확인했습니다.
