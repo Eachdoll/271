@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.12';
+const APP_VERSION = '15.16';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -216,7 +216,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // ───────────── 레이아웃 / 라우팅 ─────────────
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)']] },
+  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰(제품)'], ['#/prod/list', '샘플리스트(제품)'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정'], ['#/prod/semi/cut', '반제품 · 커팅/융착'], ['#/prod/semi/wash', '반제품 · 세탁(호기별)']] },
@@ -227,6 +227,7 @@ const PAGES = {
   '#/reports': pageReports,
   '#/purchase/po': pagePO,
   '#/purchase/laundry': pageLaundry,
+  '#/purchase/laundry-reports': pageLaundryReports,
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
   '#/quality/voc/request': () => pageIntake('voc'),
@@ -307,6 +308,27 @@ function pageAuth(mode = 'login', notice = '') {
 }
 
 // ───────────── 홈: 대시보드 + 업무흐름 ─────────────
+// ── 확인이 필요한 일: 기한 경과, 오래된 승인 대기, 수율 미달, 백업 ──
+function alertsCard(a) {
+  if (!a) return '';
+  const items = []; const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
+  if (a.overdue_po_count) items.push(`<li><a href="#/logistics/receive"><b>납기가 지난 미입고 발주 ${a.overdue_po_count}건</b></a><div class="small muted">${a.overdue_pos.map(p => `${esc(p.due_date)} ${esc(p.vendor)} · ${esc(p.item)}${p.spec ? ' ' + esc(p.spec) : ''}`).join(' / ')}${more(a.overdue_po_count, a.overdue_pos.length)}</div></li>`);
+  if (a.overdue_request_count) items.push(`<li><b>완료 희망일이 지난 의뢰 ${a.overdue_request_count}건</b><div class="small muted">${a.overdue_requests.map(r => `<a href="${REQ[r.type] ? (r.status === 'pending' ? REQ[r.type].intake : REQ[r.type].list) : '#/'}">${esc(r.due_date)} ${esc(REQ[r.type]?.label || r.type)} · ${esc(r.title)} (${esc(STATUS[r.status] || r.status)})</a>`).join(' / ')}${more(a.overdue_request_count, a.overdue_requests.length)}</div></li>`);
+  const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
+  for (const s of a.stale_approvals) { const [label, href] = staleLabel(s); items.push(`<li><a href="${href}"><b>${esc(label)} 대기 3일 초과 ${s.count}건</b></a><div class="small muted">가장 오래된 요청 ${esc(String(s.oldest).slice(0, 10))}</div></li>`); }
+  if (a.low_yield.length) items.push(`<li><a href="#/reports"><b>최근 7일 수율 목표 미달 ${a.low_yield.length}곳</b></a><div class="small muted">${a.low_yield.slice(0, 5).map(r => `${esc(r.unit_name)}(${r.process === 'cut' ? '커팅/융착' : '세탁'}) <span class="red-text">${r.yield_rate}%</span> / 목표 ${r.target}%`).join(' · ')}</div></li>`);
+  if (a.backup && (a.backup.days === null || a.backup.days >= 7)) items.push(`<li><a href="#/admin"><b>${a.backup.days === null ? '전체 백업을 아직 받지 않았습니다' : `마지막 전체 백업이 ${a.backup.days}일 전입니다`}</b></a><div class="small muted">관리자 설정 → 전체 백업 다운로드 (주 1회 이상 권장)</div></li>`);
+  if (!items.length) return '';
+  return `<div class="card tasks alerts"><h3>확인이 필요한 일 <span class="chip red">${items.length}</span></h3><ul>${items.join('')}</ul></div>`;
+}
+// 단위 입력칸 자동완성: 원단은 yd, 와이퍼는 매, 글러브는 켤레가 많습니다. 직접 입력도 됩니다.
+const UNIT_SUGGESTIONS = ['yd', '매', '켤레', 'EA', 'BOX', 'kg', '롤', 'm', '벌'];
+function suggestUnits() {
+  if (!document.getElementById('unitSuggestions')) document.body.insertAdjacentHTML('beforeend', `<datalist id="unitSuggestions">${UNIT_SUGGESTIONS.map(unit => `<option value="${unit}">`).join('')}</datalist>`);
+  $$('input[name=unit]:not([list]), input[data-line-key=unit]:not([list]), input[data-k=unit]:not([list]), input[data-material-unit]:not([list])').forEach(input => { input.setAttribute('list', 'unitSuggestions'); if (/EA \/ BOX|매 \/ 켤레/.test(input.placeholder)) input.placeholder = '예) yd / 매 / 켤레 / EA'; });
+}
+new MutationObserver(suggestUnits).observe(document.body, { childList: true, subtree: true });
+
 // ── 내가 처리할 일: 승인 대기 배지와 대시보드 카드 ──
 function taskBadgeCounts(tasks) {
   const counts = {}; const a = tasks.approvals;
@@ -361,12 +383,12 @@ function labelGridTables() {
 new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
-  const [d, tasks] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks')]);
+  const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
   const r = d.requests;
   const flow = (title, steps) => `<div class="flow"><h4>${title}</h4><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
   main.innerHTML = `
   <h1>대시보드 <span class="muted small">${d.today} (${dow(d.today)})</span></h1>
-  ${tasksCard(tasks)}
+  ${tasksCard(tasks)}${alertsCard(alerts)}
   <div class="kpis">
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
@@ -668,7 +690,7 @@ async function pageLaundry(main) {
   const month = todayStr().slice(0, 7);
   main.innerHTML = `
   <h1>세탁관리 <span class="dept">구매</span></h1>
-  <p class="muted">세탁 입고분의 불량 폐기 사진과 수량을 기록합니다.</p>
+  <p class="muted">세탁 입고분의 불량 폐기 사진과 수량을 기록합니다. 세탁일별 검수 수량과 성적서는 <a href="#/purchase/laundry-reports">세탁 검수·성적서</a>에서 관리합니다.</p>
   <form class="card" id="lnNew"><h3>세탁 폐기 등록</h3>
     <div class="form-grid">
       <label>입고일 *<input name="in_date" type="date" required value="${todayStr()}"></label>
@@ -906,10 +928,10 @@ function materialTable(materials, caption = '자재 소요량') {
   return `<div class="table-wrap"><table class="grid"><caption>${esc(caption)}</caption><thead><tr><th>자재명</th><th>분류</th><th class="r">수량</th><th>단위</th></tr></thead><tbody>${materials.map(m => `<tr><td>${esc(m.item)}</td><td>${esc(m.item_category)}</td><td class="r">${fmtNum(m.qty)}</td><td>${esc(m.unit)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function bomMaterialRow(material = {}) {
-  return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'EA')}" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
+  return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'yd')}" placeholder="yd" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
 }
 function bomForm(bom = {}) {
-  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>1차 분류<input name="cat1" maxlength="50" list="bomCat1" value="${esc(bom.cat1)}" placeholder="예) 글러브"></label><label>2차 분류<input name="cat2" maxlength="50" list="bomCat2" value="${esc(bom.cat2)}" placeholder="예) 니트릴"></label><label>3차 분류<input name="cat3" maxlength="50" list="bomCat3" value="${esc(bom.cat3)}" placeholder="예) 12인치"></label><datalist id="bomCat1"></datalist><datalist id="bomCat2"></datalist><datalist id="bomCat3"></datalist><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 1차·2차·3차 분류는 선택이며, 이미 쓴 값이 자동완성으로 나옵니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
+  return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>1차 분류<input name="cat1" maxlength="50" list="bomCat1" value="${esc(bom.cat1)}" placeholder="예) 글러브"></label><label>2차 분류<input name="cat2" maxlength="50" list="bomCat2" value="${esc(bom.cat2)}" placeholder="예) 니트릴"></label><label>3차 분류<input name="cat3" maxlength="50" list="bomCat3" value="${esc(bom.cat3)}" placeholder="예) 12인치"></label><datalist id="bomCat1"></datalist><datalist id="bomCat2"></datalist><datalist id="bomCat3"></datalist><label>반제품 종류 <span class="hint">(분류가 반제품일 때)</span><select name="semi_type"><option value="">해당 없음</option>${[['부직포와이퍼', '와이퍼 · 부직포와이퍼'], ['천와이퍼', '와이퍼 · 천와이퍼'], ['스무드', '심리스글러브 · 스무드'], ['타키', '심리스글러브 · 타키']].map(([value, label]) => `<option value="${value}" ${bom.semi_type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 반제품에 <b>반제품 종류</b>를 지정하면 커팅/융착·세탁 입력에서 그 종류의 품목(모델)으로 나오고, 구성자재를 넣으면 생산량만큼 자재 재고가 차감됩니다. 1차·2차·3차 분류는 선택이며, 이미 쓴 값이 자동완성으로 나옵니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
@@ -921,7 +943,7 @@ async function pageBoms(main) {
     const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, boms.length);
-    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.semi_type ? ` <span class="chip green">반제품 종류: ${esc(bom.semi_type)}</span>` : ''}${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
     const edit = bom => {
       const box = modal(`<h3>${bom ? 'BOM 수정' : '새 BOM 등록'}</h3>${bomForm(bom)}`, { wide: true });
       const form = $('form', box.el); const rows = $('[data-material-rows]', form);
@@ -1099,6 +1121,10 @@ async function pageAdmin(main) {
   <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
+  <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
+    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label></div>
+    <div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
+    <div class="actions"><button class="btn primary">계정 만들기</button></div></form>
   <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
     <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰·VOC 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
@@ -1108,6 +1134,7 @@ async function pageAdmin(main) {
       <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
       <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  $('#userNew').onsubmit = async (e) => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(e.target), roles: $$('[data-new-role]:checked', e.target).map((box) => box.dataset.newRole) }); toast(`${made.name} 계정을 만들었습니다.`); pageAdmin(main); } catch (err) { fail(err); } };
   $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
   const userFilter = $('#usersFilters', main);
   const filterUsers = () => {
@@ -1133,7 +1160,8 @@ async function pageAdmin(main) {
           backup.tables[table].push(...page.rows); after = page.next;
         } while (after !== null);
       }
-      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || []).flatMap(row => JSON.parse(row.photos)))];
+      const signatures = (backup.tables.laundry_reports || []).map(row => row.signature).concat(backup.tables.settings.filter(row => row.key === 'laundry_report_settings').map(row => { try { return JSON.parse(row.value).signature; } catch { return ''; } })).filter(Boolean);
+      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || []).flatMap(row => JSON.parse(row.photos)).concat(signatures))];
       for (const [i, file] of photos.entries()) {
         status.textContent = `사진을 저장하고 있습니다… (${i + 1}/${photos.length})`;
         const response = await fetch('/uploads/' + encodeURIComponent(file));
@@ -1144,6 +1172,7 @@ async function pageAdmin(main) {
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url; link.download = `work-process-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
+      await api('POST', '/api/admin/backup-done').catch(() => {}); // remembers when the last full backup was taken
       status.textContent = '백업 파일을 다운로드했습니다. 다운로드 폴더에서 확인하세요.';
     } catch (error) { status.textContent = '백업에 실패했습니다. 다시 시도해 주세요.'; fail(error); }
     finally { button.disabled = false; }

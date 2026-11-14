@@ -127,6 +127,34 @@
       "when": 1794720000000,
       "tag": "0017_semi_defect_reason",
       "breakpoints": false
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1794730000000,
+      "tag": "0018_semi_catalog_link",
+      "breakpoints": false
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794740000000,
+      "tag": "0019_break_minutes_yield_targets",
+      "breakpoints": false
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794740001000,
+      "tag": "0020_laundry_reports",
+      "breakpoints": false
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1794740002000,
+      "tag": "0021_laundry_report_signature",
+      "breakpoints": false
     }
   ]
 }

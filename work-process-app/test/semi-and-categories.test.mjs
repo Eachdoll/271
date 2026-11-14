@@ -269,3 +269,106 @@ test('Semi-finished plans take actuals from cutting records only; batch entry, d
   assert.deepEqual(semi.series.filter(r => r.process === 'cut').map(r => [r.bucket, r.group, r.qty, r.defect_qty, r.yield_rate]), [['2026-09-07', '심리스글러브', 800, 25, 97], ['2026-09-14', '심리스글러브', 90, 10, 90]]);
   assert.equal((await staff('GET', '/api/reports?from=2026-09-01&to=2026-09-30&q=' + q('없는라인'))).body.semi.series.length, 0);
 });
+
+test('Semi-finished records name the catalog model made; stock, plans and material use follow it', async () => {
+  const line = (await prod('POST', '/api/production-units', { kind: 'line', name: '5동 모델라인' })).body;
+  const washer = (await prod('POST', '/api/production-units', { kind: 'washer', name: '7호기' })).body;
+  const item = (product, code, semi_type, extra = {}) => admin('POST', '/api/boms', { product, product_code: code, item_category: '반제품', kind: 'semi', base_qty: 100, unit: '매', materials: [], semi_type, ...extra });
+  assert.equal((await item('잘못된종류', 'X', '없는종류')).status, 400);
+  assert.equal((await admin('POST', '/api/boms', { product: '상품인데', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [], semi_type: '천와이퍼' })).status, 400, 'only 반제품 items take a kind');
+  const cf9 = (await item('CF-707(9)', 'CF-707-9', '부직포와이퍼', { materials: [{ item: '부직포 원단', item_category: '원자재', qty: 5, unit: 'kg' }] })).body;
+  const cf65 = (await item('CF-707(6.5)', 'CF-707-65', '부직포와이퍼')).body;
+  const nx = (await item('NX-707', 'NX-707', '천와이퍼')).body;
+  assert.equal(cf9.semi_type, '부직포와이퍼');
+  assert.deepEqual((await staff('GET', '/api/boms?semi_type=' + q('부직포와이퍼'))).body.map(b => b.product).sort(), ['CF-707(6.5)', 'CF-707(9)']);
+  await admin('POST', '/api/po', { req_no: 'PR-F', vendor: '원단사', item: '부직포 원단', unit: 'kg', qty: 1000, due_date: '2026-08-01', item_category: '원자재' });
+  const fabricPo = (await staff('GET', '/api/po?q=' + q('부직포 원단'))).body[0]; await staff('POST', '/api/po/receive', { ids: [fabricPo.id], status: 'ok' });
+
+  const base = { process: 'cut', work_date: '2026-08-04', unit_id: line.id, product_group: 'wiper', product_type: '부직포와이퍼' };
+  const noModel = await staff('POST', '/api/semi-records', { ...base, spec: '9', qty: 10 });
+  assert.equal(noModel.status, 400); assert.match(noModel.body.error, /품목\(모델\)을 선택/, 'once models exist for a kind, one must be chosen');
+  assert.equal((await staff('POST', '/api/semi-records', { ...base, bom_id: nx.id, qty: 10 })).status, 400, 'a model of another kind is refused');
+  const made = (await staff('POST', '/api/semi-records', { ...base, bom_id: cf9.id, qty: 900, defect_qty: 100 })).body;
+  assert.deepEqual([made.bom_id, made.item_name, made.product_code, made.spec, made.unit], [cf9.id, 'CF-707(9)', 'CF-707-9', '', '매'], 'the model identifies the wiper, so no inch is required; its unit is used');
+  const batch = await staff('POST', '/api/semi-batches', { process: 'cut', common: { work_date: '2026-08-05', unit_id: line.id }, items: [
+    { product_group: 'wiper', product_type: '부직포와이퍼', bom_id: cf65.id, qty: 400 }, { product_group: 'wiper', product_type: '천와이퍼', bom_id: nx.id, qty: 250, unit: '매' }] });
+  assert.deepEqual(batch.body.rows.map(r => r.item_name), ['CF-707(6.5)', 'NX-707']);
+  const seamless = await staff('POST', '/api/semi-records', { ...base, product_group: 'seamless', product_type: '스무드', spec: 'M', qty: 5, unit: '켤레' });
+  assert.equal(seamless.status, 200, 'kinds without registered models still work as before'); assert.equal(seamless.body.bom_id, null);
+  const wash = await staff('POST', '/api/semi-records', { process: 'wash', work_date: '2026-08-05', unit_id: washer.id, product_group: 'wiper', product_type: '부직포와이퍼', bom_id: cf9.id, qty: 800 });
+  assert.equal(wash.body.item_name, 'CF-707(9)'); assert.equal((await staff('POST', '/api/semi-records', { process: 'wash', work_date: '2026-08-05', unit_id: washer.id, product_group: 'wiper', qty: 1 })).status, 200, 'washing may still record only wiper/glove');
+
+  // stock by model; the model's BOM consumes material for good and defective pieces alike
+  const stock = (await staff('GET', '/api/inventory?asof=2026-08-31')).body.rows; const of = name => stock.find(r => r.item === name);
+  assert.deepEqual([of('CF-707(9)').stock, of('CF-707(9)').category, of('CF-707(9)').product_code, of('CF-707(6.5)').stock, of('NX-707').stock], [900, '반제품', 'CF-707-9', 400, 250]);
+  const fabric = (await staff('GET', '/api/inventory')).body.rows.find(r => r.item === '부직포 원단'); // received today, used in August
+  assert.deepEqual([fabric.received, fabric.used, fabric.stock], [1000, 50, 950], '(900 + 100) × 5kg per 100');
+  // later catalog edits do not rewrite what was recorded
+  await admin('PUT', `/api/boms/${cf9.id}`, { product: 'CF-707(9) 신형', product_code: 'CF-707-9', item_category: '반제품', kind: 'semi', base_qty: 100, unit: '매', materials: [{ item: '부직포 원단', item_category: '원자재', qty: 50, unit: 'kg' }] });
+  assert.equal((await staff('GET', '/api/inventory?asof=2026-08-31')).body.rows.find(r => r.item === '부직포 원단').used, 50);
+  // a plan for the model finds its records
+  const plan = (await staff('POST', '/api/batches/schedule', { common: { kind: 'semi', period: 'month', start_date: '2026-08-01' }, items: [{ item: 'CF-707(9)', qty: 2000, unit: '매' }], request_id: crypto.randomUUID() })).body.rows[0];
+  assert.equal((await staff('GET', '/api/schedules?kind=semi&from=2026-08-01&to=2026-08-31')).body.find(s => s.id === plan.id).actual_qty, 900);
+  // changing the model is an identity change → needs the lead; reports label rows with kind · model
+  const change = await staff('PUT', `/api/semi-records/${made.id}`, { ...base, bom_id: cf65.id, qty: 900, defect_qty: 100, reason: '모델 오기' });
+  assert.equal(change.body.pending, true); await admin('POST', `/api/semi-changes/${change.body.change.id}/approve`, {});
+  const after = (await staff('GET', `/api/semi-records?process=cut&unit_id=${line.id}&from=2026-08-04&to=2026-08-04`)).body.find(r => r.id === made.id);
+  assert.deepEqual([after.item_name, after.product_code, JSON.parse(after.bom_snapshot).materials.length], ['CF-707(6.5)', 'CF-707-65', 0]);
+  const report = (await staff('GET', '/api/reports?from=2026-08-01&to=2026-08-31')).body.semi;
+  assert.deepEqual(report.by_product.filter(r => r.process === 'cut').map(r => [r.product, r.qty]).sort(), [['부직포와이퍼 · CF-707(6.5)', 1300], ['심리스 스무드', 5], ['천와이퍼 · NX-707', 250]]);
+  assert.equal((await staff('GET', '/api/semi-records?process=cut&q=NX-707')).body.length >= 0, true);
+});
+
+test('Break time, line yield targets, washing backlog, alerts, edit trail and backup reminder', async () => {
+  const day = n => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const line = (await prod('POST', '/api/production-units', { kind: 'line', name: '6동 경고라인', yield_target: 98 })).body;
+  const washer = (await prod('POST', '/api/production-units', { kind: 'washer', name: '6호기' })).body;
+  assert.equal(line.yield_target, 98); assert.equal(washer.yield_target, null);
+  assert.equal((await prod('PUT', `/api/production-units/${washer.id}`, { yield_target: 150 })).status, 400);
+  // break time is taken out of the worked hours
+  const base = { process: 'cut', work_date: day(-1), unit_id: line.id, product_group: 'seamless', product_type: '타키', spec: 'S', unit: '켤레' };
+  const rec = (await staff('POST', '/api/semi-records', { ...base, qty: 960, defect_qty: 40, start_time: '08:00', end_time: '17:00', break_minutes: 60, workers: 2 })).body;
+  assert.deepEqual([rec.break_minutes, rec.work_hours], [60, 8]);
+  assert.equal((await staff('POST', '/api/semi-records', { ...base, qty: 1, start_time: '08:00', end_time: '09:00', break_minutes: 60 })).status, 400, 'a break as long as the shift');
+  assert.equal((await staff('POST', '/api/semi-records', { ...base, qty: 1, break_minutes: 30 })).body.break_minutes, 0, 'no clock times → no break');
+  const fixed = await staff('PUT', `/api/semi-records/${rec.id}`, { ...base, qty: 960, defect_qty: 40, start_time: '08:00', end_time: '17:00', break_minutes: 90, workers: 2 });
+  assert.equal(fixed.body.pending, false); assert.equal(fixed.body.record.work_hours, 7.5);
+  // default target is a setting only the production lead or an admin changes
+  assert.deepEqual((await staff('GET', '/api/semi-settings')).body, { yield_target: 95, can_edit: false });
+  assert.equal((await prod('PUT', '/api/semi-settings', { yield_target: 97 })).status, 403);
+  assert.equal((await admin('PUT', '/api/semi-settings', { yield_target: 97 })).body.yield_target, 97);
+  await staff('POST', '/api/semi-records', { process: 'wash', work_date: day(-1), unit_id: washer.id, product_group: 'seamless', product_type: '타키', spec: 'S', qty: 480, defect_qty: 20, unit: '켤레' });
+  // washing backlog = cut good − washed (good + defect)
+  const wip = (await staff('GET', '/api/semi-wip')).body.find(r => r.item === '심리스 타키' && r.spec === 'S');
+  assert.deepEqual([wip.cut_qty, wip.washed_qty, wip.waiting_qty, wip.unit], [961, 500, 461, '켤레']);
+  // alerts
+  const late = (await staff('POST', '/api/po', { req_no: 'PR-LATE', vendor: 'V', item: '지연품', qty: 1, due_date: day(-2), item_category: '부자재' })).body;
+  const lateReq = (await staff('POST', '/api/requests', { type: 'development', title: '지연 개발', target_price: '1', due_date: day(-1) })).body;
+  sqlite.prepare("UPDATE requests SET created_at=datetime('now','+9 hours','-5 days') WHERE id=?").run(lateReq.id);
+  const alerts = (await staff('GET', '/api/alerts')).body;
+  assert.ok(alerts.overdue_pos.some(p => p.id === late.id)); assert.ok(alerts.overdue_po_count >= 1);
+  assert.ok(alerts.overdue_requests.some(r => r.id === lateReq.id));
+  assert.ok(alerts.stale_approvals.some(s => s.kind === 'request' && s.type === 'development' && s.count >= 1));
+  const low = alerts.low_yield.find(r => r.unit_name === '6동 경고라인');
+  assert.deepEqual([low.yield_rate, low.target, low.process], [96, 98, 'cut'], 'the line target overrides the default');
+  assert.equal(alerts.low_yield.some(r => r.unit_name === '6호기'), true, '96% is below the new default of 97%');
+  assert.equal(alerts.backup, undefined, 'backup status is for admins');
+  await staff('POST', '/api/po/receive', { ids: [late.id], status: 'ok' });
+  assert.equal((await staff('GET', '/api/alerts')).body.overdue_pos.some(p => p.id === late.id), false);
+  // backup reminder
+  assert.deepEqual((await admin('GET', '/api/alerts')).body.backup, { last_at: null, days: null, by: null });
+  assert.equal((await staff('POST', '/api/admin/backup-done')).status, 403);
+  await admin('POST', '/api/admin/backup-done');
+  const backup = (await admin('GET', '/api/alerts')).body.backup; assert.equal(backup.days, 0); assert.equal(backup.by, '관리자');
+  // edits leave a trail in the progress comments
+  await staff('PUT', `/api/po/${late.id}`, { req_no: 'PR-LATE', vendor: 'V', item: '지연품', qty: 3, due_date: day(5), item_category: '부자재', note: '납기 조정' });
+  const trail = (await staff('GET', `/api/comments/purchase_order/${late.id}`)).body.rows.find(c => c.content.startsWith('[수정]'));
+  assert.equal(trail.author_name, '직원'); assert.match(trail.content, /수량 1 → 3/); assert.match(trail.content, /납기일 .* → /); assert.match(trail.content, /비고 없음 → 납기 조정/);
+  const before = (await staff('GET', `/api/comments/purchase_order/${late.id}`)).body.rows.length;
+  await staff('PUT', `/api/po/${late.id}`, { req_no: 'PR-LATE', vendor: 'V', item: '지연품', qty: 3, due_date: day(5), item_category: '부자재', note: '납기 조정' });
+  assert.equal((await staff('GET', `/api/comments/purchase_order/${late.id}`)).body.rows.length, before, 'saving without changes adds nothing');
+  const ship = (await staff('POST', '/api/shipments', { ship_date: today, item: '이력품', qty: 5, customer: '고객' })).body;
+  await staff('PUT', `/api/shipments/${ship.id}`, { ship_date: today, item: '이력품', qty: 6, customer: '고객' });
+  await staff('PUT', `/api/items/shipment/${ship.id}`, { spec: 'M', unit: 'BOX' });
+  assert.deepEqual((await staff('GET', `/api/comments/shipment/${ship.id}`)).body.rows.map(c => c.content).reverse(), ['[수정] 수량 5 → 6', '[수정] 규격 없음 → M, 단위 없음 → BOX']);
+});

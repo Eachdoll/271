@@ -56,7 +56,8 @@ function semiTotals(rows, keyOf, labelOf) {
 async function semiReport(db, from, to, category, q, grain) {
   if (category && category !== '반제품') return { rows: [], by_product: [], by_line: [], reasons: [], series: [] };
   let rows = await db.prepare(`SELECT ${reportBucketExpression('work_date', grain)} AS bucket, process, unit_name, CASE product_group WHEN 'seamless' THEN '심리스글러브' ELSE '와이퍼' END AS product_group_label,
-      CASE WHEN product_type='' THEN CASE product_group WHEN 'seamless' THEN '심리스글러브' ELSE '와이퍼' END WHEN product_group='seamless' THEN '심리스 ' || product_type ELSE product_type END AS product,
+      (CASE WHEN product_type='' THEN CASE product_group WHEN 'seamless' THEN '심리스글러브' ELSE '와이퍼' END WHEN product_group='seamless' THEN '심리스 ' || product_type ELSE product_type END)
+        || CASE WHEN item_name<>'' THEN ' · ' || item_name ELSE '' END AS product,
       spec, unit, CASE WHEN defect_qty>0 THEN COALESCE(NULLIF(defect_reason,''),'미지정') ELSE '' END AS reason,
       COUNT(*) AS records, SUM(qty) AS qty, SUM(defect_qty) AS defect_qty, SUM(COALESCE(work_hours,0)) AS work_hours,
       SUM(COALESCE(work_hours,0)*COALESCE(workers,0)) AS man_hours,
@@ -123,7 +124,7 @@ export async function buildReport(db, query, today) {
     { sql: `SELECT ${reportBucketExpression('s.start_date', grain)} AS bucket,${lineName('s.product','s.spec')} AS item,${normalizedCategory("json_extract(s.bom_snapshot,'$.item_category')")} AS item_category,
         ${normalizedUnit("COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'))", lineName('s.product','s.spec'))} AS unit,s.kind,COUNT(*) AS plans,SUM(CASE WHEN s.done=1 THEN 1 ELSE 0 END) AS done_plans,SUM(s.qty) AS planned_qty,SUM(CASE WHEN s.done=1 THEN s.qty ELSE 0 END) AS completed_qty, SUM(COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL),0)
           + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE s.kind='semi' AND c.process='cut'
-              AND REPLACE(LOWER(CASE c.product_group WHEN 'seamless' THEN '심리스 ' || c.product_type ELSE c.product_type END),' ','')=REPLACE(LOWER(s.product),' ','')
+              AND REPLACE(LOWER(COALESCE(NULLIF(c.item_name,''), CASE c.product_group WHEN 'seamless' THEN '심리스 ' || c.product_type ELSE c.product_type END)),' ','')=REPLACE(LOWER(s.product),' ','')
               AND (s.spec='' OR c.spec=s.spec)
               AND c.work_date BETWEEN s.start_date AND CASE s.period WHEN 'day' THEN s.start_date WHEN 'week' THEN date(s.start_date,'+6 days') ELSE date(s.start_date,'+1 month','-1 day') END),0)) AS actual_qty
         FROM schedules s WHERE s.period=? AND ${sf.sql} GROUP BY 1,2,3,4,5 ORDER BY bucket,item,unit LIMIT 20001`, args: [planPeriod, ...sf.args] },

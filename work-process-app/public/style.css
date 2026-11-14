@@ -337,3 +337,57 @@ input[data-photo-camera] { display: none !important; }
 .semi-report-head input { width: 84px; min-height: 32px; padding: 4px 8px; }
 .share-bar { background: var(--bg); border-radius: 99px; height: 10px; overflow: hidden; }
 .share-bar i { display: block; height: 100%; background: var(--red); border-radius: 99px; }
+
+/* 확인이 필요한 일 */
+.alerts { border-left: 4px solid var(--red); }
+
+/* 세탁 검수·성적서 */
+.modal.lr-modal { width: min(1040px, 100%); }
+.lr-grid { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+.lr-grid th, .lr-grid td { border: 1px solid var(--line, #c9ced8); padding: 4px 6px; text-align: center; }
+.lr-grid thead th, .lr-grid tfoot th, .lr-grid tfoot td, .lr-grid tbody th { background: #eceef2; color: #111; font-weight: 600; }
+.lr-grid tbody th { white-space: nowrap; width: 84px; }
+.lr-grid td:has(input) { padding: 0; }
+.lr-grid td input { width: 100%; min-width: 44px; height: 30px; border: 0; border-radius: 0; background: transparent; text-align: center; padding: 2px; margin: 0; font: inherit; color: inherit; -moz-appearance: textfield; }
+.lr-grid td input::-webkit-outer-spin-button, .lr-grid td input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.lr-grid td input:focus { outline: 2px solid var(--accent); background: var(--panel); }
+.lr-grid thead th.lr-c-op_white, .lr-grid thead th.lr-c-tp_white, .lr-grid thead th.lr-c-gown_lab { background: #fff; }
+.lr-grid thead th.lr-c-op_sky, .lr-grid thead th.lr-c-gown_zip { background: #d9e8f7; }
+.lr-grid thead th.lr-c-tp_navy { background: #0000f5; color: #fff; }
+.lr-form { border: 1px solid var(--line, #d7dbe3); border-radius: 10px; padding: 8px 12px; }
+.lr-form summary { cursor: pointer; font-weight: 600; }
+.lr-form h4, #lrMatrixBody h4, .cert h4 { margin: 12px 0 6px; }
+.lr-list td, .lr-list th { text-align: right; white-space: nowrap; }
+.lr-list td:nth-child(-n+2), .lr-list th:nth-child(-n+2) { text-align: left; }
+.lr-list tfoot td, .lr-list tfoot th { font-weight: 600; background: #f3f4f7; color: #111; }
+.cert { background: #fff; color: #000; padding: 8px 4px; }
+.cert h2 { text-align: center; margin: 4px 0 10px; font-size: 20px; }
+.cert-date { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.cert-date span, .cert-date b { border: 1px solid #000; padding: 5px 22px; }
+.cert-date span { background: #d9d9d9; font-weight: 600; }
+.cert .lr-grid th, .cert .lr-grid td { border-color: #000; height: 27px; }
+.cert-sign { text-align: center; margin-top: 34px; font-size: 15px; }
+.cert-sign-box { display: inline-block; min-width: 90px; color: #888; margin-left: 12px; }
+.cert-draft { text-align: center; color: #b42318; font-weight: 600; border: 1px dashed #b42318; padding: 4px; }
+@media print {
+  /* Only the certificate prints, even when it was opened on top of the entry window. */
+  body.printing-cert { background: #fff; }
+  body.printing-cert > *:not(.lr-cert-wrap) { display: none !important; }
+  body.printing-cert .lr-cert-wrap { position: static; display: block; background: none; padding: 0; }
+  body.printing-cert .lr-cert-wrap .modal { box-shadow: none; width: 100%; max-height: none; padding: 0; overflow: visible; background: #fff; }
+  body.printing-cert .actions, body.printing-cert .modal-x { display: none; }
+  body.printing-cert .cert, body.printing-cert .cert * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.printing-cert .cert .lr-grid { font-size: 13px; min-width: 0; }
+  body.printing-cert .cert { padding: 0; }
+  body.printing-cert .cert .lr-grid th, body.printing-cert .cert .lr-grid td { height: 23px; padding: 2px 4px; }
+  body.printing-cert .cert h4 { margin: 8px 0 4px; }
+  body.printing-cert .cert-sign { margin-top: 22px; }
+}
+.lr-modal .stack > *, .lr-form { min-width: 0; }
+.lr-form .table-wrap { max-width: 100%; }
+.lr-list td, .lr-list th { padding: 8px 10px; }
+.cert-sign-img { height: 56px; max-width: 200px; object-fit: contain; vertical-align: middle; margin-left: 10px; }
+.lr-sign-preview { max-height: 90px; max-width: 260px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.role-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0; }
+.role-checks label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
+.role-checks input { width: auto; }

@@ -34,7 +34,7 @@ async function installMultiItems(legacy, entity, type = '') {
   if (entity === 'shipment') header = multiInput('ship_date','출고일','date',todayStr()) + multiInput('customer','거래처');
   if (entity === 'other_receipt') header = multiInput('received_date','입고일','date',todayStr()) + multiInput('vendor','입고처');
   if (entity === 'laundry') header = multiInput('in_date','세탁 입고일','date',todayStr());
-  if (entity === 'schedule' && kind === 'semi') header = '<p class="span3 small muted">반제품 계획의 실적은 <b>커팅/융착 기록에서 자동 집계</b>됩니다. 품목명을 <b>부직포와이퍼 · 천와이퍼 · 심리스 스무드 · 심리스 타키</b> 중 하나로, 사이즈·규격을 기록과 같게(예: M, 9인치) 쓰면 연결됩니다. 사이즈를 비우면 그 품목 전체가 합산됩니다.</p>';
+  if (entity === 'schedule' && kind === 'semi') header = '<p class="span3 small muted">반제품 계획의 실적은 <b>커팅/융착 기록에서 자동 집계</b>됩니다. 품목명을 커팅/융착에서 기록하는 <b>품목(모델) 이름</b>(예: CF-707(9))과 같게 쓰거나 BOM에서 고르세요. 모델이 없는 종류는 <b>부직포와이퍼 · 천와이퍼 · 심리스 스무드 · 심리스 타키</b>로 쓰고, 사이즈·규격은 기록과 같게(예: M, 9인치) 씁니다. 사이즈를 비우면 그 품목 전체가 합산됩니다.</p>';
   if (entity === 'schedule') header += `<label>일정 기준<select name="period"><option value="day">일간</option><option value="week">주간 (월요일 시작)</option><option value="month">월간 (1일 시작)</option></select></label>${multiInput('start_date','계획일','date',todayStr())}`;
   if (entity === 'schedule' && kind === 'semi') header += '<datalist id="semiPlanItems"><option value="부직포와이퍼"><option value="천와이퍼"><option value="심리스 스무드"><option value="심리스 타키"></datalist>';
   if (entity === 'request') header = REQ[type].fields.filter(f => !['title','qty','lot','unit','req_qty','sample_qty','target_price'].includes(f.k)).map(f => fieldInput(f)).join('');
@@ -47,7 +47,9 @@ async function installMultiItems(legacy, entity, type = '') {
   if (!host) return;
   host.before(form);
   if (host.tagName === 'DETAILS') { host.open = false; $('summary',host).textContent = '단일 품목 입력 (기존 상세 양식)'; }
-  else { const details = document.createElement('details'); details.className = 'card'; details.innerHTML = '<summary>단일 품목 입력 (기존 상세 양식)</summary>'; host.before(details); details.append(host); }
+  else { const details = document.createElement('details'); details.className = 'card'; details.innerHTML = '<summary>단일 품목 입력 (기존 상세 양식)</summary>'; host.before(details); details.append(host);
+    // Orders and shipments use this form only: the old single form has no unit or product-code field, which split stock lines.
+    if (['purchase_order', 'shipment'].includes(entity)) details.hidden = true; }
   const rowsRoot = $('[data-multi-rows]',form), status = $('[data-multi-status]',form), submit = $('[data-multi-submit]',form);
   // Items come from the product catalog by default; purchase orders and shipments may also be typed in,
   // in which case the server issues a temporary code for an administrator to tidy up.
