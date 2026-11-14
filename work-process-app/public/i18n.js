@@ -83,14 +83,17 @@ function i18nTranslator(dict) {
     const walker = document.createTreeWalker(root, 5); // elements + text
     for (let node = walker.nextNode(); node; node = walker.nextNode()) node.nodeType === 3 ? textNode(node) : element(node);
   };
+  const sidePrefs = side => side.querySelector(':scope > .side-prefs') || side.insertAdjacentElement('afterbegin', Object.assign(document.createElement('div'), { className: 'side-prefs' }));
   // Language picker: on the login card and in the header (also the operator header).
   const picker = () => {
-    for (const host of document.querySelectorAll('.who, .auth-card')) {
+    // On phones the header is narrow: the slide-out menu (.side) carries a second copy.
+    for (const found of document.querySelectorAll('.who, .auth-card, .side')) {
+      const host = found.classList.contains('side') ? sidePrefs(found) : found;
       if (host.querySelector('.lang-select')) continue;
       const select = document.createElement('select'); select.className = 'lang-select'; select.setAttribute('aria-label', 'Language / 언어'); select.setAttribute('data-no-i18n', '');
       select.innerHTML = Object.entries(I18N_LANGS).map(([code, name]) => `<option value="${code}" ${code === lang ? 'selected' : ''}>${name}</option>`).join('');
       select.onchange = () => { try { localStorage.setItem(I18N_KEY, select.value); } catch { /* private mode: applies to this page load only */ } location.reload(); };
-      host.classList.contains('who') ? host.prepend(select) : host.append(select);
+      host.classList.contains('who') ? host.prepend(select) : host.classList.contains('side-prefs') ? host.prepend(select) : host.append(select);
     }
   };
   new MutationObserver(records => {

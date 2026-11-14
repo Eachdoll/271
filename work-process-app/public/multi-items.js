@@ -32,6 +32,19 @@ function sizeGrid(row, sizes) {
   const total = () => { const sum = $$('[data-line-key^="size:"]', grid).reduce((n, input) => n + (Number(input.value) || 0), 0); $('[data-size-total]', grid).textContent = sum ? `합계 ${fmtNum(sum)}` : ''; };
   grid.addEventListener('input', total);
 }
+// Orders, shipments and other receipts: a picked product code already fixes spec, unit and category,
+// so those inputs are hidden and the code's values are shown instead. Direct entry keeps the inputs.
+function fromCatalog(row, entity, bom) {
+  if (!['purchase_order', 'shipment', 'other_receipt'].includes(entity)) return;
+  $('[data-catalog-summary]', row)?.remove();
+  const fields = ['spec', 'unit', 'item_category'].map(key => $(`[data-line-key=${key}]`, row)).filter(Boolean);
+  for (const input of fields) input.closest('label').hidden = !!bom;
+  if (!bom) return;
+  const spec = $('[data-line-key=spec]', row); if (spec) spec.value = '';
+  const box = document.createElement('p'); box.className = 'span3 catalog-summary'; box.dataset.catalogSummary = '';
+  box.innerHTML = [['단위', bom.unit], ['분류', bom.item_category || '미분류'], ['제품코드', bom.product_code]].filter(([, v]) => v).map(([label, value]) => `<span class="muted">${esc(label)}</span> <b>${esc(value)}</b>`).join('<span class="muted"> · </span>');
+  $('[data-line-key=bom_id]', row).closest('label').after(box);
+}
 function multiPayload(form, entity, type, kind, requestId) {
   const common = entity === 'request' ? collectRequest(type,form) : formObj(form);
   if (entity === 'schedule') common.kind = kind;
@@ -94,9 +107,10 @@ async function installMultiItems(legacy, entity, type = '') {
         const bom = boms.find(b => b.id === Number(select.value));
         $('[data-line-key=item]',row).readOnly = !!bom || entity === 'other_receipt'; $('[data-line-key=unit]',row).readOnly = !!bom || entity === 'other_receipt';
         if (bom) { $('[data-line-key=item]',row).value = bom.product; $('[data-line-key=unit]',row).value = bom.unit; }
-        sizeGrid(row, bom?.sizes || []);
         const category = $('[data-line-key=item_category]',row);
         if (bom && category && [...category.options].some(option => option.value === bom.item_category)) category.value = bom.item_category;
+        sizeGrid(row, bom?.sizes || []);
+        fromCatalog(row, entity, bom); // after the size grid, which shows spec/qty again for items without sizes
       };
       $('[data-bom-search]',row).oninput = event => { const q = event.target.value.toLocaleLowerCase(); [...select.options].forEach(option => { option.hidden = !!option.value && !option.textContent.toLocaleLowerCase().includes(q); }); };
     }
