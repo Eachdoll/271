@@ -536,3 +536,10 @@ label, legend { color: var(--text-2); font-weight: 600; }
 .cat-node { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-radius: var(--radius-md, 12px); background: var(--bg); }
 .cat-node.off { opacity: .55; }
 .cat-actions { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+
+/* 사이즈별 수량 · 반제품으로도 사용 (15.30) */
+.size-grid { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-md, 12px); background: var(--bg); }
+.size-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.size-cells label { font-weight: 700; color: var(--text); }
+.semi-use { display: grid; gap: 10px; padding: 12px 14px; border-radius: var(--radius-md, 12px); background: var(--bg); }
+.semi-use[hidden], [data-semi-fields][hidden], [data-pack-row][hidden] { display: none; }

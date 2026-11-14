@@ -205,7 +205,7 @@ async function pageSemi(main, process, { operator = false } = {}) {
   // 반제품 catalog items that say which kind they are; the entry lines offer them as models.
   let models = [], operatorCatalog;
   if (operator) { operatorCatalog = await api('GET', '/api/operator/catalog'); models = operatorCatalog.models; }
-  else try { models = (await api('GET', '/api/boms?item_category=' + encodeURIComponent('반제품'))).filter(b => b.semi_type); } catch { /* entry still works by kind only */ }
+  else try { models = (await api('GET', '/api/boms')).filter(b => b.semi_type).map(b => ({ ...b, unit: b.semi_unit || b.unit })); } catch { /* entry still works by kind only */ }
   if (!main.isConnected || !ME) return;
   const loadUnits = async () => {
     const units = operator ? operatorCatalog.units.filter(u => u.kind === page.unitKind) : await api('GET', `/api/production-units?kind=${page.unitKind}&all=1`); if (!main.isConnected) return;

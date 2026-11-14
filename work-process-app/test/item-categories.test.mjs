@@ -88,3 +88,39 @@ test('0023 turns categories already on items into selectable nodes without chang
     assert.deepEqual({ ...db.prepare("SELECT cat1,cat2,cat3,semi_type FROM boms WHERE product='CF-707'").get() }, { cat1: '와이퍼', cat2: '부직포와이퍼', cat3: '', semi_type: '부직포와이퍼' });
   } finally { db.close(); fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('A product used for production too: kind, production unit and box conversion; stock lines show the other unit', async () => {
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  const base = { product: 'NX-707 박스', product_code: 'NX-707B', item_category: '제품', kind: 'finished', base_qty: 1, unit: '박스', materials: [{ item: '원단', item_category: '원자재', qty: 1, unit: 'yd' }] };
+  assert.equal((await admin('POST', '/api/boms', { ...base, semi_type: '천와이퍼' })).status, 400, 'a kind needs the checkbox');
+  assert.equal((await admin('POST', '/api/boms', { ...base, semi_enabled: ['on'], semi_type: '천와이퍼', semi_unit: '매' })).status, 400, 'boxes need a conversion');
+  const nx = (await admin('POST', '/api/boms', { ...base, semi_enabled: ['on'], semi_type: '천와이퍼', semi_unit: '매', pack_qty: 1000 })).body;
+  assert.deepEqual([nx.semi_type, nx.semi_unit, nx.pack_qty, nx.unit], ['천와이퍼', '매', 1000, '박스']);
+  const line = (await admin('GET', '/api/production-units?kind=line')).body[0] || (await admin('POST', '/api/production-units', { kind: 'line', name: '2라인' })).body;
+  const cut = await admin('POST', '/api/semi-batches', { process: 'cut', common: { work_date: today, unit_id: line.id }, items: [{ entry_mode: 'code', bom_id: nx.id, qty: 2500, start_time: '08:00', end_time: '09:00' }] });
+  assert.equal(cut.status, 200, JSON.stringify(cut.body)); assert.deepEqual([cut.body.rows[0].unit, cut.body.rows[0].product_type], ['매', '천와이퍼']);
+  const po = (await admin('POST', '/api/po', { req_no: 'P', vendor: 'V', bom_id: nx.id, qty: 3, due_date: today, item_category: '제품' })).body;
+  await admin('POST', '/api/po/receive', { ids: [po.id], status: 'ok' });
+  const rows = (await admin('GET', '/api/inventory')).body.rows.filter(r => r.item === 'NX-707 박스');
+  assert.deepEqual(rows.map(r => [r.unit, r.stock, r.converted]).sort(), [['매', 2500, { qty: 2.5, unit: '박스' }], ['박스', 3, { qty: 3000, unit: '매' }]]);
+  // Turning it off removes it from production choices; same-unit products need no conversion.
+  assert.equal((await admin('PUT', `/api/boms/${nx.id}`, { ...base, semi_enabled: [] })).body.semi_type, '');
+  const sheet = (await admin('POST', '/api/boms', { ...base, product: 'NX-707 낱장', product_code: 'NX-707S', unit: '매', semi_enabled: true, semi_type: '천와이퍼' })).body;
+  assert.deepEqual([sheet.semi_unit, sheet.pack_qty], ['매', null]);
+  assert.equal((await admin('POST', '/api/boms', { ...base, product: '코드없음', product_code: '', unit: '매', semi_enabled: true, semi_type: '천와이퍼' })).status, 400, 'production items need a code');
+});
+
+test('Size sets live on categories and are inherited by the items below', async () => {
+  const garment = (await admin('POST', '/api/item-categories', { item_class: '상품', name: '방진복', sizes: 'xs, S,M L,XL' })).body.id;
+  const onepiece = (await admin('POST', '/api/item-categories', { item_class: '상품', parent_id: garment, name: '원피스' })).body.id;
+  assert.equal((await find('상품', '방진복')).sizes, 'XS,S,M,L,XL');
+  const suit = (await admin('POST', '/api/boms', { product: '방진복 원피스 흰색', product_code: 'CR-OP-W', item_category: '상품', kind: 'finished', base_qty: 1, unit: '벌', materials: [], cat1: '방진복', cat2: '원피스' })).body;
+  assert.deepEqual(suit.sizes, ['XS', 'S', 'M', 'L', 'XL']);
+  await admin('PUT', `/api/item-categories/${onepiece}`, { sizes: 'S M L XL 2XL' });
+  assert.deepEqual((await staff('GET', '/api/boms?q=CR-OP-W')).body[0].sizes, ['S', 'M', 'L', 'XL', '2XL'], 'the nearest category wins');
+  assert.equal((await admin('PUT', `/api/item-categories/${onepiece}`, { sizes: Array.from({ length: 21 }, (_, i) => 'S' + i).join(',') })).status, 400);
+  // Lines are saved per size like any other spec.
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  const batch = await staff('POST', '/api/batches/purchase_order', { common: { req_no: 'PR-S', vendor: 'V', due_date: today }, items: ['S', 'M'].map((spec, i) => ({ bom_id: suit.id, item: suit.product, unit: '벌', spec, qty: 10 * (i + 1), item_category: '상품' })), request_id: crypto.randomUUID() });
+  assert.equal(batch.status, 200, JSON.stringify(batch.body)); assert.deepEqual(batch.body.rows.map(r => [r.spec, r.qty]), [['S', 10], ['M', 20]]);
+});
