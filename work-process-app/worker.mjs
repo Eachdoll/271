@@ -360,7 +360,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1082,11 +1082,21 @@ function bomFields(body) {
   });
   return [reqStr(body.product, '품목명', 200), str(body.product_code, 80), kind, baseQty, reqStr(body.unit, '단위', 20), JSON.stringify(materials), str(body.note, 500), body.active === false || body.active === 0 ? 0 : 1, category];
 }
-// Optional sub-classification under the item class. A lower level needs the level above it.
-function bomCategories(body, previous = {}) {
+// 1차·2차·3차 세부 분류는 미리 만든 분류(item_category_nodes)에서만 고른다. 바꾸지 않은 기존 경로는 그대로 둔다.
+// 반제품은 경로에서 가장 깊은 생산 종류(semi_type)를 물려받아 커팅/융착·세탁 입력에 나온다.
+async function bomCategoryPath(body, category, previous = {}) {
   const cats = ['cat1', 'cat2', 'cat3'].map(key => body[key] === undefined ? previous[key] || '' : str(body[key], 50));
-  if ((cats[1] && !cats[0]) || (cats[2] && !cats[1])) throw bad('2차 분류는 1차, 3차 분류는 2차를 먼저 입력하세요.');
-  return cats;
+  if ((cats[1] && !cats[0]) || (cats[2] && !cats[1])) throw bad('2차 분류는 1차, 3차 분류는 2차를 먼저 선택하세요.');
+  const unchanged = previous.item_category === category && cats.every((value, i) => value === (previous['cat' + (i + 1)] || ''));
+  let parent = 0, semiType = '';
+  for (const [i, name] of cats.entries()) {
+    if (!name) break;
+    const node = await db.prepare('SELECT * FROM item_category_nodes WHERE item_class=? AND level=? AND COALESCE(parent_id,0)=? AND name=?').get(category, i + 1, parent, name);
+    if (!node || (!node.active && !unchanged)) throw bad(`${i + 1}차 분류 「${name}」는 ${category}의 세부 분류에 없습니다. 분류 관리에서 먼저 만들어 주세요.`);
+    if (node.semi_type) semiType = node.semi_type;
+    parent = node.id;
+  }
+  return { cats, semiType };
 }
 // Which semi-finished kind a catalog item is, so work records can offer the right models.
 const SEMI_TYPE_NAMES = ['부직포와이퍼', '천와이퍼', '스무드', '타키'];
@@ -1111,15 +1121,22 @@ route('GET', '/api/boms', async ({ user, query }) => {
 });
 // Category values already in use, for suggestions and filters.
 route('GET', '/api/boms/categories', async () => db.prepare("SELECT DISTINCT cat1,cat2,cat3 FROM boms WHERE active=1 AND cat1<>'' ORDER BY cat1,cat2,cat3 LIMIT 2000").all());
+// The production kind of a 반제품 comes from its category; an item without a category keeps the older explicit value.
+async function bomPlacement(body, category, previous = {}) {
+  const { cats, semiType } = await bomCategoryPath(body, category, previous);
+  const explicit = bomSemiType(body, category, previous);
+  return { cats, semiType: category !== '반제품' ? '' : cats[0] ? semiType || (cats.every((v, i) => v === (previous['cat' + (i + 1)] || '')) ? previous.semi_type || '' : '') : explicit };
+}
 route('POST', '/api/boms', async ({ user, body }) => {
   requireAdmin(user);
-  const fields = bomFields(body), cats = bomCategories(body);
-  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, bomSemiType(body, fields[8]));
+  const fields = bomFields(body), { cats, semiType } = await bomPlacement(body, fields[8]);
+  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType);
   return decodeBom(await mustGet('boms', result.lastInsertRowid));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   requireAdmin(user); const before = await mustGet('boms', params.id); const fields = bomFields(body);
-  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,cat1=?,cat2=?,cat3=?,semi_type=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, ...bomCategories(body, before), bomSemiType(body, fields[8], before), before.id] }];
+  const { cats, semiType } = await bomPlacement(body, fields[8], before);
+  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,cat1=?,cat2=?,cat3=?,semi_type=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, ...cats, semiType, before.id] }];
   if (before.is_temp) {
     if (/^TMP-/i.test(fields[1])) throw bad('임시 코드(TMP-)를 정식 제품코드로 바꿔 저장하세요.');
     commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
@@ -1141,6 +1158,65 @@ route('POST', '/api/boms/:id/merge', async ({ user, params, body }) => {
   if (target.id === temp.id || target.is_temp || !target.active) throw bad('합칠 대상은 사용 중인 정식 품목이어야 합니다.');
   await db.batch([...relinkCatalog(temp, target), { sql: "UPDATE boms SET active=0,note=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [`${target.product}(${target.product_code || '코드 없음'})로 합침 · ${user.name}`, temp.id] }]);
   return { ok: true, target: decodeBom(target) };
+});
+// ── 제품등록: 세부 분류 관리 ──
+route('GET', '/api/item-categories', async () => (await db.prepare('SELECT id,item_class,parent_id,level,name,semi_type,sort_order,active FROM item_category_nodes ORDER BY item_class,level,sort_order,name,id').all()).map(n => ({ ...n, active: !!n.active })));
+function categorySemiType(value, itemClass) {
+  const type = str(value, 20); if (!type) return '';
+  if (itemClass !== '반제품') throw bad('생산 종류는 반제품 분류에만 지정합니다.');
+  if (!SEMI_TYPE_NAMES.includes(type)) throw bad('생산 종류를 다시 선택하세요.');
+  return type;
+}
+async function categoryPathOf(node) {
+  const names = []; let cursor = node;
+  while (cursor) { names.unshift(cursor.name); cursor = cursor.parent_id ? await db.prepare('SELECT * FROM item_category_nodes WHERE id=?').get(cursor.parent_id) : null; }
+  return names;
+}
+// Items under a node take the deepest production kind found along their category path.
+async function semiTypeUpdates(itemClass) {
+  if (itemClass !== '반제품') return [];
+  const nodes = await db.prepare("SELECT * FROM item_category_nodes WHERE item_class='반제품'").all();
+  const find = (level, parent, name) => nodes.find(n => n.level === level && (n.parent_id || 0) === parent && n.name === name);
+  const items = await db.prepare("SELECT id,cat1,cat2,cat3,semi_type FROM boms WHERE item_category='반제품' AND cat1<>''").all();
+  const commands = [];
+  for (const item of items) {
+    let parent = 0, kind = '';
+    for (const [i, name] of [item.cat1, item.cat2, item.cat3].entries()) { if (!name) break; const node = find(i + 1, parent, name); if (!node) break; if (node.semi_type) kind = node.semi_type; parent = node.id; }
+    if (kind !== item.semi_type) commands.push({ sql: "UPDATE boms SET semi_type=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [kind, item.id] });
+  }
+  return commands;
+}
+const categoryConflict = error => { if (String(error.message).includes('UNIQUE')) throw new HttpError(409, '같은 위치에 같은 이름의 분류가 이미 있습니다.'); throw error; };
+route('POST', '/api/item-categories', async ({ user, body }) => {
+  requireAdmin(user);
+  const itemClass = itemCategory(body.item_class), name = reqStr(body.name, '분류 이름', 50);
+  let level = 1, parentId = null;
+  if (body.parent_id !== undefined && body.parent_id !== null && body.parent_id !== '') {
+    const parent = await mustGet('item_category_nodes', Number(body.parent_id) || 0);
+    if (parent.item_class !== itemClass) throw bad('상위 분류의 품목 분류가 다릅니다.');
+    if (parent.level >= 3) throw bad('세부 분류는 3차까지 만들 수 있습니다.');
+    level = parent.level + 1; parentId = parent.id;
+  }
+  let id; try { id = Number((await db.prepare('INSERT INTO item_category_nodes(item_class,parent_id,level,name,semi_type,created_by) VALUES(?,?,?,?,?,?)').run(itemClass, parentId, level, name, categorySemiType(body.semi_type, itemClass), user.name)).lastInsertRowid); } catch (error) { categoryConflict(error); }
+  const updates = await semiTypeUpdates(itemClass); if (updates.length) await db.batch(updates);
+  return { id };
+});
+route('PUT', '/api/item-categories/:id', async ({ user, params, body }) => {
+  requireAdmin(user);
+  const node = await mustGet('item_category_nodes', params.id);
+  const name = body.name === undefined ? node.name : reqStr(body.name, '분류 이름', 50);
+  const semiType = body.semi_type === undefined ? node.semi_type : categorySemiType(body.semi_type, node.item_class);
+  const active = body.active === undefined ? node.active : body.active === false || body.active === 0 ? 0 : 1;
+  const commands = [{ sql: 'UPDATE item_category_nodes SET name=?,semi_type=?,active=? WHERE id=?', args: [name, semiType, active, node.id] }];
+  // A rename follows through to the items filed under this node (their category text holds the name).
+  if (name !== node.name) {
+    const path = await categoryPathOf(node), column = 'cat' + node.level;
+    const where = path.map((_, i) => `cat${i + 1}=?`).join(' AND ');
+    commands.push({ sql: `UPDATE boms SET ${column}=?,updated_at=datetime('now','+9 hours') WHERE item_category=? AND ${where}`, args: [name, node.item_class, ...path] });
+  }
+  try { await db.batch(commands); } catch (error) { categoryConflict(error); }
+  const updates = await semiTypeUpdates(node.item_class); if (updates.length) await db.batch(updates);
+  return { ok: true };
 });
 route('DELETE', '/api/boms/:id', async ({ user, params }) => {
   requireAdmin(user); await mustGet('boms', params.id);
