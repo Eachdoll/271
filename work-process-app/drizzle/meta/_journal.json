@@ -106,6 +106,27 @@
       "when": 1794690000000,
       "tag": "0014_semi_record_changes",
       "breakpoints": false
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1794700000000,
+      "tag": "0015_semi_record_work_details",
+      "breakpoints": false
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1794710000000,
+      "tag": "0016_semi_record_times",
+      "breakpoints": false
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794720000000,
+      "tag": "0017_semi_defect_reason",
+      "breakpoints": false
     }
   ]
 }

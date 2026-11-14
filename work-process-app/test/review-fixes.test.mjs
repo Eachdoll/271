@@ -102,7 +102,7 @@ test('Correcting or cancelling a recorded actual needs the production team lead;
   await admin('PUT', `/api/admin/users/${all.find(u => u.name === '생산팀장').id}`, { roles: ['production_approver'] });
   await admin('PUT', `/api/admin/users/${all.find(u => u.name === '생산직원').id}`, { roles: ['production'] });
   assert.ok(users.length < all.length);
-  const plan = (await worker2('POST', '/api/schedules', { kind: 'semi', period: 'month', start_date: '2026-10-01', product: '반제품', qty: 100 })).body;
+  const plan = (await worker2('POST', '/api/schedules', { kind: 'finished', period: 'month', start_date: '2026-10-01', product: '완제품', qty: 100 })).body;
   const endpoint = `/api/schedules/${plan.id}/actuals`;
   const zero = await worker2('POST', endpoint, { production_date: '2026-10-03', qty: 0, request_id: crypto.randomUUID() });
   assert.equal(zero.status, 200);
