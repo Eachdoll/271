@@ -14,7 +14,7 @@ function lineInfo(row) {
   return `<span class="small muted line-info">${parts.map(esc).join(' · ')} ${entity ? `<button type="button" class="btn small" data-line-meta="${esc(entity)}" data-line-id="${row.id}" data-line-spec="${esc(row.spec)}" data-line-unit="${esc(unit)}" data-line-lot="${esc(row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : ''))}" data-line-name="${esc(row.item)}">규격·단위</button>` : ''}</span>`;
 }
 function scheduleFocusDate() { try { const date = sessionStorage.getItem('newScheduleDate'); sessionStorage.removeItem('newScheduleDate'); return date || todayStr(); } catch { return todayStr(); } }
-function rememberScheduleDate(date) { try { sessionStorage.setItem('newScheduleDate',date); } catch {} }
+function rememberScheduleDate(date) { try { sessionStorage.setItem('newScheduleDate',date); const key = uxKey('calendar', location.hash || '#/'); uxWrite(key, { ...(uxRead(key) || { view: 'week' }), base: date }); } catch {} }
 function multiInput(name, label, type = 'text', value = '', required = true) {
   return `<label>${label}${required ? ' *' : ''}<input name="${name}" type="${type}" value="${esc(value)}" ${required ? 'required' : ''}></label>`;
 }
@@ -96,14 +96,31 @@ async function installMultiItems(legacy, entity, type = '') {
     catch(error) { status.textContent = 'BOM을 불러오지 못했습니다. 화면을 새로고침하세요. ' + error.message; }
     finally { submit.disabled = loadingBoms; }
   }
+  if (!form.isConnected || !ME) return;
+  const entryDraft = bindEntryDraft(form, `multi:${location.hash || '#/'}:${entity}:${type}`, {
+    read: () => ({ fields: uxFormRead(form), lines: $$('[data-multi-row]', form).map(row => $$('[data-line-key]', row).map(input => [input.dataset.lineKey, input.type === 'checkbox' ? input.checked : input.value])), requestId }),
+    restore: value => {
+      uxFormRestore(form, value.fields);
+      rowsRoot.replaceChildren();
+      for (const values of (value.lines || []).slice(0, 30)) {
+        const row = add();
+        for (const [key, val] of values) { const input = $$('[data-line-key]', row).find(el => el.dataset.lineKey === key); if (!input) continue; if (input.type === 'checkbox') input.checked = val === true; else input.value = String(val ?? ''); }
+        $('[data-line-key=bom_id]', row)?.onchange?.();
+      }
+      if (!rowsRoot.children.length) add();
+      if (typeof value.requestId === 'string') requestId = value.requestId;
+      updateCount();
+    },
+  });
   form.onsubmit = async event => {
     event.preventDefault(); if (busy || draft.busy || loadingBoms) return;
-    busy = true; submit.disabled = true;
+    busy = true; submit.disabled = true; form.inert = true; entryDraft.start();
     try {
       if (!saved) {
         payload = multiPayload(form,entity,type,kind,requestId);
         status.textContent = `${payload.items.length}품목을 저장하고 있습니다…`;
         saved = await api('POST','/api/batches/' + entity,payload);
+        entryDraft.clear('품목 저장 완료 · 사진 업로드 중에는 화면을 유지하세요.');
         remaining = saved.rows.slice(); $('[data-multi-fields]',form).disabled = true;
         // Show the saved rows right away so nobody re-enters them while photos upload or retry.
         $('#main form.list-filters')?.requestSubmit();
@@ -126,8 +143,8 @@ async function installMultiItems(legacy, entity, type = '') {
       await render();
       const prefix = {shipment:'sh',other_receipt:'other',laundry:'ln'}[entity]; const date = payload.common.ship_date || payload.common.received_date || payload.common.in_date;
       if (prefix && date && $('#' + prefix + 'Filters')) { $('#' + prefix + 'From').value = date; $('#' + prefix + 'To').value = date; $('#' + prefix + 'Filters').requestSubmit(); }
-    } catch(error) { status.textContent = saved ? `${saved.rows.length}품목은 이미 저장되었습니다(아래 목록에 표시). 다시 등록하지 말고 사진만 재시도하세요. 사진 저장 실패: ${error.message}` : error.message; fail(error); }
-    finally { busy = false; submit.disabled = false; updateCount(); }
+    } catch(error) { if (!saved) entryDraft.failure(); status.textContent = saved ? `${saved.rows.length}품목은 이미 저장되었습니다(아래 목록에 표시). 다시 등록하지 말고 사진만 재시도하세요. 사진 저장 실패: ${error.message}` : error.message; fail(error); }
+    finally { busy = false; form.inert = false; submit.disabled = false; updateCount(); }
   };
 }
 function enhanceMultiForms() {
@@ -163,7 +180,7 @@ function changeHistory(changes = []) {
 }
 async function handleChangeAction(button, after) {
   const id = button.dataset.changeApprove || button.dataset.changeReject || button.dataset.changeCancel;
-  if (button.dataset.changeApprove) { await api('POST', `/api/actual-changes/${id}/approve`, {}); toast('승인했습니다. 실적에 반영되었습니다.'); }
+  if (button.dataset.changeApprove) { if (!await reviewApproval('actual', id)) return; await api('POST', `/api/actual-changes/${id}/approve`, {}); toast('승인했습니다. 실적에 반영되었습니다.'); }
   else if (button.dataset.changeReject) { const v = await promptBox('수정·취소 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return; await api('POST', `/api/actual-changes/${id}/reject`, v); toast('반려했습니다.'); }
   else { if (!(await confirmBox('이 요청을 철회할까요?'))) return; await api('POST', `/api/actual-changes/${id}/cancel`); toast('요청을 철회했습니다.'); }
   await after();

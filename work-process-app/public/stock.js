@@ -26,11 +26,12 @@ async function pageStock(main) {
   <div id="stockSummary" class="counts"></div>
   <div id="stockList"></div>`;
   const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
-  api('GET', '/api/boms/categories').then(cats => {
+  await api('GET', '/api/boms/categories').then(cats => {
     const options = list => '<option value="">전체</option>' + [...new Set(list.filter(Boolean))].map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
     const second = () => { const keep = form.cat2.value; $('#stockCat2').innerHTML = options(cats.filter(c => !form.cat1.value || c.cat1 === form.cat1.value).map(c => c.cat2)); form.cat2.value = [...form.cat2.options].some(o => o.value === keep) ? keep : ''; };
-    $('#stockCat1').innerHTML = options(cats.map(c => c.cat1)); second(); form.cat1.onchange = second;
+    $('#stockCat1').innerHTML = options(cats.map(c => c.cat1)); second(); rememberList(form); second(); const state = uxRead(uxKey('filters', (location.hash || '#/') + ':' + form.id)); if (state) uxFormRestore(form, state); form.cat1.onchange = second;
   }).catch(() => {});
+  rememberList(form);
   const adjust = async (preset = {}) => {
     const v = await promptBox('재고 조정 · 기초재고 · 실사', `
       <label>품목명 *<input name="item" required maxlength="200" value="${esc(preset.item)}"></label>

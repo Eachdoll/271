@@ -114,3 +114,15 @@ test('0009 leaves existing receipts untouched', () => {
     assert.equal(db.prepare('SELECT COUNT(*) n FROM receipt_qty_changes').get().n, 0);
   } finally { db.close(); fs.rmSync(dir2, { recursive: true, force: true }); }
 });
+
+test('Approval review fetches one pending ID even when it is older than the list limit', async () => {
+  const first = 900001;
+  for (let i = 0; i < 205; i++) sqlite.prepare("INSERT INTO receipt_qty_changes(po_id,action,old_status,old_recv_qty,new_recv_qty,reason,requested_by) VALUES(?,'qty','ok',10,9,'검토','사용자')").run(first + i);
+  const id = sqlite.prepare('SELECT id FROM receipt_qty_changes WHERE po_id=?').get(first).id;
+  const result = await anyone('GET', `/api/receipt-changes?status=pending&id=${id}`);
+  assert.equal(result.status, 200); assert.equal(result.body.length, 1); assert.equal(result.body[0].id, id);
+  for (const kind of ['receipt-changes', 'actual-changes', 'semi-changes']) {
+    assert.equal((await anyone('GET', `/api/${kind}?id=1%20OR%201=1`)).status, 400);
+    const empty = await anyone('GET', `/api/${kind}?id=9999999`); assert.equal(empty.status, 200); assert.deepEqual(empty.body, []);
+  }
+});

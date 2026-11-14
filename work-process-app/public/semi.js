@@ -49,7 +49,7 @@ function semiChangeButtons(c) {
 }
 function bindSemiChanges(root, after) {
   const run = (button, task) => { button.onclick = async event => { event.stopPropagation(); if (button.disabled) return; button.disabled = true; try { if (await task() !== false) await after(); } catch (error) { fail(error); } finally { button.disabled = false; } }; };
-  $$('[data-schange-approve]', root).forEach(button => run(button, async () => { await api('POST', `/api/semi-changes/${button.dataset.schangeApprove}/approve`, {}); toast('승인했습니다. 기록에 반영되었습니다.'); }));
+  $$('[data-schange-approve]', root).forEach(button => run(button, async () => { if (!await reviewApproval('semi', button.dataset.schangeApprove)) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeApprove}/approve`, {}); toast('승인했습니다. 기록에 반영되었습니다.'); }));
   $$('[data-schange-reject]', root).forEach(button => run(button, async () => { const v = await promptBox('수정·삭제 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeReject}/reject`, v); toast('반려했습니다.'); }));
   $$('[data-schange-cancel]', root).forEach(button => run(button, async () => { if (!(await confirmBox('이 요청을 철회할까요?'))) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeCancel}/cancel`); toast('요청을 철회했습니다.'); }));
 }
@@ -276,21 +276,40 @@ async function pageSemi(main, process) {
       try { await api('DELETE', '/api/semi-records/' + r.id, { ...v, request_id: crypto.randomUUID() }); toast('삭제 요청을 올렸습니다. 생산팀장 승인 후 반영됩니다.'); load(); } catch (error) { fail(error); }
     });
   };
+  let entryDraft;
   form.onsubmit = async event => {
-    event.preventDefault(); if (submit.disabled) return; submit.disabled = true;
+    event.preventDefault(); if (submit.disabled) return; submit.disabled = true; form.inert = true; entryDraft.start();
     const items = $$('[data-semi-row]', form).map(row => { const v = Object.fromEntries($$('[data-k]', row).map(input => [input.dataset.k, input.value])); const { product, size, inch, ...rest } = v; return { ...rest, ...productOf(product), spec: size || inch || '' }; });
     const date = form.work_date.value;
     try {
       const result = await api('POST', '/api/semi-batches', { process, common: { work_date: date, unit_id: form.unit_id.value }, items, request_id: requestId });
+      entryDraft.clear();
       requestId = crypto.randomUUID(); toast(`작업 기록 ${result.rows.length}줄을 등록했습니다.`);
       // Keep the date and line; start again with one line that remembers the last product and unit.
       const last = $$('[data-semi-row]', form).at(-1); const fresh = addRow(last); $$('[data-semi-row]', form).forEach(row => { if (row !== fresh) row.remove(); }); countRows();
       if (date < filters.from.value) filters.from.value = date; if (date > filters.to.value) filters.to.value = date;
       await load();
-    } catch (error) { fail(error); } finally { submit.disabled = false; countRows(); }
+    } catch (error) { entryDraft.failure(); fail(error); } finally { form.inert = false; submit.disabled = false; countRows(); entryDraft.resume(); }
   };
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
   $('#semiDetail').onchange = () => { $('#semiSummary').innerHTML = semiSummary(process, lastRows) + ($('#semiDetail').checked ? semiDetail(process, lastRows) : ''); };
   if (canManage) $('#semiManage').onclick = () => manageProductionUnits(page.unitKind, () => loadUnits().catch(fail)).catch(fail);
-  await loadUnits(); await load();
+  await loadUnits(); rememberList(filters);
+  entryDraft = bindEntryDraft(form, `semi:${process}`, {
+    read: () => ({ fields: uxFormRead(form), lines: $$('[data-semi-row]', form).map(row => $$('[data-k]', row).map(input => [input.dataset.k, input.value])), requestId }),
+    restore: value => {
+      uxFormRestore(form, value.fields); rowsRoot.replaceChildren();
+      for (const values of (value.lines || []).slice(0, 30)) {
+        const row = addRow(), map = new Map(values);
+        const set = key => { const input = $$('[data-k]', row).find(el => el.dataset.k === key); if (input && map.has(key)) input.value = String(map.get(key) ?? ''); return input; };
+        set('product')?.onchange?.(); set('bom_id')?.onchange?.();
+        for (const [key] of values) if (!['product', 'bom_id'].includes(key)) set(key);
+        $('[data-k=defect_qty]', row).oninput(); $('[data-k=start_time]', row).oninput();
+      }
+      if (!rowsRoot.children.length) addRow();
+      if (typeof value.requestId === 'string') requestId = value.requestId;
+      countRows();
+    },
+  });
+  await load();
 }

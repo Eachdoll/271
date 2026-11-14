@@ -126,6 +126,7 @@ async function pageReports(main) {
     } catch (error) { if (id === requestId) { current = null; content.innerHTML = `<div class="card empty">${esc(error.message)}</div>`; $('#reportStamp', main).textContent = '조회 조건을 확인해 주세요.'; } }
     finally { if (id === requestId) button.disabled = false; }
   };
+  rememberList(form);
   form.onsubmit = event => { event.preventDefault(); load(); };
   $('#reportGrain', main).onchange = () => { const [start, end] = reportRange(form.elements.grain.value); form.elements.from.value = start; form.elements.to.value = end; load(); };
   unitSelect.onchange = () => { selectedUnit = unitSelect.value; draw(); };

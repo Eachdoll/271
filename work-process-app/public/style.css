@@ -391,3 +391,13 @@ input[data-photo-camera] { display: none !important; }
 .role-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0; }
 .role-checks label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
 .role-checks input { width: auto; }
+
+/* Working state and approval review */
+.draft-state { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; margin-bottom: 12px; background: var(--accent-soft); border-radius: 8px; font-size: 12px; }
+.draft-state > span { flex: 1 1 230px; }
+.draft-state [hidden] { display: none; }
+.approval-compare { width: 100%; }
+.approval-compare td:last-child { background: var(--accent-soft); font-weight: 600; }
+.approval-compare td { white-space: pre-wrap; overflow-wrap: anywhere; }
+.approval-impact { padding: 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+@media print { .draft-state { display: none; } }

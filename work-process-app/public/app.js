@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.16';
+const APP_VERSION = '15.17';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -83,6 +83,7 @@ function listControls(prefix, { placeholder = '검색어 입력', dateLabel = ''
 }
 function listInspectionSelect() { return `<label>검수 상태<select name="inspection_status"><option value="">전체 검수</option>${Object.entries(INSPECTION).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label>`; }
 function bindListControls(form, load, reset = () => {}) {
+  rememberList(form);
   let timer;
   const run = () => {
     clearTimeout(timer);
@@ -99,11 +100,11 @@ function bindListControls(form, load, reset = () => {}) {
 function listLoading(form) { $('[data-list-count]', form).textContent = '조회 중…'; }
 function listCount(form, count) { $('[data-list-count]', form).textContent = `${count}건 조회`; }
 
-function modal(html, { wide = false } = {}) {
+function modal(html, { wide = false, onClose = () => {} } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
-  const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); document.removeEventListener('keydown', onKey); onClose(); };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
   $('.modal-x', wrap).onclick = close;
@@ -265,18 +266,20 @@ function shell() {
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
   <div class="layout"><nav class="side">${nav}</nav><main id="main"></main></div>`;
-  $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); ME = null; render(); };
+  $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); uxClearUser(); ME = null; render(); };
   $('.menu-btn').onclick = () => document.body.classList.toggle('nav-open');
   $$('.side a').forEach((a) => (a.onclick = () => document.body.classList.remove('nav-open')));
 }
 
 async function render() {
+  uxBeforeRender();
+  const route = location.hash || '#/';
   if (!ME) return pageAuth();
   shell();
   refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
   try { await page($('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-  window.scrollTo(0, 0);
+  uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
 
@@ -471,7 +474,7 @@ function bindReceiptChanges(root, rows, after) {
     const v = await promptBox('입고 취소 요청', `<p class="small muted">${esc(po.item)} · 승인되면 미입고로 돌아갑니다. 이미 등록된 수입검사 이력은 남습니다.</p><label>취소 사유 *<input name="reason" required maxlength="500"></label>`);
     if (!v) return; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'revert', ...v, request_id: crypto.randomUUID() }); toast('입고 취소 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
   }); });
-  $$('[data-rchange-approve]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => { await api('POST', `/api/receipt-changes/${button.dataset.rchangeApprove}/approve`, {}); toast('승인했습니다. 입고 내용에 반영되었습니다.'); }); });
+  $$('[data-rchange-approve]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => { if (!await reviewApproval('receipt', button.dataset.rchangeApprove)) return; await api('POST', `/api/receipt-changes/${button.dataset.rchangeApprove}/approve`, {}); toast('승인했습니다. 입고 내용에 반영되었습니다.'); }); });
   $$('[data-rchange-reject]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
     const v = await promptBox('입고 수정 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return;
     await api('POST', `/api/receipt-changes/${button.dataset.rchangeReject}/reject`, v); toast('반려했습니다.');
@@ -988,7 +991,9 @@ const PERIOD = { day: '일간', week: '주간', month: '월간' };
 async function pageSchedule(kind) {
   const main = $('#main'); const label = kind === 'finished' ? '완제품' : '반제품';
   const boms = await api('GET', '/api/boms?kind=' + kind);
-  let view = 'week'; let base = scheduleFocusDate();
+  const calendarKey = uxKey('calendar', location.hash || '#/'), calendar = uxRead(calendarKey);
+  let view = ['day', 'week', 'month'].includes(calendar?.view) ? calendar.view : 'week';
+  let base = /^\d{4}-\d{2}-\d{2}$/.test(calendar?.base || '') ? calendar.base : scheduleFocusDate();
   main.innerHTML = `
   <h1>${label} 생산일정 <span class="dept">생산</span></h1>
   <div id="actualChanges"></div>
@@ -1021,6 +1026,7 @@ async function pageSchedule(kind) {
   const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}<span class="small">계획 ${fmtNum(s.qty)} / 실제 ${s.actual_count ? fmtNum(s.actual_qty || 0) : '미입력'} / 달성률 ${s.qty ? Math.round((s.actual_qty || 0) / s.qty * 1000) / 10 : '—'}%</span><button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
+    uxWrite(calendarKey, { view, base });
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
     const [from, to] = range();

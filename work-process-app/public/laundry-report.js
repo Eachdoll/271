@@ -120,12 +120,19 @@ async function lrEditor(id, done) {
     LR_META.forms.forEach((form) => { const wash = [...now].reduce((sum, [key, qty]) => sum + (key.startsWith('wash|') && form.garments.some((g) => g.key === key.split('|')[1]) ? qty : 0), 0); $(`[data-lr-form-total="${form.key}"]`, m.el).textContent = `세탁 ${fmtNum(wash)} · 폐기 ${fmtNum(lrFormTotal(form, now) - wash)}`; });
   };
   m.el.addEventListener('input', (e) => { if (e.target.dataset.lr) totals(); }); totals();
+  const entryDraft = editable ? bindEntryDraft($('form', m.el), `laundry-report:${id || 'new'}`, { afterRestore: totals }) : null;
   const save = async () => {
+    entryDraft?.start();
     const body = { ...formObj($('form', m.el)), lines: collect() };
-    if (id) { await api('PUT', '/api/laundry-reports/' + id, body); return id; }
-    return (await api('POST', '/api/laundry-reports', body)).id;
+    if (id) { await api('PUT', '/api/laundry-reports/' + id, body); entryDraft?.clear(); return id; }
+    const created = (await api('POST', '/api/laundry-reports', body)).id; entryDraft?.clear(); return created;
   };
+  let saving = false;
   const act = async (name) => {
+    if (saving) return;
+    if (['save', 'issue'].includes(name) && !$('form', m.el).reportValidity()) return;
+    saving = true; $('form', m.el).inert = true;
+    let recordSaved = false;
     try {
       if (name === 'close') return m.close();
       if (name === 'delete') { if (!(await confirmBox('이 검수 기록을 삭제할까요?'))) return; await api('DELETE', '/api/laundry-reports/' + id); toast('삭제했습니다.'); }
@@ -134,10 +141,13 @@ async function lrEditor(id, done) {
       if (name === 'issue') {
         if (!$('form', m.el).reportValidity()) return;
         if (!$('[name=inspector]', m.el).value.trim() && !(await confirmBox('확인자가 비어 있습니다. 그대로 발행할까요?'))) return;
-        id = await save(); const issuedNow = await api('POST', `/api/laundry-reports/${id}/issue`); toast(issuedNow.signed ? '성적서를 발행했습니다. 등록된 서명이 들어갔습니다.' : '성적서를 발행했습니다.'); m.close(); done(); return lrEditor(id, done);
+        id = await save(); recordSaved = true; const issuedNow = await api('POST', `/api/laundry-reports/${id}/issue`); toast(issuedNow.signed ? '성적서를 발행했습니다. 등록된 서명이 들어갔습니다.' : '성적서를 발행했습니다.'); m.close(); done(); return lrEditor(id, done);
       }
       m.close(); done();
-    } catch (err) { fail(err); if (id) done(); }
+    } catch (err) {
+      if (recordSaved) { m.close(); done(); fail(new Error('검수 기록은 저장되었습니다. 발행 실패: ' + err.message)); return lrEditor(id, done); }
+      entryDraft?.failure(); fail(err); if (id) done();
+    } finally { saving = false; $('form', m.el).inert = false; }
   };
   $('form', m.el).onsubmit = (e) => { e.preventDefault(); act('save'); };
   $$('[data-act]', m.el).forEach((b) => { if (b.dataset.act !== 'save') b.onclick = () => act(b.dataset.act); });
@@ -176,6 +186,7 @@ async function pageLaundryReports(main) {
     $$('[data-open]', main).forEach((a) => (a.onclick = (e) => { e.preventDefault(); lrEditor(Number(a.dataset.open), load); }));
     $$('#lrList [data-cert]', main).forEach((b) => (b.onclick = async () => { const [id, key] = b.dataset.cert.split('|'); try { lrCertificate(await api('GET', '/api/laundry-reports/' + id), LR_META.forms.find((form) => form.key === key)); } catch (err) { fail(err); } }));
   };
+  rememberList($('#lrFilters', main));
   $('#lrFilters', main).onsubmit = (e) => { e.preventDefault(); load(); };
   $('#lrNew', main).onclick = () => lrEditor(null, load);
   if (LR_META.can_import) $('#lrImportFile', main).onchange = (e) => { const file = e.target.files[0]; e.target.value = ''; if (file) lrImport(file, () => pageLaundryReports(main)); };

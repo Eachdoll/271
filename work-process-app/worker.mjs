@@ -569,6 +569,7 @@ const receiptChangeSelect = `SELECT c.*, p.req_no, p.vendor, p.item, p.spec, p.u
   FROM receipt_qty_changes c LEFT JOIN purchase_orders p ON p.id=c.po_id`;
 route('GET', '/api/receipt-changes', async ({ query }) => {
   const where = [], args = [];
+  if (query.id !== undefined) { if (!/^[1-9]\d*$/.test(query.id)) throw bad('요청 번호를 확인하세요.'); where.push('c.id=?'); args.push(Number(query.id)); }
   if (query.status) { if (!['pending','approved','rejected','cancelled'].includes(query.status)) throw bad('요청 상태를 확인하세요.'); where.push('c.status=?'); args.push(query.status); }
   if (query.po_id) { if (!/^[1-9]\d*$/.test(query.po_id)) throw bad('발주 번호를 확인하세요.'); where.push('c.po_id=?'); args.push(Number(query.po_id)); }
   return db.prepare(`${receiptChangeSelect} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.id DESC LIMIT 200`).all(...args);
@@ -1322,6 +1323,7 @@ const actualChangeSelect = `SELECT c.*, s.product, s.spec, s.kind, s.period, s.s
   FROM production_actual_changes c JOIN schedules s ON s.id=c.schedule_id`;
 route('GET', '/api/actual-changes', async ({ query }) => {
   const where = [], args = [];
+  if (query.id !== undefined) { if (!/^[1-9]\d*$/.test(query.id)) throw bad('요청 번호를 확인하세요.'); where.push('c.id=?'); args.push(Number(query.id)); }
   if (query.status) { if (!['pending','approved','rejected','cancelled'].includes(query.status)) throw bad('요청 상태를 확인하세요.'); where.push('c.status=?'); args.push(query.status); }
   if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분을 확인하세요.'); where.push('s.kind=?'); args.push(query.kind); }
   if (query.schedule_id) { if (!/^[1-9]\d*$/.test(query.schedule_id)) throw bad('일정 번호를 확인하세요.'); where.push('c.schedule_id=?'); args.push(Number(query.schedule_id)); }
@@ -1572,6 +1574,7 @@ route('DELETE', '/api/semi-records/:id', async ({ user, params, body }) => {
 const decodeSemiChange = c => c && ({ ...c, old_data: JSON.parse(c.old_data), new_data: c.new_data ? JSON.parse(c.new_data) : null });
 route('GET', '/api/semi-changes', async ({ query }) => {
   const where = [], args = [];
+  if (query.id !== undefined) { if (!/^[1-9]\d*$/.test(query.id)) throw bad('요청 번호를 확인하세요.'); where.push('id=?'); args.push(Number(query.id)); }
   if (query.status) { if (!['pending', 'approved', 'rejected', 'cancelled'].includes(query.status)) throw bad('요청 상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   if (query.process) { where.push('process=?'); args.push(semiProcess(query.process)); }
   return (await db.prepare(`SELECT * FROM semi_record_changes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT 200`).all(...args)).map(decodeSemiChange);
