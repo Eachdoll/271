@@ -63,6 +63,7 @@
 - requests.type=sample_goods(샘플의뢰(상품)): 접수번호 G, 승인·상태 변경은 purchase 역할 또는 관리자. 기존 sample은 화면 이름만 샘플의뢰(제품)로 바꿨고 규칙은 그대로입니다. 새 의뢰 종류를 만들면 worker의 REQUEST_* 표, forms.js의 REQ, app.js의 PAGES/NAV/canApproveRequest, multi-items.js의 종류 판별을 함께 고치세요.
 - 라인·호기는 production 역할/관리자가 추가·이름 변경·사용 중지합니다(삭제 없음). semi_records.unit_name은 입력 당시 이름의 스냅샷입니다.
 - 반제품 품목은 worker.mjs와 public/semi.js의 SEMI_PRODUCTS(와이퍼: 부직포와이퍼·천와이퍼 / 심리스글러브: 스무드·타키)입니다. 커팅/융착은 종류 필수, 세탁은 와이퍼/심리스글러브만으로도 기록합니다. 입력은 로그인 사용자, 수정·삭제는 등록자·production·관리자. 미래 작업일은 거부합니다.
+- 0013: semi_records.spec. 심리스글러브는 사이즈 XS/S/M/L/XL(SEMI_SIZES), 와이퍼는 인치 규격을 `9인치` 형식으로 저장합니다(semiSpec()이 9, 9인치, 9" 입력을 정규화). 커팅/융착은 필수, 세탁은 선택입니다. 사이즈를 품목 이름이나 코드에 넣지 말고 spec에 두세요.
 - semi_records는 재고 계산(STOCK_MOVEMENTS)에 넣지 않았습니다. 넣을지와 품목명 규칙은 사용자 결정이 필요합니다.
 - 발주의 LOT는 선택입니다. public/semi.js를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. production_units·semi_records는 전체 백업 대상입니다.
 

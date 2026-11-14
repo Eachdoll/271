@@ -90,29 +90,33 @@ test('Lines and washers are managed by production; names are unique per kind', a
 test('Cutting/fusing is recorded per line and product type; washing per machine and product group', async () => {
   const [line, line2] = (await staff('GET', '/api/production-units?kind=line')).body; const washer = (await staff('GET', '/api/production-units?kind=washer')).body[0];
   const key = crypto.randomUUID();
-  const cut = { process: 'cut', work_date: today, unit_id: line.id, product_group: 'wiper', product_type: '부직포와이퍼', qty: 1200, unit: '매', request_id: key };
+  const cut = { process: 'cut', work_date: today, unit_id: line.id, product_group: 'wiper', product_type: '부직포와이퍼', spec: '9', qty: 1200, unit: '매', request_id: key };
   const first = await staff('POST', '/api/semi-records', cut);
-  assert.equal(first.status, 200); assert.equal(first.body.unit_name, '1동 부직포 라인 A'); assert.equal(first.body.created_by, '직원');
+  assert.equal(first.status, 200); assert.equal(first.body.spec, '9인치', 'inch spec is stored in one form'); assert.equal(first.body.unit_name, '1동 부직포 라인 A'); assert.equal(first.body.created_by, '직원');
   assert.equal((await staff('POST', '/api/semi-records', cut)).body.id, first.body.id, 'retry does not double the record');
-  await staff('POST', '/api/semi-records', { ...cut, request_id: undefined, unit_id: line2.id, product_group: 'seamless', product_type: '타키', qty: 300, unit: '켤레' });
-  for (const bad of [{ product_type: '' }, { product_type: '스무드' }, { product_group: 'x' }, { unit_id: washer.id }, { work_date: '2999-01-01' }, { qty: -1 }, { unit_id: 9999 }])
+  await staff('POST', '/api/semi-records', { ...cut, request_id: undefined, unit_id: line2.id, product_group: 'seamless', product_type: '타키', spec: 'xl', qty: 300, unit: '켤레' });
+  for (const bad of [{ spec: '' }, { spec: '아홉' }, { spec: '-3' }, { product_group: 'seamless', product_type: '스무드', spec: 'XXL' }, { product_group: 'seamless', product_type: '스무드', spec: '' }, { product_type: '' }, { product_type: '스무드' }, { product_group: 'x' }, { unit_id: washer.id }, { work_date: '2999-01-01' }, { qty: -1 }, { unit_id: 9999 }])
     assert.ok([400, 404].includes((await staff('POST', '/api/semi-records', { ...cut, request_id: undefined, ...bad })).status), JSON.stringify(bad));
   const wash = await staff('POST', '/api/semi-records', { process: 'wash', work_date: today, unit_id: washer.id, product_group: 'seamless', qty: 500, unit: '켤레' });
-  assert.equal(wash.status, 200); assert.equal(wash.body.product_type, '', 'washing may record only wiper/glove');
+  assert.equal(wash.status, 200); assert.equal(wash.body.product_type, '', 'washing may record only wiper/glove'); assert.equal(wash.body.spec, '', 'size is optional for washing');
+  const sized = await staff('POST', '/api/semi-records', { process: 'wash', work_date: today, unit_id: washer.id, product_group: 'seamless', product_type: '스무드', spec: 'M', qty: 10 });
+  assert.equal(sized.body.spec, 'M'); assert.equal((await staff('POST', '/api/semi-records', { process: 'wash', work_date: today, unit_id: washer.id, product_group: 'seamless', spec: '9', qty: 1 })).status, 400);
+  assert.equal((await staff('POST', '/api/semi-records', { ...cut, request_id: undefined, spec: '12인치' })).body.spec, '12인치'); assert.equal((await staff('POST', '/api/semi-records', { ...cut, request_id: undefined, spec: '4.5"' })).body.spec, '4.5인치');
+  assert.equal((await staff('GET', '/api/semi-records?process=cut&q=XL')).body.length, 1);
   assert.equal((await staff('POST', '/api/semi-records', { process: 'wash', work_date: today, unit_id: line.id, product_group: 'wiper', qty: 1 })).status, 400, 'washing needs a washer');
-  assert.equal((await staff('GET', `/api/semi-records?process=cut&from=${today}&to=${today}`)).body.length, 2);
+  assert.equal((await staff('GET', `/api/semi-records?process=cut&from=${today}&to=${today}`)).body.length, 4);
   assert.equal((await staff('GET', `/api/semi-records?process=cut&unit_id=${line2.id}`)).body[0].product_type, '타키');
   assert.equal((await staff('GET', '/api/semi-records?process=wash&product_group=wiper')).body.length, 0);
   assert.equal((await staff('GET', '/api/semi-records?process=x')).status, 400);
   // renaming a line keeps the name earlier records were entered under
   await prod('PUT', `/api/production-units/${line.id}`, { name: '1동 부직포라인' });
-  assert.equal((await staff('GET', `/api/semi-records?process=cut&unit_id=${line.id}`)).body[0].unit_name, '1동 부직포 라인 A');
+  assert.ok((await staff('GET', `/api/semi-records?process=cut&unit_id=${line.id}`)).body.every(r => r.unit_name === '1동 부직포 라인 A'));
   const edit = await prod('PUT', `/api/semi-records/${first.body.id}`, { ...cut, qty: 1150 });
   assert.equal(edit.body.qty, 1150); assert.equal(edit.body.updated_by, '생산담당'); assert.equal(edit.body.unit_name, '1동 부직포 라인 A');
   assert.equal((await buyer('PUT', `/api/semi-records/${first.body.id}`, { ...cut, qty: 1 })).status, 403);
   assert.equal((await buyer('DELETE', `/api/semi-records/${wash.body.id}`)).status, 403);
   assert.equal((await staff('DELETE', `/api/semi-records/${wash.body.id}`)).status, 200);
-  assert.equal((await admin('GET', '/api/admin/backup?table=semi_records')).body.rows.length, 2);
+  assert.equal((await admin('GET', '/api/admin/backup?table=semi_records')).body.rows.length, 5);
   assert.equal((await admin('GET', '/api/admin/backup?table=production_units')).body.rows.length, 3);
   assert.equal((await client()('GET', '/api/semi-records?process=cut')).status, 401);
 });

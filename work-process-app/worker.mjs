@@ -1180,6 +1180,16 @@ route('GET', '/api/reports', async ({ query }) => buildReport(db, query, today()
 // ── 생산: 라인·세탁 호기 관리와 반제품 작업 기록 (커팅/융착 = 라인별, 세탁 = 호기별) ──
 // To add a product, extend SEMI_PRODUCTS here and in public/semi.js; stored rows keep their own text.
 const SEMI_PRODUCTS = { wiper: { label: '와이퍼', types: ['부직포와이퍼', '천와이퍼'] }, seamless: { label: '심리스글러브', types: ['스무드', '타키'] } };
+const SEMI_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
+// Seamless gloves take a size; wipers take an inch spec, stored as '9인치' however it was typed.
+function semiSpec(group, value, required) {
+  const raw = str(value, 20);
+  if (!raw) { if (required) throw bad(group === 'seamless' ? '사이즈(XS~XL)를 선택하세요.' : '와이퍼 규격(인치)을 입력하세요.'); return ''; }
+  if (group === 'seamless') { const size = raw.toUpperCase(); if (!SEMI_SIZES.includes(size)) throw bad('사이즈는 XS, S, M, L, XL 중에서 선택하세요.'); return size; }
+  const inch = Number(raw.replace(/\s*(인치|inch|in|")\s*$/i, ''));
+  if (!Number.isFinite(inch) || inch <= 0 || inch > 200) throw bad('와이퍼 규격은 인치 숫자로 입력하세요. (예: 9)');
+  return `${inch}인치`;
+}
 const SEMI_UNIT_KIND = { cut: 'line', wash: 'washer' };
 const canManageProduction = user => hasRole(user, 'production');
 route('GET', '/api/production-units', async ({ query }) => {
@@ -1219,7 +1229,7 @@ async function semiFields(body, process, previous = null) {
   const type = str(body.product_type, 40);
   if (process === 'cut' && !type) throw bad('품목(종류)을 선택하세요.');
   if (type && !SEMI_PRODUCTS[group].types.includes(type)) throw bad('품목(종류)을 다시 선택하세요.');
-  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
+  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut'), qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
 }
 function semiProcess(value) { const process = String(value || ''); if (!Object.hasOwn(SEMI_UNIT_KIND, process)) throw bad('작업 구분을 확인하세요.'); return process; }
 route('GET', '/api/semi-records', async ({ query }) => {
@@ -1227,7 +1237,7 @@ route('GET', '/api/semi-records', async ({ query }) => {
   applyListDates(where, args, query, 'work_date');
   if (query.unit_id) { if (!/^[1-9]\d*$/.test(query.unit_id)) throw bad('라인·호기를 확인하세요.'); where.push('unit_id=?'); args.push(Number(query.unit_id)); }
   if (query.product_group) { if (!Object.hasOwn(SEMI_PRODUCTS, query.product_group)) throw bad('품목 구분을 확인하세요.'); where.push('product_group=?'); args.push(query.product_group); }
-  applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'lot', 'note', 'created_by']);
+  applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'spec', 'lot', 'note', 'created_by']);
   const rows = await db.prepare(`SELECT * FROM semi_records WHERE ${where.join(' AND ')} ORDER BY work_date DESC, id DESC LIMIT 2001`).all(...args);
   if (rows.length > 2000) throw bad('기록이 너무 많습니다. 기간을 좁히세요.');
   return rows;
@@ -1238,16 +1248,16 @@ route('POST', '/api/semi-records', async ({ user, body }) => {
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
   const old = await db.prepare('SELECT * FROM semi_records WHERE request_id=?').get(key);
   if (old) { if (old.created_by_id !== user.id || old.process !== process || old.unit_id !== f.unit_id || old.qty !== f.qty || old.work_date !== f.work_date) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
-  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
+  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,spec,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
   return mustGet('semi_records', r.lastInsertRowid);
 });
 route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
   const f = await semiFields(body, row.process, row);
-  await db.prepare('UPDATE semi_records SET work_date=?,unit_id=?,unit_name=?,product_group=?,product_type=?,qty=?,unit=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?')
-    .run(f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.qty, f.unit, f.lot, f.note, user.name, now(), row.id);
+  await db.prepare('UPDATE semi_records SET work_date=?,unit_id=?,unit_name=?,product_group=?,product_type=?,spec=?,qty=?,unit=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?')
+    .run(f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.qty, f.unit, f.lot, f.note, user.name, now(), row.id);
   return mustGet('semi_records', row.id);
 });
 route('DELETE', '/api/semi-records/:id', async ({ user, params }) => {
