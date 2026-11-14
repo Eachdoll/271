@@ -209,7 +209,7 @@ test('Good and defect quantities are counted separately; clock times give work h
   assert.deepEqual([cut.work_hours, cut.man_hours, cut.per_man_hour], [12, 40, 35], '1400 good ÷ (8×4 + 4×2 man-hours)');
   assert.equal(report.by_line.find(r => r.process === 'cut' && r.unit_name === '3동 수율라인').yield_rate, 90.3);
   const wash = report.by_product.find(r => r.process === 'wash' && r.product === '와이퍼');
-  assert.deepEqual([wash.qty, wash.defect_qty, wash.total_qty, wash.yield_rate, wash.defect_rate, wash.per_man_hour], [800, 8, 808, 99, 1, 400]);
+  assert.deepEqual([wash.qty, wash.defect_qty, wash.total_qty, wash.yield_rate, wash.defect_rate, wash.per_man_hour], [800, 8, 808, null, null, null]);
   assert.ok(report.rows.some(r => r.unit_name === '3동 수율라인' && r.product === '천와이퍼' && r.spec === '6인치' && r.qty === 1400));
   assert.equal(await stockOf(), 1400);
   assert.equal((await staff('GET', '/api/reports?from=2026-10-01&to=2026-10-31&item_category=' + q('상품'))).body.semi.by_product.length, 0);
@@ -351,7 +351,7 @@ test('Break time, line yield targets, washing backlog, alerts, edit trail and ba
   assert.ok(alerts.stale_approvals.some(s => s.kind === 'request' && s.type === 'development' && s.count >= 1));
   const low = alerts.low_yield.find(r => r.unit_name === '6동 경고라인');
   assert.deepEqual([low.yield_rate, low.target, low.process], [96, 98, 'cut'], 'the line target overrides the default');
-  assert.equal(alerts.low_yield.some(r => r.unit_name === '6호기'), true, '96% is below the new default of 97%');
+  assert.equal(alerts.low_yield.some(r => r.unit_name === '6호기'), false, 'washer records have no yield target');
   assert.equal(alerts.backup, undefined, 'backup status is for admins');
   await staff('POST', '/api/po/receive', { ids: [late.id], status: 'ok' });
   assert.equal((await staff('GET', '/api/alerts')).body.overdue_pos.some(p => p.id === late.id), false);
@@ -394,4 +394,16 @@ test('Code-based cutting derives identity and fixed units without a size, break 
   assert.equal((await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{...item,end_time:''}]})).status,400);
   const corrected=await staff('PUT','/api/semi-records/'+row.id,{entry_mode:'code',bom_id:model.id,qty:12,work_date:today,unit_id:line.id,start_time:'08:00',end_time:'11:00',note:'시각 정정'});assert.equal(corrected.status,200);assert.equal(corrected.body.record.unit,expected);
  }
+});
+test('Washer daily quantity and cycle counts group multi-product runs and preserve legacy totals',async()=>{
+ const washer=(await prod('POST','/api/production-units',{kind:'washer',name:'일일수량호기'})).body;
+ const item=(qty,time,unit='매')=>({entry_mode:'wash_quantity',product_group:unit==='매'?'wiper':'seamless',product_type:unit==='매'?'천와이퍼':'스무드',qty,unit,start_time:time,defect_qty:100});
+ const body={process:'wash',common:{work_date:today,unit_id:washer.id},items:[item(10,'08:00'),item(5,'08:00'),item(3,'08:00','켤레')],request_id:crypto.randomUUID()};
+ const saved=await staff('POST','/api/semi-batches',body);assert.equal(saved.status,200);assert.ok(saved.body.rows.every(r=>r.defect_qty===0));
+ await staff('POST','/api/semi-batches',body);
+ await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[item(20,'10:00')]});
+ await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[item(3,''),item(4,'')]});
+ const legacy=await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{product_group:'wiper',product_type:'천와이퍼',qty:8,defect_qty:2,unit:'매',start_time:'12:00'}]});assert.equal(legacy.status,200);
+ const summary=await staff('GET','/api/wash-summary?'+new URLSearchParams({from:today,to:today,unit_id:washer.id}));assert.equal(summary.status,200);assert.equal(summary.body.length,1);assert.equal(summary.body[0].runs,4);assert.deepEqual(summary.body[0].quantities,[{unit:'매',qty:52},{unit:'켤레',qty:3}]);
+ const old=legacy.body.rows[0];const corrected=await staff('PUT','/api/semi-records/'+old.id,{entry_mode:'wash_quantity',product_group:'wiper',product_type:'천와이퍼',unit:'매',qty:10,work_date:today,unit_id:washer.id,start_time:'12:00',note:'전체 수량 유지'});assert.equal(corrected.status,200);assert.equal(corrected.body.record.qty,8);assert.equal(corrected.body.record.defect_qty,2);
 });

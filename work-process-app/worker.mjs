@@ -85,7 +85,7 @@ function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
-  if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || path === '/api/inspections')) return true;
+  if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || ['/api/inspections','/api/wash-summary'].includes(path))) return true;
   if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals'].includes(path);
   return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path)));
 }
@@ -1613,6 +1613,7 @@ async function semiFields(body, process, previous = null) {
   const unit = await mustGet('production_units', unitId);
   if (unit.kind !== SEMI_UNIT_KIND[process]) throw bad(process === 'cut' ? '라인을 선택하세요.' : '세탁 호기를 선택하세요.');
   if (!unit.active && previous?.unit_id !== unit.id) throw bad('사용 중지된 라인·호기입니다.');
+  if(process==='wash' && body.entry_mode==='wash_quantity'){const total=num(body.qty,'세탁수량'),defect=previous?.defect_qty||0;if(total<defect)throw bad('과거 불량 이력을 보존하려면 세탁수량이 '+defect+' 이상이어야 합니다.');body={...body,qty:total-defect,defect_qty:defect,defect_reason:previous?.defect_reason||''};}
   const codeEntry = process === 'cut' && body.entry_mode === 'code';
   if(codeEntry){if(!Number.isSafeInteger(Number(body.bom_id))||Number(body.bom_id)<=0)throw bad('제품코드를 선택하세요.');const model=await mustGet('boms',body.bom_id);if(model.item_category!=='반제품'||!model.semi_type)throw bad('반제품 제품코드를 선택하세요.');const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(model.semi_type));body={...body,product_group:group,product_type:model.semi_type,unit:previous?.bom_id===model.id?previous.unit:group==='seamless'?'켤레':'매',spec:previous?.bom_id===model.id?previous.spec:''};if(!previous)body={...body,break_minutes:0,workers:null};if(!body.start_time||!body.end_time)throw bad('시작 시각과 종료 시각을 입력하세요.');}
   const group = String(body.product_group || ''); if (!Object.hasOwn(SEMI_PRODUCTS, group)) throw bad('와이퍼/심리스글러브를 선택하세요.');
@@ -1678,6 +1679,16 @@ async function listSemiRecords({ user, query, operator = false }) {
   if (rows.length > 2000) throw bad('기록이 너무 많습니다. 기간을 좁히세요.');
   return operator ? rows.map(({ bom_snapshot, request_id, ...row }) => row) : rows;
 }
+function summarizeWasherRuns(rows) {
+ const days=new Map();
+ for(const r of rows){const key=r.work_date+'|'+r.unit_id;let group=days.get(key);if(!group){group={work_date:r.work_date,unit_name:r.unit_name,unit_id:r.unit_id,quantities:new Map(),cycles:new Set()};days.set(key,group);}
+ const unit=r.unit||'';group.quantities.set(unit,(group.quantities.get(unit)||0)+r.qty+(r.defect_qty||0));
+ group.cycles.add(r.start_time?'time:'+r.start_time:r.request_id?'batch:'+r.request_id.replace(/:\d+$/,''):'row:'+r.id);
+ }
+ return [...days.values()].map(g=>({work_date:g.work_date,unit_id:g.unit_id,unit_name:g.unit_name,runs:g.cycles.size,quantities:[...g.quantities].map(([unit,qty])=>({unit,qty:Math.round(qty*1e6)/1e6}))})).sort((a,b)=>b.work_date.localeCompare(a.work_date)||a.unit_id-b.unit_id);
+}
+route('GET','/api/wash-summary',async context=>summarizeWasherRuns(await listSemiRecords({...context,query:{...context.query,process:'wash'}})));
+
 route('GET', '/api/semi-records', listSemiRecords);
 route('GET', '/api/operator/semi-records', context => listSemiRecords({ ...context, operator: true }));
 route('POST', '/api/semi-records', async ({ user, body }) => {
@@ -1822,7 +1833,7 @@ route('PUT', '/api/semi-settings', async ({ user, body }) => {
 async function lowYieldUnits() {
   const fallback = await defaultYieldTarget();
   const rows = await db.prepare(`SELECT r.process, r.unit_id, MAX(r.unit_name) AS unit_name, u.yield_target, SUM(r.qty) AS qty, SUM(r.defect_qty) AS defect_qty
-    FROM semi_records r LEFT JOIN production_units u ON u.id=r.unit_id WHERE r.work_date>=date('now','+9 hours','-6 days') AND r.work_date<=date('now','+9 hours') GROUP BY r.process, r.unit_id`).all();
+    FROM semi_records r LEFT JOIN production_units u ON u.id=r.unit_id WHERE r.process='cut' AND r.work_date>=date('now','+9 hours','-6 days') AND r.work_date<=date('now','+9 hours') GROUP BY r.process, r.unit_id`).all();
   return rows.map(r => { const total = r.qty + r.defect_qty; return { process: r.process, unit_name: r.unit_name, target: r.yield_target ?? fallback, yield_rate: total ? Math.round(r.qty / total * 1000) / 10 : null, qty: r.qty, defect_qty: r.defect_qty }; })
     .filter(r => r.yield_rate !== null && r.yield_rate < r.target).sort((a, b) => (a.yield_rate - a.target) - (b.yield_rate - b.target));
 }

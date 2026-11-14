@@ -49,8 +49,8 @@ function semiTotals(rows, keyOf, labelOf) {
     const qty = semiRound(g.qty), defect = semiRound(g.defect_qty), manHours = semiRound(g.man_hours);
     const total = semiRound(qty + defect);
     return { ...g, qty, defect_qty: defect, good_qty: qty, total_qty: total, work_hours: semiRound(g.work_hours), man_hours: manHours,
-      yield_rate: total ? Math.round(qty / total * 1000) / 10 : null, defect_rate: total ? Math.round(defect / total * 1000) / 10 : null,
-      per_man_hour: manHours ? Math.round(g.timed_good_qty / manHours * 100) / 100 : null };
+      yield_rate: g.process === 'wash' ? null : total ? Math.round(qty / total * 1000) / 10 : null, defect_rate: g.process === 'wash' ? null : total ? Math.round(defect / total * 1000) / 10 : null,
+      per_man_hour: g.process === 'wash' ? null : manHours ? Math.round(g.timed_good_qty / manHours * 100) / 100 : null };
   });
 }
 async function semiReport(db, from, to, category, q, grain) {
