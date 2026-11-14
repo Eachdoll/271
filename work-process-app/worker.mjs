@@ -12,7 +12,7 @@ async function getSetting(k) { const r = (await db.prepare('SELECT value FROM se
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
 // ───────────────────────── 공통 ─────────────────────────
-const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver'];
+const ROLES = ['operator', 'purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver'];
 const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production', sample_goods: 'purchase' };
 const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
@@ -83,6 +83,11 @@ function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul
 function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
+function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
+function operatorRequestAllowed(method, path) {
+  if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals'].includes(path);
+  return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path)));
+}
 function isRequestApprover(user, type) {
   return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase' }[type]);
 }
@@ -1026,6 +1031,32 @@ async function schedFields(b, previous = null) {
   return { kind, period, start_date: normStart(period, dateStr(b.start_date, '날짜')), product: bomId ? snapshot.product : reqStr(b.product, '제품명', 200), qty, note: str(b.note, 500), bom_id: bomId, bom_snapshot: JSON.stringify(snapshot) };
 }
 function decodeSchedule(row) { return { ...row, bom_snapshot: JSON.parse(row.bom_snapshot || '{}') }; }
+// Narrow read models for the operator UI. No prices, BOM recipes, or other users' logs.
+route('GET', '/api/operator/catalog', async () => ({
+  units: await db.prepare('SELECT id,kind,name,active FROM production_units WHERE active=1 ORDER BY sort_order,name').all(),
+  models: await db.prepare("SELECT id,product,product_code,semi_type,unit FROM boms WHERE active=1 AND is_temp=0 AND item_category='반제품' AND semi_type<>'' ORDER BY product").all(),
+}));
+function operatorDate(value) {
+  const date = listFilterDate(value, '생산일');
+  if (!date || date > today()) throw bad('생산일은 오늘 또는 과거 날짜를 선택하세요.');
+  return date;
+}
+route('GET', '/api/operator/plans', async ({ query }) => {
+  const date = operatorDate(query.date);
+  return db.prepare(`SELECT s.id,s.period,s.start_date,s.product,s.spec,s.qty,s.done,
+    COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit,
+    COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL),0) AS actual_qty
+    FROM schedules s WHERE s.kind='finished' AND s.start_date<=? AND
+    CASE s.period WHEN 'day' THEN s.start_date WHEN 'week' THEN date(s.start_date,'+6 days') ELSE date(s.start_date,'+1 month','-1 day') END>=?
+    ORDER BY s.done,s.product,s.id`).all(date,date);
+});
+route('GET', '/api/operator/actuals', async ({ user, query }) => {
+  const date = operatorDate(query.date);
+  return db.prepare(`SELECT a.id,a.production_date,a.qty,a.note,a.voided_at,s.product,s.spec,
+    COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'),'') AS unit
+    FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id
+    WHERE a.author_id=? AND a.production_date=? AND s.kind='finished' ORDER BY a.id DESC LIMIT 100`).all(user.id,date);
+});
 route('GET', '/api/schedules', async ({ query }) => {
   const kind = String(query.kind || 'finished');
   if (!['finished','semi'].includes(kind)) throw bad('생산 구분을 확인하세요.');
@@ -1251,7 +1282,8 @@ route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
 // Actual production is an append-only dated log, distinct from completion checkboxes.
 async function actualSchedule(user, id, write = false) {
   const row = await mustGet('schedules', id);
-  if (write && !canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 생산실적을 입력할 수 있습니다.');
+  if (isOperator(user) && row.kind !== 'finished') throw new HttpError(403, '오퍼레이터는 완제품 계획에만 실적을 입력할 수 있습니다.');
+  if (write && !isOperator(user) && !canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 생산실적을 입력할 수 있습니다.');
   return row;
 }
 route('GET', '/api/schedules/:id/actuals', async ({ user, params, query }) => {
@@ -1483,8 +1515,9 @@ function semiWorkDetails(body, previous, process) {
   return { start_time: start, end_time: end, break_minutes: breakMinutes, work_hours: hours, workers, defect_qty: defect, defect_reason: reason };
 }
 function semiProcess(value) { const process = String(value || ''); if (!Object.hasOwn(SEMI_UNIT_KIND, process)) throw bad('작업 구분을 확인하세요.'); return process; }
-route('GET', '/api/semi-records', async ({ query }) => {
+async function listSemiRecords({ user, query, operator = false }) {
   const where = ['process=?'], args = [semiProcess(query.process)];
+  if (operator) { where.push('created_by_id=?'); args.push(user.id); }
   applyListDates(where, args, query, 'work_date');
   if (query.unit_id) { if (!/^[1-9]\d*$/.test(query.unit_id)) throw bad('라인·호기를 확인하세요.'); where.push('unit_id=?'); args.push(Number(query.unit_id)); }
   if (query.product_group) { if (!Object.hasOwn(SEMI_PRODUCTS, query.product_group)) throw bad('품목 구분을 확인하세요.'); where.push('product_group=?'); args.push(query.product_group); }
@@ -1492,8 +1525,10 @@ route('GET', '/api/semi-records', async ({ query }) => {
   const rows = await db.prepare(`SELECT semi_records.*, (SELECT c.id FROM semi_record_changes c WHERE c.record_id=semi_records.id AND c.status='pending') AS pending_change_id
     FROM semi_records WHERE ${where.join(' AND ')} ORDER BY work_date DESC, id DESC LIMIT 2001`).all(...args);
   if (rows.length > 2000) throw bad('기록이 너무 많습니다. 기간을 좁히세요.');
-  return rows;
-});
+  return operator ? rows.map(({ bom_snapshot, request_id, ...row }) => row) : rows;
+}
+route('GET', '/api/semi-records', listSemiRecords);
+route('GET', '/api/operator/semi-records', context => listSemiRecords({ ...context, operator: true }));
 route('POST', '/api/semi-records', async ({ user, body }) => {
   const process = semiProcess(body.process); const f = await semiFields(body, process);
   const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
@@ -1511,8 +1546,9 @@ route('POST', '/api/semi-batches', async ({ user, body }) => {
   if (body.common !== undefined && (!body.common || typeof body.common !== 'object' || Array.isArray(body.common))) throw bad('공통 입력 내용을 확인하세요.');
   const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
   if (!/^[a-zA-Z0-9-]{16,60}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  const resultRows = rows => isOperator(user) ? rows.map(({ bom_snapshot, request_id, ...row }) => row) : rows;
   const saved = () => db.prepare("SELECT * FROM semi_records WHERE request_id LIKE ? ESCAPE '\\' ORDER BY id").all(key.replace(/[\\%_]/g, '\\$&') + ':%');
-  const replay = rows => { if (rows.some(r => r.created_by_id !== user.id || r.process !== process) || rows.length !== body.items.length) throw new HttpError(409, '이미 사용된 요청 번호입니다. 새로 열어 등록하세요.'); return { rows, replayed: true }; };
+  const replay = rows => { if (rows.some(r => r.created_by_id !== user.id || r.process !== process) || rows.length !== body.items.length) throw new HttpError(409, '이미 사용된 요청 번호입니다. 새로 열어 등록하세요.'); return { rows: resultRows(rows), replayed: true }; };
   const existing = await saved(); if (existing.length) return replay(existing);
   const commands = [];
   for (const [index, item] of body.items.entries()) {
@@ -1524,7 +1560,7 @@ route('POST', '/api/semi-batches', async ({ user, body }) => {
   }
   try { await db.batch(commands); }
   catch (error) { const rows = await saved(); if (rows.length) return replay(rows); throw error; }
-  return { rows: await saved(), replayed: false };
+  return { rows: resultRows(await saved()), replayed: false };
 });
 // Recorded quantities change only with a production team lead's approval; LOT and notes can be fixed directly.
 const SEMI_FIELDS = ['work_date', 'unit_id', 'unit_name', 'product_group', 'product_type', 'bom_id', 'item_name', 'product_code', 'bom_snapshot', 'spec', 'qty', 'defect_qty', 'unit', 'start_time', 'end_time', 'break_minutes', 'work_hours', 'workers', 'defect_reason', 'lot', 'note'];
@@ -1866,11 +1902,14 @@ return { async fetch(req) {
       const m = r.re.exec(p); const params = {}; r.keys.forEach((k, i) => params[k] = m[i + 1]);
       const user = await currentUser(req);
       if (r.auth && !user) throw new HttpError(401, '로그인이 필요합니다.');
+      if (isOperator(user) && !operatorRequestAllowed(req.method, p)) throw new HttpError(403, '오퍼레이터는 반제품·완제품 실적 입력과 본인 기록 조회만 사용할 수 있습니다.');
       const body = req.method === 'GET' ? {} : await readBody(req);
       return Response.json(await r.handler({ req, res, user, params, body, query: Object.fromEntries(url.searchParams) }), { headers: res });
     }
     if (p.startsWith('/uploads/')) {
-      if (!await currentUser(req)) throw new HttpError(401, '로그인이 필요합니다.');
+      const user = await currentUser(req);
+      if (!user) throw new HttpError(401, '로그인이 필요합니다.');
+      if (isOperator(user)) throw new HttpError(403, '오퍼레이터는 첨부 파일을 조회할 수 없습니다.');
       const file = p.slice('/uploads/'.length);
       if (!/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(file)) throw new HttpError(404, '사진을 찾을 수 없습니다.');
       const photo = await env.BUCKET.get(file);

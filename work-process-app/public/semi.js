@@ -131,8 +131,14 @@ async function manageProductionUnits(kind, after) {
   };
   await load();
 }
-async function pageSemi(main, process) {
-  const page = SEMI_PAGE[process]; const canManage = hasRole('production');
+function resetSemiRows(form, addRow) {
+  const rows = $$('[data-semi-row]', form), last = rows.at(-1);
+  rows.forEach(row => { if (row !== last) row.remove(); });
+  addRow(last); last?.remove();
+}
+async function pageSemi(main, process, { operator = false } = {}) {
+  const page = SEMI_PAGE[process]; const canManage = !operator && hasRole('production');
+  const recordsApi = operator ? '/api/operator/semi-records' : '/api/semi-records';
   const monthFirst = todayStr().slice(0, 8) + '01';
   main.innerHTML = `
   <h1>${page.title} <span class="dept">생산 · 반제품</span></h1>
@@ -154,10 +160,12 @@ async function pageSemi(main, process) {
   <div id="semiSummary"></div><div id="semiList"></div>`;
   const form = $('#semiNew', main), filters = $('#semiFilters', main); let version = 0, requestId = crypto.randomUUID();
   // 반제품 catalog items that say which kind they are; the entry lines offer them as models.
-  let models = [];
-  try { models = (await api('GET', '/api/boms?item_category=' + encodeURIComponent('반제품'))).filter(b => b.semi_type); } catch { /* entry still works by kind only */ }
+  let models = [], operatorCatalog;
+  if (operator) { operatorCatalog = await api('GET', '/api/operator/catalog'); models = operatorCatalog.models; }
+  else try { models = (await api('GET', '/api/boms?item_category=' + encodeURIComponent('반제품'))).filter(b => b.semi_type); } catch { /* entry still works by kind only */ }
+  if (!main.isConnected || !ME) return;
   const loadUnits = async () => {
-    const units = await api('GET', `/api/production-units?kind=${page.unitKind}&all=1`); if (!main.isConnected) return;
+    const units = operator ? operatorCatalog.units.filter(u => u.kind === page.unitKind) : await api('GET', `/api/production-units?kind=${page.unitKind}&all=1`); if (!main.isConnected) return;
     const active = units.filter(u => u.active); const chosen = form.unit_id.value, filterChosen = filters.unit_id.value;
     form.unit_id.innerHTML = active.length ? '<option value="">선택</option>' + active.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('') : `<option value="">${page.unitLabel}을(를) 먼저 등록하세요</option>`;
     form.unit_id.value = active.some(u => String(u.id) === chosen) ? chosen : '';
@@ -218,6 +226,7 @@ async function pageSemi(main, process) {
     if (copy) { field('product').value = $('[data-k="product"]', copy).value; field('unit').value = $('[data-k="unit"]', copy).value; syncSpec(); field('bom_id').value = $('[data-k="bom_id"]', copy).value; }
     syncSpec();
     $('[data-semi-remove]', row).onclick = () => { if ($$('[data-semi-row]', form).length === 1) return toast('기록은 1줄 이상 필요합니다.', 'err'); row.remove(); countRows(); };
+    if (operator) operatorSimplifySemi(row);
     rowsRoot.append(row); countRows(); return row;
   };
   addRow(); $('#semiAddRow').onclick = () => { const rows = $$('[data-semi-row]', form); const row = addRow(rows.at(-1)); if (row) $($('[data-semi-size]', row).hidden ? '[data-k="qty"]' : '[data-k="size"]', row).focus(); };
@@ -225,7 +234,7 @@ async function pageSemi(main, process) {
   $('#semiRecent').onclick = async () => {
     if (!form.unit_id.value) return toast(`${page.unitLabel}을(를) 먼저 선택하세요.`, 'err');
     try {
-      const found = await api('GET', '/api/semi-records?' + new URLSearchParams({ process, unit_id: form.unit_id.value }));
+      const found = await api('GET', recordsApi + '?' + new URLSearchParams({ process, unit_id: form.unit_id.value }));
       if (!found.length) return toast('불러올 이전 기록이 없습니다.', 'err');
       const latest = found[0].work_date; const source = found.filter(r => r.work_date === latest).reverse().slice(0, 30);
       $$('[data-semi-row]', form).forEach(row => row.remove());
@@ -244,8 +253,12 @@ async function pageSemi(main, process) {
   const productOf = value => { const [product_group, product_type] = String(value).split('|'); return { product_group, product_type: product_type || '' }; };
   const load = async () => {
     const mine = ++version;
-    const [rows, pending] = await Promise.all([api('GET', '/api/semi-records?' + new URLSearchParams({ process, ...formObj(filters) })), api('GET', `/api/semi-changes?status=pending&process=${process}`)]);
+    const [rows, pending] = await Promise.all([api('GET', recordsApi + '?' + new URLSearchParams({ process, ...formObj(filters) })), operator ? Promise.resolve([]) : api('GET', `/api/semi-changes?status=pending&process=${process}`)]);
     if (mine !== version || !main.isConnected) return;
+    if (operator) {
+      $('#semiList', main).innerHTML = operatorSemiHistory(rows);
+      return;
+    }
     $('#semiPending').innerHTML = pending.length ? `<div class="card"><h3>수정·삭제 승인 대기 <span class="chip yellow">${pending.length}건</span></h3><p class="small muted">${canApproveSemi() ? '승인하면 기록과 합계에 바로 반영됩니다.' : '생산팀장 승인 후 반영됩니다.'}</p><div class="table-wrap"><table class="grid"><thead><tr><th>요청 내용</th><th>사유</th><th>요청자</th><th></th></tr></thead><tbody>${pending.map(c => `<tr><td>${semiChangeText(c)}</td><td>${esc(c.reason)}</td><td>${esc(c.requested_by)}<br><span class="small muted">${esc(c.requested_at)}</span></td><td class="nowrap">${semiChangeButtons(c)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
     bindSemiChanges($('#semiPending'), async () => { await load(); refreshNavBadges(); });
     $('#semiCount').textContent = `${rows.length}건`;
@@ -280,21 +293,24 @@ async function pageSemi(main, process) {
   form.onsubmit = async event => {
     event.preventDefault(); if (submit.disabled) return; submit.disabled = true; form.inert = true; entryDraft?.start();
     const items = $$('[data-semi-row]', form).map(row => { const v = Object.fromEntries($$('[data-k]', row).map(input => [input.dataset.k, input.value])); const { product, size, inch, ...rest } = v; return { ...rest, ...productOf(product), spec: size || inch || '' }; });
-    const date = form.work_date.value;
+    const date = form.work_date.value; let saved = false;
     try {
       const result = await api('POST', '/api/semi-batches', { process, common: { work_date: date, unit_id: form.unit_id.value }, items, request_id: requestId });
-      entryDraft?.clear();
+      saved = true; entryDraft?.clear();
       requestId = crypto.randomUUID(); toast(`작업 기록 ${result.rows.length}줄을 등록했습니다.`);
       // Keep the date and line; start again with one line that remembers the last product and unit.
-      const last = $$('[data-semi-row]', form).at(-1); const fresh = addRow(last); $$('[data-semi-row]', form).forEach(row => { if (row !== fresh) row.remove(); }); countRows();
+      resetSemiRows(form, addRow); countRows();
       if (date < filters.from.value) filters.from.value = date; if (date > filters.to.value) filters.to.value = date;
       await load();
-    } catch (error) { entryDraft?.failure(); fail(error); } finally { form.inert = false; submit.disabled = false; countRows(); entryDraft?.resume(); }
+    } catch (error) { if (!saved) entryDraft?.failure(); fail(saved ? new Error('기록은 저장되었습니다. 목록 조회 실패: ' + error.message) : error); } finally { form.inert = false; submit.disabled = false; countRows(); entryDraft?.resume(); }
   };
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
   $('#semiDetail').onchange = () => { $('#semiSummary').innerHTML = semiSummary(process, lastRows) + ($('#semiDetail').checked ? semiDetail(process, lastRows) : ''); };
   if (canManage) $('#semiManage').onclick = () => manageProductionUnits(page.unitKind, () => loadUnits().catch(fail)).catch(fail);
-  await loadUnits(); rememberList(filters);
+  await loadUnits();
+  if (!main.isConnected || !ME) return;
+  if (operator) { filters.hidden = true; $('h1', main).textContent = page.title; $('#semiNew h3', main).textContent = '작업 기록 입력'; }
+  else rememberList(filters);
   entryDraft = bindEntryDraft(form, `semi:${process}`, {
     read: () => ({ fields: uxFormRead(form), lines: $$('[data-semi-row]', form).map(row => $$('[data-k]', row).map(input => [input.dataset.k, input.value])), requestId }),
     restore: value => {

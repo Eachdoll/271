@@ -401,3 +401,29 @@ input[data-photo-camera] { display: none !important; }
 .approval-compare td { white-space: pre-wrap; overflow-wrap: anywhere; }
 .approval-impact { padding: 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
 @media print { .draft-state { display: none; } }
+
+/* Focused production entry for operator accounts. */
+.operator-layout { max-width: 1000px; margin: 0 auto; padding: 24px; }
+.operator-layout main { padding: 0 0 48px; }
+.operator-tabs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; }
+.operator-tabs .btn { display: flex; align-items: center; flex: 1; min-height: 48px; text-align: center; justify-content: center; }
+.operator-choices { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.operator-choice { display: block; color: inherit; text-decoration: none; padding: 24px; }
+.operator-choice:hover { border-color: var(--accent); }
+.operator-number { font-weight: 700; color: var(--accent); }
+.operator-mode input, .operator-mode select, .operator-mode .btn { min-height: 44px; }
+.operator-mode .form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.operator-more { margin-top: 16px; }
+.operator-more summary { padding: 10px 0; cursor: pointer; }
+.operator-history article { display: flex; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.operator-history p { margin: 4px 0 0; }
+.operator-mode #semiFilters[hidden] { display: none; }
+.operator-mode #semiSubmit, .operator-mode #operatorActual > button { min-height: 52px; font-size: 17px; }
+@media(max-width:700px) {
+  .operator-layout { padding: 14px; }
+  .operator-choices { grid-template-columns: 1fr; }
+  .operator-tabs { gap: 6px; }
+  .operator-tabs .btn { font-size: 13px; padding: 10px 6px; }
+  .operator-mode .top { flex-wrap: wrap; height: auto; min-height: 56px; padding: 10px 12px; }
+  .operator-mode .form-grid { grid-template-columns: 1fr; }
+}

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.18';
+const APP_VERSION = '15.19';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -20,7 +20,7 @@ const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const dow = (s) => WEEK[parseD(s).getDay()];
 const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko-KR'));
 
-const ROLE_LABEL = { purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)' };
+const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -115,16 +115,16 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
 }
 function confirmBox(msg) {
   return new Promise((resolve) => {
-    const m = modal(`<p class="confirm-msg">${esc(msg)}</p><div class="actions"><button class="btn" data-no>취소</button><button class="btn danger" data-yes>확인</button></div>`);
+    const m = modal(`<p class="confirm-msg">${esc(msg)}</p><div class="actions"><button class="btn" data-no>취소</button><button class="btn danger" data-yes>확인</button></div>`, { onClose: () => resolve(false) });
     $('[data-no]', m.el).onclick = () => { m.close(); resolve(false); };
-    $('[data-yes]', m.el).onclick = () => { m.close(); resolve(true); };
+    $('[data-yes]', m.el).onclick = () => { resolve(true); m.close(); };
   });
 }
 function promptBox(title, fieldsHtml) {
   return new Promise((resolve) => {
-    const m = modal(`<h3>${esc(title)}</h3><form class="stack">${fieldsHtml}<div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">확인</button></div></form>`);
+    const m = modal(`<h3>${esc(title)}</h3><form class="stack">${fieldsHtml}<div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">확인</button></div></form>`, { onClose: () => resolve(null) });
     $('[data-no]', m.el).onclick = () => { m.close(); resolve(null); };
-    $('form', m.el).onsubmit = (e) => { e.preventDefault(); const v = formObj(e.target); m.close(); resolve(v); };
+    $('form', m.el).onsubmit = (e) => { e.preventDefault(); const v = formObj(e.target); resolve(v); m.close(); };
   });
 }
 
@@ -275,6 +275,12 @@ async function render() {
   uxBeforeRender();
   const route = location.hash || '#/';
   if (!ME) return pageAuth();
+  if (isOperatorMode()) {
+    operatorShell();
+    try { await operatorPage(route, $('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    uxAfterRender(route); return;
+  }
+  document.body.classList.remove('operator-mode');
   shell();
   refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
@@ -285,6 +291,7 @@ window.addEventListener('hashchange', render);
 
 // ───────────── 로그인 / 가입 ─────────────
 function pageAuth(mode = 'login', notice = '') {
+  document.body.classList.remove('operator-mode');
   $('#app').innerHTML = `
   <div class="auth">
     <div class="auth-card">
@@ -1131,9 +1138,9 @@ async function pageAdmin(main) {
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
   <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
     <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label></div>
-    <div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
+    <p class="small muted">오퍼레이터를 선택한 일반 계정은 다른 업무 권한보다 입력 전용 모드가 우선합니다. 관리자는 전체 권한을 유지합니다.</p><div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
     <div class="actions"><button class="btn primary">계정 만들기</button></div></form>
-  <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
+  <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="small muted">오퍼레이터: 반제품 커팅/융착·세탁과 완제품 실적만 입력합니다. 다른 업무 권한을 함께 선택해도 일반 계정은 입력 전용으로 제한됩니다. 관리자 계정은 제외됩니다.</p><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
     <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰·VOC 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
