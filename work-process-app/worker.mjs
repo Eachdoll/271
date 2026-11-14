@@ -359,7 +359,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -438,8 +438,9 @@ function receiptAnalysisQuery(sourceType, id, user) {
   const coa = purchase ? 'src.coa_requested' : '0';
   const date = purchase ? 'substr(src.recv_at,1,10)' : 'src.received_date';
   const prefix = `Q-${today().slice(2).replace(/-/g, '')}-`;
+  const inspection = inspectionSnapshotSQL('src.item', "'수입검사'", 'src.item_category', purchase ? 'src.product_code' : "json_extract(src.bom_snapshot,'$.product_code')");
   return {
-    sql: `INSERT INTO requests(type,status,req_no,title,customer,category,data,requester_id,requester_name,approver_name,approved_at,source_type,source_id,batch_id,spec,unit,lot,qty)
+    sql: `INSERT INTO requests(type,status,req_no,title,customer,category,data,requester_id,requester_name,approver_name,approved_at,source_type,source_id,batch_id,spec,unit,lot,qty,inspection_snapshot)
       SELECT 'analysis','waiting',
         ? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(req_no,length(?) + 1) AS INTEGER)),0)+1 FROM requests WHERE req_no LIKE ?)),
         src.item,src.vendor,'수입검사',
@@ -448,10 +449,10 @@ function receiptAnalysisQuery(sourceType, id, user) {
           'received_qty',${qty},'coa_requested',${coa},
           'purchase_req_no',${purchase ? 'src.req_no' : "''"},
           'bom_id',${purchase ? 'NULL' : 'src.bom_id'},
-          'product_code',${purchase ? "''" : "COALESCE(json_extract(src.bom_snapshot,'$.product_code'),'')"},
+          'product_code',${purchase ? "src.product_code" : "COALESCE(json_extract(src.bom_snapshot,'$.product_code'),'')"},
           'unit',COALESCE(NULLIF(src.unit,''),${purchase ? "''" : "json_extract(src.bom_snapshot,'$.unit')"},''),'spec',src.spec,'lot',src.lot,'lot_etc',src.lot,'qty',${qty},
           'result_type',CASE WHEN ${coa}=1 THEN 'COA발행' ELSE '기본(데이터공유)' END,'extra',src.note),
-        ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id,src.batch_id,src.spec,src.unit,src.lot,${qty}
+        ?,?,'입고 자동접수',datetime('now','+9 hours'),?,src.id,src.batch_id,src.spec,src.unit,src.lot,${qty},${inspection}
       FROM ${table} src WHERE src.id=${id == null ? 'last_insert_rowid()' : '?'}
         ${purchase ? "AND src.recv_status IN ('ok','mismatch')" : ''}
         AND NOT EXISTS(SELECT 1 FROM requests WHERE source_type=? AND source_id=src.id)
@@ -817,12 +818,132 @@ route('DELETE', '/api/laundry-reports/:id', async ({ user, params }) => {
   return { ok: true };
 });
 
+// Quality specifications are copied when a request is created; later edits never change that copy.
+function inspectionKey(value) { return String(value || '').trim().toLowerCase().replace(/ /g, ''); }
+function inspectionSnapshotSQL(title, kind, category, code = "''") {
+  return `COALESCE((SELECT MAX(json_set(s.definition,'$.id',s.id,'$.revision',s.revision)) FROM inspection_specs s
+    WHERE s.active=1 AND s.kind=${kind} AND s.item_category=${category}
+    AND EXISTS(SELECT 1 FROM inspection_spec_keys k WHERE k.spec_id=s.id AND k.name_key IN (REPLACE(LOWER(${title}),' ',''),REPLACE(LOWER(COALESCE(${code},'')),' ',''))) HAVING COUNT(*)=1),'')`;
+}
+async function inspectionSnapshot(f) {
+  if (!['수입검사','출하검사'].includes(f.category)) return '';
+  const keys = [...new Set([inspectionKey(f.title), inspectionKey(f.data.product_code)].filter(Boolean))];
+  const rows = await db.prepare(`SELECT DISTINCT s.* FROM inspection_specs s JOIN inspection_spec_keys k ON k.spec_id=s.id WHERE s.active=1 AND s.kind=? AND s.item_category=? AND k.name_key IN (${keys.map(() => '?').join(',')})`).all(f.category, f.data.item_category || '', ...keys);
+  return rows.length === 1 ? JSON.stringify({ ...JSON.parse(rows[0].definition), id: rows[0].id, revision: rows[0].revision }) : '';
+}
+function requireInspectionManager(user) { requireRole(user,'quality_approver','품질팀장'); }
+function validateInspectionSpec(body) {
+  if (!['수입검사','출하검사'].includes(body.kind)) throw bad('수입검사 또는 출하검사를 선택하세요.');
+  const category = itemCategory(body.item_category), product = reqStr(body.product,'품명',200);
+  if (!Array.isArray(body.aliases) || body.aliases.length > 20 || body.aliases.some(v => typeof v !== 'string' || v.length > 200)) throw bad('별칭은 20개 이내로 입력하세요.');
+  if (!Array.isArray(body.items) || !body.items.length || body.items.length > 20) throw bad('검사 항목은 1~20개로 설정하세요.');
+  const items = body.items.map((item,i) => {
+    if (!item || typeof item !== 'object') throw bad('검사 항목을 확인하세요.');
+    const bound = v => { if (v === '' || v == null) return null; if (!['string','number'].includes(typeof v) || !Number.isFinite(Number(v))) throw bad('규격은 숫자로 입력하세요.'); return Number(v); };
+    const min = bound(item.min), max = bound(item.max), count = Number(item.count);
+    if ((min === null && max === null) || (min !== null && max !== null && min > max)) throw bad('하한 또는 상한을 입력하고 범위를 확인하세요.');
+    if (!Number.isInteger(count) || count < 1 || count > 20) throw bad('항목별 측정 횟수는 1~20회입니다.');
+    return { key: 'i'+i, name: reqStr(item.name,'검사 항목',100), unit: reqStr(item.unit,'단위',30), min, max, count };
+  });
+  if (items.reduce((n,i) => n+i.count,0)>100) throw bad('시료별 측정 칸은 최대 100개입니다.');
+  return { kind: body.kind, item_category: category, product, aliases: [...new Set(body.aliases.map(v=>v.trim()).filter(Boolean))], items };
+}
+route('GET','/api/inspection-specs',async ({user}) => ({ can_manage: hasRole(user,'quality_approver'), specs: (await db.prepare('SELECT * FROM inspection_specs ORDER BY active DESC,id DESC').all()).map(s=>({...JSON.parse(s.definition),id:s.id,revision:s.revision,active:!!s.active,updated_by:s.updated_by,updated_at:s.updated_at})) }));
+async function saveInspectionSpec(user, body, id) {
+  requireInspectionManager(user); const spec=validateInspectionSpec(body);
+  const prior=id ? await mustGet('inspection_specs',id) : null;
+  if (prior && Number(body.revision)!==prior.revision) throw new HttpError(409,'다른 사람이 규격을 변경했습니다. 다시 열어주세요.');
+  const active=body.active!==false, keys=[...new Set([spec.product,...spec.aliases].map(inspectionKey))];
+  const commands=[];
+  if (prior) {
+    commands.push({sql:"UPDATE inspection_specs SET kind=?,item_category=?,definition=?,active=?,revision=revision+1,updated_by=?,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?",args:[spec.kind,spec.item_category,JSON.stringify(spec),active?1:0,user.name,prior.id,prior.revision]});
+    // The change token in the definition makes a stale concurrent write roll back rather than replace keys.
+    commands.push({sql:'DELETE FROM inspection_spec_keys WHERE spec_id=? AND EXISTS(SELECT 1 FROM inspection_specs WHERE id=? AND revision=? AND definition=?)',args:[prior.id,prior.id,prior.revision+1,JSON.stringify(spec)]});
+  } else commands.push({sql:'INSERT INTO inspection_specs(kind,item_category,definition,active,updated_by) VALUES(?,?,?,?,?)',args:[spec.kind,spec.item_category,JSON.stringify(spec),active?1:0,user.name]});
+  // For new records, identify the inserted specification before key inserts change last_insert_rowid().
+  const token=randomHex(16); spec.token=token; commands[0].args[2]=JSON.stringify(spec);
+  if (prior) commands[1].args[3]=JSON.stringify(spec);
+  if(active) for(const key of keys) commands.push({sql:'INSERT INTO inspection_spec_keys(spec_id,kind,item_category,name_key) SELECT id,kind,item_category,? FROM inspection_specs WHERE json_extract(definition,\'$.token\')=?',args:[key,token]});
+  let results; try { results=await db.batch(commands); } catch(error) { if(String(error.message).includes('UNIQUE')) throw new HttpError(409,'같은 검사 구분·카테고리에 이미 등록된 품명 또는 별칭입니다.'); throw error; }
+  if(!results[0].meta.changes) throw new HttpError(409,'다른 사람이 규격을 변경했습니다. 다시 열어주세요.');
+  return {ok:true};
+}
+route('POST','/api/inspection-specs',({user,body})=>saveInspectionSpec(user,body));
+route('PUT','/api/inspection-specs/:id',({user,body,params})=>saveInspectionSpec(user,body,params.id));
+function decodeInspection(row) { return row ? {...row,values:JSON.parse(row.values_json)} : null; }
+async function inspectionRequest(id) { const r=await getRequest(id); if(r.type!=='analysis'||!['수입검사','출하검사'].includes(r.category)) throw bad('수입검사·출하검사 의뢰를 선택하세요.'); return r; }
+route('GET','/api/requests/:id/inspection',async ({user,params})=>{
+  const r=await inspectionRequest(params.id);
+  return { request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:hasRole(user,'quality_approver'),can_write:hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
+});
+route('POST','/api/requests/:id/inspection/spec',async ({user,params,body})=>{
+  requireInspectionManager(user); const r=await inspectionRequest(params.id), s=await mustGet('inspection_specs',body.spec_id);
+  if(r.inspection_snapshot) throw new HttpError(409,'이미 적용된 검사규격은 변경할 수 없습니다.');
+  if(!s.active||s.kind!==r.category) throw bad('검사 구분에 맞는 사용 중인 규격을 선택하세요.');
+  const category=JSON.parse(r.data||'{}').item_category;
+  if(category&&category!==s.item_category) throw bad('의뢰 품목의 카테고리와 규격이 다릅니다.');
+  const snapshot=JSON.stringify({...JSON.parse(s.definition),id:s.id,revision:s.revision});
+  const updated=await db.prepare("UPDATE requests SET inspection_snapshot=? WHERE id=? AND inspection_snapshot='' AND category=? AND data=?").run(snapshot,r.id,r.category,r.data);
+  if(!updated.changes) throw new HttpError(409,'의뢰가 변경되었습니다. 다시 열어주세요.');return {ok:true};
+});
+function inspectValues(spec, input) {
+  if(!Array.isArray(input)||!input.length||input.length>30) throw bad('LOT·시료 행은 1~30개입니다.');
+  let missing=false,failed=false;
+  const rows=input.map(row=>{
+    if(!row||typeof row!=='object'||!row.values||typeof row.values!=='object') throw bad('측정값을 확인하세요.');
+    const values={};
+    for(const item of spec.items){
+      const list=row.values[item.key]; if(!Array.isArray(list)||list.length!==item.count) throw bad(item.name+'의 측정 칸 수가 규격과 다릅니다.');
+      values[item.key]=list.map(v=>{
+        if(v===null||v===''||(typeof v==='string'&&!v.trim())) {missing=true;return null;}
+        if(!['number','string'].includes(typeof v)||!Number.isFinite(Number(v))) throw bad('측정값은 숫자로 입력하세요.');
+        const n=Number(v); if((item.min!==null&&n<item.min)||(item.max!==null&&n>item.max)) failed=true;return n;
+      });
+    }
+    return {lot:reqStr(row.lot,'LOT / 시료명',100),values};
+  });
+  return {rows,result:failed?'fail':missing?'pending':'pass'};
+}
+route('PUT','/api/requests/:id/inspection',async ({user,params,body})=>{
+  requireRole(user,'quality','품질');const r=await inspectionRequest(params.id);
+  if(!WORK_STATUSES.includes(r.status)) throw bad('의뢰 승인 후 측정값을 입력하세요.');
+  if(!r.inspection_snapshot) throw bad('품질팀장이 검사규격을 먼저 지정해야 합니다.');
+  const revision=Number(body.revision);if(!Number.isSafeInteger(revision)||revision<0) throw bad('기록 버전을 확인하세요.');
+  const prior=await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id);
+  if((prior?.revision||0)!==revision) throw new HttpError(409,'다른 사람이 결과를 저장했습니다. 다시 열어주세요.');
+  const reason=str(body.reason,500);if(prior&&prior.result!=='pending'&&!reason) throw bad('판정된 결과를 수정할 때는 사유를 입력하세요.');
+  const {rows,result}=inspectValues(JSON.parse(r.inspection_snapshot),body.rows), token=randomHex(16), values=JSON.stringify(rows);
+  const results=await db.batch([
+    {sql:`INSERT INTO inspection_measurements(request_id,values_json,result,save_token,updated_by) SELECT ?,?,?,?,? WHERE ?=0 OR EXISTS(SELECT 1 FROM inspection_measurements WHERE request_id=? AND revision=?)
+      ON CONFLICT(request_id) DO UPDATE SET values_json=excluded.values_json,result=excluded.result,save_token=excluded.save_token,updated_by=excluded.updated_by,revision=inspection_measurements.revision+1,updated_at=datetime('now','+9 hours') WHERE inspection_measurements.revision=?`,args:[r.id,values,result,token,user.name,revision,r.id,revision,revision]},
+    {sql:'INSERT INTO inspection_measurement_history(request_id,revision,values_json,result,reason,saved_by) SELECT request_id,revision,values_json,result,?,updated_by FROM inspection_measurements WHERE request_id=? AND save_token=?',args:[reason,r.id,token]},
+    {sql:"UPDATE requests SET status=?,updated_at=datetime('now','+9 hours') WHERE id=? AND EXISTS(SELECT 1 FROM inspection_measurements WHERE request_id=? AND save_token=?)",args:[result==='pending'?'progress':'done',r.id,r.id,token]},
+  ]);
+  if(!results[0].meta.changes) throw new HttpError(409,'다른 사람이 결과를 저장했습니다. 다시 열어주세요.');
+  return decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id));
+});
+route('GET','/api/requests/:id/inspection/history/:historyId',async ({params})=>{
+  await inspectionRequest(params.id); const row=await db.prepare('SELECT * FROM inspection_measurement_history WHERE id=? AND request_id=?').get(params.historyId,params.id);if(!row) throw new HttpError(404,'검사 이력을 찾을 수 없습니다.');return decodeInspection(row);
+});
+route('GET','/api/inspections',async ({query})=>{
+  const where=["r.type='analysis'","r.category IN ('수입검사','출하검사')"], args=[];
+  if(query.kind){if(!['수입검사','출하검사'].includes(query.kind)) throw bad('검사 구분을 확인하세요.');where.push('r.category=?');args.push(query.kind);}
+  const category="COALESCE(json_extract(NULLIF(r.inspection_snapshot,''),'$.item_category'),json_extract(r.data,'$.item_category'),'')";
+  if(query.item_category){where.push(category+'=?');args.push(query.item_category==='미분류'?'':itemCategory(query.item_category));}
+  if(query.result){if(!['pending','pass','fail','unconfigured'].includes(query.result)) throw bad('판정을 확인하세요.');where.push("CASE WHEN r.inspection_snapshot='' THEN 'unconfigured' ELSE COALESCE(m.result,'pending') END=?");args.push(query.result);}
+  applyListDates(where,args,query,'substr(r.created_at,1,10)');
+  applyListKeyword(where,args,query.q,['r.title','r.req_no','r.lot','r.customer',"json_extract(r.data,'$.product_code')","json_extract(NULLIF(r.inspection_snapshot,''),'$.aliases')"]);
+  if(query.before){if(!/^[1-9]\d*$/.test(query.before)) throw bad('조회 위치를 확인하세요.');where.push('r.id<?');args.push(Number(query.before));}
+  const rows=await db.prepare(`SELECT r.id,r.req_no,r.title,r.category,r.status,r.customer,r.lot,r.created_at,${category} AS item_category,CASE WHEN r.inspection_snapshot='' THEN 'unconfigured' ELSE COALESCE(m.result,'pending') END AS result,m.updated_by,m.updated_at FROM requests r LEFT JOIN inspection_measurements m ON m.request_id=r.id WHERE ${where.join(' AND ')} ORDER BY r.id DESC LIMIT 101`).all(...args);
+  return {rows:rows.slice(0,100),next:rows.length>100?rows[99].id:null};
+});
+
 // ── 의뢰 (분석/개발/샘플): 누구나 의뢰 → 접수대기 → 담당자 승인 → 리스트(대기/진행/완료) ──
 function requestFields(type, b) {
   if (type === 'voc' && (!b.data || typeof b.data !== 'object' || Array.isArray(b.data) || JSON.stringify(b.data).length > 20000)) throw bad('VOC 입력 내용을 확인하세요.');
   const data = typeof b.data === 'object' && b.data ? JSON.parse(JSON.stringify(b.data).slice(0, 20000)) : {};
   const f = { title: reqStr(b.title, type === 'voc' ? '제품명' : type === 'development' ? '타겟제품' : '샘플명', 200), customer: str(b.customer, 100), due_date: dateStr(b.due_date, '완료 희망일', { required: false }), category: '', target_price: '', data };
-  if (type === 'analysis') { f.category = str(b.category, 20); if (!ANALYSIS_CATEGORIES.includes(f.category)) throw bad('검사 구분을 선택하세요.'); }
+  if (type === 'analysis') { f.category = str(b.category, 20); if (!ANALYSIS_CATEGORIES.includes(f.category)) throw bad('검사 구분을 선택하세요.'); if(data.item_category) f.data.item_category=itemCategory(data.item_category); }
   if (type === 'voc') {
     f.customer = reqStr(b.customer, '고객사', 100);
     if (!['number','string'].includes(typeof data.qty)) throw bad('수량을 입력하세요.');
@@ -852,8 +973,8 @@ route('GET', '/api/requests', async ({ query }) => {
 route('POST', '/api/requests', async ({ user, body }) => {
   const type = String(body.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
   const f = requestFields(type, body);
-  const r = (await db.prepare('INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name) VALUES(?,?,?,?,?,?,?,?,?)')
-    .run(type, f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), user.id, user.name));
+  const r = (await db.prepare('INSERT INTO requests(type,title,customer,due_date,category,target_price,data,requester_id,requester_name,inspection_snapshot) VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .run(type, f.title, f.customer, f.due_date, f.category, f.target_price, JSON.stringify(f.data), user.id, user.name, type==='analysis'?await inspectionSnapshot(f):''));
   return decodeRequest((await getRequest(r.lastInsertRowid)));
 });
 route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
@@ -868,6 +989,7 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
     f.title = r.title; f.customer = r.customer;
   }
   const priorData = JSON.parse(r.data || '{}');
+  if(r.inspection_snapshot && (f.title!==r.title || f.category!==r.category || (f.data.item_category||'')!==(priorData.item_category||''))) throw bad('검사규격이 적용된 의뢰의 품명·검사 구분·카테고리는 변경할 수 없습니다.');
   const meta = lineMeta({ spec: r.source_type ? r.spec || priorData.spec || '' : body.spec ?? body.data?.spec ?? r.spec,
     unit: r.source_type ? r.unit || priorData.unit || '' : body.unit ?? body.data?.unit ?? (r.unit || priorData.unit || ''),
     lot: (r.source_type ? undefined : body.lot ?? (r.type === 'analysis' ? body.data?.lot_etc : body.data?.lot)) ?? (r.lot || priorData.lot_etc || (r.type === 'voc' ? priorData.lot : '') || '') }, r);
@@ -906,6 +1028,7 @@ route('POST', '/api/requests/:id/status', async ({ user, params, body }) => {
   const r = (await getRequest(params.id)); requireRole(user, REQUEST_TYPES[r.type], roleLabel(r.type));
   if (!WORK_STATUSES.includes(r.status)) throw bad('승인된 의뢰만 진행상태를 바꿀 수 있습니다.');
   const status = String(body.status); if (!WORK_STATUSES.includes(status)) throw bad('상태 값이 올바르지 않습니다.');
+  if(status==='done' && r.inspection_snapshot && !(await db.prepare("SELECT 1 FROM inspection_measurements WHERE request_id=? AND result IN ('pass','fail')").get(r.id))) throw bad('검사 측정값을 입력하고 판정을 완료하세요.');
   (await db.prepare("UPDATE requests SET status=?, result_note=?, updated_at=datetime('now','+9 hours') WHERE id=?").run(status, body.result_note !== undefined ? str(body.result_note, 1000) : r.result_note, r.id));
   return decodeRequest((await getRequest(r.id)));
 });
@@ -915,6 +1038,7 @@ route('DELETE', '/api/requests/:id', async ({ user, params }) => {
   const own = r.requester_id === user.id && intake;
   // Before approval, only the requester or an approver may remove it; team staff cannot bypass approval by deleting.
   if (!(own || user.is_admin || (intake ? isRequestApprover(user, r.type) : hasRole(user, REQUEST_TYPES[r.type])))) throw new HttpError(403, intake ? '접수대기 의뢰는 의뢰자 본인 또는 승인권자만 삭제할 수 있습니다.' : '삭제 권한이 없습니다.');
+  if(await db.prepare('SELECT 1 FROM inspection_measurements WHERE request_id=?').get(r.id)) throw bad('측정 이력이 있는 검사 의뢰는 삭제할 수 없습니다.');
   await deleteEntityWithAttachments('request', 'requests', r.id); return { ok: true };
 });
 
@@ -1239,7 +1363,7 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         if (type === 'analysis') { data.sample_qty = String(qty); data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; }
         else { data.lot = meta.lot; if (['sample', 'sample_goods'].includes(type)) data.req_qty = String(qty); }
         const f = requestFields(type, { ...b, title: b.title || b.item, data });
-        record = { type, title: f.title, customer: f.customer, due_date: f.due_date, category: f.category, target_price: f.target_price, data: JSON.stringify(f.data), qty, requester_id: user.id, requester_name: user.name };
+        record = { type, inspection_snapshot: type==='analysis'?await inspectionSnapshot(f):'', title: f.title, customer: f.customer, due_date: f.due_date, category: f.category, target_price: f.target_price, data: JSON.stringify(f.data), qty, requester_id: user.id, requester_name: user.name };
       }
       if (entity !== 'request') record.created_by = user.name;
       commands.push(insertItem(BATCH_TABLES[entity], { ...record, ...meta, batch_id: batchId }));

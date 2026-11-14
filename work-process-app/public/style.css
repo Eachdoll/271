@@ -427,3 +427,10 @@ input[data-photo-camera] { display: none !important; }
   .operator-mode .top { flex-wrap: wrap; height: auto; min-height: 56px; padding: 10px 12px; }
   .operator-mode .form-grid { grid-template-columns: 1fr; }
 }
+
+.inspection-spec-row, .inspection-sample { border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 12px 0; }
+.inspection-values { display: grid; grid-template-columns: repeat(5,minmax(76px,1fr)); gap: 8px; margin-top: 8px; }
+.inspection-values input { width: 100%; min-height: 44px; }
+.inspection-measure { margin-top: 18px; }
+.inspection-outside { border: 2px solid var(--red) !important; background: var(--red-bg) !important; }
+@media(max-width:700px) { .inspection-values { grid-template-columns: repeat(2,minmax(0,1fr)); } }

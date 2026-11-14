@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.19';
+const APP_VERSION = '15.20';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -218,7 +218,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
   { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
-  { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
+  { group: '품질', items: [['#/quality/inspections', '수입·출하 검사 이력'], ['#/quality/specs', '검사규격 설정'], ['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰(제품)'], ['#/prod/list', '샘플리스트(제품)'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정'], ['#/prod/semi/cut', '반제품 · 커팅/융착'], ['#/prod/semi/wash', '반제품 · 세탁(호기별)']] },
   { group: '물류', items: [['#/logistics/receive', '입고목록'], ['#/logistics/ship', '출하목록'], ['#/logistics/stock', '재고 현황']] },
@@ -229,6 +229,8 @@ const PAGES = {
   '#/purchase/po': pagePO,
   '#/purchase/laundry': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
+  '#/quality/inspections': pageInspections,
+  '#/quality/specs': pageInspectionSpecs,
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
   '#/quality/voc/request': () => pageIntake('voc'),
@@ -822,6 +824,7 @@ function requestDetail(type, r, reload) {
     </div>
     <div class="actions wrap">
       <button class="btn" data-a="print">인쇄</button>${commentButton("request", r.id, r.title)}
+      ${type==='analysis' && ['수입검사','출하검사'].includes(r.category) ? '<button class="btn primary" data-a="inspection">검사규격·측정값</button>' : ''}
       ${['development','sample','sample_goods','voc'].includes(type) ? '<button class="btn" data-a="photos">사진 보기·첨부</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn" data-a="edit">수정</button>' : ''}
       ${(mine && ['pending', 'rejected'].includes(r.status)) || mgr ? '<button class="btn danger" data-a="del">삭제</button>' : ''}
@@ -833,6 +836,7 @@ function requestDetail(type, r, reload) {
   else if (r.source_type) renderAttachmentPreview($('[data-request-photos]', m.el), r.source_type, r.source_id);
   const act = async (a) => {
     try {
+      if (a === 'inspection') { m.close(); await openInspection(r.id, reload); return; }
       if (a === 'photos') { await openAttachments('request', r.id, r.title, { editable: (mine && ['pending','rejected'].includes(r.status)) || mgr }); return; }
       if (a === 'print') { document.body.classList.add('printing'); window.print(); document.body.classList.remove('printing'); return; }
       if (a === 'approve') { await api('POST', `/api/requests/${r.id}/approve`); toast(`승인했습니다. ${cfg.listTitle || cfg.label + '리스트'}에 등록됨`); }

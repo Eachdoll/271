@@ -31,6 +31,7 @@ window.REQ = {
       { k: 'title', label: '샘플명', t: 'text', core: true, req: true },
       { k: 'sample_qty', label: '샘플수량', t: 'text' },
       { k: 'category', label: '검사 구분', t: 'radio', core: true, req: true, opts: ['수입검사', '의뢰검사', '출하검사', '공정검사'] },
+      { k: 'item_category', label: '품목 카테고리', t: 'radio', opts: ['원자재','부자재','반제품','제품','상품'], hint: '수입·출하검사 규격과 이력 분류에 사용합니다.' },
       { k: 'sample_kind', label: '샘플구분', t: 'radio', opts: ['글러브', '와이퍼', '마스크', '원단'], other: true },
       { k: 'lot', label: 'LOT#', t: 'radio', opts: ['없음', '있음'], otherOn: '있음', otherPh: 'LOT 번호' },
       { k: 'items', label: '의뢰 항목', t: 'checks', opts: ['외관', '규격', '파티클', '흡수성능', '인장,인열', '세정효율', '포집효율', 'Lint', 'COF', '박리강도', '흡기저항', '멸균진행'], other: true, full: true },
