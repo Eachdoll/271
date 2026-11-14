@@ -343,7 +343,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -353,6 +353,63 @@ route('GET', '/api/admin/backup', async ({ user, query }) => {
   if (typeof after === 'number' && (!Number.isSafeInteger(after) || after < 0)) throw bad('백업 위치가 올바르지 않습니다.');
   const rows = await db.prepare(`SELECT ${key === 'rowid' ? 'rowid,' : ''}* FROM ${query.table} WHERE ${key}>? ORDER BY ${key} LIMIT 200`).all(after);
   return { rows, next: rows.length === 200 ? rows.at(-1)[key] : null };
+});
+
+// ── 거래처 목록 · 제품코드 ──
+// Names are compared without spaces/case so '니트릴글러브' and '니트릴 글러브' resolve to one entry.
+const nameKey = value => String(value ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
+// Using a vendor name anywhere registers it, so the pick list fills itself; contact details can be added later.
+async function ensureVendor(name, user) {
+  const clean = str(name, 100); if (!clean) return;
+  await db.prepare('INSERT INTO vendors(name,name_key,created_by) VALUES(?,?,?) ON CONFLICT(name_key) DO NOTHING').run(clean, nameKey(clean), user.name);
+}
+// Resolve an item row to the catalog (boms). A chosen code wins; a typed name matches an existing entry
+// ignoring spaces/case; otherwise a temporary code is issued for an administrator to tidy up later.
+async function catalogItem(user, { bom_id, item, unit, item_category }) {
+  if (bom_id !== undefined && bom_id !== null && bom_id !== '') {
+    const id = Number(bom_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad('품목 코드를 다시 선택하세요.');
+    const bom = await mustGet('boms', id); if (!bom.active) throw bad('사용 중지된 품목입니다.');
+    return bom;
+  }
+  const name = reqStr(item, '품목명', 200);
+  const found = await db.prepare("SELECT * FROM boms WHERE REPLACE(LOWER(product),' ','')=? AND active=1 ORDER BY is_temp, id LIMIT 1").get(nameKey(name));
+  if (found) return found;
+  const r = await db.prepare("INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,is_temp) VALUES(?,'','finished',1,?,'[]','직접 입력으로 자동 생성된 임시 품목',1,?,?,1)")
+    .run(name, str(unit, 20), ITEM_CATEGORIES.includes(item_category) ? item_category : '', user.name);
+  await db.prepare("UPDATE boms SET product_code='TMP-' || printf('%04d', id) WHERE id=?").run(r.lastInsertRowid);
+  return mustGet('boms', r.lastInsertRowid);
+}
+route('GET', '/api/vendors', async ({ query }) => {
+  const where = [], args = [];
+  applyListKeyword(where, args, query.q, ['name', 'contact_name', 'phone']);
+  return db.prepare(`SELECT * FROM vendors ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name LIMIT 1000`).all(...args);
+});
+function vendorFields(body) { return [reqStr(body.name, '거래처 이름', 100), str(body.contact_name, 50), str(body.phone, 30)]; }
+route('POST', '/api/vendors', async ({ user, body }) => {
+  const [name, contact, phone] = vendorFields(body);
+  if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
+  const r = await db.prepare('INSERT INTO vendors(name,name_key,contact_name,phone,created_by) VALUES(?,?,?,?,?)').run(name, nameKey(name), contact, phone, user.name);
+  return mustGet('vendors', r.lastInsertRowid);
+});
+route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
+  const row = await mustGet('vendors', params.id); const [name, contact, phone] = vendorFields(body);
+  const clash = await db.prepare('SELECT id FROM vendors WHERE name_key=?').get(nameKey(name));
+  if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름의 거래처가 이미 있습니다.');
+  await db.prepare('UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,updated_by=?,updated_at=? WHERE id=?').run(name, nameKey(name), contact, phone, user.name, now(), row.id);
+  return mustGet('vendors', row.id);
+});
+route('DELETE', '/api/vendors/:id', async ({ user, params }) => {
+  const row = await mustGet('vendors', params.id);
+  if (!canModify(user, row)) throw new HttpError(403, '거래처 삭제는 등록자 또는 관리자만 할 수 있습니다.');
+  await db.prepare('DELETE FROM vendors WHERE id=?').run(row.id); return { ok: true }; // past orders keep the vendor name they were saved with
+});
+// What we most recently bought from this vendor, newest first, one line per item/size/unit.
+route('GET', '/api/vendors/recent-items', async ({ query }) => {
+  const key = nameKey(reqStr(query.vendor, '거래처', 100));
+  const vendor = await db.prepare('SELECT * FROM vendors WHERE name_key=?').get(key);
+  const items = await db.prepare(`SELECT item, spec, unit, item_category, product_code, qty, due_date, MAX(id) AS last_id, COUNT(*) AS orders
+    FROM purchase_orders WHERE REPLACE(LOWER(vendor),' ','')=? GROUP BY item, spec, unit ORDER BY last_id DESC LIMIT 12`).all(key);
+  return { vendor: vendor || null, items };
 });
 
 // ── 구매: 발주목록 ──
@@ -405,12 +462,17 @@ route('GET', '/api/po', async ({ query }) => {
     FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
 route('POST', '/api/po', async ({ user, body }) => {
-  const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by) VALUES(?,?,?,?,?,?,?,?,?)').run(...poFields(body), user.name));
+  const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user);
+  const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(f[0], f[1], entry.product, ...f.slice(3), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(r.lastInsertRowid));
 });
 route('PUT', '/api/po/:id', async ({ user, params, body }) => {
   const row = (await mustGet('purchase_orders', params.id)); if (!canModify(user, row) && !hasRole(user, 'purchase')) throw new HttpError(403, '등록자 또는 구매 담당자만 수정할 수 있습니다.');
-  (await db.prepare('UPDATE purchase_orders SET req_no=?,vendor=?,item=?,qty=?,due_date=?,note=?,item_category=?,coa_requested=? WHERE id=?').run(...poFields(body), row.id));
+  const f = poFields(body);
+  // Keep the linked code unless the item name itself was changed.
+  const entry = nameKey(f[2]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
+  await ensureVendor(f[1], user);
+  (await db.prepare('UPDATE purchase_orders SET req_no=?,vendor=?,item=?,qty=?,due_date=?,note=?,item_category=?,coa_requested=?,product_code=? WHERE id=?').run(f[0], f[1], entry.product, ...f.slice(3), entry.product_code, row.id));
   return (await mustGet('purchase_orders', row.id));
 });
 route('DELETE', '/api/po/:id', async ({ user, params }) => {
@@ -693,6 +755,8 @@ function decodeBom(row) { return { ...row, materials: JSON.parse(row.materials) 
 route('GET', '/api/boms', async ({ user, query }) => {
   const where = []; const args = [];
   if (query.include_archived === '1') requireAdmin(user); else where.push('active=1');
+  // Temporary (direct-entry) items appear in item pickers and the admin list, not in production BOM choices.
+  if (query.temp === 'only') where.push('is_temp=1'); else if (query.temp !== '1' && query.include_archived !== '1') where.push('is_temp=0');
   if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분이 올바르지 않습니다.'); where.push('kind=?'); args.push(query.kind); }
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
   applyListKeyword(where, args, query.q, ['product','product_code','created_by','note']);
@@ -705,9 +769,29 @@ route('POST', '/api/boms', async ({ user, body }) => {
   return decodeBom(await mustGet('boms', result.lastInsertRowid));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
-  requireAdmin(user); await mustGet('boms', params.id);
-  await db.prepare("UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,updated_at=datetime('now','+9 hours') WHERE id=?").run(...bomFields(body), params.id);
+  requireAdmin(user); const before = await mustGet('boms', params.id); const fields = bomFields(body);
+  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, before.id] }];
+  if (before.is_temp) {
+    if (/^TMP-/i.test(fields[1])) throw bad('임시 코드(TMP-)를 정식 제품코드로 바꿔 저장하세요.');
+    commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
+  }
+  await db.batch(commands);
   return decodeBom(await mustGet('boms', params.id));
+});
+// Rows that used a temporary item follow it to its confirmed name/code. Inspection snapshots are left as recorded.
+function relinkCatalog(temp, target) {
+  const commands = [];
+  for (const table of ['purchase_orders', 'shipments']) commands.push({ sql: `UPDATE ${table} SET item=?,product_code=? WHERE product_code=?`, args: [target.product, target.product_code, temp.product_code] });
+  commands.push({ sql: "UPDATE other_receipts SET item=?,bom_id=?,bom_snapshot=json_set(bom_snapshot,'$.id',?,'$.product',?,'$.product_code',?) WHERE bom_id=?", args: [target.product, target.id, target.id, target.product, target.product_code, temp.id] });
+  return commands;
+}
+route('POST', '/api/boms/:id/merge', async ({ user, params, body }) => {
+  requireAdmin(user);
+  const temp = await mustGet('boms', params.id); if (!temp.is_temp) throw bad('임시 품목만 다른 품목으로 합칠 수 있습니다.');
+  const target = await mustGet('boms', Number(body.target_id) || 0);
+  if (target.id === temp.id || target.is_temp || !target.active) throw bad('합칠 대상은 사용 중인 정식 품목이어야 합니다.');
+  await db.batch([...relinkCatalog(temp, target), { sql: "UPDATE boms SET active=0,note=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [`${target.product}(${target.product_code || '코드 없음'})로 합침 · ${user.name}`, temp.id] }]);
+  return { ok: true, target: decodeBom(target) };
 });
 route('DELETE', '/api/boms/:id', async ({ user, params }) => {
   requireAdmin(user); await mustGet('boms', params.id);
@@ -809,7 +893,7 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   return await db.prepare(`SELECT other_receipts.*, ${attachmentSummary('other_receipt','other_receipts')} FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
-  const fields = await otherReceiptFields(body);
+  const fields = await otherReceiptFields(body); await ensureVendor(fields[4], user);
   const results = await db.batch([
     { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [...fields, user.name] },
     receiptAnalysisQuery('other_receipt', null, user),
@@ -841,12 +925,16 @@ route('GET', '/api/shipments', async ({ query }) => {
   return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ${where.join(' AND ')} ORDER BY ship_date DESC, id DESC`).all(...args));
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
-  const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by) VALUES(?,?,?,?,?,?,?)').run(...shipFields(body), user.name));
+  const f = shipFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[3], user);
+  const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?)').run(f[0], entry.product, ...f.slice(2), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await mustGet('shipments', r.lastInsertRowid));
 });
 route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
-  (await db.prepare('UPDATE shipments SET ship_date=?,item=?,qty=?,customer=?,note=?,lot=? WHERE id=?').run(...shipFields(body), row.id)); return (await mustGet('shipments', row.id));
+  const f = shipFields(body);
+  const entry = nameKey(f[1]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
+  await ensureVendor(f[3], user);
+  (await db.prepare('UPDATE shipments SET ship_date=?,item=?,qty=?,customer=?,note=?,lot=?,product_code=? WHERE id=?').run(f[0], entry.product, ...f.slice(2), entry.product_code, row.id)); return (await mustGet('shipments', row.id));
 });
 route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
@@ -886,11 +974,20 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
     const b = { ...(body.common || {}), ...item }; const meta = lineMeta(b); let record;
     try {
       if (entity === 'purchase_order') {
-        record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key,i) => [key, poFields(b)[i]]));
+        // Validate the whole line first so a bad row never leaves a temporary code behind.
+        if (b.bom_id) { const chosen = await catalogItem(user, b); b.item = chosen.product; if (!b.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) b.item_category = chosen.item_category; }
+        const f = poFields(b); const entry = await catalogItem(user, b);
+        record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key,i) => [key, f[i]]));
+        record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
+        if (index === 0) await ensureVendor(record.vendor, user);
       } else if (entity === 'shipment') {
-        record = Object.fromEntries(['ship_date','item','qty','customer','note','lot'].map((key,i) => [key, shipFields(b)[i]]));
+        if (b.bom_id) b.item = (await catalogItem(user, b)).product;
+        const f = shipFields(b); const entry = await catalogItem(user, b);
+        record = Object.fromEntries(['ship_date','item','qty','customer','note','lot'].map((key,i) => [key, f[i]]));
+        record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
+        if (index === 0) await ensureVendor(record.customer, user);
       } else if (entity === 'other_receipt') {
-        const fields = await otherReceiptFields(b);
+        const fields = await otherReceiptFields(b); if (index === 0) await ensureVendor(fields[4], user);
         record = Object.fromEntries(['received_date','item','item_category','qty','vendor','note','bom_id','bom_snapshot'].map((key,i) => [key, fields[i]]));
         meta.unit = JSON.parse(record.bom_snapshot).unit || '';
       } else if (entity === 'schedule') {
@@ -1178,6 +1275,7 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     const items = await db.prepare(`${receiptChangeSelect} WHERE c.status='pending' ORDER BY c.id LIMIT 50`).all();
     approvals.receipt_changes = { count: items.length, items: items.slice(0, 5) };
   }
+  if (user.is_admin) approvals.temp_items = { count: (await db.prepare('SELECT COUNT(*) c FROM boms WHERE is_temp=1 AND active=1').get()).c };
   // My own requests still waiting, plus rejections from the last 7 days so the requester notices them.
   const recent = "(c.status='pending' OR (c.status='rejected' AND c.reviewed_at>=date('now','+9 hours','-7 days')))";
   const mine = {

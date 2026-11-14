@@ -47,6 +47,15 @@
 - 승인 대기 중인 입고 수정·실적 수정 요청은 재고에 반영하지 않습니다(승인 후 원본이 바뀌면 자동 반영). 미래 기준일은 거부합니다.
 - public/stock.js(화면·CSV)를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. 두 표는 전체 백업 대상이며 stock_levels 백업 커서는 rowid입니다.
 
+## 거래처·제품코드 (15.6)
+- 0011: vendors(name, name_key UNIQUE, contact_name, phone)와 boms.is_temp, purchase_orders/shipments.product_code. 기존 행의 product_code는 빈 값으로 두고 추정·일괄 채우기를 하지 마세요.
+- 거래처는 로그인 사용자 누구나 등록·수정합니다(삭제는 등록자·관리자). 발주·기타입고·출하에서 쓴 이름은 ensureVendor()가 자동 등록합니다. 기록에는 이름 문자열을 저장하므로 거래처 삭제·개명은 과거 기록을 바꾸지 않습니다.
+- 이름 비교는 nameKey()(공백 제거·소문자)로 합니다. GET /api/vendors/recent-items?vendor= 는 그 거래처의 최근 발주 품목(품목·규격·단위별 최신 1건)을 돌려주고, 발주 다품목 양식이 '최근 매입 품목' 버튼으로 보여 줍니다.
+- 품목(boms)이 제품코드 원본입니다. 발주·출하는 catalogItem()으로 연결합니다: bom_id 선택 > 같은 이름(공백·대소문자 무시)의 활성 품목 > 없으면 is_temp=1 임시 품목 생성(TMP-0000 형식). 저장되는 품목명은 품목 원본의 이름입니다.
+- GET /api/boms는 기본적으로 임시 품목을 제외합니다(생산 BOM 선택용). 품목 선택기는 temp=1, 관리자 목록은 include_archived=1, 정리 대상만은 temp=only.
+- 임시 품목 정리는 관리자만: PUT /api/boms/:id로 정식 코드 저장(TMP- 코드는 거부) 또는 POST /api/boms/:id/merge {target_id}로 기존 품목에 합치기. 두 경우 모두 relinkCatalog()가 그 임시 코드를 쓴 발주·출하·기타입고의 품목명/코드를 한 batch로 바꿉니다. 수입검사 스냅샷은 바꾸지 않습니다. 정식 품목의 일반 수정은 과거 기록을 바꾸지 않습니다.
+- public/master.js(거래처 화면·선택 도우미)를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. vendors는 전체 백업 대상입니다. my-tasks는 관리자에게 임시 품목 수(temp_items)를 알려 줍니다.
+
 ## 확인
 ```bash
 npm test

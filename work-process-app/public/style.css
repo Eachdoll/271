@@ -323,3 +323,8 @@ tr[hidden] { display: none !important; }
 #toast.err { width: min(520px, calc(100vw - 32px)); }
 #toast.err span { flex: 1; }
 input[data-photo-camera] { display: none !important; }
+
+/* 거래처 안내 · 최근 매입 품목 */
+.partner-hint:empty { display: none; }
+.recent-items { margin-top: 6px; }
+.recent-items .btn { margin: 4px 4px 0 0; font-weight: 400; }
