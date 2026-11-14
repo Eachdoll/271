@@ -137,3 +137,23 @@ test('Dashboard source-by-source stock aggregation matches inventory and survive
     const dashboardWithoutStock = await staff('GET', '/api/dashboard'); assert.equal(dashboardWithoutStock.status,200); assert.equal(dashboardWithoutStock.body.stock,null); assert.ok(dashboardWithoutStock.body.requests.analysis); assert.ok(dashboardWithoutStock.body.po);
   } finally { env.DB = original; }
 });
+
+test('Inventory, movements and stock counts work when D1 rejects compound UNION reads', async () => {
+  const query='?group=spec&q='+encodeURIComponent('원단');
+  const expected=await stock(query);
+  const expectedMoves=(await staff('GET','/api/inventory/movements?'+new URLSearchParams({item:'원단',unit:'kg'}))).body;
+  const original=env.DB;let batches=0;
+  env.DB={...original,prepare(sql){assert.ok(!sql.includes('UNION ALL'),'no compound source reads');return original.prepare(sql);},async batch(statements){batches++;assert.equal(statements.length,8);return original.batch(statements);}};
+  try {
+    const result=await staff('GET','/api/inventory'+query);assert.equal(result.status,200);assert.deepEqual(result.body,expected);
+    const moves=await staff('GET','/api/inventory/movements?'+new URLSearchParams({item:'원단',unit:'kg'}));assert.equal(moves.status,200);assert.deepEqual(moves.body,expectedMoves);
+    const count=await lead('POST','/api/inventory/adjustments',{item:'원단',unit:'kg',kind:'count',by_item:true,counted_qty:expectedMoves.stock+3,adj_date:today,reason:'원천별 집계 검증',request_id:crypto.randomUUID()});assert.equal(count.status,200);assert.equal(count.body.qty,3);assert.ok(batches>=4);
+  } finally {env.DB=original;}
+});
+test('Movement pagination merges all sources before selecting the newest 200 records',async()=>{
+ const insert=sqlite.prepare('INSERT INTO shipments(ship_date,item,qty,customer,unit) VALUES(?,?,?,?,?)');
+ for(let i=0;i<230;i++)insert.run(today,'페이징 검증',1,'고객','EA');
+ sqlite.prepare("INSERT INTO stock_adjustments(adj_date,item,unit,qty,kind,reason,request_id,created_by_id,created_by) VALUES(?,?,?,300,'opening','검증',?,1,'관리자')").run(today,'페이징 검증','EA',crypto.randomUUID());
+ const response=await staff('GET','/api/inventory/movements?'+new URLSearchParams({item:'페이징 검증',unit:'EA'}));assert.equal(response.status,200);assert.equal(response.body.rows.length,200);assert.equal(response.body.more,true);assert.equal(response.body.stock,70);assert.equal(response.body.rows[0].src,'adjust');
+ const refs=response.body.rows.filter(r=>r.src==='ship').map(r=>r.ref);assert.deepEqual(refs,[...refs].sort((a,b)=>b-a));
+});

@@ -2034,21 +2034,40 @@ const STOCK_MOVEMENTS = `
 const stockRound = n => Math.round((Number(n) || 0) * 1e6) / 1e6;
 const canAdjustStock = user => !!user.is_admin || publicUser(user).roles.includes('logistics_approver');
 function stockAsOf(value) { const d = listFilterDate(value, '기준일') || today(); if (d > today()) throw bad('기준일은 오늘 이전으로 선택하세요.'); return d; }
+// Each bounded SELECT runs independently of the compound UNION planner. One D1 batch
+// keeps the source reads in the same transaction for inventory and stock counts.
+async function readStockSources(select, args) {
+  return (await db.batch(STOCK_MOVEMENTS.split('UNION ALL').map(source => ({
+    sql: `WITH movements(item,spec,unit,category,qty,src,d,ref,memo) AS (${source}) ${select}`, args,
+  })))).map(result => result.results);
+}
+const stockCompare = (a,b) => a === b ? 0 : a == null ? -1 : b == null ? 1 : a < b ? -1 : 1;
 async function stockQuantity(item, unit, spec, asof) {
-  const row = await db.prepare(`SELECT COALESCE(SUM(qty),0) AS qty FROM (${STOCK_MOVEMENTS}) WHERE item=? AND unit=? ${spec === null ? '' : 'AND spec=?'} AND d<=?`).get(...(spec === null ? [item, unit, asof] : [item, unit, spec, asof]));
-  return stockRound(row.qty);
+  const sources = await readStockSources(`SELECT COALESCE(SUM(qty),0) AS qty FROM movements WHERE item=? AND unit=? ${spec === null ? '' : 'AND spec=?'} AND d<=?`, spec === null ? [item,unit,asof] : [item,unit,spec,asof]);
+  return stockRound(sources.reduce((total, rows) => total + rows[0].qty, 0));
 }
 route('GET', '/api/inventory', async ({ user, query }) => {
   const asof = stockAsOf(query.asof); const bySpec = query.group === 'spec';
   if (query.group && !['item', 'spec'].includes(query.group)) throw bad('보기 기준을 확인하세요.');
   const where = ['d<=?'], args = [asof];
   applyListKeyword(where, args, query.q, ['item', 'spec']);
-  const rows = await db.prepare(`SELECT item, ${bySpec ? 'spec' : "''"} AS spec, unit, MAX(category) AS category,
+  const sources = await readStockSources(`SELECT item, ${bySpec ? 'spec' : "''"} AS spec, unit, MAX(category) AS category,
       SUM(CASE WHEN src IN ('po','other') THEN qty ELSE 0 END) AS received, SUM(CASE WHEN src='prod' THEN qty ELSE 0 END) AS produced,
       SUM(CASE WHEN src='use' THEN -qty ELSE 0 END) AS used, SUM(CASE WHEN src='ship' THEN -qty ELSE 0 END) AS shipped,
       SUM(CASE WHEN src='adjust' THEN qty ELSE 0 END) AS adjusted, SUM(qty) AS stock, MAX(d) AS last_date
-    FROM (${STOCK_MOVEMENTS}) WHERE ${where.join(' AND ')} GROUP BY 1,2,3 ORDER BY item, spec, unit LIMIT 5001`).all(...args);
-  if (rows.length > 5000) throw bad('품목이 너무 많습니다. 검색어로 범위를 좁히세요.');
+    FROM movements WHERE ${where.join(' AND ')} GROUP BY 1,2,3 ORDER BY item,spec,unit LIMIT 5001`,args);
+  const combined = new Map();
+  for (const source of sources) for (const row of source) {
+    const key = JSON.stringify([row.item,row.spec,row.unit]), prior = combined.get(key);
+    if (!prior) combined.set(key,{...row});
+    else {
+      for (const field of ['received','produced','used','shipped','adjusted','stock']) prior[field] += row[field];
+      if (stockCompare(row.category,prior.category)>0) prior.category=row.category;
+      if (stockCompare(row.last_date,prior.last_date)>0) prior.last_date=row.last_date;
+    }
+    if (combined.size>5000) throw bad('품목이 너무 많습니다. 검색어로 범위를 좁히세요.');
+  }
+  const rows = [...combined.values()].sort((a,b)=>stockCompare(a.item,b.item)||stockCompare(a.spec,b.spec)||stockCompare(a.unit,b.unit));
   const levels = new Map((await db.prepare('SELECT * FROM stock_levels').all()).map(l => [l.item + '\u0000' + l.unit, l.min_qty]));
   // By size, BOM material use sits on the unsized row; only flag a shortage when the item as a whole is short.
   const totals = new Map(); for (const r of rows) totals.set(r.item + '\u0000' + r.unit, (totals.get(r.item + '\u0000' + r.unit) || 0) + r.stock);
@@ -2070,7 +2089,8 @@ route('GET', '/api/inventory', async ({ user, query }) => {
 route('GET', '/api/inventory/movements', async ({ query }) => {
   const item = reqStr(query.item, '품목명', 200), unit = str(query.unit, 20); const asof = stockAsOf(query.asof);
   const bySpec = query.spec !== undefined;
-  const rows = await db.prepare(`SELECT * FROM (${STOCK_MOVEMENTS}) WHERE item=? AND unit=? ${bySpec ? 'AND spec=?' : ''} AND d<=? ORDER BY d DESC, src, ref DESC LIMIT 201`).all(...(bySpec ? [item, unit, str(query.spec, 100), asof] : [item, unit, asof]));
+  const sources = await readStockSources(`SELECT * FROM movements WHERE item=? AND unit=? ${bySpec ? 'AND spec=?' : ''} AND d<=? ORDER BY d DESC,src,ref DESC LIMIT 201`,bySpec ? [item,unit,str(query.spec,100),asof] : [item,unit,asof]);
+  const rows = sources.flat().sort((a,b)=>stockCompare(b.d,a.d)||stockCompare(a.src,b.src)||b.ref-a.ref).slice(0,201);
   return { rows: rows.slice(0, 200).map(r => ({ ...r, qty: stockRound(r.qty) })), more: rows.length > 200, stock: await stockQuantity(item, unit, bySpec ? str(query.spec, 100) : null, asof) };
 });
 // Opening stock, stock counts and corrections: logistics lead or admin only, append-only.
@@ -2208,7 +2228,7 @@ return { async fetch(req) {
     if (!['GET', 'HEAD'].includes(req.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     return env.ASSETS.fetch(req);
   } catch (e) {
-    if (!e.status || e.status >= 500) console.error(e);
+    if (!e.status || e.status >= 500) console.error(e.message, e);
     return Response.json({ error: e.status && e.status < 500 ? e.message : '서버 오류가 발생했습니다.' }, { status: e.status || 500, headers: res });
   }
 } };

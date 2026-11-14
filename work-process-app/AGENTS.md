@@ -349,3 +349,8 @@ INVITE_CODE=local-test-code npm start
 - fixHeadingLevels(app.js): 제목 단계가 건너뛰면 aria-level만 맞추고, 가로로 넘치는 .table-wrap/.report-chart-scroll에 tabindex를 붙입니다. 화면 변경·data-view·hidden·open 변화 때 다시 실행됩니다.
 - form-ux: 화면 코드가 직접 그리는 `*`/`(선택)` 표시(예: 커팅 입력 data-semi-model-mark)가 있으면 자체 표시를 붙이지 않습니다. 「(선택)」 스타일은 label/legend 바로 아래 span.opt에만 적용합니다(라디오 선택지·「기타」 칸의 .opt와 구분).
 - 휴대폰 카드: 표 caption은 block, 행 색(row-red/yellow/green)은 카드 전체에, 「자세히」·「더 보기」·생산일정 × 버튼은 36px 이상.
+
+## 재고 현황 D1 조회 복구 (15.40)
+- 재고 현황·변동내역·실사 기준수량은 STOCK_MOVEMENTS의 원천별 SELECT를 같은 D1 batch 트랜잭션에서 실행합니다. 큰 UNION 서브쿼리에 대한 의존을 제거하고 품목·규격·단위별 합계를 서버에서 합칩니다. 기존 계산식·단위·환산·권한을 유지합니다.
+- 원천별 5001행과 전체 5000품목 제한을 적용하고 변동내역은 모든 원천의 최신 행을 합친 뒤 200건으로 자릅니다. 일부 원천 조회 실패를 재고 0으로 숨기지 않습니다. 실사는 모든 원천의 전체 기준수량으로 계산합니다.
+- 오류 로그는 예외 message도 기록해 D1 원인 문구가 스택과 함께 남게 합니다. 비밀 값이나 요청 헤더는 기록하지 않습니다.

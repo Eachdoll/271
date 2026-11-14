@@ -407,7 +407,7 @@ test('Washer daily quantity and cycle counts group multi-product runs and preser
  const saved=await staff('POST','/api/semi-batches',body);assert.equal(saved.status,200);assert.ok(saved.body.rows.every(r=>r.defect_qty===0));
  await staff('POST','/api/semi-batches',body);
  await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[item(20,'10:00')]});
- await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[item(3,''),item(4,'')]});
+ await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[item(3,'14:17'),item(4,'14:17')]});
  const legacy=await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{product_group:'wiper',product_type:'천와이퍼',qty:8,defect_qty:2,unit:'매',start_time:'12:00'}]});assert.equal(legacy.status,200);
  const summary=await staff('GET','/api/wash-summary?'+new URLSearchParams({from:today,to:today,unit_id:washer.id}));assert.equal(summary.status,200);assert.equal(summary.body.length,1);assert.equal(summary.body[0].runs,4);assert.deepEqual(summary.body[0].quantities,[{unit:'매',qty:52},{unit:'켤레',qty:3}]);
  const old=legacy.body.rows[0];const corrected=await staff('PUT','/api/semi-records/'+old.id,{entry_mode:'wash_quantity',product_group:'wiper',product_type:'천와이퍼',unit:'매',qty:10,work_date:today,unit_id:washer.id,start_time:'12:00',note:'전체 수량 유지'});assert.equal(corrected.status,200);assert.equal(corrected.body.record.qty,8);assert.equal(corrected.body.record.defect_qty,2);
