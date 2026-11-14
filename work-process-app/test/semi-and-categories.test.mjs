@@ -269,3 +269,52 @@ test('Semi-finished plans take actuals from cutting records only; batch entry, d
   assert.deepEqual(semi.series.filter(r => r.process === 'cut').map(r => [r.bucket, r.group, r.qty, r.defect_qty, r.yield_rate]), [['2026-09-07', '심리스글러브', 800, 25, 97], ['2026-09-14', '심리스글러브', 90, 10, 90]]);
   assert.equal((await staff('GET', '/api/reports?from=2026-09-01&to=2026-09-30&q=' + q('없는라인'))).body.semi.series.length, 0);
 });
+
+test('Semi-finished records name the catalog model made; stock, plans and material use follow it', async () => {
+  const line = (await prod('POST', '/api/production-units', { kind: 'line', name: '5동 모델라인' })).body;
+  const washer = (await prod('POST', '/api/production-units', { kind: 'washer', name: '7호기' })).body;
+  const item = (product, code, semi_type, extra = {}) => admin('POST', '/api/boms', { product, product_code: code, item_category: '반제품', kind: 'semi', base_qty: 100, unit: '매', materials: [], semi_type, ...extra });
+  assert.equal((await item('잘못된종류', 'X', '없는종류')).status, 400);
+  assert.equal((await admin('POST', '/api/boms', { product: '상품인데', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [], semi_type: '천와이퍼' })).status, 400, 'only 반제품 items take a kind');
+  const cf9 = (await item('CF-707(9)', 'CF-707-9', '부직포와이퍼', { materials: [{ item: '부직포 원단', item_category: '원자재', qty: 5, unit: 'kg' }] })).body;
+  const cf65 = (await item('CF-707(6.5)', 'CF-707-65', '부직포와이퍼')).body;
+  const nx = (await item('NX-707', 'NX-707', '천와이퍼')).body;
+  assert.equal(cf9.semi_type, '부직포와이퍼');
+  assert.deepEqual((await staff('GET', '/api/boms?semi_type=' + q('부직포와이퍼'))).body.map(b => b.product).sort(), ['CF-707(6.5)', 'CF-707(9)']);
+  await admin('POST', '/api/po', { req_no: 'PR-F', vendor: '원단사', item: '부직포 원단', unit: 'kg', qty: 1000, due_date: '2026-08-01', item_category: '원자재' });
+  const fabricPo = (await staff('GET', '/api/po?q=' + q('부직포 원단'))).body[0]; await staff('POST', '/api/po/receive', { ids: [fabricPo.id], status: 'ok' });
+
+  const base = { process: 'cut', work_date: '2026-08-04', unit_id: line.id, product_group: 'wiper', product_type: '부직포와이퍼' };
+  const noModel = await staff('POST', '/api/semi-records', { ...base, spec: '9', qty: 10 });
+  assert.equal(noModel.status, 400); assert.match(noModel.body.error, /품목\(모델\)을 선택/, 'once models exist for a kind, one must be chosen');
+  assert.equal((await staff('POST', '/api/semi-records', { ...base, bom_id: nx.id, qty: 10 })).status, 400, 'a model of another kind is refused');
+  const made = (await staff('POST', '/api/semi-records', { ...base, bom_id: cf9.id, qty: 900, defect_qty: 100 })).body;
+  assert.deepEqual([made.bom_id, made.item_name, made.product_code, made.spec, made.unit], [cf9.id, 'CF-707(9)', 'CF-707-9', '', '매'], 'the model identifies the wiper, so no inch is required; its unit is used');
+  const batch = await staff('POST', '/api/semi-batches', { process: 'cut', common: { work_date: '2026-08-05', unit_id: line.id }, items: [
+    { product_group: 'wiper', product_type: '부직포와이퍼', bom_id: cf65.id, qty: 400 }, { product_group: 'wiper', product_type: '천와이퍼', bom_id: nx.id, qty: 250, unit: '매' }] });
+  assert.deepEqual(batch.body.rows.map(r => r.item_name), ['CF-707(6.5)', 'NX-707']);
+  const seamless = await staff('POST', '/api/semi-records', { ...base, product_group: 'seamless', product_type: '스무드', spec: 'M', qty: 5, unit: '켤레' });
+  assert.equal(seamless.status, 200, 'kinds without registered models still work as before'); assert.equal(seamless.body.bom_id, null);
+  const wash = await staff('POST', '/api/semi-records', { process: 'wash', work_date: '2026-08-05', unit_id: washer.id, product_group: 'wiper', product_type: '부직포와이퍼', bom_id: cf9.id, qty: 800 });
+  assert.equal(wash.body.item_name, 'CF-707(9)'); assert.equal((await staff('POST', '/api/semi-records', { process: 'wash', work_date: '2026-08-05', unit_id: washer.id, product_group: 'wiper', qty: 1 })).status, 200, 'washing may still record only wiper/glove');
+
+  // stock by model; the model's BOM consumes material for good and defective pieces alike
+  const stock = (await staff('GET', '/api/inventory?asof=2026-08-31')).body.rows; const of = name => stock.find(r => r.item === name);
+  assert.deepEqual([of('CF-707(9)').stock, of('CF-707(9)').category, of('CF-707(9)').product_code, of('CF-707(6.5)').stock, of('NX-707').stock], [900, '반제품', 'CF-707-9', 400, 250]);
+  const fabric = (await staff('GET', '/api/inventory')).body.rows.find(r => r.item === '부직포 원단'); // received today, used in August
+  assert.deepEqual([fabric.received, fabric.used, fabric.stock], [1000, 50, 950], '(900 + 100) × 5kg per 100');
+  // later catalog edits do not rewrite what was recorded
+  await admin('PUT', `/api/boms/${cf9.id}`, { product: 'CF-707(9) 신형', product_code: 'CF-707-9', item_category: '반제품', kind: 'semi', base_qty: 100, unit: '매', materials: [{ item: '부직포 원단', item_category: '원자재', qty: 50, unit: 'kg' }] });
+  assert.equal((await staff('GET', '/api/inventory?asof=2026-08-31')).body.rows.find(r => r.item === '부직포 원단').used, 50);
+  // a plan for the model finds its records
+  const plan = (await staff('POST', '/api/batches/schedule', { common: { kind: 'semi', period: 'month', start_date: '2026-08-01' }, items: [{ item: 'CF-707(9)', qty: 2000, unit: '매' }], request_id: crypto.randomUUID() })).body.rows[0];
+  assert.equal((await staff('GET', '/api/schedules?kind=semi&from=2026-08-01&to=2026-08-31')).body.find(s => s.id === plan.id).actual_qty, 900);
+  // changing the model is an identity change → needs the lead; reports label rows with kind · model
+  const change = await staff('PUT', `/api/semi-records/${made.id}`, { ...base, bom_id: cf65.id, qty: 900, defect_qty: 100, reason: '모델 오기' });
+  assert.equal(change.body.pending, true); await admin('POST', `/api/semi-changes/${change.body.change.id}/approve`, {});
+  const after = (await staff('GET', `/api/semi-records?process=cut&unit_id=${line.id}&from=2026-08-04&to=2026-08-04`)).body.find(r => r.id === made.id);
+  assert.deepEqual([after.item_name, after.product_code, JSON.parse(after.bom_snapshot).materials.length], ['CF-707(6.5)', 'CF-707-65', 0]);
+  const report = (await staff('GET', '/api/reports?from=2026-08-01&to=2026-08-31')).body.semi;
+  assert.deepEqual(report.by_product.filter(r => r.process === 'cut').map(r => [r.product, r.qty]).sort(), [['부직포와이퍼 · CF-707(6.5)', 1300], ['심리스 스무드', 5], ['천와이퍼 · NX-707', 250]]);
+  assert.equal((await staff('GET', '/api/semi-records?process=cut&q=NX-707')).body.length >= 0, true);
+});
