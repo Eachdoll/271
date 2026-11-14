@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.8';
+const APP_VERSION = '15.9';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -314,6 +314,8 @@ function taskBadgeCounts(tasks) {
   if (a.actual_changes?.finished) counts['#/prod/finished'] = a.actual_changes.finished;
   if (a.actual_changes?.semi) counts['#/prod/semi'] = a.actual_changes.semi;
   if (a.receipt_changes?.count) counts['#/logistics/receive'] = a.receipt_changes.count;
+  if (a.semi_changes?.cut) counts['#/prod/semi/cut'] = a.semi_changes.cut;
+  if (a.semi_changes?.wash) counts['#/prod/semi/wash'] = a.semi_changes.wash;
   if (a.temp_items?.count) counts['#/admin/bom'] = a.temp_items.count;
   return counts;
 }
@@ -333,12 +335,14 @@ function tasksCard(tasks) {
   for (const [type, group] of Object.entries(a.requests)) if (group.count) todo.push(`<li><a href="${REQ[type].intake}"><b>${esc(REQ[type].label)} 승인 대기 ${group.count}건</b></a><div class="small muted">${group.items.map(r => `${esc(r.title)} · ${esc(r.requester_name)}`).join(' / ')}${more(group.count, group.items.length)}</div></li>`);
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
+  if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
   for (const c of m.actual_changes) mine.push(`<li>${state(c)} <a href="${c.kind === 'semi' ? '#/prod/semi' : '#/prod/finished'}">생산실적 · ${esc(c.product)}</a> <span class="small">${changeSummary(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.temp_items;
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items;
   return `<div class="card tasks"><h3>내가 처리할 일</h3><div class="tasks-grid">
     ${canApprove ? `<section><h4>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h4>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h4>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h4>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>

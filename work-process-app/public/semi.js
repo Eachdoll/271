@@ -3,7 +3,7 @@
 const SEMI_PRODUCTS = { wiper: { label: '와이퍼', types: ['부직포와이퍼', '천와이퍼'] }, seamless: { label: '심리스글러브', types: ['스무드', '타키'] } };
 const SEMI_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
 const SEMI_PAGE = {
-  cut: { title: '커팅/융착관리', unitKind: 'line', unitLabel: '라인', manage: '라인 관리', intro: '라인별로 와이퍼(부직포와이퍼·천와이퍼)와 심리스글러브(스무드·타키)를 얼마나 생산했는지 기록합니다.' },
+  cut: { title: '커팅/융착관리', unitKind: 'line', unitLabel: '라인', manage: '라인 관리', intro: '라인별로 와이퍼(부직포와이퍼·천와이퍼)와 심리스글러브(스무드·타키)를 얼마나 생산했는지 기록합니다. 이 생산량은 재고 현황의 반제품 재고로 잡힙니다.' },
   wash: { title: '세탁관리 (호기별)', unitKind: 'washer', unitLabel: '세탁 호기', manage: '호기 관리', intro: '세탁 호기마다 와이퍼와 심리스글러브를 얼마나 세탁했는지 기록합니다. 세탁 입고분의 불량 폐기는 구매 → 세탁관리에서 기록합니다.' },
 };
 const semiTypeLabel = record => record.product_type ? (record.product_group === 'seamless' ? '심리스 ' : '') + record.product_type : SEMI_PRODUCTS[record.product_group].label;
@@ -30,6 +30,26 @@ function semiDetail(process, rows) {
   for (const r of rows) { const key = [r.unit_name, r.product_group, r.product_type, r.spec, r.unit].join('\u0000'); const g = groups.get(key) || { ...r, qty: 0, count: 0 }; g.qty += r.qty; g.count++; groups.set(key, g); }
   const list = [...groups.values()].sort((a, b) => a.unit_name.localeCompare(b.unit_name, 'ko') || a.product_group.localeCompare(b.product_group) || a.product_type.localeCompare(b.product_type, 'ko') || order(a.spec) - order(b.spec));
   return `<div class="card"><h4>사이즈·규격별 합계</h4><div class="table-wrap"><table class="grid keep-table"><thead><tr><th>${SEMI_PAGE[process].unitLabel}</th><th>품목</th><th>사이즈·규격</th><th class="r">수량</th><th class="r">기록</th></tr></thead><tbody>${list.map(g => `<tr><td>${esc(g.unit_name)}</td><td>${esc(semiTypeLabel(g))}</td><td>${esc(g.spec) || '<span class="muted">미지정</span>'}</td><td class="r"><b>${fmtNum(Math.round(g.qty * 1e6) / 1e6)}</b> ${esc(g.unit)}</td><td class="r small muted">${g.count}건</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+// ── 기록 수정·삭제 요청 (생산팀장 승인 후 반영). LOT·비고만 바꾸는 것은 바로 반영됩니다. ──
+const SEMI_FIELD_LABEL = { work_date: '작업일', unit_name: '라인·호기', product_type: '품목', spec: '사이즈·규격', qty: '수량', unit: '단위', lot: 'LOT', note: '비고' };
+function semiChangeText(c) {
+  const what = `${esc(c.old_data.work_date)} ${esc(c.old_data.unit_name)} ${esc(semiTypeLabel(c.old_data))}${c.old_data.spec ? ' ' + esc(c.old_data.spec) : ''}`;
+  if (c.action === 'delete') return `${what} · <b>삭제 요청</b> (${fmtNum(c.old_data.qty)} ${esc(c.old_data.unit)})`;
+  const show = (key, data) => key === 'product_type' ? semiTypeLabel(data) : key === 'qty' ? fmtNum(data.qty) : data[key];
+  const changed = Object.keys(SEMI_FIELD_LABEL).filter(key => (key === 'product_type' ? semiTypeLabel(c.old_data) !== semiTypeLabel(c.new_data) : c.old_data[key] !== c.new_data[key]))
+    .map(key => `${SEMI_FIELD_LABEL[key]} ${esc(show(key, c.old_data)) || '없음'} → <b>${esc(show(key, c.new_data)) || '없음'}</b>`);
+  return `${what} · ${changed.join(', ')}`;
+}
+const canApproveSemi = () => ME.is_admin || ME.roles.includes('production_approver');
+function semiChangeButtons(c) {
+  return `${canApproveSemi() ? `<button class="btn small primary" data-schange-approve="${c.id}">승인</button> <button class="btn small danger" data-schange-reject="${c.id}">반려</button>` : ''}${c.requested_by_id === ME.id ? ` <button class="btn small" data-schange-cancel="${c.id}">요청 철회</button>` : ''}`;
+}
+function bindSemiChanges(root, after) {
+  const run = (button, task) => { button.onclick = async event => { event.stopPropagation(); if (button.disabled) return; button.disabled = true; try { if (await task() !== false) await after(); } catch (error) { fail(error); } finally { button.disabled = false; } }; };
+  $$('[data-schange-approve]', root).forEach(button => run(button, async () => { await api('POST', `/api/semi-changes/${button.dataset.schangeApprove}/approve`, {}); toast('승인했습니다. 기록에 반영되었습니다.'); }));
+  $$('[data-schange-reject]', root).forEach(button => run(button, async () => { const v = await promptBox('수정·삭제 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeReject}/reject`, v); toast('반려했습니다.'); }));
+  $$('[data-schange-cancel]', root).forEach(button => run(button, async () => { if (!(await confirmBox('이 요청을 철회할까요?'))) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeCancel}/cancel`); toast('요청을 철회했습니다.'); }));
 }
 async function manageProductionUnits(kind, after) {
   const label = kind === 'line' ? '라인' : '세탁 호기';
@@ -58,6 +78,7 @@ async function pageSemi(main, process) {
   main.innerHTML = `
   <h1>${page.title} <span class="dept">생산 · 반제품</span></h1>
   <p class="muted">${page.intro}</p>
+  <div id="semiPending"></div>
   <form class="card" id="semiNew"><h3>작업 기록 입력</h3><div class="form-grid">
     <label>작업일 *<input name="work_date" type="date" required value="${todayStr()}" max="${todayStr()}"></label>
     <label>${page.unitLabel} *<select name="unit_id" required data-semi-units></select></label>
@@ -101,25 +122,32 @@ async function pageSemi(main, process) {
   const productOf = value => { const [product_group, product_type] = String(value).split('|'); return { product_group, product_type: product_type || '' }; };
   const load = async () => {
     const mine = ++version;
-    const rows = await api('GET', '/api/semi-records?' + new URLSearchParams({ process, ...formObj(filters) }));
+    const [rows, pending] = await Promise.all([api('GET', '/api/semi-records?' + new URLSearchParams({ process, ...formObj(filters) })), api('GET', `/api/semi-changes?status=pending&process=${process}`)]);
     if (mine !== version || !main.isConnected) return;
+    $('#semiPending').innerHTML = pending.length ? `<div class="card"><h3>수정·삭제 승인 대기 <span class="chip yellow">${pending.length}건</span></h3><p class="small muted">${canApproveSemi() ? '승인하면 기록과 합계에 바로 반영됩니다.' : '생산팀장 승인 후 반영됩니다.'}</p><div class="table-wrap"><table class="grid"><thead><tr><th>요청 내용</th><th>사유</th><th>요청자</th><th></th></tr></thead><tbody>${pending.map(c => `<tr><td>${semiChangeText(c)}</td><td>${esc(c.reason)}</td><td>${esc(c.requested_by)}<br><span class="small muted">${esc(c.requested_at)}</span></td><td class="nowrap">${semiChangeButtons(c)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+    bindSemiChanges($('#semiPending'), async () => { await load(); refreshNavBadges(); });
     $('#semiCount').textContent = `${rows.length}건`;
     lastRows = rows; $('#semiSummary').innerHTML = semiSummary(process, rows) + ($('#semiDetail').checked ? semiDetail(process, rows) : '');
     $('#semiInches').innerHTML = [...new Set(rows.filter(r => r.product_group === 'wiper' && r.spec).map(r => parseFloat(r.spec)))].sort((a, b) => a - b).map(v => `<option value="${v}">`).join('');
     $('#semiList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>${page.unitLabel}</th><th>품목</th><th>사이즈·규격</th><th class="r">수량</th><th>LOT</th><th>비고</th><th>입력자</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr>
       <td class="nowrap">${esc(r.work_date)} (${dow(r.work_date)})</td><td>${esc(r.unit_name)}</td><td><span class="chip">${esc(SEMI_PRODUCTS[r.product_group].label)}</span> ${esc(r.product_type ? semiTypeLabel(r) : '')}</td><td>${esc(r.spec) || '<span class="muted">—</span>'}</td>
       <td class="r"><b>${fmtNum(r.qty)}</b> ${esc(r.unit)}</td><td>${esc(r.lot)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}${r.updated_by ? `<br>수정 ${esc(r.updated_by)}` : ''}</td>
-      <td class="nowrap">${canManage || ME.is_admin || r.created_by === ME.name ? `<button class="btn small" data-semi-edit="${i}">수정</button> <button class="btn small danger" data-semi-del="${i}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      <td class="nowrap">${r.pending_change_id ? '<span class="chip yellow">승인 대기</span>' : canManage || ME.is_admin || r.created_by === ME.name ? `<button class="btn small" data-semi-edit="${i}">수정</button> <button class="btn small danger" data-semi-del="${i}">삭제 요청</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">이 기간에 기록이 없습니다.</div>';
     $$('[data-semi-edit]', main).forEach(button => button.onclick = async () => {
       const r = rows[button.dataset.semiEdit]; const units = await api('GET', `/api/production-units?kind=${page.unitKind}&all=1`);
-      const v = await promptBox('작업 기록 수정', `<label>작업일 *<input name="work_date" type="date" required value="${esc(r.work_date)}" max="${todayStr()}"></label><label>${page.unitLabel} *<select name="unit_id" required>${units.filter(u => u.active || u.id === r.unit_id).map(u => `<option value="${u.id}" ${u.id === r.unit_id ? 'selected' : ''}>${esc(u.id === r.unit_id ? r.unit_name : u.name)}</option>`).join('')}</select></label>${semiProductSelect(process, r.product_group, r.product_type)}<label>사이즈·규격${process === 'cut' ? ' *' : ''} <span class="hint">(심리스: XS·S·M·L·XL / 와이퍼: 인치 숫자)</span><input name="spec" maxlength="20" value="${esc(r.spec)}" ${process === 'cut' ? 'required' : ''}></label><label>수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(r.qty)}"></label><label>단위<input name="unit" maxlength="20" value="${esc(r.unit)}"></label><label>LOT (선택)<input name="lot" maxlength="100" value="${esc(r.lot)}"></label><label>비고<input name="note" maxlength="500" value="${esc(r.note)}"></label>`);
+      const v = await promptBox('작업 기록 수정', `<p class="small muted">LOT·비고만 바꾸면 바로 반영됩니다. 수량·품목·사이즈·날짜·${page.unitLabel}을 바꾸면 <b>생산팀장 승인</b> 후 반영됩니다.</p><label>작업일 *<input name="work_date" type="date" required value="${esc(r.work_date)}" max="${todayStr()}"></label><label>${page.unitLabel} *<select name="unit_id" required>${units.filter(u => u.active || u.id === r.unit_id).map(u => `<option value="${u.id}" ${u.id === r.unit_id ? 'selected' : ''}>${esc(u.id === r.unit_id ? r.unit_name : u.name)}</option>`).join('')}</select></label>${semiProductSelect(process, r.product_group, r.product_type)}<label>사이즈·규격${process === 'cut' ? ' *' : ''} <span class="hint">(심리스: XS·S·M·L·XL / 와이퍼: 인치 숫자)</span><input name="spec" maxlength="20" value="${esc(r.spec)}" ${process === 'cut' ? 'required' : ''}></label><label>수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(r.qty)}"></label><label>단위<input name="unit" maxlength="20" value="${esc(r.unit)}"></label><label>LOT (선택)<input name="lot" maxlength="100" value="${esc(r.lot)}"></label><label>비고<input name="note" maxlength="500" value="${esc(r.note)}"></label><label>수정 사유 <span class="hint">(수량 등을 바꿀 때 필수)</span><input name="reason" maxlength="500"></label>`);
       if (!v) return;
-      try { await api('PUT', '/api/semi-records/' + r.id, { ...v, ...productOf(v.product) }); toast('수정했습니다.'); load(); } catch (error) { fail(error); }
+      try {
+        const result = await api('PUT', '/api/semi-records/' + r.id, { ...v, ...productOf(v.product), request_id: crypto.randomUUID() });
+        toast(result.pending ? '수정 요청을 올렸습니다. 생산팀장 승인 후 반영됩니다.' : 'LOT·비고를 수정했습니다.'); load();
+      } catch (error) { fail(error); }
     });
     $$('[data-semi-del]', main).forEach(button => button.onclick = async () => {
-      const r = rows[button.dataset.semiDel]; if (!(await confirmBox(`${r.work_date} ${r.unit_name} ${semiTypeLabel(r)} ${fmtNum(r.qty)} 기록을 삭제할까요?`))) return;
-      try { await api('DELETE', '/api/semi-records/' + r.id); load(); } catch (error) { fail(error); }
+      const r = rows[button.dataset.semiDel];
+      const v = await promptBox('작업 기록 삭제 요청', `<p class="small muted">${esc(r.work_date)} ${esc(r.unit_name)} ${esc(semiTypeLabel(r))} ${esc(r.spec)} ${fmtNum(r.qty)} ${esc(r.unit)} · 생산팀장이 승인하면 삭제됩니다.</p><label>삭제 사유 *<input name="reason" required maxlength="500"></label>`);
+      if (!v) return;
+      try { await api('DELETE', '/api/semi-records/' + r.id, { ...v, request_id: crypto.randomUUID() }); toast('삭제 요청을 올렸습니다. 생산팀장 승인 후 반영됩니다.'); load(); } catch (error) { fail(error); }
     });
   };
   form.onsubmit = async event => {

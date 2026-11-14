@@ -343,7 +343,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1238,7 +1238,8 @@ route('GET', '/api/semi-records', async ({ query }) => {
   if (query.unit_id) { if (!/^[1-9]\d*$/.test(query.unit_id)) throw bad('라인·호기를 확인하세요.'); where.push('unit_id=?'); args.push(Number(query.unit_id)); }
   if (query.product_group) { if (!Object.hasOwn(SEMI_PRODUCTS, query.product_group)) throw bad('품목 구분을 확인하세요.'); where.push('product_group=?'); args.push(query.product_group); }
   applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'spec', 'lot', 'note', 'created_by']);
-  const rows = await db.prepare(`SELECT * FROM semi_records WHERE ${where.join(' AND ')} ORDER BY work_date DESC, id DESC LIMIT 2001`).all(...args);
+  const rows = await db.prepare(`SELECT semi_records.*, (SELECT c.id FROM semi_record_changes c WHERE c.record_id=semi_records.id AND c.status='pending') AS pending_change_id
+    FROM semi_records WHERE ${where.join(' AND ')} ORDER BY work_date DESC, id DESC LIMIT 2001`).all(...args);
   if (rows.length > 2000) throw bad('기록이 너무 많습니다. 기간을 좁히세요.');
   return rows;
 });
@@ -1252,18 +1253,92 @@ route('POST', '/api/semi-records', async ({ user, body }) => {
     .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
   return mustGet('semi_records', r.lastInsertRowid);
 });
+// Recorded quantities change only with a production team lead's approval; LOT and notes can be fixed directly.
+const SEMI_FIELDS = ['work_date', 'unit_id', 'unit_name', 'product_group', 'product_type', 'spec', 'qty', 'unit', 'lot', 'note'];
+const SEMI_APPROVAL_FIELDS = ['work_date', 'unit_id', 'product_group', 'product_type', 'spec', 'qty', 'unit'];
+const semiSnapshot = row => JSON.stringify(Object.fromEntries(SEMI_FIELDS.map(key => [key, row[key]])));
+async function semiPending(recordId) { return db.prepare("SELECT 1 FROM semi_record_changes WHERE record_id=? AND status='pending'").get(recordId); }
+async function requestSemiChange(user, row, action, next, body) {
+  const reason = reqStr(body.reason, action === 'delete' ? '삭제 사유' : '수정 사유', 500);
+  const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  const newData = next ? JSON.stringify(Object.fromEntries(SEMI_FIELDS.map(k => [k, next[k]]))) : null;
+  const same = c => c.record_id === row.id && c.action === action && c.requested_by_id === user.id && c.new_data === newData && c.reason === reason;
+  const old = await db.prepare('SELECT * FROM semi_record_changes WHERE request_id=?').get(key);
+  if (old) { if (!same(old)) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return { pending: old.status === 'pending', change: old }; }
+  if (await semiPending(row.id)) throw new HttpError(409, '이 기록에는 이미 승인 대기 중인 수정·삭제 요청이 있습니다.');
+  try {
+    const r = await db.prepare('INSERT INTO semi_record_changes(record_id,process,action,request_id,old_data,new_data,reason,requested_by_id,requested_by) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(row.id, row.process, action, key, semiSnapshot(row), newData, reason, user.id, user.name);
+    return { pending: true, change: await db.prepare('SELECT * FROM semi_record_changes WHERE id=?').get(r.lastInsertRowid) };
+  } catch (error) {
+    const saved = await db.prepare('SELECT * FROM semi_record_changes WHERE request_id=?').get(key);
+    if (saved && same(saved)) return { pending: true, change: saved };
+    if (await semiPending(row.id)) throw new HttpError(409, '이 기록에는 이미 승인 대기 중인 수정·삭제 요청이 있습니다.');
+    throw error;
+  }
+}
 route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
   const f = await semiFields(body, row.process, row);
-  await db.prepare('UPDATE semi_records SET work_date=?,unit_id=?,unit_name=?,product_group=?,product_type=?,spec=?,qty=?,unit=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?')
-    .run(f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.qty, f.unit, f.lot, f.note, user.name, now(), row.id);
-  return mustGet('semi_records', row.id);
+  if (SEMI_APPROVAL_FIELDS.every(key => f[key] === row[key])) {
+    if (f.lot === row.lot && f.note === row.note) throw bad('바뀐 내용이 없습니다.');
+    if (await semiPending(row.id)) throw new HttpError(409, '승인 대기 중인 요청이 처리된 뒤에 수정하세요.');
+    await db.prepare('UPDATE semi_records SET lot=?,note=?,updated_by=?,updated_at=? WHERE id=?').run(f.lot, f.note, user.name, now(), row.id);
+    return { pending: false, record: await mustGet('semi_records', row.id) };
+  }
+  return requestSemiChange(user, row, 'edit', f, body);
 });
-route('DELETE', '/api/semi-records/:id', async ({ user, params }) => {
+route('DELETE', '/api/semi-records/:id', async ({ user, params, body }) => {
   const row = await mustGet('semi_records', params.id);
-  if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제할 수 있습니다.');
-  await db.prepare('DELETE FROM semi_records WHERE id=?').run(row.id); return { ok: true };
+  if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제를 요청할 수 있습니다.');
+  return requestSemiChange(user, row, 'delete', null, body);
+});
+const decodeSemiChange = c => c && ({ ...c, old_data: JSON.parse(c.old_data), new_data: c.new_data ? JSON.parse(c.new_data) : null });
+route('GET', '/api/semi-changes', async ({ query }) => {
+  const where = [], args = [];
+  if (query.status) { if (!['pending', 'approved', 'rejected', 'cancelled'].includes(query.status)) throw bad('요청 상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
+  if (query.process) { where.push('process=?'); args.push(semiProcess(query.process)); }
+  return (await db.prepare(`SELECT * FROM semi_record_changes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT 200`).all(...args)).map(decodeSemiChange);
+});
+async function pendingSemiChange(id) {
+  if (!/^[1-9]\d*$/.test(String(id))) throw bad('요청 번호를 확인하세요.');
+  const change = await db.prepare('SELECT * FROM semi_record_changes WHERE id=?').get(Number(id));
+  if (!change) throw new HttpError(404, '수정 요청을 찾을 수 없습니다.');
+  if (change.status !== 'pending') throw new HttpError(409, '이미 처리된 요청입니다.');
+  return change;
+}
+route('POST', '/api/semi-changes/:id/approve', async ({ user, params, body }) => {
+  requireActualApprover(user);
+  const change = await pendingSemiChange(params.id); const stamp = now();
+  const row = await db.prepare('SELECT * FROM semi_records WHERE id=?').get(change.record_id);
+  if (!row || semiSnapshot(row) !== change.old_data) throw new HttpError(409, '요청 이후 기록이 바뀌었습니다. 반려하고 새로 요청하세요.');
+  const applied = "EXISTS(SELECT 1 FROM semi_record_changes WHERE id=? AND status='approved' AND reviewed_at=?)";
+  const next = change.new_data ? JSON.parse(change.new_data) : null;
+  if (next && next.work_date > today()) throw bad('아직 지나지 않은 날짜로는 승인할 수 없습니다.');
+  const results = await db.batch([
+    { sql: "UPDATE semi_record_changes SET status='approved',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'", args: [user.name, stamp, str(body.note, 500), change.id] },
+    change.action === 'edit'
+      ? { sql: `UPDATE semi_records SET ${SEMI_FIELDS.map(k => k + '=?').join(',')},updated_by=?,updated_at=? WHERE id=? AND ${applied}`, args: [...SEMI_FIELDS.map(k => next[k]), `${change.requested_by} (승인: ${user.name})`, stamp, row.id, change.id, stamp] }
+      : { sql: `DELETE FROM semi_records WHERE id=? AND ${applied}`, args: [row.id, change.id, stamp] },
+  ]);
+  if (!results[0].meta.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return decodeSemiChange(await db.prepare('SELECT * FROM semi_record_changes WHERE id=?').get(change.id));
+});
+route('POST', '/api/semi-changes/:id/reject', async ({ user, params, body }) => {
+  requireActualApprover(user);
+  const change = await pendingSemiChange(params.id);
+  const r = await db.prepare("UPDATE semi_record_changes SET status='rejected',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'").run(user.name, now(), reqStr(body.note, '반려 사유', 500), change.id);
+  if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return decodeSemiChange(await db.prepare('SELECT * FROM semi_record_changes WHERE id=?').get(change.id));
+});
+route('POST', '/api/semi-changes/:id/cancel', async ({ user, params }) => {
+  const change = await pendingSemiChange(params.id);
+  if (change.requested_by_id !== user.id && !user.is_admin) throw new HttpError(403, '요청한 사람만 철회할 수 있습니다.');
+  const r = await db.prepare("UPDATE semi_record_changes SET status='cancelled',reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'").run(user.name, now(), change.id);
+  if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
+  return { ok: true };
 });
 
 // ── 물류: 재고 현황 (입고 + 생산실적 − 생산 투입 − 출하 ± 재고 조정으로 계산) ──
@@ -1287,6 +1362,9 @@ const STOCK_MOVEMENTS = `
     WHERE a.voided_at IS NULL AND s.bom_id IS NOT NULL AND json_extract(s.bom_snapshot,'$.base_qty')>0
   UNION ALL
   SELECT TRIM(item), spec, TRIM(unit), '', -qty, 'ship', ship_date, id, customer FROM shipments
+  UNION ALL
+  SELECT CASE product_group WHEN 'seamless' THEN '심리스 ' || product_type ELSE product_type END, spec, TRIM(unit), '반제품', qty, 'prod', work_date, id, unit_name || ' 커팅/융착'
+    FROM semi_records WHERE process='cut'
   UNION ALL
   SELECT TRIM(item), spec, TRIM(unit), '', qty, 'adjust', adj_date, id, reason || ' · ' || created_by FROM stock_adjustments`;
 const stockRound = n => Math.round((Number(n) || 0) * 1e6) / 1e6;
@@ -1380,6 +1458,10 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     const items = await db.prepare(`${actualChangeSelect} WHERE c.status='pending' ORDER BY c.id LIMIT 50`).all();
     approvals.actual_changes = { count: items.length, finished: items.filter(c => c.kind === 'finished').length, semi: items.filter(c => c.kind === 'semi').length, items: items.slice(0, 5) };
   }
+  if (user.is_admin || roles.includes('production_approver')) {
+    const items = (await db.prepare("SELECT * FROM semi_record_changes WHERE status='pending' ORDER BY id LIMIT 50").all()).map(decodeSemiChange);
+    approvals.semi_changes = { count: items.length, cut: items.filter(c => c.process === 'cut').length, wash: items.filter(c => c.process === 'wash').length, items: items.slice(0, 5) };
+  }
   if (user.is_admin || roles.includes('logistics_approver')) {
     const items = await db.prepare(`${receiptChangeSelect} WHERE c.status='pending' ORDER BY c.id LIMIT 50`).all();
     approvals.receipt_changes = { count: items.length, items: items.slice(0, 5) };
@@ -1390,6 +1472,7 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   const mine = {
     requests: await db.prepare("SELECT id,type,status,title,reject_reason,approver_name,created_at FROM requests WHERE requester_id=? AND status IN ('pending','rejected') ORDER BY id DESC LIMIT 20").all(user.id),
     actual_changes: await db.prepare(`${actualChangeSelect} WHERE c.requested_by_id=? AND ${recent} ORDER BY c.id DESC LIMIT 20`).all(user.id),
+    semi_changes: (await db.prepare("SELECT * FROM semi_record_changes c WHERE c.requested_by_id=? AND " + recent + " ORDER BY c.id DESC LIMIT 20").all(user.id)).map(decodeSemiChange),
     receipt_changes: await db.prepare(`${receiptChangeSelect} WHERE c.requested_by_id=? AND ${recent} ORDER BY c.id DESC LIMIT 20`).all(user.id),
   };
   return { approvals, mine };

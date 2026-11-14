@@ -64,7 +64,9 @@
 - 라인·호기는 production 역할/관리자가 추가·이름 변경·사용 중지합니다(삭제 없음). semi_records.unit_name은 입력 당시 이름의 스냅샷입니다.
 - 반제품 품목은 worker.mjs와 public/semi.js의 SEMI_PRODUCTS(와이퍼: 부직포와이퍼·천와이퍼 / 심리스글러브: 스무드·타키)입니다. 커팅/융착은 종류 필수, 세탁은 와이퍼/심리스글러브만으로도 기록합니다. 입력은 로그인 사용자, 수정·삭제는 등록자·production·관리자. 미래 작업일은 거부합니다.
 - 0013: semi_records.spec. 심리스글러브는 사이즈 XS/S/M/L/XL(SEMI_SIZES), 와이퍼는 인치 규격을 `9인치` 형식으로 저장합니다(semiSpec()이 9, 9인치, 9" 입력을 정규화). 커팅/융착은 필수, 세탁은 선택입니다. 사이즈를 품목 이름이나 코드에 넣지 말고 spec에 두세요.
-- semi_records는 재고 계산(STOCK_MOVEMENTS)에 넣지 않았습니다. 넣을지와 품목명 규칙은 사용자 결정이 필요합니다.
+- 커팅/융착(process='cut') 기록은 STOCK_MOVEMENTS에 반제품 생산으로 들어갑니다(품목명: 부직포와이퍼·천와이퍼·심리스 스무드·심리스 타키, 규격 = spec). 세탁 기록은 같은 물건의 공정이라 재고에 넣지 않습니다. 같은 생산량을 반제품 생산일정 실적에도 입력하면 재고가 이중으로 잡히니 화면 안내를 유지하세요.
+- 0014 semi_record_changes: 반제품 기록의 수량·품목·사이즈·단위·작업일·라인 변경과 삭제는 PUT/DELETE /api/semi-records/:id가 사유와 함께 pending 요청을 만들고, production_approver(생산팀장)·관리자가 POST /api/semi-changes/:id/approve|reject 해야 반영됩니다(요청자는 /cancel). LOT·비고만 바뀌면 바로 반영합니다. 기록당 pending 1건, 승인 시 old_data가 현재 기록과 같아야 합니다. my-tasks에 semi_changes가 포함됩니다.
+- 샘플의뢰(상품)의 승인자는 purchase 역할(구매 담당자)·관리자로 확정되었습니다.
 - 발주의 LOT는 선택입니다. public/semi.js를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. production_units·semi_records는 전체 백업 대상입니다.
 
 ## 확인

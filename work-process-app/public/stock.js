@@ -10,7 +10,7 @@ function stockCsv(rows, bySpec) {
 async function pageStock(main) {
   main.innerHTML = `
   <h1>재고 현황 <span class="dept">물류</span></h1>
-  <p class="muted">입고(발주·기타) + 생산실적 − 생산 투입(BOM 기준) − 출하 ± 재고 조정으로 계산한 수량입니다. 품목명과 단위가 같은 기록끼리 합산하므로, <b>같은 품목은 같은 이름·단위</b>로 입력하세요. 시스템 도입 전부터 있던 재고는 <b>기초재고</b>로 한 번 입력합니다.</p>
+  <p class="muted">입고(발주·기타) + 생산실적·반제품 커팅/융착 − 생산 투입(BOM 기준) − 출하 ± 재고 조정으로 계산한 수량입니다. 품목명과 단위가 같은 기록끼리 합산하므로, <b>같은 품목은 같은 이름·단위</b>로 입력하세요. 시스템 도입 전부터 있던 재고는 <b>기초재고</b>로 한 번 입력합니다.</p>
   <form id="stockFilters" class="toolbar list-filters" data-read-only="true">
     <label>기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
     <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격"></label>
