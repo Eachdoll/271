@@ -69,3 +69,17 @@ test('Review fetches the exact pending request and never silently approves a mis
   c.api = async (_, path) => { url = path; return []; };
   await assert.rejects(c.reviewApproval('receipt', '250'), /찾을 수 없습니다/); assert.equal(url, '/api/receipt-changes?status=pending&id=250');
 });
+test('Receipts recorded without a quantity show the ordered quantity as the stock effect', () => {
+  const { c } = setup();
+  const revert = c.approvalComparison('receipt', { action: 'revert', old_status: 'ok', old_recv_qty: null, order_qty: 400, unit: 'EA', reason: '오기', requested_by: '직원', item: '옛 입고' });
+  assert.match(revert, /기록 없음 \(발주 400 EA 기준\)/); assert.match(revert, /-400 EA/); assert.match(revert, /입고 기록 전체 취소/); assert.ok(!revert.includes('+0'));
+  const qty = c.approvalComparison('receipt', { action: 'qty', old_status: 'ok', old_recv_qty: null, order_qty: 400, new_recv_qty: 380, unit: 'EA', reason: '실측', requested_by: '직원' });
+  assert.match(qty, /-20 EA/);
+  const unknown = c.approvalComparison('receipt', { action: 'revert', old_status: 'ok', old_recv_qty: null, order_qty: null, reason: 'x', requested_by: 'y' });
+  assert.match(unknown, /계산하지 못했습니다/);
+});
+test('Semi requests are titled by product, size and line; a delete lists only filled fields', () => {
+  const { c } = setup(); c.SEMI_FIELD_LABEL = { work_date: '작업일', unit_name: '라인', product_type: '종류', item_name: '모델', spec: '규격', qty: '양품수량', defect_qty: '불량', workers: '인원' };
+  const html = c.approvalComparison('semi', { action: 'delete', process: 'cut', reason: '중복', requested_by: '직원', old_data: { work_date: '2026-11-14', unit_name: '1동', product_type: '스무드', item_name: '', spec: 'S', qty: 50, defect_qty: 0, workers: null }, new_data: null });
+  assert.match(html, /스무드 · S · 1동 · 2026-11-14 — 삭제 요청/); assert.match(html, /양품수량/); assert.ok(!html.includes('불량</th>')); assert.ok(!html.includes('인원')); assert.ok(!html.includes('모델'));
+});

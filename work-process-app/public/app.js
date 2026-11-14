@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.17';
+const APP_VERSION = '15.18';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -463,24 +463,26 @@ function receiptChangeButtons(c) {
   return `${canApproveReceipt() ? `<button class="btn small primary" data-rchange-approve="${c.id}">승인</button> <button class="btn small danger" data-rchange-reject="${c.id}">반려</button>` : ''}${c.requested_by_id === ME.id ? ` <button class="btn small" data-rchange-cancel="${c.id}">요청 철회</button>` : ''}`;
 }
 function bindReceiptChanges(root, rows, after) {
-  const run = async (button, task) => { if (button.disabled) return; button.disabled = true; try { await task(); await after(); } catch (error) { fail(error); } finally { button.disabled = false; } };
+  // The page may have been left while the list was loading; a cancelled dialog changes nothing and needs no reload.
+  if (!root) return;
+  const run = async (button, task) => { if (button.disabled) return; button.disabled = true; try { if (await task() === false) return; await after(); } catch (error) { fail(error); } finally { button.disabled = false; } };
   $$('[data-receipt-qty]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
     const po = rows.find(row => row.id === Number(button.dataset.receiptQty));
     const v = await promptBox('입고 수량 수정 요청', `<p class="small muted">${esc(po.item)} · 발주 ${fmtNum(po.qty)} / 현재 실입고 <b>${fmtNum(po.recv_qty)}</b>. 물류팀장이 승인하면 반영됩니다.</p><label>바른 실입고 수량 *<input name="recv_qty" type="number" min="0" step="any" required value="${esc(po.recv_qty)}"></label><label>수정 사유 *<input name="reason" required maxlength="500"></label>`);
-    if (!v) return; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', ...v, request_id: crypto.randomUUID() }); toast('수정 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
+    if (!v) return false; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', ...v, request_id: crypto.randomUUID() }); toast('수정 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
   }); });
   $$('[data-receipt-revert]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
     const po = rows.find(row => row.id === Number(button.dataset.receiptRevert));
     const v = await promptBox('입고 취소 요청', `<p class="small muted">${esc(po.item)} · 승인되면 미입고로 돌아갑니다. 이미 등록된 수입검사 이력은 남습니다.</p><label>취소 사유 *<input name="reason" required maxlength="500"></label>`);
-    if (!v) return; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'revert', ...v, request_id: crypto.randomUUID() }); toast('입고 취소 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
+    if (!v) return false; await api('POST', `/api/po/${po.id}/receipt-changes`, { action: 'revert', ...v, request_id: crypto.randomUUID() }); toast('입고 취소 요청을 올렸습니다. 물류팀장 승인 후 반영됩니다.');
   }); });
-  $$('[data-rchange-approve]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => { if (!await reviewApproval('receipt', button.dataset.rchangeApprove)) return; await api('POST', `/api/receipt-changes/${button.dataset.rchangeApprove}/approve`, {}); toast('승인했습니다. 입고 내용에 반영되었습니다.'); }); });
+  $$('[data-rchange-approve]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => { if (!await reviewApproval('receipt', button.dataset.rchangeApprove)) return false; await api('POST', `/api/receipt-changes/${button.dataset.rchangeApprove}/approve`, {}); toast('승인했습니다. 입고 내용에 반영되었습니다.'); }); });
   $$('[data-rchange-reject]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
-    const v = await promptBox('입고 수정 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return;
+    const v = await promptBox('입고 수정 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return false;
     await api('POST', `/api/receipt-changes/${button.dataset.rchangeReject}/reject`, v); toast('반려했습니다.');
   }); });
   $$('[data-rchange-cancel]', root).forEach(button => button.onclick = event => { event.stopPropagation(); run(button, async () => {
-    if (!(await confirmBox('이 요청을 철회할까요?'))) return; await api('POST', `/api/receipt-changes/${button.dataset.rchangeCancel}/cancel`); toast('요청을 철회했습니다.');
+    if (!(await confirmBox('이 요청을 철회할까요?'))) return false; await api('POST', `/api/receipt-changes/${button.dataset.rchangeCancel}/cancel`); toast('요청을 철회했습니다.');
   }); });
 }
 async function renderReceiptChanges(root) {
