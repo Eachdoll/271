@@ -384,3 +384,14 @@ test('Washer records accept a single progress time and catalog code, without dur
   const legacy=await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{...item,start_time:'08:00',end_time:'10:00',break_minutes:30,workers:4}]});assert.equal(legacy.status,200);assert.equal(legacy.body.rows[0].work_hours,1.5);
   const oldId=legacy.body.rows[0].id;const edit=await staff('PUT','/api/semi-records/'+oldId,{...item,unit:'켤레',work_date:today,unit_id:washer.id,start_time:'09:00',note:'기존 상세 보존'});assert.equal(edit.status,200,JSON.stringify(edit.body));const kept=(await staff('GET','/api/semi-records?process=wash')).body.find(r=>r.id===oldId);assert.equal(kept.work_hours,1.5);assert.equal(kept.break_minutes,30);assert.equal(kept.workers,4);assert.equal(kept.end_time,'10:00');
 });
+test('Code-based cutting derives identity and fixed units without a size, break or crew',async()=>{
+ const line=(await prod('POST','/api/production-units',{kind:'line',name:'코드전용라인'})).body;
+ for(const [type,expected] of [['천와이퍼','매'],['스무드','켤레']]){
+  const model=(await admin('POST','/api/boms',{product:'코드기반 '+type,product_code:'CUT-'+expected,item_category:'반제품',semi_type:type,kind:'semi',base_qty:1,unit:expected,materials:[{item:'원단',item_category:'원자재',qty:1,unit:'kg'}]})).body;
+  const item={entry_mode:'code',bom_id:model.id,qty:12,start_time:'08:00',end_time:'10:00',unit:'임의단위',break_minutes:45,workers:7};
+  const body={process:'cut',common:{work_date:today,unit_id:line.id},items:[item],request_id:crypto.randomUUID()};
+  const saved=await staff('POST','/api/semi-batches',body);assert.equal(saved.status,200,JSON.stringify(saved.body));const row=saved.body.rows[0];assert.equal(row.product_type,type);assert.equal(row.unit,expected);assert.equal(row.spec,'');assert.equal(row.work_hours,2);assert.equal(row.break_minutes,0);assert.equal(row.workers,null);assert.equal(row.product_code,'CUT-'+expected);
+  assert.equal((await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{...item,end_time:''}]})).status,400);
+  const corrected=await staff('PUT','/api/semi-records/'+row.id,{entry_mode:'code',bom_id:model.id,qty:12,work_date:today,unit_id:line.id,start_time:'08:00',end_time:'11:00',note:'시각 정정'});assert.equal(corrected.status,200);assert.equal(corrected.body.record.unit,expected);
+ }
+});
