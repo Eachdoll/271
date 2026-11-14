@@ -816,3 +816,28 @@ form .form-error { margin: 8px 0; }
 .recent-mine > h2 { font-size: 16px; margin: 0 0 12px; display: flex; gap: 8px; align-items: center; }
 /* 생산일정 항목의 삭제(×) 버튼: 휴대폰에서 누르기 쉬운 크기 */
 @media (max-width: 700px) { .sc-item button.x { min-width: 36px; min-height: 36px; } }
+
+/* ───── 15.41 휴대폰 카드 글자 가독성 ─────
+   펼친 카드: 항목 이름(13px)을 값(15px) 위에 따로 둔다. 예전에는 이름이 왼쪽 90px 칸에 12px로 고정돼
+   긴 이름(예: 품질책임자(승인권자))이 세 줄로 접히며 아래 칸과 겹쳤다.
+   체크박스만 있는 칸(권한 등)은 「이름 …… ☑」 한 줄로 보여 준다.
+   「자세히/접기」 버튼은 항상 카드 오른쪽 위에 두고, 버튼 옆 첫 줄만 비켜 간다(나머지 줄은 전체 폭). */
+@media (max-width: 700px) {
+  table.grid.as-cards td, table.grid.as-cards td.r, table.grid.as-cards td.c { padding: 7px 14px; font-size: 15px; line-height: 1.45; }
+  table.grid.as-cards td::before { position: static; display: block; width: auto; margin: 0 0 2px; font-size: 13px; line-height: 1.4; color: var(--text-2, var(--muted)); }
+  table.grid.as-cards td[data-label=""]::before { display: none; }
+  table.grid.as-cards td:has(> input[type=checkbox]:only-child), table.grid.as-cards td:has(> label:only-child > input[type=checkbox]) { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+  table.grid.as-cards td:has(> input[type=checkbox]:only-child)::before, table.grid.as-cards td:has(> label:only-child > input[type=checkbox])::before { margin: 0; font-size: 15px; color: var(--text); }
+  table.grid.as-cards td > input[type=checkbox]:only-child { width: 22px; height: 22px; flex: none; }
+  /* 버튼 자리: 카드 오른쪽 위를 비워 두고(float 빈칸) 버튼을 그 위에 놓는다. */
+  table.grid.as-cards tbody tr:has(.card-more)::before { content: ''; float: right; width: 92px; height: 40px; }
+  table.grid.as-cards tr:not(.card-open) { padding-right: 12px !important; }
+  table.grid.as-cards td:has(> .card-more) { position: static !important; }
+  table.grid.as-cards tr .card-more, table.grid.as-cards tr.card-open .card-more { position: absolute; top: 8px; right: 10px; display: inline-flex; align-items: center; justify-content: center; margin: 0; min-height: 36px; min-width: 72px; font-size: 14px; z-index: 1; }
+  /* 접힌 카드 요약 줄: 이름 글자 11px → 12.5px */
+  table.grid.as-cards tr:not(.card-open) td:not(.card-secondary) { font-size: 14.5px; }
+  table.grid.as-cards tr:not(.card-open) td:not(.card-secondary)::before { display: inline; margin: 0 4px 0 0; font-size: 12.5px; }
+  table.grid.as-cards tr:not(.card-open) td[data-label="품목명"], table.grid.as-cards tr:not(.card-open) td[data-label="품목"] { font-size: 15.5px; }
+  /* 카드 안 버튼 묶음은 줄을 넘기고 버튼 글자는 14px 이상 */
+  table.grid.as-cards td .btn.small { font-size: 14px; min-height: 36px; }
+}
