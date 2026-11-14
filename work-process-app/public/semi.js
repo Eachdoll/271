@@ -142,20 +142,24 @@ function washerDailyHTML(rows) {
 }
 async function washerRecordPrompt(r, models, units, save) {
  const choices=models.some(m=>m.id===r.bom_id)?models:[...models,...(r.bom_id?[{id:r.bom_id,product:r.item_name,product_code:r.product_code,semi_type:r.product_type}]:[])];
- return promptBox('세탁 기록 수정',`<label>작업일<input name="work_date" type="date" required value="${esc(r.work_date)}" max="${todayStr()}"></label><label>호기<select name="unit_id" required>${units.filter(u=>u.active||u.id===r.unit_id).map(u=>`<option value="${u.id}" ${u.id===r.unit_id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></label><label>제품코드<select name="bom_id" required><option value="">제품 선택</option>${choices.map(m=>`<option value="${m.id}" ${m.id===r.bom_id?'selected':''}>${esc(m.product_code)} · ${esc(m.product)}</option>`).join('')}</select></label><label>세탁수량<input name="qty" required type="number" min="0" step="any" value="${r.qty+(r.defect_qty||0)}"></label><label>진행시각<input name="start_time" type="time" value="${esc(r.start_time)}"></label><label>LOT<input name="lot" value="${esc(r.lot)}" maxlength="100"></label><label>비고<input name="note" value="${esc(r.note)}" maxlength="500"></label><label>수정 사유<input name="reason" maxlength="500"></label>`,{submit:async v=>{const m=choices.find(m=>m.id===Number(v.bom_id));const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(m.semi_type));return save({...v,product:group+'|'+m.semi_type,unit:r.bom_id===m.id?r.unit:m.unit||r.unit,spec:r.spec,entry_mode:'wash_quantity'});}});
+ return promptBox('세탁 기록 수정',`<label>작업일<input name="work_date" type="date" required value="${esc(r.work_date)}" max="${todayStr()}"></label><label>호기<select name="unit_id" required>${units.filter(u=>u.active||u.id===r.unit_id).map(u=>`<option value="${u.id}" ${u.id===r.unit_id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></label><label>제품코드<select name="bom_id" required><option value="">제품 선택</option>${choices.map(m=>`<option value="${m.id}" ${m.id===r.bom_id?'selected':''}>${esc(m.product_code)} · ${esc(m.product)}</option>`).join('')}</select></label><label>세탁수량<input name="qty" required type="number" min="0" step="any" value="${r.qty+(r.defect_qty||0)}"></label><label>진행시각${r.start_time?' *':''}<input name="start_time" type="time" value="${esc(r.start_time)}" ${r.start_time?'required':''}></label><label>LOT<input name="lot" value="${esc(r.lot)}" maxlength="100"></label><label>비고<input name="note" value="${esc(r.note)}" maxlength="500"></label><label>수정 사유<input name="reason" maxlength="500"></label>`,{submit:async v=>{const m=choices.find(m=>m.id===Number(v.bom_id));const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(m.semi_type));return save({...v,product:group+'|'+m.semi_type,unit:r.bom_id===m.id?r.unit:m.unit||r.unit,spec:r.spec,entry_mode:'wash_quantity'});}});
 }
 
 function simplifyWasherEntry(row, models, syncSpec) {
   const field=key=>$(`[data-k="${key}"]`,row);
+  const showUnit=()=>{$('[data-wash-unit]',row).textContent=field('unit').value?'('+field('unit').value+')':'';};
   field('product').closest('label').hidden=true;
   const model=field('bom_id'), modelLabel=model.closest('label');modelLabel.hidden=false;model.required=true;
   const search=document.createElement('label');search.innerHTML='제품코드·품명 검색<input type="search" data-wash-code placeholder="코드 또는 품명 입력">';modelLabel.before(search);
   $('[data-wash-code]',search).oninput=e=>{const q=e.target.value.trim().toLowerCase(),chosen=model.value;model.innerHTML='<option value="">제품코드 선택</option>'+models.filter(m=>(m.product_code+' '+m.product).toLowerCase().includes(q)).map(m=>`<option value="${m.id}">${esc(m.product_code)} · ${esc(m.product)}</option>`).join('');model.value=chosen;};
-  model.onchange=()=>{const chosen=models.find(m=>String(m.id)===model.value);if(chosen){const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(chosen.semi_type));field('product').value=group+'|'+chosen.semi_type;}syncSpec();modelLabel.hidden=false;};
+  model.onchange=()=>{const chosen=models.find(m=>String(m.id)===model.value);if(chosen){const group=Object.keys(SEMI_PRODUCTS).find(g=>SEMI_PRODUCTS[g].types.includes(chosen.semi_type));field('product').value=group+'|'+chosen.semi_type;}syncSpec();if(chosen)field('unit').value=chosen.unit||(field('product').value.startsWith('seamless')?'켤레':'매');showUnit();modelLabel.hidden=false;};
   for(const key of ['end_time','break_minutes','workers','defect_qty','defect_reason']) {field(key).disabled=true;field(key).closest('label').hidden=true;}
-  field('start_time').closest('label').firstChild.textContent='진행시각 (가동 횟수 집계) ';field('start_time').required=false;
-  field('qty').closest('label').innerHTML='세탁수량 *<input data-k="qty" type="number" min="0" step="any" required>';
+  field('start_time').closest('label').firstChild.textContent='진행시각 * (비우면 저장할 때 현재 시각) ';field('start_time').required=false;
+  field('qty').closest('label').innerHTML='세탁수량 * <span class="hint" data-wash-unit></span><input data-k="qty" type="number" min="0" step="any" required>';
+  // Unit comes from the chosen product code; there is nothing to type.
+  field('unit').closest('label').hidden=true;for(const key of ['size','inch']){field(key).disabled=true;field(key).closest('label').hidden=true;}
   if(!models.length){const hint=document.createElement('p');hint.className='small red-text';hint.textContent='선택 가능한 반제품 코드가 없습니다. 품목 관리에서 반제품 종류와 제품코드를 먼저 등록해주세요.';modelLabel.after(hint);}
+  showUnit();
 }
 
 function simplifyCutEntry(row, models, syncSpec) {
@@ -239,7 +243,7 @@ async function pageSemi(main, process, { operator = false } = {}) {
     const field = key => $(`[data-k="${key}"]`, row);
     const syncSpec = () => {
       const group = String(field('product').value).split('|')[0]; const size = $('[data-semi-size]', row), inch = $('[data-semi-inch]', row);
-      size.hidden = process === 'cut' || group !== 'seamless'; inch.hidden = process === 'cut' || group !== 'wiper';
+      size.hidden = inch.hidden = true; // the product code identifies the item; no separate size/inch entry
       // Models registered for this kind (반제품 catalog items). Once any exist, cutting/fusing must name one.
       const type = String(field('product').value).split('|')[1] || ''; const choices = models;
       const keep = field('bom_id').value; const box = $('[data-semi-model]', row);
@@ -329,7 +333,8 @@ async function pageSemi(main, process, { operator = false } = {}) {
   let entryDraft;
   form.onsubmit = async event => {
     event.preventDefault(); if (submit.disabled) return; submit.disabled = true; form.inert = true; entryDraft?.start();
-    const items = $$('[data-semi-row]', form).map(row => { const v = Object.fromEntries($$('[data-k]', row).filter(input=>!input.disabled).map(input => [input.dataset.k, input.value])); const { product, size, inch, ...rest } = v; return { ...rest, ...productOf(product), ...(process==='cut'?{entry_mode:'code'}:{entry_mode:'wash_quantity',spec: size || inch || ''}) }; });
+    const washNow = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+    const items = $$('[data-semi-row]', form).map(row => { const v = Object.fromEntries($$('[data-k]', row).filter(input=>!input.disabled).map(input => [input.dataset.k, input.value])); const { product, size, inch, ...rest } = v; return { ...rest, ...productOf(product), ...(process==='cut'?{entry_mode:'code'}:{entry_mode:'wash_quantity',spec:'',start_time:rest.start_time||washNow}) }; });
     const date = form.work_date.value; let saved = false;
     try {
       const result = await api('POST', '/api/semi-batches', { process, common: { work_date: date, unit_id: form.unit_id.value }, items, request_id: requestId });
