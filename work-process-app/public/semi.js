@@ -27,17 +27,17 @@ function semiDetail(process, rows) {
   if (!rows.length) return '';
   const order = spec => { const i = SEMI_SIZES.indexOf(spec); return i >= 0 ? i : spec ? 100 + parseFloat(spec) : 999; };
   const groups = new Map();
-  for (const r of rows) { const key = [r.unit_name, r.product_group, r.product_type, r.spec, r.unit].join('\u0000'); const g = groups.get(key) || { ...r, qty: 0, count: 0 }; g.qty += r.qty; g.count++; groups.set(key, g); }
+  for (const r of rows) { const key = [r.unit_name, r.product_group, r.product_type, r.spec, r.unit].join('\u0000'); const g = groups.get(key) || { ...r, qty: 0, defect: 0, count: 0 }; g.qty += r.qty; g.defect += r.defect_qty || 0; g.count++; groups.set(key, g); }
   const list = [...groups.values()].sort((a, b) => a.unit_name.localeCompare(b.unit_name, 'ko') || a.product_group.localeCompare(b.product_group) || a.product_type.localeCompare(b.product_type, 'ko') || order(a.spec) - order(b.spec));
-  return `<div class="card"><h4>사이즈·규격별 합계</h4><div class="table-wrap"><table class="grid keep-table"><thead><tr><th>${SEMI_PAGE[process].unitLabel}</th><th>품목</th><th>사이즈·규격</th><th class="r">수량</th><th class="r">기록</th></tr></thead><tbody>${list.map(g => `<tr><td>${esc(g.unit_name)}</td><td>${esc(semiTypeLabel(g))}</td><td>${esc(g.spec) || '<span class="muted">미지정</span>'}</td><td class="r"><b>${fmtNum(Math.round(g.qty * 1e6) / 1e6)}</b> ${esc(g.unit)}</td><td class="r small muted">${g.count}건</td></tr>`).join('')}</tbody></table></div></div>`;
+  return `<div class="card"><h4>사이즈·규격별 합계</h4><div class="table-wrap"><table class="grid keep-table"><thead><tr><th>${SEMI_PAGE[process].unitLabel}</th><th>품목</th><th>사이즈·규격</th><th class="r">수량</th><th class="r">불량</th><th class="r">수율</th><th class="r">기록</th></tr></thead><tbody>${list.map(g => `<tr><td>${esc(g.unit_name)}</td><td>${esc(semiTypeLabel(g))}</td><td>${esc(g.spec) || '<span class="muted">미지정</span>'}</td><td class="r"><b>${fmtNum(Math.round(g.qty * 1e6) / 1e6)}</b> ${esc(g.unit)}</td><td class="r">${fmtNum(Math.round(g.defect * 1e6) / 1e6)}</td><td class="r">${semiRate(g.qty - g.defect, g.qty)}</td><td class="r small muted">${g.count}건</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 // ── 기록 수정·삭제 요청 (생산팀장 승인 후 반영). LOT·비고만 바꾸는 것은 바로 반영됩니다. ──
-const SEMI_FIELD_LABEL = { work_date: '작업일', unit_name: '라인·호기', product_type: '품목', spec: '사이즈·규격', qty: '수량', unit: '단위', lot: 'LOT', note: '비고' };
+const SEMI_FIELD_LABEL = { work_date: '작업일', unit_name: '라인·호기', product_type: '품목', spec: '사이즈·규격', qty: '수량', defect_qty: '불량수량', unit: '단위', work_hours: '작업시간', workers: '생산인원', lot: 'LOT', note: '비고' };
 function semiChangeText(c) {
   const what = `${esc(c.old_data.work_date)} ${esc(c.old_data.unit_name)} ${esc(semiTypeLabel(c.old_data))}${c.old_data.spec ? ' ' + esc(c.old_data.spec) : ''}`;
   if (c.action === 'delete') return `${what} · <b>삭제 요청</b> (${fmtNum(c.old_data.qty)} ${esc(c.old_data.unit)})`;
-  const show = (key, data) => key === 'product_type' ? semiTypeLabel(data) : key === 'qty' ? fmtNum(data.qty) : data[key];
-  const changed = Object.keys(SEMI_FIELD_LABEL).filter(key => (key === 'product_type' ? semiTypeLabel(c.old_data) !== semiTypeLabel(c.new_data) : c.old_data[key] !== c.new_data[key]))
+  const show = (key, data) => key === 'product_type' ? semiTypeLabel(data) : ['qty', 'defect_qty', 'work_hours', 'workers'].includes(key) ? (data[key] == null ? '' : fmtNum(data[key])) : data[key];
+  const changed = Object.keys(SEMI_FIELD_LABEL).filter(key => (key === 'product_type' ? semiTypeLabel(c.old_data) !== semiTypeLabel(c.new_data) : (c.old_data[key] ?? null) !== (c.new_data[key] ?? null)))
     .map(key => `${SEMI_FIELD_LABEL[key]} ${esc(show(key, c.old_data)) || '없음'} → <b>${esc(show(key, c.new_data)) || '없음'}</b>`);
   return `${what} · ${changed.join(', ')}`;
 }
@@ -50,6 +50,19 @@ function bindSemiChanges(root, after) {
   $$('[data-schange-approve]', root).forEach(button => run(button, async () => { await api('POST', `/api/semi-changes/${button.dataset.schangeApprove}/approve`, {}); toast('승인했습니다. 기록에 반영되었습니다.'); }));
   $$('[data-schange-reject]', root).forEach(button => run(button, async () => { const v = await promptBox('수정·삭제 요청 반려', '<label>반려 사유 *<input name="note" required maxlength="500"></label>'); if (!v) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeReject}/reject`, v); toast('반려했습니다.'); }));
   $$('[data-schange-cancel]', root).forEach(button => run(button, async () => { if (!(await confirmBox('이 요청을 철회할까요?'))) return false; await api('POST', `/api/semi-changes/${button.dataset.schangeCancel}/cancel`); toast('요청을 철회했습니다.'); }));
+}
+const semiRate = (part, whole) => whole ? (Math.round(part / whole * 1000) / 10) + '%' : '<span class="muted">—</span>';
+// 리포트 · 통계 화면의 반제품 구역: 생산량(수율)과 불량수량(불량률)
+function semiReportSection(semi) {
+  if (!semi) return '';
+  const pct = value => value == null ? '<span class="muted">—</span>' : value + '%';
+  const table = (rows, first, name) => `<div class="table-wrap"><table class="grid"><thead><tr><th>${first}</th><th class="r">수량</th><th class="r">양품</th><th class="r">수율</th><th class="r">불량수량</th><th class="r">불량률</th><th class="r">작업시간</th><th class="r">인시당 양품</th><th class="r">기록</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${esc(name(r))}</b></td><td class="r">${fmtNum(r.qty)} ${esc(r.unit)}</td><td class="r">${fmtNum(r.good_qty)}</td><td class="r"><b>${pct(r.yield_rate)}</b></td><td class="r">${r.defect_qty ? `<span class="red-text">${fmtNum(r.defect_qty)}</span>` : '0'}</td><td class="r">${pct(r.defect_rate)}</td><td class="r">${r.work_hours ? fmtNum(r.work_hours) + '시간' : '<span class="muted">—</span>'}</td><td class="r">${r.per_man_hour == null ? '<span class="muted">—</span>' : fmtNum(r.per_man_hour)}</td><td class="r small muted">${r.records}건</td></tr>`).join('')}</tbody></table></div>`;
+  const block = (process, title, unitLabel) => {
+    const products = semi.by_product.filter(r => r.process === process), lines = semi.by_line.filter(r => r.process === process), detail = semi.rows.filter(r => r.process === process);
+    if (!products.length) return `<section class="card"><h3>${title}</h3><p class="muted">이 기간에 기록이 없습니다.</p></section>`;
+    return `<section class="card"><h3>${title} <span class="tag soft">생산량 · 수율 · 불량률</span></h3><h4>품목별</h4>${table(products, '품목', r => r.product)}<h4>${unitLabel}별</h4>${table(lines, unitLabel, r => r.unit_name)}<details><summary>${unitLabel}·품목·사이즈별 상세</summary>${table(detail, `${unitLabel} · 품목 · 사이즈`, r => [r.unit_name, r.product, r.spec].filter(Boolean).join(' · '))}</details></section>`;
+  };
+  return `<h2>반제품 생산 (작업일 기준)</h2>${block('cut', '커팅/융착', '라인')}${block('wash', '세탁', '호기')}`;
 }
 async function manageProductionUnits(kind, after) {
   const label = kind === 'line' ? '라인' : '세탁 호기';
@@ -85,7 +98,10 @@ async function pageSemi(main, process) {
     ${semiProductSelect(process)}
     <label data-semi-size hidden>사이즈${process === 'cut' ? ' *' : ' (선택)'}<select name="size"><option value="">선택</option>${SEMI_SIZES.map(size => `<option>${size}</option>`).join('')}</select></label>
     <label data-semi-inch hidden>규격 (인치)${process === 'cut' ? ' *' : ' (선택)'}<input name="inch" type="number" min="0.1" max="200" step="any" list="semiInches" placeholder="예) 9"><datalist id="semiInches"></datalist></label>
-    <label>수량 *<input name="qty" type="number" min="0" step="any" required></label>
+    <label>수량 * <span class="hint">(불량 포함 총 수량)</span><input name="qty" type="number" min="0" step="any" required></label>
+    <label>불량수량<input name="defect_qty" type="number" min="0" step="any" placeholder="없으면 비움"></label>
+    <label>작업시간 <span class="hint">(시간)</span><input name="work_hours" type="number" min="0" step="any" placeholder="예) 7.5"></label>
+    <label>생산인원 <span class="hint">(명)</span><input name="workers" type="number" min="0" step="1" placeholder="예) 4"></label>
     <label>단위<input name="unit" maxlength="20" placeholder="예) 매 / 켤레 / kg"></label>
     <label>LOT (선택)<input name="lot" maxlength="100"></label>
     <label class="span3">비고<input name="note" maxlength="500"></label></div>
@@ -129,18 +145,18 @@ async function pageSemi(main, process) {
     $('#semiCount').textContent = `${rows.length}건`;
     lastRows = rows; $('#semiSummary').innerHTML = semiSummary(process, rows) + ($('#semiDetail').checked ? semiDetail(process, rows) : '');
     $('#semiInches').innerHTML = [...new Set(rows.filter(r => r.product_group === 'wiper' && r.spec).map(r => parseFloat(r.spec)))].sort((a, b) => a - b).map(v => `<option value="${v}">`).join('');
-    $('#semiList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>${page.unitLabel}</th><th>품목</th><th>사이즈·규격</th><th class="r">수량</th><th>LOT</th><th>비고</th><th>입력자</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr>
+    $('#semiList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>작업일</th><th>${page.unitLabel}</th><th>품목</th><th>사이즈·규격</th><th class="r">수량</th><th class="r">불량</th><th class="r">수율</th><th>시간 · 인원</th><th>LOT</th><th>비고</th><th>입력자</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr>
       <td class="nowrap">${esc(r.work_date)} (${dow(r.work_date)})</td><td>${esc(r.unit_name)}</td><td><span class="chip">${esc(SEMI_PRODUCTS[r.product_group].label)}</span> ${esc(r.product_type ? semiTypeLabel(r) : '')}</td><td>${esc(r.spec) || '<span class="muted">—</span>'}</td>
-      <td class="r"><b>${fmtNum(r.qty)}</b> ${esc(r.unit)}</td><td>${esc(r.lot)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}${r.updated_by ? `<br>수정 ${esc(r.updated_by)}` : ''}</td>
+      <td class="r"><b>${fmtNum(r.qty)}</b> ${esc(r.unit)}</td><td class="r">${r.defect_qty ? `<span class="red-text">${fmtNum(r.defect_qty)}</span>` : '0'}</td><td class="r">${semiRate(r.qty - r.defect_qty, r.qty)}</td><td class="small">${r.work_hours != null ? fmtNum(r.work_hours) + '시간' : ''}${r.work_hours != null && r.workers != null ? ' · ' : ''}${r.workers != null ? fmtNum(r.workers) + '명' : ''}</td><td>${esc(r.lot)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}${r.updated_by ? `<br>수정 ${esc(r.updated_by)}` : ''}</td>
       <td class="nowrap">${r.pending_change_id ? '<span class="chip yellow">승인 대기</span>' : canManage || ME.is_admin || r.created_by === ME.name ? `<button class="btn small" data-semi-edit="${i}">수정</button> <button class="btn small danger" data-semi-del="${i}">삭제 요청</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">이 기간에 기록이 없습니다.</div>';
     $$('[data-semi-edit]', main).forEach(button => button.onclick = async () => {
       const r = rows[button.dataset.semiEdit]; const units = await api('GET', `/api/production-units?kind=${page.unitKind}&all=1`);
-      const v = await promptBox('작업 기록 수정', `<p class="small muted">LOT·비고만 바꾸면 바로 반영됩니다. 수량·품목·사이즈·날짜·${page.unitLabel}을 바꾸면 <b>생산팀장 승인</b> 후 반영됩니다.</p><label>작업일 *<input name="work_date" type="date" required value="${esc(r.work_date)}" max="${todayStr()}"></label><label>${page.unitLabel} *<select name="unit_id" required>${units.filter(u => u.active || u.id === r.unit_id).map(u => `<option value="${u.id}" ${u.id === r.unit_id ? 'selected' : ''}>${esc(u.id === r.unit_id ? r.unit_name : u.name)}</option>`).join('')}</select></label>${semiProductSelect(process, r.product_group, r.product_type)}<label>사이즈·규격${process === 'cut' ? ' *' : ''} <span class="hint">(심리스: XS·S·M·L·XL / 와이퍼: 인치 숫자)</span><input name="spec" maxlength="20" value="${esc(r.spec)}" ${process === 'cut' ? 'required' : ''}></label><label>수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(r.qty)}"></label><label>단위<input name="unit" maxlength="20" value="${esc(r.unit)}"></label><label>LOT (선택)<input name="lot" maxlength="100" value="${esc(r.lot)}"></label><label>비고<input name="note" maxlength="500" value="${esc(r.note)}"></label><label>수정 사유 <span class="hint">(수량 등을 바꿀 때 필수)</span><input name="reason" maxlength="500"></label>`);
+      const v = await promptBox('작업 기록 수정', `<p class="small muted">작업시간·생산인원·LOT·비고만 바꾸면 바로 반영됩니다. 수량·불량수량·품목·사이즈·날짜·${page.unitLabel}을 바꾸면 <b>생산팀장 승인</b> 후 반영됩니다.</p><label>작업일 *<input name="work_date" type="date" required value="${esc(r.work_date)}" max="${todayStr()}"></label><label>${page.unitLabel} *<select name="unit_id" required>${units.filter(u => u.active || u.id === r.unit_id).map(u => `<option value="${u.id}" ${u.id === r.unit_id ? 'selected' : ''}>${esc(u.id === r.unit_id ? r.unit_name : u.name)}</option>`).join('')}</select></label>${semiProductSelect(process, r.product_group, r.product_type)}<label>사이즈·규격${process === 'cut' ? ' *' : ''} <span class="hint">(심리스: XS·S·M·L·XL / 와이퍼: 인치 숫자)</span><input name="spec" maxlength="20" value="${esc(r.spec)}" ${process === 'cut' ? 'required' : ''}></label><label>수량 * <span class="hint">(불량 포함)</span><input name="qty" type="number" min="0" step="any" required value="${esc(r.qty)}"></label><label>불량수량<input name="defect_qty" type="number" min="0" step="any" value="${esc(r.defect_qty)}"></label><label>작업시간 (시간)<input name="work_hours" type="number" min="0" step="any" value="${esc(r.work_hours)}"></label><label>생산인원 (명)<input name="workers" type="number" min="0" step="1" value="${esc(r.workers)}"></label><label>단위<input name="unit" maxlength="20" value="${esc(r.unit)}"></label><label>LOT (선택)<input name="lot" maxlength="100" value="${esc(r.lot)}"></label><label>비고<input name="note" maxlength="500" value="${esc(r.note)}"></label><label>수정 사유 <span class="hint">(수량 등을 바꿀 때 필수)</span><input name="reason" maxlength="500"></label>`);
       if (!v) return;
       try {
         const result = await api('PUT', '/api/semi-records/' + r.id, { ...v, ...productOf(v.product), request_id: crypto.randomUUID() });
-        toast(result.pending ? '수정 요청을 올렸습니다. 생산팀장 승인 후 반영됩니다.' : 'LOT·비고를 수정했습니다.'); load();
+        toast(result.pending ? '수정 요청을 올렸습니다. 생산팀장 승인 후 반영됩니다.' : '수정했습니다.'); load();
       } catch (error) { fail(error); }
     });
     $$('[data-semi-del]', main).forEach(button => button.onclick = async () => {
@@ -157,7 +173,7 @@ async function pageSemi(main, process) {
       await api('POST', '/api/semi-records', { process, ...v, ...productOf(v.product), spec: v.size || v.inch || '', request_id: requestId });
       requestId = crypto.randomUUID(); toast('작업 기록을 추가했습니다.');
       // Keep date, line and unit for the next entry; clear what changes each time.
-      form.qty.value = ''; form.lot.value = ''; form.note.value = ''; form.size.value = ''; (form.size.required ? form.size : form.qty).focus();
+      form.qty.value = ''; form.defect_qty.value = ''; form.lot.value = ''; form.note.value = ''; form.size.value = ''; (form.size.required ? form.size : form.qty).focus();
       if (v.work_date < filters.from.value) filters.from.value = v.work_date; if (v.work_date > filters.to.value) filters.to.value = v.work_date;
       await load();
     } catch (error) { fail(error); } finally { button.disabled = false; }

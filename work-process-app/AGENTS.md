@@ -67,6 +67,9 @@
 - 커팅/융착(process='cut') 기록은 STOCK_MOVEMENTS에 반제품 생산으로 들어갑니다(품목명: 부직포와이퍼·천와이퍼·심리스 스무드·심리스 타키, 규격 = spec). 세탁 기록은 같은 물건의 공정이라 재고에 넣지 않습니다. 같은 생산량을 반제품 생산일정 실적에도 입력하면 재고가 이중으로 잡히니 화면 안내를 유지하세요.
 - 0014 semi_record_changes: 반제품 기록의 수량·품목·사이즈·단위·작업일·라인 변경과 삭제는 PUT/DELETE /api/semi-records/:id가 사유와 함께 pending 요청을 만들고, production_approver(생산팀장)·관리자가 POST /api/semi-changes/:id/approve|reject 해야 반영됩니다(요청자는 /cancel). LOT·비고만 바뀌면 바로 반영합니다. 기록당 pending 1건, 승인 시 old_data가 현재 기록과 같아야 합니다. my-tasks에 semi_changes가 포함됩니다.
 - 샘플의뢰(상품)의 승인자는 purchase 역할(구매 담당자)·관리자로 확정되었습니다.
+- 0015: semi_records.work_hours(작업시간, 시간 단위)·workers(생산인원, 정수)·defect_qty(불량수량, 기본 0). **수량(qty)은 불량을 포함한 총 수량**이고 양품 = qty − defect_qty입니다(불량 ≤ 수량). 재고에는 양품만 들어갑니다. 수량·불량수량 변경은 생산팀장 승인 대상이고 작업시간·생산인원·LOT·비고는 바로 반영합니다(SEMI_DIRECT_FIELDS).
+- 리포트의 semi(reports.mjs semiReport, public/semi.js semiReportSection): 작업일 기준 커팅/융착·세탁별 품목별/라인(호기)별/상세 합계와 수율(양품÷수량)·불량률(불량÷수량)·인시당 양품(시간과 인원을 모두 입력한 기록만). 단위가 다른 수량은 합치지 않습니다. 리포트 분류 필터에 반제품을 포함합니다.
+- 빌드 산출물 검사(test/worker.test.mjs)는 번들 안의 `fs.`·`require(`·`process.env` 문자열을 금지합니다. public/*.js에서도 `diffs.`처럼 `fs.`로 끝나는 식별자 사용을 피하세요.
 - 발주의 LOT는 선택입니다. public/semi.js를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. production_units·semi_records는 전체 백업 대상입니다.
 
 ## 확인

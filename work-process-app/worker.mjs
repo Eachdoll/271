@@ -1229,7 +1229,20 @@ async function semiFields(body, process, previous = null) {
   const type = str(body.product_type, 40);
   if (process === 'cut' && !type) throw bad('품목(종류)을 선택하세요.');
   if (type && !SEMI_PRODUCTS[group].types.includes(type)) throw bad('품목(종류)을 다시 선택하세요.');
-  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut'), qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
+  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, spec: semiSpec(group, body.spec, process === 'cut'), ...semiWorkDetails(body, previous), qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
+}
+// 수량 = 총 생산(세탁)수량, 불량수량은 그 안에 포함됩니다. 양품 = 수량 − 불량.
+function semiWorkDetails(body, previous) {
+  const pick = (key, label, max) => {
+    if (body[key] === undefined) return previous ? previous[key] : null;
+    const value = num(body[key], label, { required: false });
+    if (value !== null && value > max) throw bad(`${label}을(를) 확인하세요.`);
+    return value;
+  };
+  const qty = num(body.qty, '수량'); const defect = body.defect_qty === undefined ? (previous ? previous.defect_qty : 0) : num(body.defect_qty, '불량수량', { required: false }) ?? 0;
+  if (defect > qty) throw bad('불량수량은 수량보다 클 수 없습니다.');
+  const workers = pick('workers', '생산인원', 10000); if (workers !== null && !Number.isInteger(workers)) throw bad('생산인원은 정수로 입력하세요.');
+  return { work_hours: pick('work_hours', '작업시간', 10000), workers, defect_qty: defect };
 }
 function semiProcess(value) { const process = String(value || ''); if (!Object.hasOwn(SEMI_UNIT_KIND, process)) throw bad('작업 구분을 확인하세요.'); return process; }
 route('GET', '/api/semi-records', async ({ query }) => {
@@ -1249,13 +1262,16 @@ route('POST', '/api/semi-records', async ({ user, body }) => {
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
   const old = await db.prepare('SELECT * FROM semi_records WHERE request_id=?').get(key);
   if (old) { if (old.created_by_id !== user.id || old.process !== process || old.unit_id !== f.unit_id || old.qty !== f.qty || old.work_date !== f.work_date) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
-  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,spec,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
+  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,spec,work_hours,workers,defect_qty,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.spec, f.work_hours, f.workers, f.defect_qty, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
   return mustGet('semi_records', r.lastInsertRowid);
 });
 // Recorded quantities change only with a production team lead's approval; LOT and notes can be fixed directly.
-const SEMI_FIELDS = ['work_date', 'unit_id', 'unit_name', 'product_group', 'product_type', 'spec', 'qty', 'unit', 'lot', 'note'];
-const SEMI_APPROVAL_FIELDS = ['work_date', 'unit_id', 'product_group', 'product_type', 'spec', 'qty', 'unit'];
+const SEMI_FIELDS = ['work_date', 'unit_id', 'unit_name', 'product_group', 'product_type', 'spec', 'qty', 'defect_qty', 'unit', 'work_hours', 'workers', 'lot', 'note'];
+const SEMI_DIRECT_FIELDS = ['work_hours', 'workers', 'lot', 'note']; // everything else changes what was produced
+const SEMI_APPROVAL_FIELDS = ['work_date', 'unit_id', 'product_group', 'product_type', 'spec', 'qty', 'defect_qty', 'unit'];
+// A request stays approvable as long as the fields it recorded are unchanged (older requests know fewer fields).
+const semiUnchanged = (row, oldData) => { const old = JSON.parse(oldData); return Object.keys(old).every(key => old[key] === row[key]); };
 const semiSnapshot = row => JSON.stringify(Object.fromEntries(SEMI_FIELDS.map(key => [key, row[key]])));
 async function semiPending(recordId) { return db.prepare("SELECT 1 FROM semi_record_changes WHERE record_id=? AND status='pending'").get(recordId); }
 async function requestSemiChange(user, row, action, next, body) {
@@ -1283,9 +1299,9 @@ route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
   if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
   const f = await semiFields(body, row.process, row);
   if (SEMI_APPROVAL_FIELDS.every(key => f[key] === row[key])) {
-    if (f.lot === row.lot && f.note === row.note) throw bad('바뀐 내용이 없습니다.');
+    if (SEMI_DIRECT_FIELDS.every(key => f[key] === row[key])) throw bad('바뀐 내용이 없습니다.');
     if (await semiPending(row.id)) throw new HttpError(409, '승인 대기 중인 요청이 처리된 뒤에 수정하세요.');
-    await db.prepare('UPDATE semi_records SET lot=?,note=?,updated_by=?,updated_at=? WHERE id=?').run(f.lot, f.note, user.name, now(), row.id);
+    await db.prepare('UPDATE semi_records SET work_hours=?,workers=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?').run(f.work_hours, f.workers, f.lot, f.note, user.name, now(), row.id);
     return { pending: false, record: await mustGet('semi_records', row.id) };
   }
   return requestSemiChange(user, row, 'edit', f, body);
@@ -1313,14 +1329,14 @@ route('POST', '/api/semi-changes/:id/approve', async ({ user, params, body }) =>
   requireActualApprover(user);
   const change = await pendingSemiChange(params.id); const stamp = now();
   const row = await db.prepare('SELECT * FROM semi_records WHERE id=?').get(change.record_id);
-  if (!row || semiSnapshot(row) !== change.old_data) throw new HttpError(409, '요청 이후 기록이 바뀌었습니다. 반려하고 새로 요청하세요.');
+  if (!row || !semiUnchanged(row, change.old_data)) throw new HttpError(409, '요청 이후 기록이 바뀌었습니다. 반려하고 새로 요청하세요.');
   const applied = "EXISTS(SELECT 1 FROM semi_record_changes WHERE id=? AND status='approved' AND reviewed_at=?)";
   const next = change.new_data ? JSON.parse(change.new_data) : null;
   if (next && next.work_date > today()) throw bad('아직 지나지 않은 날짜로는 승인할 수 없습니다.');
   const results = await db.batch([
     { sql: "UPDATE semi_record_changes SET status='approved',reviewed_by=?,reviewed_at=?,review_note=? WHERE id=? AND status='pending'", args: [user.name, stamp, str(body.note, 500), change.id] },
     change.action === 'edit'
-      ? { sql: `UPDATE semi_records SET ${SEMI_FIELDS.map(k => k + '=?').join(',')},updated_by=?,updated_at=? WHERE id=? AND ${applied}`, args: [...SEMI_FIELDS.map(k => next[k]), `${change.requested_by} (승인: ${user.name})`, stamp, row.id, change.id, stamp] }
+      ? { sql: `UPDATE semi_records SET ${SEMI_FIELDS.filter(k => k in next).map(k => k + '=?').join(',')},updated_by=?,updated_at=? WHERE id=? AND ${applied}`, args: [...SEMI_FIELDS.filter(k => k in next).map(k => next[k]), `${change.requested_by} (승인: ${user.name})`, stamp, row.id, change.id, stamp] }
       : { sql: `DELETE FROM semi_records WHERE id=? AND ${applied}`, args: [row.id, change.id, stamp] },
   ]);
   if (!results[0].meta.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
@@ -1363,7 +1379,7 @@ const STOCK_MOVEMENTS = `
   UNION ALL
   SELECT TRIM(item), spec, TRIM(unit), '', -qty, 'ship', ship_date, id, customer FROM shipments
   UNION ALL
-  SELECT CASE product_group WHEN 'seamless' THEN '심리스 ' || product_type ELSE product_type END, spec, TRIM(unit), '반제품', qty, 'prod', work_date, id, unit_name || ' 커팅/융착'
+  SELECT CASE product_group WHEN 'seamless' THEN '심리스 ' || product_type ELSE product_type END, spec, TRIM(unit), '반제품', qty - defect_qty, 'prod', work_date, id, unit_name || ' 커팅/융착' || CASE WHEN defect_qty>0 THEN ' (불량 ' || defect_qty || ' 제외)' ELSE '' END
     FROM semi_records WHERE process='cut'
   UNION ALL
   SELECT TRIM(item), spec, TRIM(unit), '', qty, 'adjust', adj_date, id, reason || ' · ' || created_by FROM stock_adjustments`;
