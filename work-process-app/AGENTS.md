@@ -233,3 +233,7 @@ INVITE_CODE=local-test-code npm start
 ## 오퍼레이터 검사 조회·대시보드 복구 (15.21)
 - 오퍼레이터도 검사 이력 목록·측정값·수정이력을 조회합니다. 검사 쓰기·규격 설정 API는 계속 차단하며, 다른 품질 역할이 함께 있어도 can_write/can_manage는 false입니다.
 - 대시보드 재고 경고는 STOCK_MOVEMENTS 원천별로 집계 후 품명·단위를 합산합니다. 재고 경고 조회 실패는 stock=null로 반환하고 화면에 명시하며 나머지 현황을 표시합니다. 실패를 재고 경고 0건으로 표시하지 마세요.
+
+## 화면 시작 검증 (15.22)
+- 각 JS는 클래식 script로 같은 전역 스코프를 공유합니다. 새 전역 함수·const 이름이 기존 파일과 겹치면 파일별 구문검사와 서버 테스트가 통과해도 화면이 멈춥니다.
+- 수입·출하 검사 판정 칩은 qualityInspectionBadge를 사용합니다. 기존 사진검수 inspectionBadge와 구분합니다. test/browser-startup.test.mjs는 HTML의 실제 로딩 순서로 전체 스크립트를 실행하고 로그인 렌더링을 확인합니다.
