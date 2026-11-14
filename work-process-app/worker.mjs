@@ -85,6 +85,7 @@ function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
+  if (method === 'GET' && (/^\/api\/requests\/[1-9]\d*\/inspection(?:\/history\/[1-9]\d*)?$/.test(path) || path === '/api/inspections')) return true;
   if (method === 'GET') return ['/api/me', '/api/operator/catalog', '/api/operator/semi-records', '/api/operator/plans', '/api/operator/actuals'].includes(path);
   return (method === 'PUT' && path === '/api/me/password') || (method === 'POST' && (['/api/auth/logout', '/api/auth/login', '/api/semi-batches'].includes(path) || /^\/api\/schedules\/[1-9]\d*\/actuals$/.test(path)));
 }
@@ -874,7 +875,7 @@ function decodeInspection(row) { return row ? {...row,values:JSON.parse(row.valu
 async function inspectionRequest(id) { const r=await getRequest(id); if(r.type!=='analysis'||!['수입검사','출하검사'].includes(r.category)) throw bad('수입검사·출하검사 의뢰를 선택하세요.'); return r; }
 route('GET','/api/requests/:id/inspection',async ({user,params})=>{
   const r=await inspectionRequest(params.id);
-  return { request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:hasRole(user,'quality_approver'),can_write:hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
+  return { request:decodeRequest(r), spec:r.inspection_snapshot?JSON.parse(r.inspection_snapshot):null, measurement:decodeInspection(await db.prepare('SELECT * FROM inspection_measurements WHERE request_id=?').get(r.id)), can_manage:!isOperator(user)&&hasRole(user,'quality_approver'),can_write:!isOperator(user)&&hasRole(user,'quality')&&WORK_STATUSES.includes(r.status),history:await db.prepare('SELECT id,revision,result,reason,saved_by,saved_at FROM inspection_measurement_history WHERE request_id=? ORDER BY id DESC LIMIT 50').all(r.id) };
 });
 route('POST','/api/requests/:id/inspection/spec',async ({user,params,body})=>{
   requireInspectionManager(user); const r=await inspectionRequest(params.id), s=await mustGet('inspection_specs',body.spec_id);
@@ -1948,7 +1949,13 @@ route('PUT', '/api/inventory/levels', async ({ user, body }) => {
   return { item, unit, min_qty: min };
 });
 async function stockAlerts() {
-  const rows = await db.prepare(`SELECT item, unit, SUM(qty) AS stock FROM (${STOCK_MOVEMENTS}) WHERE d<=? GROUP BY 1,2`).all(today());
+  // Bound each source separately: D1 need not plan a large compound query with JSON virtual tables.
+  const totals = new Map();
+  for (const source of STOCK_MOVEMENTS.split('UNION ALL')) {
+    const rows = await db.prepare(`WITH movements(item,spec,unit,category,qty,src,d,ref,memo) AS (${source}) SELECT item,unit,SUM(qty) AS stock FROM movements WHERE d<=? GROUP BY 1,2`).all(today());
+    for (const row of rows) { const key = row.item + '\u0000' + row.unit; const old = totals.get(key); totals.set(key, { ...row, stock: (old?.stock || 0) + (row.stock || 0) }); }
+  }
+  const rows = [...totals.values()];
   const levels = new Map((await db.prepare('SELECT * FROM stock_levels').all()).map(l => [l.item + '\u0000' + l.unit, l.min_qty]));
   return { low: rows.filter(r => levels.has(r.item + '\u0000' + r.unit) && stockRound(r.stock) < levels.get(r.item + '\u0000' + r.unit)).length, negative: rows.filter(r => stockRound(r.stock) < 0).length };
 }
@@ -2004,7 +2011,7 @@ route('GET', '/api/dashboard', async () => {
     schedulesToday: (await c("SELECT COUNT(*) c FROM schedules WHERE period='day' AND start_date=?", t)),
     actualChangesPending: (await c("SELECT COUNT(*) c FROM production_actual_changes WHERE status='pending'")),
     receiptChangesPending: (await c("SELECT COUNT(*) c FROM receipt_qty_changes WHERE status='pending'")),
-    stock: await stockAlerts(),
+    stock: await stockAlerts().catch(error => { console.error('Dashboard stock alerts: ' + error.message); return null; }),
   };
 });
 

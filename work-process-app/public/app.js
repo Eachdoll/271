@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.20';
+const APP_VERSION = '15.21';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -401,6 +401,7 @@ async function pageHome(main) {
   main.innerHTML = `
   <h1>대시보드 <span class="muted small">${d.today} (${dow(d.today)})</span></h1>
   ${tasksCard(tasks)}${alertsCard(alerts)}
+  ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
   <div class="kpis">
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>

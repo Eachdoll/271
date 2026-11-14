@@ -3,6 +3,7 @@ const isOperatorMode = () => !!ME && !ME.is_admin && ME.roles.includes('operator
 const OPERATOR_LINKS = [
   ['#/operator/cut', '반제품 · 커팅/융착', '라인과 품목을 선택하고 작업 수량을 입력합니다.'],
   ['#/operator/wash', '반제품 · 세탁', '호기와 품목을 선택하고 세탁 수량을 입력합니다.'],
+  ['#/operator/inspections', '수입·출하 검사 조회', '카테고리와 품명으로 검색하고 검사 결과를 확인합니다.'],
   ['#/operator/finished', '완제품 실적', '등록된 생산계획을 선택하고 실제 생산량을 입력합니다.'],
 ];
 function operatorShell() {
@@ -11,11 +12,12 @@ function operatorShell() {
   $('#logout').onclick = async () => { try { await api('POST', '/api/auth/logout'); uxClearUser(); ME = null; render(); } catch (error) { fail(error); } };
 }
 async function operatorPage(route, main) {
+  if (route === '#/operator/inspections') return pageInspections(main);
   if (route === '#/me') return pageMe(main);
   if (route === '#/operator/cut') return pageSemi(main, 'cut', { operator: true });
   if (route === '#/operator/wash') return pageSemi(main, 'wash', { operator: true });
   if (route === '#/operator/finished') return operatorFinished(main);
-  main.innerHTML = `<h1>오늘의 작업을 입력하세요</h1><p class="muted">작업 종류를 선택하세요. 저장한 기록은 생산 담당자 화면에 함께 반영됩니다.</p><div class="operator-choices">${OPERATOR_LINKS.map(([href,label,description],i) => `<a class="card operator-choice" href="${href}"><span class="operator-number">0${i+1}</span><h2>${label}</h2><p>${description}</p><b>입력하기 →</b></a>`).join('')}</div><p class="small muted">입력 내용을 정정해야 하면 생산 담당자에게 요청하세요.</p>`;
+  main.innerHTML = `<h1>오늘의 작업을 입력하세요</h1><p class="muted">작업 종류를 선택하세요. 저장한 기록은 생산 담당자 화면에 함께 반영됩니다.</p><div class="operator-choices">${OPERATOR_LINKS.map(([href,label,description],i) => `<a class="card operator-choice" href="${href}"><span class="operator-number">0${i+1}</span><h2>${label}</h2><p>${description}</p><b>${href.includes('inspections')?'조회하기':'입력하기'} →</b></a>`).join('')}</div><p class="small muted">입력 내용을 정정해야 하면 생산 담당자에게 요청하세요.</p>`;
 }
 function operatorSimplifySemi(row) {
   const more = document.createElement('details'); more.className = 'operator-more';

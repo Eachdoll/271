@@ -123,3 +123,17 @@ test('0010 keeps existing data and starts with no adjustments', () => {
     assert.equal(db.prepare('SELECT COUNT(*) n FROM stock_adjustments').get().n + db.prepare('SELECT COUNT(*) n FROM stock_levels').get().n, 0);
   } finally { db.close(); fs.rmSync(dir2, { recursive: true, force: true }); }
 });
+
+test('Dashboard source-by-source stock aggregation matches inventory and survives a D1 alert-query failure', async () => {
+  const inventory = await stock();
+  const levels = sqlite.prepare('SELECT * FROM stock_levels').all();
+  const expected = { negative: inventory.rows.filter(r => r.stock < 0).length, low: inventory.rows.filter(r => levels.some(l => l.item === r.item && l.unit === r.unit && r.stock < l.min_qty)).length };
+  const original = env.DB;
+  let sources = 0;
+  env.DB = { ...original, prepare(sql) { if (sql.includes('WITH movements')) { assert.ok(!sql.includes('UNION ALL')); sources++; } return original.prepare(sql); } };
+  try {
+    const dashboard = await staff('GET', '/api/dashboard'); assert.equal(dashboard.status, 200); assert.deepEqual(dashboard.body.stock, expected); assert.equal(sources,8);
+    env.DB = { ...original, prepare(sql) { if (sql.includes('WITH movements')) throw Error('simulated D1 failure'); return original.prepare(sql); } };
+    const dashboardWithoutStock = await staff('GET', '/api/dashboard'); assert.equal(dashboardWithoutStock.status,200); assert.equal(dashboardWithoutStock.body.stock,null); assert.ok(dashboardWithoutStock.body.requests.analysis); assert.ok(dashboardWithoutStock.body.po);
+  } finally { env.DB = original; }
+});

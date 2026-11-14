@@ -88,7 +88,7 @@ test('Category, inspection kind, product/alias search and result filters compose
   const alias=await staff('GET','/api/inspections?'+new URLSearchParams({q:'Coolove',item_category:'원자재'}));assert.ok(alias.body.rows.length);assert.ok(alias.body.rows.every(r=>r.title==='Coolove'));
   assert.equal((await staff('GET','/api/inspections?q=%25')).body.rows.length,0,'percent is literal');
   assert.equal((await staff('GET','/api/inspections?item_category=invalid')).status,400);
-  assert.equal((await operator('GET','/api/inspections')).status,403);
+  assert.equal((await operator('GET','/api/inspections')).status,200);
   const backup=(await admin('GET','/api/admin/backup')).body;assert.ok(backup.tables.includes('inspection_measurement_history'));
 });
 test('Specification alias collision rolls back edits and preserves both prior mappings',async()=>{
@@ -102,4 +102,16 @@ test('Inspection pagination has no gaps or duplicates and filters apply before p
   for(let i=0;i<105;i++)insert.run('pagination-'+i);
   const first=(await staff('GET','/api/inspections?item_category='+encodeURIComponent('부자재')+'&q=pagination')).body;assert.equal(first.rows.length,100);assert.ok(first.next);
   const second=(await staff('GET','/api/inspections?'+new URLSearchParams({item_category:'부자재',q:'pagination',before:first.next}))).body;assert.equal(second.rows.length,5);assert.equal(second.next,null);assert.equal(new Set([...first.rows,...second.rows].map(r=>r.id)).size,105);
+});
+
+test('Operators may read inspections and history but cannot edit even with quality roles', async()=>{
+  const user=(await admin('GET','/api/admin/users')).body.find(u=>u.name==='작업자');
+  await admin('PUT','/api/admin/users/'+user.id,{roles:['operator','quality_approver']});
+  const id=await approved(req('NX-7'));
+  const saved=await quality('PUT',`/api/requests/${id}/inspection`,{revision:0,rows:values()});assert.equal(saved.status,200);
+  const d=(await operator('GET',`/api/requests/${id}/inspection`)).body;assert.equal(d.can_write,false);assert.equal(d.can_manage,false);
+  assert.equal((await operator('GET',`/api/requests/${id}/inspection/history/${d.history[0].id}`)).status,200);
+  assert.equal((await operator('PUT',`/api/requests/${id}/inspection`,{revision:1,rows:values()})).status,403);
+  assert.equal((await operator('POST',`/api/requests/${id}/inspection/spec`,{spec_id:incoming.id})).status,403);
+  assert.equal((await operator('POST','/api/inspection-specs',spec('blocked'))).status,403);
 });
