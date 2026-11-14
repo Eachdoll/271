@@ -592,3 +592,89 @@ input[type=date], input[type=time], input[type=month] { min-width: 0; max-width:
 .legend { flex-wrap: wrap; } /* 긴 번역(크메르어 등)에서도 범례가 화면 밖으로 나가지 않게 */
 .side-prefs { display: none; gap: 8px; align-items: center; padding: 4px 4px 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
 .side-prefs .lang-select { flex: 1; max-width: none; }
+
+/* 사진 첨부 칸 (15.33): 글자처럼 줄바꿈되며 점선 테두리가 끊기던 문제 */
+.photo-picker { display: block; }
+.photo-picker .photo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.photo-picker .thumbs:empty { display: none; }
+/* 다단 메뉴 · 입력/목록 화면 나누기 (15.33) */
+.nav-sub { margin: 2px 0; }
+.nav-sub > summary { list-style: none; cursor: pointer; padding: 9px 12px; border-radius: var(--radius-md, 12px); color: var(--text-2, var(--text)); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.nav-sub > summary::-webkit-details-marker { display: none; }
+.nav-sub > summary::after { content: '›'; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.nav-sub[open] > summary::after { transform: rotate(90deg); }
+.nav-sub > summary:hover { background: var(--bg); }
+.nav-sub > a { padding-left: 26px !important; font-size: 14px; }
+#main[data-view="entry"] [data-list-part] { display: none !important; }
+#main[data-view="list"] [data-entry-part], #main[data-view="list"] .multi-form, #main[data-view="list"] details:has(> #poNew), #main[data-view="list"] details:has(> #shNew) { display: none !important; }
+.view-switch { margin: 4px 0 12px; }
+.date-fold { flex-basis: 100%; }
+.date-fold > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; padding: 4px 0; }
+.date-fold-body { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+#main[data-view="list"] details:has(> form:not(.list-filters)) { display: none !important; }
+
+/* ── 15.34 화면 개선 ── */
+/* 8) 입력 화면: 페이지 제목과 겹치는 카드 제목은 숨김 */
+#main[data-view="entry"] [data-entry-part] > h3, #main[data-view="entry"] .multi-form > h3 { display: none; }
+/* 9) 입력↔목록 이동 버튼: 제목 오른쪽 */
+h1 > .view-switch { margin-left: auto; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+/* 5) 화면 설명은 도움말로 접기 */
+details.help { margin: 2px 0 12px; }
+details.help > summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; width: fit-content; }
+details.help > p { margin: 6px 0 0; }
+/* 6) 초안·입력자 안내: 작은 한 줄. 복구할 초안이 있을 때만 강조 */
+.input-author { background: none !important; padding: 0 !important; margin: 0 0 6px !important; font-size: 12px; }
+.draft-state { background: none; padding: 0; margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+.draft-state:has([data-draft-restore]:not([hidden])) { background: var(--accent-soft); color: var(--text); padding: 10px 12px; margin-bottom: 12px; border-radius: var(--radius-md, 12px); }
+/* 11) 오늘 내가 입력한 것 */
+.recent-mine ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.recent-mine li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.recent-mine li:last-child { border-bottom: 0; }
+/* 10) 대시보드 알림 줄 */
+.alert-lines { margin: 4px 0 0; padding-left: 18px; }
+/* 12) 계획 대비 실적 막대 */
+.plan-progress { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; margin: 4px 0; }
+.plan-bar { flex: 1 1 80px; min-width: 60px; height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.plan-bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+/* 7) PC 표: 모두 빈 칸 숨김, 짧은 값 한 줄 */
+table.grid .col-empty { display: none; }
+table.grid .nowrap-cell { white-space: nowrap; }
+/* 14) 화면 모드 아이콘 */
+.theme-icon { display: inline-flex; vertical-align: -2px; }
+/* 3) 4) 13) 휴대폰 */
+.card-more, .filter-toggle, .cards-more { display: none; }
+@media (max-width: 700px) {
+  table.grid.as-cards tr:not(.card-open) td.card-secondary { display: none; }
+  table.grid.as-cards tr.card-later { display: none; }
+  table.grid.as-cards .nowrap-cell { white-space: normal; }
+  .card-more { display: inline-block; float: right; margin: -2px -4px 0 8px; border: 0; background: var(--bg); color: var(--accent-strong, var(--accent)); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 99px; cursor: pointer; }
+  .cards-more { display: block; margin: 6px 0 16px; }
+  .filter-toggle { display: inline-flex; }
+  form.list-filters:not(.show-all) > label:not(.list-search), form.list-filters:not(.show-all) > details.date-fold, form.list-filters:not(.show-all) > .opts { display: none; }
+  .fold-title { cursor: pointer; }
+  .fold-title::after { content: ' ▾'; color: var(--muted); font-size: 12px; }
+  section.fold-closed > :not(.fold-title) { display: none; }
+  section.fold-closed { padding-bottom: 6px; }
+}
+/* 휴대폰 목록 카드: 접힌 상태는 주요 칸을 한 덩어리로 이어 씀 (라벨은 작게 앞에) */
+@media (max-width: 700px) {
+  table.grid.as-cards tbody tr:not(.card-open) { padding: 10px 12px; }
+  table.grid.as-cards tr:not(.card-open) td:not(.card-secondary) { display: inline; padding: 0; min-height: 0; }
+  table.grid.as-cards tr:not(.card-open) td:not(.card-secondary)::before { position: static; display: inline; width: auto; margin-right: 4px; font-size: 11px; }
+  table.grid.as-cards tr:not(.card-open) td:not(.card-secondary) { margin-right: 12px; }
+  table.grid.as-cards tr:not(.card-open) td[data-label="품목명"], table.grid.as-cards tr:not(.card-open) td[data-label="품목"] { display: block; margin: 4px 0; font-weight: 600; }
+  table.grid.as-cards tr:not(.card-open) td[data-label="품목명"]::after, table.grid.as-cards tr:not(.card-open) td[data-label="품목"]::after, table.grid.as-cards tr:not(.card-open) td[data-label="품목명"]::before, table.grid.as-cards tr:not(.card-open) td[data-label="품목"]::before { content: none; }
+  table.grid.as-cards tr:not(.card-open) td .line-info { display: block; font-weight: 400; }
+  table.grid.as-cards tr:not(.card-open) td:has(> input[type=checkbox]) { float: left; margin: 2px 10px 0 0; }
+}
+@media (max-width: 700px) {
+  table.grid.as-cards tr:not(.card-open) td.cell-empty, table.grid.as-cards tr:not(.card-open) td.col-empty { display: none !important; }
+}
+@media (max-width: 700px) {
+  table.grid.as-cards tbody tr { position: relative; }
+  table.grid.as-cards tr:not(.card-open) { padding-right: 76px !important; }
+  table.grid.as-cards .card-more { position: absolute; top: 10px; right: 10px; float: none; margin: 0; z-index: 1; }
+  table.grid.as-cards tr:not(.card-open) td:has(> .card-more) { position: static !important; }
+  table.grid.as-cards tr.card-open .card-more { position: static; display: block; margin: 8px 0 0 auto; }
+  table.grid.as-cards tr:not(.card-open) td[data-label="품목명"], table.grid.as-cards tr:not(.card-open) td[data-label="품목"] { margin-right: 0; }
+}
