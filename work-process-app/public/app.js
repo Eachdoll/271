@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.14';
+const APP_VERSION = '15.15';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -216,7 +216,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // ───────────── 레이아웃 / 라우팅 ─────────────
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)']] },
+  { group: '구매', items: [['#/purchase/po', '발주목록'], ['#/purchase/vendors', '거래처 관리'], ['#/purchase/sample/request', '샘플의뢰(상품)'], ['#/purchase/sample/list', '샘플리스트(상품)'], ['#/purchase/laundry', '세탁관리(불량·폐기)'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   { group: '품질', items: [['#/quality/request', '분석의뢰'], ['#/quality/list', '분석리스트'], ['#/quality/voc/request', 'VOC 접수'], ['#/quality/voc/list', 'VOC 처리목록']] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [['#/prod/request', '샘플의뢰(제품)'], ['#/prod/list', '샘플리스트(제품)'], ['#/prod/finished', '완제품 생산일정'], ['#/prod/semi', '반제품 생산일정'], ['#/prod/semi/cut', '반제품 · 커팅/융착'], ['#/prod/semi/wash', '반제품 · 세탁(호기별)']] },
@@ -227,6 +227,7 @@ const PAGES = {
   '#/reports': pageReports,
   '#/purchase/po': pagePO,
   '#/purchase/laundry': pageLaundry,
+  '#/purchase/laundry-reports': pageLaundryReports,
   '#/quality/request': () => pageIntake('analysis'),
   '#/quality/list': () => pageWorkList('analysis'),
   '#/quality/voc/request': () => pageIntake('voc'),
@@ -689,7 +690,7 @@ async function pageLaundry(main) {
   const month = todayStr().slice(0, 7);
   main.innerHTML = `
   <h1>세탁관리 <span class="dept">구매</span></h1>
-  <p class="muted">세탁 입고분의 불량 폐기 사진과 수량을 기록합니다.</p>
+  <p class="muted">세탁 입고분의 불량 폐기 사진과 수량을 기록합니다. 세탁일별 검수 수량과 성적서는 <a href="#/purchase/laundry-reports">세탁 검수·성적서</a>에서 관리합니다.</p>
   <form class="card" id="lnNew"><h3>세탁 폐기 등록</h3>
     <div class="form-grid">
       <label>입고일 *<input name="in_date" type="date" required value="${todayStr()}"></label>

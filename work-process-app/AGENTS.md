@@ -180,3 +180,13 @@ INVITE_CODE=local-test-code npm start
 - done은 기존 완료 체크로만 유지하고 실제 생산량으로 이관/간주하지 마세요. actual_qty/actual_count는 취소 제외 실적에서 계산합니다.
 - 리포트는 기존 plan_period 하나/계획 시작일 기준을 유지하면서 실제 실적 누적량·차이·달성률을 추가합니다. SUM 상관 서브쿼리로 여러 실적 때문에 계획수량이 중복 합산되지 않도록 하세요. 규격과 단위를 구분합니다.
 - item_batches 백업 커서는 id가 아닌 batch_id 문자열입니다. production_actuals 취소 이력과 함께 전체 백업에 포함합니다. 0007 마이그레이션은 기존 완료 체크를 실적으로 자동 변환하지 않습니다.
+
+## 세탁 검수·성적서 (버전 15.15)
+
+- 화면은 `public/laundry-report.js`, 주소는 `#/purchase/laundry-reports`. 기존 세탁관리(불량·폐기 사진)와는 별개 기록이다.
+- 세탁일마다 검수 기록 하나(`laundry_reports`, `wash_date` UNIQUE)와 칸별 수량(`laundry_report_lines`)을 둔다. 0과 빈 칸은 저장하지 않는다.
+- 옷 종류·사이즈·폐기 구분은 `worker.mjs`의 `LAUNDRY_FORMS`가 유일한 기준이며 화면은 `/api/laundry-report-meta`로 받아 그린다. 종이 양식(생산/QC 확인표)과 같은 배치를 유지한다.
+- 단가·고객사·세탁 업체·확인자는 설정값(`laundry_report_settings`)으로만 저장한다. 단가와 사람 이름을 코드에 넣지 않는다.
+- 금액(업체 비용, 고객사 청구, 차익, 폐기 금액)은 구매 담당자·관리자에게만 응답한다.
+- 발행하면 당시 단가를 기록에 복사하고 수정·삭제를 막는다. 발행 취소는 구매 담당자·관리자만 한다.
+- 성적서 인쇄는 `body.printing-cert`로 성적서 창만 인쇄한다(입력 창 위에 열려 있어도).
