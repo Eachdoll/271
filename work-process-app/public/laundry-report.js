@@ -30,11 +30,39 @@ function lrCertificate(report, form) {
     <div class="cert-date"><span>세탁일</span><b>${esc(report.wash_date)}</b></div>
     <h4>세탁</h4>${lrGrid(form, 'wash', values, false)}
     <h4>폐기</h4>${lrGrid(form, 'discard', values, false)}
-    <p class="cert-sign">확인자 : ${esc(report.inspector || '')} <span class="cert-sign-box">(서명)</span></p>
+    <p class="cert-sign">확인자 : ${esc(report.inspector || '')} ${issued && report.signature ? `<img class="cert-sign-img" src="/uploads/${encodeURIComponent(report.signature)}" alt="서명">` : '<span class="cert-sign-box">(서명)</span>'}</p>
   </div><div class="actions"><button class="btn" data-close>닫기</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.classList.add('lr-modal'); m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => { const title = document.title; document.title = `${report.wash_date} ${LR_META.customer} 세탁물 확인표_${form.label}`; document.body.classList.add('printing-cert'); try { window.print(); } finally { document.body.classList.remove('printing-cert'); document.title = title; } };
+}
+
+// A signature photo → small PNG on a white background (so it prints cleanly on the sheet).
+function lrSignatureImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 600 / img.width, 300 / img.height); const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale)); canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url); resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 읽지 못했습니다. 다른 파일을 선택하세요.')); };
+    img.src = url;
+  });
+}
+// Past records converted from the old workbook (admin only). Sent ten wash dates at a time.
+async function lrImport(file, done) {
+  let data; try { data = JSON.parse(await file.text()); } catch { return toast('가져오기 파일을 읽지 못했습니다.', 'err'); }
+  if (data?.format !== 'laundry-reports-v1' || !Array.isArray(data.reports) || !data.reports.length) return toast('세탁 검수 가져오기 파일이 아닙니다.', 'err');
+  const dates = data.reports.map((r) => r.wash_date).sort();
+  if (!(await confirmBox(`${dates[0]} ~ ${dates.at(-1)} 세탁 기록 ${data.reports.length}건을 작성자 「${data.author}」(으)로 가져올까요? 이미 있는 세탁일은 건너뜁니다.`))) return;
+  let imported = 0, skipped = 0;
+  try {
+    for (let i = 0; i < data.reports.length; i += 10) { const r = await api('POST', '/api/laundry-report-import', { ...data, reports: data.reports.slice(i, i + 10) }); imported += r.imported; skipped += r.skipped; }
+    toast(`${imported}건을 가져왔습니다.${skipped ? ` 이미 있던 ${skipped}건은 건너뛰었습니다.` : ''}`);
+  } catch (err) { fail(err); if (imported) toast(`${imported}건까지 가져온 뒤 멈췄습니다. 같은 파일을 다시 올리면 나머지만 들어갑니다.`, 'err'); }
+  done();
 }
 
 async function lrSettings(done) {
@@ -43,15 +71,23 @@ async function lrSettings(done) {
   const m = modal(`<h3>세탁 검수 설정</h3><form class="stack">
     <div class="form-grid"><label>고객사 *<input name="customer" required maxlength="60" value="${esc(LR_META.customer)}"></label><label>세탁 업체 *<input name="vendor" required maxlength="60" value="${esc(LR_META.vendor)}"></label>
       <label class="span2">확인자 (성적서 하단 기본값)<input name="inspector" maxlength="120" value="${esc(LR_META.inspector)}" placeholder="회사 · 부서 · 이름 · 직급"></label></div>
+    <fieldset><legend>확인자 서명</legend>
+      ${LR_META.signature ? `<p><img class="lr-sign-preview" src="/uploads/${encodeURIComponent(LR_META.signature)}" alt="등록된 서명"></p><label class="check"><input type="checkbox" name="remove_signature"> 등록된 서명 지우기</label>` : '<p class="muted small">등록된 서명이 없습니다.</p>'}
+      <label>${LR_META.signature ? '서명 바꾸기' : '서명 이미지 올리기'}<input type="file" accept="image/*" data-signature></label><p data-signature-new></p>
+      <p class="muted small">흰 종이에 서명한 사진이나 이미지 파일을 올리세요. 성적서의 확인자가 위 확인자와 같을 때만, 발행하는 순간 서명이 찍힙니다. 작성 중인 성적서와 이미 발행한 성적서에는 찍히지 않습니다.</p></fieldset>
     ${priceRow('vendor', `세탁 업체 단가 (원/벌) — 우리가 내는 비용`)}${priceRow('customer', `고객사 단가 (원/벌) — 우리가 청구하는 금액`)}
     <fieldset><legend>폐기 단가 (원/개)</legend><div class="form-grid">${LR_META.parts.map((k) => `<label>${esc(k)}<input type="number" min="0" step="any" data-price="discard.${esc(k)}" value="${p.discard[k] || ''}" placeholder="0"></label>`).join('')}</div></fieldset>
     <p class="muted small">단가를 바꿔도 이미 발행한 성적서의 금액은 발행 당시 단가로 유지됩니다.</p>
     <div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">저장</button></div></form>`, { wide: true });
-  $('[data-no]', m.el).onclick = m.close;
+  $('[data-no]', m.el).onclick = m.close; let signature = null;
+  $('[data-signature]', m.el).onchange = async (e) => {
+    try { signature = e.target.files[0] ? await lrSignatureImage(e.target.files[0]) : null; } catch (err) { signature = null; e.target.value = ''; fail(err); }
+    $('[data-signature-new]', m.el).innerHTML = signature ? `<img class="lr-sign-preview" src="${signature}" alt="새 서명 미리보기">` : '';
+  };
   $('form', m.el).onsubmit = async (e) => {
     e.preventDefault(); const prices = { vendor: {}, customer: {}, discard: {} };
     $$('[data-price]', m.el).forEach((input) => { const [kind, key] = input.dataset.price.split('.'); prices[kind][key] = input.value === '' ? 0 : Number(input.value); });
-    try { await api('PUT', '/api/laundry-report-settings', { ...formObj(e.target), prices }); m.close(); toast('설정을 저장했습니다.'); done(); } catch (err) { fail(err); }
+    try { await api('PUT', '/api/laundry-report-settings', { ...formObj(e.target), remove_signature: !!$('[name=remove_signature]', m.el)?.checked, signature, prices }); m.close(); toast('설정을 저장했습니다.'); done(); } catch (err) { fail(err); }
   };
 }
 
@@ -98,7 +134,7 @@ async function lrEditor(id, done) {
       if (name === 'issue') {
         if (!$('form', m.el).reportValidity()) return;
         if (!$('[name=inspector]', m.el).value.trim() && !(await confirmBox('확인자가 비어 있습니다. 그대로 발행할까요?'))) return;
-        id = await save(); await api('POST', `/api/laundry-reports/${id}/issue`); toast('성적서를 발행했습니다.'); m.close(); done(); return lrEditor(id, done);
+        id = await save(); const issuedNow = await api('POST', `/api/laundry-reports/${id}/issue`); toast(issuedNow.signed ? '성적서를 발행했습니다. 등록된 서명이 들어갔습니다.' : '성적서를 발행했습니다.'); m.close(); done(); return lrEditor(id, done);
       }
       m.close(); done();
     } catch (err) { fail(err); if (id) done(); }
@@ -116,7 +152,7 @@ async function pageLaundryReports(main) {
   main.innerHTML = `
   <div class="report-heading"><div><h1>세탁 검수·성적서 <span class="dept">구매</span></h1>
     <p class="muted">${esc(LR_META.vendor)}에서 보낸 세탁 리스트를 검수해 세탁일별로 기록하고, ${esc(LR_META.customer)} 세탁물 확인표(성적서)를 발행합니다.</p></div>
-    <div class="actions">${money ? '<button class="btn" id="lrSettings">단가·설정</button>' : ''}<button class="btn" id="lrCsv">CSV</button><button class="btn primary" id="lrNew">새 검수 등록</button></div></div>
+    <div class="actions">${LR_META.can_import ? '<label class="btn" for="lrImportFile">과거 기록 가져오기</label><input type="file" id="lrImportFile" accept=".json,application/json" hidden>' : ''}${money ? '<button class="btn" id="lrSettings">단가·설정</button>' : ''}<button class="btn" id="lrCsv">CSV</button><button class="btn primary" id="lrNew">새 검수 등록</button></div></div>
   <form class="card filters" id="lrFilters"><div class="form-grid"><label>세탁일 시작<input type="date" name="from" value="${year}-01-01"></label><label>세탁일 종료<input type="date" name="to" value="${year}-12-31"></label></div>
     <div class="actions"><button class="btn">조회</button></div></form>
   <p id="lrHint" class="muted small"></p>
@@ -142,6 +178,7 @@ async function pageLaundryReports(main) {
   };
   $('#lrFilters', main).onsubmit = (e) => { e.preventDefault(); load(); };
   $('#lrNew', main).onclick = () => lrEditor(null, load);
+  if (LR_META.can_import) $('#lrImportFile', main).onchange = (e) => { const file = e.target.files[0]; e.target.value = ''; if (file) lrImport(file, () => pageLaundryReports(main)); };
   if (money) $('#lrSettings', main).onclick = () => lrSettings(() => pageLaundryReports(main));
   $('#lrCsv', main).onclick = () => {
     if (!rows.length) return toast('내보낼 기록이 없습니다.', 'err');

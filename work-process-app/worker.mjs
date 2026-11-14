@@ -304,6 +304,17 @@ route('GET', '/api/approval-managers', async () => {
   };
 });
 route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); return (await db.prepare('SELECT * FROM users ORDER BY id').all()).map(publicUser); });
+// An administrator can open an account directly; it is approved from the start.
+route('POST', '/api/admin/users', async ({ user, body }) => {
+  requireAdmin(user);
+  const name = reqStr(body.name, '이름', 30), password = String(body.password || '');
+  if (password.length < 4) throw bad('비밀번호는 4자 이상이어야 합니다.');
+  const roles = Array.isArray(body.roles) ? body.roles : []; if (roles.some(r => !ROLES.includes(r))) throw bad('권한이 올바르지 않습니다.');
+  if (await db.prepare('SELECT 1 FROM users WHERE name=?').get(name)) throw bad('이미 있는 이름입니다.');
+  const salt = randomHex(16);
+  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,roles,approval_status,reviewed_by,reviewed_at) VALUES(?,?,?,0,?,'approved',?,?)").run(name, salt, await hashPw(password, salt), [...new Set(roles)].join(','), user.name, now());
+  return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid));
+});
 route('POST', '/api/admin/users/:id/approval', async ({ user, params, body }) => {
   requireAdmin(user);
   const target = await db.prepare('SELECT * FROM users WHERE id=?').get(params.id);
@@ -665,6 +676,7 @@ async function laundrySettings() {
   const table = (source, keys) => Object.fromEntries(keys.map(k => [k, Number(source?.[k]) >= 0 ? Number(source[k]) : 0]));
   return {
     customer: str(saved.customer, 60) || 'Merck', vendor: str(saved.vendor, 60) || 'CNC+', inspector: str(saved.inspector, 120),
+    signature: /^[a-f0-9]{24}\.(jpg|png|webp)$/.test(saved.signature || '') ? saved.signature : '',
     prices: { vendor: table(saved.prices?.vendor, LAUNDRY_PRICE_KEYS), customer: table(saved.prices?.customer, LAUNDRY_PRICE_KEYS), discard: table(saved.prices?.discard, LAUNDRY_PARTS) },
   };
 }
@@ -705,14 +717,21 @@ function laundryHeader(body) { return { wash_date: dateStr(body.wash_date, '세�
 
 route('GET', '/api/laundry-report-meta', async ({ user }) => {
   const settings = await laundrySettings(); const money = canLaundryMoney(user);
-  return { sizes: LAUNDRY_SIZES, forms: LAUNDRY_FORMS, price_keys: LAUNDRY_PRICE_KEYS, parts: LAUNDRY_PARTS, customer: settings.customer, vendor: settings.vendor, inspector: settings.inspector, can_money: money, prices: money ? settings.prices : null };
+  return { sizes: LAUNDRY_SIZES, forms: LAUNDRY_FORMS, price_keys: LAUNDRY_PRICE_KEYS, parts: LAUNDRY_PARTS, customer: settings.customer, vendor: settings.vendor, inspector: settings.inspector, can_money: money, prices: money ? settings.prices : null, signature: money ? settings.signature : '', can_import: !!user.is_admin };
 });
 route('PUT', '/api/laundry-report-settings', async ({ user, body }) => {
   if (!canLaundryMoney(user)) throw new HttpError(403, '구매 담당자만 설정을 바꿀 수 있습니다.');
   const price = (source, keys, label) => Object.fromEntries(keys.map(k => [k, num(source?.[k] === '' || source?.[k] == null ? 0 : source[k], label)]));
   const next = { customer: reqStr(body.customer, '고객사', 60), vendor: reqStr(body.vendor, '세탁 업체', 60), inspector: str(body.inspector, 120),
     prices: { vendor: price(body.prices?.vendor, LAUNDRY_PRICE_KEYS, '세탁 업체 단가'), customer: price(body.prices?.customer, LAUNDRY_PRICE_KEYS, '고객사 단가'), discard: price(body.prices?.discard, LAUNDRY_PARTS, '폐기 단가') } };
-  await setSetting('laundry_report_settings', JSON.stringify(next)); return { ok: true };
+  // The confirmer's signature image: kept when untouched, replaced by a new upload, or removed on request.
+  const current = await laundrySettings(); next.signature = body.remove_signature ? '' : current.signature;
+  const uploaded = body.signature ? await savePhotos([body.signature]) : [];
+  if (uploaded.length) next.signature = uploaded[0];
+  try { await setSetting('laundry_report_settings', JSON.stringify(next)); } catch (error) { await removePhotos(uploaded); throw error; }
+  // An old image stays in storage while an issued sheet still shows it.
+  if (current.signature && current.signature !== next.signature && !(await db.prepare('SELECT 1 FROM laundry_reports WHERE signature=?').get(current.signature))) await removePhotos([current.signature]);
+  return { ok: true, signature: next.signature };
 });
 route('GET', '/api/laundry-reports', async ({ user, query }) => {
   const args = [], where = []; applyListDates(where, args, query, 'wash_date');
@@ -753,15 +772,37 @@ route('POST', '/api/laundry-reports/:id/issue', async ({ user, params }) => {
   const report = await laundryReport(params.id); requireLaundryEditor(user, report);
   if (!(await db.prepare('SELECT 1 FROM laundry_report_lines WHERE report_id=?').get(report.id))) throw bad('수량이 하나도 없는 성적서는 발행할 수 없습니다.');
   const settings = await laundrySettings();
-  const r = await db.prepare("UPDATE laundry_reports SET status='issued',issued_by=?,issued_at=?,prices=? WHERE id=? AND status='draft'").run(user.name, now(), JSON.stringify(settings.prices), report.id);
+  // The registered signature belongs to the confirmer named in the settings; it is never stamped under another name.
+  const signature = settings.signature && settings.inspector && report.inspector === settings.inspector ? settings.signature : '';
+  const r = await db.prepare("UPDATE laundry_reports SET status='issued',issued_by=?,issued_at=?,prices=?,signature=? WHERE id=? AND status='draft'").run(user.name, now(), JSON.stringify(settings.prices), signature, report.id);
   if (!r.changes) throw new HttpError(409, '이미 발행된 성적서입니다.');
-  return { ok: true };
+  return { ok: true, signed: !!signature };
 });
 route('POST', '/api/laundry-reports/:id/unissue', async ({ user, params }) => {
   const report = await laundryReport(params.id); if (!hasRole(user, 'purchase')) throw new HttpError(403, '발행 취소는 구매 담당자만 할 수 있습니다.');
-  const r = await db.prepare("UPDATE laundry_reports SET status='draft',issued_by='',issued_at='',prices='',updated_by=?,updated_at=? WHERE id=? AND status='issued'").run(user.name, now(), report.id);
+  const r = await db.prepare("UPDATE laundry_reports SET status='draft',issued_by='',issued_at='',prices='',signature='',updated_by=?,updated_at=? WHERE id=? AND status='issued'").run(user.name, now(), report.id);
   if (!r.changes) throw new HttpError(409, '발행 상태가 아닙니다.');
   return { ok: true };
+});
+// Past records converted from the old workbook. Each one arrives already issued, with the unit prices of that file.
+route('POST', '/api/laundry-report-import', async ({ user, body }) => {
+  requireAdmin(user);
+  if (body.format !== 'laundry-reports-v1' || !Array.isArray(body.reports) || !body.reports.length || body.reports.length > 20) throw bad('가져올 파일 형식이 올바르지 않습니다.');
+  const author = reqStr(body.author, '작성자', 30), inspector = str(body.inspector, 120);
+  const table = (source, keys) => Object.fromEntries(keys.map(k => [k, num(source?.[k] ?? 0, '단가')]));
+  const prices = { vendor: table(body.prices?.vendor, LAUNDRY_PRICE_KEYS), customer: table(body.prices?.customer, LAUNDRY_PRICE_KEYS), discard: table(body.prices?.discard, LAUNDRY_PARTS) };
+  const reports = body.reports.map(r => ({ ...laundryHeader({ ...r, inspector }), lines: laundryLines(r.lines) }));
+  if (new Set(reports.map(r => r.wash_date)).size !== reports.length) throw bad('같은 세탁일이 두 번 들어 있습니다.');
+  const existing = new Set((await db.prepare(`SELECT wash_date FROM laundry_reports WHERE wash_date IN (${reports.map(() => '?').join(',')})`).all(...reports.map(r => r.wash_date))).map(r => r.wash_date));
+  const fresh = reports.filter(r => !existing.has(r.wash_date)); const at = now(), snapshot = JSON.stringify(prices);
+  if (fresh.length) await db.batch(fresh.flatMap(r => [
+    { sql: "INSERT INTO laundry_reports(wash_date,pickup_label,status,inspector,note,prices,issued_by,issued_at,created_by) VALUES(?,?,'issued',?,?,?,?,?,?)", args: [r.wash_date, r.pickup_label, r.inspector, r.note, snapshot, author, at, author] },
+    ...r.lines.map(l => ({ sql: 'INSERT INTO laundry_report_lines(report_id,section,garment,part,size,qty) SELECT id,?,?,?,?,? FROM laundry_reports WHERE wash_date=?', args: [l.section, l.garment, l.part, l.size, l.qty, r.wash_date] })),
+  ]));
+  // First import on an unconfigured system also fills in the unit prices and the confirmer.
+  const settings = await laundrySettings(); let settings_filled = false;
+  if (LAUNDRY_PRICE_KEYS.every(k => !settings.prices.vendor[k] && !settings.prices.customer[k])) { await setSetting('laundry_report_settings', JSON.stringify({ ...settings, prices, inspector: settings.inspector || inspector })); settings_filled = true; }
+  return { imported: fresh.length, skipped: reports.length - fresh.length, settings_filled };
 });
 route('DELETE', '/api/laundry-reports/:id', async ({ user, params }) => {
   const report = await laundryReport(params.id); requireLaundryEditor(user, report);

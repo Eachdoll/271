@@ -386,3 +386,8 @@ input[data-photo-camera] { display: none !important; }
 .lr-modal .stack > *, .lr-form { min-width: 0; }
 .lr-form .table-wrap { max-width: 100%; }
 .lr-list td, .lr-list th { padding: 8px 10px; }
+.cert-sign-img { height: 56px; max-width: 200px; object-fit: contain; vertical-align: middle; margin-left: 10px; }
+.lr-sign-preview { max-height: 90px; max-width: 260px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.role-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0; }
+.role-checks label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
+.role-checks input { width: auto; }
