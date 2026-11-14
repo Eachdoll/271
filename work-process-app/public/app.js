@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.34';
+const APP_VERSION = '15.36';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -107,8 +107,20 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
-  const close = () => { if (!wrap.isConnected) return; wrap.remove(); document.removeEventListener('keydown', onKey); onClose(); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const opener = document.activeElement;
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); document.removeEventListener('keydown', onKey); onClose(); if (opener?.isConnected && !$('.modal-wrap')) opener.focus?.(); };
+  const onKey = (e) => {
+    if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
+    if (e.key === 'Escape') close();
+    // Keyboard users stay inside the dialog: Tab from the last control goes back to the first (15.35).
+    if (e.key === 'Tab') {
+      const items = $$('button:not([disabled]),[href],input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])', wrap).filter(el => el.offsetParent !== null || el === document.activeElement);
+      if (!items.length) return;
+      const first = items[0], last = items.at(-1);
+      if (e.shiftKey && (document.activeElement === first || !wrap.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !wrap.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    }
+  };
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
   $('.modal-x', wrap).onclick = close;
   document.addEventListener('keydown', onKey);
@@ -451,7 +463,7 @@ function alertsCard(a) {
   if (a.low_yield.length) items.push(`<li><a href="#/reports"><b>최근 7일 수율 목표 미달 ${a.low_yield.length}곳</b></a><div class="small muted">${a.low_yield.slice(0, 5).map(r => `${esc(r.unit_name)}(${r.process === 'cut' ? '커팅/융착' : '세탁'}) <span class="red-text">${r.yield_rate}%</span> / 목표 ${r.target}%`).join(' · ')}</div></li>`);
   if (a.backup && (a.backup.days === null || a.backup.days >= 7)) items.push(`<li><a href="#/admin"><b>${a.backup.days === null ? '전체 백업을 아직 받지 않았습니다' : `마지막 전체 백업이 ${a.backup.days}일 전입니다`}</b></a><div class="small muted">관리자 설정 → 전체 백업 다운로드 (주 1회 이상 권장)</div></li>`);
   if (!items.length) return '';
-  return `<div class="card tasks alerts"><h3>확인이 필요한 일 <span class="chip red">${items.length}</span></h3><ul>${items.join('')}</ul></div>`;
+  return `<section class="card tasks alerts" aria-labelledby="dashAlerts"><h2 id="dashAlerts">확인이 필요한 일 <span class="chip red">${items.length}</span></h2><ul>${items.join('')}</ul></section>`;
 }
 // 단위 입력칸 자동완성: 원단은 yd, 와이퍼는 매, 글러브는 켤레가 많습니다. 직접 입력도 됩니다.
 const UNIT_SUGGESTIONS = ['yd', '매', '켤레', 'EA', 'BOX', 'kg', '롤', 'm', '벌'];
@@ -502,10 +514,10 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items;
-  return `<div class="card tasks"><h3>내가 처리할 일</h3><div class="tasks-grid">
-    ${canApprove ? `<section><h4>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h4>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
-    <section><h4>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h4>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
-  </div></div>`;
+  return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
+    ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
+    <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
+  </div></section>`;
 }
 
 // 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
@@ -582,32 +594,46 @@ new MutationObserver(labelGridTables).observe(document.body, { childList: true, 
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
   const r = d.requests;
-  const flow = (title, steps) => `<div class="flow"><h4>${title}</h4><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
+  const flow = (title, steps) => `<div class="flow"><h3>${title}</h3><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
+  // 15.36 대시보드 화면 구성: 같은 숫자·링크를 업무 묶음별로 나눠 보여 준다(값과 조건은 그대로).
+  // tone: '' 보통, 'red' 문제, 'yellow' 확인 필요. 0건은 흐리게 보여 눈이 문제 숫자에 먼저 가게 한다.
+  const kpi = (href, value, label, tone = '', note = '') => `<a class="kpi ${tone} ${Number(value) === 0 ? 'is-zero' : ''}" href="${href}"><b>${value}</b><span>${label}</span>${note}</a>`;
+  const group = (title, tiles) => { const body = tiles.filter(Boolean).join(''); return body ? `<section class="kpi-group" aria-label="${title}"><h3>${title}</h3><div class="kpis">${body}</div></section>` : ''; };
+  const num = v => Number(v) === 0 ? '<span class="zero">0</span>' : v;
   main.innerHTML = `
-  <h1>대시보드 <span class="muted small">${d.today} (${dow(d.today)})</span></h1>
-  ${tasksCard(tasks)}${alertsCard(alerts)}
+  <div class="dash-head"><h1>대시보드</h1><p class="dash-date"><time datetime="${d.today}">${d.today} (${dow(d.today)})</time></p></div>
+  <div class="dash-top">${tasksCard(tasks)}${alertsCard(alerts)}</div>
   ${d.stock === null ? '<p class="small red-text" role="status">재고 경고를 조회하지 못했습니다. 재고 현황을 확인하거나 잠시 후 새로고침해주세요.</p>' : ''}
-  <div class="kpis">
-    <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
-    <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
-    <a class="kpi red" href="#/logistics/receive"><b>${d.po.mismatch}</b><span>수량상이</span></a>
-    ${d.receiptChangesPending ? `<a class="kpi yellow" href="#/logistics/receive"><b>${d.receiptChangesPending}</b><span>입고 수량 수정 승인대기</span></a>` : ''}
-    ${d.actualChangesPending ? `<a class="kpi yellow" href="#/prod/finished"><b>${d.actualChangesPending}</b><span>생산실적 수정 승인대기</span></a>` : ''}
-    ${d.stock?.low ? `<a class="kpi yellow" href="#/logistics/stock"><b>${d.stock.low}</b><span>안전재고 미달 품목</span></a>` : ''}
-    ${d.stock?.negative ? `<a class="kpi red" href="#/logistics/stock"><b>${d.stock.negative}</b><span>재고 음수 품목 (기록 확인)</span></a>` : ''}
-    <a class="kpi" href="#/quality/request"><b>${r.analysis.pending}</b><span>분석 접수대기</span></a>
-    <a class="kpi" href="#/quality/voc/request"><b>${r.voc.pending}</b><span>VOC 승인대기</span></a>
-    <a class="kpi" href="#/dev/request"><b>${r.development.pending}</b><span>개발 접수대기</span></a>
-    <a class="kpi" href="#/prod/request"><b>${r.sample.pending}</b><span>샘플 접수대기</span></a>
-    <a class="kpi" href="#/logistics/ship"><b>${d.shipmentsToday}</b><span>오늘 출하</span></a>
-    <a class="kpi" href="#/purchase/laundry"><b>${fmtNum(d.laundryMonth)}</b><span>이번달 세탁 폐기</span></a>
-  </div>
-  <h2>진행 현황</h2>
-  <div class="table-wrap"><table class="grid keep-table">
-    <thead><tr><th>구분</th><th>접수대기</th><th>대기</th><th>진행</th><th>완료</th></tr></thead>
-    <tbody>${['analysis', 'development', 'sample', 'sample_goods', 'voc'].map((t) => `<tr><td><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></td><td>${r[t].pending}</td><td>${r[t].waiting}</td><td>${r[t].progress}</td><td>${r[t].done}</td></tr>`).join('')}</tbody>
-  </table></div>
-  <h2>업무 흐름</h2>
+  <section class="dash-section" aria-labelledby="dashNow"><h2 id="dashNow">현황 한눈에</h2>
+  <div class="kpi-groups">
+    ${group('구매·물류', [
+      kpi('#/logistics/receive', d.po.none, '미입고 발주', '', d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''),
+      kpi('#/logistics/receive', d.po.checking, '입고 확인중', 'yellow'),
+      kpi('#/logistics/receive', d.po.mismatch, '수량상이', 'red'),
+      d.receiptChangesPending ? kpi('#/logistics/receive', d.receiptChangesPending, '입고 수량 수정 승인대기', 'yellow') : '',
+      kpi('#/logistics/ship', d.shipmentsToday, '오늘 출하'),
+    ])}
+    ${group('재고·생산', [
+      d.stock?.low ? kpi('#/logistics/stock', d.stock.low, '안전재고 미달 품목', 'yellow') : '',
+      d.stock?.negative ? kpi('#/logistics/stock', d.stock.negative, '재고 음수 품목 (기록 확인)', 'red') : '',
+      d.actualChangesPending ? kpi('#/prod/finished', d.actualChangesPending, '생산실적 수정 승인대기', 'yellow') : '',
+      kpi('#/purchase/laundry', fmtNum(d.laundryMonth), '이번달 세탁 폐기'),
+    ])}
+    ${group('의뢰 접수 대기', [
+      kpi('#/quality/request', r.analysis.pending, '분석 접수대기'),
+      kpi('#/quality/voc/request', r.voc.pending, 'VOC 승인대기'),
+      kpi('#/dev/request', r.development.pending, '개발 접수대기'),
+      kpi('#/prod/request', r.sample.pending, '샘플 접수대기'),
+    ])}
+  </div></section>
+  <section class="dash-section" aria-labelledby="dashProgress"><h2 id="dashProgress">진행 현황</h2>
+  <div class="table-wrap"><table class="grid keep-table progress-table">
+    <caption class="sr-only">의뢰 종류별 진행 현황 (건수)</caption>
+    <thead><tr><th scope="col">구분</th><th scope="col">접수대기</th><th scope="col">대기</th><th scope="col">진행</th><th scope="col">완료</th></tr></thead>
+    <tbody>${['analysis', 'development', 'sample', 'sample_goods', 'voc'].map((t) => `<tr><th scope="row"><a href="${REQ[t].list}">${REQ[t].label}의뢰</a></th><td>${num(r[t].pending)}</td><td>${num(r[t].waiting)}</td><td>${num(r[t].progress)}</td><td>${num(r[t].done)}</td></tr>`).join('')}</tbody>
+  </table></div></section>
+  <section class="dash-section" aria-labelledby="dashFlows">
+  <details class="dash-flows" data-flows><summary><h2 id="dashFlows">업무 흐름</h2><span class="small muted">부서별 처리 순서 안내</span></summary>
   <div class="flows">
     ${flow('구매 → 물류 (발주·입고)', ['<b>구매</b> 발주서 발송 후 <a href="#/purchase/po">발주목록</a> 입력', '<b>물류</b> 입고 시 <a href="#/logistics/receive">입고목록 → 발주입고</a>에서 체크', '정상 입고 → <span class="chip green">초록</span>', '수량 다름 → <span class="chip red">빨강</span> (실입고 수량 기록)', '확인 중 → <span class="chip yellow">노랑</span>'])}
     ${flow('품질 (분석)', ['<b>누구나</b> <a href="#/quality/request">분석의뢰</a> 양식 작성', '접수대기 목록에 등록', '<b>품질담당자</b> 승인 → 접수번호 발급', '<a href="#/quality/list">분석리스트</a>에서 대기 → 진행 → 완료', '수입·의뢰·출하·공정검사 구분'])}
@@ -615,8 +641,10 @@ async function pageHome(main) {
     ${flow('개발', ['<b>누구나</b> <a href="#/dev/request">개발의뢰</a> 작성 (타겟제품·타겟단가)', '접수대기 목록에 등록', '<b>연구소담당자</b> 승인', '<a href="#/dev/list">개발리스트</a>에서 대기 → 진행 → 완료'])}
     ${flow('생산', ['<b>누구나</b> <a href="#/prod/request">샘플의뢰</a> 작성', '<b>생산담당자</b> 승인 → <a href="#/prod/list">샘플리스트</a>', '<a href="#/prod/finished">완제품</a> / <a href="#/prod/semi">반제품</a> 생산일정 일·주·월 입력'])}
     ${flow('구매 (세탁) · 물류 (출하)', ['세탁 입고분 불량 폐기 → <a href="#/purchase/laundry">세탁관리</a>에 사진·수량', '매일 출고 품목 → <a href="#/logistics/ship">출하목록</a> 입력'])}
-  </div>
-  <p class="muted small">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>`;
+  </div></details></section>
+  <p class="muted small dash-note">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>`;
+  // 업무 흐름 안내는 넓은 화면에서는 펼치고, 휴대폰에서는 접어 둔다(내용은 그대로, 눌러서 열기).
+  const flows = $('[data-flows]', main); if (flows && !matchMedia('(max-width: 700px)').matches) flows.open = true;
 }
 
 // ───────────── 구매: 발주목록 ─────────────

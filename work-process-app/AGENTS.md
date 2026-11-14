@@ -314,3 +314,17 @@ INVITE_CODE=local-test-code npm start
 - labelGridTables: PC 표는 모든 행이 비었거나 「—」인 열을 숨기고(col-empty) 짧은 값 열은 한 줄로 둡니다(nowrap-cell). 휴대폰 카드는 CARD_SECONDARY 열을 숨기고 「자세히/접기」로 펼치며, 30건 초과는 「더 보기」로 나눠 보여 줍니다. 빈 칸(cell-empty)은 접힌 카드에서 숨깁니다.
 - foldListFilters: 휴대폰에서 목록 검색 조건을 「조건」 버튼 뒤로 접고 적용 중인 조건 수를 표시합니다. foldReportSections: 휴대폰 보고서의 두 번째 섹션부터 접어 둡니다.
 - 대시보드 납기 지난 발주는 한 줄씩 최대 5건, 생산계획 카드는 진행 막대(planProgress)로 보여 줍니다. 「규격·단위」 버튼은 직접 입력(임시 코드) 품목에만 표시합니다. 화면 모드 아이콘은 SVG입니다.
+
+## 입력 폼 UX: 검사규격 등록·수정 (15.35)
+- 검사규격 폼(inspections.js editInspectionSpec)은 1. 기본 정보 → 2. 검사 항목(항목명·단위·측정 횟수 → 합격 범위 하한·상한) → 3. 사용 여부 순서입니다. 필수는 빨간 `*`(span.req), 선택은 `(선택)`(span.opt)으로 표시합니다.
+- 브라우저 기본 검증 대신(`novalidate`) inspectionSpecCheck가 서버 validateInspectionSpec과 같은 규칙으로 먼저 검사합니다. 오류는 해당 칸의 label 안(span.field-error)에 「무엇을, 어떻게」 고칠지 적고, 칸에 `aria-invalid`·`aria-describedby`를 붙이고 첫 오류 칸으로 포커스합니다. 칸을 고치면 바로 지워집니다. 서버 규칙을 바꾸면 이 함수도 함께 바꾸세요.
+- 서버 오류는 inspectionSpecServerError가 문구로 칸을 찾아 붙이고(중복 409 → 별칭 칸), 못 찾으면 폼 위 `[data-form-error]`(role=alert)에 표시합니다. 500·연결 실패·동시 수정(409)은 「입력한 내용은 그대로 있다」와 다음 행동을 안내합니다.
+- 저장 버튼 상태: 저장 중(`.is-loading`, disabled, form aria-busy, 「저장 중…」) → 저장됨(`.is-done`, 「저장됨 ✓」) → 0.5초 뒤 닫힘. 실패하면 버튼을 다시 켭니다. 결과는 `[data-save-status]`(aria-live)로도 알립니다.
+- 하한·상한은 `type=text inputmode=decimal`입니다(number 칸은 잘못 친 값을 빈 값으로 바꿔 오류 안내를 할 수 없음). data-k 이름·보내는 값은 그대로입니다.
+- modal()은 Tab/Shift+Tab을 창 안에서 순환시키고 닫을 때 연 버튼으로 포커스를 돌려줍니다(맨 위 창만 키 처리). 폼은 저장 후 다시 그려진 목록의 버튼으로 포커스를 돌려줍니다.
+
+## 대시보드 화면 구성 (15.36)
+- pageHome은 같은 데이터(/api/dashboard, /api/my-tasks, /api/alerts)·같은 숫자·같은 링크를 그대로 쓰고 배치만 바꿨습니다: 제목+날짜 → 내가 처리할 일·확인이 필요한 일(넓은 화면 2열) → 「현황 한눈에」(구매·물류 / 재고·생산 / 의뢰 접수 대기 묶음) → 진행 현황 표 → 업무 흐름(휴대폰은 접힘, 넓은 화면은 펼침).
+- KPI 타일은 `kpi(href, 값, 이름, tone, note)`로 만들고 0건은 `.is-zero`로 흐리게 합니다. 조건부 타일(입고 수정 승인대기, 안전재고 미달, 재고 음수, 생산실적 수정 승인대기)의 표시 조건은 이전과 같습니다. 휴대폰에서는 2열입니다.
+- 제목 계층: h1 대시보드 → h2 카드·섹션 → h3 하위(tasksCard·alertsCard도 h2/h3로 바뀜). 진행 현황 표는 caption(sr-only)과 th scope를 씁니다. 문장 속 링크는 밑줄로도 구분합니다.
+- 라이트 모드 노란 글자(.chip.yellow, .kpi.yellow 숫자)는 대비 4.5:1을 위해 진하게 덮어씁니다. 다크는 기존 색 유지. axe-core(wcag2a/aa·best-practice)로 휴대폰 라이트·다크와 PC에서 위반 0건을 확인했습니다.
