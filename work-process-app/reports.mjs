@@ -41,13 +41,15 @@ function semiTotals(rows, keyOf, labelOf) {
   const groups = new Map();
   for (const r of rows) {
     const key = keyOf(r); const g = groups.get(key) || { ...labelOf(r), records: 0, qty: 0, defect_qty: 0, work_hours: 0, man_hours: 0, timed_good_qty: 0 };
+    // qty is the good quantity; defects are counted separately, so the total is their sum.
     for (const f of ['records', 'qty', 'defect_qty', 'work_hours', 'man_hours', 'timed_good_qty']) g[f] += Number(r[f] || 0);
     groups.set(key, g);
   }
   return [...groups.values()].map(g => {
     const qty = semiRound(g.qty), defect = semiRound(g.defect_qty), manHours = semiRound(g.man_hours);
-    return { ...g, qty, defect_qty: defect, good_qty: semiRound(qty - defect), work_hours: semiRound(g.work_hours), man_hours: manHours,
-      yield_rate: qty ? Math.round((qty - defect) / qty * 1000) / 10 : null, defect_rate: qty ? Math.round(defect / qty * 1000) / 10 : null,
+    const total = semiRound(qty + defect);
+    return { ...g, qty, defect_qty: defect, good_qty: qty, total_qty: total, work_hours: semiRound(g.work_hours), man_hours: manHours,
+      yield_rate: total ? Math.round(qty / total * 1000) / 10 : null, defect_rate: total ? Math.round(defect / total * 1000) / 10 : null,
       per_man_hour: manHours ? Math.round(g.timed_good_qty / manHours * 100) / 100 : null };
   });
 }
@@ -57,7 +59,7 @@ async function semiReport(db, from, to, category, q) {
       CASE WHEN product_type='' THEN CASE product_group WHEN 'seamless' THEN '심리스글러브' ELSE '와이퍼' END WHEN product_group='seamless' THEN '심리스 ' || product_type ELSE product_type END AS product,
       spec, unit, COUNT(*) AS records, SUM(qty) AS qty, SUM(defect_qty) AS defect_qty, SUM(COALESCE(work_hours,0)) AS work_hours,
       SUM(COALESCE(work_hours,0)*COALESCE(workers,0)) AS man_hours,
-      SUM(CASE WHEN work_hours>0 AND workers>0 THEN qty-defect_qty ELSE 0 END) AS timed_good_qty
+      SUM(CASE WHEN work_hours>0 AND workers>0 THEN qty ELSE 0 END) AS timed_good_qty
     FROM semi_records WHERE work_date BETWEEN ? AND ? GROUP BY 1,2,3,4,5,6 ORDER BY 1,2,4,5 LIMIT 20001`).all(from, to);
   if (rows.length > 20000) throw reportError('조회 결과가 많습니다. 기간이나 품목 필터를 좁혀 주세요.');
   if (q) { const needle = q.toLowerCase(); rows = rows.filter(r => [r.product, r.unit_name, r.spec].some(v => String(v || '').toLowerCase().includes(needle))); }
@@ -144,7 +146,7 @@ export async function buildReport(db, query, today) {
       analysis: '선택 기간에 등록된 분석의뢰의 현재 상태입니다. 완료 건수와 완료율도 해당 등록 건을 기준으로 합니다.',
       receipts: '발주입고의 입고확인·수량상이 실입고수량과 기타입고 등록수량을 입고일 기준으로 집계합니다. 판정은 현재 검수 기록 기준입니다.',
       production: '선택한 일간·주간·월간 일정의 시작일 기준 계획수량과 연결된 실제 생산실적 누적량입니다. 실제 생산일은 실적 상세에서 확인하며 취소된 실적은 제외합니다. 완료 체크 수량은 기존 계획 완료 표시로 실제 생산량과 별개입니다.',
-      semi: '반제품은 작업일 기준 커팅/융착·세탁 기록입니다. 수량은 총 생산(세탁)수량이고 불량수량을 포함합니다. 양품 = 수량 − 불량, 수율 = 양품 ÷ 수량, 불량률 = 불량 ÷ 수량입니다. 인시당 생산량은 작업시간과 생산인원을 모두 입력한 기록만으로 계산합니다(양품 ÷ (시간 × 인원)). 승인 대기 중인 수정 요청은 반영하지 않습니다.',
+      semi: '반제품은 작업일 기준 커팅/융착·세탁 기록입니다. 양품수량과 불량수량을 따로 기록합니다. 총 수량 = 양품 + 불량, 수율 = 양품 ÷ 총 수량, 불량률 = 불량 ÷ 총 수량입니다. 작업시간은 시작·종료 시각에서 계산합니다. 인시당 생산량은 작업시간과 생산인원을 모두 입력한 기록만으로 계산합니다(양품 ÷ (시간 × 인원)). 승인 대기 중인 수정 요청은 반영하지 않습니다.',
       units: '수량은 단위별로 구분합니다. 단위 정보가 없는 기존 발주입고·출하·수기 일정은 단위 미지정으로 표시하고 품목별로 나눕니다.',
       categories: '분류 필터는 저장된 분류를 기준으로 합니다. 분류가 없는 기록과 출하는 미분류에 포함됩니다.',
     },

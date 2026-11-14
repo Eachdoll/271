@@ -328,3 +328,6 @@ input[data-photo-camera] { display: none !important; }
 .partner-hint:empty { display: none; }
 .recent-items { margin-top: 6px; }
 .recent-items .btn { margin: 4px 4px 0 0; font-weight: 400; }
+
+/* 반제품 기록 목록: 라인 이름과 숫자 칸은 한 줄로 */
+@media (min-width: 701px) { #semiList td:nth-child(2), #semiList td.r { white-space: nowrap; } }
