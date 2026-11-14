@@ -543,3 +543,9 @@ label, legend { color: var(--text-2); font-weight: 600; }
 .size-cells label { font-weight: 700; color: var(--text); }
 .semi-use { display: grid; gap: 10px; padding: 12px 14px; border-radius: var(--radius-md, 12px); background: var(--bg); }
 .semi-use[hidden], [data-semi-fields][hidden], [data-pack-row][hidden] { display: none; }
+
+/* 언어 선택 (15.31) */
+.lang-select { min-height: 34px; padding: 4px 8px; font-size: 13px; border-radius: var(--radius-sm, 8px); max-width: 130px; }
+.auth-card > .lang-select { display: block; margin: 16px auto 0; }
+@media (max-width: 820px) { .who .lang-select { max-width: 96px; } }
+:lang(km) body, :lang(km) input, :lang(km) select, :lang(km) button { font-family: "Noto Sans Khmer", "Khmer OS", "Leelawadee UI", "Khmer UI", -apple-system, system-ui, sans-serif; line-height: 1.7; }
