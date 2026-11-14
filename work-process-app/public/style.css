@@ -678,3 +678,30 @@ table.grid .nowrap-cell { white-space: nowrap; }
   table.grid.as-cards tr.card-open .card-more { position: static; display: block; margin: 8px 0 0 auto; }
   table.grid.as-cards tr:not(.card-open) td[data-label="품목명"], table.grid.as-cards tr:not(.card-open) td[data-label="품목"] { margin-right: 0; }
 }
+
+/* 15.35 입력 폼 상태: 필수/선택 표시, 항목 옆 오류, 포커스·비활성·저장 중·저장됨 */
+.req { color: var(--red); font-weight: 700; }
+.opt { color: var(--muted); font-weight: 400; font-size: 12px; }
+.form-legend { margin: 0; }
+.field-help { margin: 4px 0 0; }
+.field-error { display: block; margin: 4px 0 0; color: var(--red); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.field-error::before { content: '! '; }
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--red) !important; background: var(--red-bg) !important; }
+input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[aria-invalid="true"]:focus { outline: 2px solid var(--red); outline-offset: 1px; }
+.form-error { border: 1px solid var(--red); background: var(--red-bg); color: var(--red); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 600; }
+.spec-form .spec-section { border: 0; padding: 0; margin: 4px 0 8px; min-width: 0; }
+.spec-form .spec-section > legend { font-size: 15px; color: var(--text); font-weight: 700; padding: 0; margin-bottom: 8px; }
+.spec-form .inspection-spec-row > legend { font-size: 13px; color: var(--text); font-weight: 700; padding: 0 4px; }
+.spec-form .spec-range { margin-top: 10px; }
+.spec-form .range-title { margin: 0 0 4px; font-weight: 600; color: var(--muted); }
+.spec-form .spec-library { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.spec-form .spec-library > summary { cursor: pointer; font-weight: 600; }
+.spec-form .spec-library[open] > summary { margin-bottom: 8px; }
+.spec-form .spec-actions { justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--line); }
+.spec-form input:disabled, .spec-form select:disabled, .spec-form textarea:disabled { opacity: .55; cursor: not-allowed; }
+.btn:focus-visible, summary:focus-visible, input[type=checkbox]:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn.is-loading { cursor: progress; opacity: .8; }
+.btn.is-loading::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+.btn.is-done, .btn.is-done:disabled { background: var(--green) !important; border-color: var(--green) !important; color: #fff !important; opacity: 1; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn.is-loading::before { animation: none; } }
