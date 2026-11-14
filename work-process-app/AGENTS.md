@@ -328,3 +328,10 @@ INVITE_CODE=local-test-code npm start
 - KPI 타일은 `kpi(href, 값, 이름, tone, note)`로 만들고 0건은 `.is-zero`로 흐리게 합니다. 조건부 타일(입고 수정 승인대기, 안전재고 미달, 재고 음수, 생산실적 수정 승인대기)의 표시 조건은 이전과 같습니다. 휴대폰에서는 2열입니다.
 - 제목 계층: h1 대시보드 → h2 카드·섹션 → h3 하위(tasksCard·alertsCard도 h2/h3로 바뀜). 진행 현황 표는 caption(sr-only)과 th scope를 씁니다. 문장 속 링크는 밑줄로도 구분합니다.
 - 라이트 모드 노란 글자(.chip.yellow, .kpi.yellow 숫자)는 대비 4.5:1을 위해 진하게 덮어씁니다. 다크는 기존 색 유지. axe-core(wcag2a/aa·best-practice)로 휴대폰 라이트·다크와 PC에서 위반 0건을 확인했습니다.
+
+## 모든 입력 폼 공통 UX (15.37)
+- public/form-ux.js(app.js 다음에 로드)가 모든 `<form>`에 자동 적용됩니다. 제외: `.list-filters`, `[data-read-only]`, `.spec-form`, `[data-own-errors]`, `[data-no-form-ux]`. 새 폼은 별도 작업 없이 적용되며, 자체 오류 표시를 쓰는 폼만 `data-own-errors`를 붙이세요.
+- 표시: required 칸은 label 글자 끝 `*`를 빨간 span.req로 바꾸고(없으면 추가), 필수 칸이 있는 폼의 나머지 칸에 span.opt `(선택)`을 붙입니다. legend 끝 `*`도 같습니다. 라디오 선택지 label이 원래 `.opt` 클래스를 쓰므로 「(선택)」 스타일은 반드시 `span.opt`로 한정하세요.
+- 검사: 폼에 novalidate를 켜고 document 캡처 단계 submit에서 checkValidity를 먼저 봅니다. 실패하면 각 칸 label 안(라디오·체크 묶음은 fieldset 안)에 span.field-error로 해결 방법을 적고 aria-invalid·aria-describedby를 붙인 뒤 첫 칸으로 이동하고, 원래 submit 처리는 실행하지 않습니다. 통과하면 원래 처리로 그대로 넘깁니다. 코드에서 부르는 `form.reportValidity()`도 같은 안내를 씁니다(프로토타입 교체).
+- 상태: 제출 후 버튼에 `.is-loading`(aria-busy) → 성공 토스트가 오면 `.is-done`(✓), 오류 토스트가 오면 해제 후 버튼 위 `[data-fx-form-error]`(role=alert)에 안내합니다. api()를 감싸 마지막 HTTP 상태를 기억해 500·연결 실패·409를 구분하고, 400 문구에 칸 이름이 있으면 그 칸 아래에도 붙입니다. 12초 또는 다른 곳을 누르면 처리 중 표시를 풉니다. 기존 토스트는 그대로 뜹니다.
+- 칸 이름은 label 글자 → aria-label → 표 머리글(data-label) → placeholder → (칸 하나뿐인 폼) 폼 제목 순서로 찾습니다. 안내 문구를 추가하면 4개 언어 사전에도 넣으세요.

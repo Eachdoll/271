@@ -681,7 +681,7 @@ table.grid .nowrap-cell { white-space: nowrap; }
 
 /* 15.35 입력 폼 상태: 필수/선택 표시, 항목 옆 오류, 포커스·비활성·저장 중·저장됨 */
 .req { color: var(--red); font-weight: 700; }
-.opt { color: var(--muted); font-weight: 400; font-size: 12px; }
+span.opt { color: var(--muted); font-weight: 400; font-size: 12px; }
 .form-legend { margin: 0; }
 .field-help { margin: 4px 0 0; }
 .field-error { display: block; margin: 4px 0 0; color: var(--red); font-size: 13px; font-weight: 600; line-height: 1.4; }
@@ -765,3 +765,9 @@ input[aria-invalid="true"]:focus, select[aria-invalid="true"]:focus, textarea[ar
 .tasks, .tasks-grid > section { min-width: 0; overflow-wrap: anywhere; }
 .progress-table tbody th { background: transparent; border-right: 0; font-size: 14px; color: var(--text); }
 .progress-table tbody th, .progress-table tbody td { border-bottom: 1px solid var(--line); }
+
+/* 15.37 모든 입력 폼 공통: 처리 중·완료 표시 (form-ux.js) */
+.btn.is-loading { pointer-events: none; }
+.btn.is-done:not([data-save])::before { content: '✓ '; }
+form label > .req, form label > span.opt, legend > .req { margin-left: 2px; }
+form .form-error { margin: 8px 0; }
