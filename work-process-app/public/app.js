@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.13';
+const APP_VERSION = '15.14';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -307,6 +307,27 @@ function pageAuth(mode = 'login', notice = '') {
 }
 
 // ───────────── 홈: 대시보드 + 업무흐름 ─────────────
+// ── 확인이 필요한 일: 기한 경과, 오래된 승인 대기, 수율 미달, 백업 ──
+function alertsCard(a) {
+  if (!a) return '';
+  const items = []; const more = (count, shown) => count > shown ? ` <span class="small muted">외 ${count - shown}건</span>` : '';
+  if (a.overdue_po_count) items.push(`<li><a href="#/logistics/receive"><b>납기가 지난 미입고 발주 ${a.overdue_po_count}건</b></a><div class="small muted">${a.overdue_pos.map(p => `${esc(p.due_date)} ${esc(p.vendor)} · ${esc(p.item)}${p.spec ? ' ' + esc(p.spec) : ''}`).join(' / ')}${more(a.overdue_po_count, a.overdue_pos.length)}</div></li>`);
+  if (a.overdue_request_count) items.push(`<li><b>완료 희망일이 지난 의뢰 ${a.overdue_request_count}건</b><div class="small muted">${a.overdue_requests.map(r => `<a href="${REQ[r.type] ? (r.status === 'pending' ? REQ[r.type].intake : REQ[r.type].list) : '#/'}">${esc(r.due_date)} ${esc(REQ[r.type]?.label || r.type)} · ${esc(r.title)} (${esc(STATUS[r.status] || r.status)})</a>`).join(' / ')}${more(a.overdue_request_count, a.overdue_requests.length)}</div></li>`);
+  const staleLabel = s => s.kind === 'request' ? [`${REQ[s.type]?.label || s.type} 승인`, REQ[s.type]?.intake || '#/'] : { actual_changes: ['생산실적 수정 승인', '#/prod/finished'], receipt_changes: ['입고 수량 수정 승인', '#/logistics/receive'], semi_changes: ['반제품 기록 수정 승인', '#/prod/semi/cut'] }[s.kind];
+  for (const s of a.stale_approvals) { const [label, href] = staleLabel(s); items.push(`<li><a href="${href}"><b>${esc(label)} 대기 3일 초과 ${s.count}건</b></a><div class="small muted">가장 오래된 요청 ${esc(String(s.oldest).slice(0, 10))}</div></li>`); }
+  if (a.low_yield.length) items.push(`<li><a href="#/reports"><b>최근 7일 수율 목표 미달 ${a.low_yield.length}곳</b></a><div class="small muted">${a.low_yield.slice(0, 5).map(r => `${esc(r.unit_name)}(${r.process === 'cut' ? '커팅/융착' : '세탁'}) <span class="red-text">${r.yield_rate}%</span> / 목표 ${r.target}%`).join(' · ')}</div></li>`);
+  if (a.backup && (a.backup.days === null || a.backup.days >= 7)) items.push(`<li><a href="#/admin"><b>${a.backup.days === null ? '전체 백업을 아직 받지 않았습니다' : `마지막 전체 백업이 ${a.backup.days}일 전입니다`}</b></a><div class="small muted">관리자 설정 → 전체 백업 다운로드 (주 1회 이상 권장)</div></li>`);
+  if (!items.length) return '';
+  return `<div class="card tasks alerts"><h3>확인이 필요한 일 <span class="chip red">${items.length}</span></h3><ul>${items.join('')}</ul></div>`;
+}
+// 단위 입력칸 자동완성: 원단은 yd, 와이퍼는 매, 글러브는 켤레가 많습니다. 직접 입력도 됩니다.
+const UNIT_SUGGESTIONS = ['yd', '매', '켤레', 'EA', 'BOX', 'kg', '롤', 'm', '벌'];
+function suggestUnits() {
+  if (!document.getElementById('unitSuggestions')) document.body.insertAdjacentHTML('beforeend', `<datalist id="unitSuggestions">${UNIT_SUGGESTIONS.map(unit => `<option value="${unit}">`).join('')}</datalist>`);
+  $$('input[name=unit]:not([list]), input[data-line-key=unit]:not([list]), input[data-k=unit]:not([list]), input[data-material-unit]:not([list])').forEach(input => { input.setAttribute('list', 'unitSuggestions'); if (/EA \/ BOX|매 \/ 켤레/.test(input.placeholder)) input.placeholder = '예) yd / 매 / 켤레 / EA'; });
+}
+new MutationObserver(suggestUnits).observe(document.body, { childList: true, subtree: true });
+
 // ── 내가 처리할 일: 승인 대기 배지와 대시보드 카드 ──
 function taskBadgeCounts(tasks) {
   const counts = {}; const a = tasks.approvals;
@@ -361,12 +382,12 @@ function labelGridTables() {
 new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
-  const [d, tasks] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks')]);
+  const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
   const r = d.requests;
   const flow = (title, steps) => `<div class="flow"><h4>${title}</h4><ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol></div>`;
   main.innerHTML = `
   <h1>대시보드 <span class="muted small">${d.today} (${dow(d.today)})</span></h1>
-  ${tasksCard(tasks)}
+  ${tasksCard(tasks)}${alertsCard(alerts)}
   <div class="kpis">
     <a class="kpi" href="#/logistics/receive"><b>${d.po.none}</b><span>미입고 발주</span>${d.po.overdue ? `<em class="red">납기경과 ${d.po.overdue}</em>` : ''}</a>
     <a class="kpi yellow" href="#/logistics/receive"><b>${d.po.checking}</b><span>입고 확인중</span></a>
@@ -906,7 +927,7 @@ function materialTable(materials, caption = '자재 소요량') {
   return `<div class="table-wrap"><table class="grid"><caption>${esc(caption)}</caption><thead><tr><th>자재명</th><th>분류</th><th class="r">수량</th><th>단위</th></tr></thead><tbody>${materials.map(m => `<tr><td>${esc(m.item)}</td><td>${esc(m.item_category)}</td><td class="r">${fmtNum(m.qty)}</td><td>${esc(m.unit)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function bomMaterialRow(material = {}) {
-  return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'EA')}" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
+  return `<tr data-material-row><td><input data-material-item required maxlength="200" value="${esc(material.item)}" aria-label="자재명"></td><td><select data-material-category required aria-label="자재 분류">${categoryOptions(material.item_category || '원자재')}</select></td><td><input data-material-qty type="number" required min="0.00000001" step="any" value="${esc(material.qty)}" aria-label="기준수량당 사용량"></td><td><input data-material-unit required maxlength="20" value="${esc(material.unit || 'yd')}" placeholder="yd" aria-label="자재 단위"></td><td><button type="button" class="btn small danger" data-material-remove>삭제</button></td></tr>`;
 }
 function bomForm(bom = {}) {
   return `<form class="stack" ${bom.id ? `data-entry-author="${esc(bom.created_by)}"` : ''}><div class="form-grid"><label>품목명 *<input name="product" required maxlength="200" value="${esc(bom.product)}"></label>${categoryField(bom.item_category)}<label>품목코드<input name="product_code" maxlength="80" value="${esc(bom.product_code)}"></label><label>1차 분류<input name="cat1" maxlength="50" list="bomCat1" value="${esc(bom.cat1)}" placeholder="예) 글러브"></label><label>2차 분류<input name="cat2" maxlength="50" list="bomCat2" value="${esc(bom.cat2)}" placeholder="예) 니트릴"></label><label>3차 분류<input name="cat3" maxlength="50" list="bomCat3" value="${esc(bom.cat3)}" placeholder="예) 12인치"></label><datalist id="bomCat1"></datalist><datalist id="bomCat2"></datalist><datalist id="bomCat3"></datalist><label>반제품 종류 <span class="hint">(분류가 반제품일 때)</span><select name="semi_type"><option value="">해당 없음</option>${[['부직포와이퍼', '와이퍼 · 부직포와이퍼'], ['천와이퍼', '와이퍼 · 천와이퍼'], ['스무드', '심리스글러브 · 스무드'], ['타키', '심리스글러브 · 타키']].map(([value, label]) => `<option value="${value}" ${bom.semi_type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>생산 구분<select name="kind"><option value="finished" ${bom.kind !== 'semi' ? 'selected' : ''}>완제품</option><option value="semi" ${bom.kind === 'semi' ? 'selected' : ''}>반제품</option></select></label><label>기준 생산수량 *<input name="base_qty" type="number" min="0.00000001" step="any" required value="${esc(bom.base_qty || 1)}"></label><label>생산 단위 *<input name="unit" maxlength="20" required value="${esc(bom.unit || 'EA')}"></label><label>비고<input name="note" maxlength="500" value="${esc(bom.note)}"></label></div><p class="muted small">제품 BOM은 구성자재를 등록하세요. 원자재·부자재·반제품·상품은 구성자재 없이 품목으로 등록할 수 있습니다. 반제품에 <b>반제품 종류</b>를 지정하면 커팅/융착·세탁 입력에서 그 종류의 품목(모델)으로 나오고, 구성자재를 넣으면 생산량만큼 자재 재고가 차감됩니다. 1차·2차·3차 분류는 선택이며, 이미 쓴 값이 자동완성으로 나옵니다.</p><div class="table-wrap"><table class="grid bom-materials"><thead><tr><th>자재명</th><th>분류</th><th>사용량</th><th>단위</th><th></th></tr></thead><tbody data-material-rows>${(bom.materials || []).map(bomMaterialRow).join('')}</tbody></table></div><button type="button" class="btn" data-material-add>+ 자재 추가</button><label class="inline"><input type="checkbox" name="active" ${bom.active !== 0 ? 'checked' : ''}> 사용 중 (생산·입고에서 선택 가능)</label><div class="actions"><button type="submit" class="btn primary">BOM 저장</button></div></form>`;
@@ -1144,6 +1165,7 @@ async function pageAdmin(main) {
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url; link.download = `work-process-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
+      await api('POST', '/api/admin/backup-done').catch(() => {}); // remembers when the last full backup was taken
       status.textContent = '백업 파일을 다운로드했습니다. 다운로드 폴더에서 확인하세요.';
     } catch (error) { status.textContent = '백업에 실패했습니다. 다시 시도해 주세요.'; fail(error); }
     finally { button.disabled = false; }

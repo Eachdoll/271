@@ -47,7 +47,9 @@ async function installMultiItems(legacy, entity, type = '') {
   if (!host) return;
   host.before(form);
   if (host.tagName === 'DETAILS') { host.open = false; $('summary',host).textContent = '단일 품목 입력 (기존 상세 양식)'; }
-  else { const details = document.createElement('details'); details.className = 'card'; details.innerHTML = '<summary>단일 품목 입력 (기존 상세 양식)</summary>'; host.before(details); details.append(host); }
+  else { const details = document.createElement('details'); details.className = 'card'; details.innerHTML = '<summary>단일 품목 입력 (기존 상세 양식)</summary>'; host.before(details); details.append(host);
+    // Orders and shipments use this form only: the old single form has no unit or product-code field, which split stock lines.
+    if (['purchase_order', 'shipment'].includes(entity)) details.hidden = true; }
   const rowsRoot = $('[data-multi-rows]',form), status = $('[data-multi-status]',form), submit = $('[data-multi-submit]',form);
   // Items come from the product catalog by default; purchase orders and shipments may also be typed in,
   // in which case the server issues a temporary code for an administrator to tidy up.

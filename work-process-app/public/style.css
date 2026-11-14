@@ -337,3 +337,6 @@ input[data-photo-camera] { display: none !important; }
 .semi-report-head input { width: 84px; min-height: 32px; padding: 4px 8px; }
 .share-bar { background: var(--bg); border-radius: 99px; height: 10px; overflow: hidden; }
 .share-bar i { display: block; height: 100%; background: var(--red); border-radius: 99px; }
+
+/* 확인이 필요한 일 */
+.alerts { border-left: 4px solid var(--red); }
