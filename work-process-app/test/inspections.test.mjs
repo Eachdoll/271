@@ -115,3 +115,13 @@ test('Operators may read inspections and history but cannot edit even with quali
   assert.equal((await operator('POST',`/api/requests/${id}/inspection/spec`,{spec_id:incoming.id})).status,403);
   assert.equal((await operator('POST','/api/inspection-specs',spec('blocked'))).status,403);
 });
+test('Reusable inspection items preserve permission, revision and existing request snapshots',async()=>{
+  const initial=await lead('GET','/api/inspection-items');assert.equal(initial.status,200);assert.ok(initial.body.items.some(i=>i.group==='천와이퍼'&&i.name==='린트'));
+  const item={group:'천와이퍼',name:'흡수량',unit:'g/m²',min:20,max:null,count:3};
+  assert.equal((await quality('POST','/api/inspection-items',{revision:initial.body.revision,item})).status,403);
+  const id=await approved(req('NX-7'));const snapshot=(await details(id)).body.spec;
+  const stored=await lead('POST','/api/inspection-items',{revision:initial.body.revision,item});assert.equal(stored.status,200);assert.ok(stored.body.items.some(i=>i.name==='흡수량'&&i.min===20&&i.count===3));
+  assert.equal((await lead('POST','/api/inspection-items',{revision:initial.body.revision,item})).status,409);
+  assert.equal((await lead('POST','/api/inspection-items',{revision:stored.body.revision,item:{...item,min:30,max:20}})).status,400);
+  assert.deepEqual((await details(id)).body.spec,snapshot);
+});

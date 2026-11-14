@@ -372,3 +372,15 @@ test('Break time, line yield targets, washing backlog, alerts, edit trail and ba
   await staff('PUT', `/api/items/shipment/${ship.id}`, { spec: 'M', unit: 'BOX' });
   assert.deepEqual((await staff('GET', `/api/comments/shipment/${ship.id}`)).body.rows.map(c => c.content).reverse(), ['[수정] 수량 5 → 6', '[수정] 규격 없음 → M, 단위 없음 → BOX']);
 });
+test('Washer records accept a single progress time and catalog code, without duration or crew',async()=>{
+  const washer=(await prod('POST','/api/production-units',{kind:'washer',name:'간편세탁호기'})).body;
+  const model=(await admin('POST','/api/boms',{product:'간편 세탁 모델',product_code:'WASH-23',item_category:'반제품',semi_type:'스무드',kind:'semi',base_qty:1,unit:'켤레',materials:[{item:'원단',item_category:'원자재',qty:1,unit:'kg'}]})).body;
+  assert.ok(model.id);
+  const item={product_group:'seamless',product_type:'스무드',bom_id:model.id,spec:'M',qty:8,start_time:'11:15'};
+  const body={process:'wash',common:{work_date:today,unit_id:washer.id},items:[item],request_id:crypto.randomUUID()};
+  const saved=await staff('POST','/api/semi-batches',body);assert.equal(saved.status,200);const row=saved.body.rows[0];assert.equal(row.product_code,'WASH-23');assert.equal(row.start_time,'11:15');assert.equal(row.end_time,null);assert.equal(row.work_hours,null);assert.equal(row.workers,null);assert.equal(row.break_minutes,0);
+  assert.equal((await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{...item,start_time:'25:00'}]})).status,400);
+  const found=(await staff('GET','/api/semi-records?'+new URLSearchParams({process:'wash',q:'WASH-23'}))).body;assert.ok(found.some(r=>r.id===row.id));
+  const legacy=await staff('POST','/api/semi-batches',{...body,request_id:crypto.randomUUID(),items:[{...item,start_time:'08:00',end_time:'10:00',break_minutes:30,workers:4}]});assert.equal(legacy.status,200);assert.equal(legacy.body.rows[0].work_hours,1.5);
+  const oldId=legacy.body.rows[0].id;const edit=await staff('PUT','/api/semi-records/'+oldId,{...item,unit:'켤레',work_date:today,unit_id:washer.id,start_time:'09:00',note:'기존 상세 보존'});assert.equal(edit.status,200,JSON.stringify(edit.body));const kept=(await staff('GET','/api/semi-records?process=wash')).body.find(r=>r.id===oldId);assert.equal(kept.work_hours,1.5);assert.equal(kept.break_minutes,30);assert.equal(kept.workers,4);assert.equal(kept.end_time,'10:00');
+});

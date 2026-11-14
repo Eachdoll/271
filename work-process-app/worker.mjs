@@ -849,6 +849,30 @@ function validateInspectionSpec(body) {
   if (items.reduce((n,i) => n+i.count,0)>100) throw bad('시료별 측정 칸은 최대 100개입니다.');
   return { kind: body.kind, item_category: category, product, aliases: [...new Set(body.aliases.map(v=>v.trim()).filter(Boolean))], items };
 }
+const INSPECTION_ITEM_DEFAULTS = [
+  {group:'천와이퍼',name:'흡수속도 MD',unit:'초',min:0,max:60,count:5},
+  {group:'천와이퍼',name:'흡수속도 CD',unit:'초',min:0,max:60,count:5},
+  ...['흡수량','파티클','린트','외관'].map(name=>({group:'천와이퍼',name,unit:'',min:null,max:null,count:1})),
+  {group:'심리스글러브',name:'박리강도',unit:'kgf',min:3,max:null,count:5},
+];
+async function inspectionItemLibrary() {
+  const raw=await getSetting('inspection_item_library');
+  return {raw,...(raw?JSON.parse(raw):{revision:0,items:INSPECTION_ITEM_DEFAULTS})};
+}
+route('GET','/api/inspection-items',async()=>{const {raw,...library}=await inspectionItemLibrary();return library;});
+route('POST','/api/inspection-items',async({user,body})=>{
+  requireInspectionManager(user);
+  const item=validateInspectionSpec({kind:'수입검사',item_category:'원자재',product:'항목',aliases:[],items:[body.item]}).items[0];
+  delete item.key;item.group=reqStr(body.item?.group,'품목군',100);
+  const prior=await inspectionItemLibrary();if(Number(body.revision)!==prior.revision)throw new HttpError(409,'항목 보관함이 변경되었습니다. 다시 열어주세요.');
+  const items=prior.items.filter(i=>!(i.group===item.group&&i.name===item.name));items.push(item);if(items.length>200)throw bad('보관함은 최대 200항목입니다.');
+  const value=JSON.stringify({revision:prior.revision+1,items});
+  const changed=await db.prepare(`INSERT INTO settings(key,value) SELECT 'inspection_item_library',? WHERE ?=0 OR EXISTS(SELECT 1 FROM settings WHERE key='inspection_item_library' AND value=?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE settings.value=?`).run(value,prior.revision,prior.raw,prior.raw);
+  if(!changed.changes)throw new HttpError(409,'항목 보관함이 변경되었습니다. 다시 열어주세요.');
+  return JSON.parse(value);
+});
+
 route('GET','/api/inspection-specs',async ({user}) => ({ can_manage: hasRole(user,'quality_approver'), specs: (await db.prepare('SELECT * FROM inspection_specs ORDER BY active DESC,id DESC').all()).map(s=>({...JSON.parse(s.definition),id:s.id,revision:s.revision,active:!!s.active,updated_by:s.updated_by,updated_at:s.updated_at})) }));
 async function saveInspectionSpec(user, body, id) {
   requireInspectionManager(user); const spec=validateInspectionSpec(body);
@@ -1622,15 +1646,15 @@ function semiWorkDetails(body, previous, process) {
     return value;
   };
   const start = clock('start_time', '시작 시각'), end = clock('end_time', '종료 시각');
-  if (!start !== !end) throw bad('시작 시각과 종료 시각을 함께 입력하세요.');
-  let hours = previous && body.start_time === undefined && body.end_time === undefined ? previous.work_hours : null;
+  if (process !== 'wash' && !start !== !end) throw bad('시작 시각과 종료 시각을 함께 입력하세요.');
+  let hours = previous && body.end_time === undefined && (process === 'wash' || body.start_time === undefined) ? previous.work_hours : null;
   let breakMinutes = body.break_minutes === undefined ? (previous ? previous.break_minutes : 0) : num(body.break_minutes, '휴게시간', { required: false }) ?? 0;
   if (!Number.isInteger(breakMinutes)) throw bad('휴게시간은 분 단위 정수로 입력하세요.');
-  if (start && end) {
+  if (start && end && !(process === 'wash' && previous && body.end_time === undefined)) {
     const minutes = h => Number(h.slice(0, 2)) * 60 + Number(h.slice(3)); let span = minutes(end) - minutes(start); if (span <= 0) span += 24 * 60;
     if (breakMinutes >= span) throw bad('휴게시간이 작업시간보다 길 수 없습니다.');
     hours = Math.round((span - breakMinutes) / 60 * 100) / 100; // worked time excludes breaks
-  } else if (breakMinutes && (body.start_time !== undefined || body.end_time !== undefined || !previous)) breakMinutes = 0; // a break means nothing without clock times
+  } else if (breakMinutes && !(process === 'wash' && previous && body.end_time === undefined) && (body.start_time !== undefined || body.end_time !== undefined || !previous)) breakMinutes = 0; // a break means nothing without clock times
   let workers = previous ? previous.workers : null;
   if (body.workers !== undefined) { workers = num(body.workers, '생산인원', { required: false }); if (workers !== null && (!Number.isInteger(workers) || workers > 10000)) throw bad('생산인원은 정수로 입력하세요.'); }
   const defect = body.defect_qty === undefined ? (previous ? previous.defect_qty : 0) : num(body.defect_qty, '불량수량', { required: false }) ?? 0;
@@ -1646,7 +1670,7 @@ async function listSemiRecords({ user, query, operator = false }) {
   applyListDates(where, args, query, 'work_date');
   if (query.unit_id) { if (!/^[1-9]\d*$/.test(query.unit_id)) throw bad('라인·호기를 확인하세요.'); where.push('unit_id=?'); args.push(Number(query.unit_id)); }
   if (query.product_group) { if (!Object.hasOwn(SEMI_PRODUCTS, query.product_group)) throw bad('품목 구분을 확인하세요.'); where.push('product_group=?'); args.push(query.product_group); }
-  applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'spec', 'lot', 'note', 'created_by']);
+  applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'item_name', 'product_code', 'spec', 'lot', 'note', 'created_by']);
   const rows = await db.prepare(`SELECT semi_records.*, (SELECT c.id FROM semi_record_changes c WHERE c.record_id=semi_records.id AND c.status='pending') AS pending_change_id
     FROM semi_records WHERE ${where.join(' AND ')} ORDER BY work_date DESC, id DESC LIMIT 2001`).all(...args);
   if (rows.length > 2000) throw bad('기록이 너무 많습니다. 기간을 좁히세요.');
