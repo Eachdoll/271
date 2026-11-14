@@ -186,6 +186,9 @@ function fxServerError(form, button, message) {
       for (const el of controls) {
         const label = el.closest('label'); if (!label || label.classList.contains('inline') || el.type === 'checkbox' || el.type === 'radio') continue;
         const req = label.querySelector(':scope > .req'), opt = label.querySelector(':scope > span.opt');
+        // 화면 코드가 직접 그리는 * 표시(예: 커팅 입력의 data-semi-model-mark)가 있으면 그것을 쓰고 우리 표시는 뺀다.
+        const own = [...label.children].find(c => !c.matches('.req, span.opt, .field-error, input, select, textarea') && /^(\*|\(선택\))$/.test(c.textContent.trim()));
+        if (own) { const star = own.textContent.trim() === '*'; own.classList.toggle('req-own', star); own.classList.toggle('opt-own', !star); req?.remove(); opt?.remove(); continue; }
         if (el.required) {
           el.setAttribute('aria-required', 'true'); opt?.remove();
           if (!req) {

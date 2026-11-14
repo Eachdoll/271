@@ -340,3 +340,12 @@ INVITE_CODE=local-test-code npm start
 - 거래처 관리(#/purchase/vendors)와 검사규격 설정(#/quality/specs)을 구매·품질 메뉴에서 「관리」 묶음으로 옮겼습니다. 주소·권한은 그대로입니다.
 - 「관리」 묶음은 모든 사용자에게 보이며 NAV_MANAGE(기준 정보)는 모두에게, NAV_ADMIN(관리자 설정·제품등록)은 관리자에게만 붙습니다. 화면 안의 수정 권한은 각 화면과 서버가 전과 같이 판단합니다.
 - 품질의 「수입·출하 검사」 하위 메뉴는 항목이 하나만 남아 「수입·출하 검사 이력」 단일 링크로 바꿨습니다. 거래처 관리 제목 옆 부서 표시는 「관리」입니다.
+
+## 입고목록 통합·화면 점검 수정 (15.39)
+- 기타입고 목록을 입고목록(#/logistics/receive)에 합쳤습니다. pageReceipts가 발주입고 구역(pageReceive)과 기타입고 구역(pageOtherReceipts(…, { entry: false }) — 등록 양식 없이 목록만)을 한 화면에 두고, 맨 위 「구분: 전체/발주입고/기타입고」(localStorage `wpa:receipt-kind`)로 구역을 보이거나 숨깁니다. 두 구역은 처리 방식·날짜 기준이 달라 각자의 검색·처리를 그대로 씁니다. 구분 버튼의 건수는 각 구역의 「N건 조회」를 읽어 붙입니다(같은 값이면 쓰지 않음 — 관찰자 무한 반복 방지).
+- 메뉴 「입고」는 입고목록·기타입고 입력 두 개입니다. 옛 주소 #/logistics/other는 입고목록을 「기타입고」로 걸러 엽니다. 기타입고 입력(#/logistics/other/new)의 전환 버튼은 「입고목록 보기」입니다.
+- 대비: 라이트 흐린 글자 --muted #5f6b78, 채움 버튼은 --btn-primary/--btn-green/--btn-red(라이트·다크 각각) 변수로 색을 정합니다. 상태 글자(칩·상태 선택칸)는 --green-ink/--yellow-ink/--accent-ink. axe-core wcag2a/aa 기준 72개 화면(PC 라이트·휴대폰 다크) 위반 0건을 확인했습니다. 새 색을 넣을 때 이 변수를 쓰세요.
+- `.btn`은 줄바꿈하지 않습니다(글자가 「CS / V」처럼 깨지지 않게). 버튼 묶음(.actions/.toolbar/.actionbar/.row)이 줄을 넘깁니다.
+- fixHeadingLevels(app.js): 제목 단계가 건너뛰면 aria-level만 맞추고, 가로로 넘치는 .table-wrap/.report-chart-scroll에 tabindex를 붙입니다. 화면 변경·data-view·hidden·open 변화 때 다시 실행됩니다.
+- form-ux: 화면 코드가 직접 그리는 `*`/`(선택)` 표시(예: 커팅 입력 data-semi-model-mark)가 있으면 자체 표시를 붙이지 않습니다. 「(선택)」 스타일은 label/legend 바로 아래 span.opt에만 적용합니다(라디오 선택지·「기타」 칸의 .opt와 구분).
+- 휴대폰 카드: 표 caption은 block, 행 색(row-red/yellow/green)은 카드 전체에, 「자세히」·「더 보기」·생산일정 × 버튼은 36px 이상.

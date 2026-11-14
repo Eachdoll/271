@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.38';
+const APP_VERSION = '15.39';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -262,7 +262,7 @@ const NAV = [
     { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
   ] },
   { group: '물류', items: [
-    { sub: '입고', items: [['#/logistics/receive', '발주입고 확인'], ['#/logistics/other/new', '기타입고 입력'], ['#/logistics/other', '기타입고 목록']] },
+    { sub: '입고', items: [['#/logistics/receive', '입고목록'], ['#/logistics/other/new', '기타입고 입력']] },
     { sub: '출하', items: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
     ['#/logistics/stock', '재고 현황'],
   ] },
@@ -285,13 +285,30 @@ const VIEW_SPLIT = {
   '#/prod/semi/cut': ['#/prod/semi/cut', 'list', '커팅/융착 작업 기록', '#/prod/semi/cut/new', '작업 입력'],
   '#/prod/semi/wash/new': ['#/prod/semi/wash', 'entry', '세탁 작업 입력', '#/prod/semi/wash', '작업 기록 보기'],
   '#/prod/semi/wash': ['#/prod/semi/wash', 'list', '세탁 작업 기록', '#/prod/semi/wash/new', '작업 입력'],
-  '#/logistics/other/new': ['#/logistics/other', 'entry', '기타입고 입력', '#/logistics/other', '기타입고 목록 보기'],
-  '#/logistics/other': ['#/logistics/other', 'list', '기타입고 목록', '#/logistics/other/new', '기타입고 입력'],
+  '#/logistics/other/new': ['#/logistics/other', 'entry', '기타입고 입력', '#/logistics/receive', '입고목록 보기'],
   '#/logistics/ship/new': ['#/logistics/ship', 'entry', '출하 입력', '#/logistics/ship', '출하 목록 보기'],
   '#/logistics/ship': ['#/logistics/ship', 'list', '출하 목록', '#/logistics/ship/new', '출하 입력'],
 };
 // Parts before the list filters are the entry part; the filters and everything after them are the list part.
 // Approval boxes at the top belong to the list. The multi-item form is added later and is hidden by CSS in the list view.
+// 15.39: 제목 단계가 건너뛰는 화면(h1 다음 바로 카드 h3 등)은 화면 읽기 프로그램용 단계(aria-level)만 한 단계씩 맞춘다. 모양은 그대로다.
+function fixHeadingLevels() {
+  const main = document.getElementById('main'); if (!main) return;
+  let last = 0;
+  for (const h of main.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    if (!h.offsetParent) continue;
+    const native = Number(h.tagName[1]), level = last && native > last + 1 ? last + 1 : native;
+    if (level !== native) { if (h.getAttribute('aria-level') !== String(level)) h.setAttribute('aria-level', String(level)); }
+    else if (h.dataset.levelFixed !== undefined || h.hasAttribute('aria-level')) h.removeAttribute('aria-level');
+    last = level;
+  }
+  // 가로로 넘치는 표·차트 영역은 키보드(Tab)로도 들어가 스크롤할 수 있게 한다.
+  for (const box of main.querySelectorAll('.table-wrap, .report-chart-scroll')) {
+    if (box.scrollWidth > box.clientWidth + 1) { if (!box.hasAttribute('tabindex')) { box.tabIndex = 0; box.dataset.scrollFocus = ''; } }
+    else if (box.dataset.scrollFocus !== undefined) { box.removeAttribute('tabindex'); delete box.dataset.scrollFocus; }
+  }
+}
+{ let queued = false; new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; fixHeadingLevels(); }); }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'data-view', 'open'] }); }
 function foldHelp(main) {
   for (const p of main.querySelectorAll(':scope > p.muted, :scope > section > p.muted, #receiptContent > p.muted')) {
     if (p.textContent.trim().length < 80 || p.closest('details')) continue;
@@ -338,7 +355,7 @@ function showRecentEntries(main, route) {
     try {
       const rows = (await api('GET', source(t))).filter(r => r.created_by === ME.name && String(r.created_at || '').startsWith(t)).sort((a, b) => b.id - a.id);
       if (!box.isConnected) return;
-      box.innerHTML = `<h3>오늘 내가 입력한 것 <span class="chip">${rows.length}</span></h3>${rows.length ? `<ul>${rows.slice(0, 5).map(r => `<li><b>${esc(r.item || r.product || r.item_name || r.title || '')}</b>${r.spec ? ` <span class="muted">${esc(r.spec)}</span>` : ''} <span>${r.discard_qty != null && r.qty == null ? fmtNum(r.discard_qty) : fmtNum(r.qty)} ${esc(r.unit || '')}</span> <span class="small muted">${esc([r.req_no, r.vendor || r.customer, r.unit_name, r.start_time, String(r.created_at).slice(11, 16)].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>${rows.length > 5 ? `<p class="small muted">외 ${rows.length - 5}건</p>` : ''}` : '<p class="small muted">아직 없습니다.</p>'}`;
+      box.innerHTML = `<h2>오늘 내가 입력한 것 <span class="chip">${rows.length}</span></h2>${rows.length ? `<ul>${rows.slice(0, 5).map(r => `<li><b>${esc(r.item || r.product || r.item_name || r.title || '')}</b>${r.spec ? ` <span class="muted">${esc(r.spec)}</span>` : ''} <span>${r.discard_qty != null && r.qty == null ? fmtNum(r.discard_qty) : fmtNum(r.qty)} ${esc(r.unit || '')}</span> <span class="small muted">${esc([r.req_no, r.vendor || r.customer, r.unit_name, r.start_time, String(r.created_at).slice(11, 16)].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>${rows.length > 5 ? `<p class="small muted">외 ${rows.length - 5}건</p>` : ''}` : '<p class="small muted">아직 없습니다.</p>'}`;
     } catch { box.remove(); }
   };
   load();
@@ -372,7 +389,7 @@ const PAGES = {
   '#/logistics/ship': pageShip,
   '#/logistics/ship/new': pageShip,
   '#/logistics/other': main => pageReceipts(main, 'other'),
-  '#/logistics/other/new': main => pageReceipts(main, 'other'),
+  '#/logistics/other/new': main => pageReceipts(main, 'other-entry'),
   '#/logistics/stock': main => pageStock(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),
@@ -421,7 +438,7 @@ async function render() {
   shell();
   refreshNavBadges();
   const page = PAGES[location.hash || '#/'] || pageHome;
-  try { await page($('#main')); applyView($('#main'), route); foldHelp($('#main')); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
@@ -756,11 +773,42 @@ async function pagePO(main) {
   await load();
 }
 
-// ───────────── 물류: 발주입고목록 ─────────────
+// ───────────── 물류: 입고목록 (발주입고 + 기타입고) ─────────────
+// 15.39: 기타입고 목록을 입고목록에 합쳤다. 두 구역(발주입고·기타입고)을 한 화면에 두고 「구분」으로 골라 본다.
+// 두 구역은 처리 방식(체크 후 입고확인 / 수정·삭제)과 날짜 기준(납기일 / 입고일)이 달라 각자의 검색·처리를 그대로 쓴다.
+const RECEIPT_KINDS = [['all', '전체'], ['purchase', '발주입고'], ['other', '기타입고']];
 async function pageReceipts(main, tab) {
-  main.innerHTML = `<h1>입고목록 <span class="dept">물류</span></h1><div class="tabs receipt-tabs"><a href="#/logistics/receive" class="${tab === 'purchase' ? 'on' : ''}">발주입고</a><a href="#/logistics/other" class="${tab === 'other' ? 'on' : ''}">기타입고</a></div><section id="receiptContent"></section>`;
-  if (tab === 'other') await pageOtherReceipts($('#receiptContent', main));
-  else await pageReceive($('#receiptContent', main));
+  if (tab === 'other-entry') {
+    // 기타입고 입력 화면: 입력 양식만 보이고 목록 부분은 applyView가 숨긴다.
+    main.innerHTML = `<h1>입고목록 <span class="dept">물류</span></h1><section id="receiptContent"></section>`;
+    await pageOtherReceipts($('#receiptContent', main));
+    return;
+  }
+  let kind = tab === 'other' ? 'other' : 'all';
+  if (tab !== 'other') { try { kind = localStorage.getItem('wpa:receipt-kind') || 'all'; } catch { /* private mode */ } }
+  if (!RECEIPT_KINDS.some(([k]) => k === kind)) kind = 'all';
+  main.innerHTML = `<h1>입고목록 <span class="dept">물류</span></h1>
+    <div class="kind-filter" role="group" aria-label="입고 구분">${RECEIPT_KINDS.map(([k, label]) => `<button type="button" class="kind-chip" data-receipt-kind="${k}" aria-pressed="${k === kind}">${label}<span class="kind-count" data-kind-count="${k}"></span></button>`).join('')}</div>
+    <section class="receipt-part" data-part="purchase" id="receiptPurchase"></section>
+    <section class="receipt-part" data-part="other" id="receiptOther"></section>`;
+  const apply = () => {
+    $$('[data-receipt-kind]', main).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.receiptKind === kind)));
+    $$('.receipt-part', main).forEach(part => { part.hidden = kind !== 'all' && part.dataset.part !== kind; });
+  };
+  $$('[data-receipt-kind]', main).forEach(b => b.onclick = () => { kind = b.dataset.receiptKind; try { localStorage.setItem('wpa:receipt-kind', kind); } catch { /* ignore */ } apply(); });
+  apply();
+  await Promise.all([pageReceive($('#receiptPurchase', main)), pageOtherReceipts($('#receiptOther', main), { entry: false })]);
+  // 구분 버튼에 각 구역의 조회 건수를 붙인다(각 구역의 검색 조건 기준).
+  const counts = () => {
+    if (!main.isConnected) return;
+    const n = id => { const m = /(\d+)건/.exec($(`#${id}`, main)?.textContent || ''); return m ? Number(m[1]) : null; };
+    const pc = n('rcCount'), oc = n('otherCount');
+    const set = (k, v) => { const el = $(`[data-kind-count="${k}"]`, main), text = v === null ? '' : ` ${v}`; if (el && el.textContent !== text) el.textContent = text; }; // 같은 값이면 쓰지 않는다(관찰자 무한 반복 방지)
+    set('purchase', pc); set('other', oc); set('all', pc === null || oc === null ? null : pc + oc);
+  };
+  counts();
+  // 각 구역의 「N건 조회」 글자가 바뀔 때만 다시 센다.
+  const watch = new MutationObserver(counts); for (const id of ['rcCount', 'otherCount']) { const el = $(`#${id}`, main); if (el) watch.observe(el, { subtree: true, characterData: true, childList: true }); }
 }
 async function pageReceive(main) {
   main.innerHTML = `
@@ -872,10 +920,10 @@ function bindReceiptBom(form, row = {}) {
   form.addEventListener('reset', () => queueMicrotask(() => { select.value = ''; apply(); }));
   load().catch(fail);
 }
-async function pageOtherReceipts(main) {
+async function pageOtherReceipts(main, { entry = true } = {}) {
   main.innerHTML = `<h2>기타입고</h2>
-    <p class="muted">BOM에서 품목을 검색·선택하여 발주 없는 입고를 입력합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
-    <form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="form-grid">${photoPicker()}${inspectionFields()}</div><div class="actions"><button class="btn primary">등록</button></div></form>
+    <p class="muted">BOM에서 품목을 검색·선택하여 발주 없는 입고를 입력합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>${entry ? '' : '<p class="small muted">새 기타입고는 「기타입고 입력」 화면에서 등록합니다.</p><div class="actions" style="justify-content:flex-start"><a class="btn" href="#/logistics/other/new">+ 기타입고 입력</a></div>'}
+    ${entry ? `<form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="form-grid">${photoPicker()}${inspectionFields()}</div><div class="actions"><button class="btn primary">등록</button></div></form>` : ''}
     ${listControls('other', { dateLabel: '입고', from: monthStart(todayStr()), to: todayStr(), placeholder: '품목·코드·입고처·입력자·메모', extra: `<label>분류<select name="item_category" id="otherCategory">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}<div id="otherList"></div>`;
   const filterForm = $('#otherFilters', main); let queryVersion = 0;
   const load = async () => {
@@ -902,6 +950,7 @@ async function pageOtherReceipts(main) {
       try { await api('DELETE', '/api/other-receipts/' + button.dataset.otherDel); await load(); } catch (error) { fail(error); }
     });
   };
+  if (entry) {
   const otherDraft = bindPhotoDraft($('#otherNew'));
   bindReceiptBom($('#otherNew'));
   $('#otherNew').onsubmit = async event => {
@@ -912,6 +961,7 @@ async function pageOtherReceipts(main) {
       $('#otherQ').value = ''; $('#otherCategory').value = ''; if (photoSaved) toast('기타입고와 분석리스트에 등록했습니다.'); await load();
     } catch (error) { fail(error); } finally { button.disabled = false; }
   };
+  }
   bindListControls(filterForm, load);
   await load();
 }
@@ -993,8 +1043,9 @@ function fieldInput(f, r = {}) {
   if (f.t === 'radio' || f.t === 'checks') {
     const type = f.t === 'radio' ? 'radio' : 'checkbox';
     const sel = f.t === 'checks' ? (Array.isArray(v) ? v : []) : [v];
-    const etcInput = f.other ? `<span class="opt">기타 <input name="${f.k}_etc" value="${esc(etc)}" class="etc"></span>`
-      : f.otherOn ? `<input name="${f.k}_etc" value="${esc(etc)}" class="etc" placeholder="${esc(f.otherPh || '')}">` : '';
+    const plainLabel = String(label).replace(/<[^>]*>/g, '').replace(/\*/g, '').trim();
+    const etcInput = f.other ? `<span class="opt">기타 <input name="${f.k}_etc" value="${esc(etc)}" class="etc" aria-label="${esc(plainLabel)} 기타 입력"></span>`
+      : f.otherOn ? `<input name="${f.k}_etc" value="${esc(etc)}" class="etc" placeholder="${esc(f.otherPh || '')}" aria-label="${esc(f.otherPh || plainLabel + ' 기타 입력')}">` : '';
     return `<fieldset class="${cls}"><legend>${label}</legend><div class="opts">${f.opts.map((o) => `<label class="opt"><input type="${type}" name="${f.k}" value="${esc(o)}" ${sel.includes(o) ? 'checked' : ''} ${f.req && type === 'radio' ? 'required' : ''}> ${esc(o)}</label>`).join('')}${etcInput}</div></fieldset>`;
   }
   return `<label class="${cls}">${label}<input name="${f.k}" type="${f.t === 'date' ? 'date' : f.t === 'number' ? 'number' : 'text'}" value="${esc(v)}" ${f.req ? 'required' : ''} ${f.t === 'number' ? `min="${f.min ?? 0}" step="${f.step || 'any'}"` : ''} placeholder="${esc(f.ph || '')}"></label>`;
@@ -1168,7 +1219,7 @@ function bomForm(bom = {}) {
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="tablist">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
   const load = async () => {
     if (!main.isConnected) return;
@@ -1453,7 +1504,7 @@ async function pageAdmin(main) {
   <h1>관리자 설정</h1>
   <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
-    <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4"><button class="btn primary">변경</button></div></form>
+    <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
   <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
     <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label></div>
     <p class="small muted">오퍼레이터를 선택한 일반 계정은 다른 업무 권한보다 입력 전용 모드가 우선합니다. 관리자는 전체 권한을 유지합니다.</p><div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
