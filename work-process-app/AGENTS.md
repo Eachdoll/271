@@ -56,6 +56,16 @@
 - 임시 품목 정리는 관리자만: PUT /api/boms/:id로 정식 코드 저장(TMP- 코드는 거부) 또는 POST /api/boms/:id/merge {target_id}로 기존 품목에 합치기. 두 경우 모두 relinkCatalog()가 그 임시 코드를 쓴 발주·출하·기타입고의 품목명/코드를 한 batch로 바꿉니다. 수입검사 스냅샷은 바꾸지 않습니다. 정식 품목의 일반 수정은 과거 기록을 바꾸지 않습니다.
 - public/master.js(거래처 화면·선택 도우미)를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. vendors는 전체 백업 대상입니다. my-tasks는 관리자에게 임시 품목 수(temp_items)를 알려 줍니다.
 
+## 분류·샘플의뢰(상품)·반제품 기록 (15.7)
+- 품목 분류는 원자재/부자재/반제품/제품/상품입니다(서버·화면의 ITEM_CATEGORIES 순서 유지). other_receipts 테이블의 CHECK는 기존 4개 분류 그대로이므로 반제품은 기타입고로 받지 않습니다(서버가 400으로 안내). 테이블을 다시 만들어 제약을 바꾸지 마세요.
+- 0012: boms.cat1/cat2/cat3(선택, 하위 단계는 상위 단계 필요), production_units(라인 line / 세탁 호기 washer), semi_records(커팅/융착 cut = 라인별, 세탁 wash = 호기별).
+- 재고 현황의 분류·제품코드·1~3차 분류는 품목(boms)에 같은 이름이 등록되어 있으면 그 값을 우선합니다. 등록되지 않은 품목은 기록에 있는 분류를 씁니다. 반제품 생산일정 실적은 분류 '반제품'으로 잡습니다.
+- requests.type=sample_goods(샘플의뢰(상품)): 접수번호 G, 승인·상태 변경은 purchase 역할 또는 관리자. 기존 sample은 화면 이름만 샘플의뢰(제품)로 바꿨고 규칙은 그대로입니다. 새 의뢰 종류를 만들면 worker의 REQUEST_* 표, forms.js의 REQ, app.js의 PAGES/NAV/canApproveRequest, multi-items.js의 종류 판별을 함께 고치세요.
+- 라인·호기는 production 역할/관리자가 추가·이름 변경·사용 중지합니다(삭제 없음). semi_records.unit_name은 입력 당시 이름의 스냅샷입니다.
+- 반제품 품목은 worker.mjs와 public/semi.js의 SEMI_PRODUCTS(와이퍼: 부직포와이퍼·천와이퍼 / 심리스글러브: 스무드·타키)입니다. 커팅/융착은 종류 필수, 세탁은 와이퍼/심리스글러브만으로도 기록합니다. 입력은 로그인 사용자, 수정·삭제는 등록자·production·관리자. 미래 작업일은 거부합니다.
+- semi_records는 재고 계산(STOCK_MOVEMENTS)에 넣지 않았습니다. 넣을지와 품목명 규칙은 사용자 결정이 필요합니다.
+- 발주의 LOT는 선택입니다. public/semi.js를 HTML/local.mjs ASSETS/scripts/build.mjs에 포함하세요. production_units·semi_records는 전체 백업 대상입니다.
+
 ## 확인
 ```bash
 npm test

@@ -59,8 +59,9 @@ window.REQ = {
     ],
   },
   sample: {
-    label: '샘플', dept: '생산', role: 'production', mgr: '생산담당자',
+    label: '샘플(제품)', dept: '생산', role: 'production', mgr: '생산담당자',
     intake: '#/prod/request', list: '#/prod/list',
+    intakeTitle: '샘플의뢰(제품)', listTitle: '샘플리스트(제품)', documentTitle: '샘플의뢰서(제품)',
     titleLabel: '샘플명',
     fields: [
       { k: 'customer', label: '고객사', t: 'text', core: true },
@@ -74,6 +75,24 @@ window.REQ = {
       { k: 'condition', label: '생산조건', t: 'radio', opts: ['기존과 동일', '추가요청사항'], otherOn: '추가요청사항', otherPh: '추가요청 내용' },
       { k: 'packing', label: '포장사양', t: 'radio', opts: ['무관', '클린룸패킹 (단일)', '클린룸패킹 (이중)', '클린룸패킹 (삼중)'] },
       { k: 'pack_qty', label: '패킹수량/bag', t: 'text' },
+      { k: 'extra', label: '기타 요청사항', t: 'textarea', full: true },
+    ],
+  },
+  // 구매가 접수하는 상품 샘플 의뢰. 제품 샘플(생산)과 같은 흐름이며 승인은 구매 담당자가 합니다.
+  sample_goods: {
+    label: '샘플(상품)', dept: '구매', role: 'purchase', mgr: '구매담당자',
+    intake: '#/purchase/sample/request', list: '#/purchase/sample/list',
+    intakeTitle: '샘플의뢰(상품)', listTitle: '샘플리스트(상품)', documentTitle: '샘플의뢰서(상품)',
+    titleLabel: '상품명',
+    fields: [
+      { k: 'customer', label: '공급처 · 고객사', t: 'text', core: true },
+      { k: 'due_date', label: '완료 희망일', t: 'date', core: true },
+      { k: 'purpose', label: '의뢰목적', t: 'text', full: true },
+      { k: 'title', label: '상품명', t: 'text', core: true, req: true },
+      { k: 'req_qty', label: '요청수량', t: 'text', hint: '샘플 요청 수량' },
+      { k: 'usage', label: '사용용도', t: 'text' },
+      { k: 'volume', label: '사용량', t: 'text', hint: '연간예상수량' },
+      { k: 'price', label: '희망가격', t: 'text', hint: '목표 매입가 및 판매단가' },
       { k: 'extra', label: '기타 요청사항', t: 'textarea', full: true },
     ],
   },

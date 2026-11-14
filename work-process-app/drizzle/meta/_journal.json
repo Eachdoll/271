@@ -85,6 +85,13 @@
       "when": 1794660000000,
       "tag": "0011_vendors_and_product_codes",
       "breakpoints": false
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794670000000,
+      "tag": "0012_categories_lines_semi_records",
+      "breakpoints": false
     }
   ]
 }

@@ -13,11 +13,11 @@ async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,va
 
 // ───────────────────────── 공통 ─────────────────────────
 const ROLES = ['purchase', 'quality', 'quality_approver', 'dev', 'dev_approver', 'production', 'production_approver', 'logistics', 'logistics_approver'];
-const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production' };
-const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S' };
+const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev', sample: 'production', sample_goods: 'purchase' };
+const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
 const WORK_STATUSES = ['waiting', 'progress', 'done'];
-const ITEM_CATEGORIES = ['제품', '상품', '원자재', '부자재'];
+const ITEM_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품'];
 function itemCategory(value) {
   if (!ITEM_CATEGORIES.includes(value)) throw bad('품목 분류를 선택하세요.');
   return value;
@@ -84,10 +84,10 @@ function today() { return now().slice(0, 10); }
 function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isRequestApprover(user, type) {
-  return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production' }[type]);
+  return hasRole(user, { voc: 'quality_approver', analysis: 'quality_approver', development: 'dev_approver', sample: 'production', sample_goods: 'purchase' }[type]);
 }
 function requireRequestApprover(user, type) {
-  const label = { voc: '품질팀장(품질책임자)', analysis: '품질책임자', development: '개발책임자', sample: '생산담당자' }[type];
+  const label = { voc: '품질팀장(품질책임자)', analysis: '품질책임자', development: '개발책임자', sample: '생산담당자', sample_goods: '구매담당자' }[type];
   if (!isRequestApprover(user, type)) throw new HttpError(403, `${label}(승인권자)만 승인·반려할 수 있습니다. 관리자에게 책임자 지정을 요청하세요.`);
 }
 function requireRole(user, role, label) { if (!hasRole(user, role)) throw new HttpError(403, `${label} 담당자만 할 수 있습니다. (관리자에게 권한 요청)`); }
@@ -129,7 +129,7 @@ async function attachmentEntity(type, id, user, write = false) {
     if (!write && ['purchase_order', 'other_receipt'].includes(type) && await db.prepare('SELECT 1 FROM requests WHERE source_type=? AND source_id=?').get(type, Number(id))) return;
     throw new HttpError(404, '첨부할 기록을 찾을 수 없습니다.');
   }
-  if (type === 'request' && !['development','sample','voc'].includes(row.type)) throw bad('개발·샘플 의뢰서와 VOC에 사진을 첨부할 수 있습니다.');
+  if (type === 'request' && !['development','sample','sample_goods','voc'].includes(row.type)) throw bad('개발·샘플 의뢰서와 VOC에 사진을 첨부할 수 있습니다.');
   if (write) {
     if (type === 'request') {
       if (!(hasRole(user, REQUEST_TYPES[row.type]) || (row.requester_id === user.id && ['pending','rejected'].includes(row.status)))) throw new HttpError(403, '의뢰자 또는 담당자만 사진을 변경할 수 있습니다.');
@@ -343,7 +343,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -462,6 +462,8 @@ route('GET', '/api/po', async ({ query }) => {
     FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
 route('POST', '/api/po', async ({ user, body }) => {
+  // A chosen code supplies the item name (and class when none was given).
+  if (body.bom_id) { const chosen = await catalogItem(user, body); body.item = chosen.product; if (!body.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) body.item_category = chosen.item_category; }
   const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user);
   const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(f[0], f[1], entry.product, ...f.slice(3), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(r.lastInsertRowid));
@@ -653,7 +655,7 @@ function requestFields(type, b) {
 }
 function decodeRequest(r) { return { ...r, data: JSON.parse(r.data || '{}') }; }
 async function getRequest(id) { const r = (await db.prepare('SELECT * FROM requests WHERE id=?').get(id)); if (!r) throw new HttpError(404, '의뢰를 찾을 수 없습니다.'); return r; }
-function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산' }[type]; }
+function roleLabel(type) { return { voc: '품질', analysis: '품질', development: '연구소', sample: '생산', sample_goods: '구매' }[type]; }
 
 route('GET', '/api/requests', async ({ query }) => {
   const type = String(query.type || ''); if (!Object.hasOwn(REQUEST_TYPES, type)) throw bad('의뢰 종류가 올바르지 않습니다.');
@@ -691,7 +693,7 @@ route('PUT', '/api/requests/:id', async ({ user, params, body }) => {
     lot: (r.source_type ? undefined : body.lot ?? (r.type === 'analysis' ? body.data?.lot_etc : body.data?.lot)) ?? (r.lot || priorData.lot_etc || (r.type === 'voc' ? priorData.lot : '') || '') }, r);
   let lineQty = r.qty;
   if (!r.source_type && (r.qty !== null || r.type === 'voc')) {
-    const supplied = r.type === 'analysis' ? f.data.sample_qty : r.type === 'sample' ? f.data.req_qty : f.data.qty;
+    const supplied = r.type === 'analysis' ? f.data.sample_qty : ['sample', 'sample_goods'].includes(r.type) ? f.data.req_qty : f.data.qty;
     if (supplied !== undefined && supplied !== '') { lineQty = num(supplied,'품목 수량'); if (lineQty <= 0) throw bad('품목 수량은 0보다 커야 합니다.'); }
     if (lineQty !== null) f.data.qty = lineQty;
   }
@@ -751,6 +753,12 @@ function bomFields(body) {
   });
   return [reqStr(body.product, '품목명', 200), str(body.product_code, 80), kind, baseQty, reqStr(body.unit, '단위', 20), JSON.stringify(materials), str(body.note, 500), body.active === false || body.active === 0 ? 0 : 1, category];
 }
+// Optional sub-classification under the item class. A lower level needs the level above it.
+function bomCategories(body, previous = {}) {
+  const cats = ['cat1', 'cat2', 'cat3'].map(key => body[key] === undefined ? previous[key] || '' : str(body[key], 50));
+  if ((cats[1] && !cats[0]) || (cats[2] && !cats[1])) throw bad('2차 분류는 1차, 3차 분류는 2차를 먼저 입력하세요.');
+  return cats;
+}
 function decodeBom(row) { return { ...row, materials: JSON.parse(row.materials) }; }
 route('GET', '/api/boms', async ({ user, query }) => {
   const where = []; const args = [];
@@ -759,18 +767,22 @@ route('GET', '/api/boms', async ({ user, query }) => {
   if (query.temp === 'only') where.push('is_temp=1'); else if (query.temp !== '1' && query.include_archived !== '1') where.push('is_temp=0');
   if (query.kind) { if (!['finished','semi'].includes(query.kind)) throw bad('생산 구분이 올바르지 않습니다.'); where.push('kind=?'); args.push(query.kind); }
   if (query.item_category) { where.push('item_category=?'); args.push(itemCategory(query.item_category)); }
-  applyListKeyword(where, args, query.q, ['product','product_code','created_by','note']);
+  applyListKeyword(where, args, query.q, ['product','product_code','created_by','note','cat1','cat2','cat3']);
+  for (const key of ['cat1', 'cat2', 'cat3']) if (query[key]) { where.push(key + '=?'); args.push(str(query[key], 50)); }
   if (query.active) { if (!['0','1'].includes(query.active)) throw bad('BOM 사용 상태를 확인하세요.'); where.push('active=?'); args.push(Number(query.active)); }
   return (await db.prepare(`SELECT * FROM boms ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY product,id`).all(...args)).map(decodeBom);
 });
+// Category values already in use, for suggestions and filters.
+route('GET', '/api/boms/categories', async () => db.prepare("SELECT DISTINCT cat1,cat2,cat3 FROM boms WHERE active=1 AND cat1<>'' ORDER BY cat1,cat2,cat3 LIMIT 2000").all());
 route('POST', '/api/boms', async ({ user, body }) => {
   requireAdmin(user);
-  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)').run(...bomFields(body), user.name);
+  const fields = bomFields(body), cats = bomCategories(body);
+  const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats);
   return decodeBom(await mustGet('boms', result.lastInsertRowid));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   requireAdmin(user); const before = await mustGet('boms', params.id); const fields = bomFields(body);
-  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, before.id] }];
+  const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,cat1=?,cat2=?,cat3=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, ...bomCategories(body, before), before.id] }];
   if (before.is_temp) {
     if (/^TMP-/i.test(fields[1])) throw bad('임시 코드(TMP-)를 정식 제품코드로 바꿔 저장하세요.');
     commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
@@ -869,6 +881,7 @@ route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
 });
 
 // ── 물류: 발주 없는 기타입고 ──
+function receiptCategory(value) { const c = itemCategory(value); if (c === '반제품') throw bad('반제품은 기타입고로 받을 수 없습니다. 생산 기록으로 등록하세요.'); return c; }
 async function otherReceiptFields(b, previous = null) {
   const bomId = b.bom_id === undefined ? previous?.bom_id || null : b.bom_id === null || b.bom_id === '' ? null : Number(b.bom_id);
   let snapshot = {};
@@ -881,8 +894,10 @@ async function otherReceiptFields(b, previous = null) {
       snapshot = { id: bom.id, product: bom.product, product_code: bom.product_code, item_category: bom.item_category, unit: bom.unit };
     }
     if (!ITEM_CATEGORIES.includes(snapshot.item_category)) throw bad('관리자가 BOM 품목의 분류를 먼저 지정해야 합니다.');
+    // other_receipts keeps its original four-class constraint; semi-finished goods come from production, not receipts.
+    if (snapshot.item_category === '반제품') throw bad('반제품은 기타입고로 받을 수 없습니다. 생산 기록으로 등록하세요.');
   } else if (!previous || previous.bom_id) throw bad('BOM을 검색하여 입고할 품목을 선택하세요.');
-  return [dateStr(b.received_date, '입고일'), bomId ? snapshot.product : reqStr(b.item, '품목명', 200), bomId ? snapshot.item_category : itemCategory(b.item_category), num(b.qty, '입고수량'), reqStr(b.vendor, '입고처', 100), str(b.note, 500), bomId, JSON.stringify(snapshot)];
+  return [dateStr(b.received_date, '입고일'), bomId ? snapshot.product : reqStr(b.item, '품목명', 200), bomId ? snapshot.item_category : receiptCategory(b.item_category), num(b.qty, '입고수량'), reqStr(b.vendor, '입고처', 100), str(b.note, 500), bomId, JSON.stringify(snapshot)];
 }
 route('GET', '/api/other-receipts', async ({ query }) => {
   const where = []; const args = [];
@@ -925,6 +940,7 @@ route('GET', '/api/shipments', async ({ query }) => {
   return (await db.prepare(`SELECT shipments.*, ${attachmentSummary('shipment','shipments')} FROM shipments WHERE ${where.join(' AND ')} ORDER BY ship_date DESC, id DESC`).all(...args));
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
+  if (body.bom_id) body.item = (await catalogItem(user, body)).product;
   const f = shipFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[3], user);
   const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?)').run(f[0], entry.product, ...f.slice(2), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await mustGet('shipments', r.lastInsertRowid));
@@ -1001,7 +1017,7 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         const qty = num(b.qty, '수량'); if (qty <= 0) throw bad('수량은 0보다 커야 합니다.');
         const data = { ...(b.data || {}), qty, spec: meta.spec, unit: meta.unit };
         if (type === 'analysis') { data.sample_qty = String(qty); data.lot = meta.lot ? '있음' : '없음'; data.lot_etc = meta.lot; }
-        else { data.lot = meta.lot; if (type === 'sample') data.req_qty = String(qty); }
+        else { data.lot = meta.lot; if (['sample', 'sample_goods'].includes(type)) data.req_qty = String(qty); }
         const f = requestFields(type, { ...b, title: b.title || b.item, data });
         record = { type, title: f.title, customer: f.customer, due_date: f.due_date, category: f.category, target_price: f.target_price, data: JSON.stringify(f.data), qty, requester_id: user.id, requester_name: user.name };
       }
@@ -1161,6 +1177,85 @@ route('POST', '/api/actual-changes/:id/cancel', async ({ user, params }) => {
 
 route('GET', '/api/reports', async ({ query }) => buildReport(db, query, today()));
 
+// ── 생산: 라인·세탁 호기 관리와 반제품 작업 기록 (커팅/융착 = 라인별, 세탁 = 호기별) ──
+// To add a product, extend SEMI_PRODUCTS here and in public/semi.js; stored rows keep their own text.
+const SEMI_PRODUCTS = { wiper: { label: '와이퍼', types: ['부직포와이퍼', '천와이퍼'] }, seamless: { label: '심리스글러브', types: ['스무드', '타키'] } };
+const SEMI_UNIT_KIND = { cut: 'line', wash: 'washer' };
+const canManageProduction = user => hasRole(user, 'production');
+route('GET', '/api/production-units', async ({ query }) => {
+  const where = [], args = [];
+  if (query.kind) { if (!['line', 'washer'].includes(query.kind)) throw bad('라인/호기 구분을 확인하세요.'); where.push('kind=?'); args.push(query.kind); }
+  if (query.all !== '1') where.push('active=1');
+  return db.prepare(`SELECT * FROM production_units ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY kind, sort_order, name`).all(...args);
+});
+route('POST', '/api/production-units', async ({ user, body }) => {
+  if (!canManageProduction(user)) throw new HttpError(403, '라인·호기는 생산 담당자 또는 관리자가 관리합니다.');
+  const kind = String(body.kind || ''); if (!['line', 'washer'].includes(kind)) throw bad('라인/호기 구분을 확인하세요.');
+  const name = reqStr(body.name, kind === 'line' ? '라인 이름' : '호기 이름', 60);
+  if (await db.prepare('SELECT 1 FROM production_units WHERE kind=? AND name_key=?').get(kind, nameKey(name))) throw new HttpError(409, '같은 이름이 이미 있습니다.');
+  const order = num(body.sort_order ?? 0, '표시 순서');
+  const r = await db.prepare('INSERT INTO production_units(kind,name,name_key,sort_order,created_by) VALUES(?,?,?,?,?)').run(kind, name, nameKey(name), order, user.name);
+  return mustGet('production_units', r.lastInsertRowid);
+});
+route('PUT', '/api/production-units/:id', async ({ user, params, body }) => {
+  if (!canManageProduction(user)) throw new HttpError(403, '라인·호기는 생산 담당자 또는 관리자가 관리합니다.');
+  const row = await mustGet('production_units', params.id);
+  const name = body.name === undefined ? row.name : reqStr(body.name, '이름', 60);
+  const clash = await db.prepare('SELECT id FROM production_units WHERE kind=? AND name_key=?').get(row.kind, nameKey(name));
+  if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름이 이미 있습니다.');
+  const active = body.active === undefined ? row.active : body.active === false || body.active === 0 || body.active === '0' ? 0 : 1;
+  const order = body.sort_order === undefined ? row.sort_order : num(body.sort_order, '표시 순서');
+  // Renaming keeps earlier records readable: each record stores the name it was entered under.
+  await db.prepare('UPDATE production_units SET name=?,name_key=?,active=?,sort_order=?,updated_by=?,updated_at=? WHERE id=?').run(name, nameKey(name), active, order, user.name, now(), row.id);
+  return mustGet('production_units', row.id);
+});
+async function semiFields(body, process, previous = null) {
+  const date = dateStr(body.work_date, '작업일'); if (date > today()) throw bad('작업일은 오늘 이전으로 선택하세요.');
+  const unitId = Number(body.unit_id); if (!Number.isSafeInteger(unitId) || unitId <= 0) throw bad(process === 'cut' ? '라인을 선택하세요.' : '세탁 호기를 선택하세요.');
+  const unit = await mustGet('production_units', unitId);
+  if (unit.kind !== SEMI_UNIT_KIND[process]) throw bad(process === 'cut' ? '라인을 선택하세요.' : '세탁 호기를 선택하세요.');
+  if (!unit.active && previous?.unit_id !== unit.id) throw bad('사용 중지된 라인·호기입니다.');
+  const group = String(body.product_group || ''); if (!Object.hasOwn(SEMI_PRODUCTS, group)) throw bad('와이퍼/심리스글러브를 선택하세요.');
+  const type = str(body.product_type, 40);
+  if (process === 'cut' && !type) throw bad('품목(종류)을 선택하세요.');
+  if (type && !SEMI_PRODUCTS[group].types.includes(type)) throw bad('품목(종류)을 다시 선택하세요.');
+  return { work_date: date, unit_id: unit.id, unit_name: previous?.unit_id === unit.id ? previous.unit_name : unit.name, product_group: group, product_type: type, qty: num(body.qty, '수량'), unit: str(body.unit, 20), lot: str(body.lot, 100), note: str(body.note, 500) };
+}
+function semiProcess(value) { const process = String(value || ''); if (!Object.hasOwn(SEMI_UNIT_KIND, process)) throw bad('작업 구분을 확인하세요.'); return process; }
+route('GET', '/api/semi-records', async ({ query }) => {
+  const where = ['process=?'], args = [semiProcess(query.process)];
+  applyListDates(where, args, query, 'work_date');
+  if (query.unit_id) { if (!/^[1-9]\d*$/.test(query.unit_id)) throw bad('라인·호기를 확인하세요.'); where.push('unit_id=?'); args.push(Number(query.unit_id)); }
+  if (query.product_group) { if (!Object.hasOwn(SEMI_PRODUCTS, query.product_group)) throw bad('품목 구분을 확인하세요.'); where.push('product_group=?'); args.push(query.product_group); }
+  applyListKeyword(where, args, query.q, ['unit_name', 'product_type', 'lot', 'note', 'created_by']);
+  const rows = await db.prepare(`SELECT * FROM semi_records WHERE ${where.join(' AND ')} ORDER BY work_date DESC, id DESC LIMIT 2001`).all(...args);
+  if (rows.length > 2000) throw bad('기록이 너무 많습니다. 기간을 좁히세요.');
+  return rows;
+});
+route('POST', '/api/semi-records', async ({ user, body }) => {
+  const process = semiProcess(body.process); const f = await semiFields(body, process);
+  const key = body.request_id === undefined ? randomHex(16) : String(body.request_id);
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(key)) throw bad('요청 번호를 확인하세요.');
+  const old = await db.prepare('SELECT * FROM semi_records WHERE request_id=?').get(key);
+  if (old) { if (old.created_by_id !== user.id || old.process !== process || old.unit_id !== f.unit_id || old.qty !== f.qty || old.work_date !== f.work_date) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; }
+  const r = await db.prepare('INSERT INTO semi_records(process,work_date,unit_id,unit_name,product_group,product_type,qty,unit,lot,note,request_id,created_by_id,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(process, f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.qty, f.unit, f.lot, f.note, key, user.id, user.name);
+  return mustGet('semi_records', r.lastInsertRowid);
+});
+route('PUT', '/api/semi-records/:id', async ({ user, params, body }) => {
+  const row = await mustGet('semi_records', params.id);
+  if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 수정할 수 있습니다.');
+  const f = await semiFields(body, row.process, row);
+  await db.prepare('UPDATE semi_records SET work_date=?,unit_id=?,unit_name=?,product_group=?,product_type=?,qty=?,unit=?,lot=?,note=?,updated_by=?,updated_at=? WHERE id=?')
+    .run(f.work_date, f.unit_id, f.unit_name, f.product_group, f.product_type, f.qty, f.unit, f.lot, f.note, user.name, now(), row.id);
+  return mustGet('semi_records', row.id);
+});
+route('DELETE', '/api/semi-records/:id', async ({ user, params }) => {
+  const row = await mustGet('semi_records', params.id);
+  if (!canModify(user, row) && !canManageProduction(user)) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제할 수 있습니다.');
+  await db.prepare('DELETE FROM semi_records WHERE id=?').run(row.id); return { ok: true };
+});
+
 // ── 물류: 재고 현황 (입고 + 생산실적 − 생산 투입 − 출하 ± 재고 조정으로 계산) ──
 // Stock is derived, never stored: each source row is one movement. BOM materials have no size,
 // so material use is booked without a spec; the default view therefore totals by item + unit.
@@ -1173,7 +1268,7 @@ const STOCK_MOVEMENTS = `
     FROM other_receipts
   UNION ALL
   SELECT TRIM(s.product), s.spec, TRIM(COALESCE(NULLIF(s.unit,''), json_extract(s.bom_snapshot,'$.unit'), '')),
-    COALESCE(NULLIF(json_extract(s.bom_snapshot,'$.item_category'),''), CASE s.kind WHEN 'finished' THEN '제품' ELSE '' END), a.qty, 'prod', a.production_date, a.id, a.author_name
+    COALESCE(NULLIF(json_extract(s.bom_snapshot,'$.item_category'),''), CASE s.kind WHEN 'finished' THEN '제품' ELSE '반제품' END), a.qty, 'prod', a.production_date, a.id, a.author_name
     FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.voided_at IS NULL
   UNION ALL
   SELECT TRIM(json_extract(m.value,'$.item')), '', TRIM(COALESCE(json_extract(m.value,'$.unit'),'')), COALESCE(json_extract(m.value,'$.item_category'),''),
@@ -1209,7 +1304,11 @@ route('GET', '/api/inventory', async ({ user, query }) => {
     const min = bySpec ? null : levels.get(r.item + '\u0000' + r.unit) ?? null; const stock = stockRound(r.stock);
     return { ...r, received: stockRound(r.received), produced: stockRound(r.produced), used: stockRound(r.used), shipped: stockRound(r.shipped), adjusted: stockRound(r.adjusted), stock, min_qty: min, low: min !== null && stock < min, negative: stock < 0 && stockRound(totals.get(r.item + '\u0000' + r.unit)) < 0 };
   });
+  // The catalog is the authority for an item's class, code and sub-classes; unregistered items keep what their records say.
+  const catalog = new Map(); for (const b of await db.prepare('SELECT product,product_code,item_category,cat1,cat2,cat3 FROM boms WHERE active=1 ORDER BY is_temp DESC, id DESC').all()) catalog.set(nameKey(b.product), b);
+  list = list.map(r => { const c = catalog.get(nameKey(r.item)); return { ...r, category: c?.item_category || r.category, product_code: c?.product_code || '', cat1: c?.cat1 || '', cat2: c?.cat2 || '', cat3: c?.cat3 || '' }; });
   if (query.item_category) { const c = itemCategory(query.item_category); list = list.filter(r => r.category === c); }
+  for (const key of ['cat1', 'cat2', 'cat3']) if (query[key]) list = list.filter(r => r[key] === query[key]);
   if (query.state === 'low') list = list.filter(r => r.low); else if (query.state === 'negative') list = list.filter(r => r.negative);
   else if (query.state === 'instock') list = list.filter(r => r.stock > 0); else if (query.state) throw bad('재고 상태를 확인하세요.');
   return { asof, group: bySpec ? 'spec' : 'item', rows: list, can_adjust: canAdjustStock(user) };

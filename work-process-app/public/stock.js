@@ -3,8 +3,8 @@ const STOCK_SOURCE = { po: '발주입고', other: '기타입고', prod: '생산'
 const STOCK_KIND = { opening: '기초재고 (시스템 도입 전 보유분)', count: '재고 실사 (실제로 센 수량)', adjust: '조정 (증가 +, 감소 −)' };
 function stockCsv(rows, bySpec) {
   const safe = value => { const text = String(value ?? ''); return '"' + (/^[=+\-@]/.test(text) && isNaN(Number(text)) ? "'" + text : text).replace(/"/g, '""') + '"'; };
-  const head = ['품목', ...(bySpec ? ['규격'] : []), '단위', '분류', '입고', '생산', '생산 투입', '출하', '조정', '현재고', ...(bySpec ? [] : ['안전재고']), '최근 변동일'];
-  const lines = rows.map(r => [r.item, ...(bySpec ? [r.spec] : []), r.unit, r.category, r.received, r.produced, r.used, r.shipped, r.adjusted, r.stock, ...(bySpec ? [] : [r.min_qty ?? '']), r.last_date].map(safe).join(','));
+  const head = ['품목', '제품코드', ...(bySpec ? ['규격'] : []), '단위', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '생산 투입', '출하', '조정', '현재고', ...(bySpec ? [] : ['안전재고']), '최근 변동일'];
+  const lines = rows.map(r => [r.item, r.product_code, ...(bySpec ? [r.spec] : []), r.unit, r.category, r.cat1, r.cat2, r.cat3, r.received, r.produced, r.used, r.shipped, r.adjusted, r.stock, ...(bySpec ? [] : [r.min_qty ?? '']), r.last_date].map(safe).join(','));
   return '﻿' + [head.map(safe).join(','), ...lines].join('\r\n');
 }
 async function pageStock(main) {
@@ -15,6 +15,8 @@ async function pageStock(main) {
     <label>기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}" required></label>
     <label class="list-search">품목 검색<input type="search" name="q" maxlength="200" placeholder="품목명·규격"></label>
     <label>분류<select name="item_category">${categoryOptions('', true)}</select></label>
+    <label>1차 분류<select name="cat1" id="stockCat1"><option value="">전체</option></select></label>
+    <label>2차 분류<select name="cat2" id="stockCat2"><option value="">전체</option></select></label>
     <label>재고 상태<select name="state"><option value="">전체</option><option value="instock">재고 있음</option><option value="low">안전재고 미달</option><option value="negative">재고 음수 (기록 확인 필요)</option></select></label>
     <label>보기<select name="group"><option value="item">품목 합계</option><option value="spec">규격·사이즈별</option></select></label>
     <button type="submit" class="btn primary">조회</button>
@@ -24,6 +26,11 @@ async function pageStock(main) {
   <div id="stockSummary" class="counts"></div>
   <div id="stockList"></div>`;
   const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
+  api('GET', '/api/boms/categories').then(cats => {
+    const options = list => '<option value="">전체</option>' + [...new Set(list.filter(Boolean))].map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    const second = () => { const keep = form.cat2.value; $('#stockCat2').innerHTML = options(cats.filter(c => !form.cat1.value || c.cat1 === form.cat1.value).map(c => c.cat2)); form.cat2.value = [...form.cat2.options].some(o => o.value === keep) ? keep : ''; };
+    $('#stockCat1').innerHTML = options(cats.map(c => c.cat1)); second(); form.cat1.onchange = second;
+  }).catch(() => {});
   const adjust = async (preset = {}) => {
     const v = await promptBox('재고 조정 · 기초재고 · 실사', `
       <label>품목명 *<input name="item" required maxlength="200" value="${esc(preset.item)}"></label>
@@ -46,9 +53,9 @@ async function pageStock(main) {
     $('#stockAdjustSlot').innerHTML = result.can_adjust ? '<button type="button" class="btn" id="stockAdjust">＋ 기초재고·실사·조정</button>' : '';
     if (result.can_adjust) $('#stockAdjust').onclick = () => adjust();
     $('#stockSummary').innerHTML = `${rows.length}개 품목 · 기준일 ${esc(result.asof)}${rows.some(r => r.low) ? ` · <span class="chip yellow">안전재고 미달 ${rows.filter(r => r.low).length}</span>` : ''}${rows.some(r => r.negative) ? ` · <span class="chip red">재고 음수 ${rows.filter(r => r.negative).length}</span> <span class="small muted">입고·기초재고 누락 또는 품목명·단위 불일치를 확인하세요.</span>` : ''}${bySpec ? ' · <span class="small muted">BOM 자재에는 규격이 없어 생산 투입은 규격 없는 줄에 표시됩니다.</span>' : ''}`;
-    $('#stockList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>품목</th>${bySpec ? '<th>규격</th>' : ''}<th>분류</th><th class="r">입고</th><th class="r">생산</th><th class="r">생산 투입</th><th class="r">출하</th><th class="r">조정</th><th class="r">현재고</th>${bySpec ? '' : '<th class="r">안전재고</th>'}<th>최근 변동</th><th></th></tr></thead>
+    $('#stockList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>코드</th>${bySpec ? '<th>규격</th>' : ''}<th>분류</th><th class="r">입고</th><th class="r">생산</th><th class="r">생산 투입</th><th class="r">출하</th><th class="r">조정</th><th class="r">현재고</th>${bySpec ? '' : '<th class="r">안전재고</th>'}<th>최근 변동</th><th></th></tr></thead>
       <tbody>${rows.map((r, i) => `<tr class="${r.negative ? 'row-red' : r.low ? 'row-yellow' : ''}">
-        <td><b>${esc(r.item)}</b></td>${bySpec ? `<td>${esc(r.spec || '(규격 없음)')}</td>` : ''}<td>${esc(r.category || '미분류')}</td>
+        <td><b>${esc(r.item)}</b></td><td class="small">${esc(r.product_code) || '<span class="muted">미등록</span>'}</td>${bySpec ? `<td>${esc(r.spec || '(규격 없음)')}</td>` : ''}<td>${esc(r.category || '미분류')}${r.cat1 ? `<div class="small muted">${esc([r.cat1, r.cat2, r.cat3].filter(Boolean).join(' › '))}</div>` : ''}</td>
         <td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.produced)}</td><td class="r">${fmtNum(r.used)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r">${r.adjusted ? (r.adjusted > 0 ? '+' : '') + fmtNum(r.adjusted) : '0'}</td>
         <td class="r"><b class="${r.negative ? 'red-text' : ''}">${fmtNum(r.stock)}</b> ${esc(r.unit || '단위 미지정')}${r.low ? ' <span class="chip yellow">미달</span>' : ''}</td>
         ${bySpec ? '' : `<td class="r">${r.min_qty == null ? '<span class="muted">—</span>' : fmtNum(r.min_qty)}</td>`}
