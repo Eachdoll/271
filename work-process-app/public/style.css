@@ -549,3 +549,5 @@ label, legend { color: var(--text-2); font-weight: 600; }
 .auth-card > .lang-select { display: block; margin: 16px auto 0; }
 @media (max-width: 820px) { .who .lang-select { max-width: 96px; } }
 :lang(km) body, :lang(km) input, :lang(km) select, :lang(km) button { font-family: "Noto Sans Khmer", "Khmer OS", "Leelawadee UI", "Khmer UI", -apple-system, system-ui, sans-serif; line-height: 1.7; }
+/* 크메르어는 글자가 결합되므로 자간을 줄이면 깨진다. */
+:lang(km) * { letter-spacing: normal !important; }

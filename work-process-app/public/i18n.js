@@ -25,11 +25,23 @@ function i18nTranslator(dict) {
       const values = {}; t.order.forEach((index, i) => { values[index] = hangul.test(groups[i]) ? core(groups[i].trim(), depth + 1) : groups[i]; });
       return dict[t.key].replace(/\{(\d+)\}/g, (_, n) => values[n] ?? '');
     }
+    // "(안내문)" → translate the inside.
+    const paren = /^\((.+)\)$/s.exec(text); if (paren && !/[()]/.test(paren[1])) { const inner = core(paren[1].trim(), depth + 1); if (inner !== paren[1].trim()) return '(' + inner + ')'; }
+    // "A · B · C": each part on its own (names and codes between the dots stay as they are).
+    if (text.includes(' · ')) { const parts = text.split(' · '), out = parts.map(part => hangul.test(part) ? core(part.trim(), depth + 1) : part); if (out.some((v, i) => v !== parts[i].trim() && v !== parts[i])) return out.join(' · '); }
+    // "300 매", "4시간": number + unit word.
+    const amount = /^([\d,.]+)\s?([^\d\s].*)$/.exec(text); if (amount && Object.hasOwn(dict, amount[2])) return amount[1] + ' ' + dict[amount[2]];
+    // "수량 300": label word + number.
+    const labelled = /^(.+?)\s([\d,.]+)$/.exec(text); if (labelled && Object.hasOwn(dict, labelled[1])) return dict[labelled[1]] + ' ' + labelled[2];
+    // "2026-11-14 (토)": weekday letter after a date.
+    const day = /^([\d\-.: ]+)\(([월화수목금토일])\)$/.exec(text); if (day && Object.hasOwn(dict, day[2])) return day[1] + '(' + dict[day[2]] + ')';
     // A known phrase at the end or start (the rest is usually a name or number that was inserted there).
+    // A half-translated sentence is worse than the original, so the rest must translate too unless the phrase is most of the text.
+    const accept = (key, restOut) => !hangul.test(restOut) || key.length >= text.length * 0.6;
     for (const key of plain) {
       if (text.length <= key.length) continue;
-      if (text.endsWith(key)) { const rest = text.slice(0, -key.length); return join(hangul.test(rest) ? core(rest.trim(), depth + 1) + (/\s$/.test(rest) ? ' ' : '') : rest, dict[key]); }
-      if (text.startsWith(key)) { const rest = text.slice(key.length); return join(dict[key], hangul.test(rest) ? (/^\s/.test(rest) ? ' ' : '') + core(rest.trim(), depth + 1) : rest); }
+      if (text.endsWith(key)) { const rest = text.slice(0, -key.length), restOut = hangul.test(rest) ? core(rest.trim(), depth + 1) + (/\s$/.test(rest) ? ' ' : '') : rest; if (accept(key, restOut)) return join(restOut, dict[key]); }
+      if (text.startsWith(key)) { const rest = text.slice(key.length), restOut = hangul.test(rest) ? (/^\s/.test(rest) ? ' ' : '') + core(rest.trim(), depth + 1) : rest; if (accept(key, restOut)) return join(dict[key], restOut); }
     }
     return text;
   }
@@ -47,7 +59,7 @@ function i18nTranslator(dict) {
 (function i18nStart() {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined' || !document.documentElement) return;
   const lang = i18nLang(); document.documentElement.lang = lang;
-  const ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+  const ATTRS = ['placeholder', 'title', 'aria-label', 'alt', 'data-label']; // data-label: column names on phone cards
   const done = new WeakMap(); // text node → last translation we wrote
   let translate = null;
   const skip = el => !el || el.closest?.('script,style,textarea,.cert,[data-no-i18n],[contenteditable]');
