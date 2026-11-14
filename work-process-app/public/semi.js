@@ -278,18 +278,18 @@ async function pageSemi(main, process) {
   };
   let entryDraft;
   form.onsubmit = async event => {
-    event.preventDefault(); if (submit.disabled) return; submit.disabled = true; form.inert = true; entryDraft.start();
+    event.preventDefault(); if (submit.disabled) return; submit.disabled = true; form.inert = true; entryDraft?.start();
     const items = $$('[data-semi-row]', form).map(row => { const v = Object.fromEntries($$('[data-k]', row).map(input => [input.dataset.k, input.value])); const { product, size, inch, ...rest } = v; return { ...rest, ...productOf(product), spec: size || inch || '' }; });
     const date = form.work_date.value;
     try {
       const result = await api('POST', '/api/semi-batches', { process, common: { work_date: date, unit_id: form.unit_id.value }, items, request_id: requestId });
-      entryDraft.clear();
+      entryDraft?.clear();
       requestId = crypto.randomUUID(); toast(`작업 기록 ${result.rows.length}줄을 등록했습니다.`);
       // Keep the date and line; start again with one line that remembers the last product and unit.
       const last = $$('[data-semi-row]', form).at(-1); const fresh = addRow(last); $$('[data-semi-row]', form).forEach(row => { if (row !== fresh) row.remove(); }); countRows();
       if (date < filters.from.value) filters.from.value = date; if (date > filters.to.value) filters.to.value = date;
       await load();
-    } catch (error) { entryDraft.failure(); fail(error); } finally { form.inert = false; submit.disabled = false; countRows(); entryDraft.resume(); }
+    } catch (error) { entryDraft?.failure(); fail(error); } finally { form.inert = false; submit.disabled = false; countRows(); entryDraft?.resume(); }
   };
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
   $('#semiDetail').onchange = () => { $('#semiSummary').innerHTML = semiSummary(process, lastRows) + ($('#semiDetail').checked ? semiDetail(process, lastRows) : ''); };

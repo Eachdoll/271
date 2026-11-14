@@ -143,7 +143,7 @@ async function installMultiItems(legacy, entity, type = '') {
       await render();
       const prefix = {shipment:'sh',other_receipt:'other',laundry:'ln'}[entity]; const date = payload.common.ship_date || payload.common.received_date || payload.common.in_date;
       if (prefix && date && $('#' + prefix + 'Filters')) { $('#' + prefix + 'From').value = date; $('#' + prefix + 'To').value = date; $('#' + prefix + 'Filters').requestSubmit(); }
-    } catch(error) { if (!saved) entryDraft.failure(); status.textContent = saved ? `${saved.rows.length}품목은 이미 저장되었습니다(아래 목록에 표시). 다시 등록하지 말고 사진만 재시도하세요. 사진 저장 실패: ${error.message}` : error.message; fail(error); }
+    } catch(error) { if (!saved) entryDraft.failure(); else entryDraft.clear('품목은 저장되었습니다 · 다시 등록하지 말고 사진만 재시도하세요.'); status.textContent = saved ? `${saved.rows.length}품목은 이미 저장되었습니다(아래 목록에 표시). 다시 등록하지 말고 사진만 재시도하세요. 사진 저장 실패: ${error.message}` : error.message; fail(error); }
     finally { busy = false; form.inert = false; submit.disabled = false; updateCount(); }
   };
 }

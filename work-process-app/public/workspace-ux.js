@@ -104,18 +104,25 @@ window.addEventListener('beforeunload', event => {
 function approvalComparison(kind, c) {
   let rows = [], impact = '';
   if (kind === 'receipt') {
-    rows = [['입고 상태', RECV[c.old_status] || c.old_status, c.action === 'revert' ? '미입고' : RECV[c.old_status] || c.old_status], ['실입고 수량', c.old_recv_qty, c.action === 'revert' ? 0 : c.new_recv_qty]];
-    const delta = (c.action === 'revert' ? 0 : Number(c.new_recv_qty)) - Number(c.old_recv_qty);
-    impact = `입고 재고 ${delta >= 0 ? '+' : ''}${fmtNum(delta)} ${c.unit || ''}. 기존 수입검사 스냅샷은 유지됩니다.`;
+    // Receipts recorded before quantities were kept count the ordered quantity in stock (COALESCE(recv_qty, qty)).
+    const counted = c.old_recv_qty ?? c.order_qty, unit = c.unit ? ' ' + c.unit : '';
+    const oldLabel = c.old_recv_qty != null ? c.old_recv_qty : c.order_qty != null ? `기록 없음 (발주 ${fmtNum(c.order_qty)}${unit} 기준)` : '기록 없음';
+    rows = [['입고 상태', RECV[c.old_status] || c.old_status, c.action === 'revert' ? '미입고' : RECV[c.old_status] || c.old_status], ['실입고 수량', oldLabel, c.action === 'revert' ? '입고 취소' : c.new_recv_qty]];
+    const delta = (c.action === 'revert' ? 0 : Number(c.new_recv_qty)) - Number(counted);
+    impact = counted == null ? '재고 영향은 발주 정보를 확인할 수 없어 계산하지 못했습니다. 기존 수입검사 스냅샷은 유지됩니다.'
+      : `입고 재고 ${delta >= 0 ? '+' : ''}${fmtNum(delta)}${unit}${c.action === 'revert' ? ' (입고 기록 전체 취소, 미입고로 돌아갑니다)' : ''}. 기존 수입검사 스냅샷은 유지됩니다.`;
   } else if (kind === 'actual') {
     rows = [['생산일', c.old_date, c.action === 'void' ? '취소' : c.new_date], ['생산량', c.old_qty, c.action === 'void' ? 0 : c.new_qty], ['메모', c.old_note, c.action === 'void' ? '취소' : c.new_note]];
     impact = '승인하면 생산 실적 합계가 바뀝니다. 완제품 재고와 BOM 자재 투입량도 함께 다시 계산됩니다.';
   } else {
     const old = c.old_data, next = c.action === 'delete' ? {} : c.new_data;
-    rows = Object.entries(SEMI_FIELD_LABEL).filter(([key]) => c.action === 'delete' || (old[key] ?? '') !== (next[key] ?? '')).map(([key, label]) => [label, old[key], c.action === 'delete' ? '삭제' : next[key]]);
+    const filled = value => value != null && value !== '' && !(typeof value === 'number' && value === 0 && c.action === 'delete');
+    rows = Object.entries(SEMI_FIELD_LABEL).filter(([key]) => c.action === 'delete' ? filled(old[key]) : (old[key] ?? '') !== (next[key] ?? '')).map(([key, label]) => [label, old[key], c.action === 'delete' ? '삭제' : next[key]]);
     impact = c.process === 'wash' ? '세탁 처리량과 세탁 대기량이 다시 계산됩니다. 세탁 기록은 생산 재고를 추가하지 않습니다.' : '커팅/융착 양품 재고와 BOM 자재 투입량, 연결된 반제품 계획 실적이 다시 계산됩니다.';
   }
-  return `<p><b>${esc(c.item || c.product || c.old_data?.item_name || '기록 변경')}</b></p><p>요청자: ${esc(c.requested_by)} · ${esc(c.requested_at)}<br>사유: ${esc(c.reason)}</p><div class="table-wrap"><table class="grid keep-table approval-compare"><thead><tr><th>항목</th><th>변경 전</th><th>승인 후</th></tr></thead><tbody>${rows.map(([label, old, next]) => `<tr><th>${esc(label)}</th><td>${esc(old ?? '없음')}</td><td>${esc(next ?? '없음')}</td></tr>`).join('')}</tbody></table></div><p class="approval-impact">${esc(impact)}</p><p class="small muted">위 값은 요청 당시 기준입니다. 이후 원본이 바뀌었다면 서버에서 승인을 거부합니다.</p>`;
+  const semiTitle = c.old_data ? [c.old_data.item_name || c.old_data.product_type, c.old_data.spec, c.old_data.unit_name, c.old_data.work_date].filter(Boolean).join(' · ') : '';
+  const title = (c.item || c.product || semiTitle || '기록 변경') + (c.action === 'delete' ? ' — 삭제 요청' : c.action === 'void' ? ' — 실적 취소 요청' : c.action === 'revert' ? ' — 입고 취소 요청' : '');
+  return `<p><b>${esc(title)}</b></p><p>요청자: ${esc(c.requested_by)} · ${esc(c.requested_at)}<br>사유: ${esc(c.reason)}</p><div class="table-wrap"><table class="grid keep-table approval-compare"><thead><tr><th>항목</th><th>변경 전</th><th>승인 후</th></tr></thead><tbody>${rows.map(([label, old, next]) => `<tr><th>${esc(label)}</th><td>${esc(old ?? '없음')}</td><td>${esc(next ?? '없음')}</td></tr>`).join('')}</tbody></table></div><p class="approval-impact">${esc(impact)}</p><p class="small muted">위 값은 요청 당시 기준입니다. 이후 원본이 바뀌었다면 서버에서 승인을 거부합니다.</p>`;
 }
 async function reviewApproval(kind, id) {
   const endpoint = { receipt: 'receipt-changes', actual: 'actual-changes', semi: 'semi-changes' }[kind];
