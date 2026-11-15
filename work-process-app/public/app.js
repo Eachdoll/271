@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.61';
+const APP_VERSION = '15.62';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -477,6 +477,8 @@ const PAGES = {
   '#/admin/org': pageOrg,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
+  '#/tasks': pageTasks,
+  '#/favorites': pageFavorites,
 };
 
 function shell() {
@@ -495,9 +497,17 @@ function shell() {
     <div class="who"><a href="#/me" title="내 정보">${esc(ME.name)}${ME.is_admin ? ' <span class="tag">관리자</span>' : ''}${roles ? ` <span class="tag soft">${esc(roles)}</span>` : ''}</a>
       <button class="btn small" id="logout">로그아웃</button></div>
   </header>
-  <div class="layout"><nav class="side">${nav}</nav><main id="main"></main></div>`;
-  $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); uxClearUser(); ME = null; render(); };
+  <div class="layout"><nav class="side">${nav}<div class="side-account"><a href="#/me">내 정보</a><button type="button" class="btn small" id="logoutSide">로그아웃</button></div></nav><main id="main"></main></div>
+  <nav class="tabbar" aria-label="빠른 이동">
+    <a href="#/" class="${cur === '#/' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>홈</span></a>
+    <a href="#/tasks" class="${cur === '#/tasks' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg><span>할 일</span><b class="tab-badge" data-task-badge hidden></b></a>
+    <a href="#/favorites" class="${cur === '#/favorites' ? 'active' : ''}"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.3l1.1-6.2L3 9.7l6.2-.9z"/></svg><span>자주 쓰는 화면</span></a>
+    <button type="button" class="tab-menu" aria-label="전체 메뉴 열기"><svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>메뉴</span></button>
+  </nav>`;
+  const logout = async () => { await api('POST', '/api/auth/logout'); uxClearUser(); ME = null; render(); };
+  $('#logout').onclick = logout; $('#logoutSide').onclick = logout;
   $('.menu-btn').onclick = () => document.body.classList.toggle('nav-open');
+  $('.tab-menu').onclick = () => document.body.classList.toggle('nav-open');
   $$('.side a').forEach((a) => (a.onclick = () => document.body.classList.remove('nav-open')));
 }
 
@@ -514,11 +524,49 @@ async function render() {
   shell();
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (page === pageHome) applyMenuAccess($('#main')); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
 
+// ── 휴대폰 하단 탭(15.62): 할 일 · 자주 쓰는 화면 ──
+async function pageTasks(main) {
+  const [tasks, alerts] = await Promise.all([api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);
+  main.innerHTML = `<h1>할 일</h1><div class="dash-top">${tasksCard(tasks)}${alertsCard(alerts)}</div>`;
+}
+const RECENT_LIMIT = 8;
+const recentKey = () => 'wpa:recent:' + (ME ? ME.id : '');
+function readRecent() { try { const v = JSON.parse(localStorage.getItem(recentKey()) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
+const screenTitle = main => { const h = $('h1', main); if (!h) return ''; const c = h.cloneNode(true); c.querySelectorAll('.dept, .view-switch, .fav-toggle, button, a').forEach(x => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim().slice(0, 40); };
+const FAVORITE_SKIP = ['#/', '#/tasks', '#/favorites', '#/me'];
+// 화면 제목 옆 ☆(자주 쓰는 화면에 추가)과 최근 연 화면 기록. 자주 쓰는 화면은 서버(내 설정)에 저장해 다른 기기에서도 보인다.
+function favoriteTools(main, route) {
+  const path = String(route || '#/').split('?')[0], title = screenTitle(main);
+  if (!title || FAVORITE_SKIP.includes(path) || !PAGES[path]) return;
+  try { const list = readRecent().filter(r => r.href !== path); list.unshift({ href: path, label: title }); localStorage.setItem(recentKey(), JSON.stringify(list.slice(0, RECENT_LIMIT))); } catch { /* 최근 화면은 편의 기능 */ }
+  const h1 = $('h1', main); if (!h1 || $('.fav-toggle', h1)) return;
+  const favs = () => (ME.ui && ME.ui.favorites) || [];
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'fav-toggle';
+  const paint = () => { const on = favs().some(f => f.href === path); button.textContent = on ? '★' : '☆'; button.setAttribute('aria-pressed', String(on)); button.setAttribute('aria-label', on ? '자주 쓰는 화면에서 빼기' : '자주 쓰는 화면에 추가'); button.title = button.getAttribute('aria-label'); };
+  paint(); h1.insertBefore(button, h1.querySelector('.dept, .view-switch') || null); // 제목 글자 바로 뒤(부서 표시·전환 버튼 앞)
+  button.onclick = async () => {
+    const on = favs().some(f => f.href === path);
+    const next = on ? favs().filter(f => f.href !== path) : [...favs(), { href: path, label: title }].slice(-20);
+    try { ME.ui = await api('PUT', '/api/me/prefs', { favorites: next }); paint(); toast(on ? '자주 쓰는 화면에서 뺐습니다.' : '자주 쓰는 화면에 추가했습니다.'); } catch (error) { fail(error); }
+  };
+}
+async function pageFavorites(main) {
+  const favs = ((ME.ui && ME.ui.favorites) || []).filter(f => canSeeRoute(f.href));
+  const recent = readRecent().filter(r => canSeeRoute(r.href) && !favs.some(f => f.href === r.href));
+  const list = (items, empty, removable) => items.length ? `<ul class="fav-list">${items.map((f, i) => `<li><a href="${esc(f.href)}">${esc(f.label)}</a>${removable ? `<button type="button" class="btn small" data-fav-del="${i}" aria-label="${esc(f.label)} 빼기">빼기</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted">${empty}</p>`;
+  main.innerHTML = `<h1>자주 쓰는 화면</h1>
+    <section class="card"><h2>★ 고정한 화면</h2>${list(favs, '아직 없습니다. 화면 제목 옆 ☆를 누르면 여기에 고정됩니다.', true)}</section>
+    <section class="card"><h2>최근 연 화면</h2>${list(recent, '최근 연 화면이 없습니다.', false)}</section>`;
+  $$('[data-fav-del]', main).forEach(b => b.onclick = async () => {
+    const target = favs[Number(b.dataset.favDel)];
+    try { ME.ui = await api('PUT', '/api/me/prefs', { favorites: (ME.ui.favorites || []).filter(f => f.href !== target.href) }); pageFavorites(main); } catch (error) { fail(error); }
+  });
+}
 function pageNoMenu(main) {
   const label = (MENU_GROUP_LABELS.find(([key]) => key === routeMenu(location.hash)) || [, ''])[1];
   main.innerHTML = `<h1>열람 권한이 없습니다</h1><div class="card"><p>${esc(label)} 메뉴는 열람 권한이 없습니다. 필요하면 관리자에게 메뉴 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">대시보드로</a></div></div>`;
@@ -582,6 +630,15 @@ function suggestUnits() {
 new MutationObserver(suggestUnits).observe(document.body, { childList: true, subtree: true });
 
 // ── 내가 처리할 일: 승인 대기 배지와 대시보드 카드 ──
+// 하단 탭 「할 일」 배지: 내가 처리할 승인·접수 대기 건수 합(메뉴 권한으로 숨긴 업무는 뺀다).
+function taskTotal(tasks) {
+  const a = tasks.approvals; let n = 0;
+  const add = (count, route) => { if (count && canSeeRoute(route)) n += count; };
+  for (const [type, group] of Object.entries(a.requests)) add(group.count, REQ[type].intake);
+  add(a.actual_changes?.count, '#/prod/finished'); add(a.receipt_changes?.count, '#/logistics/receive'); add(a.semi_changes?.count, '#/prod/semi');
+  add(a.production_requests?.count, '#/prod/orders'); add(a.purchase_requests?.count, '#/sales/pr'); add(a.purchase_orders_waiting?.count, '#/purchase/po/new');
+  return n;
+}
 function taskBadgeCounts(tasks) {
   const counts = {}; const a = tasks.approvals;
   for (const [type, group] of Object.entries(a.requests)) if (group.count) counts[REQ[type].intake] = group.count;
@@ -598,7 +655,9 @@ function taskBadgeCounts(tasks) {
 }
 async function refreshNavBadges() {
   try {
-    const counts = taskBadgeCounts(await api('GET', '/api/my-tasks'));
+    const tasks = await api('GET', '/api/my-tasks'), counts = taskBadgeCounts(tasks);
+    const total = taskTotal(tasks), badge = $('[data-task-badge]');
+    if (badge) { badge.hidden = !total; badge.textContent = total > 99 ? '99+' : String(total); }
     $$('.side a').forEach(link => {
       $('.nav-badge', link)?.remove();
       const n = counts[link.getAttribute('href')];
@@ -618,9 +677,9 @@ function tasksCard(tasks) {
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
-  if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `${esc(r.req_no)} ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
-  if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
-  if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `${esc(r.doc_no)} ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
+  if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `<button type="button" class="link-btn" data-open-mr="${r.id}">${esc(r.req_no)}</button> ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
+  if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
+  if (a.purchase_orders_waiting?.count) todo.push(`<li><a href="#/purchase/po/new"><b>발주 대기 구매의뢰 ${a.purchase_orders_waiting.count}건</b></a><div class="small muted">${a.purchase_orders_waiting.items.map(r => `<button type="button" class="link-btn" data-task-pr="${r.id}">${esc(r.doc_no)}</button> ${esc(r.title || r.first_item || '')} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_orders_waiting.count, a.purchase_orders_waiting.items.length)}</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
@@ -761,6 +820,12 @@ async function pageHome(main) {
   <p class="muted small dash-note">※ 샘플 및 개발제품의 출고(or 제출)는 제조/품질본부장 승인 후 출고 가능</p>`;
   // 업무 흐름 안내는 넓은 화면에서는 펼치고, 휴대폰에서는 접어 둔다(내용은 그대로, 눌러서 열기).
   const flows = $('[data-flows]', main); if (flows && !matchMedia('(max-width: 700px)').matches) flows.open = true;
+  // 15.62: 휴대폰에서는 할 일·알림을 먼저 보도록 「현황 한눈에」「진행 현황」을 접어 둔다(눌러서 열기).
+  if (matchMedia('(max-width: 700px)').matches) for (const id of ['dashNow', 'dashProgress']) {
+    const section = $(`[aria-labelledby="${id}"]`, main), heading = section && $('#' + id, section); if (!section || !heading) continue;
+    const fold = document.createElement('details'); fold.className = 'dash-fold';
+    const summary = document.createElement('summary'); summary.append(heading); fold.append(summary, ...[...section.childNodes]); section.append(fold);
+  }
 }
 
 // ───────────── 구매: 발주목록 ─────────────
@@ -924,7 +989,14 @@ async function pageReceive(main) {
   <div id="rcList"></div>`;
   let rows = []; const filterForm = $('#rcFilters', main); let queryVersion = 0;
   const selected = () => $$('.rc-check:checked').map((c) => Number(c.value));
-  const updateCount = () => { $('#rcSelectedCount').textContent = `${selected().length}개 선택`; };
+  // 15.62: 휴대폰에서 하나라도 체크하면 처리 버튼 줄을 화면 아래에 띄운다. 원래 자리에 같은 높이의 빈칸을 남겨 목록이 튀지 않게 한다.
+  const barSpacer = document.createElement('div'); barSpacer.className = 'actionbar-spacer';
+  const updateCount = () => {
+    $('#rcSelectedCount').textContent = `${selected().length}개 선택`;
+    const bar = $('.actionbar', main), on = selected().length > 0 && matchMedia('(max-width: 820px)').matches; if (!bar || on === bar.classList.contains('has-selection')) return;
+    if (on) { barSpacer.style.height = bar.offsetHeight + 'px'; bar.before(barSpacer); } else barSpacer.remove();
+    bar.classList.toggle('has-selection', on);
+  };
   const load = async () => {
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
@@ -1248,11 +1320,13 @@ async function pageIntake(type) {
   const newForm = $('.req-form', main); const draft = bindPhotoDraft(newForm);
   // 15.58: 고객사 칸은 매출처 목록에서 고른다(상품 샘플의 「공급처 · 고객사」는 양쪽이라 전체 목록).
   const customerInput = $('[name=customer]', newForm); if (customerInput) bindPartnerPicker(customerInput, null, { type: type === 'sample_goods' ? '' : 'sales' });
+  // 15.62: 의뢰서 입력 초안(이 탭). 라디오·체크 묶음도 칸 순서로 보관한다. 사진은 보관하지 않는다.
+  const intakeDraft = bindEntryDraft(newForm, 'intake:' + type, { read: () => uxIndexRead(newForm), restore: value => uxIndexRestore(newForm, value) });
   bindListControls(filterForm, load);
   newForm.onsubmit = async (e) => {
     e.preventDefault(); if (draft.busy) return;
     const button = $('button.primary', newForm); button.disabled = true;
-    try { const saved = await api('POST', '/api/requests', collectRequest(type, e.target)); const photoSaved = await saveNewAttachments('request', saved, draft, newForm); e.target.reset(); draft.reset(); if (photoSaved) toast('의뢰를 접수했습니다. 접수대기 목록을 확인하세요.'); load(); } catch (err) { fail(err); } finally { button.disabled = false; }
+    try { intakeDraft.start(); const saved = await api('POST', '/api/requests', collectRequest(type, e.target)); intakeDraft.clear(); const photoSaved = await saveNewAttachments('request', saved, draft, newForm); e.target.reset(); draft.reset(); intakeDraft.resume(); if (photoSaved) toast('의뢰를 접수했습니다. 접수대기 목록을 확인하세요.'); load(); } catch (err) { intakeDraft.failure(); fail(err); } finally { button.disabled = false; }
   };
   await load();
 }
@@ -1730,3 +1804,11 @@ async function pageMe(main) {
   try { ME = (await api('GET', '/api/me')).user; } catch { ME = null; }
   render();
 })();
+
+// 15.62: 휴대폰 카드에서 체크박스 칸 어디를 눌러도 체크된다(작은 칸을 정확히 누르지 않아도 됨).
+document.addEventListener('click', event => {
+  if (event.target.closest('input, button, a, label, select, textarea')) return;
+  const cell = event.target.closest('table.grid.as-cards td'); if (!cell) return;
+  const box = cell.querySelector(':scope > input[type=checkbox]:only-child'); if (!box || box.disabled) return;
+  box.click();
+});

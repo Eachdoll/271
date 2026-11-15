@@ -976,3 +976,43 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .menu-checks legend, .menu-mode legend { font-weight: 600; margin-bottom: 4px; }
 .menu-checks > p { flex-basis: 100%; margin: 0; }
 .menu-mode label { flex-basis: 100%; }
+
+/* ── 15.62 휴대폰 사용성 ── */
+.tabbar, .side-account { display: none; }
+.fav-toggle { background: none; border: 0; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; margin-left: 6px; min-width: 40px; min-height: 40px; vertical-align: middle; }
+.fav-toggle[aria-pressed="true"] { color: #d18a00; }
+.fav-list { list-style: none; margin: 0; padding: 0; }
+.fav-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.fav-list li:last-child { border-bottom: 0; }
+.fav-list a { font-size: 16px; font-weight: 600; }
+.link-btn { background: none; border: 0; padding: 2px 0; color: var(--accent-ink, var(--accent)); text-decoration: underline; cursor: pointer; font: inherit; }
+.dash-fold > summary { cursor: pointer; list-style: revert; }
+.dash-fold > summary > h2 { display: inline; }
+@media (max-width: 820px) {
+  /* 하단 탭(홈·할 일·자주 쓰는 화면·메뉴) */
+  .tabbar { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar a, .tabbar button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 58px; padding: 4px 2px; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); background: none; border: 0; text-decoration: none; cursor: pointer; }
+  .tabbar a.active { color: var(--accent-ink, var(--accent)); }
+  .tabbar .tab-icon { width: 22px; height: 22px; }
+  .tab-badge { position: absolute; top: 5px; left: calc(50% + 6px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: #d92d20; color: #fff; font-size: 13px; line-height: 20px; text-align: center; }
+  main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .side { height: auto; bottom: calc(58px + env(safe-area-inset-bottom)); overflow: auto; }
+  .side-account { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 12px 8px 4px; border-top: 1px solid var(--line); }
+  /* 상단 바: 버전·로그아웃은 메뉴 안으로 */
+  .top .app-version, #logout { display: none; }
+  /* 입력 폼 저장 버튼을 화면 아래(탭 위)에 고정 */
+  #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> button.primary) {
+    position: sticky; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 6; background: var(--panel); padding: 10px 0; margin-bottom: 0; box-shadow: 0 -10px 12px -10px rgba(0, 0, 0, .25);
+  }
+  .modal form > .actions:last-child:has(> button.primary) { position: sticky; bottom: 0; z-index: 6; background: var(--panel); padding: 10px 0; box-shadow: 0 -10px 12px -10px rgba(0, 0, 0, .25); }
+  /* 입고목록: 체크하면 처리 버튼 줄을 아래에 띄움 */
+  .actionbar.has-selection { position: fixed; left: 12px; right: 12px; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 24; background: var(--panel); border-radius: 16px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .22); }
+}
+@media (max-width: 700px) {
+  /* 체크·라디오를 손가락 크기로, 선택지는 칩 모양 */
+  input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
+  .opts { gap: 8px; }
+  .opts > label.opt { min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+  .opts > label.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink, var(--accent)); font-weight: 600; }
+  table.grid.as-cards td:has(> input[type=checkbox]:only-child) { cursor: pointer; }
+}

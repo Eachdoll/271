@@ -110,6 +110,12 @@ async function prForm(host, existing = null, { onDone } = {}) {
     line[kind].push(id); select.value = ''; drawLines(); select.focus();
   });
   drawLines();
+  // 15.62: 새 의뢰서 입력 초안(이 탭): 머리·품목 줄·결재선. 사진은 다시 첨부한다.
+  const entryDraft = existing ? null : bindEntryDraft(form, 'purchase-request:new', {
+    read: () => ({ head: uxFormRead(form), items: [...items.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value]))), line: JSON.parse(JSON.stringify(line)) }),
+    restore: value => { uxFormRestore(form, value.head); items.replaceChildren(); (value.items && value.items.length ? value.items : [{}]).forEach(it => addItem(it)); for (const kind of Object.keys(line)) line[kind] = (value.line && Array.isArray(value.line[kind]) ? value.line[kind] : []).filter(id => people.some(p => p.id === id)); drawLines(); },
+    afterRestore: totals,
+  });
   // 저장 재시도(응답이 끊겨 다시 누름)는 같은 request_id를 보내 서버가 처음 저장한 의뢰서를 돌려준다. 성공하면 화면을 떠난다.
   let busy = false; const saveId = existing ? null : crypto.randomUUID();
   form.onsubmit = async event => {
@@ -118,12 +124,12 @@ async function prForm(host, existing = null, { onDone } = {}) {
     const values = formObj(form);
     const body = { doc_date: values.doc_date, title: values.title, note: values.note, approvers: line.approve, agreers: line.agree, cc: line.cc,
       items: [...items.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value]))) };
-    busy = true;
+    busy = true; entryDraft?.start();
     try {
       let saved;
       if (existing) saved = await api('PUT', `/api/purchase-requests/${existing.id}`, { ...body, revision: existing.revision });
       else {
-        saved = await api('POST', '/api/purchase-requests', { ...body, request_id: saveId });
+        saved = await api('POST', '/api/purchase-requests', { ...body, request_id: saveId }); entryDraft?.clear();
         if (draft.photos.length && !saved.photos.length) {
           try { saved = await api('PUT', `/api/purchase-requests/${saved.id}/photos`, { photos: [...draft.photos], revision: saved.revision }); }
           catch { fail(new Error('의뢰서는 상신했으나 사진 저장에 실패했습니다. 의뢰서를 열어 「사진 변경」으로 다시 올리세요.')); }
@@ -131,7 +137,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
       }
       toast(existing ? '고쳐서 다시 상신했습니다.' : saved.duplicate ? `${saved.doc_no} 구매의뢰는 앞서 이미 상신되었습니다. 저장된 내용을 엽니다.` : `${saved.doc_no} 구매의뢰를 상신했습니다.`);
       if (onDone) onDone(saved); else { prOpenAfterLoad = saved.id; location.hash = '#/sales/pr'; }
-    } catch (error) { fail(error); } finally { busy = false; }
+    } catch (error) { entryDraft?.failure(); fail(error); } finally { busy = false; }
   };
 }
 async function pageSalesPrEntry(main) {
@@ -502,3 +508,9 @@ async function poFromRequests(host, onDone) {
   try { await draw(); } catch (error) { $('[data-pr-wait]', host).innerHTML = `<p class="field-error">${esc(error.message)}</p>`; }
   return { reload: draw };
 }
+
+// 대시보드·할 일의 구매의뢰 번호를 누르면 목록을 거치지 않고 바로 연다(15.62).
+document.addEventListener('click', event => {
+  const button = event.target.closest?.('[data-task-pr]');
+  if (button) prOpen(Number(button.dataset.taskPr), async () => { if (/^#\/(tasks)?$/.test(location.hash || '#/')) render(); else refreshNavBadges(); }).catch(fail);
+});
