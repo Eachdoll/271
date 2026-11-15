@@ -120,7 +120,7 @@ async function installMultiItems(legacy, entity, type = '') {
   };
   add(); $('[data-add-item]',form).onclick = add;
   const partner = $('[name=vendor],[name=customer]',form);
-  if (partner) bindPartnerPicker(partner, $('[data-partner-hint]',form), { recent: entity === 'purchase_order', onPick: item => {
+  if (partner) bindPartnerPicker(partner, $('[data-partner-hint]',form), { recent: entity === 'purchase_order', type: entity === 'shipment' ? 'sales' : 'purchase', onPick: item => {
     // Fill the first blank line (or a new one) from a recent purchase; quantity is left for the user.
     const row = $$('[data-multi-row]',form).find(r => !$('[data-line-key=item]',r).value.trim()) || add(); if (!row) return toast('품목은 30개까지 등록할 수 있습니다.','err');
     const select = $('[data-line-key=bom_id]',row); const bom = item.product_code && boms.find(b => b.product_code === item.product_code);

@@ -1,0 +1,52 @@
+// 15.56 구매 › 발주 입력에서 승인된 구매의뢰를 불러와 발주: 발주 대기 목록의 미발주 품목, 일부 품목만 발주, 대시보드 건수.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { localEnvironment } from '../local.mjs';
+import worker from '../worker.mjs';
+import approvedRegistration from './helpers.cjs';
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pofpr-'));
+const { env, sqlite } = localEnvironment(dir, 'pofpr-test');
+function client() {
+  let cookie = '';
+  return async (method, url, body) => {
+    const r = await worker.fetch(new Request('https://pofpr.test' + url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }), env);
+    if (r.headers.has('set-cookie')) cookie = r.headers.get('set-cookie').split(';')[0];
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+}
+const admin = client(), sales = client(), boss = client(), buyer = client();
+const ids = {};
+before(async () => {
+  for (const [c, name] of [[admin, '관리자'], [sales, '영업'], [boss, '팀장'], [buyer, '구매']]) await approvedRegistration(admin, c, { name, password: 'password', invite: 'pofpr-test' });
+  for (const u of (await admin('GET', '/api/admin/users')).body) ids[u.name] = u.id;
+  await admin('PUT', `/api/admin/users/${ids['구매']}`, { roles: ['purchase'] });
+});
+after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+
+test('Approved requests list their unordered items for the purchase screen; ordering some leaves the rest waiting', async () => {
+  const pr = (await sales('POST', '/api/purchase-requests', { doc_date: '2026-11-10', title: '핸드롤러', approvers: [ids['팀장']], items: [
+    { item: '핸드롤러', spec: '34Φ*200', unit: 'SET', qty: 10, vendor: '롤러상사', due_text: '2026-12-01' },
+    { item: '교체용 롤', unit: 'EA', qty: 40, vendor: '롤러상사', due_text: 'ASAP' }] })).body;
+  assert.equal((await buyer('GET', '/api/my-tasks')).body.approvals.purchase_orders_waiting, undefined, 'nothing to order before approval');
+  await boss('POST', `/api/purchase-requests/${pr.id}/decision`, { decision: 'approved' });
+  const waiting = (await buyer('GET', '/api/my-tasks')).body.approvals.purchase_orders_waiting;
+  assert.deepEqual([waiting.count, waiting.items[0].doc_no, waiting.items[0].first_item], [1, pr.doc_no, '핸드롤러']);
+  assert.equal((await sales('GET', '/api/my-tasks')).body.approvals.purchase_orders_waiting, undefined, 'only purchase staff see it');
+  const box = (await buyer('GET', '/api/purchase-requests?box=order&paged=1')).body;
+  const row = box.rows.find(r => r.id === pr.id);
+  assert.deepEqual(row.open_items.map(i => [i.item, i.spec, i.unit, i.qty, i.vendor, i.due_text]), [['핸드롤러', '34Φ*200', 'SET', 10, '롤러상사', '2026-12-01'], ['교체용 롤', '', 'EA', 40, '롤러상사', 'ASAP']]);
+  assert.ok(!('open_items' in (await buyer('GET', '/api/purchase-requests')).body[0]), 'other boxes stay as they were');
+  // 첫 품목만 발주
+  const made = await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', item_ids: [row.open_items[0].id] });
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  assert.deepEqual(made.body.created.map(p => [p.req_no, p.vendor, p.item, p.qty, p.unit, p.due_date]), [[pr.doc_no, '롤러상사', '핸드롤러', 10, 'SET', '2026-12-01']]);
+  assert.ok((await buyer('GET', '/api/po')).body.some(p => p.id === made.body.created[0].id), 'shows in the order list');
+  const rest = (await buyer('GET', '/api/purchase-requests?box=order&paged=1')).body.rows.find(r => r.id === pr.id);
+  assert.deepEqual(rest.open_items.map(i => i.item), ['교체용 롤']);
+  await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-11-20', item_category: '부자재' });
+  assert.ok(!(await buyer('GET', '/api/purchase-requests?box=order&paged=1')).body.rows.some(r => r.id === pr.id), 'fully ordered requests leave the box');
+  assert.equal((await buyer('GET', '/api/my-tasks')).body.approvals.purchase_orders_waiting, undefined);
+});
