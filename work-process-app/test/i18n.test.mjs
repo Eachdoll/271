@@ -33,4 +33,5 @@ test('15.51 messages: a retried save, per-unit totals and the save total transla
   assert.match(t('PR-261115-01 구매의뢰는 앞서 이미 상신되었습니다. 저장된 내용을 엽니다.'), /^Purchase request PR-261115-01 was already submitted/);
   assert.equal(t('합계 (BOX) · 의뢰 20 · 계획 0 · 생산 0'), 'Total (BOX) · Requested 20 · Planned 0 · Production 0');
   assert.doesNotMatch(t('합계 수량 20 BOX · 500 매 · 2줄'), /[가-힣]/);
+  for (const text of ['초안 보관됨 · 이 탭에서만 보관됩니다. 사진은 다시 첨부하세요.', '보관된 입력 초안이 있습니다. · 이 탭에서만 보관됩니다.', '입력 내용은 이 탭에 자동 보관됩니다.']) assert.doesNotMatch(t(text), /[가-힣]/, text);
 });

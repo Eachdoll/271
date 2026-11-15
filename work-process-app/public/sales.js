@@ -334,6 +334,7 @@ async function mrForm(host, existing = null, { onDone } = {}) {
   const readLines = () => [...lines.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value])));
   // 새 의뢰는 입력 초안을 이 탭에 보관한다(품목 줄 포함). 저장에 성공하면 지우고, 실패하면 남긴다.
   const draft = existing ? null : bindEntryDraft(form, 'production-request:new', {
+    noPhotos: true,
     read: () => ({ head: uxFormRead(form), lines: readLines() }),
     restore: value => { uxFormRestore(form, value.head); lines.replaceChildren(); (value.lines && value.lines.length ? value.lines : [{}]).forEach(l => addLine(l)); },
     afterRestore: total,
@@ -381,7 +382,7 @@ async function pageMrList(main, mode = 'sales') {
     const data = await api('GET', '/api/production-requests?' + new URLSearchParams(Object.entries(params).filter(([, x]) => x !== '')));
     if (own !== version || !main.isConnected) return;
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; more = data.more;
-    listCount(form, rows.length);
+    listCount(form, rows.length); if (more) $('[data-list-count]', form).textContent += ' · 더 있음';
     $('#mrList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>발주일 · 의뢰번호</th><th>업체 · 주문번호</th><th>품목 · 수량</th><th>출고 희망</th><th>진행</th><th>생산 완료일</th><th>출고</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'waiting' || r.status === 'partial' ? 'row-yellow' : ''}">
       <td>${esc(r.order_date)}<div class="small muted">${esc(r.req_no)}</div></td>
       <td><b>${esc(r.customer)}</b>${r.order_no ? `<div class="small muted">${esc(r.order_no)}</div>` : ''}${r.spec ? `<div class="small mr-spec-inline">${esc(r.spec)}</div>` : ''}</td>
@@ -407,7 +408,7 @@ async function mrOpen(id) {
     <p><span class="muted">발주일</span> <b>${esc(r.order_date)}</b> <span class="muted">주문번호</span> <b>${esc(r.order_no || '—')}</b> <span class="muted">출고 희망</span> <b>${esc(mrShip(r))}</b></p>
     <p class="small muted"><span>요청자</span> ${esc(r.author_name)} ${esc(r.author_department)} · <span>등록</span> ${esc(String(r.created_at).slice(0, 16))}</p>
     ${r.spec ? `<p class="mr-spec">${esc(r.spec)}</p>` : ''}
-    <section><h4>생산 품목 · 진행 현황</h4><div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">수량</th><th class="r">계획</th><th>생산</th></tr></thead><tbody>${r.lines.map(l => `<tr><td><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '—')}</td><td class="r">${fmtNum(l.qty)} ${esc(l.unit)}</td><td class="r ${l.planned_qty < l.qty ? 'red-text' : ''}">${fmtNum(l.planned_qty)}</td><td>${mrBar(Math.min(l.produced_qty, l.qty), l.qty)}</td></tr>`).join('')}</tbody></table></div>
+    <section><h4>생산 품목 · 진행 현황</h4><div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">수량</th><th class="r">계획</th><th>생산</th></tr></thead><tbody>${r.lines.map(l => `<tr><td><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '—')}</td><td class="r">${fmtNum(l.qty)} ${esc(l.unit)}</td><td class="r ${l.planned_qty < l.qty ? 'red-text' : ''}">${fmtNum(l.planned_qty)}</td><td data-card-primary>${mrBar(Math.min(l.produced_qty, l.qty), l.qty)}</td></tr>`).join('')}</tbody></table></div>
       ${(r.units || []).map(u => `<p class="pr-totals">${`합계${u.unit ? ' (' + esc(u.unit) + ')' : ''} · 의뢰 ${fmtNum(u.qty)} · 계획 ${fmtNum(u.planned)} · 생산 ${fmtNum(u.produced)}`}</p>`).join('')}${r.done_date ? `<p><span class="chip green">생산완료</span> ${esc(r.done_date)}</p>` : ''}</section>
     <section><h4>연결된 생산계획</h4>${r.schedules.length ? `<ul class="mr-schedules">${r.schedules.map(s => `<li><a href="#/prod/${s.kind === 'semi' ? 'semi' : 'finished'}"><span>${s.kind === 'semi' ? '반제품' : '완제품'}</span> · <span>${{ day: '일간', week: '주간', month: '월간' }[s.period]}</span> ${esc(s.start_date)}</a> <span>${esc(s.product)} ${esc(s.spec)} ${mrUnitText(s.qty, s.unit)}</span> <span class="small muted"><span>실적</span> ${fmtNum(s.actual_qty)}</span></li>`).join('')}</ul>` : '<p class="muted small">아직 생산계획에 반영되지 않았습니다. 생산 담당자가 「생산계획 반영」을 누르면 생산일정에 들어갑니다.</p>'}</section>
     ${r.note ? `<p class="pr-note">${esc(r.note)}</p>` : ''}

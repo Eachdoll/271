@@ -191,6 +191,11 @@ test('Lists and needs stay complete beyond 100 and 300 requests', async () => {
   assert.ok(planned.every(r => r.status === 'planned'));
   const needs = (await prod('GET', '/api/production-requests/needs')).body.find(n => n.item === '대량품목');
   assert.deepEqual([needs.ordered, needs.need, needs.unplanned, needs.requests], [3300, 3300, 100, 330]);
+  // 대시보드·배지 건수는 50건에서 멈추지 않는다(목록은 5건만).
+  sqlite.prepare("DELETE FROM schedules WHERE production_line_id IN (SELECT l.id FROM production_request_lines l JOIN production_requests r ON r.id=l.request_id WHERE r.req_no LIKE 'MR-261001-0%')").run();
+  const expected = sqlite.prepare('SELECT COUNT(*) n FROM production_requests r WHERE r.shipped=0 AND EXISTS(SELECT 1 FROM production_request_lines l WHERE l.request_id=r.id AND l.qty > COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0))').get().n;
+  const todo = (await prod('GET', '/api/my-tasks')).body.approvals.production_requests;
+  assert.ok(expected > 50); assert.equal(todo.count, expected); assert.equal(todo.items.length, 5);
   const prs = await sales('GET', '/api/purchase-requests');
   assert.equal(prs.status, 200, JSON.stringify(prs.body));
   assert.ok(prs.body.filter(r => r.title === '대량').length >= 150 || prs.body.length === 200);

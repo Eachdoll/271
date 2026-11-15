@@ -126,3 +126,15 @@ test('Approval review fetches one pending ID even when it is older than the list
     const empty = await anyone('GET', `/api/${kind}?id=9999999`); assert.equal(empty.status, 200); assert.deepEqual(empty.body, []);
   }
 });
+
+test('Two approvals of the same receipt change at the same moment apply once and leave one history note', async () => {
+  const po = await order('동시승인');
+  await anyone('POST', '/api/po/receive', { ids: [po.id], status: 'mismatch', recv_qty: 90 });
+  const req = (await anyone('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', recv_qty: 95, reason: '동시 승인 확인', request_id: 'concurrent-approve-0001' })).body;
+  const both = await Promise.all([lead('POST', `/api/receipt-changes/${req.change.id}/approve`, {}), admin('POST', `/api/receipt-changes/${req.change.id}/approve`, {})]);
+  assert.deepEqual(both.map(r => r.status).sort(), [200, 409]);
+  const notes = (await anyone('GET', `/api/comments/purchase_order/${po.id}`)).body.rows.filter(r => r.content.includes('입고 수량 수정 승인'));
+  assert.equal(notes.length, 1, 'the losing approval writes nothing');
+  const analysis = await analysisFor(po.id);
+  assert.equal((await anyone('GET', `/api/comments/request/${analysis.id}`)).body.rows.filter(r => r.content.includes('입고 수량 수정 승인')).length, 1);
+});
