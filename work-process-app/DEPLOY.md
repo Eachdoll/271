@@ -7,7 +7,8 @@
 `DATA_DIR`, Railway Volume, Docker 컨테이너는 Sites에서 사용하지 않습니다.
 외부 npm 패키지 없이 기존 화면과 API를 유지했습니다.
 
-- 운영 주소: https://eachdoll-work-process-hub.seoulsemitec-3654.chatgpt.site
+- 운영 주소: https://erp.seoulsemi.com (회사 도메인, AWS Route 53 서브도메인 연결·HTTPS 인증 완료)
+- 기존 Sites 주소: https://eachdoll-work-process-hub.seoulsemitec-3654.chatgpt.site (계속 유지)
 - 배포 대상은 저장소의 `work-process-app/` 내용만입니다. 저장소 루트의 다른 프로젝트는 배포하지 않습니다.
 - `.openai/hosting.json`의 `project_id`가 기존 Site를 식별합니다. 후속 작업에서 새 Site를 만들거나 이 값을 바꾸지 마세요.
 - Sites 소스 저장소는 GitHub 원본 저장소와 별개입니다. GitHub에 커밋하는 것만으로 Sites가 자동 재배포되지는 않습니다.
@@ -203,3 +204,10 @@ SigV4 구현은 AWS 공식 GET Object 예제의 서명으로 검증합니다: ht
 현재 신규 이미지는 회사 R2에 저장합니다(R2_STORAGE_MODE=external). 기존 이미지는 옮기지 않고 기존 BUCKET에서 대체 조회합니다. 사진 한 장당 최대 8MB(8×1024×1024바이트), 최대 10장입니다. 브라우저가 선택 즉시 크기를 확인한 뒤 최적화하고, 전송할 전체 크기도 검사합니다. 서버 JSON 요청 한도는 30MB입니다. 여러 사진의 전송 용량이 크면 나누어 첨부해야 합니다.
 
 Workers에서는 Request의 redirect:error 대신 manual을 사용하고 3xx를 직접 거부해야 합니다. 로컬 Node와 운영 Workers의 차이를 포함한 R2 회귀 테스트를 확인하세요.
+
+## 영업 › 구매의뢰 (15.48)
+
+`0025_purchase_requests.sql`은 사용자 직급·부서 칸과 구매의뢰 3개 표(의뢰서·품목·결재선)만 추가합니다. 기존 0000~0024와 기존 데이터는 변경하지 않습니다.
+Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환경변수·D1/R2 바인딩·R2_STORAGE_MODE 변경은 없습니다.
+의뢰서 첨부 사진은 기존과 같은 사진 저장 경로(현재 회사 R2, external)를 씁니다.
+배포 후 관리자 설정에서 사용자의 직급·부서를 입력하면 결재선에 함께 표시됩니다(비워 두어도 동작합니다).

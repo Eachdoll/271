@@ -83,7 +83,7 @@ function applyInspectionFilter(where, args, query, entity, table) {
 }
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
-function publicUser(u) { return { id: u.id, name: u.name, is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
+function publicUser(u) { return { id: u.id, name: u.name, position: u.position || '', department: u.department || '', is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
@@ -290,6 +290,11 @@ route('POST', '/api/auth/logout', async ({ req, res }) => {
 
 route('GET', '/api/me', async ({ req }) => { const u = (await currentUser(req)); return { user: u ? publicUser(u) : null }; }, { auth: false });
 
+// 내 직급·부서(구매의뢰 결재선 표시와 부서명 기본값)
+route('PUT', '/api/me/profile', async ({ user, body }) => {
+  await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(str(body.position, 30), str(body.department, 50), user.id);
+  return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(user.id));
+});
 route('PUT', '/api/me/password', async ({ user, body }) => {
   if (!(await pwMatches(user, body.current || ''))) throw bad('현재 비밀번호가 올바르지 않습니다.');
   if (String(body.password || '').length < 4) throw bad('새 비밀번호는 4자 이상이어야 합니다.');
@@ -348,6 +353,9 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
     if (target.approval_status !== 'approved' && roles.some(r => ['quality_approver','dev_approver','production_approver','logistics_approver'].includes(r))) throw bad('가입 승인 후 책임자로 지정하세요.');
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));
   }
+  if (body.position !== undefined || body.department !== undefined) {
+    await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(body.position !== undefined ? str(body.position, 30) : target.position || '', body.department !== undefined ? str(body.department, 50) : target.department || '', target.id);
+  }
   if (body.is_admin !== undefined) {
     if (target.id === user.id && !body.is_admin) throw bad('자기 자신의 관리자 권한은 해제할 수 없습니다.');
     (await db.prepare('UPDATE users SET is_admin=? WHERE id=?').run(body.is_admin ? 1 : 0, target.id));
@@ -367,7 +375,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -486,13 +494,15 @@ route('GET', '/api/po', async ({ query }) => {
     (SELECT json_object('id',c.id,'action',c.action,'new_recv_qty',c.new_recv_qty,'reason',c.reason,'requested_by',c.requested_by,'requested_by_id',c.requested_by_id,'requested_at',c.requested_at) FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending') AS pending_change
     FROM purchase_orders ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (recv_status='ok'), due_date, id DESC`).all(...args));
 });
-route('POST', '/api/po', async ({ user, body }) => {
+// 발주 1건 등록(발주 입력 화면과 구매의뢰 「발주 생성」이 함께 쓴다).
+async function createPurchaseOrder(user, body) {
   // A chosen code supplies the item name (and class when none was given).
   if (body.bom_id) { const chosen = await catalogItem(user, body); body.item = chosen.product; if (!body.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) body.item_category = chosen.item_category; }
   const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user);
   const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(f[0], f[1], entry.product, ...f.slice(3), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(r.lastInsertRowid));
-});
+}
+route('POST', '/api/po', async ({ user, body }) => createPurchaseOrder(user, body));
 route('PUT', '/api/po/:id', async ({ user, params, body }) => {
   const row = (await mustGet('purchase_orders', params.id)); if (!canModify(user, row) && !hasRole(user, 'purchase')) throw new HttpError(403, '등록자 또는 구매 담당자만 수정할 수 있습니다.');
   const f = poFields(body);
@@ -2166,6 +2176,12 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     approvals.receipt_changes = { count: items.length, items: items.slice(0, 5) };
   }
   if (user.is_admin) approvals.temp_items = { count: (await db.prepare('SELECT COUNT(*) c FROM boms WHERE is_temp=1 AND active=1').get()).c };
+  // 구매의뢰: 지금 내 결재 차례인 의뢰서(관리자도 자기 차례만).
+  {
+    const items = await db.prepare(`SELECT pr.id,pr.doc_no,pr.title,pr.author_name,pr.submitted_at,(SELECT item FROM purchase_request_items i WHERE i.request_id=pr.id ORDER BY line_no LIMIT 1) first_item,(SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id) item_count
+      FROM purchase_requests pr JOIN purchase_request_lines l ON l.request_id=pr.id AND l.step=pr.current_step AND l.kind!='cc' WHERE pr.status='pending' AND l.user_id=? ORDER BY pr.id LIMIT 50`).all(user.id);
+    if (items.length) approvals.purchase_requests = { count: items.length, items: items.slice(0, 5) };
+  }
   // My own requests still waiting, plus rejections from the last 7 days so the requester notices them.
   const recent = "(c.status='pending' OR (c.status='rejected' AND c.reviewed_at>=date('now','+9 hours','-7 days')))";
   const mine = {
@@ -2173,8 +2189,244 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     actual_changes: await db.prepare(`${actualChangeSelect} WHERE c.requested_by_id=? AND ${recent} ORDER BY c.id DESC LIMIT 20`).all(user.id),
     semi_changes: (await db.prepare("SELECT * FROM semi_record_changes c WHERE c.requested_by_id=? AND " + recent + " ORDER BY c.id DESC LIMIT 20").all(user.id)).map(decodeSemiChange),
     receipt_changes: await db.prepare(`${receiptChangeSelect} WHERE c.requested_by_id=? AND ${recent} ORDER BY c.id DESC LIMIT 20`).all(user.id),
+    purchase_requests: await db.prepare("SELECT pr.id,pr.doc_no,pr.title,pr.status,pr.reject_reason,pr.updated_at,(SELECT item FROM purchase_request_items i WHERE i.request_id=pr.id ORDER BY line_no LIMIT 1) first_item,(SELECT user_name FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.step=pr.current_step AND l.kind!='cc') current_user_name,(SELECT user_name FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.decision='rejected' ORDER BY l.decided_at DESC LIMIT 1) rejected_by FROM purchase_requests pr WHERE pr.author_id=? AND (pr.status='pending' OR (pr.status='rejected' AND pr.updated_at>=date('now','+9 hours','-7 days'))) ORDER BY pr.id DESC LIMIT 20").all(user.id),
   };
   return { approvals, mine };
+});
+
+// ── 영업: 구매의뢰 (전자결재) ──
+// 작성자가 결재(순서대로) → 합의(순서대로) 결재선을 지정해 상신한다. 지금 차례인 사람만 승인·반려할 수 있다.
+// 반려되면 작성자가 고쳐 다시 올리고 결재는 처음부터 다시 진행한다. 참조자는 열람만 하며 열면 read_at이 남는다.
+// 최종 승인된 의뢰는 구매 담당자가 「발주 생성」으로 발주목록에 올린다(구매의뢰번호 = 의뢰서 번호).
+const PR_TEXT = { delivery_qty: 50, customer: 200, stock_qty: 50, due_text: 50, manager: 50, monthly_usage: 50 };
+async function prItems(list) {
+  if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
+  if (list.length > 30) throw bad('품목은 30개까지 입력할 수 있습니다.');
+  const items = [];
+  for (const [index, raw] of list.entries()) {
+    const it = raw && typeof raw === 'object' ? raw : {}, no = `${index + 1}번 품목`;
+    let bom = null;
+    if (it.bom_id !== undefined && it.bom_id !== null && it.bom_id !== '') {
+      const id = Number(it.bom_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad(`${no}의 품목을 다시 선택하세요.`);
+      bom = await mustGet('boms', id); if (!bom.active) throw bad(`${no}은(는) 사용 중지된 품목입니다.`);
+    }
+    const qty = num(it.qty, `${no} 수량`); if (!(qty > 0)) throw bad(`${no} 수량은 0보다 커야 합니다.`);
+    const row = {
+      line_no: index + 1, bom_id: bom ? bom.id : null,
+      product_code: bom ? bom.product_code : str(it.product_code, 50),
+      item: bom ? bom.product : reqStr(it.item, `${no} 품목명`, 200),
+      spec: str(it.spec, 200), unit: str(it.unit, 20) || (bom ? bom.unit : ''), qty,
+      purchase_price: num(it.purchase_price, `${no} 매입단가`, { required: false }),
+      sale_price: num(it.sale_price, `${no} 판매단가`, { required: false }),
+      vendor: str(it.vendor, 100),
+    };
+    for (const [key, max] of Object.entries(PR_TEXT)) row[key] = str(it[key], max);
+    items.push(row);
+  }
+  return items;
+}
+async function prLines(body, authorId) {
+  const ids = key => (Array.isArray(body[key]) ? body[key] : []).map(Number);
+  const approve = ids('approvers'), agree = ids('agreers'), cc = ids('cc'), all = [...approve, ...agree, ...cc];
+  if (!approve.length) throw bad('결재자를 1명 이상 지정하세요.');
+  if (approve.length + agree.length > 10) throw bad('결재·합의는 모두 10명까지 지정할 수 있습니다.');
+  if (cc.length > 20) throw bad('참조는 20명까지 지정할 수 있습니다.');
+  if (all.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('결재선의 사용자를 다시 선택하세요.');
+  if (new Set(all).size !== all.length) throw bad('같은 사람을 결재·합의·참조에 중복 지정할 수 없습니다.');
+  if (all.includes(authorId)) throw bad('작성자 본인은 결재선에 넣을 수 없습니다. 기안자로 자동 표시됩니다.');
+  const found = await db.prepare(`SELECT id,name,position FROM users WHERE approval_status='approved' AND id IN (${all.map(() => '?').join(',')})`).all(...all);
+  if (found.length !== all.length) throw bad('결재선에 가입 승인되지 않았거나 없는 사용자가 있습니다. 다시 선택하세요.');
+  const byId = new Map(found.map(u => [u.id, u])); let step = 0;
+  return [...approve.map(id => ['approve', ++step, id]), ...agree.map(id => ['agree', ++step, id]), ...cc.map(id => ['cc', 0, id])]
+    .map(([kind, s, id]) => ({ kind, step: s, user_id: id, user_name: byId.get(id).name, user_position: byId.get(id).position || '' }));
+}
+function prHead(body, user) {
+  return { doc_date: dateStr(body.doc_date, '작성일'), department: str(body.department, 50) || user.department || '', title: str(body.title, 200), note: str(body.note, 2000) };
+}
+async function prAccess(user, id, { write = false } = {}) {
+  if (!/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(Number(id))) throw bad('구매의뢰 번호가 올바르지 않습니다.');
+  const row = await mustGet('purchase_requests', Number(id));
+  if (write) { if (!(user.is_admin || row.author_id === user.id)) throw new HttpError(403, '작성자만 고칠 수 있습니다.'); return row; }
+  if (user.is_admin || row.author_id === user.id || (row.status === 'approved' && hasRole(user, 'purchase'))) return row;
+  if (await db.prepare('SELECT 1 FROM purchase_request_lines WHERE request_id=? AND user_id=?').get(row.id, user.id)) return row;
+  throw new HttpError(403, '작성자·결재선에 지정된 사람·구매 담당자만 볼 수 있습니다.');
+}
+function prInsertDetails(docNo, items, lines) {
+  const qs = [];
+  for (const it of items) qs.push({ sql: `INSERT INTO purchase_request_items(request_id,line_no,bom_id,product_code,item,spec,unit,qty,purchase_price,sale_price,vendor,delivery_qty,customer,stock_qty,due_text,manager,monthly_usage)
+    SELECT id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM purchase_requests WHERE doc_no=?`, args: [it.line_no, it.bom_id, it.product_code, it.item, it.spec, it.unit, it.qty, it.purchase_price, it.sale_price, it.vendor, it.delivery_qty, it.customer, it.stock_qty, it.due_text, it.manager, it.monthly_usage, docNo] });
+  for (const l of lines) qs.push({ sql: 'INSERT INTO purchase_request_lines(request_id,kind,step,user_id,user_name,user_position) SELECT id,?,?,?,?,? FROM purchase_requests WHERE doc_no=?', args: [l.kind, l.step, l.user_id, l.user_name, l.user_position, docNo] });
+  return qs;
+}
+async function prDetail(row, user) {
+  const items = await db.prepare('SELECT * FROM purchase_request_items WHERE request_id=? ORDER BY line_no').all(row.id);
+  const lines = await db.prepare('SELECT * FROM purchase_request_lines WHERE request_id=? ORDER BY kind=\'cc\', step, id').all(row.id);
+  const sum = key => items.reduce((total, it) => total + (it[key] == null ? 0 : it[key] * it.qty), 0);
+  const current = row.status === 'pending' ? lines.find(l => l.step === row.current_step && l.kind !== 'cc') : null;
+  return {
+    ...row, photos: JSON.parse(row.photos || '[]'), items, lines, purchase_total: sum('purchase_price'), sale_total: sum('sale_price'),
+    current_user_id: current ? current.user_id : null, current_user_name: current ? current.user_name : '',
+    can_decide: !!(current && user && current.user_id === user.id),
+    can_edit: !!(user && (user.is_admin || row.author_id === user.id) && (row.status === 'rejected' || (row.status === 'pending' && !lines.some(l => l.decision)))),
+    can_delete: !!(user && (user.is_admin || row.author_id === user.id) && row.status !== 'approved'),
+    can_order: !!(user && row.status === 'approved' && hasRole(user, 'purchase') && items.some(it => !it.po_id)),
+  };
+}
+route('GET', '/api/directory', async () => (await db.prepare("SELECT id,name,position,department FROM users WHERE approval_status='approved' ORDER BY name").all()));
+route('GET', '/api/purchase-requests', async ({ user, query }) => {
+  const where = [], args = [];
+  const box = String(query.box || '');
+  if (box === 'todo') { where.push("pr.status='pending' AND EXISTS(SELECT 1 FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.step=pr.current_step AND l.kind!='cc' AND l.user_id=?)"); args.push(user.id); }
+  else if (box === 'mine') { where.push('pr.author_id=?'); args.push(user.id); }
+  else if (box === 'cc') { where.push("EXISTS(SELECT 1 FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.kind='cc' AND l.user_id=?)"); args.push(user.id); }
+  else if (box === 'order') { if (!hasRole(user, 'purchase')) throw new HttpError(403, '구매 담당자만 발주 대기 목록을 볼 수 있습니다.'); where.push("pr.status='approved' AND EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NULL)"); }
+  else if (box) throw bad('목록 구분을 확인하세요.');
+  if (!user.is_admin) {
+    where.push(`(pr.author_id=? OR EXISTS(SELECT 1 FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.user_id=?)${hasRole(user, 'purchase') ? " OR pr.status='approved'" : ''})`);
+    args.push(user.id, user.id);
+  }
+  if (query.status) { if (!['pending', 'approved', 'rejected'].includes(query.status)) throw bad('결재 상태를 확인하세요.'); where.push('pr.status=?'); args.push(query.status); }
+  applyListDates(where, args, query, 'pr.doc_date');
+  const q = String(query.q || '').trim();
+  if (q) {
+    if (q.length > 200) throw bad('검색어는 200자까지 입력하세요.');
+    const pattern = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+    where.push("(pr.doc_no LIKE ? ESCAPE '\\' OR pr.title LIKE ? ESCAPE '\\' OR pr.department LIKE ? ESCAPE '\\' OR pr.author_name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND (i.item LIKE ? ESCAPE '\\' OR i.product_code LIKE ? ESCAPE '\\' OR i.vendor LIKE ? ESCAPE '\\' OR i.customer LIKE ? ESCAPE '\\')))");
+    args.push(...Array(8).fill(pattern));
+  }
+  const rows = await db.prepare(`SELECT pr.* FROM purchase_requests pr ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY pr.id DESC LIMIT 200`).all(...args);
+  if (!rows.length) return [];
+  const ids = rows.map(r => r.id), marks = ids.map(() => '?').join(',');
+  const items = await db.prepare(`SELECT request_id,item,product_code,qty,unit,purchase_price,sale_price,vendor,customer,po_id FROM purchase_request_items WHERE request_id IN (${marks}) ORDER BY line_no`).all(...ids);
+  const lines = await db.prepare(`SELECT request_id,kind,step,user_id,user_name,user_position,decision,read_at FROM purchase_request_lines WHERE request_id IN (${marks}) ORDER BY step, id`).all(...ids);
+  return rows.map(row => {
+    const its = items.filter(i => i.request_id === row.id), ls = lines.filter(l => l.request_id === row.id);
+    const current = row.status === 'pending' ? ls.find(l => l.step === row.current_step && l.kind !== 'cc') : null;
+    return {
+      ...row, photos: undefined, photo_count: JSON.parse(row.photos || '[]').length, item_count: its.length, first_item: its[0]?.item || '', vendors: [...new Set(its.map(i => i.vendor).filter(Boolean))].join(', '),
+      customers: [...new Set(its.map(i => i.customer).filter(Boolean))].join(', '),
+      purchase_total: its.reduce((t, i) => t + (i.purchase_price == null ? 0 : i.purchase_price * i.qty), 0),
+      sale_total: its.reduce((t, i) => t + (i.sale_price == null ? 0 : i.sale_price * i.qty), 0),
+      ordered: its.filter(i => i.po_id).length,
+      current_user_id: current ? current.user_id : null, current_user_name: current ? current.user_name : '',
+      my_turn: !!(current && current.user_id === user.id),
+    };
+  });
+});
+route('GET', '/api/purchase-requests/:id', async ({ user, params }) => {
+  const row = await prAccess(user, params.id);
+  // 참조자·결재자가 처음 열면 열람 시각을 남긴다(참조 ✓ 표시).
+  await db.prepare("UPDATE purchase_request_lines SET read_at=datetime('now','+9 hours') WHERE request_id=? AND user_id=? AND read_at IS NULL").run(row.id, user.id);
+  return prDetail(row, user);
+});
+route('POST', '/api/purchase-requests', async ({ user, body }) => {
+  const requestId = str(body.request_id, 80);
+  if (requestId) { const done = await db.prepare('SELECT * FROM purchase_requests WHERE request_id=?').get(requestId); if (done) return prDetail(done, user); }
+  const head = prHead(body, user), items = await prItems(body.items), lines = await prLines(body, user.id);
+  const prefix = 'PR-' + head.doc_date.slice(2).replace(/-/g, '') + '-';
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const last = await db.prepare("SELECT doc_no FROM purchase_requests WHERE doc_no LIKE ? ESCAPE '\\' ORDER BY doc_no DESC LIMIT 1").get(prefix.replace(/[\\%_]/g, '\\$&') + '%');
+    const docNo = prefix + String((last ? Number(last.doc_no.slice(prefix.length)) || 0 : 0) + 1).padStart(2, '0');
+    try {
+      await db.batch([{ sql: 'INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id) VALUES(?,?,?,?,?,?,?,?,?)', args: [docNo, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', requestId || null] }, ...prInsertDetails(docNo, items, lines)]);
+      return prDetail(await db.prepare('SELECT * FROM purchase_requests WHERE doc_no=?').get(docNo), user);
+    } catch (error) {
+      if (!String(error.message).includes('UNIQUE')) throw error;
+      if (requestId) { const done = await db.prepare('SELECT * FROM purchase_requests WHERE request_id=?').get(requestId); if (done) return prDetail(done, user); }
+    }
+  }
+  throw new HttpError(409, '의뢰서 번호가 겹쳤습니다. 잠시 후 다시 상신하세요.');
+});
+// 반려된 의뢰서(또는 아직 아무도 결재하지 않은 의뢰서)를 고쳐 다시 올린다. 결재는 처음부터 다시 진행한다.
+route('PUT', '/api/purchase-requests/:id', async ({ user, params, body }) => {
+  const row = await prAccess(user, params.id, { write: true });
+  const decided = await db.prepare("SELECT 1 FROM purchase_request_lines WHERE request_id=? AND decision!=''").get(row.id);
+  if (!(row.status === 'rejected' || (row.status === 'pending' && !decided))) throw bad('결재가 진행 중이거나 승인된 의뢰서는 고칠 수 없습니다.');
+  if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  const head = prHead(body, user), items = await prItems(body.items), lines = await prLines(body, row.author_id);
+  const result = await db.batch([
+    { sql: "UPDATE purchase_requests SET doc_date=?,department=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.doc_date, head.department, head.title, head.note, row.id, row.revision] },
+    { sql: 'DELETE FROM purchase_request_items WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
+    { sql: 'DELETE FROM purchase_request_lines WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
+    ...prInsertDetails(row.doc_no, items, lines).map(q => ({ sql: q.sql + ' AND revision=?', args: [...q.args, row.revision + 1] })),
+  ]);
+  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  return prDetail(await mustGet('purchase_requests', row.id), user);
+});
+route('POST', '/api/purchase-requests/:id/decision', async ({ user, params, body }) => {
+  const row = await prAccess(user, params.id);
+  if (row.status !== 'pending') throw bad(row.status === 'approved' ? '이미 최종 승인된 의뢰서입니다.' : '반려된 의뢰서입니다. 작성자가 고쳐 다시 올려야 합니다.');
+  const line = await db.prepare("SELECT * FROM purchase_request_lines WHERE request_id=? AND step=? AND kind!='cc'").get(row.id, row.current_step);
+  if (!line || line.user_id !== user.id) throw new HttpError(403, line ? `지금은 ${line.user_name}님의 결재 차례입니다.` : '결재선을 확인할 수 없습니다.');
+  if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  const decision = String(body.decision || ''), comment = str(body.comment, 500);
+  if (!['approved', 'rejected'].includes(decision)) throw bad('승인 또는 반려를 선택하세요.');
+  if (decision === 'rejected' && !comment) throw bad('반려 사유를 입력하세요.');
+  const next = decision === 'approved' ? (await db.prepare("SELECT MIN(step) s FROM purchase_request_lines WHERE request_id=? AND kind!='cc' AND step>?").get(row.id, row.current_step)).s : null;
+  const guard = 'WHERE id=? AND revision=? AND current_step=? AND status=\'pending\'';
+  const headSql = decision === 'rejected' ? `UPDATE purchase_requests SET status='rejected',reject_reason=?,revision=revision+1,updated_at=datetime('now','+9 hours') ${guard}`
+    : next ? `UPDATE purchase_requests SET current_step=?,revision=revision+1,updated_at=datetime('now','+9 hours') ${guard}`
+      : `UPDATE purchase_requests SET status='approved',approved_at=datetime('now','+9 hours'),revision=revision+1,updated_at=datetime('now','+9 hours') ${guard}`;
+  const headArgs = [...(decision === 'rejected' ? [comment] : next ? [next] : []), row.id, row.revision, row.current_step];
+  const result = await db.batch([
+    { sql: headSql, args: headArgs },
+    { sql: "UPDATE purchase_request_lines SET decision=?,comment=?,decided_at=datetime('now','+9 hours'),read_at=COALESCE(read_at,datetime('now','+9 hours')) WHERE id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?", args: [decision, comment, line.id, row.id, row.revision + 1] },
+  ]);
+  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  return prDetail(await mustGet('purchase_requests', row.id), user);
+});
+route('DELETE', '/api/purchase-requests/:id', async ({ user, params }) => {
+  const row = await prAccess(user, params.id, { write: true });
+  if (row.status === 'approved') throw bad('최종 승인된 의뢰서는 삭제할 수 없습니다.');
+  await db.batch([{ sql: 'DELETE FROM purchase_request_items WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM purchase_request_lines WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM purchase_requests WHERE id=?', args: [row.id] }]);
+  await removePhotos(JSON.parse(row.photos || '[]'));
+  return { ok: true };
+});
+// 첨부(고객 발주서·제품 사진): 의뢰서 행의 photos에 둔다. 공통 첨부 표(attachments)는 대상 종류가 고정돼 있어 쓰지 않는다.
+// 사진 저장은 다른 첨부와 같은 savePhotos(회사 R2·8MB·10장 규칙)를 쓴다. 바꾸기는 작성자가 최종 승인 전에만.
+route('PUT', '/api/purchase-requests/:id/photos', async ({ user, params, body }) => {
+  const row = await prAccess(user, params.id, { write: true });
+  if (row.status === 'approved') throw bad('최종 승인된 의뢰서의 사진은 바꿀 수 없습니다.');
+  const current = JSON.parse(row.photos || '[]');
+  const keep = body.keep_photos === undefined ? current : body.keep_photos;
+  if (!Array.isArray(keep) || new Set(keep).size !== keep.length || keep.some(file => !current.includes(file))) throw bad('유지할 사진을 다시 확인하세요.');
+  if (body.photos !== undefined && !Array.isArray(body.photos)) throw bad('첨부 사진 형식을 확인하세요.');
+  if (keep.length + (body.photos || []).length > 10) throw bad('사진은 최대 10장까지 첨부할 수 있습니다.');
+  const added = await savePhotos(body.photos);
+  try {
+    const result = await db.prepare("UPDATE purchase_requests SET photos=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?").run(JSON.stringify(keep.concat(added)), row.id, body.revision !== undefined ? Number(body.revision) : row.revision);
+    if (!result.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  } catch (error) { await removePhotos(added); throw error; }
+  await removePhotos(current.filter(file => !keep.includes(file)));
+  return prDetail(await mustGet('purchase_requests', row.id), user);
+});
+// 최종 승인된 의뢰 품목을 발주목록에 올린다. 발주 등록과 같은 규칙(createPurchaseOrder)을 쓴다.
+route('POST', '/api/purchase-requests/:id/po', async ({ user, params, body }) => {
+  if (!hasRole(user, 'purchase')) throw new HttpError(403, '구매 담당자만 발주를 만들 수 있습니다.');
+  const row = await prAccess(user, params.id);
+  if (row.status !== 'approved') throw bad('최종 승인된 의뢰서만 발주로 만들 수 있습니다.');
+  const wanted = Array.isArray(body.item_ids) ? body.item_ids.map(Number) : null;
+  const items = (await db.prepare('SELECT * FROM purchase_request_items WHERE request_id=? AND po_id IS NULL ORDER BY line_no').all(row.id)).filter(it => !wanted || wanted.includes(it.id));
+  if (!items.length) throw bad('발주로 만들 품목이 없습니다. 이미 모두 발주했습니다.');
+  const due = dateStr(body.due_date, '납기일'), fallbackCategory = body.item_category ? itemCategory(body.item_category) : '';
+  // 먼저 모든 품목을 검사하고 나서 만든다(일부만 만들어지는 일을 줄인다).
+  const plans = [];
+  for (const it of items) {
+    const bom = it.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(it.bom_id) : null;
+    const category = (bom && ITEM_CATEGORIES.includes(bom.item_category) ? bom.item_category : '') || fallbackCategory;
+    if (!category) throw bad(`${it.line_no}번 품목(${it.item})의 분류를 고르세요.`);
+    const vendor = it.vendor || str(body.vendor, 100);
+    if (!vendor) throw bad(`${it.line_no}번 품목(${it.item})의 공급선(거래처)을 입력하세요.`);
+    plans.push({ it, body: { req_no: row.doc_no, vendor, item: it.item, bom_id: bom && bom.active ? bom.id : undefined, unit: it.unit, qty: it.qty, due_date: due, item_category: category, note: `구매의뢰 ${row.doc_no}${it.spec ? ' · ' + it.spec : ''}`.slice(0, 500) } });
+  }
+  const created = [];
+  for (const { it, body: poBody } of plans) {
+    const po = await createPurchaseOrder(user, poBody);
+    const linked = await db.prepare('UPDATE purchase_request_items SET po_id=? WHERE id=? AND po_id IS NULL').run(po.id, it.id);
+    if (!linked.changes) { await db.prepare('DELETE FROM purchase_orders WHERE id=?').run(po.id); continue; }
+    created.push(po);
+  }
+  return { created, request: await prDetail(await mustGet('purchase_requests', row.id), user) };
 });
 
 // ── 대시보드 ──

@@ -388,3 +388,17 @@ INVITE_CODE=local-test-code npm start
 - 원본 사진은 한 장당 8×1024×1024바이트 이하, 최대 10장입니다. photoPicker와 서명 입력에 8MB 안내를 표시하며 validatePhotoFiles로 디코딩 전에 검사합니다. preparePhotos는 여러 장을 순서대로 최적화하고, validatePhotoPayload는 변환 후 한 장 8MB 및 JSON 요청의 여유를 남기는 전체 크기를 검사합니다. 서버도 Base64 해제 전후에 8MB를 검사합니다.
 - 세탁 신규·수정도 bindPhotoDraft를 사용합니다. 변환 중 제출을 막고 선택 오류가 나도 기존 draft를 지우지 않습니다. 수정 제출 시 유지할 사진과 새 사진을 합쳐 10장인지 다시 검사합니다.
 - 테스트는 Workers의 redirect 제한을 재현한 세탁 사진 업로드·조회·삭제, 외부 이동 차단, 8MB 경계와 초과 차단, 기존 사진 보존을 포함합니다. 운영 저장소 모드는 external 그대로입니다.
+
+## 기타입고 화면 용어 정리 (15.47)
+- 기타입고(다품목 입력·단일 양식·수정 팝업)에서 「BOM」 표현을 뺐습니다: 「BOM 검색」→「품목 검색」, 「BOM 품목」 선택칸→「품목명」, 「BOM 품목을 선택하세요」→「품목을 선택하세요」, 안내문 「BOM에서 품목을…」→「등록된 품목을…」. 보내는 값(bom_id, item)은 그대로입니다. 일정(schedule)의 「BOM 검색/BOM 품목」은 직접 입력과 섞여 있어 그대로 둡니다.
+- 품목을 고르면 채워지는 읽기 전용 품목명 칸(.receipt-item-name)은 CSS로 숨깁니다(값은 저장됨). 예전 수기 기록을 고칠 때(읽기 전용이 아닐 때)만 「품목명 (직접 입력)」으로 보입니다.
+- 입고목록의 기타입고 구역 아래 「+ 기타입고 입력」 버튼·안내는 메뉴(입고 › 기타입고 입력)와 중복이라 없앴습니다.
+
+## 영업 › 구매의뢰 전자결재 (15.48)
+- 0025_purchase_requests.sql: users.position·department(빈 값 기본, 기존 사용자 추정·일괄 채우기 금지), purchase_requests(의뢰서 머리·photos JSON·status pending/approved/rejected·current_step·revision), purchase_request_items(품목·단가·공급선 등, 금액은 저장하지 않고 수량×단가로 계산, po_id), purchase_request_lines(kind approve/agree/cc, step, 상신 당시 이름·직급, decision, read_at). 세 표는 전체 백업 대상이며 의뢰서 사진도 백업에 포함합니다.
+- 결재 규칙(worker.mjs 「영업: 구매의뢰」): 결재자 1명 이상 필수, 결재(step 1..n) → 합의(이어서) 순서, 참조는 step 0. 지금 차례(current_step)인 사람만 승인·반려합니다(관리자도 자기 차례만). 반려는 사유 필수이며 작성자에게 돌아가고, 작성자가 고쳐 다시 올리면(PUT) 결재선·결정이 모두 초기화되어 1번부터 다시 진행합니다. 아직 아무도 결정하지 않은 의뢰서도 고칠 수 있습니다. 동시 처리는 revision으로 막습니다.
+- 보기 권한: 작성자, 결재선(결재·합의·참조)에 지정된 사람, 관리자, 그리고 최종 승인된 의뢰서는 구매 담당(purchase). 열면 해당 결재선 행의 read_at을 남깁니다(참조 ✓ 열람).
+- 발주 생성(POST /api/purchase-requests/:id/po): 구매 담당만, 최종 승인 후. 발주 등록과 같은 createPurchaseOrder()를 쓰며 구매의뢰번호=의뢰서 번호(PR-YYMMDD-NN), 거래처=품목의 공급선, 분류=등록 품목의 분류(없으면 입력값). 품목마다 po_id를 남겨 같은 품목을 두 번 발주하지 않습니다.
+- 사진은 의뢰서 행의 photos에 둡니다. 공통 attachments·progress_comments 표는 entity_type CHECK가 고정이라 쓰지 않습니다(표를 다시 만들어 제약을 바꾸지 마세요). 저장은 savePhotos(회사 R2·8MB·10장) 그대로이며 작성자가 최종 승인 전에만 바꿉니다. 별도 진행 코멘트 대신 결재선의 승인 의견·반려 사유를 씁니다.
+- 화면: public/sales.js(index.html·local.mjs·build.mjs에 포함), 메뉴 영업 › 구매의뢰(작성 #/sales/pr/new, 목록 #/sales/pr). 내 결재 차례는 my-tasks의 approvals.purchase_requests로 대시보드·메뉴 배지에 나오고, 내가 올린 의뢰(결재 중·최근 반려)는 mine.purchase_requests입니다. 직급·부서는 내 정보와 관리자 설정(사용자 행 「직급·부서」)에서 바꿉니다. GET /api/directory는 승인된 사용자의 id·이름·직급·부서만 줍니다.
+- form-ux: 우리가 붙인 *·(선택) 표시는 data-fx-mark로 찾습니다(칸이 label 안 더 깊은 곳에 있을 때 표시가 끝없이 늘어나던 문제). 입력값이 아닌 선택 도구에는 data-no-mark를 붙이세요. 휴대폰 카드에서 접혀도 보여야 하는 버튼 칸은 td에 data-card-primary를 붙입니다.

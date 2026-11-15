@@ -878,3 +878,44 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
   .draft-state, .draft-state span, .input-author { font-size: 13.5px; }
   .report-legend span { font-size: 13px; }
 }
+
+/* 15.43 기타입고: 품목을 고르면 채워지는 읽기 전용 품목명 칸은 숨긴다(값은 그대로 저장). 예전 수기 기록 수정 때만 보인다. */
+.receipt-item-name:has(> input[readonly]) { display: none; }
+
+/* ───── 15.48 영업 › 구매의뢰 ───── */
+.pr-form .pr-section { border-top: 1px solid var(--line); padding-top: 12px; }
+.pr-form .pr-section > h3 { display: block; font-size: 16px; margin: 0 0 8px; }
+.pr-item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 10px; background: var(--panel); min-width: 0; }
+.pr-item > legend { font-weight: 700; font-size: 14px; color: var(--text); padding: 0 4px; }
+.pr-amount { margin: 8px 0 0; color: var(--text-2, var(--muted)); font-variant-numeric: tabular-nums; }
+.pr-totals { font-size: 15px; font-weight: 600; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.pr-line-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.pr-line-group { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.pr-line-pick { display: flex; gap: 6px; margin-top: 4px; }
+.pr-line-pick select { flex: 1; min-width: 0; }
+.pr-line-list { margin: 8px 0 0; padding-left: 22px; }
+.pr-line-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; }
+.pr-line-list li.muted { display: list-item; }
+.pr-line-tools { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.pr-lines { width: 100%; }
+.pr-lines th { width: 80px; vertical-align: top; padding-top: 12px; }
+.pr-people { list-style: none; margin: 0; padding: 0; }
+.pr-people li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; }
+.pr-people li + li { border-top: 1px dashed var(--line); }
+.pr-people li.now { background: var(--accent-soft); }
+.pr-state { flex-shrink: 0; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.pr-state.ok { color: var(--accent-ink, var(--accent)); }
+.pr-state.no { color: var(--red); }
+.pr-state.now { color: var(--yellow-ink, var(--yellow)); }
+.pr-state.wait { color: var(--muted); font-weight: 400; }
+.pr-comment { margin-top: 2px; color: var(--text-2, var(--muted)); }
+.pr-turn { background: var(--yellow-bg); color: var(--yellow-ink, var(--yellow)); border-radius: 10px; padding: 10px 12px; font-weight: 600; }
+.pr-note { white-space: pre-wrap; background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.pr-items td:first-child { white-space: nowrap; }
+@media (max-width: 700px) {
+  .pr-lines th { width: 56px; }
+  .pr-people li { padding: 8px 6px; }
+}
+.pr-items th, .pr-items td.r { white-space: nowrap; }
+.pr-items td:nth-child(2) { min-width: 180px; }
+.modal section + section { margin-top: 18px; }
