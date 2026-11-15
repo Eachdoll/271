@@ -504,3 +504,9 @@ INVITE_CODE=local-test-code npm start
 - **대시보드(700px 이하)**: 「현황 한눈에」「진행 현황」을 접어 두고 할 일·알림을 먼저 보여 줍니다. 할 일의 구매의뢰·생산의뢰 번호는 버튼으로 바로 상세를 엽니다(data-task-pr / data-open-mr).
 - **입력 초안 확대**: 새 구매의뢰(머리·품목·결재선), 의뢰서 상세 양식(분석·VOC·개발·샘플, 칸 순서로 보관 uxIndexRead/uxIndexRestore)에도 bindEntryDraft를 붙였습니다. 사진은 보관하지 않습니다.
 - **홈 화면에 추가**: public/manifest.webmanifest(standalone), assets/icon-192·512.png, apple-touch-icon.png, theme-color·apple 메타. local.mjs·scripts/build.mjs 자산 목록에 포함합니다. 서비스 워커(오프라인)는 없습니다.
+
+## 관리자 설정 사용자 표 정리 (15.63)
+- 증상: 권한 10개를 열 하나씩 두고 머리글에 긴 이름(「물류팀장(입고 수량 수정 승인)」 등)을 줄바꿈 없이 쓰는 데다, 15.59에서 버튼 칸(한 줄 고정)에 「메뉴」 버튼이 늘어 표가 넓어지면서 이름 칸이 한 글자 폭으로 눌려 세로로 보이고 가로 스크롤이 생겼습니다.
+- 표는 이름 · 가입 상태(가입일 포함) · 권한 · 버튼 네 칸입니다. 권한 10개와 관리자는 한 칸 안의 이름 붙은 체크 칩(.role-chip, 짧은 이름 ROLE_SHORT, 긴 이름은 title·aria-label)으로 줄바꿈하며, 체크하면 지금처럼 바로 저장됩니다(data-role / data-admin 그대로). 버튼은 여러 줄로 감싸고(.user-tools) 이름은 한 줄로 고정합니다. 1000·1360·1920px에서 가로 스크롤 없음.
+- 체크된 칩·선택지 칩의 글자는 var(--text)(다크 모드 대비), 비활성 칩은 흐린 글자·점선 테두리(opacity 쓰지 않음).
+- 왼쪽 메뉴 스크롤바는 가늘게(6px, 테마 선 색) 표시합니다.

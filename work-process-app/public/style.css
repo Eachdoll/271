@@ -1013,6 +1013,24 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
   input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
   .opts { gap: 8px; }
   .opts > label.opt { min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
-  .opts > label.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink, var(--accent)); font-weight: 600; }
+  .opts > label.opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
   table.grid.as-cards td:has(> input[type=checkbox]:only-child) { cursor: pointer; }
 }
+
+/* 15.63 관리자 설정 사용자 표: 이름이 세로로 눌리지 않게 */
+.users-table td.user-name { white-space: nowrap; min-width: 6em; }
+.users-table td.user-name .small { white-space: normal; }
+/* 권한 10개는 한 칸에 이름 붙은 체크로 모아 줄바꿈(15.63) */
+.users-table td.role-cell { min-width: 200px; }
+.role-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.role-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; font-weight: 400; color: var(--text); white-space: nowrap; cursor: pointer; }
+.role-chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.role-chip:has(input:disabled) { color: var(--muted); border-style: dotted; cursor: not-allowed; }
+.users-table .user-tools { display: flex; flex-wrap: wrap; gap: 4px; min-width: 170px; max-width: 300px; }
+/* 왼쪽 메뉴 스크롤바를 가늘게(내용이 길 때만 보임) */
+.side { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.side::-webkit-scrollbar { width: 6px; }
+.side::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.side::-webkit-scrollbar-track { background: transparent; }
+.role-chip.admin-chip { border-style: dashed; }
+.users-table td:nth-child(2) small, .users-table td:nth-child(2) .small { white-space: nowrap; }
