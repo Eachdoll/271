@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.42';
+const APP_VERSION = '15.43';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1503,6 +1503,7 @@ async function pageAdmin(main) {
   main.innerHTML = `
   <h1>관리자 설정</h1>
   <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
+  <div class="card"><h3>회사 사진 저장소</h3><p id="imageStorageStatus" role="status">연결 상태를 확인하고 있습니다…</p><p class="muted small">기존 사진을 회사 저장소로 복사하고 원본과 비교합니다. 복사 중에는 사진 등록·수정·삭제를 잠시 멈춰 주세요. 원본은 보존하며 복사만으로 저장 위치가 바뀌지 않습니다.</p><div class="actions"><button class="btn" id="imageCheckBtn" disabled>연결 확인</button><button class="btn" id="imageCopyBtn" disabled>기존 사진 복사·검증</button></div><p id="imageCopyStatus" role="status" class="muted small"></p></div>
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
   <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
@@ -1531,6 +1532,32 @@ async function pageAdmin(main) {
     listCount(userFilter, count);
   };
   bindListControls(userFilter, filterUsers); filterUsers();
+  const imageCheck = $('#imageCheckBtn'), imageCopy = $('#imageCopyBtn'), imageStatus = $('#imageStorageStatus');
+  try {
+    const storage = await api('GET', '/api/admin/image-storage');
+    imageStatus.textContent = `${storage.mode === 'external' ? '회사 저장소 사용 중' : '기존 저장소 사용 중'} · ${storage.ready ? '회사 저장소 연결 설정 완료' : '회사 저장소 연결 설정이 필요합니다.'}`;
+    imageCheck.disabled = imageCopy.disabled = !storage.ready;
+  } catch (error) { imageStatus.textContent = '사진 저장소 상태를 확인하지 못했습니다.'; }
+  imageCheck.onclick = async () => {
+    imageCheck.disabled = true;
+    try { await api('POST', '/api/admin/image-storage/check', {}); toast('회사 사진 저장소 연결을 확인했습니다.'); }
+    catch (error) { fail(error); }
+    finally { imageCheck.disabled = false; }
+  };
+  imageCopy.onclick = async () => {
+    if (!confirm('사진 등록·수정·삭제를 잠시 멈췄나요? 기존 사진을 보존하면서 회사 저장소로 복사하고 검증합니다.')) return;
+    imageCopy.disabled = imageCheck.disabled = true;
+    const status = $('#imageCopyStatus'); let cursor = '', copied = 0, verified = 0;
+    try {
+      do {
+        status.textContent = `사진을 복사·검증하고 있습니다… (새로 복사 ${copied}장 · 검증 ${verified}장)`;
+        const page = await api('POST', '/api/admin/image-storage/copy', { cursor });
+        copied += page.copied; verified += page.verified; cursor = page.next;
+      } while (cursor);
+      status.textContent = `복사·검증 완료: ${verified}장 확인, ${copied}장 새로 복사. 원본은 보존했습니다. 저장 위치 전환은 별도 설정이 필요합니다.`;
+    } catch (error) { status.textContent = '복사·검증을 중단했습니다. 원본은 보존됩니다. 오류를 해결하고 다시 실행하면 복사된 사진부터 비교합니다.'; fail(error); }
+    finally { imageCopy.disabled = imageCheck.disabled = false; }
+  };
   $('#backupBtn').onclick = async (e) => {
     const button = e.currentTarget; const status = $('#backupStatus'); button.disabled = true;
     try {

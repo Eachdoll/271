@@ -1,6 +1,7 @@
 // Cloudflare Worker: request-scoped D1/R2 bindings; no third-party runtime packages.
 import { database } from './storage.mjs';
 import { buildReport } from './reports.mjs';
+import { createImageStorage } from './image-storage.mjs';
 const SESSION_DAYS = 30;
 const MAX_BODY = 30 * 1024 * 1024;
 const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
@@ -8,6 +9,7 @@ const randomHex = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 
 export function createApp(env) {
 const db = database(env.DB);
+const images = createImageStorage(env);
 async function getSetting(k) { const r = (await db.prepare('SELECT value FROM settings WHERE key=?').get(k)); return r ? r.value : (k === 'invite_code' ? env.INVITE_CODE || null : null); }
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
@@ -113,12 +115,12 @@ async function savePhotos(list) {
   });
   const saved = [];
   try {
-    for (const p of photos) { await env.BUCKET.put(p.file, p.bytes, { httpMetadata: { contentType: p.type } }); saved.push(p.file); }
+    for (const p of photos) { await images.put(p.file, p.bytes, { httpMetadata: { contentType: p.type } }); saved.push(p.file); }
     return saved;
   } catch (error) { await removePhotos(saved); throw error; }
 }
 async function removePhotos(files) {
-  for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(f)) await env.BUCKET.delete(f);
+  for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(f)) await images.delete(f);
 }
 
 const attachmentTables = { request: 'requests', purchase_order: 'purchase_orders', other_receipt: 'other_receipts', shipment: 'shipments' };
@@ -296,6 +298,9 @@ route('PUT', '/api/me/password', async ({ user, body }) => {
 
 // 관리자
 route('GET', '/api/admin/settings', async ({ user }) => { requireAdmin(user); return { invite_code: (await getSetting('invite_code')) }; });
+route('GET', '/api/admin/image-storage', async ({ user }) => { requireAdmin(user); return images.status(); });
+route('POST', '/api/admin/image-storage/check', async ({ user }) => { requireAdmin(user); return images.check(); });
+route('POST', '/api/admin/image-storage/copy', async ({ user, body }) => { requireAdmin(user); return images.copyPage(body.cursor ?? ''); });
 route('PUT', '/api/admin/invite', async ({ user, body }) => {
   requireAdmin(user);
   const code = reqStr(body.invite_code, '초대코드', 100);
@@ -2219,7 +2224,7 @@ return { async fetch(req) {
       if (isOperator(user)) throw new HttpError(403, '오퍼레이터는 첨부 파일을 조회할 수 없습니다.');
       const file = p.slice('/uploads/'.length);
       if (!/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(file)) throw new HttpError(404, '사진을 찾을 수 없습니다.');
-      const photo = await env.BUCKET.get(file);
+      const photo = await images.get(file);
       if (!photo) throw new HttpError(404, '사진을 찾을 수 없습니다.');
       res.set('Content-Type', photo.httpMetadata?.contentType || 'application/octet-stream');
       res.set('Cache-Control', 'private, no-store');

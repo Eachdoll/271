@@ -369,3 +369,10 @@ INVITE_CODE=local-test-code npm start
 - 생산일정: 휴대폰에서 주간·월간 계획의 기간 글자를 카드 위로 올리고(.plan-row column), 빈 날짜 칸은 얇게 표시합니다.
 - lineInfo의 내부 묶음 번호(batch_id)는 화면 글자에서 빼고 title(마우스 올림)로만 둡니다. 다품목 등록 토스트에서도 뺐습니다.
 - form-ux: 팝업의 item/product/title 입력칸이 칸보다 길면 아래에 .input-full로 전체 글자를 보여 줍니다(입력칸·저장 값·Enter 동작은 그대로).
+
+## 회사 R2 사진 저장소 (15.43)
+- image-storage.mjs가 기존 BUCKET과 회사 R2 S3 API 접근을 통합합니다. R2_STORAGE_MODE 기본값은 native이며 명시적으로 external을 설정하기 전에는 기존 저장소를 계속 사용합니다. native BUCKET 바인딩과 D1, 기존 마이그레이션은 유지하세요.
+- 회사 연결 변수: R2_S3_ENDPOINT, R2_S3_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY. 키는 서버의 비밀 환경변수로만 설정합니다. endpoint는 HTTPS Cloudflare R2 계정 주소만 허용하며 서명 요청의 리다이렉트는 금지합니다. 외부 패키지 없이 Web Crypto SigV4(region=auto)를 사용합니다.
+- 사진 URL과 권한은 기존 /uploads/:file 그대로입니다. external 조회는 회사 버킷의 404에서만 기존 버킷으로 대체합니다. 인증·연결 실패를 숨기지 않습니다. external 삭제는 회사 버킷만 대상으로 하며 이전 원본은 보존합니다.
+- 관리자 설정의 회사 사진 저장소와 /api/admin/image-storage{,/check,/copy}는 관리자 전용입니다. copy는 원본 BUCKET.list를 3개씩 순회해 같은 객체 키·Content-Type을 유지하여 조건부 업로드(If-None-Match: *)하고 SHA-256과 형식 정보를 비교합니다. 충돌·복사 실패 시 중단하며 원본을 삭제하거나 D1 참조를 수정하지 않습니다. 재실행은 기존 복사본부터 비교합니다.
+- 복사 중에는 사진 변경을 잠시 멈추고 마지막 전체 검증을 끝낸 뒤 external로 전환·재배포합니다. 전환 이후 새 사진은 회사 버킷에만 저장하므로 native로 되돌리기 전에는 신규 사진의 역복사가 필요합니다. scripts/build.mjs에도 image-storage.mjs를 포함합니다.

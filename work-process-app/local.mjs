@@ -42,6 +42,11 @@ export function localEnvironment(dataDir, inviteCode) {
     return path.join(dataDir, 'uploads', key);
   };
   const BUCKET = {
+    async list({ limit = 3, cursor = '' } = {}) {
+      const keys = fs.readdirSync(path.join(dataDir, 'uploads')).filter(key => /^[a-f0-9]{24}\.(jpg|png|webp)$/.test(key)).sort().filter(key => !cursor || key > cursor);
+      const page = keys.slice(0, limit);
+      return { objects: page.map(key => ({ key })), truncated: keys.length > page.length, cursor: keys.length > page.length ? page.at(-1) : undefined };
+    },
     async put(key, bytes) { fs.writeFileSync(filePath(key), new Uint8Array(bytes)); },
     async get(key) {
       if (!fs.existsSync(filePath(key))) return null;
