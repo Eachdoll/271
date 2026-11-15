@@ -841,3 +841,40 @@ form .form-error { margin: 8px 0; }
   /* 카드 안 버튼 묶음은 줄을 넘기고 버튼 글자는 14px 이상 */
   table.grid.as-cards td .btn.small { font-size: 14px; min-height: 36px; }
 }
+
+/* ───── 15.42 휴대폰 글자·배치 개선 ───── */
+/* 세탁 검수 표: 다크 모드에서 합계 줄이 흰 배경으로 튀던 문제. 테마 색을 따른다. */
+.lr-list tfoot td, .lr-list tfoot th { background: var(--bg); color: var(--text); }
+/* 코드 배지·상태 배지가 긴 이름 옆에서 세로로 찌그러지지 않게 */
+.tag, .dept, .chip { flex-shrink: 0; white-space: nowrap; }
+h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
+/* 팝업 입력칸에 다 보이지 않는 긴 값은 아래에 전체를 한 번 더 보여 준다(form-ux.js). */
+.input-full { display: block; margin-top: 4px; font-size: 13.5px; line-height: 1.45; color: var(--text-2, var(--muted)); font-weight: 400; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  /* 접힌 카드: 「이름 값」 묶음을 한 덩어리로(줄이 모자라면 묶음째 다음 줄로). 「PR-」/「105」처럼 코드가 끊기지 않는다. */
+  table.grid.as-cards tr:not(.card-open) td:not(.card-secondary):not([data-label="품목명"]):not([data-label="품목"]):not(:has(> input[type=checkbox])) { display: inline-block; max-width: 100%; vertical-align: top; margin-bottom: 2px; }
+  /* 세탁 검수 표: 옆으로 밀어도 세탁일 칸은 왼쪽에 고정 */
+  .lr-list th:first-child, .lr-list td:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+  .lr-list tfoot th:first-child, .lr-list tfoot td:first-child { background: var(--bg); }
+  /* 생산일정: 주간·월간 계획의 기간 글자를 카드 위로 올려 카드 폭을 넓게, 빈 날짜는 얇게 */
+  .plan-row { flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 8px; }
+  .plan-row > .small { font-size: 14px; font-weight: 600; color: var(--text-2, var(--muted)); }
+  .week .day:not(:has(.sc-item)) { padding: 6px 12px; }
+  .week .day:not(:has(.sc-item)) .dh { margin: 0; }
+  .dh { font-size: 14px; }
+  .sc-item { font-size: 14px; padding: 8px 40px 8px 10px; }
+  .sc-item input[type=checkbox] { width: 20px; height: 20px; }
+  /* 작은 글자 키우기 */
+  .small, small, .hint, p.small, span.small, div.small { font-size: 13.5px; }
+  .chip, .dept, .tag { font-size: 13px; }
+  label > span.opt, legend > span.opt, summary span.opt, .form-legend span.opt, .opt-own { font-size: 13px; }
+  label, legend { font-size: 14px; }
+  table.grid th { font-size: 13.5px; }
+  .report-chart-scroll svg { font-size: 13px; }
+  .kpi em { font-size: 13px; }
+}
+@media (max-width: 700px) {
+  .toolbar label, .list-filters label { font-size: 14px; }
+  .draft-state, .draft-state span, .input-author { font-size: 13.5px; }
+  .report-legend span { font-size: 13px; }
+}

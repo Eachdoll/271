@@ -16,7 +16,7 @@ function fxFieldName(el) {
   let text = '';
   if (label) for (const node of label.childNodes) {
     if (node.nodeType === 3) text += node.nodeValue;
-    else if (node.nodeType === 1 && !node.matches('input, select, textarea, button, .req, .opt, .field-error, datalist, small, .muted')) text += node.textContent;
+    else if (node.nodeType === 1 && !node.matches('input, select, textarea, button, .req, .opt, .field-error, .input-full, datalist, small, .muted')) text += node.textContent;
   }
   text = text.replace(/\*/g, '').replace(/\((선택|optional)\)/g, '').replace(/\s+/g, ' ').trim();
   if (!text) text = el.getAttribute('aria-label') || el.closest('td')?.dataset.label || el.placeholder || '';
@@ -209,7 +209,20 @@ function fxServerError(form, button, message) {
       }
     }
   };
+  // 15.42: 팝업 입력칸(품목명 등)이 칸보다 길면 칸 아래에 전체 글자를 한 줄 더 보여 준다. 입력칸 자체는 그대로다.
+  const showFull = () => {
+    for (const input of document.querySelectorAll('.modal input[name="item"], .modal input[name="product"], .modal input[name="title"]')) {
+      if (input.type !== 'text' && input.type !== '') continue;
+      let full = input.parentElement.querySelector(':scope > .input-full');
+      const long = input.value && input.scrollWidth > input.clientWidth + 2;
+      if (long) {
+        if (!full) { full = document.createElement('span'); full.className = 'input-full'; full.setAttribute('aria-hidden', 'true'); input.insertAdjacentElement('afterend', full); }
+        if (full.textContent !== input.value) full.textContent = input.value;
+      } else if (full) full.remove();
+    }
+  };
+  document.addEventListener('input', event => { if (event.target.closest?.('.modal')) showFull(); }, true);
   let queued = false;
-  const schedule = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; mark(); }); };
+  const schedule = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; mark(); showFull(); }); };
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['required'] });
 })();
