@@ -374,7 +374,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1345,7 +1345,9 @@ route('GET', '/api/schedules', async ({ query }) => {
   // 기간과 겹치는 일정: 일간(그날), 주간(월~일), 월간(그 달)
   return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS actual_qty,
       (SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) + (SELECT COUNT(*) FROM semi_records c WHERE ${semiCutMatch('schedules')}) AS actual_count,
-      COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty FROM schedules WHERE kind=? AND (
+      COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty,
+      (SELECT r.req_no || ' · ' || r.customer || CASE WHEN r.order_no!='' THEN ' · ' || r.order_no ELSE '' END FROM production_request_lines l JOIN production_requests r ON r.id=l.request_id WHERE l.id=schedules.production_line_id) AS order_ref,
+      (SELECT l.request_id FROM production_request_lines l WHERE l.id=schedules.production_line_id) AS order_id FROM schedules WHERE kind=? AND (
       (period='day' AND start_date BETWEEN ? AND ?) OR
       (period='week' AND start_date<=? AND date(start_date,'+6 days')>=?) OR
       (period='month' AND start_date<=? AND date(start_date,'+1 month','-1 day')>=?)
@@ -2175,6 +2177,11 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     approvals.receipt_changes = { count: items.length, items: items.slice(0, 5) };
   }
   if (user.is_admin) approvals.temp_items = { count: (await db.prepare('SELECT COUNT(*) c FROM boms WHERE is_temp=1 AND active=1').get()).c };
+  // 생산의뢰: 생산계획에 아직 반영되지 않은 수량이 있는 의뢰(생산 담당·생산팀장·관리자).
+  if (hasRole(user, 'production')) {
+    const open = await db.prepare(`SELECT r.id,r.req_no,r.customer,r.order_no,r.ship_text,r.ship_date,r.created_at FROM production_requests r WHERE r.shipped=0 AND EXISTS(SELECT 1 FROM production_request_lines l WHERE l.request_id=r.id AND l.qty > COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0)) ORDER BY COALESCE(r.ship_date,'9999'), r.id LIMIT 50`).all();
+    if (open.length) approvals.production_requests = { count: open.length, items: open.slice(0, 5) };
+  }
   // 구매의뢰: 지금 내 결재 차례인 의뢰서(관리자도 자기 차례만).
   {
     const items = await db.prepare(`SELECT pr.id,pr.doc_no,pr.title,pr.author_name,pr.submitted_at,(SELECT item FROM purchase_request_items i WHERE i.request_id=pr.id ORDER BY line_no LIMIT 1) first_item,(SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id) item_count
@@ -2293,6 +2300,175 @@ route('POST', '/api/admin/org-import', async ({ user }) => {
     for (const name of names) await db.prepare(`INSERT INTO ${table}(name,sort) VALUES(?,?) ON CONFLICT(name) DO NOTHING`).run(name, ++sort);
   }
   return orgLists(false);
+});
+
+// ── 영업 → 생산: 생산의뢰(수주) ──
+// 영업이 업체·주문번호·출고 희망·사양과 품목(사이즈별 줄)을 올리면, 생산 담당이 「생산계획 반영」으로 생산일정을 만든다.
+// 일정은 schedules.production_line_id로 의뢰 줄에 연결되고, 진행(생산 수량·완료일)은 그 일정의 실적으로 계산한다.
+const MR_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+async function mrLines(list) {
+  if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
+  if (list.length > 60) throw bad('품목 줄은 60개까지 입력할 수 있습니다.');
+  const lines = [];
+  for (const [index, raw] of list.entries()) {
+    const it = raw && typeof raw === 'object' ? raw : {}, no = `${index + 1}번 품목`;
+    let bom = null;
+    if (it.bom_id !== undefined && it.bom_id !== null && it.bom_id !== '') {
+      const id = Number(it.bom_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad(`${no}의 품목을 다시 선택하세요.`);
+      bom = await mustGet('boms', id); if (!bom.active) throw bad(`${no}은(는) 사용 중지된 품목입니다.`);
+    }
+    const qty = num(it.qty, `${no} 수량`); if (!(qty > 0)) throw bad(`${no} 수량은 0보다 커야 합니다.`);
+    lines.push({ line_no: index + 1, bom_id: bom ? bom.id : null, product_code: bom ? bom.product_code : str(it.product_code, 50), item: bom ? bom.product : reqStr(it.item, `${no} 품목명`, 200), spec: str(it.spec, 100), unit: str(it.unit, 20) || (bom ? bom.unit : ''), qty });
+  }
+  return lines;
+}
+function mrHead(body) {
+  const shipDate = dateStr(body.ship_date, '출고 희망일', { required: false });
+  return { order_date: dateStr(body.order_date, '발주일'), customer: reqStr(body.customer, '업체(고객사)', 100), order_no: str(body.order_no, 100), ship_text: str(body.ship_text, 50), ship_date: shipDate, spec: str(body.spec, 1000), note: str(body.note, 1000) };
+}
+// 줄마다 계획 수량(연결된 일정 합)·생산 수량(일정 실적 합)·마지막 생산일을 붙인다.
+const MR_ACTUAL = s => `COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=${s}.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch(s)}),0)`;
+async function mrLineProgress(ids) {
+  if (!ids.length) return [];
+  const marks = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT l.*,
+      COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0) AS planned_qty,
+      COALESCE((SELECT SUM(${MR_ACTUAL('s')}) FROM schedules s WHERE s.production_line_id=l.id),0) AS produced_qty,
+      (SELECT MAX(a.production_date) FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE s.production_line_id=l.id AND a.voided_at IS NULL) AS last_produced,
+      (SELECT COUNT(*) FROM schedules s WHERE s.production_line_id=l.id) AS schedule_count
+    FROM production_request_lines l WHERE l.request_id IN (${marks}) ORDER BY l.request_id, l.line_no`).all(...ids);
+}
+function mrState(row, lines) {
+  const qty = lines.reduce((t, l) => t + l.qty, 0), planned = lines.reduce((t, l) => t + Math.min(l.planned_qty, l.qty), 0), produced = lines.reduce((t, l) => t + Math.min(l.produced_qty, l.qty), 0);
+  const done = lines.length && lines.every(l => l.produced_qty >= l.qty);
+  const status = row.shipped ? 'shipped' : done ? 'done' : produced > 0 ? 'producing' : planned >= qty ? 'planned' : planned > 0 ? 'partial' : 'waiting';
+  const doneDate = done ? lines.map(l => l.last_produced).filter(Boolean).sort().at(-1) || null : null;
+  return { status, total_qty: qty, planned_total: planned, produced_total: produced, done_date: doneDate, unplanned_lines: lines.filter(l => l.planned_qty < l.qty).length };
+}
+async function mrDetail(row, user) {
+  const lines = await mrLineProgress([row.id]);
+  const state = mrState(row, lines);
+  const schedules = await db.prepare(`SELECT s.id,s.kind,s.period,s.start_date,s.product,s.spec,s.qty,s.done,s.production_line_id,${MR_ACTUAL('s')} AS actual_qty FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=? ORDER BY s.start_date, s.id`).all(row.id);
+  const mine = user && (user.is_admin || row.author_id === user.id);
+  return { ...row, shipped: !!row.shipped, lines, schedules, ...state,
+    can_edit: !!(mine && !lines.some(l => l.schedule_count) && !row.shipped),
+    can_plan: !!(user && hasRole(user, 'production') && !row.shipped && state.unplanned_lines > 0),
+    can_ship: !!(user && (mine || hasRole(user, 'logistics') || hasRole(user, 'production'))) };
+}
+route('GET', '/api/production-requests', async ({ user, query }) => {
+  const where = [], args = [];
+  applyListDates(where, args, query, 'r.order_date');
+  const q = String(query.q || '').trim();
+  if (q) {
+    if (q.length > 200) throw bad('검색어는 200자까지 입력하세요.');
+    const p = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+    where.push("(r.req_no LIKE ? ESCAPE '\\' OR r.customer LIKE ? ESCAPE '\\' OR r.order_no LIKE ? ESCAPE '\\' OR r.spec LIKE ? ESCAPE '\\' OR r.author_name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM production_request_lines l WHERE l.request_id=r.id AND (l.item LIKE ? ESCAPE '\\' OR l.product_code LIKE ? ESCAPE '\\' OR l.spec LIKE ? ESCAPE '\\')))");
+    args.push(...Array(8).fill(p));
+  }
+  if (query.mine === '1') { where.push('r.author_id=?'); args.push(user.id); }
+  const rows = await db.prepare(`SELECT r.* FROM production_requests r ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY r.shipped, COALESCE(r.ship_date, '9999'), r.order_date, r.id LIMIT 300`).all(...args);
+  const lines = await mrLineProgress(rows.map(r => r.id));
+  let out = rows.map(row => { const ls = lines.filter(l => l.request_id === row.id); return { ...row, shipped: !!row.shipped, lines: ls, ...mrState(row, ls) }; });
+  if (query.status) {
+    // open = 출고 전 전체(생산완료지만 아직 출고 안 한 의뢰도 포함), waiting = 계획이 덜 된 의뢰
+    const wanted = { open: s => s !== 'shipped', waiting: s => ['waiting', 'partial'].includes(s) };
+    const test = wanted[query.status] || (s => s === query.status);
+    if (!wanted[query.status] && !['waiting', 'partial', 'planned', 'producing', 'done', 'shipped'].includes(query.status)) throw bad('진행 상태를 확인하세요.');
+    out = out.filter(r => test(r.status));
+  }
+  return out;
+});
+// 생산 필요 수량: 아직 출고되지 않은 의뢰의 품목·규격별 남은 생산 수량 합계(영업의 「TOTAL 생산 필요 수량」)
+route('GET', '/api/production-requests/needs', async () => {
+  const rows = await db.prepare('SELECT id FROM production_requests WHERE shipped=0').all();
+  const lines = await mrLineProgress(rows.map(r => r.id));
+  const map = new Map();
+  for (const l of lines) {
+    const left = Math.max(0, l.qty - l.produced_qty); if (!left) continue;
+    const key = [l.item, l.spec, l.unit].join('\u0001');
+    const e = map.get(key) || { item: l.item, product_code: l.product_code, spec: l.spec, unit: l.unit, ordered: 0, produced: 0, need: 0, unplanned: 0, requests: 0 };
+    e.ordered += l.qty; e.produced += Math.min(l.produced_qty, l.qty); e.need += left; e.unplanned += Math.max(0, l.qty - l.planned_qty); e.requests++;
+    map.set(key, e);
+  }
+  return [...map.values()].sort((a, b) => a.item.localeCompare(b.item, 'ko') || MR_SIZES.indexOf(a.spec) - MR_SIZES.indexOf(b.spec) || a.spec.localeCompare(b.spec));
+});
+route('GET', '/api/production-requests/:id', async ({ user, params }) => mrDetail(await mustGet('production_requests', params.id), user));
+route('POST', '/api/production-requests', async ({ user, body }) => {
+  const requestId = str(body.request_id, 80);
+  if (requestId) { const done = await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(requestId); if (done) return mrDetail(done, user); }
+  const head = mrHead(body), lines = await mrLines(body.lines);
+  const prefix = 'MR-' + head.order_date.slice(2).replace(/-/g, '') + '-';
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const last = await db.prepare("SELECT req_no FROM production_requests WHERE req_no LIKE ? ESCAPE '\\' ORDER BY req_no DESC LIMIT 1").get(prefix.replace(/[\\%_]/g, '\\$&') + '%');
+    const no = prefix + String((last ? Number(last.req_no.slice(prefix.length)) || 0 : 0) + 1).padStart(2, '0');
+    try {
+      await db.batch([
+        { sql: 'INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', args: [no, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', requestId || null] },
+        ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE req_no=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, no] })),
+      ]);
+      await ensureVendor(head.customer, user);
+      return mrDetail(await db.prepare('SELECT * FROM production_requests WHERE req_no=?').get(no), user);
+    } catch (error) {
+      if (!String(error.message).includes('UNIQUE')) throw error;
+      if (requestId) { const done = await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(requestId); if (done) return mrDetail(done, user); }
+    }
+  }
+  throw new HttpError(409, '의뢰 번호가 겹쳤습니다. 잠시 후 다시 등록하세요.');
+});
+async function mrEditable(user, id) {
+  const row = await mustGet('production_requests', id);
+  if (!(user.is_admin || row.author_id === user.id)) throw new HttpError(403, '작성자만 고칠 수 있습니다.');
+  if (await db.prepare('SELECT 1 FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=?').get(row.id)) throw bad('이미 생산계획에 반영된 의뢰는 고치거나 지울 수 없습니다. 생산 담당자와 일정을 먼저 정리하세요.');
+  return row;
+}
+route('PUT', '/api/production-requests/:id', async ({ user, params, body }) => {
+  const row = await mrEditable(user, params.id);
+  if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  const head = mrHead(body), lines = await mrLines(body.lines);
+  const result = await db.batch([
+    { sql: "UPDATE production_requests SET order_date=?,customer=?,order_no=?,ship_text=?,ship_date=?,spec=?,note=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, row.id, row.revision] },
+    { sql: 'DELETE FROM production_request_lines WHERE request_id=? AND (SELECT revision FROM production_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
+    ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE id=? AND revision=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, row.id, row.revision + 1] })),
+  ]);
+  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  await ensureVendor(head.customer, user);
+  return mrDetail(await mustGet('production_requests', row.id), user);
+});
+route('DELETE', '/api/production-requests/:id', async ({ user, params }) => {
+  const row = await mrEditable(user, params.id);
+  await db.batch([{ sql: 'DELETE FROM production_request_lines WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM production_requests WHERE id=?', args: [row.id] }]);
+  return { ok: true };
+});
+// 생산계획 반영: 아직 계획되지 않은 수량만큼 생산일정을 만든다(생산 담당). 일정은 의뢰 줄에 연결된다.
+route('POST', '/api/production-requests/:id/plan', async ({ user, params, body }) => {
+  if (!hasRole(user, 'production')) throw new HttpError(403, '생산 담당자만 생산계획에 반영할 수 있습니다.');
+  const row = await mustGet('production_requests', params.id);
+  if (row.shipped) throw bad('출고 완료된 의뢰입니다.');
+  const wanted = Array.isArray(body.line_ids) ? body.line_ids.map(Number) : null;
+  const lines = (await mrLineProgress([row.id])).filter(l => l.planned_qty < l.qty && (!wanted || wanted.includes(l.id)));
+  if (!lines.length) throw bad('생산계획에 반영할 남은 수량이 없습니다.');
+  const period = String(body.period || 'week'); if (!['day', 'week', 'month'].includes(period)) throw bad('일간/주간/월간을 선택하세요.');
+  const startDate = dateStr(body.start_date, '시작일');
+  const commands = [];
+  for (const l of lines) {
+    const bom = l.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(l.bom_id) : null;
+    const kind = ['finished', 'semi'].includes(body.kind) ? body.kind : bom && bom.kind === 'semi' && bom.item_category === '반제품' ? 'semi' : 'finished';
+    const note = [`생산의뢰 ${row.req_no}`, row.customer, row.order_no, row.spec].filter(Boolean).join(' · ').slice(0, 500);
+    const f = await schedFields({ kind, period, start_date: startDate, product: l.item, qty: l.qty - l.planned_qty, note, bom_id: bom && bom.active && bom.kind === kind ? bom.id : null });
+    commands.push(insertItem('schedules', { kind: f.kind, period: f.period, start_date: f.start_date, product: f.product, qty: f.qty, note: f.note, bom_id: f.bom_id, bom_snapshot: f.bom_snapshot, spec: l.spec, unit: l.unit || (f.bom_id ? JSON.parse(f.bom_snapshot).unit || '' : ''), lot: '', batch_id: '', created_by: user.name, production_line_id: l.id }));
+  }
+  await db.batch(commands);
+  return mrDetail(row, user);
+});
+// 출고 완료 체크(출고여부·출고일). 작성자·물류·생산 담당.
+route('POST', '/api/production-requests/:id/ship', async ({ user, params, body }) => {
+  const row = await mustGet('production_requests', params.id);
+  if (!(user.is_admin || row.author_id === user.id || hasRole(user, 'logistics') || hasRole(user, 'production'))) throw new HttpError(403, '작성자·물류·생산 담당자만 출고를 표시할 수 있습니다.');
+  if (body.shipped) {
+    const date = dateStr(body.shipped_date, '출고일');
+    await db.prepare("UPDATE production_requests SET shipped=1,shipped_date=?,shipped_by=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=?").run(date, user.name, row.id);
+  } else await db.prepare("UPDATE production_requests SET shipped=0,shipped_date=NULL,shipped_by='',revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=?").run(row.id);
+  return mrDetail(await mustGet('production_requests', row.id), user);
 });
 
 // ── 영업: 구매의뢰 (전자결재) ──

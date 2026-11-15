@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.49';
+const APP_VERSION = '15.50';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -272,7 +272,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
@@ -286,6 +286,7 @@ const NAV = [
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트']] },
+    ['#/prod/orders', '생산의뢰 접수'],
     { sub: '완제품 생산', items: [['#/prod/finished/new', '생산계획 입력'], ['#/prod/finished', '생산일정 · 실적']] },
     { sub: '반제품 생산', items: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
     { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
@@ -429,6 +430,9 @@ const PAGES = {
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
   '#/prod/semi/wash/new': main => pageSemi(main, 'wash'),
   '#/sales/pr': pageSalesPrList,
+  '#/sales/mr': main => pageMrList(main, 'sales'),
+  '#/sales/mr/new': pageSalesMrEntry,
+  '#/prod/orders': main => pageMrList(main, 'production'),
   '#/sales/pr/new': pageSalesPrEntry,
   '#/admin': pageAdmin,
   '#/admin/org': pageOrg,
@@ -539,6 +543,7 @@ function taskBadgeCounts(tasks) {
   if (a.semi_changes?.wash) counts['#/prod/semi/wash'] = a.semi_changes.wash;
   if (a.temp_items?.count) counts['#/admin/bom'] = a.temp_items.count;
   if (a.purchase_requests?.count) counts['#/sales/pr'] = a.purchase_requests.count;
+  if (a.production_requests?.count) counts['#/prod/orders'] = a.production_requests.count;
   return counts;
 }
 async function refreshNavBadges() {
@@ -563,6 +568,7 @@ function tasksCard(tasks) {
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
+  if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `${esc(r.req_no)} ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
@@ -571,7 +577,7 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests;
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests;
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
@@ -1435,7 +1441,9 @@ async function pageSchedule(kind) {
   $('#scBom').onchange = previewBom; $('#scNew [name=qty]').oninput = previewBom;
   $$('#scNew [name=period]').forEach((r) => (r.onchange = () => { $('#scHint').textContent = hints[r.value]; }));
   const range = () => view === 'day' ? [base, base] : view === 'week' ? [mondayOf(base), addDays(mondayOf(base), 6)] : [monthStart(base), monthEnd(base)];
-  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${planProgress(s)}<button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
+  // 생산의뢰에서 만든 일정은 메모 앞의 「생산의뢰 번호 · 업체 · 주문번호」를 링크로 보여 주고 메모에서는 뺀다.
+  const scheduleNote = s => s.order_ref && (s.note || '').startsWith('생산의뢰 ' + s.order_ref) ? s.note.slice(('생산의뢰 ' + s.order_ref).length).replace(/^ · /, '') : s.note;
+  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.order_ref ? ` <a class="sc-order" href="#/prod/orders" data-open-mr="${s.order_id}">생산의뢰 ${esc(s.order_ref)}</a>` : ''}${scheduleNote(s) ? ` <span class="small muted">${esc(scheduleNote(s))}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${planProgress(s)}<button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
     uxWrite(calendarKey, { view, base });

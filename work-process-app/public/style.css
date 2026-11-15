@@ -940,3 +940,17 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .org-member-edit { display: flex; gap: 8px; flex-wrap: wrap; }
 .org-member-edit label { font-size: 0; } /* 이름은 칸의 선택지로 충분해 숨긴다(aria 이름은 select 첫 선택지와 label) */
 .org-member-edit select, .org-member-edit input { font-size: 14px; min-width: 120px; margin: 0; }
+
+/* ───── 15.50 생산의뢰 ───── */
+.mr-line { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0 0 8px; background: var(--panel); min-width: 0; }
+.mr-line > legend { font-weight: 700; font-size: 14px; color: var(--text); padding: 0 4px; }
+.mr-size-grid { margin: 10px 0; }
+.mr-size-grid > h4 { margin: 0 0 8px; }
+.mr-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin: 8px 0; }
+.mr-spec { background: var(--yellow-bg); color: var(--yellow-ink, var(--yellow)); border: 2px solid var(--red); border-radius: 10px; padding: 10px 14px; font-weight: 700; white-space: pre-wrap; }
+.mr-spec-inline { color: var(--red); font-weight: 600; }
+.mr-needs h2 { font-size: 17px; margin: 0 0 4px; }
+.mr-needs-table .mr-total td { background: var(--yellow-bg); font-weight: 700; }
+.mr-schedules { margin: 0; padding-left: 18px; }
+.mr-schedules li { padding: 3px 0; }
+.sc-order { display: inline-block; font-size: 13px; font-weight: 600; margin-left: 6px; }

@@ -411,3 +411,12 @@ INVITE_CODE=local-test-code npm start
 - 구매의뢰: 의뢰부서는 입력받지 않고 작성자의 users.department, 요청자 직급은 users.position을 상신(재상신) 당시 값으로 저장합니다. 「부서명」 입력칸과 품목 「담당자」 칸은 없앴습니다(예전 기록에 담당자 값이 있으면 상세 표에만 보입니다).
 - 화면: public/org.js(index.html·local.mjs·build.mjs 포함) — orgFields()(가입·사용자 추가·사용자 행 「직급·부서」에서 공용), pageOrg(#/admin/org, 관리 메뉴 「조직 구성」, 관리자만). 조직도는 부서 순서대로 높은 직급부터 보여 주고 그 자리에서 부서·직급을 바꿉니다.
 - showInputAuthors는 form[data-no-author]를 건너뜁니다(조직 구성 양식, 요청자를 따로 보여 주는 구매의뢰 양식).
+
+## 영업 → 생산 생산의뢰 · 생산계획 연동 (15.50)
+- 0027_production_requests.sql: production_requests(req_no MR-YYMMDD-NN, 발주일·업체·주문번호·출고 희망 글/날짜·사양·비고, 요청자·부서, shipped·shipped_date·shipped_by, revision, request_id), production_request_lines(품목·제품코드·규격/사이즈·단위·수량, 사이즈별 수량은 사이즈마다 한 줄), schedules.production_line_id(생산의뢰에서 만든 일정의 연결). 세 곳 모두 추가만 했고 기존 데이터는 그대로입니다. 두 표는 전체 백업 대상입니다(15.49 조직 표도 이번에 백업 목록에 넣었습니다).
+- worker.mjs 「영업 → 생산: 생산의뢰」: 등록은 로그인 사용자 누구나(업체는 거래처 목록에 자동 등록), 수정·삭제는 작성자가 생산계획 반영 전까지만. POST /:id/plan(생산 담당 hasRole production)은 줄마다 아직 계획되지 않은 수량만큼 schedFields()로 일정을 만들고 production_line_id를 남깁니다(반제품 BOM은 semi, 나머지 finished, 메모 「생산의뢰 번호 · 업체 · 주문번호 · 사양」). POST /:id/ship은 작성자·물류·생산이 출고 완료/취소를 표시합니다.
+- 진행은 저장하지 않고 계산합니다: planned_qty=연결 일정 수량 합, produced_qty=연결 일정 실적 합(생산실적 + 반제품 커팅 기록, GET /api/schedules의 actual_qty와 같은 식 MR_ACTUAL), 상태 waiting/partial/planned/producing/done/shipped, 생산 완료일=마지막 실적일. 목록 status=open은 출고 전 전체(생산완료 포함).
+- GET /api/production-requests/needs: 출고 전 의뢰의 품목·규격별 생산 필요 수량(의뢰−생산)과 계획 안 된 수량. my-tasks approvals.production_requests(생산 담당: 계획 안 된 수량이 있는 의뢰) → 대시보드·메뉴 배지(#/prod/orders).
+- GET /api/schedules는 order_ref(「MR-… · 업체 · 주문번호」)·order_id를 함께 줍니다. 생산일정 항목은 이를 링크로 보여 주고 메모에서 같은 앞부분을 뺍니다. 일정을 지우면 그 수량은 다시 「계획 안 됨」이 됩니다.
+- 화면(public/sales.js): 영업 › 생산의뢰(작성 #/sales/mr/new · 목록 #/sales/mr), 생산 › 생산의뢰 접수(#/prod/orders, 생산 필요 수량 표 + 「접수·계획 반영」). 「사이즈별 입력」은 XS~XXL 수량을 사이즈별 줄로 만듭니다.
+- i18n: textarea의 placeholder도 번역합니다(입력 내용은 번역하지 않음).
