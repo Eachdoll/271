@@ -2232,12 +2232,7 @@ return { async fetch(req) {
     }
     if (!['GET', 'HEAD'].includes(req.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     if (p === '/r2-key-handoff.html') {
-      const page = await env.ASSETS.fetch(req), headers = new Headers(page.headers);
-      headers.set('Cache-Control', 'no-store');
-      headers.set('Referrer-Policy', 'no-referrer');
-      headers.set('X-Frame-Options', 'DENY');
-      headers.set('Content-Security-Policy', "frame-ancestors 'none'");
-      return new Response(page.body, { status: page.status, headers });
+      return new Response(req.method === 'HEAD' ? null : 'R2 키 등록이 완료되어 임시 전달 페이지를 종료했습니다.', { status: 410, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
     }
     return env.ASSETS.fetch(req);
   } catch (e) {

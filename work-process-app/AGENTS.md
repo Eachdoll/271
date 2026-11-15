@@ -377,7 +377,8 @@ INVITE_CODE=local-test-code npm start
 - 관리자 설정의 회사 사진 저장소와 /api/admin/image-storage{,/check,/copy}는 관리자 전용입니다. copy는 원본 BUCKET.list를 3개씩 순회해 같은 객체 키·Content-Type을 유지하여 조건부 업로드(If-None-Match: *)하고 SHA-256과 형식 정보를 비교합니다. 충돌·복사 실패 시 중단하며 원본을 삭제하거나 D1 참조를 수정하지 않습니다. 재실행은 기존 복사본부터 비교합니다.
 - 복사 중에는 사진 변경을 잠시 멈추고 마지막 전체 검증을 끝낸 뒤 external로 전환·재배포합니다. 전환 이후 새 사진은 회사 버킷에만 저장하므로 native로 되돌리기 전에는 신규 사진의 역복사가 필요합니다. scripts/build.mjs에도 image-storage.mjs를 포함합니다.
 
-## 키 암호문 전달 도구 (15.44)
-- /r2-key-handoff.html은 다운로드·환경 설정 UI를 사용할 수 없을 때 사용하는 독립된 브라우저 암호화 도구입니다. 입력한 키를 fetch/폼 제출/브라우저 저장소로 전송·저장하지 않습니다. 작업용 RSA-OAEP/SHA-256 공개키만 포함하며 개인키는 이 작업 세션에만 둡니다. 암호문은 사용자가 원래 대화에 전달합니다.
-- HTTPS 또는 로컬 파일에서만 활성화합니다. CSP connect-src/form-action은 none, 스크립트는 SHA-256 해시로 허용하며 Worker는 프레임 삽입과 캐시를 막습니다. 문서를 수정하면 CSP 해시도 갱신해야 합니다.
-- 전달용 개인키를 잃었으면 새 키 쌍과 공개키 페이지를 준비해야 합니다. 키 등록 완료 후 이 임시 도구는 제거하세요. R2 모드·D1·기존 마이그레이션·Site 설정은 바꾸지 않습니다.
+## 회사 R2 접근 검증·임시 도구 종료 (15.45)
+- seoulsemi-images의 S3 API에서 테스트 객체의 조건부 생성·업로드·조회·SHA-256 및 Content-Type 비교·삭제 후 404를 확인했습니다. 테스트 객체는 정리했고 기존 사진에는 접근하거나 변경하지 않았습니다.
+- 두 접근 키는 Sites의 R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY에 비밀 값으로 등록합니다. 값은 소스·번들·manifest·로그·D1에 넣지 않습니다.
+- R2_STORAGE_MODE는 native를 유지합니다. 사진 복사·검증과 external 전환은 별도 단계입니다. INVITE_CODE·D1·기존 BUCKET·마이그레이션을 유지하세요.
+- 키 전달용 임시 HTML은 제거했고 /r2-key-handoff.html은 HTTP 410을 반환합니다. 임시 공개키를 다시 배포하거나 해당 페이지를 다시 활성화하지 마세요.
