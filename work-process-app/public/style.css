@@ -966,3 +966,7 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .po-pr { border: 1px solid var(--line, #e5e7eb); border-radius: 12px; padding: 8px 12px; margin: 8px 0; }
 .po-pr > summary { cursor: pointer; padding: 4px 0; line-height: 1.5; }
 .po-pr .table-wrap { margin-top: 6px; }
+
+/* 15.58 거래처 구분 체크 */
+.vendor-types { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.vendor-types legend { float: left; margin-right: 8px; font-weight: 600; }

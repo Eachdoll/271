@@ -24,7 +24,7 @@ function prItemRow(it = {}) {
       <label>판매단가<input data-k="sale_price" type="number" min="0" step="any" value="${v('sale_price')}"></label>
       <label>공급선<input data-k="vendor" maxlength="100" list="prVendorList" value="${v('vendor')}" placeholder="매입 거래처"></label>
       <label>납품예정수량<input data-k="delivery_qty" maxlength="50" value="${v('delivery_qty')}" placeholder="비우면 전량 · 분할 시 예: 1차 50"></label>
-      <label>사용고객사<input data-k="customer" maxlength="200" value="${v('customer')}"></label>
+      <label>사용고객사<input data-k="customer" maxlength="200" list="prCustomerList" value="${v('customer')}" placeholder="매출처에서 고르거나 입력"></label>
       <label>현재고<input data-k="stock_qty" maxlength="50" value="${v('stock_qty')}" placeholder="품목을 고르면 자동"></label>
       <label>입고요청일<input data-k="due_text" maxlength="50" value="${v('due_text')}" placeholder="예: ASAP 또는 2026-12-01"></label>
       <label>월사용량<input data-k="monthly_usage" maxlength="50" value="${v('monthly_usage')}"></label>
@@ -33,7 +33,8 @@ function prItemRow(it = {}) {
     <div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div></fieldset>`;
 }
 async function prForm(host, existing = null, { onDone } = {}) {
-  const [people, catalog, vendors] = await Promise.all([prDirectory(), api('GET', '/api/boms?temp=1').catch(() => []), api('GET', '/api/vendors').catch(() => [])]);
+  // 공급선은 매입처, 사용고객사는 매출처 목록(구분 없는 거래처는 양쪽)에서 고른다.
+  const [people, catalog, vendors, customers] = await Promise.all([prDirectory(), api('GET', '/api/boms?temp=1').catch(() => []), api('GET', '/api/vendors?type=purchase').catch(() => []), api('GET', '/api/vendors?type=sales').catch(() => [])]);
   const line = { approve: [], agree: [], cc: [] };
   if (existing) for (const l of existing.lines) line[l.kind].push(l.user_id);
   const others = people.filter(p => p.id !== (existing ? existing.author_id : ME.id));
@@ -58,7 +59,8 @@ async function prForm(host, existing = null, { onDone } = {}) {
     <div class="actions"><button class="btn primary">${existing ? '고쳐서 다시 상신' : '상신'}</button></div>
   </form>
   <datalist id="prCatalogList">${catalog.map(b => `<option value="${esc(b.product)}">${esc(b.product_code)}${b.unit ? ' · ' + esc(b.unit) : ''}</option>`).join('')}</datalist>
-  <datalist id="prVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
+  <datalist id="prVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>
+  <datalist id="prCustomerList">${customers.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
   const form = $('form', host), items = $('[data-items]', form), draft = existing ? null : bindPhotoDraft(form);
   const byId = id => people.find(p => p.id === id) || { name: '(없는 사용자)' };
   const renumber = () => [...items.children].forEach((row, i) => { $('legend', row).textContent = `품목 ${i + 1}`; $('[data-remove-item]', row).setAttribute('aria-label', `품목 ${i + 1} 삭제`); });
@@ -266,7 +268,7 @@ function mrLineRow(l = {}) {
   </div><div class="actions"><button type="button" class="btn small danger" data-remove-line>줄 삭제</button></div></fieldset>`;
 }
 async function mrForm(host, existing = null, { onDone } = {}) {
-  const [catalog, vendors] = await Promise.all([api('GET', '/api/boms?temp=1').catch(() => []), api('GET', '/api/vendors').catch(() => [])]);
+  const [catalog, vendors] = await Promise.all([api('GET', '/api/boms?temp=1').catch(() => []), api('GET', '/api/vendors?type=sales').catch(() => [])]);
   const e = key => esc(existing ? existing[key] ?? '' : '');
   host.innerHTML = `<form class="stack mr-form" data-no-author>
     <p class="pr-requester"><span class="muted">요청자</span> <b>${esc(existing ? existing.author_name : ME.name)}</b> <span class="muted">부서</span> <b>${esc((existing ? existing.author_department : ME.department) || '부서 미지정')}</b></p>

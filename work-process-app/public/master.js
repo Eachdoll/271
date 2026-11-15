@@ -2,9 +2,10 @@
 const partnerKey = value => String(value ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
 let partnerListSerial = 0;
 // Attach the vendor pick list to a name input; for purchase orders also suggest what was bought recently.
-async function bindPartnerPicker(input, hint, { recent = false, onPick } = {}) {
+// type(15.58): 'purchase'면 매입처, 'sales'면 매출처만(구분 없는 거래처는 둘 다) 목록에 보인다.
+async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '' } = {}) {
   let vendors = [];
-  try { vendors = await api('GET', '/api/vendors'); } catch { return; } // typing a name still works without the list
+  try { vendors = await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;
   const list = document.createElement('datalist'); list.id = 'partnerList' + (++partnerListSerial);
   list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.contact_name, v.phone].filter(Boolean).join(' · '))}</option>`).join('');
@@ -33,25 +34,29 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick } = {}) {
   input.addEventListener('change', show); if (input.value) show();
 }
 
+// 거래처 구분 체크(등록·수정)와 목록 표시
+const vendorTypeChecks = (v = {}) => `<fieldset class="vendor-types"><legend>구분</legend><label class="inline"><input type="checkbox" name="is_purchase" value="1"${v.is_purchase ? ' checked' : ''}> 매입처</label><label class="inline"><input type="checkbox" name="is_sales" value="1"${v.is_sales ? ' checked' : ''}> 매출처</label></fieldset>`;
+const vendorTypeChips = v => v.is_purchase || v.is_sales ? `${v.is_purchase ? '<span class="chip">매입</span>' : ''}${v.is_sales ? '<span class="chip green">매출</span>' : ''}` : '<span class="muted small">구분 없음</span>';
 async function pageVendors(main) {
   main.innerHTML = `
   <h1>거래처 관리 <span class="dept">관리</span></h1>
-  <p class="muted">누구나 거래처를 등록·수정할 수 있습니다. 발주·입고·출하 입력에서 거래처 이름을 고르면 담당자와 연락처가 함께 보이고, 발주에서는 그 거래처의 최근 매입 품목을 바로 불러올 수 있습니다. 입력 화면에서 새 이름을 쓰면 자동으로 이 목록에 추가됩니다.</p>
+  <p class="muted">매입처(발주·입고)와 매출처(출하·생산의뢰·고객사)를 체크해 두면 입력 화면에서 해당 거래처만 골라 보여 줍니다. 둘 다 체크하면 양쪽에 모두 나오고, 둘 다 비우면 구분 없이 어디에나 나옵니다. 누구나 거래처를 등록·수정할 수 있습니다. 발주·입고·출하 입력에서 거래처 이름을 고르면 담당자와 연락처가 함께 보이고, 발주에서는 그 거래처의 최근 매입 품목을 바로 불러올 수 있습니다. 입력 화면에서 새 이름을 쓰면 자동으로 이 목록에 추가됩니다.</p>
   <form class="card" id="vendorNew"><h3>거래처 등록</h3><div class="form-grid">
     <label>거래처 이름 *<input name="name" required maxlength="100"></label>
     <label>담당자 이름<input name="contact_name" maxlength="50"></label>
-    <label>연락처<input name="phone" maxlength="30" inputmode="tel" placeholder="예) 010-1234-5678"></label></div>
+    <label>연락처<input name="phone" maxlength="30" inputmode="tel" placeholder="예) 010-1234-5678"></label>
+    ${vendorTypeChecks()}</div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
-  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span></form>
+  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·담당자·연락처"></label><label>구분<select name="type"><option value="">전체</option><option value="purchase">매입처</option><option value="sales">매출처</option><option value="none">구분 없음</option></select></label><input type="hidden" name="only" value="1"><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span></form>
   <div id="vendorList"></div>`;
   const filters = $('#vendorFilters', main); let version = 0;
-  const fields = v => `<label>거래처 이름 *<input name="name" required maxlength="100" value="${esc(v.name)}"></label><label>담당자 이름<input name="contact_name" maxlength="50" value="${esc(v.contact_name)}"></label><label>연락처<input name="phone" maxlength="30" inputmode="tel" value="${esc(v.phone)}"></label>`;
+  const fields = v => `<label>거래처 이름 *<input name="name" required maxlength="100" value="${esc(v.name)}"></label><label>담당자 이름<input name="contact_name" maxlength="50" value="${esc(v.contact_name)}"></label><label>연락처<input name="phone" maxlength="30" inputmode="tel" value="${esc(v.phone)}"></label>${vendorTypeChecks(v)}`;
   const load = async () => {
     const mine = ++version; const rows = await api('GET', '/api/vendors?' + new URLSearchParams(formObj(filters)));
     if (mine !== version || !main.isConnected) return;
     $('#vendorCount').textContent = `${rows.length}곳`;
-    $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>거래처</th><th>담당자</th><th>연락처</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
-      <td><b>${esc(v.name)}</b></td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
+    $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>거래처</th><th>구분</th><th>담당자</th><th>연락처</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
+      <td><b>${esc(v.name)}</b></td><td>${vendorTypeChips(v)}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
       <td class="small muted">${esc(v.created_by || '')}${v.updated_by ? ` · 수정 ${esc(v.updated_by)}` : ''}</td>
       <td class="nowrap"><button class="btn small" data-vendor-recent="${i}">최근 매입</button> <button class="btn small" data-vendor-edit="${i}">수정</button>${ME.is_admin || v.created_by === ME.name ? ` <button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 거래처가 없습니다.</div>';
@@ -76,5 +81,6 @@ async function pageVendors(main) {
     try { await api('POST', '/api/vendors', formObj(event.target)); event.target.reset(); toast('거래처를 등록했습니다.'); load(); } catch (error) { fail(error); }
   };
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
+  filters.addEventListener('change', event => { if (event.target.name === 'type') load().catch(fail); }); // 구분은 고르면 바로 거른다
   await load();
 }

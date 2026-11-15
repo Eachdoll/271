@@ -408,10 +408,16 @@ route('GET', '/api/admin/backup', async ({ user, query }) => {
 // Names are compared without spaces/case so '니트릴글러브' and '니트릴 글러브' resolve to one entry.
 const nameKey = value => String(value ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
 // Using a vendor name anywhere registers it, so the pick list fills itself; contact details can be added later.
-async function ensureVendor(name, user) {
+// type(15.58): 'purchase'(발주·기타입고) 또는 'sales'(출하·생산의뢰). 새 거래처는 그 구분으로 등록하고,
+// 이미 있는 거래처는 구분이 하나도 없을 때만 채운다(사람이 정한 구분은 바꾸지 않는다).
+async function ensureVendor(name, user, type = '') {
   const clean = str(name, 100); if (!clean) return;
-  await db.prepare('INSERT INTO vendors(name,name_key,created_by) VALUES(?,?,?) ON CONFLICT(name_key) DO NOTHING').run(clean, nameKey(clean), user.name);
+  const column = type === 'purchase' ? 'is_purchase' : type === 'sales' ? 'is_sales' : '';
+  if (!column) { await db.prepare('INSERT INTO vendors(name,name_key,created_by) VALUES(?,?,?) ON CONFLICT(name_key) DO NOTHING').run(clean, nameKey(clean), user.name); return; }
+  await db.prepare(`INSERT INTO vendors(name,name_key,created_by,${column}) VALUES(?,?,?,1) ON CONFLICT(name_key) DO UPDATE SET ${column}=1 WHERE vendors.is_purchase=0 AND vendors.is_sales=0`).run(clean, nameKey(clean), user.name);
 }
+// 거래처 목록 구분: type=purchase(매입처)·sales(매출처). 구분이 없는 거래처는 어느 목록에나 나온다.
+const VENDOR_TYPES = { purchase: 'is_purchase', sales: 'is_sales' };
 // Resolve an item row to the catalog (boms). A chosen code wins; a typed name matches an existing entry
 // ignoring spaces/case; otherwise a temporary code is issued for an administrator to tidy up later.
 async function catalogItem(user, { bom_id, item, unit, item_category }) {
@@ -431,20 +437,32 @@ async function catalogItem(user, { bom_id, item, unit, item_category }) {
 route('GET', '/api/vendors', async ({ query }) => {
   const where = [], args = [];
   applyListKeyword(where, args, query.q, ['name', 'contact_name', 'phone']);
+  if (query.type) {
+    if (query.type === 'none') where.push('is_purchase=0 AND is_sales=0');
+    else if (VENDOR_TYPES[query.type]) where.push(query.only === '1' ? `${VENDOR_TYPES[query.type]}=1` : `(${VENDOR_TYPES[query.type]}=1 OR (is_purchase=0 AND is_sales=0))`);
+    else throw bad('거래처 구분을 확인하세요.');
+  }
   return db.prepare(`SELECT * FROM vendors ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name LIMIT 1000`).all(...args);
 });
 function vendorFields(body) { return [reqStr(body.name, '거래처 이름', 100), str(body.contact_name, 50), str(body.phone, 30)]; }
+// 체크 값: true/false(화면), 1/0, '1'/'on', ['1'](폼 배열). 보내지 않으면 undefined(고치기에서는 기존 값 유지).
+function vendorFlag(value) {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value.length ? 1 : 0;
+  return value === true || value === 1 || value === '1' || value === 'on' ? 1 : 0;
+}
 route('POST', '/api/vendors', async ({ user, body }) => {
   const [name, contact, phone] = vendorFields(body);
   if (await db.prepare('SELECT 1 FROM vendors WHERE name_key=?').get(nameKey(name))) throw new HttpError(409, '이미 등록된 거래처입니다. 목록에서 수정하세요.');
-  const r = await db.prepare('INSERT INTO vendors(name,name_key,contact_name,phone,created_by) VALUES(?,?,?,?,?)').run(name, nameKey(name), contact, phone, user.name);
+  const r = await db.prepare('INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales) VALUES(?,?,?,?,?,?,?)').run(name, nameKey(name), contact, phone, user.name, vendorFlag(body.is_purchase) || 0, vendorFlag(body.is_sales) || 0);
   return mustGet('vendors', r.lastInsertRowid);
 });
 route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   const row = await mustGet('vendors', params.id); const [name, contact, phone] = vendorFields(body);
   const clash = await db.prepare('SELECT id FROM vendors WHERE name_key=?').get(nameKey(name));
   if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름의 거래처가 이미 있습니다.');
-  await db.prepare('UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,updated_by=?,updated_at=? WHERE id=?').run(name, nameKey(name), contact, phone, user.name, now(), row.id);
+  const purchase = vendorFlag(body.is_purchase) ?? row.is_purchase, sales = vendorFlag(body.is_sales) ?? row.is_sales;
+  await db.prepare('UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,updated_by=?,updated_at=? WHERE id=?').run(name, nameKey(name), contact, phone, purchase, sales, user.name, now(), row.id);
   return mustGet('vendors', row.id);
 });
 route('DELETE', '/api/vendors/:id', async ({ user, params }) => {
@@ -515,7 +533,7 @@ route('GET', '/api/po', async ({ query }) => {
 async function createPurchaseOrder(user, body) {
   // A chosen code supplies the item name (and class when none was given).
   if (body.bom_id) { const chosen = await catalogItem(user, body); body.item = chosen.product; if (!body.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) body.item_category = chosen.item_category; }
-  const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user);
+  const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user, 'purchase');
   const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(f[0], f[1], entry.product, ...f.slice(3), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(r.lastInsertRowid));
 }
@@ -525,7 +543,7 @@ route('PUT', '/api/po/:id', async ({ user, params, body }) => {
   const f = poFields(body);
   // Keep the linked code unless the item name itself was changed.
   const entry = nameKey(f[2]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
-  await ensureVendor(f[1], user);
+  await ensureVendor(f[1], user, 'purchase');
   (await db.prepare('UPDATE purchase_orders SET req_no=?,vendor=?,item=?,qty=?,due_date=?,note=?,item_category=?,coa_requested=?,product_code=? WHERE id=?').run(f[0], f[1], entry.product, ...f.slice(3), entry.product_code, row.id));
   await recordEdit('purchase_order', 'purchase_orders', row.id, row, EDIT_LABELS.purchase_order, user);
   return (await mustGet('purchase_orders', row.id));
@@ -1424,7 +1442,7 @@ route('GET', '/api/other-receipts', async ({ query }) => {
   return await db.prepare(`SELECT other_receipts.*, ${attachmentSummary('other_receipt','other_receipts')} FROM other_receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_date DESC, id DESC`).all(...args);
 });
 route('POST', '/api/other-receipts', async ({ user, body }) => {
-  const fields = await otherReceiptFields(body); await ensureVendor(fields[4], user);
+  const fields = await otherReceiptFields(body); await ensureVendor(fields[4], user, 'purchase');
   const results = await db.batch([
     { sql: 'INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by) VALUES(?,?,?,?,?,?,?,?,?)', args: [...fields, user.name] },
     receiptAnalysisQuery('other_receipt', null, user),
@@ -1458,7 +1476,7 @@ route('GET', '/api/shipments', async ({ query }) => {
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
   if (body.bom_id) body.item = (await catalogItem(user, body)).product;
-  const f = shipFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[3], user);
+  const f = shipFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[3], user, 'sales');
   const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?)').run(f[0], entry.product, ...f.slice(2), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await mustGet('shipments', r.lastInsertRowid));
 });
@@ -1466,7 +1484,7 @@ route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
   const f = shipFields(body);
   const entry = nameKey(f[1]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
-  await ensureVendor(f[3], user);
+  await ensureVendor(f[3], user, 'sales');
   (await db.prepare('UPDATE shipments SET ship_date=?,item=?,qty=?,customer=?,note=?,lot=?,product_code=? WHERE id=?').run(f[0], entry.product, ...f.slice(2), entry.product_code, row.id)); await recordEdit('shipment', 'shipments', row.id, row, EDIT_LABELS.shipment, user); return (await mustGet('shipments', row.id));
 });
 route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
@@ -1512,15 +1530,15 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         const f = poFields(b); const entry = await catalogItem(user, b);
         record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key,i) => [key, f[i]]));
         record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
-        if (index === 0) await ensureVendor(record.vendor, user);
+        if (index === 0) await ensureVendor(record.vendor, user, 'purchase');
       } else if (entity === 'shipment') {
         if (b.bom_id) b.item = (await catalogItem(user, b)).product;
         const f = shipFields(b); const entry = await catalogItem(user, b);
         record = Object.fromEntries(['ship_date','item','qty','customer','note','lot'].map((key,i) => [key, f[i]]));
         record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
-        if (index === 0) await ensureVendor(record.customer, user);
+        if (index === 0) await ensureVendor(record.customer, user, 'sales');
       } else if (entity === 'other_receipt') {
-        const fields = await otherReceiptFields(b); if (index === 0) await ensureVendor(fields[4], user);
+        const fields = await otherReceiptFields(b); if (index === 0) await ensureVendor(fields[4], user, 'purchase');
         record = Object.fromEntries(['received_date','item','item_category','qty','vendor','note','bom_id','bom_snapshot'].map((key,i) => [key, fields[i]]));
         meta.unit = JSON.parse(record.bom_snapshot).unit || '';
       } else if (entity === 'schedule') {
@@ -2486,7 +2504,7 @@ route('POST', '/api/production-requests', async ({ user, body }) => {
     if (done) return { ...await mrDetail(done, user), duplicate: true };
     throw error;
   }
-  await ensureVendor(head.customer, user);
+  await ensureVendor(head.customer, user, 'sales');
   return mrDetail(await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(token), user);
 });
 const MR_LINKED = 'EXISTS(SELECT 1 FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=?)';
@@ -2514,7 +2532,7 @@ route('PUT', '/api/production-requests/:id', async ({ user, params, body }) => {
     { sql: `UPDATE production_requests SET order_date=?,customer=?,order_no=?,ship_text=?,ship_date=?,spec=?,note=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=? AND shipped=0 AND NOT ${MR_LINKED}`, args: [head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, row.id, revision, row.id] },
   ]);
   if (!result.at(-1).meta.changes) throw await mrConflict(user, row.id);
-  await ensureVendor(head.customer, user);
+  await ensureVendor(head.customer, user, 'sales');
   return mrDetail(await mustGet('production_requests', row.id), user);
 });
 route('DELETE', '/api/production-requests/:id', async ({ user, params, query }) => {

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.57';
+const APP_VERSION = '15.58';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1197,6 +1197,8 @@ async function pageIntake(type) {
     $$('#intakeList [data-ok]').forEach((b) => (b.onclick = async () => { try { const r = await api('POST', `/api/requests/${b.dataset.ok}/approve`); toast(`승인 완료 · 접수번호 ${r.req_no}`); load(); } catch (e) { fail(e); } }));
   };
   const newForm = $('.req-form', main); const draft = bindPhotoDraft(newForm);
+  // 15.58: 고객사 칸은 매출처 목록에서 고른다(상품 샘플의 「공급처 · 고객사」는 양쪽이라 전체 목록).
+  const customerInput = $('[name=customer]', newForm); if (customerInput) bindPartnerPicker(customerInput, null, { type: type === 'sample_goods' ? '' : 'sales' });
   bindListControls(filterForm, load);
   newForm.onsubmit = async (e) => {
     e.preventDefault(); if (draft.busy) return;

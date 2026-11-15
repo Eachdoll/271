@@ -204,6 +204,13 @@
       "when": 1794740009000,
       "tag": "0028_department_positions",
       "breakpoints": false
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1794740010000,
+      "tag": "0029_vendor_types",
+      "breakpoints": false
     }
   ]
 }
