@@ -478,18 +478,22 @@ async function prCreateOrders(pr, items) {
 // 구매 › 발주 입력 맨 위: 최종 승인된 구매의뢰 중 아직 발주하지 않은 품목을 골라 발주로 만든다(직접 등록은 그 아래 그대로).
 async function poFromRequests(host, onDone) {
   host.innerHTML = '<h2>승인된 구매의뢰에서 불러오기</h2><p class="small muted">영업의 구매의뢰가 최종 승인되면 여기에 나타납니다. 품목을 골라 「발주 처리」하면 발주목록에 올라갑니다(구매의뢰번호·공급선·수량·단위가 채워집니다).</p><div data-pr-wait>불러오는 중…</div>';
-  const draw = async () => {
-    const data = await api('GET', '/api/purchase-requests?box=order&paged=1'); if (!host.isConnected) return;
+  // 200건씩 읽고 「더 보기」로 다음 페이지를 붙인다.
+  let rows = [], page = 0, more = false;
+  const draw = async (next = false) => {
+    const data = await api('GET', `/api/purchase-requests?box=order&paged=1&page=${next === true ? page + 1 : 0}`); if (!host.isConnected) return;
+    rows = next === true ? rows.concat(data.rows) : data.rows; page = data.page; more = data.more;
     const list = $('[data-pr-wait]', host);
-    if (!data.rows.length) { list.innerHTML = '<p class="muted">발주를 기다리는 구매의뢰가 없습니다.</p>'; return; }
-    list.innerHTML = data.rows.map(pr => `<details class="po-pr" data-pr="${pr.id}"${data.rows.length <= 3 ? ' open' : ''}><summary><b>${esc(pr.doc_no)}</b> ${esc(pr.title || pr.first_item)} <span class="small muted">· ${esc(pr.author_name)}${pr.department ? ' ' + esc(pr.department) : ''} · <span>미발주</span> ${pr.open_items.length}<span>건</span></span></summary>
+    if (!rows.length) { list.innerHTML = '<p class="muted">발주를 기다리는 구매의뢰가 없습니다.</p>'; return; }
+    list.innerHTML = rows.map(pr => `<details class="po-pr" data-pr="${pr.id}"${rows.length <= 3 ? ' open' : ''}><summary><b>${esc(pr.doc_no)}</b> ${esc(pr.title || pr.first_item)} <span class="small muted">· ${esc(pr.author_name)}${pr.department ? ' ' + esc(pr.department) : ''} · <span>미발주</span> ${pr.open_items.length}<span>건</span></span></summary>
       <div class="table-wrap"><table class="grid keep-table"><thead><tr><th><span class="sr-only">선택</span></th><th>품목</th><th class="r">수량</th><th>공급선</th><th>입고요청일</th></tr></thead><tbody>${pr.open_items.map(it => `<tr>
         <td><input type="checkbox" data-po-item="${it.id}" checked aria-label="${esc(it.item)} 발주"></td>
         <td><b>${esc(it.item)}</b>${it.spec ? `<div class="small muted">${esc(it.spec)}</div>` : ''}</td><td class="r">${fmtNum(it.qty)} ${esc(it.unit)}</td>
         <td>${esc(it.vendor || '—')}</td><td>${esc(it.due_text || '—')}</td></tr>`).join('')}</tbody></table></div>
-      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-po-make="${pr.id}">발주 처리</button><button type="button" class="btn" data-open-pr-detail="${pr.id}">의뢰서 보기</button></div></details>`).join('') + (data.more ? '<p class="small muted">200건이 넘습니다. 영업 › 구매의뢰 목록의 「발주 대기」에서 더 볼 수 있습니다.</p>' : '');
+      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-po-make="${pr.id}">발주 처리</button><button type="button" class="btn" data-open-pr-detail="${pr.id}">의뢰서 보기</button></div></details>`).join('') + (more ? '<div class="actions"><button type="button" class="btn" data-po-more>더 보기</button></div>' : '');
+    const moreButton = $('[data-po-more]', list); if (moreButton) moreButton.onclick = () => draw(true).catch(fail);
     $$('[data-po-make]', list).forEach(b => b.onclick = async () => {
-      const pr = data.rows.find(x => x.id === Number(b.dataset.poMake)), box = b.closest('details');
+      const pr = rows.find(x => x.id === Number(b.dataset.poMake)), box = b.closest('details');
       const chosen = new Set($$('[data-po-item]:checked', box).map(x => Number(x.dataset.poItem)));
       try { const r = await prCreateOrders(pr, pr.open_items.filter(it => chosen.has(it.id))); if (r) { await draw(); await onDone?.(); refreshNavBadges(); } } catch (error) { fail(error); }
     });

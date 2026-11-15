@@ -49,13 +49,16 @@ test('Lists filter by type; untyped partners show everywhere; auto-registration 
   assert.deepEqual(names((await admin('GET', '/api/vendors?type=sales&only=1')).body), ['매출만', '양쪽'], 'the management filter shows only marked ones');
   assert.deepEqual(names((await admin('GET', '/api/vendors?type=none')).body), ['미분류']);
   assert.equal((await admin('GET', '/api/vendors?type=x')).status, 400);
-  // 자동 등록: 발주 → 매입, 생산의뢰 → 매출, 이미 정한 구분은 그대로
+  // 자동 등록: 발주 → 매입, 생산의뢰 → 매출, 다른 용도로 쓰이면 그 구분을 더한다
   await admin('POST', '/api/po', { req_no: 'R1', vendor: '새 공급사', item: '롤', qty: 1, due_date: '2026-12-01', item_category: '부자재' });
   await admin('POST', '/api/production-requests', { order_date: '2026-11-10', customer: '새 고객사', lines: [{ item: 'A', qty: 1 }] });
   await admin('POST', '/api/production-requests', { order_date: '2026-11-10', customer: '매입만', lines: [{ item: 'A', qty: 1 }] });
   await admin('POST', '/api/production-requests', { order_date: '2026-11-10', customer: '미분류', lines: [{ item: 'A', qty: 1 }] });
   const all = Object.fromEntries((await admin('GET', '/api/vendors')).body.map(v => [v.name, [v.is_purchase, v.is_sales]]));
-  assert.deepEqual([all['새 공급사'], all['새 고객사'], all['매입만'], all['미분류']], [[1, 0], [0, 1], [1, 0], [0, 1]]);
+  assert.deepEqual([all['새 공급사'], all['새 고객사'], all['매입만'], all['미분류']], [[1, 0], [0, 1], [1, 1], [0, 1]], '15.61: a partner used both ways becomes both');
+  // 출하로 매출처가 된 곳에 발주하면 매입처도 더해진다(매입 목록에서 사라지지 않게)
+  await admin('POST', '/api/po', { req_no: 'R2', vendor: '새 고객사', item: '롤', qty: 1, due_date: '2026-12-01', item_category: '부자재' });
+  assert.ok((await admin('GET', '/api/vendors?type=purchase')).body.some(v => v.name === '새 고객사'));
   // 수정: 체크를 모두 풀면 구분 없음, 보내지 않으면 그대로
   const v = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('양쪽'))).body[0];
   assert.deepEqual([(await admin('PUT', `/api/vendors/${v.id}`, { name: '양쪽', contact_name: '김' })).body.is_purchase, (await admin('GET', '/api/vendors?q=' + encodeURIComponent('양쪽'))).body[0].is_sales], [1, 1]);

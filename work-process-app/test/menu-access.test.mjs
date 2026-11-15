@@ -68,3 +68,13 @@ test('A person can show everything or pick menus directly', async () => {
   assert.deepEqual((await me(lab)).menus, [], 'back to the department default');
   assert.equal((await admin('POST', '/api/auth/login', { name: '연구원', password: 'password' })).body.user.menus.length, 0, 'login returns the menus too');
 });
+
+test('Roles keep their own menus visible, and the purchase-request list stays reachable for approvers', async () => {
+  await admin('POST', '/api/auth/login', { name: '관리자', password: 'password' }); // 앞 테스트가 이 클라이언트로 연구원 로그인을 확인했다
+  await admin('PUT', `/api/admin/users/${ids['연구원']}`, { roles: ['quality_approver'] });
+  assert.deepEqual((await me(lab)).menus, ['quality'], 'home-only department, but the quality approver still sees quality');
+  await admin('PUT', `/api/admin/users/${ids['연구원']}`, { menu_mode: 'custom', menus: ['dev'] });
+  assert.deepEqual((await me(lab)).menus, ['quality', 'dev']);
+  await admin('PUT', `/api/admin/users/${ids['연구원']}`, { roles: [], menu_mode: 'department' });
+  assert.deepEqual((await me(lab)).menus, []);
+});

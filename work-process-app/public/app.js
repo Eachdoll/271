@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.60';
+const APP_VERSION = '15.61';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -304,6 +304,8 @@ const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['qualit
 const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 품질: 'quality', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
 function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
+  // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
+  if (path === '#/sales/pr') return null;
   if (path.startsWith('#/purchase/vendors') || path.startsWith('#/quality/specs')) return 'master';
   for (const [prefix, key] of [['#/sales', 'sales'], ['#/purchase', 'purchase'], ['#/quality', 'quality'], ['#/dev', 'dev'], ['#/prod', 'production'], ['#/logistics', 'logistics']]) if (path === prefix || path.startsWith(prefix + '/')) return key;
   return null;
@@ -322,7 +324,18 @@ function applyMenuAccess(main) {
     const span = document.createElement('span'); span.textContent = a.textContent; a.replaceWith(span);
   }
   main.querySelectorAll('.kpi-group').forEach(g => { if (!g.querySelector('.kpi')) g.remove(); });
-  main.querySelectorAll('.tasks').forEach(card => { const list = card.querySelector('ul'); if (list && !list.children.length) card.remove(); });
+  // 할 일 카드: 칸(승인할 일·내가 올린 요청)마다 남은 줄 수로 건수를 고치고, 비면 안내 문구로 바꾼다(카드는 그대로).
+  // 확인이 필요한 일(알림) 카드는 줄이 하나도 안 남으면 뺀다.
+  main.querySelectorAll('.tasks').forEach(card => {
+    const boxes = [card, ...card.querySelectorAll(':scope > .tasks-grid > section')];
+    for (const box of boxes) {
+      const list = box.querySelector(':scope > ul'); if (!list) continue;
+      const chip = box.querySelector(':scope > h2 .chip, :scope > h3 .chip'), n = list.children.length;
+      if (n) { if (chip) chip.textContent = n; continue; }
+      if (box === card) { card.remove(); break; }
+      chip?.remove(); const note = document.createElement('p'); note.className = 'small muted'; note.textContent = '표시할 건이 없습니다.'; list.replaceWith(note);
+    }
+  });
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];

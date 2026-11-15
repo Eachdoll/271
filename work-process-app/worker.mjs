@@ -101,17 +101,23 @@ function menuText(list, label) {
 }
 // 실제로 보이는 메뉴: null이면 전체. 관리자·전체 보기는 null, 직접 지정은 그 목록,
 // 부서 기본은 그 부서(비어 있으면 상위 부서로 올라가며) 설정, 끝까지 없으면 전체.
+// 역할(구매·품질·개발·생산·물류와 그 책임자)을 받은 업무는 메뉴 제한과 관계없이 보인다(승인·접수 화면이 그 묶음에 있으므로).
+const ROLE_MENU = { purchase: 'purchase', quality: 'quality', quality_approver: 'quality', dev: 'dev', dev_approver: 'dev', production: 'production', production_approver: 'production', logistics: 'logistics', logistics_approver: 'logistics' };
 async function effectiveMenus(u) {
   if (!u || u.is_admin || u.menu_mode === 'all') return null;
-  if (u.menu_mode === 'custom') return menuList(u.menus) || [];
-  if (!u.department) return null;
-  const departments = await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all();
-  let d = departments.find(x => x.name === u.department);
-  for (let guard = 0; d && guard < 20; guard++) {
-    if (d.menus) return menuList(d.menus);
-    d = d.parent_id ? departments.find(x => x.id === d.parent_id) : null;
+  let list = null;
+  if (u.menu_mode === 'custom') list = menuList(u.menus) || [];
+  else if (u.department) {
+    const departments = await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all();
+    let d = departments.find(x => x.name === u.department);
+    for (let guard = 0; d && guard < 20 && !list; guard++) {
+      if (d.menus) list = menuList(d.menus);
+      d = d.parent_id ? departments.find(x => x.id === d.parent_id) : null;
+    }
   }
-  return null;
+  if (!list) return null;
+  const fromRoles = publicUser(u).roles.map(r => ROLE_MENU[r]).filter(Boolean);
+  return MENU_GROUPS.filter(k => list.includes(k) || fromRoles.includes(k));
 }
 async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u) }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
@@ -438,12 +444,12 @@ route('GET', '/api/admin/backup', async ({ user, query }) => {
 const nameKey = value => String(value ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
 // Using a vendor name anywhere registers it, so the pick list fills itself; contact details can be added later.
 // type(15.58): 'purchase'(발주·기타입고) 또는 'sales'(출하·생산의뢰). 새 거래처는 그 구분으로 등록하고,
-// 이미 있는 거래처는 구분이 하나도 없을 때만 채운다(사람이 정한 구분은 바꾸지 않는다).
+// 이미 있는 거래처는 그렇게 쓰였으므로 그 구분을 더한다(15.61: 매출처로 등록된 곳에 발주하면 매입·매출 둘 다). 다른 구분은 지우지 않는다.
 async function ensureVendor(name, user, type = '') {
   const clean = str(name, 100); if (!clean) return;
   const column = type === 'purchase' ? 'is_purchase' : type === 'sales' ? 'is_sales' : '';
   if (!column) { await db.prepare('INSERT INTO vendors(name,name_key,created_by) VALUES(?,?,?) ON CONFLICT(name_key) DO NOTHING').run(clean, nameKey(clean), user.name); return; }
-  await db.prepare(`INSERT INTO vendors(name,name_key,created_by,${column}) VALUES(?,?,?,1) ON CONFLICT(name_key) DO UPDATE SET ${column}=1 WHERE vendors.is_purchase=0 AND vendors.is_sales=0`).run(clean, nameKey(clean), user.name);
+  await db.prepare(`INSERT INTO vendors(name,name_key,created_by,${column}) VALUES(?,?,?,1) ON CONFLICT(name_key) DO UPDATE SET ${column}=1 WHERE vendors.${column}=0`).run(clean, nameKey(clean), user.name);
 }
 // 거래처 목록 구분: type=purchase(매입처)·sales(매출처). 구분이 없는 거래처는 어느 목록에나 나온다.
 const VENDOR_TYPES = { purchase: 'is_purchase', sales: 'is_sales' };
