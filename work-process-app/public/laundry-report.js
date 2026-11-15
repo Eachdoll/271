@@ -40,6 +40,7 @@ function lrCertificate(report, form) {
 // A signature photo → small PNG on a white background (so it prints cleanly on the sheet).
 function lrSignatureImage(file) {
   return new Promise((resolve, reject) => {
+    try { validatePhotoFiles([file]); } catch (error) { reject(error); return; }
     const url = URL.createObjectURL(file); const img = new Image();
     img.onload = () => {
       const scale = Math.min(1, 600 / img.width, 300 / img.height); const canvas = document.createElement('canvas');
@@ -73,7 +74,7 @@ async function lrSettings(done) {
       <label class="span2">확인자 (성적서 하단 기본값)<input name="inspector" maxlength="120" value="${esc(LR_META.inspector)}" placeholder="회사 · 부서 · 이름 · 직급"></label></div>
     <fieldset><legend>확인자 서명</legend>
       ${LR_META.signature ? `<p><img class="lr-sign-preview" src="/uploads/${encodeURIComponent(LR_META.signature)}" alt="등록된 서명"></p><label class="check"><input type="checkbox" name="remove_signature"> 등록된 서명 지우기</label>` : '<p class="muted small">등록된 서명이 없습니다.</p>'}
-      <label>${LR_META.signature ? '서명 바꾸기' : '서명 이미지 올리기'}<input type="file" accept="image/*" data-signature></label><p data-signature-new></p>
+      <label>${LR_META.signature ? '서명 바꾸기' : '서명 이미지 올리기'} (최대 8MB)<input type="file" accept="image/*" data-signature></label><p data-signature-new></p>
       <p class="muted small">흰 종이에 서명한 사진이나 이미지 파일을 올리세요. 성적서의 확인자가 위 확인자와 같을 때만, 발행하는 순간 서명이 찍힙니다. 작성 중인 성적서와 이미 발행한 성적서에는 찍히지 않습니다.</p></fieldset>
     ${priceRow('vendor', `세탁 업체 단가 (원/벌) — 우리가 내는 비용`)}${priceRow('customer', `고객사 단가 (원/벌) — 우리가 청구하는 금액`)}
     <fieldset><legend>폐기 단가 (원/개)</legend><div class="form-grid">${LR_META.parts.map((k) => `<label>${esc(k)}<input type="number" min="0" step="any" data-price="discard.${esc(k)}" value="${p.discard[k] || ''}" placeholder="0"></label>`).join('')}</div></fieldset>

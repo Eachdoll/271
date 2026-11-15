@@ -380,5 +380,11 @@ INVITE_CODE=local-test-code npm start
 ## 회사 R2 접근 검증·임시 도구 종료 (15.45)
 - seoulsemi-images의 S3 API에서 테스트 객체의 조건부 생성·업로드·조회·SHA-256 및 Content-Type 비교·삭제 후 404를 확인했습니다. 테스트 객체는 정리했고 기존 사진에는 접근하거나 변경하지 않았습니다.
 - 두 접근 키는 Sites의 R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY에 비밀 값으로 등록합니다. 값은 소스·번들·manifest·로그·D1에 넣지 않습니다.
-- R2_STORAGE_MODE는 native를 유지합니다. 사진 복사·검증과 external 전환은 별도 단계입니다. INVITE_CODE·D1·기존 BUCKET·마이그레이션을 유지하세요.
+- 현재 R2_STORAGE_MODE는 external입니다. 신규 업로드는 회사 버킷에 저장하며 기존 사진은 원래 BUCKET에서 대체 조회합니다. 기존 사진을 일괄 복사하지 않았습니다. INVITE_CODE·D1·기존 BUCKET·마이그레이션을 유지하세요.
 - 키 전달용 임시 HTML은 제거했고 /r2-key-handoff.html은 HTTP 410을 반환합니다. 임시 공개키를 다시 배포하거나 해당 페이지를 다시 활성화하지 마세요.
+
+## R2 Workers 호환·클라이언트 8MB 검증 (15.46)
+- Workers는 Request의 redirect:error를 지원하지 않습니다. 서명 요청은 redirect:manual로 만들고 3xx 응답은 본문을 닫고 명시적으로 거부합니다. 서명 헤더를 다른 주소로 전달하지 않습니다. Node에서 성공한 검사만으로 Workers 호환성을 단정하지 마세요.
+- 원본 사진은 한 장당 8×1024×1024바이트 이하, 최대 10장입니다. photoPicker와 서명 입력에 8MB 안내를 표시하며 validatePhotoFiles로 디코딩 전에 검사합니다. preparePhotos는 여러 장을 순서대로 최적화하고, validatePhotoPayload는 변환 후 한 장 8MB 및 JSON 요청의 여유를 남기는 전체 크기를 검사합니다. 서버도 Base64 해제 전후에 8MB를 검사합니다.
+- 세탁 신규·수정도 bindPhotoDraft를 사용합니다. 변환 중 제출을 막고 선택 오류가 나도 기존 draft를 지우지 않습니다. 수정 제출 시 유지할 사진과 새 사진을 합쳐 10장인지 다시 검사합니다.
+- 테스트는 Workers의 redirect 제한을 재현한 세탁 사진 업로드·조회·삭제, 외부 이동 차단, 8MB 경계와 초과 차단, 기존 사진 보존을 포함합니다. 운영 저장소 모드는 external 그대로입니다.

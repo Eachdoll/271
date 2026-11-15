@@ -109,6 +109,8 @@ async function savePhotos(list) {
   const photos = list.map(d => {
     const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(d));
     if (!m) throw bad('사진 형식이 올바르지 않습니다. (jpg/png/webp)');
+    const decodedSize = Math.floor(m[2].length * 3 / 4) - (m[2].endsWith('==') ? 2 : m[2].endsWith('=') ? 1 : 0);
+    if (decodedSize > 8 * 1024 * 1024) throw bad('사진 한 장은 8MB 이하여야 합니다.');
     let bytes; try { bytes = Uint8Array.from(atob(m[2]), c => c.charCodeAt(0)); } catch { throw bad('사진 형식이 올바르지 않습니다.'); }
     if (bytes.length > 8 * 1024 * 1024) throw bad('사진 한 장은 8MB 이하여야 합니다.');
     return { file: randomHex(12) + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]), bytes, type: 'image/' + m[1] };

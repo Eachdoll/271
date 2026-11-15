@@ -28,7 +28,7 @@ export async function signS3Request(url, { method = 'GET', headers = {}, body } 
   const serviceKey = await hmac(regionKey, 's3');
   const signature = digestHex(await hmac(await hmac(serviceKey, 'aws4_request'), toSign));
   signed.set('authorization', `AWS4-HMAC-SHA256 Credential=${credentials.accessKeyId}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}`);
-  return new Request(target, { method, headers: signed, ...(body === undefined ? {} : { body }), redirect: 'error', signal: AbortSignal.timeout(20000) });
+  return new Request(target, { method, headers: signed, ...(body === undefined ? {} : { body }), redirect: 'manual', signal: AbortSignal.timeout(20000) });
 }
 
 async function photoBytes(object) {
@@ -63,7 +63,12 @@ export function createImageStorage(env, { outbound = fetch, clock = () => new Da
   async function request(method, key = '', bytes, headers = {}) {
     const settings = config(); if (key) assertKey(key);
     const url = new URL('/' + settings.bucket + (key ? '/' + key : ''), settings.endpoint);
-    return outbound(await signS3Request(url, { method, headers, body: bytes }, settings, clock()));
+    const result = await outbound(await signS3Request(url, { method, headers, body: bytes }, settings, clock()));
+    if (result.status >= 300 && result.status < 400) {
+      await result.body?.cancel();
+      throw new Error('회사 사진 저장소가 다른 주소로 이동을 요청해 연결을 중단했습니다.');
+    }
+    return result;
   }
   async function remoteGet(key) {
     const result = await request('GET', key);

@@ -199,3 +199,7 @@ Sites 운영 환경변수는 native Sites 도구로 설정하며 INVITE_CODE와 
 
 R2의 S3 호환 규격: https://developers.cloudflare.com/r2/api/s3/api/
 SigV4 구현은 AWS 공식 GET Object 예제의 서명으로 검증합니다: https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sig-v4-header-based-auth.html
+
+현재 신규 이미지는 회사 R2에 저장합니다(R2_STORAGE_MODE=external). 기존 이미지는 옮기지 않고 기존 BUCKET에서 대체 조회합니다. 사진 한 장당 최대 8MB(8×1024×1024바이트), 최대 10장입니다. 브라우저가 선택 즉시 크기를 확인한 뒤 최적화하고, 전송할 전체 크기도 검사합니다. 서버 JSON 요청 한도는 30MB입니다. 여러 사진의 전송 용량이 크면 나누어 첨부해야 합니다.
+
+Workers에서는 Request의 redirect:error 대신 manual을 사용하고 3xx를 직접 거부해야 합니다. 로컬 Node와 운영 Workers의 차이를 포함한 R2 회귀 테스트를 확인하세요.

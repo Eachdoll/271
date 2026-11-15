@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.45';
+const APP_VERSION = '15.46';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -154,14 +154,42 @@ function promptBox(title, fieldsHtml, { submit = null } = {}) {
 }
 
 // 사진 → 최대 1600px JPEG data URL
+const PHOTO_FILE_LIMIT = 8 * 1024 * 1024;
+const PHOTO_REQUEST_LIMIT = 28 * 1024 * 1024; // JSON 요청 한도(30MB)의 여유를 남깁니다.
+function validatePhotoFiles(files, existingCount = 0) {
+  if (existingCount + files.length > 10) throw new Error('사진은 최대 10장까지 첨부할 수 있습니다.');
+  for (const file of files) if (file.size > PHOTO_FILE_LIMIT) throw new Error(`사진 한 장은 최대 8MB까지 업로드할 수 있습니다. 「${file.name || '선택한 사진'}」(${(file.size / 1024 / 1024).toFixed(1)}MB)을 줄인 뒤 다시 선택하세요.`);
+}
+function validatePhotoPayload(photos, keptCount = 0) {
+  if (photos.length + keptCount > 10) throw new Error('사진은 최대 10장까지 첨부할 수 있습니다.');
+  let encodedSize = 0;
+  for (const photo of photos) {
+    const base64 = photo.slice(photo.indexOf(',') + 1);
+    const size = Math.floor(base64.length * 3 / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+    if (size > PHOTO_FILE_LIMIT) throw new Error('사진 한 장은 최대 8MB까지 업로드할 수 있습니다. 사진 크기를 줄여주세요.');
+    encodedSize += photo.length;
+  }
+  if (encodedSize > PHOTO_REQUEST_LIMIT) throw new Error('첨부 사진의 전체 용량이 큽니다. 사진 개수를 줄여 나누어 첨부해 주세요.');
+}
+async function preparePhotos(files, initial = [], keptCount = 0) {
+  const selected = [...files]; validatePhotoFiles(selected, initial.length + keptCount);
+  const photos = [...initial];
+  // 큰 원본 여러 장을 동시에 디코딩하지 않습니다.
+  for (const file of selected) { photos.push(await resizeImage(file)); validatePhotoPayload(photos, keptCount); }
+  return photos;
+}
 function resizeImage(file, max = 1600) {
   return new Promise((resolve, reject) => {
+    try { validatePhotoFiles([file]); } catch (error) { reject(error); return; }
     const img = new Image(); const url = URL.createObjectURL(file);
     img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      resolve(c.toDataURL('image/jpeg', 0.85));
+      try {
+        const s = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        const result = c.toDataURL('image/jpeg', 0.85); validatePhotoPayload([result]); resolve(result);
+      } catch (error) { reject(error); }
+      finally { URL.revokeObjectURL(url); }
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 읽을 수 없습니다: ' + file.name)); };
     img.src = url;
@@ -171,7 +199,7 @@ function lightbox(src) { modal(`<img class="lightbox" src="${esc(src)}" alt="사
 
 const INSPECTION = { unchecked: '미판정', normal: '이상 없음', abnormal: '이상 있음' };
 function inspectionBadge(row) { return `<span class="chip ${row.inspection_status === 'abnormal' ? 'red' : row.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[row.inspection_status] || '미판정'}</span>${row.photo_count ? ` <span class="small muted">사진 ${row.photo_count}장</span>` : ''}`; }
-function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><input data-photo-camera type="file" accept="image/*" capture="environment" hidden><span class="photo-tools"><button type="button" class="btn small" data-photo-shoot>📷 바로 촬영</button> <span class="muted small">촬영한 사진은 이어서 추가됩니다. 사진을 눌러 크게 보고, ×로 뺄 수 있습니다.</span></span><div class="thumbs" data-photo-preview></div></label>'; }
+function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (한 장당 최대 8MB · 최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><input data-photo-camera type="file" accept="image/*" capture="environment" hidden><span class="photo-tools"><button type="button" class="btn small" data-photo-shoot>📷 바로 촬영</button> <span class="muted small">한 장당 8MB 이하의 사진을 선택하세요. 촬영한 사진은 이어서 추가됩니다. 사진을 눌러 크게 보고, ×로 뺄 수 있습니다.</span></span><div class="thumbs" data-photo-preview></div></label>'; }
 function bindPhotoDraft(form, initial = []) {
   const state = { photos: [...initial], busy: false };
   const input = $('[data-photo-input]', form); const preview = $('[data-photo-preview]', form);
@@ -187,10 +215,9 @@ function bindPhotoDraft(form, initial = []) {
     const submit = $('button[type=submit], button.primary', form);
     state.busy = true; if (submit) submit.disabled = true;
     try {
-      if ((append ? state.photos.length : 0) + source.files.length > 10) throw new Error('사진은 최대 10장까지 첨부할 수 있습니다.');
-      const photos = await Promise.all([...source.files].map(file => resizeImage(file)));
-      state.photos = append ? state.photos.concat(photos) : photos; show();
-    } catch (error) { fail(error); }
+      const keptCount = $$('input[name=keep_photos]:checked', form).length;
+      state.photos = await preparePhotos(source.files, append ? state.photos : [], keptCount); show();
+    } catch (error) { source.value = ''; fail(error); }
     finally { if (append || !state.photos.length) source.value = ''; state.busy = false; if (submit) submit.disabled = false; }
   };
   if (input) input.onchange = () => take(input, false);
@@ -222,6 +249,7 @@ async function openAttachments(entity, id, title, { editable = true, initialPhot
       event.preventDefault(); if (draft.busy) return;
       const values = formObj(form); const button = $('button.primary', form); button.disabled = true;
       try {
+        validatePhotoPayload(draft.photos, (values.keep_photos || []).length);
         await api('PUT', `/api/attachments/${entity}/${id}`, { photos: draft.photos, keep_photos: values.keep_photos || [], revision: record.revision, inspection_status: values.inspection_status || record.inspection_status, note: values.inspection_note });
         box.close(); toast('사진과 기록을 저장했습니다.'); render();
       } catch (error) { fail(error); } finally { button.disabled = false; }
@@ -978,18 +1006,13 @@ async function pageLaundry(main) {
       <label>입고수량<input name="in_qty" type="number" min="0" step="any" placeholder="선택"></label>
       <label>폐기수량 *<input name="discard_qty" type="number" min="0" step="any" required></label>
       <label class="span2">메모<input name="note" placeholder="불량 유형 등"></label>
-      <label class="span3">불량폐기 사진 (여러 장 가능)<input name="photos" type="file" accept="image/*" multiple></label>
+      ${photoPicker()}
     </div>
-    <div class="thumbs" id="lnPrev"></div>
     <div class="actions"><button class="btn primary">등록</button></div>
   </form>
   ${listControls('ln', { dateLabel: '입고', from: month + '-01', to: monthEnd(month + '-01'), placeholder: '메모·입력자 검색', extra: `<label>조회월<input type="month" id="lnM" value="${month}"></label><label>사진<select name="has_photos"><option value="">전체 사진</option><option value="1">사진 있음</option><option value="0">사진 없음</option></select></label><button type="button" class="btn" id="lnAllDates">전체 기간</button>` })}<p id="lnSum" class="muted small"></p>
   <div id="lnList" class="cards"></div>`;
-  let pending = []; const filterForm = $('#lnFilters', main); let queryVersion = 0;
-  $('[name=photos]').onchange = async (e) => {
-    try { pending = await Promise.all([...e.target.files].map((f) => resizeImage(f))); } catch (err) { fail(err); pending = []; }
-    $('#lnPrev').innerHTML = pending.map((s) => `<img src="${s}" alt="미리보기">`).join('');
-  };
+  const laundryDraft = bindPhotoDraft($('#lnNew')); const filterForm = $('#lnFilters', main); let queryVersion = 0;
   const load = async () => {
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
@@ -1007,7 +1030,7 @@ async function pageLaundry(main) {
     $$('#lnList [data-big]').forEach((i) => (i.onclick = () => lightbox(i.dataset.big)));
     $$('#lnList [data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 기록과 사진을 삭제할까요?')) { try { await api('DELETE', '/api/laundry/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
     $$('#lnList [data-edit]').forEach((b) => (b.onclick = () => {
-      const r = rows.find((x) => x.id == b.dataset.edit); let add = [];
+      const r = rows.find((x) => x.id == b.dataset.edit);
       const m = modal(`<h3>세탁 기록 수정</h3><form data-entry-author="${esc(r.created_by)}"><div class="form-grid">
         <label>입고일 *<input name="in_date" type="date" required value="${esc(r.in_date)}"></label>
         <label>입고수량<input name="in_qty" type="number" min="0" step="any" value="${esc(r.in_qty)}"></label>
@@ -1015,15 +1038,15 @@ async function pageLaundry(main) {
         <label class="span3">메모<input name="note" value="${esc(r.note)}"></label></div>
         <p class="small muted">체크 해제한 사진은 삭제됩니다.</p>
         <div class="thumbs">${r.photos.map((f) => `<label class="keep"><img src="/uploads/${esc(f)}" alt=""><input type="checkbox" name="keep_photos" value="${esc(f)}" checked> 유지</label>`).join('')}</div>
-        <label>사진 추가<input type="file" accept="image/*" multiple id="lnAdd"></label><div class="thumbs" id="lnAddPrev"></div>
+        ${photoPicker()}
         <div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
-      $('#lnAdd', m.el).onchange = async (e) => { add = await Promise.all([...e.target.files].map((f) => resizeImage(f))).catch((err) => { fail(err); return []; }); $('#lnAddPrev', m.el).innerHTML = add.map((s) => `<img src="${s}" alt="">`).join(''); };
-      $('form', m.el).onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/laundry/' + r.id, { ...formObj(e.target), photos: add }); m.close(); toast('수정했습니다.'); load(); } catch (err) { fail(err); } };
+      const draft = bindPhotoDraft($('form', m.el));
+      $('form', m.el).onsubmit = async (e) => { e.preventDefault(); if (draft.busy) return; const button = $('button.primary', e.target); button.disabled = true; try { const values = formObj(e.target); validatePhotoPayload(draft.photos, (values.keep_photos || []).length); await api('PUT', '/api/laundry/' + r.id, { ...values, photos: draft.photos }); m.close(); toast('수정했습니다.'); load(); } catch (err) { fail(err); } finally { button.disabled = false; } };
     }));
   };
   $('#lnNew').onsubmit = async (e) => {
-    e.preventDefault(); const btn = $('button.primary', e.target); btn.disabled = true;
-    try { await api('POST', '/api/laundry', { ...formObj(e.target), photos: pending }); e.target.reset(); e.target.in_date.value = todayStr(); pending = []; $('#lnPrev').innerHTML = ''; toast('등록했습니다.'); load(); }
+    e.preventDefault(); if (laundryDraft.busy) return; const btn = $('button.primary', e.target); btn.disabled = true;
+    try { validatePhotoPayload(laundryDraft.photos); await api('POST', '/api/laundry', { ...formObj(e.target), photos: laundryDraft.photos }); e.target.reset(); e.target.in_date.value = todayStr(); laundryDraft.reset(); toast('등록했습니다.'); load(); }
     catch (err) { fail(err); } finally { btn.disabled = false; }
   };
   bindListControls(filterForm, load);

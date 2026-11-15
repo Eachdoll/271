@@ -27,7 +27,7 @@ function setup(extra = {}) {
     requests.push(request);
     assert.equal(new URL(request.url).hostname, '763841f86927008259380d1f28416826.r2.cloudflarestorage.com');
     assert.match(request.headers.get('authorization'), /Credential=test-key\/\d{8}\/auto\/s3\/aws4_request/);
-    assert.equal(request.redirect, 'error');
+    assert.equal(request.redirect, 'manual');
     const name = new URL(request.url).pathname.split('/').at(-1), value = target.get(name);
     if (request.method === 'HEAD') return new Response(null, { status: 200 });
     if (request.method === 'GET') return value ? new Response(value.bytes, { headers: { 'content-type': value.contentType } }) : new Response(null, { status: 404 });
@@ -101,6 +101,52 @@ test('Authentication/network errors are never hidden by a fallback to old photos
   }
   const storage = createImageStorage(x.env, { outbound: async () => { throw new Error('connection failed'); } });
   await assert.rejects(storage.get(key), /connection failed/);
+});
+
+test('R2 redirects are rejected without following or leaking signed headers', async () => {
+  const x = setup(); let requests = 0;
+  for (const status of [301, 302, 307, 308]) {
+    const storage = createImageStorage({ ...x.env, R2_STORAGE_MODE: 'external', BUCKET: { get() { assert.fail('must not fall back'); } } }, { outbound: async request => {
+      requests++; assert.equal(request.redirect, 'manual');
+      return new Response('moved', { status, headers: { location: 'https://other.test/' } });
+    } });
+    await assert.rejects(storage.get(key), /다른 주소/);
+    await assert.rejects(storage.put(key, bytes), /다른 주소/);
+    await assert.rejects(storage.delete(key), /다른 주소/);
+    await assert.rejects(storage.check(), /다른 주소/);
+  }
+  assert.equal(requests, 16);
+});
+
+test('Laundry photo upload/read/delete works with Workers redirect restrictions and external R2', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wpa-r2-worker-'));
+  const { env, sqlite } = localEnvironment(dir, 'test-invite');
+  Object.assign(env, company, { R2_STORAGE_MODE: 'external' });
+  const x = setup(), NativeRequest = globalThis.Request, nativeFetch = globalThis.fetch;
+  globalThis.Request = class extends NativeRequest {
+    constructor(input, init) {
+      if (init?.redirect === 'error') throw new TypeError('Workers supports follow or manual, not redirect:error');
+      super(input, init);
+    }
+  };
+  globalThis.fetch = x.outbound;
+  let cookie = '';
+  const call = async (method, route, body) => {
+    const response = await worker.fetch(new Request('https://work.test' + route, { method, headers: { ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }), env);
+    if (response.headers.has('set-cookie')) cookie = response.headers.get('set-cookie').split(';')[0];
+    return response;
+  };
+  try {
+    assert.equal((await call('POST', '/api/auth/register', { name: 'Admin', password: 'password', invite: 'test-invite' })).status, 200);
+    const photo = 'data:image/png;base64,AQID';
+    const created = await call('POST', '/api/laundry', { in_date: '2026-11-13', discard_qty: 1, photos: [photo] });
+    assert.equal(created.status, 200); const id = (await created.json()).id;
+    const row = sqlite.prepare('SELECT * FROM laundry WHERE id=?').get(id), file = JSON.parse(row.photos)[0];
+    assert.equal(x.target.has(file), true); assert.equal(fs.readdirSync(path.join(dir, 'uploads')).length, 0);
+    const retrieved = await call('GET', '/uploads/' + file); assert.equal(retrieved.status, 200);
+    assert.equal(retrieved.headers.get('content-type'), 'image/png'); assert.deepEqual(new Uint8Array(await retrieved.arrayBuffer()), bytes);
+    assert.equal((await call('DELETE', '/api/laundry/' + id)).status, 200); assert.equal(x.target.has(file), false);
+  } finally { globalThis.Request = NativeRequest; globalThis.fetch = nativeFetch; sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('Invalid configuration cannot send secrets to another host, and status never returns secret values', async () => {
