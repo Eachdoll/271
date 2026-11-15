@@ -370,7 +370,26 @@ INVITE_CODE=local-test-code npm start
 - lineInfo의 내부 묶음 번호(batch_id)는 화면 글자에서 빼고 title(마우스 올림)로만 둡니다. 다품목 등록 토스트에서도 뺐습니다.
 - form-ux: 팝업의 item/product/title 입력칸이 칸보다 길면 아래에 .input-full로 전체 글자를 보여 줍니다(입력칸·저장 값·Enter 동작은 그대로).
 
-## 기타입고 화면 용어 정리 (15.43)
+## 회사 R2 사진 저장소 (15.43)
+- image-storage.mjs가 기존 BUCKET과 회사 R2 S3 API 접근을 통합합니다. R2_STORAGE_MODE 기본값은 native이며 명시적으로 external을 설정하기 전에는 기존 저장소를 계속 사용합니다. native BUCKET 바인딩과 D1, 기존 마이그레이션은 유지하세요.
+- 회사 연결 변수: R2_S3_ENDPOINT, R2_S3_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY. 키는 서버의 비밀 환경변수로만 설정합니다. endpoint는 HTTPS Cloudflare R2 계정 주소만 허용하며 서명 요청의 리다이렉트는 금지합니다. 외부 패키지 없이 Web Crypto SigV4(region=auto)를 사용합니다.
+- 사진 URL과 권한은 기존 /uploads/:file 그대로입니다. external 조회는 회사 버킷의 404에서만 기존 버킷으로 대체합니다. 인증·연결 실패를 숨기지 않습니다. external 삭제는 회사 버킷만 대상으로 하며 이전 원본은 보존합니다.
+- 관리자 설정의 회사 사진 저장소와 /api/admin/image-storage{,/check,/copy}는 관리자 전용입니다. copy는 원본 BUCKET.list를 3개씩 순회해 같은 객체 키·Content-Type을 유지하여 조건부 업로드(If-None-Match: *)하고 SHA-256과 형식 정보를 비교합니다. 충돌·복사 실패 시 중단하며 원본을 삭제하거나 D1 참조를 수정하지 않습니다. 재실행은 기존 복사본부터 비교합니다.
+- 복사 중에는 사진 변경을 잠시 멈추고 마지막 전체 검증을 끝낸 뒤 external로 전환·재배포합니다. 전환 이후 새 사진은 회사 버킷에만 저장하므로 native로 되돌리기 전에는 신규 사진의 역복사가 필요합니다. scripts/build.mjs에도 image-storage.mjs를 포함합니다.
+
+## 회사 R2 접근 검증·임시 도구 종료 (15.45)
+- seoulsemi-images의 S3 API에서 테스트 객체의 조건부 생성·업로드·조회·SHA-256 및 Content-Type 비교·삭제 후 404를 확인했습니다. 테스트 객체는 정리했고 기존 사진에는 접근하거나 변경하지 않았습니다.
+- 두 접근 키는 Sites의 R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY에 비밀 값으로 등록합니다. 값은 소스·번들·manifest·로그·D1에 넣지 않습니다.
+- 현재 R2_STORAGE_MODE는 external입니다. 신규 업로드는 회사 버킷에 저장하며 기존 사진은 원래 BUCKET에서 대체 조회합니다. 기존 사진을 일괄 복사하지 않았습니다. INVITE_CODE·D1·기존 BUCKET·마이그레이션을 유지하세요.
+- 키 전달용 임시 HTML은 제거했고 /r2-key-handoff.html은 HTTP 410을 반환합니다. 임시 공개키를 다시 배포하거나 해당 페이지를 다시 활성화하지 마세요.
+
+## R2 Workers 호환·클라이언트 8MB 검증 (15.46)
+- Workers는 Request의 redirect:error를 지원하지 않습니다. 서명 요청은 redirect:manual로 만들고 3xx 응답은 본문을 닫고 명시적으로 거부합니다. 서명 헤더를 다른 주소로 전달하지 않습니다. Node에서 성공한 검사만으로 Workers 호환성을 단정하지 마세요.
+- 원본 사진은 한 장당 8×1024×1024바이트 이하, 최대 10장입니다. photoPicker와 서명 입력에 8MB 안내를 표시하며 validatePhotoFiles로 디코딩 전에 검사합니다. preparePhotos는 여러 장을 순서대로 최적화하고, validatePhotoPayload는 변환 후 한 장 8MB 및 JSON 요청의 여유를 남기는 전체 크기를 검사합니다. 서버도 Base64 해제 전후에 8MB를 검사합니다.
+- 세탁 신규·수정도 bindPhotoDraft를 사용합니다. 변환 중 제출을 막고 선택 오류가 나도 기존 draft를 지우지 않습니다. 수정 제출 시 유지할 사진과 새 사진을 합쳐 10장인지 다시 검사합니다.
+- 테스트는 Workers의 redirect 제한을 재현한 세탁 사진 업로드·조회·삭제, 외부 이동 차단, 8MB 경계와 초과 차단, 기존 사진 보존을 포함합니다. 운영 저장소 모드는 external 그대로입니다.
+
+## 기타입고 화면 용어 정리 (15.47)
 - 기타입고(다품목 입력·단일 양식·수정 팝업)에서 「BOM」 표현을 뺐습니다: 「BOM 검색」→「품목 검색」, 「BOM 품목」 선택칸→「품목명」, 「BOM 품목을 선택하세요」→「품목을 선택하세요」, 안내문 「BOM에서 품목을…」→「등록된 품목을…」. 보내는 값(bom_id, item)은 그대로입니다. 일정(schedule)의 「BOM 검색/BOM 품목」은 직접 입력과 섞여 있어 그대로 둡니다.
 - 품목을 고르면 채워지는 읽기 전용 품목명 칸(.receipt-item-name)은 CSS로 숨깁니다(값은 저장됨). 예전 수기 기록을 고칠 때(읽기 전용이 아닐 때)만 「품목명 (직접 입력)」으로 보입니다.
 - 입고목록의 기타입고 구역 아래 「+ 기타입고 입력」 버튼·안내는 메뉴(입고 › 기타입고 입력)와 중복이라 없앴습니다.

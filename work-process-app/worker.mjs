@@ -1,6 +1,7 @@
 // Cloudflare Worker: request-scoped D1/R2 bindings; no third-party runtime packages.
 import { database } from './storage.mjs';
 import { buildReport } from './reports.mjs';
+import { createImageStorage } from './image-storage.mjs';
 const SESSION_DAYS = 30;
 const MAX_BODY = 30 * 1024 * 1024;
 const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
@@ -8,6 +9,7 @@ const randomHex = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 
 export function createApp(env) {
 const db = database(env.DB);
+const images = createImageStorage(env);
 async function getSetting(k) { const r = (await db.prepare('SELECT value FROM settings WHERE key=?').get(k)); return r ? r.value : (k === 'invite_code' ? env.INVITE_CODE || null : null); }
 async function setSetting(k, v) { (await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v))); }
 
@@ -107,18 +109,20 @@ async function savePhotos(list) {
   const photos = list.map(d => {
     const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(d));
     if (!m) throw bad('사진 형식이 올바르지 않습니다. (jpg/png/webp)');
+    const decodedSize = Math.floor(m[2].length * 3 / 4) - (m[2].endsWith('==') ? 2 : m[2].endsWith('=') ? 1 : 0);
+    if (decodedSize > 8 * 1024 * 1024) throw bad('사진 한 장은 8MB 이하여야 합니다.');
     let bytes; try { bytes = Uint8Array.from(atob(m[2]), c => c.charCodeAt(0)); } catch { throw bad('사진 형식이 올바르지 않습니다.'); }
     if (bytes.length > 8 * 1024 * 1024) throw bad('사진 한 장은 8MB 이하여야 합니다.');
     return { file: randomHex(12) + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]), bytes, type: 'image/' + m[1] };
   });
   const saved = [];
   try {
-    for (const p of photos) { await env.BUCKET.put(p.file, p.bytes, { httpMetadata: { contentType: p.type } }); saved.push(p.file); }
+    for (const p of photos) { await images.put(p.file, p.bytes, { httpMetadata: { contentType: p.type } }); saved.push(p.file); }
     return saved;
   } catch (error) { await removePhotos(saved); throw error; }
 }
 async function removePhotos(files) {
-  for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(f)) await env.BUCKET.delete(f);
+  for (const f of files || []) if (/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(f)) await images.delete(f);
 }
 
 const attachmentTables = { request: 'requests', purchase_order: 'purchase_orders', other_receipt: 'other_receipts', shipment: 'shipments' };
@@ -296,6 +300,9 @@ route('PUT', '/api/me/password', async ({ user, body }) => {
 
 // 관리자
 route('GET', '/api/admin/settings', async ({ user }) => { requireAdmin(user); return { invite_code: (await getSetting('invite_code')) }; });
+route('GET', '/api/admin/image-storage', async ({ user }) => { requireAdmin(user); return images.status(); });
+route('POST', '/api/admin/image-storage/check', async ({ user }) => { requireAdmin(user); return images.check(); });
+route('POST', '/api/admin/image-storage/copy', async ({ user, body }) => { requireAdmin(user); return images.copyPage(body.cursor ?? ''); });
 route('PUT', '/api/admin/invite', async ({ user, body }) => {
   requireAdmin(user);
   const code = reqStr(body.invite_code, '초대코드', 100);
@@ -2219,13 +2226,16 @@ return { async fetch(req) {
       if (isOperator(user)) throw new HttpError(403, '오퍼레이터는 첨부 파일을 조회할 수 없습니다.');
       const file = p.slice('/uploads/'.length);
       if (!/^[a-f0-9]{24}\.(jpg|png|webp)$/.test(file)) throw new HttpError(404, '사진을 찾을 수 없습니다.');
-      const photo = await env.BUCKET.get(file);
+      const photo = await images.get(file);
       if (!photo) throw new HttpError(404, '사진을 찾을 수 없습니다.');
       res.set('Content-Type', photo.httpMetadata?.contentType || 'application/octet-stream');
       res.set('Cache-Control', 'private, no-store');
       return new Response(photo.body, { headers: res });
     }
     if (!['GET', 'HEAD'].includes(req.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+    if (p === '/r2-key-handoff.html') {
+      return new Response(req.method === 'HEAD' ? null : 'R2 키 등록이 완료되어 임시 전달 페이지를 종료했습니다.', { status: 410, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+    }
     return env.ASSETS.fetch(req);
   } catch (e) {
     if (!e.status || e.status >= 500) console.error(e.message, e);
