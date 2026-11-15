@@ -196,6 +196,16 @@ test('Lists and needs stay complete beyond 100 and 300 requests', async () => {
   const expected = sqlite.prepare('SELECT COUNT(*) n FROM production_requests r WHERE r.shipped=0 AND EXISTS(SELECT 1 FROM production_request_lines l WHERE l.request_id=r.id AND l.qty > COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0))').get().n;
   const todo = (await prod('GET', '/api/my-tasks')).body.approvals.production_requests;
   assert.ok(expected > 50); assert.equal(todo.count, expected); assert.equal(todo.items.length, 5);
+  const prPage0 = (await sales('GET', '/api/purchase-requests?paged=1&q=' + encodeURIComponent('대량'))).body;
+  const prPage1 = (await sales('GET', '/api/purchase-requests?paged=1&page=1&q=' + encodeURIComponent('대량'))).body;
+  // 대량 150건 + 같은 제목 검색에 걸리는 다른 의뢰는 없다 → 한 페이지(200) 안. 페이지 나눔은 아래 250건으로 확인한다.
+  assert.deepEqual([prPage0.rows.length, prPage0.more, prPage1.rows.length], [150, false, 0]);
+  const extra = sqlite.prepare("INSERT INTO purchase_requests(doc_no,doc_date,title,author_id,author_name) VALUES(?,'2026-10-02','대량2',?,'영업')");
+  for (let n = 1; n <= 250; n++) extra.run('PR-261002-' + String(n).padStart(3, '0'), ids['영업']);
+  const big0 = (await sales('GET', '/api/purchase-requests?paged=1&q=' + encodeURIComponent('대량2'))).body;
+  const big1 = (await sales('GET', '/api/purchase-requests?paged=1&page=1&q=' + encodeURIComponent('대량2'))).body;
+  assert.deepEqual([big0.rows.length, big0.more, big1.rows.length, big1.more], [200, true, 50, false]);
+  assert.equal(new Set([...big0.rows, ...big1.rows].map(r => r.id)).size, 250, 'every purchase request appears once across pages');
   const prs = await sales('GET', '/api/purchase-requests');
   assert.equal(prs.status, 200, JSON.stringify(prs.body));
   assert.ok(prs.body.filter(r => r.title === '대량').length >= 150 || prs.body.length === 200);

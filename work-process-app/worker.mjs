@@ -2565,6 +2565,7 @@ route('POST', '/api/production-requests/:id/ship', async ({ user, params, body }
 // 작성자가 결재(순서대로) → 합의(순서대로) 결재선을 지정해 상신한다. 지금 차례인 사람만 승인·반려할 수 있다.
 // 반려되면 작성자가 고쳐 다시 올리고 결재는 처음부터 다시 진행한다. 참조자는 열람만 하며 열면 read_at이 남는다.
 // 최종 승인된 의뢰는 구매 담당자가 「발주 생성」으로 발주목록에 올린다(구매의뢰번호 = 의뢰서 번호).
+const PR_PAGE = 200;
 const PR_TEXT = { delivery_qty: 50, customer: 200, stock_qty: 50, due_text: 50, manager: 50, monthly_usage: 50 };
 async function prItems(list) {
   if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
@@ -2663,8 +2664,13 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
     where.push("(pr.doc_no LIKE ? ESCAPE '\\' OR pr.title LIKE ? ESCAPE '\\' OR pr.department LIKE ? ESCAPE '\\' OR pr.author_name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND (i.item LIKE ? ESCAPE '\\' OR i.product_code LIKE ? ESCAPE '\\' OR i.vendor LIKE ? ESCAPE '\\' OR i.customer LIKE ? ESCAPE '\\')))");
     args.push(...Array(8).fill(pattern));
   }
-  const rows = await db.prepare(`SELECT pr.* FROM purchase_requests pr ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY pr.id DESC LIMIT 200`).all(...args);
-  if (!rows.length) return [];
+  // 200건씩 page로 나눈다. 화면은 paged=1로 {rows, page, more}를 받아 「더 보기」를 붙인다(paged 없이 부르면 첫 페이지 배열).
+  const page = query.page === undefined || query.page === '' ? 0 : Number(query.page);
+  if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw bad('페이지 번호를 확인하세요.');
+  const found = await db.prepare(`SELECT pr.* FROM purchase_requests pr ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY pr.id DESC LIMIT ? OFFSET ?`).all(...args, PR_PAGE + 1, page * PR_PAGE);
+  const more = found.length > PR_PAGE, rows = found.slice(0, PR_PAGE);
+  const wrap = out => query.paged === '1' ? { rows: out, page, more } : out;
+  if (!rows.length) return wrap([]);
   // D1 매개변수 한도(100개) 안에서 나눠 읽는다.
   const items = [], lines = [];
   for (const ids of inChunks(rows.map(r => r.id))) {
@@ -2672,7 +2678,7 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
     items.push(...await db.prepare(`SELECT request_id,item,product_code,qty,unit,purchase_price,sale_price,vendor,customer,po_id FROM purchase_request_items WHERE request_id IN (${marks}) ORDER BY line_no`).all(...ids));
     lines.push(...await db.prepare(`SELECT request_id,kind,step,user_id,user_name,user_position,decision,read_at FROM purchase_request_lines WHERE request_id IN (${marks}) ORDER BY step, id`).all(...ids));
   }
-  return rows.map(row => {
+  return wrap(rows.map(row => {
     const its = items.filter(i => i.request_id === row.id), ls = lines.filter(l => l.request_id === row.id);
     const current = row.status === 'pending' ? ls.find(l => l.step === row.current_step && l.kind !== 'cc') : null;
     return {
@@ -2684,7 +2690,7 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
       current_user_id: current ? current.user_id : null, current_user_name: current ? current.user_name : '',
       my_turn: !!(current && current.user_id === user.id),
     };
-  });
+  }));
 });
 route('GET', '/api/purchase-requests/:id', async ({ user, params }) => {
   const row = await prAccess(user, params.id);

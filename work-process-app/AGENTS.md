@@ -445,3 +445,6 @@ INVITE_CODE=local-test-code npm start
 - 휴대폰 생산의뢰 상세: 생산 진행 막대를 접힌 카드에도 보이게 했습니다(data-card-primary). 목록이 300건을 넘으면 건수에 「더 있음」을 붙입니다.
 - 남은 한계: 같은 반제품·같은 규격·같은 기간의 반제품 생산일정이 둘 이상이면(예: 두 생산의뢰를 같은 주에 반영) 커팅 기록이 일정마다 중복으로 집계됩니다(생산일정 화면의 실적 규칙과 같음). 한 일정으로 묶거나 기간을 나눠 반영하세요.
 - 회귀 테스트: test/review-fixes-1552.test.mjs, receipt-changes(동시 승인), request-concurrency(건수 50 초과), i18n(초안 문구).
+
+## 구매의뢰 목록 「더 보기」 (15.53)
+- GET /api/purchase-requests는 200건씩 `page`로 나눕니다. 화면은 `paged=1`로 `{rows, page, more}`를 받아 「더 보기」를 붙이고 건수에 「더 있음」을 표시합니다(생산의뢰 목록과 같은 방식). paged 없이 부르면 첫 페이지 배열입니다.

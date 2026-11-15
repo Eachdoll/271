@@ -148,11 +148,14 @@ async function pageSalesPrList(main) {
     ${listControls('pr', { dateLabel: '작성', dateFold: '작성일로 찾기', placeholder: '의뢰번호·제목·품목·공급선·고객사·작성자', extra: `<label>결재 상태<select name="status"><option value="">전체 상태</option>${Object.entries(PR_STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>` })}
     <div id="prList"></div>`;
   const form = $('#prFilters', main); let version = 0;
-  const load = async () => {
+  // 200건씩 읽고 「더 보기」로 다음 페이지를 붙인다.
+  let rows = [], page = 0, more = false;
+  const load = async (next = false) => {
     const own = ++version; listLoading(form);
-    const rows = await api('GET', '/api/purchase-requests?' + new URLSearchParams({ ...formObj(form), ...(box ? { box } : {}) }));
+    const data = await api('GET', '/api/purchase-requests?' + new URLSearchParams({ ...formObj(form), ...(box ? { box } : {}), paged: '1', page: String(next === true ? page + 1 : 0) }));
     if (own !== version || !main.isConnected) return;
-    listCount(form, rows.length);
+    rows = next === true ? rows.concat(data.rows) : data.rows; page = data.page; more = data.more;
+    listCount(form, rows.length); if (more) $('[data-list-count]', form).textContent += ' · 더 있음';
     $('#prList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰번호 · 작성일</th><th>제목 · 품목</th><th class="r">매입 / 판매 금액</th><th>공급선 · 고객사</th><th>요청자 · 의뢰부서</th><th>결재</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.my_turn ? 'row-yellow' : ''}">
       <td><b>${esc(r.doc_no)}</b><br><span class="small muted">${esc(r.doc_date)}</span></td>
       <td>${esc(r.title || r.first_item)}${r.title ? `<div class="small muted">${esc(r.first_item)}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''}</div>` : r.item_count > 1 ? ` <span class="small muted">외 ${r.item_count - 1}건</span>` : ''}</td>
@@ -160,14 +163,15 @@ async function pageSalesPrList(main) {
       <td>${esc(r.vendors || '—')}<div class="small muted">${esc(r.customers)}</div></td>
       <td>${esc(r.author_name)}<div class="small muted">${esc(r.department)}</div></td>
       <td><span class="chip ${PR_STATUS_CHIP[r.status]}">${PR_STATUS[r.status]}</span>${r.status === 'pending' ? `<div class="small">${r.my_turn ? '<b>내 차례</b>' : esc(r.current_user_name) + ' 차례'}</div>` : ''}${r.status === 'approved' && r.ordered ? `<div class="small muted">발주 ${r.ordered}/${r.item_count}</div>` : ''}</td>
-      <td data-card-primary><button class="btn small ${r.my_turn ? 'primary' : ''}" data-open-pr="${r.id}">${r.my_turn ? '결재하기' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>`
+      <td data-card-primary><button class="btn small ${r.my_turn ? 'primary' : ''}" data-open-pr="${r.id}">${r.my_turn ? '결재하기' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>${more ? '<div class="actions"><button type="button" class="btn" data-pr-more>더 보기</button></div>' : ''}`
       : `<div class="empty">${box === 'todo' ? '지금 내 결재 차례인 구매의뢰가 없습니다.' : '조건에 맞는 구매의뢰가 없습니다.'}</div>`;
-    $$('[data-open-pr]', main).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPr), load));
+    $$('[data-open-pr]', main).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPr), () => load()));
+    const moreButton = $('[data-pr-more]', main); if (moreButton) moreButton.onclick = () => load(true).catch(fail);
   };
   $$('[data-box]', main).forEach(b => b.onclick = () => { box = b.dataset.box; try { localStorage.setItem('wpa:pr-box', box); } catch { /* ignore */ } $$('[data-box]', main).forEach(x => x.setAttribute('aria-pressed', String(x === b))); load().catch(fail); });
-  bindListControls(form, load);
+  bindListControls(form, () => load());
   await load();
-  if (prOpenAfterLoad) { const id = prOpenAfterLoad; prOpenAfterLoad = null; prOpen(id, load).catch(fail); }
+  if (prOpenAfterLoad) { const id = prOpenAfterLoad; prOpenAfterLoad = null; prOpen(id, () => load()).catch(fail); }
 }
 
 // ── 상세(결재 정보 · 본문) ──
