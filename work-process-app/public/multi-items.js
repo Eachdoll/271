@@ -9,10 +9,11 @@ function lineInfo(row) {
   const code = row.product_code ? (/^TMP-/.test(row.product_code) ? '임시코드 ' : '') + row.product_code : '';
   const parts = [code, row.spec || data.spec, unit, row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : '')].filter(Boolean);
   if (row.type && row.type !== 'voc' && (row.qty ?? data.qty) != null) parts.push('수량 ' + fmtNum(row.qty ?? data.qty));
-  if (row.batch_id) parts.push('묶음 ' + row.batch_id.slice(-8));
+  // 15.42: 내부 묶음 번호는 화면 글자에서 빼고 마우스를 올렸을 때(title)만 보인다.
+  const batchTitle = row.batch_id ? ` title="묶음 ${esc(row.batch_id.slice(-8))}"` : '';
   const fromCatalog = (row.product_code && !/^TMP-/.test(row.product_code)) || row.bom_id || (data.product_code && !/^TMP-/.test(data.product_code));
   const entity = fromCatalog ? '' : lineEntity(row);
-  return `<span class="small muted line-info">${parts.map(esc).join(' · ')} ${entity ? `<button type="button" class="btn small" data-line-meta="${esc(entity)}" data-line-id="${row.id}" data-line-spec="${esc(row.spec)}" data-line-unit="${esc(unit)}" data-line-lot="${esc(row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : ''))}" data-line-name="${esc(row.item)}">규격·단위</button>` : ''}</span>`;
+  return `<span class="small muted line-info"${batchTitle}>${parts.map(esc).join(' · ')} ${entity ? `<button type="button" class="btn small" data-line-meta="${esc(entity)}" data-line-id="${row.id}" data-line-spec="${esc(row.spec)}" data-line-unit="${esc(unit)}" data-line-lot="${esc(row.lot || data.lot_etc || (row.type === 'voc' ? data.lot : ''))}" data-line-name="${esc(row.item)}">규격·단위</button>` : ''}</span>`;
 }
 function scheduleFocusDate() { try { const date = sessionStorage.getItem('newScheduleDate'); sessionStorage.removeItem('newScheduleDate'); return date || todayStr(); } catch { return todayStr(); } }
 function rememberScheduleDate(date) { try { sessionStorage.setItem('newScheduleDate',date); const key = uxKey('calendar', location.hash || '#/'); uxWrite(key, { ...(uxRead(key) || { view: 'week' }), base: date }); } catch {} }
@@ -178,7 +179,7 @@ async function installMultiItems(legacy, entity, type = '') {
         }
         remaining.shift();
       }
-      toast(`${saved.rows.length}품목을 등록했습니다. 묶음 ${saved.batch_id.slice(-8)}`);
+      toast(`${saved.rows.length}품목을 등록했습니다.`);
       if (entity === 'schedule') rememberScheduleDate(payload.common.start_date);
       await render();
       const prefix = {shipment:'sh',other_receipt:'other',laundry:'ln'}[entity]; const date = payload.common.ship_date || payload.common.received_date || payload.common.in_date;
