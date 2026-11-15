@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.58';
+const APP_VERSION = '15.61';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -298,6 +298,45 @@ const NAV = [
     ['#/logistics/stock', '재고 현황'],
   ] },
 ];
+// ── 메뉴 열람 권한(15.59) ── ME.menus가 null이면 전체, 배열이면 그 업무 묶음만 메뉴에 보이고 주소로 들어와도 막는다.
+// 홈·리포트·내 정보·관리자 화면은 묶음에 속하지 않아 항상 열린다(관리자 화면은 관리자만).
+const MENU_GROUP_LABELS = [['sales', '영업'], ['purchase', '구매'], ['quality', '품질'], ['dev', '개발'], ['production', '생산'], ['logistics', '물류'], ['master', '기준 정보 (거래처·검사규격)']];
+const NAV_GROUP_KEY = { 영업: 'sales', 구매: 'purchase', 품질: 'quality', 개발: 'dev', 생산: 'production', 물류: 'logistics' };
+function routeMenu(route) {
+  const path = String(route || '#/').split('?')[0];
+  // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
+  if (path === '#/sales/pr') return null;
+  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/quality/specs')) return 'master';
+  for (const [prefix, key] of [['#/sales', 'sales'], ['#/purchase', 'purchase'], ['#/quality', 'quality'], ['#/dev', 'dev'], ['#/prod', 'production'], ['#/logistics', 'logistics']]) if (path === prefix || path.startsWith(prefix + '/')) return key;
+  return null;
+}
+const canSeeMenu = key => !key || !ME || !Array.isArray(ME.menus) || ME.menus.includes(key);
+const canSeeRoute = route => canSeeMenu(routeMenu(route));
+// 대시보드처럼 여러 업무가 섞인 화면에서 볼 수 없는 업무의 카드·할 일·표 줄을 뺀다.
+function applyMenuAccess(main) {
+  if (!ME || !Array.isArray(ME.menus)) return;
+  for (const a of main.querySelectorAll('a[href^="#/"]')) {
+    if (canSeeRoute(a.getAttribute('href'))) continue;
+    // 카드·표 줄은 통째로, 할 일 줄은 그 줄의 대표 링크(첫 링크)가 막힌 업무일 때만 뺀다(다른 업무의 보조 링크는 글자로 남김).
+    const box = a.closest('.kpi, .progress-table tr'), item = a.closest('.tasks li');
+    if (box) { box.remove(); continue; }
+    if (item && item.querySelector('a') === a) { item.remove(); continue; }
+    const span = document.createElement('span'); span.textContent = a.textContent; a.replaceWith(span);
+  }
+  main.querySelectorAll('.kpi-group').forEach(g => { if (!g.querySelector('.kpi')) g.remove(); });
+  // 할 일 카드: 칸(승인할 일·내가 올린 요청)마다 남은 줄 수로 건수를 고치고, 비면 안내 문구로 바꾼다(카드는 그대로).
+  // 확인이 필요한 일(알림) 카드는 줄이 하나도 안 남으면 뺀다.
+  main.querySelectorAll('.tasks').forEach(card => {
+    const boxes = [card, ...card.querySelectorAll(':scope > .tasks-grid > section')];
+    for (const box of boxes) {
+      const list = box.querySelector(':scope > ul'); if (!list) continue;
+      const chip = box.querySelector(':scope > h2 .chip, :scope > h3 .chip'), n = list.children.length;
+      if (n) { if (chip) chip.textContent = n; continue; }
+      if (box === card) { card.remove(); break; }
+      chip?.remove(); const note = document.createElement('p'); note.className = 'small muted'; note.textContent = '표시할 건이 없습니다.'; list.replaceWith(note);
+    }
+  });
+}
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];
 const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
@@ -445,9 +484,9 @@ function shell() {
   const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`;
   const entry = item => Array.isArray(item) ? link(item)
     : `<details class="nav-sub" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
-  const nav = NAV.map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(entry).join('')}</div>`).join('')
-    // 관리: 기준 정보 화면(모든 사용자에게 보임, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
-    + `<div class="nav-group"><div class="nav-title">관리</div>${[...NAV_MANAGE, ...(ME.is_admin ? NAV_ADMIN : [])].map(link).join('')}</div>`;
+  const nav = NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => `<div class="nav-group"><div class="nav-title">${g.group}</div>${g.items.map(entry).join('')}</div>`).join('')
+    // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
+    + ([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])].length ? `<div class="nav-group"><div class="nav-title">관리</div>${[...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])].map(link).join('')}</div>` : '');
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   $('#app').innerHTML = `
   <header class="top">
@@ -474,11 +513,21 @@ async function render() {
   document.body.classList.remove('operator-mode');
   shell();
   refreshNavBadges();
-  const page = PAGES[location.hash || '#/'] || pageHome;
-  try { await page($('#main')); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
+  try { await page($('#main')); if (page === pageHome) applyMenuAccess($('#main')); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
+
+function pageNoMenu(main) {
+  const label = (MENU_GROUP_LABELS.find(([key]) => key === routeMenu(location.hash)) || [, ''])[1];
+  main.innerHTML = `<h1>열람 권한이 없습니다</h1><div class="card"><p>${esc(label)} 메뉴는 열람 권한이 없습니다. 필요하면 관리자에게 메뉴 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">대시보드로</a></div></div>`;
+}
+// 메뉴 열람 설정 입력(부서 기본·사용자 직접 지정에서 같이 쓴다).
+function menuChecks(selected) {
+  return `<fieldset class="menu-checks"><legend>보이는 메뉴</legend><p class="small muted">홈·리포트는 항상 보입니다.</p>${MENU_GROUP_LABELS.map(([key, label]) => `<label class="inline"><input type="checkbox" name="menus" value="${key}"${!selected || selected.includes(key) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset>`;
+}
+const menuSummary = list => !list ? '전체' : list.length ? list.map(key => (MENU_GROUP_LABELS.find(([k]) => k === key) || [, key])[1].replace(/ \(.*\)$/, '')).join(' · ') : '홈만';
 
 // ───────────── 로그인 / 가입 ─────────────
 function pageAuth(mode = 'login', notice = '') {
@@ -1566,7 +1615,7 @@ async function pageAdmin(main) {
       ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver","logistics_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
       <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
-      <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-profile>직급·부서</button> <button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+      <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-profile>직급·부서</button> ${u.is_admin ? '' : `<button class="btn small" data-menu-access>메뉴: ${esc(u.menu_mode === 'all' ? '전체' : u.menu_mode === 'custom' ? menuSummary(u.menu_custom || []) : '부서 기본')}</button>`} <button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
   $('#userNew').onsubmit = async (e) => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(e.target), roles: $$('[data-new-role]:checked', e.target).map((box) => box.dataset.newRole) }); toast(`${made.name} 계정을 만들었습니다.`); pageAdmin(main); } catch (err) { fail(err); } };
   $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
   const userFilter = $('#usersFilters', main);
@@ -1645,6 +1694,21 @@ async function pageAdmin(main) {
     const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
     const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
     $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">부서·직급 목록은 「조직 구성」에서 관리합니다.</p>${orgFields(org, u)}`); if (v) { await save(v); pageAdmin(main); } };
+    const menuButton = $('[data-menu-access]', tr);
+    if (menuButton) menuButton.onclick = async () => {
+      const u = users.find(user => user.id === Number(id));
+      const m = modal(`<h3>${esc(name)} 메뉴 열람</h3><form class="stack" data-no-author>
+        <fieldset class="menu-mode"><legend>방식</legend>
+          <label class="inline"><input type="radio" name="menu_mode" value="department"${u.menu_mode === 'department' ? ' checked' : ''}> 부서 기본 따름 <span class="small muted">(${esc(u.department || '부서 미지정')} · 조직 구성에서 설정)</span></label>
+          <label class="inline"><input type="radio" name="menu_mode" value="all"${u.menu_mode === 'all' ? ' checked' : ''}> 전체 보임</label>
+          <label class="inline"><input type="radio" name="menu_mode" value="custom"${u.menu_mode === 'custom' ? ' checked' : ''}> 직접 지정</label></fieldset>
+        <div data-menu-custom>${menuChecks(u.menu_mode === 'custom' ? u.menu_custom || [] : null)}</div>
+        <p class="small muted">숨긴 메뉴는 메뉴와 대시보드에서 빠지고, 주소로 들어와도 열리지 않습니다. 이미 받은 승인·접수 권한(체크한 역할)은 그대로입니다.</p>
+        <div class="actions"><button class="btn primary">저장</button></div></form>`);
+      const form = $('form', m.el), custom = $('[data-menu-custom]', form);
+      const sync = () => { custom.hidden = formObj(form).menu_mode !== 'custom'; }; form.addEventListener('change', sync); sync();
+      form.onsubmit = async event => { event.preventDefault(); const v = formObj(form); m.close(); await save({ menu_mode: v.menu_mode, menus: v.menus || [] }); pageAdmin(main); };
+    };
     $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
     const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
   });
