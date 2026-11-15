@@ -29,7 +29,7 @@ before(async () => {
   for (const u of users) ids[u.name] = u.id;
   await admin('PUT', `/api/admin/users/${ids['구매담당']}`, { roles: ['purchase'] });
   await admin('PUT', `/api/admin/users/${ids['김승준']}`, { position: '부장', department: '전략영업부' });
-  assert.equal((await author('PUT', '/api/me/profile', { position: '과장', department: '전략영업부' })).body.position, '과장');
+  assert.equal((await admin('PUT', `/api/admin/users/${ids['송은아']}`, { position: '과장', department: '전략영업부' })).body.position, '과장');
   roller = (await admin('POST', '/api/boms', { product: '핸드롤러 SET(도전)', product_code: 'ZZ01-0257', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'SET', materials: [] })).body;
 });
 after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.48';
+const APP_VERSION = '15.49';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -32,7 +32,8 @@ let ME = null;
 function showInputAuthors() {
   if (!ME) return;
   for (const form of document.querySelectorAll('form')) {
-    if (form.dataset.readOnly === 'true') continue;
+    // data-no-author: 작성자 표시가 필요 없는 관리 양식(조직 구성)이나 요청자를 따로 보여 주는 양식(구매의뢰).
+    if (form.dataset.readOnly === 'true' || form.hasAttribute('data-no-author')) continue;
     let label = form.querySelector(':scope > [data-input-author]');
     if (!label) { label = document.createElement('p'); label.dataset.inputAuthor = ''; label.className = 'small muted input-author'; form.prepend(label); }
     const original = form.dataset.entryAuthor;
@@ -298,7 +299,7 @@ const NAV = [
 ];
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];
-const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/bom', '제품등록']];
+const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -430,6 +431,7 @@ const PAGES = {
   '#/sales/pr': pageSalesPrList,
   '#/sales/pr/new': pageSalesPrEntry,
   '#/admin': pageAdmin,
+  '#/admin/org': pageOrg,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
 };
@@ -488,13 +490,15 @@ function pageAuth(mode = 'login', notice = '') {
       <form class="stack" id="authForm">
         <label>이름<input name="name" autocomplete="username" required maxlength="30" placeholder="예) 홍길동"></label>
         <label>비밀번호<input name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required minlength="4"></label>
-        ${mode === 'register' ? '<label>초대코드<input name="invite" required placeholder="관리자에게 받은 초대코드"></label>' : ''}
+        ${mode === 'register' ? '<div class="stack" data-org-fields></div><label>초대코드<input name="invite" required placeholder="관리자에게 받은 초대코드"></label>' : ''}
         <button class="btn primary block">${mode === 'login' ? '로그인' : '가입하기'}</button>
       </form>
       ${mode === 'register' ? '<p class="muted small">가입 신청 후 관리자 승인이 필요합니다. 첫 계정만 자동으로 관리자가 됩니다.</p>' : ''}
     </div>
   </div>`;
   $$('.tabs button').forEach((b) => (b.onclick = () => pageAuth(b.dataset.m)));
+  // 가입: 조직 구성의 부서·직급 목록에서 고른다(목록이 비어 있으면 칸을 두지 않는다).
+  if (mode === 'register') api('GET', '/api/org').then(lists => { const host = $('[data-org-fields]'); if (host && (lists.departments.length || lists.positions.length)) host.innerHTML = orgFields(lists, {}, { required: true }); }).catch(() => {});
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
     try { const r = await api('POST', mode === 'login' ? '/api/auth/login' : '/api/auth/register', formObj(e.target)); if (r.pending) { pageAuth('login', '가입 신청이 완료되었습니다. 관리자 승인 후 로그인해 주세요.'); return; } ME = r.user; if (!location.hash) location.hash = '#/'; render(); }
@@ -1529,7 +1533,7 @@ async function pageShip(main) {
 // ───────────── 관리자 ─────────────
 async function pageAdmin(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
-  const [s, users] = await Promise.all([api('GET', '/api/admin/settings'), api('GET', '/api/admin/users')]);
+  const [s, users, org] = await Promise.all([api('GET', '/api/admin/settings'), api('GET', '/api/admin/users'), api('GET', '/api/org')]);
   main.innerHTML = `
   <h1>관리자 설정</h1>
   <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
@@ -1537,7 +1541,7 @@ async function pageAdmin(main) {
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
   <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
-    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label></div>
+    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label>${orgFields(org)}</div>
     <p class="small muted">오퍼레이터를 선택한 일반 계정은 다른 업무 권한보다 입력 전용 모드가 우선합니다. 관리자는 전체 권한을 유지합니다.</p><div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
     <div class="actions"><button class="btn primary">계정 만들기</button></div></form>
   <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="small muted">오퍼레이터: 반제품 커팅/융착·세탁과 완제품 실적만 입력합니다. 다른 업무 권한을 함께 선택해도 일반 계정은 입력 전용으로 제한됩니다. 관리자 계정은 제외됩니다.</p><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
@@ -1626,7 +1630,7 @@ async function pageAdmin(main) {
     const review = async (status, note = '') => { try { await api('POST', '/api/admin/users/' + id + '/approval', { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); render(); } catch (e) { fail(e); } };
     const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
     const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
-    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">구매의뢰 결재선에 이름과 함께 표시됩니다.</p><label>직급<input name="position" maxlength="30" value="${esc(u.position || '')}" placeholder="예: 과장"></label><label>부서<input name="department" maxlength="50" value="${esc(u.department || '')}" placeholder="예: 전략영업부"></label>`); if (v) { await save(v); pageAdmin(main); } };
+    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">부서·직급 목록은 「조직 구성」에서 관리합니다.</p>${orgFields(org, u)}`); if (v) { await save(v); pageAdmin(main); } };
     $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
     const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
   });
@@ -1635,14 +1639,11 @@ async function pageAdmin(main) {
 async function pageMe(main) {
   main.innerHTML = `<h1>내 정보</h1>
   <div class="card"><p><b>${esc(ME.name)}</b> ${ME.is_admin ? '<span class="tag">관리자</span>' : ''}</p><p class="muted small">담당: ${ME.roles.map((r) => ROLE_LABEL[r]).join(', ') || '없음 (승인 권한이 필요하면 관리자에게 요청)'}</p></div>
-  <form class="card stack" id="profileForm"><h3>직급 · 부서</h3><p class="small muted">구매의뢰 결재선에 이름과 함께 표시되고, 부서는 구매의뢰서의 부서명 기본값이 됩니다.</p>
-    <div class="form-grid"><label>직급<input name="position" maxlength="30" value="${esc(ME.position || '')}" placeholder="예: 과장"></label><label>부서<input name="department" maxlength="50" value="${esc(ME.department || '')}" placeholder="예: 전략영업부"></label></div>
-    <div class="actions"><button class="btn primary">저장</button></div></form>
+  <div class="card"><h3>부서 · 직급</h3><p><b>${esc(ME.department || '부서 미지정')}</b> · ${esc(ME.position || '직급 미지정')}</p><p class="small muted">구매의뢰서의 의뢰부서·요청자 직급으로 자동 표시됩니다. 바꾸려면 관리자에게 요청하세요(관리 › 조직 구성).</p></div>
   <form class="card stack" id="pwForm"><h3>비밀번호 변경</h3>
     <label>현재 비밀번호<input type="password" name="current" required autocomplete="current-password"></label>
     <label>새 비밀번호<input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <div class="actions"><button class="btn primary">변경</button></div></form>`;
-  $('#profileForm').onsubmit = async (e) => { e.preventDefault(); try { const me = await api('PUT', '/api/me/profile', formObj(e.target)); Object.assign(ME, { position: me.position, department: me.department }); toast('저장했습니다.'); } catch (err) { fail(err); } };
   $('#pwForm').onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/me/password', formObj(e.target)); e.target.reset(); toast('비밀번호를 변경했습니다.'); } catch (err) { fail(err); } };
 }
 

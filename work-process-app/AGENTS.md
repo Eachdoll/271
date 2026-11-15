@@ -402,3 +402,12 @@ INVITE_CODE=local-test-code npm start
 - 사진은 의뢰서 행의 photos에 둡니다. 공통 attachments·progress_comments 표는 entity_type CHECK가 고정이라 쓰지 않습니다(표를 다시 만들어 제약을 바꾸지 마세요). 저장은 savePhotos(회사 R2·8MB·10장) 그대로이며 작성자가 최종 승인 전에만 바꿉니다. 별도 진행 코멘트 대신 결재선의 승인 의견·반려 사유를 씁니다.
 - 화면: public/sales.js(index.html·local.mjs·build.mjs에 포함), 메뉴 영업 › 구매의뢰(작성 #/sales/pr/new, 목록 #/sales/pr). 내 결재 차례는 my-tasks의 approvals.purchase_requests로 대시보드·메뉴 배지에 나오고, 내가 올린 의뢰(결재 중·최근 반려)는 mine.purchase_requests입니다. 직급·부서는 내 정보와 관리자 설정(사용자 행 「직급·부서」)에서 바꿉니다. GET /api/directory는 승인된 사용자의 id·이름·직급·부서만 줍니다.
 - form-ux: 우리가 붙인 *·(선택) 표시는 data-fx-mark로 찾습니다(칸이 label 안 더 깊은 곳에 있을 때 표시가 끝없이 늘어나던 문제). 입력값이 아닌 선택 도구에는 data-no-mark를 붙이세요. 휴대폰 카드에서 접혀도 보여야 하는 버튼 칸은 td에 data-card-primary를 붙입니다.
+
+## 조직 구성 · 가입 시 부서/직급 선택 (15.49)
+- 0026_org_structure.sql: org_departments(name UNIQUE, parent_id, sort, active)·org_positions(name UNIQUE, sort=서열, 낮은 직급이 앞), 비어 있는 상태로 시작. 사용자에는 users.department/position 이름 문자열을 저장합니다.
+- worker.mjs 「조직 구성」: GET /api/org(로그인 없이, 사용 중 항목만 — 가입 화면용), GET/POST/PUT/DELETE /api/admin/org/:kind(/:id), POST …/:id/move(같은 상위 안에서 순서), POST /api/admin/org-import(사용자 값으로 빈 목록 채우기). 모두 관리자 전용(GET /api/org 제외). 상위 부서 순환 금지, 이름 변경 시 users의 같은 이름도 batch로 함께 바꿉니다(지난 구매의뢰서 스냅샷은 그대로). 사용자가 있거나 하위 부서가 있으면 삭제를 거부하고 「사용 중지」를 안내합니다.
+- orgChoice(): 목록이 있으면 사용 중 항목 중에서만 고를 수 있습니다. 가입(register)은 목록이 있으면 필수, 관리자 사용자 추가·수정은 선택. 목록이 비어 있으면 자유 입력(첫 관리자 가입 등).
+- 사용자가 자기 부서·직급을 바꾸는 /api/me/profile은 없앴습니다(조직은 관리자가 관리). 내 정보에는 읽기 전용으로 보입니다.
+- 구매의뢰: 의뢰부서는 입력받지 않고 작성자의 users.department, 요청자 직급은 users.position을 상신(재상신) 당시 값으로 저장합니다. 「부서명」 입력칸과 품목 「담당자」 칸은 없앴습니다(예전 기록에 담당자 값이 있으면 상세 표에만 보입니다).
+- 화면: public/org.js(index.html·local.mjs·build.mjs 포함) — orgFields()(가입·사용자 추가·사용자 행 「직급·부서」에서 공용), pageOrg(#/admin/org, 관리 메뉴 「조직 구성」, 관리자만). 조직도는 부서 순서대로 높은 직급부터 보여 주고 그 자리에서 부서·직급을 바꿉니다.
+- showInputAuthors는 form[data-no-author]를 건너뜁니다(조직 구성 양식, 요청자를 따로 보여 주는 구매의뢰 양식).

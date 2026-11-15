@@ -256,8 +256,10 @@ route('POST', '/api/auth/register', async ({ body, req, res }) => {
   if (str(body.invite, 100) !== (await getSetting('invite_code'))) throw bad('초대코드가 올바르지 않습니다.');
   await db.prepare("INSERT INTO settings(key,value) VALUES('invite_code',?) ON CONFLICT(key) DO NOTHING").run(await getSetting('invite_code'));
   if ((await db.prepare('SELECT 1 FROM users WHERE name=?').get(name))) throw bad('이미 가입된 이름입니다. 로그인하세요.');
+  // 조직 구성에 부서·직급 목록이 있으면 가입 때 골라야 한다(첫 관리자 가입처럼 목록이 비어 있으면 생략).
+  const org = await orgChoice(body, { required: true });
   const salt = randomHex(16);
-  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,approval_status) SELECT ?,?,?,NOT EXISTS(SELECT 1 FROM users),CASE WHEN EXISTS(SELECT 1 FROM users) THEN 'pending' ELSE 'approved' END").run(name, salt, await hashPw(password, salt));
+  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,approval_status,department,position) SELECT ?,?,?,NOT EXISTS(SELECT 1 FROM users),CASE WHEN EXISTS(SELECT 1 FROM users) THEN 'pending' ELSE 'approved' END,?,?").run(name, salt, await hashPw(password, salt), org.department, org.position);
   const account = await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
   if (account.approval_status !== 'approved') return { user: null, pending: true, account: { id: account.id, name: account.name, approval_status: account.approval_status } };
   await startSession(req, res, account.id);
@@ -290,11 +292,6 @@ route('POST', '/api/auth/logout', async ({ req, res }) => {
 
 route('GET', '/api/me', async ({ req }) => { const u = (await currentUser(req)); return { user: u ? publicUser(u) : null }; }, { auth: false });
 
-// 내 직급·부서(구매의뢰 결재선 표시와 부서명 기본값)
-route('PUT', '/api/me/profile', async ({ user, body }) => {
-  await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(str(body.position, 30), str(body.department, 50), user.id);
-  return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(user.id));
-});
 route('PUT', '/api/me/password', async ({ user, body }) => {
   if (!(await pwMatches(user, body.current || ''))) throw bad('현재 비밀번호가 올바르지 않습니다.');
   if (String(body.password || '').length < 4) throw bad('새 비밀번호는 4자 이상이어야 합니다.');
@@ -329,8 +326,9 @@ route('POST', '/api/admin/users', async ({ user, body }) => {
   if (password.length < 4) throw bad('비밀번호는 4자 이상이어야 합니다.');
   const roles = Array.isArray(body.roles) ? body.roles : []; if (roles.some(r => !ROLES.includes(r))) throw bad('권한이 올바르지 않습니다.');
   if (await db.prepare('SELECT 1 FROM users WHERE name=?').get(name)) throw bad('이미 있는 이름입니다.');
+  const org = await orgChoice(body);
   const salt = randomHex(16);
-  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,roles,approval_status,reviewed_by,reviewed_at) VALUES(?,?,?,0,?,'approved',?,?)").run(name, salt, await hashPw(password, salt), [...new Set(roles)].join(','), user.name, now());
+  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,roles,approval_status,reviewed_by,reviewed_at,department,position) VALUES(?,?,?,0,?,'approved',?,?,?,?)").run(name, salt, await hashPw(password, salt), [...new Set(roles)].join(','), user.name, now(), org.department, org.position);
   return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid));
 });
 route('POST', '/api/admin/users/:id/approval', async ({ user, params, body }) => {
@@ -354,7 +352,8 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));
   }
   if (body.position !== undefined || body.department !== undefined) {
-    await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(body.position !== undefined ? str(body.position, 30) : target.position || '', body.department !== undefined ? str(body.department, 50) : target.department || '', target.id);
+    const org = await orgChoice({ department: body.department !== undefined ? body.department : target.department, position: body.position !== undefined ? body.position : target.position });
+    await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(org.position, org.department, target.id);
   }
   if (body.is_admin !== undefined) {
     if (target.id === user.id && !body.is_admin) throw bad('자기 자신의 관리자 권한은 해제할 수 없습니다.');
@@ -2194,6 +2193,108 @@ route('GET', '/api/my-tasks', async ({ user }) => {
   return { approvals, mine };
 });
 
+// ── 조직 구성 (부서·직급) ──
+// 관리자가 부서(상·하위)와 직급(서열) 목록을 관리한다. 사용자에는 이름 문자열을 저장하므로
+// 이름을 바꾸면 그 이름을 쓰던 사용자도 함께 바꾼다. 쓰는 사람이 있거나 하위 부서가 있으면 삭제 대신 사용 중지한다.
+const ORG = { departments: { table: 'org_departments', column: 'department', label: '부서' }, positions: { table: 'org_positions', column: 'position', label: '직급' } };
+async function orgLists(activeOnly) {
+  const where = activeOnly ? 'WHERE active=1' : '';
+  return {
+    departments: await db.prepare(`SELECT id,name,parent_id,sort,active FROM org_departments ${where} ORDER BY sort, id`).all(),
+    positions: await db.prepare(`SELECT id,name,sort,active FROM org_positions ${where} ORDER BY sort, id`).all(),
+  };
+}
+// 가입·사용자 저장 때 부서·직급 검사: 목록이 있으면 사용 중인 항목에서 골라야 한다. required면 빈 값도 거부.
+async function orgChoice(body, { required = false } = {}) {
+  const lists = await orgLists(true), out = {};
+  for (const [key, kind, label] of [['department', 'departments', '부서'], ['position', 'positions', '직급']]) {
+    const value = str(body[key], key === 'department' ? 50 : 30);
+    if (!lists[kind].length) { out[key] = value; continue; }
+    if (!value) { if (required) throw bad(`${label}을(를) 고르세요.`); out[key] = ''; continue; }
+    if (!lists[kind].some(item => item.name === value)) throw bad(`${label} 「${value}」은(는) 조직 구성에 없거나 사용 중지되었습니다. 목록에서 다시 고르세요.`);
+    out[key] = value;
+  }
+  return out;
+}
+route('GET', '/api/org', async () => orgLists(true), { auth: false });
+route('GET', '/api/admin/org', async ({ user }) => {
+  requireAdmin(user);
+  const lists = await orgLists(false);
+  const users = await db.prepare("SELECT id,name,department,position,approval_status,is_admin FROM users ORDER BY name").all();
+  return { ...lists, users: users.map(u => ({ ...u, is_admin: !!u.is_admin })) };
+});
+function orgKind(kind) { if (!Object.hasOwn(ORG, kind)) throw bad('조직 구성 종류를 확인하세요.'); return ORG[kind]; }
+async function orgParent(kind, parentId, selfId = null) {
+  if (kind !== 'departments' || parentId === undefined || parentId === null || parentId === '') return null;
+  const id = Number(parentId); if (!Number.isSafeInteger(id) || id <= 0) throw bad('상위 부서를 다시 고르세요.');
+  await mustGet('org_departments', id);
+  // 자기 자신이나 하위 부서를 상위로 두면 순환이 생긴다.
+  for (let cursor = id, guard = 0; cursor; guard++) {
+    if (cursor === selfId) throw bad('자기 자신이나 하위 부서를 상위 부서로 둘 수 없습니다.');
+    if (guard > 50) throw bad('부서 단계가 너무 깊습니다.');
+    cursor = (await db.prepare('SELECT parent_id FROM org_departments WHERE id=?').get(cursor))?.parent_id || null;
+  }
+  return id;
+}
+route('POST', '/api/admin/org/:kind', async ({ user, params, body }) => {
+  requireAdmin(user); const k = orgKind(params.kind);
+  const name = reqStr(body.name, k.label + ' 이름', params.kind === 'departments' ? 50 : 30);
+  if (await db.prepare(`SELECT 1 FROM ${k.table} WHERE name=?`).get(name)) throw new HttpError(409, `이미 있는 ${k.label}입니다.`);
+  const parent = await orgParent(params.kind, body.parent_id);
+  const sort = ((await db.prepare(`SELECT MAX(sort) s FROM ${k.table}`).get()).s ?? 0) + 1;
+  const r = params.kind === 'departments'
+    ? await db.prepare('INSERT INTO org_departments(name,parent_id,sort) VALUES(?,?,?)').run(name, parent, sort)
+    : await db.prepare('INSERT INTO org_positions(name,sort) VALUES(?,?)').run(name, sort);
+  return mustGet(k.table, r.lastInsertRowid);
+});
+route('PUT', '/api/admin/org/:kind/:id', async ({ user, params, body }) => {
+  requireAdmin(user); const k = orgKind(params.kind); const row = await mustGet(k.table, params.id);
+  const name = body.name === undefined ? row.name : reqStr(body.name, k.label + ' 이름', params.kind === 'departments' ? 50 : 30);
+  if (name !== row.name && await db.prepare(`SELECT 1 FROM ${k.table} WHERE name=?`).get(name)) throw new HttpError(409, `이미 있는 ${k.label}입니다.`);
+  const active = body.active === undefined ? row.active : (body.active ? 1 : 0);
+  const queries = [];
+  if (params.kind === 'departments') {
+    const parent = body.parent_id === undefined ? row.parent_id : await orgParent('departments', body.parent_id, row.id);
+    queries.push({ sql: 'UPDATE org_departments SET name=?,parent_id=?,active=? WHERE id=?', args: [name, parent, active, row.id] });
+  } else queries.push({ sql: 'UPDATE org_positions SET name=?,active=? WHERE id=?', args: [name, active, row.id] });
+  // 이름이 바뀌면 그 이름을 쓰던 사용자도 함께 바꾼다(지난 구매의뢰서의 당시 표시는 그대로 둔다).
+  if (name !== row.name) queries.push({ sql: `UPDATE users SET ${k.column}=? WHERE ${k.column}=?`, args: [name, row.name] });
+  await db.batch(queries);
+  return mustGet(k.table, row.id);
+});
+route('POST', '/api/admin/org/:kind/:id/move', async ({ user, params, body }) => {
+  requireAdmin(user); const k = orgKind(params.kind); const row = await mustGet(k.table, params.id);
+  const dir = Number(body.dir); if (![-1, 1].includes(dir)) throw bad('이동 방향을 확인하세요.');
+  // 부서는 같은 상위 부서 안에서만 순서를 바꾼다.
+  const scope = params.kind === 'departments' ? (row.parent_id ? 'parent_id=?' : 'parent_id IS NULL') : '1=1';
+  const args = params.kind === 'departments' && row.parent_id ? [row.parent_id] : [];
+  const siblings = await db.prepare(`SELECT id,sort FROM ${k.table} WHERE ${scope} ORDER BY sort, id`).all(...args);
+  const i = siblings.findIndex(s => s.id === row.id), j = i + dir;
+  if (j < 0 || j >= siblings.length) return orgLists(false);
+  [siblings[i], siblings[j]] = [siblings[j], siblings[i]];
+  await db.batch(siblings.map((s, index) => ({ sql: `UPDATE ${k.table} SET sort=? WHERE id=?`, args: [index + 1, s.id] })));
+  return orgLists(false);
+});
+route('DELETE', '/api/admin/org/:kind/:id', async ({ user, params }) => {
+  requireAdmin(user); const k = orgKind(params.kind); const row = await mustGet(k.table, params.id);
+  const used = (await db.prepare(`SELECT COUNT(*) c FROM users WHERE ${k.column}=?`).get(row.name)).c;
+  if (used) throw bad(`${row.name}에 속한 사용자가 ${used}명 있습니다. 사용자를 옮기거나 「사용 중지」로 바꾸세요.`);
+  if (params.kind === 'departments' && await db.prepare('SELECT 1 FROM org_departments WHERE parent_id=?').get(row.id)) throw bad('하위 부서가 있습니다. 하위 부서를 먼저 옮기거나 지우세요.');
+  await db.prepare(`DELETE FROM ${k.table} WHERE id=?`).run(row.id);
+  return { ok: true };
+});
+// 지금 사용자들이 쓰는 부서·직급 이름으로 빈 목록을 채운다(처음 한 번, 이미 있는 이름은 건너뜀).
+route('POST', '/api/admin/org-import', async ({ user }) => {
+  requireAdmin(user);
+  for (const [kind, column] of [['departments', 'department'], ['positions', 'position']]) {
+    const table = ORG[kind].table;
+    const names = (await db.prepare(`SELECT DISTINCT ${column} v FROM users WHERE ${column}!='' ORDER BY ${column}`).all()).map(r => r.v);
+    let sort = ((await db.prepare(`SELECT MAX(sort) s FROM ${table}`).get()).s ?? 0);
+    for (const name of names) await db.prepare(`INSERT INTO ${table}(name,sort) VALUES(?,?) ON CONFLICT(name) DO NOTHING`).run(name, ++sort);
+  }
+  return orgLists(false);
+});
+
 // ── 영업: 구매의뢰 (전자결재) ──
 // 작성자가 결재(순서대로) → 합의(순서대로) 결재선을 지정해 상신한다. 지금 차례인 사람만 승인·반려할 수 있다.
 // 반려되면 작성자가 고쳐 다시 올리고 결재는 처음부터 다시 진행한다. 참조자는 열람만 하며 열면 read_at이 남는다.
@@ -2240,8 +2341,9 @@ async function prLines(body, authorId) {
   return [...approve.map(id => ['approve', ++step, id]), ...agree.map(id => ['agree', ++step, id]), ...cc.map(id => ['cc', 0, id])]
     .map(([kind, s, id]) => ({ kind, step: s, user_id: id, user_name: byId.get(id).name, user_position: byId.get(id).position || '' }));
 }
-function prHead(body, user) {
-  return { doc_date: dateStr(body.doc_date, '작성일'), department: str(body.department, 50) || user.department || '', title: str(body.title, 200), note: str(body.note, 2000) };
+// 의뢰부서·요청자는 입력받지 않고 작성자의 조직 정보(가입·조직 구성)를 상신 당시 값으로 남긴다.
+function prHead(body, author) {
+  return { doc_date: dateStr(body.doc_date, '작성일'), department: author.department || '', title: str(body.title, 200), note: str(body.note, 2000) };
 }
 async function prAccess(user, id, { write = false } = {}) {
   if (!/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(Number(id))) throw bad('구매의뢰 번호가 올바르지 않습니다.');
@@ -2343,9 +2445,10 @@ route('PUT', '/api/purchase-requests/:id', async ({ user, params, body }) => {
   const decided = await db.prepare("SELECT 1 FROM purchase_request_lines WHERE request_id=? AND decision!=''").get(row.id);
   if (!(row.status === 'rejected' || (row.status === 'pending' && !decided))) throw bad('결재가 진행 중이거나 승인된 의뢰서는 고칠 수 없습니다.');
   if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
-  const head = prHead(body, user), items = await prItems(body.items), lines = await prLines(body, row.author_id);
+  const author = await db.prepare('SELECT * FROM users WHERE id=?').get(row.author_id) || { department: row.department, position: row.author_position };
+  const head = prHead(body, author), items = await prItems(body.items), lines = await prLines(body, row.author_id);
   const result = await db.batch([
-    { sql: "UPDATE purchase_requests SET doc_date=?,department=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.doc_date, head.department, head.title, head.note, row.id, row.revision] },
+    { sql: "UPDATE purchase_requests SET doc_date=?,department=?,author_position=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.doc_date, head.department, author.position || '', head.title, head.note, row.id, row.revision] },
     { sql: 'DELETE FROM purchase_request_items WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
     { sql: 'DELETE FROM purchase_request_lines WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
     ...prInsertDetails(row.doc_no, items, lines).map(q => ({ sql: q.sql + ' AND revision=?', args: [...q.args, row.revision + 1] })),

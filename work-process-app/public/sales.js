@@ -27,7 +27,6 @@ function prItemRow(it = {}) {
       <label>사용고객사<input data-k="customer" maxlength="200" value="${v('customer')}"></label>
       <label>현재고<input data-k="stock_qty" maxlength="50" value="${v('stock_qty')}" placeholder="품목을 고르면 자동"></label>
       <label>입고요청일<input data-k="due_text" maxlength="50" value="${v('due_text')}" placeholder="예: ASAP 또는 2026-12-01"></label>
-      <label>담당자<input data-k="manager" maxlength="50" value="${v('manager')}"></label>
       <label>월사용량<input data-k="monthly_usage" maxlength="50" value="${v('monthly_usage')}"></label>
     </div>
     <p class="pr-amount small" data-amount aria-live="polite"></p>
@@ -38,10 +37,11 @@ async function prForm(host, existing = null, { onDone } = {}) {
   const line = { approve: [], agree: [], cc: [] };
   if (existing) for (const l of existing.lines) line[l.kind].push(l.user_id);
   const others = people.filter(p => p.id !== (existing ? existing.author_id : ME.id));
-  host.innerHTML = `<form class="stack pr-form">
+  host.innerHTML = `<form class="stack pr-form" data-no-author>
+    <p class="pr-requester"><span class="muted">의뢰부서</span> <b>${esc((existing ? existing.department : ME.department) || '부서 미지정')}</b> <span class="muted">요청자</span> <b>${esc(existing ? existing.author_name : ME.name)}</b> <span>${esc((existing ? existing.author_position : ME.position) || '')}</span></p>
+    ${!(existing ? existing.department : ME.department) ? '<p class="small muted">부서가 지정되지 않았습니다. 관리자에게 요청하세요(관리 › 조직 구성).</p>' : ''}
     <div class="form-grid">
       <label>작성일 *<input name="doc_date" type="date" required value="${esc(existing ? existing.doc_date : todayStr())}"></label>
-      <label>부서명<input name="department" maxlength="50" value="${esc(existing ? existing.department : ME.department || '')}" placeholder="예: 전략영업부"></label>
       <label>제목<input name="title" maxlength="200" value="${esc(existing ? existing.title : '')}" placeholder="예: 핸드롤러 구매의뢰"></label>
     </div>
     <section class="pr-section"><h3>구매 의뢰 품목</h3><div data-items></div>
@@ -49,7 +49,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
       <p class="pr-totals" data-totals aria-live="polite"></p></section>
     <label>비고<textarea name="note" rows="2" maxlength="2000">${esc(existing ? existing.note : '')}</textarea></label>
     <section class="pr-section"><h3>결재선</h3>
-      <p class="small muted"><span>기안</span> <b>${existing ? esc(existing.author_name) : esc(ME.name)}</b> <span>${esc(existing ? existing.author_position : ME.position || '')}</span><br><span>결재자가 순서대로 승인한 뒤 합의자가 순서대로 확인합니다. 참조자는 열람만 합니다.</span></p>
+      <p class="small muted"><span>기안은 요청자(작성자)로 자동 표시됩니다.</span><br><span>결재자가 순서대로 승인한 뒤 합의자가 순서대로 확인합니다. 참조자는 열람만 합니다.</span></p>
       <div class="pr-line-groups">${Object.entries(PR_GROUP).map(([kind, label]) => `<div class="pr-line-group" data-group="${kind}"><label>${label}${kind === 'approve' ? ' *' : ''}
         <span class="pr-line-pick"><select data-pick="${kind}" data-no-mark aria-label="${label}에 넣을 사람"><option value="">사람 선택</option>${others.map(p => `<option value="${p.id}">${esc(p.name)}${p.position ? ' · ' + esc(p.position) : ''}${p.department ? ' · ' + esc(p.department) : ''}</option>`).join('')}</select>
         <button type="button" class="btn small" data-add-line="${kind}">추가</button></span></label><ol class="pr-line-list" data-list="${kind}"></ol></div>`).join('')}</div>
@@ -113,7 +113,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
     event.preventDefault(); if (busy || draft?.busy) return;
     if (!line.approve.length) { const e = $('[data-line-error]', form); e.textContent = '결재자를 1명 이상 추가하세요. 「결재」에서 사람을 고르고 「추가」를 누르세요.'; e.hidden = false; $('[data-pick="approve"]', form).focus(); return; }
     const values = formObj(form);
-    const body = { doc_date: values.doc_date, department: values.department, title: values.title, note: values.note, approvers: line.approve, agreers: line.agree, cc: line.cc,
+    const body = { doc_date: values.doc_date, title: values.title, note: values.note, approvers: line.approve, agreers: line.agree, cc: line.cc,
       items: [...items.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value]))) };
     busy = true;
     try {
@@ -152,7 +152,7 @@ async function pageSalesPrList(main) {
     const rows = await api('GET', '/api/purchase-requests?' + new URLSearchParams({ ...formObj(form), ...(box ? { box } : {}) }));
     if (own !== version || !main.isConnected) return;
     listCount(form, rows.length);
-    $('#prList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰번호 · 작성일</th><th>제목 · 품목</th><th class="r">매입 / 판매 금액</th><th>공급선 · 고객사</th><th>작성자</th><th>결재</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.my_turn ? 'row-yellow' : ''}">
+    $('#prList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰번호 · 작성일</th><th>제목 · 품목</th><th class="r">매입 / 판매 금액</th><th>공급선 · 고객사</th><th>요청자 · 의뢰부서</th><th>결재</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.my_turn ? 'row-yellow' : ''}">
       <td><b>${esc(r.doc_no)}</b><br><span class="small muted">${esc(r.doc_date)}</span></td>
       <td>${esc(r.title || r.first_item)}${r.title ? `<div class="small muted">${esc(r.first_item)}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''}</div>` : r.item_count > 1 ? ` <span class="small muted">외 ${r.item_count - 1}건</span>` : ''}</td>
       <td class="r">${prMoney(r.purchase_total)}<br><span class="small muted">${prMoney(r.sale_total)}</span></td>
@@ -191,9 +191,9 @@ async function prOpen(id, after = () => {}) {
     ${pr.can_decide ? '<p class="pr-turn">지금 내 결재 차례입니다. 본문을 확인하고 승인 또는 반려하세요.</p>' : ''}
     <section><h4>결재 정보</h4>${prLineRows(pr)}</section>
     <section><h4>본문 · 구매의뢰서</h4>
-      <p><span class="muted">작성일</span> <b>${esc(pr.doc_date)}</b> <span class="muted">부서명</span> <b>${esc(pr.department || '—')}</b></p>
-      <div class="table-wrap"><table class="grid pr-items"><thead><tr><th>NO</th><th>품목 · 규격</th><th>단위</th><th class="r">수량</th><th class="r">매입단가</th><th class="r">매입금액</th><th class="r">판매단가</th><th class="r">판매금액</th><th>공급선</th><th>납품예정수량</th><th>사용고객사</th><th>현재고</th><th>입고요청일</th><th>담당자</th><th>월사용량</th><th>발주</th></tr></thead>
-      <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty)}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td><td>${esc(it.manager)}</td><td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+      <p><span class="muted">작성일</span> <b>${esc(pr.doc_date)}</b> <span class="muted">의뢰부서</span> <b>${esc(pr.department || '—')}</b> <span class="muted">요청자</span> <b>${esc(pr.author_name)}</b> <span>${esc(pr.author_position || '')}</span></p>
+      <div class="table-wrap"><table class="grid pr-items"><thead><tr><th>NO</th><th>품목 · 규격</th><th>단위</th><th class="r">수량</th><th class="r">매입단가</th><th class="r">매입금액</th><th class="r">판매단가</th><th class="r">판매금액</th><th>공급선</th><th>납품예정수량</th><th>사용고객사</th><th>현재고</th><th>입고요청일</th>${pr.items.some(it => it.manager) ? '<th>담당자</th>' : ''}<th>월사용량</th><th>발주</th></tr></thead>
+      <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty)}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td>${pr.items.some(x => x.manager) ? `<td>${esc(it.manager)}</td>` : ''}<td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
       <p class="pr-totals">${`합계 · 매입 ${prMoney(pr.purchase_total)}원 · 판매 ${prMoney(pr.sale_total)}원 · 이익 ${prProfit(pr.sale_total, pr.purchase_total)}`}</p>
       ${pr.note ? `<p class="pr-note">${esc(pr.note)}</p>` : ''}
       <div class="thumbs">${pr.photos.map(f => `<img src="/uploads/${esc(f)}" data-big="/uploads/${esc(f)}" alt="구매의뢰 첨부 사진" loading="lazy">`).join('') || '<span class="muted small">첨부 사진 없음</span>'}</div></section>
