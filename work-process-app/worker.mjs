@@ -68,6 +68,12 @@ function applyListDates(where, args, query, column) {
   if (from) { where.push(column + '>=?'); args.push(from); }
   if (to) { where.push(column + '<=?'); args.push(to); }
 }
+// D1은 쿼리 하나에 바인딩 매개변수를 100개까지만 받는다. IN (?, …) 목록은 다른 조건 매개변수 몫을 남기고 90개씩 나눠 읽는다.
+function inChunks(ids, size = 90) {
+  const parts = [];
+  for (let i = 0; i < ids.length; i += size) parts.push(ids.slice(i, i + size));
+  return parts;
+}
 function applyListKeyword(where, args, value, columns) {
   const q = String(value || '').trim(); if (!q) return;
   if (q.length > 200) throw bad('검색어는 200자까지 입력하세요.');
@@ -2305,7 +2311,10 @@ route('POST', '/api/admin/org-import', async ({ user }) => {
 // ── 영업 → 생산: 생산의뢰(수주) ──
 // 영업이 업체·주문번호·출고 희망·사양과 품목(사이즈별 줄)을 올리면, 생산 담당이 「생산계획 반영」으로 생산일정을 만든다.
 // 일정은 schedules.production_line_id로 의뢰 줄에 연결되고, 진행(생산 수량·완료일)은 그 일정의 실적으로 계산한다.
+// 동시 처리(15.51): 수정·삭제·계획 반영은 한 batch(D1 트랜잭션) 안에서 모든 문장이 「읽은 revision이 그대로인지」를 조건으로 갖고,
+// revision을 올리는 헤더 UPDATE는 맨 마지막에 둔다. 그래서 다른 요청이 먼저 revision을 올렸으면 이 요청의 문장은 하나도 적용되지 않는다.
 const MR_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const MR_PAGE = 300;
 async function mrLines(list) {
   if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
   if (list.length > 60) throw bad('품목 줄은 60개까지 입력할 수 있습니다.');
@@ -2328,33 +2337,44 @@ function mrHead(body) {
 }
 // 줄마다 계획 수량(연결된 일정 합)·생산 수량(일정 실적 합)·마지막 생산일을 붙인다.
 const MR_ACTUAL = s => `COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=${s}.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch(s)}),0)`;
-async function mrLineProgress(ids) {
-  if (!ids.length) return [];
-  const marks = ids.map(() => '?').join(',');
-  return db.prepare(`SELECT l.*,
-      COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0) AS planned_qty,
-      COALESCE((SELECT SUM(${MR_ACTUAL('s')}) FROM schedules s WHERE s.production_line_id=l.id),0) AS produced_qty,
+const MR_PLANNED = l => `COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=${l}.id),0)`;
+const MR_PRODUCED = l => `COALESCE((SELECT SUM(${MR_ACTUAL('s')}) FROM schedules s WHERE s.production_line_id=${l}.id),0)`;
+const mrProgressSql = filter => `SELECT l.*, ${MR_PLANNED('l')} AS planned_qty, ${MR_PRODUCED('l')} AS produced_qty,
       (SELECT MAX(a.production_date) FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE s.production_line_id=l.id AND a.voided_at IS NULL) AS last_produced,
       (SELECT COUNT(*) FROM schedules s WHERE s.production_line_id=l.id) AS schedule_count
-    FROM production_request_lines l WHERE l.request_id IN (${marks}) ORDER BY l.request_id, l.line_no`).all(...ids);
+    FROM production_request_lines l WHERE ${filter} ORDER BY l.request_id, l.line_no`;
+// D1은 쿼리 하나에 바인딩 매개변수를 100개까지만 받는다. 여러 의뢰의 줄은 나눠 읽는다(빠지는 줄 없이 모두 합친다).
+async function mrLineProgress(ids) {
+  const out = [];
+  for (const part of inChunks(ids)) out.push(...await db.prepare(mrProgressSql(`l.request_id IN (${part.map(() => '?').join(',')})`)).all(...part));
+  return out;
 }
+// 상태 규칙은 mrState와 같다(목록 필터를 LIMIT 전에 SQL에서 적용하기 위해 같은 식을 SQL로도 둔다).
+const MR_STATUS_SQL = `CASE WHEN r.shipped THEN 'shipped' WHEN st.all_done=1 THEN 'done' WHEN st.produced>0 THEN 'producing' WHEN st.planned>=st.qty THEN 'planned' WHEN st.planned>0 THEN 'partial' ELSE 'waiting' END`;
 function mrState(row, lines) {
   const qty = lines.reduce((t, l) => t + l.qty, 0), planned = lines.reduce((t, l) => t + Math.min(l.planned_qty, l.qty), 0), produced = lines.reduce((t, l) => t + Math.min(l.produced_qty, l.qty), 0);
   const done = lines.length && lines.every(l => l.produced_qty >= l.qty);
   const status = row.shipped ? 'shipped' : done ? 'done' : produced > 0 ? 'producing' : planned >= qty ? 'planned' : planned > 0 ? 'partial' : 'waiting';
   const doneDate = done ? lines.map(l => l.last_produced).filter(Boolean).sort().at(-1) || null : null;
-  return { status, total_qty: qty, planned_total: planned, produced_total: produced, done_date: doneDate, unplanned_lines: lines.filter(l => l.planned_qty < l.qty).length };
+  // 단위가 다른 수량(BOX·매·켤레)은 한 숫자로 더하지 않는다. 화면은 units(단위별 합계·진행)를 쓴다.
+  const byUnit = new Map();
+  for (const l of lines) {
+    const u = byUnit.get(l.unit) || { unit: l.unit, qty: 0, planned: 0, produced: 0 };
+    u.qty += l.qty; u.planned += Math.min(l.planned_qty, l.qty); u.produced += Math.min(l.produced_qty, l.qty); byUnit.set(l.unit, u);
+  }
+  return { status, total_qty: qty, planned_total: planned, produced_total: produced, units: [...byUnit.values()], mixed_units: byUnit.size > 1, done_date: doneDate, unplanned_lines: lines.filter(l => l.planned_qty < l.qty).length };
 }
 async function mrDetail(row, user) {
   const lines = await mrLineProgress([row.id]);
   const state = mrState(row, lines);
-  const schedules = await db.prepare(`SELECT s.id,s.kind,s.period,s.start_date,s.product,s.spec,s.qty,s.done,s.production_line_id,${MR_ACTUAL('s')} AS actual_qty FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=? ORDER BY s.start_date, s.id`).all(row.id);
+  const schedules = await db.prepare(`SELECT s.id,s.kind,s.period,s.start_date,s.product,s.spec,s.unit,s.qty,s.done,s.production_line_id,${MR_ACTUAL('s')} AS actual_qty FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=? ORDER BY s.start_date, s.id`).all(row.id);
   const mine = user && (user.is_admin || row.author_id === user.id);
   return { ...row, shipped: !!row.shipped, lines, schedules, ...state,
     can_edit: !!(mine && !lines.some(l => l.schedule_count) && !row.shipped),
     can_plan: !!(user && hasRole(user, 'production') && !row.shipped && state.unplanned_lines > 0),
     can_ship: !!(user && (mine || hasRole(user, 'logistics') || hasRole(user, 'production'))) };
 }
+const MR_FILTERS = { open: "mr_status!='shipped'", waiting: "mr_status IN ('waiting','partial')" };
 route('GET', '/api/production-requests', async ({ user, query }) => {
   const where = [], args = [];
   applyListDates(where, args, query, 'r.order_date');
@@ -2366,22 +2386,31 @@ route('GET', '/api/production-requests', async ({ user, query }) => {
     args.push(...Array(8).fill(p));
   }
   if (query.mine === '1') { where.push('r.author_id=?'); args.push(user.id); }
-  const rows = await db.prepare(`SELECT r.* FROM production_requests r ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY r.shipped, COALESCE(r.ship_date, '9999'), r.order_date, r.id LIMIT 300`).all(...args);
-  const lines = await mrLineProgress(rows.map(r => r.id));
-  let out = rows.map(row => { const ls = lines.filter(l => l.request_id === row.id); return { ...row, shipped: !!row.shipped, lines: ls, ...mrState(row, ls) }; });
+  // 진행 상태는 실적으로 계산되므로 SQL에서 같은 식으로 계산해 LIMIT 전에 거른다(300건 뒤의 조건 맞는 의뢰가 빠지지 않게).
+  const outer = [], outerArgs = [];
   if (query.status) {
-    // open = 출고 전 전체(생산완료지만 아직 출고 안 한 의뢰도 포함), waiting = 계획이 덜 된 의뢰
-    const wanted = { open: s => s !== 'shipped', waiting: s => ['waiting', 'partial'].includes(s) };
-    const test = wanted[query.status] || (s => s === query.status);
-    if (!wanted[query.status] && !['waiting', 'partial', 'planned', 'producing', 'done', 'shipped'].includes(query.status)) throw bad('진행 상태를 확인하세요.');
-    out = out.filter(r => test(r.status));
+    if (MR_FILTERS[query.status]) outer.push(MR_FILTERS[query.status]);
+    else if (['waiting', 'partial', 'planned', 'producing', 'done', 'shipped'].includes(query.status)) { outer.push('mr_status=?'); outerArgs.push(query.status); }
+    else throw bad('진행 상태를 확인하세요.');
   }
-  return out;
+  const page = query.page === undefined || query.page === '' ? 0 : Number(query.page);
+  if (!Number.isSafeInteger(page) || page < 0 || page > 1000) throw bad('페이지 번호를 확인하세요.');
+  const rows = await db.prepare(`WITH sel AS (SELECT r.* FROM production_requests r ${where.length ? 'WHERE ' + where.join(' AND ') : ''}),
+      lp AS (SELECT l.request_id, l.qty, ${MR_PLANNED('l')} AS planned, ${MR_PRODUCED('l')} AS produced FROM production_request_lines l WHERE l.request_id IN (SELECT id FROM sel)),
+      st AS (SELECT request_id, SUM(qty) AS qty, SUM(MIN(planned, qty)) AS planned, SUM(MIN(produced, qty)) AS produced, MIN(produced >= qty) AS all_done FROM lp GROUP BY request_id)
+    SELECT * FROM (SELECT r.*, ${MR_STATUS_SQL} AS mr_status FROM sel r LEFT JOIN st ON st.request_id=r.id) ${outer.length ? 'WHERE ' + outer.join(' AND ') : ''}
+    ORDER BY shipped, COALESCE(ship_date, '9999'), order_date, id LIMIT ? OFFSET ?`).all(...args, ...outerArgs, MR_PAGE + 1, page * MR_PAGE);
+  const more = rows.length > MR_PAGE, pageRows = rows.slice(0, MR_PAGE);
+  const lines = await mrLineProgress(pageRows.map(r => r.id));
+  const byRequest = new Map(); for (const l of lines) { const list = byRequest.get(l.request_id) || []; list.push(l); byRequest.set(l.request_id, list); }
+  const out = pageRows.map(({ mr_status, ...row }) => { const ls = byRequest.get(row.id) || []; return { ...row, shipped: !!row.shipped, lines: ls, ...mrState(row, ls) }; });
+  // 화면은 paged=1로 「더 보기」 여부를 함께 받는다. 그 밖의 호출은 첫 페이지 배열을 그대로 받는다.
+  return query.paged === '1' ? { rows: out, page, more } : out;
 });
-// 생산 필요 수량: 아직 출고되지 않은 의뢰의 품목·규격별 남은 생산 수량 합계(영업의 「TOTAL 생산 필요 수량」)
+// 생산 필요 수량: 아직 출고되지 않은 의뢰의 품목·규격·단위별 남은 생산 수량 합계(영업의 「TOTAL 생산 필요 수량」).
+// 출고 전 의뢰 전체를 바인딩 매개변수 없이 서브쿼리로 읽어 합계가 잘리지 않는다.
 route('GET', '/api/production-requests/needs', async () => {
-  const rows = await db.prepare('SELECT id FROM production_requests WHERE shipped=0').all();
-  const lines = await mrLineProgress(rows.map(r => r.id));
+  const lines = await db.prepare(mrProgressSql('l.request_id IN (SELECT id FROM production_requests WHERE shipped=0)')).all();
   const map = new Map();
   for (const l of lines) {
     const left = Math.max(0, l.qty - l.produced_qty); if (!left) continue;
@@ -2390,75 +2419,114 @@ route('GET', '/api/production-requests/needs', async () => {
     e.ordered += l.qty; e.produced += Math.min(l.produced_qty, l.qty); e.need += left; e.unplanned += Math.max(0, l.qty - l.planned_qty); e.requests++;
     map.set(key, e);
   }
-  return [...map.values()].sort((a, b) => a.item.localeCompare(b.item, 'ko') || MR_SIZES.indexOf(a.spec) - MR_SIZES.indexOf(b.spec) || a.spec.localeCompare(b.spec));
+  return [...map.values()].sort((a, b) => a.item.localeCompare(b.item, 'ko') || a.unit.localeCompare(b.unit, 'ko') || MR_SIZES.indexOf(a.spec) - MR_SIZES.indexOf(b.spec) || a.spec.localeCompare(b.spec));
 });
 route('GET', '/api/production-requests/:id', async ({ user, params }) => mrDetail(await mustGet('production_requests', params.id), user));
+// 저장 재시도: 같은 request_id는 같은 작성자의 같은 저장으로 보고 처음 저장된 의뢰를 돌려준다(duplicate=true).
+async function savedByRequestId(table, requestId, user, label) {
+  if (!requestId) return null;
+  const done = await db.prepare(`SELECT * FROM ${table} WHERE request_id=?`).get(requestId);
+  if (done && done.author_id !== user.id) throw new HttpError(409, `같은 저장 번호로 다른 사람이 저장한 ${label}가 있습니다. 화면을 새로 고친 뒤 다시 저장하세요.`);
+  return done;
+}
+// 하루 번호(…-01, …-99, …-100)는 숫자 부분의 최댓값 + 1. 계산과 INSERT를 한 문장에 두어 동시 등록에도 겹치지 않는다.
+const nextDocNo = (table, column) => `? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(${column}, length(?) + 1) AS INTEGER)), 0) + 1 FROM ${table} WHERE ${column} LIKE ? || '%'))`;
 route('POST', '/api/production-requests', async ({ user, body }) => {
   const requestId = str(body.request_id, 80);
-  if (requestId) { const done = await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(requestId); if (done) return mrDetail(done, user); }
+  const prior = await savedByRequestId('production_requests', requestId, user, '생산의뢰');
+  if (prior) return { ...await mrDetail(prior, user), duplicate: true };
   const head = mrHead(body), lines = await mrLines(body.lines);
   const prefix = 'MR-' + head.order_date.slice(2).replace(/-/g, '') + '-';
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const last = await db.prepare("SELECT req_no FROM production_requests WHERE req_no LIKE ? ESCAPE '\\' ORDER BY req_no DESC LIMIT 1").get(prefix.replace(/[\\%_]/g, '\\$&') + '%');
-    const no = prefix + String((last ? Number(last.req_no.slice(prefix.length)) || 0 : 0) + 1).padStart(2, '0');
-    try {
-      await db.batch([
-        { sql: 'INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', args: [no, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', requestId || null] },
-        ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE req_no=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, no] })),
-      ]);
-      await ensureVendor(head.customer, user);
-      return mrDetail(await db.prepare('SELECT * FROM production_requests WHERE req_no=?').get(no), user);
-    } catch (error) {
-      if (!String(error.message).includes('UNIQUE')) throw error;
-      if (requestId) { const done = await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(requestId); if (done) return mrDetail(done, user); }
-    }
+  // 줄은 의뢰를 request_id로 찾아 붙인다. 화면이 보내지 않은 경우에도 서버 토큰으로 채운다.
+  const token = requestId || 'srv:' + crypto.randomUUID();
+  try {
+    await db.batch([
+      { sql: `INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id) VALUES(${nextDocNo('production_requests', 'req_no')},?,?,?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', token] },
+      ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE request_id=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, token] })),
+    ]);
+  } catch (error) {
+    // 같은 request_id가 동시에 두 번 들어오면 하나만 저장되고 나머지는 저장된 의뢰를 받는다.
+    const done = String(error.message).includes('UNIQUE') && await savedByRequestId('production_requests', requestId, user, '생산의뢰');
+    if (done) return { ...await mrDetail(done, user), duplicate: true };
+    throw error;
   }
-  throw new HttpError(409, '의뢰 번호가 겹쳤습니다. 잠시 후 다시 등록하세요.');
+  await ensureVendor(head.customer, user);
+  return mrDetail(await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(token), user);
 });
+const MR_LINKED = 'EXISTS(SELECT 1 FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=?)';
 async function mrEditable(user, id) {
   const row = await mustGet('production_requests', id);
   if (!(user.is_admin || row.author_id === user.id)) throw new HttpError(403, '작성자만 고칠 수 있습니다.');
-  if (await db.prepare('SELECT 1 FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=?').get(row.id)) throw bad('이미 생산계획에 반영된 의뢰는 고치거나 지울 수 없습니다. 생산 담당자와 일정을 먼저 정리하세요.');
+  if (row.shipped) throw bad('출고 완료된 의뢰는 고치거나 지울 수 없습니다. 고쳐야 하면 먼저 「출고 취소」를 하세요.');
+  if (await db.prepare(`SELECT ${MR_LINKED} AS x`).get(row.id).then(r => r.x)) throw bad('이미 생산계획에 반영된 의뢰는 고치거나 지울 수 없습니다. 생산 담당자와 일정을 먼저 정리하세요.');
   return row;
+}
+// batch 실패 뒤 이유를 다시 확인한다(출고·계획 반영이면 그 안내, 아니면 동시 수정 충돌).
+async function mrConflict(user, id) {
+  await mrEditable(user, id);
+  return new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
 }
 route('PUT', '/api/production-requests/:id', async ({ user, params, body }) => {
   const row = await mrEditable(user, params.id);
-  if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  const revision = body.revision !== undefined ? Number(body.revision) : row.revision;
+  if (revision !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
   const head = mrHead(body), lines = await mrLines(body.lines);
+  const guard = `EXISTS(SELECT 1 FROM production_requests WHERE id=? AND revision=? AND shipped=0) AND NOT ${MR_LINKED}`, guardArgs = [row.id, revision, row.id];
   const result = await db.batch([
-    { sql: "UPDATE production_requests SET order_date=?,customer=?,order_no=?,ship_text=?,ship_date=?,spec=?,note=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, row.id, row.revision] },
-    { sql: 'DELETE FROM production_request_lines WHERE request_id=? AND (SELECT revision FROM production_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
-    ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE id=? AND revision=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, row.id, row.revision + 1] })),
+    { sql: `DELETE FROM production_request_lines WHERE request_id=? AND ${guard}`, args: [row.id, ...guardArgs] },
+    ...lines.map(l => ({ sql: `INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT ?,?,?,?,?,?,?,? WHERE ${guard}`, args: [row.id, l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, ...guardArgs] })),
+    { sql: `UPDATE production_requests SET order_date=?,customer=?,order_no=?,ship_text=?,ship_date=?,spec=?,note=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=? AND shipped=0 AND NOT ${MR_LINKED}`, args: [head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, row.id, revision, row.id] },
   ]);
-  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  if (!result.at(-1).meta.changes) throw await mrConflict(user, row.id);
   await ensureVendor(head.customer, user);
   return mrDetail(await mustGet('production_requests', row.id), user);
 });
-route('DELETE', '/api/production-requests/:id', async ({ user, params }) => {
+route('DELETE', '/api/production-requests/:id', async ({ user, params, query }) => {
   const row = await mrEditable(user, params.id);
-  await db.batch([{ sql: 'DELETE FROM production_request_lines WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM production_requests WHERE id=?', args: [row.id] }]);
+  const revision = query.revision !== undefined && query.revision !== '' ? Number(query.revision) : row.revision;
+  if (revision !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  const guard = `EXISTS(SELECT 1 FROM production_requests WHERE id=? AND revision=? AND shipped=0) AND NOT ${MR_LINKED}`;
+  const result = await db.batch([
+    { sql: `DELETE FROM production_request_lines WHERE request_id=? AND ${guard}`, args: [row.id, row.id, revision, row.id] },
+    { sql: `DELETE FROM production_requests WHERE id=? AND revision=? AND shipped=0 AND NOT ${MR_LINKED}`, args: [row.id, revision, row.id] },
+  ]);
+  if (!result.at(-1).meta.changes) throw await mrConflict(user, row.id);
   return { ok: true };
 });
 // 생산계획 반영: 아직 계획되지 않은 수량만큼 생산일정을 만든다(생산 담당). 일정은 의뢰 줄에 연결된다.
+// 같은 의뢰를 두 탭·두 사람이 동시에 반영해도 한 번만 들어간다: 일정 INSERT는 「읽은 revision·그 줄의 계획 합계가 그대로」일 때만,
+// 마지막 문장이 revision을 올린다. 먼저 끝난 반영이 revision을 올리면 나중 요청의 INSERT는 하나도 적용되지 않는다.
 route('POST', '/api/production-requests/:id/plan', async ({ user, params, body }) => {
   if (!hasRole(user, 'production')) throw new HttpError(403, '생산 담당자만 생산계획에 반영할 수 있습니다.');
   const row = await mustGet('production_requests', params.id);
   if (row.shipped) throw bad('출고 완료된 의뢰입니다.');
+  if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었거나 이미 반영되었습니다. 다시 열어 확인하세요.');
   const wanted = Array.isArray(body.line_ids) ? body.line_ids.map(Number) : null;
   const lines = (await mrLineProgress([row.id])).filter(l => l.planned_qty < l.qty && (!wanted || wanted.includes(l.id)));
   if (!lines.length) throw bad('생산계획에 반영할 남은 수량이 없습니다.');
   const period = String(body.period || 'week'); if (!['day', 'week', 'month'].includes(period)) throw bad('일간/주간/월간을 선택하세요.');
   const startDate = dateStr(body.start_date, '시작일');
+  const guard = 'EXISTS(SELECT 1 FROM production_requests WHERE id=? AND revision=? AND shipped=0)';
   const commands = [];
   for (const l of lines) {
     const bom = l.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(l.bom_id) : null;
     const kind = ['finished', 'semi'].includes(body.kind) ? body.kind : bom && bom.kind === 'semi' && bom.item_category === '반제품' ? 'semi' : 'finished';
     const note = [`생산의뢰 ${row.req_no}`, row.customer, row.order_no, row.spec].filter(Boolean).join(' · ').slice(0, 500);
     const f = await schedFields({ kind, period, start_date: startDate, product: l.item, qty: l.qty - l.planned_qty, note, bom_id: bom && bom.active && bom.kind === kind ? bom.id : null });
-    commands.push(insertItem('schedules', { kind: f.kind, period: f.period, start_date: f.start_date, product: f.product, qty: f.qty, note: f.note, bom_id: f.bom_id, bom_snapshot: f.bom_snapshot, spec: l.spec, unit: l.unit || (f.bom_id ? JSON.parse(f.bom_snapshot).unit || '' : ''), lot: '', batch_id: '', created_by: user.name, production_line_id: l.id }));
+    const record = { kind: f.kind, period: f.period, start_date: f.start_date, product: f.product, qty: f.qty, note: f.note, bom_id: f.bom_id, bom_snapshot: f.bom_snapshot, spec: l.spec, unit: l.unit || (f.bom_id ? JSON.parse(f.bom_snapshot).unit || '' : ''), lot: '', batch_id: '', created_by: user.name, production_line_id: l.id };
+    const columns = Object.keys(record);
+    commands.push({ sql: `INSERT INTO schedules(${columns.join(',')}) SELECT ${columns.map(() => '?').join(',')} WHERE ${guard}
+        AND EXISTS(SELECT 1 FROM production_request_lines WHERE id=? AND request_id=? AND qty=?) AND COALESCE((SELECT SUM(qty) FROM schedules WHERE production_line_id=?),0)=?`,
+      args: [...Object.values(record), row.id, row.revision, l.id, row.id, l.qty, l.id, l.planned_qty] });
   }
-  await db.batch(commands);
-  return mrDetail(row, user);
+  commands.push({ sql: "UPDATE production_requests SET revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=? AND shipped=0", args: [row.id, row.revision] });
+  const result = await db.batch(commands);
+  if (!result.at(-1).meta.changes) {
+    const now = await mustGet('production_requests', row.id);
+    if (now.shipped) throw bad('출고 완료된 의뢰입니다.');
+    throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었거나 이미 생산계획에 반영되었습니다. 다시 열어 확인하세요.');
+  }
+  return mrDetail(await mustGet('production_requests', row.id), user);
 });
 // 출고 완료 체크(출고여부·출고일). 작성자·물류·생산 담당.
 route('POST', '/api/production-requests/:id/ship', async ({ user, params, body }) => {
@@ -2529,11 +2597,12 @@ async function prAccess(user, id, { write = false } = {}) {
   if (await db.prepare('SELECT 1 FROM purchase_request_lines WHERE request_id=? AND user_id=?').get(row.id, user.id)) return row;
   throw new HttpError(403, '작성자·결재선에 지정된 사람·구매 담당자만 볼 수 있습니다.');
 }
-function prInsertDetails(docNo, items, lines) {
+// 품목·결재선 INSERT. where는 붙일 의뢰서를 고르는 조건(새 의뢰서는 request_id, 고치기는 id·revision 조건)이다.
+function prInsertDetails(where, whereArgs, items, lines) {
   const qs = [];
   for (const it of items) qs.push({ sql: `INSERT INTO purchase_request_items(request_id,line_no,bom_id,product_code,item,spec,unit,qty,purchase_price,sale_price,vendor,delivery_qty,customer,stock_qty,due_text,manager,monthly_usage)
-    SELECT id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM purchase_requests WHERE doc_no=?`, args: [it.line_no, it.bom_id, it.product_code, it.item, it.spec, it.unit, it.qty, it.purchase_price, it.sale_price, it.vendor, it.delivery_qty, it.customer, it.stock_qty, it.due_text, it.manager, it.monthly_usage, docNo] });
-  for (const l of lines) qs.push({ sql: 'INSERT INTO purchase_request_lines(request_id,kind,step,user_id,user_name,user_position) SELECT id,?,?,?,?,? FROM purchase_requests WHERE doc_no=?', args: [l.kind, l.step, l.user_id, l.user_name, l.user_position, docNo] });
+    SELECT id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM purchase_requests WHERE ${where}`, args: [it.line_no, it.bom_id, it.product_code, it.item, it.spec, it.unit, it.qty, it.purchase_price, it.sale_price, it.vendor, it.delivery_qty, it.customer, it.stock_qty, it.due_text, it.manager, it.monthly_usage, ...whereArgs] });
+  for (const l of lines) qs.push({ sql: `INSERT INTO purchase_request_lines(request_id,kind,step,user_id,user_name,user_position) SELECT id,?,?,?,?,? FROM purchase_requests WHERE ${where}`, args: [l.kind, l.step, l.user_id, l.user_name, l.user_position, ...whereArgs] });
   return qs;
 }
 async function prDetail(row, user) {
@@ -2574,9 +2643,13 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
   }
   const rows = await db.prepare(`SELECT pr.* FROM purchase_requests pr ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY pr.id DESC LIMIT 200`).all(...args);
   if (!rows.length) return [];
-  const ids = rows.map(r => r.id), marks = ids.map(() => '?').join(',');
-  const items = await db.prepare(`SELECT request_id,item,product_code,qty,unit,purchase_price,sale_price,vendor,customer,po_id FROM purchase_request_items WHERE request_id IN (${marks}) ORDER BY line_no`).all(...ids);
-  const lines = await db.prepare(`SELECT request_id,kind,step,user_id,user_name,user_position,decision,read_at FROM purchase_request_lines WHERE request_id IN (${marks}) ORDER BY step, id`).all(...ids);
+  // D1 매개변수 한도(100개) 안에서 나눠 읽는다.
+  const items = [], lines = [];
+  for (const ids of inChunks(rows.map(r => r.id))) {
+    const marks = ids.map(() => '?').join(',');
+    items.push(...await db.prepare(`SELECT request_id,item,product_code,qty,unit,purchase_price,sale_price,vendor,customer,po_id FROM purchase_request_items WHERE request_id IN (${marks}) ORDER BY line_no`).all(...ids));
+    lines.push(...await db.prepare(`SELECT request_id,kind,step,user_id,user_name,user_position,decision,read_at FROM purchase_request_lines WHERE request_id IN (${marks}) ORDER BY step, id`).all(...ids));
+  }
   return rows.map(row => {
     const its = items.filter(i => i.request_id === row.id), ls = lines.filter(l => l.request_id === row.id);
     const current = row.status === 'pending' ? ls.find(l => l.step === row.current_step && l.kind !== 'cc') : null;
@@ -2599,21 +2672,19 @@ route('GET', '/api/purchase-requests/:id', async ({ user, params }) => {
 });
 route('POST', '/api/purchase-requests', async ({ user, body }) => {
   const requestId = str(body.request_id, 80);
-  if (requestId) { const done = await db.prepare('SELECT * FROM purchase_requests WHERE request_id=?').get(requestId); if (done) return prDetail(done, user); }
+  const prior = await savedByRequestId('purchase_requests', requestId, user, '구매의뢰서');
+  if (prior) return { ...await prDetail(prior, user), duplicate: true };
   const head = prHead(body, user), items = await prItems(body.items), lines = await prLines(body, user.id);
   const prefix = 'PR-' + head.doc_date.slice(2).replace(/-/g, '') + '-';
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const last = await db.prepare("SELECT doc_no FROM purchase_requests WHERE doc_no LIKE ? ESCAPE '\\' ORDER BY doc_no DESC LIMIT 1").get(prefix.replace(/[\\%_]/g, '\\$&') + '%');
-    const docNo = prefix + String((last ? Number(last.doc_no.slice(prefix.length)) || 0 : 0) + 1).padStart(2, '0');
-    try {
-      await db.batch([{ sql: 'INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id) VALUES(?,?,?,?,?,?,?,?,?)', args: [docNo, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', requestId || null] }, ...prInsertDetails(docNo, items, lines)]);
-      return prDetail(await db.prepare('SELECT * FROM purchase_requests WHERE doc_no=?').get(docNo), user);
-    } catch (error) {
-      if (!String(error.message).includes('UNIQUE')) throw error;
-      if (requestId) { const done = await db.prepare('SELECT * FROM purchase_requests WHERE request_id=?').get(requestId); if (done) return prDetail(done, user); }
-    }
+  const token = requestId || 'srv:' + crypto.randomUUID();
+  try {
+    await db.batch([{ sql: `INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id) VALUES(${nextDocNo('purchase_requests', 'doc_no')},?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', token] }, ...prInsertDetails('request_id=?', [token], items, lines)]);
+  } catch (error) {
+    const done = String(error.message).includes('UNIQUE') && await savedByRequestId('purchase_requests', requestId, user, '구매의뢰서');
+    if (done) return { ...await prDetail(done, user), duplicate: true };
+    throw error;
   }
-  throw new HttpError(409, '의뢰서 번호가 겹쳤습니다. 잠시 후 다시 상신하세요.');
+  return prDetail(await db.prepare('SELECT * FROM purchase_requests WHERE request_id=?').get(token), user);
 });
 // 반려된 의뢰서(또는 아직 아무도 결재하지 않은 의뢰서)를 고쳐 다시 올린다. 결재는 처음부터 다시 진행한다.
 route('PUT', '/api/purchase-requests/:id', async ({ user, params, body }) => {
@@ -2623,13 +2694,18 @@ route('PUT', '/api/purchase-requests/:id', async ({ user, params, body }) => {
   if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
   const author = await db.prepare('SELECT * FROM users WHERE id=?').get(row.author_id) || { department: row.department, position: row.author_position };
   const head = prHead(body, author), items = await prItems(body.items), lines = await prLines(body, row.author_id);
+  // 모든 문장이 「읽은 revision·고칠 수 있는 상태가 그대로」를 조건으로 갖고, revision을 올리는 헤더 UPDATE를 맨 끝에 둔다.
+  // 다른 수정·결재가 먼저 revision을 올렸으면 이 요청은 헤더·품목·결재선 어느 것도 바꾸지 않는다.
+  const editable = "id=? AND revision=? AND (status='rejected' OR (status='pending' AND NOT EXISTS(SELECT 1 FROM purchase_request_lines d WHERE d.request_id=? AND d.decision!='')))";
+  const editArgs = [row.id, row.revision, row.id];
+  const guard = `EXISTS(SELECT 1 FROM purchase_requests WHERE ${editable})`;
   const result = await db.batch([
-    { sql: "UPDATE purchase_requests SET doc_date=?,department=?,author_position=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.doc_date, head.department, author.position || '', head.title, head.note, row.id, row.revision] },
-    { sql: 'DELETE FROM purchase_request_items WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
-    { sql: 'DELETE FROM purchase_request_lines WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
-    ...prInsertDetails(row.doc_no, items, lines).map(q => ({ sql: q.sql + ' AND revision=?', args: [...q.args, row.revision + 1] })),
+    { sql: `DELETE FROM purchase_request_items WHERE request_id=? AND ${guard}`, args: [row.id, ...editArgs] },
+    { sql: `DELETE FROM purchase_request_lines WHERE request_id=? AND ${guard}`, args: [row.id, ...editArgs] },
+    ...prInsertDetails(editable, editArgs, items, lines),
+    { sql: `UPDATE purchase_requests SET doc_date=?,department=?,author_position=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE ${editable}`, args: [head.doc_date, head.department, author.position || '', head.title, head.note, ...editArgs] },
   ]);
-  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  if (!result.at(-1).meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었거나 결재가 진행되었습니다. 다시 열어 확인하세요.');
   return prDetail(await mustGet('purchase_requests', row.id), user);
 });
 route('POST', '/api/purchase-requests/:id/decision', async ({ user, params, body }) => {
@@ -2647,17 +2723,26 @@ route('POST', '/api/purchase-requests/:id/decision', async ({ user, params, body
     : next ? `UPDATE purchase_requests SET current_step=?,revision=revision+1,updated_at=datetime('now','+9 hours') ${guard}`
       : `UPDATE purchase_requests SET status='approved',approved_at=datetime('now','+9 hours'),revision=revision+1,updated_at=datetime('now','+9 hours') ${guard}`;
   const headArgs = [...(decision === 'rejected' ? [comment] : next ? [next] : []), row.id, row.revision, row.current_step];
+  // 결재선 기록을 먼저(읽은 revision·차례가 그대로일 때만), revision을 올리는 헤더 UPDATE를 마지막에 둔다.
+  // 같은 시각의 고치기·다른 결재가 먼저 끝났으면 이 결재는 아무것도 바꾸지 않는다.
   const result = await db.batch([
-    { sql: headSql, args: headArgs },
-    { sql: "UPDATE purchase_request_lines SET decision=?,comment=?,decided_at=datetime('now','+9 hours'),read_at=COALESCE(read_at,datetime('now','+9 hours')) WHERE id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?", args: [decision, comment, line.id, row.id, row.revision + 1] },
+    { sql: "UPDATE purchase_request_lines SET decision=?,comment=?,decided_at=datetime('now','+9 hours'),read_at=COALESCE(read_at,datetime('now','+9 hours')) WHERE id=? AND request_id=? AND user_id=? AND decision='' AND EXISTS(SELECT 1 FROM purchase_requests WHERE id=? AND revision=? AND current_step=? AND status='pending')", args: [decision, comment, line.id, row.id, user.id, row.id, row.revision, row.current_step] },
+    { sql: headSql + " AND EXISTS(SELECT 1 FROM purchase_request_lines WHERE id=? AND decision=?)", args: [...headArgs, line.id, decision] },
   ]);
-  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
+  if (!result.at(-1).meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
   return prDetail(await mustGet('purchase_requests', row.id), user);
 });
 route('DELETE', '/api/purchase-requests/:id', async ({ user, params }) => {
   const row = await prAccess(user, params.id, { write: true });
   if (row.status === 'approved') throw bad('최종 승인된 의뢰서는 삭제할 수 없습니다.');
-  await db.batch([{ sql: 'DELETE FROM purchase_request_items WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM purchase_request_lines WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM purchase_requests WHERE id=?', args: [row.id] }]);
+  // 읽은 뒤 최종 승인되거나 고쳐졌으면 지우지 않는다(헤더 삭제를 마지막에 두고 모두 같은 조건).
+  const guard = "EXISTS(SELECT 1 FROM purchase_requests WHERE id=? AND revision=? AND status!='approved')";
+  const result = await db.batch([
+    { sql: `DELETE FROM purchase_request_items WHERE request_id=? AND ${guard}`, args: [row.id, row.id, row.revision] },
+    { sql: `DELETE FROM purchase_request_lines WHERE request_id=? AND ${guard}`, args: [row.id, row.id, row.revision] },
+    { sql: "DELETE FROM purchase_requests WHERE id=? AND revision=? AND status!='approved'", args: [row.id, row.revision] },
+  ]);
+  if (!result.at(-1).meta.changes) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었거나 승인되었습니다. 다시 열어 확인하세요.');
   await removePhotos(JSON.parse(row.photos || '[]'));
   return { ok: true };
 });

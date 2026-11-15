@@ -26,3 +26,11 @@ test('Every language file has the same keys, non-empty values and the same place
   }
   for (const key of ['저장', '로그인', '세탁수량', '발주목록', '제품등록']) assert.ok(base.includes(key), key);
 });
+
+test('15.51 messages: a retried save, per-unit totals and the save total translate', () => {
+  const t = engine().make(dictOf('en'));
+  assert.match(t('MR-261115-01 생산의뢰는 앞서 이미 등록되었습니다. 저장된 내용을 엽니다. 고칠 내용이 있으면 「수정」을 누르세요.'), /^Production request MR-261115-01 was already registered/);
+  assert.match(t('PR-261115-01 구매의뢰는 앞서 이미 상신되었습니다. 저장된 내용을 엽니다.'), /^Purchase request PR-261115-01 was already submitted/);
+  assert.equal(t('합계 (BOX) · 의뢰 20 · 계획 0 · 생산 0'), 'Total (BOX) · Requested 20 · Planned 0 · Production 0');
+  assert.doesNotMatch(t('합계 수량 20 BOX · 500 매 · 2줄'), /[가-힣]/);
+});
