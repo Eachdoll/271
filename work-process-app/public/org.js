@@ -44,7 +44,7 @@ async function pageOrg(main) {
   const count = (key, name) => data.users.filter(u => u[key] === name).length;
   const usedNames = data.users.some(u => u.department || u.position);
   const deptRow = d => `<li class="org-row ${d.active ? '' : 'off'}" style="--depth:${d.depth}"><span class="org-name">${esc(orgIndent(d))}<b>${esc(d.name)}</b> <span class="small muted">${count('department', d.name)}명</span>${d.active ? '' : ' <span class="chip">사용 중지</span>'}</span>
-    <span class="org-tools"><button type="button" class="btn small" data-position-system="${d.id}">직급 체계${d.position_names ? ' · 별도' : ' · 공통'}</button><button type="button" class="btn small" data-move="departments:${d.id}:-1" aria-label="${esc(d.name)} 위로">↑</button><button type="button" class="btn small" data-move="departments:${d.id}:1" aria-label="${esc(d.name)} 아래로">↓</button><button type="button" class="btn small" data-edit="departments:${d.id}">변경</button><button type="button" class="btn small" data-toggle="departments:${d.id}">${d.active ? '사용 중지' : '다시 사용'}</button><button type="button" class="btn small danger" data-del="departments:${d.id}">삭제</button></span></li>`;
+    <span class="org-tools"><button type="button" class="btn small" data-dept-menus="${d.id}">메뉴 · ${esc(d.menus ? menuSummary(d.menus) : '상위·전체')}</button><button type="button" class="btn small" data-position-system="${d.id}">직급 체계${d.position_names ? ' · 별도' : ' · 공통'}</button><button type="button" class="btn small" data-move="departments:${d.id}:-1" aria-label="${esc(d.name)} 위로">↑</button><button type="button" class="btn small" data-move="departments:${d.id}:1" aria-label="${esc(d.name)} 아래로">↓</button><button type="button" class="btn small" data-edit="departments:${d.id}">변경</button><button type="button" class="btn small" data-toggle="departments:${d.id}">${d.active ? '사용 중지' : '다시 사용'}</button><button type="button" class="btn small danger" data-del="departments:${d.id}">삭제</button></span></li>`;
   const posRow = (p, i) => `<li class="org-row ${p.active ? '' : 'off'}"><span class="org-name"><span class="org-rank">${i + 1}</span><b>${esc(p.name)}</b> <span class="small muted">${count('position', p.name)}명</span>${p.active ? '' : ' <span class="chip">사용 중지</span>'}</span>
     <span class="org-tools"><button type="button" class="btn small" data-move="positions:${p.id}:-1" aria-label="${esc(p.name)} 위로">↑</button><button type="button" class="btn small" data-move="positions:${p.id}:1" aria-label="${esc(p.name)} 아래로">↓</button><button type="button" class="btn small" data-edit="positions:${p.id}">변경</button><button type="button" class="btn small" data-toggle="positions:${p.id}">${p.active ? '사용 중지' : '다시 사용'}</button><button type="button" class="btn small danger" data-del="positions:${p.id}">삭제</button></span></li>`;
   // 조직도: 부서 순서대로 구성원을 높은 직급부터. 부서가 없거나 목록에 없는 사람은 맨 아래.
@@ -86,6 +86,21 @@ async function pageOrg(main) {
     let busy = false;
     form.onsubmit = async event => { event.preventDefault(); if (busy || !form.reportValidity()) return; busy = true;
       try { await api('PUT', `/api/admin/org/departments/${d.id}`, { position_names: mode.value === 'custom' ? names.value.split(/\r?\n/).map(n => n.trim()).filter(Boolean) : null }); toast('저장했습니다.'); m.close(); await reload(); } catch (error) { fail(error); } finally { busy = false; }
+    };
+  });
+  // 15.59 부서 기본 메뉴: 「부서 기본 따름」인 구성원이 보는 메뉴. 제한 없음이면 상위 부서 설정을 따르고, 상위도 없으면 전체.
+  $$('[data-dept-menus]', main).forEach(button => button.onclick = () => {
+    const d = data.departments.find(x => x.id === Number(button.dataset.deptMenus));
+    const m = modal(`<h3>${esc(d.name)} 기본 메뉴</h3><form class="stack" data-no-author>
+      <label class="inline"><input type="checkbox" name="limit" value="1"${d.menus ? ' checked' : ''}> 이 부서의 메뉴를 제한합니다</label>
+      <p class="small muted">체크하지 않으면 상위 부서의 설정을 따르고, 상위 부서도 제한이 없으면 모든 메뉴가 보입니다. 사용자별로 「관리자 설정 › 메뉴」에서 따로 정할 수 있습니다.</p>
+      <div data-dept-menu-list>${menuChecks(d.menus || null)}</div>
+      <div class="actions"><button class="btn primary">저장</button></div></form>`);
+    const form = $('form', m.el), list = $('[data-dept-menu-list]', form);
+    const sync = () => { list.hidden = !(formObj(form).limit || []).length; }; form.addEventListener('change', sync); sync();
+    let busy = false;
+    form.onsubmit = async event => { event.preventDefault(); if (busy) return; busy = true; const v = formObj(form);
+      try { await api('PUT', `/api/admin/org/departments/${d.id}`, { menus: (v.limit || []).length ? v.menus || [] : null }); toast('저장했습니다.'); m.close(); await reload(); } catch (error) { fail(error); } finally { busy = false; }
     };
   });
   $$('[data-user]', main).forEach(box => box.addEventListener('change', event => {

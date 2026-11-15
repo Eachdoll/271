@@ -477,3 +477,10 @@ INVITE_CODE=local-test-code npm start
 - 화면별 목록: 매입처 = 발주(공급선)·기타입고·구매의뢰 공급선, 매출처 = 출하·생산의뢰 업체·구매의뢰 사용고객사·의뢰 접수의 고객사(VOC·분석·개발·제품 샘플). 상품 샘플의 「공급처 · 고객사」는 전체 목록. bindPartnerPicker(input, hint, { type }).
 - 자동 등록(ensureVendor(name, user, type)): 새 거래처는 쓰인 구분으로 등록하고, 이미 있는 거래처는 구분이 하나도 없을 때만 채웁니다(사람이 정한 구분은 바꾸지 않음).
 - 거래처 관리: 등록·수정에 매입처·매출처 체크, 목록 「구분」 표시, 구분 필터(고르면 바로 거름). PUT은 체크값을 보내지 않으면 기존 구분을 유지합니다.
+
+## 메뉴 열람 권한 (15.59)
+- 업무 묶음(영업·구매·품질·개발·생산·물류·기준 정보) 단위로 메뉴를 숨기고 막습니다. 홈·리포트·내 정보는 항상 보이고, 관리자 화면은 지금처럼 관리자만, 관리자는 항상 전체입니다. **화면에서 숨기고 막는 정리 목적**이며 데이터 API 권한은 바꾸지 않았습니다(역할 체크의 승인·접수 권한도 그대로).
+- 0030_menu_access.sql: org_departments.menus(''=제한 없음 → 상위 부서를 따르고 끝까지 없으면 전체, 'home,sales,…'=제한), users.menu_mode(department 기본값·all·custom), users.menus(직접 지정). 처음에는 제한이 하나도 없어 기존 사용자 모두 전체를 봅니다.
+- 서버: effectiveMenus(u) → /api/me·로그인·가입 응답의 user.menus(null=전체, 배열=그 묶음만). 부서 PUT의 menus(null 또는 배열), 사용자 PUT의 menu_mode·menus.
+- 화면: shell()이 NAV를 canSeeMenu로 거르고(관리 묶음의 거래처·검사규격은 「기준 정보」), render()가 routeMenu(route)로 막힌 주소는 pageNoMenu를 보여 줍니다. 대시보드는 applyMenuAccess가 막힌 업무의 KPI·진행 현황 줄·할 일(대표 링크 기준)을 빼고 나머지 링크는 글자로 바꿉니다. 새 화면을 추가하면 주소 접두어(#/sales, #/purchase, …)가 routeMenu의 묶음과 맞는지 확인하세요.
+- 설정: 조직 구성 › 부서 줄 「메뉴」(부서 기본), 관리자 설정 › 사용자 줄 「메뉴: …」(부서 기본 따름·전체 보임·직접 지정).

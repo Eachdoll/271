@@ -970,3 +970,9 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 /* 15.58 거래처 구분 체크 */
 .vendor-types { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
 .vendor-types legend { float: left; margin-right: 8px; font-weight: 600; }
+
+/* 15.59 메뉴 열람 설정 */
+.menu-checks, .menu-mode { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.menu-checks legend, .menu-mode legend { font-weight: 600; margin-bottom: 4px; }
+.menu-checks > p { flex-basis: 100%; margin: 0; }
+.menu-mode label { flex-basis: 100%; }

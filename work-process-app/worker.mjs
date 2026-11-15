@@ -89,7 +89,31 @@ function applyInspectionFilter(where, args, query, entity, table) {
 }
 function now() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date()); }
 function today() { return now().slice(0, 10); }
-function publicUser(u) { return { id: u.id, name: u.name, position: u.position || '', department: u.department || '', is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at }; }
+function publicUser(u) { return { id: u.id, name: u.name, position: u.position || '', department: u.department || '', is_admin: !!u.is_admin, roles: u.roles ? u.roles.split(',').filter(Boolean) : [], created_at: u.created_at, approval_status: u.approval_status, approval_note: u.approval_note, reviewed_by: u.reviewed_by, reviewed_at: u.reviewed_at, menu_mode: u.menu_mode || 'department', menu_custom: menuList(u.menus) }; }
+// ── 메뉴 열람 권한(15.59) ── 업무 묶음 단위로 화면 메뉴를 숨기고 막는다(데이터 API는 그대로). 홈·리포트·내 정보는 항상 보인다.
+const MENU_GROUPS = ['sales', 'purchase', 'quality', 'dev', 'production', 'logistics', 'master'];
+// 저장 형식: '' = 제한 없음, 'home' = 홈만, 'home,sales,…' = 홈 + 고른 묶음.
+function menuList(text) { return text ? String(text).split(',').filter(k => MENU_GROUPS.includes(k)) : null; }
+function menuText(list, label) {
+  if (list === null) return '';
+  if (!Array.isArray(list) || list.some(k => !MENU_GROUPS.includes(k))) throw bad(`${label}의 메뉴 목록을 확인하세요.`);
+  return ['home', ...MENU_GROUPS.filter(k => list.includes(k))].join(',');
+}
+// 실제로 보이는 메뉴: null이면 전체. 관리자·전체 보기는 null, 직접 지정은 그 목록,
+// 부서 기본은 그 부서(비어 있으면 상위 부서로 올라가며) 설정, 끝까지 없으면 전체.
+async function effectiveMenus(u) {
+  if (!u || u.is_admin || u.menu_mode === 'all') return null;
+  if (u.menu_mode === 'custom') return menuList(u.menus) || [];
+  if (!u.department) return null;
+  const departments = await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all();
+  let d = departments.find(x => x.name === u.department);
+  for (let guard = 0; d && guard < 20; guard++) {
+    if (d.menus) return menuList(d.menus);
+    d = d.parent_id ? departments.find(x => x.id === d.parent_id) : null;
+  }
+  return null;
+}
+async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u) }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
@@ -269,7 +293,7 @@ route('POST', '/api/auth/register', async ({ body, req, res }) => {
   const account = await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
   if (account.approval_status !== 'approved') return { user: null, pending: true, account: { id: account.id, name: account.name, approval_status: account.approval_status } };
   await startSession(req, res, account.id);
-  return { user: publicUser(account) };
+  return { user: await meUser(account) };
 }, { auth: false });
 
 route('POST', '/api/auth/login', async ({ body, req, res }) => {
@@ -286,7 +310,7 @@ route('POST', '/api/auth/login', async ({ body, req, res }) => {
   if (u.approval_status === 'pending') throw new HttpError(403, '관리자 승인 대기 중입니다. 승인 후 로그인해 주세요.');
   if (u.approval_status !== 'approved') throw new HttpError(403, '가입이 반려되었습니다. 관리자에게 문의하세요.' + (u.approval_note ? ' 사유: ' + u.approval_note : ''));
   (await startSession(req, res, u.id));
-  return { user: publicUser(u) };
+  return { user: await meUser(u) };
 }, { auth: false });
 
 route('POST', '/api/auth/logout', async ({ req, res }) => {
@@ -296,7 +320,7 @@ route('POST', '/api/auth/logout', async ({ req, res }) => {
   return { ok: true };
 }, { auth: false });
 
-route('GET', '/api/me', async ({ req }) => { const u = (await currentUser(req)); return { user: u ? publicUser(u) : null }; }, { auth: false });
+route('GET', '/api/me', async ({ req }) => { const u = (await currentUser(req)); return { user: u ? await meUser(u) : null }; }, { auth: false });
 
 route('PUT', '/api/me/password', async ({ user, body }) => {
   if (!(await pwMatches(user, body.current || ''))) throw bad('현재 비밀번호가 올바르지 않습니다.');
@@ -368,6 +392,11 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
     commands.push({ sql: 'UPDATE users SET position=?,department=? WHERE id=?', args: [org.position, org.department, target.id] });
   }
   if (body.is_admin !== undefined) commands.push({ sql: 'UPDATE users SET is_admin=? WHERE id=?', args: [body.is_admin ? 1 : 0, target.id] });
+  if (body.menu_mode !== undefined) {
+    if (!['department', 'all', 'custom'].includes(body.menu_mode)) throw bad('메뉴 열람 방식을 확인하세요.');
+    const menus = body.menu_mode === 'custom' ? menuText(Array.isArray(body.menus) ? body.menus : [], '사용자') : '';
+    commands.push({ sql: 'UPDATE users SET menu_mode=?,menus=? WHERE id=?', args: [body.menu_mode, menus, target.id] });
+  }
   if (body.password) {
     const salt = randomHex(16);
     commands.push({ sql: 'UPDATE users SET pw_salt=?, pw_hash=? WHERE id=?', args: [salt, await hashPw(body.password, salt), target.id] });
@@ -2257,7 +2286,7 @@ const ORG = { departments: { table: 'org_departments', column: 'department', lab
 async function orgLists(activeOnly) {
   const where = activeOnly ? 'WHERE active=1' : '';
   return {
-    departments: (await db.prepare(`SELECT id,name,parent_id,sort,active,positions_json FROM org_departments ${where} ORDER BY sort, id`).all()).map(({ positions_json, ...d }) => ({ ...d, position_names: positions_json === null ? null : JSON.parse(positions_json) })),
+    departments: (await db.prepare(`SELECT id,name,parent_id,sort,active,positions_json,menus FROM org_departments ${where} ORDER BY sort, id`).all()).map(({ positions_json, menus, ...d }) => ({ ...d, position_names: positions_json === null ? null : JSON.parse(positions_json), menus: menuList(menus) })),
     positions: await db.prepare(`SELECT id,name,sort,active FROM org_positions ${where} ORDER BY sort, id`).all(),
   };
 }
@@ -2314,6 +2343,8 @@ route('PUT', '/api/admin/org/:kind/:id', async ({ user, params, body }) => {
   const queries = [];
   if (params.kind === 'departments') {
     const parent = body.parent_id === undefined ? row.parent_id : await orgParent('departments', body.parent_id, row.id);
+    // 15.59: 부서 기본 메뉴. null이면 제한 없음(상위 부서를 따름), 배열이면 홈 + 고른 업무 묶음.
+    if (body.menus !== undefined) queries.push({ sql: 'UPDATE org_departments SET menus=? WHERE id=?', args: [menuText(body.menus, '부서'), row.id] });
     if (body.position_names !== undefined) {
       const names = body.position_names;
       if (names !== null && (!Array.isArray(names) || !names.length || names.length > 30 || names.some(n => typeof n !== 'string' || !n.trim() || n.trim().length > 30) || new Set(names.map(n => n.trim())).size !== names.length)) throw bad('직급은 중복 없이 1~30개, 이름은 1~30자로 입력하세요.');
