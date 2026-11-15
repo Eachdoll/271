@@ -119,7 +119,37 @@ async function effectiveMenus(u) {
   const fromRoles = publicUser(u).roles.map(r => ROLE_MENU[r]).filter(Boolean);
   return MENU_GROUPS.filter(k => list.includes(k) || fromRoles.includes(k));
 }
-async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u) }; }
+// 사람별 화면 설정(15.62): 자주 쓰는 화면(★)과 목록 조건(상태·구분 같은 선택값). settings 표의 'prefs:<id>' 한 줄에 둔다(마이그레이션 없음).
+async function userPrefs(id) {
+  const row = await db.prepare('SELECT value FROM settings WHERE key=?').get('prefs:' + id);
+  try { const v = row ? JSON.parse(row.value) : {}; return { favorites: Array.isArray(v.favorites) ? v.favorites : [], filters: v.filters && typeof v.filters === 'object' ? v.filters : {} }; } catch { return { favorites: [], filters: {} }; }
+}
+function cleanPrefs(body, prior) {
+  const out = { ...prior };
+  if (body.favorites !== undefined) {
+    if (!Array.isArray(body.favorites) || body.favorites.length > 20) throw bad('자주 쓰는 화면은 20개까지 둘 수 있습니다.');
+    out.favorites = body.favorites.map(f => {
+      const href = String(f?.href || ''), label = str(f?.label, 40);
+      if (!/^#\/[a-z0-9/_-]*$/.test(href) || href.length > 60 || !label) throw bad('자주 쓰는 화면 정보를 확인하세요.');
+      return { href, label };
+    });
+  }
+  if (body.filters !== undefined) {
+    if (!body.filters || typeof body.filters !== 'object' || Array.isArray(body.filters)) throw bad('목록 조건 형식을 확인하세요.');
+    const filters = { ...prior.filters };
+    for (const [key, value] of Object.entries(body.filters)) {
+      if (key.length > 80) throw bad('목록 조건 이름이 너무 깁니다.');
+      if (value === null) { delete filters[key]; continue; }
+      if (!Array.isArray(value) || value.length > 30 || value.some(pair => !Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || pair[0].length > 40 || !(typeof pair[1] === 'string' || typeof pair[1] === 'boolean') || String(pair[1]).length > 100)) throw bad('목록 조건 형식을 확인하세요.');
+      filters[key] = value;
+    }
+    if (Object.keys(filters).length > 80) throw bad('목록 조건이 너무 많습니다.');
+    out.filters = filters;
+  }
+  if (JSON.stringify(out).length > 30000) throw bad('저장할 화면 설정이 너무 큽니다.');
+  return out;
+}
+async function meUser(u) { return { ...publicUser(u), menus: await effectiveMenus(u), ui: await userPrefs(u.id) }; }
 function hasRole(user, role) { const roles = publicUser(user).roles; return !!user.is_admin || roles.includes(role) || (['quality','dev','production','logistics'].includes(role) && roles.includes(role + '_approver')); }
 function isOperator(user) { return !!user && !user.is_admin && publicUser(user).roles.includes('operator'); }
 function operatorRequestAllowed(method, path) {
@@ -328,6 +358,11 @@ route('POST', '/api/auth/logout', async ({ req, res }) => {
 
 route('GET', '/api/me', async ({ req }) => { const u = (await currentUser(req)); return { user: u ? await meUser(u) : null }; }, { auth: false });
 
+route('PUT', '/api/me/prefs', async ({ user, body }) => {
+  const prefs = cleanPrefs(body || {}, await userPrefs(user.id));
+  await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('prefs:' + user.id, JSON.stringify(prefs));
+  return prefs;
+});
 route('PUT', '/api/me/password', async ({ user, body }) => {
   if (!(await pwMatches(user, body.current || ''))) throw bad('현재 비밀번호가 올바르지 않습니다.');
   if (String(body.password || '').length < 4) throw bad('새 비밀번호는 4자 이상이어야 합니다.');
@@ -423,7 +458,8 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
   requireAdmin(user);
   if (Number(params.id) === user.id) throw bad('자기 자신은 삭제할 수 없습니다.');
   await assertNoPendingApprovals(Number(params.id), '삭제');
-  (await db.prepare('DELETE FROM users WHERE id=?').run(params.id)); return { ok: true };
+  // 그 사람의 화면 설정(자주 쓰는 화면·목록 조건)도 함께 지운다.
+  (await db.prepare('DELETE FROM users WHERE id=?').run(params.id)); await db.prepare('DELETE FROM settings WHERE key=?').run('prefs:' + Number(params.id)); return { ok: true };
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.

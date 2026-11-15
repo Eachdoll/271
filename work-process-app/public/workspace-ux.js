@@ -30,6 +30,12 @@ function uxFormRestore(form, values) {
     else input.value = typeof value === 'string' ? value : '';
   }
 }
+// 칸 순서로 읽고 쓰기(같은 이름의 라디오·체크 묶음이 있는 의뢰서용). 비밀번호·파일·초대코드는 빼고, 칸 수가 다르면 복구하지 않는다.
+function uxIndexRead(form) { const controls = uxControls(form); return { n: controls.length, v: controls.map(input => input.type === 'checkbox' || input.type === 'radio' ? input.checked : input.value) }; }
+function uxIndexRestore(form, value) {
+  const controls = uxControls(form); if (!value || value.n !== controls.length) throw new Error('form changed');
+  controls.forEach((input, i) => { if (input.type === 'checkbox' || input.type === 'radio') input.checked = value.v[i] === true; else input.value = typeof value.v[i] === 'string' ? value.v[i] : ''; });
+}
 function bindEntryDraft(form, id, options = {}) {
   const key = uxKey('draft', id), read = options.read || (() => uxFormRead(form));
   const restore = options.restore || (value => uxFormRestore(form, value));
@@ -76,10 +82,20 @@ function rememberList(form) {
   if (!form || !ME || form.dataset.viewRemembered) return;
   form.dataset.viewRemembered = 'true'; form.dataset.readOnly = 'true';
   const key = uxKey('filters', (location.hash || '#/') + ':' + form.id);
-  const saved = uxRead(key); if (saved) uxFormRestore(form, saved);
+  // 15.62: 고르는 조건(선택칸·체크)은 내 설정(서버)에 저장해 다음에 다시 열어도·다른 기기에서도 유지한다. 검색어·날짜는 이 탭에서만 기억한다.
+  const prefKey = (location.hash || '#/').split('?')[0] + ':' + form.id;
+  const persistent = () => uxControls(form).filter(input => input.tagName === 'SELECT' || input.type === 'checkbox').map(input => [uxControlKey(input), input.type === 'checkbox' ? input.checked : input.value]);
+  const kept = ME.ui && ME.ui.filters && ME.ui.filters[prefKey];
+  const saved = uxRead(key); if (saved) uxFormRestore(form, saved); else if (Array.isArray(kept)) uxFormRestore(form, kept);
+  let persistTimer = 0;
+  const persist = () => { clearTimeout(persistTimer); persistTimer = setTimeout(async () => {
+    const value = persistent(), prior = ME && ME.ui && ME.ui.filters ? ME.ui.filters[prefKey] : undefined;
+    if (!ME || JSON.stringify(value) === JSON.stringify(prior || [])) return;
+    try { const prefs = await api('PUT', '/api/me/prefs', { filters: { [prefKey]: value } }); if (ME) ME.ui = prefs; } catch { /* 조건 기억은 편의 기능 */ }
+  }, 800); };
   const fold = form.querySelector?.('details.date-fold'); if (fold && [...fold.querySelectorAll('input')].some(input => input.value)) fold.open = true;
   const save = () => uxWrite(key, uxFormRead(form));
-  form.addEventListener('input', save); form.addEventListener('change', save);
+  form.addEventListener('input', save); form.addEventListener('change', save); form.addEventListener('change', persist);
   form.addEventListener('submit', save);
   form.addEventListener('click', () => queueMicrotask(save));
   return { save };
