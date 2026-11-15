@@ -2304,7 +2304,8 @@ async function orgChoice(body, { required = false, keep = null } = {}) {
   }
   return out;
 }
-route('GET', '/api/org', async () => orgLists(true), { auth: false });
+// 가입 화면용(로그인 전): 부서·직급 이름만 준다. 부서 메뉴 제한(menus) 같은 관리 설정은 빼고 보낸다.
+route('GET', '/api/org', async () => { const lists = await orgLists(true); return { ...lists, departments: lists.departments.map(({ menus, ...d }) => d) }; }, { auth: false });
 route('GET', '/api/admin/org', async ({ user }) => {
   requireAdmin(user);
   const lists = await orgLists(false);

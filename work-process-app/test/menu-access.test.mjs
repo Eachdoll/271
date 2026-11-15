@@ -48,6 +48,8 @@ test('Department defaults apply to members and flow down to sub-departments that
   await admin('PUT', `/api/admin/org/departments/${dept.lab.id}`, { menus: [] });
   assert.deepEqual((await me(lab)).menus, [], 'home only');
   assert.equal((await me(admin)).menus, null, 'administrators always see everything');
+  const anonymous = client();
+  assert.ok((await anonymous('GET', '/api/org')).body.departments.every(d => !('menus' in d)), 'the sign-up list does not expose menu settings');
   const org = (await admin('GET', '/api/admin/org')).body.departments.find(d => d.id === dept.hq.id);
   assert.deepEqual(org.menus, ['sales', 'purchase', 'logistics']);
   assert.equal((await admin('PUT', `/api/admin/org/departments/${dept.hq.id}`, { menus: ['payroll'] })).status, 400);
