@@ -2231,6 +2231,14 @@ return { async fetch(req) {
       return new Response(photo.body, { headers: res });
     }
     if (!['GET', 'HEAD'].includes(req.method)) return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+    if (p === '/r2-key-handoff.html') {
+      const page = await env.ASSETS.fetch(req), headers = new Headers(page.headers);
+      headers.set('Cache-Control', 'no-store');
+      headers.set('Referrer-Policy', 'no-referrer');
+      headers.set('X-Frame-Options', 'DENY');
+      headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+      return new Response(page.body, { status: page.status, headers });
+    }
     return env.ASSETS.fetch(req);
   } catch (e) {
     if (!e.status || e.status >= 500) console.error(e.message, e);
