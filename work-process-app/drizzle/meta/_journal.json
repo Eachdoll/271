@@ -176,6 +176,13 @@
       "when": 1794740005000,
       "tag": "0024_sizes_and_semi_units",
       "breakpoints": false
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794740006000,
+      "tag": "0025_purchase_requests",
+      "breakpoints": false
     }
   ]
 }

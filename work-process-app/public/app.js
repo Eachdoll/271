@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.47';
+const APP_VERSION = '15.48';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -271,6 +271,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
+  { group: '영업', items: [{ sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
@@ -426,6 +427,8 @@ const PAGES = {
   '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
   '#/prod/semi/wash/new': main => pageSemi(main, 'wash'),
+  '#/sales/pr': pageSalesPrList,
+  '#/sales/pr/new': pageSalesPrEntry,
   '#/admin': pageAdmin,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
@@ -531,6 +534,7 @@ function taskBadgeCounts(tasks) {
   if (a.semi_changes?.cut) counts['#/prod/semi/cut'] = a.semi_changes.cut;
   if (a.semi_changes?.wash) counts['#/prod/semi/wash'] = a.semi_changes.wash;
   if (a.temp_items?.count) counts['#/admin/bom'] = a.temp_items.count;
+  if (a.purchase_requests?.count) counts['#/sales/pr'] = a.purchase_requests.count;
   return counts;
 }
 async function refreshNavBadges() {
@@ -555,13 +559,15 @@ function tasksCard(tasks) {
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
+  if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
   for (const r of m.requests) mine.push(`<li>${state(r)} <a href="${REQ[r.type].intake}">${esc(REQ[r.type].label)} · ${esc(r.title)}</a>${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.approver_name || '')}) · 수정하면 다시 접수됩니다.</div>` : ''}</li>`);
   for (const c of m.actual_changes) mine.push(`<li>${state(c)} <a href="${c.kind === 'semi' ? '#/prod/semi' : '#/prod/finished'}">생산실적 · ${esc(c.product)}</a> <span class="small">${changeSummary(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
+  for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items;
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests;
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
@@ -591,7 +597,8 @@ function labelGridTables() {
     rows.forEach(tr => [...tr.children].forEach(td => {
       const label = td.dataset.label;
       if (!td.querySelector('input, select, button') && (!td.textContent.trim() || td.textContent.trim() === '—')) td.classList.add('cell-empty');
-      const isSecondary = CARD_SECONDARY.has(label) || (!label && !td.querySelector('input[type=checkbox]') && td.querySelector('button, a.btn'));
+      // data-card-primary: 접힌 카드에도 보여야 하는 칸(예: 구매의뢰의 「결재하기」 버튼).
+      const isSecondary = !td.hasAttribute('data-card-primary') && (CARD_SECONDARY.has(label) || (!label && !td.querySelector('input[type=checkbox]') && td.querySelector('button, a.btn')));
       if (isSecondary && td.textContent.trim() !== '') { td.classList.add('card-secondary'); secondary++; }
     }));
     if (secondary) rows.forEach(tr => {
@@ -1537,11 +1544,11 @@ async function pageAdmin(main) {
     <p class="muted small">품질·개발은 업무 담당 권한입니다. 분석의뢰·VOC 승인·반려는 품질책임자, 개발의뢰 승인·반려는 개발책임자를 체크해 지정하세요. 책임자는 해당 팀의 업무 처리 권한도 갖습니다. 가입 승인된 사용자만 책임자로 지정할 수 있습니다. 관리자는 모든 의뢰를 승인할 수 있으며 생산의 샘플 승인 권한은 유지됩니다.</p>
     ${listControls('users', { placeholder: '사용자 이름 검색', extra: `<label>가입 상태<select name="approval"><option value="">전체 상태</option><option value="pending">승인 대기</option><option value="approved">승인 완료</option><option value="rejected">반려</option></select></label><label>권한<select name="role"><option value="">전체 권한</option><option value="admin">관리자</option>${Object.entries(ROLE_LABEL).map(([role, label]) => `<option value="${role}">${label}</option>`).join('')}</select></label>` })}
     <div class="table-wrap"><table class="grid"><thead><tr><th>이름</th><th>가입 상태</th>${Object.values(ROLE_LABEL).map((l) => `<th>${l}</th>`).join('')}<th>관리자</th><th>가입일</th><th></th></tr></thead>
-    <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b></td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>
+    <tbody>${users.map((u) => `<tr data-u="${u.id}"><td><b>${esc(u.name)}</b>${u.department || u.position ? `<div class="small muted">${esc([u.department, u.position].filter(Boolean).join(' · '))}</div>` : ''}</td><td>${esc(({pending:"승인 대기",approved:"승인 완료",rejected:"반려"})[u.approval_status])}${u.approval_note ? `<br><small>${esc(u.approval_note)}</small>` : ""}${u.reviewed_by ? `<br><small>${esc(u.reviewed_by)} · ${esc(u.reviewed_at)}</small>` : ""}</td>
       ${Object.keys(ROLE_LABEL).map((r) => `<td class="c"><input type="checkbox" data-role="${r}" ${u.roles.includes(r) ? 'checked' : ''} ${["quality_approver","dev_approver","production_approver","logistics_approver"].includes(r) && u.approval_status !== "approved" ? 'disabled' : ''} aria-label="${ROLE_LABEL[r]}"></td>`).join('')}
       <td class="c"><input type="checkbox" data-admin ${u.is_admin ? 'checked' : ''} ${u.id === ME.id || u.approval_status !== 'approved' ? 'disabled' : ''} aria-label="관리자"></td>
       <td class="small muted">${esc(u.created_at.slice(0, 10))}</td>
-      <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+      <td class="nowrap">${u.approval_status !== "approved" ? '<button class="btn small primary" data-approve>가입 승인</button> ' : ""}${!u.is_admin && u.approval_status !== "rejected" ? '<button class="btn small danger" data-reject>반려</button> ' : ""}<button class="btn small" data-profile>직급·부서</button> <button class="btn small" data-pw>비밀번호 초기화</button> ${u.id !== ME.id ? '<button class="btn small danger" data-del>삭제</button>' : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
   $('#userNew').onsubmit = async (e) => { e.preventDefault(); try { const made = await api('POST', '/api/admin/users', { ...formObj(e.target), roles: $$('[data-new-role]:checked', e.target).map((box) => box.dataset.newRole) }); toast(`${made.name} 계정을 만들었습니다.`); pageAdmin(main); } catch (err) { fail(err); } };
   $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } };
   const userFilter = $('#usersFilters', main);
@@ -1595,7 +1602,7 @@ async function pageAdmin(main) {
         } while (after !== null);
       }
       const signatures = (backup.tables.laundry_reports || []).map(row => row.signature).concat(backup.tables.settings.filter(row => row.key === 'laundry_report_settings').map(row => { try { return JSON.parse(row.value).signature; } catch { return ''; } })).filter(Boolean);
-      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || []).flatMap(row => JSON.parse(row.photos)).concat(signatures))];
+      const photos = [...new Set(backup.tables.laundry.concat(backup.tables.attachments || [], backup.tables.purchase_requests || []).flatMap(row => JSON.parse(row.photos || '[]')).concat(signatures))];
       for (const [i, file] of photos.entries()) {
         status.textContent = `사진을 저장하고 있습니다… (${i + 1}/${photos.length})`;
         const response = await fetch('/uploads/' + encodeURIComponent(file));
@@ -1619,6 +1626,7 @@ async function pageAdmin(main) {
     const review = async (status, note = '') => { try { await api('POST', '/api/admin/users/' + id + '/approval', { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); render(); } catch (e) { fail(e); } };
     const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
     const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
+    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">구매의뢰 결재선에 이름과 함께 표시됩니다.</p><label>직급<input name="position" maxlength="30" value="${esc(u.position || '')}" placeholder="예: 과장"></label><label>부서<input name="department" maxlength="50" value="${esc(u.department || '')}" placeholder="예: 전략영업부"></label>`); if (v) { await save(v); pageAdmin(main); } };
     $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
     const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
   });
@@ -1627,10 +1635,14 @@ async function pageAdmin(main) {
 async function pageMe(main) {
   main.innerHTML = `<h1>내 정보</h1>
   <div class="card"><p><b>${esc(ME.name)}</b> ${ME.is_admin ? '<span class="tag">관리자</span>' : ''}</p><p class="muted small">담당: ${ME.roles.map((r) => ROLE_LABEL[r]).join(', ') || '없음 (승인 권한이 필요하면 관리자에게 요청)'}</p></div>
+  <form class="card stack" id="profileForm"><h3>직급 · 부서</h3><p class="small muted">구매의뢰 결재선에 이름과 함께 표시되고, 부서는 구매의뢰서의 부서명 기본값이 됩니다.</p>
+    <div class="form-grid"><label>직급<input name="position" maxlength="30" value="${esc(ME.position || '')}" placeholder="예: 과장"></label><label>부서<input name="department" maxlength="50" value="${esc(ME.department || '')}" placeholder="예: 전략영업부"></label></div>
+    <div class="actions"><button class="btn primary">저장</button></div></form>
   <form class="card stack" id="pwForm"><h3>비밀번호 변경</h3>
     <label>현재 비밀번호<input type="password" name="current" required autocomplete="current-password"></label>
     <label>새 비밀번호<input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <div class="actions"><button class="btn primary">변경</button></div></form>`;
+  $('#profileForm').onsubmit = async (e) => { e.preventDefault(); try { const me = await api('PUT', '/api/me/profile', formObj(e.target)); Object.assign(ME, { position: me.position, department: me.department }); toast('저장했습니다.'); } catch (err) { fail(err); } };
   $('#pwForm').onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/me/password', formObj(e.target)); e.target.reset(); toast('비밀번호를 변경했습니다.'); } catch (err) { fail(err); } };
 }
 

@@ -184,8 +184,10 @@ function fxServerError(form, button, message) {
         if (t && !legend.querySelector(':scope > .req')) { t.nodeValue = t.nodeValue.replace(/\s*\*\s*$/, ' '); legend.insertAdjacentHTML('beforeend', '<span class="req" aria-hidden="true">*</span>'); }
       }
       for (const el of controls) {
-        const label = el.closest('label'); if (!label || label.classList.contains('inline') || el.type === 'checkbox' || el.type === 'radio') continue;
-        const req = label.querySelector(':scope > .req'), opt = label.querySelector(':scope > span.opt');
+        // data-no-mark: 입력값이 아닌 선택 도구(예: 구매의뢰 결재선 사람 고르기)는 표시하지 않는다.
+        const label = el.closest('label'); if (!label || label.classList.contains('inline') || el.type === 'checkbox' || el.type === 'radio' || el.matches('[data-no-mark]')) continue;
+        // 칸이 label 안 더 깊은 곳에 있어도 우리가 붙인 표시를 찾는다(못 찾으면 매번 새로 붙어 화면이 계속 바뀐다).
+        const req = label.querySelector(':scope > .req, [data-fx-mark="req"]'), opt = label.querySelector(':scope > span.opt, [data-fx-mark="opt"]');
         // 화면 코드가 직접 그리는 * 표시(예: 커팅 입력의 data-semi-model-mark)가 있으면 그것을 쓰고 우리 표시는 뺀다.
         const own = [...label.children].find(c => !c.matches('.req, span.opt, .field-error, input, select, textarea') && /^(\*|\(선택\))$/.test(c.textContent.trim()));
         if (own) { const star = own.textContent.trim() === '*'; own.classList.toggle('req-own', star); own.classList.toggle('opt-own', !star); req?.remove(); opt?.remove(); continue; }
@@ -195,14 +197,14 @@ function fxServerError(form, button, message) {
             // 글자 끝의 * 를 빨간 표시로 바꾸고, 없으면 붙인다.
             const textNode = [...label.childNodes].find(n => n.nodeType === 3 && /\*\s*$/.test(n.nodeValue));
             if (textNode) textNode.nodeValue = textNode.nodeValue.replace(/\s*\*\s*$/, ' ');
-            const star = document.createElement('span'); star.className = 'req'; star.setAttribute('aria-hidden', 'true'); star.textContent = '*';
+            const star = document.createElement('span'); star.className = 'req'; star.dataset.fxMark = 'req'; star.setAttribute('aria-hidden', 'true'); star.textContent = '*';
             el.insertAdjacentElement('beforebegin', star);
           }
         } else {
           req?.remove(); el.removeAttribute('aria-required');
           const textNode = [...label.childNodes].find(n => n.nodeType === 3 && /\*\s*$/.test(n.nodeValue)); if (textNode) textNode.nodeValue = textNode.nodeValue.replace(/\s*\*\s*$/, ' ');
           if (anyRequired && !opt && !el.readOnly && !/선택|optional/i.test(label.textContent.split('\n')[0])) {
-            const o = document.createElement('span'); o.className = 'opt'; o.textContent = '(선택)';
+            const o = document.createElement('span'); o.className = 'opt'; o.dataset.fxMark = 'opt'; o.textContent = '(선택)';
             el.insertAdjacentElement('beforebegin', o);
           }
         }
