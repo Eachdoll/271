@@ -960,3 +960,9 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .mr-unit + .mr-unit { margin-top: 2px; }
 
 .org-fields, .org-position-field { display: contents; }
+
+/* 15.56 구매 › 발주 입력: 승인된 구매의뢰에서 불러오기 */
+.po-from-pr h2 { margin-top: 0; }
+.po-pr { border: 1px solid var(--line, #e5e7eb); border-radius: 12px; padding: 8px 12px; margin: 8px 0; }
+.po-pr > summary { cursor: pointer; padding: 4px 0; line-height: 1.5; }
+.po-pr .table-wrap { margin-top: 6px; }

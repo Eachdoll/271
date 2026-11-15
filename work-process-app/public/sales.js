@@ -233,13 +233,7 @@ async function prOpen(id, after = () => {}) {
     };
   });
   act('[data-pr-order]', async () => {
-    const open = pr.items.filter(it => !it.po_id), needVendor = open.some(it => !it.vendor), needCategory = open.some(it => !it.bom_id);
-    const v = await promptBox('발주 생성', `<p class="small muted">${open.length}개 품목을 발주목록에 올립니다. 구매의뢰번호는 ${esc(pr.doc_no)}, 거래처는 품목의 공급선입니다.</p>
-      <label>납기일 *<input name="due_date" type="date" required value="${addDays(todayStr(), 7)}"></label>
-      ${needCategory ? `<label>품목 분류 * <span class="hint">(등록되지 않은 품목에 적용)</span><select name="item_category" required>${categoryOptions()}</select></label>` : ''}
-      ${needVendor ? '<label>거래처 * <span class="hint">(공급선이 비어 있는 품목에 적용)</span><input name="vendor" required maxlength="100"></label>' : ''}`);
-    if (!v) return;
-    try { const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, v); toast(`발주 ${r.created.length}건을 발주목록에 올렸습니다.`); await done(); } catch (error) { fail(error); }
+    try { const r = await prCreateOrders(pr, pr.items.filter(it => !it.po_id)); if (r) await done(); } catch (error) { fail(error); }
   });
 }
 
@@ -453,3 +447,52 @@ document.addEventListener('click', event => {
   const button = event.target.closest?.('button[data-open-mr]');
   if (button) mrOpen(Number(button.dataset.openMr)).catch(fail);
 });
+
+// ── 구매: 승인된 구매의뢰 → 발주 (15.56) ──
+// 입고요청일(글)에서 날짜를 읽는다: 2026-12-01·2026.12.1·12/1·12월 1일. ASAP 같은 글은 날짜가 아니다.
+function prDueDate(text) {
+  const t = String(text || '').trim(), today = todayStr(), year = Number(today.slice(0, 4));
+  const pad = n => String(n).padStart(2, '0'), valid = (y, m, d) => { const x = `${y}-${pad(m)}-${pad(d)}`; return !Number.isNaN(Date.parse(x + 'T00:00:00Z')) && new Date(x + 'T00:00:00Z').getUTCDate() === Number(d) ? x : null; };
+  let m = /(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/.exec(t); if (m) return valid(m[1], m[2], m[3]);
+  m = /(?:^|\D)(\d{1,2})\s*[/.월]\s*(\d{1,2})(?:\s*일)?(?:\D|$)/.exec(t);
+  if (m) { const x = valid(year, m[1], m[2]); return x && x < today ? valid(year + 1, m[1], m[2]) : x; }
+  return null;
+}
+// 발주 생성 확인: 납기일은 고른 품목의 입고요청일 중 가장 이른 날짜(오늘 이전이면 오늘), 없으면 오늘+7일.
+async function prCreateOrders(pr, items) {
+  if (!items.length) { toast('발주할 품목을 고르세요.', 'err'); return null; }
+  const dates = items.map(it => prDueDate(it.due_text)).filter(Boolean).sort();
+  const due = dates.length ? (dates[0] < todayStr() ? todayStr() : dates[0]) : addDays(todayStr(), 7);
+  const needVendor = items.some(it => !it.vendor), needCategory = items.some(it => !it.bom_id);
+  const v = await promptBox('발주 생성', `<p class="small muted">${esc(pr.doc_no)}의 ${items.length}개 품목을 발주목록에 올립니다. 구매의뢰번호는 ${esc(pr.doc_no)}, 거래처는 품목의 공급선입니다.</p>
+    <label>납기일 * ${dates.length ? '<span class="hint">(입고요청일 기준)</span>' : ''}<input name="due_date" type="date" required value="${due}"></label>
+    ${needCategory ? `<label>품목 분류 * <span class="hint">(등록되지 않은 품목에 적용)</span><select name="item_category" required>${categoryOptions()}</select></label>` : ''}
+    ${needVendor ? '<label>거래처 * <span class="hint">(공급선이 비어 있는 품목에 적용)</span><input name="vendor" required maxlength="100"></label>' : ''}`);
+  if (!v) return null;
+  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { ...v, item_ids: items.map(it => it.id) });
+  toast(`발주 ${r.created.length}건을 발주목록에 올렸습니다.`);
+  return r;
+}
+// 구매 › 발주 입력 맨 위: 최종 승인된 구매의뢰 중 아직 발주하지 않은 품목을 골라 발주로 만든다(직접 등록은 그 아래 그대로).
+async function poFromRequests(host, onDone) {
+  host.innerHTML = '<h2>승인된 구매의뢰에서 불러오기</h2><p class="small muted">영업의 구매의뢰가 최종 승인되면 여기에 나타납니다. 품목을 골라 「발주 처리」하면 발주목록에 올라갑니다(구매의뢰번호·공급선·수량·단위가 채워집니다).</p><div data-pr-wait>불러오는 중…</div>';
+  const draw = async () => {
+    const data = await api('GET', '/api/purchase-requests?box=order&paged=1'); if (!host.isConnected) return;
+    const list = $('[data-pr-wait]', host);
+    if (!data.rows.length) { list.innerHTML = '<p class="muted">발주를 기다리는 구매의뢰가 없습니다.</p>'; return; }
+    list.innerHTML = data.rows.map(pr => `<details class="po-pr" data-pr="${pr.id}"${data.rows.length <= 3 ? ' open' : ''}><summary><b>${esc(pr.doc_no)}</b> ${esc(pr.title || pr.first_item)} <span class="small muted">· ${esc(pr.author_name)}${pr.department ? ' ' + esc(pr.department) : ''} · <span>미발주</span> ${pr.open_items.length}<span>건</span></span></summary>
+      <div class="table-wrap"><table class="grid keep-table"><thead><tr><th><span class="sr-only">선택</span></th><th>품목</th><th class="r">수량</th><th>공급선</th><th>입고요청일</th></tr></thead><tbody>${pr.open_items.map(it => `<tr>
+        <td><input type="checkbox" data-po-item="${it.id}" checked aria-label="${esc(it.item)} 발주"></td>
+        <td><b>${esc(it.item)}</b>${it.spec ? `<div class="small muted">${esc(it.spec)}</div>` : ''}</td><td class="r">${fmtNum(it.qty)} ${esc(it.unit)}</td>
+        <td>${esc(it.vendor || '—')}</td><td>${esc(it.due_text || '—')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-po-make="${pr.id}">발주 처리</button><button type="button" class="btn" data-open-pr-detail="${pr.id}">의뢰서 보기</button></div></details>`).join('') + (data.more ? '<p class="small muted">200건이 넘습니다. 영업 › 구매의뢰 목록의 「발주 대기」에서 더 볼 수 있습니다.</p>' : '');
+    $$('[data-po-make]', list).forEach(b => b.onclick = async () => {
+      const pr = data.rows.find(x => x.id === Number(b.dataset.poMake)), box = b.closest('details');
+      const chosen = new Set($$('[data-po-item]:checked', box).map(x => Number(x.dataset.poItem)));
+      try { const r = await prCreateOrders(pr, pr.open_items.filter(it => chosen.has(it.id))); if (r) { await draw(); await onDone?.(); refreshNavBadges(); } } catch (error) { fail(error); }
+    });
+    $$('[data-open-pr-detail]', list).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPrDetail), async () => { await draw(); await onDone?.(); }).catch(fail));
+  };
+  try { await draw(); } catch (error) { $('[data-pr-wait]', host).innerHTML = `<p class="field-error">${esc(error.message)}</p>`; }
+  return { reload: draw };
+}

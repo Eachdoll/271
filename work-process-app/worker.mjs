@@ -2215,6 +2215,11 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     const count = (await db.prepare("SELECT COUNT(*) c FROM purchase_requests pr JOIN purchase_request_lines l ON l.request_id=pr.id AND l.step=pr.current_step AND l.kind!='cc' WHERE pr.status='pending' AND l.user_id=?").get(user.id)).c;
     if (count) approvals.purchase_requests = { count, items };
   }
+  // 발주 대기: 최종 승인됐지만 아직 발주하지 않은 품목이 있는 구매의뢰(구매 담당). 구매 › 발주 입력에서 불러와 발주한다.
+  if (hasRole(user, 'purchase')) {
+    const count = (await db.prepare("SELECT COUNT(*) c FROM purchase_requests pr WHERE pr.status='approved' AND EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NULL)").get()).c;
+    if (count) approvals.purchase_orders_waiting = { count, items: await db.prepare("SELECT pr.id,pr.doc_no,pr.title,pr.author_name,pr.approved_at,(SELECT item FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NULL ORDER BY line_no LIMIT 1) first_item FROM purchase_requests pr WHERE pr.status='approved' AND EXISTS(SELECT 1 FROM purchase_request_items i WHERE i.request_id=pr.id AND i.po_id IS NULL) ORDER BY pr.approved_at, pr.id LIMIT 5").all() };
+  }
   // My own requests still waiting, plus rejections from the last 7 days so the requester notices them.
   const recent = "(c.status='pending' OR (c.status='rejected' AND c.reviewed_at>=date('now','+9 hours','-7 days')))";
   const mine = {
@@ -2684,7 +2689,7 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
   const items = [], lines = [];
   for (const ids of inChunks(rows.map(r => r.id))) {
     const marks = ids.map(() => '?').join(',');
-    items.push(...await db.prepare(`SELECT request_id,item,product_code,qty,unit,purchase_price,sale_price,vendor,customer,po_id FROM purchase_request_items WHERE request_id IN (${marks}) ORDER BY line_no`).all(...ids));
+    items.push(...await db.prepare(`SELECT id,request_id,line_no,bom_id,item,product_code,spec,qty,unit,purchase_price,sale_price,vendor,customer,due_text,po_id FROM purchase_request_items WHERE request_id IN (${marks}) ORDER BY line_no`).all(...ids));
     lines.push(...await db.prepare(`SELECT request_id,kind,step,user_id,user_name,user_position,decision,read_at FROM purchase_request_lines WHERE request_id IN (${marks}) ORDER BY step, id`).all(...ids));
   }
   return wrap(rows.map(row => {
@@ -2698,6 +2703,8 @@ route('GET', '/api/purchase-requests', async ({ user, query }) => {
       ordered: its.filter(i => i.po_id).length,
       current_user_id: current ? current.user_id : null, current_user_name: current ? current.user_name : '',
       my_turn: !!(current && current.user_id === user.id),
+      // 발주 대기(box=order): 구매 발주 입력 화면이 품목을 골라 바로 발주로 만들 수 있게 아직 발주하지 않은 품목을 함께 준다.
+      ...(box === 'order' ? { open_items: its.filter(i => !i.po_id).map(({ request_id, po_id, ...it }) => it) } : {}),
     };
   }));
 });

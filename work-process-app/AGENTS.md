@@ -458,3 +458,10 @@ INVITE_CODE=local-test-code npm start
 ## 생산의뢰 「출고 희망」 글 입력 제거 (15.55)
 - 작성 화면에서 「출고 희망」(ship_text) 글 입력칸을 뺐습니다. 「출고 희망일」(ship_date)과 겹치기 때문입니다. DB 칸은 그대로 둡니다(마이그레이션 없음).
 - 서버 mrHead(body, prior): ship_text를 보내지 않으면 고치기에서는 기존 글을 유지하고, 새 의뢰는 빈 값입니다. 예전 의뢰의 글은 목록·상세의 「출고 희망」에 계속 보입니다.
+
+## 구매 › 발주 입력: 승인된 구매의뢰 불러와 발주 (15.56)
+- 구매 담당(hasRole purchase)의 발주 입력 화면 맨 위에 「승인된 구매의뢰에서 불러오기」(#poFromPr, sales.js poFromRequests)가 있습니다. 최종 승인됐지만 아직 발주하지 않은 품목을 구매의뢰별로 보여 주고, 품목을 골라 「발주 처리」하면 POST /api/purchase-requests/:id/po(item_ids)로 발주목록에 올립니다. 그 아래 「직접 발주 등록」은 그대로입니다. 목록 화면(#/purchase/po)에서는 보이지 않습니다(입력 화면의 일부).
+- GET /api/purchase-requests?box=order는 행마다 open_items(미발주 품목: id·품목·규격·수량·단위·공급선·입고요청일·bom_id)를 함께 줍니다. 다른 box에는 없습니다.
+- 발주 생성 창(prCreateOrders, 구매의뢰 상세의 「발주 생성」도 같은 함수)은 납기일을 고른 품목의 입고요청일 중 가장 이른 날짜로 채웁니다(prDueDate: 2026-12-01·2026.12.1·12/1·12월 1일, 오늘 이전이면 오늘). 날짜가 없으면(ASAP 등) 오늘+7일.
+- my-tasks approvals.purchase_orders_waiting(구매 담당): 발주 대기 구매의뢰 건수 → 대시보드 할 일, 메뉴 배지(#/purchase/po/new).
+- 표의 빈 열 숨김(col-empty)은 입력칸·버튼이 있는 칸을 빈 칸으로 보지 않습니다(글자 없는 체크박스 열이 숨던 문제).
