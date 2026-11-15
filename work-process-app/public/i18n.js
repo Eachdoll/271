@@ -72,13 +72,16 @@ function i18nTranslator(dict) {
     if (parent.tagName === 'OPTION' && !parent.hasAttribute('value')) parent.setAttribute('value', parent.value);
     done.set(node, out); node.nodeValue = out;
   };
+  // 여러 줄 입력칸(textarea)도 안내 글(placeholder)은 번역한다. 입력한 내용(본문 글자)은 그대로 둔다.
+  const skipAttrs = el => !el || el.closest?.('script,style,.cert,[data-no-i18n],[contenteditable]');
   const element = el => {
-    if (!translate || skip(el)) return;
+    if (!translate || skipAttrs(el)) return;
     for (const name of ATTRS) { const value = el.getAttribute?.(name); if (value) { const out = translate(value); if (out !== value) el.setAttribute(name, out); } }
   };
   const walk = root => {
     if (root.nodeType === 3) return textNode(root);
-    if (root.nodeType !== 1 || skip(root)) return;
+    if (root.nodeType !== 1) return;
+    if (skip(root)) { if (root.tagName === 'TEXTAREA') element(root); return; }
     element(root);
     const walker = document.createTreeWalker(root, 5); // elements + text
     for (let node = walker.nextNode(); node; node = walker.nextNode()) node.nodeType === 3 ? textNode(node) : element(node);

@@ -919,3 +919,38 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .pr-items th, .pr-items td.r { white-space: nowrap; }
 .pr-items td:nth-child(2) { min-width: 180px; }
 .modal section + section { margin-top: 18px; }
+
+/* ───── 15.49 조직 구성 · 구매의뢰 요청자 ───── */
+.pr-requester { margin: 0; font-size: 15px; }
+.pr-requester .muted { margin-left: 6px; } .pr-requester .muted:first-child { margin-left: 0; }
+.org-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; align-items: start; }
+.org-grid > .card { margin: 0; }
+.org-grid h2, .card > h2 { font-size: 17px; margin: 0 0 10px; }
+.org-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.org-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.org-row.off .org-name b { color: var(--muted); text-decoration: line-through; }
+.org-name { min-width: 0; overflow-wrap: anywhere; }
+.org-rank { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink, var(--accent)); font-size: 13px; font-weight: 700; margin-right: 8px; }
+.org-tools { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.org-add { border-top: 1px dashed var(--line); padding-top: 10px; }
+.org-group + .org-group { margin-top: 14px; }
+.org-group > h3 { display: block; font-size: 15px; margin: 0 0 6px; }
+.org-members { list-style: none; margin: 0; padding: 0; }
+.org-member { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: var(--bg); margin-bottom: 6px; }
+.org-member-edit { display: flex; gap: 8px; flex-wrap: wrap; }
+.org-member-edit label { font-size: 0; } /* 이름은 칸의 선택지로 충분해 숨긴다(aria 이름은 select 첫 선택지와 label) */
+.org-member-edit select, .org-member-edit input { font-size: 14px; min-width: 120px; margin: 0; }
+
+/* ───── 15.50 생산의뢰 ───── */
+.mr-line { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0 0 8px; background: var(--panel); min-width: 0; }
+.mr-line > legend { font-weight: 700; font-size: 14px; color: var(--text); padding: 0 4px; }
+.mr-size-grid { margin: 10px 0; }
+.mr-size-grid > h4 { margin: 0 0 8px; }
+.mr-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin: 8px 0; }
+.mr-spec { background: var(--yellow-bg); color: var(--yellow-ink, var(--yellow)); border: 2px solid var(--red); border-radius: 10px; padding: 10px 14px; font-weight: 700; white-space: pre-wrap; }
+.mr-spec-inline { color: var(--red); font-weight: 600; }
+.mr-needs h2 { font-size: 17px; margin: 0 0 4px; }
+.mr-needs-table .mr-total td { background: var(--yellow-bg); font-weight: 700; }
+.mr-schedules { margin: 0; padding-left: 18px; }
+.mr-schedules li { padding: 3px 0; }
+.sc-order { display: inline-block; font-size: 13px; font-weight: 600; margin-left: 6px; }

@@ -402,3 +402,21 @@ INVITE_CODE=local-test-code npm start
 - 사진은 의뢰서 행의 photos에 둡니다. 공통 attachments·progress_comments 표는 entity_type CHECK가 고정이라 쓰지 않습니다(표를 다시 만들어 제약을 바꾸지 마세요). 저장은 savePhotos(회사 R2·8MB·10장) 그대로이며 작성자가 최종 승인 전에만 바꿉니다. 별도 진행 코멘트 대신 결재선의 승인 의견·반려 사유를 씁니다.
 - 화면: public/sales.js(index.html·local.mjs·build.mjs에 포함), 메뉴 영업 › 구매의뢰(작성 #/sales/pr/new, 목록 #/sales/pr). 내 결재 차례는 my-tasks의 approvals.purchase_requests로 대시보드·메뉴 배지에 나오고, 내가 올린 의뢰(결재 중·최근 반려)는 mine.purchase_requests입니다. 직급·부서는 내 정보와 관리자 설정(사용자 행 「직급·부서」)에서 바꿉니다. GET /api/directory는 승인된 사용자의 id·이름·직급·부서만 줍니다.
 - form-ux: 우리가 붙인 *·(선택) 표시는 data-fx-mark로 찾습니다(칸이 label 안 더 깊은 곳에 있을 때 표시가 끝없이 늘어나던 문제). 입력값이 아닌 선택 도구에는 data-no-mark를 붙이세요. 휴대폰 카드에서 접혀도 보여야 하는 버튼 칸은 td에 data-card-primary를 붙입니다.
+
+## 조직 구성 · 가입 시 부서/직급 선택 (15.49)
+- 0026_org_structure.sql: org_departments(name UNIQUE, parent_id, sort, active)·org_positions(name UNIQUE, sort=서열, 낮은 직급이 앞), 비어 있는 상태로 시작. 사용자에는 users.department/position 이름 문자열을 저장합니다.
+- worker.mjs 「조직 구성」: GET /api/org(로그인 없이, 사용 중 항목만 — 가입 화면용), GET/POST/PUT/DELETE /api/admin/org/:kind(/:id), POST …/:id/move(같은 상위 안에서 순서), POST /api/admin/org-import(사용자 값으로 빈 목록 채우기). 모두 관리자 전용(GET /api/org 제외). 상위 부서 순환 금지, 이름 변경 시 users의 같은 이름도 batch로 함께 바꿉니다(지난 구매의뢰서 스냅샷은 그대로). 사용자가 있거나 하위 부서가 있으면 삭제를 거부하고 「사용 중지」를 안내합니다.
+- orgChoice(): 목록이 있으면 사용 중 항목 중에서만 고를 수 있습니다. 가입(register)은 목록이 있으면 필수, 관리자 사용자 추가·수정은 선택. 목록이 비어 있으면 자유 입력(첫 관리자 가입 등).
+- 사용자가 자기 부서·직급을 바꾸는 /api/me/profile은 없앴습니다(조직은 관리자가 관리). 내 정보에는 읽기 전용으로 보입니다.
+- 구매의뢰: 의뢰부서는 입력받지 않고 작성자의 users.department, 요청자 직급은 users.position을 상신(재상신) 당시 값으로 저장합니다. 「부서명」 입력칸과 품목 「담당자」 칸은 없앴습니다(예전 기록에 담당자 값이 있으면 상세 표에만 보입니다).
+- 화면: public/org.js(index.html·local.mjs·build.mjs 포함) — orgFields()(가입·사용자 추가·사용자 행 「직급·부서」에서 공용), pageOrg(#/admin/org, 관리 메뉴 「조직 구성」, 관리자만). 조직도는 부서 순서대로 높은 직급부터 보여 주고 그 자리에서 부서·직급을 바꿉니다.
+- showInputAuthors는 form[data-no-author]를 건너뜁니다(조직 구성 양식, 요청자를 따로 보여 주는 구매의뢰 양식).
+
+## 영업 → 생산 생산의뢰 · 생산계획 연동 (15.50)
+- 0027_production_requests.sql: production_requests(req_no MR-YYMMDD-NN, 발주일·업체·주문번호·출고 희망 글/날짜·사양·비고, 요청자·부서, shipped·shipped_date·shipped_by, revision, request_id), production_request_lines(품목·제품코드·규격/사이즈·단위·수량, 사이즈별 수량은 사이즈마다 한 줄), schedules.production_line_id(생산의뢰에서 만든 일정의 연결). 세 곳 모두 추가만 했고 기존 데이터는 그대로입니다. 두 표는 전체 백업 대상입니다(15.49 조직 표도 이번에 백업 목록에 넣었습니다).
+- worker.mjs 「영업 → 생산: 생산의뢰」: 등록은 로그인 사용자 누구나(업체는 거래처 목록에 자동 등록), 수정·삭제는 작성자가 생산계획 반영 전까지만. POST /:id/plan(생산 담당 hasRole production)은 줄마다 아직 계획되지 않은 수량만큼 schedFields()로 일정을 만들고 production_line_id를 남깁니다(반제품 BOM은 semi, 나머지 finished, 메모 「생산의뢰 번호 · 업체 · 주문번호 · 사양」). POST /:id/ship은 작성자·물류·생산이 출고 완료/취소를 표시합니다.
+- 진행은 저장하지 않고 계산합니다: planned_qty=연결 일정 수량 합, produced_qty=연결 일정 실적 합(생산실적 + 반제품 커팅 기록, GET /api/schedules의 actual_qty와 같은 식 MR_ACTUAL), 상태 waiting/partial/planned/producing/done/shipped, 생산 완료일=마지막 실적일. 목록 status=open은 출고 전 전체(생산완료 포함).
+- GET /api/production-requests/needs: 출고 전 의뢰의 품목·규격별 생산 필요 수량(의뢰−생산)과 계획 안 된 수량. my-tasks approvals.production_requests(생산 담당: 계획 안 된 수량이 있는 의뢰) → 대시보드·메뉴 배지(#/prod/orders).
+- GET /api/schedules는 order_ref(「MR-… · 업체 · 주문번호」)·order_id를 함께 줍니다. 생산일정 항목은 이를 링크로 보여 주고 메모에서 같은 앞부분을 뺍니다. 일정을 지우면 그 수량은 다시 「계획 안 됨」이 됩니다.
+- 화면(public/sales.js): 영업 › 생산의뢰(작성 #/sales/mr/new · 목록 #/sales/mr), 생산 › 생산의뢰 접수(#/prod/orders, 생산 필요 수량 표 + 「접수·계획 반영」). 「사이즈별 입력」은 XS~XXL 수량을 사이즈별 줄로 만듭니다.
+- i18n: textarea의 placeholder도 번역합니다(입력 내용은 번역하지 않음).

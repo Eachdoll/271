@@ -256,8 +256,10 @@ route('POST', '/api/auth/register', async ({ body, req, res }) => {
   if (str(body.invite, 100) !== (await getSetting('invite_code'))) throw bad('초대코드가 올바르지 않습니다.');
   await db.prepare("INSERT INTO settings(key,value) VALUES('invite_code',?) ON CONFLICT(key) DO NOTHING").run(await getSetting('invite_code'));
   if ((await db.prepare('SELECT 1 FROM users WHERE name=?').get(name))) throw bad('이미 가입된 이름입니다. 로그인하세요.');
+  // 조직 구성에 부서·직급 목록이 있으면 가입 때 골라야 한다(첫 관리자 가입처럼 목록이 비어 있으면 생략).
+  const org = await orgChoice(body, { required: true });
   const salt = randomHex(16);
-  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,approval_status) SELECT ?,?,?,NOT EXISTS(SELECT 1 FROM users),CASE WHEN EXISTS(SELECT 1 FROM users) THEN 'pending' ELSE 'approved' END").run(name, salt, await hashPw(password, salt));
+  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,approval_status,department,position) SELECT ?,?,?,NOT EXISTS(SELECT 1 FROM users),CASE WHEN EXISTS(SELECT 1 FROM users) THEN 'pending' ELSE 'approved' END,?,?").run(name, salt, await hashPw(password, salt), org.department, org.position);
   const account = await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
   if (account.approval_status !== 'approved') return { user: null, pending: true, account: { id: account.id, name: account.name, approval_status: account.approval_status } };
   await startSession(req, res, account.id);
@@ -290,11 +292,6 @@ route('POST', '/api/auth/logout', async ({ req, res }) => {
 
 route('GET', '/api/me', async ({ req }) => { const u = (await currentUser(req)); return { user: u ? publicUser(u) : null }; }, { auth: false });
 
-// 내 직급·부서(구매의뢰 결재선 표시와 부서명 기본값)
-route('PUT', '/api/me/profile', async ({ user, body }) => {
-  await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(str(body.position, 30), str(body.department, 50), user.id);
-  return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(user.id));
-});
 route('PUT', '/api/me/password', async ({ user, body }) => {
   if (!(await pwMatches(user, body.current || ''))) throw bad('현재 비밀번호가 올바르지 않습니다.');
   if (String(body.password || '').length < 4) throw bad('새 비밀번호는 4자 이상이어야 합니다.');
@@ -329,8 +326,9 @@ route('POST', '/api/admin/users', async ({ user, body }) => {
   if (password.length < 4) throw bad('비밀번호는 4자 이상이어야 합니다.');
   const roles = Array.isArray(body.roles) ? body.roles : []; if (roles.some(r => !ROLES.includes(r))) throw bad('권한이 올바르지 않습니다.');
   if (await db.prepare('SELECT 1 FROM users WHERE name=?').get(name)) throw bad('이미 있는 이름입니다.');
+  const org = await orgChoice(body);
   const salt = randomHex(16);
-  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,roles,approval_status,reviewed_by,reviewed_at) VALUES(?,?,?,0,?,'approved',?,?)").run(name, salt, await hashPw(password, salt), [...new Set(roles)].join(','), user.name, now());
+  const r = await db.prepare("INSERT INTO users(name,pw_salt,pw_hash,is_admin,roles,approval_status,reviewed_by,reviewed_at,department,position) VALUES(?,?,?,0,?,'approved',?,?,?,?)").run(name, salt, await hashPw(password, salt), [...new Set(roles)].join(','), user.name, now(), org.department, org.position);
   return publicUser(await db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid));
 });
 route('POST', '/api/admin/users/:id/approval', async ({ user, params, body }) => {
@@ -354,7 +352,8 @@ route('PUT', '/api/admin/users/:id', async ({ user, params, body }) => {
     (await db.prepare('UPDATE users SET roles=? WHERE id=?').run(roles.join(','), target.id));
   }
   if (body.position !== undefined || body.department !== undefined) {
-    await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(body.position !== undefined ? str(body.position, 30) : target.position || '', body.department !== undefined ? str(body.department, 50) : target.department || '', target.id);
+    const org = await orgChoice({ department: body.department !== undefined ? body.department : target.department, position: body.position !== undefined ? body.position : target.position });
+    await db.prepare('UPDATE users SET position=?,department=? WHERE id=?').run(org.position, org.department, target.id);
   }
   if (body.is_admin !== undefined) {
     if (target.id === user.id && !body.is_admin) throw bad('자기 자신의 관리자 권한은 해제할 수 없습니다.');
@@ -375,7 +374,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1346,7 +1345,9 @@ route('GET', '/api/schedules', async ({ query }) => {
   // 기간과 겹치는 일정: 일간(그날), 주간(월~일), 월간(그 달)
   return (await db.prepare(`SELECT *,COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS actual_qty,
       (SELECT COUNT(*) FROM production_actuals a WHERE a.schedule_id=schedules.id AND a.voided_at IS NULL) + (SELECT COUNT(*) FROM semi_records c WHERE ${semiCutMatch('schedules')}) AS actual_count,
-      COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty FROM schedules WHERE kind=? AND (
+      COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch('schedules')}),0) AS cut_qty,
+      (SELECT r.req_no || ' · ' || r.customer || CASE WHEN r.order_no!='' THEN ' · ' || r.order_no ELSE '' END FROM production_request_lines l JOIN production_requests r ON r.id=l.request_id WHERE l.id=schedules.production_line_id) AS order_ref,
+      (SELECT l.request_id FROM production_request_lines l WHERE l.id=schedules.production_line_id) AS order_id FROM schedules WHERE kind=? AND (
       (period='day' AND start_date BETWEEN ? AND ?) OR
       (period='week' AND start_date<=? AND date(start_date,'+6 days')>=?) OR
       (period='month' AND start_date<=? AND date(start_date,'+1 month','-1 day')>=?)
@@ -2176,6 +2177,11 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     approvals.receipt_changes = { count: items.length, items: items.slice(0, 5) };
   }
   if (user.is_admin) approvals.temp_items = { count: (await db.prepare('SELECT COUNT(*) c FROM boms WHERE is_temp=1 AND active=1').get()).c };
+  // 생산의뢰: 생산계획에 아직 반영되지 않은 수량이 있는 의뢰(생산 담당·생산팀장·관리자).
+  if (hasRole(user, 'production')) {
+    const open = await db.prepare(`SELECT r.id,r.req_no,r.customer,r.order_no,r.ship_text,r.ship_date,r.created_at FROM production_requests r WHERE r.shipped=0 AND EXISTS(SELECT 1 FROM production_request_lines l WHERE l.request_id=r.id AND l.qty > COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0)) ORDER BY COALESCE(r.ship_date,'9999'), r.id LIMIT 50`).all();
+    if (open.length) approvals.production_requests = { count: open.length, items: open.slice(0, 5) };
+  }
   // 구매의뢰: 지금 내 결재 차례인 의뢰서(관리자도 자기 차례만).
   {
     const items = await db.prepare(`SELECT pr.id,pr.doc_no,pr.title,pr.author_name,pr.submitted_at,(SELECT item FROM purchase_request_items i WHERE i.request_id=pr.id ORDER BY line_no LIMIT 1) first_item,(SELECT COUNT(*) FROM purchase_request_items i WHERE i.request_id=pr.id) item_count
@@ -2192,6 +2198,277 @@ route('GET', '/api/my-tasks', async ({ user }) => {
     purchase_requests: await db.prepare("SELECT pr.id,pr.doc_no,pr.title,pr.status,pr.reject_reason,pr.updated_at,(SELECT item FROM purchase_request_items i WHERE i.request_id=pr.id ORDER BY line_no LIMIT 1) first_item,(SELECT user_name FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.step=pr.current_step AND l.kind!='cc') current_user_name,(SELECT user_name FROM purchase_request_lines l WHERE l.request_id=pr.id AND l.decision='rejected' ORDER BY l.decided_at DESC LIMIT 1) rejected_by FROM purchase_requests pr WHERE pr.author_id=? AND (pr.status='pending' OR (pr.status='rejected' AND pr.updated_at>=date('now','+9 hours','-7 days'))) ORDER BY pr.id DESC LIMIT 20").all(user.id),
   };
   return { approvals, mine };
+});
+
+// ── 조직 구성 (부서·직급) ──
+// 관리자가 부서(상·하위)와 직급(서열) 목록을 관리한다. 사용자에는 이름 문자열을 저장하므로
+// 이름을 바꾸면 그 이름을 쓰던 사용자도 함께 바꾼다. 쓰는 사람이 있거나 하위 부서가 있으면 삭제 대신 사용 중지한다.
+const ORG = { departments: { table: 'org_departments', column: 'department', label: '부서' }, positions: { table: 'org_positions', column: 'position', label: '직급' } };
+async function orgLists(activeOnly) {
+  const where = activeOnly ? 'WHERE active=1' : '';
+  return {
+    departments: await db.prepare(`SELECT id,name,parent_id,sort,active FROM org_departments ${where} ORDER BY sort, id`).all(),
+    positions: await db.prepare(`SELECT id,name,sort,active FROM org_positions ${where} ORDER BY sort, id`).all(),
+  };
+}
+// 가입·사용자 저장 때 부서·직급 검사: 목록이 있으면 사용 중인 항목에서 골라야 한다. required면 빈 값도 거부.
+async function orgChoice(body, { required = false } = {}) {
+  const lists = await orgLists(true), out = {};
+  for (const [key, kind, label] of [['department', 'departments', '부서'], ['position', 'positions', '직급']]) {
+    const value = str(body[key], key === 'department' ? 50 : 30);
+    if (!lists[kind].length) { out[key] = value; continue; }
+    if (!value) { if (required) throw bad(`${label}을(를) 고르세요.`); out[key] = ''; continue; }
+    if (!lists[kind].some(item => item.name === value)) throw bad(`${label} 「${value}」은(는) 조직 구성에 없거나 사용 중지되었습니다. 목록에서 다시 고르세요.`);
+    out[key] = value;
+  }
+  return out;
+}
+route('GET', '/api/org', async () => orgLists(true), { auth: false });
+route('GET', '/api/admin/org', async ({ user }) => {
+  requireAdmin(user);
+  const lists = await orgLists(false);
+  const users = await db.prepare("SELECT id,name,department,position,approval_status,is_admin FROM users ORDER BY name").all();
+  return { ...lists, users: users.map(u => ({ ...u, is_admin: !!u.is_admin })) };
+});
+function orgKind(kind) { if (!Object.hasOwn(ORG, kind)) throw bad('조직 구성 종류를 확인하세요.'); return ORG[kind]; }
+async function orgParent(kind, parentId, selfId = null) {
+  if (kind !== 'departments' || parentId === undefined || parentId === null || parentId === '') return null;
+  const id = Number(parentId); if (!Number.isSafeInteger(id) || id <= 0) throw bad('상위 부서를 다시 고르세요.');
+  await mustGet('org_departments', id);
+  // 자기 자신이나 하위 부서를 상위로 두면 순환이 생긴다.
+  for (let cursor = id, guard = 0; cursor; guard++) {
+    if (cursor === selfId) throw bad('자기 자신이나 하위 부서를 상위 부서로 둘 수 없습니다.');
+    if (guard > 50) throw bad('부서 단계가 너무 깊습니다.');
+    cursor = (await db.prepare('SELECT parent_id FROM org_departments WHERE id=?').get(cursor))?.parent_id || null;
+  }
+  return id;
+}
+route('POST', '/api/admin/org/:kind', async ({ user, params, body }) => {
+  requireAdmin(user); const k = orgKind(params.kind);
+  const name = reqStr(body.name, k.label + ' 이름', params.kind === 'departments' ? 50 : 30);
+  if (await db.prepare(`SELECT 1 FROM ${k.table} WHERE name=?`).get(name)) throw new HttpError(409, `이미 있는 ${k.label}입니다.`);
+  const parent = await orgParent(params.kind, body.parent_id);
+  const sort = ((await db.prepare(`SELECT MAX(sort) s FROM ${k.table}`).get()).s ?? 0) + 1;
+  const r = params.kind === 'departments'
+    ? await db.prepare('INSERT INTO org_departments(name,parent_id,sort) VALUES(?,?,?)').run(name, parent, sort)
+    : await db.prepare('INSERT INTO org_positions(name,sort) VALUES(?,?)').run(name, sort);
+  return mustGet(k.table, r.lastInsertRowid);
+});
+route('PUT', '/api/admin/org/:kind/:id', async ({ user, params, body }) => {
+  requireAdmin(user); const k = orgKind(params.kind); const row = await mustGet(k.table, params.id);
+  const name = body.name === undefined ? row.name : reqStr(body.name, k.label + ' 이름', params.kind === 'departments' ? 50 : 30);
+  if (name !== row.name && await db.prepare(`SELECT 1 FROM ${k.table} WHERE name=?`).get(name)) throw new HttpError(409, `이미 있는 ${k.label}입니다.`);
+  const active = body.active === undefined ? row.active : (body.active ? 1 : 0);
+  const queries = [];
+  if (params.kind === 'departments') {
+    const parent = body.parent_id === undefined ? row.parent_id : await orgParent('departments', body.parent_id, row.id);
+    queries.push({ sql: 'UPDATE org_departments SET name=?,parent_id=?,active=? WHERE id=?', args: [name, parent, active, row.id] });
+  } else queries.push({ sql: 'UPDATE org_positions SET name=?,active=? WHERE id=?', args: [name, active, row.id] });
+  // 이름이 바뀌면 그 이름을 쓰던 사용자도 함께 바꾼다(지난 구매의뢰서의 당시 표시는 그대로 둔다).
+  if (name !== row.name) queries.push({ sql: `UPDATE users SET ${k.column}=? WHERE ${k.column}=?`, args: [name, row.name] });
+  await db.batch(queries);
+  return mustGet(k.table, row.id);
+});
+route('POST', '/api/admin/org/:kind/:id/move', async ({ user, params, body }) => {
+  requireAdmin(user); const k = orgKind(params.kind); const row = await mustGet(k.table, params.id);
+  const dir = Number(body.dir); if (![-1, 1].includes(dir)) throw bad('이동 방향을 확인하세요.');
+  // 부서는 같은 상위 부서 안에서만 순서를 바꾼다.
+  const scope = params.kind === 'departments' ? (row.parent_id ? 'parent_id=?' : 'parent_id IS NULL') : '1=1';
+  const args = params.kind === 'departments' && row.parent_id ? [row.parent_id] : [];
+  const siblings = await db.prepare(`SELECT id,sort FROM ${k.table} WHERE ${scope} ORDER BY sort, id`).all(...args);
+  const i = siblings.findIndex(s => s.id === row.id), j = i + dir;
+  if (j < 0 || j >= siblings.length) return orgLists(false);
+  [siblings[i], siblings[j]] = [siblings[j], siblings[i]];
+  await db.batch(siblings.map((s, index) => ({ sql: `UPDATE ${k.table} SET sort=? WHERE id=?`, args: [index + 1, s.id] })));
+  return orgLists(false);
+});
+route('DELETE', '/api/admin/org/:kind/:id', async ({ user, params }) => {
+  requireAdmin(user); const k = orgKind(params.kind); const row = await mustGet(k.table, params.id);
+  const used = (await db.prepare(`SELECT COUNT(*) c FROM users WHERE ${k.column}=?`).get(row.name)).c;
+  if (used) throw bad(`${row.name}에 속한 사용자가 ${used}명 있습니다. 사용자를 옮기거나 「사용 중지」로 바꾸세요.`);
+  if (params.kind === 'departments' && await db.prepare('SELECT 1 FROM org_departments WHERE parent_id=?').get(row.id)) throw bad('하위 부서가 있습니다. 하위 부서를 먼저 옮기거나 지우세요.');
+  await db.prepare(`DELETE FROM ${k.table} WHERE id=?`).run(row.id);
+  return { ok: true };
+});
+// 지금 사용자들이 쓰는 부서·직급 이름으로 빈 목록을 채운다(처음 한 번, 이미 있는 이름은 건너뜀).
+route('POST', '/api/admin/org-import', async ({ user }) => {
+  requireAdmin(user);
+  for (const [kind, column] of [['departments', 'department'], ['positions', 'position']]) {
+    const table = ORG[kind].table;
+    const names = (await db.prepare(`SELECT DISTINCT ${column} v FROM users WHERE ${column}!='' ORDER BY ${column}`).all()).map(r => r.v);
+    let sort = ((await db.prepare(`SELECT MAX(sort) s FROM ${table}`).get()).s ?? 0);
+    for (const name of names) await db.prepare(`INSERT INTO ${table}(name,sort) VALUES(?,?) ON CONFLICT(name) DO NOTHING`).run(name, ++sort);
+  }
+  return orgLists(false);
+});
+
+// ── 영업 → 생산: 생산의뢰(수주) ──
+// 영업이 업체·주문번호·출고 희망·사양과 품목(사이즈별 줄)을 올리면, 생산 담당이 「생산계획 반영」으로 생산일정을 만든다.
+// 일정은 schedules.production_line_id로 의뢰 줄에 연결되고, 진행(생산 수량·완료일)은 그 일정의 실적으로 계산한다.
+const MR_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+async function mrLines(list) {
+  if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
+  if (list.length > 60) throw bad('품목 줄은 60개까지 입력할 수 있습니다.');
+  const lines = [];
+  for (const [index, raw] of list.entries()) {
+    const it = raw && typeof raw === 'object' ? raw : {}, no = `${index + 1}번 품목`;
+    let bom = null;
+    if (it.bom_id !== undefined && it.bom_id !== null && it.bom_id !== '') {
+      const id = Number(it.bom_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad(`${no}의 품목을 다시 선택하세요.`);
+      bom = await mustGet('boms', id); if (!bom.active) throw bad(`${no}은(는) 사용 중지된 품목입니다.`);
+    }
+    const qty = num(it.qty, `${no} 수량`); if (!(qty > 0)) throw bad(`${no} 수량은 0보다 커야 합니다.`);
+    lines.push({ line_no: index + 1, bom_id: bom ? bom.id : null, product_code: bom ? bom.product_code : str(it.product_code, 50), item: bom ? bom.product : reqStr(it.item, `${no} 품목명`, 200), spec: str(it.spec, 100), unit: str(it.unit, 20) || (bom ? bom.unit : ''), qty });
+  }
+  return lines;
+}
+function mrHead(body) {
+  const shipDate = dateStr(body.ship_date, '출고 희망일', { required: false });
+  return { order_date: dateStr(body.order_date, '발주일'), customer: reqStr(body.customer, '업체(고객사)', 100), order_no: str(body.order_no, 100), ship_text: str(body.ship_text, 50), ship_date: shipDate, spec: str(body.spec, 1000), note: str(body.note, 1000) };
+}
+// 줄마다 계획 수량(연결된 일정 합)·생산 수량(일정 실적 합)·마지막 생산일을 붙인다.
+const MR_ACTUAL = s => `COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=${s}.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch(s)}),0)`;
+async function mrLineProgress(ids) {
+  if (!ids.length) return [];
+  const marks = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT l.*,
+      COALESCE((SELECT SUM(s.qty) FROM schedules s WHERE s.production_line_id=l.id),0) AS planned_qty,
+      COALESCE((SELECT SUM(${MR_ACTUAL('s')}) FROM schedules s WHERE s.production_line_id=l.id),0) AS produced_qty,
+      (SELECT MAX(a.production_date) FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE s.production_line_id=l.id AND a.voided_at IS NULL) AS last_produced,
+      (SELECT COUNT(*) FROM schedules s WHERE s.production_line_id=l.id) AS schedule_count
+    FROM production_request_lines l WHERE l.request_id IN (${marks}) ORDER BY l.request_id, l.line_no`).all(...ids);
+}
+function mrState(row, lines) {
+  const qty = lines.reduce((t, l) => t + l.qty, 0), planned = lines.reduce((t, l) => t + Math.min(l.planned_qty, l.qty), 0), produced = lines.reduce((t, l) => t + Math.min(l.produced_qty, l.qty), 0);
+  const done = lines.length && lines.every(l => l.produced_qty >= l.qty);
+  const status = row.shipped ? 'shipped' : done ? 'done' : produced > 0 ? 'producing' : planned >= qty ? 'planned' : planned > 0 ? 'partial' : 'waiting';
+  const doneDate = done ? lines.map(l => l.last_produced).filter(Boolean).sort().at(-1) || null : null;
+  return { status, total_qty: qty, planned_total: planned, produced_total: produced, done_date: doneDate, unplanned_lines: lines.filter(l => l.planned_qty < l.qty).length };
+}
+async function mrDetail(row, user) {
+  const lines = await mrLineProgress([row.id]);
+  const state = mrState(row, lines);
+  const schedules = await db.prepare(`SELECT s.id,s.kind,s.period,s.start_date,s.product,s.spec,s.qty,s.done,s.production_line_id,${MR_ACTUAL('s')} AS actual_qty FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=? ORDER BY s.start_date, s.id`).all(row.id);
+  const mine = user && (user.is_admin || row.author_id === user.id);
+  return { ...row, shipped: !!row.shipped, lines, schedules, ...state,
+    can_edit: !!(mine && !lines.some(l => l.schedule_count) && !row.shipped),
+    can_plan: !!(user && hasRole(user, 'production') && !row.shipped && state.unplanned_lines > 0),
+    can_ship: !!(user && (mine || hasRole(user, 'logistics') || hasRole(user, 'production'))) };
+}
+route('GET', '/api/production-requests', async ({ user, query }) => {
+  const where = [], args = [];
+  applyListDates(where, args, query, 'r.order_date');
+  const q = String(query.q || '').trim();
+  if (q) {
+    if (q.length > 200) throw bad('검색어는 200자까지 입력하세요.');
+    const p = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+    where.push("(r.req_no LIKE ? ESCAPE '\\' OR r.customer LIKE ? ESCAPE '\\' OR r.order_no LIKE ? ESCAPE '\\' OR r.spec LIKE ? ESCAPE '\\' OR r.author_name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM production_request_lines l WHERE l.request_id=r.id AND (l.item LIKE ? ESCAPE '\\' OR l.product_code LIKE ? ESCAPE '\\' OR l.spec LIKE ? ESCAPE '\\')))");
+    args.push(...Array(8).fill(p));
+  }
+  if (query.mine === '1') { where.push('r.author_id=?'); args.push(user.id); }
+  const rows = await db.prepare(`SELECT r.* FROM production_requests r ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY r.shipped, COALESCE(r.ship_date, '9999'), r.order_date, r.id LIMIT 300`).all(...args);
+  const lines = await mrLineProgress(rows.map(r => r.id));
+  let out = rows.map(row => { const ls = lines.filter(l => l.request_id === row.id); return { ...row, shipped: !!row.shipped, lines: ls, ...mrState(row, ls) }; });
+  if (query.status) {
+    // open = 출고 전 전체(생산완료지만 아직 출고 안 한 의뢰도 포함), waiting = 계획이 덜 된 의뢰
+    const wanted = { open: s => s !== 'shipped', waiting: s => ['waiting', 'partial'].includes(s) };
+    const test = wanted[query.status] || (s => s === query.status);
+    if (!wanted[query.status] && !['waiting', 'partial', 'planned', 'producing', 'done', 'shipped'].includes(query.status)) throw bad('진행 상태를 확인하세요.');
+    out = out.filter(r => test(r.status));
+  }
+  return out;
+});
+// 생산 필요 수량: 아직 출고되지 않은 의뢰의 품목·규격별 남은 생산 수량 합계(영업의 「TOTAL 생산 필요 수량」)
+route('GET', '/api/production-requests/needs', async () => {
+  const rows = await db.prepare('SELECT id FROM production_requests WHERE shipped=0').all();
+  const lines = await mrLineProgress(rows.map(r => r.id));
+  const map = new Map();
+  for (const l of lines) {
+    const left = Math.max(0, l.qty - l.produced_qty); if (!left) continue;
+    const key = [l.item, l.spec, l.unit].join('\u0001');
+    const e = map.get(key) || { item: l.item, product_code: l.product_code, spec: l.spec, unit: l.unit, ordered: 0, produced: 0, need: 0, unplanned: 0, requests: 0 };
+    e.ordered += l.qty; e.produced += Math.min(l.produced_qty, l.qty); e.need += left; e.unplanned += Math.max(0, l.qty - l.planned_qty); e.requests++;
+    map.set(key, e);
+  }
+  return [...map.values()].sort((a, b) => a.item.localeCompare(b.item, 'ko') || MR_SIZES.indexOf(a.spec) - MR_SIZES.indexOf(b.spec) || a.spec.localeCompare(b.spec));
+});
+route('GET', '/api/production-requests/:id', async ({ user, params }) => mrDetail(await mustGet('production_requests', params.id), user));
+route('POST', '/api/production-requests', async ({ user, body }) => {
+  const requestId = str(body.request_id, 80);
+  if (requestId) { const done = await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(requestId); if (done) return mrDetail(done, user); }
+  const head = mrHead(body), lines = await mrLines(body.lines);
+  const prefix = 'MR-' + head.order_date.slice(2).replace(/-/g, '') + '-';
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const last = await db.prepare("SELECT req_no FROM production_requests WHERE req_no LIKE ? ESCAPE '\\' ORDER BY req_no DESC LIMIT 1").get(prefix.replace(/[\\%_]/g, '\\$&') + '%');
+    const no = prefix + String((last ? Number(last.req_no.slice(prefix.length)) || 0 : 0) + 1).padStart(2, '0');
+    try {
+      await db.batch([
+        { sql: 'INSERT INTO production_requests(req_no,order_date,customer,order_no,ship_text,ship_date,spec,note,author_id,author_name,author_department,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', args: [no, head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, user.id, user.name, user.department || '', requestId || null] },
+        ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE req_no=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, no] })),
+      ]);
+      await ensureVendor(head.customer, user);
+      return mrDetail(await db.prepare('SELECT * FROM production_requests WHERE req_no=?').get(no), user);
+    } catch (error) {
+      if (!String(error.message).includes('UNIQUE')) throw error;
+      if (requestId) { const done = await db.prepare('SELECT * FROM production_requests WHERE request_id=?').get(requestId); if (done) return mrDetail(done, user); }
+    }
+  }
+  throw new HttpError(409, '의뢰 번호가 겹쳤습니다. 잠시 후 다시 등록하세요.');
+});
+async function mrEditable(user, id) {
+  const row = await mustGet('production_requests', id);
+  if (!(user.is_admin || row.author_id === user.id)) throw new HttpError(403, '작성자만 고칠 수 있습니다.');
+  if (await db.prepare('SELECT 1 FROM schedules s JOIN production_request_lines l ON l.id=s.production_line_id WHERE l.request_id=?').get(row.id)) throw bad('이미 생산계획에 반영된 의뢰는 고치거나 지울 수 없습니다. 생산 담당자와 일정을 먼저 정리하세요.');
+  return row;
+}
+route('PUT', '/api/production-requests/:id', async ({ user, params, body }) => {
+  const row = await mrEditable(user, params.id);
+  if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  const head = mrHead(body), lines = await mrLines(body.lines);
+  const result = await db.batch([
+    { sql: "UPDATE production_requests SET order_date=?,customer=?,order_no=?,ship_text=?,ship_date=?,spec=?,note=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.order_date, head.customer, head.order_no, head.ship_text, head.ship_date, head.spec, head.note, row.id, row.revision] },
+    { sql: 'DELETE FROM production_request_lines WHERE request_id=? AND (SELECT revision FROM production_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
+    ...lines.map(l => ({ sql: 'INSERT INTO production_request_lines(request_id,line_no,bom_id,product_code,item,spec,unit,qty) SELECT id,?,?,?,?,?,?,? FROM production_requests WHERE id=? AND revision=?', args: [l.line_no, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, row.id, row.revision + 1] })),
+  ]);
+  if (!result[0].meta.changes) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
+  await ensureVendor(head.customer, user);
+  return mrDetail(await mustGet('production_requests', row.id), user);
+});
+route('DELETE', '/api/production-requests/:id', async ({ user, params }) => {
+  const row = await mrEditable(user, params.id);
+  await db.batch([{ sql: 'DELETE FROM production_request_lines WHERE request_id=?', args: [row.id] }, { sql: 'DELETE FROM production_requests WHERE id=?', args: [row.id] }]);
+  return { ok: true };
+});
+// 생산계획 반영: 아직 계획되지 않은 수량만큼 생산일정을 만든다(생산 담당). 일정은 의뢰 줄에 연결된다.
+route('POST', '/api/production-requests/:id/plan', async ({ user, params, body }) => {
+  if (!hasRole(user, 'production')) throw new HttpError(403, '생산 담당자만 생산계획에 반영할 수 있습니다.');
+  const row = await mustGet('production_requests', params.id);
+  if (row.shipped) throw bad('출고 완료된 의뢰입니다.');
+  const wanted = Array.isArray(body.line_ids) ? body.line_ids.map(Number) : null;
+  const lines = (await mrLineProgress([row.id])).filter(l => l.planned_qty < l.qty && (!wanted || wanted.includes(l.id)));
+  if (!lines.length) throw bad('생산계획에 반영할 남은 수량이 없습니다.');
+  const period = String(body.period || 'week'); if (!['day', 'week', 'month'].includes(period)) throw bad('일간/주간/월간을 선택하세요.');
+  const startDate = dateStr(body.start_date, '시작일');
+  const commands = [];
+  for (const l of lines) {
+    const bom = l.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(l.bom_id) : null;
+    const kind = ['finished', 'semi'].includes(body.kind) ? body.kind : bom && bom.kind === 'semi' && bom.item_category === '반제품' ? 'semi' : 'finished';
+    const note = [`생산의뢰 ${row.req_no}`, row.customer, row.order_no, row.spec].filter(Boolean).join(' · ').slice(0, 500);
+    const f = await schedFields({ kind, period, start_date: startDate, product: l.item, qty: l.qty - l.planned_qty, note, bom_id: bom && bom.active && bom.kind === kind ? bom.id : null });
+    commands.push(insertItem('schedules', { kind: f.kind, period: f.period, start_date: f.start_date, product: f.product, qty: f.qty, note: f.note, bom_id: f.bom_id, bom_snapshot: f.bom_snapshot, spec: l.spec, unit: l.unit || (f.bom_id ? JSON.parse(f.bom_snapshot).unit || '' : ''), lot: '', batch_id: '', created_by: user.name, production_line_id: l.id }));
+  }
+  await db.batch(commands);
+  return mrDetail(row, user);
+});
+// 출고 완료 체크(출고여부·출고일). 작성자·물류·생산 담당.
+route('POST', '/api/production-requests/:id/ship', async ({ user, params, body }) => {
+  const row = await mustGet('production_requests', params.id);
+  if (!(user.is_admin || row.author_id === user.id || hasRole(user, 'logistics') || hasRole(user, 'production'))) throw new HttpError(403, '작성자·물류·생산 담당자만 출고를 표시할 수 있습니다.');
+  if (body.shipped) {
+    const date = dateStr(body.shipped_date, '출고일');
+    await db.prepare("UPDATE production_requests SET shipped=1,shipped_date=?,shipped_by=?,revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=?").run(date, user.name, row.id);
+  } else await db.prepare("UPDATE production_requests SET shipped=0,shipped_date=NULL,shipped_by='',revision=revision+1,updated_at=datetime('now','+9 hours') WHERE id=?").run(row.id);
+  return mrDetail(await mustGet('production_requests', row.id), user);
 });
 
 // ── 영업: 구매의뢰 (전자결재) ──
@@ -2240,8 +2517,9 @@ async function prLines(body, authorId) {
   return [...approve.map(id => ['approve', ++step, id]), ...agree.map(id => ['agree', ++step, id]), ...cc.map(id => ['cc', 0, id])]
     .map(([kind, s, id]) => ({ kind, step: s, user_id: id, user_name: byId.get(id).name, user_position: byId.get(id).position || '' }));
 }
-function prHead(body, user) {
-  return { doc_date: dateStr(body.doc_date, '작성일'), department: str(body.department, 50) || user.department || '', title: str(body.title, 200), note: str(body.note, 2000) };
+// 의뢰부서·요청자는 입력받지 않고 작성자의 조직 정보(가입·조직 구성)를 상신 당시 값으로 남긴다.
+function prHead(body, author) {
+  return { doc_date: dateStr(body.doc_date, '작성일'), department: author.department || '', title: str(body.title, 200), note: str(body.note, 2000) };
 }
 async function prAccess(user, id, { write = false } = {}) {
   if (!/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(Number(id))) throw bad('구매의뢰 번호가 올바르지 않습니다.');
@@ -2343,9 +2621,10 @@ route('PUT', '/api/purchase-requests/:id', async ({ user, params, body }) => {
   const decided = await db.prepare("SELECT 1 FROM purchase_request_lines WHERE request_id=? AND decision!=''").get(row.id);
   if (!(row.status === 'rejected' || (row.status === 'pending' && !decided))) throw bad('결재가 진행 중이거나 승인된 의뢰서는 고칠 수 없습니다.');
   if (body.revision !== undefined && Number(body.revision) !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰서가 바뀌었습니다. 다시 열어 확인하세요.');
-  const head = prHead(body, user), items = await prItems(body.items), lines = await prLines(body, row.author_id);
+  const author = await db.prepare('SELECT * FROM users WHERE id=?').get(row.author_id) || { department: row.department, position: row.author_position };
+  const head = prHead(body, author), items = await prItems(body.items), lines = await prLines(body, row.author_id);
   const result = await db.batch([
-    { sql: "UPDATE purchase_requests SET doc_date=?,department=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.doc_date, head.department, head.title, head.note, row.id, row.revision] },
+    { sql: "UPDATE purchase_requests SET doc_date=?,department=?,author_position=?,title=?,note=?,status='pending',current_step=1,reject_reason='',approved_at=NULL,revision=revision+1,submitted_at=datetime('now','+9 hours'),updated_at=datetime('now','+9 hours') WHERE id=? AND revision=?", args: [head.doc_date, head.department, author.position || '', head.title, head.note, row.id, row.revision] },
     { sql: 'DELETE FROM purchase_request_items WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
     { sql: 'DELETE FROM purchase_request_lines WHERE request_id=? AND (SELECT revision FROM purchase_requests WHERE id=?)=?', args: [row.id, row.id, row.revision + 1] },
     ...prInsertDetails(row.doc_no, items, lines).map(q => ({ sql: q.sql + ' AND revision=?', args: [...q.args, row.revision + 1] })),

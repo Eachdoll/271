@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.48';
+const APP_VERSION = '15.50';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -32,7 +32,8 @@ let ME = null;
 function showInputAuthors() {
   if (!ME) return;
   for (const form of document.querySelectorAll('form')) {
-    if (form.dataset.readOnly === 'true') continue;
+    // data-no-author: 작성자 표시가 필요 없는 관리 양식(조직 구성)이나 요청자를 따로 보여 주는 양식(구매의뢰).
+    if (form.dataset.readOnly === 'true' || form.hasAttribute('data-no-author')) continue;
     let label = form.querySelector(':scope > [data-input-author]');
     if (!label) { label = document.createElement('p'); label.dataset.inputAuthor = ''; label.className = 'small muted input-author'; form.prepend(label); }
     const original = form.dataset.entryAuthor;
@@ -271,7 +272,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
@@ -285,6 +286,7 @@ const NAV = [
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [
     { sub: '샘플(제품)', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트']] },
+    ['#/prod/orders', '생산의뢰 접수'],
     { sub: '완제품 생산', items: [['#/prod/finished/new', '생산계획 입력'], ['#/prod/finished', '생산일정 · 실적']] },
     { sub: '반제품 생산', items: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
     { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
@@ -298,7 +300,7 @@ const NAV = [
 ];
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
 const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];
-const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/bom', '제품등록']];
+const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
 const VIEW_SPLIT = {
@@ -428,8 +430,12 @@ const PAGES = {
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
   '#/prod/semi/wash/new': main => pageSemi(main, 'wash'),
   '#/sales/pr': pageSalesPrList,
+  '#/sales/mr': main => pageMrList(main, 'sales'),
+  '#/sales/mr/new': pageSalesMrEntry,
+  '#/prod/orders': main => pageMrList(main, 'production'),
   '#/sales/pr/new': pageSalesPrEntry,
   '#/admin': pageAdmin,
+  '#/admin/org': pageOrg,
   '#/admin/bom': pageBoms,
   '#/me': pageMe,
 };
@@ -488,13 +494,15 @@ function pageAuth(mode = 'login', notice = '') {
       <form class="stack" id="authForm">
         <label>이름<input name="name" autocomplete="username" required maxlength="30" placeholder="예) 홍길동"></label>
         <label>비밀번호<input name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required minlength="4"></label>
-        ${mode === 'register' ? '<label>초대코드<input name="invite" required placeholder="관리자에게 받은 초대코드"></label>' : ''}
+        ${mode === 'register' ? '<div class="stack" data-org-fields></div><label>초대코드<input name="invite" required placeholder="관리자에게 받은 초대코드"></label>' : ''}
         <button class="btn primary block">${mode === 'login' ? '로그인' : '가입하기'}</button>
       </form>
       ${mode === 'register' ? '<p class="muted small">가입 신청 후 관리자 승인이 필요합니다. 첫 계정만 자동으로 관리자가 됩니다.</p>' : ''}
     </div>
   </div>`;
   $$('.tabs button').forEach((b) => (b.onclick = () => pageAuth(b.dataset.m)));
+  // 가입: 조직 구성의 부서·직급 목록에서 고른다(목록이 비어 있으면 칸을 두지 않는다).
+  if (mode === 'register') api('GET', '/api/org').then(lists => { const host = $('[data-org-fields]'); if (host && (lists.departments.length || lists.positions.length)) host.innerHTML = orgFields(lists, {}, { required: true }); }).catch(() => {});
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
     try { const r = await api('POST', mode === 'login' ? '/api/auth/login' : '/api/auth/register', formObj(e.target)); if (r.pending) { pageAuth('login', '가입 신청이 완료되었습니다. 관리자 승인 후 로그인해 주세요.'); return; } ME = r.user; if (!location.hash) location.hash = '#/'; render(); }
@@ -535,6 +543,7 @@ function taskBadgeCounts(tasks) {
   if (a.semi_changes?.wash) counts['#/prod/semi/wash'] = a.semi_changes.wash;
   if (a.temp_items?.count) counts['#/admin/bom'] = a.temp_items.count;
   if (a.purchase_requests?.count) counts['#/sales/pr'] = a.purchase_requests.count;
+  if (a.production_requests?.count) counts['#/prod/orders'] = a.production_requests.count;
   return counts;
 }
 async function refreshNavBadges() {
@@ -559,6 +568,7 @@ function tasksCard(tasks) {
   if (a.actual_changes?.count) todo.push(`<li><a href="${a.actual_changes.finished ? '#/prod/finished' : '#/prod/semi'}"><b>생산실적 수정·취소 승인 대기 ${a.actual_changes.count}건</b></a><div class="small muted">${a.actual_changes.items.map(c => `${esc(c.product)} ${changeSummary(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.actual_changes.count, a.actual_changes.items.length)}</div></li>`);
   if (a.receipt_changes?.count) todo.push(`<li><a href="#/logistics/receive"><b>입고 수량 수정·취소 승인 대기 ${a.receipt_changes.count}건</b></a><div class="small muted">${a.receipt_changes.items.map(c => `${esc(c.item)} ${receiptChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.receipt_changes.count, a.receipt_changes.items.length)}</div></li>`);
   if (a.semi_changes?.count) todo.push(`<li><a href="${a.semi_changes.cut ? '#/prod/semi/cut' : '#/prod/semi/wash'}"><b>반제품 기록 수정·삭제 승인 대기 ${a.semi_changes.count}건</b></a><div class="small muted">${a.semi_changes.items.map(c => `${semiChangeText(c)} · ${esc(c.requested_by)}`).join(' / ')}${more(a.semi_changes.count, a.semi_changes.items.length)}</div></li>`);
+  if (a.production_requests?.count) todo.push(`<li><a href="#/prod/orders"><b>생산의뢰 접수 대기 ${a.production_requests.count}건</b></a><div class="small muted">${a.production_requests.items.map(r => `${esc(r.req_no)} ${esc(r.customer)}${r.ship_text || r.ship_date ? ' · 출고 ' + esc(r.ship_text || r.ship_date) : ''}`).join(' / ')}${more(a.production_requests.count, a.production_requests.items.length)}</div></li>`);
   if (a.purchase_requests?.count) todo.push(`<li><a href="#/sales/pr"><b>구매의뢰 결재 차례 ${a.purchase_requests.count}건</b></a><div class="small muted">${a.purchase_requests.items.map(r => `${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''} · ${esc(r.author_name)}`).join(' / ')}${more(a.purchase_requests.count, a.purchase_requests.items.length)}</div></li>`);
   if (a.temp_items?.count) todo.push(`<li><a href="#/admin/bom"><b>임시 제품코드 정리 ${a.temp_items.count}건</b></a><div class="small muted">직접 입력된 품목에 정식 코드를 주거나 기존 품목으로 합치세요.</div></li>`);
   const state = c => `<span class="chip ${c.status === 'rejected' ? 'red' : 'yellow'}">${c.status === 'rejected' ? '반려' : '승인 대기'}</span>`;
@@ -567,7 +577,7 @@ function tasksCard(tasks) {
   for (const c of m.semi_changes || []) mine.push(`<li>${state(c)} <a href="${c.process === 'wash' ? '#/prod/semi/wash' : '#/prod/semi/cut'}">반제품 기록</a> <span class="small">${semiChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
   for (const r of m.purchase_requests || []) mine.push(`<li>${state(r)} <a href="#/sales/pr">구매의뢰 · ${esc(r.doc_no)} ${esc(r.title || r.first_item || '')}</a>${r.status === 'pending' && r.current_user_name ? ` <span class="small muted">${esc(r.current_user_name)} 결재 차례</span>` : ''}${r.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(r.reject_reason)} (${esc(r.rejected_by || '')}) · 고쳐서 다시 상신하세요.</div>` : ''}</li>`);
   for (const c of m.receipt_changes) mine.push(`<li>${state(c)} <a href="#/logistics/receive">입고 · ${esc(c.item)}</a> <span class="small">${receiptChangeText(c)}</span>${c.status === 'rejected' ? `<div class="small red-text">반려 사유: ${esc(c.review_note)} (${esc(c.reviewed_by || '')})</div>` : ''}</li>`);
-  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests;
+  const canApprove = Object.keys(a.requests).length || a.actual_changes || a.receipt_changes || a.semi_changes || a.temp_items || a.purchase_requests || a.production_requests;
   return `<section class="card tasks" aria-labelledby="dashTasks"><h2 id="dashTasks">내가 처리할 일</h2><div class="tasks-grid">
     ${canApprove ? `<section><h3>승인할 일 ${todo.length ? `<span class="chip yellow">${todo.length}</span>` : ''}</h3>${todo.length ? `<ul>${todo.join('')}</ul>` : '<p class="small muted">승인 대기 중인 건이 없습니다.</p>'}</section>` : ''}
     <section><h3>내가 올린 요청 ${mine.length ? `<span class="chip">${mine.length}</span>` : ''}</h3>${mine.length ? `<ul>${mine.join('')}</ul>` : '<p class="small muted">대기 중이거나 최근 반려된 요청이 없습니다.</p>'}</section>
@@ -1431,7 +1441,9 @@ async function pageSchedule(kind) {
   $('#scBom').onchange = previewBom; $('#scNew [name=qty]').oninput = previewBom;
   $$('#scNew [name=period]').forEach((r) => (r.onchange = () => { $('#scHint').textContent = hints[r.value]; }));
   const range = () => view === 'day' ? [base, base] : view === 'week' ? [mondayOf(base), addDays(mondayOf(base), 6)] : [monthStart(base), monthEnd(base)];
-  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.note ? ` <span class="small muted">${esc(s.note)}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${planProgress(s)}<button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
+  // 생산의뢰에서 만든 일정은 메모 앞의 「생산의뢰 번호 · 업체 · 주문번호」를 링크로 보여 주고 메모에서는 뺀다.
+  const scheduleNote = s => s.order_ref && (s.note || '').startsWith('생산의뢰 ' + s.order_ref) ? s.note.slice(('생산의뢰 ' + s.order_ref).length).replace(/^ · /, '') : s.note;
+  const item = (s) => `<div class="sc-item ${s.done ? 'done' : ''}" data-id="${s.id}"><input type="checkbox" ${s.done ? 'checked' : ''} data-done="${s.id}" title="완료 체크" aria-label="완료"> <span class="p">${esc(s.product)}${lineInfo(s)}</span> <b>${fmtNum(s.qty)}</b>${s.order_ref ? ` <a class="sc-order" href="#/prod/orders" data-open-mr="${s.order_id}">생산의뢰 ${esc(s.order_ref)}</a>` : ''}${scheduleNote(s) ? ` <span class="small muted">${esc(scheduleNote(s))}</span>` : ''}<span class="small muted">입력자: ${esc(s.created_by || '기존 기록: 미기록')}</span>${s.bom_id ? `<button class="btn small" data-bom-view="${s.id}">BOM·소요량</button>` : ''}${planProgress(s)}<button class="btn small" data-actual-open="${s.id}">${s.kind === 'semi' ? '실적 조회 (커팅/융착 자동 집계)' : '생산실적 입력·조회'}</button>${commentButton("schedule", s.id, s.product)}<button class="x" data-del="${s.id}" title="삭제" aria-label="삭제">×</button></div>`;
   const totals = (list) => { const m = {}; list.forEach((s) => (m[s.product] = (m[s.product] || 0) + s.qty)); return Object.entries(m).map(([p, q]) => `<span class="chip">${esc(p)} <b>${fmtNum(q)}</b></span>`).join(' ') || '<span class="muted small">없음</span>'; };
   const load = async () => {
     uxWrite(calendarKey, { view, base });
@@ -1529,7 +1541,7 @@ async function pageShip(main) {
 // ───────────── 관리자 ─────────────
 async function pageAdmin(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 볼 수 있습니다.</div>'; return; }
-  const [s, users] = await Promise.all([api('GET', '/api/admin/settings'), api('GET', '/api/admin/users')]);
+  const [s, users, org] = await Promise.all([api('GET', '/api/admin/settings'), api('GET', '/api/admin/users'), api('GET', '/api/org')]);
   main.innerHTML = `
   <h1>관리자 설정</h1>
   <div class="card"><h3>데이터 백업</h3><p class="muted small">업무 기록·계정·사진을 파일로 저장합니다. 백업 중에는 다른 사용자의 입력을 잠시 멈춰 주세요. 파일에는 개인정보와 비밀번호 검증값이 포함되므로 안전하게 보관하세요.</p><button class="btn" id="backupBtn">전체 백업 다운로드</button><p id="backupStatus" role="status" class="muted small"></p></div>
@@ -1537,7 +1549,7 @@ async function pageAdmin(main) {
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
   <form class="card" id="userNew"><h3>사용자 추가</h3><p class="muted small">관리자가 계정을 바로 만듭니다. 만든 계정은 승인된 상태이며, 본인이 로그인한 뒤 「내 정보」에서 비밀번호를 바꿀 수 있습니다.</p>
-    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label></div>
+    <div class="form-grid"><label>이름 *<input name="name" required maxlength="30" autocomplete="off"></label><label>비밀번호 * (4자 이상)<input name="password" type="password" required minlength="4" autocomplete="new-password"></label>${orgFields(org)}</div>
     <p class="small muted">오퍼레이터를 선택한 일반 계정은 다른 업무 권한보다 입력 전용 모드가 우선합니다. 관리자는 전체 권한을 유지합니다.</p><div class="role-checks">${Object.entries(ROLE_LABEL).map(([role, label]) => `<label class="check"><input type="checkbox" data-new-role="${role}"> ${label}</label>`).join('')}</div>
     <div class="actions"><button class="btn primary">계정 만들기</button></div></form>
   <div class="card"><h3>가입 승인 · 사용자 권한</h3><p class="small muted">오퍼레이터: 반제품 커팅/융착·세탁과 완제품 실적만 입력합니다. 다른 업무 권한을 함께 선택해도 일반 계정은 입력 전용으로 제한됩니다. 관리자 계정은 제외됩니다.</p><p class="muted">승인 대기 ${users.filter(u => u.approval_status === 'pending').length}명 · 신규 가입자는 승인 후 로그인할 수 있습니다.</p>
@@ -1626,7 +1638,7 @@ async function pageAdmin(main) {
     const review = async (status, note = '') => { try { await api('POST', '/api/admin/users/' + id + '/approval', { status, note }); toast(status === 'approved' ? '가입을 승인했습니다.' : '가입을 반려했습니다.'); render(); } catch (e) { fail(e); } };
     const approve = $('[data-approve]', tr); if (approve) approve.onclick = async () => { if (await confirmBox(`${name} 님의 가입을 승인할까요?`)) review('approved'); };
     const reject = $('[data-reject]', tr); if (reject) reject.onclick = async () => { const value = await promptBox(`${name} 님의 가입 반려`, '<label>반려 사유<input name="note" maxlength="500"></label>'); if (value) review('rejected', value.note); };
-    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">구매의뢰 결재선에 이름과 함께 표시됩니다.</p><label>직급<input name="position" maxlength="30" value="${esc(u.position || '')}" placeholder="예: 과장"></label><label>부서<input name="department" maxlength="50" value="${esc(u.department || '')}" placeholder="예: 전략영업부"></label>`); if (v) { await save(v); pageAdmin(main); } };
+    $('[data-profile]', tr).onclick = async () => { const u = users.find(user => user.id === Number(id)); const v = await promptBox(`${name} 직급·부서`, `<p class="small muted">부서·직급 목록은 「조직 구성」에서 관리합니다.</p>${orgFields(org, u)}`); if (v) { await save(v); pageAdmin(main); } };
     $('[data-pw]', tr).onclick = async () => { const v = await promptBox(`${name} 비밀번호 초기화`, '<label>새 비밀번호 *<input name="password" required minlength="4"></label>'); if (v) save(v); };
     const del = $('[data-del]', tr); if (del) del.onclick = async () => { if (await confirmBox(`${name} 사용자를 삭제할까요?`)) { try { await api('DELETE', '/api/admin/users/' + id); render(); } catch (e) { fail(e); } } };
   });
@@ -1635,14 +1647,11 @@ async function pageAdmin(main) {
 async function pageMe(main) {
   main.innerHTML = `<h1>내 정보</h1>
   <div class="card"><p><b>${esc(ME.name)}</b> ${ME.is_admin ? '<span class="tag">관리자</span>' : ''}</p><p class="muted small">담당: ${ME.roles.map((r) => ROLE_LABEL[r]).join(', ') || '없음 (승인 권한이 필요하면 관리자에게 요청)'}</p></div>
-  <form class="card stack" id="profileForm"><h3>직급 · 부서</h3><p class="small muted">구매의뢰 결재선에 이름과 함께 표시되고, 부서는 구매의뢰서의 부서명 기본값이 됩니다.</p>
-    <div class="form-grid"><label>직급<input name="position" maxlength="30" value="${esc(ME.position || '')}" placeholder="예: 과장"></label><label>부서<input name="department" maxlength="50" value="${esc(ME.department || '')}" placeholder="예: 전략영업부"></label></div>
-    <div class="actions"><button class="btn primary">저장</button></div></form>
+  <div class="card"><h3>부서 · 직급</h3><p><b>${esc(ME.department || '부서 미지정')}</b> · ${esc(ME.position || '직급 미지정')}</p><p class="small muted">구매의뢰서의 의뢰부서·요청자 직급으로 자동 표시됩니다. 바꾸려면 관리자에게 요청하세요(관리 › 조직 구성).</p></div>
   <form class="card stack" id="pwForm"><h3>비밀번호 변경</h3>
     <label>현재 비밀번호<input type="password" name="current" required autocomplete="current-password"></label>
     <label>새 비밀번호<input type="password" name="password" required minlength="4" autocomplete="new-password"></label>
     <div class="actions"><button class="btn primary">변경</button></div></form>`;
-  $('#profileForm').onsubmit = async (e) => { e.preventDefault(); try { const me = await api('PUT', '/api/me/profile', formObj(e.target)); Object.assign(ME, { position: me.position, department: me.department }); toast('저장했습니다.'); } catch (err) { fail(err); } };
   $('#pwForm').onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/me/password', formObj(e.target)); e.target.reset(); toast('비밀번호를 변경했습니다.'); } catch (err) { fail(err); } };
 }
 
