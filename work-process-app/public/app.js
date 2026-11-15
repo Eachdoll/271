@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.42';
+const APP_VERSION = '15.43';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -877,9 +877,9 @@ async function pageReceive(main) {
 function otherReceiptForm(row = {}) {
   return `<div class="form-grid">
     <label>입고일 *<input name="received_date" type="date" required value="${esc(row.received_date || todayStr())}"></label>
-    <label class="span2">BOM 검색<input data-receipt-bom-search type="search" placeholder="품목명 또는 품목코드 검색"></label>
-    <label class="span2">BOM 품목 *<select name="bom_id" data-receipt-bom ${row.id && !row.bom_id ? '' : 'required'}><option value="">${row.id && !row.bom_id ? '기존 수기 등록 품목' : 'BOM 품목을 선택하세요'}</option></select></label>
-    <label>품목명<input name="item" required maxlength="200" value="${esc(row.item)}" ${row.id && !row.bom_id ? '' : 'readonly'}></label>
+    <label class="span2">품목 검색<input data-receipt-bom-search type="search" placeholder="품목명 또는 품목코드 검색"></label>
+    <label class="span2">품목명 *<select name="bom_id" data-receipt-bom ${row.id && !row.bom_id ? '' : 'required'}><option value="">${row.id && !row.bom_id ? '기존 수기 등록 품목' : '품목을 선택하세요'}</option></select></label>
+    <label class="receipt-item-name">품목명 (직접 입력)<input name="item" required maxlength="200" value="${esc(row.item)}" ${row.id && !row.bom_id ? '' : 'readonly'}></label>
     <label>분류<input name="item_category" readonly value="${esc(row.item_category)}"></label>
     <label>입고수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(row.qty)}"></label>
     <label>단위<input data-receipt-unit readonly></label>
@@ -912,7 +912,7 @@ function bindReceiptBom(form, row = {}) {
     choices = new Map(results.map(bom => [bom.id, bom]));
     if (previous && !choices.has(previous.id)) choices.set(previous.id, previous);
     if (original) choices.set(Number(row.bom_id), { ...original, id: Number(row.bom_id) });
-    select.innerHTML = `<option value="">${row.id && !row.bom_id ? '기존 수기 등록 품목' : 'BOM 품목을 선택하세요'}</option>` + [...choices.values()].map(bom => `<option value="${bom.id}" ${ITEM_CATEGORIES.includes(bom.item_category) ? '' : 'disabled'}>${esc(bom.product)}${bom.product_code ? ' · ' + esc(bom.product_code) : ''} / ${esc(bom.item_category || '미분류: 관리자 지정 필요')}</option>`).join('');
+    select.innerHTML = `<option value="">${row.id && !row.bom_id ? '기존 수기 등록 품목' : '품목을 선택하세요'}</option>` + [...choices.values()].map(bom => `<option value="${bom.id}" ${ITEM_CATEGORIES.includes(bom.item_category) ? '' : 'disabled'}>${esc(bom.product)}${bom.product_code ? ' · ' + esc(bom.product_code) : ''} / ${esc(bom.item_category || '미분류: 관리자 지정 필요')}</option>`).join('');
     select.value = choices.has(Number(selected)) ? selected : ''; apply();
   };
   select.onchange = apply;
@@ -922,7 +922,7 @@ function bindReceiptBom(form, row = {}) {
 }
 async function pageOtherReceipts(main, { entry = true } = {}) {
   main.innerHTML = `<h2>기타입고</h2>
-    <p class="muted">BOM에서 품목을 검색·선택하여 발주 없는 입고를 입력합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>${entry ? '' : '<p class="small muted">새 기타입고는 「기타입고 입력」 화면에서 등록합니다.</p><div class="actions" style="justify-content:flex-start"><a class="btn" href="#/logistics/other/new">+ 기타입고 입력</a></div>'}
+    <p class="muted">등록된 품목을 검색·선택하여 발주 없는 입고를 입력합니다. 등록 즉시 분석리스트에 수입검사(대기)가 자동 등록됩니다.</p>
     ${entry ? `<form class="card" id="otherNew"><h3>기타입고 등록</h3>${otherReceiptForm()}<div class="form-grid">${photoPicker()}${inspectionFields()}</div><div class="actions"><button class="btn primary">등록</button></div></form>` : ''}
     ${listControls('other', { dateLabel: '입고', from: monthStart(todayStr()), to: todayStr(), placeholder: '품목·코드·입고처·입력자·메모', extra: `<label>분류<select name="item_category" id="otherCategory">${categoryOptions('', true)}</select></label>${listInspectionSelect()}` })}<div id="otherList"></div>`;
   const filterForm = $('#otherFilters', main); let queryVersion = 0;

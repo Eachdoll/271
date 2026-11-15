@@ -878,3 +878,6 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
   .draft-state, .draft-state span, .input-author { font-size: 13.5px; }
   .report-legend span { font-size: 13px; }
 }
+
+/* 15.43 기타입고: 품목을 고르면 채워지는 읽기 전용 품목명 칸은 숨긴다(값은 그대로 저장). 예전 수기 기록 수정 때만 보인다. */
+.receipt-item-name:has(> input[readonly]) { display: none; }
