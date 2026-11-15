@@ -23,7 +23,7 @@ function prItemRow(it = {}) {
       <label>매입단가<input data-k="purchase_price" type="number" min="0" step="any" value="${v('purchase_price')}"></label>
       <label>판매단가<input data-k="sale_price" type="number" min="0" step="any" value="${v('sale_price')}"></label>
       <label>공급선<input data-k="vendor" maxlength="100" list="prVendorList" value="${v('vendor')}" placeholder="매입 거래처"></label>
-      <label>납품예정수량<input data-k="delivery_qty" maxlength="50" value="${v('delivery_qty')}" placeholder="예: 전량"></label>
+      <label>납품예정수량<input data-k="delivery_qty" maxlength="50" value="${v('delivery_qty')}" placeholder="비우면 전량 · 분할 시 예: 1차 50"></label>
       <label>사용고객사<input data-k="customer" maxlength="200" value="${v('customer')}"></label>
       <label>현재고<input data-k="stock_qty" maxlength="50" value="${v('stock_qty')}" placeholder="품목을 고르면 자동"></label>
       <label>입고요청일<input data-k="due_text" maxlength="50" value="${v('due_text')}" placeholder="예: ASAP 또는 2026-12-01"></label>
@@ -198,7 +198,7 @@ async function prOpen(id, after = () => {}) {
     <section><h4>본문 · 구매의뢰서</h4>
       <p><span class="muted">작성일</span> <b>${esc(pr.doc_date)}</b> <span class="muted">의뢰부서</span> <b>${esc(pr.department || '—')}</b> <span class="muted">요청자</span> <b>${esc(pr.author_name)}</b> <span>${esc(pr.author_position || '')}</span></p>
       <div class="table-wrap"><table class="grid pr-items"><thead><tr><th>NO</th><th>품목 · 규격</th><th>단위</th><th class="r">수량</th><th class="r">매입단가</th><th class="r">매입금액</th><th class="r">판매단가</th><th class="r">판매금액</th><th>공급선</th><th>납품예정수량</th><th>사용고객사</th><th>현재고</th><th>입고요청일</th>${pr.items.some(it => it.manager) ? '<th>담당자</th>' : ''}<th>월사용량</th><th>발주</th></tr></thead>
-      <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty)}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td>${pr.items.some(x => x.manager) ? `<td>${esc(it.manager)}</td>` : ''}<td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+      <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty || '전량')}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td>${pr.items.some(x => x.manager) ? `<td>${esc(it.manager)}</td>` : ''}<td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
       <p class="pr-totals">${`합계 · 매입 ${prMoney(pr.purchase_total)}원 · 판매 ${prMoney(pr.sale_total)}원 · 이익 ${prProfit(pr.sale_total, pr.purchase_total)}`}</p>
       ${pr.note ? `<p class="pr-note">${esc(pr.note)}</p>` : ''}
       <div class="thumbs">${pr.photos.map(f => `<img src="/uploads/${esc(f)}" data-big="/uploads/${esc(f)}" alt="구매의뢰 첨부 사진" loading="lazy">`).join('') || '<span class="muted small">첨부 사진 없음</span>'}</div></section>
@@ -276,14 +276,14 @@ async function mrForm(host, existing = null, { onDone } = {}) {
       <label>발주일 *<input name="order_date" type="date" required value="${existing ? e('order_date') : todayStr()}"></label>
       <label>출고 희망일<input name="ship_date" type="date" value="${e('ship_date')}"></label>
     </div>
-    <label>사양·요청사항<textarea name="spec" rows="2" maxlength="1000" placeholder="예: 사이즈 도장 제외 사양으로 진행 / 무지백·무지박스">${e('spec')}</textarea></label>
+    <label>사양·요청사항<textarea name="spec" rows="3" maxlength="1000" placeholder="예: 사이즈 도장 제외 사양으로 진행 / 무지백·무지박스">${e('spec')}</textarea></label>
     <section class="pr-section"><h3>생산 품목</h3><div data-lines></div>
       <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-line>+ 품목 줄 추가</button><button type="button" class="btn" data-size-grid>+ 사이즈별 입력</button></div>
       <div class="mr-size-grid card" data-size-box hidden><h4>사이즈별 수량</h4><div class="form-grid"><label class="span2">품목명<input data-size-item list="mrCatalogList" maxlength="200" placeholder="예: 습진장갑"></label><label>단위<input data-size-unit maxlength="20" placeholder="예: 켤레"></label></div>
         <div class="mr-sizes">${MR_SIZES.map(size => `<label>${size}<input type="number" min="0" step="any" data-size="${size}" inputmode="numeric"></label>`).join('')}</div>
         <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-size-apply>줄로 추가</button><button type="button" class="btn" data-size-close>닫기</button></div></div>
       <p class="pr-totals" data-mr-total aria-live="polite"></p></section>
-    <label>비고<textarea name="note" rows="2" maxlength="1000">${e('note')}</textarea></label>
+    ${existing && existing.note ? `<label>비고 <span class="hint">(예전 의뢰의 비고 · 사양·요청사항으로 옮기고 비워도 됩니다)</span><textarea name="note" rows="2" maxlength="1000">${e('note')}</textarea></label>` : ''}
     <div class="actions"><button class="btn primary">${existing ? '고쳐서 저장' : '생산의뢰 등록'}</button></div>
   </form>
   <datalist id="mrCatalogList">${catalog.map(b => `<option value="${esc(b.product)}">${esc(b.product_code)}${b.unit ? ' · ' + esc(b.unit) : ''}</option>`).join('')}</datalist>

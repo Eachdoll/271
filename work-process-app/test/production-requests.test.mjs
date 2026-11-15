@@ -97,10 +97,12 @@ test('Shipping marks the order; lists filter by status; only the author deletes 
 });
 
 test('15.55: the form no longer sends a ship-text; editing keeps the text an older request already has', async () => {
-  const made = (await sales('POST', '/api/production-requests', { order_date: '2026-11-13', customer: '예전 의뢰', ship_text: '12월 초', ship_date: '2026-12-03', lines: [{ item: 'A', qty: 1 }] })).body;
+  const made = (await sales('POST', '/api/production-requests', { order_date: '2026-11-13', customer: '예전 의뢰', ship_text: '12월 초', ship_date: '2026-12-03', note: '예전 비고', lines: [{ item: 'A', qty: 1 }] })).body;
   const edited = await sales('PUT', `/api/production-requests/${made.id}`, { order_date: '2026-11-13', customer: '예전 의뢰', ship_date: '2026-12-05', lines: [{ item: 'A', qty: 2 }], revision: made.revision });
   assert.equal(edited.status, 200, JSON.stringify(edited.body));
-  assert.deepEqual([edited.body.ship_text, edited.body.ship_date], ['12월 초', '2026-12-05']);
+  assert.deepEqual([edited.body.ship_text, edited.body.ship_date, edited.body.note], ['12월 초', '2026-12-05', '예전 비고'], '15.57: the note is kept too when not sent');
+  const cleared = await sales('PUT', `/api/production-requests/${made.id}`, { order_date: '2026-11-13', customer: '예전 의뢰', note: '', spec: '예전 비고', lines: [{ item: 'A', qty: 2 }], revision: edited.body.revision });
+  assert.deepEqual([cleared.body.note, cleared.body.spec], ['', '예전 비고'], 'an old note can be moved into the spec and cleared');
   const fresh = (await sales('POST', '/api/production-requests', { order_date: '2026-11-13', customer: '새 의뢰', ship_date: '2026-12-10', lines: [{ item: 'A', qty: 1 }] })).body;
   assert.deepEqual([fresh.ship_text, fresh.ship_date], ['', '2026-12-10']);
 });
