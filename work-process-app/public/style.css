@@ -954,3 +954,7 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .mr-schedules { margin: 0; padding-left: 18px; }
 .mr-schedules li { padding: 3px 0; }
 .sc-order { display: inline-block; font-size: 13px; font-weight: 600; margin-left: 6px; }
+
+/* 15.51 생산의뢰: 단위가 다른 수량은 단위마다 진행 막대를 따로 둔다 */
+.mr-unit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mr-unit + .mr-unit { margin-top: 2px; }

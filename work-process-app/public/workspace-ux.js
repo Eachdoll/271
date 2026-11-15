@@ -38,8 +38,9 @@ function bindEntryDraft(form, id, options = {}) {
   form.prepend(box);
   const label = box.querySelector('[data-draft-status]'), recover = box.querySelector('[data-draft-restore]'), discard = box.querySelector('[data-draft-discard]');
   let pending = uxRead(key), dirty = false, paused = false, writing = false;
-  const hint = ' · 이 탭에서만 보관됩니다. 사진은 다시 첨부하세요.';
-  label.textContent = pending ? '보관된 입력 초안이 있습니다.' + hint : '입력 내용은 이 탭에 자동 보관됩니다. 사진은 제외됩니다.';
+  // 사진 첨부가 없는 화면(options.noPhotos)은 사진 안내를 붙이지 않는다.
+  const hint = options.noPhotos ? ' · 이 탭에서만 보관됩니다.' : ' · 이 탭에서만 보관됩니다. 사진은 다시 첨부하세요.';
+  label.textContent = pending ? '보관된 입력 초안이 있습니다.' + hint : options.noPhotos ? '입력 내용은 이 탭에 자동 보관됩니다.' : '입력 내용은 이 탭에 자동 보관됩니다. 사진은 제외됩니다.';
   recover.hidden = !pending; discard.hidden = !pending;
   const save = () => {
     if (!form.isConnected || !dirty || paused || writing) return;

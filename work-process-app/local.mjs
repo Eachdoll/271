@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.dirname(fileURLToPath(import.meta.url));
+export const D1_MAX_PARAMS = 100;
 export function localEnvironment(dataDir, inviteCode) {
   fs.mkdirSync(path.join(dataDir, 'uploads'), { recursive: true });
   const sqlite = new DatabaseSync(path.join(dataDir, 'app.db'));
@@ -25,7 +26,8 @@ export function localEnvironment(dataDir, inviteCode) {
       return { results, success: true, meta };
     };
     return {
-      bind(...values) { args = values; return this; },
+      // D1과 같게 한 쿼리의 바인딩 매개변수는 100개까지(로컬 SQLite는 제한이 없어 운영 오류가 숨는다).
+      bind(...values) { if (values.length > D1_MAX_PARAMS) throw new Error(`D1_ERROR: too many SQL variables (${values.length} > ${D1_MAX_PARAMS})`); args = values; return this; },
       async first() { return sqlite.prepare(sql).get(...args) || null; },
       async all() { return executeAll(); },
       executeAll,

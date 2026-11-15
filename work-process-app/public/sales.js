@@ -108,7 +108,8 @@ async function prForm(host, existing = null, { onDone } = {}) {
     line[kind].push(id); select.value = ''; drawLines(); select.focus();
   });
   drawLines();
-  let busy = false;
+  // 저장 재시도(응답이 끊겨 다시 누름)는 같은 request_id를 보내 서버가 처음 저장한 의뢰서를 돌려준다. 성공하면 화면을 떠난다.
+  let busy = false; const saveId = existing ? null : crypto.randomUUID();
   form.onsubmit = async event => {
     event.preventDefault(); if (busy || draft?.busy) return;
     if (!line.approve.length) { const e = $('[data-line-error]', form); e.textContent = '결재자를 1명 이상 추가하세요. 「결재」에서 사람을 고르고 「추가」를 누르세요.'; e.hidden = false; $('[data-pick="approve"]', form).focus(); return; }
@@ -120,13 +121,13 @@ async function prForm(host, existing = null, { onDone } = {}) {
       let saved;
       if (existing) saved = await api('PUT', `/api/purchase-requests/${existing.id}`, { ...body, revision: existing.revision });
       else {
-        saved = await api('POST', '/api/purchase-requests', { ...body, request_id: crypto.randomUUID() });
-        if (draft.photos.length) {
+        saved = await api('POST', '/api/purchase-requests', { ...body, request_id: saveId });
+        if (draft.photos.length && !saved.photos.length) {
           try { saved = await api('PUT', `/api/purchase-requests/${saved.id}/photos`, { photos: [...draft.photos], revision: saved.revision }); }
           catch { fail(new Error('의뢰서는 상신했으나 사진 저장에 실패했습니다. 의뢰서를 열어 「사진 변경」으로 다시 올리세요.')); }
         }
       }
-      toast(existing ? '고쳐서 다시 상신했습니다.' : `${saved.doc_no} 구매의뢰를 상신했습니다.`);
+      toast(existing ? '고쳐서 다시 상신했습니다.' : saved.duplicate ? `${saved.doc_no} 구매의뢰는 앞서 이미 상신되었습니다. 저장된 내용을 엽니다.` : `${saved.doc_no} 구매의뢰를 상신했습니다.`);
       if (onDone) onDone(saved); else { prOpenAfterLoad = saved.id; location.hash = '#/sales/pr'; }
     } catch (error) { fail(error); } finally { busy = false; }
   };
@@ -147,11 +148,14 @@ async function pageSalesPrList(main) {
     ${listControls('pr', { dateLabel: '작성', dateFold: '작성일로 찾기', placeholder: '의뢰번호·제목·품목·공급선·고객사·작성자', extra: `<label>결재 상태<select name="status"><option value="">전체 상태</option>${Object.entries(PR_STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>` })}
     <div id="prList"></div>`;
   const form = $('#prFilters', main); let version = 0;
-  const load = async () => {
+  // 200건씩 읽고 「더 보기」로 다음 페이지를 붙인다.
+  let rows = [], page = 0, more = false;
+  const load = async (next = false) => {
     const own = ++version; listLoading(form);
-    const rows = await api('GET', '/api/purchase-requests?' + new URLSearchParams({ ...formObj(form), ...(box ? { box } : {}) }));
+    const data = await api('GET', '/api/purchase-requests?' + new URLSearchParams({ ...formObj(form), ...(box ? { box } : {}), paged: '1', page: String(next === true ? page + 1 : 0) }));
     if (own !== version || !main.isConnected) return;
-    listCount(form, rows.length);
+    rows = next === true ? rows.concat(data.rows) : data.rows; page = data.page; more = data.more;
+    listCount(form, rows.length); if (more) $('[data-list-count]', form).textContent += ' · 더 있음';
     $('#prList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>의뢰번호 · 작성일</th><th>제목 · 품목</th><th class="r">매입 / 판매 금액</th><th>공급선 · 고객사</th><th>요청자 · 의뢰부서</th><th>결재</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.my_turn ? 'row-yellow' : ''}">
       <td><b>${esc(r.doc_no)}</b><br><span class="small muted">${esc(r.doc_date)}</span></td>
       <td>${esc(r.title || r.first_item)}${r.title ? `<div class="small muted">${esc(r.first_item)}${r.item_count > 1 ? ` 외 ${r.item_count - 1}건` : ''}</div>` : r.item_count > 1 ? ` <span class="small muted">외 ${r.item_count - 1}건</span>` : ''}</td>
@@ -159,14 +163,15 @@ async function pageSalesPrList(main) {
       <td>${esc(r.vendors || '—')}<div class="small muted">${esc(r.customers)}</div></td>
       <td>${esc(r.author_name)}<div class="small muted">${esc(r.department)}</div></td>
       <td><span class="chip ${PR_STATUS_CHIP[r.status]}">${PR_STATUS[r.status]}</span>${r.status === 'pending' ? `<div class="small">${r.my_turn ? '<b>내 차례</b>' : esc(r.current_user_name) + ' 차례'}</div>` : ''}${r.status === 'approved' && r.ordered ? `<div class="small muted">발주 ${r.ordered}/${r.item_count}</div>` : ''}</td>
-      <td data-card-primary><button class="btn small ${r.my_turn ? 'primary' : ''}" data-open-pr="${r.id}">${r.my_turn ? '결재하기' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>`
+      <td data-card-primary><button class="btn small ${r.my_turn ? 'primary' : ''}" data-open-pr="${r.id}">${r.my_turn ? '결재하기' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>${more ? '<div class="actions"><button type="button" class="btn" data-pr-more>더 보기</button></div>' : ''}`
       : `<div class="empty">${box === 'todo' ? '지금 내 결재 차례인 구매의뢰가 없습니다.' : '조건에 맞는 구매의뢰가 없습니다.'}</div>`;
-    $$('[data-open-pr]', main).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPr), load));
+    $$('[data-open-pr]', main).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPr), () => load()));
+    const moreButton = $('[data-pr-more]', main); if (moreButton) moreButton.onclick = () => load(true).catch(fail);
   };
   $$('[data-box]', main).forEach(b => b.onclick = () => { box = b.dataset.box; try { localStorage.setItem('wpa:pr-box', box); } catch { /* ignore */ } $$('[data-box]', main).forEach(x => x.setAttribute('aria-pressed', String(x === b))); load().catch(fail); });
-  bindListControls(form, load);
+  bindListControls(form, () => load());
   await load();
-  if (prOpenAfterLoad) { const id = prOpenAfterLoad; prOpenAfterLoad = null; prOpen(id, load).catch(fail); }
+  if (prOpenAfterLoad) { const id = prOpenAfterLoad; prOpenAfterLoad = null; prOpen(id, () => load()).catch(fail); }
 }
 
 // ── 상세(결재 정보 · 본문) ──
@@ -245,6 +250,9 @@ const MR_STATUS = { waiting: '접수 대기', partial: '일부 계획', planned:
 const MR_CHIP = { waiting: 'yellow', partial: 'yellow', planned: '', producing: '', done: 'green', shipped: 'green' };
 const MR_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const mrBar = (done, total) => `<span class="plan-progress"><span class="plan-bar"><i style="width:${total ? Math.min(100, Math.round(done / total * 100)) : 0}%"></i></span><span class="small">${fmtNum(done)} / ${fmtNum(total)}</span></span>`;
+// 단위가 다른 수량(BOX·매·켤레)은 더하지 않고 단위별로 보여 준다.
+const mrUnitText = (qty, unit) => `${fmtNum(qty)}${unit ? ' ' + esc(unit) : ''}`;
+const mrUnits = r => (r.units || []).map(u => `<span class="mr-unit">${mrBar(u.produced, u.qty)}${u.unit ? `<span class="small muted">${esc(u.unit)}</span>` : ''}</span>`).join('');
 const mrShip = r => r.ship_text || r.ship_date ? [r.ship_text, r.ship_date].filter(Boolean).join(' · ') : '—';
 // 같은 품목은 「S 10,000 · M 18,500」처럼 사이즈를 한 줄로 묶는다.
 function mrItemsText(lines) {
@@ -288,7 +296,11 @@ async function mrForm(host, existing = null, { onDone } = {}) {
   <datalist id="mrCatalogList">${catalog.map(b => `<option value="${esc(b.product)}">${esc(b.product_code)}${b.unit ? ' · ' + esc(b.unit) : ''}</option>`).join('')}</datalist>
   <datalist id="mrVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
   const form = $('form', host), lines = $('[data-lines]', form);
-  const total = () => { const qty = [...lines.children].reduce((t, row) => t + Number($('[data-k=qty]', row).value || 0), 0); $('[data-mr-total]', form).textContent = `합계 수량 ${fmtNum(qty)} · ${lines.children.length}줄`; };
+  const total = () => {
+    const byUnit = new Map();
+    for (const row of lines.children) { const unit = $('[data-k=unit]', row).value.trim(); byUnit.set(unit, (byUnit.get(unit) || 0) + Number($('[data-k=qty]', row).value || 0)); }
+    $('[data-mr-total]', form).textContent = `합계 수량 ${[...byUnit].map(([unit, qty]) => `${fmtNum(qty)}${unit ? ' ' + unit : ''}`).join(' · ')} · ${lines.children.length}줄`;
+  };
   const renumber = () => { [...lines.children].forEach((row, i) => { $('legend', row).textContent = `품목 ${i + 1}`; $('[data-remove-line]', row).setAttribute('aria-label', `품목 ${i + 1} 삭제`); }); total(); };
   const pick = (input, unit, code, bomInput) => {
     const bom = catalog.find(b => b.product === input.value.trim());
@@ -322,17 +334,28 @@ async function mrForm(host, existing = null, { onDone } = {}) {
     $$('[data-size]', box).forEach(input => { input.value = ''; }); $('[data-size-item]', box).value = ''; box.hidden = true;
     toast(`${item} ${sizes.length}개 사이즈를 줄로 추가했습니다.`);
   };
-  let busy = false;
+  form.addEventListener('change', event => { if (event.target.matches('[data-k=unit]')) total(); });
+  const readLines = () => [...lines.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value])));
+  // 새 의뢰는 입력 초안을 이 탭에 보관한다(품목 줄 포함). 저장에 성공하면 지우고, 실패하면 남긴다.
+  const draft = existing ? null : bindEntryDraft(form, 'production-request:new', {
+    noPhotos: true,
+    read: () => ({ head: uxFormRead(form), lines: readLines() }),
+    restore: value => { uxFormRestore(form, value.head); lines.replaceChildren(); (value.lines && value.lines.length ? value.lines : [{}]).forEach(l => addLine(l)); },
+    afterRestore: total,
+  });
+  // 저장 재시도(응답이 끊겨 다시 누름)에는 같은 request_id를 보낸다. 서버는 처음 저장된 의뢰를 돌려준다(중복 등록 없음).
+  let busy = false; const saveId = existing ? null : crypto.randomUUID();
   form.onsubmit = async event => {
     event.preventDefault(); if (busy) return;
     const v = formObj(form);
-    const body = { ...v, ship_date: v.ship_date || null, lines: [...lines.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value]))) };
-    busy = true;
+    const body = { ...v, ship_date: v.ship_date || null, lines: readLines() };
+    busy = true; draft?.start();
     try {
-      const saved = existing ? await api('PUT', `/api/production-requests/${existing.id}`, { ...body, revision: existing.revision }) : await api('POST', '/api/production-requests', { ...body, request_id: crypto.randomUUID() });
-      toast(existing ? '고쳐서 저장했습니다.' : `${saved.req_no} 생산의뢰를 등록했습니다. 생산 담당자에게 접수 대기로 표시됩니다.`);
+      const saved = existing ? await api('PUT', `/api/production-requests/${existing.id}`, { ...body, revision: existing.revision }) : await api('POST', '/api/production-requests', { ...body, request_id: saveId });
+      draft?.clear();
+      toast(existing ? '고쳐서 저장했습니다.' : saved.duplicate ? `${saved.req_no} 생산의뢰는 앞서 이미 등록되었습니다. 저장된 내용을 엽니다. 고칠 내용이 있으면 「수정」을 누르세요.` : `${saved.req_no} 생산의뢰를 등록했습니다. 생산 담당자에게 접수 대기로 표시됩니다.`);
       if (onDone) onDone(saved); else { mrOpenAfterLoad = saved.id; location.hash = '#/sales/mr'; }
-    } catch (error) { fail(error); } finally { busy = false; }
+    } catch (error) { draft?.failure(); fail(error); } finally { busy = false; }
   };
 }
 let mrOpenAfterLoad = null;
@@ -351,29 +374,34 @@ async function pageMrList(main, mode = 'sales') {
   const loadNeeds = async () => {
     if (!prodView) return;
     const needs = await api('GET', '/api/production-requests/needs'); if (!main.isConnected) return;
-    const groups = new Map(); for (const n of needs) { const g = groups.get(n.item) || []; g.push(n); groups.set(n.item, g); }
-    $('[data-needs]', main).innerHTML = needs.length ? `<div class="table-wrap"><table class="grid keep-table mr-needs-table"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">의뢰</th><th class="r">생산</th><th class="r">생산 필요</th><th class="r">계획 안 됨</th></tr></thead><tbody>${[...groups].map(([item, list]) => list.map((n, i) => `<tr><td>${i ? '' : `<b>${esc(item)}</b>`}</td><td>${esc(n.spec || '—')}</td><td class="r">${fmtNum(n.ordered)}</td><td class="r">${fmtNum(n.produced)}</td><td class="r"><b>${fmtNum(n.need)}</b> ${esc(n.unit)}</td><td class="r ${n.unplanned ? 'red-text' : ''}">${fmtNum(n.unplanned)}</td></tr>`).join('') + (list.length > 1 ? `<tr class="mr-total"><td></td><td>TOTAL</td><td class="r">${fmtNum(list.reduce((t, n) => t + n.ordered, 0))}</td><td class="r">${fmtNum(list.reduce((t, n) => t + n.produced, 0))}</td><td class="r"><b>${fmtNum(list.reduce((t, n) => t + n.need, 0))}</b></td><td class="r">${fmtNum(list.reduce((t, n) => t + n.unplanned, 0))}</td></tr>` : '')).join('')}</tbody></table></div>` : '<p class="muted">생산이 남은 의뢰가 없습니다.</p>';
+    // TOTAL은 같은 품목·같은 단위끼리만 더한다(단위가 다르면 따로 묶는다).
+    const groups = new Map(); for (const n of needs) { const key = n.item + '\u0001' + n.unit; const g = groups.get(key) || []; g.push(n); groups.set(key, g); }
+    $('[data-needs]', main).innerHTML = needs.length ? `<div class="table-wrap"><table class="grid keep-table mr-needs-table"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">의뢰</th><th class="r">생산</th><th class="r">생산 필요</th><th class="r">계획 안 됨</th></tr></thead><tbody>${[...groups].map(([, list]) => list.map((n, i) => `<tr><td>${i ? '' : `<b>${esc(n.item)}</b>`}</td><td>${esc(n.spec || '—')}</td><td class="r">${fmtNum(n.ordered)}</td><td class="r">${fmtNum(n.produced)}</td><td class="r"><b>${fmtNum(n.need)}</b> ${esc(n.unit)}</td><td class="r ${n.unplanned ? 'red-text' : ''}">${fmtNum(n.unplanned)}</td></tr>`).join('') + (list.length > 1 ? `<tr class="mr-total"><td></td><td>TOTAL</td><td class="r">${fmtNum(list.reduce((t, n) => t + n.ordered, 0))}</td><td class="r">${fmtNum(list.reduce((t, n) => t + n.produced, 0))}</td><td class="r"><b>${fmtNum(list.reduce((t, n) => t + n.need, 0))}</b> ${esc(list[0].unit)}</td><td class="r">${fmtNum(list.reduce((t, n) => t + n.unplanned, 0))}</td></tr>` : '')).join('')}</tbody></table></div>` : '<p class="muted">생산이 남은 의뢰가 없습니다.</p>';
   };
-  const load = async () => {
+  // 300건씩 읽고 「더 보기」로 다음 페이지를 붙인다(상태 필터는 서버에서 먼저 적용된다).
+  let rows = [], page = 0, more = false;
+  const load = async (next = false) => {
     const own = ++version; listLoading(form);
-    const v = formObj(form); const params = { ...v, mine: (v.mine || []).length ? '1' : '' };
-    const rows = await api('GET', '/api/production-requests?' + new URLSearchParams(Object.entries(params).filter(([, x]) => x !== '')));
+    const v = formObj(form); const params = { ...v, mine: (v.mine || []).length ? '1' : '', paged: '1', page: String(next ? page + 1 : 0) };
+    const data = await api('GET', '/api/production-requests?' + new URLSearchParams(Object.entries(params).filter(([, x]) => x !== '')));
     if (own !== version || !main.isConnected) return;
-    listCount(form, rows.length);
+    rows = next ? rows.concat(data.rows) : data.rows; page = data.page; more = data.more;
+    listCount(form, rows.length); if (more) $('[data-list-count]', form).textContent += ' · 더 있음';
     $('#mrList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>발주일 · 의뢰번호</th><th>업체 · 주문번호</th><th>품목 · 수량</th><th>출고 희망</th><th>진행</th><th>생산 완료일</th><th>출고</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'waiting' || r.status === 'partial' ? 'row-yellow' : ''}">
       <td>${esc(r.order_date)}<div class="small muted">${esc(r.req_no)}</div></td>
       <td><b>${esc(r.customer)}</b>${r.order_no ? `<div class="small muted">${esc(r.order_no)}</div>` : ''}${r.spec ? `<div class="small mr-spec-inline">${esc(r.spec)}</div>` : ''}</td>
       <td>${mrItemsText(r.lines)}</td>
       <td>${esc(mrShip(r))}</td>
-      <td><span class="chip ${MR_CHIP[r.status]}">${MR_STATUS[r.status]}</span>${mrBar(r.produced_total, r.total_qty)}</td>
+      <td><span class="chip ${MR_CHIP[r.status]}">${MR_STATUS[r.status]}</span>${mrUnits(r)}</td>
       <td>${esc(r.done_date || '')}</td>
       <td>${r.shipped ? `<span class="chip green">✓ ${esc(r.shipped_date)}</span>` : '<span class="muted">—</span>'}</td>
-      <td data-card-primary><button class="btn small ${prodView && r.unplanned_lines && !r.shipped ? 'primary' : ''}" data-open-mr="${r.id}">${prodView && r.unplanned_lines && !r.shipped ? '접수·계획 반영' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>`
+      <td data-card-primary><button class="btn small ${prodView && r.unplanned_lines && !r.shipped ? 'primary' : ''}" data-open-mr="${r.id}">${prodView && r.unplanned_lines && !r.shipped ? '접수·계획 반영' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>${more ? '<div class="actions"><button type="button" class="btn" data-mr-more>더 보기</button></div>' : ''}`
       : '<div class="empty">조건에 맞는 생산의뢰가 없습니다.</div>';
+    const moreButton = $('[data-mr-more]', main); if (moreButton) moreButton.onclick = () => load(true).catch(fail);
   };
   const reload = async () => { await load(); await loadNeeds(); };
   main.mrReload = reload;
-  bindListControls(form, load);
+  bindListControls(form, () => load());
   await Promise.all([load(), loadNeeds()]);
   if (mrOpenAfterLoad) { const id = mrOpenAfterLoad; mrOpenAfterLoad = null; mrOpen(id).catch(fail); }
 }
@@ -384,9 +412,9 @@ async function mrOpen(id) {
     <p><span class="muted">발주일</span> <b>${esc(r.order_date)}</b> <span class="muted">주문번호</span> <b>${esc(r.order_no || '—')}</b> <span class="muted">출고 희망</span> <b>${esc(mrShip(r))}</b></p>
     <p class="small muted"><span>요청자</span> ${esc(r.author_name)} ${esc(r.author_department)} · <span>등록</span> ${esc(String(r.created_at).slice(0, 16))}</p>
     ${r.spec ? `<p class="mr-spec">${esc(r.spec)}</p>` : ''}
-    <section><h4>생산 품목 · 진행 현황</h4><div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">수량</th><th class="r">계획</th><th>생산</th></tr></thead><tbody>${r.lines.map(l => `<tr><td><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '—')}</td><td class="r">${fmtNum(l.qty)} ${esc(l.unit)}</td><td class="r ${l.planned_qty < l.qty ? 'red-text' : ''}">${fmtNum(l.planned_qty)}</td><td>${mrBar(Math.min(l.produced_qty, l.qty), l.qty)}</td></tr>`).join('')}</tbody></table></div>
-      <p class="pr-totals">${`합계 · 의뢰 ${fmtNum(r.total_qty)} · 계획 ${fmtNum(r.planned_total)} · 생산 ${fmtNum(r.produced_total)}`}</p>${r.done_date ? `<p><span class="chip green">생산완료</span> ${esc(r.done_date)}</p>` : ''}</section>
-    <section><h4>연결된 생산계획</h4>${r.schedules.length ? `<ul class="mr-schedules">${r.schedules.map(s => `<li><a href="#/prod/${s.kind === 'semi' ? 'semi' : 'finished'}"><span>${s.kind === 'semi' ? '반제품' : '완제품'}</span> · <span>${{ day: '일간', week: '주간', month: '월간' }[s.period]}</span> ${esc(s.start_date)}</a> <span>${esc(s.product)} ${esc(s.spec)} ${fmtNum(s.qty)}</span> <span class="small muted"><span>실적</span> ${fmtNum(s.actual_qty)}</span></li>`).join('')}</ul>` : '<p class="muted small">아직 생산계획에 반영되지 않았습니다. 생산 담당자가 「생산계획 반영」을 누르면 생산일정에 들어갑니다.</p>'}</section>
+    <section><h4>생산 품목 · 진행 현황</h4><div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>규격·사이즈</th><th class="r">수량</th><th class="r">계획</th><th>생산</th></tr></thead><tbody>${r.lines.map(l => `<tr><td><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '—')}</td><td class="r">${fmtNum(l.qty)} ${esc(l.unit)}</td><td class="r ${l.planned_qty < l.qty ? 'red-text' : ''}">${fmtNum(l.planned_qty)}</td><td data-card-primary>${mrBar(Math.min(l.produced_qty, l.qty), l.qty)}</td></tr>`).join('')}</tbody></table></div>
+      ${(r.units || []).map(u => `<p class="pr-totals">${`합계${u.unit ? ' (' + esc(u.unit) + ')' : ''} · 의뢰 ${fmtNum(u.qty)} · 계획 ${fmtNum(u.planned)} · 생산 ${fmtNum(u.produced)}`}</p>`).join('')}${r.done_date ? `<p><span class="chip green">생산완료</span> ${esc(r.done_date)}</p>` : ''}</section>
+    <section><h4>연결된 생산계획</h4>${r.schedules.length ? `<ul class="mr-schedules">${r.schedules.map(s => `<li><a href="#/prod/${s.kind === 'semi' ? 'semi' : 'finished'}"><span>${s.kind === 'semi' ? '반제품' : '완제품'}</span> · <span>${{ day: '일간', week: '주간', month: '월간' }[s.period]}</span> ${esc(s.start_date)}</a> <span>${esc(s.product)} ${esc(s.spec)} ${mrUnitText(s.qty, s.unit)}</span> <span class="small muted"><span>실적</span> ${fmtNum(s.actual_qty)}</span></li>`).join('')}</ul>` : '<p class="muted small">아직 생산계획에 반영되지 않았습니다. 생산 담당자가 「생산계획 반영」을 누르면 생산일정에 들어갑니다.</p>'}</section>
     ${r.note ? `<p class="pr-note">${esc(r.note)}</p>` : ''}
     ${r.shipped ? `<p><span class="chip green">출고완료</span> ${esc(r.shipped_date)} · ${esc(r.shipped_by)}</p>` : ''}
     <div class="actions">${r.can_plan ? '<button class="btn primary" data-mr-plan>생산계획 반영</button>' : ''}
@@ -397,11 +425,11 @@ async function mrOpen(id) {
   act('[data-mr-plan]', async () => {
     const left = r.lines.filter(l => l.planned_qty < l.qty);
     const start = r.ship_date && r.ship_date > todayStr() ? addDays(r.ship_date, -7) > todayStr() ? addDays(r.ship_date, -7) : todayStr() : todayStr();
-    const v = await promptBox('생산계획 반영', `<p class="small muted">아직 계획되지 않은 ${left.length}줄(${fmtNum(left.reduce((t, l) => t + l.qty - l.planned_qty, 0))})을 생산일정에 넣습니다. 반제품 품목은 반제품 생산일정, 나머지는 완제품 생산일정으로 들어갑니다.</p>
+    const v = await promptBox('생산계획 반영', `<p class="small muted">아직 계획되지 않은 ${left.length}줄(${[...left.reduce((m, l) => m.set(l.unit, (m.get(l.unit) || 0) + l.qty - l.planned_qty), new Map())].map(([unit, qty]) => mrUnitText(qty, unit)).join(' · ')})을 생산일정에 넣습니다. 반제품 품목은 반제품 생산일정, 나머지는 완제품 생산일정으로 들어갑니다.</p>
       <label>일정 기준 *<select name="period" required><option value="week">주간</option><option value="day">일간</option><option value="month">월간</option></select></label>
       <label>시작일 * <span class="hint">(주간은 그 주 월요일, 월간은 1일로 맞춥니다)</span><input name="start_date" type="date" required value="${start}"></label>`);
     if (!v) return;
-    try { const x = await api('POST', `/api/production-requests/${r.id}/plan`, v); await done(`생산계획에 ${x.schedules.length}건으로 반영했습니다. 생산일정에서 실적을 입력하면 이 의뢰에 자동 반영됩니다.`); } catch (error) { fail(error); }
+    try { const x = await api('POST', `/api/production-requests/${r.id}/plan`, { ...v, revision: r.revision }); await done(`생산계획에 ${x.schedules.length}건으로 반영했습니다. 생산일정에서 실적을 입력하면 이 의뢰에 자동 반영됩니다.`); } catch (error) { fail(error); }
   });
   act('[data-mr-ship]', async () => {
     const v = await promptBox('출고 완료 표시', `<label>출고일 *<input name="shipped_date" type="date" required value="${todayStr()}"></label>`);
@@ -409,7 +437,7 @@ async function mrOpen(id) {
     try { await api('POST', `/api/production-requests/${r.id}/ship`, { shipped: true, shipped_date: v.shipped_date }); await done('출고 완료로 표시했습니다.'); } catch (error) { fail(error); }
   });
   act('[data-mr-unship]', async () => { if (!await confirmBox('출고 완료 표시를 취소할까요?')) return; try { await api('POST', `/api/production-requests/${r.id}/ship`, { shipped: false }); await done('출고 표시를 취소했습니다.'); } catch (error) { fail(error); } });
-  act('[data-mr-delete]', async () => { if (!await confirmBox(`${r.req_no} 생산의뢰를 삭제할까요?`)) return; try { await api('DELETE', `/api/production-requests/${r.id}`); await done('삭제했습니다.'); } catch (error) { fail(error); } });
+  act('[data-mr-delete]', async () => { if (!await confirmBox(`${r.req_no} 생산의뢰를 삭제할까요?`)) return; try { await api('DELETE', `/api/production-requests/${r.id}?revision=${r.revision}`); await done('삭제했습니다.'); } catch (error) { fail(error); } });
   act('[data-mr-edit]', async () => {
     m.close();
     const box = modal(`<h3>${esc(r.req_no)} 수정</h3><div data-edit-host></div>`, { wide: true });
