@@ -91,3 +91,42 @@ test('A purchase request takes the author department and position automatically'
   assert.equal(pr.status, 200, JSON.stringify(pr.body));
   assert.deepEqual([pr.body.department, pr.body.author_position], ['전략영업팀', '대리'], 'the typed department is ignored');
 });
+
+test('Department-specific positions are admin managed; signup and user edits validate the chosen department', async () => {
+  const lab = (await admin('POST', '/api/admin/org/departments', { name: '연구소' })).body;
+  const names = ['연구소장', '수석', '선임', '연구원'];
+  const endpoint = `/api/admin/org/departments/${lab.id}`;
+  assert.equal((await staff('PUT', endpoint, { position_names: names })).status, 403);
+  for (const bad of [[], ['수석', '수석'], [' '], ['a'.repeat(31)], '수석', [1]]) assert.equal((await admin('PUT', endpoint, { position_names: bad })).status, 400);
+  const beforeUsers = (await admin('GET', '/api/admin/users')).body;
+  assert.equal((await admin('PUT', endpoint, { position_names: names })).status, 200);
+  assert.deepEqual((await admin('GET', '/api/admin/users')).body, beforeUsers, 'configuration does not change existing users');
+  const lists = (await guest('GET', '/api/org')).body;
+  assert.deepEqual(lists.departments.find(d => d.id === lab.id).position_names, names);
+  const register = (name, department, position) => guest('POST', '/api/auth/register', { name, department, position, password: 'password', invite: 'org-test' });
+  assert.equal((await register('연구신입', '연구소', '연구원')).status, 200);
+  assert.equal((await register('잘못된직급', '연구소', '과장')).status, 400);
+  assert.equal((await register('다른부서', '전략영업팀', '연구원')).status, 400);
+  assert.equal((await register('직급누락', '연구소', '')).status, 400);
+  const researcher = (await admin('POST', '/api/admin/users', { name: '선임연구자', password: 'password', department: '연구소', position: '선임' })).body;
+  assert.equal((await admin('PUT', `/api/admin/users/${researcher.id}`, { department: '전략영업팀' })).status, 400, 'changing department cannot carry an incompatible old position');
+  assert.equal((await admin('PUT', `/api/admin/users/${researcher.id}`, { department: '전략영업팀', position: '과장' })).status, 200);
+  await admin('PUT', endpoint, { position_names: ['연구소장', '연구원'] });
+  const old = (await admin('GET', '/api/admin/users')).body.find(u => u.name === '연구신입');
+  assert.equal(old.position, '연구원');
+  assert.equal((await admin('PUT', endpoint, { position_names: null })).status, 200);
+  assert.equal((await register('공통가입', '연구소', '과장')).status, 200, 'switching to common positions takes effect');
+});
+
+test('Common position rename does not rewrite users in departments with their own title system', async () => {
+  const dept = (await admin('POST', '/api/admin/org/departments', { name: '독립직급팀' })).body;
+  await admin('PUT', `/api/admin/org/departments/${dept.id}`, { position_names: ['과장', '연구원'] });
+  const u = (await admin('POST', '/api/admin/users', { name: '독립과장', password: 'password', department: '독립직급팀', position: '과장' })).body;
+  const position = (await admin('GET', '/api/admin/org')).body.positions.find(p => p.name === '과장');
+  assert.equal((await admin('PUT', `/api/admin/org/positions/${position.id}`, { name: '공통과장' })).status, 200);
+  const users = (await admin('GET', '/api/admin/users')).body;
+  assert.equal(users.find(x => x.id === u.id).position, '과장');
+  assert.equal(users.find(x => x.name === '공통가입').position, '공통과장');
+  await admin('PUT', `/api/admin/org/departments/${dept.id}`, { position_names: ['연구원'] });
+  assert.equal((await admin('PUT', `/api/admin/users/${u.id}`, { position: '과장' })).status, 200, 'an existing title is preserved after list changes');
+});

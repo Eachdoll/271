@@ -2234,16 +2234,18 @@ const ORG = { departments: { table: 'org_departments', column: 'department', lab
 async function orgLists(activeOnly) {
   const where = activeOnly ? 'WHERE active=1' : '';
   return {
-    departments: await db.prepare(`SELECT id,name,parent_id,sort,active FROM org_departments ${where} ORDER BY sort, id`).all(),
+    departments: (await db.prepare(`SELECT id,name,parent_id,sort,active,positions_json FROM org_departments ${where} ORDER BY sort, id`).all()).map(({ positions_json, ...d }) => ({ ...d, position_names: positions_json === null ? null : JSON.parse(positions_json) })),
     positions: await db.prepare(`SELECT id,name,sort,active FROM org_positions ${where} ORDER BY sort, id`).all(),
   };
 }
 // 가입·사용자 저장 때 부서·직급 검사: 목록이 있으면 사용 중인 항목에서 골라야 한다. required면 빈 값도 거부.
 async function orgChoice(body, { required = false, keep = null } = {}) {
   const lists = await orgLists(true), out = {};
+  const department = str(body.department, 50), custom = lists.departments.find(d => d.name === department)?.position_names;
+  if (custom) lists.positions = custom.map(name => ({ name }));
   for (const [key, kind, label] of [['department', 'departments', '부서'], ['position', 'positions', '직급']]) {
     const value = str(body[key], key === 'department' ? 50 : 30);
-    if (!lists[kind].length || (keep && value && value === keep[key])) { out[key] = value; continue; }
+    if (!lists[kind].length || (keep && value && value === keep[key] && (key !== 'position' || department === keep.department))) { out[key] = value; continue; }
     if (!value) { if (required) throw bad(`${label}을(를) 고르세요.`); out[key] = ''; continue; }
     if (!lists[kind].some(item => item.name === value)) throw bad(`${label} 「${value}」은(는) 조직 구성에 없거나 사용 중지되었습니다. 목록에서 다시 고르세요.`);
     out[key] = value;
@@ -2289,10 +2291,15 @@ route('PUT', '/api/admin/org/:kind/:id', async ({ user, params, body }) => {
   const queries = [];
   if (params.kind === 'departments') {
     const parent = body.parent_id === undefined ? row.parent_id : await orgParent('departments', body.parent_id, row.id);
+    if (body.position_names !== undefined) {
+      const names = body.position_names;
+      if (names !== null && (!Array.isArray(names) || !names.length || names.length > 30 || names.some(n => typeof n !== 'string' || !n.trim() || n.trim().length > 30) || new Set(names.map(n => n.trim())).size !== names.length)) throw bad('직급은 중복 없이 1~30개, 이름은 1~30자로 입력하세요.');
+      queries.push({ sql: 'UPDATE org_departments SET positions_json=? WHERE id=?', args: [names === null ? null : JSON.stringify(names.map(n => n.trim())), row.id] });
+    }
     queries.push({ sql: 'UPDATE org_departments SET name=?,parent_id=?,active=? WHERE id=?', args: [name, parent, active, row.id] });
   } else queries.push({ sql: 'UPDATE org_positions SET name=?,active=? WHERE id=?', args: [name, active, row.id] });
   // 이름이 바뀌면 그 이름을 쓰던 사용자도 함께 바꾼다(지난 구매의뢰서의 당시 표시는 그대로 둔다).
-  if (name !== row.name) queries.push({ sql: `UPDATE users SET ${k.column}=? WHERE ${k.column}=?`, args: [name, row.name] });
+  if (name !== row.name) queries.push({ sql: `UPDATE users SET ${k.column}=? WHERE ${k.column}=?${params.kind === 'positions' ? ' AND NOT EXISTS(SELECT 1 FROM org_departments d WHERE d.name=users.department AND d.positions_json IS NOT NULL)' : ''}`, args: [name, row.name] });
   await db.batch(queries);
   return mustGet(k.table, row.id);
 });
