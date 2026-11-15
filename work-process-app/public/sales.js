@@ -280,7 +280,6 @@ async function mrForm(host, existing = null, { onDone } = {}) {
       <label>업체(고객사) *<input name="customer" required maxlength="100" list="mrVendorList" value="${e('customer')}" placeholder="예: 하라다"></label>
       <label>주문번호<input name="order_no" maxlength="100" value="${e('order_no')}" placeholder="예: ZEX-CT-J063"></label>
       <label>발주일 *<input name="order_date" type="date" required value="${existing ? e('order_date') : todayStr()}"></label>
-      <label>출고 희망<input name="ship_text" maxlength="50" value="${e('ship_text')}" placeholder="예: 12월 초, 12/1 희망"></label>
       <label>출고 희망일<input name="ship_date" type="date" value="${e('ship_date')}"></label>
     </div>
     <label>사양·요청사항<textarea name="spec" rows="2" maxlength="1000" placeholder="예: 사이즈 도장 제외 사양으로 진행 / 무지백·무지박스">${e('spec')}</textarea></label>

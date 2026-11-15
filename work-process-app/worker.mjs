@@ -2359,9 +2359,11 @@ async function mrLines(list) {
   }
   return lines;
 }
-function mrHead(body) {
+// 15.55: 화면에서 「출고 희망」 글 입력칸은 뺐다(출고 희망일과 겹침). 칸은 남겨 두고, 보내지 않으면 기존 의뢰의 글은 그대로 둔다.
+function mrHead(body, prior = null) {
   const shipDate = dateStr(body.ship_date, '출고 희망일', { required: false });
-  return { order_date: dateStr(body.order_date, '발주일'), customer: reqStr(body.customer, '업체(고객사)', 100), order_no: str(body.order_no, 100), ship_text: str(body.ship_text, 50), ship_date: shipDate, spec: str(body.spec, 1000), note: str(body.note, 1000) };
+  const shipText = body.ship_text !== undefined ? str(body.ship_text, 50) : prior ? prior.ship_text : '';
+  return { order_date: dateStr(body.order_date, '발주일'), customer: reqStr(body.customer, '업체(고객사)', 100), order_no: str(body.order_no, 100), ship_text: shipText, ship_date: shipDate, spec: str(body.spec, 1000), note: str(body.note, 1000) };
 }
 // 줄마다 계획 수량(연결된 일정 합)·생산 수량(일정 실적 합)·마지막 생산일을 붙인다.
 const MR_ACTUAL = s => `COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=${s}.id AND a.voided_at IS NULL),0) + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE ${semiCutMatch(s)}),0)`;
@@ -2499,7 +2501,7 @@ route('PUT', '/api/production-requests/:id', async ({ user, params, body }) => {
   const row = await mrEditable(user, params.id);
   const revision = body.revision !== undefined ? Number(body.revision) : row.revision;
   if (revision !== row.revision) throw new HttpError(409, '다른 곳에서 의뢰가 바뀌었습니다. 다시 열어 확인하세요.');
-  const head = mrHead(body), lines = await mrLines(body.lines);
+  const head = mrHead(body, row), lines = await mrLines(body.lines);
   const guard = `EXISTS(SELECT 1 FROM production_requests WHERE id=? AND revision=? AND shipped=0) AND NOT ${MR_LINKED}`, guardArgs = [row.id, revision, row.id];
   const result = await db.batch([
     { sql: `DELETE FROM production_request_lines WHERE request_id=? AND ${guard}`, args: [row.id, ...guardArgs] },
