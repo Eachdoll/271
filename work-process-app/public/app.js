@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.112';
+const APP_VERSION = '15.113';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1633,7 +1633,7 @@ document.addEventListener('click', e => { if (!e.target.closest('#bomList .row-m
 document.addEventListener('keydown', e => { if (e.key !== 'Escape' || $('.modal-wrap')) return; const open = $$('#bomList .row-menu[open]'); open.forEach(m => { m.open = false; }); if (open.length) $('summary', open[0]).focus(); });
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="bom-view-bar"><div class="seg" id="bomViewTabs" role="group" aria-label="보기"><button type="button" data-bom-view="list">목록</button><button type="button" data-bom-view="tree">BOM 트리</button></div><div class="seg" id="bomActiveTabs" role="group" aria-label="사용 여부"><button type="button" data-bom-active="1">사용</button><button type="button" data-bom-active="0">미사용</button><button type="button" data-bom-active="">전체</button></div></div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label class="dup-filter">분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label class="dup-filter">사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="bomImport" title="원자재·부자재·상품 등을 엑셀로 한 번에 등록">엑셀 올리기</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="bom-view-bar"><div class="seg" id="bomViewTabs" role="group" aria-label="보기"><button type="button" data-bom-view="list">목록</button><button type="button" data-bom-view="tree">BOM 트리</button></div><div class="seg" id="bomActiveTabs" role="group" aria-label="사용 여부"><button type="button" data-bom-active="1">사용</button><button type="button" data-bom-active="0">미사용</button><button type="button" data-bom-active="">전체</button></div></div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label class="dup-filter">분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label class="dup-filter">사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
   // 15.68 세부 분류 칩: 분류 탭(원자재 등)을 고르면 그 안의 1차 → 2차 세부 분류로 좁혀 본다(건수 표시, 화면에서 거름).
   let sub = { cat1: null, cat2: null }, subClass = null;
@@ -1710,6 +1710,10 @@ async function pageBoms(main) {
       };
     };
     $('#newBom').onclick = () => edit();
+    if ($('#bomImport')) $('#bomImport').onclick = () => importDialog({ title: '품목 엑셀 올리기', endpoint: '/api/import/items', after: () => load(),
+      help: '분류는 원자재·부자재·반제품·상품·임가공(제품은 구성자재와 함께 화면에서 등록). 1·2·3차 분류는 분류 관리에 있는 이름만.',
+      columns: [['product_code', '품목코드', '제품코드', '코드'], ['product', '품목명', '품목', '제품명'], ['item_category', '분류', '품목구분', '구분'], ['unit', '단위'], ['spec', '규격'], ['cat1', '1차 분류', '1차분류'], ['cat2', '2차 분류', '2차분류'], ['cat3', '3차 분류', '3차분류'], ['note', '비고', '메모']],
+      sample: [{ product_code: 'RM-001', product: '(예) 나일론 원사', item_category: '원자재', unit: 'KG', spec: '70D' }] });
     $('#catManage').onclick = () => manageItemCategories(filterForm.elements.item_category.value || '원자재');
     $$('[data-bom-merge]', main).forEach(button => button.onclick = async () => {
       const temp = boms.find(bom => bom.id === Number(button.dataset.bomMerge));

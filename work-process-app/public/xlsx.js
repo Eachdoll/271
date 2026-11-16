@@ -141,3 +141,111 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
   (place || toInput.closest('label') || fromInput.closest('form') || fromInput.parentElement)[place ? 'append' : toInput.closest('label') ? 'after' : 'append'](box);
   return box;
 }
+
+// ── 15.113 엑셀 읽기(.xlsx 첫 시트 · .csv · 붙여넣기) → 표 [[칸…]…] ──
+// .xlsx는 zip(저장·deflate) 안의 xl/sharedStrings.xml과 첫 시트 XML을 읽는다. 날짜 칸은 숫자(일련번호) 그대로.
+async function xlsxInflate(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function readXlsx(buffer) {
+  const u8 = new Uint8Array(buffer), dv = new DataView(buffer);
+  let eocd = -1; for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('엑셀(.xlsx) 파일이 아닙니다.');
+  const count = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true); const files = {};
+  const dec = new TextDecoder();
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('엑셀 파일이 손상되었습니다.');
+    const method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true), nameLen = dv.getUint16(p + 28, true), extra = dv.getUint16(p + 30, true), comment = dv.getUint16(p + 32, true), local = dv.getUint32(p + 42, true);
+    const name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+    files[name] = { method, size, local }; p += 46 + nameLen + extra + comment;
+  }
+  const read = async name => {
+    const f = files[name]; if (!f) return null;
+    const start = f.local + 30 + dv.getUint16(f.local + 26, true) + dv.getUint16(f.local + 28, true), raw = u8.subarray(start, start + f.size);
+    if (f.method === 0) return dec.decode(raw); if (f.method === 8) return dec.decode(await xlsxInflate(raw));
+    throw new Error('지원하지 않는 엑셀 압축 방식입니다.');
+  };
+  const xml = s => new DOMParser().parseFromString(s, 'application/xml');
+  const textOf = el => [...el.getElementsByTagName('t')].map(t => t.textContent).join('');
+  const sst = await read('xl/sharedStrings.xml'); const shared = sst ? [...xml(sst).getElementsByTagName('si')].map(textOf) : [];
+  // 첫 시트: workbook.xml의 첫 sheet → rels의 대상. 못 찾으면 sheet1.xml.
+  let sheetPath = 'xl/worksheets/sheet1.xml';
+  try {
+    const wb = xml(await read('xl/workbook.xml')), rels = xml(await read('xl/_rels/workbook.xml.rels'));
+    const first = wb.getElementsByTagName('sheet')[0], rid = first?.getAttribute('r:id') || first?.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    const rel = [...rels.getElementsByTagName('Relationship')].find(r => r.getAttribute('Id') === rid);
+    if (rel) { const t = rel.getAttribute('Target'); sheetPath = t.startsWith('/') ? t.slice(1) : 'xl/' + t.replace(/^\.\//, ''); }
+  } catch { /* 기본 경로 */ }
+  const sheet = await read(sheetPath) || await read(Object.keys(files).find(k => /^xl\/worksheets\/[^/]+\.xml$/.test(k)) || '');
+  if (!sheet) throw new Error('엑셀 시트를 찾지 못했습니다.');
+  const colIndex = ref => { let c = 0; for (const ch of ref.replace(/\d+$/, '')) c = c * 26 + ch.charCodeAt(0) - 64; return c - 1; };
+  const rows = [];
+  for (const row of xml(sheet).getElementsByTagName('row')) {
+    const out = []; let next = 0;
+    for (const c of row.getElementsByTagName('c')) {
+      const ref = c.getAttribute('r'), i = ref ? colIndex(ref) : next; next = i + 1;
+      const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0]?.textContent ?? '';
+      out[i] = t === 's' ? shared[Number(v)] ?? '' : t === 'inlineStr' ? textOf(c) : t === 'b' ? (v === '1' ? 'TRUE' : 'FALSE') : v;
+    }
+    rows[Number(row.getAttribute('r') || rows.length + 1) - 1] = Array.from(out, x => x ?? '');
+  }
+  return Array.from(rows, r => r || []);
+}
+// CSV·탭 구분(엑셀에서 복사해 붙여넣기). 따옴표 안의 쉼표·줄바꿈 허용.
+function readDelimited(text) {
+  text = String(text || '').replace(/^﻿/, ''); const sep = text.split('\n', 1)[0].includes('\t') ? '\t' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"' && !cell) q = true; else if (ch === sep) { row.push(cell); cell = ''; } else if (ch === '\n') { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = ''; } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell.replace(/\r$/, '')); rows.push(row); }
+  return rows;
+}
+// 머리글 줄을 찾아 칸 이름 → 키. columns: [[key, 머리글, 다른 이름…]…]. 머리글이 하나도 안 맞으면 순서대로.
+function importMap(table, columns) {
+  const norm = s => String(s ?? '').replace(/[\s*()（）]/g, '').toLowerCase();
+  const rows = table.filter(r => r.some(c => String(c ?? '').trim()));
+  let headIdx = rows.findIndex((r, i) => i < 10 && r.filter(c => columns.some(col => col.slice(1).some(n => norm(n) === norm(c)))).length >= 2);
+  let index;
+  if (headIdx >= 0) index = columns.map(col => rows[headIdx].findIndex(c => col.slice(1).some(n => norm(n) === norm(c))));
+  else { headIdx = -1; index = columns.map((_, i) => i); }
+  const body = rows.slice(headIdx + 1).map(r => Object.fromEntries(columns.map((col, i) => [col[0], index[i] >= 0 ? String(r[index[i]] ?? '').trim() : ''])));
+  return { rows: body, matched: columns.filter((_, i) => index[i] >= 0).map(c => c[1]), missing: columns.filter((_, i) => index[i] < 0).map(c => c[1]) };
+}
+// 올리기 창: 파일 고르기·붙여넣기 → 검사(dry_run) → 줄별 결과 → 넣기. 오류가 하나라도 있으면 넣지 않는다.
+function importDialog({ title, endpoint, columns, sample, help = '', after = null }) {
+  const m = modal(`<h3>${esc(title)}</h3>
+    <p class="small muted">첫 줄은 머리글(칸 이름)입니다. 칸 순서는 상관없고, 이름이 맞는 칸만 읽습니다. 한 번에 500줄까지. ${help}</p>
+    <div class="actions wrap" style="justify-content:flex-start"><label class="btn">파일 고르기 (.xlsx · .csv)<input type="file" accept=".xlsx,.csv,.txt" data-imp-file hidden></label><button type="button" class="btn" data-imp-sample>양식 내려받기</button><span class="small muted" data-imp-name></span></div>
+    <label>또는 엑셀에서 복사해 붙여넣기<textarea data-imp-paste rows="4" placeholder="${esc(columns.map(c => c[1]).join('\t'))}"></textarea></label>
+    <div data-imp-result></div>
+    <div class="actions"><button type="button" class="btn" data-close>닫기</button><button type="button" class="btn" data-imp-check>검사</button><button type="button" class="btn primary" data-imp-go disabled>넣기</button></div>`, { wide: true });
+  let rows = [], checked = false;
+  const result = $('[data-imp-result]', m.el), go = $('[data-imp-go]', m.el);
+  const setTable = table => {
+    const r = importMap(table, columns); rows = r.rows; checked = false; go.disabled = true;
+    result.innerHTML = `<p class="small">${rows.length}줄 읽음 · 읽은 칸: ${esc(r.matched.join(', ') || '없음')}${r.missing.length ? ` · <span class="muted">없는 칸: ${esc(r.missing.join(', '))}</span>` : ''}</p>`;
+  };
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-imp-sample]', m.el).onclick = () => xlsxDownload(`${title}_양식.xlsx`, { sheet: '양식', columns: columns.map(c => ({ label: c[1], type: 'text' })), rows: sample.map(x => columns.map(c => x[c[0]] ?? '')) });
+  $('[data-imp-file]', m.el).onchange = async e => {
+    const file = e.target.files[0]; if (!file) return; $('[data-imp-name]', m.el).textContent = file.name;
+    try { setTable(/\.xlsx$/i.test(file.name) ? await readXlsx(await file.arrayBuffer()) : readDelimited(await file.text())); }
+    catch (error) { result.innerHTML = `<p class="red-text">${esc(error.message)}</p>`; rows = []; }
+  };
+  $('[data-imp-paste]', m.el).oninput = e => setTable(readDelimited(e.target.value));
+  const send = async dry => {
+    if (!rows.length) return toast('올릴 줄이 없습니다. 파일을 고르거나 붙여넣으세요.', 'err');
+    const r = await api('POST', endpoint, { rows, dry_run: dry });
+    if (!dry && !r.errors.length) { toast(`${r.inserted}줄을 넣었습니다.`); m.close(); await after?.(); return; }
+    const keys = columns.map(c => c[0]);
+    result.innerHTML = `<p class="small"><b>${r.total}줄</b> 중 정상 ${r.ok}${r.errors.length ? ` · <span class="red-text">오류 ${r.errors.length} — 고쳐서 다시 올리세요(오류가 있으면 하나도 넣지 않습니다)</span>` : ' · 모두 정상, 「넣기」를 누르세요'}</p>
+      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th>${columns.map(c => `<th>${esc(c[1])}</th>`).join('')}<th>검사</th></tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td>${keys.map(k => `<td>${esc(row[k])}</td>`).join('')}<td class="${res?.error ? 'red-text' : 'small muted'}">${esc(res?.error || '정상')}</td></tr>`; }).join('')}</tbody></table></div>`;
+    checked = dry && !r.errors.length; go.disabled = !checked;
+  };
+  $('[data-imp-check]', m.el).onclick = () => send(true).catch(fail);
+  go.onclick = () => { if (checked) send(false).catch(fail); };
+}

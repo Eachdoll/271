@@ -258,3 +258,22 @@ test('15.110 Payments to suppliers: ledger balance = opening + bills − payment
   assert.equal((await buyer('POST', '/api/purchase-closing', { period: lastMonth, vendor: v })).status, 200);
   assert.equal((await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: lastMonth + '-15', amount: 1, request_id: rid() })).status, 400);
 });
+
+test('15.113 Excel import: dry run checks every row, errors block the whole batch, roles', async () => {
+  assert.equal((await staff('POST', '/api/import/vendors', { rows: [{ name: '엑셀상사' }] })).status, 403);
+  const rows = [{ name: '엑셀상사', code: 'x-1', is_purchase: 'O', biz_no: '1234567890' }, { name: '엑셀 상사' }, { name: '메일나쁨', tax_email: 'a@' }];
+  const dry = (await buyer('POST', '/api/import/vendors', { rows, dry_run: true })).body;
+  assert.equal(dry.ok, 1); assert.match(dry.errors[0].error, /1번째 줄과 이름/); assert.match(dry.errors[1].error, /이메일/);
+  const blocked = (await buyer('POST', '/api/import/vendors', { rows })).body;
+  assert.equal(blocked.inserted, undefined); assert.equal((await buyer('GET', '/api/vendors?q=엑셀')).body.length, 0);
+  const done = (await buyer('POST', '/api/import/vendors', { rows: [rows[0], { name: '엑셀무역', is_sales: '예' }] })).body;
+  assert.equal(done.inserted, 2);
+  const list = (await buyer('GET', '/api/vendors?q=엑셀')).body;
+  assert.deepEqual(list.map(v => [v.name, v.code.startsWith('C') ? 'auto' : v.code, v.is_purchase, v.is_sales, v.biz_no]).sort(), [['엑셀무역', 'auto', 0, 1, ''], ['엑셀상사', 'X-1', 1, 0, '123-45-67890']]);
+  // 품목: 관리자만, 제품은 거절, 코드 겹침(대소문자)
+  assert.equal((await buyer('POST', '/api/import/items', { rows: [{ product: 'a', item_category: '원자재', unit: 'KG' }] })).status, 403);
+  const items = (await admin('POST', '/api/import/items', { rows: [{ product: '원사', product_code: 'mk-1', item_category: '원자재', unit: 'KG' }, { product: '완제품', item_category: '제품', unit: 'BOX' }, { product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }], dry_run: true })).body;
+  assert.equal(items.ok, 1); assert.match(items.errors[0].error, /MK-1|mk-1/i); assert.match(items.errors[1].error, /제품은 구성자재/);
+  assert.equal((await admin('POST', '/api/import/items', { rows: [{ product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }] })).body.inserted, 1);
+  assert.equal((await admin('GET', '/api/boms?q=LB-1')).body[0].spec, '소');
+});

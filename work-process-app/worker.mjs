@@ -3616,6 +3616,72 @@ async function stockAlerts() {
   return { low: rows.filter(r => levels.has(r.item + '\u0000' + r.unit) && stockRound(r.stock) < levels.get(r.item + '\u0000' + r.unit)).length, negative: rows.filter(r => stockRound(r.stock) < 0).length };
 }
 
+// ── 15.113 엑셀 올리기: 거래처·품목을 여러 줄 한 번에. dry_run이면 줄마다 검사만 하고, 아니면 오류가 하나도 없을 때만 한 묶음으로 넣는다. ──
+// 이미 있는 이름·코드, 파일 안에서 겹치는 이름·코드는 그 줄 오류. 넣기는 db.batch(하나라도 실패하면 아무것도 안 들어감).
+const IMPORT_MAX = 500;
+function importRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) throw bad('올릴 줄이 없습니다.');
+  if (rows.length > IMPORT_MAX) throw bad(`한 번에 ${IMPORT_MAX}줄까지 올릴 수 있습니다. 나눠서 올리세요.`);
+  return rows.map(r => (r && typeof r === 'object' && !Array.isArray(r) ? r : {}));
+}
+const importFlag = v => (v === true || v === 1 || /^(1|y|yes|o|true|예|사용|매입|매출|○|v)$/i.test(String(v ?? '').trim()) ? 1 : 0);
+async function importFinish(body, results, cmds, label) {
+  const errors = results.filter(r => r.error);
+  if (body.dry_run || errors.length) return { dry_run: !!body.dry_run, total: results.length, ok: results.length - errors.length, errors: errors.slice(0, 500), rows: results };
+  try { await db.batch(cmds); }
+  catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, `그 사이 같은 이름이나 코드의 ${label}이(가) 등록되었습니다. 다시 검사하세요.`); throw error; }
+  return { dry_run: false, total: results.length, ok: results.length, errors: [], inserted: results.length };
+}
+route('POST', '/api/import/vendors', async ({ user, body }) => {
+  if (!hasRole(user, 'purchase') && !hasRole(user, 'sales')) throw new HttpError(403, '거래처 엑셀 올리기는 구매·영업 담당자나 관리자가 합니다.');
+  const rows = importRows(body.rows);
+  const have = await db.prepare('SELECT name_key, code FROM vendors').all();
+  const names = new Set(have.map(v => v.name_key)), codes = new Set(have.map(v => v.code).filter(Boolean));
+  const seenName = new Map(), seenCode = new Map(), results = [], cmds = [];
+  rows.forEach((r, i) => {
+    try {
+      const name = reqStr(r.name, '거래처 이름', 100), key = nameKey(name), code = vendorCode(r.code);
+      if (names.has(key)) throw bad('이미 등록된 거래처입니다.');
+      if (seenName.has(key)) throw bad(`${seenName.get(key)}번째 줄과 이름이 겹칩니다.`);
+      if (code && codes.has(code)) throw bad(`거래처코드 ${code}는 이미 쓰고 있습니다.`);
+      if (code && seenCode.has(code)) throw bad(`${seenCode.get(code)}번째 줄과 코드가 겹칩니다.`);
+      seenName.set(key, i + 1); if (code) seenCode.set(code, i + 1);
+      const v = { biz_no: bizNoField(r.biz_no), biz_name: str(r.biz_name, 100), ceo: str(r.ceo, 50), address: str(r.address, 200), biz_type: str(r.biz_type, 100), biz_item: str(r.biz_item, 100), tax_email: taxEmail(r.tax_email, '세금계산서 이메일'), tax_email2: taxEmail(r.tax_email2, '세금계산서 이메일 2') };
+      const purchase = importFlag(r.is_purchase), sales = importFlag(r.is_sales);
+      cmds.push({ sql: `INSERT INTO vendors(name,name_key,contact_name,phone,created_by,is_purchase,is_sales,freight_terms,code,${TAX_VENDOR_FIELDS.join(',')}) VALUES(?,?,?,?,?,?,?,'[]',${code ? '?' : VENDOR_AUTO_CODE},${TAX_VENDOR_FIELDS.map(() => '?').join(',')})`,
+        args: [name, key, str(r.contact_name, 50), str(r.phone, 30), user.name, purchase, sales, ...(code ? [code] : []), ...TAX_VENDOR_FIELDS.map(k => v[k])] });
+      results.push({ row: i + 1, name, code: code || '(자동)', is_purchase: purchase, is_sales: sales, biz_no: v.biz_no });
+    } catch (error) { if (!(error instanceof HttpError)) throw error; results.push({ row: i + 1, name: String(r.name ?? ''), error: error.message }); }
+  });
+  return importFinish(body, results, cmds, '거래처');
+});
+route('POST', '/api/import/items', async ({ user, body }) => {
+  requireAdmin(user);
+  const rows = importRows(body.rows);
+  const have = await db.prepare('SELECT product, product_code FROM boms').all();
+  const names = new Set(have.map(b => nameKey(b.product))), codes = new Set(have.map(b => String(b.product_code || '').toUpperCase()).filter(Boolean));
+  const seenName = new Map(), seenCode = new Map(), results = [], cmds = [];
+  for (const [i, r] of rows.entries()) {
+    try {
+      const category = String(r.item_category ?? '').trim();
+      if (category === '제품') throw bad('제품은 구성자재(BOM)와 함께 BOM 관리에서 등록하세요. 엑셀로는 원자재·부자재·반제품·상품·임가공을 올립니다.');
+      const body1 = { product: r.product, product_code: r.product_code, item_category: category, kind: category === '반제품' ? 'semi' : 'finished', base_qty: 1, unit: r.unit, materials: [], note: r.note, cat1: str(r.cat1, 50), cat2: str(r.cat2, 50), cat3: str(r.cat3, 50) };
+      const fields = bomFields(body1), { cats } = await bomPlacement(body1, fields[8], {}, fields[4]);
+      const key = nameKey(fields[0]), code = fields[1].toUpperCase();
+      if (/^TMP-/i.test(code)) throw bad('임시 코드(TMP-)는 쓸 수 없습니다.');
+      if (names.has(key)) throw bad('같은 이름의 품목이 이미 있습니다.');
+      if (seenName.has(key)) throw bad(`${seenName.get(key)}번째 줄과 품목명이 겹칩니다.`);
+      if (code && codes.has(code)) throw bad(`제품코드 ${fields[1]}는 이미 쓰고 있습니다.`);
+      if (code && seenCode.has(code)) throw bad(`${seenCode.get(code)}번째 줄과 제품코드가 겹칩니다.`);
+      seenName.set(key, i + 1); if (code) seenCode.set(code, i + 1);
+      const spec = str(r.spec, 100);
+      cmds.push({ sql: 'INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty,spec) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [...fields, user.name, ...cats, '', '', null, spec] });
+      results.push({ row: i + 1, product: fields[0], product_code: fields[1], item_category: category, unit: fields[4], spec });
+    } catch (error) { if (!(error instanceof HttpError)) throw error; results.push({ row: i + 1, product: String(r.product ?? ''), error: error.message }); }
+  }
+  return importFinish(body, results, cmds, '품목');
+});
+
 // ── 내가 처리할 일: 내가 승인할 수 있는 대기 건과 내가 올린 요청의 상태 ──
 route('GET', '/api/my-tasks', async ({ user }) => {
   const roles = publicUser(user).roles;

@@ -211,11 +211,15 @@ async function pageVendors(main) {
     <label>담당자 이름<input name="contact_name" maxlength="50"></label>
     <label>연락처<input name="phone" maxlength="30" inputmode="tel" placeholder="예) 010-1234-5678"></label>
     ${vendorTypeChecks()}</div>
-    <div class="actions">${ME.is_admin ? '<button type="button" class="btn" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}<button class="btn primary">등록</button></div></form>
+    <div class="actions"><button type="button" class="btn" id="vendorImport" title="거래처를 엑셀로 여러 곳 한 번에 등록">엑셀 올리기</button>${ME.is_admin ? '<button type="button" class="btn" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}<button class="btn primary">등록</button></div></form>
   <div class="seg class-tabs" id="vendorTypeTabs" role="group" aria-label="거래처 구분"></div>
   <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span></form>
   <div id="vendorList"></div>`;
   const filters = $('#vendorFilters', main); let version = 0;
+  $('#vendorImport', main).onclick = () => importDialog({ title: '거래처 엑셀 올리기', endpoint: '/api/import/vendors', after: () => load(),
+    help: '매입·매출 칸은 O·Y·1·예 중 하나면 체크. 코드를 비우면 C0001…로 자동.',
+    columns: [['code', '거래처코드', '코드', '거래처 코드'], ['name', '거래처명', '거래처 이름', '거래처', '상호', '회사명'], ['is_purchase', '매입', '매입처'], ['is_sales', '매출', '매출처'], ['contact_name', '담당자', '담당자명', '담당자 이름'], ['phone', '연락처', '전화', '전화번호', '휴대폰'], ['biz_no', '사업자번호', '사업자등록번호'], ['biz_name', '상호(사업자)', '사업자 상호', '법인명'], ['ceo', '대표자', '대표', '대표자명'], ['address', '주소', '사업장주소', '사업장 주소'], ['biz_type', '업태'], ['biz_item', '종목'], ['tax_email', '세금계산서 이메일', '이메일', 'Email', '계산서이메일'], ['tax_email2', '세금계산서 이메일2', '이메일2']],
+    sample: [{ code: '', name: '(예) 대한상사', is_purchase: 'O', is_sales: '', contact_name: '홍길동', phone: '010-1234-5678', biz_no: '123-45-67890', biz_name: '(주)대한상사', ceo: '김대표', address: '경기도 …', biz_type: '도소매', biz_item: '장갑', tax_email: 'tax@example.com' }] });
   let vendorTab = ''; try { vendorTab = localStorage.getItem('wpa:vendor-tab') || ''; } catch { /* 편의 기능 */ }
   const fields = v => `<label>거래처코드<input name="code" maxlength="20" value="${esc(v.code || '')}" autocapitalize="characters"></label><label>거래처 이름 *<input name="name" required maxlength="100" value="${esc(v.name)}"></label><label>담당자 이름<input name="contact_name" maxlength="50" value="${esc(v.contact_name)}"></label><label>연락처<input name="phone" maxlength="30" inputmode="tel" value="${esc(v.phone)}"></label>${vendorTypeChecks(v)}`;
   const load = async () => {

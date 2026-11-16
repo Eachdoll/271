@@ -828,3 +828,8 @@ INVITE_CODE=local-test-code npm start
 - 공급자 = 우리 회사 정보(GET /api/tax-company), 공급받는자 = 거래처 사업자 정보. 합계는 한글 금액(koreanWon: 십·백·천 앞 「일」 생략, 「일만」「일억」은 남김).
 - 잔액 줄: 잔액 = /api/sales-ledger(같은 기간) totals.balance, 금회 = 이 명세서 합계, 입금 = 기간 입금, 전잔액 = 잔액 − 금회 + 입금(같은 기간 다른 전표가 있으면 전잔액에 들어감).
 - 회사 정보에 입금 계좌(bank, settings company_tax_info 안 → 마이그레이션 없음). 세금계산서 관리 › 우리 회사 정보에서 넣음.
+
+## 엑셀 올리기 (15.113)
+- POST /api/import/vendors(구매·영업·관리자), /api/import/items(관리자). body {rows:[{키:값}], dry_run}. 줄마다 검사(이미 있는 이름·코드, 파일 안 겹침, 이메일·사업자번호 형식, 분류) → dry_run이면 결과만, 아니면 오류 0일 때만 db.batch로 한 번에(하나라도 실패하면 아무것도 안 들어감). 500줄까지.
+- 품목 올리기는 원자재·부자재·반제품·상품·임가공만(제품은 구성자재 필요 → 화면에서). 1·2·3차 분류는 분류 관리에 있는 이름만(bomPlacement).
+- 클라이언트(xlsx.js): readXlsx(.xlsx 첫 시트, zip 저장·deflate는 DecompressionStream), readDelimited(CSV·탭 붙여넣기), importMap(머리글 줄 자동 찾기, 다른 이름 허용 — 이카운트 내보내기 머리글 대응), importDialog(검사 → 넣기). 화면: 거래처 관리·제품등록의 「엑셀 올리기」.
