@@ -31,7 +31,7 @@ async function pageSalesBillEntry(main) {
     box.innerHTML = orderBox.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data, open; try { [data, open] = await Promise.all([api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })), api('GET', '/api/sales-orders/open-lines?' + new URLSearchParams({ customer }))]); } catch (error) { box.innerHTML = orderBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
     if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
-    rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? r.order_price ?? '', note: '' }));
+    rows = data.rows.map(r => ({ ...r, picked: false, price: r.table_price ?? r.last_price ?? r.order_price ?? '', note: '' }));
     orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderPreset = null;
     // 15.102 수주 줄을 고르면 전표의 과세 구분을 그 수주에 맞춘다(서버는 다르면 막음). 수주마다 다르면 고른 뒤에 맞춘다.
     const presetOrder = orders.find(o => o.picked); if (presetOrder && presetOrder.tax_type) { form.elements.tax_type.value = presetOrder.tax_type; }
@@ -161,10 +161,11 @@ function salesBillSheet(bill, after = null, { onClose = null } = {}) {
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
     </section>
-    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true, onClose: () => onClose?.() });
+    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' ? '<button class="btn" data-bill-stmt>거래명세서</button>' : ''}${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true, onClose: () => onClose?.() });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);
+  $('[data-bill-stmt]', m.el)?.addEventListener('click', () => statementSheet([bill]).catch(fail));
   // 건별 세금계산서 담기(로스제로 납품전표의 TAX 버튼처럼)
   $('[data-bill-tax]', m.el)?.addEventListener('click', async e => {
     const btn = e.currentTarget; if (btn.disabled) return; btn.disabled = true;
@@ -182,6 +183,58 @@ function salesBillSheet(bill, after = null, { onClose = null } = {}) {
   };
 }
 
+// ── 15.112 거래명세서(거래처용): 공급자·공급받는자, 품목 줄, 공급가액·세액·합계(한글 금액), 전잔액·금회·입금·잔액, 입금 계좌.
+// 매출전표 1장 또는 같은 거래처의 여러 전표를 한 장으로(기간 합산). 인쇄·PDF 저장은 매출전표와 같은 방식(rcPrint).
+function koreanWon(n) {
+  const v = Math.trunc(Math.abs(Number(n) || 0)); if (!v) return '영';
+  const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'], small = ['', '십', '백', '천'], big = ['', '만', '억', '조'];
+  let out = '', s = String(v), group = 0;
+  while (s.length) {
+    const part = s.slice(-4); s = s.slice(0, -4);
+    let words = ''; for (let i = 0; i < part.length; i++) { const d = Number(part[part.length - 1 - i]); if (d) words = (d === 1 && i ? '' : digits[d]) + small[i] + words; }
+    if (words) out = words + big[group] + out; group++;
+  }
+  return out;
+}
+async function statementSheet(bills) {
+  if (!bills.length) return toast('담을 매출전표가 없습니다.', 'err');
+  const customer = bills[0].customer;
+  if (bills.some(b => partnerKey(b.customer) !== partnerKey(customer))) return toast('거래명세서는 한 거래처의 전표만 묶을 수 있습니다.', 'err');
+  const dates = bills.map(b => b.bill_date).sort(), from = dates[0], to = dates.at(-1);
+  const [company, vendors, ledger] = await Promise.all([
+    api('GET', '/api/tax-company').catch(() => ({})),
+    api('GET', '/api/vendors?q=' + encodeURIComponent(customer)).catch(() => []),
+    api('GET', '/api/sales-ledger?' + new URLSearchParams({ customer, from, to })).catch(() => null),
+  ]);
+  const buyer = (Array.isArray(vendors) ? vendors : []).find(v => partnerKey(v.name) === partnerKey(customer)) || { name: customer };
+  const lines = bills.flatMap(b => b.lines.filter(l => l.active !== 0).map(l => ({ ...l, date: l.ship_date || b.bill_date, bill_no: b.bill_no })));
+  const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0), total = supply + vat;
+  const md = d => String(d || '').slice(5).replace('-', '/');
+  const party = (title, p) => `<table class="po-info stmt-party"><caption>${title}</caption><tbody>
+    <tr><th>등록번호</th><td colspan="3"><b>${esc(p.biz_no || '')}</b></td></tr>
+    <tr><th>상호</th><td>${esc(p.biz_name || p.name || '')}</td><th>대표</th><td>${esc(p.ceo || '')}</td></tr>
+    <tr><th>주소</th><td colspan="3">${esc(p.address || '')}</td></tr>
+    <tr><th>업태</th><td>${esc(p.biz_type || '')}</td><th>종목</th><td>${esc(p.biz_item || '')}</td></tr></tbody></table>`;
+  const m = modal(`<h3 class="po-print-title">거래명세서 <span class="small muted">${esc(customer)} · ${esc(from === to ? from : `${from} ~ ${to}`)} · 전표 ${bills.length}장</span></h3>
+    <section class="cert po-doc bill-doc stmt-doc">
+      <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>거 래 명 세 서</h2></div>
+      <p class="small stmt-sub">${esc(from === to ? `거래일 ${from}` : `거래기간 ${from} ~ ${to}`)} · 공급받는자 보관용</p>
+      <div class="stmt-parties">${party('공급자', { ...company, name: company.biz_name || COMPANY_NAME })}${party('공급받는자', buyer)}</div>
+      <p class="stmt-sum">합계금액 <b>일금 ${esc(koreanWon(total))}원정</b> <span>(₩${won(total)})</span> <span class="small muted">공급가액 ${won(supply)} + 세액 ${won(vat)}</span></p>
+      <table class="po-items"><thead><tr><th>월/일</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th>비고</th></tr></thead>
+      <tbody>${lines.map(l => `<tr><td class="c">${esc(md(l.date))}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="r">${won(l.vat)}</td><td>${esc(l.lot ? `LOT ${l.lot}` : '')}${l.note ? `${l.lot ? ' · ' : ''}${esc(l.note)}` : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="3" class="r">합계</th><td class="r">${esc(unitTotals(lines, l => l.qty, l => l.unit))}</td><td></td><td></td><td class="r">${won(supply)}</td><td class="r">${won(vat)}</td><td class="nowrap"><b>${esc(`${won(total)}원`)}</b></td></tr></tfoot></table>
+      ${ledger ? `<table class="po-info stmt-balance"><tbody><tr><th>전잔액</th><td class="r">${won(ledger.totals.balance - total + ledger.totals.paid)}</td><th>금회 거래</th><td class="r">${won(total)}</td><th>입금</th><td class="r">${won(ledger.totals.paid)}</td><th>잔액(미수)</th><td class="r"><b>${won(ledger.totals.balance)}</b></td></tr></tbody></table>` : ''}
+      ${company.bank ? `<p class="stmt-bank"><b>입금 계좌</b> ${esc(company.bank)}</p>` : ''}
+      <p class="small muted">${esc(company.phone ? `문의 ${company.phone}${company.email ? ' · ' + company.email : ''}` : '')}</p>
+      <div class="stmt-sign"><span>인수자</span><span class="stmt-sign-line"></span><span>(인)</span></div>
+    </section>
+    <div class="actions">${!company.biz_no ? '<span class="small red-text">우리 회사 사업자 정보가 비어 있습니다(세금계산서 관리 › 우리 회사 정보).</span>' : ''}<button class="btn" data-close>닫기</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-print]', m.el).onclick = () => rcPrint(`거래명세서_${customer}_${from === to ? from : from + '_' + to}`);
+}
+
 // 전표 줄 엑셀(매입·매출 공통): 기간·거래처로 거른 확정 전표의 줄을 한 줄 한 행으로
 async function billLinesExcel(side, { from, to, party }) {
   if (!from || !to) return toast('엑셀로 받을 기간(시작일·종료일)을 고르세요.', 'err');
@@ -196,9 +249,19 @@ async function billLinesExcel(side, { from, to, party }) {
 
 async function pageSalesBillList(main) {
   main.innerHTML = `<h1>매출전표 목록</h1>
-  <form class="list-filters toolbar" data-read-only id="sbillFilters"><label>전표 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
+  <form class="list-filters toolbar" data-read-only id="sbillFilters"><label>전표 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button><button type="button" class="btn" data-stmt title="고른 거래처의 조회 기간 확정 전표를 한 장으로">거래명세서 (기간 합산)</button></form>
   <div id="billSummary" class="counts"></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
-  const form = $('#sbillFilters', main); let rows = [], page = 0;
+  const form = $('#sbillFilters', main);
+  $('[data-stmt]', form).onclick = async () => {
+    const customer = form.elements.customer.value.trim(); if (!customer) { form.elements.customer.focus(); return toast('거래처를 고른 뒤 누르세요.', 'err'); }
+    try {
+      const list = await api('GET', '/api/sales-bills?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value, status: 'confirmed' }));
+      if (!list.rows.length) return toast('그 기간에 이 거래처의 확정 전표가 없습니다.', 'err');
+      if (list.rows.length > 60 || list.more) return toast('전표가 60장을 넘습니다. 기간을 좁히세요.', 'err');
+      const bills = await Promise.all(list.rows.slice().reverse().map(r => api('GET', '/api/sales-bills/' + r.id)));
+      await statementSheet(bills);
+    } catch (error) { fail(error); }
+  }; let rows = [], page = 0;
   bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(fail);
   const load = async (next = false) => {
     const data = await api('GET', '/api/sales-bills?' + new URLSearchParams({ ...formObj(form), page: next ? page + 1 : 0 }));
@@ -219,48 +282,110 @@ async function pageSalesBillList(main) {
 }
 
 const PAY_KIND = { payment: '입금', opening: '기초 미수금' };
-async function pageSalesPayments(main) {
-  main.innerHTML = `<h1>입금확인</h1>
-  <p class="muted">거래처에서 받은 돈을 넣으면 기간별 거래보고의 잔액에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 받을 돈은 「기초 미수금」으로 한 번 넣으세요(잔액에 더해짐).</p>
+// 15.110 입금확인(매출처에서 받은 돈)과 지급확인(매입처에 준 돈)은 같은 화면 구조. side: 'sales' | 'purchase'
+const PAY_SIDE = {
+  sales: { title: '입금확인', api: '/api/sales-payments', party: 'customer', type: 'sales', kinds: PAY_KIND, verb: '입금', ledger: '기간별 거래보고',
+    help: '거래처에서 받은 돈을 넣으면 기간별 거래보고의 잔액에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 받을 돈은 「기초 미수금」으로 한 번 넣으세요(잔액에 더해짐).' },
+  purchase: { title: '지급확인', api: '/api/purchase-payments', party: 'vendor', type: 'purchase', kinds: { payment: '지급', opening: '기초 미지급' }, verb: '지급', ledger: '매입처 원장',
+    help: '매입처에 준 돈을 넣으면 매입처 원장의 잔액(줄 돈)에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 줄 돈은 「기초 미지급」으로 한 번 넣으세요(잔액에 더해짐).' },
+};
+async function pageSalesPayments(main) { return pagePayments(main, 'sales'); }
+async function pagePayments(main, side) {
+  const c = PAY_SIDE[side], party = c.party, kinds = c.kinds;
+  main.innerHTML = `<h1>${esc(c.title)}</h1>
+  <p class="muted">${esc(c.help)}</p>
   <form class="stack card" id="payForm" data-no-author novalidate>
     <div class="form-grid">
-      <label>거래처 *<input name="customer" required maxlength="100" autocomplete="off" placeholder="매출처에서 고르거나 입력"></label><span class="partner-hint small muted" data-partner-hint></span>
+      <label>거래처 *<input name="${party}" required maxlength="100" autocomplete="off" placeholder="${side === 'sales' ? '매출처' : '매입처'}에서 고르거나 입력"></label><span class="partner-hint small muted" data-partner-hint></span>
       <label>날짜 *<input name="pay_date" type="date" required value="${todayStr()}"></label>
-      <label>구분<select name="kind"><option value="payment">입금</option><option value="opening">기초 미수금</option></select></label>
+      <label>구분<select name="kind"><option value="payment">${esc(kinds.payment)}</option><option value="opening">${esc(kinds.opening)}</option></select></label>
       <label>금액 * <span class="hint">(원)</span><input name="amount" type="number" min="1" step="1" inputmode="numeric" required></label>
-      <label>입금 계좌·방법<input name="method" maxlength="50" list="payMethods" placeholder="예) 기업은행"><datalist id="payMethods"></datalist></label>
+      <label>${esc(c.verb)} 계좌·방법<input name="method" maxlength="50" list="payMethods" placeholder="예) 기업은행"><datalist id="payMethods"></datalist></label>
       <label class="span2">비고<input name="note" maxlength="200"></label>
     </div>
-    <div class="actions"><button class="btn primary">입금 저장</button></div>
+    <div class="actions"><button class="btn primary">${esc(c.verb)} 저장</button></div>
   </form>
-  <h2>입금 목록</h2>
-  <form class="list-filters toolbar" data-read-only id="payFilters"><label>날짜<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="confirmed">확정</option><option value="">전체</option><option value="cancelled">취소</option></select></label><button class="btn primary">조회</button></form>
+  <h2>${esc(c.verb)} 목록</h2>
+  <form class="list-filters toolbar" data-read-only id="payFilters"><label>날짜<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="${party}" maxlength="100"></label><label>상태<select name="status"><option value="confirmed">확정</option><option value="">전체</option><option value="cancelled">취소</option></select></label><button class="btn primary">조회</button></form>
   <div id="paySummary" class="counts"></div><div id="payList"></div>`;
   const form = $('#payForm', main), filters = $('#payFilters', main); let requestId = crypto.randomUUID(), busy = false;
-  bindPartnerPicker(filters.elements.customer, null, { type: 'sales' }).catch(fail);
-  bindPartnerPicker(form.elements.customer, $('[data-partner-hint]', form), { type: 'sales' }).catch(() => {});
+  bindPartnerPicker(filters.elements[party], null, { type: c.type }).catch(fail);
+  bindPartnerPicker(form.elements[party], $('[data-partner-hint]', form), { type: c.type }).catch(() => {});
   const load = async () => {
-    const data = await api('GET', '/api/sales-payments?' + new URLSearchParams(formObj(filters))); if (!main.isConnected) return;
+    const data = await api('GET', c.api + '?' + new URLSearchParams(formObj(filters))); if (!main.isConnected) return;
     const methods = [...new Set(data.rows.map(r => r.method).filter(Boolean))].slice(0, 20); $('#payMethods', main).innerHTML = methods.map(m => `<option value="${esc(m)}">`).join('');
     const live = data.rows.filter(r => r.status === 'confirmed');
-    $('#paySummary', main).innerHTML = `<b>${esc(`${data.rows.length}건 · 입금 ${won(live.filter(r => r.kind === 'payment').reduce((t, r) => t + r.amount, 0))}원`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
-    $('#payList', main).innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>날짜</th><th>거래처</th><th>구분</th><th class="r">금액</th><th>입금 계좌·방법</th><th>비고</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td>${esc(r.pay_date)}</td><td data-card-primary><b>${esc(r.customer)}</b></td><td>${PAY_KIND[r.kind]}</td><td class="r"><b>${won(r.amount)}</b></td><td>${esc(r.method)}</td><td>${esc(r.note)}${r.status === 'cancelled' ? `<div class="small muted">${esc(`취소: ${r.cancel_reason}`)}</div>` : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td>${r.status === 'confirmed' ? `<button class="btn small danger" data-pay-cancel="${r.id}">취소</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 입금이 없습니다.</div>';
+    $('#paySummary', main).innerHTML = `<b>${esc(`${data.rows.length}건 · ${c.verb} ${won(live.filter(r => r.kind === 'payment').reduce((t, r) => t + r.amount, 0))}원`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
+    $('#payList', main).innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>날짜</th><th>거래처</th><th>구분</th><th class="r">금액</th><th>${esc(c.verb)} 계좌·방법</th><th>비고</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td>${esc(r.pay_date)}</td><td data-card-primary><b>${esc(r[party])}</b></td><td>${esc(kinds[r.kind])}</td><td class="r"><b>${won(r.amount)}</b></td><td>${esc(r.method)}</td><td>${esc(r.note)}${r.status === 'cancelled' ? `<div class="small muted">${esc(`취소: ${r.cancel_reason}`)}</div>` : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td>${r.status === 'confirmed' ? `<button class="btn small danger" data-pay-cancel="${r.id}">취소</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${esc(`조건에 맞는 ${c.verb}이 없습니다.`)}</div>`;
   };
   rangePresets(filters.elements.from, filters.elements.to, { onPick: () => load().catch(fail) });
   filters.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   form.onsubmit = async e => {
     e.preventDefault(); if (busy) return;
     const v = formObj(form);
-    if (!v.customer) { form.elements.customer.focus(); return toast('거래처를 넣으세요.', 'err'); }
+    if (!v[party]) { form.elements[party].focus(); return toast('거래처를 넣으세요.', 'err'); }
     if (!(Number(v.amount) > 0)) { form.elements.amount.focus(); return toast('금액을 넣으세요.', 'err'); }
     busy = true;
-    try { const r = await api('POST', '/api/sales-payments', { ...v, request_id: requestId }); toast(r.duplicate ? '앞서 이미 저장된 입금입니다.' : `${r.customer} ${PAY_KIND[r.kind]} ${won(r.amount)}원을 저장했습니다.`); requestId = crypto.randomUUID(); form.elements.amount.value = ''; form.elements.note.value = ''; await load(); }
+    try { const r = await api('POST', c.api, { ...v, request_id: requestId }); toast(r.duplicate ? `앞서 이미 저장된 ${c.verb}입니다.` : `${r[party]} ${kinds[r.kind]} ${won(r.amount)}원을 저장했습니다.`); requestId = crypto.randomUUID(); form.elements.amount.value = ''; form.elements.note.value = ''; await load(); }
     catch (error) { fail(error); } finally { busy = false; }
   };
   $('#payList', main).addEventListener('click', async e => {
     const b = e.target.closest('[data-pay-cancel]'); if (!b) return;
-    const v = await promptBox('입금 취소', '<label>취소 사유 *<input name="reason" required maxlength="200"></label>'); if (!v) return;
-    try { await api('POST', `/api/sales-payments/${b.dataset.payCancel}/cancel`, v); toast('입금을 취소했습니다.'); await load(); } catch (error) { fail(error); }
+    const v = await promptBox(`${c.verb} 취소`, '<label>취소 사유 *<input name="reason" required maxlength="200"></label>'); if (!v) return;
+    try { await api('POST', `${c.api}/${b.dataset.payCancel}/cancel`, v); toast(`${c.verb}을 취소했습니다.`); await load(); } catch (error) { fail(error); }
+  });
+  await load();
+}
+
+// 15.110 매입처 원장: 매입처를 고르면 기초 미지급 + 매입전표(전표 단위) − 지급 = 잔액(줄 돈), 비우면 매입처별 요약
+async function pagePurchaseLedger(main) {
+  const r0 = rpRange('year'), PK = PAY_SIDE.purchase.kinds;
+  main.innerHTML = `<h1>매입처 원장</h1>
+  <p class="muted">매입처를 고르면 그 기간의 매입전표·지급과 줄마다 잔액(줄 돈)을 봅니다. 비우면 매입처별 합계입니다. 지급은 「지급확인」에서 넣습니다.</p>
+  <form class="list-filters toolbar" data-read-only id="pledgerForm"><label>매입처<input name="vendor" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
+  <div id="pledgerHead" class="counts"></div><div id="pledger"></div>`;
+  const form = $('#pledgerForm', main); let data = null;
+  ledgerPrefill(form, 'vendor');
+  bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
+  const load = async () => {
+    const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
+    data = await api('GET', '/api/purchase-ledger?' + new URLSearchParams(v)); if (!main.isConnected) return;
+    const box = $('#pledger', main);
+    if (!data.vendor) {
+      const sum = k => data.rows.reduce((t, r) => t + (r[k] || 0), 0);
+      $('#pledgerHead', main).innerHTML = `<b>${esc(`${data.from} ~ ${data.to} · 매입처 ${data.rows.length}곳 · 매입 ${won(sum('total'))}원 · 지급 ${won(sum('paid'))}원 · 미지급 ${won(sum('balance'))}원`)}</b>`;
+      box.innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>매입처</th><th class="r">기초잔액</th><th class="r">전표</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">매입 합계</th><th class="r">지급</th><th class="r">잔액(미지급)</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr><td data-card-primary><b>${esc(r.vendor)}</b></td><td class="r">${won(r.opening)}</td><td class="r">${fmtNum(r.bills)}</td><td class="r">${won(r.supply)}</td><td class="r">${won(r.vat)}</td><td class="r">${won(r.total)}</td><td class="r">${won(r.paid)}</td><td class="r"><b>${won(r.balance)}</b></td><td><button class="btn small" data-pledger-open="${esc(r.vendor)}">원장</button></td></tr>`).join('')}</tbody>
+        <tfoot><tr><th>합계</th><td class="r">${won(sum('opening'))}</td><td class="r">${fmtNum(sum('bills'))}</td><td class="r">${won(sum('supply'))}</td><td class="r">${won(sum('vat'))}</td><td class="r">${won(sum('total'))}</td><td class="r">${won(sum('paid'))}</td><td class="r"><b>${won(sum('balance'))}</b></td><td></td></tr></tfoot></table></div>` : '<div class="empty">그 기간에 매입·지급이 없습니다.</div>';
+      return;
+    }
+    $('#pledgerHead', main).innerHTML = `<b>${esc(`${data.vendor} · ${data.from} ~ ${data.to} · 기초잔액 ${won(data.opening)}원 · 매입 ${won(data.totals.purchase)}원 · 지급 ${won(data.totals.paid)}원 · 잔액 ${won(data.totals.balance)}원`)}</b>`;
+    box.innerHTML = `<section class="cert ledger-doc"><h2 class="ledger-title">매입처 원장</h2><p class="small">${esc(COMPANY_NAME)} · 매입처 <b>${esc(data.vendor)}</b> · 보고기간 ${esc(data.from)} ~ ${esc(data.to)}</p>
+      <div class="table-wrap"><table class="grid ledger-grid"><thead><tr><th>날짜</th><th>구분</th><th>전표번호</th><th>명세서 번호</th><th>적요/품목</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">매입금액</th><th class="r">지급액</th><th>지급 방법</th><th class="r">잔액</th></tr></thead>
+      <tbody><tr class="row-off"><td></td><td>기초잔액</td><td colspan="8"></td><td class="r"><b>${won(data.opening)}</b></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'payment' ? 'ledger-pay' : ''}"><td class="nowrap">${esc(r.date)}</td><td class="nowrap">${r.kind === 'purchase' ? '매입' : esc(PK[r.kind])}</td><td>${r.bill_no ? `<button type="button" class="link-btn" data-pledger-bill="${r.bill_id}">${esc(r.bill_no)}</button>` : ''}</td><td>${esc(r.statement_no || '')}</td><td data-card-primary>${esc(r.item)}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td class="r">${r.kind === 'purchase' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'purchase' ? won(r.vat) : ''}</td><td class="r">${r.purchase ? won(r.purchase) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td>${esc(r.method || '')}</td><td class="r"><b>${won(r.balance)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="5">합계</th><td class="r">${won(data.totals.supply)}</td><td class="r">${won(data.totals.vat)}</td><td class="r">${won(data.totals.purchase)}</td><td class="r">${won(data.totals.paid)}</td><td></td><td class="r"><b>${won(data.totals.balance)}</b></td></tr></tfoot></table></div></section>`;
+  };
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('[data-print]', form).onclick = () => { if (!data?.vendor) return toast('인쇄할 매입처를 고르세요.', 'err'); const sec = $('.ledger-doc', main); const m = modal(`<div class="ledger-print"></div><div class="actions"><button class="btn" data-close>닫기</button><button class="btn primary" data-go>인쇄 · PDF 저장</button></div>`, { wide: true }); $('.ledger-print', m.el).append(sec.cloneNode(true)); m.el.parentElement.classList.add('lr-cert-wrap'); $('[data-close]', m.el).onclick = m.close; $('[data-go]', m.el).onclick = () => rcPrint(`매입처원장_${data.vendor}_${data.from}_${data.to}`); };
+  $('[data-xlsx]', form).onclick = async () => {
+    try {
+      if (!data || data.from !== form.elements.from.value || data.to !== form.elements.to.value || (data.vendor || '') !== form.elements.vendor.value.trim()) await load();
+      if (!data) return;
+      if (!data.vendor) {
+        const sum = k => data.rows.reduce((t, r) => t + (r[k] || 0), 0);
+        return xlsxDownload(`매입처별_${data.from}_${data.to}.xlsx`, { sheet: '매입처별', titles: ['매입처별 매입·지급', `${COMPANY_NAME} · 보고기간 ${data.from} ~ ${data.to}`],
+          columns: [{ label: '매입처', type: 'text', width: 22 }, { label: '기초잔액', type: 'money', width: 14 }, { label: '전표', type: 'number', width: 8 }, { label: '공급가액', type: 'money', width: 14 }, { label: '세액', type: 'money', width: 12 }, { label: '매입 합계', type: 'money', width: 14 }, { label: '지급', type: 'money', width: 14 }, { label: '잔액(미지급)', type: 'money', width: 14 }],
+          rows: data.rows.map(r => [r.vendor, r.opening, r.bills, r.supply, r.vat, r.total, r.paid, r.balance]), totals: ['합계', sum('opening'), sum('bills'), sum('supply'), sum('vat'), sum('total'), sum('paid'), sum('balance')] });
+      }
+      xlsxDownload(`매입처원장_${data.vendor}_${data.from}_${data.to}.xlsx`, { sheet: '매입처 원장', titles: ['매입처 원장', `${COMPANY_NAME} · 매입처 ${data.vendor} · 보고기간 ${data.from} ~ ${data.to}`],
+        columns: [{ label: '날짜', type: 'date' }, { label: '구분', type: 'text', width: 10 }, { label: '전표번호', type: 'text', width: 15 }, { label: '명세서 번호', type: 'text', width: 14 }, { label: '적요/품목', type: 'text', width: 26 }, { label: '공급가액', type: 'money', width: 13 }, { label: '세액', type: 'money', width: 12 }, { label: '매입금액', type: 'money', width: 13 }, { label: '지급액', type: 'money', width: 13 }, { label: '지급 방법', type: 'text', width: 12 }, { label: '잔액', type: 'money', width: 14 }, { label: '비고', type: 'text', width: 18 }],
+        rows: [[data.from, '기초잔액', '', '', '', null, null, null, null, '', data.opening, ''], ...data.rows.map(r => [r.date, r.kind === 'purchase' ? '매입' : PK[r.kind], r.bill_no || '', r.statement_no || '', r.item, r.kind === 'purchase' ? r.supply : null, r.kind === 'purchase' ? r.vat : null, r.purchase || null, r.paid || null, r.method || '', r.balance, r.note || ''])],
+        totals: ['합계', '', '', '', '', data.totals.supply, data.totals.vat, data.totals.purchase, data.totals.paid, '', data.totals.balance, ''] });
+    } catch (error) { fail(error); }
+  };
+  $('#pledger', main).addEventListener('click', async e => {
+    const open = e.target.closest('[data-pledger-open]'); if (open) { form.elements.vendor.value = open.dataset.pledgerOpen; await load().catch(fail); return; }
+    const bill = e.target.closest('[data-pledger-bill]'); if (bill) { try { billSheet(await api('GET', '/api/purchase-bills/' + bill.dataset.pledgerBill), () => load()); } catch (error) { fail(error); } }
   });
   await load();
 }
@@ -273,6 +398,7 @@ async function pageSalesLedger(main) {
   <form class="list-filters toolbar" data-read-only id="ledgerForm"><label>거래처<input name="customer" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
   <div id="ledgerHead" class="counts"></div><div id="ledger"></div>`;
   const form = $('#ledgerForm', main); let data = null;
+  ledgerPrefill(form, 'customer');
   bindPartnerPicker(form.elements.customer, null /* 조회 줄에는 안내 글 없음(15.91: 글이 생기며 「조회」 버튼이 밀려 클릭이 빗나감) */, { type: 'sales' }).catch(() => {});
   const load = async () => {
     const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
@@ -358,4 +484,35 @@ async function pageSalesClosing(main) {
     }
   });
   await load();
+}
+
+// 15.115 연령표에서 거래처를 누르면 원장(기간별 거래보고·매입처 원장)을 그 거래처·가장 오래된 미결 일자부터 연다.
+function ledgerPrefill(form, field) {
+  let pick = null; try { pick = JSON.parse(sessionStorage.getItem('wpa:ledger-pick') || 'null'); sessionStorage.removeItem('wpa:ledger-pick'); } catch { /* 편의 기능 */ }
+  if (!pick || pick.field !== field) return;
+  form.elements[field].value = pick.name; if (pick.from && form.elements.from) form.elements.from.value = pick.from; if (form.elements.to) form.elements.to.value = todayStr();
+}
+// 15.115 채권(매출)·채무(매입) 연령표
+async function pageAging(main, side) {
+  const S = side === 'sales' ? { title: '채권 연령표', who: '거래처', bal: '미수 잔액', adv: '선수금', ledger: '#/sales/ledger', field: 'customer', pay: '입금' } : { title: '채무 연령표', who: '매입처', bal: '미지급 잔액', adv: '선급금', ledger: '#/purchase/ledger', field: 'vendor', pay: '지급' };
+  main.innerHTML = `<h1>${S.title}</h1>
+  <p class="muted">기준일까지 남은 ${S.bal}을 전표 일자로부터 지난 날수로 나눕니다. ${S.pay}은 오래된 전표(기초 잔액 먼저)부터 갚은 것으로 봅니다. ${S.who}를 누르면 원장을 엽니다.</p>
+  <form class="list-filters toolbar" data-read-only id="agingForm"><label>기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}"></label><label class="grow">${S.who} 검색<input type="search" name="q" maxlength="100"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
+  <div id="agingHead" class="counts"></div><div id="aging"></div>`;
+  const form = $('#agingForm', main); let data = null, shown = [];
+  const load = async () => {
+    data = await api('GET', '/api/aging?' + new URLSearchParams({ side, asof: form.elements.asof.value || todayStr() })); if (!main.isConnected) return;
+    const q = form.elements.q.value.trim().replace(/\s+/g, '').toLowerCase();
+    shown = data.rows.filter(r => !q || r.name.replace(/\s+/g, '').toLowerCase().includes(q));
+    const sum = i => shown.reduce((t, r) => t + (i === 'bal' ? r.balance : i === 'adv' ? r.advance : r.buckets[i]), 0);
+    const over = shown.reduce((t, r) => t + r.buckets.slice(3).reduce((a, b) => a + b, 0), 0);
+    $('#agingHead', main).innerHTML = sumLine([[`${S.who}`, `${fmtNum(shown.length)}곳`], [S.bal, `${won(sum('bal'))}원`], ['90일 넘음', `<span class="${over ? 'red-text' : ''}">${won(over)}원</span>`]]);
+    $('#aging', main).innerHTML = shown.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr><th>${S.who}</th><th class="r">${S.bal}</th>${data.labels.map(l => `<th class="r">${esc(l)}</th>`).join('')}<th class="r">${S.adv}</th><th>가장 오래된 미결</th></tr></thead>
+      <tbody>${shown.map((r, i) => `<tr><td data-card-primary><a href="${S.ledger}" data-aging-open="${i}"><b>${esc(r.name)}</b></a></td><td class="r"><b>${won(r.balance)}</b></td>${r.buckets.map((v, j) => `<td class="r ${v && j >= 3 ? 'red-text' : ''}">${v ? won(v) : '<span class="muted">0</span>'}</td>`).join('')}<td class="r">${r.advance ? won(r.advance) : ''}</td><td class="nowrap">${r.oldest ? `${esc(r.oldest)} <span class="small muted">(${fmtNum(r.days)}일)</span>` : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th>합계</th><td class="r"><b>${won(sum('bal'))}</b></td>${data.labels.map((_, j) => `<td class="r">${won(sum(j))}</td>`).join('')}<td class="r">${won(sum('adv'))}</td><td></td></tr></tfoot></table></div>` : `<div class="empty">기준일에 남은 ${S.bal}이 없습니다.</div>`;
+    $$('[data-aging-open]', main).forEach(x => x.onclick = () => { const r = shown[x.dataset.agingOpen]; try { sessionStorage.setItem('wpa:ledger-pick', JSON.stringify({ field: S.field, name: r.name, from: r.oldest || data.asof })); } catch { /* 편의 기능 */ } });
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('[data-xlsx]', form).onclick = () => { if (!data) return; xlsxDownload(`${S.title}_${data.asof}.xlsx`, { sheet: S.title, titles: [`${S.title} · 기준일 ${data.asof}`, COMPANY_NAME], columns: [{ label: S.who, type: 'text' }, { label: S.bal, type: 'money' }, ...data.labels.map(l => ({ label: l, type: 'money' })), { label: S.adv, type: 'money' }, { label: '가장 오래된 미결', type: 'text' }, { label: '경과 일수', type: 'number' }], rows: shown.map(r => [r.name, r.balance, ...r.buckets, r.advance, r.oldest || '', r.days]) }); };
+  await load().catch(fail);
 }

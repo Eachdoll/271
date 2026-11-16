@@ -288,6 +288,27 @@
       "when": 1795431213000,
       "tag": "0040_bom_spec",
       "breakpoints": false
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1795517613000,
+      "tag": "0041_purchase_payments",
+      "breakpoints": false
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1795604013000,
+      "tag": "0042_item_prices",
+      "breakpoints": false
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1795690413000,
+      "tag": "0043_stock_transfers",
+      "breakpoints": false
     }
   ]
 }

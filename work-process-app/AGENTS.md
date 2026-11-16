@@ -810,3 +810,37 @@ INVITE_CODE=local-test-code npm start
 - 메뉴: 영업 › 매출전표의 「입금」을 빼고 구매 그룹에 「입금확인」(#/purchase/payments). 예전 주소 #/sales/payments는 새 주소로 location.replace(즐겨찾기·자주 쓰는 화면 대비). 화면은 같은 pageSalesPayments, 제목만 「입금확인」.
 - 서버 /api/sales-payments(GET·POST·취소)는 requirePayments: 영업 또는 구매. 원장(기간별 거래보고)·매출 마감은 영업 그대로이며 입금 기록은 잔액에 그대로 반영.
 - 메뉴 열람 권한(routeMenu)은 주소 앞부분으로 정해지므로 입금확인은 이제 「구매」 묶음 권한을 따른다.
+
+## 지급확인·매입처 원장 (15.110, 마이그레이션 0041)
+- purchase_payments(지급 payment / 기초 미지급 opening, 취소, request_id 재전송 안전) — sales_payments와 같은 모양, vendor. purchase_closings.payment_total.
+- /api/purchase-payments(GET·POST·취소, requirePurchase, 매입 마감된 달은 막음), /api/purchase-ledger(매입처 없으면 매입처별 요약, 있으면 전표 단위 줄 + 지급 줄, 잔액 = 기초 미지급 + 매입전표 합계 − 지급). 매입 마감 목록·마감 기록에 그 달 지급 합계.
+- 화면: 구매 › 대금(입금확인 #/purchase/payments, 지급확인 #/purchase/disbursements, 매입처 원장 #/purchase/ledger). 입금확인·지급확인은 같은 pagePayments(main, side) — PAY_SIDE 설정(거래처 칸 이름 customer/vendor, 구분 글자, API). 매입처 원장은 전표 단위(매입전표에 운송비·명세서 합계가 전표에 있으므로). 인쇄·엑셀.
+- 거래처 이름 변경 따라가기에 purchase_payments 추가. 백업 표 목록에 purchase_payments.
+
+## 거래처별 단가표 (15.111, 마이그레이션 0042)
+- item_prices: side(purchase/sales)·거래처(vendor, vendor_key)·bom_id·unit_price·valid_from 한 줄씩. 바꾸면 새 적용일로 한 줄 더함(=이력). 같은 날 다시 넣으면 그 줄을 고침(UPDATE 후 changes()=0이면 INSERT). 빼기는 active=0(이력에 「뺌」).
+- 쓰는 단가 = 그 날짜 이전 가장 늦은 적용일(CURRENT_PRICE). API: GET /api/item-prices(현재 단가·이전 단가·이력 수, 적용 예정 단가), /history, /lookup?side&vendor&date → {bom_id: 단가}, POST(여러 줄), POST /:id/remove. 고치기 권한: 매입=구매, 매출=영업, 관리자.
+- 자동 채움: 발주 입력 표(거래처·품목 고르면 매입 단가, 직접 고친 단가(priceTouched)는 그대로, 단가표와 다르면 칸 아래 「단가표 N」), 수주 입력(매출 단가), 매출전표 전표 없는 출하(SHIP_SOURCE table_price → last_price → order_price). 클라이언트 tablePrices()는 구분·거래처·날짜별 캐시(저장 뒤 PRICE_CACHE.clear()).
+- 화면: 관리 › 단가표(#/purchase/prices, 메뉴 권한 master). 품목 사용처·거래처 이름 변경 따라가기·백업에 item_prices.
+
+## 거래처용 거래명세서 (15.112)
+- 매출전표 보기(확정)의 「거래명세서」 = 전표 1장, 매출전표 목록의 「거래명세서 (기간 합산)」 = 거래처+조회 기간 확정 전표 최대 60장을 한 장으로(statementSheet, sales-bills.js).
+- 공급자 = 우리 회사 정보(GET /api/tax-company), 공급받는자 = 거래처 사업자 정보. 합계는 한글 금액(koreanWon: 십·백·천 앞 「일」 생략, 「일만」「일억」은 남김).
+- 잔액 줄: 잔액 = /api/sales-ledger(같은 기간) totals.balance, 금회 = 이 명세서 합계, 입금 = 기간 입금, 전잔액 = 잔액 − 금회 + 입금(같은 기간 다른 전표가 있으면 전잔액에 들어감).
+- 회사 정보에 입금 계좌(bank, settings company_tax_info 안 → 마이그레이션 없음). 세금계산서 관리 › 우리 회사 정보에서 넣음.
+
+## 엑셀 올리기 (15.113)
+- POST /api/import/vendors(구매·영업·관리자), /api/import/items(관리자). body {rows:[{키:값}], dry_run}. 줄마다 검사(이미 있는 이름·코드, 파일 안 겹침, 이메일·사업자번호 형식, 분류) → dry_run이면 결과만, 아니면 오류 0일 때만 db.batch로 한 번에(하나라도 실패하면 아무것도 안 들어감). 500줄까지.
+- 품목 올리기는 원자재·부자재·반제품·상품·임가공만(제품은 구성자재 필요 → 화면에서). 1·2·3차 분류는 분류 관리에 있는 이름만(bomPlacement).
+- 클라이언트(xlsx.js): readXlsx(.xlsx 첫 시트, zip 저장·deflate는 DecompressionStream), readDelimited(CSV·탭 붙여넣기), importMap(머리글 줄 자동 찾기, 다른 이름 허용 — 이카운트 내보내기 머리글 대응), importDialog(검사 → 넣기). 화면: 거래처 관리·제품등록의 「엑셀 올리기」.
+
+## 안전재고 부족분 발주 · 창고 이동 (15.114, 마이그레이션 0043)
+- 재고 현황(품목 합계 보기)에 안전재고 미달이 있으면 「부족분 발주 N」(구매·관리자). POST /api/inventory/reorder-info {items:[{item,unit}]} → bom_id·입고 전 발주(recv_status '' 또는 checking)·마지막 발주 매입처·단가. 기본 수량 = 안전재고 − 현재고 − 입고 전 발주, 단가 = 매입처 단가표 → 마지막 단가. 매입처별로 /api/batches/purchase_order 한 번씩(30품목까지).
+- 창고 이동 = LOT 위치 이동(stock_transfers). 품목 전체 재고(STOCK_MOVEMENTS)에는 들어가지 않는다. lotPlaceStock: 위치가 적힌 입고 + 이동 들어옴 − 나감, 출하는 위치가 없어 먼저 들어온 위치(같은 날이면 위치 이름 순)부터 뺀다.
+- POST /api/stock-transfers(물류·물류팀장·관리자): 받을 창고는 사용 중, 위치는 그 창고 목록 안, 같은 위치 금지, 보낼 위치 잔량(이동일 기준과 지금 둘 다) 이하. 취소(입력자·물류팀장·관리자)는 받은 위치에 그만큼 남아 있을 때만, status='cancelled'.
+- LOT별 재고 창의 「위치 · 이동」에서 위치별 잔량·이동·이동 기록·취소. LOT별 재고 「창고 · 위치」에 이동한 위치도 나옴. 이동 기록이 있는 창고는 삭제 막힘. 백업에 stock_transfers.
+
+## 채권·채무 연령표 · QR 스캔 (15.115)
+- GET /api/aging?side=sales|purchase&asof: 기준일까지 확정 전표 + 기초 잔액(opening)을 날짜별 차변, 입금·지급(payment) 합계를 오래된 것부터 갚은 것으로(선입선출) 보고 남은 금액을 0~30·31~60·61~90·91~180·180일 초과로. 잔액 음수면 advance(선수·선급금). 권한: 매출=영업, 매입=구매.
+- 화면 #/sales/aging(채권 연령표), #/purchase/aging(채무 연령표). 거래처를 누르면 sessionStorage 'wpa:ledger-pick'으로 원장(기간별 거래보고·매입처 원장)을 그 거래처·가장 오래된 미결 일자부터 연다(ledgerPrefill).
+- #/logistics/scan QR 스캔: LOT 라벨 QR(「LOT|코드|수량 단위|입고번호」) 또는 LOT 글자. 카메라는 BarcodeDetector(안드로이드 크롬), 없으면 USB 스캐너(키 입력 + Enter)·직접 입력. 찾은 LOT의 잔량·위치 → 출하 기록(POST /api/shipments, lot·bom_id) · 위치 · 이동(lotMoveWindow). 서버 변경 없음.

@@ -1452,3 +1452,12 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
   .lt-grid select[data-l=item_category] { width: 6.8em; }
   .lt-grid .lt-del { min-width: 32px; padding: 4px 8px; }
 }
+/* 15.112 거래명세서 */
+.stmt-sub { margin: 4px 0 10px; }
+.stmt-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stmt-party caption { text-align: left; font-weight: 700; padding: 2px 0 4px; }
+.stmt-sum { margin: 12px 0 8px; font-size: 15px; } .stmt-sum span { margin-left: 8px; }
+.stmt-balance { margin-top: 10px; } .stmt-balance td.r { white-space: nowrap; }
+.stmt-bank { margin: 10px 0 2px; }
+.stmt-sign { display: flex; gap: 8px; justify-content: flex-end; align-items: flex-end; margin-top: 18px; } .stmt-sign-line { display: inline-block; width: 160px; border-bottom: 1px solid currentColor; }
+@media (max-width: 700px) { .stmt-parties { grid-template-columns: 1fr; } }

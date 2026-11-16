@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.109';
+const APP_VERSION = '15.115';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -24,6 +24,14 @@ const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko
 function unitTotals(rows, qty, unit) {
   const m = new Map(); for (const r of rows) { const u = String(unit(r) || '').trim(), q = Number(qty(r)); if (!Number.isFinite(q)) continue; m.set(u, (m.get(u) || 0) + q); }
   return [...m].map(([u, n]) => `${fmtNum(Math.round(n * 1000) / 1000)}${u ? ' ' + u : ''}`).join(' · ') || '0';
+}
+// 15.111 거래처별 단가표 조회: {bom_id: {unit_price, valid_from}}. 같은 구분·거래처·날짜는 한 번만 묻는다.
+const PRICE_CACHE = new Map();
+async function tablePrices(side, vendor, date = todayStr()) {
+  const name = String(vendor || '').trim(); if (!name) return {};
+  const key = [side, name.replace(/\s+/g, '').toLowerCase(), date].join('|');
+  if (!PRICE_CACHE.has(key)) PRICE_CACHE.set(key, api('GET', '/api/item-prices/lookup?' + new URLSearchParams({ side, vendor: name, date })).then(r => r.prices || {}).catch(() => ({})));
+  return PRICE_CACHE.get(key);
 }
 // 15.103 입력 표 안에서 Enter는 저장이 아니라 다음 칸으로(수량 → 단가 → 비고 → 다음 줄). 한글 조합 중·select·textarea는 그대로.
 function enterMovesInTable(root) {
@@ -310,11 +318,11 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
-    ['#/purchase/payments', '입금확인'],
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장'], ['#/purchase/aging', '채무 연령표']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
@@ -336,6 +344,7 @@ const NAV = [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
     { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
     ['#/logistics/stock', '재고 현황'],
+    ['#/logistics/scan', 'QR 스캔'],
   ] },
 ];
 // ── 메뉴 열람 권한(15.59) ── ME.menus가 null이면 전체, 배열이면 그 업무 묶음만 메뉴에 보이고 주소로 들어와도 막는다.
@@ -346,7 +355,7 @@ function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
   if (path === '#/sales/pr') return null;
-  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/quality/specs')) return 'master';
+  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/purchase/prices') || path.startsWith('#/quality/specs')) return 'master';
   for (const [prefix, key] of [['#/sales', 'sales'], ['#/purchase', 'purchase'], ['#/quality', 'quality'], ['#/dev', 'dev'], ['#/prod', 'production'], ['#/logistics', 'logistics']]) if (path === prefix || path.startsWith(prefix + '/')) return key;
   return null;
 }
@@ -378,7 +387,7 @@ function applyMenuAccess(main) {
   });
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
-const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];
+const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
 const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
@@ -512,14 +521,20 @@ const PAGES = {
   '#/logistics/ship-orders': main => pageShipInstructions(main),
   '#/sales/bills/new': main => pageSalesBillEntry(main),
   '#/sales/bills': main => pageSalesBillList(main),
-  '#/purchase/payments': main => pageSalesPayments(main),
+  '#/purchase/payments': main => pagePayments(main, 'sales'),
+  '#/purchase/disbursements': main => pagePayments(main, 'purchase'),
+  '#/purchase/ledger': main => pagePurchaseLedger(main),
   '#/sales/payments': () => { location.replace('#/purchase/payments'); }, // 15.109 구매로 옮김
   '#/sales/ledger': main => pageSalesLedger(main),
+  '#/sales/aging': main => pageAging(main, 'sales'),
+  '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
   '#/sales/tax/new': main => pageTaxMake(main),
   '#/sales/tax': main => pageTaxList(main),
   '#/logistics/stock': main => pageStock(main),
+  '#/logistics/scan': main => pageScan(main),
   '#/purchase/vendors': main => pageVendors(main),
+  '#/purchase/prices': main => pagePrices(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),
   '#/purchase/sample/list': () => pageWorkList('sample_goods'),
   '#/prod/semi/cut': main => pageSemi(main, 'cut'),
@@ -1622,7 +1637,7 @@ document.addEventListener('click', e => { if (!e.target.closest('#bomList .row-m
 document.addEventListener('keydown', e => { if (e.key !== 'Escape' || $('.modal-wrap')) return; const open = $$('#bomList .row-menu[open]'); open.forEach(m => { m.open = false; }); if (open.length) $('summary', open[0]).focus(); });
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="bom-view-bar"><div class="seg" id="bomViewTabs" role="group" aria-label="보기"><button type="button" data-bom-view="list">목록</button><button type="button" data-bom-view="tree">BOM 트리</button></div><div class="seg" id="bomActiveTabs" role="group" aria-label="사용 여부"><button type="button" data-bom-active="1">사용</button><button type="button" data-bom-active="0">미사용</button><button type="button" data-bom-active="">전체</button></div></div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label class="dup-filter">분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label class="dup-filter">사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="bomImport" title="원자재·부자재·상품 등을 엑셀로 한 번에 등록">엑셀 올리기</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="bom-view-bar"><div class="seg" id="bomViewTabs" role="group" aria-label="보기"><button type="button" data-bom-view="list">목록</button><button type="button" data-bom-view="tree">BOM 트리</button></div><div class="seg" id="bomActiveTabs" role="group" aria-label="사용 여부"><button type="button" data-bom-active="1">사용</button><button type="button" data-bom-active="0">미사용</button><button type="button" data-bom-active="">전체</button></div></div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label class="dup-filter">분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label class="dup-filter">사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
   // 15.68 세부 분류 칩: 분류 탭(원자재 등)을 고르면 그 안의 1차 → 2차 세부 분류로 좁혀 본다(건수 표시, 화면에서 거름).
   let sub = { cat1: null, cat2: null }, subClass = null;
@@ -1699,6 +1714,10 @@ async function pageBoms(main) {
       };
     };
     $('#newBom').onclick = () => edit();
+    if ($('#bomImport')) $('#bomImport').onclick = () => importDialog({ title: '품목 엑셀 올리기', endpoint: '/api/import/items', after: () => load(),
+      help: '분류는 원자재·부자재·반제품·상품·임가공(제품은 구성자재와 함께 화면에서 등록). 1·2·3차 분류는 분류 관리에 있는 이름만.',
+      columns: [['product_code', '품목코드', '제품코드', '코드'], ['product', '품목명', '품목', '제품명'], ['item_category', '분류', '품목구분', '구분'], ['unit', '단위'], ['spec', '규격'], ['cat1', '1차 분류', '1차분류'], ['cat2', '2차 분류', '2차분류'], ['cat3', '3차 분류', '3차분류'], ['note', '비고', '메모']],
+      sample: [{ product_code: 'RM-001', product: '(예) 나일론 원사', item_category: '원자재', unit: 'KG', spec: '70D' }] });
     $('#catManage').onclick = () => manageItemCategories(filterForm.elements.item_category.value || '원자재');
     $$('[data-bom-merge]', main).forEach(button => button.onclick = async () => {
       const temp = boms.find(bom => bom.id === Number(button.dataset.bomMerge));

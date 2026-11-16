@@ -196,3 +196,34 @@ test('15.102 Shipped-from-order shipment is locked, order with shipped goods can
   assert.ok((await seller('GET', '/api/sales-orders?state=open&customer=' + encodeURIComponent('바사상사'))).body.rows.every(r => ['waiting', 'partial'].includes(r.state)));
   assert.ok((await seller('GET', '/api/sales-orders?state=done&customer=' + encodeURIComponent('바사상사'))).body.rows.some(r => r.id === so.id), 'shipped-but-unbilled counts as taken');
 });
+
+test('15.111 Price table: lookup by date, history rows, same-day edit, roles, fills unbilled shipment price', async () => {
+  await admin('POST', '/api/vendors', { name: '단가상사', is_sales: true });
+  assert.equal((await staff('POST', '/api/item-prices', { side: 'sales', vendor: '단가상사', valid_from: today, items: [{ bom_id: glove.id, unit_price: 1 }] })).status, 403);
+  const past = new Date(today + 'T00:00:00Z'); past.setUTCDate(past.getUTCDate() - 10); const d10 = past.toISOString().slice(0, 10);
+  const fut = new Date(today + 'T00:00:00Z'); fut.setUTCDate(fut.getUTCDate() + 30); const d30 = fut.toISOString().slice(0, 10);
+  assert.equal((await seller('POST', '/api/item-prices', { side: 'sales', vendor: '단가상사', valid_from: d10, items: [{ bom_id: glove.id, unit_price: 1000 }, { bom_id: mask.id, unit_price: 50 }] })).status, 200);
+  assert.equal((await seller('POST', '/api/item-prices', { side: 'sales', vendor: '단가상사', valid_from: today, items: [{ bom_id: glove.id, unit_price: 1100 }] })).status, 200);
+  assert.equal((await seller('POST', '/api/item-prices', { side: 'sales', vendor: '단가상사', valid_from: today, items: [{ bom_id: glove.id, unit_price: 1150, note: '정정' }] })).status, 200, 'same day replaces');
+  await seller('POST', '/api/item-prices', { side: 'sales', vendor: '단가상사', valid_from: d30, items: [{ bom_id: glove.id, unit_price: 1300 }] });
+  const look = (await seller('GET', `/api/item-prices/lookup?side=sales&vendor=${encodeURIComponent('단가 상사')}&date=${today}`)).body.prices;
+  assert.deepEqual([look[glove.id].unit_price, look[mask.id].unit_price], [1150, 50]);
+  assert.equal((await seller('GET', `/api/item-prices/lookup?side=sales&vendor=${encodeURIComponent('단가상사')}&date=${d10}`)).body.prices[glove.id].unit_price, 1000, 'price as of an earlier date');
+  const list = (await seller('GET', `/api/item-prices?side=sales&vendor=${encodeURIComponent('단가상사')}`)).body;
+  const g = list.rows.find(r => r.bom_id === glove.id);
+  assert.deepEqual([g.unit_price, g.previous_price, g.versions], [1150, 1000, 3]);
+  assert.equal(list.future.length, 1);
+  const hist = (await seller('GET', `/api/item-prices/history?side=sales&vendor=${encodeURIComponent('단가상사')}&bom_id=${glove.id}`)).body.rows;
+  assert.deepEqual(hist.map(r => r.unit_price), [1300, 1150, 1000]);
+  assert.equal((await seller('GET', `/api/item-prices?side=purchase&vendor=${encodeURIComponent('단가상사')}`)).body.rows.length, 0, 'sides are separate');
+  // 전표 없는 출하 줄: 단가표 단가가 함께 온다
+  await staff('POST', '/api/shipments', { ship_date: today, bom_id: glove.id, item: '니트릴장갑', qty: 2, customer: '단가상사', unit: 'BOX' });
+  const un = (await seller('GET', '/api/sales-bills/unbilled?customer=' + encodeURIComponent('단가상사'))).body.rows[0];
+  assert.equal(un.table_price, 1150);
+  // 단가 줄 빼기 → 이전 단가로
+  const cur = hist.find(r => r.unit_price === 1150);
+  assert.equal((await seller('POST', `/api/item-prices/${cur.id}/remove`)).status, 200);
+  assert.equal((await seller('GET', `/api/item-prices/lookup?side=sales&vendor=${encodeURIComponent('단가상사')}&date=${today}`)).body.prices[glove.id].unit_price, 1000);
+  // 단가표에 있는 품목은 완전 삭제 안 됨
+  assert.ok(JSON.stringify((await admin('GET', `/api/boms/${mask.id}/usage`)).body).includes('단가표'));
+});

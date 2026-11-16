@@ -232,3 +232,80 @@ test('15.109 Payment check moved to 구매: purchasing staff can enter and cance
   assert.equal((await buyer('GET', '/api/sales-payments?customer=' + encodeURIComponent('입금상사'))).body.rows.length, 1);
   assert.equal((await buyer('POST', `/api/sales-payments/${p.body.id}/cancel`, { reason: '중복' })).status, 200);
 });
+
+test('15.110 Payments to suppliers: ledger balance = opening + bills − payments; closing keeps the paid total; roles', async () => {
+  const v = '지급상사';
+  assert.equal((await staff('POST', '/api/purchase-payments', { vendor: v, pay_date: today, amount: 1, request_id: rid() })).status, 403, 'purchase role only');
+  const opening = await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: lastMonth + '-01', kind: 'opening', amount: 100000, request_id: rid() });
+  assert.equal(opening.status, 200, JSON.stringify(opening.body));
+  const p = await po(v, '지급원단', 10, 1000);
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: v, request_id: rid(), lines: [{ po_id: p.id, qty: 10 }] });
+  const line = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent(v))).body.rows[0];
+  const bill = (await buyer('POST', '/api/purchase-bills', { vendor: v, bill_date: today, request_id: rid(), lines: [{ source_type: line.source_type, source_id: line.source_id }] })).body;
+  assert.equal(bill.total, 11000);
+  const pay = (await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: today, amount: 30000, method: '기업은행', request_id: rid() })).body;
+  const from = lastMonth + '-01';
+  const led = (await buyer('GET', `/api/purchase-ledger?vendor=${encodeURIComponent(v)}&from=${today.slice(0, 7)}-01&to=${today}`)).body;
+  assert.equal(led.opening, 100000, 'opening payable before the period');
+  assert.deepEqual([led.totals.purchase, led.totals.paid, led.totals.balance], [11000, 30000, 81000]);
+  const sum = (await buyer('GET', `/api/purchase-ledger?from=${from}&to=${today}`)).body.rows.find(r => r.vendor === v);
+  assert.deepEqual([sum.opening, sum.total, sum.paid, sum.balance], [100000, 11000, 30000, 81000]);
+  const closing = (await buyer('GET', `/api/purchase-closing?period=${today.slice(0, 7)}`)).body.rows.find(r => r.vendor === v);
+  assert.equal(closing.payment_total, 30000);
+  assert.equal((await buyer('POST', `/api/purchase-payments/${pay.id}/cancel`, { reason: '중복' })).status, 200);
+  assert.equal((await buyer('GET', `/api/purchase-ledger?vendor=${encodeURIComponent(v)}&from=${today.slice(0, 7)}-01&to=${today}`)).body.totals.balance, 111000);
+  // 지난달 마감 뒤에는 그 달 지급 등록 막힘
+  assert.equal((await buyer('POST', '/api/purchase-closing', { period: lastMonth, vendor: v })).status, 200);
+  assert.equal((await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: lastMonth + '-15', amount: 1, request_id: rid() })).status, 400);
+});
+
+test('15.113 Excel import: dry run checks every row, errors block the whole batch, roles', async () => {
+  assert.equal((await staff('POST', '/api/import/vendors', { rows: [{ name: '엑셀상사' }] })).status, 403);
+  const rows = [{ name: '엑셀상사', code: 'x-1', is_purchase: 'O', biz_no: '1234567890' }, { name: '엑셀 상사' }, { name: '메일나쁨', tax_email: 'a@' }];
+  const dry = (await buyer('POST', '/api/import/vendors', { rows, dry_run: true })).body;
+  assert.equal(dry.ok, 1); assert.match(dry.errors[0].error, /1번째 줄과 이름/); assert.match(dry.errors[1].error, /이메일/);
+  const blocked = (await buyer('POST', '/api/import/vendors', { rows })).body;
+  assert.equal(blocked.inserted, undefined); assert.equal((await buyer('GET', '/api/vendors?q=엑셀')).body.length, 0);
+  const done = (await buyer('POST', '/api/import/vendors', { rows: [rows[0], { name: '엑셀무역', is_sales: '예' }] })).body;
+  assert.equal(done.inserted, 2);
+  const list = (await buyer('GET', '/api/vendors?q=엑셀')).body;
+  assert.deepEqual(list.map(v => [v.name, v.code.startsWith('C') ? 'auto' : v.code, v.is_purchase, v.is_sales, v.biz_no]).sort(), [['엑셀무역', 'auto', 0, 1, ''], ['엑셀상사', 'X-1', 1, 0, '123-45-67890']]);
+  // 품목: 관리자만, 제품은 거절, 코드 겹침(대소문자)
+  assert.equal((await buyer('POST', '/api/import/items', { rows: [{ product: 'a', item_category: '원자재', unit: 'KG' }] })).status, 403);
+  const items = (await admin('POST', '/api/import/items', { rows: [{ product: '원사', product_code: 'mk-1', item_category: '원자재', unit: 'KG' }, { product: '완제품', item_category: '제품', unit: 'BOX' }, { product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }], dry_run: true })).body;
+  assert.equal(items.ok, 1); assert.match(items.errors[0].error, /MK-1|mk-1/i); assert.match(items.errors[1].error, /제품은 구성자재/);
+  assert.equal((await admin('POST', '/api/import/items', { rows: [{ product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }] })).body.inserted, 1);
+  assert.equal((await admin('GET', '/api/boms?q=LB-1')).body[0].spec, '소');
+});
+
+test('15.114 Warehouse moves keep item stock, check place balance and roles; reorder info nets open orders', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '이동장갑', product_code: 'MV-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  await admin('POST', '/api/warehouses', { name: '본동', locations: 'R1,R2' }); await admin('POST', '/api/warehouses', { name: '별동' });
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'MV', qty: 20, warehouse: '본동', location: 'R1' }] });
+  const base = { item: '이동장갑', unit: 'BOX', lot: 'MV', from_place: '본동 R1', to_warehouse: '별동' };
+  assert.equal((await buyer('POST', '/api/stock-transfers', { ...base, qty: 5 })).status, 403);
+  assert.equal((await staff('POST', '/api/stock-transfers', { ...base, qty: 25 })).status, 400);
+  assert.equal((await staff('POST', '/api/stock-transfers', { ...base, to_warehouse: '본동', to_location: 'R1', qty: 1 })).status, 400);
+  const t = (await staff('POST', '/api/stock-transfers', { ...base, qty: 8, request_id: rid() })).body;
+  assert.equal(t.to_place, '별동');
+  const places = (await staff('GET', '/api/inventory/lot-places?item=이동장갑&unit=BOX&lot=MV')).body.places.map(p => [p.place, p.qty]);
+  assert.deepEqual(places.sort(), [['본동 R1', 12], ['별동', 8]].sort());
+  assert.equal((await staff('GET', '/api/inventory?q=이동장갑')).body.rows[0].stock, 20);
+  assert.equal((await staff('POST', `/api/stock-transfers/${t.id}/cancel`, {})).body.status, 'cancelled');
+  assert.equal((await staff('POST', `/api/stock-transfers/${t.id}/cancel`, {})).status, 400);
+  // 부족분 발주 정보: 입고 전 발주 수량·마지막 매입처·단가
+  await buyer('POST', '/api/po', { req_no: 'PR-R', vendor: '재주문상사', bom_id: g.id, item: '이동장갑', qty: 7, unit: 'BOX', due_date: today, item_category: '상품', unit_price: 900 });
+  const info = (await buyer('POST', '/api/inventory/reorder-info', { items: [{ item: '이동장갑', unit: 'BOX' }] })).body.items[0];
+  assert.deepEqual([info.bom_id, info.open_qty, info.last_vendor, info.last_price], [g.id, 7, '재주문상사', 900]);
+});
+
+test('15.115 Aging: payments settle the oldest debts first; roles per side', async () => {
+  assert.equal((await staff('GET', '/api/aging?side=purchase')).status, 403);
+  assert.equal((await buyer('GET', '/api/aging?side=x')).status, 400);
+  const ago = n => new Date(Date.parse(today + 'T00:00:00Z') - n * 864e5).toISOString().slice(0, 10);
+  await buyer('POST', '/api/purchase-payments', { vendor: '연령상사', pay_date: ago(120), kind: 'opening', amount: 30000, request_id: rid() });
+  await buyer('POST', '/api/purchase-payments', { vendor: '연령상사', pay_date: ago(5), kind: 'opening', amount: 8000, request_id: rid() });
+  await buyer('POST', '/api/purchase-payments', { vendor: '연령상사', pay_date: today, amount: 20000, request_id: rid() });
+  const row = (await buyer('GET', '/api/aging?side=purchase')).body.rows.find(r => r.name === '연령상사');
+  assert.deepEqual([row.balance, row.buckets, row.oldest, row.days], [18000, [8000, 0, 0, 10000, 0], ago(120), 120]);
+});
