@@ -154,7 +154,7 @@ test('15.75 review fixes: delete guard, LOT of a correction, cancelled LOT not r
   await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ po_id: po.id, lot: 'B1', qty: 20 }] });
   const c2 = (await staff('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', recv_qty: 45, reason: '재확인', request_id: rid() })).body.change;
   await admin('POST', `/api/receipt-changes/${c2.id}/approve`, {});
-  const rows = (await staff('GET', '/api/inventory/lots')).body.rows.filter(r => ['A1', 'B1', '(LOT 미지정 수량 수정)'].includes(r.lot) && r.item === 'G3 NXT 나이트릴');
+  const rows = (await staff('GET', '/api/inventory/lots')).body.rows.filter(r => ['A1', 'B1', '(LOT 미지정)'].includes(r.lot) && r.item === 'G3 NXT 나이트릴');
   assert.equal(rows.reduce((t, r) => t + r.balance, 0), 45);
   // 9. 입고 취소 승인 → 발주 LOT 목록도 비움, 다음 입고에 취소된 LOT가 안 붙음
   const c3 = (await staff('POST', `/api/po/${po.id}/receipt-changes`, { action: 'revert', reason: '반품', request_id: rid() })).body.change;
@@ -166,4 +166,57 @@ test('15.75 review fixes: delete guard, LOT of a correction, cancelled LOT not r
   const head = `Q${today.slice(2).replace(/-/g, '')}_`;
   await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ bom_id: mask.id, lot: `q${today.slice(2).replace(/-/g, '')}X950`, qty: 1 }, { bom_id: mask.id, lot: head + '007A', qty: 1 }] });
   assert.deepEqual((await staff('GET', `/api/lots/next?prefix=Q&date=${today}&count=1`)).body.lots, [head + '001']);
+});
+
+test('15.77 review fixes: quick receive race, editing a received order, PO LOT kept, report dates, LOT totals, dashboard partial', async () => {
+  const daysAgo = n => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() - n * 864e5));
+  // 1. 입고목록 「확인중」이 같은 순간의 LOT 입고와 겹치면 하나만 반영(LOT 합 = 실입고 유지)
+  const p1 = await order(100, '경합상사');
+  const [rc, quick] = await Promise.all([
+    staff('POST', '/api/receipts', { receipt_date: today, vendor: '경합상사', request_id: rid(), lines: [{ po_id: p1.id, lot: 'R1', qty: 30 }] }),
+    staff('POST', '/api/po/receive', { ids: [p1.id], status: 'checking' })]);
+  const row1 = sqlite.prepare('SELECT recv_status, recv_qty FROM purchase_orders WHERE id=?').get(p1.id);
+  const lots1 = sqlite.prepare('SELECT COALESCE(SUM(qty),0) s FROM po_receipt_lots WHERE po_id=? AND voided_at IS NULL').get(p1.id).s;
+  assert.ok([rc.status, quick.status].includes(200), JSON.stringify([rc.body, quick.body]));
+  assert.equal(row1.recv_qty ?? 0, ['ok', 'mismatch'].includes(row1.recv_status) ? lots1 : 0, JSON.stringify([row1, lots1]));
+  if (row1.recv_status === 'checking') assert.equal(lots1, 0);
+  // 2. LOT 입고가 있는 발주는 수량·거래처·품목을 못 바꿈(납기·비고는 가능)
+  const p2 = await order(100, '수정상사');
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '수정상사', request_id: rid(), lines: [{ po_id: p2.id, lot: 'E1', qty: 100 }] });
+  const base = { req_no: 'PR-T', vendor: '수정상사', item: 'G3 NXT 나이트릴', qty: 100, due_date: today, item_category: '상품' };
+  const bad = await admin('PUT', `/api/po/${p2.id}`, { ...base, qty: 120, vendor: 'V2' });
+  assert.equal(bad.status, 409); assert.match(bad.body.error, /수량·거래처/);
+  assert.equal((await admin('PUT', `/api/po/${p2.id}`, { ...base, note: '납기 조정' })).status, 200);
+  // 3. 발주에 미리 적어 둔 LOT는 LOT 없이 입고해도 유지
+  const p3 = await order(10, '로트상사');
+  await admin('PUT', `/api/items/purchase_order/${p3.id}`, { lot: 'VENDOR-LOT-9' });
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '로트상사', request_id: rid(), lines: [{ po_id: p3.id, qty: 10 }] });
+  assert.equal(sqlite.prepare('SELECT lot FROM purchase_orders WHERE id=?').get(p3.id).lot, 'VENDOR-LOT-9');
+  // 4. 나눠 받은 발주는 리포트에서 입고일별로, 지난 날짜로 넣어도 recv_at은 뒤로 가지 않음
+  const p4 = await order(100, '리포트상사');
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '리포트상사', request_id: rid(), lines: [{ po_id: p4.id, lot: 'T2', qty: 60 }] });
+  await staff('POST', '/api/receipts', { receipt_date: daysAgo(3), vendor: '리포트상사', request_id: rid(), lines: [{ po_id: p4.id, lot: 'T1', qty: 40 }] });
+  assert.equal(sqlite.prepare('SELECT substr(recv_at,1,10) d FROM purchase_orders WHERE id=?').get(p4.id).d, today);
+  const report = (await staff('GET', `/api/reports?from=${daysAgo(5)}&to=${today}&grain=day&q=${encodeURIComponent('G3 NXT')}`)).body;
+  const bucketQty = d => report.receipts.series.filter(r => r.bucket === d && r.source === 'purchase').reduce((t, r) => t + r.qty, 0);
+  assert.equal(bucketQty(daysAgo(3)) >= 40, true, JSON.stringify(report.receipts.series));
+  // 5. LOT 없이 받은 줄 + 수량 수정 → 「LOT 미지정」 한 줄로, 출하로 잡히지 않음
+  const p5 = await order(100, '미지정상사');
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '미지정상사', request_id: rid(), lines: [{ po_id: p5.id, qty: 100 }] });
+  const c = (await staff('POST', `/api/po/${p5.id}/receipt-changes`, { action: 'qty', recv_qty: 90, reason: '파손', request_id: rid() })).body.change;
+  await admin('POST', `/api/receipt-changes/${c.id}/approve`, {});
+  const none = (await staff('GET', '/api/inventory/lots?q=' + encodeURIComponent('(LOT 미지정)'))).body.rows;
+  assert.ok(none.every(r => r.shipped === 0 && r.balance >= 0), JSON.stringify(none));
+  // 8. 대시보드: 부분 입고는 수량상이와 따로
+  const dash = (await staff('GET', '/api/dashboard')).body.po;
+  assert.ok(dash.partial >= 1 && typeof dash.mismatch === 'number', JSON.stringify(dash));
+  // 6. 입고증: 지운 발주의 줄도 보임(LEFT JOIN)
+  const p6 = await order(5, '삭제상사');
+  const r6 = (await staff('POST', '/api/receipts', { receipt_date: today, vendor: '삭제상사', request_id: rid(), lines: [{ po_id: p6.id, lot: 'D1', qty: 5 }] })).body;
+  const c6 = (await staff('POST', `/api/po/${p6.id}/receipt-changes`, { action: 'revert', reason: '반품', request_id: rid() })).body.change;
+  await admin('POST', `/api/receipt-changes/${c6.id}/approve`, {});
+  assert.equal((await admin('DELETE', `/api/po/${p6.id}`)).status, 200);
+  const slip = (await staff('GET', `/api/receipts/${r6.id}`)).body;
+  assert.deepEqual(slip.lines.map(l => [l.item, l.lot, !!l.voided_at]), [['(삭제된 발주)', 'D1', true]]);
+  assert.equal((await admin('POST', '/api/warehouses', { name: 'A,B' })).status, 400);
 });

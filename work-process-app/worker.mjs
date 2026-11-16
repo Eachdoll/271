@@ -648,6 +648,15 @@ route('POST', '/api/po', async ({ user, body }) => createPurchaseOrder(user, bod
 route('PUT', '/api/po/:id', async ({ user, params, body }) => {
   const row = (await mustGet('purchase_orders', params.id)); if (!canModify(user, row) && !hasRole(user, 'purchase')) throw new HttpError(403, '등록자 또는 구매 담당자만 수정할 수 있습니다.');
   const f = poFields(body);
+  // 15.77 LOT별 입고 줄이 있는 발주: 수량·품목·거래처·단위를 바꾸면 입고 수량·상태·LOT 재고가 어긋나므로 막는다(입고 취소 요청 뒤 고침).
+  if (await db.prepare('SELECT 1 FROM po_receipt_lots WHERE po_id=? AND voided_at IS NULL').get(row.id)) {
+    const changed = [];
+    if (Number(f[3]) !== row.qty) changed.push('수량');
+    if (nameKey(f[1]) !== nameKey(row.vendor)) changed.push('거래처');
+    if (nameKey(f[2]) !== nameKey(row.item) || (body.bom_id !== undefined && body.bom_id !== null && body.bom_id !== '')) changed.push('품목');
+    if (body.unit !== undefined && str(body.unit, 20) !== (row.unit || '')) changed.push('단위');
+    if (changed.length) throw new HttpError(409, `${row.item}: 입고 기록(LOT)이 있는 발주는 ${changed.join('·')}을(를) 바꿀 수 없습니다. 입고목록의 「입고 취소 요청」으로 되돌린 뒤 고치세요.`);
+  }
   // Keep the linked code unless the item name itself was changed.
   const entry = nameKey(f[2]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
   await ensureVendor(f[1], user, 'purchase');
@@ -666,7 +675,11 @@ route('DELETE', '/api/po/:id', async ({ user, params, query }) => {
   // 구매의뢰에서 만든 발주를 지우면(15.69) 그 의뢰 품목은 「발주 안 함」으로 닫아 발주 대기에 다시 나타나지 않게 한다.
   // requeue=1이면 예전처럼 발주 대기로 되돌린다(다시 발주할 때). 발주 삭제와 같은 batch로 저장한다.
   const closed = query.requeue === '1' ? '' : `발주 삭제 · ${user.name} · ${now()}`.slice(0, 200);
-  await deleteEntityWithAttachments('purchase_order', 'purchase_orders', row.id, [{ sql: 'UPDATE purchase_request_items SET po_id=NULL,order_closed=? WHERE po_id=?', args: [closed, row.id] }]);
+  try {
+    await deleteEntityWithAttachments('purchase_order', 'purchase_orders', row.id, [
+      { sql: "SELECT json('conflict') WHERE EXISTS(SELECT 1 FROM po_receipt_lots WHERE po_id=? AND voided_at IS NULL)", args: [row.id] }, // 확인과 삭제 사이에 입고가 들어온 경우
+      { sql: 'UPDATE purchase_request_items SET po_id=NULL,order_closed=? WHERE po_id=?', args: [closed, row.id] }]);
+  } catch (error) { if (isGuardError(error)) throw new HttpError(409, `${row.item}: 입고 기록(LOT)이 있는 발주는 삭제할 수 없습니다. 입고목록에서 「입고 취소 요청」으로 되돌린 뒤 삭제하세요.`); throw error; }
   return { ok: true };
 });
 // ── 물류: 발주입고 확인 (ok=초록, mismatch=빨강, checking=노랑, ''=미입고) ──
@@ -696,8 +709,9 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
     queries.push({ sql: `UPDATE purchase_orders SET recv_status=?,
       recv_qty=CASE WHEN recv_status='ok' AND ?='ok' THEN COALESCE(recv_qty,qty) ELSE ? END,recv_note=?,
       recv_by=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_by ELSE ? END,
-      recv_at=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_at ELSE ? END WHERE id=?`,
-      args: [status, status, status === 'ok' ? (row.recv_status === 'mismatch' ? row.recv_qty : row.qty) : recvQty, str(body.note, 500), status, status ? user.name : null, status, status ? now() : null, row.id] });
+      recv_at=CASE WHEN recv_status='ok' AND ?='ok' THEN recv_at ELSE ? END WHERE id=? AND ((recv_status=? AND recv_qty IS ?) OR (?='ok' AND recv_status='ok'))`,
+      args: [status, status, status === 'ok' ? (row.recv_status === 'mismatch' ? row.recv_qty : row.qty) : recvQty, str(body.note, 500), status, status ? user.name : null, status, status ? now() : null, row.id, row.recv_status, row.recv_qty, status] }); // 이미 입고완료인 것을 다시 입고완료로 누르는 것은 같은 결과라 허용
+    queries.push(RC_GUARD); // 15.77 그 사이 입고 입력(LOT 줄)이 먼저 저장됐으면 batch 전체를 되돌린다
     // Anyone may confirm a receipt; the append-only comment keeps who did what even after later status changes.
     const label = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
     const detail = status === 'mismatch' ? ` · 실입고 ${recvQty} (발주 ${row.qty})`
@@ -707,9 +721,11 @@ route('POST', '/api/po/receive', async ({ user, body }) => {
       args: ['purchase_order', row.id, `[입고 처리] ${label[row.recv_status] ?? row.recv_status} → ${label[status]}${detail}${str(body.note, 500) ? ' · ' + str(body.note, 500) : ''}`, user.id, user.name] });
     if (['ok', 'mismatch'].includes(status)) queries.push(receiptAnalysisQuery('purchase_order', row.id, user));
   }
-  const results = await db.batch(queries);
-  const per = ['ok', 'mismatch'].includes(status) ? 3 : 2;
-  return { ok: true, analysis_created: per === 3 ? results.filter((_, i) => i % 3 === 2).reduce((sum, r) => sum + r.meta.changes, 0) : 0 };
+  let results;
+  try { results = await db.batch(queries); }
+  catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 다른 곳에서 입고가 처리되었습니다. 목록을 새로 불러와 다시 확인하세요.'); throw error; }
+  const per = ['ok', 'mismatch'].includes(status) ? 4 : 3;
+  return { ok: true, analysis_created: per === 4 ? results.filter((_, i) => i % 4 === 3).reduce((sum, r) => sum + r.meta.changes, 0) : 0 };
 });
 
 // ── 물류: 기록된 입고 수량 수정·입고 취소 요청 (물류팀장 승인 후 반영) ──
@@ -823,8 +839,8 @@ async function warehouseRules() {
   };
 }
 function receiptLineSql() {
-  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, p.req_no, p.item, p.spec, p.unit, p.product_code, p.item_category, l.lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
-      FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id`;
+  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, COALESCE(p.req_no,'') AS req_no, COALESCE(p.item,'(삭제된 발주)') AS item, COALESCE(p.spec,'') AS spec, COALESCE(p.unit,'') AS unit, COALESCE(p.product_code,'') AS product_code, COALESCE(p.item_category,'') AS item_category, l.lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
+      FROM po_receipt_lots l LEFT JOIN purchase_orders p ON p.id=l.po_id`;
 }
 async function receiptDetail(r) {
   const po = await db.prepare(`${receiptLineSql()} WHERE l.receipt_id=? ORDER BY l.id`).all(r.id);
@@ -901,8 +917,9 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     // 예전 방식으로 기록된 입고(줄 없음)는 먼저 한 줄로 옮겨 recv_qty = 줄 합을 지킨다.
     if (!active.length && recorded) cmds.push({ sql: 'INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) VALUES(?,?,?,?,?,?)', args: [poId, po.lot || '', recorded, (po.recv_at || '').slice(0, 10) || date, '이전 입고', po.recv_by || ''] });
     for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,qty,received_date,warehouse,location,note,created_by) VALUES(?,${RID},?,?,?,?,?,?,?)`, args: [poId, token, l.lot, l.qty, date, l.warehouse, l.location, l.note, user.name] });
-    const lots = [...new Set([...active.map(a => a.lot), ...(!active.length && recorded ? [po.lot] : []), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
-    cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=?,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, lots, poId, po.recv_status, po.recv_qty] });
+    const keepPoLot = !active.length && (recorded || !group.some(l => l.lot)); // 예전 입고를 옮기거나, 이번 줄에 LOT가 없으면 발주의 LOT 유지(15.77)
+    const lots = [...new Set([...active.map(a => a.lot), ...(keepPoLot ? [po.lot] : []), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
+    cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=CASE WHEN recv_at IS NULL OR recv_status NOT IN ('ok','mismatch') OR recv_at<? THEN ? ELSE recv_at END,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, at, lots, poId, po.recv_status, po.recv_qty] });
     cmds.push(RC_GUARD);
     const text = `${label[po.recv_status] ?? po.recv_status} → ${status === 'mismatch' && total < po.qty ? '부분 입고' : label[status]} · 이번 ${add} (누계 ${total} / 발주 ${po.qty}) · ${group.map(l => `${l.lot || 'LOT 없음'} ${l.qty}`).join(', ')}`;
     cmds.push({ sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'purchase_order',?,'[입고 처리] ' || receipt_no || ' · ' || ?,?,? FROM receipts WHERE request_id=?`, args: [poId, text, user.id, user.name, token] });
@@ -931,7 +948,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
 // 창고·위치(15.72): 조회는 로그인 사용자, 등록·수정은 물류팀장·관리자. 삭제 없이 사용 중지만 한다.
 route('GET', '/api/warehouses', async ({ query }) => db.prepare(`SELECT * FROM warehouses ${query.all === '1' ? '' : 'WHERE active=1'} ORDER BY sort, name`).all());
 function warehouseFields(body) {
-  const name = reqStr(body.name, '창고 이름', 50);
+  const name = reqStr(body.name, '창고 이름', 50); if (name.includes(',')) throw bad('창고 이름에는 쉼표(,)를 쓸 수 없습니다.');
   const locations = [...new Set(String(body.locations || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
   if (locations.length > 200) throw bad('위치는 200개까지 넣을 수 있습니다.');
   if (locations.some(x => x.length > 50)) throw bad('위치 이름은 50자 이하로 넣으세요.');
@@ -2506,17 +2523,18 @@ route('GET', '/api/inventory/lots', async ({ query }) => {
   const like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;
   const filter = like ? " AND (item LIKE ? ESCAPE '\\' OR lot LIKE ? ESCAPE '\\')" : '';
   // 원천마다 SQL에서 품목·단위·LOT별로 묶어 읽는다(15.75). 한 원천이 5000묶음을 넘으면 more로 알린다.
-  const wrap = source => ({ sql: `SELECT item, unit, lot, SUM(CASE WHEN qty>=0 THEN qty ELSE 0 END) AS received, SUM(CASE WHEN qty<0 THEN -qty ELSE 0 END) AS shipped, MIN(d) AS first_date, MAX(d) AS last_date, group_concat(DISTINCT NULLIF(place,'')) AS places FROM (${source}) WHERE d<=?${filter} GROUP BY item, unit, lot LIMIT 5001`, args: like ? [asof, like, like] : [asof] });
+  const wrap = source => ({ sql: `SELECT item, unit, lot, SUM(CASE WHEN kind='in' THEN qty ELSE 0 END) AS received, SUM(CASE WHEN kind='out' THEN qty ELSE 0 END) AS shipped, MIN(d) AS first_date, MAX(d) AS last_date, group_concat(DISTINCT NULLIF(place,'')) AS places FROM (${source}) WHERE d<=?${filter} GROUP BY item, unit, lot LIMIT 5001`, args: like ? [asof, like, like] : [asof] });
   const results = await db.batch([
-    // 수량 수정 승인 보정 줄(LOT 없음)도 넣어 LOT별 합이 발주 실입고와 맞게 한다.
-    wrap(`SELECT TRIM(p.item) AS item, TRIM(p.unit) AS unit, CASE WHEN l.lot='' THEN '(LOT 미지정 수량 수정)' ELSE l.lot END AS lot, l.qty AS qty, l.received_date AS d, TRIM(l.warehouse || ' ' || l.location) AS place FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND (l.lot<>'' OR l.note LIKE '수량 수정 승인%') AND p.recv_status IN ('ok','mismatch')`),
-    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, '' AS place FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)`),
-    wrap(`SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, qty, received_date AS d, TRIM(warehouse || ' ' || location) AS place FROM other_receipts WHERE lot<>''`),
-    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, -qty AS qty, ship_date AS d, '' AS place FROM shipments WHERE lot<>''`),
+    // LOT 줄로 받은 발주는 LOT 없는 줄(수량 수정 보정·LOT 없이 받은 줄)도 「LOT 미지정」으로 넣어 그 발주의 LOT별 합 = 실입고(15.77).
+    wrap(`SELECT TRIM(p.item) AS item, TRIM(p.unit) AS unit, CASE WHEN l.lot='' THEN '(LOT 미지정)' ELSE l.lot END AS lot, 'in' AS kind, l.qty AS qty, l.received_date AS d, TRIM(l.warehouse || ' ' || l.location) AS place FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch')`),
+    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, 'in' AS kind, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, '' AS place FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)`),
+    wrap(`SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, 'in' AS kind, qty, received_date AS d, TRIM(warehouse || ' ' || location) AS place FROM other_receipts WHERE lot<>''`),
+    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, 'out' AS kind, qty, ship_date AS d, '' AS place FROM shipments WHERE lot<>''`),
   ]);
   const map = new Map(); let truncated = false;
   for (const result of results) {
-    if (result.results.length > 5000) truncated = true;
+    // 한 원천이 5000묶음을 넘으면 입고·출하가 서로 다르게 잘려 잔량이 틀릴 수 있으므로 결과를 주지 않는다(15.77).
+    if (result.results.length > 5000) throw bad('LOT가 너무 많습니다. 품목명·LOT 검색어로 범위를 좁히세요.');
     for (const m of result.results.slice(0, 5000)) {
       const key = JSON.stringify([m.item, m.unit, m.lot]), row = map.get(key) || { item: m.item, unit: m.unit, lot: m.lot, received: 0, shipped: 0, first_date: m.first_date, last_date: m.last_date, places: new Set() };
       row.received += m.received; row.shipped += m.shipped;
@@ -3296,7 +3314,7 @@ route('GET', '/api/dashboard', async () => {
   const t = today();
   return {
     today: t,
-    po: { total: (await c('SELECT COUNT(*) c FROM purchase_orders')), none: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status=''")), ok: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='ok'")), mismatch: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='mismatch'")), checking: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='checking'")), overdue: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status<>'ok' AND due_date<?", t)) },
+    po: { total: (await c('SELECT COUNT(*) c FROM purchase_orders')), none: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status=''")), ok: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='ok'")), mismatch: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='mismatch' AND (recv_qty IS NULL OR recv_qty>=qty)")), partial: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='mismatch' AND recv_qty<qty")), checking: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status='checking'")), overdue: (await c("SELECT COUNT(*) c FROM purchase_orders WHERE recv_status<>'ok' AND due_date<?", t)) },
     requests: reqCounts,
     shipmentsToday: (await c('SELECT COUNT(*) c FROM shipments WHERE ship_date=?', t)),
     laundryMonth: (await db.prepare("SELECT COALESCE(SUM(discard_qty),0) c FROM laundry WHERE substr(in_date,1,7)=?").get(t.slice(0, 7))).c,
