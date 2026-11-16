@@ -48,11 +48,13 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   };
   input.addEventListener('mousedown', () => { if (document.activeElement !== input || input.dataset.partnerPrev === undefined) openAll(); });
   input.addEventListener('keydown', e => {
-    if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
+    if (e.key === 'Enter') restore(); // 비운 채 Enter면 원래 이름으로 되돌린 뒤 제출(빈 거래처로 조회되지 않게)
+    else if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
     else if (e.key === 'Escape' && input.dataset.partnerPrev !== undefined) { restore(); e.stopPropagation(); }
   });
   input.addEventListener('input', () => { if (input.value !== '') { delete input.dataset.partnerPrev; input.placeholder = basePlaceholder; } });
   input.addEventListener('blur', restore);
+  input.form?.addEventListener('submit', restore, true);
 }
 
 // 거래처 구분 체크(등록·수정)와 목록 표시

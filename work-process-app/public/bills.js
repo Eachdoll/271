@@ -30,12 +30,12 @@ async function pageBillEntry(main) {
   const supplyOf = r => r.price === '' || r.bqty === '' ? null : billTruncC(Number(r.bqty) * Number(r.price));
   const groupKey = r => r.source_type === 'other' ? 'other' : 'po:' + (r.po_batch || r.po_id);
   const load = async (force = false) => {
-    const vendor = vendorInput.value.trim(), key = [vendor, form.elements.from.value, form.elements.to.value].join('|');
+    const vendor = (vendorInput.dataset.partnerPrev ?? vendorInput.value).trim(), key = [vendor, form.elements.from.value, form.elements.to.value].join('|');
     if (!force && key === loadedKey) return; loadedKey = key;
     if (!vendor) { rows = []; box.innerHTML = '<p class="muted small">거래처를 넣으면 나옵니다.</p>'; totals(); return; }
     box.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data; try { data = await api('GET', '/api/purchase-bills/unbilled?' + new URLSearchParams({ vendor, from: form.elements.from.value, to: form.elements.to.value })); } catch (error) { box.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
-    if (vendorInput.value.trim() !== vendor) return;
+    if ((vendorInput.dataset.partnerPrev ?? vendorInput.value).trim() !== vendor || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
     rows = data.rows.map(r => ({ ...r, picked: false, price: r.unit_price ?? r.last_price ?? '', bqty: String(left(r)), note: '' }));
     // 발주별로 묶기(같이 넣은 발주 묶음 → 발주일·발주번호 순), 기타입고는 맨 끝
     const order = new Map();
@@ -68,7 +68,12 @@ async function pageBillEntry(main) {
     $$('tbody tr[data-bill-row]', box).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = i === 0 ? '' : heads[i] || ''; }));
     totals();
   };
-  const setPicked = (i, on) => { rows[i].picked = on; const cb = $(`[data-bill-pick="${i}"]`, box); if (cb) { cb.checked = on; cb.closest('tr').classList.toggle('bill-picked', on); } };
+  const setPicked = (i, on) => { rows[i].picked = on; const cb = $(`[data-bill-pick="${i}"]`, box); if (cb) { cb.checked = on; cb.closest('tr').classList.toggle('bill-picked', on); } syncChecks(); };
+  // 묶음·전체 체크를 줄 체크 상태에 맞춤(보이는 줄 기준)
+  const syncChecks = () => {
+    const shown = rows.filter(matches); const all = $('[data-bill-all]', box); if (all) all.checked = shown.length > 0 && shown.every(r => r.picked);
+    $$('[data-bill-group]', box).forEach(g => { const list = rows.filter(r => groupKey(r) === g.dataset.billGroup && matches(r)); g.checked = list.length > 0 && list.every(r => r.picked); });
+  };
   const refreshLine = i => {
     const r = rows[i], s = supplyOf(r), diff = r.bqty === '' ? 0 : Math.round((Number(r.bqty) - left(r)) * 1e6) / 1e6;
     $(`[data-bill-supply="${i}"]`, box).textContent = s == null ? '' : won(s);

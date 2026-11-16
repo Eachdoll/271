@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.90';
+const APP_VERSION = '15.91';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -516,14 +516,14 @@ function shell() {
   const cur = location.hash || '#/';
   const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}</a>`;
   const entry = item => Array.isArray(item) ? link(item)
-    : `<details class="nav-sub" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
+    : `<details class="nav-sub" data-sub="${esc(item.sub)}" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
   const nav = NAV.filter(g => canSeeMenu(NAV_GROUP_KEY[g.group])).map((g) => `<div class="nav-group" data-dept="${NAV_GROUP_KEY[g.group] || 'home'}"><div class="nav-title">${g.group}</div>${g.items.map(entry).join('')}</div>`).join('')
     // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
     + ([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])].length ? `<div class="nav-group" data-dept="manage"><div class="nav-title">관리</div>${[...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])].map(link).join('')}</div>` : '');
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
   // 15.87 메뉴를 다시 그려도 왼쪽 메뉴의 스크롤 위치와 펼쳐 둔 하위 메뉴를 그대로 둔다(누른 메뉴 자리에 머묾).
   const oldSide = $('.side'), sideScroll = oldSide ? oldSide.scrollTop : null;
-  const openSubs = oldSide ? new Set($$('.nav-sub[open] > summary', oldSide).map(s => s.textContent.trim())) : null;
+  const openSubs = oldSide ? new Set($$('.nav-sub[open]', oldSide).map(d => d.dataset.sub)) : null;
   $('#app').innerHTML = `
   <header class="top">
     <button class="menu-btn" aria-label="메뉴">☰</button>
@@ -544,7 +544,7 @@ function shell() {
   $('.tab-menu').onclick = () => document.body.classList.toggle('nav-open');
   $$('.side a').forEach((a) => (a.onclick = () => document.body.classList.remove('nav-open')));
   const side = $('.side');
-  if (openSubs) $$('.nav-sub > summary', side).forEach(s => { if (openSubs.has(s.textContent.trim())) s.parentElement.open = true; });
+  if (openSubs) $$('.nav-sub', side).forEach(d => { if (openSubs.has(d.dataset.sub)) d.open = true; });
   if (sideScroll !== null) side.scrollTop = sideScroll;
   const active = $('.side a.active');
   // 처음 열 때는 지금 화면 메뉴가 보이게(문서 스크롤은 건드리지 않도록 메뉴 안에서만 움직임)

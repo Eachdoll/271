@@ -112,7 +112,10 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
     <div class="rp-panel" data-rp-panel hidden>${RP_GROUPS.map(([title, items]) => `<div class="rp-col"><div class="rp-col-title">${title}</div>${items.map(([k, l]) => `<button type="button" class="btn small" data-rp="${k}">${l}</button>`).join('')}</div>`).join('')}</div>`;
   const panel = $('[data-rp-panel]', box), toggle = $('[data-rp-toggle]', box), labelEl = $('[data-rp-label]', box);
   let unit = '', picked = '';
-  const short = s => s ? s.slice(5).replace('-', '/') : '';
+  const thisYear = todayStr().slice(0, 4);
+  const short = s => !s ? '' : s.slice(0, 4) === thisYear ? s.slice(5).replace('-', '/') : `${s.slice(2, 4)}.${s.slice(5).replace('-', '/')}`;
+  const detect = () => { picked = ''; if (rpGuess(fromInput.value, toInput.value)) for (const k of Object.keys(RP_LABEL)) { const r = rpRange(k, fromInput.value); if (r && r.from === fromInput.value && r.to === toInput.value) { picked = k; break; } } $$('[data-rp]', panel).forEach(x => x.classList.toggle('on', x.dataset.rp === picked)); };
+  const sync = () => { detect(); setLabel(); };
   const setLabel = () => { labelEl.textContent = picked ? RP_LABEL[picked] : fromInput.value || toInput.value ? `${short(fromInput.value)} ~ ${short(toInput.value)}` : '기간 선택'; };
   const open = on => { panel.hidden = !on; toggle.setAttribute('aria-expanded', String(on)); box.classList.toggle('open', on); };
   box.addEventListener('click', e => {
@@ -126,14 +129,15 @@ function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = 
     setLabel(); open(false); onPick(r);
   });
   // 바깥을 누르거나 Esc면 닫음(이 상자가 화면에서 사라지면 리스너도 정리)
-  const outside = e => { if (!box.isConnected) { document.removeEventListener('click', outside, true); document.removeEventListener('keydown', esc, true); return; } if (!panel.hidden && !box.contains(e.target)) open(false); };
+  const cleanup = () => { document.removeEventListener('click', outside, true); document.removeEventListener('keydown', esc, true); window.removeEventListener('hashchange', cleanup); };
+  const outside = e => { if (!box.isConnected) return cleanup(); if (!panel.hidden && !box.contains(e.target)) open(false); };
   const esc = e => { if (e.key === 'Escape' && !panel.hidden) { open(false); toggle.focus(); e.stopPropagation(); } };
-  document.addEventListener('click', outside, true); document.addEventListener('keydown', esc, true);
+  document.addEventListener('click', outside, true); document.addEventListener('keydown', esc, true); window.addEventListener('hashchange', cleanup);
   [fromInput, toInput].forEach(i => i.addEventListener('change', () => { unit = ''; picked = ''; $$('[data-rp]', panel).forEach(x => x.classList.remove('on')); setLabel(); }));
-  picked = ''; const guess = rpGuess(fromInput.value, toInput.value);
-  if (guess) for (const k of Object.keys(RP_LABEL)) { const r = rpRange(k, fromInput.value); if (r && r.from === fromInput.value && r.to === toInput.value) { picked = k; break; } }
-  if (picked) $(`[data-rp="${picked}"]`, panel)?.classList.add('on');
-  setLabel();
+  sync();
+  setTimeout(sync, 0); // 만든 바로 뒤 화면 코드가 저장된 조건으로 날짜를 채우는 경우
+  fromInput.form?.addEventListener('submit', sync, true);
+  box.sync = sync;
   (place || toInput.closest('label') || fromInput.closest('form') || fromInput.parentElement)[place ? 'append' : toInput.closest('label') ? 'after' : 'append'](box);
   return box;
 }

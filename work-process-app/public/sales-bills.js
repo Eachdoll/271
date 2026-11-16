@@ -23,12 +23,12 @@ async function pageSalesBillEntry(main) {
   let rows = [], manual = [], loadedKey = null, requestId = crypto.randomUUID(), busy = false;
   const input = form.elements.customer;
   const load = async (force = false) => {
-    const customer = input.value.trim(), key = [customer, form.elements.from.value, form.elements.to.value].join('|');
+    const customer = (input.dataset.partnerPrev ?? input.value).trim(), key = [customer, form.elements.from.value, form.elements.to.value].join('|');
     if (!force && key === loadedKey) return; loadedKey = key;
     if (!customer) { rows = []; box.innerHTML = '<p class="muted small">거래처를 넣으면 나옵니다.</p>'; totals(); return; }
     box.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data; try { data = await api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })); } catch (error) { box.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
-    if (input.value.trim() !== customer) return;
+    if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
     rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? '', note: '' }));
     draw();
     if (data.more) toast('줄이 500개를 넘어 앞의 500줄만 보입니다. 출하일 범위로 좁히세요.', 'err');
@@ -124,12 +124,13 @@ function salesBillSheet(bill, after = null) {
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);
   // 건별 세금계산서 담기(로스제로 납품전표의 TAX 버튼처럼)
-  $('[data-bill-tax]', m.el)?.addEventListener('click', async () => {
+  $('[data-bill-tax]', m.el)?.addEventListener('click', async e => {
+    const btn = e.currentTarget; if (btn.disabled) return; btn.disabled = true;
     try {
       const r = await api('POST', '/api/tax-invoices', { kind: 'single', bill_ids: [bill.id], request_id: crypto.randomUUID() });
       toast(`세금계산서 ${r.rows[0].invoice_no}에 담았습니다. 「세금계산서 관리」에서 발행하세요.`);
       m.close(); salesBillSheet(await api('GET', '/api/sales-bills/' + bill.id), after); await after?.();
-    } catch (error) { fail(error); }
+    } catch (error) { fail(error); btn.disabled = false; }
   });
   const cancel = $('[data-bill-cancel]', m.el);
   if (cancel) cancel.onclick = async () => {
@@ -225,10 +226,10 @@ async function pageSalesLedger(main) {
   const r0 = rpRange('year');
   main.innerHTML = `<h1>기간별 거래보고</h1>
   <p class="muted">거래처를 고르면 그 기간의 매출(전표 줄)·입금과 줄마다 잔액을 봅니다. 비우면 거래처별 합계입니다. 「엑셀」은 한 값이 한 칸에 들어가고(병합 없음) 금액·수량은 숫자, 날짜는 날짜 칸이라 열을 골라 바로 합계·필터를 쓸 수 있습니다.</p>
-  <form class="list-filters toolbar" data-read-only id="ledgerForm"><label>거래처<input name="customer" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><span class="partner-hint small muted" data-partner-hint></span><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
+  <form class="list-filters toolbar" data-read-only id="ledgerForm"><label>거래처<input name="customer" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
   <div id="ledgerHead" class="counts"></div><div id="ledger"></div>`;
   const form = $('#ledgerForm', main); let data = null;
-  bindPartnerPicker(form.elements.customer, $('[data-partner-hint]', form), { type: 'sales' }).catch(() => {});
+  bindPartnerPicker(form.elements.customer, null /* 조회 줄에는 안내 글 없음(15.91: 글이 생기며 「조회」 버튼이 밀려 클릭이 빗나감) */, { type: 'sales' }).catch(() => {});
   const load = async () => {
     const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
     data = await api('GET', '/api/sales-ledger?' + new URLSearchParams(v)); if (!main.isConnected) return;
