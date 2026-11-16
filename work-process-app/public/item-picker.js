@@ -25,12 +25,14 @@ function itemStockText(bom, map) {
   if (!rows.length) return `<span class="muted">0${bom.unit ? ' ' + esc(bom.unit) : ''}</span>`;
   return rows.map(r => `<span class="${r.stock < 0 ? 'red-text' : r.stock === 0 ? 'muted' : ''}">${fmtNum(r.stock)}${r.unit ? ' ' + esc(r.unit) : ''}</span>`).join('<span class="muted"> · </span>');
 }
-function openItemPicker(catalog, { query = '', title = '품목 찾기', filter = null } = {}) {
+// multi(15.79): 여러 품목을 체크하고 품목마다 LOT 수(행추가)를 정해 한 번에 고른다 → { items: [{ bom, count }], autoLot } 또는 null
+function openItemPicker(catalog, { query = '', title = '품목 찾기', filter = null, multi = false } = {}) {
   const all = (filter ? catalog.filter(filter) : catalog).slice();
   const classes = ITEM_CATEGORIES.filter(c => all.some(b => b.item_category === c));
   if (all.some(b => !ITEM_CATEGORIES.includes(b.item_category))) classes.push('미분류');
   const classOf = b => ITEM_CATEGORIES.includes(b.item_category) ? b.item_category : '미분류';
   let cls = classes.includes(itemPickerClass) ? itemPickerClass : '', cat1 = '', cat2 = '', active = 0, shown = [], stock;
+  const picked = new Map(); // multi: 품목 id → LOT 수(고른 순서대로)
   return new Promise(resolve => {
     let done = false;
     const finish = value => { if (done) return; done = true; resolve(value); m.close(); };
@@ -40,8 +42,9 @@ function openItemPicker(catalog, { query = '', title = '품목 찾기', filter =
       <div class="ip-chips" role="group" aria-label="세부 분류" data-ip-cat1></div>
       <div class="ip-chips" role="group" aria-label="2차 세부 분류" data-ip-cat2></div>
       <p class="small muted" data-ip-count aria-live="polite"></p>
-      <div class="table-wrap ip-wrap"><table class="grid ip-table" id="ipTable"><caption class="sr-only">품목 목록</caption><thead><tr><th scope="col">코드</th><th scope="col">품목명</th><th scope="col">단위</th><th scope="col" class="r">현재고</th><th scope="col">분류</th><th scope="col">사이즈</th></tr></thead><tbody data-ip-rows></tbody></table></div>
-      <div class="actions"><button type="button" class="btn" data-ip-cancel>취소</button></div>`, { wide: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
+      <div class="table-wrap ip-wrap"><table class="grid ip-table" id="ipTable"><caption class="sr-only">품목 목록</caption><thead><tr>${multi ? '<th scope="col"><span class="sr-only">선택</span></th>' : ''}<th scope="col">코드</th><th scope="col">품목명</th><th scope="col">단위</th><th scope="col" class="r">현재고</th><th scope="col">분류</th><th scope="col">사이즈</th>${multi ? '<th scope="col">LOT 수</th>' : ''}</tr></thead><tbody data-ip-rows></tbody></table></div>
+      ${multi ? `<p class="small muted">줄을 누르거나 체크해 여러 품목을 고르고, 품목마다 LOT 수(그 품목 줄을 몇 줄 만들지)를 정하세요. 검색·분류를 바꿔도 고른 품목은 유지됩니다.</p>` : ''}
+      <div class="actions">${multi ? '<label class="inline ip-auto"><input type="checkbox" data-ip-auto checked> LOT 자동 번호</label><span class="small" data-ip-sum aria-live="polite"></span>' : ''}<button type="button" class="btn" data-ip-cancel>취소</button>${multi ? '<button type="button" class="btn primary" data-ip-ok disabled>확인</button>' : ''}</div>`, { wide: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
     const el = m.el, q = $('[data-ip-q]', el);
     const words = () => q.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean).map(itemPickerKey);
     const matchText = b => itemPickerKey([b.product, b.product_code, b.item_category, b.cat1, b.cat2, b.cat3, b.unit].join(' '));
@@ -61,24 +64,50 @@ function openItemPicker(catalog, { query = '', title = '품목 찾기', filter =
       shown = list.slice().sort((a, b) => rank(a) - rank(b) || a.product.localeCompare(b.product, 'ko')).slice(0, ITEM_PICKER_LIMIT);
       active = Math.min(active, Math.max(0, shown.length - 1));
       $('[data-ip-count]', el).textContent = list.length > ITEM_PICKER_LIMIT ? `${fmtNum(list.length)}건 중 ${ITEM_PICKER_LIMIT}건 표시 · 검색어를 더 넣으세요` : `${fmtNum(list.length)}건`;
-      $('[data-ip-rows]', el).innerHTML = shown.length ? shown.map((b, i) => `<tr data-ip-row="${i}" id="ipRow${i}" class="${i === active ? 'ip-active' : ''}" aria-selected="${i === active}">
-        <td class="nowrap"><code>${esc(b.product_code || '—')}</code>${b.is_temp ? ' <span class="chip yellow">임시</span>' : ''}</td>
+      $('[data-ip-rows]', el).innerHTML = shown.length ? shown.map((b, i) => `<tr data-ip-row="${i}" id="ipRow${i}" class="${i === active ? 'ip-active' : ''}${picked.has(b.id) ? ' ip-picked' : ''}" aria-selected="${i === active}">
+        ${multi ? `<td><input type="checkbox" data-ip-check="${i}"${picked.has(b.id) ? ' checked' : ''} aria-label="${esc(b.product)} 선택"></td>` : ''}<td class="nowrap"><code>${esc(b.product_code || '—')}</code>${b.is_temp ? ' <span class="chip yellow">임시</span>' : ''}</td>
         <td data-card-primary><button type="button" class="ip-pick" data-ip-pick="${i}">${esc(b.product)}</button></td>
         <td>${esc(b.unit || '—')}</td><td class="r nowrap">${itemStockText(b, stock)}</td><td class="small">${esc(classOf(b))}${itemPickerPath(b) ? ` › ${esc(itemPickerPath(b))}` : ''}</td>
-        <td class="small">${b.sizes && b.sizes.length ? esc(b.sizes.join(', ')) : '<span class="muted">—</span>'}</td></tr>`).join('')
-        : `<tr><td colspan="6" class="muted">찾는 품목이 없습니다. 창을 닫고 품목명을 직접 입력하세요.</td></tr>`;
+        <td class="small">${b.sizes && b.sizes.length ? esc(b.sizes.join(', ')) : '<span class="muted">—</span>'}</td>${multi ? `<td><input type="number" min="1" max="50" step="1" inputmode="numeric" data-ip-n="${i}" value="${picked.get(b.id) || 1}" aria-label="${esc(b.product)} LOT 수"></td>` : ''}</tr>`).join('')
+        : `<tr><td colspan="${multi ? 8 : 6}" class="muted">찾는 품목이 없습니다. 창을 닫고 품목명을 직접 입력하세요.</td></tr>`;
       if (shown.length) q.setAttribute('aria-activedescendant', 'ipRow' + active); else q.removeAttribute('aria-activedescendant');
+      // 공통 표 처리가 처음 그릴 때 빈 열(사이즈 등)의 머리칸을 숨기는데, 줄은 다시 그려지므로 머리칸을 늘 보이게 해 칸이 밀리지 않게 한다(15.79).
+      $$('#ipTable .col-empty', el).forEach(c => c.classList.remove('col-empty'));
+      sum();
     };
+    // multi: 고른 품목·줄 수 표시와 확인 버튼
+    const sum = () => {
+      if (!multi) return;
+      const lines = [...picked.values()].reduce((t, n) => t + n, 0);
+      $('[data-ip-sum]', el).textContent = picked.size ? `${picked.size}개 품목 · ${lines}줄` : '';
+      const ok = $('[data-ip-ok]', el); ok.disabled = !picked.size; ok.textContent = picked.size ? `확인 (${lines}줄 추가)` : '확인';
+    };
+    const toggle = (i, on) => {
+      const b = shown[i]; if (!b) return;
+      const want = on === undefined ? !picked.has(b.id) : on;
+      if (want) picked.set(b.id, Math.max(1, Math.min(50, Math.floor(Number($(`[data-ip-n="${i}"]`, el)?.value) || 1)))); else picked.delete(b.id);
+      const tr = $(`[data-ip-row="${i}"]`, el); tr?.classList.toggle('ip-picked', want); const box = $(`[data-ip-check="${i}"]`, el); if (box) box.checked = want;
+      sum();
+    };
+    const finishMulti = () => { if (!picked.size) return; finish({ items: [...picked].map(([id, count]) => ({ bom: all.find(b => b.id === id), count })), autoLot: $('[data-ip-auto]', el).checked }); };
     const move = d => { if (!shown.length) return; active = (active + d + shown.length) % shown.length; $$('[data-ip-row]', el).forEach((tr, i) => { tr.classList.toggle('ip-active', i === active); tr.setAttribute('aria-selected', String(i === active)); }); q.setAttribute('aria-activedescendant', 'ipRow' + active); $('#ipRow' + active, el)?.scrollIntoView({ block: 'nearest' }); };
     q.addEventListener('input', () => { active = 0; draw(); });
     q.addEventListener('keydown', e => {
       if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
-      else if (e.key === 'Enter') { e.preventDefault(); if (shown[active]) finish(shown[active]); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (multi) { if (e.ctrlKey || e.metaKey) finishMulti(); else toggle(active); } else if (shown[active]) finish(shown[active]); }
     });
+    if (multi) {
+      el.addEventListener('change', e => {
+        if (e.target.dataset.ipCheck !== undefined) toggle(Number(e.target.dataset.ipCheck), e.target.checked);
+        else if (e.target.dataset.ipN !== undefined) { const i = Number(e.target.dataset.ipN), n = Math.max(1, Math.min(50, Math.floor(Number(e.target.value) || 1))); e.target.value = n; if (shown[i]) { picked.set(shown[i].id, n); toggle(i, true); } }
+      });
+      $('[data-ip-ok]', el).onclick = finishMulti;
+    }
     el.addEventListener('click', e => {
-      const b = e.target.closest('button'); if (!b) { const tr = e.target.closest('[data-ip-row]'); if (tr) finish(shown[Number(tr.dataset.ipRow)]); return; }
-      if (b.dataset.ipPick !== undefined) return finish(shown[Number(b.dataset.ipPick)]);
+      if (multi && e.target.closest('input')) return; // 체크·LOT 수 칸은 change에서 처리
+      const b = e.target.closest('button'); if (!b) { const tr = e.target.closest('[data-ip-row]'); if (tr) { if (multi) toggle(Number(tr.dataset.ipRow)); else finish(shown[Number(tr.dataset.ipRow)]); } return; }
+      if (b.dataset.ipPick !== undefined) return multi ? toggle(Number(b.dataset.ipPick)) : finish(shown[Number(b.dataset.ipPick)]);
       if (b.dataset.ipClass !== undefined) { cls = b.dataset.ipClass; itemPickerClass = cls; cat1 = cat2 = ''; active = 0; draw(); q.focus(); }
       else if (b.dataset.ipC1 !== undefined) { cat1 = b.dataset.ipC1; cat2 = ''; active = 0; draw(); q.focus(); }
       else if (b.dataset.ipC2 !== undefined) { cat2 = b.dataset.ipC2; active = 0; draw(); q.focus(); }

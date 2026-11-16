@@ -613,3 +613,8 @@ INVITE_CODE=local-test-code npm start
 - 사용자 보고: 수입검사가 불합격이어도 분석리스트에는 「완료」만 보였습니다(판정은 수입·출하 검사 이력 화면에만 있었음).
 - GET /api/requests는 행마다 inspection_result(inspection_measurements.result: pass/fail/pending, 측정값이 없으면 null)를 함께 줍니다. 분석리스트에 「판정」 칸(규격이 있으면 합격/불합격/검사 대기, 규격 미지정은 「규격 미지정」), 불합격 줄은 row-red, 상태 칩 옆에 「전체 판정·합격·불합격·검사 대기」 칩(화면에서 거름).
 - GET /api/po·/api/other-receipts는 연결된 수입검사의 qc_result를 함께 주고, 입고목록(발주입고 상태 칸·기타입고 품목 칸)에 qcChip()으로 「수입검사 합격/불합격/측정 중」을 보여 줍니다(판정 전에는 표시 없음).
+
+## 입고 입력: 품목 여러 개 + LOT 수 한 번에 (15.79)
+- openItemPicker(catalog, { multi: true }): 줄 앞 체크·줄 끝 「LOT 수」(1~50) 칸·하단 「LOT 자동 번호」·「확인 (N줄 추가)」. 줄·품목명 클릭과 Enter는 체크를 바꾸고(창이 닫히지 않음), LOT 수를 바꾸면 자동 체크, Ctrl/⌘+Enter로 확인. 고른 품목은 검색·분류를 바꿔도 유지(Map, 고른 순서). 결과 `{ items: [{ bom, count }], autoLot }`. multi가 아니면(구매의뢰·생산의뢰·발주 다품목 등) 예전처럼 한 개를 바로 고릅니다.
+- 입고 입력 기타입고 탭 「품목 추가 (여러 개·LOT 수)」가 이 창을 열어 품목마다 count만큼 줄을 만들고, 자동 번호면 nextLots로 한꺼번에 번호를 붙입니다. 단가 칸은 두지 않습니다(사용자 결정). 입고 내역과 입력은 지금처럼 다른 화면입니다(사용자 결정).
+- 품목 찾기 표: 공통 표 처리(labelGridTables)가 처음 그릴 때 빈 열 머리칸에 col-empty를 붙이지만 줄은 다시 그려지므로, draw마다 col-empty를 지워 머리칸이 밀리지 않게 합니다.
