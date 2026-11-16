@@ -118,3 +118,81 @@ test('Edit and cancel an order before any bill', async () => {
   assert.equal((await seller('PUT', `/api/sales-orders/${so.id}`, { customer: '가나상사', order_date: today, lines: [{ bom_id: mask.id, qty: 1 }] })).status, 400);
   assert.deepEqual((await seller('GET', '/api/sales-orders?state=cancelled')).body.rows.map(r => r.id), [so.id]);
 });
+
+test('15.100 Cancelling a shipped bill keeps the order remaining; rebill links back; deleting the shipment undoes the instruction; BOM/vendor in use', async () => {
+  const so = (await seller('POST', '/api/sales-orders', { customer: '가나상사', order_date: today, request_id: rid(), lines: [{ bom_id: mask.id, qty: 50, unit_price: 10 }] })).body;
+  const ol = so.lines[0];
+  const b = (await seller('POST', '/api/sales-bills', { customer: '가나상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: ol.id, qty: 30 }] })).body;
+  const inst = (await staff('GET', '/api/ship-instructions?customer=' + encodeURIComponent('가나상사'))).body.rows[0];
+  assert.equal((await staff('POST', '/api/ship-instructions/ship', { ids: [inst.id], ship_date: today })).status, 200);
+  const shipId = sqlite.prepare('SELECT shipment_id FROM ship_instructions WHERE id=?').get(inst.id).shipment_id;
+  assert.equal((await seller('POST', `/api/sales-bills/${b.id}/cancel`, { reason: '단가 정정' })).status, 200);
+  let d = (await seller('GET', `/api/sales-orders/${so.id}`)).body;
+  assert.deepEqual([d.lines[0].billed_qty, d.lines[0].shipped_qty, d.lines[0].remaining], [0, 30, 20], 'shipped goods are not offered again');
+  assert.equal((await seller('POST', '/api/sales-bills', { customer: '가나상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: ol.id, qty: 21 }] })).status, 409);
+  // 같은 출하를 「전표 없는 출하」로 다시 잡으면 수주 줄로 이어진다
+  const re = (await seller('POST', '/api/sales-bills', { customer: '가나상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: shipId, unit_price: 9 }] })).body;
+  assert.equal(re.lines[0].order_line_id, ol.id);
+  d = (await seller('GET', `/api/sales-orders/${so.id}`)).body;
+  assert.deepEqual([d.lines[0].billed_qty, d.lines[0].remaining], [30, 20]);
+  // 그 전표도 취소하고 출하를 지우면 지시가 취소되고 잔량이 돌아온다
+  assert.equal((await seller('POST', `/api/sales-bills/${re.id}/cancel`, { reason: '출하 취소' })).status, 200);
+  assert.equal((await staff('DELETE', `/api/shipments/${shipId}`)).status, 200);
+  assert.deepEqual({ ...sqlite.prepare('SELECT status, shipment_id FROM ship_instructions WHERE id=?').get(inst.id) }, { status: 'cancelled', shipment_id: null });
+  assert.equal((await seller('GET', `/api/sales-orders/${so.id}`)).body.lines[0].remaining, 50);
+  // 수주에 쓰인 품목은 완전 삭제 안 됨, 전표·수주에 쓰인 거래처도 삭제 안 됨
+  const usage = (await admin('GET', `/api/boms/${mask.id}/usage`)).body;
+  assert.ok(JSON.stringify(usage).includes('수주'), JSON.stringify(usage));
+  assert.notEqual((await admin('DELETE', `/api/boms/${mask.id}?purge=1`)).status, 200);
+  const vendor = sqlite.prepare("SELECT id FROM vendors WHERE name='가나상사'").get();
+  const del = await admin('DELETE', `/api/vendors/${vendor.id}`);
+  assert.equal(del.status, 409); assert.match(del.body.error, /수주 \d+건/);
+});
+
+test('15.101 Renaming a vendor follows through to orders, bills, instructions and closings', async () => {
+  await admin('POST', '/api/vendors', { name: '라마상사', is_sales: true });
+  const so = (await seller('POST', '/api/sales-orders', { customer: '라마상사', order_date: today, request_id: rid(), lines: [{ bom_id: mask.id, qty: 10, unit_price: 5 }] })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '라마상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty: 4 }] })).body;
+  const v = sqlite.prepare("SELECT id FROM vendors WHERE name='라마상사'").get();
+  assert.equal((await admin('PUT', `/api/vendors/${v.id}`, { name: '라마산업', is_sales: true })).status, 200);
+  assert.equal((await seller('GET', `/api/sales-orders/${so.id}`)).body.customer, '라마산업');
+  assert.equal((await seller('GET', `/api/sales-bills/${b.id}`)).body.customer, '라마산업');
+  assert.equal(sqlite.prepare('SELECT customer FROM ship_instructions WHERE bill_id=?').get(b.id).customer, '라마산업');
+  const open = (await seller('GET', '/api/sales-orders/open-lines?customer=' + encodeURIComponent('라마산업'))).body.rows;
+  assert.deepEqual(open.map(r => r.remaining), [6], 'open lines found under the new name');
+  assert.equal((await seller('GET', '/api/sales-orders/open-lines?customer=' + encodeURIComponent('라마상사'))).body.rows.length, 0);
+});
+
+test('15.102 Shipped-from-order shipment is locked, order with shipped goods cannot be cancelled, tax type must match, list state filter in SQL', async () => {
+  await admin('POST', '/api/vendors', { name: '바사상사', is_sales: true }); await admin('POST', '/api/vendors', { name: '아자상사', is_sales: true });
+  const so = (await seller('POST', '/api/sales-orders', { customer: '바사상사', order_date: today, tax_type: 'zero', request_id: rid(), lines: [{ bom_id: mask.id, qty: 50, unit_price: 10 }] })).body;
+  const ol = so.lines[0];
+  const mixed = await seller('POST', '/api/sales-bills', { customer: '바사상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: ol.id, qty: 50 }] });
+  assert.equal(mixed.status, 409); assert.match(mixed.body.error, /영세·면세/);
+  assert.equal((await seller('GET', '/api/sales-orders/open-lines?customer=' + encodeURIComponent('바사상사'))).body.rows[0].tax_type, 'zero');
+  const b = (await seller('POST', '/api/sales-bills', { customer: '바사상사', bill_date: today, tax_type: 'zero', request_id: rid(), lines: [{ source_type: 'order', order_line_id: ol.id, qty: 50 }] })).body;
+  assert.equal(b.vat_total, 0);
+  const inst = (await staff('GET', '/api/ship-instructions?customer=' + encodeURIComponent('바사상사'))).body.rows[0];
+  assert.equal((await staff('POST', '/api/ship-instructions/ship', { ids: [inst.id], ship_date: '2020-01-01' })).status, 400, 'ship date before bill month');
+  assert.equal((await staff('POST', '/api/ship-instructions/ship', { ids: [inst.id], ship_date: today })).status, 200);
+  const shipId = sqlite.prepare('SELECT shipment_id FROM ship_instructions WHERE id=?').get(inst.id).shipment_id;
+  assert.equal((await seller('POST', `/api/sales-bills/${b.id}/cancel`, { reason: '정정' })).status, 200);
+  // 출하지시로 나간 출하는 전표를 취소한 뒤에도 거래처·수량을 못 바꾼다(LOT·메모만)
+  const edit = await staff('PUT', `/api/shipments/${shipId}`, { ship_date: today, item: '마스크', qty: 7, customer: '아자상사' });
+  assert.equal(edit.status, 409); assert.match(edit.body.error, /LOT·메모만/);
+  assert.equal((await staff('PUT', `/api/shipments/${shipId}`, { lot: 'L-9', note: '메모' })).status, 200);
+  assert.equal(sqlite.prepare('SELECT lot FROM shipments WHERE id=?').get(shipId).lot, 'L-9');
+  // 다른 거래처 전표로 그 출하를 잡을 수 없다(거래처가 수주와 달라서 서버가 막음 — 거래처 검사가 먼저)
+  assert.notEqual((await seller('POST', '/api/sales-bills', { customer: '아자상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: shipId, unit_price: 1 }] })).status, 200);
+  // 출하된 수주는 취소 불가, 취소한 수주는 다시 못 연다
+  const cancel = await seller('POST', `/api/sales-orders/${so.id}/status`, { status: 'cancelled' });
+  assert.equal(cancel.status, 400); assert.match(cancel.body.error, /출하된/);
+  const so2 = (await seller('POST', '/api/sales-orders', { customer: '바사상사', order_date: today, request_id: rid(), lines: [{ bom_id: mask.id, qty: 1 }] })).body;
+  assert.equal((await seller('POST', `/api/sales-orders/${so2.id}/status`, { status: 'cancelled' })).status, 200);
+  assert.equal((await seller('POST', `/api/sales-orders/${so2.id}/status`, { status: 'open' })).status, 400);
+  // 목록 상태 거름이 SQL에서: 취소만 고르면 취소된 것만, 진행 중에는 취소가 없다
+  const cancelled = (await seller('GET', '/api/sales-orders?state=cancelled&customer=' + encodeURIComponent('바사상사'))).body.rows;
+  assert.deepEqual(cancelled.map(r => r.id), [so2.id]);
+  assert.ok((await seller('GET', '/api/sales-orders?state=open&customer=' + encodeURIComponent('바사상사'))).body.rows.every(r => ['waiting', 'partial'].includes(r.state)));
+  assert.ok((await seller('GET', '/api/sales-orders?state=done&customer=' + encodeURIComponent('바사상사'))).body.rows.some(r => r.id === so.id), 'shipped-but-unbilled counts as taken');
+});

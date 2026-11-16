@@ -31,8 +31,10 @@ async function pageSalesBillEntry(main) {
     box.innerHTML = orderBox.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data, open; try { [data, open] = await Promise.all([api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })), api('GET', '/api/sales-orders/open-lines?' + new URLSearchParams({ customer }))]); } catch (error) { box.innerHTML = orderBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
     if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
-    rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? '', note: '' }));
+    rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? r.order_price ?? '', note: '' }));
     orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderPreset = null;
+    // 15.102 수주 줄을 고르면 전표의 과세 구분을 그 수주에 맞춘다(서버는 다르면 막음). 수주마다 다르면 고른 뒤에 맞춘다.
+    const presetOrder = orders.find(o => o.picked); if (presetOrder && presetOrder.tax_type) { form.elements.tax_type.value = presetOrder.tax_type; }
     drawOrders(); draw();
     if (open.more) toast('수주 잔량 줄이 500개를 넘어 앞의 500줄만 보입니다.', 'err');
     if (data.more) toast('줄이 500개를 넘어 앞의 500줄만 보입니다. 출하일 범위로 좁히세요.', 'err');
@@ -59,7 +61,7 @@ async function pageSalesBillEntry(main) {
     orderBox.innerHTML = orders.length ? `<div class="table-wrap"><table data-keep-cols class="grid bill-grid"><caption class="sr-only">수주 잔량</caption><thead><tr><th scope="col"><input type="checkbox" data-order-all aria-label="전체 선택"></th><th scope="col">수주</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col" class="r">수주</th><th scope="col" class="r">잔량</th><th scope="col" class="r">이번 수량</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">공급가액</th><th scope="col">비고</th></tr></thead>
       <tbody>${orders.map((o, i) => `<tr data-order-row="${i}" class="${o.picked ? 'bill-picked' : ''}">
         <td><input type="checkbox" data-order-pick="${i}"${o.picked ? ' checked' : ''} aria-label="${esc(o.order_no)} ${esc(o.item)} 선택"></td>
-        <td class="nowrap">${esc(o.order_no)}<div class="small muted">${esc(o.order_date)}${o.customer_po ? ' · ' + esc(o.customer_po) : ''}</div></td>
+        <td class="nowrap">${esc(o.order_no)}${o.tax_type === 'zero' ? ' <span class="chip">영세</span>' : ''}<div class="small muted">${esc(o.order_date)}${o.customer_po ? ' · ' + esc(o.customer_po) : ''}</div></td>
         <td data-card-primary><b>${esc(o.item)}</b>${o.product_code ? `<div class="small muted">${esc(o.product_code)}</div>` : ''}</td><td>${esc(o.spec || '')}</td>
         <td class="r">${fmtNum(o.qty)}</td><td class="r"><b>${fmtNum(o.remaining)}</b></td>
         <td class="r"><input type="number" min="0" max="${esc(o.remaining)}" step="any" inputmode="decimal" data-order-qty="${i}" value="${esc(o.take)}" aria-label="${esc(o.item)} 이번 수량"></td><td>${esc(o.unit || '')}</td>
@@ -70,7 +72,8 @@ async function pageSalesBillEntry(main) {
     const all = $('[data-order-all]', orderBox); if (all) all.onchange = () => { orders.forEach(o => { o.picked = all.checked; }); drawOrders(); };
     labelRows(orderBox); totals();
   };
-  const setOrderPick = (i, on) => { orders[i].picked = on; const c = $(`[data-order-pick="${i}"]`, orderBox); if (c) { c.checked = on; c.closest('tr').classList.toggle('bill-picked', on); } };
+  const setOrderPick = (i, on) => { orders[i].picked = on; const c = $(`[data-order-pick="${i}"]`, orderBox); if (c) { c.checked = on; c.closest('tr').classList.toggle('bill-picked', on); }
+    if (on && orders[i].tax_type && form.elements.tax_type.value !== orders[i].tax_type) { form.elements.tax_type.value = orders[i].tax_type; toast(`과세 구분을 수주 ${orders[i].order_no}에 맞춰 ${orders[i].tax_type === 'zero' ? '영세·면세' : '과세'}로 바꿨습니다.`); } };
   orderBox.addEventListener('change', e => { if (e.target.dataset.orderPick !== undefined) setOrderPick(Number(e.target.dataset.orderPick), e.target.checked); totals(); });
   orderBox.addEventListener('input', e => {
     const d = e.target.dataset;
@@ -91,6 +94,7 @@ async function pageSalesBillEntry(main) {
         <td><input data-m="note" data-i="${i}" maxlength="200" value="${esc(m.note)}" aria-label="비고"></td><td><button type="button" class="btn small" data-m-del="${i}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '';
     labelRows(manualBox); totals();
   };
+  enterMovesInTable(box); enterMovesInTable(orderBox); enterMovesInTable(manualBox);
   $('[data-manual-add]', form).onclick = () => { manual.push({ item: '', spec: '', qty: '', unit: '', price: '', note: '' }); drawManual(); $$('[data-m="item"]', manualBox).at(-1)?.focus(); };
   manualBox.addEventListener('input', e => { const k = e.target.dataset.m; if (!k) return; const i = Number(e.target.dataset.i); manual[i][k] = e.target.value; if (k === 'qty' || k === 'price') $(`[data-m-supply="${i}"]`, manualBox).textContent = manual[i].qty !== '' && manual[i].price !== '' ? won(billTruncC(Number(manual[i].qty) * Number(manual[i].price))) : ''; totals(); });
   manualBox.addEventListener('click', e => { const d = e.target.closest('[data-m-del]'); if (d) { manual.splice(Number(d.dataset.mDel), 1); drawManual(); } });
@@ -134,7 +138,7 @@ async function pageSalesBillEntry(main) {
         lines: [...fromOrders.map(o => ({ source_type: 'order', order_line_id: o.id, qty: o.take, unit_price: o.price, note: o.note })), ...picked.map(r => ({ source_type: 'ship', source_id: r.source_id, unit_price: r.price, note: r.note })), ...extra.map(m => ({ source_type: 'manual', item: m.item, spec: m.spec, qty: m.qty, unit: m.unit, unit_price: m.price, note: m.note }))] });
       toast(bill.duplicate ? `${bill.bill_no} 전표는 앞서 이미 저장되었습니다.` : `${bill.bill_no} 매출전표를 저장했습니다. 합계 ${won(bill.total)}원${fromOrders.length ? ` · 출하지시 ${fromOrders.length}건` : ''}`);
       requestId = crypto.randomUUID(); form.elements.note.value = ''; manual = []; drawManual();
-      await load(true); salesBillSheet(bill);
+      await load(true); salesBillSheet(bill, null, { onClose: () => { if (form.isConnected) input.focus(); } });
     } catch (error) { fail(error); } finally { busy = false; button.disabled = false; }
   };
   let preset = null; try { preset = sessionStorage.getItem('wpa:sbill-customer'); sessionStorage.removeItem('wpa:sbill-customer'); } catch { preset = null; }
@@ -142,7 +146,7 @@ async function pageSalesBillEntry(main) {
   if (preset) { input.value = preset; await load(true); }
 }
 
-function salesBillSheet(bill, after = null) {
+function salesBillSheet(bill, after = null, { onClose = null } = {}) {
   const m = modal(`<h3 class="po-print-title">매출전표 <span class="small muted">${esc(bill.bill_no)}${bill.status === 'cancelled' ? ' · 취소됨' : ''}${bill.closed ? ' · 마감' : ''}</span></h3>
     <section class="cert po-doc bill-doc">
       <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>매 출 전 표</h2></div>
@@ -153,11 +157,11 @@ function salesBillSheet(bill, after = null) {
       </tbody></table>
       <table class="po-items"><thead><tr><th>No</th><th>출하일</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th>비고</th></tr></thead>
       <tbody>${bill.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(l.ship_date || '')}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec)}</td><td>${esc(l.lot)}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit)}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="r">${won(l.vat)}</td><td>${esc(l.note)}${l.source_missing ? ' <b>(출하 삭제됨)</b>' : ''}${l.order_no ? `<div class="po-code">${esc(l.order_no)}${l.ship_status === 'pending' ? ' · 출하 대기' : l.ship_status === 'cancelled' ? ' · 지시 취소' : ''}</div>` : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><th colspan="8" class="r">합계</th><td class="r">${won(bill.supply_total)}</td><td class="r">${won(bill.vat_total)}</td><td><b>${won(bill.total)}</b></td></tr></tfoot></table>
+      <tfoot><tr><th colspan="8" class="r">합계</th><td class="r">${won(bill.supply_total)}</td><td class="r">${won(bill.vat_total)}</td><td class="nowrap"><b>${esc(`총액 ${won(bill.total)}원`)}</b></td></tr></tfoot></table>
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
     </section>
-    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true, onClose: () => onClose?.() });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);
@@ -202,7 +206,7 @@ async function pageSalesBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원 (공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))} · 부가세 ${won(live.reduce((t, r) => t + r.vat_total, 0))})`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead><tbody>${rows.map(r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><b>${esc(r.bill_no)}</b></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div class="small muted">${esc(inv[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list" data-no-sort><thead><tr><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 4, 4, r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div class="small muted">${esc(inv[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`; })}</table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
@@ -285,7 +289,7 @@ async function pageSalesLedger(main) {
     box.innerHTML = `<section class="cert ledger-doc"><h2 class="ledger-title">기간별 거래보고</h2><p class="small">${esc(COMPANY_NAME)} · 거래처 <b>${esc(data.customer)}</b> · 보고기간 ${esc(data.from)} ~ ${esc(data.to)}</p>
       <div class="table-wrap"><table class="grid ledger-grid"><thead><tr><th>날짜</th><th>구분</th><th>적요/품목명</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th class="r">세액</th><th class="r">거래금액</th><th class="r">결제액</th><th>결제 방법</th><th class="r">잔액</th></tr></thead>
       <tbody><tr class="row-off"><td></td><td>기초잔액</td><td colspan="10"></td><td class="r"><b>${won(data.opening)}</b></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'payment' ? 'ledger-pay' : ''}"><td class="nowrap">${esc(r.date)}</td><td class="nowrap">${r.kind === 'sale' ? '매출' : PAY_KIND[r.kind]}</td><td data-card-primary>${esc(r.item)}${r.bill_no ? ` <button type="button" class="link small" data-ledger-bill="${r.bill_id}">${esc(r.bill_no)}</button>` : ''}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td>${esc(r.spec || '')}</td><td>${esc(r.unit || '')}</td><td class="r">${r.kind === 'sale' ? fmtNum(r.qty) : ''}</td><td class="r">${r.kind === 'sale' ? fmtNum(r.unit_price) : ''}</td><td class="r">${r.kind === 'sale' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'sale' ? won(r.vat) : ''}</td><td class="r">${r.sale ? won(r.sale) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td>${esc(r.method || '')}</td><td class="r"><b>${won(r.balance)}</b></td></tr>`).join('')}</tbody>
-      <tfoot><tr><th colspan="5">합계</th><td class="r">${fmtNum(data.totals.qty)}</td><td></td><td class="r">${won(data.totals.supply)}</td><td class="r">${won(data.totals.vat)}</td><td class="r">${won(data.totals.sale)}</td><td class="r">${won(data.totals.paid)}</td><td></td><td class="r"><b>${won(data.totals.balance)}</b></td></tr></tfoot></table></div></section>`;
+      <tfoot><tr><th colspan="5">합계</th><td class="r">${esc(unitTotals(data.rows.filter(r => r.kind === 'sale'), r => r.qty, r => r.unit))}</td><td></td><td class="r">${won(data.totals.supply)}</td><td class="r">${won(data.totals.vat)}</td><td class="r">${won(data.totals.sale)}</td><td class="r">${won(data.totals.paid)}</td><td></td><td class="r"><b>${won(data.totals.balance)}</b></td></tr></tfoot></table></div></section>`;
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };

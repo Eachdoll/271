@@ -103,7 +103,7 @@ test('Shipment photos, damage judgement and revision checks persist without losi
 });
 
 test('Incoming analysis keeps access to receipt evidence after the source is deleted', async () => {
-  const catalog = (await admin('POST', '/api/boms', { ...bomBody, product: '파손입고', item_category: '상품', materials: [] })).body;
+  const catalog = (await admin('POST', '/api/boms', { ...bomBody, product: '파손입고', product_code: 'A-009', item_category: '상품', materials: [] })).body;
   const receipt = (await owner('POST', '/api/other-receipts', { bom_id: catalog.id, received_date: '2026-11-13', item: '파손입고', item_category: '상품', qty: 2, vendor: '공급사' })).body;
   const endpoint = `/api/attachments/other_receipt/${receipt.id}`;
   const record = await owner('PUT', endpoint, { photos: [png], inspection_status: 'abnormal', note: '박스 눌림' });

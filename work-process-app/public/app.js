@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.94';
+const APP_VERSION = '15.106';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -20,10 +20,31 @@ const addMonths = (s, n) => { const d = parseD(monthStart(s)); d.setMonth(d.getM
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const dow = (s) => WEEK[parseD(s).getDay()];
 const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko-KR'));
+// 15.100 합계: 수량은 단위마다 따로 더한다(kg와 EA를 섞어 더하지 않게). 예: "1,200 EA · 30 BOX"
+function unitTotals(rows, qty, unit) {
+  const m = new Map(); for (const r of rows) { const u = String(unit(r) || '').trim(), q = Number(qty(r)); if (!Number.isFinite(q)) continue; m.set(u, (m.get(u) || 0) + q); }
+  return [...m].map(([u, n]) => `${fmtNum(Math.round(n * 1000) / 1000)}${u ? ' ' + u : ''}`).join(' · ') || '0';
+}
+// 15.103 입력 표 안에서 Enter는 저장이 아니라 다음 칸으로(수량 → 단가 → 비고 → 다음 줄). 한글 조합 중·select·textarea는 그대로.
+function enterMovesInTable(root) {
+  root.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229 || e.altKey || e.ctrlKey || e.metaKey) return;
+    const el = e.target; if (!el.matches('input:not([type=checkbox]):not([type=radio]):not([type=file])')) return;
+    const tr = el.closest('tr'); if (!tr) return;
+    e.preventDefault();
+    const cells = row => [...row.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([disabled]):not([readonly])')].filter(i => i.offsetParent !== null);
+    const mine = cells(tr), at = mine.indexOf(el);
+    let next = at >= 0 && at < mine.length - 1 ? mine[at + 1] : null;
+    if (!next) { let r = tr.nextElementSibling; while (r && !cells(r).length) r = r.nextElementSibling; next = r ? cells(r)[0] : null; }
+    if (next) { next.focus(); next.select?.(); }
+  });
+}
+// 표 바로 아래 ERP식 합계 줄. parts: [[이름, 값(HTML)], …] (값이 빈 것은 뺀다)
+const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
-const ROLE_SHORT = { operator: '오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장' };
-const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(매출전표·입금)' };
+const ROLE_SHORT = { operator: '오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장', sales: '영업' };
+const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(수주·매출전표·입금)' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -568,10 +589,62 @@ async function render() {
   shell();
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
+
+// ── 15.97 ERP식 표·입력 화면 ──
+// 1) 목록 표 머리글을 누르면 그 칸으로 정렬(다시 누르면 반대로). 입력칸이 있는 표, 칸을 합친 줄(소계 등)이 있는 표, data-no-sort 표는 정렬하지 않는다.
+function sortableTable(table) {
+  if (!table || table.hasAttribute('data-no-sort') || table.closest('.modal')) return false;
+  const rows = [...(table.tBodies[0]?.rows || [])], n = table.tHead?.rows[0]?.cells.length;
+  const totalRow = tr => /^(합계|총계|소계|계|total)$/i.test((tr.cells[0]?.textContent || '').trim()) || /sum|total/.test(tr.className);
+  return rows.length > 1 && !!n && !table.tBodies[0].querySelector('input, select, textarea, [colspan], [rowspan]') && rows.every(tr => tr.cells.length === n) && !rows.some(totalRow);
+}
+function sortKey(td) {
+  const t = (td?.textContent || '').trim(), num = t.replace(/[,원%\s]/g, '');
+  return /^-?\d+(\.\d+)?$/.test(num) ? { n: Number(num) } : { s: t };
+}
+document.addEventListener('click', event => {
+  const th = event.target.closest('table.grid > thead > tr > th');
+  if (!th || event.target.closest('input, button, a, select') || !th.textContent.trim()) return;
+  const table = th.closest('table'); if (!sortableTable(table)) return;
+  const index = [...th.parentElement.cells].indexOf(th), asc = th.getAttribute('aria-sort') !== 'ascending';
+  [...th.parentElement.cells].forEach(c => c.removeAttribute('aria-sort')); th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+  const body = table.tBodies[0], rows = [...body.rows];
+  rows.sort((a, b) => {
+    const x = sortKey(a.cells[index]), y = sortKey(b.cells[index]);
+    const empty = v => v.s === '' ? 1 : 0; if (empty(x) !== empty(y)) return empty(x) - empty(y); // 빈 칸은 늘 아래
+    const c = x.n !== undefined && y.n !== undefined ? x.n - y.n : String(x.s ?? x.n).localeCompare(String(y.s ?? y.n), 'ko', { numeric: true });
+    return asc ? c : -c;
+  });
+  rows.forEach(tr => body.append(tr));
+});
+// 2) 입력 화면 아래 저장 줄 왼쪽에 「리스트」(같은 하위 메뉴의 목록 화면)와 「다시 작성」(입력과 보관 초안을 지우고 새로)
+function listRouteFor(route) {
+  const subs = []; const walk = items => items.forEach(i => { if (!Array.isArray(i) && i.items) { subs.push(i.items); walk(i.items); } });
+  NAV.forEach(g => walk(g.items));
+  for (const items of subs) {
+    const links = items.filter(Array.isArray).map(i => i[0]); if (!links.includes(route)) continue;
+    const others = items.filter(i => Array.isArray(i) && i[0] !== route && !i[0].endsWith('/new'));
+    return (others.find(i => /목록|리스트/.test(i[1])) || others[0])?.[0] || null;
+  }
+  return route.endsWith('/new') && PAGES[route.slice(0, -4)] ? route.slice(0, -4) : null;
+}
+function erpEntryBar(main, route) {
+  const bar = [...main.querySelectorAll('form:not(.list-filters):not([data-read-only]) > .actions:last-child')].find(a => a.querySelector(':scope > .btn.primary:not([type=button])') && a.offsetParent !== null);
+  if (!bar || bar.querySelector('.erp-bar-left')) return;
+  const list = listRouteFor(route.split('?')[0]);
+  const left = document.createElement('span'); left.className = 'erp-bar-left';
+  left.innerHTML = `<button type="button" class="btn" data-erp-reset>다시 작성</button>${list ? `<a class="btn" href="${list}" data-erp-list>리스트</a>` : ''}`;
+  bar.prepend(left);
+  left.querySelector('[data-erp-reset]').onclick = async () => {
+    if (!(await confirmBox('입력한 내용을 모두 지우고 처음부터 다시 작성할까요?'))) return;
+    for (const draft of uxDrafts) if (draft.form.isConnected) draft.clear('');
+    render();
+  };
+}
 
 // ── 휴대폰 하단 탭(15.62): 할 일 · 자주 쓰는 화면 ──
 async function pageTasks(main) {
@@ -752,9 +825,10 @@ function labelGridTables() {
     rows.forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
     // Desktop: columns that are empty on every row are left out (입력 표처럼 칸이 나중에 채워지면 data-keep-cols로 끈다); short values stay on one line.
     const ths = $$('thead th', table);
+    if (sortableTable(table)) ths.forEach(th => { if (th.textContent.trim() && !th.querySelector('input')) th.classList.add('sortable'); }); // 15.97 머리글 눌러 정렬
     heads.forEach((head, i) => {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
-      if (head && rows.length && !table.hasAttribute('data-keep-cols') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
+      if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
     });
     if (!table.classList.contains('as-cards')) return;
@@ -977,7 +1051,7 @@ function pendingReceipt(po) { try { return typeof po.pending_change === 'string'
 function poProgressCells(p) {
   const received = ['ok', 'mismatch'].includes(p.recv_status) ? Number(p.recv_qty ?? p.qty) : 0, billed = Number(p.billed_qty || 0);
   const left = p.recv_status === 'ok' ? 0 : Math.max(0, Number(p.qty) - received), unbilled = Math.max(0, received - billed);
-  return `<td class="r">${received ? fmtNum(received) : ''}</td><td class="r">${billed ? fmtNum(billed) : ''}${unbilled ? `<div class="small muted">미전표 ${fmtNum(unbilled)}</div>` : ''}</td><td class="r">${left ? `<b>${fmtNum(left)}</b>` : ''}</td>`;
+  return `<td class="r">${received ? fmtNum(received) : ''}</td><td class="r">${billed ? fmtNum(billed) : ''}${billed && unbilled ? `<div class="small muted">미전표 ${fmtNum(unbilled)}</div>` : ''}</td><td class="r">${left ? `<b>${fmtNum(left)}</b>` : ''}</td>`;
 }
 function receiptChangeText(c, po = {}) { return c.action === 'qty' ? `실입고 ${fmtNum(c.old_recv_qty ?? po.recv_qty)} → ${fmtNum(c.new_recv_qty)} 수정` : '입고 취소(미입고로)'; }
 function receiptChangeInfo(po) {
@@ -1036,14 +1110,15 @@ async function pagePO(main) {
     listCount(filterForm, rows.length);
     const t = todayStr();
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap dense-wrap" tabindex="0" role="region" aria-label="발주목록 표 · 좌우로 스크롤"><table class="grid keep-table dense-grid po-grid">
-      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
+      <thead><tr><th>구매의뢰번호</th><th>품목명</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>입고상태</th><th>거래처</th><th>납기일</th><th>분류</th><th>COA 요청</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
-        <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
-        <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
+        <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td><td>${esc(p.vendor)}</td>
+        <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
         <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-po-print="${p.id}" title="같은 구매의뢰번호·거래처의 발주를 한 장으로">발주서</button> <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 발주가 없습니다.</div>';
+    if (rows.length) { const priced = rows.filter(r => r.unit_price != null && r.unit_price !== ''); $('#poList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))], ['발주 금액', esc(`${won(priced.reduce((t, r) => t + billTruncC(r.qty * r.unit_price), 0))}원`)], ['단가 없음', rows.length - priced.length ? esc(`${rows.length - priced.length}건`) : '']])); }
     bindReceiptChanges($('#poList'), rows, load);
     $$('[data-po-print]', main).forEach(b => b.onclick = () => { const t = rows.find(r => r.id === Number(b.dataset.poPrint)); poPrintSheet(rows.filter(r => r.req_no === t.req_no && r.vendor === t.vendor)); });
     $$('[data-edit]').forEach((b) => (b.onclick = () => {
@@ -1147,6 +1222,7 @@ async function pageReceive(main) {
         <td>${recvChip(p)}${qcChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td class="small muted">${esc(p.created_by || '기존 기록: 미기록')}</td><td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td>${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 발주가 없습니다.</div>';
+    if (rows.length) $('#rcList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['발주수량', esc(unitTotals(rows, r => r.qty, r => r.unit))], ['실입고', (got => got.length ? esc(unitTotals(got, r => r.recv_qty ?? r.qty, r => r.unit)) : '')(rows.filter(r => ['ok', 'mismatch'].includes(r.recv_status)))]]));
     const all = $('#rcAll'); if (all) all.onchange = () => { $$('.rc-check').forEach((c) => (c.checked = all.checked)); updateCount(); };
     $$('.rc-check').forEach((c) => (c.onchange = updateCount));
     // 행 클릭으로도 체크
@@ -1248,6 +1324,7 @@ async function pageOtherReceipts(main, { entry = true } = {}) {
     listCount(filterForm, rows.length);
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${qcChip(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+    if (rows.length) $('#otherList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['입고수량', esc(unitTotals(rows, r => r.qty, r => r.unit || receiptBomSnapshot(r).unit))]]));
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
@@ -1717,7 +1794,7 @@ function bindCategoryPicker(form, nodes, bom) {
 
 // ── 제품등록: 세부 분류 관리 (관리자) ──
 async function manageItemCategories(startClass = '원자재') {
-  let nodes = [], current = ITEM_CATEGORIES.includes(startClass) ? startClass : '원자재';
+  let nodes = [], current = ITEM_CATEGORIES.includes(startClass) && startClass !== '임가공' ? startClass : '원자재'; // 임가공은 세부 분류를 쓰지 않는다
   const box = modal(`<h3>분류 관리</h3><p class="small muted">품목 분류마다 1차·2차·3차 세부 분류를 미리 만들어 두면 제품등록에서 고를 수 있습니다(2·3차는 없어도 됩니다). 방진복처럼 사이즈가 정해진 분류에는 사이즈 묶음을 넣으면, 그 아래 품목은 발주·기타입고·출하에서 사이즈별 수량으로 한 번에 입력합니다. 이름을 바꾸면 그 분류로 등록된 품목에도 반영됩니다. 쓰지 않는 분류는 사용 중지하면 새 등록에서만 빠집니다. 하위 분류도 등록된 품목도 없는 분류는 삭제할 수 있습니다. 반제품 분류에는 커팅/융착·세탁에서 쓸 생산 종류를 지정합니다(하위 분류는 물려받음).</p><div class="seg class-tabs" data-cat-tabs>${ITEM_CATEGORIES.filter(c => c !== '임가공').map(c => `<button type="button" data-cat-tab="${c}">${c}</button>`).join('')}</div><div data-cat-tree></div><div class="actions"><button type="button" class="btn" data-cat-close>닫기</button><button type="button" class="btn primary" data-cat-add-root>1차 분류 추가</button></div>`, { wide: true });
   const tree = $('[data-cat-tree]', box.el);
   const sizeField = value => `<label>사이즈 묶음 <span class="hint">(쉼표로 구분 · 비우면 상위 분류를 따름)</span><input name="sizes" maxlength="200" value="${esc(value)}" placeholder="예) XS,S,M,L,XL"></label><div class="actions wrap" style="justify-content:flex-start;margin-top:0">${['XS,S,M,L,XL', 'S,M,L,XL,2XL', 'XS,S,M,L,XL,2XL,3XL'].map(v => `<button type="button" class="btn small" data-size-preset="${v}">${v.split(',')[0]}~${v.split(',').at(-1)}</button>`).join('')}</div>`;
@@ -1874,7 +1951,7 @@ async function pageShip(main) {
     const rows = await api('GET', '/api/shipments?' + new URLSearchParams(formObj(filterForm)));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
-    $('#shSum').innerHTML = `${rows.length}건 · 수량 합계 <b>${fmtNum(rows.reduce((a, r) => a + r.qty, 0))}</b>`;
+    $('#shSum').innerHTML = `${esc(`${rows.length}건`)} · <span>수량 합계</span> <b>${esc(unitTotals(rows, r => r.qty, r => r.unit))}</b>`;
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}${lineInfo(r)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>

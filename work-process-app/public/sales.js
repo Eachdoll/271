@@ -191,6 +191,7 @@ async function pageSalesPrList(main) {
       <td><span class="chip ${PR_STATUS_CHIP[r.status]}">${PR_STATUS[r.status]}</span>${r.status === 'pending' ? `<div class="small">${r.my_turn ? '<b>내 차례</b>' : esc(r.current_user_name) + ' 차례'}</div>` : ''}${r.status === 'approved' && (r.ordered || r.closed) ? `<div class="small muted">발주 ${r.ordered}/${r.item_count}${r.closed ? ` · <span>발주 안 함</span> ${r.closed}` : ''}</div>` : ''}</td>
       <td data-card-primary><button class="btn small ${r.my_turn ? 'primary' : ''}" data-open-pr="${r.id}">${r.my_turn ? '결재하기' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>${more ? '<div class="actions"><button type="button" class="btn" data-pr-more>더 보기</button></div>' : ''}`
       : `<div class="empty">${box === 'todo' ? '지금 내 결재 차례인 구매의뢰가 없습니다.' : '조건에 맞는 구매의뢰가 없습니다.'}</div>`;
+    if (rows.length) $('#prList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['매입', esc(`${prMoney(rows.reduce((t, r) => t + (Number(r.purchase_total) || 0), 0))}원`)], ['판매', esc(`${prMoney(rows.reduce((t, r) => t + (Number(r.sale_total) || 0), 0))}원`)]]));
     $$('[data-open-pr]', main).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPr), () => load()));
     const moreButton = $('[data-pr-more]', main); if (moreButton) moreButton.onclick = () => load(true).catch(fail);
   };
