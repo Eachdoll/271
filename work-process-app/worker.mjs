@@ -989,20 +989,23 @@ route('PUT', '/api/warehouses/:id', async ({ user, params, body }) => {
 // 같은 입고 줄은 유효한 전표 하나에만 들어간다(부분 UNIQUE 인덱스). 거래처·월 마감 뒤에는 그 달 전표를 만들거나 취소할 수 없다.
 // 이 입고 줄에서 유효한 전표가 이미 잡은 수량
 // LOT 줄 전환 때 생긴 「이전 입고」 LOT는 그 발주의 예전 'po' 전표 줄과 같은 수량이므로 둘을 합쳐 센다.
-function lotBilled() { return `(SELECT COALESCE(SUM(b.qty),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (l.note='이전 입고' AND b.source_type='po' AND b.source_id=p.id)))`; }
+const PREV_LOT = "(l.note='이전 입고' AND l.receipt_id IS NULL)"; // 15.90: 입고 번호 없이 시스템이 옮긴 줄만(사용자 비고와 구분)
+function lotBilled() { return `(SELECT COALESCE(SUM(b.qty),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (${PREV_LOT} AND b.source_type='po' AND b.source_id=p.id)))`; }
+// 15.90 발주 전체로 아직 전표에 안 잡은 실입고 수량(수량 수정으로 줄어든 것 포함). LOT 줄은 이 값보다 많이 잡을 수 없다.
+const PO_OPEN = "(p.recv_qty - (SELECT COALESCE(SUM(x.qty),0) FROM purchase_bill_lines x WHERE x.active=1 AND x.po_id=p.id))";
 function billedOf(type, key) { return `(SELECT COALESCE(SUM(b.qty),0) FROM purchase_bill_lines b WHERE b.source_type='${type}' AND b.source_id=${key} AND b.active=1)`; }
 // 이 거래처에서 같은 품목(코드, 없으면 이름)을 마지막으로 산 단가
 function lastBought(a) { return `(SELECT x.unit_price FROM purchase_bill_lines x JOIN purchase_bills pb ON pb.id=x.bill_id WHERE x.active=1 AND REPLACE(LOWER(pb.vendor),' ','')=REPLACE(LOWER(${a}.vendor),' ','') AND (CASE WHEN COALESCE(${a === 'o' ? "json_extract(o.bom_snapshot,'$.product_code')" : 'p.product_code'},'')<>'' THEN x.product_code=${a === 'o' ? "json_extract(o.bom_snapshot,'$.product_code')" : 'p.product_code'} ELSE x.item=${a}.item END) ORDER BY pb.bill_date DESC, x.id DESC LIMIT 1)`; }
 const BILL_SOURCES = {
-  po_lot: `SELECT 'po_lot' AS source_type, l.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, l.lot, l.received_date, l.qty, p.unit_price, p.internal_note, l.note AS lot_note,
+  po_lot: `SELECT 'po_lot' AS source_type, l.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, l.lot, l.received_date, l.qty, p.unit_price, p.internal_note, l.note AS lot_note, CASE WHEN ${PREV_LOT} THEN 1 ELSE 0 END AS is_prev, ${PO_OPEN} AS po_open,
       p.qty AS po_qty, p.recv_qty AS po_recv_qty, substr(p.created_at,1,10) AS po_date, p.note AS po_note, p.batch_id AS po_batch, ${lotBilled()} AS billed_qty, ${lastBought('p')} AS last_price
     FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id
-    WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch')`,
-  po: `SELECT 'po' AS source_type, p.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, p.lot, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.recv_qty AS qty, p.unit_price, p.internal_note, '' AS lot_note,
+    WHERE l.voided_at IS NULL AND l.qty > 0 AND p.recv_status IN ('ok','mismatch')`,
+  po: `SELECT 'po' AS source_type, p.id AS source_id, p.id AS po_id, p.req_no, p.vendor, p.item, p.spec, p.unit, p.product_code, p.lot, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.recv_qty AS qty, p.unit_price, p.internal_note, '' AS lot_note, 0 AS is_prev, ${PO_OPEN} AS po_open,
       p.qty AS po_qty, p.recv_qty AS po_recv_qty, substr(p.created_at,1,10) AS po_date, p.note AS po_note, p.batch_id AS po_batch, ${billedOf('po', 'p.id')} AS billed_qty, ${lastBought('p')} AS last_price
     FROM purchase_orders p WHERE p.recv_status IN ('ok','mismatch') AND p.recv_qty IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=p.id AND l.voided_at IS NULL)`,
-  other: `SELECT 'other' AS source_type, o.id AS source_id, NULL AS po_id, '' AS req_no, o.vendor, o.item, o.spec, COALESCE(NULLIF(o.unit,''), json_extract(o.bom_snapshot,'$.unit'), '') AS unit, COALESCE(json_extract(o.bom_snapshot,'$.product_code'), '') AS product_code, o.lot, o.received_date, o.qty, NULL AS unit_price, '' AS internal_note, '' AS lot_note,
+  other: `SELECT 'other' AS source_type, o.id AS source_id, NULL AS po_id, '' AS req_no, o.vendor, o.item, o.spec, COALESCE(NULLIF(o.unit,''), json_extract(o.bom_snapshot,'$.unit'), '') AS unit, COALESCE(json_extract(o.bom_snapshot,'$.product_code'), '') AS product_code, o.lot, o.received_date, o.qty, NULL AS unit_price, '' AS internal_note, '' AS lot_note, 0 AS is_prev, NULL AS po_open,
       NULL AS po_qty, NULL AS po_recv_qty, NULL AS po_date, o.note AS po_note, '' AS po_batch, ${billedOf('other', 'o.id')} AS billed_qty, ${lastBought('o')} AS last_price
     FROM other_receipts o WHERE 1=1`,
 };
@@ -1010,7 +1013,7 @@ const BILL_SOURCE_KEY = { po_lot: 'l.id', po: 'p.id', other: 'o.id' };
 const BILL_SOURCE_QTY = { po_lot: 'l.qty', po: 'p.recv_qty', other: 'o.qty' };
 const billVendorKey = v => `REPLACE(LOWER(${v}),' ','')`;
 // 입고 줄은 「전표에 잡은 수량 합 < 입고 수량」이면 아직 열려 있다(15.82: 나눠 잡기).
-const unbilled = type => `${type === 'po_lot' ? lotBilled() : billedOf(type, BILL_SOURCE_KEY[type])} < ${BILL_SOURCE_QTY[type]} - 0.000001`;
+const unbilled = type => `${type === 'po_lot' ? lotBilled() : billedOf(type, BILL_SOURCE_KEY[type])} < ${BILL_SOURCE_QTY[type]} - 0.000001${type === 'other' ? '' : ` AND ${PO_OPEN} > 0.000001`}`;
 const billTrunc = n => Math.trunc(Math.round(n * 1000) / 1000);
 const requirePurchase = user => { if (!hasRole(user, 'purchase')) throw new HttpError(403, '매입전표는 구매 담당자가 처리합니다.'); };
 async function closedPeriod(vendor, date) {
@@ -1092,7 +1095,7 @@ route('POST', '/api/purchase-bills', async ({ user, body }) => {
     if (price == null) throw bad(`${no}(${src.item}): 단가를 넣으세요.`);
     if (price < 0) throw bad(`${no}: 단가는 0 이상이어야 합니다.`);
     // 수량: 비우면 남은 수량(입고 − 이미 잡은 수량). 명세서와 다르면 고쳐 잡는다(덜 잡은 수량은 다음 전표에서).
-    const remaining = stockRound(src.qty - src.billed_qty);
+    const remaining = stockRound(src.po_open == null ? src.qty - src.billed_qty : Math.min(src.qty - src.billed_qty, src.po_open));
     const qty = l.qty === undefined || l.qty === '' || l.qty === null ? remaining : num(l.qty, `${no} 수량`);
     if (!(qty > 0)) throw bad(`${no}(${src.item}): 수량은 0보다 커야 합니다.`);
     if (qty > remaining + 0.000001) throw bad(`${no}(${src.item}): 남은 입고 수량 ${remaining}보다 많이 잡을 수 없습니다. 명세서가 더 많으면 물류에서 입고 수량을 먼저 고치세요.`);
@@ -1105,8 +1108,8 @@ route('POST', '/api/purchase-bills', async ({ user, body }) => {
   const cmds = [{ sql: `INSERT INTO purchase_bills(bill_no,bill_date,vendor,statement_no,statement_total,tax_type,freight,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('purchase_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [prefix, prefix, prefix, date, vendor, str(body.statement_no, 50), statementTotal, taxType, billTrunc(freight), supply, vat, total, str(body.note, 500), user.name, user.id, token] }];
   // 저장 순간 그 입고 줄의 「이미 잡은 수량」이 읽은 값과 같을 때만 넣는다(동시에 다른 전표가 잡으면 batch 전체 되돌림).
-  for (const l of lines) cmds.push({ sql: `INSERT INTO purchase_bill_lines(bill_id,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note,source_qty) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ROUND((SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND ((source_type=? AND source_id=?) OR (source_type='po' AND source_id=? AND ?=1))),6)=ROUND(?,6)`,
-    args: [token, l.source_type, l.source_id, l.po_id, l.req_no || '', l.item, l.spec || '', l.unit || '', l.product_code || '', l.lot || '', l.received_date || '', l.qty, l.unit_price, l.supply, l.note, l.source_qty, l.source_type, l.source_id, l.po_id, l.source_type === 'po_lot' && l.lot_note === '이전 입고' ? 1 : 0, l.billed_before] }, RC_GUARD);
+  for (const l of lines) cmds.push({ sql: `INSERT INTO purchase_bill_lines(bill_id,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note,source_qty) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ROUND((SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND ((source_type=? AND source_id=?) OR (source_type='po' AND source_id=? AND ?=1))),6)=ROUND(?,6) AND (? IS NULL OR (SELECT COALESCE(SUM(qty),0) FROM purchase_bill_lines WHERE active=1 AND po_id=?) + ? <= (SELECT recv_qty FROM purchase_orders WHERE id=?) + 0.000001)`,
+    args: [token, l.source_type, l.source_id, l.po_id, l.req_no || '', l.item, l.spec || '', l.unit || '', l.product_code || '', l.lot || '', l.received_date || '', l.qty, l.unit_price, l.supply, l.note, l.source_qty, l.source_type, l.source_id, l.po_id, l.is_prev ? 1 : 0, l.billed_before, l.po_id, l.po_id, l.qty, l.po_id] }, RC_GUARD);
   try { await db.batch(cmds); }
   catch (error) {
     const saved = await db.prepare('SELECT * FROM purchase_bills WHERE request_id=?').get(token);
@@ -1168,7 +1171,7 @@ route('POST', '/api/purchase-closing/reopen', async ({ user, body }) => {
 const RS_SOURCES = {
   po_lot: { date: 'l.received_date', sql: `SELECT 'po_lot' AS source_type, l.id AS source_id, l.received_date AS received_date, p.vendor, p.req_no, p.item, p.spec, p.unit, p.product_code, l.lot, p.item_category AS category, l.qty, p.unit_price,
       ${lotBilled()} AS billed_qty,
-      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (l.note='이전 입고' AND b.source_type='po' AND b.source_id=p.id))) AS billed_supply
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (${PREV_LOT} AND b.source_type='po' AND b.source_id=p.id))) AS billed_supply
     FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch')` },
   po: { date: "COALESCE(substr(p.recv_at,1,10), p.due_date)", sql: `SELECT 'po' AS source_type, p.id AS source_id, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.vendor, p.req_no, p.item, p.spec, p.unit, p.product_code, p.lot, p.item_category AS category, p.recv_qty AS qty, p.unit_price,
       ${billedOf('po', 'p.id')} AS billed_qty,
@@ -1196,27 +1199,30 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
   rows.sort((a, b) => stockCompare(a.received_date, b.received_date) || stockCompare(a.vendor, b.vendor));
   const lines = rows.map(r => {
     const category = RS_ORDER.includes(r.category) ? r.category : '미분류';
-    const remaining = Math.max(0, stockRound(r.qty - (r.billed_qty || 0)));
-    const estimate = remaining > 0 && r.unit_price != null ? billTrunc(remaining * r.unit_price) : 0;
-    const state = remaining <= 0 ? 'billed' : (r.billed_qty || 0) > 0 ? 'partial' : 'open';
-    return { ...r, category, confirmed: r.billed_supply || 0, estimate, remaining, unpriced: remaining > 0 && r.unit_price == null, state };
+    // 수량 수정 승인으로 생긴 음수 줄은 그만큼 미확정 금액에서 뺀다(같은 발주의 다른 줄과 합쳐 순액이 맞음).
+    const adjust = r.qty < 0;
+    const remaining = adjust ? r.qty : Math.max(0, stockRound(r.qty - (r.billed_qty || 0)));
+    const estimate = remaining !== 0 && r.unit_price != null ? (adjust ? -billTrunc(-remaining * r.unit_price) : billTrunc(remaining * r.unit_price)) : 0;
+    const state = adjust ? 'adjust' : remaining <= 0 ? 'billed' : (r.billed_qty || 0) > 0 ? 'partial' : 'open';
+    return { ...r, category, confirmed: r.billed_supply || 0, estimate, remaining, unpriced: remaining !== 0 && r.unit_price == null, state };
   });
   const sumBy = key => {
     const map = new Map();
-    for (const l of lines) { const k = key(l), g = map.get(k) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }; g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (l.unpriced) g.unpriced++; if (l.state !== 'billed') g.open++; map.set(k, g); }
+    for (const l of lines) { const k = key(l), g = map.get(k) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }; g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (l.unpriced) g.unpriced++; if (l.state === 'open' || l.state === 'partial') g.open++; map.set(k, g); }
     return map;
   };
   const byCat = sumBy(l => l.category);
   const categories = RS_ORDER.filter(c => byCat.has(c) || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c)).map(c => ({ category: c, ...(byCat.get(c) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }) })).map(g => ({ ...g, total: g.confirmed + g.estimate }));
-  const vendors = [...sumBy(l => nameKey(l.vendor)).entries()].map(([k, g]) => {
-    const name = lines.find(l => nameKey(l.vendor) === k).vendor, cats = {}, by = {};
-    for (const l of lines) if (nameKey(l.vendor) === k) {
-      cats[l.category] = (cats[l.category] || 0) + l.confirmed + l.estimate;
-      const c = by[l.category] || (by[l.category] = { lines: 0, confirmed: 0, estimate: 0, open: 0, unpriced: 0 });
-      c.lines++; c.confirmed += l.confirmed; c.estimate += l.estimate; if (l.state !== 'billed') c.open++; if (l.unpriced) c.unpriced++;
-    }
-    return { vendor: name, ...g, total: g.confirmed + g.estimate, categories: cats, by }; // by: 분류별 세부(15.88 분류 탭)
-  }).sort((a, b) => stockCompare(a.vendor, b.vendor));
+  // 거래처 집계: 줄을 한 번만 돌며 합계·분류별 금액·분류별 세부를 모은다(15.90, 거래처 × 줄 반복 제거)
+  const vmap = new Map();
+  for (const l of lines) {
+    const k = nameKey(l.vendor), v = vmap.get(k) || { vendor: l.vendor, lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0, categories: {}, by: {} };
+    const c = v.by[l.category] || (v.by[l.category] = { lines: 0, confirmed: 0, estimate: 0, open: 0, unpriced: 0 }), isOpen = l.state === 'open' || l.state === 'partial';
+    for (const g of [v, c]) { g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (isOpen) g.open++; if (l.unpriced) g.unpriced++; }
+    v.categories[l.category] = (v.categories[l.category] || 0) + l.confirmed + l.estimate;
+    vmap.set(k, v);
+  }
+  const vendors = [...vmap.values()].map(v => ({ ...v, total: v.confirmed + v.estimate })).sort((a, b) => stockCompare(a.vendor, b.vendor));
   // 운송비는 매입전표 머리에 있어 분류가 없다. 명세서 일자가 기간 안인 확정 전표의 운송비를 따로 보여 준다.
   const fw = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?', 'freight>0'], fa = [from, to];
   if (vendor) { fw.push(`${billVendorKey('vendor')}=?`); fa.push(nameKey(vendor)); }

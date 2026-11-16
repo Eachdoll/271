@@ -225,7 +225,7 @@ async function pageBillClosing(main) {
 
 // 구매 › 입고현황(15.87): 매입 마감용. 입고일 기준 기간의 입고를 분류별·거래처별 금액으로 본다.
 // 확정 = 매입전표 공급가액, 미확정 = 아직 전표 안 잡은 수량 × 발주 단가. 단가가 없는 줄(기타입고 등)은 「단가 없음」.
-const RS_STATE = { billed: ['전표 완료', 'green'], partial: ['일부 전표', 'yellow'], open: ['전표 없음', ''] };
+const RS_STATE = { billed: ['전표 완료', 'green'], partial: ['일부 전표', 'yellow'], open: ['전표 없음', ''], adjust: ['수량 수정', ''] };
 async function pageReceiptStatus(main) {
   const r0 = rpRange('month');
   main.innerHTML = `<h1>입고현황</h1>

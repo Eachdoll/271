@@ -1,5 +1,5 @@
 const REPORT_STATUSES = ['pending', 'rejected', 'waiting', 'progress', 'done'];
-const REPORT_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품', '미분류'];
+const REPORT_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품', '임가공', '미분류'];
 const REPORT_UNKNOWN_UNIT = '단위 미지정';
 function reportError(message) { return Object.assign(new Error(message), { status: 400 }); }
 function reportDate(value) {
