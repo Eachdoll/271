@@ -571,3 +571,10 @@ INVITE_CODE=local-test-code npm start
   - 저장하면 입고증(입 고 증, .cert 번역 안 함, 인쇄는 body.printing-cert)을 열고, 「LOT 라벨(QR) 출력」은 줄마다 라벨(QR 내용 `LOT|코드|수량 단위|입고번호`). QR은 외부 라이브러리 없이 receipts.js의 qrMatrix(바이트 모드·M·버전 1~10)로 만듭니다(jsQR로 1~10버전·한글 읽힘 확인).
   - 입고목록의 「LOT·부분 입고 처리」: 체크한 발주(같은 거래처, 입고완료 제외)를 sessionStorage `wpa:rc-preload`로 넘겨 입고 입력에 담습니다. 부분 입고(수량상이 중 발주보다 적음)는 상태 옆에 「남음 N」을 보여 줍니다.
   - 재고 현황의 「LOT별 재고」 창. 줄을 다시 그릴 때마다 휴대폰 카드 이름표(td data-label)를 직접 붙입니다(labelGridTables는 표마다 한 번만).
+
+## 제품등록 BOM 트리·바로 고치기·역조회 (15.73)
+- 제품등록에 「보기: 목록 / BOM 트리」(이 기기에 기억, localStorage `wpa:bom-view`)와 「사용 / 미사용 / 전체」 칩(목록 조건 「사용 상태」와 같은 값)을 두었습니다.
+- public/bom-tree.js(index.html·local.mjs·build.mjs 포함) renderBomTree: 구성자재가 있는 품목만, 제품 줄(코드·이름·분류·세부 분류·구분·단위·기준 수량·비고+포장 환산 `1PK = 100SH`·사용·수정) 아래 자재 줄(코드는 같은 이름의 등록 품목에서 찾음, 없으면 「미등록」·세부 분류·단위·소요량). ▾로 제품별 접기, 전체 펼치기·접기(접힌 상태는 페이지 안에서 기억). 자재 코드·역조회는 조건과 상관없이 전체 품목(include_archived=1)에서 찾습니다.
+- 품목명을 누르면 그 품목을 자재로 쓰는 제품(역조회: 코드·이름·소요량·기준·상태)을 보여 줍니다(이름은 공백·대소문자 무시 비교).
+- 바로 고치기(관리자 화면): 기준 수량·자재 소요량·사용 체크를 고치면 칸이 표시되고 「변경 저장 (N)」이 제품별로 POST /api/boms/:id/quick `{ updated_at, before: { base_qty, active, qty[] }, base_qty?, materials?: [{ item, qty }], active? }`를 보냅니다. 서버는 읽은 값(before·updated_at)이 지금과 다르면 409, 자재 이름·순서가 다르면 409, 0 이하는 400. 저장은 조건부 UPDATE + RC_GUARD + 진행 코멘트 `[수정] 기준 수량 1 → 2 · 자재 소요량 a → b`. 이름·단위·자재 추가/삭제는 기존 「수정」 창에서 합니다.
+- 마이그레이션 없음.

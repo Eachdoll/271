@@ -1155,3 +1155,19 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
   body.printing-cert .rc-labels { grid-template-columns: repeat(2, 1fr); gap: 4mm; padding: 0; }
   body.printing-cert .rc-label { border: 1px solid #000; }
 }
+
+/* 15.73 제품등록 BOM 트리 */
+.bom-view-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 8px 0 4px; }
+.bom-tree-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 6px 0 8px; }
+.bom-tree-bar > span { margin-right: auto; }
+.bom-tree td { vertical-align: middle; }
+.bom-tree .bt-product td { background: var(--accent-soft, #eef4ff); }
+.bom-tree .bt-product.row-off td { opacity: .7; }
+.bom-tree .bt-indent { padding-left: 28px; position: relative; }
+.bom-tree .bt-mat td:nth-child(2)::before { content: ""; position: absolute; left: 14px; top: 0; bottom: 50%; width: 9px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.bom-tree input[type=number] { width: 7.5em; text-align: right; }
+.bom-tree .bt-dirty { outline: 2px solid var(--accent); background: var(--accent-soft, #eef4ff); }
+.bom-tree tr.bt-changed td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.bt-toggle { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer; width: 28px; height: 28px; border-radius: 6px; }
+.bt-toggle:hover { background: var(--bg); }
+.bt-name { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; word-break: keep-all; overflow-wrap: anywhere; }

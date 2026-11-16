@@ -1489,6 +1489,41 @@ route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   await db.batch(commands);
   return withSizes(decodeBom(await mustGet('boms', params.id)));
 });
+// 15.73 BOM 트리에서 바로 고치기(관리자): 기준 수량·자재 소요량·사용 여부만. 자재 이름·순서는 그대로여야 하고,
+// 읽은 뒤 다른 곳에서 바뀌었으면 409. 바뀐 내용은 진행 코멘트에 「[수정] …」으로 남긴다.
+route('POST', '/api/boms/:id/quick', async ({ user, params, body }) => {
+  requireAdmin(user);
+  const row = await mustGet('boms', params.id);
+  const mats = JSON.parse(row.materials), changes = [];
+  // 읽은 값(before: 기준 수량·사용 여부·소요량)과 지금 값이 다르면 그 사이 다른 곳에서 고친 것이다(updated_at은 초 단위라 함께 본다).
+  const before = body.before && typeof body.before === 'object' ? body.before : null;
+  const stale = String(body.updated_at || '') !== row.updated_at || !before || Number(before.base_qty) !== row.base_qty || (before.active ? 1 : 0) !== row.active
+    || !Array.isArray(before.qty) || before.qty.length !== mats.length || before.qty.some((q, i) => Number(q) !== mats[i].qty);
+  if (stale) throw new HttpError(409, `${row.product}: 다른 곳에서 이 품목이 바뀌었습니다. 새로 불러와 다시 고치세요.`);
+  let base = row.base_qty, active = row.active;
+  if (body.base_qty !== undefined) {
+    const n = num(body.base_qty, `${row.product} 기준 수량`); if (!(n > 0)) throw bad(`${row.product} 기준 수량은 0보다 커야 합니다.`);
+    if (n !== base) { changes.push(`기준 수량 ${base} → ${n}`); base = n; }
+  }
+  if (body.materials !== undefined) {
+    if (!Array.isArray(body.materials) || body.materials.length !== mats.length) throw new HttpError(409, `${row.product}: 구성자재 목록이 바뀌었습니다. 새로 불러오세요.`);
+    body.materials.forEach((m, i) => {
+      if (!m || nameKey(m.item) !== nameKey(mats[i].item)) throw new HttpError(409, `${row.product}: 구성자재 목록이 바뀌었습니다. 새로 불러오세요.`);
+      const q = num(m.qty, `${mats[i].item} 소요량`); if (!(q > 0)) throw bad(`${row.product}의 ${mats[i].item} 소요량은 0보다 커야 합니다.`);
+      if (q !== mats[i].qty) { changes.push(`${mats[i].item} 소요량 ${mats[i].qty} → ${q}`); mats[i] = { ...mats[i], qty: q }; }
+    });
+  }
+  if (body.active !== undefined) { const a = body.active === true || body.active === 1 ? 1 : 0; if (a !== active) { changes.push(a ? '사용으로 바꿈' : '사용 중지'); active = a; } }
+  if (!changes.length) return withSizes(decodeBom(row));
+  try {
+    await db.batch([
+      { sql: "UPDATE boms SET base_qty=?,materials=?,active=?,updated_at=datetime('now','+9 hours') WHERE id=? AND updated_at=? AND materials=? AND base_qty=? AND active=?", args: [base, JSON.stringify(mats), active, row.id, row.updated_at, row.materials, row.base_qty, row.active] },
+      RC_GUARD,
+      { sql: 'INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) VALUES(?,?,?,?,?)', args: ['bom', row.id, `[수정] ${changes.join(' · ')}`, user.id, user.name] },
+    ]);
+  } catch (error) { if (isGuardError(error)) throw new HttpError(409, `${row.product}: 다른 곳에서 이 품목이 바뀌었습니다. 새로 불러와 다시 고치세요.`); throw error; }
+  return withSizes(decodeBom(await mustGet('boms', row.id)));
+});
 // Rows that used a temporary item follow it to its confirmed name/code. Inspection snapshots are left as recorded.
 function relinkCatalog(temp, target) {
   const commands = [];

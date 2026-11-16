@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.72';
+const APP_VERSION = '15.73';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1493,11 +1493,16 @@ function bomForm(bom = {}) {
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="bom-view-bar"><div class="seg" id="bomViewTabs" role="group" aria-label="보기"><button type="button" data-bom-view="list">목록</button><button type="button" data-bom-view="tree">BOM 트리</button></div><div class="seg" id="bomActiveTabs" role="group" aria-label="사용 여부"><button type="button" data-bom-active="1">사용</button><button type="button" data-bom-active="0">미사용</button><button type="button" data-bom-active="">전체</button></div></div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
   // 15.68 세부 분류 칩: 분류 탭(원자재 등)을 고르면 그 안의 1차 → 2차 세부 분류로 좁혀 본다(건수 표시, 화면에서 거름).
   let sub = { cat1: null, cat2: null }, subClass = null;
   const subTabs = $('#bomSubTabs', main);
+  // 15.73 보기: 목록(한 줄에 한 품목) / BOM 트리(제품 아래 구성자재 줄). 고른 보기는 이 기기에 기억한다.
+  let view = 'list'; try { view = localStorage.getItem('wpa:bom-view') === 'tree' ? 'tree' : 'list'; } catch { /* 편의 기능 */ }
+  const markView = () => $$('[data-bom-view]', main).forEach(b => { b.classList.toggle('on', b.dataset.bomView === view); b.setAttribute('aria-pressed', String(b.dataset.bomView === view)); });
+  $$('[data-bom-view]', main).forEach(b => b.onclick = () => { view = b.dataset.bomView; try { localStorage.setItem('wpa:bom-view', view); } catch { /* 편의 기능 */ } markView(); load().catch(fail); });
+  markView();
   const load = async () => {
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
@@ -1535,6 +1540,12 @@ async function pageBoms(main) {
       <td class="nowrap">${bom.active ? '<span class="chip green">사용 중</span>' : '<span class="chip">사용 중지</span>'}</td>
       <td class="small muted">${esc(bom.created_by || '미기록')}<div>${esc(String(bom.created_at || '').slice(0, 16))}</div></td>
       <td data-card-primary><div class="bom-tools">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn small" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn small" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn small danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}<button class="btn small danger" data-bom-delete="${bom.id}">삭제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">등록된 제품이 없습니다.</div>';
+    if (view === 'tree') {
+      // 코드·역조회는 조건과 상관없이 전체 품목에서 찾는다.
+      const everything = await api('GET', '/api/boms?include_archived=1').catch(() => all);
+      if (version !== queryVersion || !main.isConnected) return;
+      renderBomTree($('#bomList'), boms, everything, load);
+    }
     const edit = async bom => {
       let nodes; try { nodes = await api('GET', '/api/item-categories'); } catch (error) { fail(error); return; }
       const box = modal(`<h3>${bom ? (bom.is_temp ? '정식 코드로 확정' : '제품 수정') : '새 제품 등록'}</h3>${bomForm(bom)}`, { wide: true });
@@ -1591,6 +1602,11 @@ async function pageBoms(main) {
   const markTab = () => $$('[data-class-tab]', tabs).forEach(b => b.classList.toggle('on', b.dataset.classTab === classSelect.value));
   $$('[data-class-tab]', tabs).forEach(b => b.onclick = () => { classSelect.value = b.dataset.classTab; markTab(); classSelect.dispatchEvent(new Event('change', { bubbles: true })); });
   classSelect.addEventListener('change', markTab); markTab();
+  // 15.73 사용 여부 빠른 선택(목록 조건의 「사용 상태」와 같은 값)
+  const activeSelect = filterForm.elements.active;
+  const markActive = () => $$('[data-bom-active]', main).forEach(b => { b.classList.toggle('on', b.dataset.bomActive === activeSelect.value); b.setAttribute('aria-pressed', String(b.dataset.bomActive === activeSelect.value)); });
+  $$('[data-bom-active]', main).forEach(b => b.onclick = () => { activeSelect.value = b.dataset.bomActive; markActive(); activeSelect.dispatchEvent(new Event('change', { bubbles: true })); });
+  activeSelect.addEventListener('change', markActive); markActive();
   await load();
 }
 
