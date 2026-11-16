@@ -1,0 +1,114 @@
+// 15.80 매입전표·매입 마감: 미전표 입고 줄(LOT·예전·기타), 금액(절사·부가세·운송비), 중복 방지, 권한, 취소, 마감, 입고 수정 막기
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { localEnvironment } from '../local.mjs';
+import worker from '../worker.mjs';
+import approvedRegistration from './helpers.cjs';
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb80-'));
+const { env, sqlite } = localEnvironment(dir, 'pb80-test');
+function client() {
+  let cookie = '';
+  return async (method, url, body) => {
+    const r = await worker.fetch(new Request('https://pb80.test' + url, { method, headers: { cookie, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }), env);
+    if (r.headers.has('set-cookie')) cookie = r.headers.get('set-cookie').split(';')[0];
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+}
+const admin = client(), buyer = client(), staff = client();
+const ids = {};
+const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+const lastMonth = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
+const rid = () => crypto.randomUUID();
+let mask;
+before(async () => {
+  for (const [c, name] of [[admin, '관리자'], [buyer, '구매'], [staff, '물류']]) await approvedRegistration(admin, c, { name, password: 'password', invite: 'pb80-test' });
+  for (const u of (await admin('GET', '/api/admin/users')).body) ids[u.name] = u.id;
+  await admin('PUT', `/api/admin/users/${ids['구매']}`, { roles: ['purchase'] });
+  await admin('PUT', `/api/admin/users/${ids['물류']}`, { roles: ['logistics'] });
+  mask = (await admin('POST', '/api/boms', { product: '마스크', product_code: 'MK-1', item_category: '부자재', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+});
+after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+const po = async (vendor, item, qty, unit_price) => (await buyer('POST', '/api/po', { req_no: 'PR-B', vendor, item, qty, due_date: today, item_category: '부자재', unit_price })).body;
+
+test('Unbilled receipt lines, amounts, duplicate guard, cancel and edit locks', async () => {
+  const a = await po('원단상사', '원단A', 100, 1234.5);
+  const b = await po('원단상사', '원단B', 10, null);
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '원단상사', request_id: rid(), lines: [{ po_id: a.id, lot: 'L1', qty: 60 }, { po_id: a.id, lot: 'L2', qty: 40 }] });
+  await staff('POST', '/api/po/receive', { ids: [b.id], status: 'ok' }); // 예전 방식 입고
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '원단상사', request_id: rid(), lines: [{ bom_id: mask.id, lot: 'M1', qty: 7 }] }); // 기타입고
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '다른상사', request_id: rid(), lines: [{ bom_id: mask.id, qty: 1 }] });
+  assert.equal((await staff('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('원단상사'))).status, 403, 'purchase only');
+  const open = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent(' 원단상사'))).body.rows;
+  assert.deepEqual(open.map(r => [r.source_type, r.item, r.lot, r.qty, r.unit_price]).sort(), [['other', '마스크', 'M1', 7, null], ['po', '원단B', '', 10, null], ['po_lot', '원단A', 'L1', 60, 1234.5], ['po_lot', '원단A', 'L2', 40, 1234.5]].sort());
+  const line = (t, item, lot) => open.find(r => r.source_type === t && r.item === item && r.lot === lot);
+  const base = { vendor: '원단상사', bill_date: today, statement_no: 'S-77', freight: 7000.9, request_id: rid() };
+  const noPrice = await buyer('POST', '/api/purchase-bills', { ...base, lines: [{ source_type: 'po', source_id: line('po', '원단B', '').source_id }] });
+  assert.equal(noPrice.status, 400); assert.match(noPrice.body.error, /단가를 넣으세요/);
+  const wrongVendor = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('다른상사'))).body.rows[0];
+  assert.match((await buyer('POST', '/api/purchase-bills', { ...base, lines: [{ source_type: 'other', source_id: wrongVendor.source_id, unit_price: 1 }] })).body.error, /다른 거래처/);
+  const bill = await buyer('POST', '/api/purchase-bills', { ...base, statement_total: 999999, lines: [
+    { source_type: 'po_lot', source_id: line('po_lot', '원단A', 'L1').source_id },
+    { source_type: 'po', source_id: line('po', '원단B', '').source_id, unit_price: 333.3 },
+    { source_type: 'other', source_id: line('other', '마스크', 'M1').source_id, unit_price: 500 }] });
+  assert.equal(bill.status, 200, JSON.stringify(bill.body));
+  // 60 × 1234.5 = 74070, 10 × 333.3 = 3333, 7 × 500 = 3500, 운송비 7000 → 공급 87903, 부가세 8790, 합계 96693
+  assert.match(bill.body.bill_no, /^PB-\d{6}-01$/);
+  assert.deepEqual([bill.body.supply_total, bill.body.vat_total, bill.body.total, bill.body.freight, bill.body.statement_total], [87903, 8790, 96693, 7000, 999999]);
+  assert.deepEqual(bill.body.lines.map(l => [l.item, l.qty, l.unit_price, l.supply]), [['원단A', 60, 1234.5, 74070], ['원단B', 10, 333.3, 3333], ['마스크', 7, 500, 3500]]);
+  const again = await buyer('POST', '/api/purchase-bills', { ...base, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: line('po_lot', '원단A', 'L1').source_id }] });
+  assert.equal(again.status, 409, 'a receipt line goes into one bill only');
+  assert.equal((await buyer('POST', '/api/purchase-bills', { ...base, lines: [] })).body.duplicate, true, 'same request id returns the saved bill');
+  assert.deepEqual((await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('원단상사'))).body.rows.map(r => r.lot), ['L2']);
+  // 영세·면세
+  const zero = await buyer('POST', '/api/purchase-bills', { vendor: '원단상사', bill_date: today, tax_type: 'zero', request_id: rid(), lines: [{ source_type: 'po_lot', source_id: line('po_lot', '원단A', 'L2').source_id }] });
+  assert.deepEqual([zero.body.supply_total, zero.body.vat_total, zero.body.total], [49380, 0, 49380]);
+  // 전표에 들어간 입고는 수정·취소 요청·삭제가 막힘
+  assert.equal((await staff('POST', `/api/po/${a.id}/receipt-changes`, { action: 'qty', recv_qty: 90, reason: 'x', request_id: rid() })).status, 409);
+  const otherId = line('other', '마스크', 'M1').source_id;
+  assert.equal((await staff('DELETE', `/api/other-receipts/${otherId}`)).status, 409);
+  assert.equal((await buyer('DELETE', `/api/po/${b.id}`)).status, 409);
+  // 목록·상세·취소
+  const list = (await buyer('GET', '/api/purchase-bills?vendor=' + encodeURIComponent('원단상사'))).body.rows;
+  assert.equal(list.length, 2); assert.equal(list.find(r => r.id === bill.body.id).line_count, 3);
+  assert.equal((await buyer('POST', `/api/purchase-bills/${bill.body.id}/cancel`, {})).status, 400, 'reason required');
+  const cancelled = await buyer('POST', `/api/purchase-bills/${bill.body.id}/cancel`, { reason: '단가 오류' });
+  assert.equal(cancelled.body.status, 'cancelled');
+  assert.equal((await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('원단상사'))).body.rows.length, 3, 'cancelled lines come back');
+  assert.equal((await staff('DELETE', `/api/other-receipts/${otherId}`)).status, 200, 'unlocked after cancel');
+});
+
+test('Old receipt moved into a LOT line is not billed twice', async () => {
+  const p = await po('이전상사', '원단C', 50, 100);
+  await staff('POST', '/api/po/receive', { ids: [p.id], status: 'mismatch', recv_qty: 30 });
+  const first = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('이전상사'))).body.rows;
+  await buyer('POST', '/api/purchase-bills', { vendor: '이전상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'po', source_id: first[0].source_id }] });
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '이전상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'N2', qty: 20 }] });
+  const rest = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('이전상사'))).body.rows;
+  assert.deepEqual(rest.map(r => [r.lot, r.qty]), [['N2', 20]], 'the earlier 30 already billed is not offered again');
+});
+
+test('Month closing: totals, unbilled count, locks and admin reopen', async () => {
+  const p = await po('마감상사', '원단D', 10, 1000);
+  const old = new Date(today + 'T00:00:00Z'); old.setUTCDate(1); old.setUTCDate(0); const lastDay = old.toISOString().slice(0, 10);
+  await staff('POST', '/api/receipts', { receipt_date: lastDay, vendor: '마감상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'K1', qty: 6 }, { po_id: p.id, lot: 'K2', qty: 4 }] });
+  const rows = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('마감상사'))).body.rows;
+  const bill = (await buyer('POST', '/api/purchase-bills', { vendor: '마감상사', bill_date: lastDay, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: rows[0].source_id }] })).body;
+  const view = (await buyer('GET', `/api/purchase-closing?period=${lastMonth}`)).body;
+  const row = view.rows.find(r => r.vendor === '마감상사');
+  assert.deepEqual([row.bill_count, row.supply_total, row.vat_total, row.total, row.unbilled_lines, row.closing], [1, 6000, 600, 6600, 1, null]);
+  assert.equal((await buyer('POST', '/api/purchase-closing', { period: today.slice(0, 7), vendor: '마감상사' })).status, 400, 'the current month cannot be closed yet');
+  const closed = await buyer('POST', '/api/purchase-closing', { period: lastMonth, vendor: '마감상사' });
+  assert.equal(closed.status, 200); assert.equal(closed.body.total, 6600);
+  assert.equal((await buyer('POST', '/api/purchase-closing', { period: lastMonth, vendor: '마감상사' })).status, 409);
+  assert.match((await buyer('POST', `/api/purchase-bills/${bill.id}/cancel`, { reason: 'x' })).body.error, /마감/);
+  assert.match((await buyer('POST', '/api/purchase-bills', { vendor: '마감상사', bill_date: lastDay, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: rows[1].source_id }] })).body.error, /마감/);
+  assert.equal((await buyer('POST', '/api/purchase-closing/reopen', { period: lastMonth, vendor: '마감상사' })).status, 403, 'admin only');
+  assert.equal((await admin('POST', '/api/purchase-closing/reopen', { period: lastMonth, vendor: '마감상사' })).status, 200);
+  assert.equal((await buyer('POST', `/api/purchase-bills/${bill.id}/cancel`, { reason: '재확인' })).status, 200);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) c FROM purchase_closings WHERE vendor='마감상사'").get().c, 1, 'closing history is kept');
+  const summary = (await buyer('GET', '/api/purchase-bills/unbilled-summary')).body.find(r => r.vendor === '마감상사');
+  assert.equal(summary.lines, 2);
+});

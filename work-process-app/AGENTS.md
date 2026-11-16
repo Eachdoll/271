@@ -618,3 +618,22 @@ INVITE_CODE=local-test-code npm start
 - openItemPicker(catalog, { multi: true }): 줄 앞 체크·줄 끝 「LOT 수」(1~50) 칸·하단 「LOT 자동 번호」·「확인 (N줄 추가)」. 줄·품목명 클릭과 Enter는 체크를 바꾸고(창이 닫히지 않음), LOT 수를 바꾸면 자동 체크, Ctrl/⌘+Enter로 확인. 고른 품목은 검색·분류를 바꿔도 유지(Map, 고른 순서). 결과 `{ items: [{ bom, count }], autoLot }`. multi가 아니면(구매의뢰·생산의뢰·발주 다품목 등) 예전처럼 한 개를 바로 고릅니다.
 - 입고 입력 기타입고 탭 「품목 추가 (여러 개·LOT 수)」가 이 창을 열어 품목마다 count만큼 줄을 만들고, 자동 번호면 nextLots로 한꺼번에 번호를 붙입니다. 단가 칸은 두지 않습니다(사용자 결정). 입고 내역과 입력은 지금처럼 다른 화면입니다(사용자 결정).
 - 품목 찾기 표: 공통 표 처리(labelGridTables)가 처음 그릴 때 빈 열 머리칸에 col-empty를 붙이지만 줄은 다시 그려지므로, draw마다 col-empty를 지워 머리칸이 밀리지 않게 합니다.
+
+## 매입전표·매입 마감 (15.80)
+- 흐름: 물류가 입고(발주입고 LOT 줄·LOT 없는 발주입고·기타입고)를 잡으면, 구매가 공급사 거래명세서를 받아 「매입전표 입력」에서 거래처를 고르고 전표 없는 입고 줄을 체크·단가 확인(발주 단가 미리 채움, 기타입고는 직접)·운송비·명세서 합계 대조 후 저장합니다. 달이 끝나면 「매입 마감」에서 거래처별로 마감합니다.
+- 마이그레이션 0034: purchase_bills(PB-YYMMDD-NN, 과세/영세, 공급가액·부가세·합계, 명세서 번호·합계, request_id UNIQUE), purchase_bill_lines(source_type po_lot/po/other + source_id, `active=1`인 원천은 UNIQUE → 한 입고 줄은 한 전표에만), purchase_closings(period·vendor_key, status='closed' UNIQUE, 마감 취소는 reopened로 이력 유지).
+- 금액: 줄마다 trunc(수량×단가) + trunc(운송비) = 공급가액, 부가세 = trunc(공급가액×0.1)(영세·면세는 0), 원 미만 절사. 단가는 서버가 원천을 다시 읽어 body 단가 또는 발주 단가를 쓰며, 없으면 400.
+- LOT 줄로 받은 발주의 '이전 입고' LOT는 그 발주가 이미 'po' 전표 줄을 가졌으면 원천에서 빠집니다(이중 청구 방지).
+- 잠금: 전표에 들어간 발주는 입고 취소 요청·삭제·수량/거래처/품목/단위 변경이 409, 전표에 들어간 기타입고는 수정·삭제 409. 마감한 달·거래처는 전표 생성·취소 409. 이번 달·미래 달은 마감 불가. 마감 취소는 관리자.
+- 얼마에요 엑셀 내보내기는 사용자가 업로드 양식을 주면 따로 합니다.
+- 분류 관리: 「삭제」 추가. DELETE /api/item-categories/:id(관리자)는 하위 분류가 있거나 이 분류 경로로 등록된 사용 중(active=1) 품목이 있으면 409(사용 중지 안내). 지운 뒤 반제품 생산 종류 상속을 다시 맞춥니다.
+
+## 매출전표·입금·기간별 거래보고·매출 마감, 엑셀 (15.81)
+- 영업 › 매출전표: 매출전표 입력 / 매출전표 목록 / 입금 / 기간별 거래보고 / 매출 마감. 권한은 새 역할 `sales`(영업, 관리자 화면에서 부여) 또는 관리자.
+- 마이그레이션 0035: sales_bills(SB-YYMMDD-NN), sales_bill_lines(source_type ship/manual, 출하 줄은 `active=1 AND source_id IS NOT NULL` UNIQUE, 줄마다 vat), sales_payments(kind payment=입금·잔액에서 뺌 / opening=기초 미수금·잔액에 더함), sales_closings(period·customer_key, closed UNIQUE, 마감 취소는 reopened).
+- 금액: 줄 trunc(수량×단가), 부가세 trunc(공급가액 합×0.1)(영세 0)를 줄마다 trunc(줄×0.1)로 나누고 차이는 가장 큰 줄에(splitVat). 단가는 출하 줄마다 「이 거래처에 마지막으로 판 단가」(같은 품목코드, 없으면 같은 품목명)를 미리 채움. 출하 기록이 없는 줄은 manual.
+- 잠금: 전표에 들어간 출하는 PUT/DELETE /api/shipments와 단위 변경(/api/items/shipment) 409. 마감한 달·거래처는 전표·입금 생성/취소 400. 이번 달은 마감 불가.
+- GET /api/sales-ledger?from&to[&customer]: 거래처가 있으면 기초잔액(시작일 전 매출 합 + 기초 미수금 − 입금) + 기간 줄(같은 날은 입금 먼저)·줄마다 잔액·합계, 없으면 거래처별 요약.
+- GET /api/bill-lines?side=sales|purchase&from&to[&party]: 엑셀용 확정 전표 줄(최대 1만). 매입은 운송비를 그 전표 끝 「운송비」 줄로 붙임.
+- public/xlsx.js: 라이브러리 없이 .xlsx(무압축 zip) 생성. 한 값 한 칸(병합 없음), 표 안 빈 줄 없음, 금액·수량은 숫자 칸(#,##0), 날짜는 날짜 칸(yyyy-mm-dd), 머리글 틀 고정 + 자동 필터, 합계 줄. 사용자 요청: 얼마에요 엑셀처럼 열을 골랐을 때 옆 칸까지 잡히거나 합계가 0이 되면 안 됨.
+- rangePresets(from, to, {onPick}): 오늘·어제·이번 주·지난 주·이번 달·지난 달·1~4분기·상/하반기·금년·작년 + ◀▶(같은 단위로 이동). 매출전표 목록·입금·기간별 거래보고·매입전표 목록에 붙임. 매입전표 목록에도 「엑셀 (줄별)」.

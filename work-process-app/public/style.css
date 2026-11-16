@@ -1205,3 +1205,28 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .ip-table tr.ip-picked td { background: var(--accent-soft); }
 .ip-table input[data-ip-n] { width: 5em; text-align: right; }
 .ip-auto { margin-right: auto; }
+
+/* 15.80 매입전표 */
+.bill-range { display: flex; align-items: center; gap: 4px; }
+.bill-range input { min-width: 0; flex: 1; }
+.bill-grid tbody tr { cursor: pointer; }
+.bill-grid tr.bill-picked td { background: var(--accent-soft); }
+.bill-grid input[data-bill-price] { width: 7.5em; text-align: right; }
+.bill-grid input[data-bill-note] { min-width: 8em; }
+.bill-total { position: sticky; bottom: 0; z-index: 2; }
+.bill-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+.bill-sum .bill-grand { font-size: 1.1em; }
+.bill-form .table-wrap, .bill-form > *, .bill-form { min-width: 0; max-width: 100%; }
+.bill-form .table-wrap { position: relative; }
+/* 15.81 매출전표·기간 빠른 선택·거래보고 */
+.range-presets { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex-basis: 100%; }
+.range-presets .btn.small { padding: 3px 9px; min-height: 30px; border: 1px solid var(--line); background: var(--panel); }
+.range-presets .btn.on { background: var(--btn-primary); color: #fff; border-color: transparent; }
+.range-presets .rp-arrow { font-size: 12px; }
+.range-presets .rp-sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.ledger-grid td, .ledger-grid th { white-space: nowrap; }
+.ledger-grid tr.ledger-pay td { background: var(--red-bg); }
+.ledger-doc .ledger-title { margin: 0 0 4px; }
+.ledger-print .ledger-doc .table-wrap { overflow: visible; }
+.bill-grid .rc-unit { width: 70px; }
+@media (max-width: 700px) { .range-presets .rp-sep { display: none; } }

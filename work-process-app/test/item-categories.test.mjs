@@ -124,3 +124,20 @@ test('Size sets live on categories and are inherited by the items below', async 
   const batch = await staff('POST', '/api/batches/purchase_order', { common: { req_no: 'PR-S', vendor: 'V', due_date: today }, items: ['S', 'M'].map((spec, i) => ({ bom_id: suit.id, item: suit.product, unit: '벌', spec, qty: 10 * (i + 1), item_category: '상품' })), request_id: crypto.randomUUID() });
   assert.equal(batch.status, 200, JSON.stringify(batch.body)); assert.deepEqual(batch.body.rows.map(r => [r.spec, r.qty]), [['S', 10], ['M', 20]]);
 });
+
+test('15.80 A category is deleted only when it has no subcategories and no items in use', async () => {
+  const root = (await admin('POST', '/api/item-categories', { item_class: '상품', name: '삭제테스트' })).body.id;
+  const child = (await admin('POST', '/api/item-categories', { item_class: '상품', parent_id: root, name: '하위' })).body.id;
+  assert.equal((await staff('DELETE', `/api/item-categories/${child}`)).status, 403);
+  const blocked = await admin('DELETE', `/api/item-categories/${root}`);
+  assert.equal(blocked.status, 409); assert.match(blocked.body.error, /하위 분류 1개/);
+  const item = await admin('POST', '/api/boms', { product: 'DEL-1', product_code: 'DEL-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [], cat1: '삭제테스트', cat2: '하위' });
+  assert.equal(item.status, 200, JSON.stringify(item.body));
+  const used = await admin('DELETE', `/api/item-categories/${child}`);
+  assert.equal(used.status, 409); assert.match(used.body.error, /품목 1개/);
+  sqlite.prepare('UPDATE boms SET active=0 WHERE id=?').run(item.body.id);
+  assert.equal((await admin('DELETE', `/api/item-categories/${child}`)).status, 200);
+  assert.equal((await admin('DELETE', `/api/item-categories/${root}`)).status, 200);
+  assert.equal(await find('상품', '삭제테스트'), undefined);
+  assert.equal((await admin('DELETE', `/api/item-categories/${root}`)).status, 404);
+});
