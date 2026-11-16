@@ -1070,3 +1070,13 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .bom-tools { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; min-width: 160px; }
 .bom-table td:nth-child(6) div { white-space: nowrap; }
 @media (min-width: 1200px) { .bom-tools { flex-wrap: nowrap; } }
+
+/* 15.68 제품등록 세부 분류 칩 · 거래처 구분 탭 */
+.sub-tabs { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+.sub-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sub-row-2 { padding-left: 12px; border-left: 3px solid var(--line); }
+.sub-path { font-size: 13px; color: var(--muted); }
+.sub-chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; min-height: 36px; }
+.sub-chip.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.sub-count { color: var(--muted); font-size: 13px; margin-left: 2px; }
+.sub-chip.on .sub-count, .class-tabs .on .sub-count { color: inherit; }

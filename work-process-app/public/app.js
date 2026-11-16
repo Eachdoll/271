@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.67';
+const APP_VERSION = '15.68';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1427,20 +1427,44 @@ function bomForm(bom = {}) {
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
+  // 15.68 세부 분류 칩: 분류 탭(원자재 등)을 고르면 그 안의 1차 → 2차 세부 분류로 좁혀 본다(건수 표시, 화면에서 거름).
+  let sub = { cat1: null, cat2: null }, subClass = null;
+  const subTabs = $('#bomSubTabs', main);
   const load = async () => {
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
-    const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
+    const all = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
+    const cls = filterForm.elements.item_category.value;
+    if (cls !== subClass) { sub = { cat1: null, cat2: null }; subClass = cls; }
+    const none = '__none__'; // 세부 분류가 비어 있는 품목
+    const key1 = b => b.cat1 || none, key2 = b => b.cat2 || none;
+    const chip = (level, value, label, count, on) => `<button type="button" class="sub-chip${on ? ' on' : ''}" data-sub="${level}" data-sub-value="${esc(value)}" aria-pressed="${on}">${esc(label)} <span class="sub-count">${fmtNum(count)}</span></button>`;
+    const groups = (list, key) => { const m = new Map(); for (const b of list) m.set(key(b), (m.get(key(b)) || 0) + 1); return [...m].sort((a, b) => (a[0] === none) - (b[0] === none) || a[0].localeCompare(b[0], 'ko')); };
+    const g1 = cls ? groups(all, key1) : [];
+    if (cls && g1.length > 1 || (g1.length === 1 && g1[0][0] !== none)) {
+      if (sub.cat1 !== null && !g1.some(([k]) => k === sub.cat1)) sub = { cat1: null, cat2: null };
+      const in1 = sub.cat1 === null ? [] : all.filter(b => key1(b) === sub.cat1), g2 = sub.cat1 !== null && sub.cat1 !== none ? groups(in1, key2) : [];
+      if (sub.cat2 !== null && !g2.some(([k]) => k === sub.cat2)) sub.cat2 = null;
+      subTabs.innerHTML = `<div class="sub-row">${chip(1, '', '전체', all.length, sub.cat1 === null)}${g1.map(([k, n]) => chip(1, k, k === none ? '세부 분류 없음' : k, n, sub.cat1 === k)).join('')}</div>`
+        + (g2.length > 1 || (g2.length === 1 && g2[0][0] !== none) ? `<div class="sub-row sub-row-2"><span class="sub-path">${esc(sub.cat1)} ›</span>${chip(2, '', '전체', in1.length, sub.cat2 === null)}${g2.map(([k, n]) => chip(2, k, k === none ? '2차 없음' : k, n, sub.cat2 === k)).join('')}</div>` : '');
+      subTabs.hidden = false;
+      $$('[data-sub]', subTabs).forEach(b => b.onclick = () => {
+        const v = b.dataset.subValue || null;
+        if (b.dataset.sub === '1') sub = { cat1: v, cat2: null }; else sub.cat2 = v;
+        load().catch(fail);
+      });
+    } else { subTabs.hidden = true; subTabs.innerHTML = ''; sub = { cat1: null, cat2: null }; }
+    const boms = all.filter(b => (sub.cat1 === null || key1(b) === sub.cat1) && (sub.cat2 === null || key2(b) === sub.cat2));
     listCount(filterForm, boms.length);
     // 15.67: 카드 대신 한 줄에 한 품목(표). 구성자재는 「자재 N개」를 눌러 펼친다. 휴대폰에서는 표가 카드로 바뀐다.
     const bomMaterials = bom => bom.materials && bom.materials.length ? `<details class="bom-mats"><summary>자재 ${bom.materials.length}개</summary><ul>${bom.materials.map(m => `<li>${esc(m.item)} <span class="muted">${esc(m.item_category || '')}</span> <b>${fmtNum(m.qty)}</b> ${esc(m.unit || '')}</li>`).join('')}</ul><div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}당</div></details>` : '<span class="muted">—</span>';
-    $('#bomList').innerHTML = boms.length ? `<div class="table-wrap"><table class="grid bom-table"><thead><tr><th>제품명 · 코드</th><th>분류</th><th>종류 · 기준</th><th>구성자재</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${boms.map(bom => `<tr class="${bom.active ? '' : 'row-off'}">
+    $('#bomList').innerHTML = boms.length ? `<div class="table-wrap"><table class="grid bom-table"><thead><tr><th>제품명 · 코드</th><th>분류</th><th>종류 · 기준 · 단위</th><th>구성자재</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${boms.map(bom => `<tr class="${bom.active ? '' : 'row-off'}">
       <td><b>${esc(bom.product)}</b>${bom.product_code ? ` <span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}${bom.note ? `<div class="small muted">${esc(bom.note)}</div>` : ''}</td>
       <td><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.cat1 ? `<div class="small muted">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</div>` : ''}${bom.semi_type ? `<div class="small"><span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span></div>` : ''}${bom.sizes?.length ? `<div class="small muted">사이즈 ${esc(bom.sizes.join('·'))}</div>` : ''}</td>
-      <td class="nowrap">${bom.kind === 'finished' ? '완제품' : '반제품'}<div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}</div></td>
+      <td class="nowrap">${['제품', '반제품'].includes(bom.item_category) ? `${bom.kind === 'finished' ? '완제품' : '반제품'}<div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}</div>` : `<span class="muted">단위</span> ${esc(bom.unit || '—')}`}</td>
       <td>${bomMaterials(bom)}</td>
       <td class="nowrap">${bom.active ? '<span class="chip green">사용 중</span>' : '<span class="chip">사용 중지</span>'}</td>
       <td class="small muted">${esc(bom.created_by || '미기록')}<div>${esc(String(bom.created_at || '').slice(0, 16))}</div></td>
