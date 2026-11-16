@@ -608,3 +608,8 @@ INVITE_CODE=local-test-code npm start
 - 대시보드 po.partial(수량상이 중 발주보다 적게 받음)을 따로 세어 「부분 입고 (남음)」 노란 KPI로 보이고, po.mismatch는 다 받았거나 초과한 수량상이만 셉니다.
 - 제품등록 「더보기」 메뉴의 문서 수준 이벤트(click·scroll·resize·Esc)는 app.js 최상위에서 한 번만 등록합니다(화면을 다시 열 때마다 쌓이던 문제). Esc로 닫고 버튼으로 포커스를 돌려줍니다.
 - 창고 이름에 쉼표 금지(LOT별 재고 위치 목록 구분자).
+
+## 수입검사 판정을 목록에 표시 (15.78)
+- 사용자 보고: 수입검사가 불합격이어도 분석리스트에는 「완료」만 보였습니다(판정은 수입·출하 검사 이력 화면에만 있었음).
+- GET /api/requests는 행마다 inspection_result(inspection_measurements.result: pass/fail/pending, 측정값이 없으면 null)를 함께 줍니다. 분석리스트에 「판정」 칸(규격이 있으면 합격/불합격/검사 대기, 규격 미지정은 「규격 미지정」), 불합격 줄은 row-red, 상태 칩 옆에 「전체 판정·합격·불합격·검사 대기」 칩(화면에서 거름).
+- GET /api/po·/api/other-receipts는 연결된 수입검사의 qc_result를 함께 주고, 입고목록(발주입고 상태 칸·기타입고 품목 칸)에 qcChip()으로 「수입검사 합격/불합격/측정 중」을 보여 줍니다(판정 전에는 표시 없음).
