@@ -220,7 +220,7 @@ async function pageSalesBillList(main) {
 
 const PAY_KIND = { payment: '입금', opening: '기초 미수금' };
 async function pageSalesPayments(main) {
-  main.innerHTML = `<h1>입금</h1>
+  main.innerHTML = `<h1>입금확인</h1>
   <p class="muted">거래처에서 받은 돈을 넣으면 기간별 거래보고의 잔액에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 받을 돈은 「기초 미수금」으로 한 번 넣으세요(잔액에 더해짐).</p>
   <form class="stack card" id="payForm" data-no-author novalidate>
     <div class="form-grid">

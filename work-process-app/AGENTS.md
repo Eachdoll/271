@@ -805,3 +805,8 @@ INVITE_CODE=local-test-code npm start
 - lineTableItems(lines, entity)는 순수 함수(test/line-table.test.mjs). 줄 값이 공통 값을 덮으므로 빈 비고·빈 납기는 보내지 않는다.
 - 공통 사진은 저장한 모든 줄에 붙임(예전과 같은 순서·재시도). 초안은 bindEntryDraft(lines 배열). 표 안 Enter는 다음 칸(enterMovesInTable), F8 저장.
 - 테스트 스크립트 주의: 등록된 거래처를 칠 때 브라우저 제안 목록이 열려 다음 클릭을 삼킨다. Escape 말고 Tab으로 칸을 나간다.
+
+## 입금 → 구매 › 입금확인 (15.109)
+- 메뉴: 영업 › 매출전표의 「입금」을 빼고 구매 그룹에 「입금확인」(#/purchase/payments). 예전 주소 #/sales/payments는 새 주소로 location.replace(즐겨찾기·자주 쓰는 화면 대비). 화면은 같은 pageSalesPayments, 제목만 「입금확인」.
+- 서버 /api/sales-payments(GET·POST·취소)는 requirePayments: 영업 또는 구매. 원장(기간별 거래보고)·매출 마감은 영업 그대로이며 입금 기록은 잔액에 그대로 반영.
+- 메뉴 열람 권한(routeMenu)은 주소 앞부분으로 정해지므로 입금확인은 이제 「구매」 묶음 권한을 따른다.
