@@ -1129,3 +1129,29 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .lock-tag { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 18px; color: var(--muted); background: var(--locked-bg); vertical-align: 1px; }
 .lock-tag::before { content: "🔒"; font-size: 11px; }
 @media (max-width: 700px) { .lock-tag { font-size: 13px; } }
+
+/* 15.72 입고 입력·입고증·LOT 라벨 */
+.rc-tabs { margin: 4px 0 0; }
+.rc-source { margin: 4px 0 8px; }
+.rc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 8px; }
+.rc-toolbar input[data-rc-prefix] { width: 5em; }
+.rc-grid input, .rc-grid select { min-width: 0; width: 100%; }
+.rc-grid td:nth-child(5) input { min-width: 9em; }
+.rc-grid td:nth-child(6) input { min-width: 6em; text-align: right; }
+.rc-grid td:nth-child(7) select, .rc-grid td:nth-child(8) select { min-width: 6.5em; }
+.rc-grid td:nth-child(3) { min-width: 12em; word-break: keep-all; overflow-wrap: anywhere; }
+.rc-po-table td:nth-child(3) { word-break: keep-all; overflow-wrap: anywhere; }
+.rc-po-sum { margin-top: 2px; }
+.po-doc .rc-void td { color: #888; text-decoration: line-through; }
+.po-doc .rc-sign { width: 45%; margin-left: auto; margin-top: 16px; }
+.po-doc .rc-sign th { background: #f2f4f6; text-align: center; }
+.po-doc .rc-sign td { height: 56px; }
+.rc-labels { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; background: #fff; color: #111; padding: 8px; }
+.rc-label { display: flex; gap: 10px; align-items: center; border: 1px dashed #555; border-radius: 6px; padding: 8px; break-inside: avoid; page-break-inside: avoid; color: #111; font-size: 13px; line-height: 1.35; }
+.rc-label-qr svg { width: 96px; height: 96px; display: block; }
+.rc-label-body { min-width: 0; overflow-wrap: anywhere; }
+.rc-label-lot { font-size: 16px; font-weight: 700; }
+@media print {
+  body.printing-cert .rc-labels { grid-template-columns: repeat(2, 1fr); gap: 4mm; padding: 0; }
+  body.printing-cert .rc-label { border: 1px solid #000; }
+}

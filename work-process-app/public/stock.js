@@ -21,11 +21,13 @@ async function pageStock(main) {
     <label>보기<select name="group"><option value="item">품목 합계</option><option value="spec">규격·사이즈별</option></select></label>
     <button type="submit" class="btn primary">조회</button>
     <button type="button" class="btn" id="stockCsv">CSV 저장</button>
+    <button type="button" class="btn" id="stockLots" title="LOT가 적힌 입고 − 같은 LOT 출하">LOT별 재고</button>
     <span id="stockAdjustSlot"></span>
   </form>
   <div id="stockSummary" class="counts"></div>
   <div id="stockList"></div>`;
   const form = $('#stockFilters', main); let version = 0, current = { rows: [], group: 'item' };
+  $('#stockLots', main).onclick = () => stockLotWindow(form.elements.asof.value || todayStr(), form.elements.q.value);
   await api('GET', '/api/boms/categories').then(cats => {
     const options = list => '<option value="">전체</option>' + [...new Set(list.filter(Boolean))].map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
     const second = () => { const keep = form.cat2.value; $('#stockCat2').innerHTML = options(cats.filter(c => !form.cat1.value || c.cat1 === form.cat1.value).map(c => c.cat2)); form.cat2.value = [...form.cat2.options].some(o => o.value === keep) ? keep : ''; };
@@ -86,4 +88,22 @@ async function pageStock(main) {
     link.download = `재고현황-${current.asof}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
   await load();
+}
+
+// LOT별 재고(15.72): LOT가 적힌 입고(발주입고·기타입고) − 같은 LOT 출하. 생산 투입은 LOT를 기록하지 않아 빠지지 않는다.
+async function stockLotWindow(asof, q = '') {
+  const m = modal(`<h3>LOT별 재고 <span class="small muted">기준일 ${esc(asof)}</span></h3>
+    <p class="small muted">LOT가 적힌 입고(발주입고·기타입고)에서 같은 LOT로 출하한 수량을 뺀 잔량입니다. 생산 투입(BOM)은 LOT를 기록하지 않아 빠지지 않으니, 품목 전체 재고는 재고 현황 표를 보세요.</p>
+    <form class="toolbar" data-read-only data-lot-form><label class="grow">품목·LOT 검색<input type="search" name="q" value="${esc(q)}" maxlength="200"></label><label class="inline"><input type="checkbox" name="instock" checked> 잔량 있는 LOT만</label><button class="btn primary">조회</button></form>
+    <div data-lot-list><p class="muted">불러오는 중…</p></div>`, { wide: true });
+  const form = $('[data-lot-form]', m.el);
+  const load = async () => {
+    const v = formObj(form);
+    const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof, q: v.q || '', ...(form.elements.instock.checked ? { state: 'instock' } : {}) }));
+    if (!m.el.isConnected) return;
+    $('[data-lot-list]', m.el).innerHTML = data.rows.length ? `<p class="small muted">${fmtNum(data.rows.length)}개 LOT${data.more ? ' (더 있음 · 검색으로 좁히세요)' : ''}</p><div class="table-wrap"><table class="grid"><thead><tr><th>품목</th><th>LOT</th><th class="r">입고</th><th class="r">출하</th><th class="r">잔량</th><th>단위</th><th>입고일</th><th>창고 · 위치</th></tr></thead><tbody>${data.rows.map(r => `<tr><td data-card-primary><b>${esc(r.item)}</b></td><td data-card-primary>${esc(r.lot)}</td><td class="r">${fmtNum(r.received)}</td><td class="r">${fmtNum(r.shipped)}</td><td class="r"><b class="${r.balance < 0 ? 'red-text' : ''}">${fmtNum(r.balance)}</b></td><td>${esc(r.unit)}</td><td class="nowrap">${esc(r.first_date)}${r.last_date !== r.first_date ? ' ~ ' + esc(r.last_date) : ''}</td><td>${esc(r.places)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 LOT가 없습니다.</div>';
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  form.elements.instock.onchange = () => load().catch(fail);
+  await load().catch(fail);
 }

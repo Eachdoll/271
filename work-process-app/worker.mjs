@@ -463,7 +463,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -769,6 +769,10 @@ route('POST', '/api/receipt-changes/:id/approve', async ({ user, params, body })
     change.action === 'qty'
       ? { sql: `UPDATE purchase_orders SET recv_qty=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND ${applied}`, args: [change.new_recv_qty, row.id, change.old_status, change.old_recv_qty, change.id] }
       : { sql: `UPDATE purchase_orders SET recv_status='',recv_qty=NULL,recv_note='',recv_by=NULL,recv_at=NULL WHERE id=? AND recv_status=? AND recv_qty IS ? AND ${applied}`, args: [row.id, change.old_status, change.old_recv_qty, change.id] },
+    // 15.72 LOT별 입고 줄이 있는 발주: 수량 수정은 차이를 보정 줄로 더하고, 입고 취소는 줄을 모두 취소해 recv_qty = 줄 합을 유지한다.
+    change.action === 'qty'
+      ? { sql: `INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) SELECT ?,'',?,?,?,? WHERE EXISTS(SELECT 1 FROM po_receipt_lots WHERE po_id=? AND voided_at IS NULL) AND ${applied}`, args: [row.id, stockRound(change.new_recv_qty - change.old_recv_qty), today(), `수량 수정 승인 #${change.id}`, user.name, row.id, change.id] }
+      : { sql: `UPDATE po_receipt_lots SET voided_at=?,voided_by=? WHERE po_id=? AND voided_at IS NULL AND ${applied}`, args: [stamp, user.name, row.id, change.id] },
     { sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'purchase_order',?,?,?,? WHERE ${applied}`, args: [row.id, text, user.id, user.name, change.id] },
     // The linked inspection keeps its receipt snapshot; the correction is noted on it instead.
     { sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'request',id,?,?,? FROM requests WHERE source_type='purchase_order' AND source_id=? AND ${applied}`, args: [text, user.id, user.name, row.id, change.id] },
@@ -790,6 +794,160 @@ route('POST', '/api/receipt-changes/:id/cancel', async ({ user, params }) => {
   const r = await db.prepare("UPDATE receipt_qty_changes SET status='cancelled',reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'").run(user.name, now(), change.id);
   if (!r.changes) throw new HttpError(409, '이미 처리된 요청입니다.');
   return { ok: true };
+});
+
+// ── 물류: 입고 묶음·LOT·창고 (15.72) ──
+// 한 번에 받은 입고를 입고번호(RC-YYMMDD-NN)로 묶는다. 발주 줄은 LOT별로 po_receipt_lots에 쌓이고(부분 입고 가능),
+// 발주의 recv_qty = 취소 안 된 줄의 합, 상태는 합이 발주 수량과 같으면 입고완료, 아니면 수량상이(부분 입고 포함)입니다.
+// 기타입고 줄은 지금처럼 other_receipts 한 줄씩(LOT마다 한 줄, 수입검사도 줄마다)이며 receipt_id로 묶입니다.
+const RC_GUARD = { sql: "SELECT json('conflict') WHERE changes()=0" }; // 바로 앞 문장이 바꾼 줄이 없으면 오류를 내어 batch 전체를 되돌린다
+const isGuardError = error => /malformed JSON/i.test(String(error && error.message));
+async function warehouseRules() {
+  const list = await db.prepare('SELECT * FROM warehouses WHERE active=1 ORDER BY sort, name').all();
+  return {
+    list,
+    check(warehouse, location) {
+      const name = str(warehouse, 50), place = str(location, 50);
+      if (!name) { if (place) throw bad('위치(Location)를 넣으려면 창고를 먼저 고르세요.'); return { warehouse: '', location: '' }; }
+      const w = list.find(x => x.name === name); if (!w) throw bad(`등록되지 않은 창고입니다: ${name}`);
+      const places = w.locations ? w.locations.split(',') : [];
+      if (place && places.length && !places.includes(place)) throw bad(`${name} 창고에 없는 위치입니다: ${place}`);
+      return { warehouse: name, location: place };
+    },
+  };
+}
+function receiptLineSql() {
+  return `SELECT 'po' AS kind, l.id, l.receipt_id, l.po_id, NULL AS other_id, p.req_no, p.item, p.spec, p.unit, p.product_code, p.item_category, l.lot, l.qty, l.received_date, l.warehouse, l.location, l.note, l.voided_at, p.qty AS po_qty, p.recv_qty, p.recv_status
+      FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id`;
+}
+async function receiptDetail(r) {
+  const po = await db.prepare(`${receiptLineSql()} WHERE l.receipt_id=? ORDER BY l.id`).all(r.id);
+  const other = await db.prepare(`SELECT 'other' AS kind, id, receipt_id, NULL AS po_id, id AS other_id, '' AS req_no, item, spec, COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '') AS unit, json_extract(bom_snapshot,'$.product_code') AS product_code, item_category, lot, qty, received_date, warehouse, location, note, NULL AS voided_at FROM other_receipts WHERE receipt_id=? ORDER BY id`).all(r.id);
+  return { ...r, lines: [...po, ...other] };
+}
+route('GET', '/api/receipts', async ({ query }) => {
+  const where = [], args = [];
+  applyListDates(where, args, query, 'receipt_date');
+  if (query.q) { const q = '%' + String(query.q).slice(0, 200).replace(/[\\%_]/g, m => '\\' + m) + '%'; where.push(`(receipt_no LIKE ? ESCAPE '\\' OR vendor LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\' OR created_by LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.receipt_id=receipts.id AND (l.lot LIKE ? ESCAPE '\\' OR p.item LIKE ? ESCAPE '\\')) OR EXISTS(SELECT 1 FROM other_receipts o WHERE o.receipt_id=receipts.id AND (o.lot LIKE ? ESCAPE '\\' OR o.item LIKE ? ESCAPE '\\')))`); args.push(q, q, q, q, q, q, q, q); }
+  const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
+  const rows = await db.prepare(`SELECT receipts.*,
+      (SELECT COUNT(*) FROM po_receipt_lots l WHERE l.receipt_id=receipts.id) + (SELECT COUNT(*) FROM other_receipts o WHERE o.receipt_id=receipts.id) AS line_count,
+      (SELECT COUNT(*) FROM po_receipt_lots l WHERE l.receipt_id=receipts.id AND l.voided_at IS NOT NULL) AS voided_count,
+      COALESCE((SELECT group_concat(item, ' · ') FROM (SELECT DISTINCT p.item FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.receipt_id=receipts.id UNION SELECT DISTINCT o.item FROM other_receipts o WHERE o.receipt_id=receipts.id LIMIT 4)), '') AS items
+    FROM receipts ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY receipt_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  return { rows: rows.slice(0, 200), page, more: rows.length > 200 };
+});
+route('GET', '/api/receipts/open-po', async ({ query }) => {
+  const key = nameKey(reqStr(query.vendor, '거래처', 100));
+  return db.prepare(`SELECT id, req_no, vendor, item, spec, unit, qty, recv_qty, recv_status, due_date, lot, product_code, item_category, internal_note, coa_requested,
+      (SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending') AS pending_change
+    FROM purchase_orders WHERE REPLACE(LOWER(vendor),' ','')=? AND recv_status IN ('','checking','mismatch') ORDER BY due_date, id LIMIT 300`).all(key);
+});
+// LOT 자동 번호: 접두어 + 입고일(YYMMDD) + _순번(3자리). 이미 쓰인 번호(발주입고·기타입고) 다음부터 count개를 제안한다.
+route('GET', '/api/lots/next', async ({ query }) => {
+  const prefix = str(query.prefix, 10).replace(/[^A-Za-z0-9-]/g, '') || 'M';
+  const date = dateStr(query.date || today(), '입고일'), count = Math.max(1, Math.min(100, Number(query.count) || 1));
+  const head = `${prefix}${date.slice(2).replace(/-/g, '')}_`;
+  const used = await db.prepare(`SELECT MAX(n) AS n FROM (SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) AS n FROM po_receipt_lots WHERE lot LIKE ? || '%' UNION ALL SELECT CAST(substr(lot, length(?) + 1) AS INTEGER) FROM other_receipts WHERE lot LIKE ? || '%')`).get(head, head, head, head);
+  const start = (used && used.n) || 0;
+  return { lots: Array.from({ length: count }, (_, i) => head + String(start + i + 1).padStart(3, '0')) };
+});
+route('GET', '/api/receipts/:id', async ({ params }) => receiptDetail(await mustGet('receipts', params.id)));
+route('POST', '/api/receipts', async ({ user, body }) => {
+  const token = String(body.request_id || '');
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
+  const replay = async saved => { if (saved.created_by_id !== user.id) throw new HttpError(409, '이미 사용된 등록 요청입니다. 새로 열어 등록하세요.'); return { ...await receiptDetail(saved), duplicate: true }; };
+  const prior = await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token);
+  if (prior) return replay(prior);
+  const date = dateStr(body.receipt_date, '입고일'); if (date > today()) throw bad('입고일은 오늘 이전으로 선택하세요.');
+  const vendor = reqStr(body.vendor, '거래처(협력사)', 100), note = str(body.note, 500);
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!lines.length || lines.length > 100) throw bad('입고 줄은 1~100줄 입력하세요.');
+  const rules = await warehouseRules();
+  const poLines = new Map(), otherLines = [];
+  for (const [index, raw] of lines.entries()) {
+    const l = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    try {
+      const qty = num(l.qty, '수량'); if (!(qty > 0)) throw bad('수량은 0보다 커야 합니다.');
+      const line = { lot: str(l.lot, 100), qty, note: str(l.note, 200), ...rules.check(l.warehouse, l.location), no: index + 1 };
+      if (l.po_id !== undefined && l.po_id !== null && l.po_id !== '') {
+        const id = Number(l.po_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad('발주를 다시 고르세요.');
+        const group = poLines.get(id) || []; group.push(line); poLines.set(id, group);
+      } else otherLines.push({ ...line, raw: l });
+    } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 줄: ${error.message}`); throw error; }
+  }
+  const prefix = `RC-${today().slice(2).replace(/-/g, '')}-`, RID = '(SELECT id FROM receipts WHERE request_id=?)';
+  const at = `${date} ${now().slice(11)}`;
+  const cmds = [{ sql: `INSERT INTO receipts(receipt_no,receipt_date,vendor,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('receipts', 'receipt_no')},?,?,?,?,?,?)`, args: [prefix, prefix, prefix, date, vendor, note, user.name, user.id, token] }];
+  const label = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
+  for (const [poId, group] of poLines) {
+    const po = await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(poId);
+    const name = po ? `${po.item}${po.spec ? ' ' + po.spec : ''}(${po.req_no})` : '';
+    if (!po) throw bad(`${group[0].no}번째 줄: 발주를 찾을 수 없습니다. 목록을 새로 불러오세요.`);
+    if (nameKey(po.vendor) !== nameKey(vendor)) throw bad(`${name}: 다른 거래처(${po.vendor})의 발주입니다.`);
+    if (po.recv_status === 'ok') throw bad(`${name}: 이미 입고가 끝난 발주입니다. 더 받은 수량은 기타입고로 받으세요.`);
+    if (await db.prepare("SELECT 1 FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(poId)) throw new HttpError(409, `${name}: 승인 대기 중인 입고 수정 요청이 있습니다. 처리 후 다시 시도하세요.`);
+    const recorded = ['ok', 'mismatch'].includes(po.recv_status) ? po.recv_qty || 0 : 0;
+    const active = await db.prepare('SELECT * FROM po_receipt_lots WHERE po_id=? AND voided_at IS NULL ORDER BY id').all(poId);
+    const add = stockRound(group.reduce((t, l) => t + l.qty, 0)), total = stockRound(recorded + add), status = total === po.qty ? 'ok' : 'mismatch';
+    // 예전 방식으로 기록된 입고(줄 없음)는 먼저 한 줄로 옮겨 recv_qty = 줄 합을 지킨다.
+    if (!active.length && recorded) cmds.push({ sql: 'INSERT INTO po_receipt_lots(po_id,lot,qty,received_date,note,created_by) VALUES(?,?,?,?,?,?)', args: [poId, po.lot || '', recorded, (po.recv_at || '').slice(0, 10) || date, '이전 입고', po.recv_by || ''] });
+    for (const l of group) cmds.push({ sql: `INSERT INTO po_receipt_lots(po_id,receipt_id,lot,qty,received_date,warehouse,location,note,created_by) VALUES(?,${RID},?,?,?,?,?,?,?)`, args: [poId, token, l.lot, l.qty, date, l.warehouse, l.location, l.note, user.name] });
+    const lots = [...new Set([...active.map(a => a.lot), ...(active.length ? [] : [po.lot]), ...group.map(l => l.lot)].filter(Boolean))].join(', ').slice(0, 100);
+    cmds.push({ sql: `UPDATE purchase_orders SET recv_status=?,recv_qty=?,recv_by=?,recv_at=?,lot=? WHERE id=? AND recv_status=? AND recv_qty IS ? AND NOT EXISTS(SELECT 1 FROM receipt_qty_changes c WHERE c.po_id=purchase_orders.id AND c.status='pending')`, args: [status, total, user.name, at, lots, poId, po.recv_status, po.recv_qty] });
+    cmds.push(RC_GUARD);
+    const text = `${label[po.recv_status] ?? po.recv_status} → ${status === 'mismatch' && total < po.qty ? '부분 입고' : label[status]} · 이번 ${add} (누계 ${total} / 발주 ${po.qty}) · ${group.map(l => `${l.lot || 'LOT 없음'} ${l.qty}`).join(', ')}`;
+    cmds.push({ sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'purchase_order',?,'[입고 처리] ' || receipt_no || ' · ' || ?,?,? FROM receipts WHERE request_id=?`, args: [poId, text, user.id, user.name, token] });
+    if (['ok', 'mismatch'].includes(po.recv_status)) cmds.push({ sql: `INSERT INTO progress_comments(entity_type,entity_id,content,author_id,author_name) SELECT 'request',q.id,'[추가 입고] ' || r.receipt_no || ' · ' || ?,?,? FROM requests q, receipts r WHERE q.source_type='purchase_order' AND q.source_id=? AND r.request_id=?`, args: [text, user.id, user.name, poId, token] });
+    else cmds.push(receiptAnalysisQuery('purchase_order', poId, user));
+  }
+  if (otherLines.length) await ensureVendor(vendor, user, 'purchase');
+  for (const l of otherLines) {
+    let fields;
+    try { fields = await otherReceiptFields({ ...l.raw, received_date: date, vendor, note: l.note || note, qty: l.qty }); }
+    catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
+    const snapshot = JSON.parse(fields[7]);
+    cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?)`,
+      args: [...fields, user.name, str(l.raw.spec, 100), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location] });
+    cmds.push(receiptAnalysisQuery('other_receipt', null, user));
+  }
+  try { await db.batch(cmds); }
+  catch (error) {
+    const saved = await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token);
+    if (saved) return replay(saved);
+    if (isGuardError(error)) throw new HttpError(409, '다른 곳에서 같은 발주의 입고가 먼저 처리되었습니다. 발주 목록을 새로 불러와 다시 확인하세요.');
+    throw error;
+  }
+  return receiptDetail(await db.prepare('SELECT * FROM receipts WHERE request_id=?').get(token));
+});
+// 창고·위치(15.72): 조회는 로그인 사용자, 등록·수정은 물류팀장·관리자. 삭제 없이 사용 중지만 한다.
+route('GET', '/api/warehouses', async ({ query }) => db.prepare(`SELECT * FROM warehouses ${query.all === '1' ? '' : 'WHERE active=1'} ORDER BY sort, name`).all());
+function warehouseFields(body) {
+  const name = reqStr(body.name, '창고 이름', 50);
+  const locations = [...new Set(String(body.locations || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
+  if (locations.length > 200) throw bad('위치는 200개까지 넣을 수 있습니다.');
+  if (locations.some(x => x.length > 50)) throw bad('위치 이름은 50자 이하로 넣으세요.');
+  return { name, locations: locations.join(','), sort: Number.isSafeInteger(Number(body.sort)) ? Number(body.sort) : 0 };
+}
+route('POST', '/api/warehouses', async ({ user, body }) => {
+  if (!canAdjustStock(user)) throw new HttpError(403, '창고는 물류팀장·관리자가 등록합니다.');
+  const f = warehouseFields(body);
+  if (await db.prepare('SELECT 1 FROM warehouses WHERE name=?').get(f.name)) throw new HttpError(409, '같은 이름의 창고가 있습니다.');
+  const r = await db.prepare('INSERT INTO warehouses(name,locations,sort) VALUES(?,?,?)').run(f.name, f.locations, f.sort);
+  return mustGet('warehouses', r.lastInsertRowid);
+});
+route('PUT', '/api/warehouses/:id', async ({ user, params, body }) => {
+  if (!canAdjustStock(user)) throw new HttpError(403, '창고는 물류팀장·관리자가 고칩니다.');
+  const row = await mustGet('warehouses', params.id), f = warehouseFields({ name: row.name, locations: row.locations, sort: row.sort, ...body });
+  const clash = await db.prepare('SELECT id FROM warehouses WHERE name=?').get(f.name); if (clash && clash.id !== row.id) throw new HttpError(409, '같은 이름의 창고가 있습니다.');
+  const active = body.active === undefined ? row.active : body.active ? 1 : 0;
+  // 이름을 바꾸면 기록에 남은 창고 이름도 함께 바꾼다(위치는 그대로).
+  await db.batch([
+    { sql: 'UPDATE warehouses SET name=?,locations=?,sort=?,active=? WHERE id=?', args: [f.name, f.locations, f.sort, active, row.id] },
+    { sql: 'UPDATE po_receipt_lots SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
+    { sql: 'UPDATE other_receipts SET warehouse=? WHERE warehouse=?', args: [f.name, row.name] },
+  ]);
+  return mustGet('warehouses', row.id);
 });
 
 // ── 구매: 세탁관리 ──
@@ -2214,6 +2372,11 @@ const STOCK_MOVEMENTS = `
   SELECT TRIM(item) AS item, spec, TRIM(unit) AS unit, item_category AS category, recv_qty AS qty, 'po' AS src,
     COALESCE(substr(recv_at,1,10), due_date, '0000-00-00') AS d, id AS ref, req_no || ' · ' || vendor AS memo
     FROM purchase_orders WHERE recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)
+  UNION ALL
+  SELECT TRIM(p.item), p.spec, TRIM(p.unit), p.item_category, l.qty, 'po', l.received_date, p.id,
+    p.req_no || ' · ' || p.vendor || CASE WHEN l.lot<>'' THEN ' · LOT ' || l.lot ELSE '' END
+    FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch')
   UNION ALL
   SELECT TRIM(item), spec, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')), item_category, qty, 'other', received_date, id, vendor
     FROM other_receipts
@@ -2292,6 +2455,31 @@ route('GET', '/api/inventory', async ({ user, query }) => {
   if (query.state === 'low') list = list.filter(r => r.low); else if (query.state === 'negative') list = list.filter(r => r.negative);
   else if (query.state === 'instock') list = list.filter(r => r.stock > 0); else if (query.state) throw bad('재고 상태를 확인하세요.');
   return { asof, group: bySpec ? 'spec' : 'item', rows: list, can_adjust: canAdjustStock(user) };
+});
+// LOT별 재고(15.72): LOT가 적힌 입고(발주입고 LOT 줄·예전 발주입고·기타입고) − 같은 LOT의 출하. 생산 투입은 LOT를 기록하지 않아 빼지 않는다.
+// D1이 큰 UNION 조회를 거부한 적이 있어(15.40) 원천별로 나눠 읽고 서버에서 합친다.
+route('GET', '/api/inventory/lots', async ({ query }) => {
+  const asof = stockAsOf(query.asof), q = str(query.q, 200);
+  const like = q ? '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%' : null;
+  const filter = like ? " AND (item LIKE ? ESCAPE '\\' OR lot LIKE ? ESCAPE '\\')" : '';
+  const wrap = source => ({ sql: `SELECT item, unit, lot, qty, d, place FROM (${source}) WHERE d<=?${filter} LIMIT 5001`, args: like ? [asof, like, like] : [asof] });
+  const results = await db.batch([
+    wrap(`SELECT TRIM(p.item) AS item, TRIM(p.unit) AS unit, l.lot AS lot, l.qty AS qty, l.received_date AS d, TRIM(l.warehouse || ' ' || l.location) AS place FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND l.lot<>'' AND p.recv_status IN ('ok','mismatch')`),
+    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, '' AS place FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)`),
+    wrap(`SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, qty, received_date AS d, TRIM(warehouse || ' ' || location) AS place FROM other_receipts WHERE lot<>''`),
+    wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, -qty AS qty, ship_date AS d, '' AS place FROM shipments WHERE lot<>''`),
+  ]);
+  const map = new Map();
+  for (const result of results) for (const m of result.results) {
+    const key = JSON.stringify([m.item, m.unit, m.lot]), row = map.get(key) || { item: m.item, unit: m.unit, lot: m.lot, received: 0, shipped: 0, first_date: m.d, last_date: m.d, places: new Set() };
+    if (m.qty >= 0) row.received += m.qty; else row.shipped -= m.qty;
+    if (stockCompare(m.d, row.first_date) < 0) row.first_date = m.d; if (stockCompare(m.d, row.last_date) > 0) row.last_date = m.d;
+    if (m.place) row.places.add(m.place); map.set(key, row);
+  }
+  let rows = [...map.values()].map(r => ({ ...r, received: stockRound(r.received), shipped: stockRound(r.shipped), balance: stockRound(r.received - r.shipped), places: [...r.places].join(', ') }));
+  if (query.state === 'instock') rows = rows.filter(r => r.balance > 0);
+  rows.sort((a, b) => stockCompare(a.item, b.item) || stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
+  return { asof, rows: rows.slice(0, 2000), more: rows.length > 2000 };
 });
 route('GET', '/api/inventory/movements', async ({ query }) => {
   const item = reqStr(query.item, '품목명', 200), unit = str(query.unit, 20); const asof = stockAsOf(query.asof);

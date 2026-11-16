@@ -552,3 +552,22 @@ INVITE_CODE=local-test-code npm start
 
 ## 고정된 칸 표시 (15.71)
 - 등록 품목을 골라 읽기 전용이 된 칸(품목명·제품코드·단위, 다품목 입력의 품목명·단위, 생산의뢰 사이즈별 입력)은 itemLockMark(input)가 라벨에 .is-locked와 「🔒 고정」(.lock-tag, title로 이유)을 붙이고, CSS가 회색 빗금 바탕(--locked-bg/--locked-stripe, 라이트·다크 두 벌)·흐린 글자·점선 테두리·not-allowed 커서로 표시합니다. 「직접 입력으로」 등으로 풀면 함께 사라집니다. 새 고정 칸을 만들면 readOnly를 바꾼 뒤 itemLockMark를 부르세요.
+
+## 입고 입력 개편: 입고번호·LOT 여러 개·부분 입고·창고·입고증·LOT 라벨·LOT별 재고 (15.72)
+- 0033_receipts_lots_warehouses.sql(추가만): receipts(입고 묶음, receipt_no RC-YYMMDD-NN, receipt_date, vendor, note, request_id UNIQUE), po_receipt_lots(발주입고의 LOT 줄: po_id, receipt_id, lot, qty, received_date, warehouse, location, note, voided_at), other_receipts.receipt_id·warehouse·location, warehouses(name UNIQUE, locations 쉼표 목록, sort, active). 세 표는 전체 백업 대상입니다.
+- POST /api/receipts `{ receipt_date, vendor, note, request_id, lines: [{ po_id | bom_id, lot, qty, warehouse, location, note, spec }] }`(1~100줄): 한 batch로 저장합니다.
+  - 발주 줄은 발주별로 모아 LOT 줄을 쌓고, recv_qty = 취소 안 된 줄의 합, 상태는 합 = 발주 수량이면 ok, 아니면 mismatch(부분 입고 포함, 남은 수량은 더 받거나 기존 「입고확인·완료」로 종결). 이미 ok인 발주·다른 거래처·승인 대기 수정이 있는 발주는 거부합니다. recv_at = 입고일 + 저장 시각, lot 칸 = LOT 목록.
+  - **불변식**: po_receipt_lots에 취소 안 된 줄이 있는 발주는 recv_qty = 그 합. 예전 방식(줄 없음)으로 기록된 발주에 LOT 줄을 더하면 먼저 기존 recv_qty를 「이전 입고」 줄로 옮깁니다. 입고 수량 수정 승인은 차이를 보정 줄로 더하고, 입고 취소 승인은 줄을 모두 voided 처리합니다(receipt-changes approve). /api/po/receive의 기존 규칙은 그대로입니다.
+  - 동시 처리: 발주 UPDATE에 읽은 상태·수량을 조건으로 걸고 바로 뒤에 `SELECT json('conflict') WHERE changes()=0`(RC_GUARD)를 둡니다. 바뀐 줄이 없으면 오류로 batch 전체가 되돌려지고 409를 줍니다.
+  - 수입검사: 발주는 첫 입고 때 한 건(기존과 같음), 이후 추가 입고는 그 검사에 「[추가 입고] RC-…」 코멘트. 기타입고 줄은 줄(LOT)마다 other_receipts 한 줄과 수입검사 한 건(기존과 같음), batch_id = request_id.
+  - request_id 재시도: 같은 작성자면 처음 저장된 입고를 duplicate:true로 돌려주고, 다른 사람이면 409.
+- 재고(STOCK_MOVEMENTS): LOT 줄이 있는 발주는 줄마다 입고일로(새 원천 1개, 원천 수 9), 없는 발주는 예전처럼 recv_qty·recv_at. test/inventory.test.mjs의 원천 수 검사를 9로 바꿨습니다.
+- GET /api/receipts(검색: 입고번호·거래처·비고·입력자·품목·LOT, 200건씩 page), /api/receipts/:id(줄 포함), /api/receipts/open-po?vendor=(미입고·확인중·수량상이 발주), /api/lots/next?prefix&date&count(접두어+YYMMDD_순번 3자리, 발주입고·기타입고에 쓰인 번호 다음부터 제안).
+- 창고: GET /api/warehouses(?all=1), POST/PUT(물류팀장·관리자, 삭제 없이 사용 중지). 이름을 바꾸면 LOT 줄·기타입고의 창고 이름도 함께 바꿉니다. 줄의 창고는 사용 중 창고만, 위치는 그 창고 목록 안에서만(목록이 비면 자유) 받습니다.
+- LOT별 재고 GET /api/inventory/lots?asof&q&state=instock: LOT가 적힌 입고(LOT 줄·예전 발주입고·기타입고) − 같은 LOT 출하. 생산 투입은 LOT가 없어 빼지 않습니다(화면에 안내). 원천 4개를 batch로 나눠 읽습니다(큰 UNION 금지).
+- 화면 public/receipts.js(index.html·local.mjs·build.mjs 포함): 메뉴 물류 › 입고 › 입고 입력(#/logistics/receipt/new)·입고목록·입고증 목록(#/logistics/receipts). 예전 「기타입고 입력」(#/logistics/other/new)은 주소만 남깁니다.
+  - 입고 입력: 입고일·거래처·비고 → 발주입고 탭(거래처의 미입고 발주 표, 체크 후 「선택 발주 담기」, 남은 수량으로 줄 생성) / 기타입고 탭(품목 찾기, 반제품 제외) → 입고 상세 표(LOT·수량·창고·위치·비고, 발주 줄은 발주·기입고·이번·남음 요약).
+  - 「LOT 나누기」(개수·줄마다 수량, 자동 번호), LOT·수량 칸 붙여넣기(여러 줄·「LOT[탭]수량」 → 아래로 같은 품목 줄), Enter = 아래 줄 같은 칸, 「LOT 자동 번호」(빈 LOT), 「일괄적용」(창고·위치·수량·비고, 선택 줄 또는 전체), 「선택 줄 삭제」, 「창고·위치 관리」(물류팀장·관리자). 초안은 이 탭에 보관(bindEntryDraft receipt:new). 거래처가 그대로면 발주 표를 다시 그리지 않습니다(체크 유지).
+  - 저장하면 입고증(입 고 증, .cert 번역 안 함, 인쇄는 body.printing-cert)을 열고, 「LOT 라벨(QR) 출력」은 줄마다 라벨(QR 내용 `LOT|코드|수량 단위|입고번호`). QR은 외부 라이브러리 없이 receipts.js의 qrMatrix(바이트 모드·M·버전 1~10)로 만듭니다(jsQR로 1~10버전·한글 읽힘 확인).
+  - 입고목록의 「LOT·부분 입고 처리」: 체크한 발주(같은 거래처, 입고완료 제외)를 sessionStorage `wpa:rc-preload`로 넘겨 입고 입력에 담습니다. 부분 입고(수량상이 중 발주보다 적음)는 상태 옆에 「남음 N」을 보여 줍니다.
+  - 재고 현황의 「LOT별 재고」 창. 줄을 다시 그릴 때마다 휴대폰 카드 이름표(td data-label)를 직접 붙입니다(labelGridTables는 표마다 한 번만).

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.71';
+const APP_VERSION = '15.72';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -307,7 +307,7 @@ const NAV = [
     { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
   ] },
   { group: '물류', items: [
-    { sub: '입고', items: [['#/logistics/receive', '입고목록'], ['#/logistics/other/new', '기타입고 입력']] },
+    { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
     { sub: '출하', items: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
     ['#/logistics/stock', '재고 현황'],
   ] },
@@ -474,6 +474,8 @@ const PAGES = {
   '#/logistics/ship/new': pageShip,
   '#/logistics/other': main => pageReceipts(main, 'other'),
   '#/logistics/other/new': main => pageReceipts(main, 'other-entry'),
+  '#/logistics/receipt/new': main => pageReceiptEntry(main),
+  '#/logistics/receipts': main => pageReceiptList(main),
   '#/logistics/stock': main => pageStock(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),
@@ -870,6 +872,9 @@ function poForm(po = {}) {
 const internalNoteChip = p => p.internal_note ? `<div class="small internal-note"><span class="chip yellow">내부</span> ${esc(p.internal_note)}</div>` : '';
 function recvChip(po) {
   const cls = { ok: 'green', mismatch: 'red', checking: 'yellow' }[po.recv_status] || '';
+  // 15.72 부분 입고(수량상이 중 발주보다 적게 받은 것)는 남은 수량을 함께 보여 준다(더 받거나 「입고확인·완료」로 종결).
+  const left = po.recv_status === 'mismatch' && po.recv_qty != null && po.recv_qty < po.qty ? po.qty - po.recv_qty : 0;
+  if (left) return `<span class="chip ${cls}">${RECV[po.recv_status]} (${fmtNum(po.recv_qty)})</span> <span class="small muted">남음 ${fmtNum(left)}</span>${receiptChangeInfo(po)}`;
   const shortClosed = po.recv_status === 'ok' && po.recv_qty != null && po.recv_qty !== po.qty;
   return `<span class="chip ${cls}">${RECV[po.recv_status]}${po.recv_status === 'mismatch' ? ` (${fmtNum(po.recv_qty)})` : ''}${shortClosed ? ` · ${fmtNum(po.recv_qty)}/${fmtNum(po.qty)} 종결` : ''}</span>${receiptChangeInfo(po)}`;
 }
@@ -1073,6 +1078,7 @@ async function pageReceive(main) {
     <button class="btn red" data-st="mismatch">수량상이</button>
     <button class="btn yellow" data-st="checking">확인중</button>
     <button class="btn" data-st="">미입고로 되돌리기</button>
+    <button class="btn primary" data-rc-lot title="체크한 발주(같은 거래처)를 입고 입력 화면으로 불러와 LOT별·부분 입고로 받습니다">LOT·부분 입고 처리</button>
   </div>
   <div id="rcList"></div>`;
   let rows = []; const filterForm = $('#rcFilters', main); let queryVersion = 0;
@@ -1111,6 +1117,17 @@ async function pageReceive(main) {
     renderReceiptChanges($('#receiptChanges')).then(() => bindReceiptChanges($('#receiptChanges'), rows, load)).catch(fail);
     $$('#rcList [data-receipt-photo]').forEach(button => button.onclick = () => openAttachments('purchase_order', Number(button.dataset.receiptPhoto), rows.find(row => row.id === Number(button.dataset.receiptPhoto)).item));
     updateCount();
+  };
+  // 15.72 체크한 발주(같은 거래처)를 입고 입력 화면으로 넘겨 LOT별·부분 입고로 받는다.
+  $('.actionbar [data-rc-lot]', main).onclick = () => {
+    const picked = rows.filter(r => selected().includes(r.id));
+    if (!picked.length) return toast('먼저 발주를 체크하세요.', 'err');
+    const vendors = [...new Set(picked.map(r => partnerKey(r.vendor)))];
+    if (vendors.length > 1) return toast('같은 거래처의 발주만 함께 입고할 수 있습니다.', 'err');
+    const done = picked.filter(r => r.recv_status === 'ok');
+    if (done.length) return toast(`이미 입고가 끝난 발주(${done.map(r => r.item).join(', ')})는 뺀 뒤 다시 누르세요.`, 'err');
+    try { sessionStorage.setItem('wpa:rc-preload', JSON.stringify({ vendor: picked[0].vendor, ids: picked.map(r => r.id) })); } catch { /* 넘기지 못하면 입고 입력에서 다시 고른다 */ }
+    location.hash = '#/logistics/receipt/new';
   };
   $$('.actionbar [data-st]').forEach((b) => (b.onclick = async () => {
     const ids = selected(); const status = b.dataset.st;
