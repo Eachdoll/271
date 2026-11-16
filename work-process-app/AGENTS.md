@@ -637,3 +637,28 @@ INVITE_CODE=local-test-code npm start
 - GET /api/bill-lines?side=sales|purchase&from&to[&party]: 엑셀용 확정 전표 줄(최대 1만). 매입은 운송비를 그 전표 끝 「운송비」 줄로 붙임.
 - public/xlsx.js: 라이브러리 없이 .xlsx(무압축 zip) 생성. 한 값 한 칸(병합 없음), 표 안 빈 줄 없음, 금액·수량은 숫자 칸(#,##0), 날짜는 날짜 칸(yyyy-mm-dd), 머리글 틀 고정 + 자동 필터, 합계 줄. 사용자 요청: 얼마에요 엑셀처럼 열을 골랐을 때 옆 칸까지 잡히거나 합계가 0이 되면 안 됨.
 - rangePresets(from, to, {onPick}): 오늘·어제·이번 주·지난 주·이번 달·지난 달·1~4분기·상/하반기·금년·작년 + ◀▶(같은 단위로 이동). 매출전표 목록·입금·기간별 거래보고·매입전표 목록에 붙임. 매입전표 목록에도 「엑셀 (줄별)」.
+
+## 매입전표 입력 개선: 발주별 묶음·수량 나눠 잡기 (15.82)
+- 사용자 결정(로스제로·얼마에요 화면 PPT 검토 후): 매입전표는 「물류가 입고 잡은 것만」, 명세서 수량이 입고와 다르면 「수량 고치기 허용 + 차이 표시 + 덜 잡은 수량은 다음 전표」.
+- 마이그레이션 0036: purchase_bill_lines의 UNIQUE(source_type, source_id) WHERE active=1을 지우고 일반 인덱스로 바꿈, source_qty(전표 잡을 때 입고 수량) 열 추가. 기존 데이터 변경 없음.
+- 입고 줄은 「유효 전표가 잡은 수량 합 < 입고 수량」이면 열림(unbilled). 원천 줄에 billed_qty·po_qty·po_recv_qty·po_date·po_note·po_batch·last_price(같은 거래처·품목 마지막 매입 단가)를 함께 줌.
+- 저장: 줄 qty(비우면 남은 수량, 0 이하 400). 겹쳐 잡기는 INSERT … SELECT … WHERE ROUND(현재 잡은 합,6)=ROUND(읽은 합,6) + RC_GUARD로 막아 그 사이 다른 전표가 잡으면 409로 batch 전체를 되돌림. 같은 전표에 같은 입고 줄 두 번은 400.
+- 화면: 발주 묶음(batch_id, 없으면 발주 id) 머리 줄에 발주번호·발주일·발주금액·발주 비고 + 묶음 체크, 줄에 발주량·입고량·전표 잡은·이번 수량(입력, 입고와 차이 표시)·단가(입력, 지난 매입 단가 안내), 「결과 내 찾기」, 합계에 「수량 고친 줄 N」. 전표 보기에 입고 수량이 다르면 「입고 N」.
+- 「최근 매입목록·전체 상품목록」에서 입고 없이 줄을 담는 기능은 「입고된 것만」 결정에 따라 넣지 않음(지난 매입 단가는 안내로 보여 줌).
+
+## 세금계산서: 건별·월별 담기, 관리·발행, 받는 이메일 2개 (15.83)
+- 사용자 결정: 계산서 담기는 건별·월별만(선택 합계 없음), 발행은 세금계산서 관리 창에서 체크 후 「발행」(얼마에요 발행V3.0처럼), 받는 이메일 2개, 연동은 트러스빌 유지.
+- 마이그레이션 0037: vendors에 biz_no·biz_name·ceo·address·biz_type·biz_item·tax_email·tax_email2 열 추가, tax_invoices(uid·invoice_no TI-…·kind single/monthly·write_date·period·charge claim/receipt·받는 쪽 사업자 정보 복사·email1/2·items JSON·금액·status draft/queued/issued/sent/failed/cancelled·approval_no·status_message), tax_invoice_bills(전표 하나는 active 계산서 하나에만 UNIQUE).
+- 우리 회사 정보: settings 'company_tax_info'(GET 영업, PUT 관리자). 거래처 사업자 정보: PUT /api/vendors/:id/tax-info(거래처 관리·세금계산서 화면의 「사업자 정보」).
+- 담기: POST /api/tax-invoices kind single(bill_ids → 장마다 1건, 작성일자 기본 전표 일자, 품목=전표 줄) / monthly(customer·from·to → 담지 않은 전표 전부 1장, 작성일자 기본 기간 마지막 날, 품목=전표마다 1줄 「첫 품목 외 N건」). 발행 전·실패만 고치기(작성일자·청구/영수·이메일 2개·비고·거래처 정보 다시 불러오기)·담기 취소. 담긴 매출전표는 취소 409.
+- 발행: POST /api/tax-invoices/issue {ids}. 먼저 점검(우리 회사·거래처 사업자번호 10자리·상호·대표자·이메일 1) 400, 그다음 settings 'tax_link'가 없으면 409 「트러스빌 연동이 아직 연결되지 않아…」(조용히 쌓지 않음). 연결되면 queued.
+- 트러스빌: Windows Agent(DB 연동) 사용 예정. Agent는 회사 PC에서 ODBC/OLE로 SaleEBill·Itemlist(최대 99줄)·EB_Status 등 표를 읽어 서명·전송하고 상태를 받는다. SaleEBill에 RecEMail·RecEMail2가 있어 받는 이메일 2개와 맞음. 우리 D1에는 직접 붙을 수 없으므로 회사 PC의 로컬 DB + 연결 프로그램(queued → SaleEBill/Itemlist, EB_Status·NTS 승인번호 → 우리 API)이 다음 단계. 공급자 담당자 TrusBill ID(MemID)·담당자명·이메일·전화가 순발행 필수.
+- 사용자 PPT(계산서 발행하는 법) 반영: 매출전표 보기에 「세금계산서 담기」(로스제로 납품전표 TAX 버튼처럼 건별), 매출전표 목록에 세금계산서 칸(안 담음/상태·번호), 담긴 전표는 보기에서 취소 버튼 숨김. 청구/영수 기본값은 영수(사용자 화면 기준).
+
+## 15.82~15.83 검증 수정 · 표 격자 · 메뉴 부서 구분 (15.84)
+- 「이전 입고」 LOT의 잡은 수량 = 그 LOT의 po_lot 전표 줄 + 그 발주의 예전 'po' 전표 줄(lotBilled). 예전 방식으로 일부만 전표를 잡은 뒤 LOT 입고가 붙어도 남은 수량이 열려 있습니다(예전에는 그 LOT 전체가 빠져 남은 수량을 영영 못 잡음). 저장 가드도 같은 합으로 비교합니다.
+- 매입전표 수량은 남은 입고 수량까지만(넘으면 400, 「물류에서 입고 수량을 먼저 고치세요」). 그 발주에 처리 중인 입고 수정 요청이 있으면 409. 입고 수정 승인은 batch 첫 문장에서 활성 매입전표 줄이 있으면 오류로 전체를 되돌립니다(409).
+- 매출전표 취소 UPDATE에 「활성 계산서 연결 없음」 조건, 계산서 담기의 연결 INSERT는 「확정 전표일 때만」 + RC_GUARD(경합 시 409). 월별은 전표마다 문장을 만들지 않고 INSERT … SELECT 한 문장 + 건수·합계 가드(D1 요청당 문장 수 제한). 같은 request_id 재시도가 겹치면 저장된 것을 duplicate로 돌려줍니다.
+- PUT /api/vendors/:id/tax-info는 영업·구매 담당·관리자만(받는 이메일이 계산서 발송 주소이므로).
+- 표 가독성(사용자 요청 「재고·수치 화면에 그리드가 없어 불편」): PC 표(table.grid:not(.as-cards))에 연한 가로 격자(--grid-line), 짝수 줄 음영(--zebra, row-*·bill-picked·bill-group·ledger-pay 줄 제외), 마우스 올림 강조, 합계(tfoot) 바탕. 숫자 칸(td.r)이 있는 표는 세로 격자도 긋고 숫자는 tabular-nums. 휴대폰 카드는 그대로. 라이트·다크 변수 두 벌.
+- 메뉴: .nav-group에 data-dept(home·sales·purchase·quality·dev·production·logistics·manage)를 붙이고 부서 이름을 색 막대가 있는 굵은 머리로, 묶음 사이에 구분선, 현재 화면 링크 왼쪽에 부서 색. 새 업무 묶음을 만들면 NAV_GROUP_KEY와 색(--dept)을 함께 넣으세요.
