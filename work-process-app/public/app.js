@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.63';
+const APP_VERSION = '15.64';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1398,7 +1398,7 @@ async function pageBoms(main) {
     const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, boms.length);
-    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span>` : ''}${bom.sizes?.length ? ` <span class="chip">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}</div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span>` : ''}${bom.sizes?.length ? ` <span class="chip">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}<button class="btn danger" data-bom-delete="${bom.id}">삭제</button></div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
     const edit = async bom => {
       let nodes; try { nodes = await api('GET', '/api/item-categories'); } catch (error) { fail(error); return; }
       const box = modal(`<h3>${bom ? (bom.is_temp ? '정식 코드로 확정' : '제품 수정') : '새 제품 등록'}</h3>${bomForm(bom)}`, { wide: true });
@@ -1428,6 +1428,23 @@ async function pageBoms(main) {
       try { await api('POST', `/api/boms/${temp.id}/merge`, value); toast('기존 품목으로 합쳤습니다.'); await load(); refreshNavBadges(); } catch (error) { fail(error); }
     });
     $$('[data-bom-edit]', main).forEach(button => button.onclick = () => edit(boms.find(bom => bom.id === Number(button.dataset.bomEdit))));
+    // 15.64 완전 삭제: 어디에도 쓰이지 않은 품목만. 쓰이는 품목은 사용처와 함께 사용 중지·합치기를 안내한다.
+    $$('[data-bom-delete]', main).forEach(button => button.onclick = async () => {
+      const bom = boms.find(b => b.id === Number(button.dataset.bomDelete));
+      let usage; try { usage = await api('GET', `/api/boms/${bom.id}/usage`); } catch (error) { fail(error); return; }
+      const name = `${bom.product}${bom.product_code ? ` (${bom.product_code})` : ''}`;
+      if (usage.total) {
+        const box = modal(`<h3>${esc(name)} 삭제할 수 없음</h3><p>이 품목은 아래 기록에서 쓰고 있어 지우면 기록의 연결이 끊깁니다.</p><ul class="bom-uses">${usage.uses.map(u => `<li>${esc(u.label)} <b>${fmtNum(u.count)}건</b></li>`).join('')}</ul>
+          <p class="small muted"><span>목록에서 안 보이게 하려면 「사용 중지」하세요(기록은 그대로).</span>${bom.is_temp ? ' <span>임시 코드라면 「기존 품목으로 합치기」로 기록을 정식 품목으로 옮긴 뒤 삭제할 수 있습니다.</span>' : ''}</p>
+          <div class="actions">${bom.is_temp && bom.active ? '<button class="btn" data-use-merge>기존 품목으로 합치기</button>' : ''}${bom.active ? '<button class="btn danger" data-use-disable>사용 중지</button>' : ''}<button class="btn primary" data-use-close>닫기</button></div>`);
+        $('[data-use-close]', box.el).onclick = () => box.close();
+        const merge = $('[data-use-merge]', box.el); if (merge) merge.onclick = () => { box.close(); $(`[data-bom-merge="${bom.id}"]`, main)?.click(); };
+        const off = $('[data-use-disable]', box.el); if (off) off.onclick = async () => { try { await api('DELETE', '/api/boms/' + bom.id); box.close(); toast('사용 중지했습니다.'); await load(); refreshNavBadges(); } catch (error) { fail(error); } };
+        return;
+      }
+      if (!await confirmBox(`${name}을(를) 완전히 삭제할까요? 어디에도 쓰이지 않은 품목이라 기록에는 영향이 없습니다. 되돌릴 수 없습니다.`)) return;
+      try { await api('DELETE', `/api/boms/${bom.id}?purge=1`); toast('삭제했습니다.'); await load(); refreshNavBadges(); } catch (error) { fail(error); }
+    });
     $$('[data-bom-disable]', main).forEach(button => button.onclick = async () => {
       if (!await confirmBox('이 BOM을 생산 선택 목록에서 사용 중지할까요? 기존 생산일정은 유지됩니다.')) return;
       try { await api('DELETE', '/api/boms/' + button.dataset.bomDisable); await load(); } catch (error) { fail(error); }

@@ -1379,9 +1379,44 @@ route('PUT', '/api/item-categories/:id', async ({ user, params, body }) => {
   const updates = await semiTypeUpdates(node.item_class); if (updates.length) await db.batch(updates);
   return { ok: true };
 });
-route('DELETE', '/api/boms/:id', async ({ user, params }) => {
-  requireAdmin(user); await mustGet('boms', params.id);
-  await db.prepare("UPDATE boms SET active=0,updated_at=datetime('now','+9 hours') WHERE id=?").run(params.id);
+// 품목(제품코드) 사용처(15.64): 이 중 하나라도 있으면 완전 삭제하지 않고 사용 중지·합치기를 안내한다.
+// 코드로 연결된 기록은 product_code(빈 코드는 비교하지 않음), 품목으로 연결된 기록은 bom_id로 센다. 구성자재는 이름으로 센다.
+const BOM_USES = [
+  ['발주', 'purchase_orders', "product_code<>'' AND product_code=?", 'code'],
+  ['출하', 'shipments', "product_code<>'' AND product_code=?", 'code'],
+  ['기타입고', 'other_receipts', 'bom_id=?', 'id'],
+  ['생산일정', 'schedules', 'bom_id=?', 'id'],
+  ['반제품 기록', 'semi_records', 'bom_id=?', 'id'],
+  ['구매의뢰', 'purchase_request_items', 'bom_id=?', 'id'],
+  ['생산의뢰', 'production_request_lines', 'bom_id=?', 'id'],
+  ['의뢰·수입검사', 'requests', "json_extract(data,'$.bom_id')=?", 'id'],
+  ['다른 제품의 구성자재', 'boms', "id<>? AND EXISTS(SELECT 1 FROM json_each(boms.materials) m WHERE json_extract(m.value,'$.item')=?)", 'material'],
+];
+const bomUseArgs = (bom, key) => key === 'code' ? [bom.product_code] : key === 'material' ? [bom.id, bom.product] : [bom.id];
+async function bomUsage(bom) {
+  const uses = [];
+  for (const [label, table, where, key] of BOM_USES) {
+    if (key === 'code' && !bom.product_code) continue;
+    const count = (await db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE ${where}`).get(...bomUseArgs(bom, key))).c;
+    if (count) uses.push({ label, count });
+  }
+  return { uses, total: uses.reduce((t, u) => t + u.count, 0) };
+}
+route('GET', '/api/boms/:id/usage', async ({ user, params }) => { requireAdmin(user); return bomUsage(await mustGet('boms', params.id)); });
+// 기본은 사용 중지(예전 동작). purge=1이면 어디에도 쓰이지 않은 품목만 완전히 지운다.
+route('DELETE', '/api/boms/:id', async ({ user, params, query }) => {
+  requireAdmin(user); const bom = await mustGet('boms', params.id);
+  if (query.purge === '1') {
+    const usage = await bomUsage(bom);
+    if (usage.total) throw new HttpError(409, `${usage.uses.map(u => `${u.label} ${u.count}건`).join(', ')}에서 쓰고 있어 삭제할 수 없습니다. 「사용 중지」하거나${bom.is_temp ? ' 「기존 품목으로 합치기」로 옮긴 뒤 삭제하거나' : ''} 그대로 두세요.`);
+    // 확인과 삭제 사이에 새로 쓰이면 지우지 않는다(같은 조건을 DELETE 문장에 둔다).
+    const guards = BOM_USES.filter(([, , , key]) => key !== 'code' || bom.product_code);
+    const result = await db.prepare(`DELETE FROM boms WHERE id=? AND ${guards.map(([, table, where]) => `NOT EXISTS(SELECT 1 FROM ${table} WHERE ${where})`).join(' AND ')}`)
+      .run(bom.id, ...guards.flatMap(([, , , key]) => bomUseArgs(bom, key)));
+    if (!result.changes) throw new HttpError(409, '방금 다른 곳에서 이 품목을 사용해 삭제하지 않았습니다. 다시 확인하세요.');
+    return { ok: true, deleted: true };
+  }
+  await db.prepare("UPDATE boms SET active=0,updated_at=datetime('now','+9 hours') WHERE id=?").run(bom.id);
   return { ok: true };
 });
 

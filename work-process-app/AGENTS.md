@@ -510,3 +510,8 @@ INVITE_CODE=local-test-code npm start
 - 표는 이름 · 가입 상태(가입일 포함) · 권한 · 버튼 네 칸입니다. 권한 10개와 관리자는 한 칸 안의 이름 붙은 체크 칩(.role-chip, 짧은 이름 ROLE_SHORT, 긴 이름은 title·aria-label)으로 줄바꿈하며, 체크하면 지금처럼 바로 저장됩니다(data-role / data-admin 그대로). 버튼은 여러 줄로 감싸고(.user-tools) 이름은 한 줄로 고정합니다. 1000·1360·1920px에서 가로 스크롤 없음.
 - 체크된 칩·선택지 칩의 글자는 var(--text)(다크 모드 대비), 비활성 칩은 흐린 글자·점선 테두리(opacity 쓰지 않음).
 - 왼쪽 메뉴 스크롤바는 가늘게(6px, 테마 선 색) 표시합니다.
+
+## 품목(제품코드) 완전 삭제 (15.64)
+- 제품등록 카드마다 「삭제」 버튼(관리자). GET /api/boms/:id/usage가 사용처(BOM_USES: 발주·출하는 product_code, 기타입고·생산일정·반제품 기록·구매의뢰·생산의뢰·의뢰 data.bom_id는 bom_id, 다른 제품 구성자재는 materials의 이름)를 세고, 하나도 없을 때만 DELETE /api/boms/:id?purge=1이 행을 지웁니다. 확인과 삭제 사이 경합은 DELETE 문장의 NOT EXISTS 조건으로 막습니다(변경 0건이면 409).
+- 쓰이는 품목은 사용처·건수를 보여 주고 「사용 중지」(기존 DELETE, purge 없이)나 임시 코드의 「기존 품목으로 합치기」를 안내합니다. 임시 코드는 합치면 기록이 정식 품목으로 옮겨져 사용처가 0이 되므로 그 뒤 삭제할 수 있습니다.
+- 진행 코멘트(entity bom)는 이력이라 지우지 않습니다. 새 표에 bom_id·product_code를 저장하면 BOM_USES에도 추가하세요.

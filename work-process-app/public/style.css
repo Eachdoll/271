@@ -1034,3 +1034,7 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .side::-webkit-scrollbar-track { background: transparent; }
 .role-chip.admin-chip { border-style: dashed; }
 .users-table td:nth-child(2) small, .users-table td:nth-child(2) .small { white-space: nowrap; }
+
+/* 15.64 품목 사용처 */
+.bom-uses { margin: 8px 0 12px; padding-left: 20px; }
+.bom-uses li { margin: 4px 0; }
