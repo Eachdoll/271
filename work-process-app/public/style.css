@@ -1060,3 +1060,13 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
   body.printing-cert .po-doc { border: 0; border-radius: 0; padding: 0; margin: 0; }
   body.printing-cert .po-doc + .po-doc { break-before: page; page-break-before: always; }
 }
+
+/* 15.67 제품등록 목록(표) */
+.bom-table td { vertical-align: top; }
+.bom-table tr.row-off td { color: var(--muted); }
+.bom-mats > summary { cursor: pointer; color: var(--accent-ink, var(--accent)); white-space: nowrap; }
+.bom-mats ul { margin: 6px 0 2px; padding-left: 18px; }
+.bom-mats li { margin: 2px 0; }
+.bom-tools { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; min-width: 160px; }
+.bom-table td:nth-child(6) div { white-space: nowrap; }
+@media (min-width: 1200px) { .bom-tools { flex-wrap: nowrap; } }

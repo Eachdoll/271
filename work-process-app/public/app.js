@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.66';
+const APP_VERSION = '15.67';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1435,7 +1435,16 @@ async function pageBoms(main) {
     const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, boms.length);
-    $('#bomList').innerHTML = boms.length ? boms.map(bom => `<div class="card"><h3>${esc(bom.product)} ${bom.product_code ? `<span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}</h3><p><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.semi_type ? ` <span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span>` : ''}${bom.sizes?.length ? ` <span class="chip">사이즈 ${esc(bom.sizes.join('·'))}</span>` : ''}${bom.cat1 ? ` <span class="chip">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</span>` : ''} ${bom.kind === 'finished' ? '완제품' : '반제품'} · 기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)} · ${bom.active ? '사용 중' : '사용 중지'}</p>${materialTable(bom.materials, '기준수량당 자재')}<p class="muted">${esc(bom.note)}</p><p class="small muted">입력자: ${esc(bom.created_by || '기존 기록: 미기록')} · ${esc(bom.created_at)}</p><div class="actions">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}<button class="btn danger" data-bom-delete="${bom.id}">삭제</button></div></div>`).join('') : '<div class="empty">등록된 BOM이 없습니다.</div>';
+    // 15.67: 카드 대신 한 줄에 한 품목(표). 구성자재는 「자재 N개」를 눌러 펼친다. 휴대폰에서는 표가 카드로 바뀐다.
+    const bomMaterials = bom => bom.materials && bom.materials.length ? `<details class="bom-mats"><summary>자재 ${bom.materials.length}개</summary><ul>${bom.materials.map(m => `<li>${esc(m.item)} <span class="muted">${esc(m.item_category || '')}</span> <b>${fmtNum(m.qty)}</b> ${esc(m.unit || '')}</li>`).join('')}</ul><div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}당</div></details>` : '<span class="muted">—</span>';
+    $('#bomList').innerHTML = boms.length ? `<div class="table-wrap"><table class="grid bom-table"><thead><tr><th>제품명 · 코드</th><th>분류</th><th>종류 · 기준</th><th>구성자재</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${boms.map(bom => `<tr class="${bom.active ? '' : 'row-off'}">
+      <td><b>${esc(bom.product)}</b>${bom.product_code ? ` <span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}${bom.note ? `<div class="small muted">${esc(bom.note)}</div>` : ''}</td>
+      <td><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.cat1 ? `<div class="small muted">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</div>` : ''}${bom.semi_type ? `<div class="small"><span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span></div>` : ''}${bom.sizes?.length ? `<div class="small muted">사이즈 ${esc(bom.sizes.join('·'))}</div>` : ''}</td>
+      <td class="nowrap">${bom.kind === 'finished' ? '완제품' : '반제품'}<div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}</div></td>
+      <td>${bomMaterials(bom)}</td>
+      <td class="nowrap">${bom.active ? '<span class="chip green">사용 중</span>' : '<span class="chip">사용 중지</span>'}</td>
+      <td class="small muted">${esc(bom.created_by || '미기록')}<div>${esc(String(bom.created_at || '').slice(0, 16))}</div></td>
+      <td data-card-primary><div class="bom-tools">${commentButton("bom", bom.id, bom.product)}${bom.is_temp && bom.active ? `<button class="btn small" data-bom-merge="${bom.id}">기존 품목으로 합치기</button>` : ''}<button class="btn small" data-bom-edit="${bom.id}">${bom.is_temp ? '정식 코드로 확정' : '수정'}</button>${bom.active ? `<button class="btn small danger" data-bom-disable="${bom.id}">사용 중지</button>` : ''}<button class="btn small danger" data-bom-delete="${bom.id}">삭제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">등록된 제품이 없습니다.</div>';
     const edit = async bom => {
       let nodes; try { nodes = await api('GET', '/api/item-categories'); } catch (error) { fail(error); return; }
       const box = modal(`<h3>${bom ? (bom.is_temp ? '정식 코드로 확정' : '제품 수정') : '새 제품 등록'}</h3>${bomForm(bom)}`, { wide: true });
