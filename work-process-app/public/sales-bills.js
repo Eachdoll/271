@@ -33,6 +33,8 @@ async function pageSalesBillEntry(main) {
     if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
     rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? '', note: '' }));
     orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderPreset = null;
+    // 15.102 수주 줄을 고르면 전표의 과세 구분을 그 수주에 맞춘다(서버는 다르면 막음). 수주마다 다르면 고른 뒤에 맞춘다.
+    const presetOrder = orders.find(o => o.picked); if (presetOrder && presetOrder.tax_type) { form.elements.tax_type.value = presetOrder.tax_type; }
     drawOrders(); draw();
     if (open.more) toast('수주 잔량 줄이 500개를 넘어 앞의 500줄만 보입니다.', 'err');
     if (data.more) toast('줄이 500개를 넘어 앞의 500줄만 보입니다. 출하일 범위로 좁히세요.', 'err');
@@ -59,7 +61,7 @@ async function pageSalesBillEntry(main) {
     orderBox.innerHTML = orders.length ? `<div class="table-wrap"><table data-keep-cols class="grid bill-grid"><caption class="sr-only">수주 잔량</caption><thead><tr><th scope="col"><input type="checkbox" data-order-all aria-label="전체 선택"></th><th scope="col">수주</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col" class="r">수주</th><th scope="col" class="r">잔량</th><th scope="col" class="r">이번 수량</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">공급가액</th><th scope="col">비고</th></tr></thead>
       <tbody>${orders.map((o, i) => `<tr data-order-row="${i}" class="${o.picked ? 'bill-picked' : ''}">
         <td><input type="checkbox" data-order-pick="${i}"${o.picked ? ' checked' : ''} aria-label="${esc(o.order_no)} ${esc(o.item)} 선택"></td>
-        <td class="nowrap">${esc(o.order_no)}<div class="small muted">${esc(o.order_date)}${o.customer_po ? ' · ' + esc(o.customer_po) : ''}</div></td>
+        <td class="nowrap">${esc(o.order_no)}${o.tax_type === 'zero' ? ' <span class="chip">영세</span>' : ''}<div class="small muted">${esc(o.order_date)}${o.customer_po ? ' · ' + esc(o.customer_po) : ''}</div></td>
         <td data-card-primary><b>${esc(o.item)}</b>${o.product_code ? `<div class="small muted">${esc(o.product_code)}</div>` : ''}</td><td>${esc(o.spec || '')}</td>
         <td class="r">${fmtNum(o.qty)}</td><td class="r"><b>${fmtNum(o.remaining)}</b></td>
         <td class="r"><input type="number" min="0" max="${esc(o.remaining)}" step="any" inputmode="decimal" data-order-qty="${i}" value="${esc(o.take)}" aria-label="${esc(o.item)} 이번 수량"></td><td>${esc(o.unit || '')}</td>
@@ -70,7 +72,8 @@ async function pageSalesBillEntry(main) {
     const all = $('[data-order-all]', orderBox); if (all) all.onchange = () => { orders.forEach(o => { o.picked = all.checked; }); drawOrders(); };
     labelRows(orderBox); totals();
   };
-  const setOrderPick = (i, on) => { orders[i].picked = on; const c = $(`[data-order-pick="${i}"]`, orderBox); if (c) { c.checked = on; c.closest('tr').classList.toggle('bill-picked', on); } };
+  const setOrderPick = (i, on) => { orders[i].picked = on; const c = $(`[data-order-pick="${i}"]`, orderBox); if (c) { c.checked = on; c.closest('tr').classList.toggle('bill-picked', on); }
+    if (on && orders[i].tax_type && form.elements.tax_type.value !== orders[i].tax_type) { form.elements.tax_type.value = orders[i].tax_type; toast(`과세 구분을 수주 ${orders[i].order_no}에 맞춰 ${orders[i].tax_type === 'zero' ? '영세·면세' : '과세'}로 바꿨습니다.`); } };
   orderBox.addEventListener('change', e => { if (e.target.dataset.orderPick !== undefined) setOrderPick(Number(e.target.dataset.orderPick), e.target.checked); totals(); });
   orderBox.addEventListener('input', e => {
     const d = e.target.dataset;
