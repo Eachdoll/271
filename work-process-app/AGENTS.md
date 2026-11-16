@@ -833,3 +833,9 @@ INVITE_CODE=local-test-code npm start
 - POST /api/import/vendors(구매·영업·관리자), /api/import/items(관리자). body {rows:[{키:값}], dry_run}. 줄마다 검사(이미 있는 이름·코드, 파일 안 겹침, 이메일·사업자번호 형식, 분류) → dry_run이면 결과만, 아니면 오류 0일 때만 db.batch로 한 번에(하나라도 실패하면 아무것도 안 들어감). 500줄까지.
 - 품목 올리기는 원자재·부자재·반제품·상품·임가공만(제품은 구성자재 필요 → 화면에서). 1·2·3차 분류는 분류 관리에 있는 이름만(bomPlacement).
 - 클라이언트(xlsx.js): readXlsx(.xlsx 첫 시트, zip 저장·deflate는 DecompressionStream), readDelimited(CSV·탭 붙여넣기), importMap(머리글 줄 자동 찾기, 다른 이름 허용 — 이카운트 내보내기 머리글 대응), importDialog(검사 → 넣기). 화면: 거래처 관리·제품등록의 「엑셀 올리기」.
+
+## 안전재고 부족분 발주 · 창고 이동 (15.114, 마이그레이션 0043)
+- 재고 현황(품목 합계 보기)에 안전재고 미달이 있으면 「부족분 발주 N」(구매·관리자). POST /api/inventory/reorder-info {items:[{item,unit}]} → bom_id·입고 전 발주(recv_status '' 또는 checking)·마지막 발주 매입처·단가. 기본 수량 = 안전재고 − 현재고 − 입고 전 발주, 단가 = 매입처 단가표 → 마지막 단가. 매입처별로 /api/batches/purchase_order 한 번씩(30품목까지).
+- 창고 이동 = LOT 위치 이동(stock_transfers). 품목 전체 재고(STOCK_MOVEMENTS)에는 들어가지 않는다. lotPlaceStock: 위치가 적힌 입고 + 이동 들어옴 − 나감, 출하는 위치가 없어 먼저 들어온 위치(같은 날이면 위치 이름 순)부터 뺀다.
+- POST /api/stock-transfers(물류·물류팀장·관리자): 받을 창고는 사용 중, 위치는 그 창고 목록 안, 같은 위치 금지, 보낼 위치 잔량(이동일 기준과 지금 둘 다) 이하. 취소(입력자·물류팀장·관리자)는 받은 위치에 그만큼 남아 있을 때만, status='cancelled'.
+- LOT별 재고 창의 「위치 · 이동」에서 위치별 잔량·이동·이동 기록·취소. LOT별 재고 「창고 · 위치」에 이동한 위치도 나옴. 이동 기록이 있는 창고는 삭제 막힘. 백업에 stock_transfers.

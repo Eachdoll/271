@@ -277,3 +277,24 @@ test('15.113 Excel import: dry run checks every row, errors block the whole batc
   assert.equal((await admin('POST', '/api/import/items', { rows: [{ product: '라벨', product_code: 'LB-1', item_category: '부자재', unit: 'EA', spec: '소' }] })).body.inserted, 1);
   assert.equal((await admin('GET', '/api/boms?q=LB-1')).body[0].spec, '소');
 });
+
+test('15.114 Warehouse moves keep item stock, check place balance and roles; reorder info nets open orders', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '이동장갑', product_code: 'MV-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  await admin('POST', '/api/warehouses', { name: '본동', locations: 'R1,R2' }); await admin('POST', '/api/warehouses', { name: '별동' });
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '상사', request_id: rid(), lines: [{ bom_id: g.id, lot: 'MV', qty: 20, warehouse: '본동', location: 'R1' }] });
+  const base = { item: '이동장갑', unit: 'BOX', lot: 'MV', from_place: '본동 R1', to_warehouse: '별동' };
+  assert.equal((await buyer('POST', '/api/stock-transfers', { ...base, qty: 5 })).status, 403);
+  assert.equal((await staff('POST', '/api/stock-transfers', { ...base, qty: 25 })).status, 400);
+  assert.equal((await staff('POST', '/api/stock-transfers', { ...base, to_warehouse: '본동', to_location: 'R1', qty: 1 })).status, 400);
+  const t = (await staff('POST', '/api/stock-transfers', { ...base, qty: 8, request_id: rid() })).body;
+  assert.equal(t.to_place, '별동');
+  const places = (await staff('GET', '/api/inventory/lot-places?item=이동장갑&unit=BOX&lot=MV')).body.places.map(p => [p.place, p.qty]);
+  assert.deepEqual(places.sort(), [['본동 R1', 12], ['별동', 8]].sort());
+  assert.equal((await staff('GET', '/api/inventory?q=이동장갑')).body.rows[0].stock, 20);
+  assert.equal((await staff('POST', `/api/stock-transfers/${t.id}/cancel`, {})).body.status, 'cancelled');
+  assert.equal((await staff('POST', `/api/stock-transfers/${t.id}/cancel`, {})).status, 400);
+  // 부족분 발주 정보: 입고 전 발주 수량·마지막 매입처·단가
+  await buyer('POST', '/api/po', { req_no: 'PR-R', vendor: '재주문상사', bom_id: g.id, item: '이동장갑', qty: 7, unit: 'BOX', due_date: today, item_category: '상품', unit_price: 900 });
+  const info = (await buyer('POST', '/api/inventory/reorder-info', { items: [{ item: '이동장갑', unit: 'BOX' }] })).body.items[0];
+  assert.deepEqual([info.bom_id, info.open_qty, info.last_vendor, info.last_price], [g.id, 7, '재주문상사', 900]);
+});

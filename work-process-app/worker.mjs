@@ -476,7 +476,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1034,8 +1034,9 @@ route('DELETE', '/api/warehouses/:id', async ({ user, params }) => {
   const row = await mustGet('warehouses', params.id);
   const lots = (await db.prepare('SELECT COUNT(*) c FROM po_receipt_lots WHERE warehouse=?').get(row.name)).c;
   const others = (await db.prepare('SELECT COUNT(*) c FROM other_receipts WHERE warehouse=?').get(row.name)).c;
-  if (lots || others) throw new HttpError(409, `${row.name}: 입고 기록 ${lots + others}건이 이 창고에 있어 지울 수 없습니다. 「사용」을 끄면 입력 화면에서만 빠집니다.`);
-  const r = await db.prepare('DELETE FROM warehouses WHERE id=? AND NOT EXISTS(SELECT 1 FROM po_receipt_lots WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM other_receipts WHERE warehouse=?)').run(row.id, row.name, row.name);
+  const moves = (await db.prepare('SELECT COUNT(*) c FROM stock_transfers WHERE to_warehouse=?').get(row.name)).c;
+  if (lots || others || moves) throw new HttpError(409, `${row.name}: 입고·이동 기록 ${lots + others + moves}건이 이 창고에 있어 지울 수 없습니다. 「사용」을 끄면 입력 화면에서만 빠집니다.`);
+  const r = await db.prepare('DELETE FROM warehouses WHERE id=? AND NOT EXISTS(SELECT 1 FROM po_receipt_lots WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM other_receipts WHERE warehouse=?) AND NOT EXISTS(SELECT 1 FROM stock_transfers WHERE to_warehouse=?)').run(row.id, row.name, row.name, row.name);
   if (!r.changes) throw new HttpError(409, '그 사이 이 창고로 입고가 기록되어 지울 수 없습니다.');
   return { ok: true };
 });
@@ -3534,6 +3535,83 @@ route('GET', '/api/inventory', async ({ user, query }) => {
   else if (query.state === 'instock') list = list.filter(r => r.stock > 0); else if (query.state) throw bad('재고 상태를 확인하세요.');
   return { asof, group: bySpec ? 'spec' : 'item', rows: list, can_adjust: canAdjustStock(user) };
 });
+// 15.114 안전재고 부족분 → 발주: 품목마다 등록 품목(bom_id·코드·분류), 입고 전 발주 수량(아직 안 받은·검수 중), 마지막 발주 매입처·단가.
+// 화면은 부족분 = 안전재고 − 현재고 − 입고 전 발주 를 기본 수량으로 쓰고, 매입처별로 묶어 발주(/api/batches/purchase_order)를 만든다.
+route('POST', '/api/inventory/reorder-info', async ({ body }) => {
+  if (!Array.isArray(body.items) || body.items.length > 300) throw bad('품목은 300개까지 볼 수 있습니다.');
+  const out = [];
+  for (const raw of body.items) {
+    const item = reqStr(raw?.item, '품목명', 200), unit = str(raw?.unit, 20), key = nameKey(item);
+    const bom = await db.prepare("SELECT id, product, product_code, item_category, unit, spec FROM boms WHERE active=1 AND REPLACE(LOWER(product),' ','')=? ORDER BY is_temp, id DESC LIMIT 1").get(key);
+    const open = await db.prepare("SELECT COALESCE(SUM(qty),0) AS q, COUNT(*) AS n FROM purchase_orders WHERE REPLACE(LOWER(item),' ','')=? AND (unit=? OR unit='') AND recv_status IN ('','checking')").get(key, unit);
+    const last = await db.prepare("SELECT vendor, unit_price FROM purchase_orders WHERE REPLACE(LOWER(item),' ','')=? AND vendor<>'' ORDER BY id DESC LIMIT 1").get(key);
+    out.push({ item, unit, bom_id: bom?.id || null, product_code: bom?.product_code || '', item_category: bom?.item_category || '', open_qty: stockRound(open.q), open_count: open.n, last_vendor: last?.vendor || '', last_price: last?.unit_price ?? null });
+  }
+  return { items: out };
+});
+// ── 15.114 창고 이동(LOT 위치 이동). 품목 전체 재고는 그대로, LOT의 위치별 잔량만 바뀐다. ──
+// 위치별 잔량 = 위치가 적힌 입고 + 이동 들어옴 − 이동 나감. 출하는 위치를 적지 않으므로 먼저 들어온 위치부터 뺀다.
+async function lotPlaceStock(item, unit, lot, asof = today(), skipId = 0) {
+  const lotExpr = "CASE WHEN l.lot='' THEN '(LOT 미지정)' ELSE l.lot END";
+  const [a, b, c, d, t] = await db.batch([
+    { sql: `SELECT TRIM(l.warehouse || ' ' || l.location) AS place, l.qty, l.received_date AS d FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch') AND TRIM(p.item)=? AND TRIM(p.unit)=? AND ${lotExpr}=? AND l.received_date<=?`, args: [item, unit, lot, asof] },
+    { sql: `SELECT '' AS place, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL) AND TRIM(item)=? AND TRIM(unit)=? AND lot=? AND COALESCE(substr(recv_at,1,10), due_date)<=?`, args: [item, unit, lot, asof] },
+    { sql: `SELECT TRIM(warehouse || ' ' || location) AS place, qty, received_date AS d FROM other_receipts WHERE lot<>'' AND TRIM(item)=? AND TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), ''))=? AND lot=? AND received_date<=?`, args: [item, unit, lot, asof] },
+    { sql: `SELECT COALESCE(SUM(qty),0) AS q FROM shipments WHERE lot<>'' AND TRIM(item)=? AND TRIM(unit)=? AND lot=? AND ship_date<=?`, args: [item, unit, lot, asof] },
+    { sql: `SELECT id, from_place, to_place, qty, transfer_date AS d FROM stock_transfers WHERE status='confirmed' AND item=? AND unit=? AND lot=? AND transfer_date<=? AND id<>? ORDER BY transfer_date, id`, args: [item, unit, lot, asof, skipId] },
+  ]);
+  const map = new Map(); const at = (place, d) => { if (!map.has(place)) map.set(place, { place, qty: 0, first: d }); const p = map.get(place); if (d < p.first) p.first = d; return p; };
+  for (const r of [...a.results, ...b.results, ...c.results]) at(r.place || '', r.d).qty += Number(r.qty) || 0;
+  for (const r of t.results) { at(r.from_place, r.d).qty -= r.qty; at(r.to_place, r.d).qty += r.qty; }
+  let ship = Number(d.results[0]?.q) || 0;
+  const places = [...map.values()].sort((x, y) => stockCompare(x.first, y.first) || stockCompare(x.place, y.place));
+  for (const p of places) { if (ship <= 0) break; const take = Math.min(Math.max(p.qty, 0), ship); p.qty -= take; ship -= take; }
+  if (ship > 0 && places.length) places[0].qty -= ship; // 받은 것보다 많이 출하(기록 확인 필요)
+  return places.map(p => ({ place: p.place, qty: stockRound(p.qty), first_date: p.first })).filter(p => p.qty !== 0);
+}
+route('GET', '/api/inventory/lot-places', async ({ query }) => {
+  const item = reqStr(query.item, '품목명', 200), unit = str(query.unit, 20), lot = reqStr(query.lot, 'LOT', 100);
+  const transfers = await db.prepare('SELECT * FROM stock_transfers WHERE item=? AND unit=? AND lot=? ORDER BY transfer_date DESC, id DESC LIMIT 50').all(item, unit, lot);
+  return { item, unit, lot, places: await lotPlaceStock(item, unit, lot, stockAsOf(query.asof)), transfers };
+});
+const canMoveStock = user => canAdjustStock(user) || hasRole(user, 'logistics');
+route('POST', '/api/stock-transfers', async ({ user, body }) => {
+  if (!canMoveStock(user)) throw new HttpError(403, '창고 이동은 물류 담당자나 관리자가 합니다.');
+  const key = str(body.request_id, 80);
+  if (key) { const old = await db.prepare('SELECT * FROM stock_transfers WHERE request_id=?').get(key); if (old) { if (old.created_by_id !== user.id) throw new HttpError(409, '이미 사용된 요청 번호입니다.'); return old; } }
+  const item = reqStr(body.item, '품목명', 200), unit = str(body.unit, 20), lot = reqStr(body.lot, 'LOT', 100);
+  const date = dateStr(body.transfer_date || today(), '이동일'); if (date > today()) throw bad('이동일은 오늘 이전으로 넣으세요.');
+  const qty = num(body.qty, '이동 수량'); if (!(qty > 0)) throw bad('이동 수량은 0보다 커야 합니다.');
+  const from = str(body.from_place, 120), toWh = reqStr(body.to_warehouse, '옮길 창고', 50), toLoc = str(body.to_location, 50);
+  const wh = await db.prepare('SELECT * FROM warehouses WHERE name=? AND active=1').get(toWh); if (!wh) throw bad(`사용 중인 창고가 아닙니다: ${toWh}`);
+  const locs = wh.locations ? wh.locations.split(',') : []; if (toLoc && locs.length && !locs.includes(toLoc)) throw bad(`${toWh} 창고에 없는 위치입니다: ${toLoc}`);
+  const to = `${toWh} ${toLoc}`.trim(); if (to === from) throw bad('같은 위치로는 옮길 수 없습니다.');
+  const here = (await lotPlaceStock(item, unit, lot, date)).find(p => p.place === from);
+  if (!here || here.qty < qty - 1e-9) throw bad(`${from || '위치 미지정'}에 이 LOT가 ${stockRound(here?.qty || 0)}${unit}만 있습니다(${date} 기준).`);
+  // 그 날짜 이후 이 위치에서 나간 이동이 있으면 지금 잔량으로도 확인(나중 날짜 이동과 겹쳐 모자라지 않게)
+  const cur = (await lotPlaceStock(item, unit, lot)).find(p => p.place === from);
+  if (!cur || cur.qty < qty - 1e-9) throw bad(`${from || '위치 미지정'}의 이 LOT 현재 잔량(${stockRound(cur?.qty || 0)}${unit})보다 많이 옮길 수 없습니다.`);
+  const r = await db.prepare('INSERT INTO stock_transfers(transfer_date,item,unit,lot,qty,from_place,to_warehouse,to_location,to_place,note,created_by,created_by_id,request_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(date, item, unit, lot, qty, from, toWh, toLoc, to, str(body.note, 200), user.name, user.id, key || null);
+  return mustGet('stock_transfers', r.lastInsertRowid);
+});
+route('GET', '/api/stock-transfers', async ({ query }) => {
+  const where = [], args = []; applyListDates(where, args, query, 'transfer_date');
+  applyListKeyword(where, args, query.q, ['item', 'lot', 'from_place', 'to_place', 'note', 'created_by']);
+  return db.prepare(`SELECT * FROM stock_transfers ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY transfer_date DESC, id DESC LIMIT 300`).all(...args);
+});
+// 취소: 옮긴 위치에 그만큼 남아 있을 때만(그 뒤 다시 옮기거나 출하했으면 막음).
+route('POST', '/api/stock-transfers/:id/cancel', async ({ user, params }) => {
+  const row = await mustGet('stock_transfers', params.id);
+  if (!canAdjustStock(user) && row.created_by_id !== user.id) throw new HttpError(403, '이동 취소는 입력한 사람이나 물류팀장·관리자가 합니다.');
+  if (row.status !== 'confirmed') throw bad('이미 취소된 이동입니다.');
+  const left = (await lotPlaceStock(row.item, row.unit, row.lot)).find(p => p.place === row.to_place);
+  if (!left || left.qty < row.qty - 1e-9) throw bad(`${row.to_place}에 남은 수량(${stockRound(left?.qty || 0)}${row.unit})이 옮긴 수량보다 적어 취소할 수 없습니다. 그 뒤 이동·출하를 먼저 확인하세요.`);
+  const r = await db.prepare("UPDATE stock_transfers SET status='cancelled',cancelled_at=?,cancelled_by=? WHERE id=? AND status='confirmed'").run(now(), user.name, row.id);
+  if (!r.changes) throw new HttpError(409, '그 사이 이 이동이 취소되었습니다.');
+  return mustGet('stock_transfers', row.id);
+});
+
 // LOT별 재고(15.72): LOT가 적힌 입고(발주입고 LOT 줄·예전 발주입고·기타입고) − 같은 LOT의 출하. 생산 투입은 LOT를 기록하지 않아 빼지 않는다.
 // D1이 큰 UNION 조회를 거부한 적이 있어(15.40) 원천별로 나눠 읽고 서버에서 합친다.
 route('GET', '/api/inventory/lots', async ({ query }) => {
@@ -3548,6 +3626,7 @@ route('GET', '/api/inventory/lots', async ({ query }) => {
     wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, 'in' AS kind, recv_qty AS qty, COALESCE(substr(recv_at,1,10), due_date) AS d, '' AS place FROM purchase_orders WHERE lot<>'' AND recv_status IN ('ok','mismatch') AND recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=purchase_orders.id AND l.voided_at IS NULL)`),
     wrap(`SELECT TRIM(item) AS item, TRIM(COALESCE(NULLIF(unit,''), json_extract(bom_snapshot,'$.unit'), '')) AS unit, lot, 'in' AS kind, qty, received_date AS d, TRIM(warehouse || ' ' || location) AS place FROM other_receipts WHERE lot<>''`),
     wrap(`SELECT TRIM(item) AS item, TRIM(unit) AS unit, lot, 'out' AS kind, qty, ship_date AS d, '' AS place FROM shipments WHERE lot<>''`),
+    wrap(`SELECT item, unit, lot, 'move' AS kind, 0 AS qty, transfer_date AS d, to_place AS place FROM stock_transfers WHERE status='confirmed'`), // 15.114 이동한 위치
   ]);
   const map = new Map(); let truncated = false;
   for (const result of results) {
