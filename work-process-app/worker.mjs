@@ -999,7 +999,7 @@ route('POST', '/api/receipts', async ({ user, body }) => {
     catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${l.no}번째 줄: ${error.message}`); throw error; }
     const snapshot = JSON.parse(fields[7]);
     cmds.push({ sql: `INSERT INTO other_receipts(received_date,item,item_category,qty,vendor,note,bom_id,bom_snapshot,created_by,spec,unit,lot,batch_id,receipt_id,warehouse,location) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,${RID},?,?)`,
-      args: [...fields, user.name, str(l.raw.spec, 100), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location] });
+      args: [...fields, user.name, await catalogSpec(fields[6], l.raw.spec), snapshot.unit || '', l.lot, token, token, l.warehouse, l.location] });
     cmds.push(receiptAnalysisQuery('other_receipt', null, user));
   }
   try { await db.batch(cmds); }
@@ -2316,7 +2316,9 @@ route('POST', '/api/boms', async ({ user, body }) => {
   const fields = bomFields(body), { cats, semiType, semiUnit, packQty } = await bomPlacement(body, fields[8], {}, fields[4]);
   if (semiType && !fields[1]) throw bad('커팅/융착·세탁에서 고를 품목은 제품코드가 필요합니다.');
   await bomCodeClash(fields[1]); await bomCycleCheck(fields[0], fields[5]);
+  const spec = str(body.spec, 100);
   const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType, semiUnit, packQty);
+  if (spec) await db.prepare('UPDATE boms SET spec=? WHERE id=?').run(spec, result.lastInsertRowid);
   return withSizes(decodeBom(await mustGet('boms', result.lastInsertRowid)));
 });
 route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
@@ -2330,6 +2332,7 @@ route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
     if (/^TMP-/i.test(fields[1])) throw bad('임시 코드(TMP-)를 정식 제품코드로 바꿔 저장하세요.');
     commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
   } else commands.push(...await bomFollowRename(before, fields[0], fields[1]));
+  if (body.spec !== undefined) commands.push({ sql: 'UPDATE boms SET spec=? WHERE id=?', args: [str(body.spec, 100), before.id] });
   await db.batch(commands);
   return withSizes(decodeBom(await mustGet('boms', params.id)));
 });
@@ -2398,6 +2401,15 @@ async function sizeSets() {
     for (const [i, name] of cats.entries()) { if (!name) break; const node = nodes.find(n => n.item_class === category && n.level === i + 1 && (n.parent_id || 0) === parent && n.name === name); if (!node) break; if (node.sizes) sizes = node.sizes; parent = node.id; }
     return sizes ? sizes.split(',') : [];
   };
+}
+// 15.107 줄의 규격: 품목코드에 규격이 있으면 그것(입력값 무시). 분류에 사이즈 묶음이 있으면 줄마다 고른 사이즈. 둘 다 없으면 입력한 규격.
+async function catalogSpec(bomOrId, typed) {
+  const bom = bomOrId && typeof bomOrId === 'object' ? bomOrId : bomOrId ? await db.prepare('SELECT * FROM boms WHERE id=?').get(Number(bomOrId)) : null;
+  const value = str(typed, 100);
+  if (!bom) return value;
+  const sizes = (await sizeSets())(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]);
+  if (sizes.length) return value;
+  return bom.spec || value;
 }
 async function withSizes(bom) { return { ...bom, sizes: (await sizeSets())(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]) }; }
 function categorySemiType(value, itemClass) {
@@ -2757,6 +2769,9 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         const f = poFields(b, true); const entry = await catalogItem(user, b);
         record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key,i) => [key, f[i]]));
         record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
+        meta.spec = await catalogSpec(entry, meta.spec);
+        // 15.107 발주 단가(줄마다). 발주서 금액·매입전표 기본 단가로 쓰인다.
+        if (b.unit_price !== undefined && b.unit_price !== '') record.unit_price = poUnitPrice(b.unit_price, '단가');
         record.internal_note = str(b.internal_note, 200); // 15.69 내부 메모(공통)
         if (index === 0) await ensureVendor(record.vendor, user, 'purchase');
       } else if (entity === 'shipment') {
@@ -2764,11 +2779,13 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         const f = shipFields(b); const entry = await catalogItem(user, b);
         record = Object.fromEntries(['ship_date','item','qty','customer','note','lot'].map((key,i) => [key, f[i]]));
         record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
+        meta.spec = await catalogSpec(entry, meta.spec);
         if (index === 0) await ensureVendor(record.customer, user, 'sales');
       } else if (entity === 'other_receipt') {
         const fields = await otherReceiptFields(b); if (index === 0) await ensureVendor(fields[4], user, 'purchase');
         record = Object.fromEntries(['received_date','item','item_category','qty','vendor','note','bom_id','bom_snapshot'].map((key,i) => [key, fields[i]]));
         meta.unit = JSON.parse(record.bom_snapshot).unit || '';
+        meta.spec = await catalogSpec(record.bom_id, meta.spec);
       } else if (entity === 'schedule') {
         record = await schedFields({ ...b, product: b.product || b.item });
         if (record.bom_id) meta.unit = JSON.parse(record.bom_snapshot).unit || '';
@@ -3794,7 +3811,7 @@ async function orderLines(body) {
     const qty = num(l.qty, `${no} 수량`); if (!(qty > 0)) throw bad(`${no}(${bom.product}): 수량은 0보다 커야 합니다.`);
     const price = l.unit_price === undefined || l.unit_price === '' || l.unit_price === null ? null : num(l.unit_price, `${no} 단가`);
     if (price != null && price < 0) throw bad(`${no}: 단가는 0 이상이어야 합니다.`);
-    out.push({ bom_id: bom.id, product_code: bom.product_code || '', item: bom.product, spec: str(l.spec, 100), unit: bom.unit || str(l.unit, 20), qty, unit_price: price, due_date: l.due_date ? dateStr(l.due_date, `${no} 납기`) : '', note: str(l.note, 200) });
+    out.push({ bom_id: bom.id, product_code: bom.product_code || '', item: bom.product, spec: await catalogSpec(bom, l.spec), unit: bom.unit || str(l.unit, 20), qty, unit_price: price, due_date: l.due_date ? dateStr(l.due_date, `${no} 납기`) : '', note: str(l.note, 200) });
   }
   return out;
 }

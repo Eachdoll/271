@@ -27,12 +27,13 @@ async function pageSalesOrderEntry(main, editId = null) {
   const form = $('form', main), box = $('[data-so-lines]', form), input = form.elements.customer;
   let lines = (editing?.lines || []).map(l => ({ bom_id: l.bom_id, item: l.item, product_code: l.product_code, unit: l.unit, spec: l.spec || '', qty: l.qty, price: l.unit_price ?? '', due_date: l.due_date || '', note: l.note || '' }));
   let catalog = null, requestId = crypto.randomUUID(), busy = false;
+  if (lines.length) { catalog = await api('GET', '/api/boms').catch(() => null); for (const l of lines) { const b = catalog?.find(x => x.id === l.bom_id); if (b) { l.sizes = b.sizes || []; l.fixedSpec = !!b.spec && !l.sizes.length; if (l.fixedSpec) l.spec = b.spec; } } }
   const amount = l => l.qty !== '' && l.price !== '' ? billTruncC(Number(l.qty) * Number(l.price)) : null;
   const draw = () => {
     box.innerHTML = lines.length ? `<div class="table-wrap"><table data-keep-cols class="grid bill-grid so-grid"><caption class="sr-only">수주 품목</caption><thead><tr><th scope="col">품목 *</th><th scope="col">규격</th><th scope="col" class="r">수량 *</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">금액</th><th scope="col">납기</th><th scope="col">비고</th><th scope="col"><span class="sr-only">삭제</span></th></tr></thead>
       <tbody>${lines.map((l, i) => `<tr>
         <td data-card-primary data-label="품목"><button type="button" class="btn small" data-so-pick="${i}">바꾸기</button> <b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td>
-        <td data-label="규격"><input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${esc(l.item)} 규격"></td>
+        <td data-label="규격">${l.fixedSpec ? esc(l.spec) : (l.sizes || []).length ? `<select data-l="spec" data-i="${i}" aria-label="${esc(l.item)} 사이즈"><option value="">사이즈</option>${l.sizes.map(z => `<option${z === l.spec ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>` : `<input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${esc(l.item)} 규격">`}</td>
         <td class="r" data-label="수량"><input type="number" min="0" step="any" inputmode="decimal" data-l="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item)} 수량" required></td>
         <td data-label="단위">${esc(l.unit || '')}</td>
         <td class="r" data-label="단가"><input type="number" min="0" step="any" inputmode="decimal" data-l="price" data-i="${i}" value="${esc(l.price)}" aria-label="${esc(l.item)} 단가" placeholder="전표 때 입력"></td>
@@ -52,8 +53,8 @@ async function pageSalesOrderEntry(main, editId = null) {
     if (!catalog) return;
     const bom = await openItemPicker(catalog, { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' });
     if (!bom) return;
-    const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '' };
-    if (index >= 0) Object.assign(lines[index], row); else lines.push({ ...row, spec: '', qty: '', price: '', due_date: form.elements.due_date.value, note: '' });
+    const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, sizes: bom.sizes || [] };
+    if (index >= 0) Object.assign(lines[index], row); else lines.push({ ...row, qty: '', price: '', due_date: form.elements.due_date.value, note: '' });
     draw();
     $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - 1]?.focus();
   };
@@ -63,6 +64,7 @@ async function pageSalesOrderEntry(main, editId = null) {
     const p = e.target.closest('[data-so-pick]'); if (p) return pick(Number(p.dataset.soPick)).catch(fail);
     const d = e.target.closest('[data-so-del]'); if (d) { lines.splice(Number(d.dataset.soDel), 1); draw(); }
   });
+  box.addEventListener('change', e => { if (e.target.matches('select[data-l="spec"]')) lines[Number(e.target.dataset.i)].spec = e.target.value; });
   box.addEventListener('input', e => {
     const k = e.target.dataset.l; if (!k) return; const i = Number(e.target.dataset.i); lines[i][k] = e.target.value;
     if (k === 'qty' || k === 'price') { const a = amount(lines[i]); $(`[data-so-amount="${i}"]`, box).textContent = a == null ? '' : won(a); totals(); }

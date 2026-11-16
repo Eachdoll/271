@@ -67,3 +67,21 @@ test('A BOM cannot contain itself, directly or through another BOM', async () =>
   assert.equal(loop.status, 400); assert.match(loop.body.error, /순환/);
   assert.ok(top.id);
 });
+
+test('15.107 Code spec flows into orders, POs and receipts; PO lines keep a unit price', async () => {
+  const withSpec = (await admin('POST', '/api/boms', { ...raw('나일론장갑', 'NG-50'), item_category: '상품', spec: '9인치' })).body;
+  assert.equal(withSpec.spec, '9인치');
+  const noSpec = (await admin('POST', '/api/boms', { ...raw('면장갑', 'CG-1'), item_category: '상품' })).body;
+  await admin('POST', '/api/vendors', { name: '고객상사', is_sales: true });
+  const so = (await admin('POST', '/api/sales-orders', { customer: '고객상사', order_date: today, request_id: crypto.randomUUID(), lines: [{ bom_id: withSpec.id, spec: '아무거나', qty: 1 }, { bom_id: noSpec.id, spec: '직접 L', qty: 1 }] })).body;
+  assert.deepEqual(so.lines.map(l => l.spec), ['9인치', '직접 L'], 'code spec wins, typed spec only when the code has none');
+  const po = await admin('POST', '/api/batches/purchase_order', { request_id: crypto.randomUUID(), common: { vendor: '공급상사', due_date: today }, items: [{ bom_id: withSpec.id, qty: 10, spec: '무시', unit_price: 1250 }] });
+  assert.equal(po.status, 200, JSON.stringify(po.body));
+  const row = sqlite.prepare('SELECT spec, unit_price FROM purchase_orders WHERE id=?').get(po.body.rows[0].id);
+  assert.deepEqual({ ...row }, { spec: '9인치', unit_price: 1250 });
+  // 품목 규격을 고치면 다음 입력부터 새 규격
+  assert.equal((await admin('PUT', `/api/boms/${withSpec.id}`, { ...raw('나일론장갑', 'NG-50'), item_category: '상품', spec: '10인치' })).body.spec, '10인치');
+  const rc = await admin('POST', '/api/receipts', { receipt_date: today, vendor: '공급상사', request_id: crypto.randomUUID(), lines: [{ bom_id: withSpec.id, qty: 2, spec: '무시' }] });
+  assert.equal(rc.status, 200, JSON.stringify(rc.body));
+  assert.equal(sqlite.prepare('SELECT spec FROM other_receipts ORDER BY id DESC LIMIT 1').get().spec, '10인치');
+});
