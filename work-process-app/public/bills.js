@@ -229,49 +229,83 @@ const RS_STATE = { billed: ['전표 완료', 'green'], partial: ['일부 전표'
 async function pageReceiptStatus(main) {
   const r0 = rpRange('month');
   main.innerHTML = `<h1>입고현황</h1>
-  <p class="muted">기간 안에 입고된 것을 분류(원자재·부자재·제품·상품·임가공)별·거래처별 금액으로 봅니다. 매입전표를 잡은 수량은 전표 금액(확정), 아직 안 잡은 수량은 발주 단가로 계산한 금액(미확정)입니다. 매입 마감 전에 미확정·단가 없는 줄을 확인하세요.</p>
+  <p class="muted">기간 안에 입고된 것을 분류(원자재·부자재·제품·상품·임가공)별·거래처별 금액으로 봅니다. 위의 분류 탭을 누르면 그 분류만 보이고, 「전체」는 분류별 합계를 함께 보여 줍니다. 매입전표를 잡은 수량은 전표 금액(확정), 아직 안 잡은 수량은 발주 단가로 계산한 금액(미확정)입니다. 매입 마감 전에 미확정·단가 없는 줄을 확인하세요.</p>
   <form class="list-filters toolbar" data-read-only id="rsForm"><label>입고일<input type="date" name="from" value="${r0.from}" required></label><label>~<input type="date" name="to" value="${r0.to}" required></label><label>거래처<input name="vendor" maxlength="100" autocomplete="off" placeholder="비우면 전체"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
-  <div id="rsSummary"></div><h2 class="rs-h">거래처별</h2><div id="rsVendors"></div><h2 class="rs-h">입고 줄 <span class="small muted" id="rsCount"></span></h2><div class="seg" id="rsCatTabs" role="group" aria-label="분류"></div><div id="rsLines"></div>`;
-  const form = $('#rsForm', main); let data = null, catFilter = '', vendorFilter = '';
+  <div class="seg class-tabs rs-tabs" id="rsTabs" role="tablist" aria-label="분류"></div>
+  <div id="rsSummary"></div><h2 class="rs-h">거래처별</h2><div id="rsVendors"></div><h2 class="rs-h">입고 줄 <span class="small muted" id="rsCount"></span></h2><div id="rsVendorChip"></div><div id="rsLines"></div>`;
+  const form = $('#rsForm', main), MAIN_CATS = ['원자재', '부자재', '제품', '상품', '임가공'];
+  let data = null, vendorFilter = '', cat = '';
+  try { cat = localStorage.getItem('wpa:rs-cat') || ''; } catch { cat = ''; }
   bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
   const amount = n => n ? won(n) : '<span class="muted">0</span>';
-  const drawLines = () => {
-    const rows = data.lines.filter(l => (!catFilter || l.category === catFilter) && (!vendorFilter || l.vendor === vendorFilter));
-    $('#rsCount', main).textContent = `${rows.length}줄${data.more ? ' (앞 3000줄만)' : ''}${vendorFilter ? ` · ${vendorFilter}` : ''}`;
-    $('#rsCatTabs', main).innerHTML = ['', ...data.categories.filter(c => c.lines).map(c => c.category)].map(c => `<button type="button" data-rs-cat="${esc(c)}" class="${c === catFilter ? 'on' : ''}">${esc(c || '전체')}</button>`).join('') + (vendorFilter ? ` <button type="button" class="btn small" data-rs-clear>거래처 거름 해제</button>` : '');
-    $('#rsLines', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>거래처</th><th>분류</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">발주 단가</th><th class="r">확정(전표)</th><th class="r">미확정</th><th>전표</th></tr></thead><tbody>${rows.map(l => `<tr class="${l.unpriced ? 'row-yellow' : ''}"><td class="nowrap">${esc(l.received_date)}</td><td>${esc(l.vendor)}</td><td>${esc(l.category)}</td><td data-card-primary><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td>${esc(l.lot || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${l.unit_price == null ? '<span class="muted">없음</span>' : fmtNum(l.unit_price)}</td><td class="r">${amount(l.confirmed)}</td><td class="r">${l.unpriced ? '<span class="chip yellow">단가 없음</span>' : amount(l.estimate)}</td><td>${(([t, c]) => `<span class="chip ${c}">${t}</span>`)(RS_STATE[l.state])}${l.state === 'partial' ? `<div class="small muted">${esc(`남음 ${fmtNum(l.remaining)}`)}</div>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 입고가 없습니다.</div>';
-    const heads = $$('#rsLines thead th', main).map(th => th.textContent.trim()); $$('#rsLines tbody tr', main).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = heads[i] || ''; }));
+  const label = c => c || '전체';
+  const shownCats = () => data.categories.filter(c => c.lines || MAIN_CATS.includes(c.category));
+  const labelRows = sel => { const heads = $$(`${sel} thead th`, main).map(th => th.textContent.trim()); $$(`${sel} tbody tr`, main).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = heads[i] || ''; })); };
+  const drawTabs = () => {
+    const total = shownCats().reduce((t, c) => t + c.total, 0) + data.freight.total;
+    $('#rsTabs', main).innerHTML = [['', total], ...shownCats().map(c => [c.category, c.total])].map(([c, t]) => `<button type="button" role="tab" data-rs-tab="${esc(c)}" class="${c === cat ? 'on' : ''}" aria-selected="${c === cat}">${esc(label(c))} <span class="sub-count">${won(t)}</span></button>`).join('');
   };
+  const drawSummary = () => {
+    const head = '<thead><tr><th>분류</th><th class="r">입고 줄</th><th class="r">확정(매입전표)</th><th class="r">미확정(발주 단가)</th><th class="r">합계</th><th class="r">전표 안 잡은 줄</th><th class="r">단가 없는 줄</th></tr></thead>';
+    const row = c => `<tr><td><b>${esc(c.category)}</b></td><td class="r">${fmtNum(c.lines)}</td><td class="r">${amount(c.confirmed)}</td><td class="r">${amount(c.estimate)}</td><td class="r"><b>${amount(c.total)}</b></td><td class="r">${c.open ? `<span class="chip yellow">${fmtNum(c.open)}</span>` : '0'}</td><td class="r">${c.unpriced ? `<span class="chip yellow">${fmtNum(c.unpriced)}</span>` : '0'}</td></tr>`;
+    const caption = `<caption class="sr-only">${esc(`${data.from} ~ ${data.to} 분류별 입고 금액`)}</caption>`;
+    if (cat) {
+      const c = data.categories.find(x => x.category === cat) || { category: cat, lines: 0, confirmed: 0, estimate: 0, total: 0, open: 0, unpriced: 0 };
+      $('#rsSummary', main).innerHTML = `<div class="table-wrap"><table class="grid keep-table rs-cat">${caption}${head}<tbody>${row(c)}</tbody></table></div>`;
+      return;
+    }
+    const cats = shownCats(), sum = k => cats.reduce((t, c) => t + c[k], 0);
+    $('#rsSummary', main).innerHTML = `<div class="table-wrap"><table class="grid keep-table rs-cat">${caption}${head}<tbody>${cats.map(row).join('')}
+      ${data.freight.total ? `<tr><td>운송비 <span class="small muted">${esc(`(전표 일자 기준 ${data.freight.bills}건)`)}</span></td><td class="r"></td><td class="r">${won(data.freight.total)}</td><td class="r"></td><td class="r"><b>${won(data.freight.total)}</b></td><td></td><td></td></tr>` : ''}</tbody>
+      <tfoot><tr><th>합계</th><td class="r">${fmtNum(sum('lines'))}</td><td class="r">${won(sum('confirmed') + data.freight.total)}</td><td class="r">${won(sum('estimate'))}</td><td class="r"><b>${won(sum('total') + data.freight.total)}</b></td><td class="r">${fmtNum(sum('open'))}</td><td class="r">${fmtNum(sum('unpriced'))}</td></tr></tfoot></table></div>`;
+  };
+  const drawVendors = () => {
+    const tools = v => `<td class="nowrap"><button type="button" class="btn small" data-rs-vendor="${esc(v.vendor)}">줄 보기</button>${(cat ? v.by[cat]?.open : v.open) ? ` <button type="button" class="btn small" data-rs-bill="${esc(v.vendor)}">전표 입력</button>` : ''}</td>`;
+    if (cat) {
+      const list = data.vendors.filter(v => v.by?.[cat]);
+      const s = k => list.reduce((t, v) => t + v.by[cat][k], 0);
+      $('#rsVendors', main).innerHTML = list.length ? `<div class="table-wrap"><table class="grid rs-vendors"><thead><tr><th>거래처</th><th class="r">입고 줄</th><th class="r">확정(매입전표)</th><th class="r">미확정(발주 단가)</th><th class="r">합계</th><th class="r">전표 안 잡은 줄</th><th></th></tr></thead><tbody>${list.map(v => { const b = v.by[cat]; return `<tr><td data-card-primary><b>${esc(v.vendor)}</b></td><td class="r">${fmtNum(b.lines)}</td><td class="r">${amount(b.confirmed)}</td><td class="r">${b.unpriced ? `${amount(b.estimate)} <span class="chip yellow">${esc(`단가 없음 ${b.unpriced}`)}</span>` : amount(b.estimate)}</td><td class="r"><b>${won(b.confirmed + b.estimate)}</b></td><td class="r">${b.open ? `<span class="chip yellow">${fmtNum(b.open)}</span>` : '0'}</td>${tools(v)}</tr>`; }).join('')}</tbody>
+        <tfoot><tr><th>합계</th><td class="r">${fmtNum(s('lines'))}</td><td class="r">${won(s('confirmed'))}</td><td class="r">${won(s('estimate'))}</td><td class="r"><b>${won(s('confirmed') + s('estimate'))}</b></td><td class="r">${fmtNum(s('open'))}</td><td></td></tr></tfoot></table></div>` : `<div class="empty">${esc(`그 기간에 ${cat} 입고가 없습니다.`)}</div>`;
+      return labelRows('#rsVendors');
+    }
+    const vcats = shownCats().map(c => c.category);
+    $('#rsVendors', main).innerHTML = data.vendors.length ? `<div class="table-wrap"><table class="grid rs-vendors"><thead><tr><th>거래처</th>${vcats.map(c => `<th class="r">${esc(c)}</th>`).join('')}<th class="r">합계</th><th class="r">미확정</th><th></th></tr></thead><tbody>${data.vendors.map(v => `<tr><td data-card-primary><b>${esc(v.vendor)}</b></td>${vcats.map(c => `<td class="r">${amount(v.categories[c] || 0)}</td>`).join('')}<td class="r"><b>${won(v.total)}</b></td><td class="r">${v.estimate ? won(v.estimate) : '0'}${v.unpriced ? ` <span class="chip yellow">${esc(`단가 없음 ${v.unpriced}`)}</span>` : ''}</td>${tools(v)}</tr>`).join('')}</tbody>
+      <tfoot><tr><th>합계</th>${vcats.map(c => `<td class="r">${won(data.vendors.reduce((t, v) => t + (v.categories[c] || 0), 0))}</td>`).join('')}<td class="r"><b>${won(data.vendors.reduce((t, v) => t + v.total, 0))}</b></td><td class="r">${won(data.vendors.reduce((t, v) => t + v.estimate, 0))}</td><td></td></tr></tfoot></table></div>` : '<div class="empty">그 기간에 입고가 없습니다.</div>';
+    labelRows('#rsVendors');
+  };
+  const visibleLines = () => data.lines.filter(l => (!cat || l.category === cat) && (!vendorFilter || l.vendor === vendorFilter));
+  const drawLines = () => {
+    const rows = visibleLines();
+    $('#rsCount', main).textContent = `${rows.length}줄${data.more ? ' (앞 3000줄만)' : ''}`;
+    $('#rsVendorChip', main).innerHTML = vendorFilter ? `<p class="small"><span class="chip">${esc(vendorFilter)}</span> <button type="button" class="btn small" data-rs-clear>거래처 거름 해제</button></p>` : '';
+    $('#rsLines', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>거래처</th>${cat ? '' : '<th>분류</th>'}<th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">발주 단가</th><th class="r">확정(전표)</th><th class="r">미확정</th><th>전표</th></tr></thead><tbody>${rows.map(l => `<tr class="${l.unpriced ? 'row-yellow' : ''}"><td class="nowrap">${esc(l.received_date)}</td><td>${esc(l.vendor)}</td>${cat ? '' : `<td>${esc(l.category)}</td>`}<td data-card-primary><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td>${esc(l.lot || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${l.unit_price == null ? '<span class="muted">없음</span>' : fmtNum(l.unit_price)}</td><td class="r">${amount(l.confirmed)}</td><td class="r">${l.unpriced ? '<span class="chip yellow">단가 없음</span>' : amount(l.estimate)}</td><td>${(([t, c]) => `<span class="chip ${c}">${t}</span>`)(RS_STATE[l.state])}${l.state === 'partial' ? `<div class="small muted">${esc(`남음 ${fmtNum(l.remaining)}`)}</div>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 입고가 없습니다.</div>';
+    labelRows('#rsLines');
+  };
+  const drawAll = () => { drawTabs(); drawSummary(); drawVendors(); drawLines(); };
   const load = async () => {
     const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
     data = await api('GET', '/api/purchase-receipt-status?' + new URLSearchParams(v)); if (!main.isConnected) return;
-    catFilter = ''; vendorFilter = '';
-    const cats = data.categories, sum = k => cats.reduce((t, c) => t + c[k], 0);
-    const shown = cats.filter(c => c.lines || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c.category));
-    $('#rsSummary', main).innerHTML = `<div class="table-wrap"><table class="grid keep-table rs-cat"><caption class="sr-only">${esc(`${data.from} ~ ${data.to} 분류별 입고 금액`)}</caption><thead><tr><th>분류</th><th class="r">입고 줄</th><th class="r">확정(매입전표)</th><th class="r">미확정(발주 단가)</th><th class="r">합계</th><th class="r">전표 안 잡은 줄</th><th class="r">단가 없는 줄</th></tr></thead><tbody>${shown.map(c => `<tr><td><button type="button" class="link" data-rs-cat="${esc(c.category)}"><b>${esc(c.category)}</b></button></td><td class="r">${fmtNum(c.lines)}</td><td class="r">${amount(c.confirmed)}</td><td class="r">${amount(c.estimate)}</td><td class="r"><b>${amount(c.total)}</b></td><td class="r">${c.open ? `<span class="chip yellow">${fmtNum(c.open)}</span>` : '0'}</td><td class="r">${c.unpriced ? `<span class="chip yellow">${fmtNum(c.unpriced)}</span>` : '0'}</td></tr>`).join('')}
-      ${data.freight.total ? `<tr><td>운송비 <span class="small muted">${esc(`(전표 일자 기준 ${data.freight.bills}건)`)}</span></td><td class="r"></td><td class="r">${won(data.freight.total)}</td><td class="r"></td><td class="r"><b>${won(data.freight.total)}</b></td><td></td><td></td></tr>` : ''}</tbody>
-      <tfoot><tr><th>합계</th><td class="r">${fmtNum(sum('lines'))}</td><td class="r">${won(sum('confirmed') + data.freight.total)}</td><td class="r">${won(sum('estimate'))}</td><td class="r"><b>${won(sum('total') + data.freight.total)}</b></td><td class="r">${fmtNum(sum('open'))}</td><td class="r">${fmtNum(sum('unpriced'))}</td></tr></tfoot></table></div>`;
-    const vcats = shown.map(c => c.category);
-    $('#rsVendors', main).innerHTML = data.vendors.length ? `<div class="table-wrap"><table class="grid rs-vendors"><thead><tr><th>거래처</th>${vcats.map(c => `<th class="r">${esc(c)}</th>`).join('')}<th class="r">합계</th><th class="r">미확정</th><th></th></tr></thead><tbody>${data.vendors.map(v => `<tr><td data-card-primary><b>${esc(v.vendor)}</b></td>${vcats.map(c => `<td class="r">${amount(v.categories[c] || 0)}</td>`).join('')}<td class="r"><b>${won(v.total)}</b></td><td class="r">${v.estimate ? won(v.estimate) : '0'}${v.unpriced ? ` <span class="chip yellow">${esc(`단가 없음 ${v.unpriced}`)}</span>` : ''}</td><td class="nowrap"><button type="button" class="btn small" data-rs-vendor="${esc(v.vendor)}">줄 보기</button>${v.open ? ` <button type="button" class="btn small" data-rs-bill="${esc(v.vendor)}">전표 입력</button>` : ''}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><th>합계</th>${vcats.map(c => `<td class="r">${won(data.vendors.reduce((t, v) => t + (v.categories[c] || 0), 0))}</td>`).join('')}<td class="r"><b>${won(data.vendors.reduce((t, v) => t + v.total, 0))}</b></td><td class="r">${won(data.vendors.reduce((t, v) => t + v.estimate, 0))}</td><td></td></tr></tfoot></table></div>` : '<div class="empty">그 기간에 입고가 없습니다.</div>';
-    drawLines();
+    vendorFilter = '';
+    if (cat && !shownCats().some(c => c.category === cat)) cat = '';
+    drawAll();
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   main.addEventListener('click', e => {
-    const c = e.target.closest('[data-rs-cat]'); if (c && data) { catFilter = c.dataset.rsCat; drawLines(); if (c.closest('#rsSummary')) $('#rsLines', main).scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    const t = e.target.closest('[data-rs-tab]'); if (t && data) { cat = t.dataset.rsTab; try { localStorage.setItem('wpa:rs-cat', cat); } catch { /* 편의 */ } drawAll(); return; }
     const v = e.target.closest('[data-rs-vendor]'); if (v && data) { vendorFilter = v.dataset.rsVendor; drawLines(); $('#rsLines', main).scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (e.target.closest('[data-rs-clear]')) { vendorFilter = ''; drawLines(); return; }
     const b = e.target.closest('[data-rs-bill]'); if (b) { try { sessionStorage.setItem('wpa:bill-vendor', b.dataset.rsBill); } catch { /* 편의 */ } location.hash = '#/purchase/bills/new'; }
   });
+  // 엑셀: 지금 보고 있는 분류(전체면 모든 분류)의 줄
   $('[data-xlsx]', form).onclick = async () => {
     try {
       if (!data || data.from !== form.elements.from.value || data.to !== form.elements.to.value || (data.vendor || '') !== form.elements.vendor.value.trim()) await load();
       if (!data) return;
-      const cats = data.categories.filter(c => c.lines || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c.category));
-      const lines = data.lines.map(l => [l.received_date, l.vendor, l.category, l.req_no || '', l.product_code || '', l.item, l.spec || '', l.lot || '', l.unit || '', l.qty, l.unit_price, l.confirmed, l.estimate, l.confirmed + l.estimate, RS_STATE[l.state][0] + (l.unpriced ? ' · 단가 없음' : '')]);
+      const cats = shownCats().filter(c => !cat || c.category === cat);
+      const lines = data.lines.filter(l => !cat || l.category === cat).map(l => [l.received_date, l.vendor, l.category, l.req_no || '', l.product_code || '', l.item, l.spec || '', l.lot || '', l.unit || '', l.qty, l.unit_price, l.confirmed, l.estimate, l.confirmed + l.estimate, RS_STATE[l.state][0] + (l.unpriced ? ' · 단가 없음' : '')]);
       const sum = i => lines.reduce((t, r) => t + (Number(r[i]) || 0), 0);
-      xlsxDownload(`입고현황_${data.from}_${data.to}${data.vendor ? '_' + data.vendor : ''}.xlsx`, { sheet: '입고현황', titles: ['입고현황', `${COMPANY_NAME} · 입고일 ${data.from} ~ ${data.to}${data.vendor ? ' · 거래처 ' + data.vendor : ''}`, `분류별 합계: ${cats.map(c => `${c.category} ${won(c.total)}`).join(' / ')}${data.freight.total ? ` / 운송비 ${won(data.freight.total)}` : ''}`],
+      xlsxDownload(`입고현황_${cat || '전체'}_${data.from}_${data.to}${data.vendor ? '_' + data.vendor : ''}.xlsx`, { sheet: `입고현황 ${cat || '전체'}`, titles: [`입고현황 · ${cat || '전체'}`, `${COMPANY_NAME} · 입고일 ${data.from} ~ ${data.to}${data.vendor ? ' · 거래처 ' + data.vendor : ''}`, `분류별 합계: ${cats.map(c => `${c.category} ${won(c.total)}`).join(' / ')}${!cat && data.freight.total ? ` / 운송비 ${won(data.freight.total)}` : ''}`],
         columns: [{ label: '입고일', type: 'date' }, { label: '거래처', type: 'text', width: 18 }, { label: '분류', type: 'text', width: 9 }, { label: '구매의뢰번호', type: 'text', width: 15 }, { label: '품목코드', type: 'text', width: 13 }, { label: '품목', type: 'text', width: 24 }, { label: '규격', type: 'text' }, { label: 'LOT', type: 'text', width: 14 }, { label: '단위', type: 'text', width: 7 }, { label: '수량', type: 'number', width: 10 }, { label: '발주 단가', type: 'number', width: 12 }, { label: '확정(전표)', type: 'money', width: 14 }, { label: '미확정(발주 단가)', type: 'money', width: 16 }, { label: '금액 합계', type: 'money', width: 14 }, { label: '전표', type: 'text', width: 16 }],
         rows: lines, totals: ['합계', '', '', '', '', '', '', '', '', sum(9), '', sum(11), sum(12), sum(13), ''] });
     } catch (error) { fail(error); }
