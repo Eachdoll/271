@@ -662,3 +662,7 @@ INVITE_CODE=local-test-code npm start
 - PUT /api/vendors/:id/tax-info는 영업·구매 담당·관리자만(받는 이메일이 계산서 발송 주소이므로).
 - 표 가독성(사용자 요청 「재고·수치 화면에 그리드가 없어 불편」): PC 표(table.grid:not(.as-cards))에 연한 가로 격자(--grid-line), 짝수 줄 음영(--zebra, row-*·bill-picked·bill-group·ledger-pay 줄 제외), 마우스 올림 강조, 합계(tfoot) 바탕. 숫자 칸(td.r)이 있는 표는 세로 격자도 긋고 숫자는 tabular-nums. 휴대폰 카드는 그대로. 라이트·다크 변수 두 벌.
 - 메뉴: .nav-group에 data-dept(home·sales·purchase·quality·dev·production·logistics·manage)를 붙이고 부서 이름을 색 막대가 있는 굵은 머리로, 묶음 사이에 구분선, 현재 화면 링크 왼쪽에 부서 색. 새 업무 묶음을 만들면 NAV_GROUP_KEY와 색(--dept)을 함께 넣으세요.
+
+## 입고 입력 엑셀 붙여넣기를 엑셀처럼 (15.85)
+- 사용자 보고: 엑셀에서 긁어 셀에 붙여넣으면 줄이 늘어남. 예전에는 여러 칸이면 첫 칸만 그 줄에 넣고 나머지는 그 아래에 새 줄을 끼워 넣었고, 빈 칸은 걸러져 값이 밀렸습니다.
+- 이제 LOT·수량·비고 칸에 붙여넣으면 그 칸부터 아래 줄을 차례로 채웁니다(LOT 칸은 「LOT[탭]수량」 두 열도). 표 끝을 넘을 때만 마지막 줄과 같은 품목 줄을 더하고(비고는 넘는 값을 버림), 엑셀이 붙이는 끝 줄바꿈은 버리며 가운데 빈 칸은 빈 값으로 둡니다. 한 칸도 「1,200」처럼 쉼표 숫자를 받습니다. 한 품목 LOT 여러 개는 「LOT 나누기」 또는 마지막 줄에 붙여넣기.

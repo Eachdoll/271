@@ -19,7 +19,7 @@ function rcLocationOptions(warehouse, value = '') {
 
 async function pageReceiptEntry(main) {
   main.innerHTML = `<h1>입고 입력</h1>
-  <p class="muted">입고일·거래처를 한 번 넣고, 아래 표에 받은 품목을 LOT별로 입력합니다. 발주입고는 그 거래처의 미입고 발주를 불러오고, 기타입고는 품목 찾기로 담습니다. 한 품목에 LOT가 여러 개면 「LOT 나누기」를 누르거나 엑셀의 LOT·수량 두 열을 LOT 칸에 붙여넣으세요. 저장하면 입고번호로 묶여 입고증이 열립니다.</p>
+  <p class="muted">입고일·거래처를 한 번 넣고, 아래 표에 받은 품목을 LOT별로 입력합니다. 발주입고는 그 거래처의 미입고 발주를 불러오고, 기타입고는 품목 찾기로 담습니다. 한 품목에 LOT가 여러 개면 「LOT 나누기」를 누르세요. 엑셀에서 복사한 열을 붙여넣으면 그 칸부터 아래 줄을 차례로 채우고(LOT 칸에는 LOT·수량 두 열도 됨), 표 끝을 넘을 때만 줄이 늘어납니다. 저장하면 입고번호로 묶여 입고증이 열립니다.</p>
   <form class="stack rc-form" data-no-author novalidate>
     <div class="form-grid">
       <label>입고일 *<input name="receipt_date" type="date" required value="${todayStr()}"></label>
@@ -86,7 +86,6 @@ async function pageReceiptEntry(main) {
     for (const el of $$('[data-rc-sum]', body)) { const l = lines.find(x => x.po_id === Number(el.dataset.rcSum)); if (l) el.outerHTML = poSummary(l); }
   };
   const newLine = (base, extra = {}) => ({ key: 'l' + (++seq), item: base.item, spec: base.spec || '', sizes: base.sizes || [], unit: base.unit || '', product_code: base.product_code || '', po_id: base.po_id || null, po: base.po || null, bom_id: base.bom_id || null, lot: '', qty: '', warehouse: base.warehouse || '', location: base.location || '', note: '', picked: false, ...extra });
-  const insertAfter = (line, list) => { const i = lines.indexOf(line); lines.splice(i + 1, 0, ...list); };
   // 발주 불러오기
   const poBox = $('[data-rc-po]', form);
   let loadedVendor = null;
@@ -158,21 +157,28 @@ async function pageReceiptEntry(main) {
     const tr = e.target.closest('tr'), next = e.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
     $(`[data-f="${e.target.dataset.f}"]`, next || tr)?.focus();
   });
-  // 붙여넣기: 여러 줄이면 이 줄부터 아래로 같은 품목 줄을 만든다. LOT 칸에서는 「LOT [탭] 수량」, 수량 칸에서는 수량만.
+  // 붙여넣기(15.85, 엑셀과 같게): 붙여넣은 칸부터 아래 줄을 차례로 채우고, 표 끝을 넘을 때만 마지막 줄과 같은 품목 줄을 더한다.
+  // LOT 칸은 「LOT [탭] 수량」 두 칸도 받는다. 엑셀이 끝에 붙이는 줄바꿈은 버리고, 가운데 빈 칸은 빈 값으로 채운다(값이 밀리지 않게).
   body.addEventListener('paste', e => {
-    const field = e.target.dataset?.f; if (!['lot', 'qty'].includes(field)) return;
+    const field = e.target.dataset?.f; if (!['lot', 'qty', 'note'].includes(field)) return;
     const text = (e.clipboardData || window.clipboardData).getData('text');
-    const rows = text.replace(/\r/g, '').split('\n').map(r => r.split('\t').map(c => c.trim())).filter(r => r.some(Boolean));
-    if (rows.length < 2 && !(rows[0] && rows[0].length > 1)) return; // 한 칸짜리는 기본 붙여넣기
+    const rows = text.replace(/\r/g, '').split('\n').map(r => r.split('\t').map(c => c.trim()));
+    while (rows.length && !rows.at(-1).some(Boolean)) rows.pop();
+    if (!rows.length) return;
     e.preventDefault(); readAll();
     const tr = e.target.closest('tr'), line = lines.find(x => x.key === tr.dataset.rcLine);
     const value = r => { const n = Number(String(r ?? '').replace(/,/g, '')); return String(r ?? '').trim() === '' || Number.isNaN(n) ? '' : n; };
-    const fill = (l, r) => { if (field === 'lot') { l.lot = r[0] || ''; if (r.length > 1) l.qty = value(r[1]); } else l.qty = value(r[0]); };
-    if (lines.length + rows.length - 1 > 100) return toast('입고 줄은 100줄까지입니다.', 'err');
-    fill(line, rows[0]);
-    const more = rows.slice(1).map(r => { const l = newLine(line, { warehouse: line.warehouse, location: line.location }); fill(l, r); return l; });
-    insertAfter(line, more); draw([line.key, field]);
-    toast(`${rows.length}줄을 붙여넣었습니다.`);
+    const fill = (l, r) => { if (field === 'lot') { l.lot = r[0] || ''; if (r.length > 1) l.qty = value(r[1]); } else if (field === 'qty') l.qty = value(r[0]); else l.note = r[0] || ''; };
+    const start = lines.indexOf(line), below = lines.slice(start, start + rows.length);
+    const extra = field === 'note' ? 0 : rows.length - below.length; // 비고는 표 끝을 넘으면 버림
+    if (lines.length + Math.max(0, extra) > 100) return toast('입고 줄은 100줄까지입니다.', 'err');
+    below.forEach((l, k) => fill(l, rows[k]));
+    if (extra > 0) {
+      const last = lines.at(-1);
+      lines.push(...rows.slice(below.length).map(r => { const l = newLine(last, { warehouse: last.warehouse, location: last.location }); fill(l, r); return l; }));
+    }
+    draw([line.key, field]);
+    if (rows.length > 1) toast(extra > 0 ? `${below.length}줄을 채우고 표 끝에 ${extra}줄을 더했습니다.` : `${rows.length}줄을 채웠습니다.`);
   });
   body.addEventListener('click', async e => {
     const tr = e.target.closest('tr[data-rc-line]'); if (!tr) return;
