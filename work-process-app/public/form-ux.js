@@ -198,7 +198,7 @@ function fxServerError(form, button, message) {
             const textNode = [...label.childNodes].find(n => n.nodeType === 3 && /\*\s*$/.test(n.nodeValue));
             if (textNode) textNode.nodeValue = textNode.nodeValue.replace(/\s*\*\s*$/, ' ');
             const star = document.createElement('span'); star.className = 'req'; star.dataset.fxMark = 'req'; star.setAttribute('aria-hidden', 'true'); star.textContent = '*';
-            el.insertAdjacentElement('beforebegin', star);
+            (el.closest('.partner-picker') || el).insertAdjacentElement('beforebegin', star); // 거래처 찾기 묶음 안이 아니라 묶음 앞(라벨 글자 옆)
           }
         } else {
           req?.remove(); el.removeAttribute('aria-required');
@@ -228,3 +228,24 @@ function fxServerError(form, button, message) {
   const schedule = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; mark(); showFull(); }); };
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['required'] });
 })();
+
+// 15.95 ERP식 단축키. F8: 저장(열린 창이 있으면 그 창, 없으면 지금 칸이 있는 입력 폼 → 화면의 첫 입력 폼의 저장 버튼).
+// F3: 목록 조회 조건의 검색 칸으로 이동. 한글 조합 중이거나 보조키를 누르면 쓰지 않는다.
+document.addEventListener('keydown', event => {
+  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const visible = el => el && el.offsetParent !== null && !el.disabled;
+  if (event.key === 'F8') {
+    const modal = [...document.querySelectorAll('.modal-wrap .modal')].at(-1), scope = modal || document.getElementById('main');
+    if (!scope) return;
+    const saveOf = form => [...form.querySelectorAll(':scope > .actions:last-child > .btn.primary:not([type=button]), :scope .actions .btn.primary:not([type=button])')].find(visible);
+    const forms = [...scope.querySelectorAll('form:not(.list-filters):not([data-read-only])')];
+    const own = document.activeElement?.closest?.('form');
+    const ordered = own && forms.includes(own) ? [own, ...forms.filter(f => f !== own)] : forms;
+    for (const form of ordered) { const button = saveOf(form); if (button) { event.preventDefault(); button.click(); return; } }
+  } else if (event.key === 'F3') {
+    if (document.querySelector('.modal-wrap')) return;
+    const field = [...document.querySelectorAll('#main .list-filters input[type=search], #main .list-filters input[name=q]')].find(visible);
+    if (!field) return;
+    event.preventDefault(); field.focus(); field.select?.();
+  }
+});

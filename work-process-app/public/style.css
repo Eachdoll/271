@@ -1346,3 +1346,24 @@ table.grid.dense-grid td.r, table.grid.dense-grid th.r { white-space: nowrap; fo
   .actionbar #rcSelectedCount { grid-column: 1 / -1; }
   .actionbar > .btn { white-space: normal; line-height: 1.25; padding: 6px 4px; min-height: 44px; font-size: 13.5px; justify-content: center; text-align: center; }
 }
+/* 15.95 ERP식 화면: 표는 각진 모서리(둥근 모서리에 격자 끝이 잘리던 문제), 진한 머리줄, 촘촘한 줄 간격,
+   입력 화면의 저장 버튼 줄은 화면 아래에 고정, 저장 버튼에 F8 표시 */
+.table-wrap, .dense-wrap, table.grid, .table-wrap > table, .empty { border-radius: 0; }
+.table-wrap { box-shadow: none; }
+@media (max-width: 700px) { table.grid.as-cards tbody tr { border-radius: 0; } }
+@media (min-width: 701px) {
+  .grid th, .grid td { padding: 7px 10px; }
+  table.grid { font-size: 13.5px; }
+  table.grid > thead > tr > th { background: var(--total-bg); color: var(--text); font-weight: 700; font-size: 12.5px; border-bottom: 1px solid var(--grid-head); }
+  table.grid > thead > tr > th + th { border-left: 1px solid var(--grid-head); }
+}
+#main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> .btn.primary:not([type=button])) {
+  position: sticky; bottom: 0; z-index: 6; margin: 14px 0 0; padding: 10px 12px; background: var(--panel);
+  border: 1px solid var(--line); border-top: 2px solid var(--accent); box-shadow: 0 -4px 12px rgba(16, 24, 40, .06);
+}
+@media (hover: hover) and (min-width: 821px) {
+  #main form:not(.list-filters):not([data-read-only]) > .actions:last-child > .btn.primary:not([type=button])::after,
+  .modal form:not(.list-filters) > .actions:last-child > .btn.primary:not([type=button])::after {
+    content: 'F8'; margin-left: 8px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font-size: 11px; font-weight: 600; opacity: .75;
+  }
+}
