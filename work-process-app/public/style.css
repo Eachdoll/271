@@ -1371,3 +1371,34 @@ table.grid.dense-grid td.r, table.grid.dense-grid th.r { white-space: nowrap; fo
 .list-filters .partner-picker { width: auto; }
 .list-filters .partner-picker > input { flex: none; width: 11em; }
 @media (max-width: 700px) { .list-filters .partner-picker { width: 100%; } .list-filters .partner-picker > input { flex: 1; width: 0; } }
+/* 15.97 ERP식 표·입력 화면 */
+:root { --erp-head: #e8f0fa; --erp-head-ink: #23508f; --erp-head-line: #c5d5ea; --erp-sum: #eef1f5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --erp-head: #22304a; --erp-head-ink: #a9c8f2; --erp-head-line: #34486a; --erp-sum: #2a2a32; } }
+:root[data-theme="dark"] { --erp-head: #22304a; --erp-head-ink: #a9c8f2; --erp-head-line: #34486a; --erp-sum: #2a2a32; }
+@media (min-width: 701px) {
+  table.grid > thead > tr > th, table.grid.dense-grid > thead > tr > th { background: var(--erp-head); color: var(--erp-head-ink); border-bottom: 1px solid var(--erp-head-line); text-align: center; }
+  table.grid > thead > tr > th + th, table.grid.dense-grid > thead > tr > th + th { border-left: 1px solid var(--erp-head-line); }
+  table.grid > thead > tr > th.sortable { cursor: pointer; user-select: none; }
+  table.grid > thead > tr > th.sortable::after { content: '▾'; margin-left: 4px; font-size: 11px; opacity: .45; }
+  table.grid > thead > tr > th.sortable[aria-sort="ascending"]::after { content: '▲'; opacity: 1; }
+  table.grid > thead > tr > th.sortable[aria-sort="descending"]::after { content: '▼'; opacity: 1; }
+  table.grid > thead > tr > th.sortable:hover { filter: brightness(.97); }
+}
+/* 전표 목록 월계·합계 줄 */
+table.grid > tbody > tr.month-sum > td { background: var(--erp-sum) !important; font-weight: 700; text-align: center; }
+table.grid > tbody > tr.month-sum > td.r { text-align: right; }
+table.grid > tfoot > tr.grand-sum > * { background: var(--erp-sum); color: var(--text); font-weight: 700; text-align: center; }
+table.grid > tfoot > tr.grand-sum > td.r { text-align: right; }
+@media (max-width: 700px) { table.grid.as-cards tr.month-sum td:empty { display: none; } }
+.link-btn { border: 0; background: none; padding: 0; min-height: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; text-align: left; }
+.link-btn:hover { text-decoration: underline; }
+/* 입력 화면 아래 저장 줄: 왼쪽 「다시 작성」「리스트」 */
+.erp-bar-left { display: inline-flex; gap: 8px; margin-right: auto; }
+/* 거래처 칸: 돋보기 버튼을 칸에 붙여(코드·이름 검색 창) */
+.partner-picker { gap: 0; }
+.partner-picker > input { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.partner-picker > .btn.partner-find { font-size: 0; width: 42px; min-width: 42px; padding: 0; align-self: stretch; min-height: 0; border: 1px solid var(--line); border-left: 0; border-radius: 0 var(--radius-md, 10px) var(--radius-md, 10px) 0; background: var(--panel); display: inline-flex; align-items: center; justify-content: center; }
+.partner-picker > .btn.partner-find::before { content: ''; width: 17px; height: 17px; background: var(--muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5 21 21'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5 21 21'/%3E%3C/svg%3E") center / contain no-repeat; }
+.partner-picker > .btn.partner-find:hover::before { background: var(--accent); }

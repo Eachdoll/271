@@ -732,3 +732,11 @@ INVITE_CODE=local-test-code npm start
 ## 입고현황 거래 있는 분류만 (15.96)
 - shownCats는 그 기간에 입고 줄이 있는 분류만(예전에는 원자재~임가공 5개를 늘 보임). 탭·분류 합계·거래처별 칸이 모두 이것을 따릅니다. 거래처가 그 분류 입고가 없으면 칸을 비웁니다(v.by[분류] 없음). 입고가 하나도 없으면 분류 합계 자리에 빈 안내.
 - 조회 줄(.list-filters)의 거래처 찾기 묶음은 입력칸 11em(휴대폰은 한 줄 가득).
+
+## ERP식 목록·입력 (15.97)
+- 표 머리줄: 넓은 화면에서 연한 파랑 바탕·파랑 글자·가운데 정렬(--erp-head*), 다크 모드 값 따로.
+- 머리글 정렬: sortableTable(입력칸·colspan/rowspan 줄이 없고 줄마다 칸 수가 같은 표, data-no-sort·창 안 표 제외)이면 labelGridTables가 th에 .sortable, 누르면 오름/내림(aria-sort). 숫자는 쉼표·원·% 빼고 수로, 빈 칸은 늘 아래.
+- 매입·매출전표 목록: billMonthBody로 월마다 「YYYY/MM 계」 줄(month-sum)과 tfoot 합계(grand-sum), 확정 전표만 더함. 전표번호는 .link-btn(data-bill-open). 이 표는 data-no-sort.
+- 입력 화면 아래 저장 줄(15.95) 왼쪽에 erpEntryBar가 「다시 작성」(확인 → 보관 초안 지우고 render)과 「리스트」(NAV 같은 하위 메뉴의 목록, 없으면 /new 뗀 주소)를 붙입니다.
+- 거래처 찾기 버튼은 입력칸에 붙은 돋보기(.partner-find, 글자는 aria-label·title로만). 테스트용 가짜 DOM에는 classList가 없으니 className으로 지정합니다.
+- 번들 금지 문자열 검사는 변수 이름에도 걸립니다(예: hrefs. → "fs."). 이름을 바꾸세요.

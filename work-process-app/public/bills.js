@@ -168,6 +168,19 @@ function billSheet(bill, after = null) {
   };
 }
 
+// 15.97 ERP식 전표 목록: 날짜 내림차순 목록에 월마다 「YYYY/MM 계」 줄, 맨 아래 합계(확정 전표만 더함).
+// lead = 금액 앞 칸 수, tail = 금액 뒤 칸 수, rowHtml = 전표 한 줄
+function billMonthBody(rows, lead, tail, rowHtml) {
+  const live = r => r.status === 'confirmed', sum = (list, k) => list.filter(live).reduce((t, r) => t + r[k], 0);
+  const line = (label, list, cls) => `<tr class="${cls}"><td colspan="${lead}">${label} <span class="small muted">${esc(`${list.filter(live).length}건`)}</span></td><td class="r">${won(sum(list, 'supply_total'))}</td><td class="r">${won(sum(list, 'vat_total'))}</td><td class="r"><b>${won(sum(list, 'total'))}</b></td><td colspan="${tail}"></td></tr>`;
+  let out = '';
+  for (let i = 0; i < rows.length;) {
+    const m = String(rows[i].bill_date).slice(0, 7), group = [];
+    while (i < rows.length && String(rows[i].bill_date).slice(0, 7) === m) group.push(rows[i++]);
+    out += group.map(rowHtml).join('') + line(`<span>${esc(m.replace('-', '/'))}</span> <span>계</span>`, group, 'month-sum');
+  }
+  return `<tbody>${out}</tbody><tfoot>${line('합계', rows, 'grand-sum').replace(/<td colspan/, '<th colspan').replace('</td><td class="r">', '</th><td class="r">')}</tfoot>`;
+}
 async function pageBillList(main) {
   main.innerHTML = `<h1>매입전표 목록</h1>
   <form class="list-filters toolbar" data-read-only id="billFilters"><label>명세서 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="vendor" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·명세서 번호·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
@@ -179,7 +192,7 @@ async function pageBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원 (공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))} · 부가세 ${won(live.reduce((t, r) => t + r.vat_total, 0))})`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><b>${esc(r.bill_no)}</b></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)}</td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list" data-no-sort><thead><tr><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 5, 3, r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)}</td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   $('[data-xlsx]', form).onclick = () => billLinesExcel('purchase', { from: form.elements.from.value, to: form.elements.to.value, party: form.elements.vendor.value.trim() }).catch(fail);

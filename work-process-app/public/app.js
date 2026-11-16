@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.96';
+const APP_VERSION = '15.97';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -568,10 +568,61 @@ async function render() {
   shell();
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
-  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);
+
+// ── 15.97 ERP식 표·입력 화면 ──
+// 1) 목록 표 머리글을 누르면 그 칸으로 정렬(다시 누르면 반대로). 입력칸이 있는 표, 칸을 합친 줄(소계 등)이 있는 표, data-no-sort 표는 정렬하지 않는다.
+function sortableTable(table) {
+  if (!table || table.hasAttribute('data-no-sort') || table.closest('.modal')) return false;
+  const rows = [...(table.tBodies[0]?.rows || [])], n = table.tHead?.rows[0]?.cells.length;
+  return rows.length > 1 && !!n && !table.tBodies[0].querySelector('input, select, textarea, [colspan], [rowspan]') && rows.every(tr => tr.cells.length === n);
+}
+function sortKey(td) {
+  const t = (td?.textContent || '').trim(), num = t.replace(/[,원%\s]/g, '');
+  return /^-?\d+(\.\d+)?$/.test(num) ? { n: Number(num) } : { s: t };
+}
+document.addEventListener('click', event => {
+  const th = event.target.closest('table.grid > thead > tr > th');
+  if (!th || event.target.closest('input, button, a, select') || !th.textContent.trim()) return;
+  const table = th.closest('table'); if (!sortableTable(table)) return;
+  const index = [...th.parentElement.cells].indexOf(th), asc = th.getAttribute('aria-sort') !== 'ascending';
+  [...th.parentElement.cells].forEach(c => c.removeAttribute('aria-sort')); th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+  const body = table.tBodies[0], rows = [...body.rows];
+  rows.sort((a, b) => {
+    const x = sortKey(a.cells[index]), y = sortKey(b.cells[index]);
+    const empty = v => v.s === '' ? 1 : 0; if (empty(x) !== empty(y)) return empty(x) - empty(y); // 빈 칸은 늘 아래
+    const c = x.n !== undefined && y.n !== undefined ? x.n - y.n : String(x.s ?? x.n).localeCompare(String(y.s ?? y.n), 'ko', { numeric: true });
+    return asc ? c : -c;
+  });
+  rows.forEach(tr => body.append(tr));
+});
+// 2) 입력 화면 아래 저장 줄 왼쪽에 「리스트」(같은 하위 메뉴의 목록 화면)와 「다시 작성」(입력과 보관 초안을 지우고 새로)
+function listRouteFor(route) {
+  const subs = []; const walk = items => items.forEach(i => { if (!Array.isArray(i) && i.items) { subs.push(i.items); walk(i.items); } });
+  NAV.forEach(g => walk(g.items));
+  for (const items of subs) {
+    const links = items.filter(Array.isArray).map(i => i[0]); if (!links.includes(route)) continue;
+    const others = items.filter(i => Array.isArray(i) && i[0] !== route && !i[0].endsWith('/new'));
+    return (others.find(i => /목록|리스트/.test(i[1])) || others[0])?.[0] || null;
+  }
+  return route.endsWith('/new') && PAGES[route.slice(0, -4)] ? route.slice(0, -4) : null;
+}
+function erpEntryBar(main, route) {
+  const bar = [...main.querySelectorAll('form:not(.list-filters):not([data-read-only]) > .actions:last-child')].find(a => a.querySelector(':scope > .btn.primary:not([type=button])') && a.offsetParent !== null);
+  if (!bar || bar.querySelector('.erp-bar-left')) return;
+  const list = listRouteFor(route.split('?')[0]);
+  const left = document.createElement('span'); left.className = 'erp-bar-left';
+  left.innerHTML = `<button type="button" class="btn" data-erp-reset>다시 작성</button>${list ? `<a class="btn" href="${list}" data-erp-list>리스트</a>` : ''}`;
+  bar.prepend(left);
+  left.querySelector('[data-erp-reset]').onclick = async () => {
+    if (!(await confirmBox('입력한 내용을 모두 지우고 처음부터 다시 작성할까요?'))) return;
+    for (const draft of uxDrafts) if (draft.form.isConnected) draft.clear('');
+    render();
+  };
+}
 
 // ── 휴대폰 하단 탭(15.62): 할 일 · 자주 쓰는 화면 ──
 async function pageTasks(main) {
@@ -752,6 +803,7 @@ function labelGridTables() {
     rows.forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
     // Desktop: columns that are empty on every row are left out (입력 표처럼 칸이 나중에 채워지면 data-keep-cols로 끈다); short values stay on one line.
     const ths = $$('thead th', table);
+    if (sortableTable(table)) ths.forEach(th => { if (th.textContent.trim() && !th.querySelector('input')) th.classList.add('sortable'); }); // 15.97 머리글 눌러 정렬
     heads.forEach((head, i) => {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));

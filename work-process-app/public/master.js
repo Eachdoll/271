@@ -40,7 +40,7 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   const wrap = document.createElement('span'); wrap.className = 'partner-picker';
   input.before(wrap); wrap.append(input);
   const button = document.createElement('button'); button.type = 'button'; button.className = 'btn small'; button.textContent = '거래처 찾기';
-  button.setAttribute('aria-label', '거래처 찾기'); wrap.append(button);
+  button.setAttribute('aria-label', '거래처 찾기'); button.title = '거래처 찾기'; button.className = 'btn small partner-find'; wrap.append(button);
   button.onclick = async e => {
     e.preventDefault(); if (input.disabled || input.readOnly) return;
     button.disabled = true;
