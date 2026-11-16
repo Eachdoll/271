@@ -3,10 +3,11 @@
 const BILL_SOURCE_LABEL = { po_lot: '발주입고', po: '발주입고', other: '기타입고' };
 const won = n => n == null || n === '' ? '' : fmtNum(Math.trunc(Number(n)));
 const billTruncC = n => Math.trunc(Math.round(n * 1000) / 1000);
+const billCmp = (a, b) => String(a).localeCompare(String(b), 'ko');
 
 async function pageBillEntry(main) {
   main.innerHTML = `<h1>매입전표 입력</h1>
-  <p class="muted">공급사 거래명세서를 받으면 거래처를 고르세요. 물류가 잡은 입고 중 아직 전표가 없는 줄이 나옵니다. 명세서에 있는 줄을 체크하고 단가를 확인한 뒤(발주 단가가 미리 들어감) 명세서 합계와 맞는지 보고 저장하세요. 금액은 원 미만 절사, 부가세는 공급가액 합계의 10%입니다.</p>
+  <p class="muted">공급사 거래명세서를 받으면 거래처를 고르세요. 물류가 입고를 잡은 줄이 발주별로 묶여 나옵니다(발주량·입고량·이미 전표에 잡은 양·남은 양). 명세서에 있는 줄을 체크하고 수량·단가를 표에서 바로 고친 뒤(발주 단가가 미리 들어감) 명세서 합계와 맞는지 보고 저장하세요. 명세서 수량이 입고와 다르면 고쳐 잡고, 덜 잡은 수량은 다음 전표에서 잡습니다. 금액은 원 미만 절사, 부가세는 공급가액 합계의 10%입니다.</p>
   <form class="stack bill-form" data-no-author novalidate>
     <div class="form-grid">
       <label>거래처 *<input name="vendor" required maxlength="100" placeholder="매입처에서 고르거나 입력" autocomplete="off"></label><span class="partner-hint small muted" data-partner-hint></span>
@@ -18,13 +19,16 @@ async function pageBillEntry(main) {
       <label>입고일 범위<span class="bill-range"><input name="from" type="date" aria-label="입고일 시작"> ~ <input name="to" type="date" aria-label="입고일 끝"></span></label>
       <label class="span2">비고<input name="note" maxlength="500"></label>
     </div>
-    <section class="pr-section"><h3>전표 없는 입고 줄</h3><div data-bill-lines><p class="muted small">거래처를 넣으면 나옵니다.</p></div></section>
+    <section class="pr-section"><div class="bill-lines-head"><h3>발주·입고 목록 <span class="small muted" data-bill-count></span></h3><label class="bill-find">결과 내 찾기<input type="search" data-bill-find placeholder="발주번호·품목·코드·규격·LOT·비고" autocomplete="off"></label></div><div data-bill-lines><p class="muted small">거래처를 넣으면 나옵니다.</p></div></section>
     <div class="bill-total card" data-bill-total aria-live="polite"></div>
     <div class="actions"><button class="btn primary" data-bill-save>매입전표 저장</button></div>
   </form>`;
-  const form = $('form', main), box = $('[data-bill-lines]', form);
+  const form = $('form', main), box = $('[data-bill-lines]', form), find = $('[data-bill-find]', form);
   let rows = [], loadedKey = null, requestId = crypto.randomUUID(), busy = false;
   const vendorInput = form.elements.vendor;
+  const left = r => Math.round((r.qty - (r.billed_qty || 0)) * 1e6) / 1e6;
+  const supplyOf = r => r.price === '' || r.bqty === '' ? null : billTruncC(Number(r.bqty) * Number(r.price));
+  const groupKey = r => r.source_type === 'other' ? 'other' : 'po:' + (r.po_batch || r.po_id);
   const load = async (force = false) => {
     const vendor = vendorInput.value.trim(), key = [vendor, form.elements.from.value, form.elements.to.value].join('|');
     if (!force && key === loadedKey) return; loadedKey = key;
@@ -32,52 +36,73 @@ async function pageBillEntry(main) {
     box.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data; try { data = await api('GET', '/api/purchase-bills/unbilled?' + new URLSearchParams({ vendor, from: form.elements.from.value, to: form.elements.to.value })); } catch (error) { box.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
     if (vendorInput.value.trim() !== vendor) return;
-    rows = data.rows.map(r => ({ ...r, key: r.source_type + ':' + r.source_id, picked: false, price: r.unit_price ?? '', note: '' }));
+    rows = data.rows.map(r => ({ ...r, picked: false, price: r.unit_price ?? r.last_price ?? '', bqty: String(left(r)), note: '' }));
+    // 발주별로 묶기(같이 넣은 발주 묶음 → 발주일·발주번호 순), 기타입고는 맨 끝
+    const order = new Map();
+    for (const r of rows) { const k = groupKey(r); if (!order.has(k)) order.set(k, order.size); }
+    rows.sort((a, b) => (groupKey(a) === 'other') - (groupKey(b) === 'other') || billCmp(a.po_date || '', b.po_date || '') || order.get(groupKey(a)) - order.get(groupKey(b)) || billCmp(a.received_date, b.received_date));
     draw();
     if (data.more) toast('줄이 500개를 넘어 앞의 500줄만 보입니다. 입고일 범위로 좁히세요.', 'err');
   };
+  const matches = r => { const q = find.value.trim().toLowerCase(); return !q || [r.req_no, r.item, r.product_code, r.spec, r.lot, r.po_note, r.note].some(v => String(v || '').toLowerCase().includes(q)); };
   const draw = () => {
-    box.innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-grid"><caption class="sr-only">전표 없는 입고 줄</caption><thead><tr><th scope="col"><input type="checkbox" data-bill-all aria-label="전체 선택"></th><th scope="col">입고일</th><th scope="col">구분</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col">LOT</th><th scope="col" class="r">수량</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">공급가액</th><th scope="col">비고</th></tr></thead>
-      <tbody>${rows.map((r, i) => `<tr data-bill-row="${i}" class="${r.picked ? 'bill-picked' : ''}">
+    const shown = rows.map((r, i) => [r, i]).filter(([r]) => matches(r));
+    $('[data-bill-count]', form).textContent = rows.length ? (shown.length === rows.length ? `${rows.length}줄` : `${shown.length} / ${rows.length}줄`) : '';
+    if (!rows.length) { box.innerHTML = '<p class="muted">이 거래처의 전표 없는 입고가 없습니다.</p>'; totals(); return; }
+    const groups = []; for (const [r, i] of shown) { const k = groupKey(r); if (!groups.length || groups.at(-1).key !== k) groups.push({ key: k, items: [] }); groups.at(-1).items.push([r, i]); }
+    const head = g => { const r = g.items[0][0]; if (g.key === 'other') return '<b>기타입고</b>'; const pos = new Map(g.items.map(([x]) => [x.po_id, x])); const amount = [...pos.values()].reduce((t, x) => t + (x.unit_price == null ? 0 : billTruncC(x.po_qty * x.unit_price)), 0); const reqs = [...new Set(g.items.map(([x]) => x.req_no).filter(Boolean))].join(', '); return `<b>발주 ${esc(reqs || '—')}</b> <span class="muted">· 발주일 ${esc(r.po_date || '')}${amount ? ` · 발주금액 ${won(amount)}원` : ''}</span>${r.po_note ? ` <span class="small">· ${esc(r.po_note)}</span>` : ''}`; };
+    box.innerHTML = shown.length ? `<div class="table-wrap"><table class="grid bill-grid"><caption class="sr-only">발주·입고 목록</caption><thead><tr><th scope="col"><input type="checkbox" data-bill-all aria-label="전체 선택"></th><th scope="col">입고일</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col">LOT</th><th scope="col">단위</th><th scope="col" class="r">발주량</th><th scope="col" class="r">입고량</th><th scope="col" class="r">전표 잡은</th><th scope="col" class="r">이번 수량</th><th scope="col" class="r">단가</th><th scope="col" class="r">공급가액</th><th scope="col">비고</th></tr></thead>
+      <tbody>${groups.map(g => `<tr class="bill-group"><td><input type="checkbox" data-bill-group="${esc(g.key)}" aria-label="이 발주 전체 선택"${g.items.every(([r]) => r.picked) ? ' checked' : ''}></td><td colspan="12">${head(g)}</td></tr>${g.items.map(([r, i]) => { const diff = r.bqty === '' ? 0 : Math.round((Number(r.bqty) - left(r)) * 1e6) / 1e6; return `<tr data-bill-row="${i}" class="${r.picked ? 'bill-picked' : ''}">
         <td><input type="checkbox" data-bill-pick="${i}"${r.picked ? ' checked' : ''} aria-label="${esc(r.item)} ${esc(r.lot || '')} 선택"></td>
         <td class="nowrap">${esc(r.received_date)}</td>
-        <td class="nowrap small">${BILL_SOURCE_LABEL[r.source_type]}${r.req_no ? `<div class="muted">${esc(r.req_no)}</div>` : ''}</td>
         <td data-card-primary><b>${esc(r.item)}</b>${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}${internalNoteChip(r)}</td>
-        <td>${esc(r.spec || '')}</td><td>${esc(r.lot || '')}</td>
-        <td class="r">${fmtNum(r.qty)}</td><td>${esc(r.unit || '')}</td>
-        <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-bill-price="${i}" value="${esc(r.price)}" aria-label="${esc(r.item)} 단가"${r.unit_price == null ? ' placeholder="단가 없음"' : ''}></td>
-        <td class="r nowrap" data-bill-supply="${i}">${r.price === '' ? '' : won(billTruncC(r.qty * Number(r.price)))}</td>
-        <td><input data-bill-note="${i}" maxlength="200" value="${esc(r.note)}" aria-label="${esc(r.item)} 비고"></td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="muted">이 거래처의 전표 없는 입고가 없습니다.</p>';
-    const all = $('[data-bill-all]', box); if (all) all.onchange = () => { rows.forEach(r => { r.picked = all.checked; }); draw(); };
+        <td>${esc(r.spec || '')}</td><td>${esc(r.lot || '')}</td><td>${esc(r.unit || '')}</td>
+        <td class="r">${r.po_qty == null ? '' : fmtNum(r.po_qty)}</td><td class="r">${fmtNum(r.qty)}</td><td class="r">${r.billed_qty ? fmtNum(r.billed_qty) : ''}</td>
+        <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-bill-qty="${i}" value="${esc(r.bqty)}" aria-label="${esc(r.item)} 이번 수량"><div class="small ${diff ? 'red-text' : 'muted'}" data-bill-diff="${i}">${diff ? `입고와 차이 ${diff > 0 ? '+' : ''}${fmtNum(diff)}` : ''}</div></td>
+        <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-bill-price="${i}" value="${esc(r.price)}" aria-label="${esc(r.item)} 단가"${r.unit_price == null && r.last_price == null ? ' placeholder="단가 없음"' : ''}>${r.last_price != null && r.unit_price != null && r.last_price !== r.unit_price ? `<div class="small muted">${esc(`지난 매입 ${fmtNum(r.last_price)}`)}</div>` : r.unit_price == null && r.last_price != null ? `<div class="small muted">${esc('지난 매입 단가')}</div>` : ''}</td>
+        <td class="r nowrap" data-bill-supply="${i}">${supplyOf(r) == null ? '' : won(supplyOf(r))}</td>
+        <td><input data-bill-note="${i}" maxlength="200" value="${esc(r.note)}" aria-label="${esc(r.item)} 비고"></td></tr>`; }).join('')}`).join('')}</tbody></table></div>`
+      : '<p class="muted">찾는 줄이 없습니다.</p>';
+    const all = $('[data-bill-all]', box); if (all) { all.checked = shown.length > 0 && shown.every(([r]) => r.picked); all.onchange = () => { shown.forEach(([r]) => { r.picked = all.checked; }); draw(); }; }
     const heads = $$('thead th', box).map(th => th.textContent.trim());
-    $$('tbody tr', box).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = i === 0 ? '' : heads[i] || ''; }));
+    $$('tbody tr[data-bill-row]', box).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = i === 0 ? '' : heads[i] || ''; }));
     totals();
   };
+  const setPicked = (i, on) => { rows[i].picked = on; const cb = $(`[data-bill-pick="${i}"]`, box); if (cb) { cb.checked = on; cb.closest('tr').classList.toggle('bill-picked', on); } };
+  const refreshLine = i => {
+    const r = rows[i], s = supplyOf(r), diff = r.bqty === '' ? 0 : Math.round((Number(r.bqty) - left(r)) * 1e6) / 1e6;
+    $(`[data-bill-supply="${i}"]`, box).textContent = s == null ? '' : won(s);
+    const d = $(`[data-bill-diff="${i}"]`, box); d.textContent = diff ? `입고와 차이 ${diff > 0 ? '+' : ''}${fmtNum(diff)}` : ''; d.className = 'small ' + (diff ? 'red-text' : 'muted');
+  };
   box.addEventListener('change', e => {
-    const i = Number(e.target.dataset.billPick ?? e.target.dataset.billPrice ?? e.target.dataset.billNote);
-    if (e.target.dataset.billPick !== undefined) { rows[i].picked = e.target.checked; e.target.closest('tr').classList.toggle('bill-picked', rows[i].picked); }
+    if (e.target.dataset.billPick !== undefined) setPicked(Number(e.target.dataset.billPick), e.target.checked);
+    if (e.target.dataset.billGroup !== undefined) { rows.forEach((r, i) => { if (groupKey(r) === e.target.dataset.billGroup && matches(r)) r.picked = e.target.checked; }); draw(); return; }
     totals();
   });
   box.addEventListener('input', e => {
-    if (e.target.dataset.billPrice !== undefined) { const i = Number(e.target.dataset.billPrice); rows[i].price = e.target.value; if (e.target.value !== '' && !rows[i].picked) { rows[i].picked = true; $(`[data-bill-pick="${i}"]`, box).checked = true; e.target.closest('tr').classList.add('bill-picked'); } $(`[data-bill-supply="${i}"]`, box).textContent = e.target.value === '' ? '' : won(billTruncC(rows[i].qty * Number(e.target.value))); }
-    if (e.target.dataset.billNote !== undefined) rows[Number(e.target.dataset.billNote)].note = e.target.value;
+    const t = e.target, i = Number(t.dataset.billPrice ?? t.dataset.billQty ?? t.dataset.billNote);
+    if (t.dataset.billPrice !== undefined) rows[i].price = t.value;
+    if (t.dataset.billQty !== undefined) rows[i].bqty = t.value;
+    if (t.dataset.billNote !== undefined) rows[i].note = t.value;
+    if ((t.dataset.billPrice !== undefined || t.dataset.billQty !== undefined) && t.value !== '' && !rows[i].picked) setPicked(i, true);
+    if (t.dataset.billPrice !== undefined || t.dataset.billQty !== undefined) refreshLine(i);
     totals();
   });
   // 줄 아무 데나 눌러도 체크
-  box.addEventListener('click', e => { const tr = e.target.closest('tr[data-bill-row]'); if (!tr || e.target.closest('input,button,a')) return; const i = Number(tr.dataset.billRow); rows[i].picked = !rows[i].picked; $(`[data-bill-pick="${i}"]`, box).checked = rows[i].picked; tr.classList.toggle('bill-picked', rows[i].picked); totals(); });
+  box.addEventListener('click', e => { const tr = e.target.closest('tr[data-bill-row]'); if (!tr || e.target.closest('input,button,a')) return; const i = Number(tr.dataset.billRow); setPicked(i, !rows[i].picked); totals(); });
+  find.addEventListener('input', () => draw());
   const totals = () => {
-    const picked = rows.filter(r => r.picked), missing = picked.filter(r => r.price === '');
+    const picked = rows.filter(r => r.picked), missing = picked.filter(r => r.price === '' || !(Number(r.bqty) > 0));
     const freight = billTruncC(Number(form.elements.freight.value || 0));
-    const supply = picked.reduce((t, r) => t + (r.price === '' ? 0 : billTruncC(r.qty * Number(r.price))), 0) + freight;
+    const supply = picked.reduce((t, r) => t + (supplyOf(r) || 0), 0) + freight;
     const vat = form.elements.tax_type.value === 'zero' ? 0 : billTruncC(supply * 0.1), total = supply + vat;
     const statement = form.elements.statement_total.value === '' ? null : Number(form.elements.statement_total.value);
-    const diff = statement === null ? null : statement - total;
+    const diff = statement === null ? null : statement - total, changed = picked.filter(r => Number(r.bqty) !== left(r)).length;
     $('[data-bill-total]', form).innerHTML = `<div class="bill-sum"><span>선택 <b>${picked.length}</b>줄</span>
       ${freight ? `<span>운송비 <b>${won(freight)}</b>원</span>` : ''}
       <span>공급가액 <b>${won(supply)}</b>원</span><span>부가세 <b>${won(vat)}</b>원</span><span class="bill-grand">합계 <b>${won(total)}</b>원</span>
       ${diff === null ? '' : diff === 0 ? '<span class="chip green">명세서 합계와 일치</span>' : `<span class="chip red">명세서와 차이 ${diff > 0 ? '+' : ''}${won(diff)}원</span>`}
-      ${missing.length ? `<span class="chip yellow">단가 없는 줄 ${missing.length}</span>` : ''}</div>`;
+      ${missing.length ? `<span class="chip yellow">단가 없는 줄 ${missing.length}</span>` : ''}${changed ? `<span class="chip yellow">${esc(`수량 고친 줄 ${changed}`)}</span>` : ''}</div>`;
   };
   form.elements.tax_type.onchange = totals; form.elements.statement_total.oninput = totals; form.elements.freight.oninput = totals;
   let timer = 0;
@@ -90,13 +115,15 @@ async function pageBillEntry(main) {
     const v = formObj(form), picked = rows.filter(r => r.picked);
     if (!v.vendor) { vendorInput.focus(); return toast('거래처를 넣으세요.', 'err'); }
     if (!picked.length) return toast('전표에 넣을 입고 줄을 체크하세요.', 'err');
-    const missing = picked.find(r => r.price === ''); if (missing) { $(`[data-bill-price="${rows.indexOf(missing)}"]`, box)?.focus(); return toast(`${missing.item}의 단가를 넣으세요.`, 'err'); }
+    const focusOn = (r, attr) => { if (!matches(r)) { find.value = ''; draw(); } $(`[${attr}="${rows.indexOf(r)}"]`, box)?.focus(); };
+    const noQty = picked.find(r => !(Number(r.bqty) > 0)); if (noQty) { focusOn(noQty, 'data-bill-qty'); return toast(`${noQty.item}의 수량을 넣으세요.`, 'err'); }
+    const missing = picked.find(r => r.price === ''); if (missing) { focusOn(missing, 'data-bill-price'); return toast(`${missing.item}의 단가를 넣으세요.`, 'err'); }
     busy = true; const button = $('[data-bill-save]', form); button.disabled = true;
     try {
       const bill = await api('POST', '/api/purchase-bills', { vendor: v.vendor, bill_date: v.bill_date, statement_no: v.statement_no, tax_type: v.tax_type, statement_total: v.statement_total, freight: v.freight, note: v.note, request_id: requestId,
-        lines: picked.map(r => ({ source_type: r.source_type, source_id: r.source_id, unit_price: r.price, note: r.note })) });
+        lines: picked.map(r => ({ source_type: r.source_type, source_id: r.source_id, qty: r.bqty, unit_price: r.price, note: r.note })) });
       toast(bill.duplicate ? `${bill.bill_no} 전표는 앞서 이미 저장되었습니다.` : `${bill.bill_no} 매입전표를 저장했습니다. 합계 ${won(bill.total)}원`);
-      requestId = crypto.randomUUID(); form.elements.statement_no.value = ''; form.elements.statement_total.value = ''; form.elements.note.value = ''; form.elements.freight.value = '';
+      requestId = crypto.randomUUID(); form.elements.statement_no.value = ''; form.elements.statement_total.value = ''; form.elements.note.value = ''; form.elements.freight.value = ''; find.value = '';
       await load(true); billSheet(bill);
     } catch (error) { fail(error); } finally { busy = false; button.disabled = false; }
   };
@@ -116,7 +143,7 @@ function billSheet(bill, after = null) {
         <tr><th>과세 구분</th><td>${bill.tax_type === 'zero' ? '영세·면세' : '과세 10%'}</td><th>작성</th><td>${esc(bill.created_by)} · ${esc(String(bill.created_at).slice(0, 16))}</td></tr>
       </tbody></table>
       <table class="po-items"><thead><tr><th>No</th><th>입고일</th><th>품목</th><th>규격</th><th>LOT</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">공급가액</th><th>비고</th></tr></thead>
-      <tbody>${bill.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(l.received_date)}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.req_no ? `<div class="po-code">${esc(l.req_no)}</div>` : ''}</td><td>${esc(l.spec)}</td><td>${esc(l.lot)}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit)}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td>${esc(l.note)}${l.source_voided ? ' <b>(입고 취소됨)</b>' : ''}</td></tr>`).join('')}</tbody>
+      <tbody>${bill.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${esc(l.received_date)}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}${l.req_no ? `<div class="po-code">${esc(l.req_no)}</div>` : ''}</td><td>${esc(l.spec)}</td><td>${esc(l.lot)}</td><td class="r">${fmtNum(l.qty)}${l.source_qty != null && l.source_qty !== l.qty ? `<div class="po-code">${esc(`입고 ${fmtNum(l.source_qty)}`)}</div>` : ''}</td><td>${esc(l.unit)}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td>${esc(l.note)}${l.source_voided ? ' <b>(입고 취소됨)</b>' : ''}</td></tr>`).join('')}</tbody>
       <tfoot>${bill.freight ? `<tr><th colspan="8" class="r">운송비</th><td class="r">${won(bill.freight)}</td><td></td></tr>` : ''}
         <tr><th colspan="8" class="r">공급가액</th><td class="r">${won(bill.supply_total)}</td><td></td></tr>
         <tr><th colspan="8" class="r">부가세</th><td class="r">${won(bill.vat_total)}</td><td></td></tr>

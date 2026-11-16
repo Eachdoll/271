@@ -253,6 +253,13 @@
       "when": 1794999213000,
       "tag": "0035_sales_bills",
       "breakpoints": false
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1795085613000,
+      "tag": "0036_purchase_bill_partial",
+      "breakpoints": false
     }
   ]
 }

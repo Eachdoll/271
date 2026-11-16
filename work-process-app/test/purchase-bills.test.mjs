@@ -112,3 +112,25 @@ test('Month closing: totals, unbilled count, locks and admin reopen', async () =
   const summary = (await buyer('GET', '/api/purchase-bills/unbilled-summary')).body.find(r => r.vendor === '마감상사');
   assert.equal(summary.lines, 2);
 });
+
+test('15.82 A receipt line can be billed in parts; the statement quantity may differ from the receipt', async () => {
+  const p = await po('나눔상사', '원단Z', 100, 1000);
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '나눔상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'Z1', qty: 60 }] });
+  const open = async () => (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('나눔상사'))).body.rows;
+  const [line] = await open();
+  assert.deepEqual([line.qty, line.billed_qty, line.po_qty, line.po_recv_qty, line.unit_price], [60, 0, 100, 60, 1000]);
+  const first = await buyer('POST', '/api/purchase-bills', { vendor: '나눔상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: line.source_id, qty: 25 }] });
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.deepEqual([first.body.lines[0].qty, first.body.lines[0].source_qty, first.body.supply_total], [25, 60, 25000]);
+  const [rest] = await open();
+  assert.deepEqual([rest.qty, rest.billed_qty, rest.last_price], [60, 25, 1000], 'remaining 35 stays open, last price known');
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '나눔상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: line.source_id, qty: 0 }] })).status, 400);
+  // 남은 수량을 비우면 남은 35, 다 잡으면 목록에서 빠짐
+  const second = await buyer('POST', '/api/purchase-bills', { vendor: '나눔상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: line.source_id, unit_price: 990 }] });
+  assert.equal(second.body.lines[0].qty, 35);
+  assert.equal((await open()).length, 0);
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '나눔상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: line.source_id, qty: 1 }] })).status, 409);
+  // 한 전표를 취소하면 그만큼 다시 열림
+  await buyer('POST', `/api/purchase-bills/${first.body.id}/cancel`, { reason: '수량 정정' });
+  const [again] = await open(); assert.equal(again.qty - again.billed_qty, 25);
+});

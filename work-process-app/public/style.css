@@ -1230,3 +1230,10 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .ledger-print .ledger-doc .table-wrap { overflow: visible; }
 .bill-grid .rc-unit { width: 70px; }
 @media (max-width: 700px) { .range-presets .rp-sep { display: none; } }
+/* 15.82 매입전표 입력: 발주별 묶음·수량 고치기·결과 내 찾기 */
+.bill-lines-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px; }
+.bill-lines-head h3 { margin: 0; }
+.bill-find { min-width: 0; flex: 0 1 320px; }
+.bill-grid tr.bill-group td { background: var(--bg); font-size: .95em; cursor: default; }
+.bill-grid input[data-bill-qty] { width: 6.5em; text-align: right; }
+@media (max-width: 700px) { .bill-grid tr.bill-group { display: block; } .bill-grid tr.bill-group td[colspan] { display: block; } }
