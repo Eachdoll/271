@@ -71,9 +71,9 @@ async function pageTaxMake(main) {
     try {
       let made = 0;
       if (mode === 'single') made = (await api('POST', '/api/tax-invoices', { kind: 'single', bill_ids: keys.map(Number), ...o, request_id: requestId })).rows.length;
-      else for (const [i, customer] of keys.entries()) made += (await api('POST', '/api/tax-invoices', { kind: 'monthly', customer, from: form.elements.from.value, to: form.elements.to.value, ...o, request_id: `${requestId.slice(0, 30)}-${i}` })).rows.length;
+      else for (const customer of keys) made += (await api('POST', '/api/tax-invoices', { kind: 'monthly', customer, from: data.from, to: data.to, ...o, request_id: crypto.randomUUID() })).rows.length;
       toast(`세금계산서 ${made}장을 담았습니다. 「세금계산서 관리」에서 발행하세요.`); requestId = crypto.randomUUID(); await load();
-    } catch (error) { fail(error); await load().catch(() => {}); } finally { busy = false; btn.disabled = false; }
+    } catch (error) { fail(error); requestId = crypto.randomUUID(); await load().catch(() => {}); } finally { busy = false; btn.disabled = false; }
   };
   await load();
 }

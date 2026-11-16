@@ -8,15 +8,20 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   try { vendors = await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;
   const list = document.createElement('datalist'); list.id = 'partnerList' + (++partnerListSerial);
-  list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.contact_name, v.phone].filter(Boolean).join(' · '))}</option>`).join('');
+  list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.code, v.contact_name, v.phone].filter(Boolean).join(' · '))}</option>`).join('');
   input.after(list); input.setAttribute('list', list.id); input.autocomplete = 'off';
+  // 15.92 거래처코드를 그대로 쳐도(예: C0001) 그 거래처 이름으로 바꾼다. 화면의 change 처리보다 먼저(capture) 바꿔 같은 값으로 불러오게 한다.
+  input.addEventListener('change', () => {
+    const typed = input.value.trim(); if (!typed || vendors.some(v => partnerKey(v.name) === partnerKey(typed))) return;
+    const byCode = vendors.find(v => v.code && v.code === typed.toUpperCase()); if (byCode) input.value = byCode.name;
+  }, true);
   if (!input.placeholder) input.placeholder = '이름 일부를 입력해 고르세요';
   let serial = 0;
   const show = async () => {
     if (!hint) return; const mine = ++serial; const name = input.value.trim();
     if (!name) { hint.innerHTML = ''; return; }
     const known = vendors.find(v => partnerKey(v.name) === partnerKey(name));
-    let html = known ? `<span class="muted">${esc(known.name)}${known.contact_name || known.phone ? ' · 담당 ' + esc([known.contact_name, known.phone].filter(Boolean).join(' · ')) : ' · 담당자·연락처 미등록'}</span>`
+    let html = known ? `<span class="muted">${known.code ? `[${esc(known.code)}] ` : ''}${esc(known.name)}${known.contact_name || known.phone ? ' · 담당 ' + esc([known.contact_name, known.phone].filter(Boolean).join(' · ')) : ' · 담당자·연락처 미등록'}</span>`
       : '<span class="muted">새 거래처입니다. 저장하면 거래처 목록에 등록됩니다. 담당자·연락처는 <a href="#/purchase/vendors">거래처 관리</a>에서 입력하세요.</span>';
     if (recent) {
       try {
@@ -48,11 +53,13 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   };
   input.addEventListener('mousedown', () => { if (document.activeElement !== input || input.dataset.partnerPrev === undefined) openAll(); });
   input.addEventListener('keydown', e => {
-    if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
+    if (e.key === 'Enter') restore(); // 비운 채 Enter면 원래 이름으로 되돌린 뒤 제출(빈 거래처로 조회되지 않게)
+    else if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
     else if (e.key === 'Escape' && input.dataset.partnerPrev !== undefined) { restore(); e.stopPropagation(); }
   });
   input.addEventListener('input', () => { if (input.value !== '') { delete input.dataset.partnerPrev; input.placeholder = basePlaceholder; } });
   input.addEventListener('blur', restore);
+  input.form?.addEventListener('submit', restore, true);
 }
 
 // 거래처 구분 체크(등록·수정)와 목록 표시
@@ -63,17 +70,18 @@ async function pageVendors(main) {
   <h1>거래처 관리 <span class="dept">관리</span></h1>
   <p class="muted">매입처(발주·입고)와 매출처(출하·생산의뢰·고객사)를 체크해 두면 입력 화면에서 해당 거래처만 골라 보여 줍니다. 둘 다 체크하면 양쪽에 모두 나오고, 둘 다 비우면 구분 없이 어디에나 나옵니다. 누구나 거래처를 등록·수정할 수 있습니다. 발주·입고·출하 입력에서 거래처 이름을 고르면 담당자와 연락처가 함께 보이고, 발주에서는 그 거래처의 최근 매입 품목을 바로 불러올 수 있습니다. 입력 화면에서 새 이름을 쓰면 자동으로 이 목록에 추가됩니다.</p>
   <form class="card" id="vendorNew"><h3>거래처 등록</h3><div class="form-grid">
+    <label>거래처코드<input name="code" maxlength="20" placeholder="비우면 자동(C0001…)" autocapitalize="characters"></label>
     <label>거래처 이름 *<input name="name" required maxlength="100"></label>
     <label>담당자 이름<input name="contact_name" maxlength="50"></label>
     <label>연락처<input name="phone" maxlength="30" inputmode="tel" placeholder="예) 010-1234-5678"></label>
     ${vendorTypeChecks()}</div>
     <div class="actions"><button class="btn primary">등록</button></div></form>
   <div class="seg class-tabs" id="vendorTypeTabs" role="group" aria-label="거래처 구분"></div>
-  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span></form>
+  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span>${ME.is_admin ? '<button type="button" class="btn small" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}</form>
   <div id="vendorList"></div>`;
   const filters = $('#vendorFilters', main); let version = 0;
   let vendorTab = ''; try { vendorTab = localStorage.getItem('wpa:vendor-tab') || ''; } catch { /* 편의 기능 */ }
-  const fields = v => `<label>거래처 이름 *<input name="name" required maxlength="100" value="${esc(v.name)}"></label><label>담당자 이름<input name="contact_name" maxlength="50" value="${esc(v.contact_name)}"></label><label>연락처<input name="phone" maxlength="30" inputmode="tel" value="${esc(v.phone)}"></label>${vendorTypeChecks(v)}`;
+  const fields = v => `<label>거래처코드<input name="code" maxlength="20" value="${esc(v.code || '')}" autocapitalize="characters"></label><label>거래처 이름 *<input name="name" required maxlength="100" value="${esc(v.name)}"></label><label>담당자 이름<input name="contact_name" maxlength="50" value="${esc(v.contact_name)}"></label><label>연락처<input name="phone" maxlength="30" inputmode="tel" value="${esc(v.phone)}"></label>${vendorTypeChecks(v)}`;
   const load = async () => {
     // 15.68 구분 탭(건수 표시): 검색 결과를 전체 / 매입처 / 매출처 / 매입·매출 / 구분 없음으로 나눠 본다.
     const mine = ++version; const all = await api('GET', '/api/vendors?' + new URLSearchParams(formObj(filters)));
@@ -85,8 +93,8 @@ async function pageVendors(main) {
     const rows = all.filter(test);
     if (mine !== version || !main.isConnected) return;
     $('#vendorCount').textContent = `${rows.length}곳`;
-    $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>거래처</th><th>구분</th><th>운송비 조건</th><th>담당자</th><th>연락처</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
-      <td><b>${esc(v.name)}</b>${v.biz_no ? `<div class="small muted">${esc(v.biz_no)}</div>` : ''}</td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
+    $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>코드</th><th>거래처</th><th>구분</th><th>운송비 조건</th><th>담당자</th><th>연락처</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
+      <td class="nowrap">${esc(v.code || '')}</td><td data-card-primary><b>${esc(v.name)}</b>${v.biz_no ? `<div class="small muted">${esc(v.biz_no)}</div>` : ''}</td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
       <td class="small muted">${esc(v.created_by || '')}${v.updated_by ? ` · 수정 ${esc(v.updated_by)}` : ''}</td>
       <td class="nowrap"><button class="btn small" data-vendor-recent="${i}">최근 매입</button> <button class="btn small" data-vendor-freight="${i}">운송비 조건</button> <button class="btn small" data-vendor-tax="${i}">사업자 정보</button> <button class="btn small" data-vendor-edit="${i}">수정</button>${ME.is_admin || v.created_by === ME.name ? ` <button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 거래처가 없습니다.</div>';
@@ -137,5 +145,11 @@ async function pageVendors(main) {
     try { await api('POST', '/api/vendors', formObj(event.target)); event.target.reset(); toast('거래처를 등록했습니다.'); load(); } catch (error) { fail(error); }
   };
   filters.onsubmit = event => { event.preventDefault(); load().catch(fail); };
+  const fillCodes = $('#vendorFillCodes', main);
+  if (fillCodes) fillCodes.onclick = async () => {
+    if (!(await confirmBox('코드가 비어 있는 거래처에 C0001부터 이어지는 번호를 붙일까요? 이미 있는 코드는 그대로 둡니다.'))) return;
+    fillCodes.disabled = true;
+    try { const r = await api('POST', '/api/vendors/fill-codes'); toast(`거래처 ${r.filled}곳에 코드를 붙였습니다.`); await load(); } catch (error) { fail(error); } finally { fillCodes.disabled = false; }
+  };
   await load();
 }

@@ -97,7 +97,7 @@ async function pageReceiptEntry(main) {
     if (!vendor) { openPos = []; poBox.innerHTML = '<p class="muted small">거래처를 넣으면 미입고 발주가 여기에 나옵니다.</p>'; return; }
     poBox.innerHTML = '<p class="muted small">불러오는 중…</p>';
     try { openPos = await api('GET', '/api/receipts/open-po?vendor=' + encodeURIComponent(vendor)); } catch (error) { poBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
-    if (vendorInput.value.trim() !== vendor) return;
+    if ((vendorInput.dataset.partnerPrev ?? vendorInput.value).trim() !== vendor) return;
     const t = todayStr();
     poBox.innerHTML = openPos.length ? `<div class="table-wrap"><table class="grid keep-table rc-po-table"><caption class="sr-only">${esc(vendor)} 미입고 발주</caption><thead><tr><th scope="col"><input type="checkbox" data-rc-po-all aria-label="발주 전체 선택"></th><th scope="col">구매의뢰번호</th><th scope="col">품목</th><th scope="col" class="r">발주</th><th scope="col" class="r">기입고</th><th scope="col" class="r">남음</th><th scope="col">납기일</th></tr></thead><tbody>${openPos.map(p => { const before = ['ok', 'mismatch'].includes(p.recv_status) ? p.recv_qty || 0 : 0; return `<tr><td><input type="checkbox" data-rc-po-pick="${p.id}" aria-label="${esc(p.item)} 담기"${p.pending_change ? ' disabled title="입고 수정 승인 대기"' : ''}></td><td>${esc(p.req_no)}</td><td><b>${esc(p.item)}</b>${p.spec ? ` <span class="small">${esc(p.spec)}</span>` : ''}${internalNoteChip(p)}${p.pending_change ? ' <span class="chip yellow">수정 승인 대기</span>' : ''}</td><td class="r">${fmtNum(p.qty)} ${esc(p.unit || '')}</td><td class="r">${fmtNum(before)}</td><td class="r"><b>${fmtNum(Math.max(0, p.qty - before))}</b></td><td class="${p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td></tr>`; }).join('')}</tbody></table></div>
       <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-rc-po-add>선택 발주 담기</button></div>`
@@ -165,6 +165,11 @@ async function pageReceiptEntry(main) {
     const rows = text.replace(/\r/g, '').split('\n').map(r => r.split('\t').map(c => c.trim()));
     while (rows.length && !rows.at(-1).some(Boolean)) rows.pop();
     if (!rows.length) return;
+    if (rows.length === 1 && rows[0].length === 1) { // 한 칸: 기본 붙여넣기(커서 자리에 넣음). 수량 칸의 「1,200」만 숫자로 바꿔 넣는다.
+      if (field !== 'qty' || !/,/.test(rows[0][0])) return;
+      const n = Number(rows[0][0].replace(/,/g, '')); if (Number.isNaN(n)) return;
+      e.preventDefault(); e.target.value = String(n); e.target.dispatchEvent(new Event('input', { bubbles: true })); return;
+    }
     e.preventDefault(); readAll();
     const tr = e.target.closest('tr'), line = lines.find(x => x.key === tr.dataset.rcLine);
     const value = r => { const n = Number(String(r ?? '').replace(/,/g, '')); return String(r ?? '').trim() === '' || Number.isNaN(n) ? '' : n; };

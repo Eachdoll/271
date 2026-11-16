@@ -190,3 +190,36 @@ test('15.87 receipt status by category with confirmed/estimated amounts; 임가�
   const line = r.lines.find(l => l.item === '원단R');
   assert.deepEqual([line.state, line.remaining, line.confirmed, line.estimate], ['partial', 6, 3960, 6000]);
 });
+
+test('15.90 a reduced receipt (negative correction lot) caps billing at the received qty and nets in the report; a typed 「이전 입고」 note is not treated as migrated', async () => {
+  const d = today;
+  const q = await po('수정상사', '원단Q2', 10, 100);
+  await staff('POST', '/api/receipts', { receipt_date: d, vendor: '수정상사', request_id: rid(), lines: [{ po_id: q.id, lot: 'Q1', qty: 10 }] });
+  await staff('POST', `/api/po/${q.id}/receipt-changes`, { action: 'qty', recv_qty: 8, reason: '수량 정정', request_id: rid() });
+  const changeId = sqlite.prepare("SELECT id FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(q.id).id;
+  assert.equal((await admin('POST', `/api/receipt-changes/${changeId}/approve`, {})).status, 200);
+  const rows = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('수정상사'))).body.rows;
+  assert.equal(rows.length, 1, 'the -2 correction lot is not a billable line');
+  assert.equal(rows[0].po_open, 8);
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '수정상사', bill_date: d, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: rows[0].source_id, qty: 9 }] })).status, 400, 'cannot bill more than received (8)');
+  const r0 = (await buyer('GET', `/api/purchase-receipt-status?from=${d}&to=${d}&vendor=${encodeURIComponent('수정상사')}`)).body;
+  assert.equal(r0.categories.find(c => c.category === '부자재').estimate, 800, 'report nets the correction');
+  assert.ok(r0.lines.some(l => l.state === 'adjust' && l.estimate === -200));
+  const bill = await buyer('POST', '/api/purchase-bills', { vendor: '수정상사', bill_date: d, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: rows[0].source_id }] });
+  assert.equal(bill.body.lines[0].qty, 8, 'default qty = received after correction');
+  assert.equal((await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('수정상사'))).body.rows.length, 0);
+  const r1 = (await buyer('GET', `/api/purchase-receipt-status?from=${d}&to=${d}&vendor=${encodeURIComponent('수정상사')}`)).body.categories.find(c => c.category === '부자재');
+  assert.deepEqual([r1.confirmed, r1.estimate], [800, 0]);
+  // 사용자가 비고에 「이전 입고」라고 적어도 예전 전표와 합쳐 세지 않음
+  const lg = await po('비고상사', '원단L2', 10, 100);
+  await staff('POST', '/api/po/receive', { ids: [lg.id], status: 'mismatch', recv_qty: 5 });
+  const [legacy] = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('비고상사'))).body.rows;
+  await buyer('POST', '/api/purchase-bills', { vendor: '비고상사', bill_date: d, request_id: rid(), lines: [{ source_type: 'po', source_id: legacy.source_id, qty: 3 }] });
+  await staff('POST', '/api/receipts', { receipt_date: d, vendor: '비고상사', request_id: rid(), lines: [{ po_id: lg.id, lot: 'N1', qty: 5, note: '이전 입고' }] });
+  const open2 = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('비고상사'))).body.rows;
+  const n1 = open2.find(r => r.lot === 'N1');
+  assert.deepEqual([n1.billed_qty, n1.is_prev], [0, 0], 'typed note does not pick up the legacy bill');
+  const rep = (await buyer('GET', `/api/purchase-receipt-status?from=${d}&to=${d}&vendor=${encodeURIComponent('비고상사')}`)).body.categories.find(c => c.category === '부자재');
+  assert.equal(rep.confirmed, 300, 'legacy bill counted once');
+  assert.equal((await admin('GET', `/api/reports?from=${d}&to=${d}&item_category=${encodeURIComponent('임가공')}`)).status, 200);
+});

@@ -686,3 +686,29 @@ INVITE_CODE=local-test-code npm start
 - 사용자 요청: 휴대폰에서 기간 버튼(17개)이 세 줄을 차지해 지저분함 → 펼쳐 보는 방식으로. rangePresets는 「◀ [라벨 ▾] ▶」 한 줄(라벨 = 고른 기간 이름, 직접 고친 날짜면 MM/DD ~ MM/DD)이고, 가운데를 누르면 일·주·월 / 분기 / 반기·년 세 열 창(data-rp-panel)이 펼쳐집니다. 고르면 닫히고, 바깥 클릭·Esc로도 닫힙니다. data-rp 값·onPick은 그대로이며 끝 날짜 칸 label 바로 뒤에 붙습니다. 처음 날짜가 어떤 기간과 같으면 그 이름을 라벨로 보입니다.
 - showInputAuthors: data-read-only(값 없이 써도)·.list-filters 양식에는 「입력자(자동 기록)」를 붙이지 않습니다(예전에는 값이 정확히 true일 때만 건너뛰어 매출전표 목록 등 조회 줄에 붙었음).
 - 휴대폰(700px 이하): 목록 조건 줄은 「조건·조회·엑셀」 한 줄 + 기간 한 줄(order), 입고목록 처리 버튼 줄(.actionbar)은 3열 격자. 휴대폰으로 모든 메뉴 화면을 돌며 버튼이 3줄 이상 쌓이는 곳을 찾아 0곳으로 만들었습니다.
+
+## 검증 수정: 줄어든 입고·「이전 입고」 구분·리포트 임가공 (15.90)
+- 입고 수량 수정 승인으로 생기는 음수 보정 LOT 줄은 매입전표 원천에서 빼고(l.qty > 0), 발주 전체로 아직 안 잡은 실입고(PO_OPEN = recv_qty − 그 발주의 활성 전표 줄 합)를 넘지 않게 합니다: 원천 목록 조건·저장 시 남은 수량 min(줄 남은, 발주 남은)·저장 가드(같은 batch의 앞 줄 포함 합 ≤ recv_qty). 예전에는 10 → 8로 줄여도 LOT 줄이 10으로 열려 있어 입고보다 많이 잡혔습니다.
+- 입고현황: 음수 보정 줄은 상태 「수량 수정」, 미확정 금액을 음수로 넣어 같은 발주 줄과 순액이 맞습니다. 거래처 집계는 줄을 한 번만 돌아 모읍니다.
+- 「이전 입고」(예전 방식 입고를 옮긴 줄)는 note와 receipt_id IS NULL로 구분합니다(PREV_LOT). 사용자가 입고 비고에 같은 말을 써도 예전 전표 수량과 합쳐 세지 않습니다.
+- reports.mjs REPORT_CATEGORIES에 임가공(분류 필터 400 해소).
+
+## 화면 검토 수정 (15.91)
+- 거래처 칸(bindPartnerPicker): 눌러서 비운 채 Enter나 「조회」로 제출하면 원래 이름으로 되돌린 뒤 제출(빈 거래처로 전체가 조회되던 문제). 목록을 불러오는 동안 칸을 눌러도 응답을 버리지 않도록 화면은 data-partner-prev ?? value로 비교하고, 기간이 바뀐 늦은 응답은 버립니다(매입·매출전표 입력, 입고 입력).
+- 기간별 거래보고 조회 줄에는 거래처 안내 글(partner-hint)을 붙이지 않습니다: 칸을 벗어날 때 글이 생기며 「조회」 버튼이 밀려 클릭이 빗나갔습니다.
+- 세금계산서 월별 담기: 거래처마다 새 request_id, 실패하면 화면의 request_id도 새로(예전에는 같은 번호를 다시 보내 앞서 담긴 계산서가 duplicate로 돌아와 「담았습니다」인데 안 담김), 기간은 화면에 보이는 조회 결과(data.from/to).
+- 입고 입력 붙여넣기: 한 칸이면 브라우저 기본(커서 자리에 넣기), 수량 칸의 쉼표 숫자만 숫자로.
+- 메뉴: 펼친 하위 메뉴는 data-sub(이름)로 맞춤(배지·번역 글자가 붙어도 유지).
+- rangePresets: 만든 직후·제출할 때 날짜로 라벨을 다시 맞춤(box.sync, 저장된 조건으로 날짜를 채운 목록), 올해가 아니면 YY.MM/DD, 화면이 바뀌면 문서 리스너 정리.
+- 매입전표 입력: 줄을 하나씩 체크해도 묶음·전체 체크가 맞춰짐. 매출전표 보기 「세금계산서 담기」 두 번 누름 방지.
+
+## 수주 → 분할 매출전표 → 출하지시 → 출하 (15.92, 마이그레이션 0038)
+- 표: sales_orders(SO-YYMMDD-NN, status open/closed/cancelled), sales_order_lines(bom_id 필수 — 품목·코드·단위는 품목 등록에서), ship_instructions(전표 줄 하나당 하나, pending/shipped/cancelled), sales_bill_lines.order_line_id, vendors.code(빈 값이 아니면 UNIQUE).
+- 거래처코드: 직접 넣으면 대문자(영문·숫자·-·_ 20자), 비우면 VENDOR_AUTO_CODE(C0001부터 다음 번호). ensureVendor로 자동 등록되는 거래처도 코드를 받습니다. 관리자 「빈 코드 자동 채우기」(POST /api/vendors/fill-codes). bindPartnerPicker는 목록 라벨에 코드를 보이고, 코드를 그대로 치면 change(capture)에서 이름으로 바꿉니다.
+- 잔량 = 수주 수량 − 유효한(active) 매출전표 줄 수량(ORDER_BILLED). 마감·취소된 수주는 잔량 0. 상태: waiting/partial/done(+closed/cancelled)은 계산값.
+- POST /api/sales-bills의 source_type 'order' 줄: 수주 열림·같은 거래처·잔량 이하·한 전표에 같은 수주 줄 한 번. 저장은 source_type 'manual' + order_line_id로, INSERT…SELECT가 잔량·열림을 다시 확인하고 RC_GUARD로 전체를 되돌립니다. 같은 배치에서 ship_instructions를 만듭니다.
+- 출하 처리(POST /api/ship-instructions/ship, 물류): 지시를 shipped로(+RC_GUARD), shipments에 batch_id 'si:<지시 id>'로 한 줄, 지시에 shipment_id, 전표 줄을 source_type 'ship'·source_id=출하로 바꿉니다(이후 출하 수정·삭제는 기존 규칙대로 전표가 막음).
+- 매출전표 취소: 대기 중인 지시도 cancelled. 이미 출하된 것은 출하로 남아 「전표 없는 출하」에 다시 나옵니다.
+- 수주 고치기는 전표를 한 번도(취소된 전표 포함) 잡지 않았을 때만, 줄을 통째로 바꿉니다. 그 뒤에는 「잔량 마감」·다시 열기.
+- 화면: 영업 › 수주(입력·목록·상세 modal), 매출전표 입력 「수주 잔량」 구역(wpa:sbill-order로 상세에서 넘어오면 그 수주 줄이 체크됨), 물류 › 출하 › 출하지시(배지: my-tasks ship_instructions), 발주 목록 입고·전표·잔량 칸(billed_qty).
+- 표 그리기: 전체가 빈 칸은 숨기는 규칙(col-empty)을 입력 표에서 끄려면 table에 data-keep-cols. 수주 입력 표는 품목 칸이 가장 넓습니다(.so-grid).
