@@ -654,3 +654,11 @@ INVITE_CODE=local-test-code npm start
 - 발행: POST /api/tax-invoices/issue {ids}. 먼저 점검(우리 회사·거래처 사업자번호 10자리·상호·대표자·이메일 1) 400, 그다음 settings 'tax_link'가 없으면 409 「트러스빌 연동이 아직 연결되지 않아…」(조용히 쌓지 않음). 연결되면 queued.
 - 트러스빌: Windows Agent(DB 연동) 사용 예정. Agent는 회사 PC에서 ODBC/OLE로 SaleEBill·Itemlist(최대 99줄)·EB_Status 등 표를 읽어 서명·전송하고 상태를 받는다. SaleEBill에 RecEMail·RecEMail2가 있어 받는 이메일 2개와 맞음. 우리 D1에는 직접 붙을 수 없으므로 회사 PC의 로컬 DB + 연결 프로그램(queued → SaleEBill/Itemlist, EB_Status·NTS 승인번호 → 우리 API)이 다음 단계. 공급자 담당자 TrusBill ID(MemID)·담당자명·이메일·전화가 순발행 필수.
 - 사용자 PPT(계산서 발행하는 법) 반영: 매출전표 보기에 「세금계산서 담기」(로스제로 납품전표 TAX 버튼처럼 건별), 매출전표 목록에 세금계산서 칸(안 담음/상태·번호), 담긴 전표는 보기에서 취소 버튼 숨김. 청구/영수 기본값은 영수(사용자 화면 기준).
+
+## 15.82~15.83 검증 수정 · 표 격자 · 메뉴 부서 구분 (15.84)
+- 「이전 입고」 LOT의 잡은 수량 = 그 LOT의 po_lot 전표 줄 + 그 발주의 예전 'po' 전표 줄(lotBilled). 예전 방식으로 일부만 전표를 잡은 뒤 LOT 입고가 붙어도 남은 수량이 열려 있습니다(예전에는 그 LOT 전체가 빠져 남은 수량을 영영 못 잡음). 저장 가드도 같은 합으로 비교합니다.
+- 매입전표 수량은 남은 입고 수량까지만(넘으면 400, 「물류에서 입고 수량을 먼저 고치세요」). 그 발주에 처리 중인 입고 수정 요청이 있으면 409. 입고 수정 승인은 batch 첫 문장에서 활성 매입전표 줄이 있으면 오류로 전체를 되돌립니다(409).
+- 매출전표 취소 UPDATE에 「활성 계산서 연결 없음」 조건, 계산서 담기의 연결 INSERT는 「확정 전표일 때만」 + RC_GUARD(경합 시 409). 월별은 전표마다 문장을 만들지 않고 INSERT … SELECT 한 문장 + 건수·합계 가드(D1 요청당 문장 수 제한). 같은 request_id 재시도가 겹치면 저장된 것을 duplicate로 돌려줍니다.
+- PUT /api/vendors/:id/tax-info는 영업·구매 담당·관리자만(받는 이메일이 계산서 발송 주소이므로).
+- 표 가독성(사용자 요청 「재고·수치 화면에 그리드가 없어 불편」): PC 표(table.grid:not(.as-cards))에 연한 가로 격자(--grid-line), 짝수 줄 음영(--zebra, row-*·bill-picked·bill-group·ledger-pay 줄 제외), 마우스 올림 강조, 합계(tfoot) 바탕. 숫자 칸(td.r)이 있는 표는 세로 격자도 긋고 숫자는 tabular-nums. 휴대폰 카드는 그대로. 라이트·다크 변수 두 벌.
+- 메뉴: .nav-group에 data-dept(home·sales·purchase·quality·dev·production·logistics·manage)를 붙이고 부서 이름을 색 막대가 있는 굵은 머리로, 묶음 사이에 구분선, 현재 화면 링크 왼쪽에 부서 색. 새 업무 묶음을 만들면 NAV_GROUP_KEY와 색(--dept)을 함께 넣으세요.

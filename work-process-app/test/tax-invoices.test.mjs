@@ -98,3 +98,15 @@ test('Single and monthly invoices; one bill in one invoice; edit, cancel, locks;
   assert.equal((await seller('POST', `/api/tax-invoices/${inv1.id}/cancel`, {})).status, 400);
   assert.equal((await staff('GET', '/api/tax-invoices')).status, 403);
 });
+
+test('15.84 review fixes: tax info needs sales/purchase, cancel refuses an invoiced bill even if the pre-check is bypassed, replay', async () => {
+  const v = (await admin('GET', '/api/vendors?q=' + encodeURIComponent('세흥상사'))).body[0];
+  assert.equal((await staff('PUT', `/api/vendors/${v.id}/tax-info`, { tax_email: 'evil@x.test' })).status, 403);
+  const b = await bill('세흥상사', 'CF800', 1, 100);
+  const token = rid();
+  const first = await seller('POST', '/api/tax-invoices', { kind: 'single', bill_ids: [b.id], request_id: token });
+  assert.equal(first.status, 200);
+  assert.equal((await seller('POST', '/api/tax-invoices', { kind: 'single', bill_ids: [b.id], request_id: token })).body.duplicate, true);
+  assert.equal((await seller('POST', `/api/sales-bills/${b.id}/cancel`, { reason: 'x' })).status, 409);
+  assert.equal(sqlite.prepare('SELECT status FROM sales_bills WHERE id=?').get(b.id).status, 'confirmed');
+});

@@ -134,3 +134,33 @@ test('15.82 A receipt line can be billed in parts; the statement quantity may di
   await buyer('POST', `/api/purchase-bills/${first.body.id}/cancel`, { reason: '수량 정정' });
   const [again] = await open(); assert.equal(again.qty - again.billed_qty, 25);
 });
+
+test('15.84 review fixes: legacy PO billed in part then lot receipt, no over-billing, pending receipt change, approval guard', async () => {
+  // 예전 방식으로 5 받고 3만 전표 → 나중에 LOT 입고 5 → 「이전 입고」 LOT에 남은 2가 열려 있어야 함
+  const p = await po('레거시', '원단L', 10, 100);
+  assert.equal((await staff('POST', '/api/po/receive', { ids: [p.id], status: 'mismatch', recv_qty: 5 })).status, 200);
+  const open = async v => (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent(v))).body.rows;
+  const [legacy] = await open('레거시');
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '레거시', bill_date: today, request_id: rid(), lines: [{ source_type: 'po', source_id: legacy.source_id, qty: 3 }] })).status, 200);
+  assert.equal((await staff('POST', '/api/receipts', { receipt_date: today, vendor: '레거시', request_id: rid(), lines: [{ po_id: p.id, lot: 'N1', qty: 5 }] })).status, 200);
+  const rows = await open('레거시');
+  const prev = rows.find(r => r.lot_note === '이전 입고'), n1 = rows.find(r => r.lot === 'N1');
+  assert.ok(prev, JSON.stringify(rows)); assert.deepEqual([prev.qty, prev.billed_qty, n1.qty, n1.billed_qty], [5, 3, 5, 0]);
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '레거시', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: prev.source_id, qty: 3 }] })).status, 400, 'only 2 left');
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '레거시', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: prev.source_id }] })).body.lines[0].qty, 2);
+  assert.equal((await open('레거시')).length, 1, 'only N1 left');
+  // 남은 수량보다 많이는 안 됨
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '레거시', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: n1.source_id, qty: 1000000 }] })).status, 400);
+  // 입고 수정 요청이 처리 중이면 전표 못 잡음, 승인 전에 전표가 잡혔으면 승인 409
+  const q = await po('승인상사', '원단Q', 10, 100);
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '승인상사', request_id: rid(), lines: [{ po_id: q.id, lot: 'Q1', qty: 10 }] });
+  const change = await staff('POST', `/api/po/${q.id}/receipt-changes`, { action: 'qty', recv_qty: 8, reason: '수량 오류', request_id: rid() });
+  assert.equal(change.status, 200, JSON.stringify(change.body));
+  const [qline] = await open('승인상사');
+  assert.equal((await buyer('POST', '/api/purchase-bills', { vendor: '승인상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'po_lot', source_id: qline.source_id }] })).status, 409);
+  sqlite.prepare("INSERT INTO purchase_bill_lines(bill_id,source_type,source_id,po_id,item,qty,unit_price,supply) VALUES(0,'po_lot',?,?,'원단Q',1,100,100)").run(qline.source_id, q.id); // 경합 흉내
+  const changeId = sqlite.prepare("SELECT id FROM receipt_qty_changes WHERE po_id=? AND status='pending'").get(q.id).id;
+  const appr = await admin('POST', `/api/receipt-changes/${changeId}/approve`, {});
+  assert.equal(appr.status, 409, JSON.stringify(appr.body) + JSON.stringify(change.body));
+  assert.equal(sqlite.prepare('SELECT recv_qty FROM purchase_orders WHERE id=?').get(q.id).recv_qty, 10, 'nothing applied');
+});

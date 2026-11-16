@@ -1247,3 +1247,34 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .tax-actions { margin: 8px 0; gap: 8px; }
 @media (max-width: 700px) { .tax-parties, .tax-parties tbody, .tax-parties tr, .tax-parties th, .tax-parties td { display: block; width: auto; } .tax-parties .tax-side { display: none; } }
 #toast.err span { white-space: pre-line; }
+/* 15.84 표 가독성: 연한 격자·줄 음영(PC 표만, 휴대폰 카드 .as-cards 제외) */
+:root { --grid-line: #e3e7ec; --grid-head: #cdd4dd; --zebra: #f8f9fb; --row-hover: #eef4fe; --total-bg: #f1f3f6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --grid-line: #34343e; --grid-head: #474754; --zebra: #24242b; --row-hover: #2a3142; --total-bg: #2a2a32; } }
+:root[data-theme="dark"] { --grid-line: #34343e; --grid-head: #474754; --zebra: #24242b; --row-hover: #2a3142; --total-bg: #2a2a32; }
+/* 모든 table.grid에 as-cards 클래스가 붙고 카드 모양은 700px 이하 미디어 쿼리가 정하므로, 격자는 701px 이상에만 적용 */
+@media (min-width: 701px) {
+  table.grid > tbody > tr > td, table.grid > tfoot > tr > * { border-bottom: 1px solid var(--grid-line); }
+  table.grid > thead > tr > th { border-bottom: 1px solid var(--grid-head); }
+  table.grid > tbody > tr:last-child > td { border-bottom: 1px solid var(--grid-line); }
+  table.grid > tbody > tr:nth-child(even):not([class*="row-"]):not(.bill-picked):not(.bill-group):not(.ledger-pay) > td { background: var(--zebra); }
+  table.grid > tbody > tr:not(.bill-group):hover > td { background: var(--row-hover); }
+  table.grid > tfoot > tr > * { background: var(--total-bg); font-weight: 700; border-top: 1px solid var(--grid-head); }
+  /* 숫자가 있는 표는 세로 격자도 */
+  table.grid:has(td.r) > * > tr > :is(td, th) + :is(td, th) { border-left: 1px solid var(--grid-line); }
+  table.grid:has(td.r) > thead > tr > th + th { border-left-color: var(--grid-head); }
+}
+table.grid td.r, table.grid th.r { font-variant-numeric: tabular-nums; }
+/* 15.84 메뉴: 부서(업무 묶음) 이름을 색 막대가 있는 머리로 구분 */
+.nav-group[data-dept] { --dept: #6b7684; }
+.nav-group[data-dept="sales"] { --dept: #3182f6; }
+.nav-group[data-dept="purchase"] { --dept: #f08c00; }
+.nav-group[data-dept="quality"] { --dept: #12b886; }
+.nav-group[data-dept="dev"] { --dept: #7950f2; }
+.nav-group[data-dept="production"] { --dept: #e8590c; }
+.nav-group[data-dept="logistics"] { --dept: #1098ad; }
+.nav-group[data-dept="manage"] { --dept: #868e96; }
+.nav-group[data-dept] + .nav-group[data-dept] { border-top: 1px solid var(--line); padding-top: 10px; }
+.nav-group[data-dept] > .nav-title { display: flex; align-items: center; gap: 8px; margin: 2px 4px 6px; padding: 6px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 800; color: var(--text); letter-spacing: 0; background: color-mix(in srgb, var(--dept) 10%, transparent); }
+.nav-group[data-dept] > .nav-title::before { content: ''; width: 4px; height: 15px; border-radius: 2px; background: var(--dept); flex: none; }
+.nav-group[data-dept] .nav-sub > a, .nav-group[data-dept] > a { border-left: 2px solid transparent; }
+.nav-group[data-dept] a.active { border-left-color: var(--dept); }
