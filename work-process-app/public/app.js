@@ -578,7 +578,8 @@ window.addEventListener('hashchange', render);
 function sortableTable(table) {
   if (!table || table.hasAttribute('data-no-sort') || table.closest('.modal')) return false;
   const rows = [...(table.tBodies[0]?.rows || [])], n = table.tHead?.rows[0]?.cells.length;
-  return rows.length > 1 && !!n && !table.tBodies[0].querySelector('input, select, textarea, [colspan], [rowspan]') && rows.every(tr => tr.cells.length === n);
+  const totalRow = tr => /^(합계|총계|소계|계|total)$/i.test((tr.cells[0]?.textContent || '').trim()) || /sum|total/.test(tr.className);
+  return rows.length > 1 && !!n && !table.tBodies[0].querySelector('input, select, textarea, [colspan], [rowspan]') && rows.every(tr => tr.cells.length === n) && !rows.some(totalRow);
 }
 function sortKey(td) {
   const t = (td?.textContent || '').trim(), num = t.replace(/[,원%\s]/g, '');

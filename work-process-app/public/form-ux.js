@@ -233,6 +233,7 @@ function fxServerError(form, button, message) {
 // F3: 목록 조회 조건의 검색 칸으로 이동. 한글 조합 중이거나 보조키를 누르면 쓰지 않는다.
 document.addEventListener('keydown', event => {
   if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if ((event.key === 'F8' || event.key === 'F3') && event.repeat) { event.preventDefault(); return; } // 누르고 있어도 한 번만(중복 저장 방지)
   const visible = el => el && el.offsetParent !== null && !el.disabled;
   if (event.key === 'F8') {
     const modal = [...document.querySelectorAll('.modal-wrap .modal')].at(-1), scope = modal || document.getElementById('main');
@@ -240,6 +241,7 @@ document.addEventListener('keydown', event => {
     const saveOf = form => [...form.querySelectorAll(':scope > .actions:last-child > .btn.primary:not([type=button]), :scope .actions .btn.primary:not([type=button])')].find(visible);
     const forms = [...scope.querySelectorAll('form:not(.list-filters):not([data-read-only])')];
     const own = document.activeElement?.closest?.('form');
+    if (own?.matches('.list-filters, [data-read-only]')) return; // 조회 조건 칸에서는 저장하지 않는다
     const ordered = own && forms.includes(own) ? [own, ...forms.filter(f => f !== own)] : forms;
     for (const form of ordered) { const button = saveOf(form); if (button) { event.preventDefault(); button.click(); return; } }
   } else if (event.key === 'F3') {

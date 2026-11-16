@@ -282,25 +282,32 @@ async function pageReceiptStatus(main) {
   // 15.98 거래처별: 분류 칸 대신 거래처 → 품목(품목명·규격·수량·단위·단가·금액). 분류는 품목 등록 때 정해지므로 위 분류 탭으로 거른다
   // (탭을 누르면 그 분류를 거래한 거래처만). 같은 품목이라도 단가가 다르면 줄을 나눈다. 거래처마다 「계」 줄에 줄 보기·전표 입력.
   const drawVendors = () => {
-    const lines = data.lines.filter(l => !cat || l.category === cat), groups = new Map();
-    for (const l of lines) {
-      if (!groups.has(l.vendor)) groups.set(l.vendor, { vendor: l.vendor, items: new Map(), qty: 0, amount: 0, estimate: 0, open: 0, unpriced: 0 });
-      const g = groups.get(l.vendor), key = [l.item, l.spec || '', l.unit || '', l.unit_price ?? ''].join('\u0001');
-      if (!g.items.has(key)) g.items.set(key, { item: l.item, code: l.product_code || '', spec: l.spec || '', unit: l.unit || '', price: l.unit_price, qty: 0, amount: 0, unpriced: 0 });
-      const it = g.items.get(key), money = (l.confirmed || 0) + (l.estimate || 0);
-      it.qty += l.qty; it.amount += money; it.unpriced += l.unpriced ? 1 : 0;
-      g.amount += money; g.estimate += l.estimate || 0; g.open += l.state === 'open' || l.state === 'partial' ? 1 : 0; g.unpriced += l.unpriced ? 1 : 0;
+    // 거래처 목록·계·합계는 서버 집계(data.vendors, 이름 키로 묶임·전체 줄)에서, 품목 줄은 받아 온 입고 줄(최대 3000)에서 만든다.
+    const vkey = v => String(v ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
+    const vendors = data.vendors.filter(v => !cat || v.by?.[cat]);
+    if (!vendors.length) { $('#rsVendors', main).innerHTML = `<div class="empty">${esc(cat ? `그 기간에 ${cat} 입고가 없습니다.` : '그 기간에 입고가 없습니다.')}</div>`; return; }
+    const items = new Map(vendors.map(v => [vkey(v.vendor), new Map()]));
+    for (const l of data.lines) {
+      if (cat && l.category !== cat) continue;
+      const bucket = items.get(vkey(l.vendor)); if (!bucket) continue;
+      const key = [l.item, l.spec || '', l.unit || '', l.unit_price ?? ''].join('\u0001');
+      if (!bucket.has(key)) bucket.set(key, { item: l.item, code: l.product_code || '', spec: l.spec || '', unit: l.unit || '', price: l.unit_price, qty: 0, amount: 0, unpriced: 0 });
+      const it = bucket.get(key); it.qty += l.qty; it.amount += (l.confirmed || 0) + (l.estimate || 0); it.unpriced += l.unpriced ? 1 : 0;
     }
-    const list = [...groups.values()].sort((a, b) => b.amount - a.amount || a.vendor.localeCompare(b.vendor, 'ko'));
-    if (!list.length) { $('#rsVendors', main).innerHTML = `<div class="empty">${esc(cat ? `그 기간에 ${cat} 입고가 없습니다.` : '그 기간에 입고가 없습니다.')}</div>`; return; }
-    const body = list.map(g => [...g.items.values()].map((it, k) => `<tr>
-        <td>${k ? '' : `<b>${esc(g.vendor)}</b>`}</td><td data-card-primary><b>${esc(it.item)}</b>${it.code ? ` <span class="small muted">${esc(it.code)}</span>` : ''}</td><td>${esc(it.spec)}</td>
-        <td class="r">${fmtNum(it.qty)}</td><td>${esc(it.unit)}</td><td class="r">${it.price == null ? '<span class="chip yellow">단가 없음</span>' : fmtNum(it.price)}</td><td class="r">${amount(it.amount)}</td></tr>`).join('')
-      + `<tr class="month-sum rs-vendor-sum"><td colspan="3">${esc(g.vendor)} <span>계</span></td><td class="r">${fmtNum(g.qty || [...g.items.values()].reduce((t, it) => t + it.qty, 0))}</td><td></td><td></td><td class="r"><b>${won(g.amount)}</b>${g.estimate ? `<div class="small muted">${esc(`미확정 ${won(g.estimate)}`)}</div>` : ''}</td>
-        <td class="nowrap"><button type="button" class="btn small" data-rs-vendor="${esc(g.vendor)}">줄 보기</button>${g.open ? ` <button type="button" class="btn small" data-rs-bill="${esc(g.vendor)}">전표 입력</button>` : ''}</td></tr>`).join('');
-    const total = list.reduce((t, g) => t + g.amount, 0);
+    const totals = v => cat ? { amount: v.by[cat].confirmed + v.by[cat].estimate, estimate: v.by[cat].estimate, open: v.by[cat].open } : { amount: v.total, estimate: v.estimate, open: v.open };
+    const list = vendors.map(v => ({ v, t: totals(v), rows: [...items.get(vkey(v.vendor)).values()] })).sort((a, b) => b.t.amount - a.t.amount || a.v.vendor.localeCompare(b.v.vendor, 'ko'));
+    const priceCell = it => it.price != null ? fmtNum(it.price) : it.unpriced ? '<span class="chip yellow">단가 없음</span>' : '';
+    const body = list.map(({ v, t, rows }) => {
+      const units = new Set(rows.map(it => it.unit)), qty = units.size === 1 ? fmtNum(rows.reduce((s, it) => s + it.qty, 0)) : '';
+      return rows.map((it, k) => `<tr>
+        <td>${k ? '' : `<b>${esc(v.vendor)}</b>`}</td><td data-card-primary><b>${esc(it.item)}</b>${it.code ? ` <span class="small muted">${esc(it.code)}</span>` : ''}</td><td>${esc(it.spec)}</td>
+        <td class="r">${fmtNum(it.qty)}</td><td>${esc(it.unit)}</td><td class="r">${priceCell(it)}</td><td class="r">${amount(it.amount)}</td><td></td></tr>`).join('')
+      + `<tr class="month-sum rs-vendor-sum"><td colspan="3">${esc(v.vendor)} <span>계</span></td><td class="r">${qty}</td><td>${units.size === 1 ? esc([...units][0]) : ''}</td><td></td><td class="r"><b>${won(t.amount)}</b>${t.estimate ? `<div class="small muted">${esc(`미확정 ${won(t.estimate)}`)}</div>` : ''}</td>
+        <td class="nowrap"><button type="button" class="btn small" data-rs-vendor="${esc(v.vendor)}">줄 보기</button>${t.open ? ` <button type="button" class="btn small" data-rs-bill="${esc(v.vendor)}">전표 입력</button>` : ''}</td></tr>`;
+    }).join('');
+    const total = list.reduce((s, x) => s + x.t.amount, 0);
     $('#rsVendors', main).innerHTML = `<div class="table-wrap dense-wrap" tabindex="0" role="region" aria-label="입고현황 표 · 좌우로 스크롤"><table class="grid keep-table dense-grid rs-vendors" data-no-sort data-keep-cols><thead><tr><th>거래처</th><th>품목명</th><th>규격</th><th class="r">수량</th><th>단위</th><th class="r">단가</th><th class="r">금액</th><th></th></tr></thead>
-      <tbody>${body}</tbody><tfoot><tr class="grand-sum"><th colspan="6">${esc(`합계 · 거래처 ${list.length}곳`)}</th><td class="r"><b>${won(total)}</b></td><td></td></tr></tfoot></table></div>${data.more ? '<p class="small muted">입고 줄이 많아 앞 3000줄로 계산했습니다. 기간을 좁히세요.</p>' : ''}`;
+      <tbody>${body}</tbody><tfoot><tr class="grand-sum"><th colspan="6">${esc(`합계 · 거래처 ${list.length}곳`)}</th><td class="r"><b>${won(total)}</b></td><td></td></tr></tfoot></table></div>${data.more ? '<p class="small muted">입고 줄이 많아 품목 줄은 앞 3000줄만 보입니다(거래처 계·합계는 전체 기준). 기간을 좁히세요.</p>' : ''}`;
     labelRows('#rsVendors');
   };
   const visibleLines = () => data.lines.filter(l => (!cat || l.category === cat) && (!vendorFilter || l.vendor === vendorFilter));
