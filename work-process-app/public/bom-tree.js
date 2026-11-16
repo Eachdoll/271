@@ -19,7 +19,7 @@ function bomWhereUsed(name, all) {
   $('[data-close]', m.el).onclick = m.close;
 }
 // host: 표를 넣을 곳, boms: 지금 조건의 품목, all: 전체 품목(코드·역조회용), reload: 저장 뒤 다시 읽기
-function renderBomTree(host, boms, all, reload) {
+function renderBomTree(host, boms, all, reload, onEdit = null) {
   const catalog = bomTreeCatalog(all);
   const tree = boms.filter(b => (b.materials || []).length);
   const skipped = boms.length - tree.length;
@@ -74,6 +74,8 @@ function renderBomTree(host, boms, all, reload) {
     host.oninput = host.onchange = e => { if (e.target.matches('[data-bt-base],[data-bt-qty],[data-bt-active]')) mark(); };
     $$('[data-bt-used]', host).forEach(button => button.onclick = () => bomWhereUsed(button.dataset.btUsed, all));
     $('[data-bt-reset]', host).onclick = () => { dirty.clear(); draw(); };
+    // 다시 그린 뒤에도 「수정」이 동작하도록 여기서 붙인다(15.75).
+    if (onEdit) $$('[data-bom-edit]', host).forEach(button => button.onclick = () => onEdit(Number(button.dataset.bomEdit)));
     $('[data-bt-save]', host).onclick = async () => {
       const button = $('[data-bt-save]', host); button.disabled = true;
       const errors = []; let saved = 0;

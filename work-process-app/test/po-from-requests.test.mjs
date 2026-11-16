@@ -122,3 +122,15 @@ test('15.70: the PO-sheet note typed when ordering is kept after the automatic r
   const made = (await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', note: '성적서 동봉', lines: [{ id: pr.items[0].id, qty: 12 }] })).body.created[0];
   assert.equal(made.note, `구매의뢰 ${pr.doc_no} · L · 의뢰 10 → 발주 12 · 성적서 동봉`);
 });
+
+test('15.75: re-submitting a request keeps a spec saved before sizes were registered', async () => {
+  const bom = (await admin('POST', '/api/boms', { product: '사이즈후등록', product_code: 'SZ-9', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const pr = (await sales('POST', '/api/purchase-requests', { doc_date: '2026-11-16', title: '이전 규격', approvers: [ids['팀장']], items: [{ bom_id: bom.id, item: 'x', spec: '245', qty: 1 }] })).body;
+  await boss('POST', `/api/purchase-requests/${pr.id}/decision`, { decision: 'rejected', comment: '수량 확인' });
+  const node = (await admin('POST', '/api/item-categories', { item_class: '상품', name: '사이즈후등록분류', sizes: '240,250' })).body.id;
+  await admin('PUT', `/api/boms/${bom.id}`, { ...bom, cat1: '사이즈후등록분류' });
+  assert.ok(node);
+  const again = await sales('PUT', `/api/purchase-requests/${pr.id}`, { doc_date: '2026-11-16', title: '이전 규격', approvers: [ids['팀장']], items: [{ bom_id: bom.id, item: 'x', spec: '245', qty: 2 }], revision: pr.revision + 1 });
+  assert.equal(again.status, 200, JSON.stringify(again.body)); assert.equal(again.body.items[0].spec, '245');
+  assert.equal((await sales('PUT', `/api/purchase-requests/${pr.id}`, { doc_date: '2026-11-16', title: '이전 규격', approvers: [ids['팀장']], items: [{ bom_id: bom.id, item: 'x', spec: '999', qty: 2 }], revision: again.body.revision })).status, 400, 'a new unregistered size is still refused');
+});

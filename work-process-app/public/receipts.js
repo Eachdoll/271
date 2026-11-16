@@ -38,7 +38,7 @@ async function pageReceiptEntry(main) {
         <button type="button" class="btn small danger" data-rc-remove>선택 줄 삭제</button>
         ${rcCanManageWarehouse() ? '<button type="button" class="btn small" data-rc-warehouses>창고·위치 관리</button>' : ''}
       </div>
-      <div class="table-wrap"><table class="grid rc-grid"><caption class="sr-only">입고 상세 줄</caption><thead><tr><th scope="col"><input type="checkbox" data-rc-all aria-label="전체 줄 선택"></th><th scope="col">No</th><th scope="col">품목</th><th scope="col">단위</th><th scope="col">LOT</th><th scope="col">수량</th><th scope="col">창고</th><th scope="col">위치</th><th scope="col">비고</th><th scope="col"><span class="sr-only">줄 작업</span></th></tr></thead><tbody data-rc-lines></tbody></table></div>
+      <div class="table-wrap"><table class="grid rc-grid"><caption class="sr-only">입고 상세 줄</caption><thead><tr><th scope="col"><input type="checkbox" data-rc-all aria-label="전체 줄 선택"></th><th scope="col">No</th><th scope="col">품목</th><th scope="col">규격</th><th scope="col">단위</th><th scope="col">LOT</th><th scope="col">수량</th><th scope="col">창고</th><th scope="col">위치</th><th scope="col">비고</th><th scope="col"><span class="sr-only">줄 작업</span></th></tr></thead><tbody data-rc-lines></tbody></table></div>
       <p class="pr-totals" data-rc-total aria-live="polite"></p>
     </section>
     <div class="actions"><button class="btn primary" data-rc-save>입고 등록</button></div>
@@ -63,7 +63,8 @@ async function pageReceiptEntry(main) {
     body.innerHTML = lines.map((l, i) => `<tr data-rc-line="${l.key}">
       <td><input type="checkbox" data-rc-pick aria-label="${i + 1}번째 줄 선택"${l.picked ? ' checked' : ''}></td>
       <td class="c">${i + 1}<div class="small muted">${RC_KIND_LABEL[l.po_id ? 'po' : 'other']}</div></td>
-      <td data-card-primary><b>${esc(l.item)}</b>${l.spec ? ` <span class="small">${esc(l.spec)}</span>` : ''}${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}${poSummary(l)}</td>
+      <td data-card-primary><b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}${poSummary(l)}</td>
+      <td>${l.po_id ? esc(l.spec || '') : (l.sizes || []).length ? `<select data-f="spec" aria-label="${i + 1}번째 줄 규격"><option value="">사이즈</option>${l.sizes.map(z => `<option${z === l.spec ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>` : `<input data-f="spec" value="${esc(l.spec || '')}" maxlength="100" aria-label="${i + 1}번째 줄 규격">`}</td>
       <td>${esc(l.unit || '')}</td>
       <td><input data-f="lot" value="${esc(l.lot || '')}" maxlength="100" aria-label="${i + 1}번째 줄 LOT" placeholder="LOT · 붙여넣기 가능"></td>
       <td><input data-f="qty" type="number" min="0" step="any" inputmode="decimal" value="${esc(l.qty ?? '')}" aria-label="${i + 1}번째 줄 수량" required></td>
@@ -71,7 +72,7 @@ async function pageReceiptEntry(main) {
       <td><select data-f="location" aria-label="${i + 1}번째 줄 위치"${rcLocations(l.warehouse).length ? '' : ' disabled'}>${rcLocationOptions(l.warehouse, l.location)}</select></td>
       <td><input data-f="note" value="${esc(l.note || '')}" maxlength="200" aria-label="${i + 1}번째 줄 비고"></td>
       <td class="nowrap"><button type="button" class="btn small" data-rc-split>LOT 나누기</button> <button type="button" class="btn small danger" data-rc-del aria-label="${i + 1}번째 줄 삭제">×</button></td></tr>`).join('')
-      || '<tr><td colspan="10" class="muted">아직 줄이 없습니다. 발주를 담거나 품목을 추가하세요.</td></tr>';
+      || '<tr><td colspan="11" class="muted">아직 줄이 없습니다. 발주를 담거나 품목을 추가하세요.</td></tr>';
     // 휴대폰 카드의 칸 이름(표는 처음 한 번만 이름표를 붙이므로 다시 그릴 때마다 붙인다)
     const heads = $$('thead th', body.closest('table')).map(th => th.textContent.trim());
     $$('tr', body).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 || i === 0 || i === heads.length - 1 ? '' : heads[i] || ''; }));
@@ -84,7 +85,7 @@ async function pageReceiptEntry(main) {
     $('[data-rc-picked]', form).textContent = `선택 ${lines.filter(l => l.picked).length}줄`;
     for (const el of $$('[data-rc-sum]', body)) { const l = lines.find(x => x.po_id === Number(el.dataset.rcSum)); if (l) el.outerHTML = poSummary(l); }
   };
-  const newLine = (base, extra = {}) => ({ key: 'l' + (++seq), item: base.item, spec: base.spec || '', unit: base.unit || '', product_code: base.product_code || '', po_id: base.po_id || null, po: base.po || null, bom_id: base.bom_id || null, lot: '', qty: '', warehouse: base.warehouse || '', location: base.location || '', note: '', picked: false, ...extra });
+  const newLine = (base, extra = {}) => ({ key: 'l' + (++seq), item: base.item, spec: base.spec || '', sizes: base.sizes || [], unit: base.unit || '', product_code: base.product_code || '', po_id: base.po_id || null, po: base.po || null, bom_id: base.bom_id || null, lot: '', qty: '', warehouse: base.warehouse || '', location: base.location || '', note: '', picked: false, ...extra });
   const insertAfter = (line, list) => { const i = lines.indexOf(line); lines.splice(i + 1, 0, ...list); };
   // 발주 불러오기
   const poBox = $('[data-rc-po]', form);
@@ -133,7 +134,7 @@ async function pageReceiptEntry(main) {
     const bom = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => b.item_category !== '반제품' });
     if (!bom) return;
     if (lines.length >= 100) return toast('입고 줄은 100줄까지입니다.', 'err');
-    const line = newLine({ item: bom.product, unit: bom.unit, product_code: bom.product_code, bom_id: bom.id });
+    const line = newLine({ item: bom.product, unit: bom.unit, product_code: bom.product_code, bom_id: bom.id, sizes: bom.sizes || [] });
     lines.push(line); draw([line.key, 'lot']);
   };
   // 표 안 동작
@@ -184,12 +185,19 @@ async function pageReceiptEntry(main) {
     if (lines.length + count - 1 > 100) return toast('입고 줄은 100줄까지입니다.', 'err');
     const each = v.each !== '' && v.each !== undefined ? Number(v.each) : total ? Math.floor(total / count * 1000) / 1000 : '';
     const made = Array.from({ length: count }, (_, i) => newLine(line, { warehouse: line.warehouse, location: line.location, note: line.note, lot: i === 0 ? line.lot : '', qty: each === '' ? '' : i === count - 1 && v.each === '' && total ? Math.round((total - each * (count - 1)) * 1000) / 1000 : each }));
-    if (v.auto) { const lots = await nextLots(count).catch(() => null); if (lots) made.forEach((l, i) => { l.lot = lots[i]; }); }
+    if (v.auto) { const empty = made.filter(l => !l.lot); const lots = empty.length ? await nextLots(empty.length).catch(() => null) : []; if (lots) empty.forEach((l, i) => { l.lot = lots[i]; }); }
     lines.splice(lines.indexOf(line), 1, ...made); draw([made[0].key, 'lot']);
   });
   $('[data-rc-all]', form).onchange = e => { lines.forEach(l => { l.picked = e.target.checked; }); draw(); };
   const target = () => { readAll(); const picked = lines.filter(l => l.picked); return picked.length ? picked : lines; };
-  const nextLots = async count => (await api('GET', `/api/lots/next?${new URLSearchParams({ prefix: $('[data-rc-prefix]', form).value || 'M', date: form.elements.receipt_date.value || todayStr(), count })}`)).lots;
+  // LOT 자동 번호: 서버가 준 다음 번호와 이 표에 이미 있는 번호 중 큰 것 다음부터(저장 전 줄끼리 겹치지 않게, 15.75).
+  const nextLots = async count => {
+    const first = (await api('GET', `/api/lots/next?${new URLSearchParams({ prefix: $('[data-rc-prefix]', form).value || 'M', date: form.elements.receipt_date.value || todayStr(), count: 1 })}`)).lots[0];
+    const head = first.replace(/\d+$/, ''), width = first.length - head.length;
+    const inGrid = lines.map(l => String(l.lot || '')).filter(x => x.startsWith(head) && /^\d+$/.test(x.slice(head.length))).map(x => Number(x.slice(head.length)));
+    let n = Math.max(Number(first.slice(head.length)) - 1, ...inGrid);
+    return Array.from({ length: count }, () => head + String(++n).padStart(width, '0'));
+  };
   $('[data-rc-autolot]', form).onclick = async () => {
     const list = target().filter(l => !String(l.lot || '').trim());
     if (!list.length) return toast('LOT가 비어 있는 줄이 없습니다.', 'err');

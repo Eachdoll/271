@@ -1136,9 +1136,10 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .rc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 8px; }
 .rc-toolbar input[data-rc-prefix] { width: 5em; }
 .rc-grid input, .rc-grid select { min-width: 0; width: 100%; }
-.rc-grid td:nth-child(5) input { min-width: 9em; }
-.rc-grid td:nth-child(6) input { min-width: 6em; text-align: right; }
-.rc-grid td:nth-child(7) select, .rc-grid td:nth-child(8) select { min-width: 6.5em; }
+.rc-grid td:nth-child(6) input { min-width: 9em; }
+.rc-grid td:nth-child(4) input, .rc-grid td:nth-child(4) select { min-width: 5.5em; }
+.rc-grid td:nth-child(7) input { min-width: 6em; text-align: right; }
+.rc-grid td:nth-child(8) select, .rc-grid td:nth-child(9) select { min-width: 6.5em; }
 .rc-grid td:nth-child(3) { min-width: 12em; word-break: keep-all; overflow-wrap: anywhere; }
 .rc-po-table td:nth-child(3) { word-break: keep-all; overflow-wrap: anywhere; }
 .rc-po-sum { margin-top: 2px; }
@@ -1171,3 +1172,25 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .bt-toggle { font: inherit; border: 0; background: none; color: var(--text); cursor: pointer; width: 28px; height: 28px; border-radius: 6px; }
 .bt-toggle:hover { background: var(--bg); }
 .bt-name { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 15.74 제품등록 목록 가독성 */
+.dup-filter { display: none !important; }
+.bom-table td { vertical-align: middle; padding-top: 7px; padding-bottom: 7px; }
+.bom-table tbody td { border-bottom: 1px solid var(--line); }
+.bom-table tbody tr:hover td { background: var(--accent-soft); }
+.bom-table .bom-code b { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.bom-table .bom-name { min-width: 14em; word-break: keep-all; overflow-wrap: anywhere; }
+.bom-table .bom-class { color: var(--text-2, var(--muted)); font-size: 13.5px; }
+.bom-table tr.row-off td, .bom-table tr.row-off td b { color: var(--muted); font-weight: 400; }
+.bom-mats > summary { max-width: 18em; overflow: hidden; text-overflow: ellipsis; }
+.st-dot { white-space: nowrap; color: var(--muted); }
+.st-dot::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--line); vertical-align: 1px; }
+.st-dot.on { color: var(--green-ink, var(--green)); font-weight: 600; }
+.st-dot.on::before { background: var(--green); }
+.bom-actions { white-space: nowrap; text-align: right; }
+.bom-actions > .btn, .bom-actions > .row-menu { display: inline-block; vertical-align: middle; margin-left: 4px; }
+.row-menu > summary { list-style: none; text-align: center; }
+.row-menu > summary::-webkit-details-marker { display: none; }
+.row-menu[open] > summary { background: var(--accent-soft); }
+.row-menu-list { position: fixed; z-index: 40; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; min-width: 150px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-float, 0 8px 24px rgba(0,0,0,.15)); }
+.row-menu-list .btn { text-align: left; }
