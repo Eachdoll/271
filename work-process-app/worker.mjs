@@ -1179,7 +1179,8 @@ async function unbilledShipments({ customer = '', from = '', to = '', limit = 50
 async function salesBillDetail(bill) {
   const lines = await db.prepare('SELECT * FROM sales_bill_lines WHERE bill_id=? ORDER BY id').all(bill.id);
   for (const l of lines) if (l.source_type === 'ship') l.source_missing = !(await db.prepare('SELECT 1 FROM shipments WHERE id=?').get(l.source_id));
-  return { ...bill, lines, closed: !!(await salesClosed(bill.customer, bill.bill_date)) };
+  const invoice = await db.prepare('SELECT i.id, i.invoice_no, i.status FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1').get(bill.id);
+  return { ...bill, lines, invoice: invoice || null, closed: !!(await salesClosed(bill.customer, bill.bill_date)) };
 }
 const optDate = (v, label) => v ? dateStr(v, label) : '';
 route('GET', '/api/sales-bills/unbilled', async ({ user, query }) => {
@@ -1195,7 +1196,7 @@ route('GET', '/api/sales-bills', async ({ user, query }) => {
   if (query.status) { if (!['confirmed', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   applyListKeyword(where, args, query.q, ['bill_no', 'customer', 'note', 'created_by']);
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
-  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
   return { rows: rows.slice(0, 200), page, more: rows.length > 200 };
 });
 route('GET', '/api/sales-bills/:id', async ({ user, params }) => { requireSales(user); return salesBillDetail(await mustGet('sales_bills', params.id)); });
@@ -1464,7 +1465,7 @@ route('POST', '/api/tax-invoices', async ({ user, body }) => {
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
   const prior = await db.prepare('SELECT * FROM tax_invoices WHERE request_id=? ORDER BY id').all(token);
   if (prior.length) { if (prior[0].created_by_id !== user.id) throw new HttpError(409, '이미 사용된 등록 요청입니다. 새로 열어 등록하세요.'); return { rows: prior, duplicate: true }; }
-  const charge = body.charge === 'receipt' ? 'receipt' : 'claim', note = str(body.note, 200);
+  const charge = body.charge === 'claim' ? 'claim' : 'receipt', note = str(body.note, 200); // 기본 영수(사용자 화면 기준)
   const cmds = [], made = [];
   if (body.kind === 'monthly') {
     const customer = reqStr(body.customer, '거래처', 100), from = dateStr(body.from, '시작일'), to = dateStr(body.to, '종료일');

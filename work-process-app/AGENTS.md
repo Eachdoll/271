@@ -653,3 +653,4 @@ INVITE_CODE=local-test-code npm start
 - 담기: POST /api/tax-invoices kind single(bill_ids → 장마다 1건, 작성일자 기본 전표 일자, 품목=전표 줄) / monthly(customer·from·to → 담지 않은 전표 전부 1장, 작성일자 기본 기간 마지막 날, 품목=전표마다 1줄 「첫 품목 외 N건」). 발행 전·실패만 고치기(작성일자·청구/영수·이메일 2개·비고·거래처 정보 다시 불러오기)·담기 취소. 담긴 매출전표는 취소 409.
 - 발행: POST /api/tax-invoices/issue {ids}. 먼저 점검(우리 회사·거래처 사업자번호 10자리·상호·대표자·이메일 1) 400, 그다음 settings 'tax_link'가 없으면 409 「트러스빌 연동이 아직 연결되지 않아…」(조용히 쌓지 않음). 연결되면 queued.
 - 트러스빌: Windows Agent(DB 연동) 사용 예정. Agent는 회사 PC에서 ODBC/OLE로 SaleEBill·Itemlist(최대 99줄)·EB_Status 등 표를 읽어 서명·전송하고 상태를 받는다. SaleEBill에 RecEMail·RecEMail2가 있어 받는 이메일 2개와 맞음. 우리 D1에는 직접 붙을 수 없으므로 회사 PC의 로컬 DB + 연결 프로그램(queued → SaleEBill/Itemlist, EB_Status·NTS 승인번호 → 우리 API)이 다음 단계. 공급자 담당자 TrusBill ID(MemID)·담당자명·이메일·전화가 순발행 필수.
+- 사용자 PPT(계산서 발행하는 법) 반영: 매출전표 보기에 「세금계산서 담기」(로스제로 납품전표 TAX 버튼처럼 건별), 매출전표 목록에 세금계산서 칸(안 담음/상태·번호), 담긴 전표는 보기에서 취소 버튼 숨김. 청구/영수 기본값은 영수(사용자 화면 기준).

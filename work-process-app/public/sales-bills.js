@@ -119,10 +119,18 @@ function salesBillSheet(bill, after = null) {
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
     </section>
-    <div class="actions"><button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.closed ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);
+  // 건별 세금계산서 담기(로스제로 납품전표의 TAX 버튼처럼)
+  $('[data-bill-tax]', m.el)?.addEventListener('click', async () => {
+    try {
+      const r = await api('POST', '/api/tax-invoices', { kind: 'single', bill_ids: [bill.id], request_id: crypto.randomUUID() });
+      toast(`세금계산서 ${r.rows[0].invoice_no}에 담았습니다. 「세금계산서 관리」에서 발행하세요.`);
+      m.close(); salesBillSheet(await api('GET', '/api/sales-bills/' + bill.id), after); await after?.();
+    } catch (error) { fail(error); }
+  });
   const cancel = $('[data-bill-cancel]', m.el);
   if (cancel) cancel.onclick = async () => {
     const v = await promptBox('매출전표 취소', `<p class="small muted">${esc(bill.bill_no)}을(를) 취소하면 그 출하 줄은 다시 「전표 없는 출하」로 돌아갑니다.</p><label>취소 사유 *<input name="reason" required maxlength="200"></label>`);
@@ -154,7 +162,7 @@ async function pageSalesBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원 (공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))} · 부가세 ${won(live.reduce((t, r) => t + r.vat_total, 0))})`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><b>${esc(r.bill_no)}</b></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>전표번호</th><th>전표 일자</th><th>거래처</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead><tbody>${rows.map(r => { const inv = r.invoice ? r.invoice.split('|') : null; return `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td data-card-primary><b>${esc(r.bill_no)}</b></td><td>${esc(r.bill_date)}</td><td>${esc(r.customer)}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${inv ? `${taxChip(inv[1])}<div class="small muted">${esc(inv[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 담음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 매출전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
