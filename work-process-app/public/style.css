@@ -1213,6 +1213,27 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .bill-grid tr.bill-picked td { background: var(--accent-soft); }
 .bill-grid input[data-bill-price] { width: 7.5em; text-align: right; }
 .bill-grid input[data-bill-note] { min-width: 8em; }
+.bill-grid input[data-order-qty], .bill-grid input[data-order-price] { width: 7.5em; text-align: right; }
+.bill-grid input[data-order-note] { min-width: 8em; }
+/* 15.92 수주 입력 */
+.so-grid tbody tr { cursor: default; }
+/* 품목명 칸이 가장 넓고 나머지는 내용만큼 좁게(15.92) */
+@media (min-width: 701px) {
+  .bill-grid td[data-card-primary] { width: 35%; min-width: 14em; }
+  .bill-grid td.r, .bill-grid th.r, .bill-grid td.nowrap { white-space: nowrap; }
+  .bill-grid input[data-order-qty] { width: 6em; }
+  .bill-grid input[data-order-price] { width: 7em; }
+  .so-grid { width: 100%; }
+  .so-grid td[data-card-primary] { width: 40%; min-width: 16em; }
+  .so-grid td[data-card-primary] b { white-space: nowrap; }
+  .so-grid td:not([data-card-primary]), .so-grid th:not(:first-child) { width: 1%; white-space: nowrap; }
+  .so-grid input[data-l=qty] { width: 6em; }
+  .so-grid input[data-l=price] { width: 7.5em; }
+  .so-grid input[data-l=spec] { width: 7em; }
+  .so-grid input[data-l=due_date] { width: 9.5em; }
+  .so-grid input[data-l=note] { width: 10em; }
+}
+.so-grid input[type=number] { text-align: right; }
 .bill-total { position: sticky; bottom: 0; z-index: 2; }
 .bill-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
 .bill-sum .bill-grand { font-size: 1.1em; }

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.91';
+const APP_VERSION = '15.92';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -289,7 +289,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/payments', '입금'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/payments', '입금'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
@@ -312,7 +312,7 @@ const NAV = [
   ] },
   { group: '물류', items: [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
-    { sub: '출하', items: [['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
+    { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
     ['#/logistics/stock', '재고 현황'],
   ] },
 ];
@@ -484,6 +484,10 @@ const PAGES = {
   '#/purchase/bills': main => pageBillList(main),
   '#/purchase/closing': main => pageBillClosing(main),
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
+  '#/sales/orders/new': main => pageSalesOrderEntry(main),
+  '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
+  '#/sales/orders': main => pageSalesOrderList(main),
+  '#/logistics/ship-orders': main => pageShipInstructions(main),
   '#/sales/bills/new': main => pageSalesBillEntry(main),
   '#/sales/bills': main => pageSalesBillList(main),
   '#/sales/payments': main => pageSalesPayments(main),
@@ -691,6 +695,7 @@ function taskBadgeCounts(tasks) {
   if (a.purchase_requests?.count) counts['#/sales/pr'] = a.purchase_requests.count;
   if (a.purchase_orders_waiting?.count) counts['#/purchase/po/new'] = a.purchase_orders_waiting.count;
   if (a.production_requests?.count) counts['#/prod/orders'] = a.production_requests.count;
+  if (a.ship_instructions?.count) counts['#/logistics/ship-orders'] = a.ship_instructions.count;
   return counts;
 }
 async function refreshNavBadges() {
@@ -745,11 +750,11 @@ function labelGridTables() {
     const heads = $$('thead th', table).map(th => th.textContent.trim());
     const rows = $$('tbody tr', table);
     rows.forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = td.colSpan > 1 ? '' : heads[i] || ''; }));
-    // Desktop: columns that are empty on every row are left out; short values stay on one line.
+    // Desktop: columns that are empty on every row are left out (입력 표처럼 칸이 나중에 채워지면 data-keep-cols로 끈다); short values stay on one line.
     const ths = $$('thead th', table);
     heads.forEach((head, i) => {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
-      if (head && rows.length && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
+      if (head && rows.length && !table.hasAttribute('data-keep-cols') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
     });
     if (!table.classList.contains('as-cards')) return;
@@ -968,6 +973,12 @@ function freightSummary(terms) {
 // ── 기록된 입고 수량 수정·입고 취소 요청 (물류팀장 승인 후 반영) ──
 const canApproveReceipt = () => ME && (ME.is_admin || ME.roles.includes('logistics_approver'));
 function pendingReceipt(po) { try { return typeof po.pending_change === 'string' ? JSON.parse(po.pending_change) : po.pending_change || null; } catch { return null; } }
+// 15.92 발주 대비 잔량: 입고(물류 입고확인) · 전표(매입전표에 잡힌 수량) · 잔량(아직 안 들어온 수량, 입고 종결이면 0)
+function poProgressCells(p) {
+  const received = ['ok', 'mismatch'].includes(p.recv_status) ? Number(p.recv_qty ?? p.qty) : 0, billed = Number(p.billed_qty || 0);
+  const left = p.recv_status === 'ok' ? 0 : Math.max(0, Number(p.qty) - received), unbilled = Math.max(0, received - billed);
+  return `<td class="r">${received ? fmtNum(received) : ''}</td><td class="r">${billed ? fmtNum(billed) : ''}${unbilled ? `<div class="small muted">미전표 ${fmtNum(unbilled)}</div>` : ''}</td><td class="r">${left ? `<b>${fmtNum(left)}</b>` : ''}</td>`;
+}
 function receiptChangeText(c, po = {}) { return c.action === 'qty' ? `실입고 ${fmtNum(c.old_recv_qty ?? po.recv_qty)} → ${fmtNum(c.new_recv_qty)} 수정` : '입고 취소(미입고로)'; }
 function receiptChangeInfo(po) {
   const c = pendingReceipt(po);
@@ -1025,9 +1036,9 @@ async function pagePO(main) {
     listCount(filterForm, rows.length);
     const t = todayStr();
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
-      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
+      <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>

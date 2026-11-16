@@ -267,6 +267,13 @@
       "when": 1795172013000,
       "tag": "0037_tax_invoices",
       "breakpoints": false
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1795258413000,
+      "tag": "0038_sales_orders",
+      "breakpoints": false
     }
   ]
 }

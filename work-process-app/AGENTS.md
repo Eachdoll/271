@@ -701,3 +701,14 @@ INVITE_CODE=local-test-code npm start
 - 메뉴: 펼친 하위 메뉴는 data-sub(이름)로 맞춤(배지·번역 글자가 붙어도 유지).
 - rangePresets: 만든 직후·제출할 때 날짜로 라벨을 다시 맞춤(box.sync, 저장된 조건으로 날짜를 채운 목록), 올해가 아니면 YY.MM/DD, 화면이 바뀌면 문서 리스너 정리.
 - 매입전표 입력: 줄을 하나씩 체크해도 묶음·전체 체크가 맞춰짐. 매출전표 보기 「세금계산서 담기」 두 번 누름 방지.
+
+## 수주 → 분할 매출전표 → 출하지시 → 출하 (15.92, 마이그레이션 0038)
+- 표: sales_orders(SO-YYMMDD-NN, status open/closed/cancelled), sales_order_lines(bom_id 필수 — 품목·코드·단위는 품목 등록에서), ship_instructions(전표 줄 하나당 하나, pending/shipped/cancelled), sales_bill_lines.order_line_id, vendors.code(빈 값이 아니면 UNIQUE).
+- 거래처코드: 직접 넣으면 대문자(영문·숫자·-·_ 20자), 비우면 VENDOR_AUTO_CODE(C0001부터 다음 번호). ensureVendor로 자동 등록되는 거래처도 코드를 받습니다. 관리자 「빈 코드 자동 채우기」(POST /api/vendors/fill-codes). bindPartnerPicker는 목록 라벨에 코드를 보이고, 코드를 그대로 치면 change(capture)에서 이름으로 바꿉니다.
+- 잔량 = 수주 수량 − 유효한(active) 매출전표 줄 수량(ORDER_BILLED). 마감·취소된 수주는 잔량 0. 상태: waiting/partial/done(+closed/cancelled)은 계산값.
+- POST /api/sales-bills의 source_type 'order' 줄: 수주 열림·같은 거래처·잔량 이하·한 전표에 같은 수주 줄 한 번. 저장은 source_type 'manual' + order_line_id로, INSERT…SELECT가 잔량·열림을 다시 확인하고 RC_GUARD로 전체를 되돌립니다. 같은 배치에서 ship_instructions를 만듭니다.
+- 출하 처리(POST /api/ship-instructions/ship, 물류): 지시를 shipped로(+RC_GUARD), shipments에 batch_id 'si:<지시 id>'로 한 줄, 지시에 shipment_id, 전표 줄을 source_type 'ship'·source_id=출하로 바꿉니다(이후 출하 수정·삭제는 기존 규칙대로 전표가 막음).
+- 매출전표 취소: 대기 중인 지시도 cancelled. 이미 출하된 것은 출하로 남아 「전표 없는 출하」에 다시 나옵니다.
+- 수주 고치기는 전표를 한 번도(취소된 전표 포함) 잡지 않았을 때만, 줄을 통째로 바꿉니다. 그 뒤에는 「잔량 마감」·다시 열기.
+- 화면: 영업 › 수주(입력·목록·상세 modal), 매출전표 입력 「수주 잔량」 구역(wpa:sbill-order로 상세에서 넘어오면 그 수주 줄이 체크됨), 물류 › 출하 › 출하지시(배지: my-tasks ship_instructions), 발주 목록 입고·전표·잔량 칸(billed_qty).
+- 표 그리기: 전체가 빈 칸은 숨기는 규칙(col-empty)을 입력 표에서 끄려면 table에 data-keep-cols. 수주 입력 표는 품목 칸이 가장 넓습니다(.so-grid).
