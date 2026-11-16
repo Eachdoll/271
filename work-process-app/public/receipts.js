@@ -28,7 +28,7 @@ async function pageReceiptEntry(main) {
     </div>
     <div class="seg class-tabs rc-tabs" role="group" aria-label="입고 구분"><button type="button" data-rc-tab="po" aria-pressed="true" class="on">발주입고</button><button type="button" data-rc-tab="other" aria-pressed="false">기타입고</button></div>
     <section class="rc-source" data-rc-source="po"><div data-rc-po><p class="muted small">거래처를 넣으면 미입고 발주가 여기에 나옵니다.</p></div></section>
-    <section class="rc-source" data-rc-source="other" hidden><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-rc-add-item>품목 찾기로 줄 추가</button><span class="small muted">반제품은 기타입고로 받지 않습니다(생산 기록).</span></div></section>
+    <section class="rc-source" data-rc-source="other" hidden><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-rc-add-item>품목 추가 (여러 개·LOT 수)</button><span class="small muted">반제품은 기타입고로 받지 않습니다(생산 기록).</span></div></section>
     <section class="pr-section rc-lines-box"><h3>입고 상세</h3>
       <div class="rc-toolbar">
         <span class="small muted" data-rc-picked>선택 0줄</span>
@@ -131,12 +131,16 @@ async function pageReceiptEntry(main) {
   $('[data-rc-add-item]', form).onclick = async () => {
     readAll();
     if (!catalog) catalog = await api('GET', '/api/boms?temp=1').catch(() => []);
-    const bom = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => b.item_category !== '반제품' });
-    if (!bom) return;
-    if (lines.length >= 100) return toast('입고 줄은 100줄까지입니다.', 'err');
-    const line = newLine({ item: bom.product, unit: bom.unit, product_code: bom.product_code, bom_id: bom.id, sizes: bom.sizes || [] });
-    lines.push(line); draw([line.key, 'lot']);
+    // 15.79 ERP처럼 여러 품목을 체크하고 품목마다 LOT 수만큼 줄을 한 번에 만든다(LOT 자동 번호 선택).
+    const pick = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => b.item_category !== '반제품', multi: true });
+    if (!pick) return;
+    const made = pick.items.flatMap(({ bom, count }) => Array.from({ length: count }, () => newLine({ item: bom.product, unit: bom.unit, product_code: bom.product_code, bom_id: bom.id, sizes: bom.sizes || [] })));
+    if (lines.length + made.length > 100) return toast(`입고 줄은 100줄까지입니다. 지금 ${lines.length}줄에 ${made.length}줄을 더할 수 없습니다.`, 'err');
+    if (pick.autoLot) { const lots = await nextLots(made.length).catch(() => null); if (lots) made.forEach((l, k) => { l.lot = lots[k]; }); }
+    lines.push(...made); draw([made[0].key, 'qty']);
+    toast(`${pick.items.length}개 품목 ${made.length}줄을 추가했습니다.`);
   };
+
   // 표 안 동작
   body.addEventListener('change', e => {
     const tr = e.target.closest('tr[data-rc-line]'); if (!tr) return;

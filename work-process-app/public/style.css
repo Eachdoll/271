@@ -1200,3 +1200,8 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .rc-grid td:nth-child(3) { min-width: 10em; }
 .rc-grid td:nth-child(10) input { min-width: 8em; }
 .rc-lines-box .table-wrap, .rc-source .table-wrap, #bomList .table-wrap { position: relative; } /* 숨김 글자(sr-only)가 표 스크롤 밖으로 나가 페이지를 넓히지 않게 */
+
+/* 15.79 품목 찾기 여러 개 고르기 */
+.ip-table tr.ip-picked td { background: var(--accent-soft); }
+.ip-table input[data-ip-n] { width: 5em; text-align: right; }
+.ip-auto { margin-right: auto; }

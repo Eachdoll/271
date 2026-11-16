@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.77';
+const APP_VERSION = '15.79';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -213,6 +213,8 @@ function resizeImage(file, max = 1600) {
 function lightbox(src) { modal(`<img class="lightbox" src="${esc(src)}" alt="사진">`, { wide: true }); }
 
 const INSPECTION = { unchecked: '미판정', normal: '이상 없음', abnormal: '이상 있음' };
+// 15.78 입고에 연결된 수입검사 판정(측정값 저장 후). 판정 전에는 표시하지 않는다.
+function qcChip(row) { return row.qc_result === 'pass' ? ' <span class="chip green">수입검사 합격</span>' : row.qc_result === 'fail' ? ' <span class="chip red">수입검사 불합격</span>' : row.qc_result === 'pending' ? ' <span class="chip yellow">수입검사 측정 중</span>' : ''; }
 function inspectionBadge(row) { return `<span class="chip ${row.inspection_status === 'abnormal' ? 'red' : row.inspection_status === 'normal' ? 'green' : ''}">${INSPECTION[row.inspection_status] || '미판정'}</span>${row.photo_count ? ` <span class="small muted">사진 ${row.photo_count}장</span>` : ''}`; }
 function photoPicker() { return '<label class="span3 photo-picker">사진 첨부 (한 장당 최대 8MB · 최대 10장)<input data-photo-input type="file" accept="image/jpeg,image/png,image/webp" multiple><input data-photo-camera type="file" accept="image/*" capture="environment" hidden><span class="photo-tools"><button type="button" class="btn small" data-photo-shoot>📷 바로 촬영</button> <span class="muted small">한 장당 8MB 이하의 사진을 선택하세요. 촬영한 사진은 이어서 추가됩니다. 사진을 눌러 크게 보고, ×로 뺄 수 있습니다.</span></span><div class="thumbs" data-photo-preview></div></label>'; }
 function bindPhotoDraft(form, initial = []) {
@@ -1107,7 +1109,7 @@ async function pageReceive(main) {
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
-        <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
+        <td>${recvChip(p)}${qcChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td class="small muted">${esc(p.created_by || '기존 기록: 미기록')}</td><td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td>${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 발주가 없습니다.</div>';
     const all = $('#rcAll'); if (all) all.onchange = () => { $$('.rc-check').forEach((c) => (c.checked = all.checked)); updateCount(); };
@@ -1210,7 +1212,7 @@ async function pageOtherReceipts(main, { entry = true } = {}) {
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
-      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+      <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${qcChip(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
@@ -1440,13 +1442,14 @@ async function pageIntake(type) {
 // 승인된 의뢰 리스트 (대기/진행/완료)
 async function pageWorkList(type) {
   const cfg = REQ[type]; const main = $('#main'); const mgr = hasRole(cfg.role);
-  let status = ''; let category = '';
+  let status = ''; let category = ''; let qc = ''; // qc: 15.78 판정 칩
   main.innerHTML = `
   <h1>${cfg.listTitle || cfg.label + '리스트'} <span class="dept">${cfg.dept}</span></h1>
   <p class="muted">${type === 'analysis' ? '승인된 분석의뢰와 입고에서 자동 등록된 수입검사 목록입니다.' : `승인된 ${cfg.label}의뢰 목록입니다.`} ${mgr ? '상태 칸에서 바로 대기/진행/완료를 바꿀 수 있습니다.' : `상태 변경은 ${cfg.mgr}가 합니다.`} 행을 누르면 의뢰서를 봅니다.</p>
   <div class="toolbar">
     <div class="seg" id="stSeg">${['', 'waiting', 'progress', 'done'].map((s) => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s ? STATUS[s] : '전체'}</button>`).join('')}</div>
-    ${type === 'analysis' ? `<div class="seg" id="catSeg">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div>` : ''}
+    ${type === 'analysis' ? `<div class="seg" id="catSeg">${['', '수입검사', '의뢰검사', '출하검사', '공정검사'].map((c) => `<button data-c="${c}" class="${c === category ? 'on' : ''}">${c || '전체 검사'}</button>`).join('')}</div>
+    <div class="seg" id="qcSeg" role="group" aria-label="판정">${[['', '전체 판정'], ['pass', '합격'], ['fail', '불합격'], ['pending', '검사 대기']].map(([v, l]) => `<button type="button" data-qc="${v}" class="${v === '' ? 'on' : ''}" aria-pressed="${v === ''}">${l}</button>`).join('')}</div>` : ''}
   </div>
   <div id="workCounts" class="counts"></div>
   ${listControls('work', { dateLabel: '등록', placeholder: '접수번호·품목·고객사·입력자·메모' })}<div id="workList"></div>`;
@@ -1456,23 +1459,27 @@ async function pageWorkList(type) {
     const version = ++queryVersion; listLoading(filterForm);
     const all = await api('GET', '/api/requests?' + new URLSearchParams({ ...formObj(filterForm), type, scope: 'list', category }));
     if (version !== queryVersion || !main.isConnected) return;
-    const rows = status ? all.filter((r) => r.status === status) : all;
+    // 15.78 판정: 측정값이 저장되면 pass/fail, 규격은 있는데 판정 전이면 검사 대기(pending), 규격 미지정은 판정 없음
+    const qcOf = r => r.inspection_result === 'pass' || r.inspection_result === 'fail' ? r.inspection_result : r.inspection_snapshot ? 'pending' : '';
+    const rows = all.filter((r) => (!status || r.status === status) && (!qc || qcOf(r) === qc));
     listCount(filterForm, rows.length);
     $('#workCounts').innerHTML = ['waiting', 'progress', 'done'].map((s) => `${statusChip(s)} ${all.filter((r) => r.status === s).length}`).join(' &nbsp; ');
     const t = todayStr();
     $('#workList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid click">
-      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th><th>완료희망일</th><th>상태</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${r.status === 'done' ? 'row-done' : ''}">
+      <thead><tr><th>접수번호</th>${type === 'analysis' ? '<th>검사구분</th>' : ''}<th>${cfg.titleLabel}</th>${type === 'development' ? '<th>타겟단가</th>' : ''}<th>고객사</th>${type === 'voc' ? '<th>수량</th><th>LOT</th>' : ''}<th>입력자(의뢰자)</th><th>완료희망일</th>${type === 'analysis' ? '<th>판정</th>' : ''}<th>상태</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr data-id="${r.id}" class="${type === 'analysis' && qcOf(r) === 'fail' ? 'row-red' : r.status === 'done' ? 'row-done' : ''}">
         <td class="nowrap">${esc(r.req_no)}</td>${type === 'analysis' ? `<td><span class="chip">${esc(r.category)}</span></td>` : ''}
         <td><b>${esc(r.title)}</b>${lineInfo(r)}${r.source_type ? `<div class="small muted">${r.source_type === 'purchase_order' ? '발주입고' : '기타입고'} · ${esc(r.data.item_category || '미분류')} · 입고 ${fmtNum(r.data.received_qty)}${r.data.coa_requested ? ' · COA 요청' : ''}</div>` : ''}${r.result_note ? `<div class="small muted">${esc(r.result_note)}</div>` : ''}</td>${type === 'development' ? `<td>${esc(r.target_price)}</td>` : ''}
         <td>${esc(r.customer)}</td>${type === 'voc' ? `<td>${fmtNum(r.data.qty)} ${esc(r.data.unit)}</td><td>${esc(r.data.lot || '미확인')}</td>` : ''}<td>${esc(r.requester_name)}</td>
         <td class="${r.status !== 'done' && r.due_date && r.due_date < t ? 'overdue' : ''}">${esc(r.due_date || '')}</td>
+        ${type === 'analysis' ? `<td class="nowrap">${qcOf(r) ? qualityInspectionBadge(qcOf(r)) : '<span class="small muted">규격 미지정</span>'}</td>` : ''}
         <td>${mgr ? `<select class="st-select st-${r.status}" data-st="${r.id}" aria-label="상태">${['waiting', 'progress', 'done'].map((s) => `<option value="${s}" ${r.status === s ? 'selected' : ''}>${STATUS[s]}</option>`).join('')}</select>` : statusChip(r.status)} ${commentButton("request", r.id, r.title)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 항목이 없습니다.</div>';
     $$('#workList tr[data-id]').forEach((tr) => (tr.onclick = (e) => { if (e.target.closest('select')) return; requestDetail(type, rows.find((x) => x.id == tr.dataset.id), load); }));
     $$('#workList [data-st]').forEach((s) => (s.onchange = async () => { try { await api('POST', `/api/requests/${s.dataset.st}/status`, { status: s.value }); toast(`${STATUS[s.value]}(으)로 변경`); load(); } catch (e) { fail(e); load(); } }));
   };
   $$('#stSeg button').forEach((b) => (b.onclick = () => { status = b.dataset.s; $$('#stSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
+  $$('#qcSeg button').forEach((b) => (b.onclick = () => { qc = b.dataset.qc; $$('#qcSeg button').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); filterForm.requestSubmit(); }));
   $$('#catSeg button').forEach((b) => (b.onclick = () => { category = b.dataset.c; $$('#catSeg button').forEach((x) => x.classList.toggle('on', x === b)); filterForm.requestSubmit(); }));
   bindListControls(filterForm, load, () => {
     status = ''; category = '';
