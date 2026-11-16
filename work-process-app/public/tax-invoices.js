@@ -31,7 +31,7 @@ async function pageTaxMake(main) {
   const ym = prevMonth(), r0 = monthRange(ym);
   main.innerHTML = `<h1>세금계산서 만들기</h1>
   <p class="muted">매출전표를 세금계산서로 담습니다. <b>건별</b>은 전표 1건이 계산서 1장, <b>월별</b>은 거래처의 기간(보통 한 달) 전표를 합쳐 1장입니다. 담은 계산서는 「세금계산서 관리」에서 체크해 발행합니다. 한 전표는 계산서 하나에만 담깁니다.</p>
-  <div class="seg class-tabs" role="tablist" aria-label="담는 방식"><button type="button" data-tax-mode="single" class="on">건별</button><button type="button" data-tax-mode="monthly">월별</button></div>
+  <div class="seg class-tabs" role="group" aria-label="담는 방식"><button type="button" data-tax-mode="single" class="on">건별</button><button type="button" data-tax-mode="monthly">월별</button></div>
   <form class="list-filters toolbar" data-read-only id="taxMakeForm"><label>전표 일자<input type="date" name="from" value="${r0.from}" required></label><label>~<input type="date" name="to" value="${r0.to}" required></label><label>거래처<input name="customer" maxlength="100" placeholder="비우면 전체"></label><button class="btn primary">조회</button></form>
   <div class="card bill-form tax-opts"><div class="form-grid"><label>작성일자 <span class="hint" data-wd-hint>(비우면 전표 일자)</span><input type="date" name="write_date"></label><label>청구/영수<select name="charge"><option value="receipt">영수</option><option value="claim">청구</option></select></label><label class="span2">비고<input name="note" maxlength="200"></label></div></div>
   <div id="taxCand"></div>

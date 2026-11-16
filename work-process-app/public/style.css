@@ -1404,3 +1404,5 @@ table.grid > tfoot > tr.grand-sum > td.r { text-align: right; }
 .partner-picker > .btn.partner-find:hover::before { background: var(--accent); }
 /* 15.99 휴대폰: 아래 고정 저장 줄이 하단 탭(58px)에 가리지 않게 그 위에 붙인다 */
 @media (max-width: 820px) { body:has(.tabbar) #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> .btn.primary:not([type=button])) { bottom: calc(59px + env(safe-area-inset-bottom)); } }
+/* 15.99 안내 문장 속 작은 버튼(예: 출하 화면 「매출전표 입력으로」)도 누르기 쉬운 높이로 */
+p > a.btn.small, p > button.btn.small { display: inline-flex; align-items: center; min-height: 32px; vertical-align: middle; }
