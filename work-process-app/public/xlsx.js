@@ -243,7 +243,7 @@ function importDialog({ title, endpoint, columns, sample, help = '', after = nul
     if (!dry && !r.errors.length) { toast(`${r.inserted}줄을 넣었습니다.`); m.close(); await after?.(); return; }
     const keys = columns.map(c => c[0]);
     result.innerHTML = `<p class="small"><b>${r.total}줄</b> 중 정상 ${r.ok}${r.errors.length ? ` · <span class="red-text">오류 ${r.errors.length} — 고쳐서 다시 올리세요(오류가 있으면 하나도 넣지 않습니다)</span>` : ' · 모두 정상, 「넣기」를 누르세요'}</p>
-      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th>${columns.map(c => `<th>${esc(c[1])}</th>`).join('')}<th>검사</th></tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td>${keys.map(k => `<td>${esc(row[k])}</td>`).join('')}<td class="${res?.error ? 'red-text' : 'small muted'}">${esc(res?.error || '정상')}</td></tr>`; }).join('')}</tbody></table></div>`;
+      <div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th>줄</th><th>검사</th>${columns.map(c => `<th class="nowrap">${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.map((row, i) => { const res = r.rows?.[i] || r.errors.find(x => x.row === i + 1); return `<tr${res?.error ? ' class="row-err"' : ''}><td>${i + 1}</td><td class="${res?.error ? 'red-text' : 'small muted'}" style="min-width:14em">${esc(res?.error || '정상')}</td>${keys.map(k => `<td class="nowrap">${esc(row[k])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
     checked = dry && !r.errors.length; go.disabled = !checked;
   };
   $('[data-imp-check]', m.el).onclick = () => send(true).catch(fail);
