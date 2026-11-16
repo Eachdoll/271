@@ -1310,6 +1310,8 @@ const SHIP_SOURCE = `SELECT 'ship' AS source_type, s.id AS source_id, s.ship_dat
   FROM shipments s WHERE NOT EXISTS(SELECT 1 FROM sales_bill_lines x WHERE x.source_type='ship' AND x.source_id=s.id AND x.active=1)`;
 const customerKey = v => `REPLACE(LOWER(${v}),' ','')`;
 const requireSales = user => { if (!hasRole(user, 'sales')) throw new HttpError(403, '매출전표는 영업 담당자가 처리합니다.'); };
+// 15.109 입금확인은 구매 메뉴로 옮겨 구매·영업 담당자가 함께 한다(입금 기록은 거래처 원장 잔액에 그대로 반영).
+const requirePayments = user => { if (!hasRole(user, 'sales') && !hasRole(user, 'purchase')) throw new HttpError(403, '입금확인은 구매·영업 담당자가 처리합니다.'); };
 async function salesClosed(customer, date) {
   return db.prepare("SELECT * FROM sales_closings WHERE period=? AND customer_key=? AND status='closed'").get(String(date).slice(0, 7), nameKey(customer));
 }
@@ -1454,7 +1456,7 @@ route('POST', '/api/sales-bills/:id/cancel', async ({ user, params, body }) => {
 });
 // 입금·기초 미수금
 route('GET', '/api/sales-payments', async ({ user, query }) => {
-  requireSales(user);
+  requirePayments(user);
   const where = [], args = [];
   applyListDates(where, args, query, 'pay_date');
   if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
@@ -1464,7 +1466,7 @@ route('GET', '/api/sales-payments', async ({ user, query }) => {
   return { rows: rows.slice(0, 500), more: rows.length > 500 };
 });
 route('POST', '/api/sales-payments', async ({ user, body }) => {
-  requireSales(user);
+  requirePayments(user);
   const token = String(body.request_id || '');
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
   const prior = await db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token);
@@ -1480,7 +1482,7 @@ route('POST', '/api/sales-payments', async ({ user, body }) => {
   return db.prepare('SELECT * FROM sales_payments WHERE request_id=?').get(token);
 });
 route('POST', '/api/sales-payments/:id/cancel', async ({ user, params, body }) => {
-  requireSales(user);
+  requirePayments(user);
   const row = await mustGet('sales_payments', params.id);
   if (row.status !== 'confirmed') throw bad('이미 취소된 입금입니다.');
   if (await salesClosed(row.customer, row.pay_date)) throw bad(closedMessage(row.customer, row.pay_date, '취소하세요'));

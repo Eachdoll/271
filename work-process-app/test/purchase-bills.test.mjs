@@ -223,3 +223,12 @@ test('15.90 a reduced receipt (negative correction lot) caps billing at the rece
   assert.equal(rep.confirmed, 300, 'legacy bill counted once');
   assert.equal((await admin('GET', `/api/reports?from=${d}&to=${d}&item_category=${encodeURIComponent('임가공')}`)).status, 200);
 });
+
+test('15.109 Payment check moved to 구매: purchasing staff can enter and cancel customer payments; logistics cannot', async () => {
+  const pay = { customer: '입금상사', pay_date: today, amount: 50000, kind: 'payment', request_id: rid() };
+  assert.equal((await staff('POST', '/api/sales-payments', pay)).status, 403);
+  const p = await buyer('POST', '/api/sales-payments', pay);
+  assert.equal(p.status, 200, JSON.stringify(p.body));
+  assert.equal((await buyer('GET', '/api/sales-payments?customer=' + encodeURIComponent('입금상사'))).body.rows.length, 1);
+  assert.equal((await buyer('POST', `/api/sales-payments/${p.body.id}/cancel`, { reason: '중복' })).status, 200);
+});
