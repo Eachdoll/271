@@ -15,7 +15,7 @@ function prItemRow(it = {}) {
   const v = key => esc(it[key] ?? '');
   return `<fieldset class="pr-item"><legend></legend><input type="hidden" data-k="bom_id" value="${v('bom_id')}">
     <div class="form-grid">
-      <label class="span2">품목명 *<input data-k="item" required maxlength="200" list="prCatalogList" value="${v('item')}" placeholder="등록된 품목을 검색하거나 직접 입력"></label>
+      <div class="span2 item-pick"><div class="item-field"><label>품목명 *<input data-k="item" required maxlength="200" value="${v('item')}" placeholder="품목명 직접 입력 · Enter로 등록 품목 찾기" autocomplete="off"></label><button type="button" class="btn" data-item-find>품목 찾기</button></div><div class="item-lock" data-item-lock></div></div>
       <label>제품코드<input data-k="product_code" maxlength="50" value="${v('product_code')}"></label>
       <label>규격<input data-k="spec" maxlength="200" value="${v('spec')}" placeholder="예: 34Φ*200"></label>
       <label>단위<input data-k="unit" maxlength="20" value="${v('unit')}" placeholder="예: SET, BOX"></label>
@@ -59,7 +59,6 @@ async function prForm(host, existing = null, { onDone } = {}) {
     ${existing ? '' : photoPicker()}
     <div class="actions"><button class="btn primary">${existing ? '고쳐서 다시 상신' : '상신'}</button></div>
   </form>
-  <datalist id="prCatalogList">${catalog.map(b => `<option value="${esc(b.product)}">${esc(b.product_code)}${b.unit ? ' · ' + esc(b.unit) : ''}</option>`).join('')}</datalist>
   <datalist id="prVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>
   <datalist id="prCustomerList">${customers.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
   const form = $('form', host), items = $('[data-items]', form), draft = existing ? null : bindPhotoDraft(form);
@@ -91,17 +90,19 @@ async function prForm(host, existing = null, { onDone } = {}) {
     if (items.children.length >= 30) return toast('품목은 30개까지 입력할 수 있습니다.', 'err');
     items.insertAdjacentHTML('beforeend', prItemRow(it)); const row = items.lastElementChild;
     const k = key => $(`[data-k="${key}"]`, row);
-    k('item').addEventListener('change', async () => {
-      const bom = catalog.find(b => b.product === k('item').value.trim());
-      k('bom_id').value = bom ? bom.id : '';
+    // 15.70 품목 찾기 창으로 고르면 품목명·코드·단위·규격을 등록 정보로 고정한다.
+    const choose = async bom => {
+      itemLockApply(row, k, bom, { keepSpec: false }); totals();
       if (!bom) return;
-      k('product_code').value = bom.product_code || ''; if (!k('unit').value) k('unit').value = bom.unit || '';
       try {
         const stock = await api('GET', `/api/inventory?asof=${todayStr()}&q=${encodeURIComponent(bom.product)}`);
         const hit = (stock.rows || []).find(r => r.item === bom.product && (!k('unit').value || r.unit === k('unit').value));
         if (hit && !k('stock_qty').value) k('stock_qty').value = fmtNum(hit.stock);
       } catch { /* 현재고는 참고값이라 못 읽어도 직접 입력하면 된다 */ }
-    });
+    };
+    bindItemPick(row, k, catalog, async bom => { await choose(bom); if (bom) (k('spec').tagName === 'SELECT' ? k('spec') : k('qty')).focus(); });
+    const saved = it.bom_id && catalog.find(b => b.id === Number(it.bom_id));
+    if (saved) itemLockApply(row, k, saved, { keepSpec: true });
     $('[data-remove-item]', row).onclick = () => { if (items.children.length === 1) return toast('품목은 1개 이상 필요합니다.', 'err'); row.remove(); renumber(); totals(); $('[data-add-item]', form).focus(); };
     renumber(); totals(); if (focus) k('item').focus();
   };
@@ -285,7 +286,7 @@ function mrItemsText(lines) {
 function mrLineRow(l = {}) {
   const v = key => esc(l[key] ?? '');
   return `<fieldset class="mr-line"><legend></legend><input type="hidden" data-k="bom_id" value="${v('bom_id')}"><div class="form-grid">
-    <label class="span2">품목명 *<input data-k="item" required maxlength="200" list="mrCatalogList" value="${v('item')}" placeholder="등록된 품목을 검색하거나 직접 입력"></label>
+    <div class="span2 item-pick"><div class="item-field"><label>품목명 *<input data-k="item" required maxlength="200" value="${v('item')}" placeholder="품목명 직접 입력 · Enter로 등록 품목 찾기" autocomplete="off"></label><button type="button" class="btn" data-item-find>품목 찾기</button></div><div class="item-lock" data-item-lock></div></div>
     <label>규격·사이즈<input data-k="spec" maxlength="100" value="${v('spec')}" placeholder="예: S, 50매"></label>
     <label>단위<input data-k="unit" maxlength="20" value="${v('unit')}" placeholder="예: 켤레, BOX"></label>
     <label>수량 *<input data-k="qty" type="number" min="0" step="any" required value="${v('qty')}"></label>
@@ -306,14 +307,13 @@ async function mrForm(host, existing = null, { onDone } = {}) {
     <label>사양·요청사항<textarea name="spec" rows="3" maxlength="1000" placeholder="예: 사이즈 도장 제외 사양으로 진행 / 무지백·무지박스">${e('spec')}</textarea></label>
     <section class="pr-section"><h3>생산 품목</h3><div data-lines></div>
       <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-line>+ 품목 줄 추가</button><button type="button" class="btn" data-size-grid>+ 사이즈별 입력</button></div>
-      <div class="mr-size-grid card" data-size-box hidden><h4>사이즈별 수량</h4><div class="form-grid"><label class="span2">품목명<input data-size-item list="mrCatalogList" maxlength="200" placeholder="예: 습진장갑"></label><label>단위<input data-size-unit maxlength="20" placeholder="예: 켤레"></label></div>
+      <div class="mr-size-grid card" data-size-box hidden><h4>사이즈별 수량</h4><div class="form-grid"><div class="span2 item-pick"><div class="item-field"><label>품목명<input data-size-item maxlength="200" placeholder="예: 습진장갑" autocomplete="off"></label><button type="button" class="btn" data-size-find>품목 찾기</button></div><p class="small muted" data-size-hint></p></div><label>단위<input data-size-unit maxlength="20" placeholder="예: 켤레"></label></div>
         <div class="mr-sizes">${MR_SIZES.map(size => `<label>${size}<input type="number" min="0" step="any" data-size="${size}" inputmode="numeric"></label>`).join('')}</div>
         <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-size-apply>줄로 추가</button><button type="button" class="btn" data-size-close>닫기</button></div></div>
       <p class="pr-totals" data-mr-total aria-live="polite"></p></section>
     ${existing && existing.note ? `<label>비고 <span class="hint">(예전 의뢰의 비고 · 사양·요청사항으로 옮기고 비워도 됩니다)</span><textarea name="note" rows="2" maxlength="1000">${e('note')}</textarea></label>` : ''}
     <div class="actions"><button class="btn primary">${existing ? '고쳐서 저장' : '생산의뢰 등록'}</button></div>
   </form>
-  <datalist id="mrCatalogList">${catalog.map(b => `<option value="${esc(b.product)}">${esc(b.product_code)}${b.unit ? ' · ' + esc(b.unit) : ''}</option>`).join('')}</datalist>
   <datalist id="mrVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
   const form = $('form', host), lines = $('[data-lines]', form);
   const total = () => {
@@ -322,16 +322,12 @@ async function mrForm(host, existing = null, { onDone } = {}) {
     $('[data-mr-total]', form).textContent = `합계 수량 ${[...byUnit].map(([unit, qty]) => `${fmtNum(qty)}${unit ? ' ' + unit : ''}`).join(' · ')} · ${lines.children.length}줄`;
   };
   const renumber = () => { [...lines.children].forEach((row, i) => { $('legend', row).textContent = `품목 ${i + 1}`; $('[data-remove-line]', row).setAttribute('aria-label', `품목 ${i + 1} 삭제`); }); total(); };
-  const pick = (input, unit, code, bomInput) => {
-    const bom = catalog.find(b => b.product === input.value.trim());
-    if (bomInput) bomInput.value = bom ? bom.id : '';
-    if (code) code.value = bom ? bom.product_code || '' : '';
-    if (bom && unit && !unit.value) unit.value = bom.unit || '';
-  };
   const addLine = (l, focus) => {
     if (lines.children.length >= 60) return toast('품목 줄은 60개까지 입력할 수 있습니다.', 'err');
     lines.insertAdjacentHTML('beforeend', mrLineRow(l)); const row = lines.lastElementChild, k = key => $(`[data-k="${key}"]`, row);
-    k('item').addEventListener('change', () => pick(k('item'), k('unit'), k('product_code'), k('bom_id')));
+    bindItemPick(row, k, catalog, bom => { itemLockApply(row, k, bom, { keepSpec: false }); total(); if (bom) (k('spec').tagName === 'SELECT' ? k('spec') : k('qty')).focus(); });
+    const saved = l.bom_id && catalog.find(b => b.id === Number(l.bom_id));
+    if (saved) itemLockApply(row, k, saved, { keepSpec: true });
     $('[data-remove-line]', row).onclick = () => { if (lines.children.length === 1) return toast('품목은 1줄 이상 필요합니다.', 'err'); row.remove(); renumber(); $('[data-add-line]', form).focus(); };
     renumber(); if (focus) k('item').focus();
   };
@@ -341,17 +337,31 @@ async function mrForm(host, existing = null, { onDone } = {}) {
   const box = $('[data-size-box]', form);
   $('[data-size-grid]', form).onclick = () => { box.hidden = false; $('[data-size-item]', box).focus(); };
   $('[data-size-close]', form).onclick = () => { box.hidden = true; $('[data-size-grid]', form).focus(); };
-  $('[data-size-item]', box).addEventListener('change', () => pick($('[data-size-item]', box), $('[data-size-unit]', box)));
+  // 15.70 사이즈별 입력: 등록 품목을 고르면 품목명·단위를 고정하고 그 품목의 등록 사이즈 칸만 보여 준다(등록 사이즈가 없으면 기본 사이즈).
+  let sizeBom = null;
+  const sizeItem = $('[data-size-item]', box), sizeUnit = $('[data-size-unit]', box), sizeHint = $('[data-size-hint]', box);
+  const drawSizes = list => { $('.mr-sizes', box).innerHTML = list.map(size => `<label>${esc(size)}<input type="number" min="0" step="any" data-size="${esc(size)}" inputmode="numeric"></label>`).join(''); };
+  const setSizeBom = bom => {
+    sizeBom = bom; sizeItem.readOnly = !!bom; sizeUnit.readOnly = !!(bom && bom.unit); itemLockMark(sizeItem); itemLockMark(sizeUnit);
+    if (bom) { sizeItem.value = bom.product; if (bom.unit) sizeUnit.value = bom.unit; }
+    const own = bom && bom.sizes && bom.sizes.length ? bom.sizes : null; drawSizes(own || MR_SIZES);
+    sizeHint.innerHTML = bom ? `<span class="chip green">등록 품목</span> <code>${esc(bom.product_code || '')}</code> <span class="small">현재고 <b data-item-stock>…</b></span> <span>${own ? '등록된 사이즈만 보입니다.' : '등록된 사이즈가 없어 기본 사이즈(XS~XXL)를 씁니다.'}</span> <button type="button" class="btn small" data-size-unlock>직접 입력으로</button>` : '';
+    if (bom) itemStockLoad().then(map => { const cell = $('[data-item-stock]', sizeHint); if (cell && sizeBom === bom) cell.innerHTML = itemStockText(bom, map); });
+  };
+  $('[data-size-find]', box).onclick = async () => { const bom = await openItemPicker(catalog, { query: sizeItem.readOnly ? '' : sizeItem.value.trim() }); if (bom) { setSizeBom(bom); ($('[data-size]', box) || sizeItem).focus(); } else sizeItem.focus(); };
+  sizeItem.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter' || (e.key === 'ArrowDown' && !e.altKey)) { e.preventDefault(); if (!sizeItem.readOnly) $('[data-size-find]', box).click(); } });
+  sizeItem.addEventListener('change', () => { if (sizeItem.readOnly) return; const key = itemPickerKey(sizeItem.value), hits = key ? catalog.filter(b => itemPickerKey(b.product) === key) : []; if (hits.length === 1) setSizeBom(hits[0]); });
+  box.addEventListener('click', e => { if (e.target.closest('[data-size-unlock]')) { setSizeBom(null); sizeItem.focus(); } });
   $('[data-size-apply]', form).onclick = () => {
-    const item = $('[data-size-item]', box).value.trim(), unit = $('[data-size-unit]', box).value.trim();
+    const item = sizeItem.value.trim(), unit = sizeUnit.value.trim();
     const sizes = $$('[data-size]', box).filter(input => Number(input.value) > 0);
-    if (!item) { $('[data-size-item]', box).focus(); return toast('사이즈별로 넣을 품목명을 입력하세요.', 'err'); }
-    if (!sizes.length) { $('[data-size]', box).focus(); return toast('사이즈별 수량을 1개 이상 입력하세요.', 'err'); }
-    const bom = catalog.find(b => b.product === item);
+    if (!item) { sizeItem.focus(); return toast('사이즈별로 넣을 품목명을 입력하세요.', 'err'); }
+    if (!sizes.length) { ($('[data-size]', box) || sizeItem).focus(); return toast('사이즈별 수량을 1개 이상 입력하세요.', 'err'); }
+    const bom = sizeBom;
     // 비어 있는 첫 줄은 사이즈 줄로 바꾼다.
     if (lines.children.length === 1 && !$('[data-k=item]', lines).value.trim()) lines.replaceChildren();
-    for (const input of sizes) addLine({ item, unit: unit || (bom ? bom.unit : ''), spec: input.dataset.size, qty: input.value, bom_id: bom ? bom.id : '', product_code: bom ? bom.product_code : '' });
-    $$('[data-size]', box).forEach(input => { input.value = ''; }); $('[data-size-item]', box).value = ''; box.hidden = true;
+    for (const input of sizes) addLine({ item, unit: bom && bom.unit ? bom.unit : unit, spec: input.dataset.size, qty: input.value, bom_id: bom ? bom.id : '', product_code: bom ? bom.product_code : '' });
+    $$('[data-size]', box).forEach(input => { input.value = ''; }); setSizeBom(null); sizeItem.value = ''; box.hidden = true;
     toast(`${item} ${sizes.length}개 사이즈를 줄로 추가했습니다.`);
   };
   form.addEventListener('change', event => { if (event.target.matches('[data-k=unit]')) total(); });
@@ -509,6 +519,7 @@ async function prCreateOrders(pr, items) {
       <td><input name="price_${it.id}" type="number" min="0" step="any" inputmode="decimal" value="${esc(it.purchase_price ?? '')}" placeholder="선택" aria-label="${esc(it.item)} 단가" data-po-price></td>
       <td><input name="memo_${it.id}" maxlength="200" value="${esc(it.customer ? it.customer + '향' : '')}" placeholder="예: 풍림무약향" aria-label="${esc(it.item)} 내부 메모"></td></tr>`).join('')}</tbody></table></div>
     <p class="small muted">발주 수량을 줄이거나 늘릴 수 있습니다(의뢰 수량과 다르면 비고에 남습니다). 단가는 발주서 금액에, 내부 메모는 구매·물류 확인용으로만 쓰입니다.</p>
+    <label>발주서 비고 <span class="hint">(거래처에 보임 · 발주서에 인쇄)</span><input name="po_note" maxlength="300" placeholder="예: 납품 시 성적서 동봉, 오전 입고"></label>
     ${vendorsInOrder.length ? `<div class="po-freight"><h4>운송비 <span class="small muted">(거래처별 · 발주서에 표시)</span></h4>${vendorsInOrder.map(vendor => {
       const fromRequest = !orderedBefore(vendor) && pr.freight && pr.freight[vendor] !== undefined ? pr.freight[vendor] : null;
       return `<div class="pr-freight-row"><span><b>${esc(vendor)}</b> <span class="small muted">${freightSummary(termsOf(vendor))}${fromRequest !== null ? ' · <span>의뢰서 값</span>' : ''}</span></span><label class="inline">운송비 <input type="number" min="0" step="any" inputmode="decimal" name="freight__${esc(vendor)}" data-po-freight data-vendor="${esc(vendor)}" ${fromRequest !== null ? `value="${esc(fromRequest)}" data-dirty="1"` : ''} aria-label="${esc(vendor)} 운송비"> 원</label></div>`;
@@ -528,7 +539,7 @@ async function prCreateOrders(pr, items) {
   if (!v) return null;
   const lines = items.map(it => ({ id: it.id, qty: v['qty_' + it.id], unit_price: v['price_' + it.id] ?? '', internal_note: v['memo_' + it.id] ?? '' }));
   const freight = Object.fromEntries(vendorsInOrder.filter(vendor => (v['freight__' + vendor] ?? '') !== '').map(vendor => [vendor, v['freight__' + vendor]]));
-  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: v.due_date, item_category: v.item_category, vendor: v.vendor, item_ids: items.map(it => it.id), lines, freight });
+  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: v.due_date, item_category: v.item_category, vendor: v.vendor, item_ids: items.map(it => it.id), lines, freight, note: v.po_note || '' });
   toast(`발주 ${r.created.length}건을 발주목록에 올렸습니다.`);
   if (r.created.length) poPrintSheet(r.created);
   return r;
