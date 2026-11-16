@@ -23,7 +23,7 @@ async function editCompanyTaxInfo() {
     <div class="form-grid"><label>사업자등록번호 *<input name="biz_no" maxlength="12" inputmode="numeric" required value="${esc(c.biz_no)}"></label><label>상호 *<input name="biz_name" maxlength="100" required value="${esc(c.biz_name || COMPANY_NAME)}"></label>
     <label>대표자 *<input name="ceo" maxlength="50" required value="${esc(c.ceo)}"></label><label class="span2">주소<input name="address" maxlength="200" value="${esc(c.address)}"></label>
     <label>업태<input name="biz_type" maxlength="100" value="${esc(c.biz_type)}"></label><label>종목<input name="biz_item" maxlength="100" value="${esc(c.biz_item)}"></label>
-    <label>담당 이메일<input name="email" type="email" maxlength="100" value="${esc(c.email)}"></label><label>담당 전화<input name="phone" maxlength="30" value="${esc(c.phone)}"></label></div>`, { wide: true, submit: body => api('PUT', '/api/tax-company', body) });
+    <label>담당 이메일<input name="email" type="email" maxlength="100" value="${esc(c.email)}"></label><label>담당 전화<input name="phone" maxlength="30" value="${esc(c.phone)}"></label><label class="span2">입금 계좌 <span class="hint">(거래명세서에 나감)</span><input name="bank" maxlength="100" value="${esc(c.bank || '')}" placeholder="예) 기업은행 123-456789-01-011 (주)서울세미텍"></label></div>`, { wide: true, submit: body => api('PUT', '/api/tax-company', body) });
   if (values) toast('우리 회사 정보를 저장했습니다.');
 }
 

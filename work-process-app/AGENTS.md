@@ -822,3 +822,9 @@ INVITE_CODE=local-test-code npm start
 - 쓰는 단가 = 그 날짜 이전 가장 늦은 적용일(CURRENT_PRICE). API: GET /api/item-prices(현재 단가·이전 단가·이력 수, 적용 예정 단가), /history, /lookup?side&vendor&date → {bom_id: 단가}, POST(여러 줄), POST /:id/remove. 고치기 권한: 매입=구매, 매출=영업, 관리자.
 - 자동 채움: 발주 입력 표(거래처·품목 고르면 매입 단가, 직접 고친 단가(priceTouched)는 그대로, 단가표와 다르면 칸 아래 「단가표 N」), 수주 입력(매출 단가), 매출전표 전표 없는 출하(SHIP_SOURCE table_price → last_price → order_price). 클라이언트 tablePrices()는 구분·거래처·날짜별 캐시(저장 뒤 PRICE_CACHE.clear()).
 - 화면: 관리 › 단가표(#/purchase/prices, 메뉴 권한 master). 품목 사용처·거래처 이름 변경 따라가기·백업에 item_prices.
+
+## 거래처용 거래명세서 (15.112)
+- 매출전표 보기(확정)의 「거래명세서」 = 전표 1장, 매출전표 목록의 「거래명세서 (기간 합산)」 = 거래처+조회 기간 확정 전표 최대 60장을 한 장으로(statementSheet, sales-bills.js).
+- 공급자 = 우리 회사 정보(GET /api/tax-company), 공급받는자 = 거래처 사업자 정보. 합계는 한글 금액(koreanWon: 십·백·천 앞 「일」 생략, 「일만」「일억」은 남김).
+- 잔액 줄: 잔액 = /api/sales-ledger(같은 기간) totals.balance, 금회 = 이 명세서 합계, 입금 = 기간 입금, 전잔액 = 잔액 − 금회 + 입금(같은 기간 다른 전표가 있으면 전잔액에 들어감).
+- 회사 정보에 입금 계좌(bank, settings company_tax_info 안 → 마이그레이션 없음). 세금계산서 관리 › 우리 회사 정보에서 넣음.
