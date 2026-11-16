@@ -232,6 +232,13 @@
       "when": 1794740013000,
       "tag": "0032_freight_internal_note",
       "breakpoints": false
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794826413000,
+      "tag": "0033_receipts_lots_warehouses",
+      "breakpoints": false
     }
   ]
 }
