@@ -578,6 +578,12 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
 route('DELETE', '/api/vendors/:id', async ({ user, params }) => {
   const row = await mustGet('vendors', params.id);
   if (!canModify(user, row)) throw new HttpError(403, '거래처 삭제는 등록자 또는 관리자만 할 수 있습니다.');
+  // 15.100 전표·수주·계산서·발주에 쓰인 거래처는 지우지 않는다(코드·사업자 정보·운송비 조건이 함께 사라져 계산서·수주 고치기가 막힘).
+  const key = row.name_key, uses = [];
+  for (const [label, table, col] of [['수주', 'sales_orders', 'customer'], ['매출전표', 'sales_bills', 'customer'], ['매입전표', 'purchase_bills', 'vendor'], ['세금계산서', 'tax_invoices', 'customer'], ['발주', 'purchase_orders', 'vendor'], ['출하', 'shipments', 'customer']]) {
+    const n = (await db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE ${customerKey(col)}=?`).get(key)).c; if (n) uses.push(`${label} ${n}건`);
+  }
+  if (uses.length) throw new HttpError(409, `${row.name}은(는) ${uses.join(', ')}에 쓰인 거래처라 삭제할 수 없습니다. 이름·연락처를 고쳐 쓰세요.`);
   await db.prepare('DELETE FROM vendors WHERE id=?').run(row.id); return { ok: true }; // past orders keep the vendor name they were saved with
 });
 // What we most recently bought from this vendor, newest first, one line per item/size/unit.
@@ -1338,7 +1344,7 @@ route('POST', '/api/sales-bills', async ({ user, body }) => {
       // 수주 줄에서 나눠 잡기(15.92): 남은 수량까지만. 저장은 직접 입력 줄(manual)+order_line_id, 물류에 출하지시가 함께 생긴다.
       const id = Number(l.order_line_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad(`${no}: 수주 줄을 다시 고르세요.`);
       if (seenOrder.has(id)) throw bad(`${no}: 같은 수주 줄이 두 번 들어 있습니다. 수량을 한 줄로 합치세요.`); seenOrder.add(id);
-      const ol = await db.prepare(`SELECT ol.*, o.status, o.customer, o.order_no, ${ORDER_BILLED} AS billed_qty FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE ol.id=?`).get(id);
+      const ol = await db.prepare(`SELECT ol.*, o.status, o.customer, o.order_no, ${ORDER_TAKEN} AS billed_qty FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE ol.id=?`).get(id);
       if (!ol) throw bad(`${no}: 수주 줄을 찾을 수 없습니다. 새로 불러오세요.`);
       if (ol.status !== 'open') throw new HttpError(409, `${no}: 수주 ${ol.order_no}는 마감·취소되었습니다.`);
       if (nameKey(ol.customer) !== nameKey(customer)) throw bad(`${no}: 다른 거래처(${ol.customer})의 수주입니다.`);
@@ -1363,13 +1369,18 @@ route('POST', '/api/sales-bills', async ({ user, body }) => {
   const cmds = [{ sql: `INSERT INTO sales_bills(bill_no,bill_date,customer,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('sales_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`,
     args: [prefix, prefix, prefix, date, customer, taxType, supply, vat, total, str(body.note, 500), user.name, user.id, token] }];
   lines.forEach((l, i) => {
+    if (!l.order_line_id && l.source_type === 'ship') {
+      cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},?,?,?,?,?,?,?,?,?,?,?,?,?,
+        (SELECT i.order_line_id FROM ship_instructions i WHERE i.shipment_id=? AND i.status='shipped' LIMIT 1) WHERE EXISTS(SELECT 1 FROM shipments WHERE id=?)`,
+        args: [token, l.source_type, l.source_id, l.item, l.spec, l.unit, l.product_code, l.lot, l.ship_date, l.qty, l.unit_price, l.supply, vats[i], l.note, l.source_id, l.source_id] }, RC_GUARD); return; }
     if (!l.order_line_id) { cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note) VALUES(${BID},?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [token, l.source_type, l.source_id, l.item, l.spec, l.unit, l.product_code, l.lot, l.ship_date, l.qty, l.unit_price, l.supply, vats[i], l.note] }); return; }
     // 그 사이 다른 전표가 잔량을 가져갔거나 수주가 마감되면 넣지 않고(RC_GUARD) 전체를 되돌린다.
     cmds.push({ sql: `INSERT INTO sales_bill_lines(bill_id,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id) SELECT ${BID},'manual',NULL,?,?,?,?,'','',?,?,?,?,?,?
       WHERE EXISTS(SELECT 1 FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE ol.id=? AND o.status='open')
-        AND (SELECT COALESCE(SUM(b.qty),0) FROM sales_bill_lines b WHERE b.order_line_id=? AND b.active=1) + ? <= ? + 0.000001`,
-      args: [token, l.item, l.spec, l.unit, l.product_code, l.qty, l.unit_price, l.supply, vats[i], l.note, l.order_line_id, l.order_line_id, l.order_line_id, l.qty, l.order_qty] }, RC_GUARD,
+        AND (SELECT COALESCE(SUM(b.qty),0) FROM sales_bill_lines b WHERE b.order_line_id=? AND b.active=1)
+          + (SELECT COALESCE(SUM(i.qty),0) FROM ship_instructions i WHERE i.order_line_id=? AND i.status='shipped' AND NOT EXISTS(SELECT 1 FROM sales_bill_lines x WHERE x.source_type='ship' AND x.source_id=i.shipment_id AND x.active=1)) + ? <= ? + 0.000001`,
+      args: [token, l.item, l.spec, l.unit, l.product_code, l.qty, l.unit_price, l.supply, vats[i], l.note, l.order_line_id, l.order_line_id, l.order_line_id, l.order_line_id, l.qty, l.order_qty] }, RC_GUARD,
     { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by)
       SELECT b.id, l.id, ?, b.customer, ?, l.product_code, l.item, l.spec, l.unit, l.qty, b.bill_date, l.note, ? FROM sales_bills b JOIN sales_bill_lines l ON l.bill_id=b.id WHERE b.request_id=? AND l.order_line_id=?`,
       args: [l.order_line_id, l.bom_id, user.name, token, l.order_line_id] });
@@ -1378,7 +1389,7 @@ route('POST', '/api/sales-bills', async ({ user, body }) => {
   catch (error) {
     const saved = await db.prepare('SELECT * FROM sales_bills WHERE request_id=?').get(token);
     if (saved && saved.created_by_id === user.id) return { ...await salesBillDetail(saved), duplicate: true };
-    if (isGuardError(error)) throw new HttpError(409, '그 사이 수주 잔량이 바뀌었거나 수주가 마감되었습니다. 수주 잔량을 새로 불러오세요.');
+    if (isGuardError(error)) throw new HttpError(409, '그 사이 수주 잔량이 바뀌었거나 수주가 마감되었거나 출하가 삭제되었습니다. 새로 불러와 다시 고르세요.');
     if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 출하 줄이 다른 전표에 들어갔습니다. 목록을 새로 불러와 다시 고르세요.');
     throw error;
   }
@@ -2391,6 +2402,8 @@ const BOM_USES = [
   ['반제품 기록', 'semi_records', 'bom_id=?', 'id'],
   ['구매의뢰', 'purchase_request_items', 'bom_id=?', 'id'],
   ['생산의뢰', 'production_request_lines', 'bom_id=?', 'id'],
+  ['수주', 'sales_order_lines', 'bom_id=?', 'id'],
+  ['출하지시', 'ship_instructions', 'bom_id=?', 'id'],
   ['의뢰·수입검사', 'requests', "json_extract(data,'$.bom_id')=?", 'id'],
   ['다른 제품의 구성자재', 'boms', "id<>? AND EXISTS(SELECT 1 FROM json_each(boms.materials) m WHERE json_extract(m.value,'$.item')=?)", 'material'],
 ];
@@ -2519,7 +2532,9 @@ route('PUT', '/api/schedules/:id', async ({ user, params, body }) => {
 route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
   const row = (await mustGet('schedules', params.id)); if (!canModify(user, row) && !hasRole(user, 'production')) throw new HttpError(403, '등록자 또는 생산 담당자만 삭제할 수 있습니다.');
   if (await db.prepare('SELECT 1 FROM production_actuals WHERE schedule_id=?').get(row.id)) throw bad('생산실적이 있는 일정은 삭제할 수 없습니다. 실적 이력을 확인하세요.');
-  (await db.prepare('DELETE FROM schedules WHERE id=?').run(row.id)); return { ok: true };
+  const r = await db.prepare('DELETE FROM schedules WHERE id=? AND NOT EXISTS(SELECT 1 FROM production_actuals WHERE schedule_id=?)').run(row.id, row.id);
+  if (!r.changes) throw bad('그 사이 생산실적이 기록되어 삭제할 수 없습니다. 새로 불러오세요.');
+  return { ok: true };
 });
 
 // ── 물류: 발주 없는 기타입고 ──
@@ -2571,7 +2586,8 @@ route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {
   const row = await mustGet('other_receipts', params.id);
   if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
   if (await db.prepare("SELECT 1 FROM purchase_bill_lines WHERE source_type='other' AND source_id=? AND active=1").get(row.id)) throw new HttpError(409, `${row.item}: 매입전표에 들어간 기타입고입니다. 구매에서 매입전표를 취소한 뒤 삭제하세요.`);
-  await deleteEntityWithAttachments('other_receipt', 'other_receipts', row.id);
+  try { await deleteEntityWithAttachments('other_receipt', 'other_receipts', row.id, [{ sql: "SELECT json('conflict') WHERE EXISTS(SELECT 1 FROM purchase_bill_lines WHERE source_type='other' AND source_id=? AND active=1)", args: [row.id] }]); }
+  catch (error) { if (isGuardError(error)) throw new HttpError(409, `${row.item}: 그 사이 매입전표에 들어갔습니다. 새로 불러오세요.`); throw error; }
   return { ok: true };
 });
 
@@ -2601,8 +2617,16 @@ route('PUT', '/api/shipments/:id', async ({ user, params, body }) => {
 });
 route('DELETE', '/api/shipments/:id', async ({ user, params }) => {
   const row = (await mustGet('shipments', params.id)); if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
-  if (await db.prepare("SELECT 1 FROM sales_bill_lines WHERE source_type='ship' AND source_id=? AND active=1").get(row.id)) throw new HttpError(409, `${row.item}: 매출전표에 들어간 출하입니다. 영업에서 매출전표를 취소한 뒤 삭제하세요.`);
-  await deleteEntityWithAttachments('shipment', 'shipments', row.id); return { ok: true };
+  const billed = `${row.item}: 매출전표에 들어간 출하입니다. 영업에서 매출전표를 취소한 뒤 삭제하세요.`;
+  if (await db.prepare("SELECT 1 FROM sales_bill_lines WHERE source_type='ship' AND source_id=? AND active=1").get(row.id)) throw new HttpError(409, billed);
+  // 15.100 출하지시로 나간 출하를 지우면 그 지시를 「지시 취소」로 되돌려 수주 잔량에 다시 잡히게 한다(출하 수량이 사라졌으므로).
+  try {
+    await deleteEntityWithAttachments('shipment', 'shipments', row.id, [
+      { sql: "SELECT json('conflict') WHERE EXISTS(SELECT 1 FROM sales_bill_lines WHERE source_type='ship' AND source_id=? AND active=1)", args: [row.id] },
+      { sql: "UPDATE ship_instructions SET status='cancelled',shipment_id=NULL,processed_by=?,processed_at=? WHERE shipment_id=?", args: [user.name, now(), row.id] },
+    ]);
+  } catch (error) { if (isGuardError(error)) throw new HttpError(409, billed); throw error; }
+  return { ok: true };
 });
 
 // One submission creates independently tracked item rows in a single D1 transaction.
@@ -3660,6 +3684,9 @@ const nextDocNo = (table, column) => `? || printf('%02d', (SELECT COALESCE(MAX(C
 const ORDER_BILLED = "(SELECT COALESCE(SUM(b.qty),0) FROM sales_bill_lines b WHERE b.order_line_id=ol.id AND b.active=1)";
 const ORDER_SHIPPED = "(SELECT COALESCE(SUM(i.qty),0) FROM ship_instructions i WHERE i.order_line_id=ol.id AND i.status='shipped')";
 const ORDER_PENDING = "(SELECT COALESCE(SUM(i.qty),0) FROM ship_instructions i WHERE i.order_line_id=ol.id AND i.status='pending')";
+// 15.100 출하는 됐는데 그 출하를 담은 유효한 전표가 없는 수량(전표를 취소한 뒤 아직 다시 잡지 않음). 잔량 계산에 넣는다.
+const ORDER_SHIPPED_OPEN = "(SELECT COALESCE(SUM(i.qty),0) FROM ship_instructions i WHERE i.order_line_id=ol.id AND i.status='shipped' AND NOT EXISTS(SELECT 1 FROM sales_bill_lines x WHERE x.source_type='ship' AND x.source_id=i.shipment_id AND x.active=1))";
+const ORDER_TAKEN = `(${ORDER_BILLED} + ${ORDER_SHIPPED_OPEN})`;
 async function orderVendor(name) {
   const v = await db.prepare('SELECT * FROM vendors WHERE name_key=?').get(nameKey(name));
   if (!v) throw bad(`거래처 「${name}」가 거래처 관리에 없습니다. 먼저 등록하세요.`);
@@ -3682,12 +3709,12 @@ async function orderLines(body) {
   return out;
 }
 async function orderDetail(order) {
-  const lines = await db.prepare(`SELECT ol.*, ${ORDER_BILLED} AS billed_qty, ${ORDER_SHIPPED} AS shipped_qty, ${ORDER_PENDING} AS pending_qty FROM sales_order_lines ol WHERE ol.order_id=? ORDER BY ol.id`).all(order.id);
-  for (const l of lines) l.remaining = order.status === 'open' ? Math.max(0, stockRound(l.qty - l.billed_qty)) : 0;
+  const lines = await db.prepare(`SELECT ol.*, ${ORDER_BILLED} AS billed_qty, ${ORDER_SHIPPED} AS shipped_qty, ${ORDER_PENDING} AS pending_qty, ${ORDER_SHIPPED_OPEN} AS shipped_unbilled FROM sales_order_lines ol WHERE ol.order_id=? ORDER BY ol.id`).all(order.id);
+  for (const l of lines) l.remaining = order.status === 'open' ? Math.max(0, stockRound(l.qty - l.billed_qty - l.shipped_unbilled)) : 0;
   const bills = await db.prepare(`SELECT b.id AS bill_id, b.bill_no, b.bill_date, l.order_line_id, l.qty, l.unit_price, l.supply, l.source_type, i.status AS ship_status, i.id AS instruction_id
     FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id LEFT JOIN ship_instructions i ON i.bill_line_id=l.id
     WHERE l.active=1 AND l.order_line_id IN (SELECT id FROM sales_order_lines WHERE order_id=?) ORDER BY b.bill_date, b.id`).all(order.id);
-  const ordered = lines.reduce((t, l) => t + l.qty, 0), billed = lines.reduce((t, l) => t + Math.min(l.qty, l.billed_qty), 0);
+  const ordered = lines.reduce((t, l) => t + l.qty, 0), billed = lines.reduce((t, l) => t + Math.min(l.qty, l.billed_qty + l.shipped_unbilled), 0);
   const state = order.status !== 'open' ? order.status : billed <= 0 ? 'waiting' : billed + 0.000001 >= ordered ? 'done' : 'partial';
   return { ...order, lines, bills, state, amount: lines.reduce((t, l) => t + (l.unit_price == null ? 0 : billTrunc(l.qty * l.unit_price)), 0) };
 }
@@ -3700,7 +3727,7 @@ route('GET', '/api/sales-orders', async ({ user, query }) => {
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const rows = await db.prepare(`SELECT o.*, (SELECT COUNT(*) FROM sales_order_lines ol WHERE ol.order_id=o.id) AS line_count,
       (SELECT COALESCE(SUM(ol.qty),0) FROM sales_order_lines ol WHERE ol.order_id=o.id) AS ordered_qty,
-      (SELECT COALESCE(SUM(MIN(ol.qty, ${ORDER_BILLED})),0) FROM sales_order_lines ol WHERE ol.order_id=o.id) AS billed_qty,
+      (SELECT COALESCE(SUM(MIN(ol.qty, ${ORDER_TAKEN})),0) FROM sales_order_lines ol WHERE ol.order_id=o.id) AS billed_qty,
       (SELECT COALESCE(SUM(CASE WHEN ol.unit_price IS NULL THEN 0 ELSE ol.qty*ol.unit_price END),0) FROM sales_order_lines ol WHERE ol.order_id=o.id) AS amount,
       (SELECT ol.item FROM sales_order_lines ol WHERE ol.order_id=o.id ORDER BY ol.id LIMIT 1) AS first_item
     FROM sales_orders o ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY o.order_date DESC, o.id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
@@ -3712,8 +3739,8 @@ route('GET', '/api/sales-orders', async ({ user, query }) => {
 route('GET', '/api/sales-orders/open-lines', async ({ user, query }) => {
   requireSales(user);
   const customer = reqStr(query.customer, '거래처', 100);
-  const rows = await db.prepare(`SELECT ol.*, o.order_no, o.order_date, o.customer_po, o.due_date AS order_due, ${ORDER_BILLED} AS billed_qty FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id
-    WHERE o.status='open' AND ${customerKey('o.customer')}=? AND ${ORDER_BILLED} < ol.qty - 0.000001 ORDER BY o.order_date, o.id, ol.id LIMIT 501`).all(nameKey(customer));
+  const rows = await db.prepare(`SELECT ol.*, o.order_no, o.order_date, o.customer_po, o.due_date AS order_due, ${ORDER_TAKEN} AS billed_qty FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id
+    WHERE o.status='open' AND ${customerKey('o.customer')}=? AND ${ORDER_TAKEN} < ol.qty - 0.000001 ORDER BY o.order_date, o.id, ol.id LIMIT 501`).all(nameKey(customer));
   return { rows: rows.slice(0, 500).map(r => ({ ...r, remaining: stockRound(r.qty - r.billed_qty) })), more: rows.length > 500 };
 });
 route('GET', '/api/sales-orders/:id', async ({ user, params }) => { requireSales(user); return orderDetail(await mustGet('sales_orders', params.id)); });
