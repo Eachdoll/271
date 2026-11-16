@@ -52,6 +52,7 @@ function fromCatalog(row, entity, bom) {
 }
 function multiPayload(form, entity, type, kind, requestId) {
   const common = entity === 'request' ? collectRequest(type,form) : formObj(form);
+  if (entity === 'purchase_order') common.req_no = ''; // Ignore a number restored from an older draft; the server allocates it on save.
   if (entity === 'schedule') common.kind = kind;
   const items = $$('[data-multi-row]',form).flatMap(row => {
     const item = Object.fromEntries($$('[data-line-key]',row).filter(input => !input.dataset.lineKey.startsWith('size:')).map(input => [input.dataset.lineKey,input.type === 'checkbox' ? input.checked : input.value]));
@@ -71,7 +72,7 @@ async function installMultiItems(legacy, entity, type = '') {
   const kind = location.hash.includes('/semi') ? 'semi' : 'finished';
   const titles = { purchase_order: '발주', shipment: '출하', laundry: '세탁', other_receipt: '기타입고', schedule: '생산계획', request: (REQ[type]?.label || '') + ' 접수' };
   let header = '';
-  if (entity === 'purchase_order') header = multiInput('req_no','구매의뢰번호') + multiInput('vendor','거래처') + multiInput('due_date','납기일','date') + multiInput('internal_note','내부 메모 (구매·물류용, 발주서에 안 나감)','text','',false);
+  if (entity === 'purchase_order') header = '<label>구매의뢰번호<input name="req_no" readonly placeholder="저장 시 자동 부여 (PR-날짜-순번)"><span class="hint">한 번에 등록한 품목은 같은 번호를 사용합니다.</span></label>' + multiInput('vendor','거래처') + multiInput('due_date','납기일','date') + multiInput('internal_note','내부 메모 (구매·물류용, 발주서에 안 나감)','text','',false);
   if (entity === 'shipment') header = multiInput('ship_date','출고일','date',todayStr()) + multiInput('customer','거래처');
   if (entity === 'other_receipt') header = multiInput('received_date','입고일','date',todayStr()) + multiInput('vendor','입고처');
   if (entity === 'laundry') header = multiInput('in_date','세탁 입고일','date',todayStr());

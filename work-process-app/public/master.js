@@ -1,9 +1,57 @@
 // 거래처 목록과 거래처·품목 선택 도우미. 거래처는 누구나 등록·수정합니다.
 const partnerKey = value => String(value ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
 let partnerListSerial = 0;
+// Search the registered partner directory without relying on the browser's datalist UI.
+function pickPartner({ type = '' } = {}) {
+  return new Promise(resolve => {
+    let done = false, serial = 0, shown = [];
+    const finish = value => { if (done) return; done = true; resolve(value); m.close(); };
+    const scope = type === 'purchase' ? '매입처 · 구분 없음' : type === 'sales' ? '매출처 · 구분 없음' : '전체 거래처';
+    const m = modal(`<h3>거래처 찾기</h3><p class="small muted">${scope} · 이름·코드·담당자·연락처로 검색한 뒤 선택하세요.</p>
+      <form data-no-author data-partner-search class="toolbar"><label class="grow">검색<input type="search" name="q" maxlength="200" autocomplete="off" placeholder="거래처명·코드·담당자·연락처"></label><button class="btn primary">조회</button></form>
+      <p class="small muted" data-partner-count role="status"></p><div data-partner-results></div><div class="actions"><button type="button" class="btn" data-partner-cancel>취소</button></div>`, { wide: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
+    const form = $('[data-partner-search]', m.el), input = form.elements.q, results = $('[data-partner-results]', m.el);
+    const load = async () => {
+      const mine = ++serial;
+      $('[data-partner-count]', m.el).textContent = '조회 중…';
+      try {
+        const rows = await api('GET', '/api/vendors?' + new URLSearchParams({ q: input.value.trim(), ...(type ? { type } : {}) }));
+        if (done || mine !== serial) return;
+        shown = rows;
+        $('[data-partner-count]', m.el).textContent = rows.length >= 1000 ? '앞의 1,000곳 표시 · 검색어로 범위를 좁히세요.' : `${rows.length}곳`;
+        results.innerHTML = rows.length ? `<div class="table-wrap"><table class="grid keep-table dense-grid partner-results" data-keep-cols><thead><tr><th>코드</th><th>거래처</th><th>구분</th><th>담당자</th><th>연락처</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr><td><code>${esc(v.code || '—')}</code></td><td><button type="button" class="link-btn" data-partner-pick="${i}">${esc(v.name)}</button></td><td>${vendorTypeChips(v)}</td><td>${esc(v.contact_name || '')}</td><td>${esc(v.phone || '')}</td><td><button type="button" class="btn small" data-partner-pick="${i}" aria-label="${esc(v.name)} 선택">선택</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 거래처가 없습니다. 검색어를 바꿔 조회하세요.</div>';
+      } catch (error) {
+        if (done || mine !== serial) return;
+        shown = []; $('[data-partner-count]', m.el).textContent = '조회 실패';
+        results.innerHTML = `<p class="field-error" role="alert">${esc(error.message)} · 다시 조회해 주세요.</p>`;
+      }
+    };
+    form.onsubmit = e => { e.preventDefault(); load(); };
+    results.addEventListener('click', e => { const b = e.target.closest('[data-partner-pick]'); if (b && shown[Number(b.dataset.partnerPick)]) finish(shown[Number(b.dataset.partnerPick)]); });
+    $('[data-partner-cancel]', m.el).onclick = () => m.close();
+    load();
+  });
+}
 // Attach the vendor pick list to a name input; for purchase orders also suggest what was bought recently.
 // type(15.58): 'purchase'면 매입처, 'sales'면 매출처만(구분 없는 거래처는 둘 다) 목록에 보인다.
 async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '' } = {}) {
+  if (input.dataset.partnerBound) return;
+  input.dataset.partnerBound = 'true';
+  const wrap = document.createElement('span'); wrap.className = 'partner-picker';
+  input.before(wrap); wrap.append(input);
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'btn small'; button.textContent = '거래처 찾기';
+  button.setAttribute('aria-label', '거래처 찾기'); wrap.append(button);
+  button.onclick = async e => {
+    e.preventDefault(); if (input.disabled || input.readOnly) return;
+    button.disabled = true;
+    try {
+      const partner = await pickPartner({ type });
+      if (!partner || !input.isConnected) return;
+      delete input.dataset.partnerPrev; input.value = partner.name;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally { if (button.isConnected) button.disabled = false; }
+  };
   let vendors = [];
   try { vendors = await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;

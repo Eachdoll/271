@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.92';
+const APP_VERSION = '15.93';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -885,7 +885,7 @@ function categoryField(value = '') {
 function coaChip(value) { return value ? '<span class="chip">COA 요청</span>' : '<span class="muted">—</span>'; }
 function poForm(po = {}) {
   return `<div class="form-grid">
-    <label>구매의뢰번호 *<input name="req_no" required value="${esc(po.req_no)}"></label>
+    <label>구매의뢰번호<input name="req_no" readonly value="${esc(po.req_no || '')}" placeholder="저장 시 자동 부여 (PR-날짜-순번)"><span class="hint">승인된 의뢰에서 불러오면 기존 의뢰번호를 사용합니다.</span></label>
     <label>거래처 *<input name="vendor" required value="${esc(po.vendor)}"></label>
     ${categoryField(po.item_category)}
     <label class="inline coa-field"><input name="coa_requested" type="checkbox" value="1" ${po.coa_requested ? 'checked' : ''}> COA 요청</label>
@@ -1035,7 +1035,7 @@ async function pagePO(main) {
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
     const t = todayStr();
-    $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
+    $('#poList').innerHTML = rows.length ? `<div class="table-wrap dense-wrap" tabindex="0" role="region" aria-label="발주목록 표 · 좌우로 스크롤"><table class="grid keep-table dense-grid po-grid">
       <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th class="r">입고</th><th class="r">전표</th><th class="r">잔량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>${poProgressCells(p)}
@@ -1135,7 +1135,7 @@ async function pageReceive(main) {
     rows = found;
     listCount(filterForm, rows.length);
     const t = todayStr();
-    $('#rcList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
+    $('#rcList').innerHTML = rows.length ? `<div class="table-wrap dense-wrap" tabindex="0" role="region" aria-label="입고목록 표 · 좌우로 스크롤"><table class="grid keep-table dense-grid po-grid">
       <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>입력자</th><th>입고 처리자</th><th>사진·검수</th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td><input type="checkbox" class="rc-check" value="${p.id}" aria-label="선택"></td>
@@ -1854,6 +1854,7 @@ async function pageSchedule(kind) {
 async function pageShip(main) {
   main.innerHTML = `
   <h1>출하목록 <span class="dept">물류</span></h1>
+  <p class="muted">물류가 직접 입력한 출하는 영업 담당자가 「매출전표 입력」에서 거래처를 고른 뒤 「전표 없는 출하」를 체크하고 단가를 넣어 전표로 잡습니다.${hasRole('sales') ? ' <a class="btn small" href="#/sales/bills/new">매출전표 입력으로</a>' : ''}</p>
   <form class="card" id="shNew"><h3>출하 입력</h3><div class="form-grid">
     <label>출고일 *<input name="ship_date" type="date" required value="${todayStr()}"></label>
     <label>품목명 *<input name="item" required></label>

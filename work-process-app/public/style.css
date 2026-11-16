@@ -1299,6 +1299,27 @@ table.grid td.r, table.grid th.r { font-variant-numeric: tabular-nums; }
 #rsCatTabs { margin: 0 0 8px; }
 .rs-tabs { margin: 10px 0 12px; flex-wrap: wrap; }
 .rs-tabs .sub-count { font-weight: 600; margin-left: 4px; }
+/* 15.93 거래처 검색과 촘촘한 업무 표. keep-table은 휴대폰에서도 행·열을 유지한다. */
+.partner-picker { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; }
+.partner-picker > input { flex: 1; min-width: 0; width: 0; }
+.partner-picker > .btn { flex: none; white-space: nowrap; }
+.dense-wrap { position: relative; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.dense-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+table.grid.dense-grid { border-collapse: collapse; font-size: 13px; line-height: 1.35; }
+table.grid.dense-grid > :is(thead, tbody, tfoot) > tr > :is(th, td) { border: 1px solid var(--grid-head); padding: 7px 9px; vertical-align: middle; }
+table.grid.dense-grid > thead > tr > th { background: var(--total-bg); color: var(--text); white-space: nowrap; }
+table.grid.dense-grid > tbody > tr:nth-child(even):not([class*="row-"]) > td { background: var(--zebra); }
+table.grid.dense-grid > tfoot > tr > * { background: var(--total-bg); font-weight: 700; white-space: nowrap; }
+table.grid.dense-grid > tbody > tr:hover > td { background: var(--row-hover); }
+table.grid.dense-grid .btn.small { padding: 4px 7px; min-height: 36px; font-size: 12px; }
+table.grid.dense-grid .line-info { display: block; }
+table.grid.po-grid td:nth-child(-n+3) { min-width: 8em; max-width: 20em; }
+table.grid.dense-grid td.r, table.grid.dense-grid th.r { white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  table.grid.dense-grid { font-size: 12.5px; }
+  table.grid.dense-grid > :is(thead, tbody, tfoot) > tr > :is(th, td) { padding: 6px 8px; }
+  .partner-results { min-width: 540px; }
+}
 /* 15.89 기간 선택: 한 줄 「◀ [이번 달 ▾] ▶」 + 세 열로 펼치는 창 */
 .range-presets { position: relative; display: inline-flex; gap: 4px; align-items: center; align-self: end; }
 .range-presets > .btn.small { padding: 3px 10px; min-height: 36px; border: 1px solid var(--line); background: var(--panel); }

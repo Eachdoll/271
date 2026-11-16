@@ -15,7 +15,7 @@ async function pageSalesBillEntry(main) {
       <label class="span2">비고<input name="note" maxlength="500"></label>
     </div>
     <section class="pr-section"><h3>수주 잔량</h3><div data-order-lines><p class="muted small">거래처를 넣으면 나옵니다.</p></div></section>
-    <section class="pr-section"><h3>전표 없는 출하</h3><div data-bill-lines><p class="muted small">거래처를 넣으면 나옵니다.</p></div></section>
+    <section class="pr-section"><h3>전표 없는 출하</h3><p class="small muted">물류가 직접 입력한 출하를 전표로 잡으려면: 거래처 선택 → 아래 출하 줄 체크 → 단가 확인 → 「매출전표 저장」. 출하일 범위가 비어 있으면 전체 기간에서 찾습니다. 이미 전표를 잡은 출하는 제외됩니다.</p><div data-bill-lines><p class="muted small">거래처를 넣으면 나옵니다.</p></div></section>
     <section class="pr-section"><h3>직접 입력 줄</h3><div data-manual-lines></div><div class="actions" style="justify-content:flex-start"><button type="button" class="btn small" data-manual-add>직접 줄 추가</button></div></section>
     <div class="bill-total card" data-bill-total aria-live="polite"></div>
     <div class="actions"><button class="btn primary" data-bill-save>매출전표 저장</button></div>

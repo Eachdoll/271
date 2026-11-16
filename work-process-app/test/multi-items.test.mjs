@@ -122,3 +122,25 @@ test('Edits keep typed size/units and synchronize request quantity and LOT; semi
  assert.equal((await staff('POST',endpoint,{production_date:'2026-10-31',qty:12.5,request_id:crypto.randomUUID()})).status,200);
  const totals=(await staff('GET',endpoint)).body;assert.equal(totals.actual_qty,12.5);assert.equal(totals.achievement_rate,125);
 });
+
+test('Automatic PR numbers share the request sequence, remain distinct concurrently, and replay multi-line submissions', async () => {
+ const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date());
+ const prefix='PR-'+date.slice(2).replace(/-/g,'')+'-';
+ sqlite.prepare('INSERT INTO purchase_requests(doc_no,doc_date,author_id,author_name) VALUES(?,?,?,?)').run(prefix+'99',date,1,'번호검증');
+ const body={vendor:'자동번호 공급사',item:'번호 검증품',qty:1,unit:'EA',item_category:'상품',due_date:'2026-12-01'};
+ const results=await Promise.all([staff('POST','/api/po',body),staff('POST','/api/po',body)]);
+ assert.ok(results.every(r=>r.status===200),JSON.stringify(results));
+ assert.deepEqual(results.map(r=>r.body.req_no).sort(),[prefix+'100',prefix+'101']);
+ const key=crypto.randomUUID(),common={vendor:body.vendor,due_date:body.due_date};
+ const saved=await batch('purchase_order',common,items,key);
+ assert.equal(saved.status,200,JSON.stringify(saved.body));
+ assert.equal(new Set(saved.body.rows.map(r=>r.req_no)).size,1);
+ assert.equal(saved.body.rows[0].req_no,prefix+'102');
+ const replay=await batch('purchase_order',common,items,key);
+ assert.equal(replay.body.replayed,true);assert.deepEqual(replay.body.rows.map(r=>r.req_no),saved.body.rows.map(r=>r.req_no));
+ const count=()=>sqlite.prepare('SELECT count(*) n FROM purchase_orders').get().n;
+ const old=count();const invalid=await batch('purchase_order',common,[items[0],{...items[1],qty:-1}]);
+ assert.equal(invalid.status,400);assert.equal(count(),old);
+ const explicit=await staff('POST','/api/po',{...body,req_no:'APPROVED-ORIGINAL'});
+ assert.equal(explicit.body.req_no,'APPROVED-ORIGINAL','approved requests retain their source document number');
+});

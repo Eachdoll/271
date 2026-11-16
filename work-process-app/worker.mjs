@@ -626,8 +626,22 @@ function poUnitPrice(value, label) {
   if (value === null || value === undefined || value === '') return null;
   const n = num(value, label); if (n < 0) throw bad(`${label}는 0 이상이어야 합니다.`); return n;
 }
-function poFields(b) {
-  return [reqStr(b.req_no, '구매의뢰번호', 50), reqStr(b.vendor, '거래처', 100), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), dateStr(b.due_date, '납기일'), str(b.note, 500), itemCategory(b.item_category), checked(b.coa_requested)];
+function poFields(b, autoNumber = false) {
+  return [autoNumber && !str(b.req_no, 50) ? '' : reqStr(b.req_no, '구매의뢰번호', 50), reqStr(b.vendor, '거래처', 100), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), dateStr(b.due_date, '납기일'), str(b.note, 500), itemCategory(b.item_category), checked(b.coa_requested)];
+}
+// Direct orders and approved purchase requests share the PR number space. Allocate inside
+// the INSERT so concurrent saves cannot read the same next number. Multi-item rows share one number.
+const nextPurchaseNo = `? || printf('%02d', (SELECT COALESCE(MAX(CAST(substr(n, length(?) + 1) AS INTEGER)),0)+1 FROM (SELECT req_no AS n FROM purchase_orders UNION ALL SELECT doc_no AS n FROM purchase_requests) WHERE n LIKE ? || '%'))`;
+function insertPurchaseOrder(record, batchId = '') {
+  const columns = Object.keys(record), args = [];
+  const values = columns.map(key => {
+    if (key !== 'req_no' || record.req_no) { args.push(record[key]); return '?'; }
+    const prefix = 'PR-' + today().slice(2).replace(/-/g, '') + '-';
+    if (batchId) args.push(batchId);
+    args.push(prefix, prefix, prefix);
+    return batchId ? `COALESCE((SELECT req_no FROM purchase_orders WHERE batch_id=? ORDER BY id LIMIT 1), ${nextPurchaseNo})` : nextPurchaseNo;
+  });
+  return { sql: `INSERT INTO purchase_orders(${columns.join(',')}) VALUES(${values.join(',')})`, args };
 }
 route('GET', '/api/po', async ({ query }) => {
   const where = []; const args = [];
@@ -650,8 +664,10 @@ route('GET', '/api/po', async ({ query }) => {
 async function createPurchaseOrder(user, body) {
   // A chosen code supplies the item name (and class when none was given).
   if (body.bom_id) { const chosen = await catalogItem(user, body); body.item = chosen.product; if (!body.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) body.item_category = chosen.item_category; }
-  const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user, 'purchase');
-  const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(f[0], f[1], entry.product, ...f.slice(3), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
+  const f = poFields(body, true); const entry = await catalogItem(user, body); await ensureVendor(f[1], user, 'purchase');
+  const record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key, i) => [key, f[i]]));
+  const command = insertPurchaseOrder({ ...record, item: entry.product, created_by: user.name, product_code: entry.product_code, unit: str(body.unit, 20) || entry.unit });
+  const r = await db.prepare(command.sql).run(...command.args);
   if (body.unit_price !== undefined && body.unit_price !== '') await db.prepare('UPDATE purchase_orders SET unit_price=? WHERE id=?').run(poUnitPrice(body.unit_price, '단가'), r.lastInsertRowid);
   // 15.69 내부 메모(구매·물류용, 발주서에 안 나감)·운송비
   if (body.internal_note || (body.freight !== undefined && body.freight !== '')) await db.prepare('UPDATE purchase_orders SET internal_note=?,freight=? WHERE id=?').run(str(body.internal_note, 200), poUnitPrice(body.freight, '운송비'), r.lastInsertRowid);
@@ -2624,7 +2640,7 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
       if (entity === 'purchase_order') {
         // Validate the whole line first so a bad row never leaves a temporary code behind.
         if (b.bom_id) { const chosen = await catalogItem(user, b); b.item = chosen.product; if (!b.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) b.item_category = chosen.item_category; }
-        const f = poFields(b); const entry = await catalogItem(user, b);
+        const f = poFields(b, true); const entry = await catalogItem(user, b);
         record = Object.fromEntries(['req_no','vendor','item','qty','due_date','note','item_category','coa_requested'].map((key,i) => [key, f[i]]));
         record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
         record.internal_note = str(b.internal_note, 200); // 15.69 내부 메모(공통)
@@ -2657,7 +2673,8 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         record = { type, inspection_snapshot: type==='analysis'?await inspectionSnapshot(f):'', title: f.title, customer: f.customer, due_date: f.due_date, category: f.category, target_price: f.target_price, data: JSON.stringify(f.data), qty, requester_id: user.id, requester_name: user.name };
       }
       if (entity !== 'request') record.created_by = user.name;
-      commands.push(insertItem(BATCH_TABLES[entity], { ...record, ...meta, batch_id: batchId }));
+      const savedRecord = { ...record, ...meta, batch_id: batchId };
+      commands.push(entity === 'purchase_order' ? insertPurchaseOrder(savedRecord, batchId) : insertItem(BATCH_TABLES[entity], savedRecord));
       if (entity === 'other_receipt') commands.push(receiptAnalysisQuery('other_receipt', null, user));
     } catch (error) { if (error.status === 400 || error.status === 404) throw bad(`${index + 1}번째 품목: ${error.message}`); throw error; }
   }
@@ -4051,7 +4068,7 @@ route('POST', '/api/purchase-requests', async ({ user, body }) => {
   const prefix = 'PR-' + head.doc_date.slice(2).replace(/-/g, '') + '-';
   const token = requestId || 'srv:' + crypto.randomUUID();
   try {
-    await db.batch([{ sql: `INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id,freight) VALUES(${nextDocNo('purchase_requests', 'doc_no')},?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', token, head.freight] }, ...prInsertDetails('request_id=?', [token], items, lines)]);
+    await db.batch([{ sql: `INSERT INTO purchase_requests(doc_no,doc_date,department,title,note,author_id,author_name,author_position,request_id,freight) VALUES(${nextPurchaseNo},?,?,?,?,?,?,?,?,?)`, args: [prefix, prefix, prefix, head.doc_date, head.department, head.title, head.note, user.id, user.name, user.position || '', token, head.freight] }, ...prInsertDetails('request_id=?', [token], items, lines)]);
   } catch (error) {
     const done = String(error.message).includes('UNIQUE') && await savedByRequestId('purchase_requests', requestId, user, '구매의뢰서');
     if (done) return { ...await prDetail(done, user), duplicate: true };
