@@ -342,7 +342,7 @@ async function mrForm(host, existing = null, { onDone } = {}) {
   const sizeItem = $('[data-size-item]', box), sizeUnit = $('[data-size-unit]', box), sizeHint = $('[data-size-hint]', box);
   const drawSizes = list => { $('.mr-sizes', box).innerHTML = list.map(size => `<label>${esc(size)}<input type="number" min="0" step="any" data-size="${esc(size)}" inputmode="numeric"></label>`).join(''); };
   const setSizeBom = bom => {
-    sizeBom = bom; sizeItem.readOnly = !!bom; sizeUnit.readOnly = !!(bom && bom.unit);
+    sizeBom = bom; sizeItem.readOnly = !!bom; sizeUnit.readOnly = !!(bom && bom.unit); itemLockMark(sizeItem); itemLockMark(sizeUnit);
     if (bom) { sizeItem.value = bom.product; if (bom.unit) sizeUnit.value = bom.unit; }
     const own = bom && bom.sizes && bom.sizes.length ? bom.sizes : null; drawSizes(own || MR_SIZES);
     sizeHint.innerHTML = bom ? `<span class="chip green">등록 품목</span> <code>${esc(bom.product_code || '')}</code> <span class="small">현재고 <b data-item-stock>…</b></span> <span>${own ? '등록된 사이즈만 보입니다.' : '등록된 사이즈가 없어 기본 사이즈(XS~XXL)를 씁니다.'}</span> <button type="button" class="btn small" data-size-unlock>직접 입력으로</button>` : '';

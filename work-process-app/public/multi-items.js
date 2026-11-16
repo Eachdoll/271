@@ -111,6 +111,7 @@ async function installMultiItems(legacy, entity, type = '') {
       select.onchange = () => {
         const bom = boms.find(b => b.id === Number(select.value));
         $('[data-line-key=item]',row).readOnly = !!bom || entity === 'other_receipt'; $('[data-line-key=unit]',row).readOnly = !!bom || entity === 'other_receipt';
+        itemLockMark($('[data-line-key=item]',row)); itemLockMark($('[data-line-key=unit]',row));
         if (bom) { $('[data-line-key=item]',row).value = bom.product; $('[data-line-key=unit]',row).value = bom.unit; }
         const category = $('[data-line-key=item_category]',row);
         if (bom && category && [...category.options].some(option => option.value === bom.item_category)) category.value = bom.item_category;

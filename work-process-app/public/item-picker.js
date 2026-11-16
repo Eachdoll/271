@@ -92,6 +92,15 @@ function openItemPicker(catalog, { query = '', title = '품목 찾기', filter =
 // 등록 품목 고정(15.70): 목록에서 고른 품목은 품목명·코드·단위를 등록 정보로 고정하고,
 // 규격은 등록된 사이즈 중에서만 고른다(등록 사이즈가 없는 품목은 직접 입력). 「직접 입력으로」를 누르면 풀린다.
 // row: 줄 요소, k(key): 그 줄의 [data-k=key] 요소, bom: 고른 품목 또는 null
+// 고정된 칸 표시(15.70): 칸을 회색·점선으로 바꾸고 라벨에 「🔒 고정」을 붙인다(칸이 읽기 전용이면).
+function itemLockMark(input, on = input && input.readOnly) {
+  if (!input || input.type === 'hidden') return;
+  const label = input.closest('label'); if (!label) return;
+  label.classList.toggle('is-locked', !!on);
+  let tag = $(':scope > .lock-tag', label);
+  if (on && !tag) { tag = document.createElement('span'); tag.className = 'lock-tag'; tag.textContent = '고정'; tag.title = '등록된 품목 정보라 고칠 수 없습니다'; input.before(tag); }
+  else if (!on && tag) tag.remove();
+}
 function itemLockApply(row, k, bom, { keepSpec = true } = {}) {
   const spec = k('spec'), oldSpec = spec ? spec.value : '';
   row.classList.toggle('item-locked', !!bom);
@@ -99,6 +108,7 @@ function itemLockApply(row, k, bom, { keepSpec = true } = {}) {
   const item = k('item'); item.readOnly = !!bom; if (bom) item.value = bom.product;
   const code = k('product_code'); if (code) { code.readOnly = !!bom; if (bom) code.value = bom.product_code || ''; }
   const unit = k('unit'); if (unit) { unit.readOnly = !!(bom && bom.unit); if (bom && bom.unit) unit.value = bom.unit; }
+  [item, code, unit].forEach(input => itemLockMark(input));
   if (spec) {
     // 등록 사이즈가 있으면 선택칸, 없으면 입력칸.
     const sizes = bom && Array.isArray(bom.sizes) ? bom.sizes : [];
