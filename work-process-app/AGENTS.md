@@ -839,3 +839,8 @@ INVITE_CODE=local-test-code npm start
 - 창고 이동 = LOT 위치 이동(stock_transfers). 품목 전체 재고(STOCK_MOVEMENTS)에는 들어가지 않는다. lotPlaceStock: 위치가 적힌 입고 + 이동 들어옴 − 나감, 출하는 위치가 없어 먼저 들어온 위치(같은 날이면 위치 이름 순)부터 뺀다.
 - POST /api/stock-transfers(물류·물류팀장·관리자): 받을 창고는 사용 중, 위치는 그 창고 목록 안, 같은 위치 금지, 보낼 위치 잔량(이동일 기준과 지금 둘 다) 이하. 취소(입력자·물류팀장·관리자)는 받은 위치에 그만큼 남아 있을 때만, status='cancelled'.
 - LOT별 재고 창의 「위치 · 이동」에서 위치별 잔량·이동·이동 기록·취소. LOT별 재고 「창고 · 위치」에 이동한 위치도 나옴. 이동 기록이 있는 창고는 삭제 막힘. 백업에 stock_transfers.
+
+## 채권·채무 연령표 · QR 스캔 (15.115)
+- GET /api/aging?side=sales|purchase&asof: 기준일까지 확정 전표 + 기초 잔액(opening)을 날짜별 차변, 입금·지급(payment) 합계를 오래된 것부터 갚은 것으로(선입선출) 보고 남은 금액을 0~30·31~60·61~90·91~180·180일 초과로. 잔액 음수면 advance(선수·선급금). 권한: 매출=영업, 매입=구매.
+- 화면 #/sales/aging(채권 연령표), #/purchase/aging(채무 연령표). 거래처를 누르면 sessionStorage 'wpa:ledger-pick'으로 원장(기간별 거래보고·매입처 원장)을 그 거래처·가장 오래된 미결 일자부터 연다(ledgerPrefill).
+- #/logistics/scan QR 스캔: LOT 라벨 QR(「LOT|코드|수량 단위|입고번호」) 또는 LOT 글자. 카메라는 BarcodeDetector(안드로이드 크롬), 없으면 USB 스캐너(키 입력 + Enter)·직접 입력. 찾은 LOT의 잔량·위치 → 출하 기록(POST /api/shipments, lot·bom_id) · 위치 · 이동(lotMoveWindow). 서버 변경 없음.

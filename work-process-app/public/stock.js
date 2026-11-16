@@ -201,3 +201,67 @@ async function stockReorder(lowRows) {
     finally { button.disabled = false; }
   };
 }
+
+// ── 15.115 QR 스캔: LOT 라벨 QR(「LOT|코드|수량 단위|입고번호」) 또는 LOT 글자. 휴대폰 카메라(BarcodeDetector) · USB 스캐너(글자 입력 + Enter) ──
+// 찾은 LOT의 잔량·위치를 보이고 바로 출하 기록 · 창고 이동을 한다. 같은 LOT가 여러 품목에 있으면 코드로 가린다.
+function parseLotScan(text) {
+  const raw = String(text || '').trim(); if (!raw) return null;
+  const parts = raw.split('|').map(x => x.trim());
+  return { lot: parts[0], code: parts.length > 1 ? parts[1] : '', receipt: parts[3] || '', raw };
+}
+async function pageScan(main) {
+  main.innerHTML = `<h1>QR 스캔 <span class="dept">물류</span></h1>
+  <p class="muted">LOT 라벨의 QR을 찍거나(휴대폰 카메라) USB 스캐너로 읽으면 그 LOT의 잔량·위치가 나오고, 바로 출하 기록이나 창고 이동을 합니다. LOT 번호를 직접 넣어도 됩니다.</p>
+  <form class="toolbar" id="scanForm" data-read-only><label class="grow">LOT · QR 내용<input name="code" autocomplete="off" autofocus placeholder="스캐너로 읽거나 LOT 입력 후 Enter"></label><button class="btn primary">찾기</button><button type="button" class="btn" id="scanCam">카메라로 스캔</button></form>
+  <div id="scanCamBox" hidden><video id="scanVideo" playsinline muted style="width:100%;max-width:480px;border:1px solid var(--line)"></video><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" id="scanStop">카메라 끄기</button></div></div>
+  <div id="scanResult"></div><h3>이번에 찍은 것</h3><div id="scanLog" class="small muted">아직 없습니다.</div>`;
+  const form = $('#scanForm', main), input = form.elements.code, log = [];
+  let stream = null, timer = null;
+  const stop = () => { clearInterval(timer); timer = null; stream?.getTracks().forEach(t => t.stop()); stream = null; $('#scanCamBox', main).hidden = true; };
+  const addLog = text => { log.unshift(`${new Date().toTimeString().slice(0, 8)} · ${text}`); $('#scanLog', main).innerHTML = log.slice(0, 20).map(x => `<div>${esc(x)}</div>`).join(''); };
+  const show = async text => {
+    const scan = parseLotScan(text); if (!scan) return;
+    const box = $('#scanResult', main); box.innerHTML = '<p class="muted">찾는 중…</p>';
+    const data = await api('GET', '/api/inventory/lots?' + new URLSearchParams({ asof: todayStr(), q: scan.lot }));
+    let rows = data.rows.filter(r => r.lot === scan.lot);
+    let boms = [];
+    if (scan.code) { boms = (await api('GET', '/api/boms?' + new URLSearchParams({ q: scan.code }))).filter(b => String(b.product_code).toUpperCase() === scan.code.toUpperCase()); if (boms.length) rows = rows.filter(r => boms.some(b => b.product.replace(/\s+/g, '').toLowerCase() === r.item.replace(/\s+/g, '').toLowerCase())); }
+    if (!main.isConnected) return;
+    if (!rows.length) { box.innerHTML = `<div class="empty">LOT ${esc(scan.lot)}를 찾지 못했습니다.${scan.code ? ` (코드 ${esc(scan.code)})` : ''}</div>`; addLog(`${scan.lot} — 없음`); return; }
+    box.innerHTML = rows.map((r, i) => `<div class="card" data-scan-row="${i}"><h3>${esc(r.item)} <span class="tag">LOT ${esc(r.lot)}</span></h3>
+      <p>잔량 <b class="${r.balance <= 0 ? 'red-text' : ''}">${fmtNum(r.balance)} ${esc(r.unit)}</b> · 입고 ${fmtNum(r.received)} · 출하 ${fmtNum(r.shipped)} · 입고일 ${esc(r.first_date)}${r.places ? ` · 위치 ${esc(r.places)}` : ''}</p>
+      <form class="form-grid" data-scan-ship><label>출하 수량 *<input name="qty" type="number" step="any" min="0" required value="${r.balance > 0 ? r.balance : ''}"></label><label>거래처 *<input name="customer" maxlength="100" required></label><label>출하일 *<input name="ship_date" type="date" required value="${todayStr()}" max="${todayStr()}"></label>
+        <div class="actions span3" style="justify-content:flex-start"><button class="btn primary">출하 기록</button><button type="button" class="btn" data-scan-move>위치 · 이동</button></div></form></div>`).join('');
+    addLog(`${scan.lot} — ${rows.map(r => `${r.item} 잔량 ${fmtNum(r.balance)}${r.unit}`).join(', ')}`);
+    $$('[data-scan-row]', box).forEach(card => {
+      const r = rows[card.dataset.scanRow], f = $('[data-scan-ship]', card);
+      if (typeof bindPartnerPicker === 'function') bindPartnerPicker(f.elements.customer, null, { type: 'sales' }).catch(() => {});
+      $('[data-scan-move]', card).onclick = () => lotMoveWindow(r, () => show(text)).catch(fail);
+      f.onsubmit = async e => {
+        e.preventDefault(); const v = formObj(f); const button = f.querySelector('button.primary'); button.disabled = true;
+        try {
+          const bom = boms.find(b => b.product.replace(/\s+/g, '').toLowerCase() === r.item.replace(/\s+/g, '').toLowerCase());
+          await api('POST', '/api/shipments', { ship_date: v.ship_date, item: r.item, ...(bom ? { bom_id: bom.id } : {}), qty: v.qty, unit: r.unit, customer: v.customer, lot: r.lot, note: 'QR 스캔 출하' });
+          toast(`${r.item} LOT ${r.lot} ${fmtNum(v.qty)}${r.unit} 출하를 기록했습니다.`); addLog(`${r.lot} — 출하 ${fmtNum(v.qty)}${r.unit} → ${v.customer}`); await show(text);
+        } catch (error) { fail(error); } finally { button.disabled = false; }
+      };
+    });
+  };
+  form.onsubmit = e => { e.preventDefault(); const t = input.value; input.value = ''; show(t).catch(fail).finally(() => input.focus()); };
+  $('#scanStop', main).onclick = stop;
+  $('#scanCam', main).onclick = async () => {
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) return toast('이 브라우저는 카메라 QR 읽기를 지원하지 않습니다. 안드로이드 크롬을 쓰거나 USB 스캐너·LOT 입력을 쓰세요.', 'err');
+    try {
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const video = $('#scanVideo', main); video.srcObject = stream; await video.play(); $('#scanCamBox', main).hidden = false;
+      let last = '', busy = false;
+      timer = setInterval(async () => {
+        if (busy || !main.isConnected) { if (!main.isConnected) stop(); return; } busy = true;
+        try { const codes = await detector.detect(video); const v = codes[0]?.rawValue; if (v && v !== last) { last = v; navigator.vibrate?.(80); await show(v); setTimeout(() => { last = ''; }, 3000); } }
+        catch { /* 다음 프레임 */ } finally { busy = false; }
+      }, 400);
+    } catch (error) { stop(); fail(new Error('카메라를 열 수 없습니다: ' + (error.message || error))); }
+  };
+  window.addEventListener('hashchange', stop, { once: true });
+}

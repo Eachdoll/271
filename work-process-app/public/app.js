@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.114';
+const APP_VERSION = '15.115';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -318,11 +318,11 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/aging', '채권 연령표'], ['#/sales/closing', '매출 마감']] }, { sub: '세금계산서', items: [['#/sales/tax/new', '세금계산서 만들기'], ['#/sales/tax', '세금계산서 관리']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
-    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장']] },
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장'], ['#/purchase/aging', '채무 연령표']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
@@ -344,6 +344,7 @@ const NAV = [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
     { sub: '출하', items: [['#/logistics/ship-orders', '출하지시'], ['#/logistics/ship/new', '출하 입력'], ['#/logistics/ship', '출하 목록']] },
     ['#/logistics/stock', '재고 현황'],
+    ['#/logistics/scan', 'QR 스캔'],
   ] },
 ];
 // ── 메뉴 열람 권한(15.59) ── ME.menus가 null이면 전체, 배열이면 그 업무 묶음만 메뉴에 보이고 주소로 들어와도 막는다.
@@ -525,10 +526,13 @@ const PAGES = {
   '#/purchase/ledger': main => pagePurchaseLedger(main),
   '#/sales/payments': () => { location.replace('#/purchase/payments'); }, // 15.109 구매로 옮김
   '#/sales/ledger': main => pageSalesLedger(main),
+  '#/sales/aging': main => pageAging(main, 'sales'),
+  '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
   '#/sales/tax/new': main => pageTaxMake(main),
   '#/sales/tax': main => pageTaxList(main),
   '#/logistics/stock': main => pageStock(main),
+  '#/logistics/scan': main => pageScan(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/prices': main => pagePrices(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),

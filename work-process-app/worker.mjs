@@ -1636,6 +1636,40 @@ async function ledgerBefore(from, customer = '') {
   for (const r of [...sales, ...pays]) { const g = map.get(r.k) || { customer: r.customer, opening: 0 }; g.opening += r.t || 0; map.set(r.k, g); }
   return map;
 }
+// ── 15.115 채권·채무 연령표: 기준일까지의 미결 잔액을 전표 일자 나이로 나눈다. 입금·지급은 오래된 전표(기초 잔액 먼저)부터 갚은 것으로 본다(선입선출). ──
+// 잔액이 음수면 선수금(매출)·선급금(매입)으로 따로 보인다.
+const AGING_BUCKETS = [[30, '0~30일'], [60, '31~60일'], [90, '61~90일'], [180, '91~180일'], [Infinity, '180일 초과']];
+route('GET', '/api/aging', async ({ user, query }) => {
+  const side = query.side === 'purchase' ? 'purchase' : query.side === 'sales' ? 'sales' : null; if (!side) throw bad('매출·매입을 고르세요.');
+  if (side === 'sales') requireSales(user); else requirePurchase(user);
+  const asof = query.asof ? dateStr(query.asof, '기준일') : today();
+  const [bills, pays, col] = side === 'sales' ? ['sales_bills', 'sales_payments', 'customer'] : ['purchase_bills', 'purchase_payments', 'vendor'];
+  const key = side === 'sales' ? customerKey('customer') : billVendorKey('vendor');
+  const debits = await db.prepare(`SELECT k, MIN(name) AS name, d, SUM(amt) AS amt FROM (
+      SELECT ${key} AS k, ${col} AS name, bill_date AS d, total AS amt FROM ${bills} WHERE status='confirmed' AND bill_date<=?
+      UNION ALL SELECT ${key} AS k, ${col} AS name, pay_date AS d, amount AS amt FROM ${pays} WHERE status='confirmed' AND kind='opening' AND pay_date<=?)
+    GROUP BY k, d ORDER BY k, d LIMIT 200001`).all(asof, asof);
+  if (debits.length > 200000) throw bad('전표가 너무 많습니다.');
+  const credits = new Map((await db.prepare(`SELECT ${key} AS k, MIN(${col}) AS name, SUM(amount) AS paid FROM ${pays} WHERE status='confirmed' AND kind='payment' AND pay_date<=? GROUP BY k`).all(asof)).map(r => [r.k, r]));
+  const day = d => Date.parse(d + 'T00:00:00Z') / 864e5, now = day(asof);
+  const groups = new Map();
+  for (const r of debits) { if (!groups.has(r.k)) groups.set(r.k, { name: r.name, lines: [] }); groups.get(r.k).lines.push(r); }
+  for (const [k, c] of credits) if (!groups.has(k)) groups.set(k, { name: c.name, lines: [] });
+  const rows = [];
+  for (const [k, g] of groups) {
+    let paid = credits.get(k)?.paid || 0; const total = g.lines.reduce((t, l) => t + l.amt, 0);
+    const buckets = AGING_BUCKETS.map(() => 0); let oldest = null;
+    for (const l of g.lines) { // 날짜 순: 오래된 것부터 갚음
+      const take = Math.min(Math.max(paid, 0), l.amt); paid -= take; const left = l.amt - take;
+      if (left > 0.000001) { const age = now - day(l.d); buckets[AGING_BUCKETS.findIndex(([max]) => age <= max)] += left; oldest ??= l.d; }
+    }
+    const balance = total - (credits.get(k)?.paid || 0);
+    if (Math.abs(balance) < 0.5 && !buckets.some(Boolean)) continue;
+    rows.push({ name: g.name, balance: billTrunc(balance), buckets: buckets.map(billTrunc), advance: billTrunc(Math.max(paid, 0)), oldest, days: oldest ? now - day(oldest) : 0 });
+  }
+  rows.sort((a, b) => b.days - a.days || b.balance - a.balance);
+  return { side, asof, labels: AGING_BUCKETS.map(b => b[1]), rows };
+});
 route('GET', '/api/sales-ledger', async ({ user, query }) => {
   requireSales(user);
   const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일');

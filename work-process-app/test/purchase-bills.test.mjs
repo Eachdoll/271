@@ -298,3 +298,14 @@ test('15.114 Warehouse moves keep item stock, check place balance and roles; reo
   const info = (await buyer('POST', '/api/inventory/reorder-info', { items: [{ item: '이동장갑', unit: 'BOX' }] })).body.items[0];
   assert.deepEqual([info.bom_id, info.open_qty, info.last_vendor, info.last_price], [g.id, 7, '재주문상사', 900]);
 });
+
+test('15.115 Aging: payments settle the oldest debts first; roles per side', async () => {
+  assert.equal((await staff('GET', '/api/aging?side=purchase')).status, 403);
+  assert.equal((await buyer('GET', '/api/aging?side=x')).status, 400);
+  const ago = n => new Date(Date.parse(today + 'T00:00:00Z') - n * 864e5).toISOString().slice(0, 10);
+  await buyer('POST', '/api/purchase-payments', { vendor: '연령상사', pay_date: ago(120), kind: 'opening', amount: 30000, request_id: rid() });
+  await buyer('POST', '/api/purchase-payments', { vendor: '연령상사', pay_date: ago(5), kind: 'opening', amount: 8000, request_id: rid() });
+  await buyer('POST', '/api/purchase-payments', { vendor: '연령상사', pay_date: today, amount: 20000, request_id: rid() });
+  const row = (await buyer('GET', '/api/aging?side=purchase')).body.rows.find(r => r.name === '연령상사');
+  assert.deepEqual([row.balance, row.buckets, row.oldest, row.days], [18000, [8000, 0, 0, 10000, 0], ago(120), 120]);
+});

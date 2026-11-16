@@ -345,6 +345,7 @@ async function pagePurchaseLedger(main) {
   <form class="list-filters toolbar" data-read-only id="pledgerForm"><label>매입처<input name="vendor" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
   <div id="pledgerHead" class="counts"></div><div id="pledger"></div>`;
   const form = $('#pledgerForm', main); let data = null;
+  ledgerPrefill(form, 'vendor');
   bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
   const load = async () => {
     const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
@@ -397,6 +398,7 @@ async function pageSalesLedger(main) {
   <form class="list-filters toolbar" data-read-only id="ledgerForm"><label>거래처<input name="customer" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
   <div id="ledgerHead" class="counts"></div><div id="ledger"></div>`;
   const form = $('#ledgerForm', main); let data = null;
+  ledgerPrefill(form, 'customer');
   bindPartnerPicker(form.elements.customer, null /* 조회 줄에는 안내 글 없음(15.91: 글이 생기며 「조회」 버튼이 밀려 클릭이 빗나감) */, { type: 'sales' }).catch(() => {});
   const load = async () => {
     const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
@@ -482,4 +484,35 @@ async function pageSalesClosing(main) {
     }
   });
   await load();
+}
+
+// 15.115 연령표에서 거래처를 누르면 원장(기간별 거래보고·매입처 원장)을 그 거래처·가장 오래된 미결 일자부터 연다.
+function ledgerPrefill(form, field) {
+  let pick = null; try { pick = JSON.parse(sessionStorage.getItem('wpa:ledger-pick') || 'null'); sessionStorage.removeItem('wpa:ledger-pick'); } catch { /* 편의 기능 */ }
+  if (!pick || pick.field !== field) return;
+  form.elements[field].value = pick.name; if (pick.from && form.elements.from) form.elements.from.value = pick.from; if (form.elements.to) form.elements.to.value = todayStr();
+}
+// 15.115 채권(매출)·채무(매입) 연령표
+async function pageAging(main, side) {
+  const S = side === 'sales' ? { title: '채권 연령표', who: '거래처', bal: '미수 잔액', adv: '선수금', ledger: '#/sales/ledger', field: 'customer', pay: '입금' } : { title: '채무 연령표', who: '매입처', bal: '미지급 잔액', adv: '선급금', ledger: '#/purchase/ledger', field: 'vendor', pay: '지급' };
+  main.innerHTML = `<h1>${S.title}</h1>
+  <p class="muted">기준일까지 남은 ${S.bal}을 전표 일자로부터 지난 날수로 나눕니다. ${S.pay}은 오래된 전표(기초 잔액 먼저)부터 갚은 것으로 봅니다. ${S.who}를 누르면 원장을 엽니다.</p>
+  <form class="list-filters toolbar" data-read-only id="agingForm"><label>기준일<input type="date" name="asof" value="${todayStr()}" max="${todayStr()}"></label><label class="grow">${S.who} 검색<input type="search" name="q" maxlength="100"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
+  <div id="agingHead" class="counts"></div><div id="aging"></div>`;
+  const form = $('#agingForm', main); let data = null, shown = [];
+  const load = async () => {
+    data = await api('GET', '/api/aging?' + new URLSearchParams({ side, asof: form.elements.asof.value || todayStr() })); if (!main.isConnected) return;
+    const q = form.elements.q.value.trim().replace(/\s+/g, '').toLowerCase();
+    shown = data.rows.filter(r => !q || r.name.replace(/\s+/g, '').toLowerCase().includes(q));
+    const sum = i => shown.reduce((t, r) => t + (i === 'bal' ? r.balance : i === 'adv' ? r.advance : r.buckets[i]), 0);
+    const over = shown.reduce((t, r) => t + r.buckets.slice(3).reduce((a, b) => a + b, 0), 0);
+    $('#agingHead', main).innerHTML = sumLine([[`${S.who}`, `${fmtNum(shown.length)}곳`], [S.bal, `${won(sum('bal'))}원`], ['90일 넘음', `<span class="${over ? 'red-text' : ''}">${won(over)}원</span>`]]);
+    $('#aging', main).innerHTML = shown.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr><th>${S.who}</th><th class="r">${S.bal}</th>${data.labels.map(l => `<th class="r">${esc(l)}</th>`).join('')}<th class="r">${S.adv}</th><th>가장 오래된 미결</th></tr></thead>
+      <tbody>${shown.map((r, i) => `<tr><td data-card-primary><a href="${S.ledger}" data-aging-open="${i}"><b>${esc(r.name)}</b></a></td><td class="r"><b>${won(r.balance)}</b></td>${r.buckets.map((v, j) => `<td class="r ${v && j >= 3 ? 'red-text' : ''}">${v ? won(v) : '<span class="muted">0</span>'}</td>`).join('')}<td class="r">${r.advance ? won(r.advance) : ''}</td><td class="nowrap">${r.oldest ? `${esc(r.oldest)} <span class="small muted">(${fmtNum(r.days)}일)</span>` : ''}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th>합계</th><td class="r"><b>${won(sum('bal'))}</b></td>${data.labels.map((_, j) => `<td class="r">${won(sum(j))}</td>`).join('')}<td class="r">${won(sum('adv'))}</td><td></td></tr></tfoot></table></div>` : `<div class="empty">기준일에 남은 ${S.bal}이 없습니다.</div>`;
+    $$('[data-aging-open]', main).forEach(x => x.onclick = () => { const r = shown[x.dataset.agingOpen]; try { sessionStorage.setItem('wpa:ledger-pick', JSON.stringify({ field: S.field, name: r.name, from: r.oldest || data.asof })); } catch { /* 편의 기능 */ } });
+  };
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('[data-xlsx]', form).onclick = () => { if (!data) return; xlsxDownload(`${S.title}_${data.asof}.xlsx`, { sheet: S.title, titles: [`${S.title} · 기준일 ${data.asof}`, COMPANY_NAME], columns: [{ label: S.who, type: 'text' }, { label: S.bal, type: 'money' }, ...data.labels.map(l => ({ label: l, type: 'money' })), { label: S.adv, type: 'money' }, { label: '가장 오래된 미결', type: 'text' }, { label: '경과 일수', type: 'number' }], rows: shown.map(r => [r.name, r.balance, ...r.buckets, r.advance, r.oldest || '', r.days]) }); };
+  await load().catch(fail);
 }
