@@ -346,3 +346,7 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 ## 매입전표·매입 마감·분류 삭제 (15.80)
 
 **마이그레이션 0034_purchase_bills.sql을 Worker 배포보다 먼저 적용하세요.** 새 테이블 3개(purchase_bills, purchase_bill_lines, purchase_closings)와 인덱스만 만들고 기존 테이블·데이터는 건드리지 않습니다. 환경변수·바인딩 변경은 없습니다.
+
+## 매출전표·입금·기간별 거래보고·매출 마감 (15.81)
+
+**마이그레이션 0035_sales_bills.sql을 Worker 배포보다 먼저 적용하세요**(0034가 아직이면 0034부터). 새 테이블 4개(sales_bills, sales_bill_lines, sales_payments, sales_closings)와 인덱스만 만들고 기존 테이블·데이터는 건드리지 않습니다. 환경변수·바인딩 변경은 없습니다. 배포 뒤 관리자가 영업 담당자 계정에 새 권한 「영업(매출전표·입금)」을 주세요.

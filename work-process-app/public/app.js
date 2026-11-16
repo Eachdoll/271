@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.80';
+const APP_VERSION = '15.81';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -23,7 +23,7 @@ const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
 const ROLE_SHORT = { operator: '오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장' };
-const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)' };
+const ROLE_LABEL = { operator: '오퍼레이터(입력 전용)', purchase: '구매', quality: '품질', quality_approver: '품질책임자(승인권자)', dev: '개발(연구소)', dev_approver: '개발책임자(승인권자)', production: '생산', production_approver: '생산팀장(실적 수정 승인)', logistics: '물류', logistics_approver: '물류팀장(입고 수량 수정 승인)', sales: '영업(매출전표·입금)' };
 const STATUS = { pending: '접수대기', rejected: '반려', waiting: '대기', progress: '진행', done: '완료' };
 const RECV = { '': '미입고', ok: '입고완료', mismatch: '수량상이', checking: '확인중' };
 
@@ -288,7 +288,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/payments', '입금'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/closing', '매입 마감']] },
@@ -482,6 +482,11 @@ const PAGES = {
   '#/purchase/bills/new': main => pageBillEntry(main),
   '#/purchase/bills': main => pageBillList(main),
   '#/purchase/closing': main => pageBillClosing(main),
+  '#/sales/bills/new': main => pageSalesBillEntry(main),
+  '#/sales/bills': main => pageSalesBillList(main),
+  '#/sales/payments': main => pageSalesPayments(main),
+  '#/sales/ledger': main => pageSalesLedger(main),
+  '#/sales/closing': main => pageSalesClosing(main),
   '#/logistics/stock': main => pageStock(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),

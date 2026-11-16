@@ -627,3 +627,13 @@ INVITE_CODE=local-test-code npm start
 - 잠금: 전표에 들어간 발주는 입고 취소 요청·삭제·수량/거래처/품목/단위 변경이 409, 전표에 들어간 기타입고는 수정·삭제 409. 마감한 달·거래처는 전표 생성·취소 409. 이번 달·미래 달은 마감 불가. 마감 취소는 관리자.
 - 얼마에요 엑셀 내보내기는 사용자가 업로드 양식을 주면 따로 합니다.
 - 분류 관리: 「삭제」 추가. DELETE /api/item-categories/:id(관리자)는 하위 분류가 있거나 이 분류 경로로 등록된 사용 중(active=1) 품목이 있으면 409(사용 중지 안내). 지운 뒤 반제품 생산 종류 상속을 다시 맞춥니다.
+
+## 매출전표·입금·기간별 거래보고·매출 마감, 엑셀 (15.81)
+- 영업 › 매출전표: 매출전표 입력 / 매출전표 목록 / 입금 / 기간별 거래보고 / 매출 마감. 권한은 새 역할 `sales`(영업, 관리자 화면에서 부여) 또는 관리자.
+- 마이그레이션 0035: sales_bills(SB-YYMMDD-NN), sales_bill_lines(source_type ship/manual, 출하 줄은 `active=1 AND source_id IS NOT NULL` UNIQUE, 줄마다 vat), sales_payments(kind payment=입금·잔액에서 뺌 / opening=기초 미수금·잔액에 더함), sales_closings(period·customer_key, closed UNIQUE, 마감 취소는 reopened).
+- 금액: 줄 trunc(수량×단가), 부가세 trunc(공급가액 합×0.1)(영세 0)를 줄마다 trunc(줄×0.1)로 나누고 차이는 가장 큰 줄에(splitVat). 단가는 출하 줄마다 「이 거래처에 마지막으로 판 단가」(같은 품목코드, 없으면 같은 품목명)를 미리 채움. 출하 기록이 없는 줄은 manual.
+- 잠금: 전표에 들어간 출하는 PUT/DELETE /api/shipments와 단위 변경(/api/items/shipment) 409. 마감한 달·거래처는 전표·입금 생성/취소 400. 이번 달은 마감 불가.
+- GET /api/sales-ledger?from&to[&customer]: 거래처가 있으면 기초잔액(시작일 전 매출 합 + 기초 미수금 − 입금) + 기간 줄(같은 날은 입금 먼저)·줄마다 잔액·합계, 없으면 거래처별 요약.
+- GET /api/bill-lines?side=sales|purchase&from&to[&party]: 엑셀용 확정 전표 줄(최대 1만). 매입은 운송비를 그 전표 끝 「운송비」 줄로 붙임.
+- public/xlsx.js: 라이브러리 없이 .xlsx(무압축 zip) 생성. 한 값 한 칸(병합 없음), 표 안 빈 줄 없음, 금액·수량은 숫자 칸(#,##0), 날짜는 날짜 칸(yyyy-mm-dd), 머리글 틀 고정 + 자동 필터, 합계 줄. 사용자 요청: 얼마에요 엑셀처럼 열을 골랐을 때 옆 칸까지 잡히거나 합계가 0이 되면 안 됨.
+- rangePresets(from, to, {onPick}): 오늘·어제·이번 주·지난 주·이번 달·지난 달·1~4분기·상/하반기·금년·작년 + ◀▶(같은 단위로 이동). 매출전표 목록·입금·기간별 거래보고·매입전표 목록에 붙임. 매입전표 목록에도 「엑셀 (줄별)」.
