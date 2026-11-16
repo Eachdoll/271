@@ -1429,3 +1429,5 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 /* 넓은 화면에서 아래 고정 저장 줄이 마지막 입력 줄을 가리지 않게 폼 끝에 여유 */
 #main form:not(.list-filters):not([data-read-only]):has(> .actions:last-child > .btn.primary:not([type=button])) > .form-grid:last-of-type { margin-bottom: 8px; }
 #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> .btn.primary:not([type=button])) { margin-top: 10px; }
+/* 15.106 휴대폰: 제품등록 창의 구성자재 표가 카드로 바뀌면 최소 너비를 풀어 창 밖으로 잘리지 않게 */
+@media (max-width: 700px) { .bom-materials, .bom-materials.as-cards { min-width: 0; } .bom-materials input, .bom-materials select, .bom-materials td:first-child input { min-width: 0; } .modal .stack > * { min-width: 0; } }

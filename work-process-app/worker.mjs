@@ -2275,10 +2275,47 @@ async function bomPlacement(body, category, previous = {}, unit = '') {
   }
   return { cats, semiType: type, semiUnit, packQty };
 }
+// 15.106 제품코드는 대소문자를 가리지 않고 하나만(빈 코드 제외). 순환 구성자재 막기. 이름·코드를 바꾸면 그 이름·코드로 저장된 기록도 따라간다.
+const CODE_TABLES = ['purchase_orders', 'shipments', 'semi_records', 'purchase_request_items', 'production_request_lines', 'purchase_bill_lines', 'sales_bill_lines', 'sales_order_lines', 'ship_instructions'];
+async function bomCodeClash(code, id = 0) {
+  if (!code) return;
+  const other = await db.prepare("SELECT product, product_code FROM boms WHERE product_code<>'' AND UPPER(product_code)=UPPER(?) AND id<>?").get(code, id);
+  if (other) throw new HttpError(409, `제품코드 ${code}는 「${other.product}」(${other.product_code})에서 이미 쓰고 있습니다.`);
+}
+async function bomCycleCheck(product, materialsJson, id = 0) {
+  const self = nameKey(product), mats = JSON.parse(materialsJson);
+  if (mats.some(m => nameKey(m.item) === self)) throw bad(`「${product}」는 자기 자신을 구성자재로 넣을 수 없습니다.`);
+  const all = await db.prepare('SELECT id, product, materials FROM boms WHERE active=1 AND id<>?').all(id);
+  const graph = new Map(); for (const b of all) graph.set(nameKey(b.product), JSON.parse(b.materials || '[]').map(m => nameKey(m.item)));
+  graph.set(self, mats.map(m => nameKey(m.item)));
+  const seen = new Set(), stack = [...graph.get(self)];
+  while (stack.length) {
+    const k = stack.pop(); if (k === self) throw bad(`「${product}」의 구성자재를 따라가면 다시 「${product}」가 나옵니다(순환 BOM). 구성자재를 확인하세요.`);
+    if (seen.has(k)) continue; seen.add(k); for (const n of graph.get(k) || []) stack.push(n);
+  }
+}
+async function bomFollowRename(before, product, code) {
+  const cmds = [], oldKey = nameKey(before.product), renamed = product !== before.product, recoded = (code || '') !== (before.product_code || '');
+  if (recoded && before.product_code) {
+    for (const t of CODE_TABLES) cmds.push({ sql: `UPDATE ${t} SET product_code=? WHERE product_code=?`, args: [code, before.product_code] });
+  }
+  if (renamed) {
+    // 다른 제품의 구성자재 이름
+    const users = await db.prepare("SELECT id, materials FROM boms WHERE id<>? AND EXISTS(SELECT 1 FROM json_each(boms.materials) m WHERE REPLACE(LOWER(json_extract(m.value,'$.item')),' ','')=?)").all(before.id, oldKey);
+    for (const b of users) { const mats = JSON.parse(b.materials).map(m => nameKey(m.item) === oldKey ? { ...m, item: product } : m); cmds.push({ sql: "UPDATE boms SET materials=?,updated_at=datetime('now','+9 hours') WHERE id=?", args: [JSON.stringify(mats), b.id] }); }
+    // 이 품목으로 연결된 기록의 품목명(코드·bom_id로 확실히 이어진 것만). 재고는 품목명으로 묶이므로 같이 바꿔야 끊기지 않는다.
+    if (before.product_code) for (const t of ['purchase_orders', 'shipments']) cmds.push({ sql: `UPDATE ${t} SET item=? WHERE product_code=? AND item=?`, args: [product, code || before.product_code, before.product] });
+    cmds.push({ sql: 'UPDATE other_receipts SET item=? WHERE bom_id=? AND item=?', args: [product, before.id, before.product] });
+    const sameName = await db.prepare('SELECT COUNT(*) c FROM boms WHERE id<>? AND product=?').get(before.id, before.product);
+    if (!sameName.c) cmds.push({ sql: 'UPDATE stock_adjustments SET item=? WHERE TRIM(item)=?', args: [product, before.product] });
+  }
+  return cmds;
+}
 route('POST', '/api/boms', async ({ user, body }) => {
   requireAdmin(user);
   const fields = bomFields(body), { cats, semiType, semiUnit, packQty } = await bomPlacement(body, fields[8], {}, fields[4]);
   if (semiType && !fields[1]) throw bad('커팅/융착·세탁에서 고를 품목은 제품코드가 필요합니다.');
+  await bomCodeClash(fields[1]); await bomCycleCheck(fields[0], fields[5]);
   const result = await db.prepare('INSERT INTO boms(product,product_code,kind,base_qty,unit,materials,note,active,item_category,created_by,cat1,cat2,cat3,semi_type,semi_unit,pack_qty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...fields, user.name, ...cats, semiType, semiUnit, packQty);
   return withSizes(decodeBom(await mustGet('boms', result.lastInsertRowid)));
 });
@@ -2286,11 +2323,13 @@ route('PUT', '/api/boms/:id', async ({ user, params, body }) => {
   requireAdmin(user); const before = await mustGet('boms', params.id); const fields = bomFields(body);
   const { cats, semiType, semiUnit, packQty } = await bomPlacement(body, fields[8], before, fields[4]);
   if (semiType && !fields[1]) throw bad('커팅/융착·세탁에서 고를 품목은 제품코드가 필요합니다.');
+  if (before.is_temp && !fields[1]) throw bad('임시 품목을 정식으로 바꿀 때는 제품코드를 넣으세요(비우면 이 코드로 이어진 발주·출하가 끊깁니다).');
+  await bomCodeClash(fields[1], before.id); await bomCycleCheck(fields[0], fields[5], before.id);
   const commands = [{ sql: "UPDATE boms SET product=?,product_code=?,kind=?,base_qty=?,unit=?,materials=?,note=?,active=?,item_category=?,cat1=?,cat2=?,cat3=?,semi_type=?,semi_unit=?,pack_qty=?,is_temp=0,updated_at=datetime('now','+9 hours') WHERE id=?", args: [...fields, ...cats, semiType, semiUnit, packQty, before.id] }];
   if (before.is_temp) {
     if (/^TMP-/i.test(fields[1])) throw bad('임시 코드(TMP-)를 정식 제품코드로 바꿔 저장하세요.');
     commands.push(...relinkCatalog(before, { id: before.id, product: fields[0], product_code: fields[1] }));
-  }
+  } else commands.push(...await bomFollowRename(before, fields[0], fields[1]));
   await db.batch(commands);
   return withSizes(decodeBom(await mustGet('boms', params.id)));
 });
@@ -2446,9 +2485,9 @@ const BOM_USES = [
   ['수주', 'sales_order_lines', 'bom_id=?', 'id'],
   ['출하지시', 'ship_instructions', 'bom_id=?', 'id'],
   ['의뢰·수입검사', 'requests', "json_extract(data,'$.bom_id')=?", 'id'],
-  ['다른 제품의 구성자재', 'boms', "id<>? AND EXISTS(SELECT 1 FROM json_each(boms.materials) m WHERE json_extract(m.value,'$.item')=?)", 'material'],
+  ['다른 제품의 구성자재', 'boms', "id<>? AND EXISTS(SELECT 1 FROM json_each(boms.materials) m WHERE REPLACE(LOWER(json_extract(m.value,'$.item')),' ','')=?)", 'material'],
 ];
-const bomUseArgs = (bom, key) => key === 'code' ? [bom.product_code] : key === 'material' ? [bom.id, bom.product] : [bom.id];
+const bomUseArgs = (bom, key) => key === 'code' ? [bom.product_code] : key === 'material' ? [bom.id, nameKey(bom.product)] : [bom.id];
 async function bomUsage(bom) {
   const uses = [];
   for (const [label, table, where, key] of BOM_USES) {
