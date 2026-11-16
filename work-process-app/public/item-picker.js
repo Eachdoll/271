@@ -116,7 +116,8 @@ function itemLockApply(row, k, bom, { keepSpec = true } = {}) {
     let next;
     if (bom && sizes.length) {
       next = document.createElement('select');
-      next.innerHTML = `<option value="">사이즈 선택</option>${sizes.map(s => `<option${keepSpec && s === oldSpec ? ' selected' : ''}>${esc(s)}</option>`).join('')}`;
+      const legacy = keepSpec && oldSpec && !sizes.includes(oldSpec); // 사이즈 등록 전에 적은 값 등(15.75): 그대로 둘 수 있게
+      next.innerHTML = `<option value="">사이즈 선택</option>${legacy ? `<option value="${esc(oldSpec)}" selected>${esc(oldSpec)} (이전 값)</option>` : ''}${sizes.map(s => `<option${keepSpec && s === oldSpec ? ' selected' : ''}>${esc(s)}</option>`).join('')}`;
     } else {
       next = document.createElement('input'); next.maxLength = base.max;
       next.value = oldSpec; next.placeholder = bom ? '등록된 사이즈 없음 · 필요하면 입력' : base.ph;

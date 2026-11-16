@@ -139,3 +139,31 @@ test('LOT stock: received per LOT minus shipments of the same LOT', async () => 
   await admin('POST', '/api/shipments', { ship_date: today, item: 'G3 NXT 나이트릴', bom_id: glove.id, qty: 20, customer: '고객', lot: 'LS-2' });
   assert.deepEqual((await staff('GET', '/api/inventory/lots?q=LS-&state=instock')).body.rows.map(r => r.lot), ['LS-1']);
 });
+
+test('15.75 review fixes: delete guard, LOT of a correction, cancelled LOT not reused, exact LOT numbering', async () => {
+  // 1. LOT 입고 줄이 있는 발주는 삭제 거부
+  const po = await order(60, '점검상사');
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ po_id: po.id, lot: 'A1', qty: 30 }] });
+  const del = await admin('DELETE', `/api/po/${po.id}`);
+  assert.equal(del.status, 409); assert.match(del.body.error, /입고 취소 요청/);
+  // 2. LOT가 하나면 수량 수정 보정 줄이 그 LOT로 → LOT별 재고가 실입고와 맞음
+  const c1 = (await staff('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', recv_qty: 28, reason: '파손', request_id: rid() })).body.change;
+  await admin('POST', `/api/receipt-changes/${c1.id}/approve`, {});
+  assert.deepEqual((await staff('GET', '/api/inventory/lots?q=A1')).body.rows.map(r => [r.lot, r.balance]), [['A1', 28]]);
+  // LOT가 여럿이면 「LOT 미지정 수량 수정」 줄로 보여 합이 맞음
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ po_id: po.id, lot: 'B1', qty: 20 }] });
+  const c2 = (await staff('POST', `/api/po/${po.id}/receipt-changes`, { action: 'qty', recv_qty: 45, reason: '재확인', request_id: rid() })).body.change;
+  await admin('POST', `/api/receipt-changes/${c2.id}/approve`, {});
+  const rows = (await staff('GET', '/api/inventory/lots')).body.rows.filter(r => ['A1', 'B1', '(LOT 미지정 수량 수정)'].includes(r.lot) && r.item === 'G3 NXT 나이트릴');
+  assert.equal(rows.reduce((t, r) => t + r.balance, 0), 45);
+  // 9. 입고 취소 승인 → 발주 LOT 목록도 비움, 다음 입고에 취소된 LOT가 안 붙음
+  const c3 = (await staff('POST', `/api/po/${po.id}/receipt-changes`, { action: 'revert', reason: '반품', request_id: rid() })).body.change;
+  await admin('POST', `/api/receipt-changes/${c3.id}/approve`, {});
+  assert.equal(sqlite.prepare('SELECT lot FROM purchase_orders WHERE id=?').get(po.id).lot, '');
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ po_id: po.id, lot: 'C1', qty: 5 }] });
+  assert.equal(sqlite.prepare('SELECT lot FROM purchase_orders WHERE id=?').get(po.id).lot, 'C1');
+  // 6. LOT 번호: 접두어 정확히·숫자만
+  const head = `Q${today.slice(2).replace(/-/g, '')}_`;
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '점검상사', request_id: rid(), lines: [{ bom_id: mask.id, lot: `q${today.slice(2).replace(/-/g, '')}X950`, qty: 1 }, { bom_id: mask.id, lot: head + '007A', qty: 1 }] });
+  assert.deepEqual((await staff('GET', `/api/lots/next?prefix=Q&date=${today}&count=1`)).body.lots, [head + '001']);
+});

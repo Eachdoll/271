@@ -1136,9 +1136,10 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .rc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0 8px; }
 .rc-toolbar input[data-rc-prefix] { width: 5em; }
 .rc-grid input, .rc-grid select { min-width: 0; width: 100%; }
-.rc-grid td:nth-child(5) input { min-width: 9em; }
-.rc-grid td:nth-child(6) input { min-width: 6em; text-align: right; }
-.rc-grid td:nth-child(7) select, .rc-grid td:nth-child(8) select { min-width: 6.5em; }
+.rc-grid td:nth-child(6) input { min-width: 9em; }
+.rc-grid td:nth-child(4) input, .rc-grid td:nth-child(4) select { min-width: 5.5em; }
+.rc-grid td:nth-child(7) input { min-width: 6em; text-align: right; }
+.rc-grid td:nth-child(8) select, .rc-grid td:nth-child(9) select { min-width: 6.5em; }
 .rc-grid td:nth-child(3) { min-width: 12em; word-break: keep-all; overflow-wrap: anywhere; }
 .rc-po-table td:nth-child(3) { word-break: keep-all; overflow-wrap: anywhere; }
 .rc-po-sum { margin-top: 2px; }

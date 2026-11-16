@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.74';
+const APP_VERSION = '15.75';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1553,7 +1553,7 @@ async function pageBoms(main) {
       // 코드·역조회는 조건과 상관없이 전체 품목에서 찾는다.
       const everything = await api('GET', '/api/boms?include_archived=1').catch(() => all);
       if (version !== queryVersion || !main.isConnected) return;
-      renderBomTree($('#bomList'), boms, everything, load);
+      renderBomTree($('#bomList'), boms, everything, load, id => edit(boms.find(b => b.id === id)));
     }
     const edit = async bom => {
       let nodes; try { nodes = await api('GET', '/api/item-categories'); } catch (error) { fail(error); return; }
