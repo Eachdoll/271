@@ -810,3 +810,9 @@ INVITE_CODE=local-test-code npm start
 - 메뉴: 영업 › 매출전표의 「입금」을 빼고 구매 그룹에 「입금확인」(#/purchase/payments). 예전 주소 #/sales/payments는 새 주소로 location.replace(즐겨찾기·자주 쓰는 화면 대비). 화면은 같은 pageSalesPayments, 제목만 「입금확인」.
 - 서버 /api/sales-payments(GET·POST·취소)는 requirePayments: 영업 또는 구매. 원장(기간별 거래보고)·매출 마감은 영업 그대로이며 입금 기록은 잔액에 그대로 반영.
 - 메뉴 열람 권한(routeMenu)은 주소 앞부분으로 정해지므로 입금확인은 이제 「구매」 묶음 권한을 따른다.
+
+## 지급확인·매입처 원장 (15.110, 마이그레이션 0041)
+- purchase_payments(지급 payment / 기초 미지급 opening, 취소, request_id 재전송 안전) — sales_payments와 같은 모양, vendor. purchase_closings.payment_total.
+- /api/purchase-payments(GET·POST·취소, requirePurchase, 매입 마감된 달은 막음), /api/purchase-ledger(매입처 없으면 매입처별 요약, 있으면 전표 단위 줄 + 지급 줄, 잔액 = 기초 미지급 + 매입전표 합계 − 지급). 매입 마감 목록·마감 기록에 그 달 지급 합계.
+- 화면: 구매 › 대금(입금확인 #/purchase/payments, 지급확인 #/purchase/disbursements, 매입처 원장 #/purchase/ledger). 입금확인·지급확인은 같은 pagePayments(main, side) — PAY_SIDE 설정(거래처 칸 이름 customer/vendor, 구분 글자, API). 매입처 원장은 전표 단위(매입전표에 운송비·명세서 합계가 전표에 있으므로). 인쇄·엑셀.
+- 거래처 이름 변경 따라가기에 purchase_payments 추가. 백업 표 목록에 purchase_payments.

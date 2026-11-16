@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.109';
+const APP_VERSION = '15.110';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -314,7 +314,7 @@ const NAV = [
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
-    ['#/purchase/payments', '입금확인'],
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/ledger', '매입처 원장']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
@@ -512,7 +512,9 @@ const PAGES = {
   '#/logistics/ship-orders': main => pageShipInstructions(main),
   '#/sales/bills/new': main => pageSalesBillEntry(main),
   '#/sales/bills': main => pageSalesBillList(main),
-  '#/purchase/payments': main => pageSalesPayments(main),
+  '#/purchase/payments': main => pagePayments(main, 'sales'),
+  '#/purchase/disbursements': main => pagePayments(main, 'purchase'),
+  '#/purchase/ledger': main => pagePurchaseLedger(main),
   '#/sales/payments': () => { location.replace('#/purchase/payments'); }, // 15.109 구매로 옮김
   '#/sales/ledger': main => pageSalesLedger(main),
   '#/sales/closing': main => pageSalesClosing(main),

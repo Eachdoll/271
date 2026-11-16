@@ -232,3 +232,29 @@ test('15.109 Payment check moved to 구매: purchasing staff can enter and cance
   assert.equal((await buyer('GET', '/api/sales-payments?customer=' + encodeURIComponent('입금상사'))).body.rows.length, 1);
   assert.equal((await buyer('POST', `/api/sales-payments/${p.body.id}/cancel`, { reason: '중복' })).status, 200);
 });
+
+test('15.110 Payments to suppliers: ledger balance = opening + bills − payments; closing keeps the paid total; roles', async () => {
+  const v = '지급상사';
+  assert.equal((await staff('POST', '/api/purchase-payments', { vendor: v, pay_date: today, amount: 1, request_id: rid() })).status, 403, 'purchase role only');
+  const opening = await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: lastMonth + '-01', kind: 'opening', amount: 100000, request_id: rid() });
+  assert.equal(opening.status, 200, JSON.stringify(opening.body));
+  const p = await po(v, '지급원단', 10, 1000);
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: v, request_id: rid(), lines: [{ po_id: p.id, qty: 10 }] });
+  const line = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent(v))).body.rows[0];
+  const bill = (await buyer('POST', '/api/purchase-bills', { vendor: v, bill_date: today, request_id: rid(), lines: [{ source_type: line.source_type, source_id: line.source_id }] })).body;
+  assert.equal(bill.total, 11000);
+  const pay = (await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: today, amount: 30000, method: '기업은행', request_id: rid() })).body;
+  const from = lastMonth + '-01';
+  const led = (await buyer('GET', `/api/purchase-ledger?vendor=${encodeURIComponent(v)}&from=${today.slice(0, 7)}-01&to=${today}`)).body;
+  assert.equal(led.opening, 100000, 'opening payable before the period');
+  assert.deepEqual([led.totals.purchase, led.totals.paid, led.totals.balance], [11000, 30000, 81000]);
+  const sum = (await buyer('GET', `/api/purchase-ledger?from=${from}&to=${today}`)).body.rows.find(r => r.vendor === v);
+  assert.deepEqual([sum.opening, sum.total, sum.paid, sum.balance], [100000, 11000, 30000, 81000]);
+  const closing = (await buyer('GET', `/api/purchase-closing?period=${today.slice(0, 7)}`)).body.rows.find(r => r.vendor === v);
+  assert.equal(closing.payment_total, 30000);
+  assert.equal((await buyer('POST', `/api/purchase-payments/${pay.id}/cancel`, { reason: '중복' })).status, 200);
+  assert.equal((await buyer('GET', `/api/purchase-ledger?vendor=${encodeURIComponent(v)}&from=${today.slice(0, 7)}-01&to=${today}`)).body.totals.balance, 111000);
+  // 지난달 마감 뒤에는 그 달 지급 등록 막힘
+  assert.equal((await buyer('POST', '/api/purchase-closing', { period: lastMonth, vendor: v })).status, 200);
+  assert.equal((await buyer('POST', '/api/purchase-payments', { vendor: v, pay_date: lastMonth + '-15', amount: 1, request_id: rid() })).status, 400);
+});

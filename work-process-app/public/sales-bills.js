@@ -219,48 +219,109 @@ async function pageSalesBillList(main) {
 }
 
 const PAY_KIND = { payment: '입금', opening: '기초 미수금' };
-async function pageSalesPayments(main) {
-  main.innerHTML = `<h1>입금확인</h1>
-  <p class="muted">거래처에서 받은 돈을 넣으면 기간별 거래보고의 잔액에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 받을 돈은 「기초 미수금」으로 한 번 넣으세요(잔액에 더해짐).</p>
+// 15.110 입금확인(매출처에서 받은 돈)과 지급확인(매입처에 준 돈)은 같은 화면 구조. side: 'sales' | 'purchase'
+const PAY_SIDE = {
+  sales: { title: '입금확인', api: '/api/sales-payments', party: 'customer', type: 'sales', kinds: PAY_KIND, verb: '입금', ledger: '기간별 거래보고',
+    help: '거래처에서 받은 돈을 넣으면 기간별 거래보고의 잔액에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 받을 돈은 「기초 미수금」으로 한 번 넣으세요(잔액에 더해짐).' },
+  purchase: { title: '지급확인', api: '/api/purchase-payments', party: 'vendor', type: 'purchase', kinds: { payment: '지급', opening: '기초 미지급' }, verb: '지급', ledger: '매입처 원장',
+    help: '매입처에 준 돈을 넣으면 매입처 원장의 잔액(줄 돈)에서 빠집니다. 프로그램을 쓰기 전부터 남아 있던 줄 돈은 「기초 미지급」으로 한 번 넣으세요(잔액에 더해짐).' },
+};
+async function pageSalesPayments(main) { return pagePayments(main, 'sales'); }
+async function pagePayments(main, side) {
+  const c = PAY_SIDE[side], party = c.party, kinds = c.kinds;
+  main.innerHTML = `<h1>${esc(c.title)}</h1>
+  <p class="muted">${esc(c.help)}</p>
   <form class="stack card" id="payForm" data-no-author novalidate>
     <div class="form-grid">
-      <label>거래처 *<input name="customer" required maxlength="100" autocomplete="off" placeholder="매출처에서 고르거나 입력"></label><span class="partner-hint small muted" data-partner-hint></span>
+      <label>거래처 *<input name="${party}" required maxlength="100" autocomplete="off" placeholder="${side === 'sales' ? '매출처' : '매입처'}에서 고르거나 입력"></label><span class="partner-hint small muted" data-partner-hint></span>
       <label>날짜 *<input name="pay_date" type="date" required value="${todayStr()}"></label>
-      <label>구분<select name="kind"><option value="payment">입금</option><option value="opening">기초 미수금</option></select></label>
+      <label>구분<select name="kind"><option value="payment">${esc(kinds.payment)}</option><option value="opening">${esc(kinds.opening)}</option></select></label>
       <label>금액 * <span class="hint">(원)</span><input name="amount" type="number" min="1" step="1" inputmode="numeric" required></label>
-      <label>입금 계좌·방법<input name="method" maxlength="50" list="payMethods" placeholder="예) 기업은행"><datalist id="payMethods"></datalist></label>
+      <label>${esc(c.verb)} 계좌·방법<input name="method" maxlength="50" list="payMethods" placeholder="예) 기업은행"><datalist id="payMethods"></datalist></label>
       <label class="span2">비고<input name="note" maxlength="200"></label>
     </div>
-    <div class="actions"><button class="btn primary">입금 저장</button></div>
+    <div class="actions"><button class="btn primary">${esc(c.verb)} 저장</button></div>
   </form>
-  <h2>입금 목록</h2>
-  <form class="list-filters toolbar" data-read-only id="payFilters"><label>날짜<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="confirmed">확정</option><option value="">전체</option><option value="cancelled">취소</option></select></label><button class="btn primary">조회</button></form>
+  <h2>${esc(c.verb)} 목록</h2>
+  <form class="list-filters toolbar" data-read-only id="payFilters"><label>날짜<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="${party}" maxlength="100"></label><label>상태<select name="status"><option value="confirmed">확정</option><option value="">전체</option><option value="cancelled">취소</option></select></label><button class="btn primary">조회</button></form>
   <div id="paySummary" class="counts"></div><div id="payList"></div>`;
   const form = $('#payForm', main), filters = $('#payFilters', main); let requestId = crypto.randomUUID(), busy = false;
-  bindPartnerPicker(filters.elements.customer, null, { type: 'sales' }).catch(fail);
-  bindPartnerPicker(form.elements.customer, $('[data-partner-hint]', form), { type: 'sales' }).catch(() => {});
+  bindPartnerPicker(filters.elements[party], null, { type: c.type }).catch(fail);
+  bindPartnerPicker(form.elements[party], $('[data-partner-hint]', form), { type: c.type }).catch(() => {});
   const load = async () => {
-    const data = await api('GET', '/api/sales-payments?' + new URLSearchParams(formObj(filters))); if (!main.isConnected) return;
+    const data = await api('GET', c.api + '?' + new URLSearchParams(formObj(filters))); if (!main.isConnected) return;
     const methods = [...new Set(data.rows.map(r => r.method).filter(Boolean))].slice(0, 20); $('#payMethods', main).innerHTML = methods.map(m => `<option value="${esc(m)}">`).join('');
     const live = data.rows.filter(r => r.status === 'confirmed');
-    $('#paySummary', main).innerHTML = `<b>${esc(`${data.rows.length}건 · 입금 ${won(live.filter(r => r.kind === 'payment').reduce((t, r) => t + r.amount, 0))}원`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
-    $('#payList', main).innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>날짜</th><th>거래처</th><th>구분</th><th class="r">금액</th><th>입금 계좌·방법</th><th>비고</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td>${esc(r.pay_date)}</td><td data-card-primary><b>${esc(r.customer)}</b></td><td>${PAY_KIND[r.kind]}</td><td class="r"><b>${won(r.amount)}</b></td><td>${esc(r.method)}</td><td>${esc(r.note)}${r.status === 'cancelled' ? `<div class="small muted">${esc(`취소: ${r.cancel_reason}`)}</div>` : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td>${r.status === 'confirmed' ? `<button class="btn small danger" data-pay-cancel="${r.id}">취소</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 입금이 없습니다.</div>';
+    $('#paySummary', main).innerHTML = `<b>${esc(`${data.rows.length}건 · ${c.verb} ${won(live.filter(r => r.kind === 'payment').reduce((t, r) => t + r.amount, 0))}원`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}`;
+    $('#payList', main).innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>날짜</th><th>거래처</th><th>구분</th><th class="r">금액</th><th>${esc(c.verb)} 계좌·방법</th><th>비고</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td>${esc(r.pay_date)}</td><td data-card-primary><b>${esc(r[party])}</b></td><td>${esc(kinds[r.kind])}</td><td class="r"><b>${won(r.amount)}</b></td><td>${esc(r.method)}</td><td>${esc(r.note)}${r.status === 'cancelled' ? `<div class="small muted">${esc(`취소: ${r.cancel_reason}`)}</div>` : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td>${r.status === 'confirmed' ? `<button class="btn small danger" data-pay-cancel="${r.id}">취소</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${esc(`조건에 맞는 ${c.verb}이 없습니다.`)}</div>`;
   };
   rangePresets(filters.elements.from, filters.elements.to, { onPick: () => load().catch(fail) });
   filters.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   form.onsubmit = async e => {
     e.preventDefault(); if (busy) return;
     const v = formObj(form);
-    if (!v.customer) { form.elements.customer.focus(); return toast('거래처를 넣으세요.', 'err'); }
+    if (!v[party]) { form.elements[party].focus(); return toast('거래처를 넣으세요.', 'err'); }
     if (!(Number(v.amount) > 0)) { form.elements.amount.focus(); return toast('금액을 넣으세요.', 'err'); }
     busy = true;
-    try { const r = await api('POST', '/api/sales-payments', { ...v, request_id: requestId }); toast(r.duplicate ? '앞서 이미 저장된 입금입니다.' : `${r.customer} ${PAY_KIND[r.kind]} ${won(r.amount)}원을 저장했습니다.`); requestId = crypto.randomUUID(); form.elements.amount.value = ''; form.elements.note.value = ''; await load(); }
+    try { const r = await api('POST', c.api, { ...v, request_id: requestId }); toast(r.duplicate ? `앞서 이미 저장된 ${c.verb}입니다.` : `${r[party]} ${kinds[r.kind]} ${won(r.amount)}원을 저장했습니다.`); requestId = crypto.randomUUID(); form.elements.amount.value = ''; form.elements.note.value = ''; await load(); }
     catch (error) { fail(error); } finally { busy = false; }
   };
   $('#payList', main).addEventListener('click', async e => {
     const b = e.target.closest('[data-pay-cancel]'); if (!b) return;
-    const v = await promptBox('입금 취소', '<label>취소 사유 *<input name="reason" required maxlength="200"></label>'); if (!v) return;
-    try { await api('POST', `/api/sales-payments/${b.dataset.payCancel}/cancel`, v); toast('입금을 취소했습니다.'); await load(); } catch (error) { fail(error); }
+    const v = await promptBox(`${c.verb} 취소`, '<label>취소 사유 *<input name="reason" required maxlength="200"></label>'); if (!v) return;
+    try { await api('POST', `${c.api}/${b.dataset.payCancel}/cancel`, v); toast(`${c.verb}을 취소했습니다.`); await load(); } catch (error) { fail(error); }
+  });
+  await load();
+}
+
+// 15.110 매입처 원장: 매입처를 고르면 기초 미지급 + 매입전표(전표 단위) − 지급 = 잔액(줄 돈), 비우면 매입처별 요약
+async function pagePurchaseLedger(main) {
+  const r0 = rpRange('year'), PK = PAY_SIDE.purchase.kinds;
+  main.innerHTML = `<h1>매입처 원장</h1>
+  <p class="muted">매입처를 고르면 그 기간의 매입전표·지급과 줄마다 잔액(줄 돈)을 봅니다. 비우면 매입처별 합계입니다. 지급은 「지급확인」에서 넣습니다.</p>
+  <form class="list-filters toolbar" data-read-only id="pledgerForm"><label>매입처<input name="vendor" maxlength="100" autocomplete="off" placeholder="비우면 전체 요약"></label><label>시작일<input type="date" name="from" value="${r0.from}" required></label><label>종료일<input type="date" name="to" value="${r0.to}" required></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button><button type="button" class="btn" data-print>인쇄</button></form>
+  <div id="pledgerHead" class="counts"></div><div id="pledger"></div>`;
+  const form = $('#pledgerForm', main); let data = null;
+  bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
+  const load = async () => {
+    const v = formObj(form); if (!v.from || !v.to) return toast('기간을 고르세요.', 'err');
+    data = await api('GET', '/api/purchase-ledger?' + new URLSearchParams(v)); if (!main.isConnected) return;
+    const box = $('#pledger', main);
+    if (!data.vendor) {
+      const sum = k => data.rows.reduce((t, r) => t + (r[k] || 0), 0);
+      $('#pledgerHead', main).innerHTML = `<b>${esc(`${data.from} ~ ${data.to} · 매입처 ${data.rows.length}곳 · 매입 ${won(sum('total'))}원 · 지급 ${won(sum('paid'))}원 · 미지급 ${won(sum('balance'))}원`)}</b>`;
+      box.innerHTML = data.rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>매입처</th><th class="r">기초잔액</th><th class="r">전표</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">매입 합계</th><th class="r">지급</th><th class="r">잔액(미지급)</th><th></th></tr></thead><tbody>${data.rows.map(r => `<tr><td data-card-primary><b>${esc(r.vendor)}</b></td><td class="r">${won(r.opening)}</td><td class="r">${fmtNum(r.bills)}</td><td class="r">${won(r.supply)}</td><td class="r">${won(r.vat)}</td><td class="r">${won(r.total)}</td><td class="r">${won(r.paid)}</td><td class="r"><b>${won(r.balance)}</b></td><td><button class="btn small" data-pledger-open="${esc(r.vendor)}">원장</button></td></tr>`).join('')}</tbody>
+        <tfoot><tr><th>합계</th><td class="r">${won(sum('opening'))}</td><td class="r">${fmtNum(sum('bills'))}</td><td class="r">${won(sum('supply'))}</td><td class="r">${won(sum('vat'))}</td><td class="r">${won(sum('total'))}</td><td class="r">${won(sum('paid'))}</td><td class="r"><b>${won(sum('balance'))}</b></td><td></td></tr></tfoot></table></div>` : '<div class="empty">그 기간에 매입·지급이 없습니다.</div>';
+      return;
+    }
+    $('#pledgerHead', main).innerHTML = `<b>${esc(`${data.vendor} · ${data.from} ~ ${data.to} · 기초잔액 ${won(data.opening)}원 · 매입 ${won(data.totals.purchase)}원 · 지급 ${won(data.totals.paid)}원 · 잔액 ${won(data.totals.balance)}원`)}</b>`;
+    box.innerHTML = `<section class="cert ledger-doc"><h2 class="ledger-title">매입처 원장</h2><p class="small">${esc(COMPANY_NAME)} · 매입처 <b>${esc(data.vendor)}</b> · 보고기간 ${esc(data.from)} ~ ${esc(data.to)}</p>
+      <div class="table-wrap"><table class="grid ledger-grid"><thead><tr><th>날짜</th><th>구분</th><th>전표번호</th><th>명세서 번호</th><th>적요/품목</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">매입금액</th><th class="r">지급액</th><th>지급 방법</th><th class="r">잔액</th></tr></thead>
+      <tbody><tr class="row-off"><td></td><td>기초잔액</td><td colspan="8"></td><td class="r"><b>${won(data.opening)}</b></td></tr>${data.rows.map(r => `<tr class="${r.kind === 'payment' ? 'ledger-pay' : ''}"><td class="nowrap">${esc(r.date)}</td><td class="nowrap">${r.kind === 'purchase' ? '매입' : esc(PK[r.kind])}</td><td>${r.bill_no ? `<button type="button" class="link-btn" data-pledger-bill="${r.bill_id}">${esc(r.bill_no)}</button>` : ''}</td><td>${esc(r.statement_no || '')}</td><td data-card-primary>${esc(r.item)}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td class="r">${r.kind === 'purchase' ? won(r.supply) : ''}</td><td class="r">${r.kind === 'purchase' ? won(r.vat) : ''}</td><td class="r">${r.purchase ? won(r.purchase) : ''}</td><td class="r">${r.paid ? won(r.paid) : ''}</td><td>${esc(r.method || '')}</td><td class="r"><b>${won(r.balance)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="5">합계</th><td class="r">${won(data.totals.supply)}</td><td class="r">${won(data.totals.vat)}</td><td class="r">${won(data.totals.purchase)}</td><td class="r">${won(data.totals.paid)}</td><td></td><td class="r"><b>${won(data.totals.balance)}</b></td></tr></tfoot></table></div></section>`;
+  };
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('[data-print]', form).onclick = () => { if (!data?.vendor) return toast('인쇄할 매입처를 고르세요.', 'err'); const sec = $('.ledger-doc', main); const m = modal(`<div class="ledger-print"></div><div class="actions"><button class="btn" data-close>닫기</button><button class="btn primary" data-go>인쇄 · PDF 저장</button></div>`, { wide: true }); $('.ledger-print', m.el).append(sec.cloneNode(true)); m.el.parentElement.classList.add('lr-cert-wrap'); $('[data-close]', m.el).onclick = m.close; $('[data-go]', m.el).onclick = () => rcPrint(`매입처원장_${data.vendor}_${data.from}_${data.to}`); };
+  $('[data-xlsx]', form).onclick = async () => {
+    try {
+      if (!data || data.from !== form.elements.from.value || data.to !== form.elements.to.value || (data.vendor || '') !== form.elements.vendor.value.trim()) await load();
+      if (!data) return;
+      if (!data.vendor) {
+        const sum = k => data.rows.reduce((t, r) => t + (r[k] || 0), 0);
+        return xlsxDownload(`매입처별_${data.from}_${data.to}.xlsx`, { sheet: '매입처별', titles: ['매입처별 매입·지급', `${COMPANY_NAME} · 보고기간 ${data.from} ~ ${data.to}`],
+          columns: [{ label: '매입처', type: 'text', width: 22 }, { label: '기초잔액', type: 'money', width: 14 }, { label: '전표', type: 'number', width: 8 }, { label: '공급가액', type: 'money', width: 14 }, { label: '세액', type: 'money', width: 12 }, { label: '매입 합계', type: 'money', width: 14 }, { label: '지급', type: 'money', width: 14 }, { label: '잔액(미지급)', type: 'money', width: 14 }],
+          rows: data.rows.map(r => [r.vendor, r.opening, r.bills, r.supply, r.vat, r.total, r.paid, r.balance]), totals: ['합계', sum('opening'), sum('bills'), sum('supply'), sum('vat'), sum('total'), sum('paid'), sum('balance')] });
+      }
+      xlsxDownload(`매입처원장_${data.vendor}_${data.from}_${data.to}.xlsx`, { sheet: '매입처 원장', titles: ['매입처 원장', `${COMPANY_NAME} · 매입처 ${data.vendor} · 보고기간 ${data.from} ~ ${data.to}`],
+        columns: [{ label: '날짜', type: 'date' }, { label: '구분', type: 'text', width: 10 }, { label: '전표번호', type: 'text', width: 15 }, { label: '명세서 번호', type: 'text', width: 14 }, { label: '적요/품목', type: 'text', width: 26 }, { label: '공급가액', type: 'money', width: 13 }, { label: '세액', type: 'money', width: 12 }, { label: '매입금액', type: 'money', width: 13 }, { label: '지급액', type: 'money', width: 13 }, { label: '지급 방법', type: 'text', width: 12 }, { label: '잔액', type: 'money', width: 14 }, { label: '비고', type: 'text', width: 18 }],
+        rows: [[data.from, '기초잔액', '', '', '', null, null, null, null, '', data.opening, ''], ...data.rows.map(r => [r.date, r.kind === 'purchase' ? '매입' : PK[r.kind], r.bill_no || '', r.statement_no || '', r.item, r.kind === 'purchase' ? r.supply : null, r.kind === 'purchase' ? r.vat : null, r.purchase || null, r.paid || null, r.method || '', r.balance, r.note || ''])],
+        totals: ['합계', '', '', '', '', data.totals.supply, data.totals.vat, data.totals.purchase, data.totals.paid, '', data.totals.balance, ''] });
+    } catch (error) { fail(error); }
+  };
+  $('#pledger', main).addEventListener('click', async e => {
+    const open = e.target.closest('[data-pledger-open]'); if (open) { form.elements.vendor.value = open.dataset.pledgerOpen; await load().catch(fail); return; }
+    const bill = e.target.closest('[data-pledger-bill]'); if (bill) { try { billSheet(await api('GET', '/api/purchase-bills/' + bill.dataset.pledgerBill), () => load()); } catch (error) { fail(error); } }
   });
   await load();
 }
