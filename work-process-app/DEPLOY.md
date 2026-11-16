@@ -301,3 +301,7 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 
 **Worker 배포 전에 D1 마이그레이션 `0032_freight_internal_note.sql`을 적용하세요.** vendors.freight_terms, purchase_requests.freight, purchase_orders.internal_note·freight, purchase_request_items.order_closed 칸만 추가합니다(기본값 있음). 기존 0000~0031과 운영 데이터는 바꾸지 않습니다. 환경변수·바인딩 변경은 없습니다.
 배포 후 이미 「발주 대기」에 되살아나 있는 의뢰 품목은 자동으로 닫지 않습니다(어느 것이 지운 발주였는지 기록이 없음). 구매 담당이 발주 대기 목록의 「발주 안 함」으로 정리하세요.
+
+## 품목 찾기 창·등록 품목 고정·현재고·발주서 비고 (15.70)
+
+마이그레이션·환경변수·바인딩 변경이 없습니다. 코드만 배포합니다. 새 정적 파일 public/item-picker.js가 빌드에 포함됩니다(scripts/build.mjs 목록). 15.69의 0032가 아직 적용되지 않았다면 먼저 적용하세요.

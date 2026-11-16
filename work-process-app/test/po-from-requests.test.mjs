@@ -99,3 +99,26 @@ test('15.69: vendor freight terms, request freight in profit, internal note and 
   const direct = (await buyer('POST', '/api/po', { req_no: 'D-1', vendor: '운송상사', item: '장화', qty: 1, due_date: '2026-12-01', item_category: '부자재', internal_note: '머크향', freight: 3000 })).body;
   assert.deepEqual([direct.internal_note, direct.freight], ['머크향', 3000]);
 });
+
+test('15.70: a registered item keeps its unit and only takes one of its registered sizes as spec', async () => {
+  await admin('POST', '/api/item-categories', { item_class: '상품', name: '방진화', sizes: '240,250,260' });
+  const shoe = (await admin('POST', '/api/boms', { product: '방진안전화', product_code: 'SH-01', item_category: '상품', kind: 'finished', base_qty: 1, unit: '켤레', materials: [], cat1: '방진화' })).body;
+  const plain = (await admin('POST', '/api/boms', { product: '무사이즈 품목', product_code: 'NS-01', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  assert.deepEqual(shoe.sizes, ['240', '250', '260']);
+  const send = items => sales('POST', '/api/purchase-requests', { doc_date: '2026-11-16', title: '고정', approvers: [ids['팀장']], items });
+  const wrong = await send([{ bom_id: shoe.id, item: '아무거나', unit: 'BOX', spec: '999', qty: 1 }]);
+  assert.equal(wrong.status, 400); assert.match(wrong.body.error, /등록된 사이즈\(240, 250, 260\)/);
+  const ok = await send([{ bom_id: shoe.id, item: '아무거나', product_code: 'X', unit: 'BOX', spec: '250', qty: 1 }, { bom_id: plain.id, item: 'x', unit: 'BOX', spec: '흰색', qty: 2 }, { item: '직접 입력', unit: 'BOX', spec: '자유', qty: 3 }]);
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.deepEqual(ok.body.items.map(i => [i.item, i.product_code, i.unit, i.spec]), [['방진안전화', 'SH-01', '켤레', '250'], ['무사이즈 품목', 'NS-01', 'EA', '흰색'], ['직접 입력', '', 'BOX', '자유']]);
+  const mr = await sales('POST', '/api/production-requests', { order_date: '2026-11-16', customer: '하라다', lines: [{ bom_id: shoe.id, item: 'x', unit: 'BOX', spec: '240', qty: 5 }] });
+  assert.equal(mr.status, 200, JSON.stringify(mr.body)); assert.deepEqual([mr.body.lines[0].unit, mr.body.lines[0].spec], ['켤레', '240']);
+  assert.equal((await sales('POST', '/api/production-requests', { order_date: '2026-11-16', customer: '하라다', lines: [{ bom_id: shoe.id, item: 'x', spec: 'XL', qty: 5 }] })).status, 400);
+});
+
+test('15.70: the PO-sheet note typed when ordering is kept after the automatic request text', async () => {
+  const pr = (await sales('POST', '/api/purchase-requests', { doc_date: '2026-11-16', title: '비고', approvers: [ids['팀장']], items: [{ item: '비고장갑', spec: 'L', unit: 'EA', qty: 10, vendor: '비고상사' }] })).body;
+  await boss('POST', `/api/purchase-requests/${pr.id}/decision`, { decision: 'approved' });
+  const made = (await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', note: '성적서 동봉', lines: [{ id: pr.items[0].id, qty: 12 }] })).body.created[0];
+  assert.equal(made.note, `구매의뢰 ${pr.doc_no} · L · 의뢰 10 → 발주 12 · 성적서 동봉`);
+});

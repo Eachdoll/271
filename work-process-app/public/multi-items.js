@@ -46,6 +46,9 @@ function fromCatalog(row, entity, bom) {
   const box = document.createElement('p'); box.className = 'span3 catalog-summary'; box.dataset.catalogSummary = '';
   box.innerHTML = [['단위', bom.unit], ['분류', bom.item_category || '미분류'], ['제품코드', bom.product_code]].filter(([, v]) => v).map(([label, value]) => `<span class="muted">${esc(label)}</span> <b>${esc(value)}</b>`).join('<span class="muted"> · </span>');
   $('[data-line-key=bom_id]', row).closest('label').after(box);
+  // 15.70 현재고(재고 현황과 같은 계산)
+  box.insertAdjacentHTML('beforeend', '<span class="muted"> · </span><span class="muted">현재고</span> <b data-item-stock>…</b>');
+  itemStockLoad().then(map => { const cell = $('[data-item-stock]', box); if (cell) cell.innerHTML = itemStockText(bom, map); });
 }
 function multiPayload(form, entity, type, kind, requestId) {
   const common = entity === 'request' ? collectRequest(type,form) : formObj(form);
@@ -100,7 +103,7 @@ async function installMultiItems(legacy, entity, type = '') {
   const add = () => {
     if ($$('[data-multi-row]',form).length >= 30) return;
     const row = document.createElement('fieldset'); row.dataset.multiRow = ''; row.className = 'multi-row';
-    row.innerHTML = `<legend>품목</legend><div class="form-grid">${picker ? `<label>${freeEntry || entity === 'other_receipt' ? '품목 검색' : 'BOM 검색'}<input type="search" data-bom-search placeholder="품목·코드 검색"></label><label class="span2">${freeEntry ? '제품코드로 불러오기' : entity === 'other_receipt' ? '품목명 *' : 'BOM 품목'}<select data-line-key="bom_id" ${entity === 'other_receipt' ? 'required' : ''}>${optionHtml()}</select></label>` : ''}<label${entity === 'other_receipt' ? ' class="receipt-item-name"' : ''}>${entity === 'laundry' ? '옷 종류 (원피스·투피스 등)' : '품목명 / 제품명'} *<input data-line-key="item" required ${entity === 'other_receipt' ? 'readonly' : ''} ${entity === 'schedule' && kind === 'semi' ? 'list="semiPlanItems"' : ''} maxlength="200"></label><label>규격·사이즈<input data-line-key="spec" maxlength="100" placeholder="예) S / M / L"></label><label>${entity === 'laundry' ? '입고' : entity === 'schedule' ? '계획' : ''}수량 *<input data-line-key="qty" type="number" min="0" step="any" required></label><label>단위<input data-line-key="unit" maxlength="20" placeholder="예) EA / BOX / 벌" ${entity === 'other_receipt' ? 'readonly' : ''}></label><label>LOT <span class="hint">(선택${entity === 'purchase_order' ? ' · 모르면 비워 두고 입고 후 입력' : ''})</span><input data-line-key="lot" maxlength="100"></label>${entity === 'purchase_order' ? `<label>분류 *<select data-line-key="item_category" required>${categoryOptions('',true).replace('전체 분류','분류 선택')}</select></label><label class="inline"><input data-line-key="coa_requested" type="checkbox">COA 요청</label>` : ''}${entity === 'laundry' ? '<label>폐기수량 *<input data-line-key="discard_qty" type="number" min="0" step="any" value="0" required></label>' : ''}${type === 'development' ? '<label>타겟단가 *<input data-line-key="target_price" required></label>' : ''}</div><div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div>`;
+    row.innerHTML = `<legend>품목</legend><div class="form-grid">${picker ? `<div class="multi-find"><button type="button" class="btn" data-bom-find>품목 찾기</button></div><label class="span2">${freeEntry ? '제품코드로 불러오기' : entity === 'other_receipt' ? '품목명 *' : 'BOM 품목'}<select data-line-key="bom_id" ${entity === 'other_receipt' ? 'required' : ''}>${optionHtml()}</select></label>` : ''}<label${entity === 'other_receipt' ? ' class="receipt-item-name"' : ''}>${entity === 'laundry' ? '옷 종류 (원피스·투피스 등)' : '품목명 / 제품명'} *<input data-line-key="item" required ${entity === 'other_receipt' ? 'readonly' : ''} ${entity === 'schedule' && kind === 'semi' ? 'list="semiPlanItems"' : ''} maxlength="200"></label><label>규격·사이즈<input data-line-key="spec" maxlength="100" placeholder="예) S / M / L"></label><label>${entity === 'laundry' ? '입고' : entity === 'schedule' ? '계획' : ''}수량 *<input data-line-key="qty" type="number" min="0" step="any" required></label><label>단위<input data-line-key="unit" maxlength="20" placeholder="예) EA / BOX / 벌" ${entity === 'other_receipt' ? 'readonly' : ''}></label><label>LOT <span class="hint">(선택${entity === 'purchase_order' ? ' · 모르면 비워 두고 입고 후 입력' : ''})</span><input data-line-key="lot" maxlength="100"></label>${entity === 'purchase_order' ? `<label>분류 *<select data-line-key="item_category" required>${categoryOptions('',true).replace('전체 분류','분류 선택')}</select></label><label class="inline"><input data-line-key="coa_requested" type="checkbox">COA 요청</label>` : ''}${entity === 'laundry' ? '<label>폐기수량 *<input data-line-key="discard_qty" type="number" min="0" step="any" value="0" required></label>' : ''}${type === 'development' ? '<label>타겟단가 *<input data-line-key="target_price" required></label>' : ''}</div><div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div>`;
     rowsRoot.append(row);
     $('[data-remove-item]',row).onclick = () => { if ($$('[data-multi-row]',form).length === 1) return toast('품목은 1개 이상 필요합니다.','err'); row.remove(); updateCount(); };
     const select = $('[data-line-key=bom_id]',row);
@@ -114,7 +117,11 @@ async function installMultiItems(legacy, entity, type = '') {
         sizeGrid(row, bom?.sizes || []);
         fromCatalog(row, entity, bom); // after the size grid, which shows spec/qty again for items without sizes
       };
-      $('[data-bom-search]',row).oninput = event => { const q = event.target.value.toLocaleLowerCase(); [...select.options].forEach(option => { option.hidden = !!option.value && !option.textContent.toLocaleLowerCase().includes(q); }); };
+      // 15.70 품목 찾기 창(분류 탭·세부 분류·검색·표)으로 고른다. 선택칸은 그대로 두어 고른 값을 담는다.
+      $('[data-bom-find]',row).onclick = async () => {
+        const bom = await openItemPicker(boms, { filter: b => entity !== 'schedule' || (b.kind === kind && !b.is_temp) });
+        if (bom) { select.value = String(bom.id); select.onchange(); ($('[data-line-key=qty]',row) || select).focus(); } else select.focus();
+      };
     }
     updateCount(); return row;
   };

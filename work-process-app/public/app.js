@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.69';
+const APP_VERSION = '15.70';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -875,6 +875,17 @@ function recvChip(po) {
 }
 // ── 발주서(15.66): 거래처별로 한 장씩. 인쇄·PDF 저장은 세탁 성적서와 같은 방식(body.printing-cert)으로 이 창만 찍는다. ──
 // 발주서 본문(.cert)은 번역하지 않는다(거래처에 보내는 한국어 문서).
+// 발주서 비고(15.70): 사람이 쓴 비고만 모은다. 구매의뢰 발주의 자동 문구(「구매의뢰 PR-…」, 규격, 「의뢰 10 → 발주 12」)는 뺀다.
+// 모든 품목의 비고가 같으면 한 번, 다르면 「품목: 비고」 줄로. 내부 메모(internal_note)는 넣지 않는다.
+function poUserNote(p) {
+  return String(p.note || '').split(' · ').map(s => s.trim()).filter((part, i) => part && !(i === 0 && /^구매의뢰 /.test(part)) && !(p.spec && part === p.spec && /^구매의뢰 /.test(p.note)) && !/^의뢰 \S+ → 발주 \S+$/.test(part)).join(' · ');
+}
+function poSheetMemo(list) {
+  const notes = list.map(p => [p, poUserNote(p)]).filter(([, n]) => n);
+  if (!notes.length) return '';
+  const same = notes.length === list.length && notes.every(([, n]) => n === notes[0][1]);
+  return same ? notes[0][1] : [...new Set(notes.map(([p, n]) => `${p.item}${p.spec ? ' ' + p.spec : ''}: ${n}`))].join('\n');
+}
 async function poPrintSheet(pos) {
   if (!pos.length) return;
   const vendors = await api('GET', '/api/vendors?type=purchase').catch(() => []);
@@ -899,7 +910,7 @@ async function poPrintSheet(pos) {
       <table class="po-items"><thead><tr><th>No</th><th>품목</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th>납기일</th></tr></thead>
       <tbody>${list.map((p, i) => `<tr><td class="c">${i + 1}</td><td>${esc(p.item)}${p.product_code ? `<div class="po-code">${esc(p.product_code)}</div>` : ''}</td><td>${esc(p.spec || '')}</td><td>${esc(p.unit || '')}</td><td class="r">${fmtNum(p.qty)}</td><td class="r">${money(p.unit_price)}</td><td class="r">${p.unit_price == null ? '' : money(p.unit_price * p.qty)}</td><td class="c">${esc(p.due_date)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="6" class="r">합계${priced.length < list.length ? ' (단가 없는 품목 제외)' : ''}</th><td class="r"><b>${priced.length ? money(total) : ''}</b></td><td></td></tr>${hasFreight ? `<tr><th colspan="6" class="r">운송비</th><td class="r">${money(freight)}</td><td></td></tr><tr><th colspan="6" class="r">총액</th><td class="r"><b>${money(total + freight)}</b></td><td></td></tr>` : ''}</tfoot></table>
-      <div class="po-memo"><b>비고</b><div></div></div>
+      <div class="po-memo"><b>비고</b><div class="po-memo-body" contenteditable="true" role="textbox" aria-multiline="true" aria-label="발주서 비고 (인쇄 전에 고칠 수 있음)">${esc(poSheetMemo(list))}</div></div>
       <p class="po-sign">발주처 : 서울세미텍 <span class="cert-sign-box">(인)</span></p>
     </section>`;
   };

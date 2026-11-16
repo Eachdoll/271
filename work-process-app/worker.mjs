@@ -2518,10 +2518,17 @@ route('POST', '/api/admin/org-import', async ({ user }) => {
 // revision을 올리는 헤더 UPDATE는 맨 마지막에 둔다. 그래서 다른 요청이 먼저 revision을 올렸으면 이 요청의 문장은 하나도 적용되지 않는다.
 const MR_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const MR_PAGE = 300;
+// 15.70 등록 품목(코드)을 고른 줄: 단위는 등록 단위, 규격은 등록된 사이즈 중 하나(등록 사이즈가 없으면 입력값).
+function lockedSpec(bom, sizes, spec, no) {
+  const value = str(spec, 200);
+  if (!sizes.length) return value; // 등록 사이즈가 없는 품목은 규격(사이즈·메모)을 그대로 받는다
+  if (value && !sizes.includes(value)) throw bad(`${no}(${bom.product})의 규격은 등록된 사이즈(${sizes.join(', ')}) 중에서 고르세요.`);
+  return value;
+}
 async function mrLines(list) {
   if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
   if (list.length > 60) throw bad('품목 줄은 60개까지 입력할 수 있습니다.');
-  const lines = [];
+  const lines = [], sizesOf = await sizeSets();
   for (const [index, raw] of list.entries()) {
     const it = raw && typeof raw === 'object' ? raw : {}, no = `${index + 1}번 품목`;
     let bom = null;
@@ -2530,7 +2537,8 @@ async function mrLines(list) {
       bom = await mustGet('boms', id); if (!bom.active) throw bad(`${no}은(는) 사용 중지된 품목입니다.`);
     }
     const qty = num(it.qty, `${no} 수량`); if (!(qty > 0)) throw bad(`${no} 수량은 0보다 커야 합니다.`);
-    lines.push({ line_no: index + 1, bom_id: bom ? bom.id : null, product_code: bom ? bom.product_code : str(it.product_code, 50), item: bom ? bom.product : reqStr(it.item, `${no} 품목명`, 200), spec: str(it.spec, 100), unit: str(it.unit, 20) || (bom ? bom.unit : ''), qty });
+    const spec = bom ? lockedSpec(bom, sizesOf(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]), it.spec, no).slice(0, 100) : str(it.spec, 100);
+    lines.push({ line_no: index + 1, bom_id: bom ? bom.id : null, product_code: bom ? bom.product_code : str(it.product_code, 50), item: bom ? bom.product : reqStr(it.item, `${no} 품목명`, 200), spec, unit: bom && bom.unit ? bom.unit : str(it.unit, 20) || (bom ? bom.unit : ''), qty });
   }
   return lines;
 }
@@ -2754,7 +2762,7 @@ const PR_TEXT = { delivery_qty: 50, customer: 200, stock_qty: 50, due_text: 50, 
 async function prItems(list) {
   if (!Array.isArray(list) || !list.length) throw bad('품목을 1개 이상 입력하세요.');
   if (list.length > 30) throw bad('품목은 30개까지 입력할 수 있습니다.');
-  const items = [];
+  const items = [], sizesOf = await sizeSets();
   for (const [index, raw] of list.entries()) {
     const it = raw && typeof raw === 'object' ? raw : {}, no = `${index + 1}번 품목`;
     let bom = null;
@@ -2767,7 +2775,8 @@ async function prItems(list) {
       line_no: index + 1, bom_id: bom ? bom.id : null,
       product_code: bom ? bom.product_code : str(it.product_code, 50),
       item: bom ? bom.product : reqStr(it.item, `${no} 품목명`, 200),
-      spec: str(it.spec, 200), unit: str(it.unit, 20) || (bom ? bom.unit : ''), qty,
+      spec: bom ? lockedSpec(bom, sizesOf(bom.item_category, [bom.cat1, bom.cat2, bom.cat3]), it.spec, no) : str(it.spec, 200),
+      unit: bom && bom.unit ? bom.unit : str(it.unit, 20) || (bom ? bom.unit : ''), qty,
       purchase_price: num(it.purchase_price, `${no} 매입단가`, { required: false }),
       sale_price: num(it.sale_price, `${no} 판매단가`, { required: false }),
       vendor: str(it.vendor, 100),
@@ -2993,7 +3002,7 @@ route('POST', '/api/purchase-requests/:id/po', async ({ user, params, body }) =>
   // 15.66: 품목별 발주 수량·단가를 바꿔 발주할 수 있다(lines: [{ id, qty, unit_price }]). 없으면 의뢰 수량·매입단가.
   const changes = new Map((Array.isArray(body.lines) ? body.lines : []).map(l => [Number(l && l.id), l]));
   // 먼저 모든 품목을 검사하고 나서 만든다(일부만 만들어지는 일을 줄인다).
-  const plans = [];
+  const plans = [], userNote = str(body.note, 300); // 15.70 발주서 비고(거래처에 보임)
   for (const it of items) {
     const change = changes.get(it.id) || {};
     const qty = change.qty === undefined || change.qty === '' ? it.qty : num(change.qty, `${it.line_no}번 품목 발주 수량`);
@@ -3006,7 +3015,7 @@ route('POST', '/api/purchase-requests/:id/po', async ({ user, params, body }) =>
     const vendor = it.vendor || str(body.vendor, 100);
     if (!vendor) throw bad(`${it.line_no}번 품목(${it.item})의 공급선(거래처)을 입력하세요.`);
     const changed = qty !== it.qty ? ` · 의뢰 ${it.qty} → 발주 ${qty}` : '';
-    plans.push({ it, unitPrice, internalNote, body: { req_no: row.doc_no, vendor, item: it.item, bom_id: bom && bom.active ? bom.id : undefined, unit: it.unit, qty, due_date: due, item_category: category, note: `구매의뢰 ${row.doc_no}${it.spec ? ' · ' + it.spec : ''}${changed}`.slice(0, 500) } });
+    plans.push({ it, unitPrice, internalNote, body: { req_no: row.doc_no, vendor, item: it.item, bom_id: bom && bom.active ? bom.id : undefined, unit: it.unit, qty, due_date: due, item_category: category, note: `구매의뢰 ${row.doc_no}${it.spec ? ' · ' + it.spec : ''}${changed}${userNote ? ' · ' + userNote : ''}`.slice(0, 500) } });
   }
   // 거래처별 운송비(15.69): 보낸 값 > 의뢰서에 적힌 값. 그 거래처로 만든 첫 발주에 붙인다(발주서는 묶음의 합을 쓴다).
   // 나눠서 발주할 때 같은 거래처 운송비가 두 번 붙지 않게, 이 의뢰서의 앞선 발주에 이미 운송비가 있는 거래처는 기본값을 쓰지 않는다.
