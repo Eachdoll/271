@@ -1367,3 +1367,7 @@ table.grid.dense-grid td.r, table.grid.dense-grid th.r { white-space: nowrap; fo
     content: 'F8'; margin-left: 8px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font-size: 11px; font-weight: 600; opacity: .75;
   }
 }
+/* 15.96 조회 줄의 거래처 칸(거래처 찾기 묶음)이 좁아져 거의 안 보이던 문제 */
+.list-filters .partner-picker { width: auto; }
+.list-filters .partner-picker > input { flex: none; width: 11em; }
+@media (max-width: 700px) { .list-filters .partner-picker { width: 100%; } .list-filters .partner-picker > input { flex: 1; width: 0; } }
