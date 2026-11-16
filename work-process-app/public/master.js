@@ -65,14 +65,15 @@ async function pageVendors(main) {
     if (mine !== version || !main.isConnected) return;
     $('#vendorCount').textContent = `${rows.length}곳`;
     $('#vendorList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>거래처</th><th>구분</th><th>운송비 조건</th><th>담당자</th><th>연락처</th><th>등록</th><th></th></tr></thead><tbody>${rows.map((v, i) => `<tr>
-      <td><b>${esc(v.name)}</b></td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
+      <td><b>${esc(v.name)}</b>${v.biz_no ? `<div class="small muted">${esc(v.biz_no)}</div>` : ''}</td><td>${vendorTypeChips(v)}</td><td class="small">${v.is_purchase || v.freight_terms?.length ? freightSummary(v.freight_terms) : '<span class="muted">—</span>'}</td><td>${esc(v.contact_name) || '<span class="muted">미등록</span>'}</td><td>${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^0-9+]/g, ''))}">${esc(v.phone)}</a>` : '<span class="muted">미등록</span>'}</td>
       <td class="small muted">${esc(v.created_by || '')}${v.updated_by ? ` · 수정 ${esc(v.updated_by)}` : ''}</td>
-      <td class="nowrap"><button class="btn small" data-vendor-recent="${i}">최근 매입</button> <button class="btn small" data-vendor-freight="${i}">운송비 조건</button> <button class="btn small" data-vendor-edit="${i}">수정</button>${ME.is_admin || v.created_by === ME.name ? ` <button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      <td class="nowrap"><button class="btn small" data-vendor-recent="${i}">최근 매입</button> <button class="btn small" data-vendor-freight="${i}">운송비 조건</button> <button class="btn small" data-vendor-tax="${i}">사업자 정보</button> <button class="btn small" data-vendor-edit="${i}">수정</button>${ME.is_admin || v.created_by === ME.name ? ` <button class="btn small danger" data-vendor-del="${i}">삭제</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 거래처가 없습니다.</div>';
     $$('[data-vendor-edit]', main).forEach(button => button.onclick = async () => {
       const v = rows[button.dataset.vendorEdit]; const values = await promptBox('거래처 수정', fields(v)); if (!values) return;
       try { await api('PUT', '/api/vendors/' + v.id, values); toast('거래처를 수정했습니다.'); load(); } catch (error) { fail(error); }
     });
+    $$('[data-vendor-tax]', main).forEach(button => button.onclick = () => editVendorTaxInfo(rows[button.dataset.vendorTax].name, load));
     $$('[data-vendor-del]', main).forEach(button => button.onclick = async () => {
       const v = rows[button.dataset.vendorDel]; if (!(await confirmBox(`${v.name} 거래처를 목록에서 삭제할까요? 이미 등록된 발주·입고 기록은 그대로 남습니다.`))) return;
       try { await api('DELETE', '/api/vendors/' + v.id); load(); } catch (error) { fail(error); }

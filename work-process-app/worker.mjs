@@ -463,7 +463,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1260,6 +1260,8 @@ route('POST', '/api/sales-bills/:id/cancel', async ({ user, params, body }) => {
   const bill = await mustGet('sales_bills', params.id);
   if (bill.status !== 'confirmed') throw bad('이미 취소된 전표입니다.');
   if (await salesClosed(bill.customer, bill.bill_date)) throw bad(closedMessage(bill.customer, bill.bill_date, '취소하세요'));
+  const invoice = await db.prepare('SELECT i.invoice_no, i.status FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1').get(bill.id);
+  if (invoice) throw new HttpError(409, `세금계산서 ${invoice.invoice_no}에 담긴 전표입니다. ${invoice.status === 'draft' || invoice.status === 'failed' ? '세금계산서 관리에서 담기 취소한 뒤 취소하세요.' : '발행된 계산서는 수정세금계산서로 처리하세요.'}`);
   const reason = reqStr(body.reason, '취소 사유', 200);
   const results = await db.batch([
     { sql: "UPDATE sales_bill_lines SET active=0 WHERE bill_id=? AND EXISTS(SELECT 1 FROM sales_bills WHERE id=? AND status='confirmed')", args: [bill.id, bill.id] },
@@ -1395,6 +1397,171 @@ route('GET', '/api/bill-lines', async ({ user, query }) => {
     for (const f of freight) { const at = rows.findLastIndex(r => r.bill_no === f.bill_no); rows.splice(at + 1, 0, { bill_no: f.bill_no, bill_date: f.bill_date, party: f.party, tax_type: f.tax_type, source_date: '', item: '운송비', spec: '', unit: '', product_code: '', lot: '', qty: null, unit_price: null, supply: f.freight, vat: null, note: '' }); }
   }
   return { rows };
+});
+// ── 영업: 세금계산서 (15.83) ──
+// 매출전표를 건별(전표 1건 = 1장) 또는 월별(거래처·기간 합계 1장)로 담고, 세금계산서 관리에서 체크해 「발행」한다.
+// 실제 발행(전자서명·국세청 전송)은 트러스빌 ERP 연동(Agent)으로 붙인다. 연동 설정(settings 'tax_link')이 없으면
+// 발행 요청은 409로 분명히 막는다(조용히 쌓아 두지 않음). 받는 쪽 사업자 정보는 담을 때 거래처에서 복사한다.
+const TAX_STATUS = ['draft', 'queued', 'issued', 'sent', 'failed', 'cancelled'];
+const TAX_VENDOR_FIELDS = ['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item', 'tax_email', 'tax_email2'];
+const COMPANY_FIELDS = ['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item', 'email', 'phone'];
+const bizNo = v => String(v || '').replace(/[^0-9]/g, '');
+const emailOk = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || ''));
+function taxEmail(value, label) { const v = str(value, 100); if (v && !emailOk(v)) throw bad(`${label} 형식을 확인하세요.`); return v; }
+function bizNoField(value) { const n = bizNo(value); if (n && n.length !== 10) throw bad('사업자등록번호는 숫자 10자리입니다.'); return n ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : ''; }
+async function companyInfo() { let v = {}; try { v = JSON.parse(await getSetting('company_tax_info') || '{}'); } catch { v = {}; } return Object.fromEntries(COMPANY_FIELDS.map(k => [k, String(v[k] || '')])); }
+route('GET', '/api/tax-company', async ({ user }) => { requireSales(user); return companyInfo(); });
+route('PUT', '/api/tax-company', async ({ user, body }) => {
+  requireAdmin(user);
+  const v = { biz_no: bizNoField(body.biz_no), biz_name: str(body.biz_name, 100), ceo: str(body.ceo, 50), address: str(body.address, 200), biz_type: str(body.biz_type, 100), biz_item: str(body.biz_item, 100), email: taxEmail(body.email, '이메일'), phone: str(body.phone, 30) };
+  await setSetting('company_tax_info', JSON.stringify(v));
+  return v;
+});
+// 거래처 사업자 정보(세금계산서용)
+route('PUT', '/api/vendors/:id/tax-info', async ({ user, params, body }) => {
+  const row = await mustGet('vendors', params.id);
+  const v = { biz_no: bizNoField(body.biz_no), biz_name: str(body.biz_name, 100), ceo: str(body.ceo, 50), address: str(body.address, 200), biz_type: str(body.biz_type, 100), biz_item: str(body.biz_item, 100), tax_email: taxEmail(body.tax_email, '세금계산서 이메일 1'), tax_email2: taxEmail(body.tax_email2, '세금계산서 이메일 2') };
+  await db.prepare(`UPDATE vendors SET ${TAX_VENDOR_FIELDS.map(k => `${k}=?`).join(',')},updated_by=?,updated_at=? WHERE id=?`).run(...TAX_VENDOR_FIELDS.map(k => v[k]), user.name, now(), row.id);
+  return decodeVendor(await mustGet('vendors', row.id));
+});
+const vendorByName = name => db.prepare('SELECT * FROM vendors WHERE name_key=?').get(nameKey(name));
+const UNINVOICED = "NOT EXISTS(SELECT 1 FROM tax_invoice_bills t WHERE t.bill_id=b.id AND t.active=1)";
+// 아직 계산서에 담지 않은 확정 매출전표(기간·거래처)
+async function invoiceCandidates({ from, to, customer = '' }) {
+  const where = ["b.status='confirmed'", UNINVOICED, 'b.bill_date>=?', 'b.bill_date<=?'], args = [from, to];
+  if (customer) { where.push(`${customerKey('b.customer')}=?`); args.push(nameKey(customer)); }
+  const rows = await db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=b.id) AS line_count, (SELECT item FROM sales_bill_lines l WHERE l.bill_id=b.id ORDER BY l.id LIMIT 1) AS first_item FROM sales_bills b WHERE ${where.join(' AND ')} ORDER BY b.bill_date, b.id LIMIT 2001`).all(...args);
+  if (rows.length > 2000) throw bad('전표가 너무 많습니다. 기간을 좁히세요.');
+  return rows;
+}
+const itemLabel = (first, count) => `${first || ''}${count > 1 ? ` 외 ${count - 1}건` : ''}`;
+route('GET', '/api/tax-invoices/candidates', async ({ user, query }) => {
+  requireSales(user);
+  const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일'); if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
+  const bills = await invoiceCandidates({ from, to, customer: str(query.customer, 100) });
+  const map = new Map();
+  for (const b of bills) { const k = nameKey(b.customer), g = map.get(k) || { customer: b.customer, bills: 0, supply_total: 0, vat_total: 0, total: 0, first_item: b.first_item, lines: 0 }; g.bills++; g.lines += b.line_count; g.supply_total += b.supply_total; g.vat_total += b.vat_total; g.total += b.total; map.set(k, g); }
+  const vendors = new Map(); for (const g of map.values()) { const v = await vendorByName(g.customer); vendors.set(nameKey(g.customer), v); g.biz_no = v?.biz_no || ''; g.tax_email = v?.tax_email || ''; g.tax_email2 = v?.tax_email2 || ''; }
+  return { from, to, bills: bills.map(b => ({ ...b, biz_no: vendors.get(nameKey(b.customer))?.biz_no || '', tax_email: vendors.get(nameKey(b.customer))?.tax_email || '' })), customers: [...map.values()].sort((a, b) => stockCompare(a.customer, b.customer)) };
+});
+function invoiceRow(v, { kind, customer, writeDate, from = '', to = '', charge, email1, email2, note, items, bills, uid, token, user }) {
+  const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0);
+  const summary = kind === 'single' ? itemLabel(items[0]?.item, items.length) : itemLabel(items[0]?.item?.replace(/ 외 \d+건$/, ''), bills.reduce((t, b) => t + b.line_count, 0));
+  const prefix = `TI-${today().slice(2).replace(/-/g, '')}-`;
+  return { sql: `INSERT INTO tax_invoices(uid,invoice_no,kind,write_date,period_from,period_to,charge,customer,biz_no,biz_name,ceo,address,biz_type,biz_item,email1,email2,items,item_summary,supply_total,vat_total,total,note,request_id,created_by,created_by_id) VALUES(?,${nextDocNo('tax_invoices', 'invoice_no')},?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [uid, prefix, prefix, prefix, kind, writeDate, from, to, charge, customer, v?.biz_no || '', v?.biz_name || v?.name || customer, v?.ceo || '', v?.address || '', v?.biz_type || '', v?.biz_item || '', email1, email2, JSON.stringify(items), summary, supply, vat, supply + vat, note, token, user.name, user.id] };
+}
+const linkBill = (uid, billId) => ({ sql: 'INSERT INTO tax_invoice_bills(invoice_id,bill_id) VALUES((SELECT id FROM tax_invoices WHERE uid=?),?)', args: [uid, billId] });
+async function invoiceDetail(inv) {
+  const bills = await db.prepare('SELECT b.id, b.bill_no, b.bill_date, b.total, t.active FROM tax_invoice_bills t JOIN sales_bills b ON b.id=t.bill_id WHERE t.invoice_id=? ORDER BY b.bill_date, b.id').all(inv.id);
+  let items = []; try { items = JSON.parse(inv.items || '[]'); } catch { items = []; }
+  return { ...inv, items, bills };
+}
+// 담기: kind single → bill_ids 마다 한 장, monthly → customer·from·to 의 담지 않은 전표 전부를 한 장
+route('POST', '/api/tax-invoices', async ({ user, body }) => {
+  requireSales(user);
+  const token = String(body.request_id || '');
+  if (!/^[a-zA-Z0-9-]{16,80}$/.test(token)) throw bad('등록 요청 번호를 확인하세요.');
+  const prior = await db.prepare('SELECT * FROM tax_invoices WHERE request_id=? ORDER BY id').all(token);
+  if (prior.length) { if (prior[0].created_by_id !== user.id) throw new HttpError(409, '이미 사용된 등록 요청입니다. 새로 열어 등록하세요.'); return { rows: prior, duplicate: true }; }
+  const charge = body.charge === 'receipt' ? 'receipt' : 'claim', note = str(body.note, 200);
+  const cmds = [], made = [];
+  if (body.kind === 'monthly') {
+    const customer = reqStr(body.customer, '거래처', 100), from = dateStr(body.from, '시작일'), to = dateStr(body.to, '종료일');
+    if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
+    const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : to;
+    if (writeDate < from) throw bad('작성일자는 기간 시작일 이후여야 합니다.');
+    const bills = await invoiceCandidates({ from, to, customer });
+    if (!bills.length) throw bad(`${customer}의 ${from} ~ ${to} 사이에 담을 매출전표가 없습니다.`);
+    const v = await vendorByName(customer), uid = crypto.randomUUID();
+    const items = bills.map(b => ({ date: b.bill_date, item: itemLabel(b.first_item, b.line_count), spec: '', qty: null, unit_price: null, supply: b.supply_total, vat: b.vat_total, note: b.bill_no }));
+    cmds.push(invoiceRow(v, { kind: 'monthly', customer, writeDate, from, to, charge, email1: taxEmail(body.email1 ?? v?.tax_email, '이메일 1'), email2: taxEmail(body.email2 ?? v?.tax_email2, '이메일 2'), note, items, bills, uid, token, user }), ...bills.map(b => linkBill(uid, b.id)));
+    made.push(uid);
+  } else if (body.kind === 'single') {
+    const ids = Array.isArray(body.bill_ids) ? [...new Set(body.bill_ids.map(Number))] : [];
+    if (!ids.length || ids.length > 100 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('담을 전표를 1~100건 고르세요.');
+    for (const id of ids) {
+      const b = await db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=b.id) AS line_count FROM sales_bills b WHERE b.id=? AND b.status='confirmed' AND ${UNINVOICED}`).get(id);
+      if (!b) throw new HttpError(409, '이미 계산서에 담겼거나 취소된 전표가 있습니다. 목록을 새로 불러오세요.');
+      const lines = await db.prepare('SELECT * FROM sales_bill_lines WHERE bill_id=? ORDER BY id').all(b.id);
+      const v = await vendorByName(b.customer), uid = crypto.randomUUID();
+      const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : b.bill_date;
+      const items = lines.map(l => ({ date: b.bill_date, item: l.item, spec: l.spec, qty: l.qty, unit_price: l.unit_price, supply: l.supply, vat: l.vat, note: l.note }));
+      cmds.push(invoiceRow(v, { kind: 'single', customer: b.customer, writeDate, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills: [b], uid, token, user }), linkBill(uid, b.id));
+      made.push(uid);
+    }
+  } else throw bad('담는 방식(건별·월별)을 고르세요.');
+  try { await db.batch(cmds); }
+  catch (error) {
+    if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '그 사이 같은 전표가 다른 계산서에 담겼습니다. 목록을 새로 불러오세요.');
+    throw error;
+  }
+  return { rows: await db.prepare('SELECT * FROM tax_invoices WHERE request_id=? ORDER BY id').all(token) };
+});
+route('GET', '/api/tax-invoices', async ({ user, query }) => {
+  requireSales(user);
+  const where = [], args = [];
+  applyListDates(where, args, query, 'write_date');
+  if (query.customer) { where.push(`${customerKey('customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
+  if (query.status) { if (!TAX_STATUS.includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
+  else where.push("status<>'cancelled'");
+  applyListKeyword(where, args, query.q, ['invoice_no', 'customer', 'biz_no', 'item_summary', 'email1', 'email2', 'note', 'approval_no']);
+  const rows = await db.prepare(`SELECT id,invoice_no,kind,write_date,period_from,period_to,charge,customer,biz_no,email1,email2,item_summary,supply_total,vat_total,total,note,status,approval_no,status_message,issued_at,created_by,created_at,(SELECT COUNT(*) FROM tax_invoice_bills t WHERE t.invoice_id=tax_invoices.id) AS bill_count FROM tax_invoices ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY write_date DESC, id DESC LIMIT 1001`).all(...args);
+  return { rows: rows.slice(0, 1000), more: rows.length > 1000, linked: !!(await getSetting('tax_link')) };
+});
+route('GET', '/api/tax-invoices/:id', async ({ user, params }) => { requireSales(user); return { ...await invoiceDetail(await mustGet('tax_invoices', params.id)), company: await companyInfo() }; });
+// 담은 계산서(발행 전·실패) 고치기: 작성일자·청구/영수·이메일 2개·비고, 거래처 사업자 정보 다시 불러오기
+route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
+  requireSales(user);
+  const inv = await mustGet('tax_invoices', params.id);
+  if (!['draft', 'failed'].includes(inv.status)) throw bad('발행을 요청한 계산서는 고칠 수 없습니다.');
+  const writeDate = body.write_date === undefined ? inv.write_date : dateStr(body.write_date, '작성일자');
+  if (inv.kind === 'monthly' && inv.period_from && writeDate < inv.period_from) throw bad('작성일자는 기간 시작일 이후여야 합니다.');
+  const set = { write_date: writeDate, charge: body.charge === undefined ? inv.charge : body.charge === 'receipt' ? 'receipt' : 'claim', email1: body.email1 === undefined ? inv.email1 : taxEmail(body.email1, '이메일 1'), email2: body.email2 === undefined ? inv.email2 : taxEmail(body.email2, '이메일 2'), note: body.note === undefined ? inv.note : str(body.note, 200) };
+  if (body.refresh_customer) { const v = await vendorByName(inv.customer); if (v) Object.assign(set, { biz_no: v.biz_no, biz_name: v.biz_name || v.name, ceo: v.ceo, address: v.address, biz_type: v.biz_type, biz_item: v.biz_item }); }
+  const keys = Object.keys(set);
+  const r = await db.prepare(`UPDATE tax_invoices SET ${keys.map(k => `${k}=?`).join(',')},updated_by=?,updated_at=? WHERE id=? AND status IN ('draft','failed')`).run(...keys.map(k => set[k]), user.name, now(), inv.id);
+  if (!r.changes) throw new HttpError(409, '그 사이 발행이 요청되었습니다. 새로 불러오세요.');
+  return invoiceDetail(await mustGet('tax_invoices', inv.id));
+});
+// 담기 취소(발행 전·실패만): 전표는 다시 담을 수 있게 풀린다.
+route('POST', '/api/tax-invoices/:id/cancel', async ({ user, params, body }) => {
+  requireSales(user);
+  const inv = await mustGet('tax_invoices', params.id);
+  if (!['draft', 'failed'].includes(inv.status)) throw bad('발행을 요청한 계산서는 담기 취소할 수 없습니다(발행 취소·수정세금계산서로 처리).');
+  const results = await db.batch([
+    { sql: "UPDATE tax_invoice_bills SET active=0 WHERE invoice_id=? AND EXISTS(SELECT 1 FROM tax_invoices WHERE id=? AND status IN ('draft','failed'))", args: [inv.id, inv.id] },
+    { sql: "UPDATE tax_invoices SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status IN ('draft','failed')", args: [now(), user.name, str(body.reason, 200) || '담기 취소', inv.id] },
+  ]);
+  if (!results.at(-1).meta.changes) throw new HttpError(409, '그 사이 발행이 요청되었습니다. 새로 불러오세요.');
+  return { ok: true };
+});
+// 발행 전 점검: 우리 회사·받는 쪽 사업자 정보와 이메일
+function invoiceProblems(inv, company) {
+  const p = [];
+  if (bizNo(company.biz_no).length !== 10 || !company.biz_name || !company.ceo) p.push('우리 회사 사업자 정보(사업자번호·상호·대표자)');
+  if (bizNo(inv.biz_no).length !== 10) p.push('거래처 사업자번호');
+  if (!inv.biz_name || !inv.ceo) p.push('거래처 상호·대표자');
+  if (!emailOk(inv.email1)) p.push('받는 이메일 1');
+  if (inv.email2 && !emailOk(inv.email2)) p.push('받는 이메일 2');
+  if (!(inv.total > 0) && inv.kind) p.push('금액');
+  return p;
+}
+route('POST', '/api/tax-invoices/issue', async ({ user, body }) => {
+  requireSales(user);
+  const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
+  if (!ids.length || ids.length > 100) throw bad('발행할 계산서를 1~100장 고르세요.');
+  const company = await companyInfo(), problems = [];
+  for (const id of ids) {
+    const inv = await mustGet('tax_invoices', id);
+    if (!['draft', 'failed'].includes(inv.status)) { problems.push(`${inv.invoice_no} ${inv.customer}: 이미 발행을 요청한 계산서`); continue; }
+    const p = invoiceProblems(inv, company); if (p.length) problems.push(`${inv.invoice_no} ${inv.customer}: ${p.join(', ')} 확인`);
+  }
+  if (problems.length) throw bad(`발행 전에 고칠 것이 있습니다.\n${problems.slice(0, 10).join('\n')}${problems.length > 10 ? `\n외 ${problems.length - 10}건` : ''}`);
+  // 트러스빌 ERP 연동(Agent)이 연결되면 여기서 queued로 넘기고 Agent가 발행·결과를 돌려준다.
+  if (!(await getSetting('tax_link'))) throw new HttpError(409, '트러스빌 연동이 아직 연결되지 않아 발행할 수 없습니다. 금융결제원에서 ERP 연동 매뉴얼을 받아 연결한 뒤 발행됩니다. 계산서는 담긴 그대로 남아 있습니다.');
+  const results = await db.batch(ids.map(id => ({ sql: "UPDATE tax_invoices SET status='queued',status_message='',updated_by=?,updated_at=? WHERE id=? AND status IN ('draft','failed')", args: [user.name, now(), id] })));
+  return { queued: results.reduce((t, r) => t + r.meta.changes, 0) };
 });
 // ── 구매: 세탁관리 ──
 route('GET', '/api/laundry', async ({ query }) => {

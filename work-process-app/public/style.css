@@ -1237,3 +1237,13 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .bill-grid tr.bill-group td { background: var(--bg); font-size: .95em; cursor: default; }
 .bill-grid input[data-bill-qty] { width: 6.5em; text-align: right; }
 @media (max-width: 700px) { .bill-grid tr.bill-group { display: block; } .bill-grid tr.bill-group td[colspan] { display: block; } }
+/* 15.83 세금계산서 */
+.tax-doc .tax-title { text-align: center; margin: 0 0 10px; }
+.tax-parties { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 13px; }
+.tax-parties th, .tax-parties td { border: 1px solid #c33; padding: 4px 6px; text-align: left; }
+.tax-parties .tax-side { width: 26px; text-align: center; color: #c33; }
+.tax-parties .tax-side.to { color: #24c; border-color: #24c; }
+.tax-grid td .chip { white-space: nowrap; }
+.tax-actions { margin: 8px 0; gap: 8px; }
+@media (max-width: 700px) { .tax-parties, .tax-parties tbody, .tax-parties tr, .tax-parties th, .tax-parties td { display: block; width: auto; } .tax-parties .tax-side { display: none; } }
+#toast.err span { white-space: pre-line; }

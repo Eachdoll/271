@@ -645,3 +645,11 @@ INVITE_CODE=local-test-code npm start
 - 저장: 줄 qty(비우면 남은 수량, 0 이하 400). 겹쳐 잡기는 INSERT … SELECT … WHERE ROUND(현재 잡은 합,6)=ROUND(읽은 합,6) + RC_GUARD로 막아 그 사이 다른 전표가 잡으면 409로 batch 전체를 되돌림. 같은 전표에 같은 입고 줄 두 번은 400.
 - 화면: 발주 묶음(batch_id, 없으면 발주 id) 머리 줄에 발주번호·발주일·발주금액·발주 비고 + 묶음 체크, 줄에 발주량·입고량·전표 잡은·이번 수량(입력, 입고와 차이 표시)·단가(입력, 지난 매입 단가 안내), 「결과 내 찾기」, 합계에 「수량 고친 줄 N」. 전표 보기에 입고 수량이 다르면 「입고 N」.
 - 「최근 매입목록·전체 상품목록」에서 입고 없이 줄을 담는 기능은 「입고된 것만」 결정에 따라 넣지 않음(지난 매입 단가는 안내로 보여 줌).
+
+## 세금계산서: 건별·월별 담기, 관리·발행, 받는 이메일 2개 (15.83)
+- 사용자 결정: 계산서 담기는 건별·월별만(선택 합계 없음), 발행은 세금계산서 관리 창에서 체크 후 「발행」(얼마에요 발행V3.0처럼), 받는 이메일 2개, 연동은 트러스빌 유지.
+- 마이그레이션 0037: vendors에 biz_no·biz_name·ceo·address·biz_type·biz_item·tax_email·tax_email2 열 추가, tax_invoices(uid·invoice_no TI-…·kind single/monthly·write_date·period·charge claim/receipt·받는 쪽 사업자 정보 복사·email1/2·items JSON·금액·status draft/queued/issued/sent/failed/cancelled·approval_no·status_message), tax_invoice_bills(전표 하나는 active 계산서 하나에만 UNIQUE).
+- 우리 회사 정보: settings 'company_tax_info'(GET 영업, PUT 관리자). 거래처 사업자 정보: PUT /api/vendors/:id/tax-info(거래처 관리·세금계산서 화면의 「사업자 정보」).
+- 담기: POST /api/tax-invoices kind single(bill_ids → 장마다 1건, 작성일자 기본 전표 일자, 품목=전표 줄) / monthly(customer·from·to → 담지 않은 전표 전부 1장, 작성일자 기본 기간 마지막 날, 품목=전표마다 1줄 「첫 품목 외 N건」). 발행 전·실패만 고치기(작성일자·청구/영수·이메일 2개·비고·거래처 정보 다시 불러오기)·담기 취소. 담긴 매출전표는 취소 409.
+- 발행: POST /api/tax-invoices/issue {ids}. 먼저 점검(우리 회사·거래처 사업자번호 10자리·상호·대표자·이메일 1) 400, 그다음 settings 'tax_link'가 없으면 409 「트러스빌 연동이 아직 연결되지 않아…」(조용히 쌓지 않음). 연결되면 queued.
+- 트러스빌: Windows Agent(DB 연동) 사용 예정. Agent는 회사 PC에서 ODBC/OLE로 SaleEBill·Itemlist(최대 99줄)·EB_Status 등 표를 읽어 서명·전송하고 상태를 받는다. SaleEBill에 RecEMail·RecEMail2가 있어 받는 이메일 2개와 맞음. 우리 D1에는 직접 붙을 수 없으므로 회사 PC의 로컬 DB + 연결 프로그램(queued → SaleEBill/Itemlist, EB_Status·NTS 승인번호 → 우리 API)이 다음 단계. 공급자 담당자 TrusBill ID(MemID)·담당자명·이메일·전화가 순발행 필수.

@@ -354,3 +354,7 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 ## 매입전표 수량 나눠 잡기 (15.82)
 
 **마이그레이션 0036_purchase_bill_partial.sql을 Worker 배포보다 먼저 적용하세요.** purchase_bill_lines의 부분 UNIQUE 인덱스(purchase_bill_lines_source)를 지우고 일반 인덱스를 만들며, source_qty 열(NULL 허용)을 추가합니다. 기존 테이블 재생성·데이터 변경은 없습니다. 환경변수·바인딩 변경은 없습니다.
+
+## 세금계산서 (15.83)
+
+**마이그레이션 0037_tax_invoices.sql을 Worker 배포보다 먼저 적용하세요**(0036이 아직이면 0036부터). vendors에 사업자 정보 열 8개를 추가(기본값 '')하고 새 테이블 2개(tax_invoices, tax_invoice_bills)를 만듭니다. 기존 데이터 변경은 없습니다. 환경변수·바인딩 변경은 없습니다. 트러스빌 연동 전에는 「발행」이 409로 막히는 것이 정상입니다.
