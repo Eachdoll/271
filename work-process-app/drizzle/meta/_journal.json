@@ -239,6 +239,13 @@
       "when": 1794826413000,
       "tag": "0033_receipts_lots_warehouses",
       "breakpoints": false
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1794912813000,
+      "tag": "0034_purchase_bills",
+      "breakpoints": false
     }
   ]
 }

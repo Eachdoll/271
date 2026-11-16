@@ -8,7 +8,7 @@ if (!manifest.project_id) throw new Error('Missing Sites project_id');
 fs.rmSync(path.join(root, 'dist'), { recursive: true, force: true });
 fs.mkdirSync(path.join(root, 'dist/server'), { recursive: true });
 fs.mkdirSync(path.join(root, 'dist/.openai'), { recursive: true });
-const assets = Object.fromEntries(['index.html', 'app.js', 'forms.js', 'reports.js', 'comments.js', 'item-picker.js', 'multi-items.js', 'stock.js', 'master.js', 'semi.js', 'laundry-report.js', 'workspace-ux.js', 'operator.js', 'inspections.js', 'sales.js', 'receipts.js', 'bom-tree.js', 'org.js', 'form-ux.js', 'theme.js', 'i18n.js', 'i18n-en.js', 'i18n-vi.js', 'i18n-km.js', 'i18n-zh.js', 'style.css'].map(file => ['/' + file, read('public/' + file)]));
+const assets = Object.fromEntries(['index.html', 'app.js', 'forms.js', 'reports.js', 'comments.js', 'item-picker.js', 'multi-items.js', 'stock.js', 'master.js', 'semi.js', 'laundry-report.js', 'workspace-ux.js', 'operator.js', 'inspections.js', 'sales.js', 'receipts.js', 'bills.js', 'bom-tree.js', 'org.js', 'form-ux.js', 'theme.js', 'i18n.js', 'i18n-en.js', 'i18n-vi.js', 'i18n-km.js', 'i18n-zh.js', 'style.css'].map(file => ['/' + file, read('public/' + file)]));
 for (const file of ['seoulsemi-logo-blue.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']) assets['/assets/' + file] = { base64: fs.readFileSync(path.join(root, 'public/assets', file)).toString('base64'), contentType: 'image/png' };
 // 홈 화면에 추가(15.62): 앱 이름·아이콘 정보. 비밀 값은 넣지 않는다.
 assets['/manifest.webmanifest'] = { base64: Buffer.from(read('public/manifest.webmanifest')).toString('base64'), contentType: 'application/manifest+json; charset=utf-8' };

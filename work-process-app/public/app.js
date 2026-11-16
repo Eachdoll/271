@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.79';
+const APP_VERSION = '15.80';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -291,6 +291,7 @@ const NAV = [
   { group: '영업', items: [{ sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
@@ -478,6 +479,9 @@ const PAGES = {
   '#/logistics/other/new': main => pageReceipts(main, 'other-entry'),
   '#/logistics/receipt/new': main => pageReceiptEntry(main),
   '#/logistics/receipts': main => pageReceiptList(main),
+  '#/purchase/bills/new': main => pageBillEntry(main),
+  '#/purchase/bills': main => pageBillList(main),
+  '#/purchase/closing': main => pageBillClosing(main),
   '#/logistics/stock': main => pageStock(main),
   '#/purchase/vendors': main => pageVendors(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),
@@ -1683,7 +1687,7 @@ function bindCategoryPicker(form, nodes, bom) {
 // ── 제품등록: 세부 분류 관리 (관리자) ──
 async function manageItemCategories(startClass = '원자재') {
   let nodes = [], current = ITEM_CATEGORIES.includes(startClass) ? startClass : '원자재';
-  const box = modal(`<h3>분류 관리</h3><p class="small muted">품목 분류마다 1차·2차·3차 세부 분류를 미리 만들어 두면 제품등록에서 고를 수 있습니다(2·3차는 없어도 됩니다). 방진복처럼 사이즈가 정해진 분류에는 사이즈 묶음을 넣으면, 그 아래 품목은 발주·기타입고·출하에서 사이즈별 수량으로 한 번에 입력합니다. 이름을 바꾸면 그 분류로 등록된 품목에도 반영됩니다. 쓰지 않는 분류는 사용 중지하면 새 등록에서만 빠집니다. 반제품 분류에는 커팅/융착·세탁에서 쓸 생산 종류를 지정합니다(하위 분류는 물려받음).</p><div class="seg class-tabs" data-cat-tabs>${ITEM_CATEGORIES.map(c => `<button type="button" data-cat-tab="${c}">${c}</button>`).join('')}</div><div data-cat-tree></div><div class="actions"><button type="button" class="btn" data-cat-close>닫기</button><button type="button" class="btn primary" data-cat-add-root>1차 분류 추가</button></div>`, { wide: true });
+  const box = modal(`<h3>분류 관리</h3><p class="small muted">품목 분류마다 1차·2차·3차 세부 분류를 미리 만들어 두면 제품등록에서 고를 수 있습니다(2·3차는 없어도 됩니다). 방진복처럼 사이즈가 정해진 분류에는 사이즈 묶음을 넣으면, 그 아래 품목은 발주·기타입고·출하에서 사이즈별 수량으로 한 번에 입력합니다. 이름을 바꾸면 그 분류로 등록된 품목에도 반영됩니다. 쓰지 않는 분류는 사용 중지하면 새 등록에서만 빠집니다. 하위 분류도 등록된 품목도 없는 분류는 삭제할 수 있습니다. 반제품 분류에는 커팅/융착·세탁에서 쓸 생산 종류를 지정합니다(하위 분류는 물려받음).</p><div class="seg class-tabs" data-cat-tabs>${ITEM_CATEGORIES.map(c => `<button type="button" data-cat-tab="${c}">${c}</button>`).join('')}</div><div data-cat-tree></div><div class="actions"><button type="button" class="btn" data-cat-close>닫기</button><button type="button" class="btn primary" data-cat-add-root>1차 분류 추가</button></div>`, { wide: true });
   const tree = $('[data-cat-tree]', box.el);
   const sizeField = value => `<label>사이즈 묶음 <span class="hint">(쉼표로 구분 · 비우면 상위 분류를 따름)</span><input name="sizes" maxlength="200" value="${esc(value)}" placeholder="예) XS,S,M,L,XL"></label><div class="actions wrap" style="justify-content:flex-start;margin-top:0">${['XS,S,M,L,XL', 'S,M,L,XL,2XL', 'XS,S,M,L,XL,2XL,3XL'].map(v => `<button type="button" class="btn small" data-size-preset="${v}">${v.split(',')[0]}~${v.split(',').at(-1)}</button>`).join('')}</div>`;
   box.el.ownerDocument.addEventListener('click', event => { const b = event.target.closest('[data-size-preset]'); if (b) b.closest('form').elements.sizes.value = b.dataset.sizePreset; });
@@ -1694,7 +1698,7 @@ async function manageItemCategories(startClass = '원자재') {
       const list = nodes.filter(n => n.item_class === current && (n.parent_id || 0) === parentId && n.level === level);
       if (!list.length) return level === 1 ? '<p class="muted">아직 세부 분류가 없습니다. 「1차 분류 추가」로 시작하세요.</p>' : '';
       return `<ul class="cat-tree">${list.map(n => `<li><div class="cat-node ${n.active ? '' : 'off'}"><b>${esc(n.name)}</b> <span class="small muted">${level}차</span>${n.semi_type ? ` <span class="chip green">${esc(SEMI_KIND_LABEL[n.semi_type] || n.semi_type)}</span>` : ''}${n.sizes ? ` <span class="chip">사이즈 ${esc(n.sizes.replaceAll(',', '·'))}</span>` : ''}${n.active ? '' : ' <span class="chip">사용 중지</span>'}
-        <span class="cat-actions">${level < 3 && n.active ? `<button type="button" class="btn small" data-cat-add="${n.id}">하위 추가</button>` : ''}<button type="button" class="btn small" data-cat-edit="${n.id}">수정</button><button type="button" class="btn small ${n.active ? 'danger' : ''}" data-cat-toggle="${n.id}">${n.active ? '사용 중지' : '다시 사용'}</button></span></div>${branch(n.id, level + 1)}</li>`).join('')}</ul>`;
+        <span class="cat-actions">${level < 3 && n.active ? `<button type="button" class="btn small" data-cat-add="${n.id}">하위 추가</button>` : ''}<button type="button" class="btn small" data-cat-edit="${n.id}">수정</button><button type="button" class="btn small ${n.active ? 'danger' : ''}" data-cat-toggle="${n.id}">${n.active ? '사용 중지' : '다시 사용'}</button><button type="button" class="btn small danger" data-cat-del="${n.id}">삭제</button></span></div>${branch(n.id, level + 1)}</li>`).join('')}</ul>`;
     };
     tree.innerHTML = branch(0, 1);
   };
@@ -1715,6 +1719,10 @@ async function manageItemCategories(startClass = '원자재') {
         const n = nodes.find(x => x.id === Number(b.dataset.catEdit));
         if (await promptBox(`분류 수정 · ${n.name}`, `<label>분류 이름 *<input name="name" required maxlength="50" value="${esc(n.name)}"></label>${n.item_class === '반제품' ? kindSelect(n.semi_type) : ''}${sizeField(n.sizes || '')}<p class="small muted">이름을 바꾸면 이 분류로 등록된 품목의 분류 이름도 함께 바뀝니다.</p>`, { submit: v => api('PUT', `/api/item-categories/${n.id}`, v) })) toast('분류를 수정했습니다.');
         await load();
+      } else if (b.dataset.catDel) {
+        const n = nodes.find(x => x.id === Number(b.dataset.catDel));
+        if (!(await confirmBox(`「${n.name}」 분류를 삭제할까요? 하위 분류나 이 분류로 등록된 품목이 있으면 삭제되지 않습니다.`))) return;
+        await api('DELETE', `/api/item-categories/${n.id}`); toast('분류를 삭제했습니다.'); await load();
       } else if (b.dataset.catToggle) {
         const n = nodes.find(x => x.id === Number(b.dataset.catToggle));
         if (n.active && !(await confirmBox(`「${n.name}」을(를) 사용 중지할까요? 이미 등록된 품목은 그대로이고, 새 등록에서만 고를 수 없게 됩니다.`))) return;

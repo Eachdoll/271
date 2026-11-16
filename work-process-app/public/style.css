@@ -1205,3 +1205,16 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .ip-table tr.ip-picked td { background: var(--accent-soft); }
 .ip-table input[data-ip-n] { width: 5em; text-align: right; }
 .ip-auto { margin-right: auto; }
+
+/* 15.80 매입전표 */
+.bill-range { display: flex; align-items: center; gap: 4px; }
+.bill-range input { min-width: 0; flex: 1; }
+.bill-grid tbody tr { cursor: pointer; }
+.bill-grid tr.bill-picked td { background: var(--accent-soft); }
+.bill-grid input[data-bill-price] { width: 7.5em; text-align: right; }
+.bill-grid input[data-bill-note] { min-width: 8em; }
+.bill-total { position: sticky; bottom: 0; z-index: 2; }
+.bill-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+.bill-sum .bill-grand { font-size: 1.1em; }
+.bill-form .table-wrap, .bill-form > *, .bill-form { min-width: 0; max-width: 100%; }
+.bill-form .table-wrap { position: relative; }
