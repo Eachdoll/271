@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.64';
+const APP_VERSION = '15.66';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -848,6 +848,7 @@ function poForm(po = {}) {
     <label class="span2">품목명 *<input name="item" required value="${esc(po.item)}"></label>
     <label>수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(po.qty)}"></label>
     <label>납기일 *<input name="due_date" type="date" required value="${esc(po.due_date)}"></label>
+    <label>단가<input name="unit_price" type="number" min="0" step="any" inputmode="decimal" value="${esc(po.unit_price ?? '')}" placeholder="발주서 금액용"></label>
     <label class="span2">비고<input name="note" value="${esc(po.note)}"></label>
   </div>`;
 }
@@ -855,6 +856,41 @@ function recvChip(po) {
   const cls = { ok: 'green', mismatch: 'red', checking: 'yellow' }[po.recv_status] || '';
   const shortClosed = po.recv_status === 'ok' && po.recv_qty != null && po.recv_qty !== po.qty;
   return `<span class="chip ${cls}">${RECV[po.recv_status]}${po.recv_status === 'mismatch' ? ` (${fmtNum(po.recv_qty)})` : ''}${shortClosed ? ` · ${fmtNum(po.recv_qty)}/${fmtNum(po.qty)} 종결` : ''}</span>${receiptChangeInfo(po)}`;
+}
+// ── 발주서(15.66): 거래처별로 한 장씩. 인쇄·PDF 저장은 세탁 성적서와 같은 방식(body.printing-cert)으로 이 창만 찍는다. ──
+// 발주서 본문(.cert)은 번역하지 않는다(거래처에 보내는 한국어 문서).
+async function poPrintSheet(pos) {
+  if (!pos.length) return;
+  const vendors = await api('GET', '/api/vendors?type=purchase').catch(() => []);
+  const groups = new Map(); for (const p of pos) { const g = groups.get(p.vendor) || []; g.push(p); groups.set(p.vendor, g); }
+  const money = n => n == null ? '' : fmtNum(Math.round(n * 100) / 100);
+  const today = todayStr();
+  const sheet = (vendor, list) => {
+    const v = vendors.find(x => partnerKey(x.name) === partnerKey(vendor));
+    const reqNos = [...new Set(list.map(p => p.req_no).filter(Boolean))].join(', ');
+    const priced = list.filter(p => p.unit_price != null), total = priced.reduce((t, p) => t + p.unit_price * p.qty, 0);
+    const dues = [...new Set(list.map(p => p.due_date))].sort();
+    return `<section class="cert po-doc">
+      <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>발 주 서</h2></div>
+      <table class="po-info"><tbody>
+        <tr><th>발주일</th><td>${esc(today)}</td><th>발주번호</th><td>${esc(reqNos || '—')}</td></tr>
+        <tr><th>수신</th><td><b>${esc(vendor)}</b> 귀하</td><th>담당 · 연락처</th><td>${esc([v?.contact_name, v?.phone].filter(Boolean).join(' · ') || '—')}</td></tr>
+        <tr><th>발주처</th><td>서울세미텍</td><th>발주 담당</th><td>${esc([ME.name, ME.department, ME.position].filter(Boolean).join(' · '))}</td></tr>
+        <tr><th>납기일</th><td colspan="3">${esc(dues.join(', '))}</td></tr>
+      </tbody></table>
+      <p>아래와 같이 발주합니다.</p>
+      <table class="po-items"><thead><tr><th>No</th><th>품목</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th>납기일</th></tr></thead>
+      <tbody>${list.map((p, i) => `<tr><td class="c">${i + 1}</td><td>${esc(p.item)}${p.product_code ? `<div class="po-code">${esc(p.product_code)}</div>` : ''}</td><td>${esc(p.spec || '')}</td><td>${esc(p.unit || '')}</td><td class="r">${fmtNum(p.qty)}</td><td class="r">${money(p.unit_price)}</td><td class="r">${p.unit_price == null ? '' : money(p.unit_price * p.qty)}</td><td class="c">${esc(p.due_date)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><th colspan="6" class="r">합계${priced.length < list.length ? ' (단가 없는 품목 제외)' : ''}</th><td class="r"><b>${priced.length ? money(total) : ''}</b></td><td></td></tr></tfoot></table>
+      <div class="po-memo"><b>비고</b><div></div></div>
+      <p class="po-sign">발주처 : 서울세미텍 <span class="cert-sign-box">(인)</span></p>
+    </section>`;
+  };
+  const m = modal(`<h3 class="po-print-title">발주서 미리보기 <span class="small muted">${groups.size}개 거래처 · ${pos.length}개 품목</span></h3>${[...groups].map(([vendor, list]) => sheet(vendor, list)).join('')}
+    <div class="actions"><button class="btn" data-close>닫기</button><button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+  m.el.parentElement.classList.add('lr-cert-wrap');
+  $('[data-close]', m.el).onclick = m.close;
+  $('[data-print]', m.el).onclick = () => { const title = document.title; document.title = `발주서_${[...groups.keys()].join('_')}_${today}`; document.body.classList.add('printing-cert'); try { window.print(); } finally { document.body.classList.remove('printing-cert'); document.title = title; } };
 }
 // ── 기록된 입고 수량 수정·입고 취소 요청 (물류팀장 승인 후 반영) ──
 const canApproveReceipt = () => ME && (ME.is_admin || ME.roles.includes('logistics_approver'));
@@ -922,9 +958,10 @@ async function pagePO(main) {
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
-        <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
+        <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-po-print="${p.id}" title="같은 구매의뢰번호·거래처의 발주를 한 장으로">발주서</button> <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 발주가 없습니다.</div>';
     bindReceiptChanges($('#poList'), rows, load);
+    $$('[data-po-print]', main).forEach(b => b.onclick = () => { const t = rows.find(r => r.id === Number(b.dataset.poPrint)); poPrintSheet(rows.filter(r => r.req_no === t.req_no && r.vendor === t.vendor)); });
     $$('[data-edit]').forEach((b) => (b.onclick = () => {
       const p = rows.find((x) => x.id == b.dataset.edit);
       const m = modal(`<h3>발주 수정</h3><form data-entry-author="${esc(p.created_by)}">${poForm(p)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });

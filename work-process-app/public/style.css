@@ -999,7 +999,8 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
   .side { height: auto; bottom: calc(58px + env(safe-area-inset-bottom)); overflow: auto; }
   .side-account { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 12px 8px 4px; border-top: 1px solid var(--line); }
   /* 상단 바: 버전·로그아웃은 메뉴 안으로 */
-  .top .app-version, #logout { display: none; }
+  /* 오퍼레이터 화면은 메뉴(☰)가 없으므로 로그아웃을 상단에 그대로 둔다(15.65) */
+  body:not(.operator-mode) .top .app-version, body:not(.operator-mode) #logout { display: none; }
   /* 입력 폼 저장 버튼을 화면 아래(탭 위)에 고정 */
   #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> button.primary) {
     position: sticky; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 6; background: var(--panel); padding: 10px 0; margin-bottom: 0; box-shadow: 0 -10px 12px -10px rgba(0, 0, 0, .25);
@@ -1038,3 +1039,24 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 /* 15.64 품목 사용처 */
 .bom-uses { margin: 8px 0 12px; padding-left: 20px; }
 .bom-uses li { margin: 4px 0; }
+
+/* 15.66 발주 처리 수량·단가, 발주서 */
+.po-lines input { width: 7.5em; }
+.po-doc { background: #fff; color: #111; border: 1px solid var(--line); border-radius: 12px; padding: 24px; margin: 12px 0; }
+.po-doc-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
+.po-doc-head img { height: 40px; }
+.po-doc-head h2 { margin: 0; font-size: 28px; letter-spacing: .3em; color: #111; }
+.po-doc table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+.po-doc th, .po-doc td { border: 1px solid #333; padding: 6px 8px; color: #111; background: #fff; }
+.po-doc .po-info th { width: 14%; background: #f2f4f6; text-align: left; white-space: nowrap; }
+.po-doc .po-items thead th { background: #f2f4f6; }
+.po-doc .po-items .r, .po-doc .po-items th.r { text-align: right; }
+.po-doc .po-items .c { text-align: center; }
+.po-doc .po-code { font-size: 12px; color: #444; }
+.po-doc .po-memo { border: 1px solid #333; padding: 6px 8px; min-height: 64px; margin-top: 8px; }
+.po-doc .po-sign { text-align: right; margin-top: 24px; font-size: 15px; }
+@media print {
+  body.printing-cert .po-print-title { display: none; }
+  body.printing-cert .po-doc { border: 0; border-radius: 0; padding: 0; margin: 0; }
+  body.printing-cert .po-doc + .po-doc { break-before: page; page-break-before: always; }
+}
