@@ -999,7 +999,8 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
   .side { height: auto; bottom: calc(58px + env(safe-area-inset-bottom)); overflow: auto; }
   .side-account { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 12px 8px 4px; border-top: 1px solid var(--line); }
   /* 상단 바: 버전·로그아웃은 메뉴 안으로 */
-  .top .app-version, #logout { display: none; }
+  /* 오퍼레이터 화면은 메뉴(☰)가 없으므로 로그아웃을 상단에 그대로 둔다(15.65) */
+  body:not(.operator-mode) .top .app-version, body:not(.operator-mode) #logout { display: none; }
   /* 입력 폼 저장 버튼을 화면 아래(탭 위)에 고정 */
   #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> button.primary) {
     position: sticky; bottom: calc(58px + env(safe-area-inset-bottom)); z-index: 6; background: var(--panel); padding: 10px 0; margin-bottom: 0; box-shadow: 0 -10px 12px -10px rgba(0, 0, 0, .25);

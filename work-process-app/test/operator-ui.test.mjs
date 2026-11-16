@@ -55,3 +55,10 @@ test('Saving the maximum 30 semi rows resets to one usable row while retaining t
   const c=vm.createContext({$$:()=>rows});vm.runInContext(semi.slice(semi.indexOf('function resetSemiRows('),semi.indexOf('async function pageSemi(')),c);
   c.resetSemiRows({},last=>{assert.ok(rows.length<30);rows.push({product:last.product})});assert.equal(rows.length,1);assert.equal(rows[0].product,'p29');
 });
+
+test('15.65: the operator screen keeps its logout button on phones (only the regular screen moves it into the menu)', () => {
+  const css = fs.readFileSync(new URL('../public/style.css', import.meta.url), 'utf8');
+  const hiding = css.split('}').filter(rule => /#logout[^{]*\{[^}]*display:\s*none/.test(rule + '}'));
+  assert.ok(hiding.length > 0, 'the regular phone screen still hides the top logout');
+  for (const rule of hiding) assert.match(rule, /body:not\(\.operator-mode\)\s+#logout/, rule.trim().slice(0, 160));
+});

@@ -515,3 +515,6 @@ INVITE_CODE=local-test-code npm start
 - 제품등록 카드마다 「삭제」 버튼(관리자). GET /api/boms/:id/usage가 사용처(BOM_USES: 발주·출하는 product_code, 기타입고·생산일정·반제품 기록·구매의뢰·생산의뢰·의뢰 data.bom_id는 bom_id, 다른 제품 구성자재는 materials의 이름)를 세고, 하나도 없을 때만 DELETE /api/boms/:id?purge=1이 행을 지웁니다. 확인과 삭제 사이 경합은 DELETE 문장의 NOT EXISTS 조건으로 막습니다(변경 0건이면 409).
 - 쓰이는 품목은 사용처·건수를 보여 주고 「사용 중지」(기존 DELETE, purge 없이)나 임시 코드의 「기존 품목으로 합치기」를 안내합니다. 임시 코드는 합치면 기록이 정식 품목으로 옮겨져 사용처가 0이 되므로 그 뒤 삭제할 수 있습니다.
 - 진행 코멘트(entity bom)는 이력이라 지우지 않습니다. 새 표에 bom_id·product_code를 저장하면 BOM_USES에도 추가하세요.
+
+## 오퍼레이터 화면 로그아웃 복구 (15.65)
+- 15.62에서 휴대폰(820px 이하) 상단의 #logout을 숨기고 메뉴 안(.side-account)으로 옮겼는데, 오퍼레이터 화면은 메뉴가 없어서 로그아웃할 방법이 없어졌습니다. 숨김 규칙을 `body:not(.operator-mode)`로 한정했습니다(오퍼레이터는 상단 로그아웃 그대로). test/operator-ui.test.mjs가 이 조건을 검사합니다.
