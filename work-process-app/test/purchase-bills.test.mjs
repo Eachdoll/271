@@ -309,3 +309,37 @@ test('15.115 Aging: payments settle the oldest debts first; roles per side', asy
   const row = (await buyer('GET', '/api/aging?side=purchase')).body.rows.find(r => r.name === '연령상사');
   assert.deepEqual([row.balance, row.buckets, row.oldest, row.days], [18000, [8000, 0, 0, 10000, 0], ago(120), 120]);
 });
+
+test('15.117 Bill lines keep the item class as saved; lists filter and total by class', async () => {
+  const wash = (await admin('POST', '/api/boms', { product: '세탁가공', product_code: 'WS-1', item_category: '임가공', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const p = (await buyer('POST', '/api/po', { req_no: 'PR-C', vendor: '가공상사', bom_id: wash.id, item: '세탁가공', qty: 10, due_date: today, item_category: '임가공', unit_price: 500 })).body;
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '가공상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'W1', qty: 10 }] });
+  const open = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('가공상사'))).body.rows;
+  assert.equal(open[0].item_category, '임가공');
+  const bill = (await buyer('POST', '/api/purchase-bills', { vendor: '가공상사', bill_date: today, request_id: rid(), lines: [{ source_type: open[0].source_type, source_id: open[0].source_id }] })).body;
+  assert.equal(bill.lines[0].category, '임가공');
+  // 품목 분류를 바꿔도 저장된 전표 줄은 그대로
+  await admin('PUT', `/api/boms/${wash.id}`, { product: '세탁가공', product_code: 'WS-1', item_category: '부자재', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] });
+  assert.equal((await buyer('GET', `/api/purchase-bills/${bill.id}`)).body.lines[0].category, '임가공');
+  const list = (await buyer('GET', '/api/purchase-bills?category=임가공')).body;
+  assert.deepEqual(list.rows.map(r => r.bill_no), [bill.bill_no]);
+  assert.equal(list.rows[0].categories, '임가공');
+  assert.deepEqual(list.by_category, [{ category: '임가공', lines: 1, supply: 5000 }]);
+  assert.equal((await buyer('GET', '/api/purchase-bills?category=없는분류')).status, 400);
+  const ledger = (await buyer('GET', `/api/purchase-ledger?vendor=${encodeURIComponent('가공상사')}&from=${today}&to=${today}`)).body;
+  assert.equal(ledger.rows.find(r => r.kind === 'purchase').categories, '임가공');
+});
+
+test('15.117 Sales bill lines: product/goods class fixed at save, uncoded lines unclassified', async () => {
+  const goods = (await admin('POST', '/api/boms', { product: '판매장갑', product_code: 'SG-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'BOX', materials: [] })).body;
+  const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: goods.id, item: '판매장갑', qty: 3, customer: '분류고객', unit: 'BOX' })).body;
+  const unbilled = (await admin('GET', '/api/sales-bills/unbilled?customer=' + encodeURIComponent('분류고객'))).body.rows;
+  assert.equal(unbilled[0].item_category, '상품');
+  const bill = (await admin('POST', '/api/sales-bills', { customer: '분류고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 1000 }, { source_type: 'manual', item: '기타 용역', qty: 1, unit_price: 500 }] })).body;
+  assert.deepEqual(bill.lines.map(l => l.category), ['상품', '']);
+  const list = (await admin('GET', '/api/sales-bills?customer=' + encodeURIComponent('분류고객'))).body;
+  assert.deepEqual(list.by_category.map(c => [c.category, c.supply]), [['상품', 3000], ['', 500]]);
+  assert.equal((await admin('GET', '/api/sales-bills?category=미분류&customer=' + encodeURIComponent('분류고객'))).body.rows.length, 1);
+  const ledger = (await admin('GET', `/api/sales-ledger?customer=${encodeURIComponent('분류고객')}&from=${today}&to=${today}`)).body;
+  assert.deepEqual(ledger.rows.filter(r => r.kind === 'sale').map(r => r.category), ['상품', '']);
+});

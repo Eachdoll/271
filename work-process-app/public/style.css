@@ -1461,3 +1461,19 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 .stmt-bank { margin: 10px 0 2px; }
 .stmt-sign { display: flex; gap: 8px; justify-content: flex-end; align-items: flex-end; margin-top: 18px; } .stmt-sign-line { display: inline-block; width: 160px; border-bottom: 1px solid currentColor; }
 @media (max-width: 700px) { .stmt-parties { grid-template-columns: 1fr; } }
+/* 15.117 분류 칩 */
+.cat-chip { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; vertical-align: 1px; }
+.cat-chip.cat-blue { color: #1d5fd1; border-color: #9dbbf0; background: #eef4ff; }
+.cat-chip.cat-green { color: #187a3e; border-color: #9fd5b2; background: #ecf8f0; }
+.cat-chip.cat-orange { color: #a8540a; border-color: #f0c08f; background: #fff4e8; }
+.cat-chip.cat-none { border-style: dashed; }
+.cat-sum { margin-top: 6px; }
+@media print { .cat-chip { background: none !important; } }
+:root[data-theme="dark"] .cat-chip.cat-blue { color: #9dbbff; border-color: #3b5aa8; background: #1d2a4a; }
+:root[data-theme="dark"] .cat-chip.cat-green { color: #8fd6a8; border-color: #2f6b45; background: #17301f; }
+:root[data-theme="dark"] .cat-chip.cat-orange { color: #f3b77a; border-color: #7a4a1c; background: #33220f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cat-chip.cat-blue { color: #9dbbff; border-color: #3b5aa8; background: #1d2a4a; }
+  :root:not([data-theme="light"]) .cat-chip.cat-green { color: #8fd6a8; border-color: #2f6b45; background: #17301f; }
+  :root:not([data-theme="light"]) .cat-chip.cat-orange { color: #f3b77a; border-color: #7a4a1c; background: #33220f; }
+}

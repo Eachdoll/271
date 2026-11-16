@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.116';
+const APP_VERSION = '15.117';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -48,6 +48,12 @@ function enterMovesInTable(root) {
   });
 }
 // 표 바로 아래 ERP식 합계 줄. parts: [[이름, 값(HTML)], …] (값이 빈 것은 뺀다)
+// 15.117 품목 분류 칩(전표 줄). 빈 값 = 미분류(코드 없는 직접 입력 줄)
+const CAT_TONE = { 제품: 'blue', 상품: 'green', 원자재: 'gray', 부자재: 'gray', 반제품: 'gray', 임가공: 'orange' };
+const catChip = c => `<span class="cat-chip cat-${CAT_TONE[c] || 'none'}">${esc(c || '미분류')}</span>`;
+const catChips = list => list == null ? '' : String(list).split(',').map(c => catChip(c)).join(' ');
+const catSummary = (by, label = '분류별 공급가액') => by?.length ? `<div class="small cat-sum">${esc(label)}: ${by.map(c => `${catChip(c.category)} ${won(c.supply)}원`).join(' · ')}</div>` : '';
+const catOptions = order => '<option value="">전체</option>' + order.map(c => `<option>${c}</option>`).join('');
 const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
