@@ -1278,3 +1278,7 @@ table.grid td.r, table.grid th.r { font-variant-numeric: tabular-nums; }
 .nav-group[data-dept] > .nav-title::before { content: ''; width: 4px; height: 15px; border-radius: 2px; background: var(--dept); flex: none; }
 .nav-group[data-dept] .nav-sub > a, .nav-group[data-dept] > a { border-left: 2px solid transparent; }
 .nav-group[data-dept] a.active { border-left-color: var(--dept); }
+/* 15.87 입고현황 */
+.rs-h { margin: 22px 0 8px; }
+.rs-cat td .link { font-size: inherit; }
+#rsCatTabs { margin: 0 0 8px; }

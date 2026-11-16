@@ -32,6 +32,27 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
     if (mine === serial) hint.innerHTML = html;
   };
   input.addEventListener('change', show); if (input.value) show();
+  // 15.86 등록된 거래처가 들어 있어도 칸을 누르거나 ↓를 누르면 전체 목록이 보이게(브라우저 목록은 칸 글자로 걸러지므로)
+  // 이름을 잠시 흐린 글씨(placeholder)로 옮겼다가, 다른 거래처를 고르지 않고 나가거나 Esc를 누르면 그대로 되돌린다.
+  // 값만 바꾸고 input/change 이벤트는 보내지 않아 화면이 다시 불러오지 않는다.
+  const basePlaceholder = input.placeholder;
+  const openAll = () => {
+    const name = input.value.trim();
+    if (!name || input.readOnly || input.disabled || !vendors.some(v => partnerKey(v.name) === partnerKey(name))) return;
+    input.dataset.partnerPrev = input.value; input.placeholder = input.value; input.value = '';
+  };
+  const restore = () => {
+    if (input.dataset.partnerPrev === undefined) return;
+    if (input.value === '') input.value = input.dataset.partnerPrev;
+    delete input.dataset.partnerPrev; input.placeholder = basePlaceholder;
+  };
+  input.addEventListener('mousedown', () => { if (document.activeElement !== input || input.dataset.partnerPrev === undefined) openAll(); });
+  input.addEventListener('keydown', e => {
+    if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
+    else if (e.key === 'Escape' && input.dataset.partnerPrev !== undefined) { restore(); e.stopPropagation(); }
+  });
+  input.addEventListener('input', () => { if (input.value !== '') { delete input.dataset.partnerPrev; input.placeholder = basePlaceholder; } });
+  input.addEventListener('blur', restore);
 }
 
 // 거래처 구분 체크(등록·수정)와 목록 표시

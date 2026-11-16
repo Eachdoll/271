@@ -164,3 +164,29 @@ test('15.84 review fixes: legacy PO billed in part then lot receipt, no over-bil
   assert.equal(appr.status, 409, JSON.stringify(appr.body) + JSON.stringify(change.body));
   assert.equal(sqlite.prepare('SELECT recv_qty FROM purchase_orders WHERE id=?').get(q.id).recv_qty, 10, 'nothing applied');
 });
+
+test('15.87 receipt status by category with confirmed/estimated amounts; 임가공 category rules', async () => {
+  const d = today;
+  // 임가공 품목: 등록 가능, 세부 분류·기타입고 불가, 발주로는 받음
+  const svc = await admin('POST', '/api/boms', { product: '세탁 임가공', product_code: 'SV-1', item_category: '임가공', kind: 'finished', base_qty: 1, unit: '식', materials: [] });
+  assert.equal(svc.status, 200, JSON.stringify(svc.body));
+  assert.equal((await admin('POST', '/api/item-categories', { item_class: '임가공', name: '세탁' })).status, 400);
+  assert.equal((await staff('POST', '/api/receipts', { receipt_date: d, vendor: '현황상사', request_id: rid(), lines: [{ bom_id: svc.body.id, lot: 'X', qty: 1 }] })).status, 400);
+  const raw = await po('현황상사', '원단R', 10, 1000);
+  const sv = (await buyer('POST', '/api/po', { req_no: 'PR-S', vendor: '현황상사', item: '세탁 임가공', bom_id: svc.body.id, qty: 1, due_date: d, item_category: '임가공', unit_price: 50000 })).body;
+  assert.equal(sv.item_category, '임가공');
+  await staff('POST', '/api/receipts', { receipt_date: d, vendor: '현황상사', request_id: rid(), lines: [{ po_id: raw.id, lot: 'R1', qty: 10 }, { po_id: sv.id, lot: '', qty: 1 }] });
+  // 원단 4개만 전표(단가 990), 나머지 6개는 발주 단가로 미확정
+  const [rline] = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('현황상사'))).body.rows.filter(r => r.item === '원단R');
+  await buyer('POST', '/api/purchase-bills', { vendor: '현황상사', bill_date: d, request_id: rid(), freight: 3000, lines: [{ source_type: 'po_lot', source_id: rline.source_id, qty: 4, unit_price: 990 }] });
+  assert.equal((await staff('GET', `/api/purchase-receipt-status?from=${d}&to=${d}`)).status, 403);
+  const r = (await buyer('GET', `/api/purchase-receipt-status?from=${d}&to=${d}&vendor=${encodeURIComponent('현황상사')}`)).body;
+  const cat = c => r.categories.find(x => x.category === c);
+  assert.deepEqual([cat('부자재').confirmed, cat('부자재').estimate, cat('부자재').total], [3960, 6000, 9960]);
+  assert.deepEqual([cat('임가공').confirmed, cat('임가공').estimate, cat('임가공').lines], [0, 50000, 1]);
+  assert.ok(cat('원자재') && cat('제품') && cat('상품'), 'five main categories always listed');
+  assert.equal(r.vendors.length, 1); assert.equal(r.vendors[0].categories['임가공'], 50000); assert.equal(r.vendors[0].total, 59960);
+  assert.deepEqual([r.freight.total, r.freight.bills], [3000, 1]);
+  const line = r.lines.find(l => l.item === '원단R');
+  assert.deepEqual([line.state, line.remaining, line.confirmed, line.estimate], ['partial', 6, 3960, 6000]);
+});
