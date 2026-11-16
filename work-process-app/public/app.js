@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.102';
+const APP_VERSION = '15.103';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -24,6 +24,20 @@ const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko
 function unitTotals(rows, qty, unit) {
   const m = new Map(); for (const r of rows) { const u = String(unit(r) || '').trim(), q = Number(qty(r)); if (!Number.isFinite(q)) continue; m.set(u, (m.get(u) || 0) + q); }
   return [...m].map(([u, n]) => `${fmtNum(Math.round(n * 1000) / 1000)}${u ? ' ' + u : ''}`).join(' · ') || '0';
+}
+// 15.103 입력 표 안에서 Enter는 저장이 아니라 다음 칸으로(수량 → 단가 → 비고 → 다음 줄). 한글 조합 중·select·textarea는 그대로.
+function enterMovesInTable(root) {
+  root.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229 || e.altKey || e.ctrlKey || e.metaKey) return;
+    const el = e.target; if (!el.matches('input:not([type=checkbox]):not([type=radio]):not([type=file])')) return;
+    const tr = el.closest('tr'); if (!tr) return;
+    e.preventDefault();
+    const cells = row => [...row.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([disabled]):not([readonly])')].filter(i => i.offsetParent !== null);
+    const mine = cells(tr), at = mine.indexOf(el);
+    let next = at >= 0 && at < mine.length - 1 ? mine[at + 1] : null;
+    if (!next) { let r = tr.nextElementSibling; while (r && !cells(r).length) r = r.nextElementSibling; next = r ? cells(r)[0] : null; }
+    if (next) { next.focus(); next.select?.(); }
+  });
 }
 // 표 바로 아래 ERP식 합계 줄. parts: [[이름, 값(HTML)], …] (값이 빈 것은 뺀다)
 const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
@@ -1037,7 +1051,7 @@ function pendingReceipt(po) { try { return typeof po.pending_change === 'string'
 function poProgressCells(p) {
   const received = ['ok', 'mismatch'].includes(p.recv_status) ? Number(p.recv_qty ?? p.qty) : 0, billed = Number(p.billed_qty || 0);
   const left = p.recv_status === 'ok' ? 0 : Math.max(0, Number(p.qty) - received), unbilled = Math.max(0, received - billed);
-  return `<td class="r">${received ? fmtNum(received) : ''}</td><td class="r">${billed ? fmtNum(billed) : ''}${unbilled ? `<div class="small muted">미전표 ${fmtNum(unbilled)}</div>` : ''}</td><td class="r">${left ? `<b>${fmtNum(left)}</b>` : ''}</td>`;
+  return `<td class="r">${received ? fmtNum(received) : ''}</td><td class="r">${billed ? fmtNum(billed) : ''}${billed && unbilled ? `<div class="small muted">미전표 ${fmtNum(unbilled)}</div>` : ''}</td><td class="r">${left ? `<b>${fmtNum(left)}</b>` : ''}</td>`;
 }
 function receiptChangeText(c, po = {}) { return c.action === 'qty' ? `실입고 ${fmtNum(c.old_recv_qty ?? po.recv_qty)} → ${fmtNum(c.new_recv_qty)} 수정` : '입고 취소(미입고로)'; }
 function receiptChangeInfo(po) {

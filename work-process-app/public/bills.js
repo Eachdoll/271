@@ -115,6 +115,7 @@ async function pageBillEntry(main) {
   vendorInput.addEventListener('change', () => { clearTimeout(timer); load().catch(fail); });
   form.elements.from.onchange = form.elements.to.onchange = () => load().catch(fail);
   bindPartnerPicker(vendorInput, $('[data-partner-hint]', form), { type: 'purchase' }).catch(() => {});
+  enterMovesInTable(box);
   form.onsubmit = async e => {
     e.preventDefault(); if (busy) return;
     const v = formObj(form), picked = rows.filter(r => r.picked);
@@ -122,6 +123,7 @@ async function pageBillEntry(main) {
     if (!picked.length) return toast('전표에 넣을 입고 줄을 체크하세요.', 'err');
     const focusOn = (r, attr) => { if (!matches(r)) { find.value = ''; draw(); } $(`[${attr}="${rows.indexOf(r)}"]`, box)?.focus(); };
     const noQty = picked.find(r => !(Number(r.bqty) > 0)); if (noQty) { focusOn(noQty, 'data-bill-qty'); return toast(`${noQty.item}의 수량을 넣으세요.`, 'err'); }
+    const over = picked.find(r => Number(r.bqty) > left(r) + 0.000001); if (over) { focusOn(over, 'data-bill-qty'); return toast(`${over.item}: 이번 수량은 입고 남은 수량 ${fmtNum(left(over))} 이하로 넣으세요.`, 'err'); }
     const missing = picked.find(r => r.price === ''); if (missing) { focusOn(missing, 'data-bill-price'); return toast(`${missing.item}의 단가를 넣으세요.`, 'err'); }
     busy = true; const button = $('[data-bill-save]', form); button.disabled = true;
     try {

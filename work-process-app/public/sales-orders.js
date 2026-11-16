@@ -50,13 +50,14 @@ async function pageSalesOrderEntry(main, editId = null) {
   const pick = async (index = -1) => {
     if (!catalog) catalog = await api('GET', '/api/boms').catch(error => { fail(error); return null; });
     if (!catalog) return;
-    const bom = await openItemPicker(catalog, { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp });
+    const bom = await openItemPicker(catalog, { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' });
     if (!bom) return;
     const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '' };
     if (index >= 0) Object.assign(lines[index], row); else lines.push({ ...row, spec: '', qty: '', price: '', due_date: form.elements.due_date.value, note: '' });
     draw();
     $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - 1]?.focus();
   };
+  enterMovesInTable(box);
   $('[data-so-add]', form).onclick = () => pick().catch(fail);
   box.addEventListener('click', e => {
     const p = e.target.closest('[data-so-pick]'); if (p) return pick(Number(p.dataset.soPick)).catch(fail);
@@ -81,14 +82,14 @@ async function pageSalesOrderEntry(main, editId = null) {
       requestId = crypto.randomUUID();
       if (editing) { location.hash = '#/sales/orders'; return; }
       lines = []; form.elements.note.value = ''; form.elements.customer_po.value = ''; draw();
-      salesOrderSheet(order);
+      salesOrderSheet(order, null, { onClose: () => { if (form.isConnected) $('[data-so-add]', form)?.focus(); } });
     } catch (error) { fail(error); } finally { busy = false; button.disabled = false; }
   };
   draw();
 }
 
 // 수주 상세: 줄마다 수주·전표·출하·잔량, 이 수주로 잡은 전표들, 「매출전표 잡기」·마감·다시 열기·취소·고치기
-function salesOrderSheet(order, after = null) {
+function salesOrderSheet(order, after = null, { onClose = null } = {}) {
   const open = order.status === 'open', hasBills = order.bills.length > 0;
   const left = order.lines.reduce((t, l) => t + l.remaining, 0);
   const m = modal(`<h3>수주 ${esc(order.order_no)} ${soChip(order.state)}</h3>
@@ -107,7 +108,7 @@ function salesOrderSheet(order, after = null) {
       ${open && !hasBills ? `<button class="btn" data-so-edit>고치기</button><button class="btn danger" data-so-status="cancelled">수주 취소</button>` : ''}
       ${open && hasBills && left > 0 ? '<button class="btn" data-so-status="closed">잔량 마감</button>' : ''}
       ${!open ? '<button class="btn" data-so-status="open">다시 열기</button>' : ''}
-      ${open && left > 0 ? '<button class="btn primary" data-so-bill-new>매출전표 잡기</button>' : ''}</div>`, { wide: true });
+      ${open && left > 0 ? '<button class="btn primary" data-so-bill-new>매출전표 잡기</button>' : ''}</div>`, { wide: true, onClose: () => onClose?.() });
   const unitOf = id => order.lines.find(x => x.id === id)?.unit || '';
   $('.so-detail', m.el)?.closest('.table-wrap')?.insertAdjacentHTML('afterend', sumLine([['수주', esc(unitTotals(order.lines, l => l.qty, l => l.unit))], ['전표', esc(unitTotals(order.lines, l => l.billed_qty, l => l.unit))], ['출하', esc(unitTotals(order.lines, l => l.shipped_qty, l => l.unit))], ['잔량', esc(unitTotals(order.lines, l => l.remaining, l => l.unit))], ['수주 금액', esc(`${won(order.amount)}원`)]]));
   $('.so-bills', m.el)?.closest('.table-wrap')?.insertAdjacentHTML('afterend', sumLine([['합계', esc(`${order.bills.length}건`)], ['수량', esc(unitTotals(order.bills, b => b.qty, b => unitOf(b.order_line_id)))], ['공급가액', esc(`${won(order.bills.reduce((t, b) => t + b.supply, 0))}원`)]]));

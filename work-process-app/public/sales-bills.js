@@ -31,7 +31,7 @@ async function pageSalesBillEntry(main) {
     box.innerHTML = orderBox.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data, open; try { [data, open] = await Promise.all([api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })), api('GET', '/api/sales-orders/open-lines?' + new URLSearchParams({ customer }))]); } catch (error) { box.innerHTML = orderBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
     if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
-    rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? '', note: '' }));
+    rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? r.order_price ?? '', note: '' }));
     orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderPreset = null;
     // 15.102 수주 줄을 고르면 전표의 과세 구분을 그 수주에 맞춘다(서버는 다르면 막음). 수주마다 다르면 고른 뒤에 맞춘다.
     const presetOrder = orders.find(o => o.picked); if (presetOrder && presetOrder.tax_type) { form.elements.tax_type.value = presetOrder.tax_type; }
@@ -94,6 +94,7 @@ async function pageSalesBillEntry(main) {
         <td><input data-m="note" data-i="${i}" maxlength="200" value="${esc(m.note)}" aria-label="비고"></td><td><button type="button" class="btn small" data-m-del="${i}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '';
     labelRows(manualBox); totals();
   };
+  enterMovesInTable(box); enterMovesInTable(orderBox); enterMovesInTable(manualBox);
   $('[data-manual-add]', form).onclick = () => { manual.push({ item: '', spec: '', qty: '', unit: '', price: '', note: '' }); drawManual(); $$('[data-m="item"]', manualBox).at(-1)?.focus(); };
   manualBox.addEventListener('input', e => { const k = e.target.dataset.m; if (!k) return; const i = Number(e.target.dataset.i); manual[i][k] = e.target.value; if (k === 'qty' || k === 'price') $(`[data-m-supply="${i}"]`, manualBox).textContent = manual[i].qty !== '' && manual[i].price !== '' ? won(billTruncC(Number(manual[i].qty) * Number(manual[i].price))) : ''; totals(); });
   manualBox.addEventListener('click', e => { const d = e.target.closest('[data-m-del]'); if (d) { manual.splice(Number(d.dataset.mDel), 1); drawManual(); } });
@@ -137,7 +138,7 @@ async function pageSalesBillEntry(main) {
         lines: [...fromOrders.map(o => ({ source_type: 'order', order_line_id: o.id, qty: o.take, unit_price: o.price, note: o.note })), ...picked.map(r => ({ source_type: 'ship', source_id: r.source_id, unit_price: r.price, note: r.note })), ...extra.map(m => ({ source_type: 'manual', item: m.item, spec: m.spec, qty: m.qty, unit: m.unit, unit_price: m.price, note: m.note }))] });
       toast(bill.duplicate ? `${bill.bill_no} 전표는 앞서 이미 저장되었습니다.` : `${bill.bill_no} 매출전표를 저장했습니다. 합계 ${won(bill.total)}원${fromOrders.length ? ` · 출하지시 ${fromOrders.length}건` : ''}`);
       requestId = crypto.randomUUID(); form.elements.note.value = ''; manual = []; drawManual();
-      await load(true); salesBillSheet(bill);
+      await load(true); salesBillSheet(bill, null, { onClose: () => { if (form.isConnected) input.focus(); } });
     } catch (error) { fail(error); } finally { busy = false; button.disabled = false; }
   };
   let preset = null; try { preset = sessionStorage.getItem('wpa:sbill-customer'); sessionStorage.removeItem('wpa:sbill-customer'); } catch { preset = null; }
@@ -145,7 +146,7 @@ async function pageSalesBillEntry(main) {
   if (preset) { input.value = preset; await load(true); }
 }
 
-function salesBillSheet(bill, after = null) {
+function salesBillSheet(bill, after = null, { onClose = null } = {}) {
   const m = modal(`<h3 class="po-print-title">매출전표 <span class="small muted">${esc(bill.bill_no)}${bill.status === 'cancelled' ? ' · 취소됨' : ''}${bill.closed ? ' · 마감' : ''}</span></h3>
     <section class="cert po-doc bill-doc">
       <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>매 출 전 표</h2></div>
@@ -160,7 +161,7 @@ function salesBillSheet(bill, after = null) {
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
     </section>
-    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    <div class="actions">${bill.invoice ? `<span class="small">세금계산서 ${taxChip(bill.invoice.status)} ${esc(bill.invoice.invoice_no)}</span>` : ''}<button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.invoice ? '<button class="btn" data-bill-tax>세금계산서 담기</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.invoice ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true, onClose: () => onClose?.() });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매출전표_${bill.bill_no}`);

@@ -1280,7 +1280,9 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
 // 입금(payment)은 잔액에서 빼고 기초 미수금(opening)은 더한다. 고객사·월 마감 뒤에는 그 달 전표·입금을 만들거나 취소할 수 없다.
 const SHIP_SOURCE = `SELECT 'ship' AS source_type, s.id AS source_id, s.ship_date, s.customer, s.item, s.spec, s.unit, s.product_code, s.lot, s.qty, s.note AS ship_note,
   (SELECT x.unit_price FROM sales_bill_lines x JOIN sales_bills b ON b.id=x.bill_id WHERE x.active=1 AND REPLACE(LOWER(b.customer),' ','')=REPLACE(LOWER(s.customer),' ','')
-     AND (CASE WHEN s.product_code<>'' THEN x.product_code=s.product_code ELSE x.item=s.item END) ORDER BY b.bill_date DESC, x.id DESC LIMIT 1) AS last_price
+     AND (CASE WHEN s.product_code<>'' THEN x.product_code=s.product_code ELSE x.item=s.item END) ORDER BY b.bill_date DESC, x.id DESC LIMIT 1) AS last_price,
+  (SELECT ol.unit_price FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE o.status='open' AND ol.unit_price IS NOT NULL AND REPLACE(LOWER(o.customer),' ','')=REPLACE(LOWER(s.customer),' ','')
+     AND (CASE WHEN s.product_code<>'' THEN ol.product_code=s.product_code ELSE ol.item=s.item END) ORDER BY o.order_date DESC, ol.id DESC LIMIT 1) AS order_price
   FROM shipments s WHERE NOT EXISTS(SELECT 1 FROM sales_bill_lines x WHERE x.source_type='ship' AND x.source_id=s.id AND x.active=1)`;
 const customerKey = v => `REPLACE(LOWER(${v}),' ','')`;
 const requireSales = user => { if (!hasRole(user, 'sales')) throw new HttpError(403, '매출전표는 영업 담당자가 처리합니다.'); };

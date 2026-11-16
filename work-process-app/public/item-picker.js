@@ -26,7 +26,7 @@ function itemStockText(bom, map) {
   return rows.map(r => `<span class="${r.stock < 0 ? 'red-text' : r.stock === 0 ? 'muted' : ''}">${fmtNum(r.stock)}${r.unit ? ' ' + esc(r.unit) : ''}</span>`).join('<span class="muted"> · </span>');
 }
 // multi(15.79): 여러 품목을 체크하고 품목마다 LOT 수(행추가)를 정해 한 번에 고른다 → { items: [{ bom, count }], autoLot } 또는 null
-function openItemPicker(catalog, { query = '', title = '품목 찾기', filter = null, multi = false } = {}) {
+function openItemPicker(catalog, { query = '', title = '품목 찾기', filter = null, multi = false, emptyText = '찾는 품목이 없습니다. 창을 닫고 품목명을 직접 입력하세요.' } = {}) {
   const all = (filter ? catalog.filter(filter) : catalog).slice();
   const classes = ITEM_CATEGORIES.filter(c => all.some(b => b.item_category === c));
   if (all.some(b => !ITEM_CATEGORIES.includes(b.item_category))) classes.push('미분류');
@@ -69,7 +69,7 @@ function openItemPicker(catalog, { query = '', title = '품목 찾기', filter =
         <td data-card-primary><button type="button" class="ip-pick" data-ip-pick="${i}">${esc(b.product)}</button></td>
         <td>${esc(b.unit || '—')}</td><td class="r nowrap">${itemStockText(b, stock)}</td><td class="small">${esc(classOf(b))}${itemPickerPath(b) ? ` › ${esc(itemPickerPath(b))}` : ''}</td>
         <td class="small">${b.sizes && b.sizes.length ? esc(b.sizes.join(', ')) : '<span class="muted">—</span>'}</td>${multi ? `<td><input type="number" min="1" max="50" step="1" inputmode="numeric" data-ip-n="${i}" value="${picked.get(b.id) || 1}" aria-label="${esc(b.product)} LOT 수"></td>` : ''}</tr>`).join('')
-        : `<tr><td colspan="${multi ? 8 : 6}" class="muted">찾는 품목이 없습니다. 창을 닫고 품목명을 직접 입력하세요.</td></tr>`;
+        : `<tr><td colspan="${multi ? 8 : 6}" class="muted">${esc(emptyText)}</td></tr>`;
       if (shown.length) q.setAttribute('aria-activedescendant', 'ipRow' + active); else q.removeAttribute('aria-activedescendant');
       // 공통 표 처리가 처음 그릴 때 빈 열(사이즈 등)의 머리칸을 숨기는데, 줄은 다시 그려지므로 머리칸을 늘 보이게 해 칸이 밀리지 않게 한다(15.79).
       $$('#ipTable .col-empty', el).forEach(c => c.classList.remove('col-empty'));

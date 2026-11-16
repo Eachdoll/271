@@ -1410,3 +1410,5 @@ p > a.btn.small, p > button.btn.small { display: inline-flex; align-items: cente
 .list-sum { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 20px; margin: 0; padding: 9px 12px; background: var(--erp-sum, var(--total-bg)); border: 1px solid var(--line); border-top: 0; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .list-sum > span > span { color: var(--muted); margin-right: 4px; }
 .modal .list-sum { margin-bottom: 12px; }
+/* 15.103 거래처 찾기 창: ↑↓로 고른 줄 강조 */
+.partner-results tbody tr.ip-active > td { background: var(--accent-bg, rgba(49, 130, 246, .10)) !important; outline: 2px solid var(--accent); outline-offset: -2px; }

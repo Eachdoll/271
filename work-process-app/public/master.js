@@ -26,10 +26,20 @@ function pickPartner({ type = '' } = {}) {
         results.innerHTML = `<p class="field-error" role="alert">${esc(error.message)} · 다시 조회해 주세요.</p>`;
       }
     };
-    form.onsubmit = e => { e.preventDefault(); load(); };
+    // 15.103 키보드: ↑↓로 줄을 고르고 Enter로 선택(결과가 하나면 바로). 검색어를 바꾸면 조회부터.
+    let active = 0, searched = '';
+    const rowsOf = () => [...(results.querySelectorAll?.('tbody tr') || [])];
+    const paint = () => rowsOf().forEach((tr, i) => { tr.classList?.toggle('ip-active', i === active); tr.setAttribute?.('aria-selected', String(i === active)); });
+    const loadThen = () => { searched = input.value.trim(); return load().then(() => { active = 0; paint(); }); };
+    input.addEventListener?.('keydown', e => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { if (!shown.length) return; e.preventDefault(); active = (active + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % shown.length; paint(); rowsOf()[active]?.scrollIntoView?.({ block: 'nearest' }); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (shown.length && input.value.trim() === searched) finish(shown[shown.length === 1 ? 0 : active]); else loadThen(); }
+    });
+    form.onsubmit = e => { e.preventDefault(); loadThen(); };
     results.addEventListener('click', e => { const b = e.target.closest('[data-partner-pick]'); if (b && shown[Number(b.dataset.partnerPick)]) finish(shown[Number(b.dataset.partnerPick)]); });
     $('[data-partner-cancel]', m.el).onclick = () => m.close();
-    load();
+    loadThen();
   });
 }
 // Attach the vendor pick list to a name input; for purchase orders also suggest what was bought recently.
@@ -50,13 +60,15 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
       delete input.dataset.partnerPrev; input.value = partner.name;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
+      // 15.103 고른 뒤 다음 칸으로(Tab 흐름이 이어지게). 조회 줄이면 거래처 칸에 둔다.
+      if (!input.form?.matches('.list-filters, [data-read-only]')) { const all = [...input.form?.elements || []].filter(el => el.matches('input, select, textarea') && !el.disabled && !el.readOnly && el.type !== 'hidden' && el.offsetParent !== null && !el.closest('.partner-picker')); const next = all.find(el => el.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_PRECEDING); Promise.resolve().then(() => (next || input).focus?.()); } else Promise.resolve().then(() => input.focus?.());
     } finally { if (button.isConnected) button.disabled = false; }
   };
   let vendors = [];
   try { vendors = directory || await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;
   const list = document.createElement('datalist'); list.id = 'partnerList' + (++partnerListSerial);
-  list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.code, v.contact_name, v.phone].filter(Boolean).join(' · '))}</option>`).join('');
+  list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.contact_name, v.phone, v.code].filter(Boolean).join(' · '))}</option>`).join('');
   input.after(list); input.setAttribute('list', list.id); input.autocomplete = 'off';
   // 15.92 거래처코드를 그대로 쳐도(예: C0001) 그 거래처 이름으로 바꾼다. 화면의 change 처리보다 먼저(capture) 바꿔 같은 값으로 불러오게 한다.
   input.addEventListener('change', () => {
@@ -101,6 +113,9 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   };
   input.addEventListener('mousedown', () => { if (document.activeElement !== input || input.dataset.partnerPrev === undefined) openAll(); });
   input.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return;
+    // 15.103 비어 있는 칸에서 ↓·Enter → 거래처 찾기 창(품목명 칸의 품목 찾기와 같은 방식). 이름이 들어 있으면 예전처럼 목록 열기·제출.
+    if ((e.key === 'ArrowDown' || e.key === 'Enter') && !input.value.trim() && input.dataset.partnerPrev === undefined && !input.form?.matches('.list-filters, [data-read-only]')) { e.preventDefault(); button.click(); return; }
     if (e.key === 'Enter') restore(); // 비운 채 Enter면 원래 이름으로 되돌린 뒤 제출(빈 거래처로 조회되지 않게)
     else if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
     else if (e.key === 'Escape' && input.dataset.partnerPrev !== undefined) { restore(); e.stopPropagation(); }
@@ -118,14 +133,14 @@ async function pageVendors(main) {
   <h1>거래처 관리 <span class="dept">관리</span></h1>
   <p class="muted">매입처(발주·입고)와 매출처(출하·생산의뢰·고객사)를 체크해 두면 입력 화면에서 해당 거래처만 골라 보여 줍니다. 둘 다 체크하면 양쪽에 모두 나오고, 둘 다 비우면 구분 없이 어디에나 나옵니다. 누구나 거래처를 등록·수정할 수 있습니다. 발주·입고·출하 입력에서 거래처 이름을 고르면 담당자와 연락처가 함께 보이고, 발주에서는 그 거래처의 최근 매입 품목을 바로 불러올 수 있습니다. 입력 화면에서 새 이름을 쓰면 자동으로 이 목록에 추가됩니다.</p>
   <form class="card" id="vendorNew"><h3>거래처 등록</h3><div class="form-grid">
-    <label>거래처코드<input name="code" maxlength="20" placeholder="비우면 자동(C0001…)" autocapitalize="characters"></label>
+    <label>거래처코드 <span class="hint">(영문·숫자·-·_ 20자, 저장 시 대문자)</span><input name="code" maxlength="20" placeholder="비우면 자동(C0001…)" autocapitalize="characters" pattern="[A-Za-z0-9_-]{0,20}"></label>
     <label>거래처 이름 *<input name="name" required maxlength="100"></label>
     <label>담당자 이름<input name="contact_name" maxlength="50"></label>
     <label>연락처<input name="phone" maxlength="30" inputmode="tel" placeholder="예) 010-1234-5678"></label>
     ${vendorTypeChecks()}</div>
-    <div class="actions"><button class="btn primary">등록</button></div></form>
+    <div class="actions">${ME.is_admin ? '<button type="button" class="btn" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}<button class="btn primary">등록</button></div></form>
   <div class="seg class-tabs" id="vendorTypeTabs" role="group" aria-label="거래처 구분"></div>
-  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span>${ME.is_admin ? '<button type="button" class="btn small" id="vendorFillCodes" title="코드가 비어 있는 거래처에 C0001부터 번호를 붙입니다">빈 코드 자동 채우기</button>' : ''}</form>
+  <form id="vendorFilters" class="toolbar list-filters" data-read-only="true"><label class="list-search">검색<input type="search" name="q" maxlength="200" placeholder="거래처·코드·담당자·연락처"></label><button type="submit" class="btn primary">검색</button><span class="small muted" id="vendorCount"></span></form>
   <div id="vendorList"></div>`;
   const filters = $('#vendorFilters', main); let version = 0;
   let vendorTab = ''; try { vendorTab = localStorage.getItem('wpa:vendor-tab') || ''; } catch { /* 편의 기능 */ }
