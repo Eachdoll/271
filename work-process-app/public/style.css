@@ -1194,3 +1194,9 @@ label.is-locked input[readonly]:focus { outline: 2px dashed var(--muted); outlin
 .row-menu[open] > summary { background: var(--accent-soft); }
 .row-menu-list { position: fixed; z-index: 40; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; min-width: 150px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-float, 0 8px 24px rgba(0,0,0,.15)); }
 .row-menu-list .btn { text-align: left; }
+/* 15.76 입고 입력: 표가 넓어도 양식 전체가 늘어나지 않게(표만 가로 스크롤). 비고 칸 최소 폭, 구분 글자 한 줄 */
+.rc-form, .rc-form > *, .rc-lines-box, .rc-lines-box .table-wrap { min-width: 0; max-width: 100%; }
+.rc-grid td:nth-child(2) { white-space: nowrap; }
+.rc-grid td:nth-child(3) { min-width: 10em; }
+.rc-grid td:nth-child(10) input { min-width: 8em; }
+.rc-lines-box .table-wrap, .rc-source .table-wrap, #bomList .table-wrap { position: relative; } /* 숨김 글자(sr-only)가 표 스크롤 밖으로 나가 페이지를 넓히지 않게 */
