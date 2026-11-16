@@ -225,6 +225,13 @@
       "when": 1794740012000,
       "tag": "0031_po_unit_price",
       "breakpoints": false
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794740013000,
+      "tag": "0032_freight_internal_note",
+      "breakpoints": false
     }
   ]
 }

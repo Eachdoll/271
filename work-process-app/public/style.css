@@ -1080,3 +1080,14 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .sub-chip.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .sub-count { color: var(--muted); font-size: 13px; margin-left: 2px; }
 .sub-chip.on .sub-count, .class-tabs .on .sub-count { color: inherit; }
+
+/* 15.69 운송비·내부 메모·넓은 발주 처리 창 */
+.pr-freight h4, .po-freight h4 { margin: 12px 0 6px; }
+.pr-freight-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.pr-freight-row input { width: 9em; }
+.freight-rule { white-space: nowrap; }
+.po-lines .po-line-item { min-width: 12em; word-break: keep-all; overflow-wrap: anywhere; }
+.po-lines input { width: 7.5em; }
+.po-lines input[name^="memo_"] { width: 11em; }
+.freight-rules input, .freight-rules select { min-width: 6.5em; }
+.internal-note { margin-top: 2px; }

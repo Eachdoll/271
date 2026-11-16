@@ -68,7 +68,7 @@ async function installMultiItems(legacy, entity, type = '') {
   const kind = location.hash.includes('/semi') ? 'semi' : 'finished';
   const titles = { purchase_order: '발주', shipment: '출하', laundry: '세탁', other_receipt: '기타입고', schedule: '생산계획', request: (REQ[type]?.label || '') + ' 접수' };
   let header = '';
-  if (entity === 'purchase_order') header = multiInput('req_no','구매의뢰번호') + multiInput('vendor','거래처') + multiInput('due_date','납기일','date');
+  if (entity === 'purchase_order') header = multiInput('req_no','구매의뢰번호') + multiInput('vendor','거래처') + multiInput('due_date','납기일','date') + multiInput('internal_note','내부 메모 (구매·물류용, 발주서에 안 나감)','text','',false);
   if (entity === 'shipment') header = multiInput('ship_date','출고일','date',todayStr()) + multiInput('customer','거래처');
   if (entity === 'other_receipt') header = multiInput('received_date','입고일','date',todayStr()) + multiInput('vendor','입고처');
   if (entity === 'laundry') header = multiInput('in_date','세탁 입고일','date',todayStr());
