@@ -20,6 +20,13 @@ const addMonths = (s, n) => { const d = parseD(monthStart(s)); d.setMonth(d.getM
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const dow = (s) => WEEK[parseD(s).getDay()];
 const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko-KR'));
+// 15.100 합계: 수량은 단위마다 따로 더한다(kg와 EA를 섞어 더하지 않게). 예: "1,200 EA · 30 BOX"
+function unitTotals(rows, qty, unit) {
+  const m = new Map(); for (const r of rows) { const u = String(unit(r) || '').trim(), q = Number(qty(r)); if (!Number.isFinite(q)) continue; m.set(u, (m.get(u) || 0) + q); }
+  return [...m].map(([u, n]) => `${fmtNum(Math.round(n * 1000) / 1000)}${u ? ' ' + u : ''}`).join(' · ') || '0';
+}
+// 표 바로 아래 ERP식 합계 줄. parts: [[이름, 값(HTML)], …] (값이 빈 것은 뺀다)
+const sumLine = parts => `<div class="list-sum" role="status">${parts.filter(p => p && p[1] !== '' && p[1] != null).map(([k, v]) => `<span><span>${esc(k)}</span> <b>${v}</b></span>`).join('')}</div>`;
 
 // 표 머리글용 짧은 이름(15.63): 긴 이름은 머리글 title·체크박스 aria-label로 그대로 보여 준다.
 const ROLE_SHORT = { operator: '오퍼레이터', purchase: '구매', quality: '품질', quality_approver: '품질책임자', dev: '개발', dev_approver: '개발책임자', production: '생산', production_approver: '생산팀장', logistics: '물류', logistics_approver: '물류팀장' };
@@ -807,7 +814,7 @@ function labelGridTables() {
     if (sortableTable(table)) ths.forEach(th => { if (th.textContent.trim() && !th.querySelector('input')) th.classList.add('sortable'); }); // 15.97 머리글 눌러 정렬
     heads.forEach((head, i) => {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
-      if (head && rows.length && !table.hasAttribute('data-keep-cols') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
+      if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
     });
     if (!table.classList.contains('as-cards')) return;
@@ -1097,6 +1104,7 @@ async function pagePO(main) {
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
         <td class="nowrap">${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-po-print="${p.id}" title="같은 구매의뢰번호·거래처의 발주를 한 장으로">발주서</button> <button class="btn small" data-edit="${p.id}">수정</button> <button class="btn small danger" data-del="${p.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">등록된 발주가 없습니다.</div>';
+    if (rows.length) { const priced = rows.filter(r => r.unit_price != null && r.unit_price !== ''); $('#poList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))], ['발주 금액', esc(`${won(priced.reduce((t, r) => t + billTruncC(r.qty * r.unit_price), 0))}원`)], ['단가 없음', rows.length - priced.length ? esc(`${rows.length - priced.length}건`) : '']])); }
     bindReceiptChanges($('#poList'), rows, load);
     $$('[data-po-print]', main).forEach(b => b.onclick = () => { const t = rows.find(r => r.id === Number(b.dataset.poPrint)); poPrintSheet(rows.filter(r => r.req_no === t.req_no && r.vendor === t.vendor)); });
     $$('[data-edit]').forEach((b) => (b.onclick = () => {
@@ -1200,6 +1208,7 @@ async function pageReceive(main) {
         <td>${recvChip(p)}${qcChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td class="small muted">${esc(p.created_by || '기존 기록: 미기록')}</td><td class="small muted">${esc(p.recv_by || '')}${p.recv_at ? '<br>' + esc(p.recv_at.slice(5, 16)) : ''}</td><td>${commentButton("purchase_order", p.id, p.item)} <button class="btn small" data-receipt-photo="${p.id}">사진·이상 여부</button>${inspectionBadge(p)}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 발주가 없습니다.</div>';
+    if (rows.length) $('#rcList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['발주수량', esc(unitTotals(rows, r => r.qty, r => r.unit))], ['실입고', (got => got.length ? esc(unitTotals(got, r => r.recv_qty ?? r.qty, r => r.unit)) : '')(rows.filter(r => ['ok', 'mismatch'].includes(r.recv_status)))]]));
     const all = $('#rcAll'); if (all) all.onchange = () => { $$('.rc-check').forEach((c) => (c.checked = all.checked)); updateCount(); };
     $$('.rc-check').forEach((c) => (c.onchange = updateCount));
     // 행 클릭으로도 체크
@@ -1301,6 +1310,7 @@ async function pageOtherReceipts(main, { entry = true } = {}) {
     listCount(filterForm, rows.length);
     $('#otherList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>입고일</th><th>분류</th><th>품목명</th><th class="r">입고수량</th><th>입고처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map(row => `<tr><td>${esc(row.received_date)}</td><td>${esc(row.item_category)}</td><td>${esc(row.item)}${lineInfo(row)}${qcChip(row)}${receiptBomSnapshot(row).product_code ? `<div class="small muted">${esc(receiptBomSnapshot(row).product_code)}</div>` : ''}</td><td class="r">${fmtNum(row.qty)} ${esc(receiptBomSnapshot(row).unit || '')}</td><td>${esc(row.vendor)}</td><td>${esc(row.note)}</td><td>${esc(row.created_by)}</td><td class="nowrap">${commentButton("other_receipt", row.id, row.item)} <button class="btn small" data-other-photo="${row.id}">사진·이상 여부</button>${inspectionBadge(row)} <button class="btn small" data-other-edit="${row.id}">수정</button> <button class="btn small danger" data-other-del="${row.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">해당하는 기타입고가 없습니다.</div>';
+    if (rows.length) $('#otherList').insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['입고수량', esc(unitTotals(rows, r => r.qty, r => r.unit || receiptBomSnapshot(r).unit))]]));
     $$('[data-other-photo]', main).forEach(button => button.onclick = () => { const row = rows.find(row => row.id === Number(button.dataset.otherPhoto)); openAttachments('other_receipt', row.id, row.item, { editable: ME.is_admin || hasRole('logistics') || row.created_by === ME.name }); });
     $$('[data-other-edit]', main).forEach(button => button.onclick = () => {
       const row = rows.find(row => row.id === Number(button.dataset.otherEdit));
@@ -1927,7 +1937,7 @@ async function pageShip(main) {
     const rows = await api('GET', '/api/shipments?' + new URLSearchParams(formObj(filterForm)));
     if (version !== queryVersion || !main.isConnected) return;
     listCount(filterForm, rows.length);
-    $('#shSum').innerHTML = `${rows.length}건 · 수량 합계 <b>${fmtNum(rows.reduce((a, r) => a + r.qty, 0))}</b>`;
+    $('#shSum').innerHTML = `${esc(`${rows.length}건`)} · <span>수량 합계</span> <b>${esc(unitTotals(rows, r => r.qty, r => r.unit))}</b>`;
     $('#shList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>출고일</th><th>품목명</th><th>LOT</th><th class="r">수량</th><th>거래처</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((r) => `<tr><td class="nowrap">${esc(r.ship_date)} (${dow(r.ship_date)})</td><td>${esc(r.item)}${lineInfo(r)}</td><td>${esc(r.lot)}</td><td class="r">${fmtNum(r.qty)}</td><td>${esc(r.customer)}</td><td>${esc(r.note)}</td><td class="small muted">${esc(r.created_by)}</td>

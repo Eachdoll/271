@@ -1406,3 +1406,7 @@ table.grid > tfoot > tr.grand-sum > td.r { text-align: right; }
 @media (max-width: 820px) { body:has(.tabbar) #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> .btn.primary:not([type=button])) { bottom: calc(59px + env(safe-area-inset-bottom)); } }
 /* 15.99 안내 문장 속 작은 버튼(예: 출하 화면 「매출전표 입력으로」)도 누르기 쉬운 높이로 */
 p > a.btn.small, p > button.btn.small { display: inline-flex; align-items: center; min-height: 32px; vertical-align: middle; }
+/* 15.100 표 아래 합계 줄(ERP식) */
+.list-sum { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 20px; margin: 0; padding: 9px 12px; background: var(--erp-sum, var(--total-bg)); border: 1px solid var(--line); border-top: 0; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.list-sum > span > span { color: var(--muted); margin-right: 4px; }
+.modal .list-sum { margin-bottom: 12px; }
