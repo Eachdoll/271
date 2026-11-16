@@ -148,3 +148,17 @@ test('15.100 Cancelling a shipped bill keeps the order remaining; rebill links b
   const del = await admin('DELETE', `/api/vendors/${vendor.id}`);
   assert.equal(del.status, 409); assert.match(del.body.error, /수주 \d+건/);
 });
+
+test('15.101 Renaming a vendor follows through to orders, bills, instructions and closings', async () => {
+  await admin('POST', '/api/vendors', { name: '라마상사', is_sales: true });
+  const so = (await seller('POST', '/api/sales-orders', { customer: '라마상사', order_date: today, request_id: rid(), lines: [{ bom_id: mask.id, qty: 10, unit_price: 5 }] })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '라마상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty: 4 }] })).body;
+  const v = sqlite.prepare("SELECT id FROM vendors WHERE name='라마상사'").get();
+  assert.equal((await admin('PUT', `/api/vendors/${v.id}`, { name: '라마산업', is_sales: true })).status, 200);
+  assert.equal((await seller('GET', `/api/sales-orders/${so.id}`)).body.customer, '라마산업');
+  assert.equal((await seller('GET', `/api/sales-bills/${b.id}`)).body.customer, '라마산업');
+  assert.equal(sqlite.prepare('SELECT customer FROM ship_instructions WHERE bill_id=?').get(b.id).customer, '라마산업');
+  const open = (await seller('GET', '/api/sales-orders/open-lines?customer=' + encodeURIComponent('라마산업'))).body.rows;
+  assert.deepEqual(open.map(r => r.remaining), [6], 'open lines found under the new name');
+  assert.equal((await seller('GET', '/api/sales-orders/open-lines?customer=' + encodeURIComponent('라마상사'))).body.rows.length, 0);
+});

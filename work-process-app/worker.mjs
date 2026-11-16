@@ -571,7 +571,18 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   const terms = freightTerms(body.freight_terms);
   const code = body.code === undefined ? row.code : vendorCode(body.code);
   if (code && code !== row.code && await db.prepare('SELECT 1 FROM vendors WHERE code=? AND id<>?').get(code, row.id)) throw new HttpError(409, `거래처코드 ${code}는 이미 쓰고 있습니다.`);
-  try { await db.prepare('UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,updated_by=?,updated_at=? WHERE id=?').run(name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', user.name, now(), row.id); }
+  // 15.101 이름을 바꾸면 그 이름으로 저장된 문서(수주·전표·출하지시·세금계산서 초안·발주·출하·마감 키)도 따라 바꾼다.
+  // 문서는 거래처 이름 글자를 들고 있어 그대로 두면 수주 잔량·전표 없는 출하·마감 확인이 새 이름과 맞지 않는다.
+  const cmds = [{ sql: 'UPDATE vendors SET name=?,name_key=?,contact_name=?,phone=?,is_purchase=?,is_sales=?,freight_terms=?,code=?,updated_by=?,updated_at=? WHERE id=?', args: [name, nameKey(name), contact, phone, purchase, sales, terms === undefined ? row.freight_terms : JSON.stringify(terms), code || '', user.name, now(), row.id] }];
+  if (nameKey(name) !== row.name_key || name !== row.name) {
+    const k = row.name_key;
+    for (const [table, col] of [['sales_orders', 'customer'], ['sales_bills', 'customer'], ['ship_instructions', 'customer'], ['purchase_bills', 'vendor'], ['purchase_orders', 'vendor'], ['shipments', 'customer'], ['other_receipts', 'vendor'], ['receipts', 'vendor'], ['production_requests', 'customer']])
+      cmds.push({ sql: `UPDATE ${table} SET ${col}=? WHERE ${customerKey(col)}=?`, args: [name, k] });
+    cmds.push({ sql: "UPDATE tax_invoices SET customer=? WHERE REPLACE(LOWER(customer),' ','')=? AND status IN ('draft','failed')", args: [name, k] });
+    cmds.push({ sql: 'UPDATE sales_closings SET customer=?,customer_key=? WHERE customer_key=?', args: [name, nameKey(name), k] });
+    cmds.push({ sql: 'UPDATE purchase_closings SET vendor=?,vendor_key=? WHERE vendor_key=?', args: [name, nameKey(name), k] });
+  }
+  try { await db.batch(cmds); }
   catch (error) { if (/UNIQUE/i.test(String(error && error.message))) throw new HttpError(409, '같은 이름이나 코드의 거래처가 이미 있습니다.'); throw error; }
   return decodeVendor(await mustGet('vendors', row.id));
 });
