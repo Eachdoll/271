@@ -28,16 +28,37 @@ before(async () => {
 after(() => { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); });
 const request = extra => sales('POST', '/api/purchase-requests', { doc_date: '2026-11-10', title: '점검', items: [{ item: '장갑', unit: 'EA', qty: 5, vendor: '공급사' }], approvers: [ids['팀장']], ...extra });
 
-test('Deleting a purchase order made from a purchase request lets that item be ordered again', async () => {
-  const pr = (await request()).body;
+test('15.69: deleting an order made from a purchase request closes that item unless requeue is asked', async () => {
+  const pr = (await request({ items: [{ item: '장갑', unit: 'EA', qty: 5, vendor: '공급사' }, { item: '마스크', unit: 'EA', qty: 9, vendor: '공급사' }] })).body;
   await boss('POST', `/api/purchase-requests/${pr.id}/decision`, { decision: 'approved' });
   const made = (await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재' })).body;
-  assert.equal(made.created.length, 1);
+  assert.equal(made.created.length, 2);
+  const list = (await buyer('GET', '/api/po')).body;
+  assert.ok(list.find(p => p.id === made.created[0].id).pr_item_id, 'the list tells which orders came from a request');
+  // 기본 삭제: 의뢰 품목도 닫혀 발주 대기에 다시 나타나지 않는다.
   assert.equal((await buyer('DELETE', `/api/po/${made.created[0].id}`)).status, 200);
-  const view = (await buyer('GET', `/api/purchase-requests/${pr.id}`)).body;
-  assert.deepEqual([view.items[0].po_id, view.can_order], [null, true]);
-  assert.ok((await buyer('GET', '/api/purchase-requests?box=order')).body.some(r => r.id === pr.id), 'back in the to-order box');
-  assert.equal((await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-05', item_category: '부자재' })).body.created.length, 1);
+  let view = (await buyer('GET', `/api/purchase-requests/${pr.id}`)).body;
+  assert.equal(view.items[0].po_id, null); assert.match(view.items[0].order_closed, /발주 삭제 · 구매/);
+  assert.equal(view.can_order, false);
+  assert.ok(!(await buyer('GET', '/api/purchase-requests?box=order')).body.some(r => r.id === pr.id), 'does not come back to the to-order box');
+  assert.equal((await buyer('GET', '/api/my-tasks')).body.approvals.purchase_orders_waiting, undefined);
+  assert.equal((await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-05', item_category: '부자재' })).status, 400, 'closed items are not ordered again');
+  // requeue=1: 예전처럼 발주 대기로
+  assert.equal((await buyer('DELETE', `/api/po/${made.created[1].id}?requeue=1`)).status, 200);
+  view = (await buyer('GET', `/api/purchase-requests/${pr.id}`)).body;
+  assert.deepEqual([view.items[1].po_id, view.items[1].order_closed, view.can_order], [null, '', true]);
+  const box = (await buyer('GET', '/api/purchase-requests?box=order')).body.find(r => r.id === pr.id);
+  assert.deepEqual(box.open_items.map(i => i.item), ['마스크']);
+  // 발주 안 함 / 되돌리기
+  assert.equal((await sales('POST', `/api/purchase-requests/${pr.id}/items/${view.items[1].id}/order-closed`, { closed: true })).status, 403, 'only purchase staff');
+  const closed = await buyer('POST', `/api/purchase-requests/${pr.id}/items/${view.items[1].id}/order-closed`, { closed: true, reason: '재고 사용' });
+  assert.equal(closed.status, 200); assert.match(closed.body.items[1].order_closed, /발주 안 함 \(재고 사용\)/);
+  assert.ok(!(await buyer('GET', '/api/purchase-requests?box=order')).body.some(r => r.id === pr.id));
+  const reopened = await buyer('POST', `/api/purchase-requests/${pr.id}/items/${view.items[0].id}/order-closed`, { closed: false });
+  assert.equal(reopened.body.items[0].order_closed, '');
+  const again = (await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-05', item_category: '부자재' })).body;
+  assert.deepEqual(again.created.map(p => p.item), ['장갑']);
+  assert.equal((await buyer('POST', `/api/purchase-requests/${pr.id}/items/${view.items[0].id}/order-closed`, { closed: true })).status, 400, 'an ordered item is closed by deleting its order');
 });
 
 test('A person who still has an approval turn cannot be deleted or rejected until the turn is done', async () => {

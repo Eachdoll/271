@@ -1070,3 +1070,24 @@ h3:has(> .tag), h4:has(> .tag) { flex-wrap: wrap; }
 .bom-tools { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; min-width: 160px; }
 .bom-table td:nth-child(6) div { white-space: nowrap; }
 @media (min-width: 1200px) { .bom-tools { flex-wrap: nowrap; } }
+
+/* 15.68 제품등록 세부 분류 칩 · 거래처 구분 탭 */
+.sub-tabs { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+.sub-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sub-row-2 { padding-left: 12px; border-left: 3px solid var(--line); }
+.sub-path { font-size: 13px; color: var(--muted); }
+.sub-chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; min-height: 36px; }
+.sub-chip.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.sub-count { color: var(--muted); font-size: 13px; margin-left: 2px; }
+.sub-chip.on .sub-count, .class-tabs .on .sub-count { color: inherit; }
+
+/* 15.69 운송비·내부 메모·넓은 발주 처리 창 */
+.pr-freight h4, .po-freight h4 { margin: 12px 0 6px; }
+.pr-freight-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.pr-freight-row input { width: 9em; }
+.freight-rule { white-space: nowrap; }
+.po-lines .po-line-item { min-width: 12em; word-break: keep-all; overflow-wrap: anywhere; }
+.po-lines input { width: 7.5em; }
+.po-lines input[name^="memo_"] { width: 11em; }
+.freight-rules input, .freight-rules select { min-width: 6.5em; }
+.internal-note { margin-top: 2px; }

@@ -72,3 +72,30 @@ test('15.66: quantities and unit prices can be changed when ordering; the order 
   assert.equal((await buyer('PUT', `/api/po/${pb.id}`, { req_no: pb.req_no, vendor: pb.vendor, item: pb.item, qty: 30, due_date: '2026-12-01', item_category: '부자재', unit_price: '' })).body.unit_price, null);
   assert.equal((await buyer('GET', '/api/po')).body.find(p => p.id === pa.id).unit_price, 4800, 'the list carries the price for the sheet');
 });
+
+test('15.69: vendor freight terms, request freight in profit, internal note and freight carried once per vendor', async () => {
+  const vendor = (await buyer('POST', '/api/vendors', { name: '운송상사', is_purchase: true, freight_terms: [{ when: 'gte', amount: 1000000, fee: 150000, per: 'order', note: '착불' }, { when: 'always', fee: 7000, per: 'line' }] })).body;
+  assert.deepEqual(vendor.freight_terms.map(r => [r.when, r.amount, r.fee, r.per, r.note]), [['gte', 1000000, 150000, 'order', '착불'], ['always', null, 7000, 'line', '']]);
+  assert.equal((await buyer('PUT', `/api/vendors/${vendor.id}`, { name: '운송상사', freight_terms: [{ when: 'sometimes', fee: 1 }] })).status, 400);
+  assert.equal((await buyer('PUT', `/api/vendors/${vendor.id}`, { name: '운송상사', freight_terms: [{ when: 'always', fee: -1 }] })).status, 400);
+  assert.equal((await buyer('PUT', `/api/vendors/${vendor.id}`, { name: '운송상사', freight_terms: Array(11).fill({ when: 'always', fee: 1 }) })).status, 400);
+  assert.equal((await buyer('PUT', `/api/vendors/${vendor.id}`, { name: '운송상사', contact_name: '김' })).body.freight_terms.length, 2, 'kept when not sent');
+  assert.equal((await buyer('GET', '/api/vendors?q=' + encodeURIComponent('운송상사'))).body[0].freight_terms.length, 2);
+  assert.equal((await sales('POST', '/api/purchase-requests', { doc_date: '2026-11-10', title: 'x', approvers: [ids['팀장']], freight: { 운송상사: -5 }, items: [{ item: 'a', unit: 'EA', qty: 1, vendor: '운송상사' }] })).status, 400);
+  const pr = (await sales('POST', '/api/purchase-requests', { doc_date: '2026-11-10', title: '운송비', approvers: [ids['팀장']], freight: { 운송상사: 20000, '': 5 }, items: [
+    { item: '장갑', unit: 'EA', qty: 10, purchase_price: 1000, sale_price: 2000, vendor: '운송상사', customer: '풍림무약' },
+    { item: '마스크', unit: 'EA', qty: 10, purchase_price: 500, sale_price: 900, vendor: '운송상사' }] })).body;
+  assert.deepEqual([pr.freight, pr.freight_total, pr.purchase_total, pr.sale_total], [{ 운송상사: 20000 }, 20000, 15000, 29000]);
+  assert.equal((await sales('GET', '/api/purchase-requests?box=mine')).body.find(r => r.id === pr.id).freight_total, 20000);
+  await boss('POST', `/api/purchase-requests/${pr.id}/decision`, { decision: 'approved' });
+  const [a, b] = pr.items;
+  const first = (await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', item_ids: [a.id], lines: [{ id: a.id, internal_note: '풍림무약향' }] })).body.created;
+  assert.deepEqual([first[0].internal_note, first[0].freight], ['풍림무약향', 20000], 'request freight goes to the first order of that vendor');
+  const second = (await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재' })).body.created;
+  assert.deepEqual([second[0].item, second[0].freight, second[0].internal_note], ['마스크', null, ''], 'a later split order does not charge it again');
+  const edited = await buyer('PUT', `/api/po/${second[0].id}`, { req_no: second[0].req_no, vendor: '운송상사', item: '마스크', qty: 10, due_date: '2026-12-01', item_category: '부자재', internal_note: '머크향', freight: 7000 });
+  assert.deepEqual([edited.body.internal_note, edited.body.freight], ['머크향', 7000]);
+  assert.equal((await buyer('PUT', `/api/po/${second[0].id}`, { req_no: second[0].req_no, vendor: '운송상사', item: '마스크', qty: 10, due_date: '2026-12-01', item_category: '부자재', freight: '' })).body.freight, null);
+  const direct = (await buyer('POST', '/api/po', { req_no: 'D-1', vendor: '운송상사', item: '장화', qty: 1, due_date: '2026-12-01', item_category: '부자재', internal_note: '머크향', freight: 3000 })).body;
+  assert.deepEqual([direct.internal_note, direct.freight], ['머크향', 3000]);
+});

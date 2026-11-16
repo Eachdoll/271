@@ -47,6 +47,7 @@ async function prForm(host, existing = null, { onDone } = {}) {
     </div>
     <section class="pr-section"><h3>구매 의뢰 품목</h3><div data-items></div>
       <div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-add-item>+ 품목 추가</button></div>
+      <div class="pr-freight" data-freight></div>
       <p class="pr-totals" data-totals aria-live="polite"></p></section>
     <label>비고<textarea name="note" rows="2" maxlength="2000">${esc(existing ? existing.note : '')}</textarea></label>
     <section class="pr-section"><h3>결재선</h3>
@@ -64,15 +65,28 @@ async function prForm(host, existing = null, { onDone } = {}) {
   const form = $('form', host), items = $('[data-items]', form), draft = existing ? null : bindPhotoDraft(form);
   const byId = id => people.find(p => p.id === id) || { name: '(없는 사용자)' };
   const renumber = () => [...items.children].forEach((row, i) => { $('legend', row).textContent = `품목 ${i + 1}`; $('[data-remove-item]', row).setAttribute('aria-label', `품목 ${i + 1} 삭제`); });
+  // 15.69 운송비: 공급선(매입처)별로 그 거래처의 운송비 조건으로 기본값을 계산하고, 손으로 고친 값은 그대로 둔다. 이익 = 판매 - 매입 - 운송비.
+  const freightVal = {}; for (const [vendor, fee] of Object.entries(existing?.freight || {})) freightVal[vendor] = { value: String(fee), dirty: true };
+  const freightBox = $('[data-freight]', form);
+  const freightTotal = () => [...freightBox.querySelectorAll('[data-freight-input]')].reduce((t, el) => t + Number(el.value || 0), 0);
+  const writeTotals = (buy, sale) => { const fr = freightTotal(); $('[data-totals]', form).textContent = `합계 · 매입 ${prMoney(buy)}원 · 운송비 ${prMoney(fr)}원 · 판매 ${prMoney(sale)}원 · 이익 ${prProfit(sale, buy + fr)}`; };
+  let lastBuy = 0, lastSale = 0;
   const totals = () => {
-    let buy = 0, sale = 0;
+    let buy = 0, sale = 0; const byVendor = new Map();
     for (const row of items.children) {
       const n = key => Number($(`[data-k="${key}"]`, row).value || 0), qty = n('qty'), b = n('purchase_price') * qty, s = n('sale_price') * qty;
       buy += b; sale += s;
       $('[data-amount]', row).textContent = qty ? `매입금액 ${prMoney(b)} · 판매금액 ${prMoney(s)} · 이익 ${prProfit(s, b)}` : '';
+      const vendor = $('[data-k="vendor"]', row).value.trim(); if (vendor) { const g = byVendor.get(vendor) || { amount: 0, lines: 0 }; g.amount += b; g.lines++; byVendor.set(vendor, g); }
     }
-    $('[data-totals]', form).textContent = `합계 · 매입 ${prMoney(buy)}원 · 판매 ${prMoney(sale)}원 · 이익 ${prProfit(sale, buy)}`;
+    freightBox.innerHTML = byVendor.size ? `<h4>운송비 <span class="small muted">(공급선별 · 거래처 관리의 조건으로 자동 계산, 고칠 수 있음)</span></h4>${[...byVendor].map(([vendor, g]) => {
+      const terms = vendors.find(v => partnerKey(v.name) === partnerKey(vendor))?.freight_terms || [], calc = freightCalc(terms, g.amount, g.lines), state = freightVal[vendor];
+      const value = state && state.dirty ? state.value : calc === null ? (state?.value ?? '') : String(calc);
+      return `<div class="pr-freight-row"><span><b>${esc(vendor)}</b> <span class="small muted">매입 ${prMoney(g.amount)}원 · ${freightSummary(terms)}</span></span><label class="inline">운송비 <input type="number" min="0" step="any" inputmode="decimal" data-freight-input data-vendor="${esc(vendor)}" value="${esc(value)}" placeholder="${calc === null ? '조건 없음' : ''}" aria-label="${esc(vendor)} 운송비"> 원</label></div>`;
+    }).join('')}` : '';
+    lastBuy = buy; lastSale = sale; writeTotals(buy, sale);
   };
+  freightBox.addEventListener('input', event => { const el = event.target.closest('[data-freight-input]'); if (!el) return; freightVal[el.dataset.vendor] = { value: el.value, dirty: true }; writeTotals(lastBuy, lastSale); });
   const addItem = (it, focus) => {
     if (items.children.length >= 30) return toast('품목은 30개까지 입력할 수 있습니다.', 'err');
     items.insertAdjacentHTML('beforeend', prItemRow(it)); const row = items.lastElementChild;
@@ -122,7 +136,8 @@ async function prForm(host, existing = null, { onDone } = {}) {
     event.preventDefault(); if (busy || draft?.busy) return;
     if (!line.approve.length) { const e = $('[data-line-error]', form); e.textContent = '결재자를 1명 이상 추가하세요. 「결재」에서 사람을 고르고 「추가」를 누르세요.'; e.hidden = false; $('[data-pick="approve"]', form).focus(); return; }
     const values = formObj(form);
-    const body = { doc_date: values.doc_date, title: values.title, note: values.note, approvers: line.approve, agreers: line.agree, cc: line.cc,
+    const freight = Object.fromEntries($$('[data-freight-input]', form).filter(el => el.value !== '').map(el => [el.dataset.vendor, el.value]));
+    const body = { doc_date: values.doc_date, title: values.title, note: values.note, freight, approvers: line.approve, agreers: line.agree, cc: line.cc,
       items: [...items.children].map(row => Object.fromEntries($$('[data-k]', row).map(el => [el.dataset.k, el.value]))) };
     busy = true; entryDraft?.start();
     try {
@@ -170,7 +185,7 @@ async function pageSalesPrList(main) {
       <td class="r">${prMoney(r.purchase_total)}<br><span class="small muted">${prMoney(r.sale_total)}</span></td>
       <td>${esc(r.vendors || '—')}<div class="small muted">${esc(r.customers)}</div></td>
       <td>${esc(r.author_name)}<div class="small muted">${esc(r.department)}</div></td>
-      <td><span class="chip ${PR_STATUS_CHIP[r.status]}">${PR_STATUS[r.status]}</span>${r.status === 'pending' ? `<div class="small">${r.my_turn ? '<b>내 차례</b>' : esc(r.current_user_name) + ' 차례'}</div>` : ''}${r.status === 'approved' && r.ordered ? `<div class="small muted">발주 ${r.ordered}/${r.item_count}</div>` : ''}</td>
+      <td><span class="chip ${PR_STATUS_CHIP[r.status]}">${PR_STATUS[r.status]}</span>${r.status === 'pending' ? `<div class="small">${r.my_turn ? '<b>내 차례</b>' : esc(r.current_user_name) + ' 차례'}</div>` : ''}${r.status === 'approved' && (r.ordered || r.closed) ? `<div class="small muted">발주 ${r.ordered}/${r.item_count}${r.closed ? ` · <span>발주 안 함</span> ${r.closed}` : ''}</div>` : ''}</td>
       <td data-card-primary><button class="btn small ${r.my_turn ? 'primary' : ''}" data-open-pr="${r.id}">${r.my_turn ? '결재하기' : '열기'}</button></td></tr>`).join('')}</tbody></table></div>${more ? '<div class="actions"><button type="button" class="btn" data-pr-more>더 보기</button></div>' : ''}`
       : `<div class="empty">${box === 'todo' ? '지금 내 결재 차례인 구매의뢰가 없습니다.' : '조건에 맞는 구매의뢰가 없습니다.'}</div>`;
     $$('[data-open-pr]', main).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPr), () => load()));
@@ -206,8 +221,9 @@ async function prOpen(id, after = () => {}) {
     <section><h4>본문 · 구매의뢰서</h4>
       <p><span class="muted">작성일</span> <b>${esc(pr.doc_date)}</b> <span class="muted">의뢰부서</span> <b>${esc(pr.department || '—')}</b> <span class="muted">요청자</span> <b>${esc(pr.author_name)}</b> <span>${esc(pr.author_position || '')}</span></p>
       <div class="table-wrap"><table class="grid pr-items"><thead><tr><th>NO</th><th>품목 · 규격</th><th>단위</th><th class="r">수량</th><th class="r">매입단가</th><th class="r">매입금액</th><th class="r">판매단가</th><th class="r">판매금액</th><th>공급선</th><th>납품예정수량</th><th>사용고객사</th><th>현재고</th><th>입고요청일</th>${pr.items.some(it => it.manager) ? '<th>담당자</th>' : ''}<th>월사용량</th><th>발주</th></tr></thead>
-      <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty || '전량')}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td>${pr.items.some(x => x.manager) ? `<td>${esc(it.manager)}</td>` : ''}<td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
-      <p class="pr-totals">${`합계 · 매입 ${prMoney(pr.purchase_total)}원 · 판매 ${prMoney(pr.sale_total)}원 · 이익 ${prProfit(pr.sale_total, pr.purchase_total)}`}</p>
+      <tbody>${pr.items.map(it => `<tr><td>${it.line_no}</td><td><b>${esc(it.item)}</b>${it.spec ? `<div class="small">${esc(it.spec)}</div>` : ''}${it.product_code ? `<div class="small muted">제품코드 ${esc(it.product_code)}</div>` : ''}</td><td>${esc(it.unit)}</td><td class="r">${fmtNum(it.qty)}</td><td class="r">${prMoney(it.purchase_price)}</td><td class="r">${it.purchase_price == null ? '' : prMoney(it.purchase_price * it.qty)}</td><td class="r">${prMoney(it.sale_price)}</td><td class="r">${it.sale_price == null ? '' : prMoney(it.sale_price * it.qty)}</td><td>${esc(it.vendor)}</td><td>${esc(it.delivery_qty || '전량')}</td><td>${esc(it.customer)}</td><td>${esc(it.stock_qty)}</td><td>${esc(it.due_text)}</td>${pr.items.some(x => x.manager) ? `<td>${esc(it.manager)}</td>` : ''}<td>${esc(it.monthly_usage)}</td><td>${it.po_id ? '<span class="chip green">발주됨</span>' : it.order_closed ? `<span class="chip" title="${esc(it.order_closed)}">발주 안 함</span>${pr.status === 'approved' && hasRole('purchase') ? ` <button type="button" class="btn small" data-pr-reopen="${it.id}">발주 대기로</button>` : ''}` : ''}</td></tr>`).join('')}</tbody></table></div>
+      ${Object.keys(pr.freight || {}).length ? `<p class="small"><b>운송비</b> ${Object.entries(pr.freight).map(([vendor, fee]) => `${esc(vendor)} ${prMoney(fee)}원`).join(' · ')}</p>` : ''}
+      <p class="pr-totals">${`합계 · 매입 ${prMoney(pr.purchase_total)}원 · 운송비 ${prMoney(pr.freight_total || 0)}원 · 판매 ${prMoney(pr.sale_total)}원 · 이익 ${prProfit(pr.sale_total, pr.purchase_total + (pr.freight_total || 0))}`}</p>
       ${pr.note ? `<p class="pr-note">${esc(pr.note)}</p>` : ''}
       <div class="thumbs">${pr.photos.map(f => `<img src="/uploads/${esc(f)}" data-big="/uploads/${esc(f)}" alt="구매의뢰 첨부 사진" loading="lazy">`).join('') || '<span class="muted small">첨부 사진 없음</span>'}</div></section>
     <div class="actions">${pr.can_decide ? '<button class="btn primary" data-pr-approve>승인</button><button class="btn danger" data-pr-reject>반려</button>' : ''}
@@ -241,7 +257,10 @@ async function prOpen(id, after = () => {}) {
     };
   });
   act('[data-pr-order]', async () => {
-    try { const r = await prCreateOrders(pr, pr.items.filter(it => !it.po_id)); if (r) await done(); } catch (error) { fail(error); }
+    try { const r = await prCreateOrders(pr, pr.items.filter(it => !it.po_id && !it.order_closed)); if (r) await done(); } catch (error) { fail(error); }
+  });
+  $$('[data-pr-reopen]', m.el).forEach(b => b.onclick = async () => {
+    try { await api('POST', `/api/purchase-requests/${pr.id}/items/${b.dataset.prReopen}/order-closed`, { closed: false }); toast('발주 대기로 되돌렸습니다.'); m.close(); await after(); refreshNavBadges(); prOpen(pr.id, after); } catch (error) { fail(error); }
   });
 }
 
@@ -472,19 +491,44 @@ async function prCreateOrders(pr, items) {
   const dates = items.map(it => prDueDate(it.due_text)).filter(Boolean).sort();
   const due = dates.length ? (dates[0] < todayStr() ? todayStr() : dates[0]) : addDays(todayStr(), 7);
   const needVendor = items.some(it => !it.vendor), needCategory = items.some(it => !it.bom_id);
+  // 15.69 운송비: 의뢰서에 적힌 값(앞서 같은 거래처로 발주한 적이 없을 때) > 매입처 조건 계산. 내부 메모 기본값은 사용고객사(예: 풍림무약향).
+  const vendorList = await api('GET', '/api/vendors?type=purchase').catch(() => []);
+  const termsOf = vendor => vendorList.find(v => partnerKey(v.name) === partnerKey(vendor))?.freight_terms || [];
+  const orderedBefore = vendor => (pr.items || []).some(it => it.po_id && partnerKey(it.vendor) === partnerKey(vendor)) || (!pr.items && (pr.ordered || 0) > 0);
+  const vendorsInOrder = [...new Set(items.map(it => it.vendor).filter(Boolean))];
   const v = await promptBox('발주 생성', `<p class="small muted">${esc(pr.doc_no)}의 ${items.length}개 품목을 발주목록에 올립니다. 구매의뢰번호는 ${esc(pr.doc_no)}, 거래처는 품목의 공급선입니다.</p>
+    <div class="form-grid">
     <label>납기일 * ${dates.length ? '<span class="hint">(입고요청일 기준)</span>' : ''}<input name="due_date" type="date" required value="${due}"></label>
     ${needCategory ? `<label>품목 분류 * <span class="hint">(등록되지 않은 품목에 적용)</span><select name="item_category" required>${categoryOptions()}</select></label>` : ''}
     ${needVendor ? '<label>거래처 * <span class="hint">(공급선이 비어 있는 품목에 적용)</span><input name="vendor" required maxlength="100"></label>' : ''}
-    <div class="table-wrap"><table class="grid keep-table po-lines"><caption class="sr-only">품목별 발주 수량·단가</caption><thead><tr><th scope="col">품목</th><th scope="col" class="r">의뢰 수량</th><th scope="col">발주 수량</th><th scope="col">단가</th></tr></thead><tbody>${items.map(it => `<tr>
-      <td><b>${esc(it.item)}</b>${it.spec ? `<div class="small muted">${esc(it.spec)}</div>` : ''}${it.vendor ? `<div class="small muted">${esc(it.vendor)}</div>` : ''}</td>
-      <td class="r">${fmtNum(it.qty)} ${esc(it.unit || '')}</td>
-      <td><input name="qty_${it.id}" type="number" min="0" step="any" inputmode="decimal" required value="${esc(it.qty)}" aria-label="${esc(it.item)} 발주 수량"></td>
-      <td><input name="price_${it.id}" type="number" min="0" step="any" inputmode="decimal" value="${esc(it.purchase_price ?? '')}" placeholder="선택" aria-label="${esc(it.item)} 단가"></td></tr>`).join('')}</tbody></table></div>
-    <p class="small muted">발주 수량을 줄이거나 늘릴 수 있습니다(의뢰 수량과 다르면 비고에 남습니다). 단가는 발주서 금액에 쓰입니다.</p>`);
+    </div>
+    <div class="table-wrap"><table class="grid keep-table po-lines"><caption class="sr-only">품목별 발주 수량·단가·내부 메모</caption><thead><tr><th scope="col">품목</th><th scope="col" class="r">의뢰 수량</th><th scope="col">발주 수량</th><th scope="col">단가</th><th scope="col">내부 메모 <span class="hint">(발주서에 안 나감)</span></th></tr></thead><tbody>${items.map(it => `<tr data-po-line data-vendor="${esc(it.vendor || '')}">
+      <td class="po-line-item"><b>${esc(it.item)}</b>${it.spec ? `<div class="small muted">${esc(it.spec)}</div>` : ''}${it.vendor ? `<div class="small muted">${esc(it.vendor)}</div>` : ''}</td>
+      <td class="r nowrap">${fmtNum(it.qty)} ${esc(it.unit || '')}</td>
+      <td><input name="qty_${it.id}" type="number" min="0" step="any" inputmode="decimal" required value="${esc(it.qty)}" aria-label="${esc(it.item)} 발주 수량" data-po-qty></td>
+      <td><input name="price_${it.id}" type="number" min="0" step="any" inputmode="decimal" value="${esc(it.purchase_price ?? '')}" placeholder="선택" aria-label="${esc(it.item)} 단가" data-po-price></td>
+      <td><input name="memo_${it.id}" maxlength="200" value="${esc(it.customer ? it.customer + '향' : '')}" placeholder="예: 풍림무약향" aria-label="${esc(it.item)} 내부 메모"></td></tr>`).join('')}</tbody></table></div>
+    <p class="small muted">발주 수량을 줄이거나 늘릴 수 있습니다(의뢰 수량과 다르면 비고에 남습니다). 단가는 발주서 금액에, 내부 메모는 구매·물류 확인용으로만 쓰입니다.</p>
+    ${vendorsInOrder.length ? `<div class="po-freight"><h4>운송비 <span class="small muted">(거래처별 · 발주서에 표시)</span></h4>${vendorsInOrder.map(vendor => {
+      const fromRequest = !orderedBefore(vendor) && pr.freight && pr.freight[vendor] !== undefined ? pr.freight[vendor] : null;
+      return `<div class="pr-freight-row"><span><b>${esc(vendor)}</b> <span class="small muted">${freightSummary(termsOf(vendor))}${fromRequest !== null ? ' · <span>의뢰서 값</span>' : ''}</span></span><label class="inline">운송비 <input type="number" min="0" step="any" inputmode="decimal" name="freight__${esc(vendor)}" data-po-freight data-vendor="${esc(vendor)}" ${fromRequest !== null ? `value="${esc(fromRequest)}" data-dirty="1"` : ''} aria-label="${esc(vendor)} 운송비"> 원</label></div>`;
+    }).join('')}</div>` : ''}
+    <p class="pr-totals" data-po-total aria-live="polite"></p>`, { wide: true, onOpen: el => {
+      // 수량·단가를 바꾸면 거래처별 발주 금액과(손대지 않은) 운송비, 총액을 다시 계산한다.
+      const update = () => {
+        let total = 0; const byVendor = new Map();
+        for (const tr of $$('[data-po-line]', el)) { const amount = Number($('[data-po-qty]', tr).value || 0) * Number($('[data-po-price]', tr).value || 0); total += amount; const g = byVendor.get(tr.dataset.vendor) || { amount: 0, lines: 0 }; g.amount += amount; g.lines++; byVendor.set(tr.dataset.vendor, g); }
+        for (const input of $$('[data-po-freight]', el)) if (!input.dataset.dirty) { const g = byVendor.get(input.dataset.vendor) || { amount: 0, lines: 0 }, calc = freightCalc(termsOf(input.dataset.vendor), g.amount, g.lines); input.value = calc === null ? '' : calc; input.placeholder = calc === null ? '조건 없음' : ''; }
+        const freight = $$('[data-po-freight]', el).reduce((t, input) => t + Number(input.value || 0), 0);
+        $('[data-po-total]', el).textContent = `발주 금액 ${prMoney(total)}원 · 운송비 ${prMoney(freight)}원 · 총액 ${prMoney(total + freight)}원`;
+      };
+      el.addEventListener('input', event => { if (event.target.matches('[data-po-freight]')) event.target.dataset.dirty = '1'; update(); });
+      update();
+    } });
   if (!v) return null;
-  const lines = items.map(it => ({ id: it.id, qty: v['qty_' + it.id], unit_price: v['price_' + it.id] ?? '' }));
-  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: v.due_date, item_category: v.item_category, vendor: v.vendor, item_ids: items.map(it => it.id), lines });
+  const lines = items.map(it => ({ id: it.id, qty: v['qty_' + it.id], unit_price: v['price_' + it.id] ?? '', internal_note: v['memo_' + it.id] ?? '' }));
+  const freight = Object.fromEntries(vendorsInOrder.filter(vendor => (v['freight__' + vendor] ?? '') !== '').map(vendor => [vendor, v['freight__' + vendor]]));
+  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: v.due_date, item_category: v.item_category, vendor: v.vendor, item_ids: items.map(it => it.id), lines, freight });
   toast(`발주 ${r.created.length}건을 발주목록에 올렸습니다.`);
   if (r.created.length) poPrintSheet(r.created);
   return r;
@@ -500,16 +544,22 @@ async function poFromRequests(host, onDone) {
     const list = $('[data-pr-wait]', host);
     if (!rows.length) { list.innerHTML = '<p class="muted">발주를 기다리는 구매의뢰가 없습니다.</p>'; return; }
     list.innerHTML = rows.map(pr => `<details class="po-pr" data-pr="${pr.id}"${rows.length <= 3 ? ' open' : ''}><summary><b>${esc(pr.doc_no)}</b> ${esc(pr.title || pr.first_item)} <span class="small muted">· ${esc(pr.author_name)}${pr.department ? ' ' + esc(pr.department) : ''} · <span>미발주</span> ${pr.open_items.length}<span>건</span></span></summary>
-      <div class="table-wrap"><table class="grid keep-table"><thead><tr><th><span class="sr-only">선택</span></th><th>품목</th><th class="r">수량</th><th>공급선</th><th>입고요청일</th></tr></thead><tbody>${pr.open_items.map(it => `<tr>
+      <div class="table-wrap"><table class="grid keep-table"><thead><tr><th><span class="sr-only">선택</span></th><th>품목</th><th class="r">수량</th><th>공급선</th><th>입고요청일</th><th><span class="sr-only">발주 안 함</span></th></tr></thead><tbody>${pr.open_items.map(it => `<tr>
         <td><input type="checkbox" data-po-item="${it.id}" checked aria-label="${esc(it.item)} 발주"></td>
         <td><b>${esc(it.item)}</b>${it.spec ? `<div class="small muted">${esc(it.spec)}</div>` : ''}</td><td class="r">${fmtNum(it.qty)} ${esc(it.unit)}</td>
-        <td>${esc(it.vendor || '—')}</td><td>${esc(it.due_text || '—')}</td></tr>`).join('')}</tbody></table></div>
+        <td>${esc(it.vendor || '—')}</td><td>${esc(it.due_text || '—')}</td><td><button type="button" class="btn small" data-po-skip="${it.id}" data-pr-id="${pr.id}" title="발주하지 않고 대기 목록에서 뺍니다(의뢰서에서 되돌릴 수 있음)">발주 안 함</button></td></tr>`).join('')}</tbody></table></div>
       <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" data-po-make="${pr.id}">발주 처리</button><button type="button" class="btn" data-open-pr-detail="${pr.id}">의뢰서 보기</button></div></details>`).join('') + (more ? '<div class="actions"><button type="button" class="btn" data-po-more>더 보기</button></div>' : '');
     const moreButton = $('[data-po-more]', list); if (moreButton) moreButton.onclick = () => draw(true).catch(fail);
     $$('[data-po-make]', list).forEach(b => b.onclick = async () => {
       const pr = rows.find(x => x.id === Number(b.dataset.poMake)), box = b.closest('details');
       const chosen = new Set($$('[data-po-item]:checked', box).map(x => Number(x.dataset.poItem)));
       try { const r = await prCreateOrders(pr, pr.open_items.filter(it => chosen.has(it.id))); if (r) { await draw(); await onDone?.(); refreshNavBadges(); } } catch (error) { fail(error); }
+    });
+    $$('[data-po-skip]', list).forEach(b => b.onclick = async () => {
+      const it = rows.flatMap(pr => pr.open_items).find(x => x.id === Number(b.dataset.poSkip));
+      const v = await promptBox('발주 안 함', `<p class="small muted">${esc(it ? it.item : '')} 품목을 발주 대기에서 뺍니다. 구매의뢰서 상세에서 「발주 대기로」를 눌러 되돌릴 수 있습니다.</p><label>사유 (선택)<input name="reason" maxlength="100" placeholder="예: 중복 의뢰, 재고 사용"></label>`);
+      if (!v) return;
+      try { await api('POST', `/api/purchase-requests/${b.dataset.prId}/items/${b.dataset.poSkip}/order-closed`, { closed: true, reason: v.reason }); toast('발주 대기에서 뺐습니다.'); await draw(); await onDone?.(); refreshNavBadges(); } catch (error) { fail(error); }
     });
     $$('[data-open-pr-detail]', list).forEach(b => b.onclick = () => prOpen(Number(b.dataset.openPrDetail), async () => { await draw(); await onDone?.(); }).catch(fail));
   };

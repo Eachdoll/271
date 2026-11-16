@@ -528,3 +528,16 @@ INVITE_CODE=local-test-code npm start
 ## 제품등록 목록 표로 바꿈 (15.67)
 - 제품등록(#/admin/bom) 목록을 카드에서 표(table.grid.bom-table)로 바꿨습니다: 제품명·코드 · 분류(세부 분류·생산 종류·사이즈) · 종류·기준 · 구성자재(「자재 N개」 details로 펼침) · 상태 · 입력 · 버튼(진행 코멘트·합치기·수정/정식 코드로 확정·사용 중지·삭제). data-bom-* 버튼과 동작은 그대로입니다. 한 화면에 약 14개(예전 약 2개)가 보입니다.
 - 사용 중지된 품목은 줄 글자를 흐리게(.row-off) 표시합니다. 휴대폰에서는 공통 규칙대로 카드로 바뀌며 버튼 칸은 접힌 카드에도 보입니다(data-card-primary).
+
+## 제품등록 세부 분류 칩 · 거래처 구분 탭 (15.68)
+- 제품등록: 분류 탭(원자재 등)을 고르면 그 아래 #bomSubTabs에 1차 세부 분류 칩(건수, 「세부 분류 없음」 포함)이 나오고, 1차를 고르면 2차 칩이 이어집니다. 칩은 받은 목록을 화면에서 거르며(서버 요청은 분류 탭·검색 조건 그대로), 분류 탭을 바꾸면 초기화됩니다. 「전체」 탭과 세부 분류가 없는 분류에서는 숨깁니다. 원자재·부자재·상품은 의미 없는 「완제품 · 기준」 대신 「단위」를 보여 줍니다(제품·반제품만 종류·기준).
+- 거래처 관리: 「조건」 안의 구분 선택칸 대신 목록 위 탭(전체 / 매입처 / 매출처 / 매입·매출 / 구분 없음, 검색 결과 기준 건수)으로 거릅니다. 고른 탭은 이 기기에 기억합니다(localStorage `wpa:vendor-tab`). 서버 API(type·only)는 그대로입니다.
+
+## 운송비 조건 · 내부 메모 · 넓은 발주 처리 창 · 발주 삭제 후 되살아남 수정 (15.69)
+- 0032_freight_internal_note.sql: 칸만 추가합니다(기존 데이터는 그대로). vendors.freight_terms(JSON 배열, 기본 '[]'), purchase_requests.freight(JSON 객체 {거래처: 금액}, 기본 '{}'), purchase_orders.internal_note(기본 '')·freight(REAL, NULL 허용), purchase_request_items.order_closed(기본 '').
+- 매입처 운송비 조건(거래처 관리 「운송비 조건」): 최대 10줄 `{ when: always|gte|lt, amount, fee, per: order|line, note ≤30 }`. 맞는 줄을 모두 더합니다(per=line은 품목 수만큼). 서버 freightTerms()가 검사하고, PUT에서 보내지 않으면 기존 값을 유지합니다. 화면 계산은 app.js freightCalc/freightSummary(만원 표기는 한국어 화면만).
+- 구매의뢰서: 공급선별 운송비 칸(조건으로 자동 계산, 손으로 고친 값은 유지)을 body.freight로 저장하고, 상세·목록에 freight/freight_total을 줍니다. 이익 = 판매 − 매입 − 운송비.
+- 발주 처리 창(prCreateOrders): 넓은 창(promptBox wide/onOpen). 품목별 발주 수량·단가·내부 메모(기본 「사용고객사+향」), 거래처별 운송비(그 거래처로 아직 발주하지 않았으면 의뢰서 값, 아니면 조건 계산), 발주 금액·운송비·총액을 실시간 표시. 서버는 lines[].internal_note와 body.freight를 받고, 운송비는 거래처별 첫 발주 한 건에만 붙입니다. body.freight가 없으면 의뢰서 값을 쓰되 같은 의뢰서의 앞선 발주에서 이미 운송비가 붙은 거래처는 빼서 두 번 붙지 않게 합니다.
+- 내부 메모는 발주목록·입고목록(물류)에 「내부」 칩으로 보이고 발주서에는 나가지 않습니다. 발주서는 운송비가 있으면 운송비·총액 줄을 붙입니다. 발주 수정·직접 입력(POST /api/po, 다건 입력 공통 칸)도 internal_note·freight를 받습니다. 수정 이력 라벨 「내부 메모」「운송비」.
+- 발주 삭제: 예전에는 구매의뢰에서 만든 발주를 지우면 의뢰 품목의 연결만 풀려 「발주 대기」에 다시 나타났습니다(사용자 보고: 삭제한 발주가 계속 살아남). 이제 DELETE /api/po/:id는 기본으로 그 품목을 order_closed(「발주 삭제 · 이름 · 시각」)로 닫고, `?requeue=1`일 때만 발주 대기로 되돌립니다. 발주목록 삭제 버튼은 구매의뢰 발주(GET /api/po의 pr_item_id)에 「삭제 (발주 안 함)」/「삭제 후 다시 발주 대기로」 선택창을 띄웁니다.
+- 발주 대기 목록 품목별 「발주 안 함」, 의뢰서 상세 「발주 안 함」 칩과 「발주 대기로」: POST /api/purchase-requests/:id/items/:itemId/order-closed `{ closed, reason }`(구매 담당·최종 승인된 의뢰·미발주 품목만). 발주 대기·할 일 건수·can_order·발주 처리는 `po_id IS NULL AND order_closed=''`만 봅니다. 목록 행에는 closed 건수를 줍니다.

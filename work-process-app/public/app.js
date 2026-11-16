@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.67';
+const APP_VERSION = '15.69';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -138,11 +138,23 @@ function confirmBox(msg) {
     $('[data-yes]', m.el).onclick = () => { resolve(true); m.close(); };
   });
 }
+// 구매의뢰에서 만든 발주 삭제(15.69): 'close'(의뢰 품목도 닫기, 기본) · 'requeue'(발주 대기로 되돌리기) · null(취소)
+function poDeleteChoice(p) {
+  return new Promise((resolve) => {
+    const m = modal(`<h3>발주 삭제</h3><p class="confirm-msg">${esc(p.item)} · ${esc(p.req_no)}</p><p class="small muted">구매의뢰에서 만든 발주입니다. 지운 뒤 이 의뢰 품목을 어떻게 할까요?</p>
+      <div class="actions"><button class="btn" data-no>취소</button><button class="btn" data-requeue>삭제 후 다시 발주 대기로</button><button class="btn danger" data-yes>삭제 (발주 안 함)</button></div>`, { onClose: () => resolve(null) });
+    $('[data-no]', m.el).onclick = () => { m.close(); resolve(null); };
+    $('[data-requeue]', m.el).onclick = () => { resolve('requeue'); m.close(); };
+    $('[data-yes]', m.el).onclick = () => { resolve('close'); m.close(); };
+  });
+}
 // With { submit }, the dialog stays open while the values are saved; a rejected save keeps everything typed.
-function promptBox(title, fieldsHtml, { submit = null } = {}) {
+// wide: 넓은 창, onOpen(창 요소): 입력 중 계산 같은 동작을 붙일 때(15.69)
+function promptBox(title, fieldsHtml, { submit = null, wide = false, onOpen = null } = {}) {
   return new Promise((resolve) => {
     let busy = false;
-    const m = modal(`<h3>${esc(title)}</h3><form class="stack">${fieldsHtml}<div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">확인</button></div></form>`, { onClose: () => resolve(null) });
+    const m = modal(`<h3>${esc(title)}</h3><form class="stack">${fieldsHtml}<div class="actions"><button type="button" class="btn" data-no>취소</button><button class="btn primary">확인</button></div></form>`, { wide, onClose: () => resolve(null) });
+    if (onOpen) onOpen(m.el);
     $('[data-no]', m.el).onclick = () => { if (busy) return; m.close(); resolve(null); };
     $('form', m.el).onsubmit = async (e) => {
       e.preventDefault(); if (busy) return;
@@ -849,9 +861,13 @@ function poForm(po = {}) {
     <label>수량 *<input name="qty" type="number" min="0" step="any" required value="${esc(po.qty)}"></label>
     <label>납기일 *<input name="due_date" type="date" required value="${esc(po.due_date)}"></label>
     <label>단가<input name="unit_price" type="number" min="0" step="any" inputmode="decimal" value="${esc(po.unit_price ?? '')}" placeholder="발주서 금액용"></label>
+    <label>운송비<input name="freight" type="number" min="0" step="any" inputmode="decimal" value="${esc(po.freight ?? '')}" placeholder="발주서에 붙는 운송비"></label>
+    <label class="span2">내부 메모 <span class="hint">(구매·물류용, 발주서에 안 나감)</span><input name="internal_note" maxlength="200" value="${esc(po.internal_note || '')}" placeholder="예: 풍림무약향"></label>
     <label class="span2">비고<input name="note" value="${esc(po.note)}"></label>
   </div>`;
 }
+// 내부 메모(15.69): 구매·물류만 보는 구분(예: 풍림무약향). 발주서에는 나가지 않는다.
+const internalNoteChip = p => p.internal_note ? `<div class="small internal-note"><span class="chip yellow">내부</span> ${esc(p.internal_note)}</div>` : '';
 function recvChip(po) {
   const cls = { ok: 'green', mismatch: 'red', checking: 'yellow' }[po.recv_status] || '';
   const shortClosed = po.recv_status === 'ok' && po.recv_qty != null && po.recv_qty !== po.qty;
@@ -869,6 +885,7 @@ async function poPrintSheet(pos) {
     const v = vendors.find(x => partnerKey(x.name) === partnerKey(vendor));
     const reqNos = [...new Set(list.map(p => p.req_no).filter(Boolean))].join(', ');
     const priced = list.filter(p => p.unit_price != null), total = priced.reduce((t, p) => t + p.unit_price * p.qty, 0);
+    const freight = list.reduce((t, p) => t + (p.freight || 0), 0), hasFreight = list.some(p => p.freight != null);
     const dues = [...new Set(list.map(p => p.due_date))].sort();
     return `<section class="cert po-doc">
       <div class="po-doc-head"><img src="/assets/seoulsemi-logo-blue.png" alt="SEOUL SEMITECH"><h2>발 주 서</h2></div>
@@ -881,7 +898,7 @@ async function poPrintSheet(pos) {
       <p>아래와 같이 발주합니다.</p>
       <table class="po-items"><thead><tr><th>No</th><th>품목</th><th>규격</th><th>단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th><th>납기일</th></tr></thead>
       <tbody>${list.map((p, i) => `<tr><td class="c">${i + 1}</td><td>${esc(p.item)}${p.product_code ? `<div class="po-code">${esc(p.product_code)}</div>` : ''}</td><td>${esc(p.spec || '')}</td><td>${esc(p.unit || '')}</td><td class="r">${fmtNum(p.qty)}</td><td class="r">${money(p.unit_price)}</td><td class="r">${p.unit_price == null ? '' : money(p.unit_price * p.qty)}</td><td class="c">${esc(p.due_date)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><th colspan="6" class="r">합계${priced.length < list.length ? ' (단가 없는 품목 제외)' : ''}</th><td class="r"><b>${priced.length ? money(total) : ''}</b></td><td></td></tr></tfoot></table>
+      <tfoot><tr><th colspan="6" class="r">합계${priced.length < list.length ? ' (단가 없는 품목 제외)' : ''}</th><td class="r"><b>${priced.length ? money(total) : ''}</b></td><td></td></tr>${hasFreight ? `<tr><th colspan="6" class="r">운송비</th><td class="r">${money(freight)}</td><td></td></tr><tr><th colspan="6" class="r">총액</th><td class="r"><b>${money(total + freight)}</b></td><td></td></tr>` : ''}</tfoot></table>
       <div class="po-memo"><b>비고</b><div></div></div>
       <p class="po-sign">발주처 : 서울세미텍 <span class="cert-sign-box">(인)</span></p>
     </section>`;
@@ -891,6 +908,21 @@ async function poPrintSheet(pos) {
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => { const title = document.title; document.title = `발주서_${[...groups.keys()].join('_')}_${today}`; document.body.classList.add('printing-cert'); try { window.print(); } finally { document.body.classList.remove('printing-cert'); document.title = title; } };
+}
+// ── 운송비 조건(15.69) ── 매입처의 조건(맞는 줄을 모두 더함)으로 기본 운송비를 계산한다. 조건이 없으면 null.
+function freightCalc(terms, subtotal, lines = 1) {
+  if (!Array.isArray(terms) || !terms.length) return null;
+  return terms.reduce((sum, r) => {
+    const hit = r.when === 'always' || (r.when === 'gte' && subtotal >= r.amount) || (r.when === 'lt' && subtotal < r.amount);
+    return hit ? sum + r.fee * (r.per === 'line' ? Math.max(1, lines) : 1) : sum;
+  }, 0);
+}
+// 만원 표기는 한국어 화면에서만(번역 화면은 전체 금액).
+const freightWon = n => n >= 10000 && n % 10000 === 0 && document.documentElement.lang === 'ko' ? `${fmtNum(n / 10000)}만원` : `${fmtNum(n)}원`;
+// 조건 요약(번역되도록 조각마다 span): 「100만원 이상 1건당 150,000원 (착불)」
+function freightSummary(terms) {
+  if (!Array.isArray(terms) || !terms.length) return '<span class="muted">조건 없음</span>';
+  return terms.map(r => `<span class="freight-rule">${r.when === 'always' ? '' : `<span>${freightWon(r.amount)} ${r.when === 'gte' ? '이상' : '미만'}</span> `}<span>${r.per === 'line' ? '품목당' : '1건당'} ${fmtNum(r.fee)}원</span>${r.note ? ` (${esc(r.note)})` : ''}</span>`).join('<span aria-hidden="true"> · </span>');
 }
 // ── 기록된 입고 수량 수정·입고 취소 요청 (물류팀장 승인 후 반영) ──
 const canApproveReceipt = () => ME && (ME.is_admin || ME.roles.includes('logistics_approver'));
@@ -954,7 +986,7 @@ async function pagePO(main) {
     $('#poList').innerHTML = rows.length ? `<div class="table-wrap"><table class="grid">
       <thead><tr><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">수량</th><th>납기일</th><th>입고상태</th><th>비고</th><th>입력자</th><th></th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
         <td>${esc(p.note)}</td><td class="small muted">${esc(p.created_by)}</td>
@@ -967,7 +999,13 @@ async function pagePO(main) {
       const m = modal(`<h3>발주 수정</h3><form data-entry-author="${esc(p.created_by)}">${poForm(p)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
       $('form', m.el).onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/po/' + p.id, formObj(e.target)); m.close(); toast('수정했습니다.'); load(); } catch (err) { fail(err); } };
     }));
-    $$('[data-del]').forEach((b) => (b.onclick = async () => { if (await confirmBox('이 발주를 삭제할까요?')) { try { await api('DELETE', '/api/po/' + b.dataset.del); load(); } catch (e) { fail(e); } } }));
+    $$('#poList [data-del]').forEach((b) => (b.onclick = async () => {
+      const p = rows.find(x => x.id === Number(b.dataset.del));
+      // 15.69 구매의뢰에서 만든 발주: 지우면 기본으로 그 의뢰 품목도 닫아 「발주 대기」에 다시 나타나지 않게 한다.
+      const how = p && p.pr_item_id ? await poDeleteChoice(p) : (await confirmBox('이 발주를 삭제할까요?') ? 'close' : null);
+      if (!how) return;
+      try { await api('DELETE', '/api/po/' + b.dataset.del + (how === 'requeue' ? '?requeue=1' : '')); toast(how === 'requeue' ? '삭제했습니다. 의뢰 품목은 발주 대기로 돌아갔습니다.' : '삭제했습니다.'); load(); refreshNavBadges(); } catch (e) { fail(e); }
+    }));
   };
   $('#poNew').onsubmit = async (e) => { e.preventDefault(); try { await api('POST', '/api/po', formObj(e.target)); e.target.reset(); toast('발주를 등록했습니다.'); load(); } catch (err) { fail(err); } };
   bindListControls(filterForm, load);
@@ -1048,7 +1086,7 @@ async function pageReceive(main) {
       <thead><tr><th><input type="checkbox" id="rcAll" aria-label="전체 선택"></th><th>구매의뢰번호</th><th>거래처</th><th>품목명</th><th>분류</th><th>COA 요청</th><th class="r">발주수량</th><th class="r">실입고</th><th>납기일</th><th>상태</th><th>입력자</th><th>입고 처리자</th><th>사진·검수</th></tr></thead>
       <tbody>${rows.map((p) => `<tr class="${rowClass(p)}">
         <td><input type="checkbox" class="rc-check" value="${p.id}" aria-label="선택"></td>
-        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
+        <td>${esc(p.req_no)}</td><td>${esc(p.vendor)}</td><td>${esc(p.item)}${lineInfo(p)}${internalNoteChip(p)}</td><td>${esc(p.item_category || '미분류')}</td><td>${coaChip(p.coa_requested)}</td><td class="r">${fmtNum(p.qty)}</td>
         <td class="r">${p.recv_status ? fmtNum(p.recv_qty) : ''}</td>
         <td class="${p.recv_status !== 'ok' && p.due_date < t ? 'overdue' : ''}">${esc(p.due_date)}</td>
         <td>${recvChip(p)}${p.recv_note ? `<div class="small muted">${esc(p.recv_note)}</div>` : ''}</td>
@@ -1427,20 +1465,44 @@ function bomForm(bom = {}) {
 }
 async function pageBoms(main) {
   if (!ME.is_admin) { main.innerHTML = '<div class="empty">관리자만 BOM을 관리할 수 있습니다.</div>'; return; }
-  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
+  main.innerHTML = '<h1>제품등록</h1><p class="muted">품목을 원자재·부자재·반제품·제품·상품으로 나누고, 미리 만든 1차·2차·3차 세부 분류에서 골라 등록합니다. 발주·출하·생산·기타입고에서 이 품목코드를 불러옵니다.</p><div class="actions wrap" style="justify-content:flex-start"><button class="btn primary" id="newBom">새 제품 등록</button><button class="btn" id="catManage">분류 관리</button></div><div class="seg class-tabs" id="bomClassTabs" role="group" aria-label="품목 분류">' + ['', ...ITEM_CATEGORIES].map(c => `<button type="button" data-class-tab="${c}">${c || '전체'}</button>`).join('') + '</div><div class="sub-tabs" id="bomSubTabs" role="group" aria-label="세부 분류" hidden></div>' + listControls('bom', { placeholder: '품목명·코드·입력자·메모', extra: `<label>분류<select name="item_category" id="bomCategory">${categoryOptions('', true)}</select></label><label>사용 상태<select name="active"><option value="">전체 사용 상태</option><option value="1">사용 중</option><option value="0">사용 중지</option></select></label><label>코드 상태<select name="temp"><option value="">전체</option><option value="only">임시 코드만 (정리 필요)</option></select></label>` }) + '<div id="bomList"></div>';
   const filterForm = $('#bomFilters', main); let queryVersion = 0;
+  // 15.68 세부 분류 칩: 분류 탭(원자재 등)을 고르면 그 안의 1차 → 2차 세부 분류로 좁혀 본다(건수 표시, 화면에서 거름).
+  let sub = { cat1: null, cat2: null }, subClass = null;
+  const subTabs = $('#bomSubTabs', main);
   const load = async () => {
     if (!main.isConnected) return;
     const version = ++queryVersion; listLoading(filterForm);
-    const boms = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
+    const all = await api('GET', '/api/boms?' + new URLSearchParams({ ...formObj(filterForm), include_archived: '1' }));
     if (version !== queryVersion || !main.isConnected) return;
+    const cls = filterForm.elements.item_category.value;
+    if (cls !== subClass) { sub = { cat1: null, cat2: null }; subClass = cls; }
+    const none = '__none__'; // 세부 분류가 비어 있는 품목
+    const key1 = b => b.cat1 || none, key2 = b => b.cat2 || none;
+    const chip = (level, value, label, count, on) => `<button type="button" class="sub-chip${on ? ' on' : ''}" data-sub="${level}" data-sub-value="${esc(value)}" aria-pressed="${on}">${esc(label)} <span class="sub-count">${fmtNum(count)}</span></button>`;
+    const groups = (list, key) => { const m = new Map(); for (const b of list) m.set(key(b), (m.get(key(b)) || 0) + 1); return [...m].sort((a, b) => (a[0] === none) - (b[0] === none) || a[0].localeCompare(b[0], 'ko')); };
+    const g1 = cls ? groups(all, key1) : [];
+    if (cls && g1.length > 1 || (g1.length === 1 && g1[0][0] !== none)) {
+      if (sub.cat1 !== null && !g1.some(([k]) => k === sub.cat1)) sub = { cat1: null, cat2: null };
+      const in1 = sub.cat1 === null ? [] : all.filter(b => key1(b) === sub.cat1), g2 = sub.cat1 !== null && sub.cat1 !== none ? groups(in1, key2) : [];
+      if (sub.cat2 !== null && !g2.some(([k]) => k === sub.cat2)) sub.cat2 = null;
+      subTabs.innerHTML = `<div class="sub-row">${chip(1, '', '전체', all.length, sub.cat1 === null)}${g1.map(([k, n]) => chip(1, k, k === none ? '세부 분류 없음' : k, n, sub.cat1 === k)).join('')}</div>`
+        + (g2.length > 1 || (g2.length === 1 && g2[0][0] !== none) ? `<div class="sub-row sub-row-2"><span class="sub-path">${esc(sub.cat1)} ›</span>${chip(2, '', '전체', in1.length, sub.cat2 === null)}${g2.map(([k, n]) => chip(2, k, k === none ? '2차 없음' : k, n, sub.cat2 === k)).join('')}</div>` : '');
+      subTabs.hidden = false;
+      $$('[data-sub]', subTabs).forEach(b => b.onclick = () => {
+        const v = b.dataset.subValue || null;
+        if (b.dataset.sub === '1') sub = { cat1: v, cat2: null }; else sub.cat2 = v;
+        load().catch(fail);
+      });
+    } else { subTabs.hidden = true; subTabs.innerHTML = ''; sub = { cat1: null, cat2: null }; }
+    const boms = all.filter(b => (sub.cat1 === null || key1(b) === sub.cat1) && (sub.cat2 === null || key2(b) === sub.cat2));
     listCount(filterForm, boms.length);
     // 15.67: 카드 대신 한 줄에 한 품목(표). 구성자재는 「자재 N개」를 눌러 펼친다. 휴대폰에서는 표가 카드로 바뀐다.
     const bomMaterials = bom => bom.materials && bom.materials.length ? `<details class="bom-mats"><summary>자재 ${bom.materials.length}개</summary><ul>${bom.materials.map(m => `<li>${esc(m.item)} <span class="muted">${esc(m.item_category || '')}</span> <b>${fmtNum(m.qty)}</b> ${esc(m.unit || '')}</li>`).join('')}</ul><div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}당</div></details>` : '<span class="muted">—</span>';
-    $('#bomList').innerHTML = boms.length ? `<div class="table-wrap"><table class="grid bom-table"><thead><tr><th>제품명 · 코드</th><th>분류</th><th>종류 · 기준</th><th>구성자재</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${boms.map(bom => `<tr class="${bom.active ? '' : 'row-off'}">
+    $('#bomList').innerHTML = boms.length ? `<div class="table-wrap"><table class="grid bom-table"><thead><tr><th>제품명 · 코드</th><th>분류</th><th>종류 · 기준 · 단위</th><th>구성자재</th><th>상태</th><th>입력</th><th></th></tr></thead><tbody>${boms.map(bom => `<tr class="${bom.active ? '' : 'row-off'}">
       <td><b>${esc(bom.product)}</b>${bom.product_code ? ` <span class="tag">${esc(bom.product_code)}</span>` : ''}${bom.is_temp ? ' <span class="chip yellow">임시 코드 · 정리 필요</span>' : ''}${bom.note ? `<div class="small muted">${esc(bom.note)}</div>` : ''}</td>
       <td><span class="chip">${esc(bom.item_category || '미분류')}</span>${bom.cat1 ? `<div class="small muted">${esc([bom.cat1, bom.cat2, bom.cat3].filter(Boolean).join(' › '))}</div>` : ''}${bom.semi_type ? `<div class="small"><span class="chip green">생산: ${esc(bom.semi_type)}${bom.pack_qty ? ` · 1${esc(bom.unit)}=${fmtNum(bom.pack_qty)}${esc(bom.semi_unit)}` : ''}</span></div>` : ''}${bom.sizes?.length ? `<div class="small muted">사이즈 ${esc(bom.sizes.join('·'))}</div>` : ''}</td>
-      <td class="nowrap">${bom.kind === 'finished' ? '완제품' : '반제품'}<div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}</div></td>
+      <td class="nowrap">${['제품', '반제품'].includes(bom.item_category) ? `${bom.kind === 'finished' ? '완제품' : '반제품'}<div class="small muted">기준 ${fmtNum(bom.base_qty)} ${esc(bom.unit)}</div>` : `<span class="muted">단위</span> ${esc(bom.unit || '—')}`}</td>
       <td>${bomMaterials(bom)}</td>
       <td class="nowrap">${bom.active ? '<span class="chip green">사용 중</span>' : '<span class="chip">사용 중지</span>'}</td>
       <td class="small muted">${esc(bom.created_by || '미기록')}<div>${esc(String(bom.created_at || '').slice(0, 16))}</div></td>
