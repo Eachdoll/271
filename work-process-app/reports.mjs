@@ -104,6 +104,7 @@ export async function buildReport(db, query, today) {
   const af = filter(analysisDate, "json_extract(r.data,'$.item_category')", lineName('r.title','r.spec'), 'r.customer');
   const pf = filter('substr(p.recv_at,1,10)', 'p.item_category', lineName('p.item','p.spec'), 'p.vendor');
   const of = filter('o.received_date', 'o.item_category', lineName('o.item','o.spec'), 'o.vendor');
+  const lf = filter('l.received_date', 'p.item_category', lineName('p.item','p.spec'), 'p.vendor'); // 15.77 LOT 줄로 받은 발주(입고일별)
   const sf = filter('s.start_date', "json_extract(s.bom_snapshot,'$.item_category')", lineName('s.product','s.spec'));
   const hf = filter('h.ship_date', "''", lineName('h.item','h.spec'), 'h.customer');
   const receiptCte = `WITH incoming AS (
@@ -112,6 +113,14 @@ export async function buildReport(db, query, today) {
       CASE WHEN a.inspection_status='abnormal' THEN 1 ELSE 0 END AS abnormal
       FROM purchase_orders p LEFT JOIN attachments a ON a.entity_type='purchase_order' AND a.entity_id=p.id
       WHERE p.recv_status IN ('ok','mismatch') AND p.recv_at IS NOT NULL AND ${pf.sql}
+        AND NOT EXISTS(SELECT 1 FROM po_receipt_lots x WHERE x.po_id=p.id AND x.voided_at IS NULL)
+    UNION ALL
+    SELECT l.received_date,${lineName('p.item','p.spec')},${normalizedCategory('p.item_category')},
+      ${normalizedUnit("p.unit", lineName('p.item','p.spec'))},'purchase',l.qty,
+      CASE WHEN a.inspection_status='abnormal' THEN 1 ELSE 0 END
+      FROM (SELECT po_id, received_date, SUM(qty) AS qty FROM po_receipt_lots WHERE voided_at IS NULL GROUP BY po_id, received_date) l
+      JOIN purchase_orders p ON p.id=l.po_id LEFT JOIN attachments a ON a.entity_type='purchase_order' AND a.entity_id=p.id
+      WHERE p.recv_status IN ('ok','mismatch') AND ${lf.sql}
     UNION ALL
     SELECT o.received_date,${lineName('o.item','o.spec')},${normalizedCategory('o.item_category')},${normalizedUnit("COALESCE(NULLIF(o.unit,''),json_extract(o.bom_snapshot,'$.unit'))", lineName('o.item','o.spec'))},'other',o.qty,
       CASE WHEN a.inspection_status='abnormal' THEN 1 ELSE 0 END
@@ -120,7 +129,7 @@ export async function buildReport(db, query, today) {
   )`;
   const queries = [
     { sql: `SELECT ${reportBucketExpression(analysisDate, grain)} AS bucket,r.status,COUNT(*) AS count FROM requests r WHERE r.type='analysis' AND ${af.sql} GROUP BY bucket,r.status ORDER BY bucket,r.status LIMIT 20001`, args: af.args },
-    { sql: `${receiptCte} SELECT ${reportBucketExpression('received_date', grain)} AS bucket,item,item_category,unit,source,COUNT(*) AS count,SUM(qty) AS qty,SUM(abnormal) AS abnormal FROM incoming GROUP BY bucket,item,item_category,unit,source ORDER BY bucket,item,unit,source LIMIT 20001`, args: [...pf.args, ...of.args] },
+    { sql: `${receiptCte} SELECT ${reportBucketExpression('received_date', grain)} AS bucket,item,item_category,unit,source,COUNT(*) AS count,SUM(qty) AS qty,SUM(abnormal) AS abnormal FROM incoming GROUP BY bucket,item,item_category,unit,source ORDER BY bucket,item,unit,source LIMIT 20001`, args: [...pf.args, ...lf.args, ...of.args] },
     { sql: `SELECT ${reportBucketExpression('s.start_date', grain)} AS bucket,${lineName('s.product','s.spec')} AS item,${normalizedCategory("json_extract(s.bom_snapshot,'$.item_category')")} AS item_category,
         ${normalizedUnit("COALESCE(NULLIF(s.unit,''),json_extract(s.bom_snapshot,'$.unit'))", lineName('s.product','s.spec'))} AS unit,s.kind,COUNT(*) AS plans,SUM(CASE WHEN s.done=1 THEN 1 ELSE 0 END) AS done_plans,SUM(s.qty) AS planned_qty,SUM(CASE WHEN s.done=1 THEN s.qty ELSE 0 END) AS completed_qty, SUM(COALESCE((SELECT SUM(a.qty) FROM production_actuals a WHERE a.schedule_id=s.id AND a.voided_at IS NULL),0)
           + COALESCE((SELECT SUM(c.qty) FROM semi_records c WHERE s.kind='semi' AND c.process='cut'

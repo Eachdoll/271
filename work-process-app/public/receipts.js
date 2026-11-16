@@ -113,7 +113,7 @@ async function pageReceiptEntry(main) {
     for (const id of ids) {
       const p = openPos.find(x => x.id === id); if (!p || lines.some(l => l.po_id === id)) continue;
       const before = ['ok', 'mismatch'].includes(p.recv_status) ? p.recv_qty || 0 : 0;
-      lines.push(newLine({ item: p.item, spec: p.spec, unit: p.unit, product_code: p.product_code, po_id: p.id, po: p }, { qty: Math.max(0, p.qty - before) || '' })); added++;
+      lines.push(newLine({ item: p.item, spec: p.spec, unit: p.unit, product_code: p.product_code, po_id: p.id, po: p }, { qty: Math.max(0, p.qty - before) || '', lot: before ? '' : p.lot || '' })); // 발주에 적어 둔 LOT로 미리 채움(15.77) added++;
     }
     if (lines.length > 100) { lines = lines.slice(0, 100); toast('입고 줄은 100줄까지입니다.', 'err'); }
     draw(); if (added) toast(`발주 ${added}건을 담았습니다. LOT가 여러 개면 「LOT 나누기」를 누르세요.`);
