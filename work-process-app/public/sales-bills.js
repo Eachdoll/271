@@ -195,6 +195,7 @@ async function pageSalesBillList(main) {
   <form class="list-filters toolbar" data-read-only id="sbillFilters"><label>전표 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
   <div id="billSummary" class="counts"></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
   const form = $('#sbillFilters', main); let rows = [], page = 0;
+  bindPartnerPicker(form.elements.customer, null, { type: 'sales' }).catch(fail);
   const load = async (next = false) => {
     const data = await api('GET', '/api/sales-bills?' + new URLSearchParams({ ...formObj(form), page: next ? page + 1 : 0 }));
     if (!main.isConnected) return;
@@ -232,6 +233,7 @@ async function pageSalesPayments(main) {
   <form class="list-filters toolbar" data-read-only id="payFilters"><label>날짜<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="confirmed">확정</option><option value="">전체</option><option value="cancelled">취소</option></select></label><button class="btn primary">조회</button></form>
   <div id="paySummary" class="counts"></div><div id="payList"></div>`;
   const form = $('#payForm', main), filters = $('#payFilters', main); let requestId = crypto.randomUUID(), busy = false;
+  bindPartnerPicker(filters.elements.customer, null, { type: 'sales' }).catch(fail);
   bindPartnerPicker(form.elements.customer, $('[data-partner-hint]', form), { type: 'sales' }).catch(() => {});
   const load = async () => {
     const data = await api('GET', '/api/sales-payments?' + new URLSearchParams(formObj(filters))); if (!main.isConnected) return;

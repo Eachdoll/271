@@ -34,7 +34,7 @@ function pickPartner({ type = '' } = {}) {
 }
 // Attach the vendor pick list to a name input; for purchase orders also suggest what was bought recently.
 // type(15.58): 'purchase'면 매입처, 'sales'면 매출처만(구분 없는 거래처는 둘 다) 목록에 보인다.
-async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '' } = {}) {
+async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '', directory = null } = {}) {
   if (input.dataset.partnerBound) return;
   input.dataset.partnerBound = 'true';
   const wrap = document.createElement('span'); wrap.className = 'partner-picker';
@@ -53,7 +53,7 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
     } finally { if (button.isConnected) button.disabled = false; }
   };
   let vendors = [];
-  try { vendors = await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
+  try { vendors = directory || await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;
   const list = document.createElement('datalist'); list.id = 'partnerList' + (++partnerListSerial);
   list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.code, v.contact_name, v.phone].filter(Boolean).join(' · '))}</option>`).join('');

@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.93';
+const APP_VERSION = '15.94';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -1049,6 +1049,7 @@ async function pagePO(main) {
     $$('[data-edit]').forEach((b) => (b.onclick = () => {
       const p = rows.find((x) => x.id == b.dataset.edit);
       const m = modal(`<h3>발주 수정</h3><form data-entry-author="${esc(p.created_by)}">${poForm(p)}<div class="actions"><button class="btn primary">저장</button></div></form>`, { wide: true });
+      bindPartnerPicker($('[name=vendor]', m.el), null, { type: 'purchase' }).catch(fail);
       $('form', m.el).onsubmit = async (e) => { e.preventDefault(); try { await api('PUT', '/api/po/' + p.id, formObj(e.target)); m.close(); toast('수정했습니다.'); load(); } catch (err) { fail(err); } };
     }));
     $$('#poList [data-del]').forEach((b) => (b.onclick = async () => {
@@ -1060,6 +1061,7 @@ async function pagePO(main) {
     }));
   };
   $('#poNew').onsubmit = async (e) => { e.preventDefault(); try { await api('POST', '/api/po', formObj(e.target)); e.target.reset(); toast('발주를 등록했습니다.'); load(); } catch (err) { fail(err); } };
+  bindPartnerPicker($('#poNew').elements.vendor, null, { type: 'purchase' }).catch(fail);
   bindListControls(filterForm, load);
   await load();
   if ($('#poFromPr', main)) await poFromRequests($('#poFromPr', main), load);

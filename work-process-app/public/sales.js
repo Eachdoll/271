@@ -90,6 +90,8 @@ async function prForm(host, existing = null, { onDone } = {}) {
     if (items.children.length >= 30) return toast('품목은 30개까지 입력할 수 있습니다.', 'err');
     items.insertAdjacentHTML('beforeend', prItemRow(it)); const row = items.lastElementChild;
     const k = key => $(`[data-k="${key}"]`, row);
+    bindPartnerPicker(k('vendor'), null, { type: 'purchase', directory: vendors }).catch(fail);
+    bindPartnerPicker(k('customer'), null, { type: 'sales', directory: customers }).catch(fail);
     // 15.70 품목 찾기 창으로 고르면 품목명·코드·단위·규격을 등록 정보로 고정한다.
     const choose = async bom => {
       itemLockApply(row, k, bom, { keepSpec: false }); totals();
@@ -316,6 +318,7 @@ async function mrForm(host, existing = null, { onDone } = {}) {
   </form>
   <datalist id="mrVendorList">${vendors.map(vd => `<option value="${esc(vd.name)}">`).join('')}</datalist>`;
   const form = $('form', host), lines = $('[data-lines]', form);
+  bindPartnerPicker(form.elements.customer, null, { type: 'sales', directory: vendors }).catch(fail);
   const total = () => {
     const byUnit = new Map();
     for (const row of lines.children) { const unit = $('[data-k=unit]', row).value.trim(); byUnit.set(unit, (byUnit.get(unit) || 0) + Number($('[data-k=qty]', row).value || 0)); }
