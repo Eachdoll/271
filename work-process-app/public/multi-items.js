@@ -40,11 +40,11 @@ function fromCatalog(row, entity, bom) {
   if (!['purchase_order', 'shipment', 'other_receipt'].includes(entity)) return;
   $('[data-catalog-summary]', row)?.remove();
   const fields = ['spec', 'unit', 'item_category'].map(key => $(`[data-line-key=${key}]`, row)).filter(Boolean);
-  for (const input of fields) input.closest('label').hidden = !!bom;
+  for (const input of fields) input.closest('label').hidden = !!bom && !(input.dataset.lineKey === 'spec' && !bom.spec && !(bom.sizes || []).length);
   if (!bom) return;
-  const spec = $('[data-line-key=spec]', row); if (spec) spec.value = '';
+  const spec = $('[data-line-key=spec]', row); if (spec && !(bom.sizes || []).length) spec.value = bom.spec || ''; // 15.107 코드 규격을 그대로(없으면 직접 입력)
   const box = document.createElement('p'); box.className = 'span3 catalog-summary'; box.dataset.catalogSummary = '';
-  box.innerHTML = [['단위', bom.unit], ['분류', bom.item_category || '미분류'], ['제품코드', bom.product_code]].filter(([, v]) => v).map(([label, value]) => `<span class="muted">${esc(label)}</span> <b>${esc(value)}</b>`).join('<span class="muted"> · </span>');
+  box.innerHTML = [['규격', bom.spec], ['단위', bom.unit], ['분류', bom.item_category || '미분류'], ['제품코드', bom.product_code]].filter(([, v]) => v).map(([label, value]) => `<span class="muted">${esc(label)}</span> <b>${esc(value)}</b>`).join('<span class="muted"> · </span>');
   $('[data-line-key=bom_id]', row).closest('label').after(box);
   // 15.70 현재고(재고 현황과 같은 계산)
   box.insertAdjacentHTML('beforeend', '<span class="muted"> · </span><span class="muted">현재고</span> <b data-item-stock>…</b>');
@@ -106,6 +106,8 @@ async function installMultiItems(legacy, entity, type = '') {
     const row = document.createElement('fieldset'); row.dataset.multiRow = ''; row.className = 'multi-row';
     row.innerHTML = `<legend>품목</legend><div class="form-grid">${picker ? `<div class="multi-find"><button type="button" class="btn" data-bom-find>품목 찾기</button></div><label class="span2">${freeEntry ? '제품코드로 불러오기' : entity === 'other_receipt' ? '품목명 *' : 'BOM 품목'}<select data-line-key="bom_id" ${entity === 'other_receipt' ? 'required' : ''}>${optionHtml()}</select></label>` : ''}<label${entity === 'other_receipt' ? ' class="receipt-item-name"' : ''}>${entity === 'laundry' ? '옷 종류 (원피스·투피스 등)' : '품목명 / 제품명'} *<input data-line-key="item" required ${entity === 'other_receipt' ? 'readonly' : ''} ${entity === 'schedule' && kind === 'semi' ? 'list="semiPlanItems"' : ''} maxlength="200"></label><label>규격·사이즈<input data-line-key="spec" maxlength="100" placeholder="예) S / M / L"></label><label>${entity === 'laundry' ? '입고' : entity === 'schedule' ? '계획' : ''}수량 *<input data-line-key="qty" type="number" min="0" step="any" required></label><label>단위<input data-line-key="unit" maxlength="20" placeholder="예) EA / BOX / 벌" ${entity === 'other_receipt' ? 'readonly' : ''}></label><label>LOT <span class="hint">(선택${entity === 'purchase_order' ? ' · 모르면 비워 두고 입고 후 입력' : ''})</span><input data-line-key="lot" maxlength="100"></label>${entity === 'purchase_order' ? `<label>분류 *<select data-line-key="item_category" required>${categoryOptions('',true).replace('전체 분류','분류 선택')}</select></label><label class="inline"><input data-line-key="coa_requested" type="checkbox">COA 요청</label>` : ''}${entity === 'laundry' ? '<label>폐기수량 *<input data-line-key="discard_qty" type="number" min="0" step="any" value="0" required></label>' : ''}${type === 'development' ? '<label>타겟단가 *<input data-line-key="target_price" required></label>' : ''}</div><div class="actions"><button type="button" class="btn small danger" data-remove-item>품목 삭제</button></div>`;
     rowsRoot.append(row);
+    // 15.107 발주는 줄마다 단가(발주서 금액·매입전표 기본 단가)
+    if (entity === 'purchase_order' && !$('[data-line-key=unit_price]', row)) $('[data-line-key=qty]', row)?.closest('label').insertAdjacentHTML('afterend', '<label>단가 <span class="hint">(발주서 금액)</span><input data-line-key="unit_price" type="number" min="0" step="any" inputmode="decimal" placeholder="원"></label>');
     $('[data-remove-item]',row).onclick = () => { if ($$('[data-multi-row]',form).length === 1) return toast('품목은 1개 이상 필요합니다.','err'); row.remove(); updateCount(); };
     const select = $('[data-line-key=bom_id]',row);
     if (select) {
@@ -197,10 +199,12 @@ async function installMultiItems(legacy, entity, type = '') {
     finally { busy = false; form.inert = false; submit.disabled = false; updateCount(); }
   };
 }
+// 15.108 발주·출하·기타입고는 수주 입력과 같은 표 입력(line-table.js). 세탁·생산계획·의뢰는 이 카드 폼 그대로.
+const LT_ENTITIES = ['purchase_order', 'shipment', 'other_receipt'];
 function enhanceMultiForms() {
   if (!ME) return;
   const configs = [['#poNew','purchase_order'],['#shNew','shipment'],['#otherNew','other_receipt'],['#lnNew','laundry'],['#scNew','schedule']];
-  for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) installMultiItems(form,entity).catch(fail); }
+  for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) (LT_ENTITIES.includes(entity) ? installLineTable(form,entity) : installMultiItems(form,entity)).catch(fail); }
   const form = $('#reqNewBox .req-form');
   if (form && !form.dataset.multiInstalled) {
     const type = location.hash.includes('/purchase/sample') ? 'sample_goods' : location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';

@@ -281,6 +281,13 @@
       "when": 1795344813000,
       "tag": "0039_ship_hold",
       "breakpoints": false
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1795431213000,
+      "tag": "0040_bom_spec",
+      "breakpoints": false
     }
   ]
 }
