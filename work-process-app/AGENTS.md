@@ -798,3 +798,10 @@ INVITE_CODE=local-test-code npm start
 - boms.spec(0040). 제품등록 창에 규격 칸. 줄의 규격은 서버 catalogSpec(bom, 입력값): 코드 규격이 있으면 그것(입력 무시), 분류에 사이즈 묶음이 있으면 줄마다 고른 사이즈, 둘 다 없으면 입력값. 수주 줄·발주/출하/기타입고 묶음 등록·입고 입력 기타입고 줄에 적용.
 - 화면: 코드 규격이 있으면 규격은 글자로만(수주 입력 표·입고 입력), 발주·출하·기타입고 카드 폼은 규격 칸을 숨기고 품목 요약에 「규격」 표시. 코드에 규격이 없으면 예전처럼 입력칸.
 - 발주 여러 품목 폼(/api/batches/purchase_order) 줄마다 단가(unit_price) 칸·저장. 예전에는 단일 발주 폼에만 있어 실제 쓰는 화면에서는 단가를 넣을 수 없었다.
+
+## 발주·출하·기타입고 표 입력 (15.108)
+- public/line-table.js installLineTable(legacy, entity): 수주 입력과 같은 표(한 줄 = 한 품목). enhanceMultiForms가 purchase_order·shipment·other_receipt(LT_ENTITIES)는 이것으로, 세탁·생산계획·의뢰는 예전 카드 폼(installMultiItems). 저장은 그대로 POST /api/batches/:entity(서버 변경 없음).
+- 줄: 품목(찾기·바꾸기 / 직접 입력은 발주·출하만, 임시 코드) · 규격(코드 규격이면 글자, 없으면 입력) · 수량 · 단위 · [발주: 단가·금액·납기(공통 납기 따라감, 줄에서 고치면 그 줄만)·분류(직접 입력 줄만 선택)·COA] · LOT · 비고. 사이즈 묶음 품목은 사이즈마다 줄을 펼치고 수량이 빈 사이즈 줄은 저장하지 않음.
+- lineTableItems(lines, entity)는 순수 함수(test/line-table.test.mjs). 줄 값이 공통 값을 덮으므로 빈 비고·빈 납기는 보내지 않는다.
+- 공통 사진은 저장한 모든 줄에 붙임(예전과 같은 순서·재시도). 초안은 bindEntryDraft(lines 배열). 표 안 Enter는 다음 칸(enterMovesInTable), F8 저장.
+- 테스트 스크립트 주의: 등록된 거래처를 칠 때 브라우저 제안 목록이 열려 다음 클릭을 삼킨다. Escape 말고 Tab으로 칸을 나간다.

@@ -199,10 +199,12 @@ async function installMultiItems(legacy, entity, type = '') {
     finally { busy = false; form.inert = false; submit.disabled = false; updateCount(); }
   };
 }
+// 15.108 발주·출하·기타입고는 수주 입력과 같은 표 입력(line-table.js). 세탁·생산계획·의뢰는 이 카드 폼 그대로.
+const LT_ENTITIES = ['purchase_order', 'shipment', 'other_receipt'];
 function enhanceMultiForms() {
   if (!ME) return;
   const configs = [['#poNew','purchase_order'],['#shNew','shipment'],['#otherNew','other_receipt'],['#lnNew','laundry'],['#scNew','schedule']];
-  for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) installMultiItems(form,entity).catch(fail); }
+  for (const [selector,entity] of configs) { const form = $(selector); if (form && !form.dataset.multiInstalled) (LT_ENTITIES.includes(entity) ? installLineTable(form,entity) : installMultiItems(form,entity)).catch(fail); }
   const form = $('#reqNewBox .req-form');
   if (form && !form.dataset.multiInstalled) {
     const type = location.hash.includes('/purchase/sample') ? 'sample_goods' : location.hash.includes('/voc/') ? 'voc' : location.hash.includes('/quality/') ? 'analysis' : location.hash.includes('/dev/') ? 'development' : 'sample';

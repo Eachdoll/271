@@ -1431,3 +1431,24 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 #main form:not(.list-filters):not([data-read-only]) > .actions:last-child:has(> .btn.primary:not([type=button])) { margin-top: 10px; }
 /* 15.106 휴대폰: 제품등록 창의 구성자재 표가 카드로 바뀌면 최소 너비를 풀어 창 밖으로 잘리지 않게 */
 @media (max-width: 700px) { .bom-materials, .bom-materials.as-cards { min-width: 0; } .bom-materials input, .bom-materials select, .bom-materials td:first-child input { min-width: 0; } .modal .stack > * { min-width: 0; } }
+/* 15.108 발주·출하·기타입고 표 입력 */
+@media (min-width: 701px) {
+  .lt-grid input[data-l=item] { min-width: 14em; }
+  .lt-grid input[data-l=lot], .lt-grid input[data-l=note] { width: 8em; }
+  .lt-grid select[data-l=item_category] { width: 7em; }
+  .lt-grid input[type=date] { width: 9.5em; }
+}
+@media (min-width: 701px) {
+  .lt-grid td[data-card-primary] { width: auto; min-width: 11em; }
+  .lt-grid input[data-l=qty] { width: 5.5em; }
+  .lt-grid input[data-l=price] { width: 6.5em; }
+  .lt-grid input[data-l=spec], .lt-grid input[data-l=unit] { width: 5.5em; }
+  .lt-grid input[data-l=lot], .lt-grid input[data-l=note] { width: 6.5em; }
+  .lt-grid > :is(thead, tbody) > tr > :is(th, td) { padding-left: 6px; padding-right: 6px; }
+}
+@media (min-width: 701px) {
+  .lt-grid input[data-l=item] { min-width: 9em; width: 10em; }
+  .lt-grid input[type=date] { width: 8.4em; padding-left: 6px; padding-right: 4px; }
+  .lt-grid select[data-l=item_category] { width: 6.8em; }
+  .lt-grid .lt-del { min-width: 32px; padding: 4px 8px; }
+}
