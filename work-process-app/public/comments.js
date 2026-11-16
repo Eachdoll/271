@@ -14,7 +14,7 @@ async function openComments(entity, id, title) {
   let rows = [], next = null, busy = false;
   const setBusy = value => { busy = value; form.elements.content.readOnly = value; $$('[data-comment-action]', box.el).forEach(button => { button.disabled = value; }); };
   const display = () => {
-    list.innerHTML = rows.slice().sort((a, b) => a.id - b.id).map(row => `<li class="comment-entry"><div class="comment-meta"><b>${esc(row.author_name)}</b><time datetime="${esc(row.created_at.replace(' ', 'T') + '+09:00')}">${esc(row.created_at)}</time></div><p class="comment-content">${esc(row.content)}</p></li>`).join('');
+    list.innerHTML = rows.slice().sort((a, b) => a.id - b.id).map(row => `<li class="comment-entry"><div class="comment-meta"><b>${esc(row.author_name)}</b><time datetime="${esc(row.created_at.replace(' ', 'T') + '+09:00')}">${esc(row.created_at)}</time>${row.content !== '(삭제됨)' && typeof ME !== 'undefined' && ME && (ME.is_admin || (row.author_id === ME.id && Date.now() - Date.parse(row.created_at.replace(' ', 'T') + '+09:00') < 10 * 60 * 1000)) ? ` <button type="button" class="link-btn small" data-comment-del="${row.id}">삭제</button>` : ''}</div><p class="comment-content${row.content === '(삭제됨)' ? ' muted' : ''}">${esc(row.content)}</p></li>`).join('');
     $('[data-comment-empty]', box.el).hidden = rows.length !== 0;
     older.hidden = next === null;
   };
@@ -30,6 +30,14 @@ async function openComments(entity, id, title) {
     finally { setBusy(false); }
   };
   $('[data-comment-refresh]', box.el).onclick = () => load();
+  // 15.104 삭제: 내 코멘트는 쓴 지 10분 안에만, 관리자는 언제나. 줄은 「(삭제됨)」으로 남는다.
+  list.addEventListener?.('click', async e => {
+    const b = e.target.closest('[data-comment-del]'); if (!b || busy) return;
+    if (!(await confirmBox('이 코멘트를 지울까요? 자리에 「(삭제됨)」만 남습니다.'))) return;
+    setBusy(true);
+    try { await api('DELETE', `${endpoint}/${b.dataset.commentDel}`); const row = rows.find(r => r.id === Number(b.dataset.commentDel)); if (row) row.content = '(삭제됨)'; display(); status.textContent = '코멘트를 지웠습니다.'; }
+    catch (error) { status.textContent = error.message; fail(error); } finally { setBusy(false); }
+  });
   older.onclick = () => load(true);
   form.elements.content.oninput = () => { $('[data-comment-length]', box.el).textContent = `${form.elements.content.value.length.toLocaleString('ko-KR')} / 2,000자`; };
   form.onsubmit = async event => {

@@ -75,7 +75,8 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
     const typed = input.value.trim(); if (!typed || vendors.some(v => partnerKey(v.name) === partnerKey(typed))) return;
     const byCode = vendors.find(v => v.code && v.code === typed.toUpperCase()); if (byCode) input.value = byCode.name;
   }, true);
-  if (!input.placeholder) input.placeholder = '이름 일부를 입력해 고르세요';
+  if (!input.placeholder) input.placeholder = '이름 일부 입력 · 비우고 ↓는 찾기';
+  button.title = '거래처 찾기 (코드·담당자·연락처로 검색). 이름은 칸에 바로 쳐도 됩니다.';
   let serial = 0;
   const show = async () => {
     if (!hint) return; const mine = ++serial; const name = input.value.trim();

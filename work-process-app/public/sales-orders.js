@@ -3,7 +3,7 @@
 // 출하(재고 차감)가 만들어지며 전표 줄이 그 출하로 이어진다. won·billTruncC는 bills.js, salesBillSheet는 sales-bills.js.
 const SO_STATE = { waiting: ['대기', ''], partial: ['일부 전표', 'yellow'], done: ['전표 완료', 'green'], closed: ['마감', ''], cancelled: ['취소', ''] };
 const soChip = s => { const [label, cls] = SO_STATE[s] || [s, '']; return `<span class="chip ${cls}">${esc(label)}</span>`; };
-const SHIP_STATE = { pending: ['출하 대기', 'yellow'], shipped: ['출하 완료', 'green'], cancelled: ['지시 취소', ''] };
+const SHIP_STATE = { pending: ['출하 대기', 'yellow'], held: ['보류', 'red'], shipped: ['출하 완료', 'green'], cancelled: ['지시 취소', ''] };
 const shipChip = s => { const [label, cls] = SHIP_STATE[s] || [s || '', '']; return label ? `<span class="chip ${cls}">${esc(label)}</span>` : ''; };
 
 async function pageSalesOrderEntry(main, editId = null) {
@@ -173,7 +173,8 @@ async function pageShipInstructions(main) {
   <div class="actionbar" id="siBar"><span class="small" id="siCount"></span><label class="inline">출고일 <input type="date" id="siDate" value="${todayStr()}" max="${todayStr()}"></label><button type="button" class="btn primary" id="siShip">출하 처리</button></div>`;
   const form = $('#siFilters', main); let rows = [], status = 'pending', version = 0, busy = false;
   const canShip = hasRole('logistics');
-  const tabs = [['pending', '출하 대기'], ['shipped', '출하 완료'], ['cancelled', '지시 취소']];
+  const tabs = [['pending', '출하 대기'], ['held', '보류'], ['shipped', '출하 완료'], ['cancelled', '지시 취소']];
+  const canHold = hasRole('logistics') || hasRole('sales');
   const drawTabs = () => { $('#siTabs', main).innerHTML = tabs.map(([k, label]) => `<button type="button" data-si-tab="${k}" class="${k === status ? 'on' : ''}" aria-pressed="${k === status}">${label}</button>`).join(''); };
   const picked = () => $$('[data-si-pick]:checked', main).map(c => Number(c.value));
   const sync = () => { const n = picked().length; $('#siCount', main).textContent = `${n}건 선택`; $('#siShip', main).disabled = !n || busy; };
@@ -181,20 +182,30 @@ async function pageShipInstructions(main) {
     const mine = ++version;
     const data = await api('GET', '/api/ship-instructions?' + new URLSearchParams({ ...formObj(form), status }));
     if (mine !== version || !main.isConnected) return;
-    rows = data.rows; const pending = status === 'pending';
+    rows = data.rows; const pending = status === 'pending', held = status === 'held';
     $('#siBar', main).hidden = !pending || !canShip;
-    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr>${pending && canShip ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th></tr></thead><tbody>${rows.map(r => `<tr>
+    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr>${pending && canShip ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr>
       ${pending && canShip ? `<td><input type="checkbox" data-si-pick value="${r.id}" aria-label="${esc(r.item)} 선택"></td>` : ''}<td class="nowrap">${esc(r.ship_date)}</td><td>${esc(r.customer)}</td>
       <td data-card-primary><b>${esc(r.item)}</b>${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td>${esc(r.spec || '')}</td>
       <td class="r"><b>${fmtNum(r.qty)}</b></td><td>${esc(r.unit || '')}</td>
       <td>${pending ? (canShip ? `<input data-si-lot="${r.id}" maxlength="100" aria-label="${esc(r.item)} LOT" placeholder="LOT">` : '') : `${esc(r.shipped_lot || '')}<div class="small muted">${esc(r.processed_by || '')} ${esc(String(r.processed_at || '').slice(5, 16))}</div>`}</td>
-      <td class="small">${esc(r.order_no || '')}${r.customer_po ? ` · ${esc(r.customer_po)}` : ''}<div class="muted">${esc(r.bill_no)}</div></td><td>${shipChip(r.status)}</td></tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty">${pending ? '내려온 출하지시가 없습니다.' : '해당하는 출하지시가 없습니다.'}</div>`;
+      <td class="small">${esc(r.order_no || '')}${r.customer_po ? ` · ${esc(r.customer_po)}` : ''}<div class="muted">${esc(r.bill_no)}</div></td><td>${shipChip(held ? 'held' : r.status)}${held && r.hold_note ? `<div class="small muted">${esc(r.hold_note)}</div>` : ''}${held ? `<div class="small muted">${esc(r.held_by || '')} ${esc(String(r.held_at || '').slice(5, 16))}</div>` : ''}</td>${(pending || held) && canHold ? `<td class="nowrap"><button type="button" class="btn small" data-si-hold="${r.id}">${held ? '보류 해제' : '보류'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${pending ? '내려온 출하지시가 없습니다.' : held ? '보류 중인 출하지시가 없습니다.' : '해당하는 출하지시가 없습니다.'}</div>`;
     if (rows.length) $('#siList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))]]));
     const all = $('#siAll', main); if (all) all.onchange = () => { $$('[data-si-pick]', main).forEach(c => { c.checked = all.checked; }); sync(); };
     sync();
   };
   $('#siList', main).addEventListener('change', e => { if (e.target.matches('[data-si-pick]')) sync(); });
+  // 15.104 보류: 출하만 미룰 때(전표·수주 잔량은 그대로). 해제하면 다시 출하 대기로.
+  $('#siList', main).addEventListener('click', async e => {
+    const b = e.target.closest('[data-si-hold]'); if (!b) return;
+    const r = rows.find(x => x.id === Number(b.dataset.siHold)); if (!r) return;
+    let note = '';
+    if (status === 'pending') { const v = await promptBox('출하 보류', `<p class="small muted">${esc(r.item)} ${fmtNum(r.qty)} ${esc(r.unit || '')} · ${esc(r.customer)}<br>보류하면 출하 처리 목록과 배지에서 빠집니다. 전표와 수주 잔량은 그대로입니다.</p><label>사유<input name="note" maxlength="200" placeholder="예) 고객 요청으로 출고 연기"></label>`); if (!v) return; note = v.note; }
+    b.disabled = true;
+    try { await api('POST', `/api/ship-instructions/${r.id}/hold`, { held: status === 'pending', note }); toast(status === 'pending' ? '보류했습니다.' : '보류를 풀었습니다. 출하 대기로 돌아갑니다.'); await load(); refreshNavBadges?.(); }
+    catch (error) { fail(error); b.disabled = false; }
+  });
   $('#siList', main).addEventListener('input', e => { const id = e.target.dataset.siLot; if (id && e.target.value) { const c = $(`[data-si-pick][value="${id}"]`, main); if (c && !c.checked) { c.checked = true; sync(); } } });
   $('#siShip', main).onclick = async () => {
     const ids = picked(); if (!ids.length || busy) return;

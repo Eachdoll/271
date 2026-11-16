@@ -252,9 +252,10 @@ async function pageReceiptStatus(main) {
   <p class="muted">기간 안에 입고된 것을 분류(원자재·부자재·제품·상품·임가공)별·거래처별 금액으로 봅니다. 위의 분류 탭을 누르면 그 분류만 보이고, 「전체」는 분류별 합계를 함께 보여 줍니다. 매입전표를 잡은 수량은 전표 금액(확정), 아직 안 잡은 수량은 발주 단가로 계산한 금액(미확정)입니다. 매입 마감 전에 미확정·단가 없는 줄을 확인하세요.</p>
   <form class="list-filters toolbar" data-read-only id="rsForm"><label>입고일<input type="date" name="from" value="${r0.from}" required></label><label>~<input type="date" name="to" value="${r0.to}" required></label><label>거래처<input name="vendor" maxlength="100" autocomplete="off" placeholder="비우면 전체"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
   <div class="seg class-tabs rs-tabs" id="rsTabs" role="tablist" aria-label="분류"></div>
-  <div id="rsSummary"></div><h2 class="rs-h">거래처별</h2><div id="rsVendors"></div><h2 class="rs-h">입고 줄 <span class="small muted" id="rsCount"></span></h2><div id="rsVendorChip"></div><div id="rsLines"></div>`;
+  <div id="rsSummary"></div><h2 class="rs-h">거래처별</h2><div id="rsVendors"></div><details class="rs-lines-fold" open><summary><h2 class="rs-h" style="display:inline">입고 줄 <span class="small muted" id="rsCount"></span></h2></summary><div id="rsVendorChip"></div><div id="rsLines"></div></details>`;
   const form = $('#rsForm', main);
   let data = null, vendorFilter = '', cat = '';
+  if (matchMedia('(max-width: 820px)').matches) $('.rs-lines-fold', main).open = false; // 휴대폰은 분류·거래처별 표를 먼저, 입고 줄은 접어 둔다
   try { cat = localStorage.getItem('wpa:rs-cat') || ''; } catch { cat = ''; }
   bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
   const amount = n => n ? won(n) : '<span class="muted">0</span>';

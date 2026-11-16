@@ -776,3 +776,12 @@ INVITE_CODE=local-test-code npm start
 - datalist 라벨은 「담당자 · 연락처 · 코드」 순.
 - 매입전표: 입고 남은 수량을 넘는 이번 수량은 보내기 전에 막고 그 칸으로. 전표 없는 출하 단가: 마지막 판 단가 → 없으면 열린 수주 단가(SHIP_SOURCE order_price).
 - 발주 목록 「미전표」는 전표 수량이 있을 때만. 품목 찾기 emptyText 옵션(수주는 직접 입력 없음 안내). 전표·수주 상세 창 onClose → 저장 뒤 거래처 칸·품목 추가로 초점. 거래처코드 규칙 안내·pattern, 「빈 코드 자동 채우기」는 등록 카드 안.
+
+## 남은 항목 정리 (15.104, 마이그레이션 0039)
+- 출하지시 보류: status CHECK는 그대로 두고 held/hold_note/held_by/held_at 칸 추가(0039). 대기(pending) 지시만 보류·해제(POST /api/ship-instructions/:id/hold, 물류·영업). 보류면 status=pending 목록·출하 처리·배지에서 빠지고(held=0 조건), 전표·수주 잔량은 그대로. GET ?status=held. 수주 상세 ship_status는 'held'로 보임.
+- 창고 삭제(DELETE /api/warehouses/:id, 물류팀장·관리자): po_receipt_lots·other_receipts에 그 창고 이름이 없을 때만. 있으면 409(사용 중지 안내). 창고 관리 창에 삭제 버튼.
+- 댓글 삭제(DELETE /api/comments/:entity/:id/:commentId): 작성자는 10분 안, 관리자는 언제나. 줄은 남기고 content를 「(삭제됨)」으로(이력 순서 유지). 화면 버튼도 같은 조건으로만 보임(ME 없는 테스트 DOM 대비 typeof 가드).
+- 거래처코드 변경 → 열린(open) 수주의 customer_code만 따라감(마감·취소는 당시 코드).
+- 거래처 입력 두 방식: datalist(이름 자동완성)와 찾기 창(코드·담당자 검색) 역할 분담. placeholder·돋보기 title로 안내, datalist 라벨은 코드 먼저.
+- 발주 목록 칸 순서: 구매의뢰번호·품목명·수량·입고·전표·잔량·입고상태·거래처·납기일·분류·COA·비고(숫자가 먼저). 휴대폰(≤820px) dense-grid는 첫 칸 sticky. 입고현황 입고 줄은 details.rs-lines-fold(휴대폰에서 접힘).
+- 발주 입력의 품목 선택은 이미 공용 bindItemPick(찾기 버튼·Enter·↓·자동 연결) 하나라 그대로 둠. 아래 고정 저장 줄과 마지막 입력 줄 사이 여유만 더함.

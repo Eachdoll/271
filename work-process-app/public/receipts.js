@@ -323,11 +323,11 @@ async function pageReceiptList(main) {
   await load();
 }
 
-// 창고·위치 관리(물류팀장·관리자). 삭제 없이 사용 중지. 위치는 쉼표·줄바꿈으로 나눠 적는다.
+// 창고·위치 관리(물류팀장·관리자). 입고 기록이 없는 창고는 삭제, 있으면 사용 중지(15.104). 위치는 쉼표·줄바꿈으로 나눠 적는다.
 async function rcWarehouseManager(after) {
   const list = await api('GET', '/api/warehouses?all=1');
   const m = modal(`<h3>창고·위치 관리</h3><p class="small muted">입고 줄의 창고·위치 선택지입니다. 위치를 비워 두면 그 창고는 위치 없이 씁니다. 이름을 바꾸면 지난 입고 기록의 창고 이름도 바뀝니다.</p>
-    <div class="table-wrap"><table class="grid keep-table"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th><th></th></tr></thead><tbody>${list.map(w => `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td><textarea data-k="locations" rows="2" aria-label="${esc(w.name)} 위치">${esc(w.locations.split(',').join(', '))}</textarea></td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td><button type="button" class="btn small" data-wh-save>저장</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">등록된 창고가 없습니다.</td></tr>'}</tbody></table></div>
+    <div class="table-wrap"><table class="grid keep-table"><thead><tr><th>창고</th><th>위치(Location)</th><th>순서</th><th>사용</th><th></th></tr></thead><tbody>${list.map(w => `<tr data-wh="${w.id}"><td><input data-k="name" value="${esc(w.name)}" maxlength="50" aria-label="창고 이름"></td><td><textarea data-k="locations" rows="2" aria-label="${esc(w.name)} 위치">${esc(w.locations.split(',').join(', '))}</textarea></td><td><input data-k="sort" type="number" step="1" value="${w.sort}" aria-label="${esc(w.name)} 순서" style="width:5em"></td><td><input type="checkbox" data-k="active"${w.active ? ' checked' : ''} aria-label="${esc(w.name)} 사용"></td><td class="nowrap"><button type="button" class="btn small" data-wh-save>저장</button> <button type="button" class="btn small danger" data-wh-del title="입고 기록이 없는 창고만 지울 수 있습니다">삭제</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">등록된 창고가 없습니다.</td></tr>'}</tbody></table></div>
     <form class="form-grid" data-wh-new data-own-errors><label>새 창고 *<input name="name" required maxlength="50" placeholder="예: 5동"></label><label class="span2">위치 <span class="hint">(쉼표로 구분)</span><input name="locations" placeholder="예: 5동 1층, 5동 2층"></label><div class="actions"><button class="btn primary">창고 추가</button></div></form>
     <div class="actions"><button type="button" class="btn" data-close>닫기</button></div>`, { wide: true });
   const done = async () => { m.close(); await rcLoadWarehouses(true); after?.(); rcWarehouseManager(after); };
@@ -335,6 +335,11 @@ async function rcWarehouseManager(after) {
   $$('[data-wh-save]', m.el).forEach(b => b.onclick = async () => {
     const tr = b.closest('tr'), val = k => $(`[data-k="${k}"]`, tr);
     try { await api('PUT', '/api/warehouses/' + tr.dataset.wh, { name: val('name').value, locations: val('locations').value, sort: Number(val('sort').value) || 0, active: val('active').checked }); toast('저장했습니다.'); await done(); } catch (error) { fail(error); }
+  });
+  $$('[data-wh-del]', m.el).forEach(b => b.onclick = async () => {
+    const tr = b.closest('tr'), name = $('[data-k="name"]', tr).value;
+    if (!(await confirmBox(`${name} 창고를 지울까요? 이 창고로 기록된 입고가 있으면 지워지지 않습니다.`))) return;
+    try { await api('DELETE', '/api/warehouses/' + tr.dataset.wh); toast('창고를 지웠습니다.'); await done(); } catch (error) { fail(error); }
   });
   $('[data-wh-new]', m.el).onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/warehouses', formObj(e.target)); toast('창고를 추가했습니다.'); await done(); } catch (error) { fail(error); } };
 }
