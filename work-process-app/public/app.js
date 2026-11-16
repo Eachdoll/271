@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.88';
+const APP_VERSION = '15.89';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -35,7 +35,8 @@ function showInputAuthors() {
   if (!ME) return;
   for (const form of document.querySelectorAll('form')) {
     // data-no-author: 작성자 표시가 필요 없는 관리 양식(조직 구성)이나 요청자를 따로 보여 주는 양식(구매의뢰).
-    if (form.dataset.readOnly === 'true' || form.hasAttribute('data-no-author')) continue;
+    // 조회용 양식: data-read-only(값 없이 써도)·목록 조건(.list-filters)에는 입력자를 붙이지 않는다(15.89).
+    if ((form.dataset.readOnly !== undefined && form.dataset.readOnly !== 'false') || form.classList.contains('list-filters') || form.hasAttribute('data-no-author')) { form.querySelector(':scope > [data-input-author]')?.remove(); continue; }
     let label = form.querySelector(':scope > [data-input-author]');
     if (!label) { label = document.createElement('p'); label.dataset.inputAuthor = ''; label.className = 'small muted input-author'; form.prepend(label); }
     const original = form.dataset.entryAuthor;
