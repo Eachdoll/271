@@ -1209,9 +1209,13 @@ route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
   const byCat = sumBy(l => l.category);
   const categories = RS_ORDER.filter(c => byCat.has(c) || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c)).map(c => ({ category: c, ...(byCat.get(c) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }) })).map(g => ({ ...g, total: g.confirmed + g.estimate }));
   const vendors = [...sumBy(l => nameKey(l.vendor)).entries()].map(([k, g]) => {
-    const name = lines.find(l => nameKey(l.vendor) === k).vendor, cats = {};
-    for (const l of lines) if (nameKey(l.vendor) === k) cats[l.category] = (cats[l.category] || 0) + l.confirmed + l.estimate;
-    return { vendor: name, ...g, total: g.confirmed + g.estimate, categories: cats };
+    const name = lines.find(l => nameKey(l.vendor) === k).vendor, cats = {}, by = {};
+    for (const l of lines) if (nameKey(l.vendor) === k) {
+      cats[l.category] = (cats[l.category] || 0) + l.confirmed + l.estimate;
+      const c = by[l.category] || (by[l.category] = { lines: 0, confirmed: 0, estimate: 0, open: 0, unpriced: 0 });
+      c.lines++; c.confirmed += l.confirmed; c.estimate += l.estimate; if (l.state !== 'billed') c.open++; if (l.unpriced) c.unpriced++;
+    }
+    return { vendor: name, ...g, total: g.confirmed + g.estimate, categories: cats, by }; // by: 분류별 세부(15.88 분류 탭)
   }).sort((a, b) => stockCompare(a.vendor, b.vendor));
   // 운송비는 매입전표 머리에 있어 분류가 없다. 명세서 일자가 기간 안인 확정 전표의 운송비를 따로 보여 준다.
   const fw = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?', 'freight>0'], fa = [from, to];

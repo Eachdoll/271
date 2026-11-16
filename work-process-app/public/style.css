@@ -1282,3 +1282,5 @@ table.grid td.r, table.grid th.r { font-variant-numeric: tabular-nums; }
 .rs-h { margin: 22px 0 8px; }
 .rs-cat td .link { font-size: inherit; }
 #rsCatTabs { margin: 0 0 8px; }
+.rs-tabs { margin: 10px 0 12px; flex-wrap: wrap; }
+.rs-tabs .sub-count { font-weight: 600; margin-left: 4px; }
