@@ -50,3 +50,25 @@ test('Approved requests list their unordered items for the purchase screen; orde
   assert.ok(!(await buyer('GET', '/api/purchase-requests?box=order&paged=1')).body.rows.some(r => r.id === pr.id), 'fully ordered requests leave the box');
   assert.equal((await buyer('GET', '/api/my-tasks')).body.approvals.purchase_orders_waiting, undefined);
 });
+
+test('15.66: quantities and unit prices can be changed when ordering; the order keeps spec and price for the PO sheet', async () => {
+  const pr = (await sales('POST', '/api/purchase-requests', { doc_date: '2026-11-10', title: '수량 조정', approvers: [ids['팀장']], items: [
+    { item: '롤러', spec: '34Φ*200', unit: 'SET', qty: 10, purchase_price: 5000, vendor: '롤러상사' },
+    { item: '교체 롤', unit: 'EA', qty: 40, purchase_price: 700, vendor: '롤러상사' }] })).body;
+  await boss('POST', `/api/purchase-requests/${pr.id}/decision`, { decision: 'approved' });
+  const [a, b] = (await buyer('GET', `/api/purchase-requests/${pr.id}`)).body.items;
+  const bad = await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', lines: [{ id: a.id, qty: 0 }] });
+  assert.equal(bad.status, 400); assert.match(bad.body.error, /0보다 커야/);
+  assert.equal((await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', lines: [{ id: a.id, unit_price: -1 }] })).status, 400);
+  const made = await buyer('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: '2026-12-01', item_category: '부자재', lines: [{ id: a.id, qty: 12, unit_price: 4800 }, { id: b.id, qty: 30, unit_price: '' }] });
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  const [pa, pb] = made.body.created;
+  assert.deepEqual([pa.qty, pa.unit_price, pa.spec, pa.unit], [12, 4800, '34Φ*200', 'SET']);
+  assert.match(pa.note, /의뢰 10 → 발주 12/);
+  assert.deepEqual([pb.qty, pb.unit_price], [30, null], 'a cleared price stays empty');
+  // 발주목록에서 단가 수정·삭제
+  const edited = await buyer('PUT', `/api/po/${pb.id}`, { req_no: pb.req_no, vendor: pb.vendor, item: pb.item, qty: 30, due_date: '2026-12-01', item_category: '부자재', unit_price: 650 });
+  assert.equal(edited.body.unit_price, 650);
+  assert.equal((await buyer('PUT', `/api/po/${pb.id}`, { req_no: pb.req_no, vendor: pb.vendor, item: pb.item, qty: 30, due_date: '2026-12-01', item_category: '부자재', unit_price: '' })).body.unit_price, null);
+  assert.equal((await buyer('GET', '/api/po')).body.find(p => p.id === pa.id).unit_price, 4800, 'the list carries the price for the sheet');
+});

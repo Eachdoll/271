@@ -583,6 +583,10 @@ function receiptAnalysisQuery(sourceType, id, user) {
   };
 }
 
+function poUnitPrice(value, label) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = num(value, label); if (n < 0) throw bad(`${label}는 0 이상이어야 합니다.`); return n;
+}
 function poFields(b) {
   return [reqStr(b.req_no, '구매의뢰번호', 50), reqStr(b.vendor, '거래처', 100), reqStr(b.item, '품목명', 200), num(b.qty, '수량'), dateStr(b.due_date, '납기일'), str(b.note, 500), itemCategory(b.item_category), checked(b.coa_requested)];
 }
@@ -606,6 +610,7 @@ async function createPurchaseOrder(user, body) {
   if (body.bom_id) { const chosen = await catalogItem(user, body); body.item = chosen.product; if (!body.item_category && ITEM_CATEGORIES.includes(chosen.item_category)) body.item_category = chosen.item_category; }
   const f = poFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[1], user, 'purchase');
   const r = (await db.prepare('INSERT INTO purchase_orders(req_no,vendor,item,qty,due_date,note,item_category,coa_requested,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(f[0], f[1], entry.product, ...f.slice(3), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
+  if (body.unit_price !== undefined && body.unit_price !== '') await db.prepare('UPDATE purchase_orders SET unit_price=? WHERE id=?').run(poUnitPrice(body.unit_price, '단가'), r.lastInsertRowid);
   return (await db.prepare('SELECT * FROM purchase_orders WHERE id=?').get(r.lastInsertRowid));
 }
 route('POST', '/api/po', async ({ user, body }) => createPurchaseOrder(user, body));
@@ -616,6 +621,8 @@ route('PUT', '/api/po/:id', async ({ user, params, body }) => {
   const entry = nameKey(f[2]) === nameKey(row.item) && row.product_code && body.bom_id === undefined ? { product: row.item, product_code: row.product_code } : await catalogItem(user, body);
   await ensureVendor(f[1], user, 'purchase');
   (await db.prepare('UPDATE purchase_orders SET req_no=?,vendor=?,item=?,qty=?,due_date=?,note=?,item_category=?,coa_requested=?,product_code=? WHERE id=?').run(f[0], f[1], entry.product, ...f.slice(3), entry.product_code, row.id));
+  // 15.66 단가(발주서용, 선택): 보내면 바꾸고 빈 값이면 지운다.
+  if (body.unit_price !== undefined) await db.prepare('UPDATE purchase_orders SET unit_price=? WHERE id=?').run(poUnitPrice(body.unit_price, '단가'), row.id);
   await recordEdit('purchase_order', 'purchase_orders', row.id, row, EDIT_LABELS.purchase_order, user);
   return (await mustGet('purchase_orders', row.id));
 });
@@ -2157,7 +2164,7 @@ async function recordEdit(entity, table, id, before, labels, user) {
   if (trail) await db.prepare(trail.sql).run(...trail.args);
 }
 const EDIT_LABELS = {
-  purchase_order: { req_no: '구매의뢰번호', vendor: '거래처', item: '품목', qty: '수량', due_date: '납기일', item_category: '분류', coa_requested: 'COA 요청', note: '비고', spec: '규격', unit: '단위', lot: 'LOT' },
+  purchase_order: { req_no: '구매의뢰번호', vendor: '거래처', item: '품목', qty: '수량', due_date: '납기일', item_category: '분류', coa_requested: 'COA 요청', note: '비고', spec: '규격', unit: '단위', lot: 'LOT', unit_price: '단가' },
   shipment: { ship_date: '출고일', item: '품목', qty: '수량', customer: '거래처', lot: 'LOT', note: '비고', spec: '규격', unit: '단위' },
   other_receipt: { received_date: '입고일', item: '품목', qty: '수량', vendor: '입고처', note: '비고', spec: '규격', unit: '단위', lot: 'LOT' },
   schedule: { period: '일정 기준', start_date: '시작일', product: '품목', qty: '계획수량', note: '비고', spec: '규격', unit: '단위', lot: 'LOT' },
@@ -2944,22 +2951,31 @@ route('POST', '/api/purchase-requests/:id/po', async ({ user, params, body }) =>
   const items = (await db.prepare('SELECT * FROM purchase_request_items WHERE request_id=? AND po_id IS NULL ORDER BY line_no').all(row.id)).filter(it => !wanted || wanted.includes(it.id));
   if (!items.length) throw bad('발주로 만들 품목이 없습니다. 이미 모두 발주했습니다.');
   const due = dateStr(body.due_date, '납기일'), fallbackCategory = body.item_category ? itemCategory(body.item_category) : '';
+  // 15.66: 품목별 발주 수량·단가를 바꿔 발주할 수 있다(lines: [{ id, qty, unit_price }]). 없으면 의뢰 수량·매입단가.
+  const changes = new Map((Array.isArray(body.lines) ? body.lines : []).map(l => [Number(l && l.id), l]));
   // 먼저 모든 품목을 검사하고 나서 만든다(일부만 만들어지는 일을 줄인다).
   const plans = [];
   for (const it of items) {
+    const change = changes.get(it.id) || {};
+    const qty = change.qty === undefined || change.qty === '' ? it.qty : num(change.qty, `${it.line_no}번 품목 발주 수량`);
+    if (!(qty > 0)) throw bad(`${it.line_no}번 품목(${it.item})의 발주 수량은 0보다 커야 합니다.`);
+    const unitPrice = change.unit_price === undefined ? it.purchase_price : poUnitPrice(change.unit_price, `${it.line_no}번 품목 단가`);
     const bom = it.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(it.bom_id) : null;
     const category = (bom && ITEM_CATEGORIES.includes(bom.item_category) ? bom.item_category : '') || fallbackCategory;
     if (!category) throw bad(`${it.line_no}번 품목(${it.item})의 분류를 고르세요.`);
     const vendor = it.vendor || str(body.vendor, 100);
     if (!vendor) throw bad(`${it.line_no}번 품목(${it.item})의 공급선(거래처)을 입력하세요.`);
-    plans.push({ it, body: { req_no: row.doc_no, vendor, item: it.item, bom_id: bom && bom.active ? bom.id : undefined, unit: it.unit, qty: it.qty, due_date: due, item_category: category, note: `구매의뢰 ${row.doc_no}${it.spec ? ' · ' + it.spec : ''}`.slice(0, 500) } });
+    const changed = qty !== it.qty ? ` · 의뢰 ${it.qty} → 발주 ${qty}` : '';
+    plans.push({ it, unitPrice, body: { req_no: row.doc_no, vendor, item: it.item, bom_id: bom && bom.active ? bom.id : undefined, unit: it.unit, qty, due_date: due, item_category: category, note: `구매의뢰 ${row.doc_no}${it.spec ? ' · ' + it.spec : ''}${changed}`.slice(0, 500) } });
   }
   const created = [];
-  for (const { it, body: poBody } of plans) {
+  for (const { it, unitPrice, body: poBody } of plans) {
     const po = await createPurchaseOrder(user, poBody);
     const linked = await db.prepare('UPDATE purchase_request_items SET po_id=? WHERE id=? AND po_id IS NULL').run(po.id, it.id);
     if (!linked.changes) { await db.prepare('DELETE FROM purchase_orders WHERE id=?').run(po.id); continue; }
-    created.push(po);
+    // 발주서용 규격·단가를 함께 남긴다(규격은 비고에도 그대로).
+    await db.prepare('UPDATE purchase_orders SET spec=?,unit_price=? WHERE id=?').run(str(it.spec, 100), unitPrice ?? null, po.id);
+    created.push(await mustGet('purchase_orders', po.id));
   }
   return { created, request: await prDetail(await mustGet('purchase_requests', row.id), user) };
 });

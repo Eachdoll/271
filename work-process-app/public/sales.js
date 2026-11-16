@@ -475,10 +475,18 @@ async function prCreateOrders(pr, items) {
   const v = await promptBox('발주 생성', `<p class="small muted">${esc(pr.doc_no)}의 ${items.length}개 품목을 발주목록에 올립니다. 구매의뢰번호는 ${esc(pr.doc_no)}, 거래처는 품목의 공급선입니다.</p>
     <label>납기일 * ${dates.length ? '<span class="hint">(입고요청일 기준)</span>' : ''}<input name="due_date" type="date" required value="${due}"></label>
     ${needCategory ? `<label>품목 분류 * <span class="hint">(등록되지 않은 품목에 적용)</span><select name="item_category" required>${categoryOptions()}</select></label>` : ''}
-    ${needVendor ? '<label>거래처 * <span class="hint">(공급선이 비어 있는 품목에 적용)</span><input name="vendor" required maxlength="100"></label>' : ''}`);
+    ${needVendor ? '<label>거래처 * <span class="hint">(공급선이 비어 있는 품목에 적용)</span><input name="vendor" required maxlength="100"></label>' : ''}
+    <div class="table-wrap"><table class="grid keep-table po-lines"><caption class="sr-only">품목별 발주 수량·단가</caption><thead><tr><th scope="col">품목</th><th scope="col" class="r">의뢰 수량</th><th scope="col">발주 수량</th><th scope="col">단가</th></tr></thead><tbody>${items.map(it => `<tr>
+      <td><b>${esc(it.item)}</b>${it.spec ? `<div class="small muted">${esc(it.spec)}</div>` : ''}${it.vendor ? `<div class="small muted">${esc(it.vendor)}</div>` : ''}</td>
+      <td class="r">${fmtNum(it.qty)} ${esc(it.unit || '')}</td>
+      <td><input name="qty_${it.id}" type="number" min="0" step="any" inputmode="decimal" required value="${esc(it.qty)}" aria-label="${esc(it.item)} 발주 수량"></td>
+      <td><input name="price_${it.id}" type="number" min="0" step="any" inputmode="decimal" value="${esc(it.purchase_price ?? '')}" placeholder="선택" aria-label="${esc(it.item)} 단가"></td></tr>`).join('')}</tbody></table></div>
+    <p class="small muted">발주 수량을 줄이거나 늘릴 수 있습니다(의뢰 수량과 다르면 비고에 남습니다). 단가는 발주서 금액에 쓰입니다.</p>`);
   if (!v) return null;
-  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { ...v, item_ids: items.map(it => it.id) });
+  const lines = items.map(it => ({ id: it.id, qty: v['qty_' + it.id], unit_price: v['price_' + it.id] ?? '' }));
+  const r = await api('POST', `/api/purchase-requests/${pr.id}/po`, { due_date: v.due_date, item_category: v.item_category, vendor: v.vendor, item_ids: items.map(it => it.id), lines });
   toast(`발주 ${r.created.length}건을 발주목록에 올렸습니다.`);
+  if (r.created.length) poPrintSheet(r.created);
   return r;
 }
 // 구매 › 발주 입력 맨 위: 최종 승인된 구매의뢰 중 아직 발주하지 않은 품목을 골라 발주로 만든다(직접 등록은 그 아래 그대로).
