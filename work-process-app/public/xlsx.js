@@ -103,20 +103,37 @@ function rpGuess(from, to) {
   return '';
 }
 // fromInput·toInput 옆(또는 place 안)에 빠른 선택 버튼을 붙인다. 고르면 두 칸을 채우고 onPick() 부름.
+// 15.89 한 줄로 접음: 「◀ [이번 달 ▾] ▶」. 가운데를 누르면 일·주·월 / 분기 / 반기·년 세 열로 펼쳐 고른다(휴대폰에서 버튼 세 줄이 지저분하던 문제).
+const RP_GROUPS = [['일·주·월', [['today', '오늘'], ['yesterday', '어제'], ['week', '이번 주'], ['lastweek', '지난 주'], ['month', '이번 달'], ['lastmonth', '지난 달']]], ['분기', [['q1', '1분기'], ['q2', '2분기'], ['q3', '3분기'], ['q4', '4분기']]], ['반기·년', [['h1', '상반기'], ['h2', '하반기'], ['year', '금년'], ['lastyear', '작년']]]];
+const RP_LABEL = Object.fromEntries(RP_GROUPS.flatMap(([, items]) => items));
 function rangePresets(fromInput, toInput, { place = null, onPick = () => {} } = {}) {
   const box = document.createElement('div'); box.className = 'range-presets'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', '기간 빠른 선택');
-  const b = (k, label, extra = '') => `<button type="button" class="btn small${extra}" data-rp="${k}">${label}</button>`;
-  box.innerHTML = `${b('prev', '◀', ' rp-arrow')}${b('today', '오늘')}${b('yesterday', '어제')}${b('week', '이번 주')}${b('lastweek', '지난 주')}${b('month', '이번 달')}${b('lastmonth', '지난 달')}<span class="rp-sep"></span>${b('q1', '1분기')}${b('q2', '2분기')}${b('q3', '3분기')}${b('q4', '4분기')}${b('h1', '상반기')}${b('h2', '하반기')}<span class="rp-sep"></span>${b('year', '금년')}${b('lastyear', '작년')}${b('next', '▶', ' rp-arrow')}`;
-  $('[data-rp="prev"]', box).setAttribute('aria-label', '이전 기간'); $('[data-rp="next"]', box).setAttribute('aria-label', '다음 기간');
-  let unit = '';
+  box.innerHTML = `<button type="button" class="btn small rp-arrow" data-rp="prev" aria-label="이전 기간">◀</button><button type="button" class="btn small rp-toggle" data-rp-toggle aria-expanded="false" aria-haspopup="true"><span data-rp-label></span> ▾</button><button type="button" class="btn small rp-arrow" data-rp="next" aria-label="다음 기간">▶</button>
+    <div class="rp-panel" data-rp-panel hidden>${RP_GROUPS.map(([title, items]) => `<div class="rp-col"><div class="rp-col-title">${title}</div>${items.map(([k, l]) => `<button type="button" class="btn small" data-rp="${k}">${l}</button>`).join('')}</div>`).join('')}</div>`;
+  const panel = $('[data-rp-panel]', box), toggle = $('[data-rp-toggle]', box), labelEl = $('[data-rp-label]', box);
+  let unit = '', picked = '';
+  const short = s => s ? s.slice(5).replace('-', '/') : '';
+  const setLabel = () => { labelEl.textContent = picked ? RP_LABEL[picked] : fromInput.value || toInput.value ? `${short(fromInput.value)} ~ ${short(toInput.value)}` : '기간 선택'; };
+  const open = on => { panel.hidden = !on; toggle.setAttribute('aria-expanded', String(on)); box.classList.toggle('open', on); };
   box.addEventListener('click', e => {
+    if (e.target.closest('[data-rp-toggle]')) { open(panel.hidden); return; }
     const k = e.target.closest('[data-rp]')?.dataset.rp; if (!k) return;
-    const r = k === 'prev' || k === 'next' ? rpShift(fromInput.value || todayStr(), toInput.value || fromInput.value || todayStr(), unit || rpGuess(fromInput.value, toInput.value), k === 'prev' ? -1 : 1) : rpRange(k, fromInput.value);
+    const shift = k === 'prev' || k === 'next';
+    const r = shift ? rpShift(fromInput.value || todayStr(), toInput.value || fromInput.value || todayStr(), unit || rpGuess(fromInput.value, toInput.value), k === 'prev' ? -1 : 1) : rpRange(k, fromInput.value);
     if (!r) return; unit = r.unit; fromInput.value = r.from; toInput.value = r.to;
-    $$('[data-rp]', box).forEach(x => x.classList.toggle('on', x.dataset.rp === k && k !== 'prev' && k !== 'next'));
-    onPick(r);
+    picked = shift ? '' : k;
+    $$('[data-rp]', panel).forEach(x => x.classList.toggle('on', x.dataset.rp === picked));
+    setLabel(); open(false); onPick(r);
   });
-  [fromInput, toInput].forEach(i => i.addEventListener('change', () => { unit = ''; $$('[data-rp]', box).forEach(x => x.classList.remove('on')); }));
-  (place || fromInput.closest('form') || fromInput.parentElement).append(box);
+  // 바깥을 누르거나 Esc면 닫음(이 상자가 화면에서 사라지면 리스너도 정리)
+  const outside = e => { if (!box.isConnected) { document.removeEventListener('click', outside, true); document.removeEventListener('keydown', esc, true); return; } if (!panel.hidden && !box.contains(e.target)) open(false); };
+  const esc = e => { if (e.key === 'Escape' && !panel.hidden) { open(false); toggle.focus(); e.stopPropagation(); } };
+  document.addEventListener('click', outside, true); document.addEventListener('keydown', esc, true);
+  [fromInput, toInput].forEach(i => i.addEventListener('change', () => { unit = ''; picked = ''; $$('[data-rp]', panel).forEach(x => x.classList.remove('on')); setLabel(); }));
+  picked = ''; const guess = rpGuess(fromInput.value, toInput.value);
+  if (guess) for (const k of Object.keys(RP_LABEL)) { const r = rpRange(k, fromInput.value); if (r && r.from === fromInput.value && r.to === toInput.value) { picked = k; break; } }
+  if (picked) $(`[data-rp="${picked}"]`, panel)?.classList.add('on');
+  setLabel();
+  (place || toInput.closest('label') || fromInput.closest('form') || fromInput.parentElement)[place ? 'append' : toInput.closest('label') ? 'after' : 'append'](box);
   return box;
 }
