@@ -476,7 +476,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -594,6 +594,7 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
       cmds.push({ sql: `UPDATE ${table} SET ${col}=? WHERE ${customerKey(col)}=?`, args: [name, k] });
     cmds.push({ sql: "UPDATE tax_invoices SET customer=? WHERE REPLACE(LOWER(customer),' ','')=? AND status IN ('draft','failed')", args: [name, k] });
     cmds.push({ sql: 'UPDATE sales_closings SET customer=?,customer_key=? WHERE customer_key=?', args: [name, nameKey(name), k] });
+    cmds.push({ sql: 'UPDATE item_prices SET vendor=?,vendor_key=? WHERE vendor_key=?', args: [name, nameKey(name), k] });
     cmds.push({ sql: 'UPDATE purchase_closings SET vendor=?,vendor_key=? WHERE vendor_key=?', args: [name, nameKey(name), k] });
   }
   try { await db.batch(cmds); }
@@ -1238,6 +1239,65 @@ route('POST', '/api/purchase-closing/reopen', async ({ user, body }) => {
   return { ok: true };
 });
 
+// ── 15.111 거래처별 단가표 ── 구분·거래처·품목·적용일마다 한 줄, 바꾸면 새 줄(이력). 쓰는 단가 = 날짜 이전 가장 늦은 적용일.
+const PRICE_SIDES = ['purchase', 'sales'];
+function priceSide(v) { const s = String(v || ''); if (!PRICE_SIDES.includes(s)) throw bad('매입·매출 구분을 확인하세요.'); return s; }
+const requirePriceEdit = (user, side) => { if (!user.is_admin && !hasRole(user, side === 'purchase' ? 'purchase' : 'sales')) throw new HttpError(403, side === 'purchase' ? '매입 단가표는 구매 담당자가 고칩니다.' : '매출 단가표는 영업 담당자가 고칩니다.'); };
+const CURRENT_PRICE = "NOT EXISTS(SELECT 1 FROM item_prices n WHERE n.side=p.side AND n.vendor_key=p.vendor_key AND n.bom_id=p.bom_id AND n.active=1 AND n.valid_from<=? AND (n.valid_from>p.valid_from OR (n.valid_from=p.valid_from AND n.id>p.id)))";
+route('GET', '/api/item-prices', async ({ query }) => {
+  const side = priceSide(query.side), date = query.date ? dateStr(query.date, '기준일') : today();
+  const where = ['p.side=?', 'p.active=1', 'p.valid_from<=?', CURRENT_PRICE], args = [side, date, date];
+  if (query.vendor) { where.push('p.vendor_key=?'); args.push(nameKey(str(query.vendor, 100))); }
+  if (query.bom_id) { where.push('p.bom_id=?'); args.push(Number(query.bom_id)); }
+  applyListKeyword(where, args, query.q, ['p.vendor', 'b.product', 'b.product_code', 'b.spec', 'p.note']);
+  const rows = await db.prepare(`SELECT p.*, b.product AS item, b.product_code, b.spec, b.unit, b.item_category,
+      (SELECT o.unit_price FROM item_prices o WHERE o.side=p.side AND o.vendor_key=p.vendor_key AND o.bom_id=p.bom_id AND o.active=1 AND (o.valid_from<p.valid_from OR (o.valid_from=p.valid_from AND o.id<p.id)) ORDER BY o.valid_from DESC, o.id DESC LIMIT 1) AS previous_price,
+      (SELECT COUNT(*) FROM item_prices o WHERE o.side=p.side AND o.vendor_key=p.vendor_key AND o.bom_id=p.bom_id AND o.active=1) AS versions
+    FROM item_prices p JOIN boms b ON b.id=p.bom_id WHERE ${where.join(' AND ')} ORDER BY p.vendor, b.product LIMIT 2001`).all(...args);
+  // 앞으로 적용될(적용일이 기준일 뒤) 단가도 함께
+  const future = await db.prepare(`SELECT p.*, b.product AS item, b.product_code FROM item_prices p JOIN boms b ON b.id=p.bom_id WHERE p.side=? AND p.active=1 AND p.valid_from>? ${query.vendor ? 'AND p.vendor_key=?' : ''} ORDER BY p.valid_from LIMIT 500`).all(side, date, ...(query.vendor ? [nameKey(str(query.vendor, 100))] : []));
+  return { side, date, rows: rows.slice(0, 2000), more: rows.length > 2000, future };
+});
+// 한 품목·거래처의 단가 이력(취소된 줄 포함)
+route('GET', '/api/item-prices/history', async ({ query }) => {
+  const side = priceSide(query.side), vendor = reqStr(query.vendor, '거래처', 100), bomId = Number(query.bom_id);
+  if (!Number.isSafeInteger(bomId) || bomId <= 0) throw bad('품목을 확인하세요.');
+  return { rows: await db.prepare('SELECT * FROM item_prices WHERE side=? AND vendor_key=? AND bom_id=? ORDER BY valid_from DESC, id DESC LIMIT 200').all(side, nameKey(vendor), bomId) };
+});
+// 전표 입력용: 거래처의 그 날짜 단가 {bom_id: 단가}
+route('GET', '/api/item-prices/lookup', async ({ query }) => {
+  const side = priceSide(query.side), vendor = str(query.vendor, 100), date = query.date ? dateStr(query.date, '기준일') : today();
+  if (!vendor) return { prices: {} };
+  const rows = await db.prepare(`SELECT p.bom_id, p.unit_price, p.valid_from FROM item_prices p WHERE p.side=? AND p.vendor_key=? AND p.active=1 AND p.valid_from<=? AND ${CURRENT_PRICE}`).all(side, nameKey(vendor), date, date);
+  return { prices: Object.fromEntries(rows.map(r => [r.bom_id, { unit_price: r.unit_price, valid_from: r.valid_from }])) };
+});
+// 새 단가(여러 줄 한꺼번에): [{bom_id, unit_price}], 같은 적용일이 이미 있으면 그 줄을 바꾼다(그날 고침)
+route('POST', '/api/item-prices', async ({ user, body }) => {
+  const side = priceSide(body.side); requirePriceEdit(user, side);
+  const vendor = reqStr(body.vendor, '거래처', 100), date = dateStr(body.valid_from || today(), '적용일');
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!items.length || items.length > 200) throw bad('단가는 1~200줄 넣으세요.');
+  const cmds = [];
+  for (const [i, raw] of items.entries()) {
+    const id = Number(raw?.bom_id); if (!Number.isSafeInteger(id) || id <= 0) throw bad(`${i + 1}번째 줄: 품목을 고르세요.`);
+    const bom = await db.prepare('SELECT id, product, active FROM boms WHERE id=?').get(id); if (!bom) throw bad(`${i + 1}번째 줄: 품목을 찾을 수 없습니다.`);
+    const price = num(raw.unit_price, `${bom.product} 단가`); if (price < 0) throw bad(`${bom.product}: 단가는 0 이상이어야 합니다.`);
+    const note = str(raw.note, 200);
+    cmds.push({ sql: 'UPDATE item_prices SET unit_price=?,note=?,created_by=?,created_at=? WHERE side=? AND vendor_key=? AND bom_id=? AND valid_from=? AND active=1', args: [price, note, user.name, now(), side, nameKey(vendor), id, date] });
+    cmds.push({ sql: 'INSERT INTO item_prices(side,vendor,vendor_key,bom_id,unit_price,valid_from,note,created_by) SELECT ?,?,?,?,?,?,?,? WHERE changes()=0', args: [side, vendor, nameKey(vendor), id, price, date, note, user.name] });
+  }
+  await ensureVendor(vendor, user, side);
+  await db.batch(cmds);
+  return { saved: items.length };
+});
+// 잘못 넣은 단가 줄 빼기(이력에는 「취소」로 남음)
+route('POST', '/api/item-prices/:id/remove', async ({ user, params }) => {
+  const row = await mustGet('item_prices', params.id); requirePriceEdit(user, row.side);
+  const r = await db.prepare('UPDATE item_prices SET active=0,removed_by=?,removed_at=? WHERE id=? AND active=1').run(user.name, now(), row.id);
+  if (!r.changes) throw bad('이미 뺀 단가입니다.');
+  return { ok: true };
+});
+
 // ── 15.110 구매: 지급확인(매입처에 준 돈·기초 미지급)과 매입처 원장(기초 미지급 + 매입전표 − 지급 = 잔액) ──
 route('GET', '/api/purchase-payments', async ({ user, query }) => {
   requirePurchase(user);
@@ -1381,6 +1441,7 @@ const SHIP_SOURCE = `SELECT 'ship' AS source_type, s.id AS source_id, s.ship_dat
      AND (CASE WHEN s.product_code<>'' THEN x.product_code=s.product_code ELSE x.item=s.item END) ORDER BY b.bill_date DESC, x.id DESC LIMIT 1) AS last_price,
   (SELECT ol.unit_price FROM sales_order_lines ol JOIN sales_orders o ON o.id=ol.order_id WHERE o.status='open' AND ol.unit_price IS NOT NULL AND REPLACE(LOWER(o.customer),' ','')=REPLACE(LOWER(s.customer),' ','')
      AND (CASE WHEN s.product_code<>'' THEN ol.product_code=s.product_code ELSE ol.item=s.item END) ORDER BY o.order_date DESC, ol.id DESC LIMIT 1) AS order_price
+  ,(SELECT p.unit_price FROM item_prices p JOIN boms bm ON bm.id=p.bom_id WHERE p.side='sales' AND p.active=1 AND p.vendor_key=REPLACE(LOWER(s.customer),' ','') AND s.product_code<>'' AND bm.product_code=s.product_code AND p.valid_from<=s.ship_date ORDER BY p.valid_from DESC, p.id DESC LIMIT 1) AS table_price
   FROM shipments s WHERE NOT EXISTS(SELECT 1 FROM sales_bill_lines x WHERE x.source_type='ship' AND x.source_id=s.id AND x.active=1)`;
 const customerKey = v => `REPLACE(LOWER(${v}),' ','')`;
 const requireSales = user => { if (!hasRole(user, 'sales')) throw new HttpError(403, '매출전표는 영업 담당자가 처리합니다.'); };
@@ -2572,6 +2633,7 @@ const BOM_USES = [
   ['생산의뢰', 'production_request_lines', 'bom_id=?', 'id'],
   ['수주', 'sales_order_lines', 'bom_id=?', 'id'],
   ['출하지시', 'ship_instructions', 'bom_id=?', 'id'],
+  ['단가표', 'item_prices', 'bom_id=? AND active=1', 'id'],
   ['의뢰·수입검사', 'requests', "json_extract(data,'$.bom_id')=?", 'id'],
   ['다른 제품의 구성자재', 'boms', "id<>? AND EXISTS(SELECT 1 FROM json_each(boms.materials) m WHERE REPLACE(LOWER(json_extract(m.value,'$.item')),' ','')=?)", 'material'],
 ];

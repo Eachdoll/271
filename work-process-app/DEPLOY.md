@@ -457,3 +457,7 @@ Sites가 새 마이그레이션을 적용한 뒤 Worker를 배포합니다. 환�
 ## 지급확인·매입처 원장 (15.110)
 
 **마이그레이션 0041_purchase_payments.sql을 Worker보다 먼저 적용하세요.** 새 표 purchase_payments와 purchase_closings.payment_total 칸만 추가합니다. 기존 데이터는 바꾸지 않습니다.
+
+## 거래처별 단가표 (15.111)
+
+**마이그레이션 0042_item_prices.sql을 Worker보다 먼저 적용하세요.** 새 표 item_prices와 색인만 추가합니다.

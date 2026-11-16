@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.110';
+const APP_VERSION = '15.111';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -24,6 +24,14 @@ const fmtNum = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('ko
 function unitTotals(rows, qty, unit) {
   const m = new Map(); for (const r of rows) { const u = String(unit(r) || '').trim(), q = Number(qty(r)); if (!Number.isFinite(q)) continue; m.set(u, (m.get(u) || 0) + q); }
   return [...m].map(([u, n]) => `${fmtNum(Math.round(n * 1000) / 1000)}${u ? ' ' + u : ''}`).join(' · ') || '0';
+}
+// 15.111 거래처별 단가표 조회: {bom_id: {unit_price, valid_from}}. 같은 구분·거래처·날짜는 한 번만 묻는다.
+const PRICE_CACHE = new Map();
+async function tablePrices(side, vendor, date = todayStr()) {
+  const name = String(vendor || '').trim(); if (!name) return {};
+  const key = [side, name.replace(/\s+/g, '').toLowerCase(), date].join('|');
+  if (!PRICE_CACHE.has(key)) PRICE_CACHE.set(key, api('GET', '/api/item-prices/lookup?' + new URLSearchParams({ side, vendor: name, date })).then(r => r.prices || {}).catch(() => ({})));
+  return PRICE_CACHE.get(key);
 }
 // 15.103 입력 표 안에서 Enter는 저장이 아니라 다음 칸으로(수량 → 단가 → 비고 → 다음 줄). 한글 조합 중·select·textarea는 그대로.
 function enterMovesInTable(root) {
@@ -346,7 +354,7 @@ function routeMenu(route) {
   const path = String(route || '#/').split('?')[0];
   // 구매의뢰 목록은 결재선에 지정된 누구나 들어와 결재해야 하므로 막지 않는다(서버가 본인 관련 의뢰만 보여 준다).
   if (path === '#/sales/pr') return null;
-  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/quality/specs')) return 'master';
+  if (path.startsWith('#/purchase/vendors') || path.startsWith('#/purchase/prices') || path.startsWith('#/quality/specs')) return 'master';
   for (const [prefix, key] of [['#/sales', 'sales'], ['#/purchase', 'purchase'], ['#/quality', 'quality'], ['#/dev', 'dev'], ['#/prod', 'production'], ['#/logistics', 'logistics']]) if (path === prefix || path.startsWith(prefix + '/')) return key;
   return null;
 }
@@ -378,7 +386,7 @@ function applyMenuAccess(main) {
   });
 }
 // 관리 메뉴(15.38): 거래처·검사규격 같은 기준 정보는 업무 메뉴가 아닌 관리 묶음에 둔다. 주소는 그대로다.
-const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/quality/specs', '검사규격 설정']];
+const NAV_MANAGE = [['#/purchase/vendors', '거래처 관리'], ['#/purchase/prices', '단가표'], ['#/quality/specs', '검사규격 설정']];
 const NAV_ADMIN = [['#/admin', '관리자 설정'], ['#/admin/org', '조직 구성'], ['#/admin/bom', '제품등록']];
 // Entry and list screens built from one page: the page renders both parts and the view hides one.
 // key: route → [page route, view, title, other route, link label]
@@ -522,6 +530,7 @@ const PAGES = {
   '#/sales/tax': main => pageTaxList(main),
   '#/logistics/stock': main => pageStock(main),
   '#/purchase/vendors': main => pageVendors(main),
+  '#/purchase/prices': main => pagePrices(main),
   '#/purchase/sample/request': () => pageIntake('sample_goods'),
   '#/purchase/sample/list': () => pageWorkList('sample_goods'),
   '#/prod/semi/cut': main => pageSemi(main, 'cut'),

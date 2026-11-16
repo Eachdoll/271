@@ -54,7 +54,9 @@ async function pageSalesOrderEntry(main, editId = null) {
     const bom = await openItemPicker(catalog, { title: '수주 품목 찾기', filter: b => b.active !== 0 && !b.is_temp, emptyText: '찾는 품목이 없습니다. 분류 탭을 「전체」로 바꾸거나 검색어를 줄이세요. 새 품목은 제품등록에서 먼저 등록합니다.' });
     if (!bom) return;
     const row = { bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec && !(bom.sizes || []).length, sizes: bom.sizes || [] };
-    if (index >= 0) Object.assign(lines[index], row); else lines.push({ ...row, qty: '', price: '', due_date: form.elements.due_date.value, note: '' });
+    const tp = (await tablePrices('sales', input.value, form.elements.order_date.value || todayStr()))[bom.id];
+    if (tp) row.price = tp.unit_price; // 15.111 매출 단가표 단가를 미리 채움
+    if (index >= 0) Object.assign(lines[index], row); else lines.push({ qty: '', price: '', due_date: form.elements.due_date.value, note: '', ...row });
     draw();
     $$('[data-l="qty"]', box)[index >= 0 ? index : lines.length - 1]?.focus();
   };

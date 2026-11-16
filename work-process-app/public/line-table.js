@@ -59,7 +59,7 @@ async function installLineTable(legacy, entity) {
         <td>${l.sizeLine || (fixed(l) && l.fixedSpec) ? esc(l.spec) : `<input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${i + 1}번째 줄 규격">`}</td>
         <td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-l="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item || (i + 1) + '번째 줄')} 수량"></td>
         <td>${fixed(l) ? esc(l.unit) : `<input data-l="unit" data-i="${i}" maxlength="20" value="${esc(l.unit)}" class="rc-unit" placeholder="EA" aria-label="${i + 1}번째 줄 단위">`}</td>
-        ${cfg.price ? `<td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-l="price" data-i="${i}" value="${esc(l.price ?? '')}" aria-label="${esc(l.item || (i + 1) + '번째 줄')} 단가"></td><td class="r nowrap" data-lt-amount="${i}">${amount(l) == null ? '' : won(amount(l))}</td>
+        ${cfg.price ? `<td class="r"><input type="number" min="0" step="any" inputmode="decimal" data-l="price" data-i="${i}" value="${esc(l.price ?? '')}" aria-label="${esc(l.item || (i + 1) + '번째 줄')} 단가">${l.tablePrice != null && String(l.tablePrice) !== String(l.price) ? `<div class="small muted">${esc(`단가표 ${fmtNum(l.tablePrice)}`)}</div>` : ''}</td><td class="r nowrap" data-lt-amount="${i}">${amount(l) == null ? '' : won(amount(l))}</td>
         <td><input type="date" data-l="due_date" data-i="${i}" value="${esc(l.due_date || '')}" aria-label="${i + 1}번째 줄 납기"></td>
         <td>${fixed(l) ? esc(l.item_category || '') : `<select data-l="item_category" data-i="${i}" aria-label="${i + 1}번째 줄 분류">${cats(l.item_category)}</select>`}</td>
         <td class="c"><input type="checkbox" data-l="coa" data-i="${i}"${l.coa ? ' checked' : ''} aria-label="${i + 1}번째 줄 COA 요청"></td>` : ''}
@@ -78,6 +78,14 @@ async function installLineTable(legacy, entity) {
   };
   const lineFrom = (bom, extra = {}) => ({ bom_id: bom.id, item: bom.product, product_code: bom.product_code || '', unit: bom.unit || '', spec: bom.spec || '', fixedSpec: !!bom.spec, item_category: bom.item_category || '', qty: '', price: '', due_date: form.elements.due_date?.value || '', lot: '', note: '', coa: false, ...extra });
   const expand = bom => (bom.sizes || []).length ? bom.sizes.map(size => lineFrom(bom, { spec: size, sizeLine: true })) : [lineFrom(bom)];
+  // 15.111 발주는 매입 단가표 단가를 미리 채운다(직접 고친 단가는 그대로). 단가표 단가는 칸 아래 작게 보인다.
+  const fillPrices = async () => {
+    if (!cfg.price) return;
+    const prices = await tablePrices('purchase', form.elements[cfg.partner]?.value);
+    let changed = false;
+    for (const l of lines) { const p = l.bom_id && prices[l.bom_id]; l.tablePrice = p ? p.unit_price : null; if (p && !l.priceTouched && String(l.price ?? '') !== String(p.unit_price)) { l.price = p.unit_price; changed = true; } }
+    if (changed || lines.some(l => l.tablePrice != null)) draw();
+  };
   const pick = async (index = -1) => {
     if (loading) return toast('품목 목록을 불러오는 중입니다.', 'err');
     const bom = await openItemPicker(boms, { title: `${cfg.title.replace(' 등록', '').replace(' 입력', '')} 품목 찾기` });
@@ -85,7 +93,7 @@ async function installLineTable(legacy, entity) {
     const made = expand(bom);
     if (lines.length - (index >= 0 ? 1 : 0) + made.length > 30) return toast('한 번에 30줄까지 등록할 수 있습니다.', 'err');
     if (index >= 0) lines.splice(index, 1, ...made); else lines.push(...made);
-    draw();
+    draw(); await fillPrices();
     const at = index >= 0 ? index : lines.length - made.length;
     $$('[data-l="qty"]', box)[at]?.focus();
   };
@@ -102,6 +110,7 @@ async function installLineTable(legacy, entity) {
   const sync = e => {
     const k = e.target.dataset.l; if (!k) return; const i = Number(e.target.dataset.i);
     lines[i][k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (k === 'price') lines[i].priceTouched = true;
     if (k === 'qty' || k === 'price') { const a = amount(lines[i]); const cell = $(`[data-lt-amount="${i}"]`, box); if (cell) cell.textContent = a == null ? '' : won(a); }
     if (['qty', 'price', 'unit'].includes(k)) totals();
   };
@@ -112,6 +121,7 @@ async function installLineTable(legacy, entity) {
   box.addEventListener('input', e => { if (e.target.dataset.l === 'due_date') lines[Number(e.target.dataset.i)].dueTouched = true; });
   // 거래처: 발주는 최근 매입 품목을 눌러 줄로 넣는다
   const partner = form.elements[cfg.partner];
+  partner.addEventListener('change', () => fillPrices().catch(() => {}));
   bindPartnerPicker(partner, $('[data-partner-hint]', form), { recent: entity === 'purchase_order', type: cfg.type, onPick: item => {
     if (lines.length >= 30) return toast('한 번에 30줄까지 등록할 수 있습니다.', 'err');
     const bom = item.product_code && boms.find(b => b.product_code === item.product_code);

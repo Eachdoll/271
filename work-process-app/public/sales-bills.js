@@ -31,7 +31,7 @@ async function pageSalesBillEntry(main) {
     box.innerHTML = orderBox.innerHTML = '<p class="muted small">불러오는 중…</p>';
     let data, open; try { [data, open] = await Promise.all([api('GET', '/api/sales-bills/unbilled?' + new URLSearchParams({ customer, from: form.elements.from.value, to: form.elements.to.value })), api('GET', '/api/sales-orders/open-lines?' + new URLSearchParams({ customer }))]); } catch (error) { box.innerHTML = orderBox.innerHTML = `<p class="field-error">${esc(error.message)}</p>`; return; }
     if ((input.dataset.partnerPrev ?? input.value).trim() !== customer || [form.elements.from.value, form.elements.to.value].join('|') !== key.split('|').slice(1).join('|')) return;
-    rows = data.rows.map(r => ({ ...r, picked: false, price: r.last_price ?? r.order_price ?? '', note: '' }));
+    rows = data.rows.map(r => ({ ...r, picked: false, price: r.table_price ?? r.last_price ?? r.order_price ?? '', note: '' }));
     orders = open.rows.map(r => ({ ...r, picked: orderPreset === r.order_id, take: String(r.remaining), price: r.unit_price ?? '', note: '' })); orderPreset = null;
     // 15.102 수주 줄을 고르면 전표의 과세 구분을 그 수주에 맞춘다(서버는 다르면 막음). 수주마다 다르면 고른 뒤에 맞춘다.
     const presetOrder = orders.find(o => o.picked); if (presetOrder && presetOrder.tax_type) { form.elements.tax_type.value = presetOrder.tax_type; }

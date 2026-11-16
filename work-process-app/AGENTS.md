@@ -816,3 +816,9 @@ INVITE_CODE=local-test-code npm start
 - /api/purchase-payments(GET·POST·취소, requirePurchase, 매입 마감된 달은 막음), /api/purchase-ledger(매입처 없으면 매입처별 요약, 있으면 전표 단위 줄 + 지급 줄, 잔액 = 기초 미지급 + 매입전표 합계 − 지급). 매입 마감 목록·마감 기록에 그 달 지급 합계.
 - 화면: 구매 › 대금(입금확인 #/purchase/payments, 지급확인 #/purchase/disbursements, 매입처 원장 #/purchase/ledger). 입금확인·지급확인은 같은 pagePayments(main, side) — PAY_SIDE 설정(거래처 칸 이름 customer/vendor, 구분 글자, API). 매입처 원장은 전표 단위(매입전표에 운송비·명세서 합계가 전표에 있으므로). 인쇄·엑셀.
 - 거래처 이름 변경 따라가기에 purchase_payments 추가. 백업 표 목록에 purchase_payments.
+
+## 거래처별 단가표 (15.111, 마이그레이션 0042)
+- item_prices: side(purchase/sales)·거래처(vendor, vendor_key)·bom_id·unit_price·valid_from 한 줄씩. 바꾸면 새 적용일로 한 줄 더함(=이력). 같은 날 다시 넣으면 그 줄을 고침(UPDATE 후 changes()=0이면 INSERT). 빼기는 active=0(이력에 「뺌」).
+- 쓰는 단가 = 그 날짜 이전 가장 늦은 적용일(CURRENT_PRICE). API: GET /api/item-prices(현재 단가·이전 단가·이력 수, 적용 예정 단가), /history, /lookup?side&vendor&date → {bom_id: 단가}, POST(여러 줄), POST /:id/remove. 고치기 권한: 매입=구매, 매출=영업, 관리자.
+- 자동 채움: 발주 입력 표(거래처·품목 고르면 매입 단가, 직접 고친 단가(priceTouched)는 그대로, 단가표와 다르면 칸 아래 「단가표 N」), 수주 입력(매출 단가), 매출전표 전표 없는 출하(SHIP_SOURCE table_price → last_price → order_price). 클라이언트 tablePrices()는 구분·거래처·날짜별 캐시(저장 뒤 PRICE_CACHE.clear()).
+- 화면: 관리 › 단가표(#/purchase/prices, 메뉴 권한 master). 품목 사용처·거래처 이름 변경 따라가기·백업에 item_prices.
