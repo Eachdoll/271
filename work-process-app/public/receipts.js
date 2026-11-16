@@ -131,7 +131,7 @@ async function pageReceiptEntry(main) {
     readAll();
     if (!catalog) catalog = await api('GET', '/api/boms?temp=1').catch(() => []);
     // 15.79 ERP처럼 여러 품목을 체크하고 품목마다 LOT 수만큼 줄을 한 번에 만든다(LOT 자동 번호 선택).
-    const pick = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => b.item_category !== '반제품', multi: true });
+    const pick = await openItemPicker(catalog, { title: '기타입고 품목 찾기', filter: b => !['반제품', '임가공'].includes(b.item_category), multi: true });
     if (!pick) return;
     const made = pick.items.flatMap(({ bom, count }) => Array.from({ length: count }, () => newLine({ item: bom.product, unit: bom.unit, product_code: bom.product_code, bom_id: bom.id, sizes: bom.sizes || [] })));
     if (lines.length + made.length > 100) return toast(`입고 줄은 100줄까지입니다. 지금 ${lines.length}줄에 ${made.length}줄을 더할 수 없습니다.`, 'err');

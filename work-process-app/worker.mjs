@@ -19,7 +19,8 @@ const REQUEST_TYPES = { voc: 'quality', analysis: 'quality', development: 'dev',
 const REQUEST_PREFIX = { voc: 'V', analysis: 'Q', development: 'D', sample: 'S', sample_goods: 'G' };
 const ANALYSIS_CATEGORIES = ['수입검사', '의뢰검사', '출하검사', '공정검사'];
 const WORK_STATUSES = ['waiting', 'progress', 'done'];
-const ITEM_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품'];
+// 15.87 임가공: 외주 가공(세탁·커팅 등) 품목. 발주로만 받고(기타입고 불가) 세부 분류는 쓰지 않는다(item_category_nodes CHECK).
+const ITEM_CATEGORIES = ['원자재', '부자재', '반제품', '제품', '상품', '임가공'];
 function itemCategory(value) {
   if (!ITEM_CATEGORIES.includes(value)) throw bad('품목 분류를 선택하세요.');
   return value;
@@ -1162,6 +1163,62 @@ route('POST', '/api/purchase-closing/reopen', async ({ user, body }) => {
   return { ok: true };
 });
 
+// ── 구매: 입고현황 (15.87) ── 매입 마감용. 입고일 기준으로 기간 안 입고 줄을 분류(원자재·부자재·제품·상품·임가공…)별로 모아 금액을 낸다.
+// 금액 = 매입전표에 잡은 수량은 전표 공급가액(확정) + 아직 안 잡은 수량은 발주 단가 × 남은 수량(미확정, 기타입고처럼 단가가 없으면 「단가 없음」).
+const RS_SOURCES = {
+  po_lot: { date: 'l.received_date', sql: `SELECT 'po_lot' AS source_type, l.id AS source_id, l.received_date AS received_date, p.vendor, p.req_no, p.item, p.spec, p.unit, p.product_code, l.lot, p.item_category AS category, l.qty, p.unit_price,
+      ${lotBilled()} AS billed_qty,
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND ((b.source_type='po_lot' AND b.source_id=l.id) OR (l.note='이전 입고' AND b.source_type='po' AND b.source_id=p.id))) AS billed_supply
+    FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.voided_at IS NULL AND p.recv_status IN ('ok','mismatch')` },
+  po: { date: "COALESCE(substr(p.recv_at,1,10), p.due_date)", sql: `SELECT 'po' AS source_type, p.id AS source_id, COALESCE(substr(p.recv_at,1,10), p.due_date) AS received_date, p.vendor, p.req_no, p.item, p.spec, p.unit, p.product_code, p.lot, p.item_category AS category, p.recv_qty AS qty, p.unit_price,
+      ${billedOf('po', 'p.id')} AS billed_qty,
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND b.source_type='po' AND b.source_id=p.id) AS billed_supply
+    FROM purchase_orders p WHERE p.recv_status IN ('ok','mismatch') AND p.recv_qty IS NOT NULL AND NOT EXISTS(SELECT 1 FROM po_receipt_lots l WHERE l.po_id=p.id AND l.voided_at IS NULL)` },
+  other: { date: 'o.received_date', sql: `SELECT 'other' AS source_type, o.id AS source_id, o.received_date, o.vendor, '' AS req_no, o.item, o.spec, COALESCE(NULLIF(o.unit,''), json_extract(o.bom_snapshot,'$.unit'), '') AS unit, COALESCE(json_extract(o.bom_snapshot,'$.product_code'), '') AS product_code, o.lot, o.item_category AS category, o.qty, NULL AS unit_price,
+      ${billedOf('other', 'o.id')} AS billed_qty,
+      (SELECT COALESCE(SUM(b.supply),0) FROM purchase_bill_lines b WHERE b.active=1 AND b.source_type='other' AND b.source_id=o.id) AS billed_supply
+    FROM other_receipts o WHERE 1=1` },
+};
+const RS_ORDER = ['원자재', '부자재', '제품', '상품', '임가공', '반제품', '미분류'];
+route('GET', '/api/purchase-receipt-status', async ({ user, query }) => {
+  requirePurchase(user);
+  const from = dateStr(query.from, '시작일'), to = dateStr(query.to, '종료일');
+  if (from > to) throw bad('시작일이 종료일보다 늦습니다.');
+  const vendor = str(query.vendor, 100);
+  const rows = [];
+  for (const [type, s] of Object.entries(RS_SOURCES)) {
+    const where = [`${s.date}>=?`, `${s.date}<=?`], args = [from, to];
+    if (vendor) { where.push(`${billVendorKey(type === 'other' ? 'o.vendor' : 'p.vendor')}=?`); args.push(nameKey(vendor)); }
+    const part = await db.prepare(`${s.sql} AND ${where.join(' AND ')} LIMIT 10001`).all(...args);
+    if (part.length > 10000) throw bad('입고 줄이 너무 많습니다. 기간이나 거래처로 좁히세요.');
+    rows.push(...part);
+  }
+  rows.sort((a, b) => stockCompare(a.received_date, b.received_date) || stockCompare(a.vendor, b.vendor));
+  const lines = rows.map(r => {
+    const category = RS_ORDER.includes(r.category) ? r.category : '미분류';
+    const remaining = Math.max(0, stockRound(r.qty - (r.billed_qty || 0)));
+    const estimate = remaining > 0 && r.unit_price != null ? billTrunc(remaining * r.unit_price) : 0;
+    const state = remaining <= 0 ? 'billed' : (r.billed_qty || 0) > 0 ? 'partial' : 'open';
+    return { ...r, category, confirmed: r.billed_supply || 0, estimate, remaining, unpriced: remaining > 0 && r.unit_price == null, state };
+  });
+  const sumBy = key => {
+    const map = new Map();
+    for (const l of lines) { const k = key(l), g = map.get(k) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }; g.lines++; g.confirmed += l.confirmed; g.estimate += l.estimate; if (l.unpriced) g.unpriced++; if (l.state !== 'billed') g.open++; map.set(k, g); }
+    return map;
+  };
+  const byCat = sumBy(l => l.category);
+  const categories = RS_ORDER.filter(c => byCat.has(c) || ['원자재', '부자재', '제품', '상품', '임가공'].includes(c)).map(c => ({ category: c, ...(byCat.get(c) || { lines: 0, confirmed: 0, estimate: 0, unpriced: 0, open: 0 }) })).map(g => ({ ...g, total: g.confirmed + g.estimate }));
+  const vendors = [...sumBy(l => nameKey(l.vendor)).entries()].map(([k, g]) => {
+    const name = lines.find(l => nameKey(l.vendor) === k).vendor, cats = {};
+    for (const l of lines) if (nameKey(l.vendor) === k) cats[l.category] = (cats[l.category] || 0) + l.confirmed + l.estimate;
+    return { vendor: name, ...g, total: g.confirmed + g.estimate, categories: cats };
+  }).sort((a, b) => stockCompare(a.vendor, b.vendor));
+  // 운송비는 매입전표 머리에 있어 분류가 없다. 명세서 일자가 기간 안인 확정 전표의 운송비를 따로 보여 준다.
+  const fw = ["status='confirmed'", 'bill_date>=?', 'bill_date<=?', 'freight>0'], fa = [from, to];
+  if (vendor) { fw.push(`${billVendorKey('vendor')}=?`); fa.push(nameKey(vendor)); }
+  const freight = (await db.prepare(`SELECT COALESCE(SUM(freight),0) AS f, COUNT(*) AS c FROM purchase_bills WHERE ${fw.join(' AND ')}`).get(...fa));
+  return { from, to, vendor, categories, vendors, freight: { total: freight.f, bills: freight.c }, lines: lines.slice(0, 3000), more: lines.length > 3000, line_count: lines.length };
+});
 // ── 영업: 매출전표·입금·기간별 거래보고·매출 마감 (15.81) ──
 // 물류가 잡은 출하 줄(전표 없는 것)이나 직접 입력 줄로 매출전표(SB-…)를 만든다. 금액은 원 미만 절사,
 // 부가세는 공급가액 합계의 10%(영세·면세 0)이고 줄마다 나눠 적는다(끝 줄이 나머지를 받아 합이 맞음).
@@ -2216,6 +2273,7 @@ const categoryConflict = error => { if (String(error.message).includes('UNIQUE')
 route('POST', '/api/item-categories', async ({ user, body }) => {
   requireAdmin(user);
   const itemClass = itemCategory(body.item_class), name = reqStr(body.name, '분류 이름', 50);
+  if (itemClass === '임가공') throw bad('임가공은 세부 분류를 쓰지 않습니다.');
   let level = 1, parentId = null;
   if (body.parent_id !== undefined && body.parent_id !== null && body.parent_id !== '') {
     const parent = await mustGet('item_category_nodes', Number(body.parent_id) || 0);
@@ -2400,7 +2458,7 @@ route('DELETE', '/api/schedules/:id', async ({ user, params }) => {
 });
 
 // ── 물류: 발주 없는 기타입고 ──
-function receiptCategory(value) { const c = itemCategory(value); if (c === '반제품') throw bad('반제품은 기타입고로 받을 수 없습니다. 생산 기록으로 등록하세요.'); return c; }
+function receiptCategory(value) { const c = itemCategory(value); if (c === '반제품') throw bad('반제품은 기타입고로 받을 수 없습니다. 생산 기록으로 등록하세요.'); if (c === '임가공') throw bad('임가공은 발주로 받습니다. 기타입고로는 받을 수 없습니다.'); return c; }
 async function otherReceiptFields(b, previous = null) {
   const bomId = b.bom_id === undefined ? previous?.bom_id || null : b.bom_id === null || b.bom_id === '' ? null : Number(b.bom_id);
   let snapshot = {};
@@ -2415,6 +2473,7 @@ async function otherReceiptFields(b, previous = null) {
     if (!ITEM_CATEGORIES.includes(snapshot.item_category)) throw bad('관리자가 BOM 품목의 분류를 먼저 지정해야 합니다.');
     // other_receipts keeps its original four-class constraint; semi-finished goods come from production, not receipts.
     if (snapshot.item_category === '반제품') throw bad('반제품은 기타입고로 받을 수 없습니다. 생산 기록으로 등록하세요.');
+    if (snapshot.item_category === '임가공') throw bad('임가공은 발주로 받습니다. 기타입고로는 받을 수 없습니다.');
   } else if (!previous || previous.bom_id) throw bad('BOM을 검색하여 입고할 품목을 선택하세요.');
   return [dateStr(b.received_date, '입고일'), bomId ? snapshot.product : reqStr(b.item, '품목명', 200), bomId ? snapshot.item_category : receiptCategory(b.item_category), num(b.qty, '입고수량'), reqStr(b.vendor, '입고처', 100), str(b.note, 500), bomId, JSON.stringify(snapshot)];
 }
