@@ -2083,3 +2083,9 @@ input[type=checkbox], input[type=radio], input[type=file], input[type=range], in
 form.list-filters input, form.list-filters select, .rs-page .rs-filter input, .rs-page .rs-filter select { border-color: var(--field-line); background-color: var(--field-bg); }
 /* 표 안 입력칸(전표·견적 줄)도 테두리가 보이게 */
 table input:not([type=checkbox]):not([type=radio]), table select { border-color: var(--field-line); background-color: var(--field-bg); }
+
+/* 15.170 관리 화면 전환 단추(목록 | 입력) */
+.manage-tabs { display: inline-flex; margin: 2px 0 12px; border: 1px solid var(--ns-head-line, var(--line)); border-radius: 6px !important; overflow: hidden; background: var(--panel); }
+.manage-tabs a { padding: 8px 18px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; border-right: 1px solid var(--ns-head-line, var(--line)); }
+.manage-tabs a:last-child { border-right: 0; } .manage-tabs a:hover { background: var(--accent-soft); }
+.manage-tabs a.on { background: var(--ns-pill, var(--accent)); color: #fff; }

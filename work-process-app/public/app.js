@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.169';
+const APP_VERSION = '15.170';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -345,7 +345,7 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills/new', '매출전표 입력'], ['#/sales/bills', '매출전표 목록'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
     { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
@@ -354,7 +354,7 @@ const NAV = [
   ] },
   // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
   { group: '경리', items: [
-    { sub: '세금계산서', items: [['#/sales/tax/new', '매출 세금계산서 만들기'], ['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
+    { sub: '세금계산서', items: [['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
     { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
     { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
@@ -557,8 +557,8 @@ const PAGES = {
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
   '#/sales/orders': main => pageSalesOrderList(main),
   '#/logistics/ship-orders': main => pageShipInstructions(main),
-  '#/sales/bills/new': main => pageSalesBillEntry(main),
-  '#/sales/bills': main => pageSalesBillList(main),
+  '#/sales/bills/new': main => managedPage(main, '#/sales/bills/new', pageSalesBillEntry), // 15.170 매출전표 관리(입력)
+  '#/sales/bills': main => managedPage(main, '#/sales/bills', pageSalesBillList), // 15.170 매출전표 관리(목록)
   '#/purchase/payments': main => pagePayments(main, 'sales'),
   '#/purchase/disbursements': main => pagePayments(main, 'purchase'),
   '#/purchase/ledger': main => pagePurchaseLedger(main),
@@ -575,8 +575,8 @@ const PAGES = {
   '#/sales/aging': main => pageAging(main, 'sales'),
   '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
-  '#/sales/tax/new': main => pageTaxMake(main),
-  '#/sales/tax': main => pageTaxList(main),
+  '#/sales/tax/new': main => managedPage(main, '#/sales/tax/new', pageTaxMake), // 15.170 세금계산서 관리(만들기)
+  '#/sales/tax': main => pageTaxList(main).then(() => managedTabs(main, '#/sales/tax')), // 15.170 세금계산서 관리(목록)
   '#/purchase/tax': main => pagePurchaseTax(main),
   '#/sales/tax-check': main => pageTaxCheck(main, 'sales'),
   '#/purchase/tax-check': main => pageTaxCheck(main, 'purchase'),
@@ -621,8 +621,22 @@ function refreshFavNav() {
   const after = side.querySelector(':scope > .side-prefs'); after ? after.insertAdjacentHTML('afterend', html) : side.insertAdjacentHTML('afterbegin', html);
   $$('.nav-fav a', side).forEach(a => { a.onclick = () => document.body.classList.remove('nav-open'); });
 }
+// ── 15.170 「관리」 화면: 목록과 입력(만들기)을 한 메뉴로. 같은 화면 제목 아래 전환 단추, 입력 주소(/new)는 그대로 쓰되
+// 메뉴 강조·화면 탭·위치 표시는 관리 화면 하나로 묶는다(navRoute).
+const MANAGE = {
+  '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
+  '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
+};
+const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax' };
+const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
+function managedTabs(main, route) {
+  const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
+  const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (t) t.nodeValue = m.title + ' '; else h1.prepend(m.title + ' ');
+  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+}
+async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
 function shell() {
-  const cur = location.hash || '#/';
+  const cur = navRoute(location.hash || '#/'); // 15.170 입력 주소도 관리 메뉴로 강조
   const link = ([h, l]) => `<a href="${h}" class="${cur === h ? 'active' : ''}">${l}${navStar(h, l)}</a>`;
   const entry = item => Array.isArray(item) ? link(item)
     : `<details class="nav-sub" data-sub="${esc(item.sub)}" ${item.items.some(([h]) => h === cur) ? 'open' : ''}><summary>${item.sub}</summary>${item.items.map(link).join('')}</details>`;
@@ -691,7 +705,7 @@ function crumbPath(route) {
 }
 function pageTabs(main, route) {
   if (!main || main.querySelector(':scope > .page-tabs')) return;
-  const path = String(route || '#/').split('?')[0], trail = crumbPath(path), h1 = $('h1', main);
+  const path = navRoute(route), trail = crumbPath(path), h1 = $('h1', main); // 15.170 입력·목록은 한 탭
   const label = trail.at(-1) || (h1 ? screenTitle(main) : '');
   let tabs = readTabs();
   if (path !== '#/' && label && PAGES[path]) { if (!tabs.some(t => t.href === path)) tabs.push({ href: path, label }); writeTabs(tabs); tabs = readTabs(); }
