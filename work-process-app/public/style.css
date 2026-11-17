@@ -2064,3 +2064,6 @@ form.list-filters .result-seg label { flex-direction: row; align-items: center; 
 .sc-sum { margin: 8px 0 0 auto; border-collapse: collapse; min-width: 320px; } .sc-sum th { text-align: left; padding: 4px 12px; color: #8a1c1c; } .sc-sum td { padding: 4px 8px; font-variant-numeric: tabular-nums; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sc-table tr.sc-row.on > td { background: #3a2e1e !important; } }
 @media (max-width: 1100px) { .sc-grid { grid-template-columns: 1fr; } }
+
+/* 15.167 팝업 자체에 포커스가 갈 때 테두리는 안 보이게(키보드 Tab으로 들어간 칸에만 표시) */
+.modal:focus { outline: none; }

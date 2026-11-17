@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.166';
+const APP_VERSION = '15.167';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -152,12 +152,20 @@ function bindListControls(form, load, reset = () => {}) {
 function listLoading(form) { $('[data-list-count]', form).textContent = '조회 중…'; }
 function listCount(form, count) { $('[data-list-count]', form).textContent = `${count}건 조회`; }
 
+// 15.167 팝업이 떠 있으면 키보드·마우스는 맨 위 팝업에만: 뒤 화면(#app)과 아래 팝업은 inert(포커스·클릭·Enter가 안 감).
+// 팝업이 어떤 경로로 사라지든(닫기·화면 이동·코드에서 remove) 지켜보다가 맞춘다 — 뒤 화면이 잠긴 채 남지 않게.
+function syncModalInert() {
+  const wraps = [...document.querySelectorAll('.modal-wrap')], app = document.getElementById('app');
+  if (app) app.inert = wraps.length > 0;
+  wraps.forEach((w, i) => { w.inert = i < wraps.length - 1; });
+}
+if (typeof MutationObserver !== 'undefined' && document.body) new MutationObserver(() => syncModalInert()).observe(document.body, { childList: true });
 function modal(html, { wide = false, onClose = () => {} } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="닫기">×</button>${html}</div>`;
   const opener = document.activeElement;
-  const close = () => { if (!wrap.isConnected) return; wrap.remove(); document.removeEventListener('keydown', onKey); onClose(); if (opener?.isConnected && !$('.modal-wrap')) opener.focus?.(); };
+  const close = () => { if (!wrap.isConnected) return; wrap.remove(); syncModalInert(); document.removeEventListener('keydown', onKey); onClose(); const top = $$('.modal-wrap').at(-1); if (top) { if (!top.contains(document.activeElement)) ($('.modal', top)?.focus?.()); } else if (opener?.isConnected) opener.focus?.(); };
   const onKey = (e) => {
     if (wrap !== $$('.modal-wrap').at(-1)) return; // only the top dialog reacts
     if (e.key === 'Escape') close();
@@ -173,9 +181,12 @@ function modal(html, { wide = false, onClose = () => {} } = {}) {
   wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
   $('.modal-x', wrap).onclick = close;
   document.addEventListener('keydown', onKey);
-  document.body.appendChild(wrap);
-  const first = $('input:not([type=hidden]),textarea,select', wrap); if (first) first.focus();
-  return { el: $('.modal', wrap), close };
+  document.body.appendChild(wrap); syncModalInert();
+  // 포커스를 팝업 안으로: [autofocus] → 첫 입력칸 → 확인 단추(확인 창) → 팝업 자체. 뒤 화면 단추에 포커스가 남아 Enter가 뒤로 가지 않게.
+  const dialog = $('.modal', wrap); dialog.tabIndex = -1;
+  const first = $('[autofocus]', wrap) || $$('input:not([type=hidden]):not([disabled]),textarea:not([disabled]),select:not([disabled])', wrap).find(el => el.offsetParent !== null) || $('[data-yes]', wrap);
+  (first || dialog).focus({ preventScroll: !first });
+  return { el: dialog, close };
 }
 function confirmBox(msg) {
   return new Promise((resolve) => {
