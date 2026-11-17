@@ -2495,10 +2495,18 @@ route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
   let items; try { items = JSON.parse(inv.items || '[]'); } catch { items = []; }
   const month = writeDate.slice(0, 7);
   if (Array.isArray(body.items)) {
-    if (body.items.length !== items.length) throw bad('품목 줄 수가 맞지 않습니다. 새로 불러오세요.');
-    items = items.map((it, k) => { const e = body.items[k] && typeof body.items[k] === 'object' ? body.items[k] : {}; const date = e.date ? dateStr(e.date, `${k + 1}번째 품목 월일`) : it.date;
+    // 15.162 수량·단가·공급가액·세액도 고치고 줄을 보태거나(품목명 넣기) 뺄(품목명 비우기) 수 있다. 줄 금액 합은 계산서(담긴 전표) 합계와 같아야 한다.
+    const raw = body.items.filter(e => e && typeof e === 'object' && String(e.item ?? '').trim()), max = Math.max(16, items.length);
+    if (!raw.length || raw.length > max) throw bad(`품목 줄은 1~${max}줄로 넣으세요(품목명이 빈 줄은 빠집니다).`);
+    const optNum = (v, old, label) => v === undefined ? old ?? null : v === null || v === '' ? null : num(v, label);
+    items = raw.map((e, k) => { const it = items[k] || {}; const date = e.date ? dateStr(e.date, `${k + 1}번째 품목 월일`) : it.date || writeDate;
       if (String(date).slice(0, 7) !== month) throw bad(`${k + 1}번째 품목 월일(${date})은 작성일자와 같은 달이어야 합니다.`);
-      return { ...it, date, item: e.item === undefined ? it.item : reqStr(e.item, `${k + 1}번째 품목`, 200), spec: e.spec === undefined ? it.spec : str(e.spec, 100), note: e.note === undefined ? it.note : str(e.note, 200) }; });
+      const supply = e.supply === undefined ? Number(it.supply ?? 0) : Number(e.supply), vat = e.vat === undefined ? Number(it.vat ?? 0) : Number(e.vat ?? 0);
+      if (!Number.isInteger(supply) || !Number.isInteger(vat)) throw bad(`${k + 1}번째 품목: 공급가액·세액은 원 단위 정수로 넣으세요.`);
+      return { ...it, date, item: reqStr(e.item, `${k + 1}번째 품목`, 200), spec: e.spec === undefined ? it.spec ?? '' : str(e.spec, 100), note: e.note === undefined ? it.note ?? '' : str(e.note, 200),
+        qty: optNum(e.qty, it.qty, `${k + 1}번째 수량`), unit_price: optNum(e.unit_price, it.unit_price, `${k + 1}번째 단가`), supply, vat }; });
+    const ss = items.reduce((t, i) => t + i.supply, 0), vs = items.reduce((t, i) => t + i.vat, 0);
+    if (ss !== Number(inv.supply_total) || vs !== Number(inv.vat_total)) throw bad(`품목 줄 합계(공급가액 ${won0(ss)} · 세액 ${won0(vs)})가 계산서 합계(공급가액 ${won0(inv.supply_total)} · 세액 ${won0(inv.vat_total)})와 다릅니다. 금액을 맞추거나, 전표 금액이 다르면 매출전표를 먼저 고치세요.`);
     set.items = JSON.stringify(items); set.item_summary = itemLabel(items[0]?.item, items.length);
   } else if (writeDate !== inv.write_date) {
     // 작성일자를 바꾸면 품목 월일도 함께(다른 달 날짜는 작성일자로)

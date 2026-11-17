@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.161';
+const APP_VERSION = '15.162';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -658,6 +658,35 @@ function shell() {
   if (active && sideScroll === null && side.scrollHeight > side.clientHeight) { const top = active.getBoundingClientRect().top - side.getBoundingClientRect().top; if (top > side.clientHeight - 40) side.scrollTop = top - side.clientHeight / 3; }
 }
 
+// ── 15.162 N-SRM식 화면 탭·위치 표시 ── 연 화면을 탭으로 모아 두고(이 기기, 최대 10개) × 로 닫는다. 위치는 메뉴 구조에서 찾는다.
+const TABS_MAX = 10, tabsKey = () => `wpa:tabs:${ME?.id || 0}`;
+function readTabs() { try { const v = JSON.parse(localStorage.getItem(tabsKey()) || '[]'); return Array.isArray(v) ? v.filter(t => t && t.href && canSeeRoute(t.href)) : []; } catch { return []; } }
+function writeTabs(list) { try { localStorage.setItem(tabsKey(), JSON.stringify(list.slice(-TABS_MAX))); } catch { /* 편의 */ } }
+function crumbPath(route) {
+  const out = []; const walk = (items, trail) => { for (const i of items) { if (Array.isArray(i)) { if (i[0] === route) { out.push(...trail, i[1]); return true; } } else if (walk(i.items, [...trail, i.sub])) return true; } return false; };
+  for (const g of NAV) if (walk(g.items, [g.group])) return out;
+  for (const [h, l] of [...NAV_MANAGE, ...NAV_ADMIN]) if (h === route) return ['관리', l];
+  return [];
+}
+function pageTabs(main, route) {
+  if (!main || main.querySelector(':scope > .page-tabs')) return;
+  const path = String(route || '#/').split('?')[0], trail = crumbPath(path), h1 = $('h1', main);
+  const label = trail.at(-1) || (h1 ? screenTitle(main) : '');
+  let tabs = readTabs();
+  if (path !== '#/' && label && PAGES[path]) { if (!tabs.some(t => t.href === path)) tabs.push({ href: path, label }); writeTabs(tabs); tabs = readTabs(); }
+  const PIN = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M10 1l5 5-2 1-3 3 .5 3.5L9 15l-3-3-4 4-1-1 4-4-3-3 1.5-1.5L7 7l3-3z" fill="currentColor"/></svg>';
+  const bar = document.createElement('nav'); bar.className = 'page-tabs'; bar.setAttribute('aria-label', '연 화면');
+  bar.innerHTML = `<a href="#/" class="pt-tab pt-home${path === '#/' ? ' on' : ''}">HOME</a>${tabs.map(t => `<span class="pt-tab${t.href === path ? ' on' : ''}"><a href="${esc(t.href)}">${PIN}<span>${esc(t.label)}</span></a><button type="button" class="pt-x" data-tab-close="${esc(t.href)}" aria-label="${esc(t.label)} 탭 닫기" title="닫기">×</button></span>`).join('')}${tabs.length > 1 ? '<button type="button" class="pt-clear" data-tab-clear title="다른 탭 모두 닫기" aria-label="다른 탭 모두 닫기">≡×</button>' : ''}`;
+  main.prepend(bar);
+  if (trail.length && h1) h1.insertAdjacentHTML('beforebegin', `<div class="crumbs" aria-label="위치"><a href="#/" aria-label="홈">⌂</a>${trail.map(t => ` <span>›</span> ${esc(t)}`).join('')}</div>`);
+  bar.addEventListener('click', e => {
+    const x = e.target.closest('[data-tab-close]'), all = e.target.closest('[data-tab-clear]'); if (!x && !all) return;
+    e.preventDefault();
+    if (all) { writeTabs(readTabs().filter(t => t.href === path)); render(); return; }
+    const list = readTabs(), k = list.findIndex(t => t.href === x.dataset.tabClose); list.splice(k, 1); writeTabs(list);
+    if (x.dataset.tabClose === path) location.hash = (list[k] || list[k - 1])?.href || '#/'; else x.closest('.pt-tab').remove();
+  });
+}
 async function render() {
   uxBeforeRender();
   const route = location.hash || '#/';
@@ -672,6 +701,7 @@ async function render() {
   refreshNavBadges();
   const page = canSeeRoute(route) ? PAGES[location.hash || '#/'] || pageHome : pageNoMenu;
   try { await page($('#main')); if (page === pageHome || page === pageTasks) applyMenuAccess($('#main')); if (page !== pageNoMenu) favoriteTools($('#main'), route); applyView($('#main'), route); foldHelp($('#main')); erpEntryBar($('#main'), route); requestAnimationFrame(fixHeadingLevels); } catch (e) { $('#main').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  try { pageTabs($('#main'), route); } catch { /* 탭은 편의 기능 */ }
   uxAfterRender(route);
 }
 window.addEventListener('hashchange', render);

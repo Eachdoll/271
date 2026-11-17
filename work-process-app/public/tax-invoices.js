@@ -89,7 +89,7 @@ function taxInvoiceView(inv, after) {
     <tr><th>비고</th><td colspan="3">${editable ? `<input class="taxf-in" data-tf="note" maxlength="200" value="${esc(inv.note)}" aria-label="비고">` : esc(inv.note || '')}</td><th>담긴 전표</th><td class="small">${inv.bills.filter(b => b.active).map(b => esc(b.bill_no)).join(', ')}</td></tr>
     ${inv.status_message ? `<tr><th>메시지</th><td colspan="5" class="small">${esc(inv.status_message)}</td></tr>` : ''}</tbody></table>`;
   const m = modal(`<h3>${inv.doc_type === 'free' ? '계산서' : '세금계산서'} <span class="small muted">${esc(inv.invoice_no)} · ${inv.kind === 'single' ? '건별' : '월별'}</span> ${taxChip(inv.status)}${editable ? ' <span class="small muted">· 칸을 눌러 바로 고친 뒤 「저장」</span>' : ''}</h3>
-    ${taxFormHtml({ side: 'sales', inv, supplier: c, buyer: inv, items: inv.items, editable, charge: inv.charge, statusBar })}
+    ${taxFormHtml({ side: 'sales', inv, supplier: c, buyer: inv, items: inv.items, editable, editAmounts: editable, charge: inv.charge, statusBar })}${editable ? '<p class="small" data-tax-check></p><p class="small muted">수량·단가를 바꾸면 공급가액·세액을 다시 계산합니다(직접 고쳐도 됨). 품목명을 넣으면 줄이 보태지고 비우면 빠집니다. 줄 금액 합은 계산서 합계와 같아야 저장됩니다.</p>' : ''}
     <div class="actions">${editable ? '<button class="btn" data-tax-refresh>거래처 정보 다시 불러오기</button>' : ''}<button class="btn" data-close>닫기</button><button class="btn" data-print>인쇄 · PDF 저장</button>${editable ? '<button class="btn primary" data-tax-save>저장</button>' : ''}</div>`, { wide: true });
   m.el.classList.add('taxf-modal');
   m.el.parentElement.classList.add('lr-cert-wrap');
@@ -98,14 +98,17 @@ function taxInvoiceView(inv, after) {
   const reopen = async r => { m.close(); taxInvoiceView({ ...r, company: c }, after); await after?.(); };
   $('[data-tax-refresh]', m.el)?.addEventListener('click', async () => { try { reopen(await api('PUT', `/api/tax-invoices/${inv.id}`, { refresh_customer: true })); toast('거래처 사업자 정보를 다시 불러왔습니다.'); } catch (error) { fail(error); } });
   if (!editable) return;
+  const ed = taxItemEditor(m.el, inv);
   // 작성일자를 바꾸면 아래 품목 월일도 같이 바뀐다.
   const wd = $('[data-tf="write_date"]', m.el);
-  wd.addEventListener('change', () => { if (!wd.value) return; $$('[data-ti="date"]', m.el).forEach(x => { x.value = wd.value; x.classList.add('auto-filled'); }); });
+  wd.addEventListener('change', () => { if (!wd.value) return; $$('[data-ti="date"]', m.el).forEach(x => { if (x.value) { x.value = wd.value; x.classList.add('auto-filled'); } }); });
   $('[data-tax-save]', m.el).onclick = async e => {
     const tf = k => $(`[data-tf="${k}"]`, m.el)?.value ?? '';
     if (!wd.value) { wd.focus(); return toast('작성일자를 넣으세요.', 'err'); }
     if (!tf('email1').trim()) { $('[data-tf="email1"]', m.el).focus(); return toast('받는 이메일 1을 넣으세요.', 'err'); }
-    const items = inv.items.map((_, k) => Object.fromEntries(['date', 'item', 'spec', 'note'].map(f => [f, $(`[data-ti="${f}"][data-k="${k}"]`, m.el)?.value ?? ''])));
+    const items = ed.collect();
+    if (!items.length) return toast('품목을 한 줄 이상 넣으세요.', 'err');
+    if (!ed.check()) return toast('품목 줄 합계가 계산서 합계와 다릅니다. 금액을 맞춰 주세요.', 'err');
     const body = { doc_type: $('[name="taxf-doc"]:checked', m.el)?.value || inv.doc_type || 'tax', write_date: wd.value, charge: $('[name="taxf-charge"]:checked', m.el)?.value || inv.charge, email1: tf('email1'), email2: tf('email2'), note: tf('note'),
       buyer: Object.fromEntries(['biz_no', 'biz_name', 'ceo', 'address', 'biz_type', 'biz_item'].map(k => [k, tf(k)])), items };
     e.target.disabled = true;
@@ -211,6 +214,30 @@ async function pagePurchaseTax(main) {
   $('#ptaxNew', main).onclick = () => purchaseTaxNew(() => load()).catch(fail);
   await load().catch(fail);
 }
+// 15.162 세금계산서 품목 줄 편집(매출·매입 같은 방식): 수량·단가를 바꾸면 공급가액·세액을 다시 계산(직접 고쳐도 됨), 품목명을 넣으면 줄 추가·비우면 빠짐,
+// 줄 금액 합이 계산서 합계와 같은지 [data-tax-check]에 바로 보여 준다. collect()는 저장할 줄 목록.
+function taxItemEditor(el, inv) {
+  const free = inv.doc_type === 'free', zero = Number(inv.vat_total) === 0;
+  const cell = (f, k) => $(`[data-ti="${f}"][data-k="${k}"]`, el), keys = $$('[data-ti="item"]', el).map(x => x.dataset.k);
+  const n = v => { const t = String(v ?? '').replace(/,/g, '').trim(); return t === '' ? null : Number(t); };
+  const check = () => {
+    let s = 0, v = 0; for (const k of keys) { if (!cell('item', k).value.trim()) continue; s += n(cell('supply', k)?.value) || 0; v += n(cell('vat', k)?.value) || 0; }
+    const ok = s === Number(inv.supply_total) && v === Number(inv.vat_total), box = $('[data-tax-check]', el);
+    if (box) box.innerHTML = `품목 합계 공급가액 <b>${won(s)}</b> · 세액 <b>${won(v)}</b> ${ok ? '<span class="chip green">계산서 합계와 같음</span>' : `<span class="chip red">계산서 합계(공급가액 ${won(inv.supply_total)} · 세액 ${won(inv.vat_total)})와 다름</span>`}`;
+    return ok;
+  };
+  const wd = $('[data-tf="write_date"]', el);
+  el.addEventListener('input', e => {
+    const k = e.target.dataset.k, f = e.target.dataset.ti; if (k === undefined || !f) return;
+    if (f === 'qty' || f === 'unit_price') { const q = n(cell('qty', k).value), p = n(cell('unit_price', k).value); if (q != null && p != null && Number.isFinite(q * p)) { const sup = Math.trunc(q * p); cell('supply', k).value = sup; if (cell('vat', k)) cell('vat', k).value = free || zero ? 0 : Math.trunc(sup * 0.1); } }
+    if (f === 'supply' && cell('vat', k) && !free && !zero) { const sup = n(e.target.value); if (sup != null) cell('vat', k).value = Math.trunc(sup * 0.1); }
+    if (f === 'item' && e.target.value.trim() && !cell('date', k).value && wd) cell('date', k).value = wd.value;
+    check();
+  });
+  check();
+  const collect = () => keys.filter(k => cell('item', k).value.trim()).map(k => ({ date: cell('date', k).value || wd?.value, item: cell('item', k).value, spec: cell('spec', k).value, qty: n(cell('qty', k).value), unit_price: n(cell('unit_price', k).value), supply: n(cell('supply', k).value) ?? 0, vat: free ? 0 : n(cell('vat', k)?.value) ?? 0, note: cell('note', k).value }));
+  return { check, collect };
+}
 async function purchaseTaxView(id, after = null, edit = false) {
   const inv = await api('GET', '/api/purchase-tax-invoices/' + id);
   const sup = inv.supplier || {}, supplier = { biz_no: inv.biz_no || sup.biz_no, biz_name: sup.biz_name || inv.vendor, ceo: sup.ceo, address: sup.address, biz_type: sup.biz_type, biz_item: sup.biz_item };
@@ -221,35 +248,18 @@ async function purchaseTaxView(id, after = null, edit = false) {
     ${(inv.changes || []).length ? `<details class="small taxf-hist"><summary>고친 이력 ${inv.changes.length}건</summary>${inv.changes.map(c => `<div>${esc(String(c.changed_at).slice(0, 16))} · ${esc(c.changed_by)} · ${esc(c.summary)}</div>`).join('')}</details>` : ''}`;
   const m = modal(`<h3>매입 ${inv.doc_type === 'free' ? '계산서' : '세금계산서'} <span class="small muted">${esc(inv.invoice_no)}${inv.status === 'cancelled' ? ' · 취소' : ''}</span>${editing ? ' <span class="chip yellow">고치는 중</span>' : ''}</h3>
     ${taxFormHtml({ side: 'purchase', inv, supplier, buyer: inv.company || {}, items, editable: editing, editParty: false, editAmounts: editing, charge: 'claim', statusBar })}
-    ${editing ? '<p class="small" data-ptax-check></p><p class="small muted">품목 줄의 공급가액·세액 합은 담긴 매입전표 합계와 같아야 저장됩니다. 품목명을 비운 줄은 빠집니다. 수량·단가를 고치면 공급가액·세액을 다시 계산합니다(직접 고쳐도 됨).</p>' : ''}
+    ${editing ? '<p class="small" data-tax-check></p><p class="small muted">품목 줄의 공급가액·세액 합은 담긴 매입전표 합계와 같아야 저장됩니다. 품목명을 비운 줄은 빠집니다. 수량·단가를 고치면 공급가액·세액을 다시 계산합니다(직접 고쳐도 됨).</p>' : ''}
     <div class="actions"><button class="btn" data-close>${editing ? '취소' : '닫기'}</button>${editing ? '<button class="btn primary" data-ptax-save>저장</button>' : `${canEdit ? '<button class="btn" data-ptax-edit>수정</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button>`}</div>`, { wide: true });
   m.el.classList.add('taxf-modal'); m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = () => { m.close(); if (editing) purchaseTaxView(id, after); };
   $('[data-print]', m.el)?.addEventListener('click', () => rcPrint(`매입세금계산서_${inv.invoice_no}`));
   $('[data-ptax-edit]', m.el)?.addEventListener('click', () => { m.close(); purchaseTaxView(id, after, true); });
   if (!editing) return;
-  const free = inv.doc_type === 'free', zero = Number(inv.vat_total) === 0;
-  const cell = (f, k) => $(`[data-ti="${f}"][data-k="${k}"]`, m.el), keys = $$('[data-ti="item"]', m.el).map(x => x.dataset.k);
-  const n = v => { const t = String(v ?? '').replace(/,/g, '').trim(); return t === '' ? null : Number(t); };
-  const check = () => {
-    let s = 0, v = 0; for (const k of keys) { if (!cell('item', k).value.trim()) continue; s += n(cell('supply', k).value) || 0; v += n(cell('vat', k)?.value) || 0; }
-    const ok = s === Number(inv.supply_total) && v === Number(inv.vat_total);
-    $('[data-ptax-check]', m.el).innerHTML = `품목 합계 공급가액 <b>${won(s)}</b> · 세액 <b>${won(v)}</b> ${ok ? '<span class="chip green">전표 합계와 같음</span>' : `<span class="chip red">전표 합계(공급가액 ${won(inv.supply_total)} · 세액 ${won(inv.vat_total)})와 다름</span>`}`;
-    return ok;
-  };
-  const wd = $('[data-tf="write_date"]', m.el);
-  wd.addEventListener('change', () => { if (wd.value) keys.forEach(k => { const d = cell('date', k); if (d.value || cell('item', k).value.trim()) { d.value = wd.value; d.classList.add('auto-filled'); } }); });
-  m.el.addEventListener('input', e => {
-    const k = e.target.dataset.k, f = e.target.dataset.ti; if (k === undefined) return;
-    if (f === 'qty' || f === 'unit_price') { const q = n(cell('qty', k).value), p = n(cell('unit_price', k).value); if (q != null && p != null && Number.isFinite(q * p)) { const sup = Math.trunc(q * p); cell('supply', k).value = sup; if (cell('vat', k)) cell('vat', k).value = free || zero ? 0 : Math.trunc(sup * 0.1); } }
-    if (f === 'supply' && cell('vat', k) && !free && !zero) { const sup = n(e.target.value); if (sup != null) cell('vat', k).value = Math.trunc(sup * 0.1); }
-    if (f === 'item' && e.target.value.trim() && !cell('date', k).value) cell('date', k).value = wd.value;
-    check();
-  });
-  check();
+  const ed = taxItemEditor(m.el, inv), check = ed.check, wd = $('[data-tf="write_date"]', m.el);
+  wd.addEventListener('change', () => { if (wd.value) $$('[data-ti="date"]', m.el).forEach(d => { if (d.value) { d.value = wd.value; d.classList.add('auto-filled'); } }); });
   $('[data-ptax-save]', m.el).onclick = async e => {
     if (!wd.value) { wd.focus(); return toast('작성일자를 넣으세요.', 'err'); }
-    const rows = keys.filter(k => cell('item', k).value.trim()).map(k => ({ date: cell('date', k).value || wd.value, item: cell('item', k).value, spec: cell('spec', k).value, qty: n(cell('qty', k).value), unit_price: n(cell('unit_price', k).value), supply: n(cell('supply', k).value) ?? 0, vat: free ? 0 : n(cell('vat', k)?.value) ?? 0, note: cell('note', k).value }));
+    const rows = ed.collect();
     if (!rows.length) return toast('품목을 한 줄 이상 넣으세요.', 'err');
     if (!check()) return toast('품목 합계가 담긴 매입전표 합계와 다릅니다. 금액을 맞춰 주세요.', 'err');
     e.target.disabled = true;

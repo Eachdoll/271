@@ -10,7 +10,7 @@ const NAV_KEY = 'wpa:nav-layout', NAV_LABEL = { side: '좌측 메뉴', top: '상
   side: '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>',
   top: '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>',
 };
-function navLayout() { try { return localStorage.getItem(NAV_KEY) === 'top' ? 'top' : 'side'; } catch { return 'side'; } }
+function navLayout() { try { return localStorage.getItem(NAV_KEY) === 'side' ? 'side' : 'top'; } catch { return 'top'; } } // 15.162 기본은 상단 메뉴
 function applyNavLayout(mode) {
   const root = document.documentElement;
   if (mode === 'top') root.setAttribute('data-nav', 'top'); else root.removeAttribute('data-nav');
