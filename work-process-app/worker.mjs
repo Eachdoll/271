@@ -2560,7 +2560,9 @@ route('GET', '/api/tax-invoices/:id', async ({ user, params }) => { requireSales
 route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
   requireSales(user);
   const inv = await mustGet('tax_invoices', params.id);
-  if (!['draft', 'failed'].includes(inv.status)) throw bad('발행을 요청한 계산서는 고칠 수 없습니다.');
+  // 15.164 역발행(거래처가 홈택스에서 발행, 우리는 기록만)은 발행 기록 뒤에도 고칠 수 있다. 우리가 발행한 정발행은 발행 요청 뒤 못 고침.
+  const pending = ['draft', 'failed'].includes(inv.status), reverseEdit = inv.issue_type === 'reverse' && inv.status !== 'cancelled';
+  if (!pending && !reverseEdit) throw bad('발행을 요청한 계산서는 고칠 수 없습니다(역발행 계산서는 발행 기록 뒤에도 고칠 수 있음).');
   const writeDate = body.write_date === undefined ? inv.write_date : dateStr(body.write_date, '작성일자');
   if (inv.kind === 'monthly' && inv.period_from && writeDate < inv.period_from) throw bad('작성일자는 기간 시작일 이후여야 합니다.');
   const set = { write_date: writeDate, charge: body.charge === undefined ? inv.charge : body.charge === 'receipt' ? 'receipt' : 'claim', email1: body.email1 === undefined ? inv.email1 : taxEmail(body.email1, '이메일 1'), email2: body.email2 === undefined ? inv.email2 : taxEmail(body.email2, '이메일 2'), note: body.note === undefined ? inv.note : str(body.note, 200) };
@@ -2568,6 +2570,12 @@ route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
   // 15.142 양식 창에서 바로 고치기: 공급받는자 정보 · 품목 줄(월일·품목·규격·비고, 금액은 전표 그대로)
   if (body.buyer && typeof body.buyer === 'object' && !body.refresh_customer) {
     const b = body.buyer; Object.assign(set, { biz_no: b.biz_no === undefined ? inv.biz_no : bizNoField(b.biz_no), biz_name: str(b.biz_name ?? inv.biz_name, 100), ceo: str(b.ceo ?? inv.ceo, 50), address: str(b.address ?? inv.address, 200), biz_type: str(b.biz_type ?? inv.biz_type, 100), biz_item: str(b.biz_item ?? inv.biz_item, 100) });
+  }
+  if (body.issue_type !== undefined && pending) { if (!['normal', 'reverse'].includes(body.issue_type)) throw bad('발행구분을 확인하세요.'); set.issue_type = body.issue_type; }
+  if (body.approval_no !== undefined && reverseEdit) {
+    const appr = approvalNo(body.approval_no);
+    if (appr && appr !== inv.approval_no && await db.prepare("SELECT 1 FROM tax_invoices WHERE approval_no=? AND status<>'cancelled' AND id<>?").get(appr, inv.id)) throw new HttpError(409, `승인번호 ${appr}는 이미 다른 계산서에 있습니다.`);
+    set.approval_no = appr;
   }
   if (body.doc_type !== undefined) { if (!['tax', 'free'].includes(body.doc_type)) throw bad('문서 구분을 확인하세요.'); if (body.doc_type === 'free' && Number(inv.vat_total) !== 0) throw bad('계산서(면세)는 세액이 0이어야 합니다. 영세·면세 전표로 담으세요.'); set.doc_type = body.doc_type; }
   let items; try { items = JSON.parse(inv.items || '[]'); } catch { items = []; }
@@ -2591,7 +2599,7 @@ route('PUT', '/api/tax-invoices/:id', async ({ user, params, body }) => {
     items = items.map(it => ({ ...it, date: inv.kind === 'single' || String(it.date || '').slice(0, 7) !== month ? writeDate : it.date })); set.items = JSON.stringify(items);
   }
   const keys = Object.keys(set);
-  const r = await db.prepare(`UPDATE tax_invoices SET ${keys.map(k => `${k}=?`).join(',')},updated_by=?,updated_at=? WHERE id=? AND status IN ('draft','failed')`).run(...keys.map(k => set[k]), user.name, now(), inv.id);
+  const r = await db.prepare(`UPDATE tax_invoices SET ${keys.map(k => `${k}=?`).join(',')},updated_by=?,updated_at=? WHERE id=? AND (status IN ('draft','failed') OR (issue_type='reverse' AND status<>'cancelled'))`).run(...keys.map(k => set[k]), user.name, now(), inv.id);
   if (!r.changes) throw new HttpError(409, '그 사이 발행이 요청되었습니다. 새로 불러오세요.');
   return invoiceDetail(await mustGet('tax_invoices', inv.id));
 });

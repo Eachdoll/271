@@ -624,3 +624,19 @@ test('15.161 Purchase tax invoice: items from bill lines (freight row), edit ite
   const other = await buyer('PUT', `/api/purchase-tax-invoices/${inv.id}`, { items: [{ ...items[0], date: '2020-01-01' }, items[1]] });
   assert.match(other.body.error, /같은 달/);
 });
+
+test('15.164 Reverse-issued sales tax invoice stays editable after the issue record; normal issued is locked', async () => {
+  const g = (await admin('POST', '/api/boms', { product: '역발행상품', product_code: 'RV-1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const mk = async c => { const s = (await admin('POST', '/api/shipments', { ship_date: today, ...(g.id ? { bom_id: g.id } : {}), item: '역발행상품', qty: 10, customer: c, unit: 'EA' })).body;
+    const b = (await admin('POST', '/api/sales-bills', { customer: c, bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 100 }] })).body;
+    const t = (await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [b.id] })).body; return t.rows[0]; };
+  const rv = await mk('역발행고객'), nm = await mk('정발행고객');
+  // 발행 전: 고치기 창에서 발행구분을 역발행으로
+  assert.equal((await admin('PUT', `/api/tax-invoices/${rv.id}`, { issue_type: 'reverse' })).body.issue_type, 'reverse');
+  for (const [i, n] of [[rv, '01'], [nm, '02']]) assert.equal((await admin('POST', `/api/tax-invoices/${i.id}/mark-issued`, { approval_no: `20261117-41000012-000002${n}` })).status, 200);
+  const items = [{ item: '역발행상품', qty: 6, unit_price: 100, supply: 600, vat: 60 }, { item: '역발행상품(추가)', qty: 4, unit_price: 100, supply: 400, vat: 40 }];
+  const u = await admin('PUT', `/api/tax-invoices/${rv.id}`, { items, approval_no: '20261117-41000012-00000299', note: '거래처 발행분' });
+  assert.equal(u.status, 200, JSON.stringify(u.body)); assert.equal(u.body.status, 'issued'); assert.deepEqual(u.body.items.map(i => i.qty), [6, 4]); assert.equal(u.body.approval_no, '20261117-41000012-00000299');
+  assert.match((await admin('PUT', `/api/tax-invoices/${rv.id}`, { approval_no: '20261117-41000012-00000202' })).body.error, /이미 다른/);
+  assert.match((await admin('PUT', `/api/tax-invoices/${nm.id}`, { items })).body.error, /발행을 요청한/);
+});

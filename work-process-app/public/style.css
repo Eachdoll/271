@@ -2033,3 +2033,7 @@ form.list-filters, .rs-page .rs-filter, .table-wrap, .card, .xf-pop, .xf-bar { b
 .qt-grid input { width: 100%; min-width: 0; box-sizing: border-box; } .qt-grid td:nth-child(3) { min-width: 220px; } .qt-grid .qt-unit { width: 5em; } .qt-grid td:nth-child(6), .qt-grid td:nth-child(7) { width: 9em; }
 @media (max-width: 760px) { .qt-top { grid-template-columns: 1fr; } }
 .qt-left h2 { text-align: left; }
+
+/* 15.164 경리 메뉴 색 · 세금계산서 목록 줄 누르기 */
+.nav-group[data-dept="accounting"] { --dept: #0f766e; }
+tr.tax-row { cursor: pointer; } tr.tax-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
