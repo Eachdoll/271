@@ -1515,3 +1515,21 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 @media print { .g-table thead th, .g-table .g-prod { position: static; } }
 .g-key.g-done { border-color: var(--green); } .g-key.g-part { border-color: var(--yellow); } .g-key.g-late { border-color: var(--red); }
 .g-cell.g-done { box-shadow: inset 0 -2px 0 var(--green); } .g-cell.g-late { box-shadow: inset 0 -2px 0 var(--red); } .g-cell.g-part { box-shadow: inset 0 -2px 0 var(--yellow); }
+/* 15.119 인쇄: 맨 위 창만 · 전표 표 칸 줄바꿈 막기 · 거래명세서 공급자/공급받는자 칸이 종이 밖으로 나가지 않게 */
+@media print { body.printing-cert .lr-cert-wrap.print-skip { display: none !important; } }
+.po-doc .po-items th { white-space: nowrap; }
+.po-doc .po-items td.r, .po-doc .po-items td.c { white-space: nowrap; }
+.bill-doc .po-items, .stmt-doc .po-items { font-size: 13px; }
+.bill-doc .po-items th, .bill-doc .po-items td, .stmt-doc .po-items th, .stmt-doc .po-items td { padding: 5px 6px; }
+.stmt-parties { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.stmt-doc .stmt-party { table-layout: fixed; font-size: 13px; }
+.stmt-doc .stmt-party th { width: auto; padding: 5px 6px; }
+.stmt-doc .stmt-party td { padding: 5px 6px; overflow-wrap: anywhere; }
+.stmt-doc .stmt-balance { table-layout: fixed; font-size: 13px; }
+.stmt-doc .stmt-balance th { width: auto; }
+@media print {
+  body.printing-cert .bill-doc .po-items, body.printing-cert .stmt-doc .po-items { font-size: 11.5px; }
+  body.printing-cert .po-doc .po-items th, body.printing-cert .po-doc .po-items td { padding: 4px 5px; }
+  body.printing-cert .stmt-doc .stmt-party, body.printing-cert .stmt-doc .stmt-balance { font-size: 11.5px; }
+}
+@media (max-width: 700px) { .stmt-parties { grid-template-columns: minmax(0, 1fr); } }
