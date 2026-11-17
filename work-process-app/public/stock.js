@@ -168,6 +168,7 @@ async function stockReorder(lowRows) {
       <td class="r"><input type="number" step="any" min="0" data-ro-qty value="${Math.max(0, l.need)}" style="width:7em"></td><td>${esc(l.unit)}</td>
       <td><input data-ro-vendor maxlength="100" value="${esc(l.last_vendor)}" style="width:10em"></td><td class="r"><input type="number" step="any" min="0" data-ro-price value="${l.last_price ?? ''}" style="width:7em"></td></tr>`).join('')}</tbody></table></div>
     <div class="actions"><span class="small muted" data-ro-sum></span><button type="button" class="btn" data-close>닫기</button><button class="btn primary">발주 만들기</button></div></form>`, { wide: true });
+  m.el.classList.add('lr-modal', 'ro-modal'); // 15.123 넓게(품목 칸이 한 글자씩 꺾이지 않게)
   const form = $('form', m.el), rowsEl = $$('[data-ro]', m.el);
   const pick = () => rowsEl.map(tr => ({ l: lines[tr.dataset.ro], on: $('[data-ro-on]', tr).checked, qty: Number($('[data-ro-qty]', tr).value), vendor: $('[data-ro-vendor]', tr).value.trim(), price: $('[data-ro-price]', tr).value, tr })).filter(x => x.on);
   const vkey = v => v.replace(/\s+/g, '').toLowerCase();

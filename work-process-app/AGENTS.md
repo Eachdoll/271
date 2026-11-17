@@ -875,3 +875,8 @@ INVITE_CODE=local-test-code npm start
 ## 품목 찾기 창 (15.122)
 - .ip-modal: 창은 고정 높이(flex column, overflow hidden), 품목 표(.ip-wrap)만 스크롤 → 이중 스크롤 없음. 표 모서리 0(첫 칸이 잘리지 않게), 머리글 sticky.
 - openItemPicker 옵션 lots(기본 true): false면 LOT 수 칸·LOT 자동 번호 숨김(단가표).
+
+## 각진 스타일 · 조회 줄 정렬 (15.123)
+- style.css 끝: 모든 요소 border-radius 0(!important). 원이어야 하는 것만 예외(.flow 번호, .thumb 삭제, 로딩, .org-rank, .st-dot, 라디오). 새 스타일에 둥근 모서리를 넣어도 이 규칙이 이김.
+- .toolbar align-items flex-end + 큰 버튼 min-height 44px(입력칸과 같은 높이) → 라벨 달린 입력칸 옆 「조회」 버튼이 같은 줄에 맞음.
+- 부족분 발주 창 lr-modal(넓게) · 품목 칸 최소 폭.

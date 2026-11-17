@@ -1556,3 +1556,12 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 .modal.ip-modal .ip-wrap thead th { position: sticky; top: 0; z-index: 1; }
 .modal.ip-modal .ip-wrap table th:first-child, .modal.ip-modal .ip-wrap table td:first-child { border-radius: 0 !important; }
 @media (max-width: 700px) { .modal.ip-modal { height: calc(100vh - 16px); } }
+/* 15.122 조회 줄: 입력칸 아래 선에 버튼을 맞추고 높이도 같게(44px) */
+.toolbar { align-items: flex-end; }
+.toolbar > .btn:not(.small), .toolbar > button.btn:not(.small), .list-filters .btn:not(.small) { min-height: 44px; }
+/* 15.122 둥근 모서리 없앰(창·버튼·칸·카드·칩 전부 각지게). 원이어야 뜻이 통하는 것(번호 원·상태 점·로딩·라디오)만 둥글게 */
+*, *::before, *::after { border-radius: 0 !important; }
+.flow li::before, .thumb button, .btn.is-loading::before, .org-rank, .st-dot::before, input[type=radio] { border-radius: 50% !important; }
+.ro-modal td:nth-child(2) { min-width: 180px; }
+.ro-modal td input[data-ro-vendor] { width: 9em !important; }
+.ro-modal td input[data-ro-qty], .ro-modal td input[data-ro-price] { width: 6.5em !important; }
