@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.146';
+const APP_VERSION = '15.147';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -545,6 +545,8 @@ const PAGES = {
   '#/sales/book': main => pagePartnerBook(main, 'sales'),
   '#/sales/returns/new': main => pageReturnEntry(main, 'in'),
   '#/sales/returns': main => pageReturnList(main, 'in'),
+  '#/sales/returns/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:ret-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/returns'; return; } return pageReturnEntry(main, 'in', id); },
+  '#/purchase/returns/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:ret-edit'); } catch { id = null; } if (!id) { location.hash = '#/purchase/returns'; return; } return pageReturnEntry(main, 'out', id); },
   '#/purchase/returns/new': main => pageReturnEntry(main, 'out'),
   '#/purchase/returns': main => pageReturnList(main, 'out'),
   '#/purchase/book': main => pagePartnerBook(main, 'purchase'),

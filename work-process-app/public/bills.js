@@ -158,11 +158,14 @@ function billSheet(bill, after = null) {
       ${catSummary(billCatTotals(bill.lines))}
       ${bill.note ? `<div class="po-memo"><b>비고</b><div class="po-memo-body">${esc(bill.note)}</div></div>` : ''}
       ${bill.status === 'cancelled' ? `<p><b>취소</b> ${esc(bill.cancelled_by || '')} · ${esc(String(bill.cancelled_at || '').slice(0, 16))} · ${esc(bill.cancel_reason)}</p>` : ''}
+      ${bill.return_ref ? `<p class="small"><span class="chip red">반출</span> 반출 <button type="button" class="link-btn" data-bill-ret="${bill.return_ref.id}">${esc(bill.return_ref.return_no)}</button>에서 자동으로 만든 전표입니다. 고치거나 취소는 그 반출에서 합니다.</p>` : ''}${bill.invoice ? `<p class="small">매입 세금계산서 ${esc(bill.invoice.invoice_no)}에 담김 — 고치려면 계산서를 먼저 취소하세요.</p>` : ''}${(bill.changes || []).length ? `<div class="doc-changes small muted"><b>고친 이력</b> ${bill.changes.map(c => `${esc(String(c.changed_at).slice(5, 16))} ${esc(c.changed_by)} · ${esc(c.summary)}`).join(' / ')}</div>` : ''}
     </section>
-    <div class="actions"><button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.closed ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    <div class="actions"><button class="btn" data-close>닫기</button>${bill.status === 'confirmed' && !bill.closed && !bill.invoice && !bill.return_ref ? '<button class="btn" data-bill-edit>수정</button>' : ''}${bill.status === 'confirmed' && !bill.closed && !bill.return_ref ? '<button class="btn danger" data-bill-cancel>전표 취소</button>' : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`매입전표_${bill.bill_no}`);
+  $('[data-bill-ret]', m.el)?.addEventListener('click', async e => { try { returnSheet(await api('GET', '/api/returns/' + e.currentTarget.dataset.billRet)); } catch (error) { fail(error); } });
+  $('[data-bill-edit]', m.el)?.addEventListener('click', () => billEditWindow('purchase', bill, async next => { m.close(); billSheet(next, after); await after?.(); }));
   const cancel = $('[data-bill-cancel]', m.el);
   if (cancel) cancel.onclick = async () => {
     const v = await promptBox('매입전표 취소', `<p class="small muted">${esc(bill.bill_no)}을(를) 취소하면 그 입고 줄은 다시 「전표 없는 입고」로 돌아갑니다.</p><label>취소 사유 *<input name="reason" required maxlength="200"></label>`);
@@ -186,7 +189,7 @@ function billMonthBody(rows, lead, tail, rowHtml) {
 }
 async function pageBillList(main) {
   main.innerHTML = `<h1>매입전표 목록</h1>
-  <form class="list-filters toolbar" data-read-only id="billFilters"><label>명세서 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="vendor" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label>분류<select name="category">${catOptions(['원자재', '부자재', '임가공', '상품', '제품', '반제품', '미분류'])}</select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·명세서 번호·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
+  <form class="list-filters toolbar" data-read-only id="billFilters"><label>명세서 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="vendor" maxlength="100"></label><label>상태<select name="status"><option value="confirmed" selected>확정</option><option value="">전체(취소 포함)</option><option value="cancelled">취소만</option></select></label><label>분류<select name="category">${catOptions(['원자재', '부자재', '임가공', '상품', '제품', '반제품', '미분류'])}</select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·명세서 번호·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
   <div id="billSummary" class="counts"></div><div class="bulk-bar" id="billBulk"><span data-bulk-info>체크한 전표 없음</span><button type="button" class="btn primary" data-bulk-tax disabled>체크한 전표로 받은 세금계산서 등록</button><span class="small muted">한 매입처씩 · 이미 등록된 전표는 체크할 수 없습니다(중복 방지).</span></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
   const form = $('#billFilters', main); let rows = [], page = 0;
   const load = async (next = false) => {
@@ -195,13 +198,14 @@ async function pageBillList(main) {
     rows = next ? rows.concat(data.rows) : data.rows; page = data.page; $('#billMore', main).hidden = !data.more;
     const live = rows.filter(r => r.status === 'confirmed');
     $('#billSummary', main).innerHTML = `<b>${esc(`${rows.length}건 · 확정 합계 ${won(live.reduce((t, r) => t + r.total, 0))}원 (공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))} · 부가세 ${won(live.reduce((t, r) => t + r.vat_total, 0))})`)}</b>${data.more ? ' <span>(더 있음)</span>' : ''}${catSummary(data.by_category, '확정 전표 분류별 공급가액')}`;
-    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="등록할 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 6, 4, r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)}<div>${catChips(r.categories)}</div></td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${r.invoice ? `<span class="chip green">받음</span><div class="small muted">${esc(r.invoice.split('|')[1] || r.invoice.split('|')[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 받음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
+    $('#billList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-list"><thead><tr><th class="pick-cell"><input type="checkbox" data-bulk-all aria-label="등록할 수 있는 전표 모두 고르기"></th><th>전표번호</th><th>명세서 일자</th><th>거래처</th><th>명세서 번호</th><th class="r">줄</th><th class="r">공급가액</th><th class="r">부가세</th><th class="r">합계</th><th>상태</th><th>세금계산서</th><th>입력</th><th></th></tr></thead>${billMonthBody(rows, 6, 4, r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="pick-cell">${r.status === 'confirmed' && !r.invoice ? `<input type="checkbox" data-bulk-pick="${r.id}" aria-label="${esc(r.bill_no)} 고르기">` : `<input type="checkbox" disabled title="${r.invoice ? '이미 세금계산서에 담김' : '취소된 전표'}" aria-label="${esc(r.bill_no)} 고를 수 없음">`}</td><td data-card-primary><button type="button" class="link-btn" data-bill-open="${r.id}">${esc(r.bill_no)}</button></td><td>${esc(r.bill_date)}</td><td>${esc(r.vendor)}<div>${r.return_ref ? `<button type="button" class="chip red ret-chip" data-list-ret="${esc(r.return_ref.split('|')[1])}" title="반출 전표 보기">반출 ${esc(r.return_ref.split('|')[0])}</button> ` : ''}${catChips(r.categories)}</div></td><td>${esc(r.statement_no || '')}</td><td class="r">${fmtNum(r.line_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b>${r.statement_total != null && r.statement_total !== r.total ? '<div class="small red-text">명세서 차이</div>' : ''}</td><td>${r.status === 'confirmed' ? '<span class="chip green">확정</span>' : '<span class="chip">취소</span>'}</td><td>${r.invoice ? `<span class="chip green">받음</span><div class="small muted">${esc(r.invoice.split('|')[1] || r.invoice.split('|')[0])}</div>` : r.status === 'confirmed' ? '<span class="small muted">안 받음</span>' : ''}</td><td class="small muted">${esc(r.created_by)}</td><td data-card-primary><button class="btn small" data-bill-open="${r.id}">보기</button></td></tr>`)}</table></div>` : '<div class="empty">조건에 맞는 매입전표가 없습니다.</div>';
   };
   rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
   $('[data-xlsx]', form).onclick = () => billLinesExcel('purchase', { from: form.elements.from.value, to: form.elements.to.value, party: form.elements.vendor.value.trim() }).catch(fail);
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('#billMore', main).onclick = () => load(true).catch(fail);
   bulkPicks(main, () => rows, 'purchase', () => load());
+  $('#billList', main).addEventListener('click', async e => { const rr = e.target.closest('[data-list-ret]'); if (rr) { try { returnSheet(await api('GET', '/api/returns/' + rr.dataset.listRet), () => load()); } catch (error) { fail(error); } } });
   $('#billList', main).addEventListener('click', async e => { const b = e.target.closest('[data-bill-open]'); if (!b) return; try { billSheet(await api('GET', '/api/purchase-bills/' + b.dataset.billOpen), () => load()); } catch (error) { fail(error); } });
   let preset = null; try { preset = JSON.parse(sessionStorage.getItem('wpa:bill-filter') || 'null'); sessionStorage.removeItem('wpa:bill-filter'); } catch { preset = null; }
   if (preset) for (const [k, v] of Object.entries(preset)) if (form.elements[k]) form.elements[k].value = v;
@@ -421,9 +425,11 @@ const RET_PROCESS = { in: { stock_amount: '재납품+금액삭감', amount: '금
 const retProcessLabel = (side, p) => RET_PROCESS[side]?.[p] || RET_PROCESS_LABEL[p] || p;
 const RET_REASONS = ['불량', '오배송·오발주', '수량 초과', '변심·취소', '기타'];
 const retTabs = (side, list) => `<div class="seg class-tabs tax-side" role="tablist" aria-label="반입·반출">${(ME.is_admin || ME.roles.includes('sales')) ? `<a role="tab" href="#/sales/returns${list ? '' : '/new'}" class="${side === 'in' ? 'on' : ''}">반입 <span class="small muted">(거래처 → 우리)</span></a>` : ''}${(ME.is_admin || ME.roles.includes('purchase')) ? `<a role="tab" href="#/purchase/returns${list ? '' : '/new'}" class="${side === 'out' ? 'on' : ''}">반출 <span class="small muted">(우리 → 매입처)</span></a>` : ''}</div>`;
-async function pageReturnEntry(main, side = 'in') {
+async function pageReturnEntry(main, side = 'in', editId = null) {
   const S = RET_SIDE[side];
-  main.innerHTML = `<h1>${S.title} 입력</h1>${retTabs(side, false)}
+  const editing = editId ? await api('GET', '/api/returns/' + editId) : null; // 15.147 고치기
+  if (editing && editing.side !== side) { location.hash = `${RET_SIDE[editing.side].route}/edit`; return; }
+  main.innerHTML = `<h1>${editing ? `${S.title} 수정 <span class="small muted">${esc(editing.return_no)}</span>` : `${S.title} 입력`}</h1>${editing ? '' : retTabs(side, false)}
   <p class="muted">${side === 'in' ? '거래처에서 돌아온 제품을 넣습니다. 「재고」를 처리하면 재고로 다시 들어오고, 「금액」을 처리하면 음수 매출전표가 생겨 미수금이 줄어듭니다(세금계산서 관리에서 수정 계산서로 담을 수 있음).' : '매입처로 돌려보내는 자재를 넣습니다. 「재고」를 처리하면 재고에서 빠지고, 「금액」을 처리하면 음수 매입전표가 생겨 미지급금이 줄어듭니다.'} 「${S.src}(F5)」에서 원래 전표 줄을 고르면 남은 수량까지만 넣을 수 있습니다.</p>
   <form class="stack bill-form ret-form" id="retForm" data-no-author novalidate>
     <div class="ret-head">
@@ -442,10 +448,17 @@ async function pageReturnEntry(main, side = 'in') {
     </div>
     <div class="ret-bar"><b class="ret-bar-title">${S.title} 입력</b><span class="small muted">${S.label}할 ${side === 'in' ? '제품' : '상품'} 고르기 ☞</span><button type="button" class="btn" data-ret-src>${S.src} (F5)</button><button type="button" class="btn" data-ret-all>전체 품목 (F6)</button><span class="ret-bar-count small muted" data-ret-count></span></div>
     <div data-ret-lines></div><div data-ret-total hidden></div>
-    <div class="actions"><button class="btn primary" data-ret-save>${S.label} 저장</button></div>
+    <div class="actions">${editing ? `<a class="btn" href="${S.route}">목록으로</a>` : ''}<button class="btn primary" data-ret-save>${editing ? `${S.label} 수정 저장` : `${S.label} 저장`}</button></div>
   </form>`;
   const form = $('#retForm', main), box = $('[data-ret-lines]', form), partyIn = form.elements.party;
   let lines = [], requestId = crypto.randomUUID(), busy = false, catalog = null;
+  if (editing) { // 고치기: 머리·줄 채우기(원래 전표 줄은 남은 수량 + 이 전표 수량까지)
+    form.elements.return_date.value = editing.return_date; form.elements.process.value = editing.process in RET_PROCESS[side] ? editing.process : 'stock_amount'; form.elements.tax_type.value = editing.tax_type; form.elements.note.value = editing.note || '';
+    partyIn.value = editing.party; partyIn.readOnly = true; partyIn.title = '거래처는 바꿀 수 없습니다(취소 후 새로)';
+    $$('[name=settle]', form).forEach(x => { x.checked = x.value === editing.settle; });
+    const src = await api('GET', '/api/returns/sources?' + new URLSearchParams({ side, party: editing.party, months: 24 })).catch(() => ({ rows: [] }));
+    lines = editing.lines.map(l => { const s0 = l.source_id ? src.rows.find(x => x.id === l.source_id) : null; return { source_id: l.source_id || undefined, bom_id: l.bom_id || undefined, item: l.item, product_code: l.product_code, spec: l.spec, unit: l.unit, qty: l.qty, unit_price: l.unit_price, reason: l.reason, lot: l.lot, left: l.source_id ? (s0 ? s0.left + l.qty : l.qty) : null, source_bill_no: s0?.bill_no || l.source_bill_no || '', source_date: s0?.date || l.source_date || '' }; });
+  }
   bindPartnerPicker(partyIn, $('[data-partner-hint]', form), { type: S.type }).catch(() => {});
   const amountOn = () => ['stock_amount', 'amount'].includes(form.elements.process.value);
   const syncSettle = () => { $$('[name=settle]', form).forEach(x => { x.disabled = !amountOn(); }); $('.ret-settle-box', form).classList.toggle('off', !amountOn()); totals(); };
@@ -521,7 +534,9 @@ async function pageReturnEntry(main, side = 'in') {
     if (amountOn() && !lines.some(l => amt(l) > 0)) return toast('금액을 처리하려면 단가를 넣으세요. 재고만 처리하려면 처리구분을 「재고만」으로 고르세요.', 'err');
     busy = true; const btn = $('[data-ret-save]', form); btn.disabled = true;
     try {
-      const r = await api('POST', '/api/returns', { side, return_date: v.return_date, party: v.party, process: v.process, settle: v.settle || 'offset', tax_type: v.tax_type, note: v.note, request_id: requestId, lines: lines.map(l => ({ source_id: l.source_id || undefined, bom_id: l.bom_id || undefined, spec: l.spec, qty: l.qty, unit_price: l.unit_price, reason: l.reason, lot: l.lot })) });
+      const payload = { side, return_date: v.return_date, party: v.party, process: v.process, settle: v.settle || 'offset', tax_type: v.tax_type, note: v.note, request_id: requestId, lines: lines.map(l => ({ source_id: l.source_id || undefined, bom_id: l.bom_id || undefined, spec: l.spec, qty: l.qty, unit_price: l.unit_price, reason: l.reason, lot: l.lot })) };
+      const r = editing ? await api('PUT', '/api/returns/' + editing.id, payload) : await api('POST', '/api/returns', payload);
+      if (editing) { toast(`${r.return_no}을 고쳤습니다.`); location.hash = S.route; returnSheet(r); return; }
       toast(`${r.return_no} ${S.label}을 저장했습니다.${r.bill ? ` 금액 전표 ${r.bill.bill_no}` : ''}`);
       requestId = crypto.randomUUID(); lines = []; form.elements.note.value = ''; draw();
       returnSheet(r);
@@ -545,11 +560,13 @@ function returnSheet(r, after = null) {
       <tbody>${r.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td>${esc(l.item)}${l.product_code ? `<div class="po-code">${esc(l.product_code)}</div>` : ''}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}</td><td>${esc(l.unit || '')}</td><td class="r">${won(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td>${esc(l.reason || '')}</td><td>${esc(l.lot || '')}</td><td class="small">${esc(l.source_bill_no || '')}</td></tr>`).join('')}</tbody>
       <tfoot><tr><th colspan="6" class="r">공급가액</th><td class="r">${won(r.supply_total)}</td><td colspan="3"></td></tr><tr><th colspan="6" class="r">부가세</th><td class="r">${won(r.vat_total)}</td><td colspan="3"></td></tr><tr><th colspan="6" class="r">합계</th><td class="r"><b>${won(r.total)}</b></td><td colspan="3"></td></tr></tfoot></table>
     </section>
-    <div class="actions"><button class="btn" data-close>닫기</button>${r.status === 'confirmed' ? `<button class="btn danger" data-ret-cancel>${S.label} 취소</button>` : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
+    ${(r.changes || []).length ? `<div class="doc-changes small muted"><b>고친 이력</b> ${r.changes.map(c => `${esc(String(c.changed_at).slice(5, 16))} ${esc(c.changed_by)} · ${esc(c.summary)}`).join(' / ')}</div>` : ''}${r.invoiced ? `<p class="small muted">금액이 세금계산서에 담겨 있어 고칠 수 없습니다(계산서를 먼저 취소).</p>` : ''}
+    <div class="actions"><button class="btn" data-close>닫기</button>${r.status === 'confirmed' && !r.invoiced ? `<button class="btn" data-ret-edit>수정</button>` : ''}${r.status === 'confirmed' ? `<button class="btn danger" data-ret-cancel>${S.label} 취소</button>` : ''}<button class="btn primary" data-print>인쇄 · PDF 저장</button></div>`, { wide: true });
   m.el.parentElement.classList.add('lr-cert-wrap');
   $('[data-close]', m.el).onclick = m.close;
   $('[data-print]', m.el).onclick = () => rcPrint(`${S.title}_${r.return_no}`);
   $('[data-ret-bill]', m.el)?.addEventListener('click', e => S.billOpen(e.currentTarget.dataset.retBill).catch(fail));
+  $('[data-ret-edit]', m.el)?.addEventListener('click', () => { try { sessionStorage.setItem('wpa:ret-edit', String(r.id)); } catch { /* 편의 */ } m.close(); location.hash = `${S.route}/edit`; });
   $('[data-ret-cancel]', m.el)?.addEventListener('click', async () => {
     const v = await promptBox(`${S.label} 취소 · ${r.return_no}`, `<p class="small muted">재고·금액 처리(금액 전표·환불)가 모두 되돌려집니다.</p><label>취소 사유 *<input name="reason" required maxlength="200"></label>`);
     if (!v) return;
@@ -559,7 +576,7 @@ function returnSheet(r, after = null) {
 async function pageReturnList(main, side = 'in') {
   const S = RET_SIDE[side];
   main.innerHTML = `<h1>${S.title} 목록</h1>${retTabs(side, true)}
-  <form class="list-filters toolbar" data-read-only id="retFilters"><label>${S.label}일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>${S.party}<input name="party" maxlength="100"></label><label>상태<select name="status"><option value="">전체</option><option value="confirmed">확정</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고"></label><button class="btn primary">조회</button><a class="btn" href="${S.route}/new">＋ ${S.label} 입력</a></form>
+  <form class="list-filters toolbar" data-read-only id="retFilters"><label>${S.label}일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>${S.party}<input name="party" maxlength="100"></label><label>상태<select name="status"><option value="confirmed" selected>확정</option><option value="">전체(취소 포함)</option><option value="cancelled">취소만</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·비고"></label><button class="btn primary">조회</button><a class="btn" href="${S.route}/new">＋ ${S.label} 입력</a></form>
   <div id="retSum" class="counts"></div><div id="retList"></div>`;
   const form = $('#retFilters', main); let rows = [];
   bindPartnerPicker(form.elements.party, null, { type: S.type }).catch(() => {});
@@ -573,4 +590,21 @@ async function pageReturnList(main, side = 'in') {
   form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
   $('#retList', main).addEventListener('click', async e => { const b = e.target.closest('[data-ret-open]'); if (!b) return; try { returnSheet(await api('GET', '/api/returns/' + b.dataset.retOpen), () => load()); } catch (error) { fail(error); } });
   await load().catch(fail);
+}
+
+// ── 15.147 매출·매입전표 고치기 창: 일자·줄 단가·줄 비고·전표 비고(매입은 명세서 번호·합계·운송비). 수량·줄은 출하·입고와 묶여 그대로. ──
+async function billEditWindow(side, bill, done) {
+  const P = side === 'purchase';
+  const v = await promptBox(`${P ? '매입' : '매출'}전표 수정 · ${bill.bill_no}`, `<p class="small muted">일자·단가·비고${P ? '·명세서·운송비' : ''}를 고칩니다. 수량은 ${P ? '입고' : '출하'}와 묶여 있어 바꿀 수 없습니다(바꾸려면 전표 취소 후 다시). 고친 내용은 이력으로 남습니다.</p>
+    <div class="form-grid"><label>전표 일자 *<input type="date" name="bill_date" required value="${esc(bill.bill_date)}" max="${todayStr()}"></label>${P ? `<label>명세서 번호<input name="statement_no" maxlength="50" value="${esc(bill.statement_no || '')}"></label><label>명세서 합계<input type="number" name="statement_total" step="any" value="${bill.statement_total ?? ''}"></label><label>운송비<input type="number" name="freight" min="0" step="1" value="${bill.freight || 0}"></label>` : ''}<label class="span2">비고<input name="note" maxlength="500" value="${esc(bill.note || '')}"></label></div>
+    <div class="table-wrap"><table class="erp-grid bill-edit-grid" data-keep-cols data-no-sort><thead><tr><th>품목</th><th>규격</th><th class="r">수량</th><th class="r">단가</th><th>줄 비고</th></tr></thead><tbody>${bill.lines.filter(l => l.active !== 0).map(l => `<tr><td><b>${esc(l.item)}</b></td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)} ${esc(l.unit || '')}</td><td class="r"><input type="number" min="0" step="any" name="price_${l.id}" value="${l.unit_price}" aria-label="${esc(l.item)} 단가"></td><td><input name="note_${l.id}" maxlength="200" value="${esc(l.note || '')}" aria-label="${esc(l.item)} 줄 비고"></td></tr>`).join('')}</tbody></table></div>`,
+    { wide: true, submit: async body => {
+      const lines = bill.lines.filter(l => l.active !== 0).map(l => ({ id: l.id, unit_price: body['price_' + l.id], note: body['note_' + l.id] }));
+      const out = { bill_date: body.bill_date, note: body.note, lines };
+      if (P) Object.assign(out, { statement_no: body.statement_no, statement_total: body.statement_total, freight: body.freight });
+      return api('PUT', `/api/${P ? 'purchase' : 'sales'}-bills/${bill.id}`, out);
+    } });
+  if (!v) return;
+  toast('전표를 고쳤습니다.');
+  await done?.(await api('GET', `/api/${P ? 'purchase' : 'sales'}-bills/${bill.id}`));
 }

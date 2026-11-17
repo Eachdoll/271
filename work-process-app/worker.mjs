@@ -476,7 +476,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills', 'ship_batches', 'production_lot_inputs', 'stock_returns', 'stock_return_lines', 'doc_changes'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -1135,7 +1135,10 @@ async function billDetail(bill) {
   const lines = await db.prepare(`SELECT l.*, ${LINE_CAT('l')} AS category FROM purchase_bill_lines l WHERE l.bill_id=? ORDER BY l.id`).all(bill.id);
   // 전표 뒤에 입고가 취소된 줄은 표시만(전표는 그대로 — 전표를 취소하고 다시 만든다)
   for (const l of lines) if (l.source_type === 'po_lot') l.source_voided = !!(await db.prepare('SELECT 1 FROM po_receipt_lots WHERE id=? AND voided_at IS NOT NULL').get(l.source_id));
-  return { ...bill, lines, closed: !!(await closedPeriod(bill.vendor, bill.bill_date)) };
+  const invoice = await db.prepare("SELECT i.id, i.invoice_no FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1 AND i.status='received'").get(bill.id);
+  const ret = await db.prepare("SELECT id, return_no FROM stock_returns WHERE side='out' AND bill_id=? AND status='confirmed'").get(bill.id);
+  const changes = await db.prepare("SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type='purchase_bill' AND doc_id=? ORDER BY id DESC LIMIT 20").all(bill.id);
+  return { ...bill, lines, closed: !!(await closedPeriod(bill.vendor, bill.bill_date)), invoice: invoice || null, return_ref: ret || null, changes };
 }
 route('GET', '/api/purchase-bills/unbilled', async ({ user, query }) => {
   requirePurchase(user);
@@ -1162,7 +1165,7 @@ route('GET', '/api/purchase-bills', async ({ user, query }) => {
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('purchase_bill_lines', 'purchase_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const by_category = await billCategoryTotals('purchase_bill_lines', 'purchase_bills', where, args);
-  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT i.invoice_no || '|' || i.approval_no || '|' || i.id FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=purchase_bills.id AND t.active=1 AND i.status='received') AS invoice, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT return_no || '|' || id FROM stock_returns WHERE side='out' AND bill_id=purchase_bills.id AND status='confirmed') AS return_ref, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT i.invoice_no || '|' || i.approval_no || '|' || i.id FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=purchase_bills.id AND t.active=1 AND i.status='received') AS invoice, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
   return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 route('GET', '/api/purchase-bills/:id', async ({ user, params }) => { requirePurchase(user); return billDetail(await mustGet('purchase_bills', params.id)); });
@@ -1495,7 +1498,9 @@ async function salesBillDetail(bill) {
     LEFT JOIN sales_order_lines ol ON ol.id=l.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id WHERE l.bill_id=? ORDER BY l.id`).all(bill.id);
   for (const l of lines) if (l.source_type === 'ship') l.source_missing = !(await db.prepare('SELECT 1 FROM shipments WHERE id=?').get(l.source_id));
   const invoice = await db.prepare('SELECT i.id, i.invoice_no, i.status FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1').get(bill.id);
-  return { ...bill, lines, invoice: invoice || null, closed: !!(await salesClosed(bill.customer, bill.bill_date)) };
+  const ret = await db.prepare("SELECT id, return_no FROM stock_returns WHERE side='in' AND bill_id=? AND status='confirmed'").get(bill.id);
+  const changes = await db.prepare("SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type='sales_bill' AND doc_id=? ORDER BY id DESC LIMIT 20").all(bill.id);
+  return { ...bill, lines, invoice: invoice || null, closed: !!(await salesClosed(bill.customer, bill.bill_date)), return_ref: ret || null, changes };
 }
 const optDate = (v, label) => v ? dateStr(v, label) : '';
 route('GET', '/api/sales-bills/unbilled', async ({ user, query }) => {
@@ -1513,7 +1518,7 @@ route('GET', '/api/sales-bills', async ({ user, query }) => {
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('sales_bill_lines', 'sales_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const by_category = await billCategoryTotals('sales_bill_lines', 'sales_bills', where, args);
-  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id AND l.active=1)) AS categories, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  const rows = await db.prepare(`SELECT sales_bills.*, (SELECT return_no || '|' || id FROM stock_returns WHERE side='in' AND bill_id=sales_bills.id AND status='confirmed') AS return_ref, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM sales_bill_lines l WHERE l.bill_id=sales_bills.id AND l.active=1)) AS categories, (SELECT i.invoice_no || '|' || i.status || '|' || i.id FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=sales_bills.id AND t.active=1) AS invoice FROM sales_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
   return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 route('GET', '/api/sales-bills/:id', async ({ user, params }) => { requireSales(user); return salesBillDetail(await mustGet('sales_bills', params.id)); });
@@ -1734,18 +1739,9 @@ route('GET', '/api/returns/sources', async ({ user, query }) => {
         FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id WHERE b.status='confirmed' AND l.active=1 AND l.qty>0 AND b.bill_date>=? AND ${billVendorKey('b.vendor')}=? ORDER BY b.bill_date DESC, l.id DESC LIMIT 501`).all(from, nameKey(party));
   return { side, party, from, rows: rows.slice(0, 500).map(r => ({ ...r, left: stockRound(r.qty - r.returned) })), more: rows.length > 500 };
 });
-route('POST', '/api/returns', async ({ user, body }) => {
-  const side = body.side === 'out' ? 'out' : body.side === 'in' ? 'in' : null; if (!side) throw bad('반입·반출을 고르세요.');
-  const c = RET[side]; c.need(user);
-  const key = str(body.request_id, 80);
-  if (key) { const old = await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(key); if (old) return { ...await returnDetail(old), duplicate: true }; }
-  const date = dateStr(body.return_date, `${c.label}일자`); if (date > today()) throw bad(`${c.label}일자는 오늘 이전으로 선택하세요.`);
-  const v = await vendorByName(reqStr(body.party, '거래처', 100)); if (!v) throw bad(`거래처 「${body.party}」가 거래처 관리에 없습니다. 먼저 등록하세요.`);
-  const party = v.name, process = RET_PROCESS[body.process] ? body.process : 'stock_amount', settle = body.settle === 'refund' ? 'refund' : 'offset', taxType = body.tax_type === 'zero' ? 'zero' : 'taxable';
-  const amount = ['stock_amount', 'amount'].includes(process);
-  if (amount && await c.closed(party, date)) throw bad(`${party}의 ${date.slice(0, 7)} ${side === 'in' ? '매출' : '매입'}은 마감되었습니다. 마감 취소(관리자) 뒤에 넣으세요.`);
-  const input = Array.isArray(body.lines) ? body.lines : [];
-  if (!input.length || input.length > 100) throw bad(`${c.label} 품목은 1~100줄 넣으세요.`);
+// 15.147 반입·반출 줄 확인(새로 넣기·고치기 공통). excludeId: 고치는 전표 자신은 「이미 반품한 수량」에서 뺀다.
+async function returnLinesFrom(side, party, input, excludeId = 0) {
+  const c = RET[side];
   const lines = [], used = new Map();
   for (const [i, raw] of input.entries()) {
     const l = raw && typeof raw === 'object' ? raw : {}, no = `${i + 1}번째 줄`;
@@ -1758,7 +1754,7 @@ route('POST', '/api/returns', async ({ user, body }) => {
         : await db.prepare(`SELECT l.*, b.vendor AS party, ${LINE_CAT('l')} AS cat FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id WHERE l.id=? AND l.active=1 AND b.status='confirmed'`).get(sid);
       if (!src) throw new HttpError(409, `${no}: 원래 전표가 취소되었거나 없습니다. 새로 불러오세요.`);
       if (nameKey(src.party) !== nameKey(party)) throw bad(`${no}(${src.item}): 다른 거래처(${src.party})의 전표 줄입니다.`);
-      const done = (await db.prepare(`SELECT ${RET_RETURNED} AS q`).get(c.source, sid)).q + (used.get(sid) || 0);
+      const done = (await db.prepare(`SELECT (SELECT COALESCE(SUM(x.qty),0) FROM stock_return_lines x JOIN stock_returns r ON r.id=x.return_id WHERE r.status='confirmed' AND x.source_type=? AND x.source_id=? AND r.id<>?) AS q`).get(c.source, sid, excludeId)).q + (used.get(sid) || 0);
       if (qty > src.qty - done + 0.000001) throw bad(`${no}(${src.item}): 원래 ${stockRound(src.qty)} 중 이미 ${stockRound(done)} 반품되어 ${stockRound(src.qty - done)}까지 넣을 수 있습니다.`);
       used.set(sid, (used.get(sid) || 0) + qty);
       line = { source_type: c.source, source_id: sid, bom_id: null, product_code: src.product_code || '', item: src.item, spec: src.spec || '', unit: src.unit || '', item_category: src.cat || '', lot: str(l.lot, 100) || src.lot || '' };
@@ -1773,6 +1769,21 @@ route('POST', '/api/returns', async ({ user, body }) => {
     Object.assign(line, { qty, supply: billTrunc(qty * line.unit_price), reason: str(l.reason, 50), note: str(l.note, 200) });
     lines.push(line);
   }
+  return lines;
+}
+route('POST', '/api/returns', async ({ user, body }) => {
+  const side = body.side === 'out' ? 'out' : body.side === 'in' ? 'in' : null; if (!side) throw bad('반입·반출을 고르세요.');
+  const c = RET[side]; c.need(user);
+  const key = str(body.request_id, 80);
+  if (key) { const old = await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(key); if (old) return { ...await returnDetail(old), duplicate: true }; }
+  const date = dateStr(body.return_date, `${c.label}일자`); if (date > today()) throw bad(`${c.label}일자는 오늘 이전으로 선택하세요.`);
+  const v = await vendorByName(reqStr(body.party, '거래처', 100)); if (!v) throw bad(`거래처 「${body.party}」가 거래처 관리에 없습니다. 먼저 등록하세요.`);
+  const party = v.name, process = RET_PROCESS[body.process] ? body.process : 'stock_amount', settle = body.settle === 'refund' ? 'refund' : 'offset', taxType = body.tax_type === 'zero' ? 'zero' : 'taxable';
+  const amount = ['stock_amount', 'amount'].includes(process);
+  if (amount && await c.closed(party, date)) throw bad(`${party}의 ${date.slice(0, 7)} ${side === 'in' ? '매출' : '매입'}은 마감되었습니다. 마감 취소(관리자) 뒤에 넣으세요.`);
+  const input = Array.isArray(body.lines) ? body.lines : [];
+  if (!input.length || input.length > 100) throw bad(`${c.label} 품목은 1~100줄 넣으세요.`);
+  const lines = await returnLinesFrom(side, party, input, 0);
   const supply = lines.reduce((t, l) => t + l.supply, 0), vat = taxType === 'zero' ? 0 : billTrunc(supply * 0.1), total = supply + vat, vats = splitVat(lines, vat);
   lines.forEach((l, i) => { l.vat = vats[i]; });
   if (amount && !(total > 0)) throw bad('금액을 처리하려면 단가를 넣으세요(금액 0). 재고만 처리하려면 처리구분을 「재고만」으로 고르세요.');
@@ -1809,11 +1820,135 @@ route('POST', '/api/returns', async ({ user, body }) => {
   catch (error) { const saved = await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(token); if (saved) return { ...await returnDetail(saved), duplicate: true }; throw error; }
   return returnDetail(await db.prepare('SELECT * FROM stock_returns WHERE request_id=?').get(token));
 });
+// 15.147 반입·반출 고치기: 같은 전표번호를 그대로 두고 일자·처리구분·금액처리·부가세·비고와 줄을 바꾼다.
+// 연결된 금액 전표(음수 매출·매입전표)와 현금 환불도 함께 맞춘다. 세금계산서에 담겼거나 마감된 달이면 막는다. 고친 내용은 doc_changes에 한 줄.
+const docChange = (type, id, summary, user) => ({ sql: 'INSERT INTO doc_changes(doc_type,doc_id,summary,changed_by) VALUES(?,?,?,?)', args: [type, id, String(summary).slice(0, 500), user.name] });
+route('GET', '/api/doc-changes', async ({ query }) => db.prepare('SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type=? AND doc_id=? ORDER BY id DESC LIMIT 50').all(str(query.type, 30), Number(query.id) || 0));
+route('PUT', '/api/returns/:id', async ({ user, params, body }) => {
+  const r = await mustGet('stock_returns', params.id), side = r.side, c = RET[side]; c.need(user);
+  if (r.status !== 'confirmed') throw bad('취소된 전표는 고칠 수 없습니다.');
+  const date = dateStr(body.return_date ?? r.return_date, `${c.label}일자`); if (date > today()) throw bad(`${c.label}일자는 오늘 이전으로 선택하세요.`);
+  const process = RET_PROCESS[body.process] ? body.process : r.process, settle = body.settle === 'refund' ? 'refund' : body.settle === 'offset' ? 'offset' : r.settle;
+  const taxType = body.tax_type === 'zero' ? 'zero' : body.tax_type === 'taxable' ? 'taxable' : r.tax_type, note = body.note === undefined ? r.note : str(body.note, 500);
+  const amount = ['stock_amount', 'amount'].includes(process), oldAmount = !!r.bill_id;
+  const BT = side === 'in' ? 'sales' : 'purchase', BILLS = `${BT}_bills`, LINES = `${BT}_bill_lines`, PAYS = `${BT}_payments`;
+  if (oldAmount) {
+    const inv = side === 'in' ? await db.prepare('SELECT i.invoice_no FROM tax_invoice_bills t JOIN tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1').get(r.bill_id)
+      : await db.prepare("SELECT i.invoice_no FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1 AND i.status='received'").get(r.bill_id);
+    if (inv) throw new HttpError(409, `세금계산서 ${inv.invoice_no}에 담긴 ${c.label} 금액입니다. 계산서를 먼저 취소한 뒤 고치세요.`);
+    if (await c.closed(r.party, r.return_date)) throw bad(`${r.party}의 ${r.return_date.slice(0, 7)}은 마감되었습니다. 마감 취소(관리자) 뒤에 고치세요.`);
+  }
+  if (amount && await c.closed(r.party, date)) throw bad(`${r.party}의 ${date.slice(0, 7)}은 마감되었습니다. 마감 취소(관리자) 뒤에 고치세요.`);
+  const input = Array.isArray(body.lines) ? body.lines : [];
+  if (!input.length || input.length > 100) throw bad(`${c.label} 품목은 1~100줄 넣으세요.`);
+  const lines = await returnLinesFrom(side, r.party, input, r.id);
+  const supply = lines.reduce((t, l) => t + l.supply, 0), vat = taxType === 'zero' ? 0 : billTrunc(supply * 0.1), total = supply + vat, vats = splitVat(lines, vat);
+  lines.forEach((l, i) => { l.vat = vats[i]; });
+  if (amount && !(total > 0)) throw bad('금액을 처리하려면 단가를 넣으세요(금액 0). 재고만 처리하려면 처리구분을 「교환(재고만)」으로 고르세요.');
+  const old = await db.prepare('SELECT * FROM stock_return_lines WHERE return_id=? ORDER BY id').all(r.id);
+  const memo = `${c.label} ${r.return_no}${note ? ' · ' + note : ''}`, ymd = today().slice(2).replace(/-/g, '');
+  const cmds = [{ sql: "UPDATE stock_returns SET return_date=?,process=?,settle=?,tax_type=?,supply_total=?,vat_total=?,total=?,note=? WHERE id=? AND status='confirmed'", args: [date, process, amount ? settle : 'offset', taxType, supply, vat, total, note, r.id] }, RC_GUARD,
+    { sql: 'DELETE FROM stock_return_lines WHERE return_id=?', args: [r.id] },
+    ...lines.map(l => ({ sql: 'INSERT INTO stock_return_lines(return_id,bom_id,product_code,item,spec,unit,item_category,qty,unit_price,supply,vat,reason,lot,source_type,source_id,note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', args: [r.id, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.item_category, l.qty, l.unit_price, l.supply, l.vat, l.reason, l.lot, l.source_type, l.source_id, l.note] }))];
+  const billLine = (billRef, l, k) => side === 'in'
+    ? { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note) VALUES(${billRef.sql},?,'manual',NULL,?,?,?,?,?,?,?,?,?,?,?)`, args: [...billRef.args, l.item_category, l.item, l.spec, l.unit, l.product_code, l.lot, date, -l.qty, l.unit_price, -l.supply, -l.vat, `반입${l.reason ? ' · ' + l.reason : ''}`] }
+    : { sql: `INSERT INTO purchase_bill_lines(bill_id,item_category,source_type,source_id,po_id,req_no,item,spec,unit,product_code,lot,received_date,qty,unit_price,supply,note) VALUES(${billRef.sql},?,'other',?,NULL,'',?,?,?,?,?,?,?,?,?,?)`, args: [...billRef.args, l.item_category, -(Date.now() * 100 + k), l.item, l.spec, l.unit, l.product_code, l.lot, date, -l.qty, l.unit_price, -l.supply, `반출${l.reason ? ' · ' + l.reason : ''}`] };
+  if (oldAmount && amount) { // 같은 금액 전표를 고쳐 씀
+    cmds.push({ sql: `UPDATE ${BILLS} SET bill_date=?,tax_type=?,supply_total=?,vat_total=?,total=?,note=? WHERE id=? AND status='confirmed'`, args: [date, taxType, -supply, -vat, -total, memo, r.bill_id] }, RC_GUARD,
+      { sql: `DELETE FROM ${LINES} WHERE bill_id=?`, args: [r.bill_id] }, ...lines.map((l, k) => billLine({ sql: '?', args: [r.bill_id] }, l, k)));
+  } else if (oldAmount && !amount) { // 금액 처리를 끔 → 금액 전표 취소(목록에서는 숨김)
+    cmds.push({ sql: `UPDATE ${LINES} SET active=0 WHERE bill_id=?`, args: [r.bill_id] }, { sql: `UPDATE ${BILLS} SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'`, args: [now(), user.name, `${c.label} ${r.return_no} 고침(금액 처리 안 함)`, r.bill_id] },
+      { sql: 'UPDATE stock_returns SET bill_id=NULL WHERE id=?', args: [r.id] });
+  } else if (!oldAmount && amount) { // 새로 금액 전표
+    const btok = `ret:${r.id}:${crypto.randomUUID()}`, bp = `${side === 'in' ? 'SB' : 'PB'}-${ymd}-`, BID = `(SELECT id FROM ${BILLS} WHERE request_id=?)`;
+    cmds.push(side === 'in'
+      ? { sql: `INSERT INTO sales_bills(bill_no,bill_date,customer,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('sales_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`, args: [bp, bp, bp, date, r.party, taxType, -supply, -vat, -total, memo, user.name, user.id, btok] }
+      : { sql: `INSERT INTO purchase_bills(bill_no,bill_date,vendor,tax_type,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('purchase_bills', 'bill_no')},?,?,?,?,?,?,?,?,?,?)`, args: [bp, bp, bp, date, r.party, taxType, -supply, -vat, -total, memo, user.name, user.id, btok] },
+      ...lines.map((l, k) => billLine({ sql: BID, args: [btok] }, l, k)), { sql: `UPDATE stock_returns SET bill_id=${BID} WHERE id=?`, args: [btok, r.id] });
+  }
+  const refund = amount && settle === 'refund', col = side === 'in' ? 'customer' : 'vendor';
+  if (r.payment_id && refund) cmds.push({ sql: `UPDATE ${PAYS} SET pay_date=?,amount=?,note=? WHERE id=? AND status='confirmed'`, args: [date, -total, `${c.label} ${r.return_no} 환불`, r.payment_id] });
+  else if (r.payment_id && !refund) cmds.push({ sql: `UPDATE ${PAYS} SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='confirmed'`, args: [now(), user.name, `${c.label} ${r.return_no} 고침(환불 안 함)`, r.payment_id] }, { sql: 'UPDATE stock_returns SET payment_id=NULL WHERE id=?', args: [r.id] });
+  else if (!r.payment_id && refund) { const ptok = `ret:${r.id}:pay:${crypto.randomUUID()}`; cmds.push({ sql: `INSERT INTO ${PAYS}(pay_date,${col},kind,amount,method,note,created_by,created_by_id,request_id) VALUES(?,?,'payment',?,'현금환불',?,?,?,?)`, args: [date, r.party, -total, `${c.label} ${r.return_no} 환불`, user.name, user.id, ptok] }, { sql: `UPDATE stock_returns SET payment_id=(SELECT id FROM ${PAYS} WHERE request_id=?) WHERE id=?`, args: [ptok, r.id] }); }
+  // 이력: 바뀐 것만 짧게
+  const diff = [];
+  if (date !== r.return_date) diff.push(`일자 ${r.return_date}→${date}`);
+  if (process !== r.process) diff.push(`처리 ${r.process}→${process}`);
+  if (amount && settle !== r.settle) diff.push(settle === 'refund' ? '현금 환불로' : '미수·미지급 삭감으로');
+  if (taxType !== r.tax_type) diff.push(taxType === 'zero' ? '영세·면세로' : '부가세 별도로');
+  if (total !== r.total) diff.push(`합계 ${billTrunc(r.total).toLocaleString('ko-KR')}→${billTrunc(total).toLocaleString('ko-KR')}`);
+  const lineSig = l => `${l.item}|${l.qty}|${l.unit_price}|${l.reason}|${l.lot}`;
+  if (old.map(lineSig).join() !== lines.map(lineSig).join()) diff.push(`품목 ${old.length}줄→${lines.length}줄(수량·단가·사유)`);
+  if (note !== r.note) diff.push('비고');
+  if (!diff.length) return returnDetail(r);
+  cmds.push(docChange('return', r.id, diff.join(' · '), user));
+  try { await db.batch(cmds); } catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 전표가 바뀌었습니다. 새로 불러오세요.'); throw error; }
+  return returnDetail(await mustGet('stock_returns', r.id));
+});
+// 15.147 매출·매입전표 고치기: 일자·줄 단가·줄 비고·전표 비고(매입은 명세서 번호·명세서 합계·운송비도). 수량·줄 구성은 출하·입고에 묶여 있어 그대로.
+// 세금계산서에 담겼거나 마감된 달(원래·새 일자)이면 막고, 반입·반출로 생긴 전표는 그 반품 전표에서 고친다. 고친 내용은 doc_changes에 한 줄.
+async function billEditCommon(side, bill, body, user) {
+  const c = side === 'sales' ? { need: requireSales, party: bill.customer, closed: (p, d) => salesClosed(p, d), retSide: 'in', link: 'tax_invoice_bills', inv: 'tax_invoices', live: "i.status<>'cancelled'" }
+    : { need: requirePurchase, party: bill.vendor, closed: (p, d) => closedPeriod(p, d), retSide: 'out', link: 'purchase_tax_invoice_bills', inv: 'purchase_tax_invoices', live: "i.status='received'" };
+  c.need(user);
+  if (bill.status !== 'confirmed') throw bad('취소된 전표는 고칠 수 없습니다.');
+  const ret = await returnOfBill(c.retSide, bill.id); if (ret) throw bad(`${c.retSide === 'in' ? '반입' : '반출'} ${ret.return_no}로 생긴 전표입니다. 그 ${c.retSide === 'in' ? '반입' : '반출'} 전표에서 고치세요.`);
+  const inv = await db.prepare(`SELECT i.invoice_no FROM ${c.link} t JOIN ${c.inv} i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1 AND ${c.live}`).get(bill.id);
+  if (inv) throw new HttpError(409, `세금계산서 ${inv.invoice_no}에 담긴 전표입니다. 계산서를 먼저 ${side === 'sales' ? '담기 취소' : '취소'}한 뒤 고치세요.`);
+  const date = body.bill_date === undefined ? bill.bill_date : dateStr(body.bill_date, '전표 일자'); if (date > today()) throw bad('전표 일자는 오늘 이전으로 선택하세요.');
+  for (const d of new Set([bill.bill_date, date])) if (await c.closed(c.party, d)) throw bad(`${c.party}의 ${d.slice(0, 7)}은 마감되었습니다. 마감 취소(관리자) 뒤에 고치세요.`);
+  const lines = await db.prepare(`SELECT * FROM ${side}_bill_lines WHERE bill_id=? AND active=1 ORDER BY id`).all(bill.id);
+  const edits = new Map((Array.isArray(body.lines) ? body.lines : []).filter(l => l && l.id).map(l => [Number(l.id), l]));
+  for (const id of edits.keys()) if (!lines.some(l => l.id === id)) throw new HttpError(409, '이 전표에 없는 줄입니다. 새로 불러오세요.');
+  const diff = [];
+  for (const l of lines) {
+    const e = edits.get(l.id); l.newPrice = l.unit_price; l.newNote = l.note;
+    if (e) {
+      if (e.unit_price !== undefined && e.unit_price !== '' && e.unit_price !== null) { const p = num(e.unit_price, `${l.item} 단가`); if (p < 0) throw bad(`${l.item}: 단가는 0 이상이어야 합니다.`); l.newPrice = p; }
+      if (e.note !== undefined) l.newNote = str(e.note, 200);
+    }
+    l.newSupply = billTrunc(l.qty * l.newPrice);
+    if (l.newPrice !== l.unit_price) diff.push(`${l.item} 단가 ${l.unit_price}→${l.newPrice}`);
+    else if (l.newNote !== l.note) diff.push(`${l.item} 비고`);
+  }
+  if (date !== bill.bill_date) diff.unshift(`일자 ${bill.bill_date}→${date}`);
+  const note = body.note === undefined ? bill.note : str(body.note, 500); if (note !== bill.note) diff.push('비고');
+  return { c, date, lines, note, diff };
+}
+route('PUT', '/api/sales-bills/:id', async ({ user, params, body }) => {
+  const bill = await mustGet('sales_bills', params.id);
+  const { date, lines, note, diff } = await billEditCommon('sales', bill, body, user);
+  if (!diff.length) return salesBillDetail(bill);
+  const supply = lines.reduce((t, l) => t + l.newSupply, 0), vat = bill.tax_type === 'zero' ? 0 : billTrunc(supply * 0.1), vats = splitVat(lines.map(l => ({ supply: l.newSupply })), vat);
+  if (supply + vat !== bill.total) diff.push(`합계 ${billTrunc(bill.total).toLocaleString('ko-KR')}→${billTrunc(supply + vat).toLocaleString('ko-KR')}`);
+  const cmds = [{ sql: "UPDATE sales_bills SET bill_date=?,supply_total=?,vat_total=?,total=?,note=? WHERE id=? AND status='confirmed' AND NOT EXISTS(SELECT 1 FROM tax_invoice_bills WHERE bill_id=? AND active=1)", args: [date, supply, vat, supply + vat, note, bill.id, bill.id] }, RC_GUARD,
+    ...lines.map((l, k) => ({ sql: 'UPDATE sales_bill_lines SET unit_price=?,supply=?,vat=?,note=? WHERE id=?', args: [l.newPrice, l.newSupply, vats[k], l.newNote, l.id] })), docChange('sales_bill', bill.id, diff.join(' · '), user)];
+  try { await db.batch(cmds); } catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 세금계산서에 담겼거나 취소되었습니다. 새로 불러오세요.'); throw error; }
+  return salesBillDetail(await mustGet('sales_bills', bill.id));
+});
+route('PUT', '/api/purchase-bills/:id', async ({ user, params, body }) => {
+  const bill = await mustGet('purchase_bills', params.id);
+  const { date, lines, note, diff } = await billEditCommon('purchase', bill, body, user);
+  const freight = body.freight === undefined ? bill.freight : body.freight === '' || body.freight === null ? 0 : num(body.freight, '운송비'); if (freight < 0) throw bad('운송비는 0 이상이어야 합니다.');
+  const stNo = body.statement_no === undefined ? bill.statement_no : str(body.statement_no, 50);
+  const stTotal = body.statement_total === undefined ? bill.statement_total : body.statement_total === '' || body.statement_total === null ? null : num(body.statement_total, '명세서 합계');
+  if (billTrunc(freight) !== bill.freight) diff.push(`운송비 ${bill.freight}→${billTrunc(freight)}`);
+  if (stNo !== bill.statement_no) diff.push('명세서 번호'); if (stTotal !== bill.statement_total) diff.push('명세서 합계');
+  if (!diff.length) return billDetail(bill);
+  const supply = lines.reduce((t, l) => t + l.newSupply, 0) + billTrunc(freight), vat = bill.tax_type === 'zero' ? 0 : billTrunc(supply * 0.1);
+  if (supply + vat !== bill.total) diff.push(`합계 ${billTrunc(bill.total).toLocaleString('ko-KR')}→${billTrunc(supply + vat).toLocaleString('ko-KR')}`);
+  const cmds = [{ sql: "UPDATE purchase_bills SET bill_date=?,statement_no=?,statement_total=?,freight=?,supply_total=?,vat_total=?,total=?,note=? WHERE id=? AND status='confirmed' AND NOT EXISTS(SELECT 1 FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1 AND i.status='received')", args: [date, stNo, stTotal, billTrunc(freight), supply, vat, supply + vat, note, bill.id, bill.id] }, RC_GUARD,
+    ...lines.map(l => ({ sql: 'UPDATE purchase_bill_lines SET unit_price=?,supply=?,note=? WHERE id=?', args: [l.newPrice, l.newSupply, l.newNote, l.id] })), docChange('purchase_bill', bill.id, diff.join(' · '), user)];
+  try { await db.batch(cmds); } catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 세금계산서에 담겼거나 취소되었습니다. 새로 불러오세요.'); throw error; }
+  return billDetail(await mustGet('purchase_bills', bill.id));
+});
 async function returnDetail(r) {
   const lines = await db.prepare('SELECT * FROM stock_return_lines WHERE return_id=? ORDER BY id').all(r.id);
   const bill = r.bill_id ? await db.prepare(`SELECT id, bill_no, status FROM ${r.side === 'in' ? 'sales_bills' : 'purchase_bills'} WHERE id=?`).get(r.bill_id) : null;
   for (const l of lines) if (l.source_id) { const s = await db.prepare(l.source_type === 'sales_line' ? 'SELECT b.bill_no, b.bill_date FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id WHERE l.id=?' : 'SELECT b.bill_no, b.bill_date FROM purchase_bill_lines l JOIN purchase_bills b ON b.id=l.bill_id WHERE l.id=?').get(l.source_id); if (s) Object.assign(l, { source_bill_no: s.bill_no, source_date: s.bill_date }); }
-  return { ...r, lines, bill };
+  const changes = await db.prepare("SELECT summary, changed_by, changed_at FROM doc_changes WHERE doc_type='return' AND doc_id=? ORDER BY id DESC LIMIT 20").all(r.id);
+  const invoiced = r.bill_id ? !!(await db.prepare(r.side === 'in' ? 'SELECT 1 FROM tax_invoice_bills WHERE bill_id=? AND active=1' : "SELECT 1 FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=? AND t.active=1 AND i.status='received'").get(r.bill_id)) : false;
+  return { ...r, lines, bill, changes, invoiced };
 }
 route('GET', '/api/returns', async ({ user, query }) => {
   const side = query.side === 'out' ? 'out' : 'in'; RET[side].need(user);
