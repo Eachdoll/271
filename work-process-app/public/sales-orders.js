@@ -18,13 +18,19 @@ async function pageSalesOrderEntry(main, editId = null) {
       <label>납기<input name="due_date" type="date" value="${esc(editing?.due_date || '')}"></label>
       <label>고객 발주번호<input name="customer_po" maxlength="50" value="${esc(editing?.customer_po || '')}" placeholder="고객사 주문서 번호"></label>
       <label>과세 구분<select name="tax_type"><option value="taxable">과세 (부가세 10%)</option><option value="zero"${editing?.tax_type === 'zero' ? ' selected' : ''}>영세·면세 (부가세 0)</option></select></label>
-      <label class="span2">비고<input name="note" maxlength="500" value="${esc(editing?.note || '')}"></label>
+      <label class="span2">비고 <span class="hint">(고객 비고를 그대로 붙여넣으면 PO를 읽어 고객 발주번호에 넣습니다)</span><input name="note" maxlength="500" value="${esc(editing?.note || '')}" placeholder="예: 0C0827-27 (P1DD) OLED Asan mj1938,seon 2008315425"><span class="small muted" data-note-parse></span></label>
     </div>
     <section class="pr-section"><h3>수주 품목</h3><div data-so-lines></div><div class="actions" style="justify-content:flex-start"><button type="button" class="btn" data-so-add>+ 품목 추가</button></div></section>
     <div class="bill-total card" data-so-total aria-live="polite"></div>
     <div class="actions">${editing ? `<a class="btn" href="#/sales/orders">목록으로</a>` : ''}<button class="btn primary" data-so-save>${editing ? '수주 고치기 저장' : '수주 저장'}</button></div>
   </form>`;
   const form = $('form', main), box = $('[data-so-lines]', form), input = form.elements.customer;
+  // 15.126 고객 비고(삼성 형식)를 붙여넣으면 PO·라인·사업장·담당자를 읽어 보여 주고, 고객 발주번호가 비어 있으면 PO를 넣는다
+  { const noteIn = form.elements.note, poIn = form.elements.customer_po, out = $('[data-note-parse]', form);
+    const read = () => { const p = parseCustomerNote(noteIn.value), po = p?.po || poOf('', noteIn.value);
+      if (po && !poIn.value.trim()) { poIn.value = po; poIn.classList.add('auto-filled'); }
+      out.innerHTML = p ? `읽음 · 요청 <b>${esc(p.req)}</b> · 라인 <b>${esc(p.line)}</b>${p.site ? ` · ${esc(p.site)}` : ''}${p.person ? ` · 담당 ${esc(p.person)}` : ''} · PO <b>${esc(p.po)}</b>` : po ? `PO <b>${esc(po)}</b> 읽음` : ''; };
+    noteIn.addEventListener('input', read); if (noteIn.value) read(); }
   let lines = (editing?.lines || []).map(l => ({ bom_id: l.bom_id, item: l.item, product_code: l.product_code, unit: l.unit, spec: l.spec || '', qty: l.qty, price: l.unit_price ?? '', due_date: l.due_date || '', note: l.note || '' }));
   let catalog = null, requestId = crypto.randomUUID(), busy = false;
   if (lines.length) { catalog = await api('GET', '/api/boms').catch(() => null); for (const l of lines) { const b = catalog?.find(x => x.id === l.bom_id); if (b) { l.sizes = b.sizes || []; l.fixedSpec = !!b.spec && !l.sizes.length; if (l.fixedSpec) l.spec = b.spec; } } }
@@ -85,7 +91,7 @@ async function pageSalesOrderEntry(main, editId = null) {
       toast(order.duplicate ? `${order.order_no} 수주는 앞서 이미 저장되었습니다.` : editing ? `${order.order_no} 수주를 고쳤습니다.` : `${order.order_no} 수주를 저장했습니다.`);
       requestId = crypto.randomUUID();
       if (editing) { location.hash = '#/sales/orders'; return; }
-      lines = []; form.elements.note.value = ''; form.elements.customer_po.value = ''; draw();
+      lines = []; form.elements.note.value = ''; form.elements.customer_po.value = ''; form.elements.customer_po.classList.remove('auto-filled'); $('[data-note-parse]', form).innerHTML = ''; draw();
       salesOrderSheet(order, null, { onClose: () => { if (form.isConnected) $('[data-so-add]', form)?.focus(); } });
     } catch (error) { fail(error); } finally { busy = false; button.disabled = false; }
   };

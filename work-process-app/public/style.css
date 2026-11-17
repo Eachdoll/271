@@ -1609,3 +1609,20 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 }
 .s2-lnote { font-size: 11px; }
 .s2-note { line-height: 1.35; }
+/* 15.126 수주 불러오기(두 칸) */
+.so-pick { display: grid; grid-template-columns: minmax(260px, 34%) 1fr; gap: 12px; align-items: start; }
+.so-left { border: 1px solid var(--line); background: var(--panel); }
+.so-left input[type=search] { width: 100%; border: 0; border-bottom: 1px solid var(--line); }
+.so-list { max-height: 420px; overflow: auto; }
+.so-order { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 7px 10px; cursor: pointer; color: var(--text); font: inherit; font-size: 13px; }
+.so-order:hover { background: var(--accent-soft); }
+.so-order.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.so-order .so-po { font-weight: 700; }
+.so-order .so-note { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.so-order .so-meta { display: block; color: var(--muted); font-size: 11.5px; }
+.so-order mark { background: #fff1a8; color: inherit; padding: 0; }
+.so-head { border: 1px solid var(--line); border-bottom: 0; background: var(--panel); padding: 8px 10px; font-size: 13px; }
+.so-head .so-note-full { color: var(--muted); word-break: break-all; }
+input.auto-filled { background: var(--green-bg); }
+@media (max-width: 900px) { .so-pick { grid-template-columns: 1fr; } .so-list { max-height: 240px; } }
+.so-pick > * { min-width: 0; }
