@@ -156,3 +156,32 @@ test('15.135 Production actual: material LOT inputs within LOT balance, finished
   const hist = (await owner('GET', `/api/schedules/${p.id}/actuals`)).body.rows; assert.equal(hist[0].inputs.length, 2);
   void stock;
 });
+
+test('15.150 LOT protection: used LOT locks receipt edits/LOT change, unit mismatch still consumes the LOT, shipments reject another item LOT', async () => {
+  const cl = (await admin('POST', '/api/boms', { product: '보호원단', product_code: 'PR-CL', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'm', materials: [] })).body;
+  const b2 = (await admin('POST', '/api/boms', { ...bomBody, product: '보호완제품', product_code: 'PR-FG', materials: [{ item: '보호원단', item_category: '원자재', qty: 1, unit: 'M' }], base_qty: 1 })).body;
+  const rc = (await admin('POST', '/api/receipts', { receipt_date: '2026-11-10', vendor: '보호상사', request_id: crypto.randomUUID(), lines: [{ bom_id: cl.id, lot: 'R261110_901', qty: 10 }] })).body;
+  const oid = rc.lines[0].other_id ?? rc.lines[0].id;
+  const p = (await owner('POST', '/api/schedules', { kind: 'finished', period: 'day', start_date: '2026-11-12', qty: 10, bom_id: b2.id })).body;
+  // BOM 단위(M)와 입고 단위(m)가 달라도 같은 LOT에서 빠진다
+  const a = await owner('POST', `/api/schedules/${p.id}/actuals`, { production_date: '2026-11-12', qty: 10, request_id: crypto.randomUUID(), inputs: [{ item: '보호원단', unit: 'M', lot: 'R261110_901', qty: 10 }] });
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal((await owner('GET', '/api/lots/available?item=' + encodeURIComponent('보호원단'))).body.rows.length, 0, 'fully used LOT disappears');
+  // 쓰인 LOT: 수량·품목 수정, 삭제, LOT 바꾸기 막힘
+  const row = (await admin('GET', '/api/other-receipts')).body.find(r => r.lot === 'R261110_901');
+  assert.match((await admin('PUT', `/api/other-receipts/${row.id}`, { received_date: row.received_date, item: row.item, item_category: row.item_category, qty: 12, vendor: row.vendor, bom_id: row.bom_id })).body.error || '', /생산 투입/);
+  assert.match((await admin('DELETE', `/api/other-receipts/${row.id}`)).body.error || '', /생산 투입/);
+  assert.match((await admin('PUT', `/api/items/other_receipt/${row.id}`, { spec: '', unit: 'm', lot: 'R261110_999' })).body.error || '', /생산 투입/);
+  // 안 쓰인 LOT: 관리자만 바꿈
+  const rc2 = (await admin('POST', '/api/receipts', { receipt_date: '2026-11-10', vendor: '보호상사', request_id: crypto.randomUUID(), lines: [{ bom_id: cl.id, lot: 'R261110_902', qty: 5 }] })).body;
+  const row2 = (await admin('GET', '/api/other-receipts')).body.find(r => r.lot === 'R261110_902');
+  assert.equal((await owner('PUT', `/api/items/other_receipt/${row2.id}`, { spec: '', unit: 'm', lot: 'R261110_903' })).status, 403);
+  assert.equal((await admin('PUT', `/api/items/other_receipt/${row2.id}`, { spec: '', unit: 'm', lot: 'R261110_903' })).status, 200);
+  // 출하: 다른 품목 LOT 막힘, 자기 LOT은 됨, LOT 기록 없는 품목은 자유
+  const fgLot = a.body.lot;
+  assert.match((await admin('POST', '/api/shipments', { ship_date: '2026-11-12', bom_id: b2.id, item: '보호완제품', qty: 1, customer: '보호고객', lot: 'R261110_903' })).body.error || '', /다른 품목/);
+  assert.match((await admin('POST', '/api/shipments', { ship_date: '2026-11-12', bom_id: b2.id, item: '보호완제품', qty: 1, customer: '보호고객', lot: 'NOPE-1' })).body.error || '', /LOT이 아닙니다/);
+  assert.equal((await admin('POST', '/api/shipments', { ship_date: '2026-11-12', bom_id: b2.id, item: '보호완제품', qty: 1, customer: '보호고객', lot: fgLot })).status, 200);
+  assert.equal((await admin('POST', '/api/shipments', { ship_date: '2026-11-12', item: 'LOT없는품목', qty: 1, customer: '보호고객', lot: 'ANY-1' })).status, 200);
+  void rc2; void oid;
+});

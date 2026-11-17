@@ -66,8 +66,20 @@ async function pageStock(main) {
         <td class="r"><b class="${r.negative ? 'red-text' : ''}">${fmtNum(r.stock)}</b> ${esc(r.unit || '단위 미지정')}${r.converted ? `<br><span class="small muted">= ${fmtNum(r.converted.qty)} ${esc(r.converted.unit)}</span>` : ''}${r.low ? ' <span class="chip yellow">미달</span>' : ''}</td>
         ${bySpec ? '' : `<td class="r">${r.min_qty == null ? '<span class="muted">—</span>' : fmtNum(r.min_qty)}</td>`}
         <td class="small muted">${esc(r.last_date === '0000-00-00' ? '' : r.last_date)}</td>
-        <td class="nowrap"><button class="btn small" data-stock-moves="${i}">내역</button>${result.can_adjust ? `${bySpec ? '' : ` <button class="btn small" data-stock-min="${i}">안전재고</button>`} <button class="btn small" data-stock-count="${i}">실사</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+        <td class="nowrap"><button class="btn small" data-stock-lots="${i}" aria-expanded="false" title="이 품목의 LOT별 남은 수량">LOT ▾</button> <button class="btn small" data-stock-moves="${i}">내역</button>${result.can_adjust ? `${bySpec ? '' : ` <button class="btn small" data-stock-min="${i}">안전재고</button>`} <button class="btn small" data-stock-count="${i}">실사</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="empty">해당하는 재고가 없습니다. 입고·생산실적·출하를 등록하거나 기초재고를 입력하면 여기에 나타납니다.</div>';
+    // 15.150 품목 줄 아래에 LOT별 남은 수량(위치·처음 입고일) 펼치기
+    $$('[data-stock-lots]', main).forEach(button => button.onclick = async () => {
+      const tr = button.closest('tr'), open = button.getAttribute('aria-expanded') === 'true';
+      if (open) { tr.nextElementSibling?.matches('.stock-lot-row') && tr.nextElementSibling.remove(); button.setAttribute('aria-expanded', 'false'); button.textContent = 'LOT ▾'; return; }
+      const r = rows[button.dataset.stockLots]; button.disabled = true;
+      try {
+        const lots = (await api('GET', '/api/lots/available?item=' + encodeURIComponent(r.item))).rows.filter(l => !r.unit || !l.unit || l.unit === r.unit);
+        const sum = lots.reduce((t, l) => t + l.balance, 0);
+        tr.insertAdjacentHTML('afterend', `<tr class="stock-lot-row"><td colspan="${tr.children.length}"><div class="stock-lots">${lots.length ? `<table class="erp-grid" data-keep-cols data-no-sort><thead><tr><th>LOT</th><th class="r">입고·생산</th><th class="r">사용·출하</th><th class="r">남은 수량</th><th>위치</th><th>처음 입고</th><th>마지막</th></tr></thead><tbody>${lots.map(l => `<tr><td><span class="lot-tag">${esc(l.lot)}</span></td><td class="r">${fmtNum(l.received)}</td><td class="r">${fmtNum(l.shipped)}</td><td class="r"><b>${fmtNum(l.balance)}</b> <span class="small muted">${esc(l.unit || '')}</span></td><td class="small">${esc(l.places || '')}</td><td class="small">${esc(l.first_date || '')}</td><td class="small">${esc(l.last_date || '')}</td></tr>`).join('')}</tbody><tfoot><tr><th>LOT 합계</th><td></td><td></td><td class="r"><b>${fmtNum(Math.round(sum * 1000) / 1000)}</b></td><td colspan="3" class="small muted">${Math.abs(sum - r.stock) > 0.001 ? `현재고 ${fmtNum(r.stock)}와 차이 ${fmtNum(Math.round((r.stock - sum) * 1000) / 1000)} — LOT 없이 들어오거나 나간 수량(BOM 투입·LOT 없는 출하 등)` : '현재고와 같음'}</td></tr></tfoot></table>` : '<p class="small muted">이 품목은 LOT 남은 재고가 없습니다(LOT 없이 받았거나 다 썼음).</p>'}</div></td></tr>`);
+        button.setAttribute('aria-expanded', 'true'); button.textContent = 'LOT ▴';
+      } catch (error) { fail(error); } finally { button.disabled = false; }
+    });
     $$('[data-stock-moves]', main).forEach(button => button.onclick = async () => {
       const r = rows[button.dataset.stockMoves];
       try {

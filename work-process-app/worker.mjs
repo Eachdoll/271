@@ -847,6 +847,7 @@ route('POST', '/api/receipt-changes/:id/approve', async ({ user, params, body })
   const applied = "EXISTS(SELECT 1 FROM receipt_qty_changes WHERE id=? AND status='pending')";
   // 15.75 수량 수정 보정 줄: LOT가 하나뿐이면 그 LOT에 붙이고, 여럿이면 LOT 미지정(LOT별 재고에 「LOT 미지정 수량 수정」으로 보임).
   const lotNames = await db.prepare("SELECT DISTINCT lot FROM po_receipt_lots WHERE po_id=? AND voided_at IS NULL AND lot<>''").all(row.id);
+  if (change.action !== 'qty' || Number(change.new_recv_qty) < Number(change.old_recv_qty)) for (const { lot } of lotNames) { const u = await lotUsage(row.item, lot); if (u) throw new HttpError(409, lotUsedMessage(row.item, lot, u)); } // 15.150
   const correctionLot = lotNames.length === 1 ? lotNames[0].lot : '';
   if (await db.prepare('SELECT 1 FROM purchase_bill_lines WHERE po_id=? AND active=1').get(row.id)) throw new HttpError(409, `${row.item}: 그 사이 매입전표에 들어간 입고입니다. 구매에서 매입전표를 취소한 뒤 승인하세요.`);
   let results;
@@ -3397,6 +3398,7 @@ route('PUT', '/api/other-receipts/:id', async ({ user, params, body }) => {
   if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 수정할 수 있습니다.');
   if (await db.prepare("SELECT 1 FROM purchase_bill_lines WHERE source_type='other' AND source_id=? AND active=1").get(row.id)) throw new HttpError(409, `${row.item}: 매입전표에 들어간 기타입고입니다. 구매에서 매입전표를 취소한 뒤 고치세요.`);
   const fields = await otherReceiptFields(body, row);
+  { const u = await lotUsage(row.item, row.lot); if (u && (fields[1] !== row.item || Number(fields[3]) !== Number(row.qty) || fields[6] !== row.bom_id)) throw new HttpError(409, lotUsedMessage(row.item, row.lot, u)); } // 15.150
   await db.prepare('UPDATE other_receipts SET received_date=?,item=?,item_category=?,qty=?,vendor=?,note=?,bom_id=?,bom_snapshot=? WHERE id=?').run(...fields, row.id);
   await recordEdit('other_receipt', 'other_receipts', row.id, row, EDIT_LABELS.other_receipt, user);
   return await mustGet('other_receipts', row.id);
@@ -3405,6 +3407,7 @@ route('DELETE', '/api/other-receipts/:id', async ({ user, params }) => {
   const row = await mustGet('other_receipts', params.id);
   if (!canModify(user, row) && !hasRole(user, 'logistics')) throw new HttpError(403, '등록자 또는 물류 담당자만 삭제할 수 있습니다.');
   if (await db.prepare("SELECT 1 FROM purchase_bill_lines WHERE source_type='other' AND source_id=? AND active=1").get(row.id)) throw new HttpError(409, `${row.item}: 매입전표에 들어간 기타입고입니다. 구매에서 매입전표를 취소한 뒤 삭제하세요.`);
+  { const u = await lotUsage(row.item, row.lot); if (u) throw new HttpError(409, lotUsedMessage(row.item, row.lot, u)); } // 15.150
   try { await deleteEntityWithAttachments('other_receipt', 'other_receipts', row.id, [{ sql: "SELECT json('conflict') WHERE EXISTS(SELECT 1 FROM purchase_bill_lines WHERE source_type='other' AND source_id=? AND active=1)", args: [row.id] }]); }
   catch (error) { if (isGuardError(error)) throw new HttpError(409, `${row.item}: 그 사이 매입전표에 들어갔습니다. 새로 불러오세요.`); throw error; }
   return { ok: true };
@@ -3422,7 +3425,7 @@ route('GET', '/api/shipments', async ({ query }) => {
 });
 route('POST', '/api/shipments', async ({ user, body }) => {
   if (body.bom_id) body.item = (await catalogItem(user, body)).product;
-  const f = shipFields(body); const entry = await catalogItem(user, body); await ensureVendor(f[3], user, 'sales');
+  const f = shipFields(body); const entry = await catalogItem(user, body); await checkShipLot(entry.product, f[5]); await ensureVendor(f[3], user, 'sales');
   const r = (await db.prepare('INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit) VALUES(?,?,?,?,?,?,?,?,?)').run(f[0], entry.product, ...f.slice(2), user.name, entry.product_code, str(body.unit, 20) || entry.unit));
   return (await mustGet('shipments', r.lastInsertRowid));
 });
@@ -3508,6 +3511,7 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
         record.item = entry.product; record.product_code = entry.product_code; if (!meta.unit) meta.unit = entry.unit || '';
         meta.spec = await catalogSpec(entry, meta.spec);
         if (index === 0) await ensureVendor(record.customer, user, 'sales');
+        try { await checkShipLot(record.item, record.lot); } catch (error) { throw bad(`${index + 1}번째 줄: ${error.message}`); } // 15.150
       } else if (entity === 'other_receipt') {
         const fields = await otherReceiptFields(b); if (index === 0) await ensureVendor(fields[4], user, 'purchase');
         record = Object.fromEntries(['received_date','item','item_category','qty','vendor','note','bom_id','bom_snapshot'].map((key,i) => [key, fields[i]]));
@@ -3546,6 +3550,28 @@ route('POST', '/api/batches/:entity', async ({ user, params, body }) => {
   return { batch_id: batchId, rows: await batchRows(entity, batchId), replayed: false };
 });
 
+// ── 15.150 LOT 보호 ──
+// 생산 투입·출하에 쓰인 LOT: 그 입고의 품목·수량·LOT을 바꾸거나 지우지 못한다(쓴 생산실적·출하를 먼저 취소).
+async function lotUsage(item, lot) {
+  if (!lot) return null;
+  const r = await db.prepare(`SELECT (SELECT COALESCE(SUM(i.qty),0) FROM production_lot_inputs i JOIN production_actuals a ON a.id=i.actual_id WHERE a.voided_at IS NULL AND TRIM(i.item)=TRIM(?) AND i.lot=?) AS used,
+    (SELECT COALESCE(SUM(qty),0) FROM shipments WHERE TRIM(item)=TRIM(?) AND lot=?) AS shipped`).get(item, lot, item, lot);
+  return r.used || r.shipped ? r : null;
+}
+const lotUsedMessage = (item, lot, u) => `${item}: LOT ${lot}은 ${[u.used ? `생산 투입 ${stockRound(u.used)}` : '', u.shipped ? `출하 ${stockRound(u.shipped)}` : ''].filter(Boolean).join(' · ')}에 쓰였습니다. 바꾸려면 그 생산실적·출하를 먼저 취소하세요.`;
+// 출하 LOT: 다른 품목의 LOT이면 막는다. 이 품목에 LOT 기록이 있는데 모르는 LOT이어도 막는다(LOT 기록이 아예 없는 품목은 예전처럼 자유 입력).
+async function checkShipLot(item, lot) {
+  if (!lot) return;
+  const owners = (await db.prepare(`SELECT DISTINCT TRIM(p.item) AS item FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE l.lot=? AND l.voided_at IS NULL
+    UNION SELECT DISTINCT TRIM(item) FROM other_receipts WHERE lot=? UNION SELECT DISTINCT TRIM(s.product) FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE a.lot=? AND a.voided_at IS NULL
+    UNION SELECT DISTINCT TRIM(item) FROM purchase_orders WHERE lot=? AND recv_status IN ('ok','mismatch')`).all(lot, lot, lot, lot)).map(r => r.item);
+  const me = String(item || '').trim();
+  if (owners.includes(me)) return;
+  if (owners.length) throw bad(`LOT ${lot}은 다른 품목(${owners.slice(0, 2).join(', ')})의 LOT입니다. ${me}의 재고 LOT을 고르세요.`);
+  const tracked = await db.prepare(`SELECT 1 WHERE EXISTS(SELECT 1 FROM other_receipts WHERE TRIM(item)=? AND lot<>'') OR EXISTS(SELECT 1 FROM po_receipt_lots l JOIN purchase_orders p ON p.id=l.po_id WHERE TRIM(p.item)=? AND l.lot<>'' AND l.voided_at IS NULL)
+    OR EXISTS(SELECT 1 FROM production_actuals a JOIN schedules s ON s.id=a.schedule_id WHERE TRIM(s.product)=? AND a.lot<>'')`).get(me, me, me);
+  if (tracked) throw bad(`LOT ${lot}은 ${me}의 입고·생산 LOT이 아닙니다. LOT 칸에서 재고 LOT을 고르세요.`);
+}
 route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
   if (!Object.hasOwn(BATCH_TABLES,params.entity)) throw bad('품목 목록을 확인하세요.');
   const row = await mustGet(BATCH_TABLES[params.entity],params.id);
@@ -3561,6 +3587,11 @@ route('PUT', '/api/items/:entity/:id', async ({ user, params, body }) => {
   if (row.source_type) { const snapshot = JSON.parse(row.data || '{}'); if (meta.spec !== (row.spec || snapshot.spec || '') || meta.unit !== (row.unit || snapshot.unit || '') || meta.lot !== (row.lot || snapshot.lot_etc || snapshot.lot || '')) throw bad('입고 자동분석의 품목 정보는 입고 당시 스냅샷을 유지합니다. 정정사항은 코멘트에 남기세요.'); }
   { const bom = row.bom_id ? await db.prepare('SELECT * FROM boms WHERE id=?').get(row.bom_id) : row.product_code ? await db.prepare("SELECT * FROM boms WHERE product_code<>'' AND UPPER(product_code)=UPPER(?) ORDER BY is_temp, id DESC LIMIT 1").get(row.product_code) : null;
     if (bom && !row.source_type) meta.spec = await catalogSpec(bom, meta.spec, row.spec || ''); } // 15.121
+  if (['other_receipt', 'purchase_order'].includes(params.entity) && meta.lot !== (row.lot || '')) { // 15.150
+    const u = await lotUsage(row.item, row.lot); if (u) throw new HttpError(409, lotUsedMessage(row.item, row.lot, u));
+    if (row.lot && !user.is_admin) throw new HttpError(403, `LOT 번호는 관리자만 바꿀 수 있습니다(라벨·투입·출하 기록과 어긋나지 않게). 잘못 넣은 경우 관리자에게 요청하세요.`);
+  }
+  if (params.entity === 'shipment' && meta.lot !== (row.lot || '')) await checkShipLot(row.item, meta.lot);
   const set = ['spec=?','unit=?','lot=?']; const args = [meta.spec,meta.unit,meta.lot];
   if (params.entity === 'laundry') { set.push('item=?'); args.push(reqStr(body.item ?? row.item,'옷 종류',200)); }
   if (params.entity === 'request') {
@@ -3641,6 +3672,7 @@ async function actualLotInputs(raw) {
     const [item, lot] = JSON.parse(k), have = (await lotBalances(item)).find(r => r.lot === lot);
     if (!have) throw bad(`${item}: LOT ${lot}의 재고가 없습니다. LOT별 재고를 확인하세요.`);
     if (need > have.balance + 0.000001) throw bad(`${item}: LOT ${lot}의 남은 수량은 ${have.balance}입니다(투입 ${stockRound(need)}).`);
+    for (const i of out) if (i.item === item && i.lot === lot && have.unit) i.unit = have.unit; // 15.150 LOT 단위로 저장
   }
   return out;
 }
@@ -4287,14 +4319,16 @@ async function lotStockReport(query) {
     // 한 원천이 5000묶음을 넘으면 입고·출하가 서로 다르게 잘려 잔량이 틀릴 수 있으므로 결과를 주지 않는다(15.77).
     if (result.results.length > 5000) throw bad('LOT가 너무 많습니다. 품목명·LOT 검색어로 범위를 좁히세요.');
     for (const m of result.results.slice(0, 5000)) {
-      const key = JSON.stringify([m.item, m.unit, m.lot]), row = map.get(key) || { item: m.item, unit: m.unit, lot: m.lot, received: 0, shipped: 0, first_date: m.first_date, last_date: m.last_date, places: new Set() };
+      // 15.150 단위가 달라도(예: 투입을 BOM 단위 M로, 입고를 m로) 같은 품목·LOT이면 한 줄 — 입고 쪽 단위를 쓴다
+      const key = JSON.stringify([m.item, m.lot]), row = map.get(key) || { item: m.item, unit: m.unit, lot: m.lot, received: 0, shipped: 0, first_date: m.first_date, last_date: m.last_date, places: new Set() };
+      if (m.received > 0 && m.unit && (!row.unit || !row.inUnit)) { row.unit = m.unit; row.inUnit = true; }
       row.received += m.received; row.shipped += m.shipped;
       if (stockCompare(m.first_date, row.first_date) < 0) row.first_date = m.first_date; if (stockCompare(m.last_date, row.last_date) > 0) row.last_date = m.last_date;
       for (const place of String(m.places || '').split(',')) if (place) row.places.add(place);
       map.set(key, row);
     }
   }
-  let rows = [...map.values()].map(r => ({ ...r, received: stockRound(r.received), shipped: stockRound(r.shipped), balance: stockRound(r.received - r.shipped), places: [...r.places].join(', ') }));
+  let rows = [...map.values()].map(({ inUnit, ...r }) => ({ ...r, received: stockRound(r.received), shipped: stockRound(r.shipped), balance: stockRound(r.received - r.shipped), places: [...r.places].join(', ') }));
   if (query.state === 'instock') rows = rows.filter(r => r.balance > 0);
   rows.sort((a, b) => stockCompare(a.item, b.item) || stockCompare(a.first_date, b.first_date) || stockCompare(a.lot, b.lot));
   return { asof, rows: rows.slice(0, 2000), more: truncated || rows.length > 2000 };
@@ -5132,6 +5166,7 @@ route('POST', '/api/ship-instructions/ship', async ({ user, body }) => {
     if (!closedCustomers.has(ins.customer) && await salesClosed(ins.customer, date)) throw bad(closedMessage(ins.customer, date, '출하 처리하세요'));
     closedCustomers.add(ins.customer);
     const lot = str(lots[id], 100), tag = `si:${id}`;
+    await checkShipLot(ins.item, lot); // 15.150
     cmds.push(
       { sql: "UPDATE ship_instructions SET status='shipped',processed_by=?,processed_at=? WHERE id=? AND status='pending' AND held=0", args: [user.name, now(), id] }, RC_GUARD,
       { sql: 'INSERT INTO shipments(ship_date,item,qty,customer,note,lot,created_by,product_code,unit,spec,batch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)', args: [date, ins.item, ins.qty, ins.customer, ins.note || '', lot, user.name, ins.product_code, ins.unit, ins.spec, tag] },
