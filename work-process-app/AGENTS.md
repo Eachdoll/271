@@ -892,3 +892,10 @@ INVITE_CODE=local-test-code npm start
 - 수주 입력: 비고에 붙여넣으면 읽은 내용 표시 + 고객 발주번호가 비었으면 PO 자동(초록 표시).
 - 매출전표 입력의 수주 잔량 = 두 칸(.so-pick): 왼쪽 수주 목록(수주번호·PO·비고·고른 줄 수, 검색은 PO·비고·수주번호·품목·코드, 단어 여러 개 AND, 강조), 오른쪽 고른 수주의 품목 표(기존 data-order-* 처리 그대로, 「검색된 수주 전체 줄 보기」). /api/sales-orders/open-lines에 order_note.
 - PO 표시·검색: 전표 보기(수주번호 옆), 거래명세표 줄 비고 앞 「PO …」, 매출전표 목록 검색(수주 PO·비고·수주번호), 출하지시 검색(o.customer_po·o.note·o.order_no). salesBillDetail 줄에 customer_po·order_note.
+
+## 세금계산서 매출·매입 · 분류 (15.127, 마이그레이션 0045)
+- 세금계산서 화면 위 탭: 매출(#/sales/tax, 발행) | 매입(#/purchase/tax, 받음). 메뉴 구매 › 매입전표 › 매입 세금계산서.
+- 매입 세금계산서(purchase_tax_invoices + purchase_tax_invoice_bills): 매입처에게 받은 계산서를 확정 매입전표와 묶어 기록(승인번호·작성일자·비고). 금액 = 담은 전표 합(운송비 포함). 한 전표는 유효한 계산서 하나에만(부분 유니크 인덱스 + RC_GUARD). 취소는 status='cancelled' + 묶음 active=0(전표 다시 담기 가능). 승인번호는 숫자·-만, 받음 상태끼리 겹치면 409.
+- API: GET /api/purchase-tax-invoices/candidates?vendor&from&to, POST /api/purchase-tax-invoices, GET 목록(?from&to&vendor&status&q&category), GET /:id, POST /:id/cancel. 권한 구매.
+- 분류 필터(매출·매입 목록 ?category): 원자재·부자재·반제품·제품·상품·임가공·운송비(매입전표 운송비)·미분류. 계산서마다 cats 「분류:공급가액|…」, by_category = 분류별 공급가액(취소 제외). 줄 분류는 LINE_CAT(15.117).
+- 등록 창: 「받은 계산서 합계」를 넣으면 전표 합계와 같은지/차이를 바로 표시(다르면 확인 후 등록).

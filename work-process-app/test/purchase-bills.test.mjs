@@ -372,3 +372,35 @@ test('15.121 Registered spec is fixed on every save path; items without a regist
   const ord = (await admin('POST', '/api/sales-orders', { request_id: rid(), customer: '규격고객', order_date: today, lines: [{ bom_id: g.id, qty: 1, spec: '다른', unit_price: 1 }] })).body;
   assert.equal(ord.lines[0].spec, '12" (M)');
 });
+
+test('15.127 Purchase tax invoices: register from purchase bills, one invoice per bill, class filter incl. freight; sales invoices filter by class', async () => {
+  const raw = (await admin('POST', '/api/boms', { product: '세금원사', product_code: 'TX-R1', item_category: '원자재', kind: 'finished', base_qty: 1, unit: 'KG', materials: [] })).body;
+  const p = (await buyer('POST', '/api/po', { req_no: 'PR-T', vendor: '계산서상사', bom_id: raw.id, item: '세금원사', qty: 10, due_date: today, item_category: '원자재', unit_price: 1000 })).body;
+  await staff('POST', '/api/receipts', { receipt_date: today, vendor: '계산서상사', request_id: rid(), lines: [{ po_id: p.id, lot: 'T1', qty: 10 }] });
+  const open = (await buyer('GET', '/api/purchase-bills/unbilled?vendor=' + encodeURIComponent('계산서상사'))).body.rows;
+  const bill = (await buyer('POST', '/api/purchase-bills', { vendor: '계산서상사', bill_date: today, freight: 3000, request_id: rid(), lines: [{ source_type: open[0].source_type, source_id: open[0].source_id }] })).body;
+  assert.equal((await staff('GET', '/api/purchase-tax-invoices/candidates?vendor=계산서상사')).status, 403);
+  const cand = (await buyer('GET', '/api/purchase-tax-invoices/candidates?vendor=' + encodeURIComponent('계산서 상사'))).body.rows;
+  assert.deepEqual(cand.map(r => r.id), [bill.id]); assert.equal(cand[0].categories, '원자재');
+  assert.equal((await buyer('POST', '/api/purchase-tax-invoices', { vendor: '계산서상사', write_date: today, approval_no: 'abc', bill_ids: [bill.id] })).status, 400);
+  const inv = (await buyer('POST', '/api/purchase-tax-invoices', { request_id: rid(), vendor: '계산서상사', write_date: today, approval_no: '20261117-41000012-00000001', bill_ids: [bill.id] })).body;
+  assert.equal(inv.total, bill.total); assert.deepEqual(inv.categories.map(c => [c.category, c.supply]), [['원자재', 10000], ['운송비', 3000]]);
+  assert.equal((await buyer('POST', '/api/purchase-tax-invoices', { request_id: rid(), vendor: '계산서상사', write_date: today, bill_ids: [bill.id] })).status, 409);
+  assert.equal((await buyer('GET', '/api/purchase-tax-invoices/candidates?vendor=' + encodeURIComponent('계산서상사'))).body.rows.length, 0);
+  const byFreight = (await buyer('GET', '/api/purchase-tax-invoices?category=운송비')).body;
+  assert.equal(byFreight.rows.length, 1); assert.equal(byFreight.rows[0].cats.split('|').sort().join('|'), '운송비:3000|원자재:10000');
+  assert.deepEqual(byFreight.by_category.map(c => [c.category, c.supply]), [['원자재', 10000], ['운송비', 3000]]);
+  assert.equal((await buyer('GET', '/api/purchase-tax-invoices?category=상품')).body.rows.length, 0);
+  assert.equal((await buyer('GET', '/api/purchase-tax-invoices?category=없음')).status, 400);
+  const c = (await buyer('POST', `/api/purchase-tax-invoices/${inv.id}/cancel`, { reason: '잘못 등록' })).body;
+  assert.equal(c.status, 'cancelled');
+  assert.equal((await buyer('GET', '/api/purchase-tax-invoices/candidates?vendor=' + encodeURIComponent('계산서상사'))).body.rows.length, 1);
+  // 매출 계산서 분류 필터
+  const g = (await admin('POST', '/api/boms', { product: '세금상품', product_code: 'TX-G1', item_category: '상품', kind: 'finished', base_qty: 1, unit: 'EA', materials: [] })).body;
+  const s = (await admin('POST', '/api/shipments', { ship_date: today, bom_id: g.id, item: g.product, qty: 2, customer: '계산서고객', unit: 'EA' })).body;
+  const sb = (await admin('POST', '/api/sales-bills', { customer: '계산서고객', bill_date: today, request_id: rid(), lines: [{ source_type: 'ship', source_id: s.id, unit_price: 500 }] })).body;
+  await admin('POST', '/api/tax-invoices', { request_id: rid(), kind: 'single', bill_ids: [sb.id] });
+  const ti = (await admin('GET', `/api/tax-invoices?category=상품&from=${today}&to=${today}`)).body;
+  assert.ok(ti.rows.some(r => r.customer === '계산서고객' && r.cats === '상품:1000'), JSON.stringify(ti.rows.map(r => r.cats)));
+  assert.equal((await admin('GET', `/api/tax-invoices?category=원자재&customer=${encodeURIComponent('계산서고객')}&from=${today}&to=${today}`)).body.rows.length, 0);
+});

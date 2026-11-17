@@ -109,10 +109,10 @@ function taxInvoiceView(inv, after) {
 
 async function pageTaxList(main) {
   const r0 = monthRange(todayStr().slice(0, 7));
-  main.innerHTML = `<h1>세금계산서 관리</h1>
+  main.innerHTML = `<h1>세금계산서 관리</h1>${taxSideTabs('sales')}
   <p class="muted">담은 세금계산서를 체크하고 「발행」을 누르면 트러스빌로 발행합니다. 발행 전에는 작성일자·받는 이메일(2곳까지)을 고치거나 「담기 취소」할 수 있습니다.</p>
   <div class="tax-link" id="taxLink"></div>
-  <form class="list-filters toolbar" data-read-only id="taxFilters"><label>작성일자<input type="date" name="from" value="${r0.from}"></label><label>~<input type="date" name="to" value="${r0.to}"></label><label>거래처<input name="customer" maxlength="100"></label><label>상태<select name="status"><option value="">전체(담기 취소 제외)</option>${Object.entries(TAX_STATUS_LABEL).map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="grow">검색<input type="search" name="q" placeholder="거래처·사업자번호·품목·이메일·승인번호"></label><button class="btn primary">조회</button></form>
+  <form class="list-filters toolbar" data-read-only id="taxFilters"><label>작성일자<input type="date" name="from" value="${r0.from}"></label><label>~<input type="date" name="to" value="${r0.to}"></label><label>거래처<input name="customer" maxlength="100"></label>${taxCatSelect(['원자재', '부자재', '반제품', '제품', '상품', '임가공', '미분류'])}<label>상태<select name="status"><option value="">전체(담기 취소 제외)</option>${Object.entries(TAX_STATUS_LABEL).map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select></label><label class="grow">검색<input type="search" name="q" placeholder="거래처·사업자번호·품목·이메일·승인번호"></label><button class="btn primary">조회</button></form>
   <div class="actions tax-actions" style="justify-content:flex-start"><button type="button" class="btn primary" id="taxIssue">발행</button><button type="button" class="btn" id="taxCancel">담기 취소</button>${ME.is_admin ? '<button type="button" class="btn" id="taxCompany">우리 회사 정보</button>' : ''}<button type="button" class="btn" id="taxXlsx">엑셀</button></div>
   <div id="taxList"></div><div id="taxCounts" class="counts"></div>`;
   const form = $('#taxFilters', main); let rows = [];
@@ -120,9 +120,9 @@ async function pageTaxList(main) {
     const data = await api('GET', '/api/tax-invoices?' + new URLSearchParams(formObj(form))); if (!main.isConnected) return;
     rows = data.rows;
     $('#taxLink', main).innerHTML = data.linked ? '' : '<p class="card small"><span class="chip yellow">연동 준비 중</span> 트러스빌 연동이 아직 연결되지 않았습니다. 계산서를 담고 고칠 수는 있지만 「발행」은 연결 뒤에 됩니다.</p>';
-    $('#taxList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-grid tax-grid"><caption class="sr-only">세금계산서</caption><thead><tr><th scope="col"><input type="checkbox" data-tax-all aria-label="전체 선택"></th><th>상태</th><th>작성일자</th><th>구분</th><th>거래처</th><th>사업자번호</th><th>받는 이메일</th><th>품목</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th><th>청구/영수</th><th>승인번호</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : r.status === 'failed' ? 'row-red' : ''}"><td>${['draft', 'failed'].includes(r.status) ? `<input type="checkbox" data-tax-pick="${r.id}" aria-label="${esc(r.invoice_no)} 선택">` : ''}</td><td>${taxChip(r.status)}${r.status_message ? `<div class="small red-text">${esc(r.status_message)}</div>` : ''}</td><td class="nowrap">${esc(r.write_date)}</td><td>${r.kind === 'single' ? '건별' : '월별'}</td><td data-card-primary><b>${esc(r.customer)}</b></td><td class="nowrap">${r.biz_no ? esc(r.biz_no) : '<span class="chip red">없음</span>'}</td><td class="small">${r.email1 ? esc(r.email1) : '<span class="chip yellow">없음</span>'}${r.email2 ? `<div>${esc(r.email2)}</div>` : ''}</td><td>${esc(r.item_summary)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${CHARGE_LABEL[r.charge]}</td><td class="small">${esc(r.approval_no)}</td><td><button type="button" class="btn small" data-tax-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 세금계산서가 없습니다.</div>';
+    $('#taxList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid bill-grid tax-grid"><caption class="sr-only">세금계산서</caption><thead><tr><th scope="col"><input type="checkbox" data-tax-all aria-label="전체 선택"></th><th>상태</th><th>작성일자</th><th>구분</th><th>거래처</th><th>사업자번호</th><th>받는 이메일</th><th>품목</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th><th>청구/영수</th><th>승인번호</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : r.status === 'failed' ? 'row-red' : ''}"><td>${['draft', 'failed'].includes(r.status) ? `<input type="checkbox" data-tax-pick="${r.id}" aria-label="${esc(r.invoice_no)} 선택">` : ''}</td><td>${taxChip(r.status)}${r.status_message ? `<div class="small red-text">${esc(r.status_message)}</div>` : ''}</td><td class="nowrap">${esc(r.write_date)}</td><td>${r.kind === 'single' ? '건별' : '월별'}</td><td data-card-primary><b>${esc(r.customer)}</b><div>${taxCatChips(r.cats)}</div></td><td class="nowrap">${r.biz_no ? esc(r.biz_no) : '<span class="chip red">없음</span>'}</td><td class="small">${r.email1 ? esc(r.email1) : '<span class="chip yellow">없음</span>'}${r.email2 ? `<div>${esc(r.email2)}</div>` : ''}</td><td>${esc(r.item_summary)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${CHARGE_LABEL[r.charge]}</td><td class="small">${esc(r.approval_no)}</td><td><button type="button" class="btn small" data-tax-open="${r.id}">보기</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 세금계산서가 없습니다.</div>';
     const live = rows.filter(r => r.status !== 'cancelled'), count = s => rows.filter(r => r.status === s).length;
-    $('#taxCounts', main).innerHTML = `<b>${esc(`${live.length}장 · 공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))}원 · 세액 ${won(live.reduce((t, r) => t + r.vat_total, 0))}원 · 합계 ${won(live.reduce((t, r) => t + r.supply_total + r.vat_total, 0))}원`)}</b> <span>${esc(`발행 전 ${count('draft')} · 발행 요청 ${count('queued')} · 발행 완료 ${count('issued')} · 국세청 전송 ${count('sent')} · 실패 ${count('failed')}`)}</span>${data.more ? ' <span>(더 있음)</span>' : ''}`;
+    $('#taxCounts', main).innerHTML = `<b>${esc(`${live.length}장 · 공급가액 ${won(live.reduce((t, r) => t + r.supply_total, 0))}원 · 세액 ${won(live.reduce((t, r) => t + r.vat_total, 0))}원 · 합계 ${won(live.reduce((t, r) => t + r.supply_total + r.vat_total, 0))}원`)}</b> <span>${esc(`발행 전 ${count('draft')} · 발행 요청 ${count('queued')} · 발행 완료 ${count('issued')} · 국세청 전송 ${count('sent')} · 실패 ${count('failed')}`)}</span>${data.more ? ' <span>(더 있음)</span>' : ''}` + taxCatSummary(data.by_category);
     const all = $('[data-tax-all]', main); if (all) all.onchange = () => $$('[data-tax-pick]', main).forEach(x => { x.checked = all.checked; });
     const heads = $$('#taxList thead th', main).map(th => th.textContent.trim()); $$('#taxList tbody tr', main).forEach(tr => [...tr.children].forEach((td, i) => { td.dataset.label = i === 0 ? '' : heads[i] || ''; }));
   };
@@ -151,4 +151,90 @@ async function pageTaxList(main) {
   };
   $('#taxList', main).addEventListener('click', async e => { const b = e.target.closest('[data-tax-open]'); if (!b) return; try { taxInvoiceView(await api('GET', '/api/tax-invoices/' + b.dataset.taxOpen), load); } catch (error) { fail(error); } });
   await load();
+}
+
+// ── 15.127 세금계산서 매출·매입 구분 탭 · 분류(원자재·부자재·반제품·제품·상품·임가공·운송비·미분류) ──
+const TAX_CAT_ORDER = ['원자재', '부자재', '반제품', '제품', '상품', '임가공', '운송비', '미분류'];
+const taxSideTabs = side => `<div class="seg class-tabs tax-side" role="tablist" aria-label="매출·매입">${(ME.is_admin || ME.roles.includes('sales')) ? `<a role="tab" href="#/sales/tax" class="${side === 'sales' ? 'on' : ''}" aria-selected="${side === 'sales'}">매출 세금계산서 <span class="small muted">(발행)</span></a>` : ''}${(ME.is_admin || ME.roles.includes('purchase')) ? `<a role="tab" href="#/purchase/tax" class="${side === 'purchase' ? 'on' : ''}" aria-selected="${side === 'purchase'}">매입 세금계산서 <span class="small muted">(받음)</span></a>` : ''}</div>`;
+const taxCatSelect = order => `<label>분류<select name="category"><option value="">전체</option>${order.map(c => `<option>${c}</option>`).join('')}</select></label>`;
+// 「원자재:10000|운송비:3000」 → 칩(금액 큰 순이 아니라 분류 순서)
+function taxCatChips(cats, withAmount = false) {
+  const list = String(cats || '').split('|').filter(Boolean).map(x => { const k = x.lastIndexOf(':'); return [x.slice(0, k), Number(x.slice(k + 1))]; }).sort((a, b) => TAX_CAT_ORDER.indexOf(a[0]) - TAX_CAT_ORDER.indexOf(b[0]));
+  return list.map(([c, v]) => `${c === '운송비' ? '<span class="cat-chip cat-none">운송비</span>' : catChip(c === '미분류' ? '' : c)}${withAmount ? ` <span class="small">${won(v)}</span>` : ''}`).join(' ');
+}
+const taxCatSummary = by => by?.length ? `<div class="small cat-sum">분류별 공급가액: ${by.map(c => `${c.category === '운송비' ? '<span class="cat-chip cat-none">운송비</span>' : catChip(c.category === '미분류' ? '' : c.category)} ${won(c.supply)}원`).join(' · ')}</div>` : '';
+
+async function pagePurchaseTax(main) {
+  const r0 = monthRange(todayStr().slice(0, 7));
+  main.innerHTML = `<h1>매입 세금계산서</h1>${taxSideTabs('purchase')}
+  <p class="muted">매입처에게 받은 세금계산서를 그 매입전표와 묶어 기록합니다(국세청 승인번호·작성일자). 한 매입전표는 계산서 하나에만 담깁니다. 운송비가 있는 전표는 「운송비」로도 찾을 수 있습니다.</p>
+  <form class="list-filters toolbar" data-read-only id="ptaxFilters"><label>작성일자<input type="date" name="from" value="${r0.from}"></label><label>~<input type="date" name="to" value="${r0.to}"></label><label>매입처<input name="vendor" maxlength="100"></label>${taxCatSelect(TAX_CAT_ORDER)}<label>상태<select name="status"><option value="">받음</option><option value="cancelled">취소</option></select></label><label class="grow">검색<input type="search" name="q" placeholder="승인번호·매입처·사업자번호·비고"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀</button></form>
+  <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" id="ptaxNew">+ 매입 세금계산서 등록</button></div>
+  <div id="ptaxSum" class="counts"></div><div id="ptaxList"></div>`;
+  const form = $('#ptaxFilters', main); let rows = [];
+  bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
+  const load = async () => {
+    const data = await api('GET', '/api/purchase-tax-invoices?' + new URLSearchParams(formObj(form))); if (!main.isConnected) return; rows = data.rows;
+    $('#ptaxSum', main).innerHTML = sumLine([['계산서', `${fmtNum(rows.length)}장`], ['공급가액', `${won(rows.reduce((t, r) => t + r.supply_total, 0))}원`], ['세액', `${won(rows.reduce((t, r) => t + r.vat_total, 0))}원`], ['합계', `${won(rows.reduce((t, r) => t + r.total, 0))}원`]]) + taxCatSummary(data.by_category);
+    $('#ptaxList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid" data-keep-cols><thead><tr><th>작성일자</th><th>매입처</th><th>분류</th><th>승인번호</th><th class="r">전표</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th><th>상태</th><th>입력</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `<tr class="${r.status === 'cancelled' ? 'row-off' : ''}"><td class="nowrap">${esc(r.write_date)}</td><td data-card-primary><b>${esc(r.vendor)}</b>${r.biz_no ? `<div class="small muted">${esc(r.biz_no)}</div>` : ''}</td><td>${taxCatChips(r.cats, true)}</td><td class="small">${esc(r.approval_no || '')}${r.note ? `<div class="muted">${esc(r.note)}</div>` : ''}</td><td class="r">${fmtNum(r.bill_count)}</td><td class="r">${won(r.supply_total)}</td><td class="r">${won(r.vat_total)}</td><td class="r"><b>${won(r.total)}</b></td><td>${r.status === 'cancelled' ? `<span class="chip">취소</span><div class="small muted">${esc(r.cancel_reason || '')}</div>` : '<span class="chip green">받음</span>'}</td><td class="small muted">${esc(r.created_by)}</td><td class="nowrap"><button type="button" class="btn small" data-ptax-open="${r.id}">보기</button>${r.status === 'received' ? ` <button type="button" class="btn small danger" data-ptax-cancel="${r.id}">취소</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">조건에 맞는 매입 세금계산서가 없습니다.</div>';
+    $$('[data-ptax-open]', main).forEach(b => b.onclick = () => purchaseTaxView(Number(b.dataset.ptaxOpen)).catch(fail));
+    $$('[data-ptax-cancel]', main).forEach(b => b.onclick = async () => { const v = await promptBox('매입 세금계산서 취소', '<label>사유<input name="reason" maxlength="200" placeholder="예) 잘못 등록 · 수정 계산서로 다시 받음"></label>'); if (!v) return; try { await api('POST', `/api/purchase-tax-invoices/${b.dataset.ptaxCancel}/cancel`, v); toast('취소했습니다. 담겼던 전표는 다시 담을 수 있습니다.'); load().catch(fail); } catch (error) { fail(error); } });
+  };
+  rangePresets(form.elements.from, form.elements.to, { onPick: () => load().catch(fail) });
+  form.onsubmit = e => { e.preventDefault(); load().catch(fail); };
+  $('[data-xlsx]', form).onclick = () => { if (!rows.length) return toast('내려받을 계산서가 없습니다.', 'err'); const v = formObj(form);
+    xlsxDownload(`매입세금계산서_${v.from}_${v.to}.xlsx`, { sheet: '매입 세금계산서', titles: ['매입 세금계산서', `${COMPANY_NAME} · 작성일자 ${v.from} ~ ${v.to}${v.category ? ' · 분류 ' + v.category : ''}`],
+      columns: [{ label: '작성일자', type: 'date' }, { label: '매입처', type: 'text', width: 20 }, { label: '사업자번호', type: 'text', width: 14 }, { label: '승인번호', type: 'text', width: 28 }, { label: '분류', type: 'text', width: 30 }, { label: '전표 수', type: 'number' }, { label: '공급가액', type: 'money' }, { label: '세액', type: 'money' }, { label: '합계', type: 'money' }, { label: '상태', type: 'text' }, { label: '비고', type: 'text', width: 24 }],
+      rows: rows.map(r => [r.write_date, r.vendor, r.biz_no, r.approval_no, String(r.cats || '').split('|').map(x => x.replace(':', ' ')).join(', '), r.bill_count, r.supply_total, r.vat_total, r.total, r.status === 'cancelled' ? '취소' : '받음', r.note]),
+      totals: ['합계', '', '', '', '', '', rows.reduce((t, r) => t + r.supply_total, 0), rows.reduce((t, r) => t + r.vat_total, 0), rows.reduce((t, r) => t + r.total, 0), '', ''] }); };
+  $('#ptaxNew', main).onclick = () => purchaseTaxNew(() => load()).catch(fail);
+  await load().catch(fail);
+}
+async function purchaseTaxView(id) {
+  const inv = await api('GET', '/api/purchase-tax-invoices/' + id);
+  const m = modal(`<h3>매입 세금계산서 <span class="small muted">${esc(inv.invoice_no)}${inv.status === 'cancelled' ? ' · 취소' : ''}</span></h3>
+    <table class="grid" data-keep-cols><tbody><tr><th>매입처</th><td>${esc(inv.vendor)} ${inv.biz_no ? `<span class="small muted">${esc(inv.biz_no)}</span>` : ''}</td><th>작성일자</th><td>${esc(inv.write_date)}</td></tr>
+      <tr><th>승인번호</th><td colspan="3">${esc(inv.approval_no || '—')}</td></tr><tr><th>공급가액</th><td class="r">${won(inv.supply_total)}</td><th>세액 · 합계</th><td class="r">${won(inv.vat_total)} · <b>${won(inv.total)}</b></td></tr>
+      ${inv.note ? `<tr><th>비고</th><td colspan="3">${esc(inv.note)}</td></tr>` : ''}</tbody></table>
+    <h4>분류별</h4><p>${inv.categories.map(c => `${c.category === '운송비' ? '<span class="cat-chip cat-none">운송비</span>' : catChip(c.category === '미분류' ? '' : c.category)} ${won(c.supply)}원`).join(' · ') || '—'}</p>
+    <h4>담긴 매입전표</h4><div class="table-wrap"><table class="grid" data-keep-cols><thead><tr><th>전표번호</th><th>명세서 일자</th><th>명세서 번호</th><th class="r">공급가액(운송비 포함)</th><th class="r">세액</th><th class="r">합계</th></tr></thead><tbody>${inv.bills.map(b => `<tr><td>${esc(b.bill_no)}</td><td>${esc(b.bill_date)}</td><td>${esc(b.statement_no || '')}</td><td class="r">${won(b.supply_total)}${b.freight ? `<div class="small muted">운송비 ${won(b.freight)}</div>` : ''}</td><td class="r">${won(b.vat_total)}</td><td class="r">${won(b.total)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="actions"><button class="btn" data-close>닫기</button></div>`, { wide: true });
+  $('[data-close]', m.el).onclick = m.close;
+}
+// 등록: 매입처 → 기간 → 아직 계산서에 안 담긴 확정 매입전표 체크 → 작성일자·승인번호 → 저장. 받은 계산서 합계를 넣으면 맞는지 바로 비교.
+async function purchaseTaxNew(after) {
+  const r0 = monthRange(todayStr().slice(0, 7)), requestId = crypto.randomUUID();
+  const m = modal(`<h3>매입 세금계산서 등록</h3>
+    <form><div class="form-grid"><label>매입처 *<input name="vendor" required maxlength="100" autocomplete="off"></label><label>전표 기간<input type="date" name="from" value="${r0.from}"></label><label>~<input type="date" name="to" value="${r0.to}"></label></div>
+    <div data-ptax-cands><p class="muted small">매입처를 고르면 아직 계산서에 담지 않은 확정 매입전표가 나옵니다.</p></div>
+    <div class="form-grid"><label>작성일자 *<input type="date" name="write_date" required value="${todayStr()}"></label><label>국세청 승인번호<input name="approval_no" maxlength="40" placeholder="예) 20261117-41000012-00000001" inputmode="numeric"></label><label>받은 계산서 합계 <span class="hint">(맞는지 비교)</span><input name="check_total" type="number" min="0" step="1"></label><label class="span3">비고<input name="note" maxlength="500"></label></div>
+    <p class="small" data-ptax-sum></p>
+    <div class="actions"><button type="button" class="btn" data-close>닫기</button><button class="btn primary">등록</button></div></form>`, { wide: true });
+  m.el.classList.add('lr-modal');
+  const form = $('form', m.el), box = $('[data-ptax-cands]', form); let cands = [];
+  bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {});
+  const sum = () => { const p = cands.filter((_, i) => $(`[data-pc="${i}"]`, box)?.checked), s = p.reduce((t, b) => t + b.supply_total, 0), v = p.reduce((t, b) => t + b.vat_total, 0), chk = form.elements.check_total.value;
+    const diff = chk === '' ? null : Number(chk) - (s + v);
+    $('[data-ptax-sum]', form).innerHTML = `${p.length}장 · 공급가액 <b>${won(s)}</b> · 세액 <b>${won(v)}</b> · 합계 <b>${won(s + v)}</b>원${diff == null ? '' : diff === 0 ? ' <span class="chip green">받은 계산서와 같음</span>' : ` <span class="chip red">받은 계산서와 ${won(Math.abs(diff))}원 ${diff > 0 ? '많음' : '적음'}</span>`}`;
+    if (p.length) { const last = p.map(b => b.bill_date).sort().at(-1); if (!form.elements.write_date.dataset.touched) form.elements.write_date.value = last; } };
+  const load = async () => {
+    const vendor = form.elements.vendor.value.trim(); if (!vendor) return;
+    const data = await api('GET', '/api/purchase-tax-invoices/candidates?' + new URLSearchParams({ vendor, from: form.elements.from.value, to: form.elements.to.value })); cands = data.rows;
+    box.innerHTML = cands.length ? `<div class="table-wrap"><table class="grid" data-keep-cols data-no-sort><thead><tr><th><input type="checkbox" data-pc-all checked aria-label="모두"></th><th>전표번호</th><th>명세서 일자</th><th>명세서 번호</th><th>분류</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th></tr></thead><tbody>${cands.map((b, i) => `<tr><td><input type="checkbox" data-pc="${i}" checked></td><td>${esc(b.bill_no)}</td><td>${esc(b.bill_date)}</td><td>${esc(b.statement_no || '')}</td><td>${String(b.categories || '').split(',').filter(Boolean).map(c => catChip(c === '미분류' ? '' : c)).join(' ')}${b.freight ? ` <span class="cat-chip cat-none">운송비 ${won(b.freight)}</span>` : ''}</td><td class="r">${won(b.supply_total)}</td><td class="r">${won(b.vat_total)}</td><td class="r">${won(b.total)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="muted">${esc(vendor)}: 이 기간에 계산서에 담지 않은 확정 매입전표가 없습니다.</p>`;
+    $('[data-pc-all]', box)?.addEventListener('change', e => { $$('[data-pc]', box).forEach(c => { c.checked = e.target.checked; }); sum(); });
+    sum();
+  };
+  form.elements.vendor.addEventListener('change', () => load().catch(fail));
+  form.elements.from.onchange = form.elements.to.onchange = () => load().catch(fail);
+  box.addEventListener('change', sum); form.elements.check_total.oninput = sum;
+  form.elements.write_date.oninput = () => { form.elements.write_date.dataset.touched = '1'; };
+  $('[data-close]', m.el).onclick = m.close;
+  form.onsubmit = async e => {
+    e.preventDefault(); const ids = cands.filter((_, i) => $(`[data-pc="${i}"]`, box)?.checked).map(b => b.id);
+    if (!ids.length) return toast('담을 매입전표를 고르세요.', 'err');
+    const v = formObj(form), total = cands.filter(b => ids.includes(b.id)).reduce((t, b) => t + b.total, 0);
+    if (v.check_total !== '' && Number(v.check_total) !== total && !await confirmBox(`받은 계산서 합계(${won(Number(v.check_total))}원)와 전표 합계(${won(total)}원)가 다릅니다. 그래도 등록할까요?`)) return;
+    try { await api('POST', '/api/purchase-tax-invoices', { request_id: requestId, vendor: v.vendor, write_date: v.write_date, approval_no: v.approval_no, note: v.note, bill_ids: ids }); toast('매입 세금계산서를 등록했습니다.'); m.close(); await after?.(); } catch (error) { fail(error); }
+  };
 }
