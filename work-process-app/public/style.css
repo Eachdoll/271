@@ -1607,3 +1607,5 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
   body.printing-cert .s2-top h2 { font-size: 22px; }
   body.printing-cert .s2-to { padding: 3px 8px; }
 }
+.s2-lnote { font-size: 11px; }
+.s2-note { line-height: 1.35; }

@@ -218,7 +218,9 @@ async function statementSheet(bills) {
   const [y, mo, d] = to.split('-');
   const docNo = bills.length === 1 ? bills[0].bill_no : `${bills[0].bill_no} 외 ${bills.length - 1}장`;
   const prev = ledger ? ledger.totals.balance - total + ledger.totals.paid : null, paid = ledger ? ledger.totals.paid : null, last = ledger ? ledger.totals.balance : null;
-  const note = [manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
+  // 15.125 전표 비고(전표마다 적은 비고)를 아래 비고 칸 맨 앞에 · 줄 비고는 표의 비고 칸에
+  const billNotes = [...new Set(bills.map(b => String(b.note || '').trim()).filter(Boolean))];
+  const note = [...billNotes, manyDays ? `거래기간 ${from} ~ ${to}` : '', company.bank ? `입금 계좌 ${company.bank}` : ''].filter(Boolean).join(' · ');
   const w = n => n == null ? '' : won(n);
   const copy = (kind, tone) => `<section class="stmt2 stmt2-${tone}${compact ? ' stmt2-half' : ''}">
     <div class="s2-top"><span class="s2-no">전표NO: <b>${esc(docNo)}</b></span><h2>거 래 명 세 표</h2><span class="s2-date"><b>${y}</b> 년 <b>${Number(mo)}</b> 월 <b>${Number(d)}</b> 일</span></div>
@@ -230,9 +232,9 @@ async function statementSheet(bills) {
         <tr><th>등록번호</th><td>${esc(company.biz_no || '')}</td><th>성명</th><td class="s2-seal">${esc(company.ceo || '')}<span>(인)</span></td></tr>
         <tr><th>주 소</th><td colspan="3">${esc(company.address || '')}</td></tr></tbody></table>
     </div>
-    <table class="s2-items"><colgroup><col style="width:34%"><col style="width:26%"><col style="width:10%"><col style="width:13%"><col style="width:17%"></colgroup>
-      <thead><tr><th>품 명</th><th>규 격</th><th>수 량</th><th>단 가</th><th>금 액</th></tr></thead>
-      <tbody>${Array.from({ length: rows }, (_, i) => { const l = lines[i]; return l ? `<tr><td>${manyDays ? `<span class="s2-md">${esc(md(l.date))}</span> ` : ''}${esc(l.item)}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}${l.unit ? ` <span class="s2-u">${esc(l.unit)}</span>` : ''}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td></tr>` : '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>'; }).join('')}</tbody></table>
+    <table class="s2-items"><colgroup><col style="width:29%"><col style="width:17%"><col style="width:9%"><col style="width:11%"><col style="width:14%"><col style="width:20%"></colgroup>
+      <thead><tr><th>품 명</th><th>규 격</th><th>수 량</th><th>단 가</th><th>금 액</th><th>비 고</th></tr></thead>
+      <tbody>${Array.from({ length: rows }, (_, i) => { const l = lines[i]; return l ? `<tr><td>${manyDays ? `<span class="s2-md">${esc(md(l.date))}</span> ` : ''}${esc(l.item)}</td><td>${esc(l.spec || '')}</td><td class="r">${fmtNum(l.qty)}${l.unit ? ` <span class="s2-u">${esc(l.unit)}</span>` : ''}</td><td class="r">${fmtNum(l.unit_price)}</td><td class="r">${won(l.supply)}</td><td class="s2-lnote" title="${esc(l.note || '')}">${esc(l.note || '')}</td></tr>` : '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>'; }).join('')}</tbody></table>
     <table class="s2-foot"><colgroup><col style="width:12%"><col style="width:21%"><col style="width:10%"><col style="width:20%"><col style="width:10%"><col style="width:27%"></colgroup><tbody>
       <tr><th>합계금액</th><td class="r">${won(supply)}</td><th>부가세</th><td class="r">${won(vat)}</td><th>계</th><td class="r"><b>${won(total)}</b></td></tr>
       <tr><th>비 고</th><td colspan="3" class="s2-note">${esc(note)}</td><th>인 수 자</th><td class="s2-seal"><span>(인)</span></td></tr>
