@@ -2160,3 +2160,8 @@ form.list-filters .lf-pair input[type=date] { width: 10.6em; }
 form.list-filters input[type=date] { min-width: 9.6em; }
 label input[data-rc-prefix], input[data-rc-prefix][size] { width: 6.5em !important; min-width: 6.5em; }
 input[type=date][name=asof] { min-width: 9.6em; }
+
+/* 15.178 관리 화면이면 화면 안 예전 전환 단추(목록 보기·＋ 입력)는 숨김 — 위 전환 단추로 */
+#main h1:has(+ .manage-tabs) .view-switch { display: none; }
+/* 「확인중으로 표시」가 상태 칩이 아니라 단추로 보이게 */
+.btn.yellow { border: 1px solid var(--yellow, #b7791f) !important; }

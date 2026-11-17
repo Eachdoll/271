@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.177';
+const APP_VERSION = '15.178';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -345,9 +345,9 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes', '견적서 관리']] }, { sub: '수주', items: [['#/sales/orders', '수주 관리']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr', '생산의뢰 관리']] }, { sub: '구매의뢰', items: [['#/sales/pr', '구매의뢰 관리']] }] },
   { group: '구매', items: [
-    { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
+    { sub: '발주', items: [['#/purchase/po', '발주 관리']] },
     { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
     { sub: '샘플(상품)', items: [['#/purchase/sample/request', '상품 샘플의뢰'], ['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
@@ -480,6 +480,7 @@ function applyView(main, route) {
     }
   }
   const h1 = $('h1', main);
+  if (MANAGE[navRoute(route)]) { if (view === 'entry') showRecentEntries(main, route); return; } // 15.178 관리 화면: 제목·전환은 managedTabs
   if (h1) { const text = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (text) text.nodeValue = title + ' '; }
   const link = document.createElement('a'); link.className = `btn view-switch ${view === 'list' ? 'primary' : ''}`; link.href = other;
   link.textContent = (view === 'entry' ? '' : '＋ ') + otherLabel + (view === 'entry' ? ' →' : '');
@@ -517,8 +518,8 @@ function showRecentEntries(main, route) {
 const PAGES = {
   '#/': pageHome,
   '#/reports': pageReports,
-  '#/purchase/po': pagePO,
-  '#/purchase/po/new': pagePO,
+  '#/purchase/po': main => managedPage(main, '#/purchase/po', pagePO), // 15.178 발주 관리
+  '#/purchase/po/new': main => managedPage(main, '#/purchase/po/new', pagePO),
   '#/purchase/laundry': pageLaundry,
   '#/purchase/laundry/new': pageLaundry,
   '#/purchase/laundry-reports': pageLaundryReports,
@@ -549,14 +550,14 @@ const PAGES = {
   '#/purchase/closing': main => pageBillClosing(main),
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
   '#/sales/delivery-status': main => pageReceiptStatus(main, 'sales'),
-  '#/sales/quotes/new': main => pageQuoteEntry(main), // 15.163 견적서
-  '#/sales/quotes': main => pageQuoteList(main),
+  '#/sales/quotes/new': main => managedPage(main, '#/sales/quotes/new', pageQuoteEntry), // 15.163 견적서 · 15.178 견적서 관리
+  '#/sales/quotes': main => managedPage(main, '#/sales/quotes', pageQuoteList),
   '#/purchase/notes': main => pageNotes(main), // 15.165 어음 관리
   '#/purchase/calendar': main => pagePurchaseCalendar(main), // 15.176 매입 달력
   '#/sales/calendar': main => pageSalesCalendar(main), // 15.166 매출 달력 // 15.157 납품현황(입고현황의 매출 쪽)
-  '#/sales/orders/new': main => pageSalesOrderEntry(main),
+  '#/sales/orders/new': main => managedPage(main, '#/sales/orders/new', pageSalesOrderEntry), // 15.178 수주 관리
   '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
-  '#/sales/orders': main => pageSalesOrderList(main),
+  '#/sales/orders': main => managedPage(main, '#/sales/orders', pageSalesOrderList),
   '#/logistics/ship-orders': main => pageShipInstructions(main),
   '#/sales/bills/new': main => managedPage(main, '#/sales/bills/new', pageSalesBillEntry), // 15.170 매출전표 관리(입력)
   '#/sales/bills': main => managedPage(main, '#/sales/bills', pageSalesBillList), // 15.170 매출전표 관리(목록)
@@ -591,11 +592,11 @@ const PAGES = {
   '#/prod/semi/cut/new': main => pageSemi(main, 'cut'),
   '#/prod/semi/wash': main => pageSemi(main, 'wash'),
   '#/prod/semi/wash/new': main => pageSemi(main, 'wash'),
-  '#/sales/pr': pageSalesPrList,
-  '#/sales/mr': main => pageMrList(main, 'sales'),
-  '#/sales/mr/new': pageSalesMrEntry,
+  '#/sales/pr': main => managedPage(main, '#/sales/pr', pageSalesPrList), // 15.178 구매의뢰 관리
+  '#/sales/mr': main => managedPage(main, '#/sales/mr', m => pageMrList(m, 'sales')), // 15.178 생산의뢰 관리
+  '#/sales/mr/new': main => managedPage(main, '#/sales/mr/new', pageSalesMrEntry),
   '#/prod/orders': main => pageMrList(main, 'production'),
-  '#/sales/pr/new': pageSalesPrEntry,
+  '#/sales/pr/new': main => managedPage(main, '#/sales/pr/new', pageSalesPrEntry),
   '#/admin': pageAdmin,
   '#/admin/users': main => managedPage(main, '#/admin/users', m => pageMembers(m, 'info')), // 15.175 회원 관리 · 회원 정보
   '#/admin/users/roles': main => managedPage(main, '#/admin/users/roles', m => pageMembers(m, 'roles')), // 사용 권한
@@ -630,17 +631,23 @@ function refreshFavNav() {
 const MANAGE = {
   '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
+  '#/sales/quotes': { title: '견적서 관리', tabs: [['#/sales/quotes', '견적서 목록'], ['#/sales/quotes/new', '견적서 작성']] },
+  '#/sales/orders': { title: '수주 관리', tabs: [['#/sales/orders', '수주 목록'], ['#/sales/orders/new', '수주 입력']] },
+  '#/sales/mr': { title: '생산의뢰 관리', tabs: [['#/sales/mr', '생산의뢰 목록'], ['#/sales/mr/new', '생산의뢰 작성']] },
+  '#/sales/pr': { title: '구매의뢰 관리', tabs: [['#/sales/pr', '구매의뢰 목록'], ['#/sales/pr/new', '구매의뢰 작성']] },
+  '#/purchase/po': { title: '발주 관리', tabs: [['#/purchase/po', '발주 목록'], ['#/purchase/po/new', '발주 입력']] },
   '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills', '전표 목록'], ['#/purchase/bills/new', '전표 입력']] },
   '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
   '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
 };
-const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
+const ROUTE_ALIAS = { '#/sales/quotes/new': '#/sales/quotes', '#/sales/orders/new': '#/sales/orders', '#/sales/orders/edit': '#/sales/orders', '#/sales/mr/new': '#/sales/mr', '#/sales/pr/new': '#/sales/pr', '#/purchase/po/new': '#/purchase/po', '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
-  const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim()); if (t) t.nodeValue = m.title + ' '; else h1.prepend(m.title + ' ');
-  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
+  const t = [...h1.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
+  if (t) t.nodeValue = /수정|고치기/.test(t.nodeValue) ? `${m.title} · ${t.nodeValue.trim()} ` : m.title + ' '; else h1.prepend(m.title + ' '); // 15.178 고치는 중 표시 유지
+  h1.insertAdjacentHTML('afterend', `<nav class="manage-tabs" aria-label="${esc(m.title)}">${m.tabs.filter(([h]) => canSeeRoute(h)).map(([h, l]) => `<a href="${h}" class="${h === route ? 'on' : ''}"${h === route ? ' aria-current="page"' : ''}>${esc(l)}</a>`).join('')}</nav>`);
 }
 async function managedPage(main, route, fn) { await fn(main); managedTabs(main, route); }
 function shell() {
@@ -1589,7 +1596,7 @@ async function pageReceive(main) {
     <span id="rcSelectedCount" class="muted">0개 선택</span>
     <button class="btn green" data-st="ok" title="수량상이 항목은 실입고 수량 그대로 입고 종결">✔ 입고확인·완료</button>
     <button class="btn red" data-st="mismatch">수량상이</button>
-    <button class="btn yellow" data-st="checking">확인중</button>
+    <button class="btn yellow" data-st="checking" title="고른 줄을 「확인중」 상태로 바꿉니다">확인중으로 표시</button>
     <button class="btn" data-st="">미입고로 되돌리기</button>
     <button class="btn primary" data-rc-lot title="체크한 발주(같은 거래처)를 입고 입력 화면으로 불러와 LOT별·부분 입고로 받습니다">LOT·부분 입고 처리</button>
   </div>
