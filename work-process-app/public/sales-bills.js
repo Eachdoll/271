@@ -734,7 +734,7 @@ async function pageBillCalendar(main, side) {
   const P = side === 'purchase';
   const C = P ? { title: '매입 달력', word: '매입', doc: '입고전표', daily: '일별 매입현황', amt: '매입', items: '세부품목내역', price: '매입가액', cal: '/api/purchase-calendar', list: '/api/purchase-bills', one: '/api/purchase-bills/', who: 'vendor', type: 'purchase', key: 'wpa:purchase-cal', entry: '#/purchase/bills/new', presetKey: 'wpa:bill-vendor', sheet: (b, after) => billSheet(b, after), help: '확정 매입전표 기준(반출 감액 전표 포함)' }
     : { title: '매출 달력', word: '매출', doc: '납품전표', daily: '일별 납품현황', amt: '매출', items: '세부품목내역', price: '납품가액', cal: '/api/sales-calendar', list: '/api/sales-bills', one: '/api/sales-bills/', who: 'customer', type: 'sales', key: 'wpa:sales-cal', entry: '#/sales/bills/new', presetKey: 'wpa:sbill-customer', sheet: (b, after) => salesBillSheet(b, after), help: '확정 매출전표 기준(반입 감액 전표 포함)' };
-  let month = todayStr().slice(0, 7), day = todayStr(), billId = null, cal = null, bill = null;
+  let month = todayStr().slice(0, 7), day = todayStr(), billId = null, cal = null, bill = null, itemSeq = 0;
   try { const s = JSON.parse(sessionStorage.getItem(C.key) || 'null'); if (s?.month) { month = s.month; day = s.day || day; } } catch { /* 편의 */ }
   main.innerHTML = `<h1>${C.title}</h1>
   <p class="muted small">날짜를 누르면 그날 ${C.word}전표가, 전표를 누르면 품목이 나옵니다. 「+ 전표 추가」는 고른 날짜로 ${C.word}전표 입력을 열고, 「수정」은 일자·단가·비고를 고칩니다. 금액은 ${C.help}이고 V.A.T 별도 ${C.amt}·세액·합계로 봅니다.</p>
@@ -769,7 +769,7 @@ async function pageBillCalendar(main, side) {
   };
   const drawItems = async () => {
     if (!billId) { bill = null; $('#scBillLabel', main).textContent = ''; $('#scItems', main).innerHTML = '<div class="empty">전표를 고르세요.</div>'; return; }
-    const b = await api('GET', C.one + billId); if (!main.isConnected) return; bill = b;
+    const my = ++itemSeq, b = await api('GET', C.one + billId); if (!main.isConnected || my !== itemSeq || b.id !== billId) return; bill = b; // 15.179 늦게 온 응답은 버림
     $('#scBillLabel', main).textContent = `${b.bill_no} · ${b[C.who]}`;
     const lines = b.lines.filter(l => l.active !== 0), qty = new Set(lines.map(l => l.unit)).size === 1 ? lines.reduce((t, l) => t + (Number(l.qty) || 0), 0) : null;
     const locked = b.closed ? '마감된 달이라 고칠 수 없습니다' : b.invoice ? '세금계산서에 담긴 전표입니다(일자·단가를 바꾸려면 계산서에서 먼저 빼세요)' : '';
@@ -777,7 +777,7 @@ async function pageBillCalendar(main, side) {
       <tbody>${lines.map(l => `<tr><td class="nowrap">${esc(l.product_code || '')}</td><td>${esc(l.item)}</td><td>${esc(l.spec || '')}</td><td>${esc(l.unit || '')}</td><td class="r">${fmtNum(l.qty)}</td><td class="r">${won(l.unit_price)}</td><td class="r">${won(l.supply)}</td></tr>`).join('')}</tbody></table></div>
       <table class="sc-sum"><tbody><tr><th>${C.price}</th><td class="r">${qty == null ? '' : fmtNum(qty)}</td><td class="r">${won(b.supply_total)}</td></tr><tr><th>부 가 세</th><td></td><td class="r">${won(b.vat_total)}</td></tr><tr><th>합계금액</th><td></td><td class="r"><b>${won(b.total)}</b></td></tr></tbody></table>
       ${locked ? `<p class="small muted" style="text-align:right">${esc(locked)}</p>` : ''}
-      <div class="actions" style="justify-content:flex-end"><button type="button" class="btn" data-sc-open="${b.id}">전표 열기</button>${b.status === 'confirmed' ? `<button type="button" class="btn primary" data-sc-edit="${b.id}">수정</button>` : ''}</div>`;
+      <div class="actions" style="justify-content:flex-end"><button type="button" class="btn" data-sc-open="${b.id}">전표 열기</button>${b.status === 'confirmed' && !locked ? `<button type="button" class="btn primary" data-sc-edit="${b.id}">수정</button>` : ''}</div>`;
   };
   const drawBills = async () => {
     $('#scDayLabel', main).textContent = `${day} (${W[new Date(day).getDay()]})`;
@@ -807,7 +807,7 @@ async function pageBillCalendar(main, side) {
   main.addEventListener('click', e => {
     const d = e.target.closest('[data-sc-day]'), b = e.target.closest('[data-sc-bill]'), o = e.target.closest('[data-sc-open]'), ed = e.target.closest('[data-sc-edit]'), add = e.target.closest('[data-sc-add]');
     if (add) { try { sessionStorage.setItem('wpa:bill-date', day); if (partner()) sessionStorage.setItem(C.presetKey, partner()); } catch { /* 편의 */ } location.hash = C.entry; return; }
-    if (ed) { if (bill) billEditWindow(side, bill, next => reload(next)).catch(fail); return; }
+    if (ed) { if (bill && bill.id === Number(ed.dataset.scEdit)) billEditWindow(side, bill, next => reload(next)).catch(fail); return; }
     if (o) { api('GET', C.one + o.dataset.scOpen).then(x => C.sheet(x, () => load())).catch(fail); return; }
     if (d) { pick(d.dataset.scDay).catch(fail); return; }
     if (b) { billId = Number(b.dataset.scBill); $$('[data-sc-bill]', main).forEach(x => x.classList.toggle('on', x === b)); drawItems().catch(fail); }

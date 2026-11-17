@@ -104,18 +104,18 @@ function menuText(list, label) {
 // 부서 기본은 그 부서(비어 있으면 상위 부서로 올라가며) 설정, 끝까지 없으면 전체.
 // 역할(구매·품질·개발·생산·물류와 그 책임자)을 받은 업무는 메뉴 제한과 관계없이 보인다(승인·접수 화면이 그 묶음에 있으므로).
 const ROLE_MENU = { purchase: 'purchase', quality: 'quality', quality_approver: 'quality', dev: 'dev', dev_approver: 'dev', production: 'production', production_approver: 'production', logistics: 'logistics', logistics_approver: 'logistics' };
-async function effectiveMenus(u) {
-  const list = await baseMenus(u); if (!list) return null;
+async function effectiveMenus(u, departments = null) {
+  const list = await baseMenus(u, departments); if (!list) return null;
   const fromRoles = publicUser(u).roles.map(r => ROLE_MENU[r]).filter(Boolean);
   return MENU_GROUPS.filter(k => list.includes(k) || fromRoles.includes(k));
 }
 // 15.175 메뉴 설정만으로 정해지는 목록(사용 권한으로 더해지는 묶음 제외). null = 전체.
-async function baseMenus(u) {
+async function baseMenus(u, departments = null) { // 15.179 departments를 넘기면 부서 표를 다시 읽지 않는다(회원 목록)
   if (!u || u.is_admin || u.menu_mode === 'all') return null;
   let list = null;
   if (u.menu_mode === 'custom') list = menuList(u.menus) || [];
   else if (u.department) {
-    const departments = await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all();
+    departments ||= await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all();
     let d = departments.find(x => x.name === u.department);
     for (let guard = 0; d && guard < 20 && !list; guard++) {
       if (d.menus) list = menuList(d.menus);
@@ -406,7 +406,7 @@ route('GET', '/api/approval-managers', async () => {
     development: users.filter(u => (u.roles || '').split(',').includes('dev_approver')).map(u => ({ id: u.id, name: u.name })),
   };
 });
-route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); return Promise.all((await db.prepare('SELECT * FROM users ORDER BY id').all()).map(async u => ({ ...publicUser(u), menus_base: await baseMenus(u), menus_effective: await effectiveMenus(u) }))); }); // 15.175 메뉴 보기 표: 설정값·실제 보임
+route('GET', '/api/admin/users', async ({ user }) => { requireAdmin(user); const departments = await db.prepare('SELECT id,name,parent_id,menus FROM org_departments').all(); const out = []; for (const u of await db.prepare('SELECT * FROM users ORDER BY id').all()) out.push({ ...publicUser(u), menus_base: await baseMenus(u, departments), menus_effective: await effectiveMenus(u, departments) }); return out; }); // 15.175 메뉴 보기 표: 설정값·실제 보임
 // An administrator can open an account directly; it is approved from the start.
 route('POST', '/api/admin/users', async ({ user, body }) => {
   requireAdmin(user);

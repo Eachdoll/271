@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.178';
+const APP_VERSION = '15.179';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -392,7 +392,20 @@ function routeMenu(route) {
   return null;
 }
 const canSeeMenu = key => !key || !ME || !Array.isArray(ME.menus) || ME.menus.includes(key);
-const canSeeRoute = route => canSeeMenu(routeMenu(route));
+// 15.179 사용 권한이 있어야 쓸 수 있는 화면(서버가 영업·구매 담당만 허용): 메뉴를 「전체 보임」으로 해도 권한이 없으면 숨기고 막는다.
+// 메뉴 보기만 켜고 권한이 없어 들어가면 빈 화면·「권한 없음」 오류만 보이던 문제.
+const ROUTE_ROLE = [
+  [['#/sales/quotes', '#/sales/orders', '#/sales/bills', '#/sales/calendar', '#/sales/returns', '#/sales/delivery-status', '#/sales/closing', '#/sales/tax', '#/sales/tax-check', '#/sales/book', '#/sales/ledger', '#/sales/aging'], ['sales']],
+  [['#/purchase/bills', '#/purchase/calendar', '#/purchase/returns', '#/purchase/receipt-status', '#/purchase/closing', '#/purchase/tax', '#/purchase/tax-check', '#/purchase/book', '#/purchase/ledger', '#/purchase/aging'], ['purchase']],
+  [['#/purchase/payments', '#/purchase/disbursements', '#/purchase/notes'], ['sales', 'purchase']],
+];
+function routeRoles(route) {
+  const path = String(route || '#/').split('?')[0];
+  for (const [prefixes, roles] of ROUTE_ROLE) if (prefixes.some(p => path === p || path.startsWith(p + '/'))) return roles;
+  return null;
+}
+const canUseRoute = route => { const roles = routeRoles(route); return !roles || !ME || ME.is_admin || roles.some(r => hasRole(r)); };
+const canSeeRoute = route => canSeeMenu(routeMenu(route)) && canUseRoute(route);
 // 대시보드처럼 여러 업무가 섞인 화면에서 볼 수 없는 업무의 카드·할 일·표 줄을 뺀다.
 function applyMenuAccess(main) {
   if (!ME || !Array.isArray(ME.menus)) return;
@@ -556,7 +569,7 @@ const PAGES = {
   '#/purchase/calendar': main => pagePurchaseCalendar(main), // 15.176 매입 달력
   '#/sales/calendar': main => pageSalesCalendar(main), // 15.166 매출 달력 // 15.157 납품현황(입고현황의 매출 쪽)
   '#/sales/orders/new': main => managedPage(main, '#/sales/orders/new', pageSalesOrderEntry), // 15.178 수주 관리
-  '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return pageSalesOrderEntry(main, id); },
+  '#/sales/orders/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:so-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/orders'; return; } return managedPage(main, '#/sales/orders/edit', m => pageSalesOrderEntry(m, id)); }, // 15.179 수주 관리 · 수주 고치기
   '#/sales/orders': main => managedPage(main, '#/sales/orders', pageSalesOrderList),
   '#/logistics/ship-orders': main => pageShipInstructions(main),
   '#/sales/bills/new': main => managedPage(main, '#/sales/bills/new', pageSalesBillEntry), // 15.170 매출전표 관리(입력)
@@ -660,7 +673,7 @@ function shell() {
   const hasCur = items => items.some(i => Array.isArray(i) ? i[0] === cur : i.items.some(([h]) => h === cur));
   const group = (dept, title, items, body) => { const shut = navShut.has(dept) && !hasCur(items); return `<div class="nav-group${shut ? ' shut' : ''}" data-dept="${dept}"><button type="button" class="nav-title" data-nav-toggle="${dept}" aria-expanded="${!shut}">${title}</button><div class="nav-body">${body}</div></div>`; };
   const seeItems = items => items.map(i => Array.isArray(i) ? (canSeeRoute(i[0]) ? i : null) : (s => s.items.length ? s : null)({ ...i, items: i.items.filter(([h]) => canSeeRoute(h)) })).filter(Boolean); // 15.164 경리처럼 여러 부서 화면이 섞인 묶음
-  const nav = favNavHtml(cur) + NAV.filter(g => g.group === '경리' || canSeeMenu(NAV_GROUP_KEY[g.group])).map(g => g.group === '경리' ? { ...g, items: seeItems(g.items) } : g).filter(g => g.items.length).map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
+  const nav = favNavHtml(cur) + NAV.filter(g => g.group === '경리' || canSeeMenu(NAV_GROUP_KEY[g.group])).map(g => ({ ...g, items: seeItems(g.items) })).filter(g => g.items.length) /* 15.179 모든 묶음에서 쓸 수 없는 화면 빼기 */.map((g) => group(NAV_GROUP_KEY[g.group] || 'home', g.group, g.items, g.items.map(entry).join(''))).join('')
     // 관리: 기준 정보 화면(메뉴 권한 「기준 정보」, 권한은 각 화면과 서버가 그대로 판단) + 관리자 전용 화면
     + ((manage => manage.length ? group('manage', '관리', manage, manage.map(link).join('')) : '')([...(canSeeMenu('master') ? NAV_MANAGE : []), ...(ME.is_admin ? NAV_ADMIN : [])]));
   const roles = ME.roles.map((r) => ROLE_LABEL[r]).join(', ');
@@ -990,6 +1003,7 @@ async function pageFavorites(main) {
 }
 function pageNoMenu(main) {
   const label = (MENU_GROUP_LABELS.find(([key]) => key === routeMenu(location.hash)) || [, ''])[1];
+  if (!canUseRoute(location.hash)) { const need = { sales: '영업', purchase: '구매' }; main.innerHTML = `<h1>사용 권한이 없습니다</h1><div class="card"><p>이 화면은 <b>${esc(routeRoles(location.hash).map(r => need[r] || r).join(' 또는 '))}</b> 사용 권한이 있어야 쓸 수 있습니다. 필요하면 관리자에게 「회원 관리 › 사용 권한」에서 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">홈으로</a></div></div>`; return; } // 15.179
   main.innerHTML = `<h1>열람 권한이 없습니다</h1><div class="card"><p>${esc(label)} 메뉴는 열람 권한이 없습니다. 필요하면 관리자에게 메뉴 권한을 요청하세요.</p><div class="actions" style="justify-content:flex-start"><a class="btn primary" href="#/">대시보드로</a></div></div>`;
 }
 // 메뉴 열람 설정 입력(부서 기본·사용자 직접 지정에서 같이 쓴다).
@@ -2509,6 +2523,7 @@ async function pageAdmin(main) {
   <form class="card" id="invForm"><h3>초대코드</h3><p class="muted small">가입할 때 이 코드를 입력해야 합니다. 바꾸면 이후 가입부터 새 코드가 필요합니다.</p>
     <div class="row"><input name="invite_code" value="${esc(s.invite_code)}" required minlength="4" aria-label="초대코드"><button class="btn primary">변경</button></div></form>
   <div class="card"><h3>회원 관리</h3><p class="muted small">가입 승인·회원 정보, 사용 권한(승인·처리), 메뉴 보기는 「회원 관리」에서 나눠 관리합니다.</p><p>${(() => { const n = users.filter(u => u.approval_status === 'pending').length; return n ? `<span class="chip yellow">가입 승인 대기 ${n}명</span> ` : ''; })()}<a class="btn" href="#/admin/users">회원 관리 열기</a></p></div>`;
+  $('#invForm').onsubmit = async (e) => { e.preventDefault(); try { const r = await api('PUT', '/api/admin/invite', formObj(e.target)); toast(`초대코드: ${r.invite_code}`); } catch (err) { fail(err); } }; // 15.179 15.175에서 빠졌던 저장 되살림
   const imageCheck = $('#imageCheckBtn'), imageCopy = $('#imageCopyBtn'), imageStatus = $('#imageStorageStatus');
   try {
     const storage = await api('GET', '/api/admin/image-storage');
