@@ -2,7 +2,7 @@
 const partnerKey = value => String(value ?? '').normalize('NFC').toLowerCase().replace(/\s+/g, '');
 let partnerListSerial = 0;
 // Search the registered partner directory without relying on the browser's datalist UI.
-function pickPartner({ type = '' } = {}) {
+function pickPartner({ type = '', query = '' } = {}) {
   return new Promise(resolve => {
     let done = false, serial = 0, shown = [];
     const finish = value => { if (done) return; done = true; resolve(value); m.close(); };
@@ -11,6 +11,7 @@ function pickPartner({ type = '' } = {}) {
       <form data-no-author data-partner-search class="toolbar"><label class="grow">검색<input type="search" name="q" maxlength="200" autocomplete="off" placeholder="거래처명·코드·담당자·연락처"></label><button class="btn primary">조회</button></form>
       <p class="small muted" data-partner-count role="status"></p><div data-partner-results></div><div class="actions"><button type="button" class="btn" data-partner-cancel>취소</button></div>`, { wide: true, onClose: () => { if (!done) { done = true; resolve(null); } } });
     const form = $('[data-partner-search]', m.el), input = form.elements.q, results = $('[data-partner-results]', m.el);
+    if (query) input.value = query; // 15.146 칸에 친 글자로 바로 찾기
     const load = async () => {
       const mine = ++serial;
       $('[data-partner-count]', m.el).textContent = '조회 중…';
@@ -51,11 +52,12 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
   input.before(wrap); wrap.append(input);
   const button = document.createElement('button'); button.type = 'button'; button.className = 'btn small'; button.textContent = '거래처 찾기';
   button.setAttribute('aria-label', '거래처 찾기'); button.title = '거래처 찾기'; button.className = 'btn small partner-find'; wrap.append(button);
-  button.onclick = async e => {
-    e.preventDefault(); if (input.disabled || input.readOnly) return;
+  // 15.146 자동완성 목록 대신 「거래처 찾기」 창으로 고른다(칸에 친 글자가 있으면 그 글자로 찾기).
+  const openFind = async (query = '') => {
+    if (input.disabled || input.readOnly || button.disabled) return;
     button.disabled = true;
     try {
-      const partner = await pickPartner({ type });
+      const partner = await pickPartner({ type, query });
       if (!partner || !input.isConnected) return;
       delete input.dataset.partnerPrev; input.value = partner.name;
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -64,19 +66,19 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
       if (!input.form?.matches('.list-filters, [data-read-only]')) { const all = [...input.form?.elements || []].filter(el => el.matches('input, select, textarea') && !el.disabled && !el.readOnly && el.type !== 'hidden' && el.offsetParent !== null && !el.closest('.partner-picker')); const next = all.find(el => el.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_PRECEDING); Promise.resolve().then(() => (next || input).focus?.()); } else Promise.resolve().then(() => input.focus?.());
     } finally { if (button.isConnected) button.disabled = false; }
   };
+  button.onclick = e => { e.preventDefault(); return openFind(isKnown(input.value) ? '' : input.value.trim()); };
   let vendors = [];
+  const isKnown = v => { const t = String(v || '').trim(); return !!t && vendors.some(x => partnerKey(x.name) === partnerKey(t) || (x.code && x.code === t.toUpperCase())); };
   try { vendors = directory || await api('GET', '/api/vendors' + (type ? '?type=' + type : '')); } catch { return; } // typing a name still works without the list
   if (!input.isConnected) return;
-  const list = document.createElement('datalist'); list.id = 'partnerList' + (++partnerListSerial);
-  list.innerHTML = vendors.map(v => `<option value="${esc(v.name)}">${esc([v.contact_name, v.phone, v.code].filter(Boolean).join(' · '))}</option>`).join('');
-  input.after(list); input.setAttribute('list', list.id); input.autocomplete = 'off';
+  input.removeAttribute?.('list'); input.autocomplete = 'off'; // 15.146 브라우저 자동완성 목록은 쓰지 않음
   // 15.92 거래처코드를 그대로 쳐도(예: C0001) 그 거래처 이름으로 바꾼다. 화면의 change 처리보다 먼저(capture) 바꿔 같은 값으로 불러오게 한다.
   input.addEventListener('change', () => {
     const typed = input.value.trim(); if (!typed || vendors.some(v => partnerKey(v.name) === partnerKey(typed))) return;
     const byCode = vendors.find(v => v.code && v.code === typed.toUpperCase()); if (byCode) input.value = byCode.name;
   }, true);
-  if (!input.placeholder) input.placeholder = '이름 일부 입력 · 비우고 ↓는 찾기';
-  button.title = '거래처 찾기 (코드·담당자·연락처로 검색). 이름은 칸에 바로 쳐도 됩니다.';
+  if (!input.placeholder || /↓/.test(input.placeholder)) input.placeholder = '거래처 찾기 (이름·코드 입력 후 Enter)';
+  button.title = '거래처 찾기 (이름·코드·담당자·연락처로 검색)';
   let serial = 0;
   const show = async () => {
     if (!hint) return; const mine = ++serial; const name = input.value.trim();
@@ -98,32 +100,14 @@ async function bindPartnerPicker(input, hint, { recent = false, onPick, type = '
     if (mine === serial) hint.innerHTML = html;
   };
   input.addEventListener('change', show); if (input.value) show();
-  // 15.86 등록된 거래처가 들어 있어도 칸을 누르거나 ↓를 누르면 전체 목록이 보이게(브라우저 목록은 칸 글자로 걸러지므로)
-  // 이름을 잠시 흐린 글씨(placeholder)로 옮겼다가, 다른 거래처를 고르지 않고 나가거나 Esc를 누르면 그대로 되돌린다.
-  // 값만 바꾸고 input/change 이벤트는 보내지 않아 화면이 다시 불러오지 않는다.
-  const basePlaceholder = input.placeholder;
-  const openAll = () => {
-    const name = input.value.trim();
-    if (!name || input.readOnly || input.disabled || !vendors.some(v => partnerKey(v.name) === partnerKey(name))) return;
-    input.dataset.partnerPrev = input.value; input.placeholder = input.value; input.value = '';
-  };
-  const restore = () => {
-    if (input.dataset.partnerPrev === undefined) return;
-    if (input.value === '') input.value = input.dataset.partnerPrev;
-    delete input.dataset.partnerPrev; input.placeholder = basePlaceholder;
-  };
-  input.addEventListener('mousedown', () => { if (document.activeElement !== input || input.dataset.partnerPrev === undefined) openAll(); });
+  // 15.146 엔터·↓·더블클릭 → 거래처 찾기 창. 등록된 이름이 이미 있으면 Enter는 다음으로(조회 줄은 조회).
   input.addEventListener('keydown', e => {
     if (e.isComposing || e.keyCode === 229) return;
-    // 15.103 비어 있는 칸에서 ↓·Enter → 거래처 찾기 창(품목명 칸의 품목 찾기와 같은 방식). 이름이 들어 있으면 예전처럼 목록 열기·제출.
-    if ((e.key === 'ArrowDown' || e.key === 'Enter') && !input.value.trim() && input.dataset.partnerPrev === undefined && !input.form?.matches('.list-filters, [data-read-only]')) { e.preventDefault(); button.click(); return; }
-    if (e.key === 'Enter') restore(); // 비운 채 Enter면 원래 이름으로 되돌린 뒤 제출(빈 거래처로 조회되지 않게)
-    else if ((e.key === 'ArrowDown' || (e.altKey && e.key === 'ArrowDown')) && input.dataset.partnerPrev === undefined) openAll();
-    else if (e.key === 'Escape' && input.dataset.partnerPrev !== undefined) { restore(); e.stopPropagation(); }
+    const typed = input.value.trim(), filter = input.form?.matches('.list-filters, [data-read-only]');
+    if (e.key === 'ArrowDown' || (e.key === 'F2')) { e.preventDefault(); openFind(isKnown(typed) ? '' : typed); return; }
+    if (e.key === 'Enter' && !filter && !isKnown(typed)) { e.preventDefault(); openFind(typed); }
   });
-  input.addEventListener('input', () => { if (input.value !== '') { delete input.dataset.partnerPrev; input.placeholder = basePlaceholder; } });
-  input.addEventListener('blur', restore);
-  input.form?.addEventListener('submit', restore, true);
+  input.addEventListener('dblclick', () => openFind(isKnown(input.value) ? '' : input.value.trim()));
 }
 
 // ── 15.111 거래처별 단가표 ── 매입(구매)·매출(영업) 탭. 단가를 바꾸면 새 적용일로 한 줄이 더해져 이력이 남는다.
