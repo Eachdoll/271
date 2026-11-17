@@ -904,3 +904,5 @@ INVITE_CODE=local-test-code npm start
 ## 세금계산서 발행 · 수취 체크 (15.129)
 - GET /api/tax-check?side=sales|purchase&period=YYYY-MM: 그 달(전표 일자) 확정 전표를 거래처별로 — 매출: 전표 합계·발행 완료(issued/sent)·담음·발행 전(draft/queued/failed)·안 담음, 매입: 받음(등록)·안 받음. 화면 #/sales/tax-check · #/purchase/tax-check(탭 「발행 · 수취 체크」), 「남은 일만」·전달/다음 달·엑셀, 빨강=미발행/미수취, 노랑=발행 전.
 - 직접 발행 기록: POST /api/tax-invoices/:id/mark-issued {approval_no, issued_date}(발행 전·실패만, 승인번호 필수·중복 409) → issued + status_message 「직접 발행 기록 · 이름」. POST /:id/unmark-issued로 발행 전으로(직접 기록한 것만). 관리 화면 버튼 「직접 발행 기록」(한 장)·「직접 발행 되돌리기」, 직접 기록한 행도 체크 가능(발행·담기 취소는 발행 전 것만 보냄).
+
+- 15.130 일부 출고된 수주 고치기: PUT /api/sales-orders/:id는 줄 id로 기존 줄 유지(삭제·재삽입 안 함). 수량 ≥ 잡은 수량(ORDER_TAKEN), 전표·출하가 있던 줄(ORDER_LINE_USED)은 품목·규격 고정·삭제 불가, 그런 수주는 거래처 변경 불가. 새 줄 추가 자유. 상세 응답 줄에 used.

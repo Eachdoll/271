@@ -13,7 +13,7 @@ async function pageSalesOrderEntry(main, editId = null) {
   <p class="muted">고객 주문(수주의뢰)을 받으면 거래처(이름 또는 거래처코드)를 고르고 품목을 넣어 저장합니다. 매출전표 입력의 「수주 잔량」에서 남은 수량만큼 나눠 전표를 잡을 수 있고, 전표를 잡으면 물류에 출하지시가 내려갑니다.</p>
   <form class="stack bill-form" data-no-author novalidate>
     <div class="form-grid">
-      <label>거래처 *<input name="customer" required maxlength="100" placeholder="거래처 이름 또는 코드" autocomplete="off" value="${esc(editing?.customer || '')}"></label><span class="partner-hint small muted" data-partner-hint></span>
+      <label>거래처 *<input name="customer" required maxlength="100" placeholder="거래처 이름 또는 코드" autocomplete="off" value="${esc(editing?.customer || '')}"${editing?.lines.some(l => l.used) ? ' readonly title="전표·출하가 잡힌 수주는 거래처를 바꿀 수 없습니다"' : ''}></label><span class="partner-hint small muted" data-partner-hint></span>
       <label>수주일 *<input name="order_date" type="date" required value="${esc(editing?.order_date || todayStr())}"></label>
       <label>납기<input name="due_date" type="date" value="${esc(editing?.due_date || '')}"></label>
       <label>고객 발주번호<input name="customer_po" maxlength="50" value="${esc(editing?.customer_po || '')}" placeholder="고객사 주문서 번호"></label>
@@ -31,22 +31,23 @@ async function pageSalesOrderEntry(main, editId = null) {
       if (po && !poIn.value.trim()) { poIn.value = po; poIn.classList.add('auto-filled'); }
       out.innerHTML = p ? `읽음 · 요청 <b>${esc(p.req)}</b> · 라인 <b>${esc(p.line)}</b>${p.site ? ` · ${esc(p.site)}` : ''}${p.person ? ` · 담당 ${esc(p.person)}` : ''} · PO <b>${esc(p.po)}</b>` : po ? `PO <b>${esc(po)}</b> 읽음` : ''; };
     noteIn.addEventListener('input', read); if (noteIn.value) read(); }
-  let lines = (editing?.lines || []).map(l => ({ bom_id: l.bom_id, item: l.item, product_code: l.product_code, unit: l.unit, spec: l.spec || '', qty: l.qty, price: l.unit_price ?? '', due_date: l.due_date || '', note: l.note || '' }));
+
+  let lines = (editing?.lines || []).map(l => ({ id: l.id, used: !!l.used, taken: Math.round((l.billed_qty + l.shipped_unbilled) * 1e6) / 1e6, bom_id: l.bom_id, item: l.item, product_code: l.product_code, unit: l.unit, spec: l.spec || '', qty: l.qty, price: l.unit_price ?? '', due_date: l.due_date || '', note: l.note || '' }));
   let catalog = null, requestId = crypto.randomUUID(), busy = false;
   if (lines.length) { catalog = await api('GET', '/api/boms').catch(() => null); for (const l of lines) { const b = catalog?.find(x => x.id === l.bom_id); if (b) { l.sizes = b.sizes || []; l.fixedSpec = !!b.spec && !l.sizes.length; if (l.fixedSpec) l.spec = b.spec; } } }
   const amount = l => l.qty !== '' && l.price !== '' ? billTruncC(Number(l.qty) * Number(l.price)) : null;
   const draw = () => {
     box.innerHTML = lines.length ? `<div class="table-wrap"><table data-keep-cols class="grid bill-grid so-grid"><caption class="sr-only">수주 품목</caption><thead><tr><th scope="col">품목 *</th><th scope="col">규격</th><th scope="col" class="r">수량 *</th><th scope="col">단위</th><th scope="col" class="r">단가</th><th scope="col" class="r">금액</th><th scope="col">납기</th><th scope="col">비고</th><th scope="col"><span class="sr-only">삭제</span></th></tr></thead>
       <tbody>${lines.map((l, i) => `<tr>
-        <td data-card-primary data-label="품목"><button type="button" class="btn small" data-so-pick="${i}">바꾸기</button> <b>${esc(l.item)}</b>${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td>
-        <td data-label="규격">${l.fixedSpec ? `<span class="spec-fixed" title="제품등록 규격(고정)">${esc(l.spec)}</span>` : (l.sizes || []).length ? `<select data-l="spec" data-i="${i}" aria-label="${esc(l.item)} 사이즈"><option value="">사이즈</option>${l.sizes.map(z => `<option${z === l.spec ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>` : `<input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${esc(l.item)} 규격">`}</td>
-        <td class="r" data-label="수량"><input type="number" min="0" step="any" inputmode="decimal" data-l="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item)} 수량" required></td>
+        <td data-card-primary data-label="품목">${l.used ? '<span class="chip blue" title="전표·출하가 잡힌 줄: 품목·규격 고정, 수량은 잡은 수량 이상">진행 중</span>' : `<button type="button" class="btn small" data-so-pick="${i}">바꾸기</button>`} <b>${esc(l.item)}</b>${l.used ? `<div class="small muted" data-so-taken="${i}">잡은 수량 ${fmtNum(l.taken)} · 남은 ${fmtNum(Math.max(0, (Number(l.qty) || 0) - l.taken))}</div>` : ''}${l.product_code ? `<div class="small muted">${esc(l.product_code)}</div>` : ''}</td>
+        <td data-label="규격">${l.used ? `<span class="spec-fixed">${esc(l.spec)}</span>` : l.fixedSpec ? `<span class="spec-fixed" title="제품등록 규격(고정)">${esc(l.spec)}</span>` : (l.sizes || []).length ? `<select data-l="spec" data-i="${i}" aria-label="${esc(l.item)} 사이즈"><option value="">사이즈</option>${l.sizes.map(z => `<option${z === l.spec ? ' selected' : ''}>${esc(z)}</option>`).join('')}</select>` : `<input data-l="spec" data-i="${i}" maxlength="100" value="${esc(l.spec)}" aria-label="${esc(l.item)} 규격">`}</td>
+        <td class="r" data-label="수량"><input type="number" min="${l.used ? esc(l.taken) : 0}" step="any" inputmode="decimal" data-l="qty" data-i="${i}" value="${esc(l.qty)}" aria-label="${esc(l.item)} 수량" required></td>
         <td data-label="단위">${esc(l.unit || '')}</td>
         <td class="r" data-label="단가"><input type="number" min="0" step="any" inputmode="decimal" data-l="price" data-i="${i}" value="${esc(l.price)}" aria-label="${esc(l.item)} 단가" placeholder="전표 때 입력"></td>
         <td class="r nowrap" data-label="금액" data-so-amount="${i}">${amount(l) == null ? '' : won(amount(l))}</td>
         <td data-label="납기"><input type="date" data-l="due_date" data-i="${i}" value="${esc(l.due_date)}" aria-label="${esc(l.item)} 납기"></td>
         <td data-label="비고"><input data-l="note" data-i="${i}" maxlength="200" value="${esc(l.note)}" aria-label="${esc(l.item)} 비고"></td>
-        <td><button type="button" class="btn small" data-so-del="${i}">삭제</button></td></tr>`).join('')}</tbody></table></div>`
+        <td>${l.used ? '' : `<button type="button" class="btn small" data-so-del="${i}">삭제</button>`}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="muted small">「+ 품목 추가」로 품목을 고르세요.</p>';
     totals();
   };
@@ -75,6 +76,7 @@ async function pageSalesOrderEntry(main, editId = null) {
   box.addEventListener('change', e => { if (e.target.matches('select[data-l="spec"]')) lines[Number(e.target.dataset.i)].spec = e.target.value; });
   box.addEventListener('input', e => {
     const k = e.target.dataset.l; if (!k) return; const i = Number(e.target.dataset.i); lines[i][k] = e.target.value;
+    if (k === 'qty' && lines[i].used) { const t = $(`[data-so-taken="${i}"]`, box); if (t) { const left = (Number(lines[i].qty) || 0) - lines[i].taken; t.innerHTML = left < -0.000001 ? `<span class="red-text">잡은 수량 ${fmtNum(lines[i].taken)}보다 적게 못 줄입니다</span>` : `잡은 수량 ${fmtNum(lines[i].taken)} · 남은 ${fmtNum(left)}`; } }
     if (k === 'qty' || k === 'price') { const a = amount(lines[i]); $(`[data-so-amount="${i}"]`, box).textContent = a == null ? '' : won(a); totals(); }
   });
   bindPartnerPicker(input, $('[data-partner-hint]', form), { type: 'sales' }).catch(() => {});
@@ -84,9 +86,10 @@ async function pageSalesOrderEntry(main, editId = null) {
     if (!v.customer) { input.focus(); return toast('거래처를 넣으세요.', 'err'); }
     if (!lines.length) return toast('수주 품목을 넣으세요.', 'err');
     const badQty = lines.findIndex(l => !(Number(l.qty) > 0)); if (badQty >= 0) { $$('[data-l="qty"]', box)[badQty]?.focus(); return toast(`${lines[badQty].item}의 수량을 넣으세요.`, 'err'); }
+    const under = lines.findIndex(l => l.used && Number(l.qty) + 0.000001 < l.taken); if (under >= 0) { $$('[data-l="qty"]', box)[under]?.focus(); return toast(`${lines[under].item}: 이미 ${fmtNum(lines[under].taken)} 잡았습니다. 그 이상으로 넣으세요.`, 'err'); }
     busy = true; const button = $('[data-so-save]', form); button.disabled = true;
     try {
-      const body = { ...v, request_id: requestId, lines: lines.map(l => ({ bom_id: l.bom_id, spec: l.spec, qty: l.qty, unit_price: l.price, due_date: l.due_date, note: l.note })) };
+      const body = { ...v, request_id: requestId, lines: lines.map(l => ({ id: l.id ?? null, bom_id: l.bom_id, spec: l.spec, qty: l.qty, unit_price: l.price, due_date: l.due_date, note: l.note })) };
       const order = editing ? await api('PUT', '/api/sales-orders/' + editing.id, body) : await api('POST', '/api/sales-orders', body);
       toast(order.duplicate ? `${order.order_no} 수주는 앞서 이미 저장되었습니다.` : editing ? `${order.order_no} 수주를 고쳤습니다.` : `${order.order_no} 수주를 저장했습니다.`);
       requestId = crypto.randomUUID();
@@ -115,7 +118,7 @@ function salesOrderSheet(order, after = null, { onClose = null } = {}) {
     <h4>매출전표 내역</h4>
     ${hasBills ? `<div class="table-wrap"><table class="grid so-bills"><thead><tr><th>전표번호</th><th>전표 일자</th><th>품목</th><th class="r">수량</th><th class="r">공급가액</th><th>출하</th><th></th></tr></thead><tbody>${order.bills.map(b => { const l = order.lines.find(x => x.id === b.order_line_id); return `<tr><td data-card-primary><b>${esc(b.bill_no)}</b></td><td>${esc(b.bill_date)}</td><td>${esc(l?.item || '')}</td><td class="r">${fmtNum(b.qty)}</td><td class="r">${won(b.supply)}</td><td>${shipChip(b.ship_status)}</td><td><button type="button" class="btn small" data-so-bill="${b.bill_id}">전표 보기</button></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted small">아직 잡은 매출전표가 없습니다.</p>'}
     <div class="actions"><button class="btn" data-close>닫기</button>
-      ${open && !hasBills ? `<button class="btn" data-so-edit>고치기</button><button class="btn danger" data-so-status="cancelled">수주 취소</button>` : ''}
+      ${open ? `<button class="btn" data-so-edit>고치기${hasBills ? ' <span class="small muted">(품목 추가·수량)</span>' : ''}</button>` : ''}${open && !hasBills ? '<button class="btn danger" data-so-status="cancelled">수주 취소</button>' : ''}
       ${open && hasBills && left > 0 ? '<button class="btn" data-so-status="closed">잔량 마감</button>' : ''}
       ${!open ? '<button class="btn" data-so-status="open">다시 열기</button>' : ''}
       ${open && left > 0 ? '<button class="btn primary" data-so-bill-new>매출전표 잡기</button>' : ''}</div>`, { wide: true, onClose: () => onClose?.() });
