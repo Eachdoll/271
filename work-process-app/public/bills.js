@@ -193,6 +193,7 @@ async function pageBillList(main) {
   <form class="list-filters toolbar" data-read-only id="billFilters"><label>명세서 일자<input type="date" name="from"></label><label>~<input type="date" name="to"></label><label>거래처<input name="vendor" maxlength="100"></label><label>상태<select name="status"><option value="confirmed" selected>확정</option><option value="">전체(취소 포함)</option><option value="cancelled">취소만</option></select></label><label>분류<select name="category">${catOptions(['원자재', '부자재', '임가공', '상품', '제품', '반제품', '미분류'])}</select></label><label class="grow">검색<input type="search" name="q" placeholder="전표번호·거래처·명세서 번호·비고·입력자"></label><button class="btn primary">조회</button><button type="button" class="btn" data-xlsx>엑셀 (줄별)</button></form>
   <div id="billSummary" class="counts"></div><div class="bulk-bar" id="billBulk"><span data-bulk-info>체크한 전표 없음</span><button type="button" class="btn primary" data-bulk-tax disabled>체크한 전표로 받은 세금계산서 등록</button><span class="small muted">한 매입처씩 · 이미 등록된 전표는 체크할 수 없습니다(중복 방지).</span></div><div id="billList"></div><div class="actions"><button type="button" class="btn" id="billMore" hidden>더 보기</button></div>`;
   const form = $('#billFilters', main); let rows = [], page = 0;
+  bindPartnerPicker(form.elements.vendor, null, { type: 'purchase' }).catch(() => {}); // 15.177 매출전표 목록처럼 거래처 찾기
   const load = async (next = false) => {
     const data = await api('GET', '/api/purchase-bills?' + new URLSearchParams({ ...formObj(form), page: next ? page + 1 : 0 }));
     if (!main.isConnected) return;

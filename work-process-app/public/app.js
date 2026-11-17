@@ -1,5 +1,5 @@
 // 앱 변경 커밋마다 AGENTS.md의 버전 규칙에 따라 올립니다.
-const APP_VERSION = '15.176';
+const APP_VERSION = '15.177';
 // 서울세미텍 시스템 프런트엔드 (빌드 도구 없음, 해시 라우팅)
 'use strict';
 
@@ -345,18 +345,18 @@ async function saveNewAttachments(entity, row, draft, form) {
 // 메뉴: 업무 → 하위 메뉴 → 화면. 입력과 목록(조회·검색)은 서로 다른 화면입니다(VIEW_SPLIT).
 const NAV = [
   { group: '홈', items: [['#/', '대시보드 · 업무흐름'], ['#/reports', '리포트 · 통계']] },
-  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns/new', '반입(반품) 입력'], ['#/sales/returns', '반입 목록'], ['#/sales/delivery-status', '납품현황'], ['#/sales/ledger', '기간별 거래보고'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
+  { group: '영업', items: [{ sub: '견적', items: [['#/sales/quotes/new', '견적서 작성'], ['#/sales/quotes', '견적서 목록']] }, { sub: '수주', items: [['#/sales/orders/new', '수주 입력'], ['#/sales/orders', '수주 목록']] }, { sub: '매출전표', items: [['#/sales/bills', '매출전표 관리'], ['#/sales/calendar', '매출 달력'], ['#/sales/returns', '반입(반품) 관리'], ['#/sales/delivery-status', '납품현황'], ['#/sales/closing', '매출 마감']] }, { sub: '생산의뢰', items: [['#/sales/mr/new', '생산의뢰 작성'], ['#/sales/mr', '생산의뢰 목록']] }, { sub: '구매의뢰', items: [['#/sales/pr/new', '구매의뢰 작성'], ['#/sales/pr', '구매의뢰 목록']] }] },
   { group: '구매', items: [
     { sub: '발주', items: [['#/purchase/po/new', '발주 입력'], ['#/purchase/po', '발주 목록']] },
-    { sub: '매입전표', items: [['#/purchase/bills/new', '매입전표 입력'], ['#/purchase/bills', '매입전표 목록'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns/new', '반출(반품) 입력'], ['#/purchase/returns', '반출 목록'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
-    { sub: '샘플(상품)', items: [['#/purchase/sample/request', '샘플의뢰'], ['#/purchase/sample/list', '샘플리스트']] },
+    { sub: '매입전표', items: [['#/purchase/bills', '매입전표 관리'], ['#/purchase/calendar', '매입 달력'], ['#/purchase/returns', '반출(반품) 관리'], ['#/purchase/receipt-status', '입고현황'], ['#/purchase/closing', '매입 마감']] },
+    { sub: '샘플(상품)', items: [['#/purchase/sample/request', '상품 샘플의뢰'], ['#/purchase/sample/list', '상품 샘플리스트']] },
     { sub: '세탁', items: [['#/purchase/laundry/new', '불량·폐기 입력'], ['#/purchase/laundry', '불량·폐기 목록'], ['#/purchase/laundry-reports', '세탁 검수·성적서']] },
   ] },
   // 15.164 경리: 매입·매출 세금계산서, 매입·매출 거래처별 장부, 대금(입금·지급·원장·연령표)을 한곳에. 화면 주소는 그대로라 볼 수 있는 사람(영업·구매 메뉴 권한)도 그대로이고, 권한 없는 화면은 메뉴에서 빠진다.
   { group: '경리', items: [
     { sub: '세금계산서', items: [['#/sales/tax', '매출 세금계산서 관리'], ['#/sales/tax-check', '매출 발행 체크'], ['#/purchase/tax', '매입 세금계산서'], ['#/purchase/tax-check', '매입 발행 체크']] },
     { sub: '거래처별 장부', items: [['#/sales/book', '매출 거래처별 장부'], ['#/purchase/book', '매입 거래처별 장부']] },
-    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/purchase/ledger', '매입처 원장'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
+    { sub: '대금', items: [['#/purchase/payments', '입금확인'], ['#/purchase/disbursements', '지급확인'], ['#/purchase/notes', '어음 관리'], ['#/sales/aging', '채권 연령표'], ['#/purchase/aging', '채무 연령표']] },
   ] },
   { group: '품질', items: [
     ['#/quality/inspections', '수입·출하 검사 이력'],
@@ -365,12 +365,12 @@ const NAV = [
   ] },
   { group: '개발', items: [['#/dev/request', '개발의뢰'], ['#/dev/list', '개발리스트']] },
   { group: '생산', items: [
-    { sub: '샘플(제품)', items: [['#/prod/request', '샘플의뢰'], ['#/prod/list', '샘플리스트']] },
+    { sub: '샘플(제품)', items: [['#/prod/request', '제품 샘플의뢰'], ['#/prod/list', '제품 샘플리스트']] },
     ['#/prod/orders', '생산의뢰 접수'],
-    { sub: '완제품 생산', items: [['#/prod/finished/new', '생산계획 입력'], ['#/prod/finished', '생산일정 · 실적']] },
-    { sub: '반제품 생산', items: [['#/prod/semi/new', '생산계획 입력'], ['#/prod/semi', '생산일정']] },
-    { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '작업 입력'], ['#/prod/semi/cut', '작업 기록']] },
-    { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '작업 입력'], ['#/prod/semi/wash', '작업 기록']] },
+    { sub: '완제품 생산', items: [['#/prod/finished/new', '완제품 생산계획 입력'], ['#/prod/finished', '완제품 생산일정 · 실적']] },
+    { sub: '반제품 생산', items: [['#/prod/semi/new', '반제품 생산계획 입력'], ['#/prod/semi', '반제품 생산일정']] },
+    { sub: '커팅/융착', items: [['#/prod/semi/cut/new', '커팅/융착 작업 입력'], ['#/prod/semi/cut', '커팅/융착 작업 기록']] },
+    { sub: '세탁(호기별)', items: [['#/prod/semi/wash/new', '세탁 작업 입력'], ['#/prod/semi/wash', '세탁 작업 기록']] },
   ] },
   { group: '물류', items: [
     { sub: '입고', items: [['#/logistics/receipt/new', '입고 입력'], ['#/logistics/receive', '입고목록'], ['#/logistics/receipts', '입고증 목록']] },
@@ -544,8 +544,8 @@ const PAGES = {
   '#/logistics/other/new': main => pageReceipts(main, 'other-entry'),
   '#/logistics/receipt/new': main => pageReceiptEntry(main),
   '#/logistics/receipts': main => pageReceiptList(main),
-  '#/purchase/bills/new': main => pageBillEntry(main),
-  '#/purchase/bills': main => pageBillList(main),
+  '#/purchase/bills/new': main => managedPage(main, '#/purchase/bills/new', pageBillEntry), // 15.177 매입전표 관리(입력)
+  '#/purchase/bills': main => managedPage(main, '#/purchase/bills', pageBillList), // 15.177 매입전표 관리(목록)
   '#/purchase/closing': main => pageBillClosing(main),
   '#/purchase/receipt-status': main => pageReceiptStatus(main),
   '#/sales/delivery-status': main => pageReceiptStatus(main, 'sales'),
@@ -562,17 +562,17 @@ const PAGES = {
   '#/sales/bills': main => managedPage(main, '#/sales/bills', pageSalesBillList), // 15.170 매출전표 관리(목록)
   '#/purchase/payments': main => pagePayments(main, 'sales'),
   '#/purchase/disbursements': main => pagePayments(main, 'purchase'),
-  '#/purchase/ledger': main => pagePurchaseLedger(main),
+  '#/purchase/ledger': main => managedPage(main, '#/purchase/ledger', pagePurchaseLedger), // 15.177 매입 거래처별 장부 › 품목 줄별 원장
   '#/sales/payments': () => { location.replace('#/purchase/payments'); }, // 15.109 구매로 옮김
-  '#/sales/ledger': main => pageSalesLedger(main),
-  '#/sales/book': main => pagePartnerBook(main, 'sales'),
+  '#/sales/ledger': main => managedPage(main, '#/sales/ledger', pageSalesLedger), // 15.177 매출 거래처별 장부 › 품목 줄별 원장
+  '#/sales/book': main => managedPage(main, '#/sales/book', m => pagePartnerBook(m, 'sales')),
   '#/sales/returns/new': main => pageReturnEntry(main, 'in'),
   '#/sales/returns': main => pageReturnList(main, 'in'),
   '#/sales/returns/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:ret-edit'); } catch { id = null; } if (!id) { location.hash = '#/sales/returns'; return; } return pageReturnEntry(main, 'in', id); },
   '#/purchase/returns/edit': main => { let id = null; try { id = sessionStorage.getItem('wpa:ret-edit'); } catch { id = null; } if (!id) { location.hash = '#/purchase/returns'; return; } return pageReturnEntry(main, 'out', id); },
   '#/purchase/returns/new': main => pageReturnEntry(main, 'out'),
   '#/purchase/returns': main => pageReturnList(main, 'out'),
-  '#/purchase/book': main => pagePartnerBook(main, 'purchase'),
+  '#/purchase/book': main => managedPage(main, '#/purchase/book', m => pagePartnerBook(m, 'purchase')),
   '#/sales/aging': main => pageAging(main, 'sales'),
   '#/purchase/aging': main => pageAging(main, 'purchase'),
   '#/sales/closing': main => pageSalesClosing(main),
@@ -630,9 +630,12 @@ function refreshFavNav() {
 const MANAGE = {
   '#/sales/bills': { title: '매출전표 관리', tabs: [['#/sales/bills', '전표 목록'], ['#/sales/bills/new', '전표 입력']] },
   '#/sales/tax': { title: '세금계산서 관리', tabs: [['#/sales/tax', '계산서 목록'], ['#/sales/tax/new', '계산서 만들기']] },
+  '#/purchase/bills': { title: '매입전표 관리', tabs: [['#/purchase/bills', '전표 목록'], ['#/purchase/bills/new', '전표 입력']] },
+  '#/sales/book': { title: '매출 거래처별 장부', tabs: [['#/sales/book', '전표별 장부'], ['#/sales/ledger', '품목 줄별 원장']] },
+  '#/purchase/book': { title: '매입 거래처별 장부', tabs: [['#/purchase/book', '전표별 장부'], ['#/purchase/ledger', '품목 줄별 원장']] },
   '#/admin/users': { title: '회원 관리', tabs: [['#/admin/users', '회원 정보'], ['#/admin/users/roles', '사용 권한'], ['#/admin/users/menus', '메뉴 보기']] },
 };
-const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
+const ROUTE_ALIAS = { '#/sales/bills/new': '#/sales/bills', '#/sales/tax/new': '#/sales/tax', '#/purchase/bills/new': '#/purchase/bills', '#/sales/ledger': '#/sales/book', '#/purchase/ledger': '#/purchase/book', '#/sales/returns/new': '#/sales/returns', '#/purchase/returns/new': '#/purchase/returns', '#/admin/users/roles': '#/admin/users', '#/admin/users/menus': '#/admin/users' };
 const navRoute = r => ROUTE_ALIAS[String(r || '#/').split('?')[0]] || String(r || '#/').split('?')[0];
 function managedTabs(main, route) {
   const m = MANAGE[navRoute(route)], h1 = $('h1', main); if (!m || !h1 || $('.manage-tabs', main)) return;
@@ -1109,7 +1112,8 @@ function tasksCard(tasks) {
 // 3) 좁은 화면에서는 표를 카드로 보여 주기 위해 각 칸에 머리글을 붙입니다 (CSS가 data-label을 사용).
 // Phone cards show the main fields; the rest (memo, entered by, row buttons…) opens with 「자세히」. Long lists show 30 at a time.
 const CARD_SECONDARY = new Set(['COA 요청', '비고', '메모', '입력자', '입고 처리자', '처리자', '사진·검수', 'LOT', '분류', '1차 분류', '2차 분류', '3차 분류', '입고', '생산', '사용', '출하', '조정', '안전재고', '최근 일자', '입력자 · 검사일', '입력자 / 입력시각', '수정', '사유', '거래처 · 담당', '시작', '종료', '작업시간', '인원', '불량 사유', '단가', '비용']);
-const NOWRAP_HEADS = new Set(['분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
+const ITEM_HEADS = new Set(['품목', '품목명', '품명', '제품명', '제품', '자재명', '샘플명', '품명 · LOT']); // 15.177 최소 너비
+const NOWRAP_HEADS = new Set(['코드', '품목코드', '제품코드', '전표번호', '구매의뢰번호', '수주번호', '발주번호', '입고번호', '출하번호', '접수번호', '어음번호', '계산서번호', '승인번호', '전표 일자', '명세서 일자', '수주일', '발주일', '만기일자', '발행일자', '분류', '거래처', '납기일', '입고일', '출고일', '작업일', '세탁일', '의뢰일', '상태', '입고상태', '수량', '발주수량', '실입고', '입력자', 'COA 요청', '단위', '현재고']);
 // ── 15.173 표 열 너비·순서(엑셀처럼): 머리글 오른쪽 경계를 끌어 너비 조절(두 번 누르면 원래 너비),
 // 머리글을 끌어 다른 머리글 위에 놓으면 열 순서 바꿈. 사용자·화면·표(머리글 이름)마다 이 브라우저에 저장, 「열 배치 초기화」로 되돌림.
 // 순서 바꾸기는 입력칸·합친 칸·두 줄 머리글·합계 줄이 없는 표만(칸 번호로 읽는 코드 보호). 휴대폰 카드 모양에서는 쓰지 않음.
@@ -1212,6 +1216,7 @@ function labelGridTables() {
       const cells = rows.map(tr => tr.children[i]).filter(Boolean);
       if (head && rows.length && !table.hasAttribute('data-keep-cols') && !table.querySelector('[colspan]') && cells.every(td => (!td.textContent.trim() || td.textContent.trim() === '—') && !td.querySelector('input, select, button, textarea'))) [ths[i], ...cells].forEach(c => c?.classList.add('col-empty'));
       if (NOWRAP_HEADS.has(head)) [ths[i], ...cells].forEach(c => c?.classList.add('nowrap-cell'));
+      if (ITEM_HEADS.has(head)) ths[i]?.classList.add('item-col'); // 15.177
     });
     gridLayout(table); // 15.173 열 너비·순서(빈 열 숨긴 뒤)
     if (!table.classList.contains('as-cards')) return;
@@ -1266,7 +1271,19 @@ function foldReportSections() {
   });
 }
 new MutationObserver(foldReportSections).observe(document.body, { childList: true, subtree: true });
-new MutationObserver(labelGridTables).observe(document.body, { childList: true, subtree: true });
+// 15.177 조회 줄의 「~」 라벨(끝 날짜)을 시작 날짜 칸 옆으로 붙인다: [전표 일자: 시작 ~ 끝]. 입력 이름·이벤트는 그대로.
+function pairDateRanges() {
+  $$('form.list-filters > label:not([data-paired])').forEach(l => {
+    l.dataset.paired = '1';
+    const own = [...l.childNodes].filter(n => n.nodeType === 3).map(n => n.nodeValue.trim()).join('');
+    const end = l.querySelector(':scope > input[type=date]'), prev = l.previousElementSibling;
+    if (own !== '~' || !end || !prev?.matches('label') || !prev.querySelector(':scope > input[type=date]')) return;
+    const start = prev.querySelector(':scope > input[type=date]'), pair = document.createElement('span'); pair.className = 'lf-pair';
+    start.replaceWith(pair); pair.append(start, Object.assign(document.createElement('span'), { className: 'muted', textContent: '~' }), end);
+    end.setAttribute('aria-label', (prev.childNodes[0]?.nodeValue || '').trim() + ' 끝'); prev.classList.add('lf-period'); l.remove();
+  });
+}
+new MutationObserver(() => { labelGridTables(); pairDateRanges(); }).observe(document.body, { childList: true, subtree: true });
 
 async function pageHome(main) {
   const [d, tasks, alerts] = await Promise.all([api('GET', '/api/dashboard'), api('GET', '/api/my-tasks'), api('GET', '/api/alerts').catch(() => null)]);

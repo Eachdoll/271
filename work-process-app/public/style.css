@@ -2149,3 +2149,14 @@ button.linklike { border: 0; background: none; padding: 0; color: var(--accent);
 
 /* 15.176 달력 「+ 전표 추가」 */
 .sc-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .sc-h .sc-add { margin-left: auto; }
+
+/* 15.177 표·조회 줄 다듬기 */
+table.grid th.item-col { min-width: 9.5em; }
+/* 줄 끝 단추가 3개 이상이면 한 줄 고집 대신 두 줄로(표가 화면 밖으로 밀리지 않게) */
+table.grid td:last-child:has(> .btn ~ .btn ~ .btn) { white-space: normal; min-width: 10em; }
+table.grid td:last-child:has(> .btn ~ .btn ~ .btn) > .btn { margin: 2px 0; }
+form.list-filters .lf-pair { display: flex; align-items: center; gap: 6px; }
+form.list-filters .lf-pair input[type=date] { width: 10.6em; }
+form.list-filters input[type=date] { min-width: 9.6em; }
+label input[data-rc-prefix], input[data-rc-prefix][size] { width: 6.5em !important; min-width: 6.5em; }
+input[type=date][name=asof] { min-width: 9.6em; }
