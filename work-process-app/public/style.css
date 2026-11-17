@@ -1626,3 +1626,10 @@ table.grid.po-grid td:nth-child(1) { white-space: nowrap; }
 input.auto-filled { background: var(--green-bg); }
 @media (max-width: 900px) { .so-pick { grid-template-columns: 1fr; } .so-list { max-height: 240px; } }
 .so-pick > * { min-width: 0; }
+.tax-side { margin: 4px 0 10px; } .tax-side a { text-decoration: none; color: inherit; padding: 8px 14px; } .tax-side a.on { background: var(--panel); font-weight: 700; }
+.so-list-note { min-width: 220px; max-width: 360px; font-size: 12.5px; white-space: normal; word-break: break-all; display: table-cell; }
+.tax-check-side { margin: 0 0 10px; } .tax-check-side a { text-decoration: none; color: inherit; padding: 6px 12px; } .tax-check-side a.on { background: var(--panel); font-weight: 700; }
+tr.tc-missing td { background: var(--red-bg); } tr.tc-pending td { background: var(--yellow-bg); }
+.yellow-text { color: var(--yellow); }
+.bulk-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0 8px; } .bulk-bar [data-bulk-info] { font-weight: 700; }
+.pick-cell { width: 36px; text-align: center; } .pick-cell input { width: 18px; height: 18px; }

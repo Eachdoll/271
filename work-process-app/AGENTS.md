@@ -892,3 +892,19 @@ INVITE_CODE=local-test-code npm start
 - 수주 입력: 비고에 붙여넣으면 읽은 내용 표시 + 고객 발주번호가 비었으면 PO 자동(초록 표시).
 - 매출전표 입력의 수주 잔량 = 두 칸(.so-pick): 왼쪽 수주 목록(수주번호·PO·비고·고른 줄 수, 검색은 PO·비고·수주번호·품목·코드, 단어 여러 개 AND, 강조), 오른쪽 고른 수주의 품목 표(기존 data-order-* 처리 그대로, 「검색된 수주 전체 줄 보기」). /api/sales-orders/open-lines에 order_note.
 - PO 표시·검색: 전표 보기(수주번호 옆), 거래명세표 줄 비고 앞 「PO …」, 매출전표 목록 검색(수주 PO·비고·수주번호), 출하지시 검색(o.customer_po·o.note·o.order_no). salesBillDetail 줄에 customer_po·order_note.
+
+## 세금계산서 매출·매입 · 분류 (15.127, 마이그레이션 0045)
+- 세금계산서 화면 위 탭: 매출(#/sales/tax, 발행) | 매입(#/purchase/tax, 받음). 메뉴 구매 › 매입전표 › 매입 세금계산서.
+- 매입 세금계산서(purchase_tax_invoices + purchase_tax_invoice_bills): 매입처에게 받은 계산서를 확정 매입전표와 묶어 기록(승인번호·작성일자·비고). 금액 = 담은 전표 합(운송비 포함). 한 전표는 유효한 계산서 하나에만(부분 유니크 인덱스 + RC_GUARD). 취소는 status='cancelled' + 묶음 active=0(전표 다시 담기 가능). 승인번호는 숫자·-만, 받음 상태끼리 겹치면 409.
+- API: GET /api/purchase-tax-invoices/candidates?vendor&from&to, POST /api/purchase-tax-invoices, GET 목록(?from&to&vendor&status&q&category), GET /:id, POST /:id/cancel. 권한 구매.
+- 분류 필터(매출·매입 목록 ?category): 원자재·부자재·반제품·제품·상품·임가공·운송비(매입전표 운송비)·미분류. 계산서마다 cats 「분류:공급가액|…」, by_category = 분류별 공급가액(취소 제외). 줄 분류는 LINE_CAT(15.117).
+- 등록 창: 「받은 계산서 합계」를 넣으면 전표 합계와 같은지/차이를 바로 표시(다르면 확인 후 등록).
+- 15.128 수주 목록에 「비고」 칸(전체 문구, 줄바꿈) · 수주번호 아래 PO는 poOf(칸 또는 비고 10자리).
+
+## 세금계산서 발행 · 수취 체크 (15.129)
+- GET /api/tax-check?side=sales|purchase&period=YYYY-MM: 그 달(전표 일자) 확정 전표를 거래처별로 — 매출: 전표 합계·발행 완료(issued/sent)·담음·발행 전(draft/queued/failed)·안 담음, 매입: 받음(등록)·안 받음. 화면 #/sales/tax-check · #/purchase/tax-check(탭 「발행 · 수취 체크」), 「남은 일만」·전달/다음 달·엑셀, 빨강=미발행/미수취, 노랑=발행 전.
+- 직접 발행 기록: POST /api/tax-invoices/:id/mark-issued {approval_no, issued_date}(발행 전·실패만, 승인번호 필수·중복 409) → issued + status_message 「직접 발행 기록 · 이름」. POST /:id/unmark-issued로 발행 전으로(직접 기록한 것만). 관리 화면 버튼 「직접 발행 기록」(한 장)·「직접 발행 되돌리기」, 직접 기록한 행도 체크 가능(발행·담기 취소는 발행 전 것만 보냄).
+
+- 15.130 일부 출고된 수주 고치기: PUT /api/sales-orders/:id는 줄 id로 기존 줄 유지(삭제·재삽입 안 함). 수량 ≥ 잡은 수량(ORDER_TAKEN), 전표·출하가 있던 줄(ORDER_LINE_USED)은 품목·규격 고정·삭제 불가, 그런 수주는 거래처 변경 불가. 새 줄 추가 자유. 상세 응답 줄에 used.
+
+- 15.131 전표 목록 체크 → 세금계산서 일괄 담기: 매출전표 목록(체크 → 건별 kind single / 거래처별 합산 kind merge, merge는 monthly 형식으로 저장·기간=전표 일자 처음~끝·전표마다 linkBill), 매입전표 목록(세금계산서 열 + 한 매입처씩 체크 → POST /api/purchase-tax-invoices). 이미 담긴·취소 전표는 체크칸 잠금, 서버는 UNINVOICED 확인 + 활성 고유 인덱스로 중복 거절(409). GET /api/purchase-bills 줄에 invoice(번호|승인번호|id). 마이그레이션 없음.

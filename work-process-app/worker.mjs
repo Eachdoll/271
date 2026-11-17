@@ -476,7 +476,7 @@ route('DELETE', '/api/admin/users/:id', async ({ user, params }) => {
 });
 
 // Bounded pages keep backups within Worker memory limits. Sessions are omitted.
-const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers'];
+const backupTables = ['settings', 'users', 'purchase_orders', 'laundry', 'requests', 'schedules', 'shipments', 'other_receipts', 'boms', 'attachments', 'progress_comments', 'item_batches', 'production_actuals', 'production_actual_changes', 'receipt_qty_changes', 'stock_adjustments', 'stock_levels', 'vendors', 'production_units', 'semi_records', 'semi_record_changes', 'laundry_reports', 'laundry_report_lines', 'inspection_specs', 'inspection_spec_keys', 'inspection_measurements', 'inspection_measurement_history', 'item_category_nodes', 'purchase_requests', 'purchase_request_items', 'purchase_request_lines', 'org_departments', 'org_positions', 'production_requests', 'production_request_lines', 'receipts', 'po_receipt_lots', 'warehouses', 'purchase_bills', 'purchase_bill_lines', 'purchase_closings', 'sales_bills', 'sales_bill_lines', 'sales_payments', 'sales_closings', 'tax_invoices', 'tax_invoice_bills', 'sales_orders', 'sales_order_lines', 'ship_instructions', 'purchase_payments', 'item_prices', 'stock_transfers', 'purchase_tax_invoices', 'purchase_tax_invoice_bills'];
 route('GET', '/api/admin/backup', async ({ user, query }) => {
   requireAdmin(user);
   if (!query.table) return { format: 'work-process-v2', tables: backupTables };
@@ -590,7 +590,7 @@ route('PUT', '/api/vendors/:id', async ({ user, params, body }) => {
   if ((code || '') !== (row.code || '')) cmds.push({ sql: "UPDATE sales_orders SET customer_code=? WHERE status='open' AND REPLACE(LOWER(customer),' ','')=?", args: [code || '', row.name_key] }); // 15.104 열린 수주만 새 코드로(끝난 수주는 당시 코드)
   if (nameKey(name) !== row.name_key || name !== row.name) {
     const k = row.name_key;
-    for (const [table, col] of [['sales_orders', 'customer'], ['sales_bills', 'customer'], ['ship_instructions', 'customer'], ['purchase_bills', 'vendor'], ['purchase_orders', 'vendor'], ['shipments', 'customer'], ['other_receipts', 'vendor'], ['receipts', 'vendor'], ['production_requests', 'customer'], ['sales_payments', 'customer'], ['purchase_payments', 'vendor']])
+    for (const [table, col] of [['sales_orders', 'customer'], ['sales_bills', 'customer'], ['ship_instructions', 'customer'], ['purchase_bills', 'vendor'], ['purchase_orders', 'vendor'], ['shipments', 'customer'], ['other_receipts', 'vendor'], ['receipts', 'vendor'], ['production_requests', 'customer'], ['sales_payments', 'customer'], ['purchase_payments', 'vendor'], ['purchase_tax_invoices', 'vendor']])
       cmds.push({ sql: `UPDATE ${table} SET ${col}=? WHERE ${customerKey(col)}=?`, args: [name, k] });
     cmds.push({ sql: "UPDATE tax_invoices SET customer=? WHERE REPLACE(LOWER(customer),' ','')=? AND status IN ('draft','failed')", args: [name, k] });
     cmds.push({ sql: 'UPDATE sales_closings SET customer=?,customer_key=? WHERE customer_key=?', args: [name, nameKey(name), k] });
@@ -1152,7 +1152,7 @@ route('GET', '/api/purchase-bills', async ({ user, query }) => {
   if (query.category) { const c = query.category === '미분류' ? '' : itemCategory(query.category); where.push(BILL_CATEGORY_FILTER('purchase_bill_lines', 'purchase_bills')); args.push(c); }
   const page = Math.max(0, Math.min(1000, Number(query.page) || 0));
   const by_category = await billCategoryTotals('purchase_bill_lines', 'purchase_bills', where, args);
-  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
+  const rows = await db.prepare(`SELECT purchase_bills.*, (SELECT COUNT(*) FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id) AS line_count, (SELECT i.invoice_no || '|' || i.approval_no || '|' || i.id FROM purchase_tax_invoice_bills t JOIN purchase_tax_invoices i ON i.id=t.invoice_id WHERE t.bill_id=purchase_bills.id AND t.active=1 AND i.status='received') AS invoice, (SELECT group_concat(DISTINCT c) FROM (SELECT ${LINE_CAT('l')} AS c FROM purchase_bill_lines l WHERE l.bill_id=purchase_bills.id AND l.active=1)) AS categories FROM purchase_bills ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY bill_date DESC, id DESC LIMIT 201 OFFSET ?`).all(...args, page * 200);
   return { rows: rows.slice(0, 200), page, more: rows.length > 200, by_category };
 });
 route('GET', '/api/purchase-bills/:id', async ({ user, params }) => { requirePurchase(user); return billDetail(await mustGet('purchase_bills', params.id)); });
@@ -1876,6 +1876,25 @@ route('POST', '/api/tax-invoices', async ({ user, body }) => {
       cmds.push(invoiceRow(v, { kind: 'single', customer: b.customer, writeDate, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills: [b], uid, token, user }), ...linkBill(uid, b.id));
       made.push(uid);
     }
+  } else if (body.kind === 'merge') {
+    // 15.131 매출전표 목록에서 체크한 전표를 거래처마다 한 장으로 합산
+    const ids = Array.isArray(body.bill_ids) ? [...new Set(body.bill_ids.map(Number))] : [];
+    if (!ids.length || ids.length > 100 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('담을 전표를 1~100건 고르세요.');
+    const groups = new Map();
+    for (const id of ids) {
+      const b = await db.prepare(`SELECT b.*, (SELECT COUNT(*) FROM sales_bill_lines l WHERE l.bill_id=b.id) AS line_count, (SELECT item FROM sales_bill_lines l WHERE l.bill_id=b.id ORDER BY l.id LIMIT 1) AS first_item FROM sales_bills b WHERE b.id=? AND b.status='confirmed' AND ${UNINVOICED}`).get(id);
+      if (!b) throw new HttpError(409, '이미 계산서에 담겼거나 취소된 전표가 있습니다. 목록을 새로 불러오세요.');
+      const k = nameKey(b.customer); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(b);
+    }
+    for (const bills of groups.values()) {
+      bills.sort((x, y) => x.bill_date.localeCompare(y.bill_date) || x.id - y.id);
+      const customer = bills[0].customer, from = bills[0].bill_date, to = bills[bills.length - 1].bill_date;
+      const writeDate = body.write_date ? dateStr(body.write_date, '작성일자') : to;
+      const v = await vendorByName(customer), uid = crypto.randomUUID();
+      const items = bills.map(b => ({ date: b.bill_date, item: itemLabel(b.first_item, b.line_count), spec: '', qty: null, unit_price: null, supply: b.supply_total, vat: b.vat_total, note: b.bill_no }));
+      cmds.push(invoiceRow(v, { kind: 'monthly', customer, writeDate, from, to, charge, email1: taxEmail(v?.tax_email, '이메일 1'), email2: taxEmail(v?.tax_email2, '이메일 2'), note, items, bills, uid, token, user }), ...bills.flatMap(b => linkBill(uid, b.id)));
+      made.push(uid);
+    }
   } else throw bad('담는 방식(건별·월별)을 고르세요.');
   try { await db.batch(cmds); }
   catch (error) {
@@ -1886,6 +1905,134 @@ route('POST', '/api/tax-invoices', async ({ user, body }) => {
   }
   return { rows: await db.prepare('SELECT * FROM tax_invoices WHERE request_id=? ORDER BY id').all(token) };
 });
+// ── 15.127 세금계산서 분류(원자재·부자재·반제품·제품·상품·임가공·운송비·미분류) · 매입 세금계산서 ──
+const TAX_CATS = [...ITEM_CATEGORIES, '운송비', '미분류'];
+function taxCategory(value) { const c = String(value || ''); if (!TAX_CATS.includes(c)) throw bad('분류를 확인하세요.'); return c; }
+// 매출 계산서: 담긴 매출전표 줄 분류. 매입 계산서: 담긴 매입전표 줄 분류 + 운송비(전표 운송비).
+// cond = 계산서를 고르는 조건(예: t.invoice_id=i.id), active = 담긴 줄(취소된 계산서는 0)
+const SALES_INV_LINES = (cond, active = 1) => `SELECT ${LINE_CAT('l')} AS c, l.supply AS amt FROM tax_invoice_bills t JOIN sales_bill_lines l ON l.bill_id=t.bill_id WHERE ${cond} AND t.active=${active} AND l.active=1`;
+const PURCHASE_INV_LINES = (cond, active = 1) => `SELECT ${LINE_CAT('l')} AS c, l.supply AS amt FROM purchase_tax_invoice_bills t JOIN purchase_bill_lines l ON l.bill_id=t.bill_id WHERE ${cond} AND t.active=${active} AND l.active=1 UNION ALL SELECT '운송비', b.freight FROM purchase_tax_invoice_bills t JOIN purchase_bills b ON b.id=t.bill_id WHERE ${cond} AND t.active=${active} AND b.freight>0`;
+const invCats = sub => `(SELECT group_concat(c, '|') FROM (SELECT CASE WHEN c='' THEN '미분류' ELSE c END || ':' || CAST(SUM(amt) AS INTEGER) AS c FROM (${sub}) GROUP BY CASE WHEN c='' THEN '미분류' ELSE c END))`;
+const invHasCat = (sub, c) => ({ sql: `EXISTS(SELECT 1 FROM (${sub}) WHERE (CASE WHEN c='' THEN '미분류' ELSE c END)=?)`, arg: c });
+async function invCatTotals(lines, idsSql, args, twice = false) {
+  const rows = await db.prepare(`SELECT CASE WHEN c='' THEN '미분류' ELSE c END AS category, SUM(amt) AS supply FROM (${lines(`t.invoice_id IN (${idsSql})`)}) GROUP BY 1`).all(...args, ...(twice ? args : []));
+  return rows.sort((a, b) => TAX_CATS.indexOf(a.category) - TAX_CATS.indexOf(b.category));
+}
+// 매입 세금계산서 후보: 확정 매입전표 중 아직 계산서에 담지 않은 것(분류·운송비 함께)
+route('GET', '/api/purchase-tax-invoices/candidates', async ({ user, query }) => {
+  requirePurchase(user);
+  const vendor = reqStr(query.vendor, '매입처', 100), from = query.from ? dateStr(query.from, '시작일') : '0000-01-01', to = query.to ? dateStr(query.to, '종료일') : '9999-12-31';
+  const rows = await db.prepare(`SELECT b.id, b.bill_no, b.bill_date, b.statement_no, b.supply_total, b.vat_total, b.total, b.freight, b.tax_type,
+      (SELECT group_concat(DISTINCT CASE WHEN ${LINE_CAT('l')}='' THEN '미분류' ELSE ${LINE_CAT('l')} END) FROM purchase_bill_lines l WHERE l.bill_id=b.id AND l.active=1) AS categories
+    FROM purchase_bills b WHERE b.status='confirmed' AND ${billVendorKey('b.vendor')}=? AND b.bill_date BETWEEN ? AND ?
+      AND NOT EXISTS(SELECT 1 FROM purchase_tax_invoice_bills t WHERE t.bill_id=b.id AND t.active=1) ORDER BY b.bill_date, b.id LIMIT 301`).all(nameKey(vendor), from, to);
+  return { rows: rows.slice(0, 300), more: rows.length > 300, vendor: (await vendorByName(vendor)) || null };
+});
+const approvalNo = v => { const s = str(v, 40).replace(/\s+/g, ''); if (s && !/^[0-9-]{8,40}$/.test(s)) throw bad('승인번호는 숫자와 -로 넣으세요(예: 20261117-41000012-1a2b3c4d는 숫자만).'); return s; };
+route('POST', '/api/purchase-tax-invoices', async ({ user, body }) => {
+  requirePurchase(user);
+  const key = str(body.request_id, 80);
+  if (key) { const old = await db.prepare('SELECT * FROM purchase_tax_invoices WHERE request_id=?').get(key); if (old) return purchaseInvDetail(old); }
+  const vendor = reqStr(body.vendor, '매입처', 100), date = dateStr(body.write_date, '작성일자'), appr = approvalNo(body.approval_no);
+  const ids = Array.isArray(body.bill_ids) ? [...new Set(body.bill_ids.map(Number))] : [];
+  if (!ids.length || ids.length > 200 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('담을 매입전표를 1~200장 고르세요.');
+  if (appr && await db.prepare("SELECT 1 FROM purchase_tax_invoices WHERE approval_no=? AND status='received'").get(appr)) throw new HttpError(409, `승인번호 ${appr}는 이미 등록되어 있습니다.`);
+  const bills = [];
+  for (const id of ids) {
+    const b = await db.prepare("SELECT * FROM purchase_bills WHERE id=? AND status='confirmed'").get(id);
+    if (!b) throw new HttpError(409, '취소되었거나 없는 매입전표가 있습니다. 새로 불러오세요.');
+    if (nameKey(b.vendor) !== nameKey(vendor)) throw bad(`${b.bill_no}: 다른 매입처(${b.vendor})의 전표입니다.`);
+    bills.push(b);
+  }
+  const supply = bills.reduce((t, b) => t + b.supply_total, 0), vat = bills.reduce((t, b) => t + b.vat_total, 0);
+  const v = await vendorByName(vendor), token = key || 'srv:' + crypto.randomUUID(), prefix = `PT-${today().slice(2).replace(/-/g, '')}-`;
+  const IID = '(SELECT id FROM purchase_tax_invoices WHERE request_id=?)';
+  const cmds = [{ sql: `INSERT INTO purchase_tax_invoices(invoice_no,approval_no,write_date,vendor,biz_no,supply_total,vat_total,total,note,created_by,created_by_id,request_id) VALUES(${nextDocNo('purchase_tax_invoices', 'invoice_no')},?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [prefix, prefix, prefix, appr, date, vendor, v?.biz_no || '', supply, vat, supply + vat, str(body.note, 500), user.name, user.id, token] }];
+  for (const b of bills) cmds.push({ sql: `INSERT INTO purchase_tax_invoice_bills(invoice_id,bill_id) SELECT ${IID},? WHERE NOT EXISTS(SELECT 1 FROM purchase_tax_invoice_bills WHERE bill_id=? AND active=1)`, args: [token, b.id, b.id] }, RC_GUARD);
+  try { await db.batch(cmds); }
+  catch (error) { if (isGuardError(error) || /UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '그 사이 다른 계산서에 담긴 전표가 있습니다. 새로 불러오세요.'); throw error; }
+  return purchaseInvDetail(await db.prepare('SELECT * FROM purchase_tax_invoices WHERE request_id=?').get(token));
+});
+async function purchaseInvDetail(inv) {
+  const bills = await db.prepare(`SELECT b.id, b.bill_no, b.bill_date, b.statement_no, b.supply_total, b.vat_total, b.total, b.freight FROM purchase_tax_invoice_bills t JOIN purchase_bills b ON b.id=t.bill_id WHERE t.invoice_id=? AND t.active=${inv.status === 'cancelled' ? 0 : 1} ORDER BY b.bill_date, b.id`).all(inv.id);
+  const cats = await db.prepare(`SELECT CASE WHEN c='' THEN '미분류' ELSE c END AS category, SUM(amt) AS supply FROM (${PURCHASE_INV_LINES('t.invoice_id=' + Number(inv.id), inv.status === 'cancelled' ? 0 : 1)}) GROUP BY 1`).all();
+  return { ...inv, bills, categories: cats.sort((a, b) => TAX_CATS.indexOf(a.category) - TAX_CATS.indexOf(b.category)) };
+}
+route('GET', '/api/purchase-tax-invoices', async ({ user, query }) => {
+  requirePurchase(user);
+  const where = [], args = [];
+  applyListDates(where, args, query, 'i.write_date');
+  if (query.vendor) { where.push(`${billVendorKey('i.vendor')}=?`); args.push(nameKey(str(query.vendor, 100))); }
+  if (query.status) { if (!['received', 'cancelled'].includes(query.status)) throw bad('상태를 확인하세요.'); where.push('i.status=?'); args.push(query.status); } else where.push("i.status='received'");
+  applyListKeyword(where, args, query.q, ['i.invoice_no', 'i.approval_no', 'i.vendor', 'i.biz_no', 'i.note', 'i.created_by']);
+  if (query.category) { const f = invHasCat(PURCHASE_INV_LINES('t.invoice_id=i.id'), taxCategory(query.category)); where.push(f.sql); args.push(f.arg); }
+  const rows = await db.prepare(`SELECT i.*, (SELECT COUNT(*) FROM purchase_tax_invoice_bills t WHERE t.invoice_id=i.id AND t.active=1) AS bill_count, ${invCats(PURCHASE_INV_LINES('t.invoice_id=i.id'))} AS cats FROM purchase_tax_invoices i ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.write_date DESC, i.id DESC LIMIT 1001`).all(...args);
+  // 분류별 합계는 받은(유효) 계산서만 — 취소만 볼 때는 비움
+  const by_category = query.status === 'cancelled' ? [] : await invCatTotals(PURCHASE_INV_LINES, `SELECT i.id FROM purchase_tax_invoices i WHERE ${where.join(' AND ')}`, args, true);
+  return { rows: rows.slice(0, 1000), more: rows.length > 1000, by_category };
+});
+route('GET', '/api/purchase-tax-invoices/:id', async ({ user, params }) => { requirePurchase(user); return purchaseInvDetail(await mustGet('purchase_tax_invoices', params.id)); });
+route('POST', '/api/purchase-tax-invoices/:id/cancel', async ({ user, params, body }) => {
+  requirePurchase(user);
+  const inv = await mustGet('purchase_tax_invoices', params.id);
+  if (inv.status !== 'received') throw bad('이미 취소된 계산서입니다.');
+  const r = await db.batch([
+    { sql: "UPDATE purchase_tax_invoices SET status='cancelled',cancelled_at=?,cancelled_by=?,cancel_reason=? WHERE id=? AND status='received'", args: [now(), user.name, str(body.reason, 200), inv.id] }, RC_GUARD,
+    { sql: 'UPDATE purchase_tax_invoice_bills SET active=0 WHERE invoice_id=? AND active=1', args: [inv.id] },
+  ]).catch(error => { if (isGuardError(error)) throw new HttpError(409, '그 사이 이 계산서가 취소되었습니다.'); throw error; });
+  void r; return purchaseInvDetail(await mustGet('purchase_tax_invoices', inv.id));
+});
+
+// ── 15.129 세금계산서 발행 체크 ──
+// (1) 직접 발행 기록: 트러스빌 연동 전·홈택스에서 직접 발행한 계산서를 승인번호와 함께 「발행 완료」로 표시(되돌리기 가능).
+const MANUAL_ISSUED = '직접 발행 기록';
+route('POST', '/api/tax-invoices/:id/mark-issued', async ({ user, params, body }) => {
+  requireSales(user);
+  const inv = await mustGet('tax_invoices', params.id);
+  if (!['draft', 'failed'].includes(inv.status)) throw bad(`${inv.invoice_no}: 발행 전 계산서만 직접 발행으로 기록할 수 있습니다.`);
+  const appr = approvalNo(body.approval_no); if (!appr) throw bad('국세청 승인번호를 넣으세요.');
+  const date = dateStr(body.issued_date || today(), '발행일'); if (date > today()) throw bad('발행일은 오늘 이전으로 넣으세요.');
+  if (await db.prepare("SELECT 1 FROM tax_invoices WHERE approval_no=? AND status IN ('issued','sent') AND id<>?").get(appr, inv.id)) throw new HttpError(409, `승인번호 ${appr}는 다른 계산서에 이미 있습니다.`);
+  const r = await db.prepare("UPDATE tax_invoices SET status='issued',approval_no=?,issued_at=?,status_message=?,updated_by=?,updated_at=? WHERE id=? AND status IN ('draft','failed')").run(appr, date, `${MANUAL_ISSUED} · ${user.name}`, user.name, now(), inv.id);
+  if (!r.changes) throw new HttpError(409, '그 사이 이 계산서의 상태가 바뀌었습니다. 새로 불러오세요.');
+  return mustGet('tax_invoices', inv.id);
+});
+route('POST', '/api/tax-invoices/:id/unmark-issued', async ({ user, params }) => {
+  requireSales(user);
+  const inv = await mustGet('tax_invoices', params.id);
+  if (inv.status !== 'issued' || !String(inv.status_message || '').startsWith(MANUAL_ISSUED)) throw bad('직접 발행으로 기록한 계산서만 되돌릴 수 있습니다(트러스빌 발행은 수정 계산서로).');
+  await db.prepare("UPDATE tax_invoices SET status='draft',approval_no='',issued_at=NULL,status_message='',updated_by=?,updated_at=? WHERE id=? AND status='issued'").run(user.name, now(), inv.id);
+  return mustGet('tax_invoices', inv.id);
+});
+// (2) 발행 현황 체크: 달(전표 일자 기준)마다 거래처별로 전표 합계 · 발행 완료 · 담았지만 발행 전 · 안 담음.
+// 매입은 매입전표 합계 · 받은 계산서 · 안 받음.
+route('GET', '/api/tax-check', async ({ user, query }) => {
+  const side = query.side === 'purchase' ? 'purchase' : 'sales';
+  if (side === 'sales') requireSales(user); else requirePurchase(user);
+  const period = billPeriod(query.period), from = period + '-01', to = monthEnd(period);
+  let rows;
+  if (side === 'sales') {
+    rows = await db.prepare(`SELECT MIN(b.customer) AS name, COUNT(*) AS bills, SUM(b.total) AS total,
+        SUM(CASE WHEN i.status IN ('issued','sent') THEN b.total ELSE 0 END) AS done, SUM(CASE WHEN i.status IN ('issued','sent') THEN 1 ELSE 0 END) AS done_n,
+        SUM(CASE WHEN i.status IN ('draft','queued','failed') THEN b.total ELSE 0 END) AS pending, SUM(CASE WHEN i.status IN ('draft','queued','failed') THEN 1 ELSE 0 END) AS pending_n,
+        SUM(CASE WHEN i.id IS NULL THEN b.total ELSE 0 END) AS missing, SUM(CASE WHEN i.id IS NULL THEN 1 ELSE 0 END) AS missing_n,
+        MAX(v.biz_no) AS biz_no
+      FROM sales_bills b LEFT JOIN tax_invoice_bills t ON t.bill_id=b.id AND t.active=1 LEFT JOIN tax_invoices i ON i.id=t.invoice_id AND i.status<>'cancelled'
+        LEFT JOIN vendors v ON v.name_key=${customerKey('b.customer')}
+      WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? GROUP BY ${customerKey('b.customer')} ORDER BY missing DESC, pending DESC, name`).all(from, to);
+  } else {
+    rows = await db.prepare(`SELECT MIN(b.vendor) AS name, COUNT(*) AS bills, SUM(b.total) AS total,
+        SUM(CASE WHEN i.id IS NOT NULL THEN b.total ELSE 0 END) AS done, SUM(CASE WHEN i.id IS NOT NULL THEN 1 ELSE 0 END) AS done_n,
+        0 AS pending, 0 AS pending_n,
+        SUM(CASE WHEN i.id IS NULL THEN b.total ELSE 0 END) AS missing, SUM(CASE WHEN i.id IS NULL THEN 1 ELSE 0 END) AS missing_n, MAX(v.biz_no) AS biz_no
+      FROM purchase_bills b LEFT JOIN purchase_tax_invoice_bills t ON t.bill_id=b.id AND t.active=1 LEFT JOIN purchase_tax_invoices i ON i.id=t.invoice_id AND i.status='received'
+        LEFT JOIN vendors v ON v.name_key=${billVendorKey('b.vendor')}
+      WHERE b.status='confirmed' AND b.bill_date BETWEEN ? AND ? GROUP BY ${billVendorKey('b.vendor')} ORDER BY missing DESC, name`).all(from, to);
+  }
+  const sum = k => rows.reduce((t, r) => t + (r[k] || 0), 0);
+  return { side, period, from, to, rows, totals: { bills: sum('bills'), total: sum('total'), done: sum('done'), pending: sum('pending'), missing: sum('missing') } };
+});
 route('GET', '/api/tax-invoices', async ({ user, query }) => {
   requireSales(user);
   const where = [], args = [];
@@ -1894,8 +2041,10 @@ route('GET', '/api/tax-invoices', async ({ user, query }) => {
   if (query.status) { if (!TAX_STATUS.includes(query.status)) throw bad('상태를 확인하세요.'); where.push('status=?'); args.push(query.status); }
   else where.push("status<>'cancelled'");
   applyListKeyword(where, args, query.q, ['invoice_no', 'customer', 'biz_no', 'item_summary', 'email1', 'email2', 'note', 'approval_no']);
-  const rows = await db.prepare(`SELECT id,invoice_no,kind,write_date,period_from,period_to,charge,customer,biz_no,email1,email2,item_summary,supply_total,vat_total,total,note,status,approval_no,status_message,issued_at,created_by,created_at,(SELECT COUNT(*) FROM tax_invoice_bills t WHERE t.invoice_id=tax_invoices.id) AS bill_count FROM tax_invoices ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY write_date DESC, id DESC LIMIT 1001`).all(...args);
-  return { rows: rows.slice(0, 1000), more: rows.length > 1000, linked: !!(await getSetting('tax_link')) };
+  if (query.category) { const f = invHasCat(SALES_INV_LINES('t.invoice_id=tax_invoices.id'), taxCategory(query.category)); where.push(f.sql); args.push(f.arg); } // 15.127
+  const by_category = query.status === 'cancelled' ? [] : await invCatTotals(SALES_INV_LINES, `SELECT id FROM tax_invoices WHERE ${where.join(' AND ')}`, args);
+  const rows = await db.prepare(`SELECT id,invoice_no,kind,write_date,period_from,period_to,charge,customer,biz_no,email1,email2,item_summary,supply_total,vat_total,total,note,status,approval_no,status_message,issued_at,created_by,created_at,(SELECT COUNT(*) FROM tax_invoice_bills t WHERE t.invoice_id=tax_invoices.id) AS bill_count,${invCats(SALES_INV_LINES('t.invoice_id=tax_invoices.id'))} AS cats FROM tax_invoices ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY write_date DESC, id DESC LIMIT 1001`).all(...args);
+  return { rows: rows.slice(0, 1000), more: rows.length > 1000, linked: !!(await getSetting('tax_link')), by_category };
 });
 route('GET', '/api/tax-invoices/:id', async ({ user, params }) => { requireSales(user); return { ...await invoiceDetail(await mustGet('tax_invoices', params.id)), company: await companyInfo() }; });
 // 담은 계산서(발행 전·실패) 고치기: 작성일자·청구/영수·이메일 2개·비고, 거래처 사업자 정보 다시 불러오기
@@ -4398,12 +4547,13 @@ async function orderLines(body) {
     const qty = num(l.qty, `${no} 수량`); if (!(qty > 0)) throw bad(`${no}(${bom.product}): 수량은 0보다 커야 합니다.`);
     const price = l.unit_price === undefined || l.unit_price === '' || l.unit_price === null ? null : num(l.unit_price, `${no} 단가`);
     if (price != null && price < 0) throw bad(`${no}: 단가는 0 이상이어야 합니다.`);
-    out.push({ bom_id: bom.id, product_code: bom.product_code || '', item: bom.product, spec: await catalogSpec(bom, l.spec), unit: bom.unit || str(l.unit, 20), qty, unit_price: price, due_date: l.due_date ? dateStr(l.due_date, `${no} 납기`) : '', note: str(l.note, 200) });
+    const lineId = l.id == null || l.id === '' ? null : Number(l.id); if (lineId != null && !(Number.isSafeInteger(lineId) && lineId > 0)) throw bad(`${no}: 줄 번호가 올바르지 않습니다.`);
+    out.push({ id: lineId, bom_id: bom.id, product_code: bom.product_code || '', item: bom.product, spec: await catalogSpec(bom, l.spec), unit: bom.unit || str(l.unit, 20), qty, unit_price: price, due_date: l.due_date ? dateStr(l.due_date, `${no} 납기`) : '', note: str(l.note, 200) });
   }
   return out;
 }
 async function orderDetail(order) {
-  const lines = await db.prepare(`SELECT ol.*, ${ORDER_BILLED} AS billed_qty, ${ORDER_SHIPPED} AS shipped_qty, ${ORDER_PENDING} AS pending_qty, ${ORDER_SHIPPED_OPEN} AS shipped_unbilled FROM sales_order_lines ol WHERE ol.order_id=? ORDER BY ol.id`).all(order.id);
+  const lines = await db.prepare(`SELECT ol.*, ${ORDER_LINE_USED} AS used, ${ORDER_BILLED} AS billed_qty, ${ORDER_SHIPPED} AS shipped_qty, ${ORDER_PENDING} AS pending_qty, ${ORDER_SHIPPED_OPEN} AS shipped_unbilled FROM sales_order_lines ol WHERE ol.order_id=? ORDER BY ol.id`).all(order.id);
   for (const l of lines) l.remaining = order.status === 'open' ? Math.max(0, stockRound(l.qty - l.billed_qty - l.shipped_unbilled)) : 0;
   const bills = await db.prepare(`SELECT b.id AS bill_id, b.bill_no, b.bill_date, l.order_line_id, l.qty, l.unit_price, l.supply, l.source_type, CASE WHEN i.status='pending' AND i.held=1 THEN 'held' ELSE i.status END AS ship_status, i.id AS instruction_id
     FROM sales_bill_lines l JOIN sales_bills b ON b.id=l.bill_id LEFT JOIN ship_instructions i ON i.bill_line_id=l.id
@@ -4457,23 +4607,42 @@ route('POST', '/api/sales-orders', async ({ user, body }) => {
   return orderDetail(await db.prepare('SELECT * FROM sales_orders WHERE request_id=?').get(token));
 });
 // 고치기: 아직 매출전표가 하나도 없을 때만(줄을 통째로 바꿈)
+// 15.131 일부 출고된 수주도 고칠 수 있다: 기존 줄은 id로 유지하고 수량은 이미 잡은 수량(전표+출하) 이상으로만 바꾼다.
+// 품목 추가는 자유, 줄 삭제는 전표·출하지시가 한 번도 없었던 줄만. 전표가 잡힌 줄은 품목·규격을 못 바꾸고(수량·단가·납기·비고만),
+// 거래처는 전표·출하가 하나라도 있으면 못 바꾼다. 각 줄 UPDATE에 조건을 걸어 그 사이 잡힌 전표와 경합하면 전체를 되돌린다.
+const qtyK = n => stockRound(n).toLocaleString('ko-KR');
+const ORDER_LINE_USED = "(EXISTS(SELECT 1 FROM sales_bill_lines b WHERE b.order_line_id=ol.id) OR EXISTS(SELECT 1 FROM ship_instructions i WHERE i.order_line_id=ol.id))";
 route('PUT', '/api/sales-orders/:id', async ({ user, params, body }) => {
   requireSales(user);
   const order = await mustGet('sales_orders', params.id);
-  if (order.status !== 'open') throw bad('마감·취소된 수주는 고칠 수 없습니다.');
+  if (order.status !== 'open') throw bad('마감·취소된 수주는 고칠 수 없습니다. 「다시 열기」 후 고치세요.');
   const vendor = await orderVendor(reqStr(body.customer, '거래처', 100));
   const date = dateStr(body.order_date, '수주일'), lines = await orderLines(body);
-  // 취소된 전표까지 포함해 한 번이라도 전표를 잡은 수주는 줄을 바꾸지 않는다(전표 줄이 수주 줄을 가리키므로).
-  const NO_BILL = "NOT EXISTS(SELECT 1 FROM sales_bill_lines b JOIN sales_order_lines x ON x.id=b.order_line_id WHERE x.order_id=?)";
-  if (await db.prepare(`SELECT 1 WHERE NOT ${NO_BILL}`).get(order.id)) throw new HttpError(409, '매출전표를 잡은 적이 있는 수주는 고칠 수 없습니다. 남은 수량은 「마감」하고 새 수주로 넣으세요.');
+  const old = await db.prepare(`SELECT ol.*, ${ORDER_TAKEN} AS taken, ${ORDER_LINE_USED} AS used FROM sales_order_lines ol WHERE ol.order_id=?`).all(order.id);
+  const byId = new Map(old.map(l => [l.id, l])), kept = new Set();
+  for (const [i, l] of lines.entries()) {
+    if (l.id == null) continue;
+    const o = byId.get(l.id), no = `${i + 1}번째 줄(${l.item})`;
+    if (!o) throw new HttpError(409, `${no}: 이 수주에 없는 줄입니다. 새로 불러오세요.`);
+    if (kept.has(l.id)) throw bad(`${no}: 같은 줄이 두 번 들어 있습니다.`);
+    kept.add(l.id);
+    if (o.used && (o.bom_id !== l.bom_id || (o.spec || '') !== (l.spec || ''))) throw bad(`${no}: 전표·출하가 잡힌 줄은 품목·규격을 바꿀 수 없습니다. 새 줄로 추가하고 이 줄은 잡은 수량(${qtyK(o.taken)})으로 줄이세요.`);
+    if (l.qty + 0.000001 < o.taken) throw bad(`${no}: 이미 전표·출하로 ${qtyK(o.taken)} 잡았습니다. 수량은 ${qtyK(o.taken)} 이상으로 넣으세요.`);
+  }
+  const removed = old.filter(o => !kept.has(o.id));
+  const blocked = removed.find(o => o.used); if (blocked) throw bad(`${blocked.item}: 전표·출하지시가 있었던 줄은 지울 수 없습니다. 수량을 잡은 수량(${qtyK(blocked.taken)})까지 줄이거나 「잔량 마감」하세요.`);
+  const anyUsed = old.some(o => o.used);
+  if (anyUsed && nameKey(vendor.name) !== nameKey(order.customer)) throw bad('전표·출하가 잡힌 수주는 거래처를 바꿀 수 없습니다.');
   const cmds = [
-    { sql: `UPDATE sales_orders SET order_date=?,customer=?,customer_code=?,customer_po=?,due_date=?,tax_type=?,note=?,updated_by=?,updated_at=? WHERE id=? AND status='open' AND ${NO_BILL}`,
-      args: [date, vendor.name, vendor.code || '', str(body.customer_po, 50), body.due_date ? dateStr(body.due_date, '납기') : '', body.tax_type === 'zero' ? 'zero' : 'taxable', str(body.note, 500), user.name, now(), order.id, order.id] }, RC_GUARD,
-    { sql: 'DELETE FROM sales_order_lines WHERE order_id=?', args: [order.id] },
-    ...lines.map(l => ({ sql: 'INSERT INTO sales_order_lines(order_id,bom_id,product_code,item,spec,unit,qty,unit_price,due_date,note) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [order.id, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, l.unit_price, l.due_date, l.note] })),
+    { sql: "UPDATE sales_orders SET order_date=?,customer=?,customer_code=?,customer_po=?,due_date=?,tax_type=?,note=?,updated_by=?,updated_at=? WHERE id=? AND status='open'",
+      args: [date, vendor.name, vendor.code || '', str(body.customer_po, 50), body.due_date ? dateStr(body.due_date, '납기') : '', body.tax_type === 'zero' ? 'zero' : 'taxable', str(body.note, 500), user.name, now(), order.id] }, RC_GUARD,
+    ...removed.flatMap(o => [{ sql: 'DELETE FROM sales_order_lines AS ol WHERE ol.id=? AND ol.order_id=? AND NOT ' + ORDER_LINE_USED, args: [o.id, order.id] }, RC_GUARD]),
+    ...lines.filter(l => l.id != null).flatMap(l => [{ sql: `UPDATE sales_order_lines AS ol SET bom_id=?,product_code=?,item=?,spec=?,unit=?,qty=?,unit_price=?,due_date=?,note=? WHERE ol.id=? AND ol.order_id=? AND ?+0.000001>=${ORDER_TAKEN} AND (NOT ${ORDER_LINE_USED} OR (ol.bom_id=? AND COALESCE(ol.spec,'')=?))`,
+      args: [l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, l.unit_price, l.due_date, l.note, l.id, order.id, l.qty, l.bom_id, l.spec || ''] }, RC_GUARD]),
+    ...lines.filter(l => l.id == null).map(l => ({ sql: 'INSERT INTO sales_order_lines(order_id,bom_id,product_code,item,spec,unit,qty,unit_price,due_date,note) VALUES(?,?,?,?,?,?,?,?,?,?)', args: [order.id, l.bom_id, l.product_code, l.item, l.spec, l.unit, l.qty, l.unit_price, l.due_date, l.note] })),
   ];
   try { await db.batch(cmds); }
-  catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 매출전표가 잡혔거나 수주가 마감되었습니다. 새로 불러오세요.'); throw error; }
+  catch (error) { if (isGuardError(error)) throw new HttpError(409, '그 사이 매출전표·출하가 잡혔거나 수주가 마감되었습니다. 새로 불러오세요.'); throw error; }
   return orderDetail(await mustGet('sales_orders', order.id));
 });
 // 마감(남은 수량을 더 받지 않음)·다시 열기·취소(전표가 없을 때)

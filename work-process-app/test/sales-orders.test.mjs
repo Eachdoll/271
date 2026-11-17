@@ -70,7 +70,18 @@ test('Order 100 → bills of 80 and 20, remaining, ship instructions, shipping l
   let detail = (await seller('GET', `/api/sales-orders/${so.body.id}`)).body;
   assert.equal(detail.state, 'partial'); assert.deepEqual(detail.lines.map(l => [l.billed_qty, l.pending_qty, l.shipped_qty, l.remaining]), [[80, 80, 0, 20], [0, 0, 0, 10]]);
   assert.equal(detail.bills.length, 1);
-  assert.equal((await seller('PUT', `/api/sales-orders/${so.body.id}`, { customer: '세흥상사', order_date: today, lines: [{ bom_id: glove.id, qty: 5 }] })).status, 409, 'no edit after a bill');
+  // 15.131 일부 잡힌 수주 고치기: 잡은 줄은 지울 수 없음 · 수량은 잡은 수량 이상 · 품목 추가 · 거래처 변경 불가
+  const put = lines => seller('PUT', `/api/sales-orders/${so.body.id}`, { customer: '세흥상사', order_date: today, customer_po: 'PO-9', lines });
+  assert.match((await put([{ bom_id: glove.id, qty: 5 }])).body.error, /지울 수 없습니다/, 'used line cannot be dropped');
+  assert.match((await put([{ id: gl.id, bom_id: glove.id, qty: 79, unit_price: 1500 }, { id: ml.id, bom_id: mask.id, qty: 10 }])).body.error, /80 이상/);
+  assert.match((await put([{ id: gl.id, bom_id: mask.id, qty: 100 }, { id: ml.id, bom_id: mask.id, qty: 10 }])).body.error, /품목·규격을 바꿀 수 없습니다/);
+  assert.match((await seller('PUT', `/api/sales-orders/${so.body.id}`, { customer: '가나상사', order_date: today, lines: [{ id: gl.id, bom_id: glove.id, qty: 100 }, { id: ml.id, bom_id: mask.id, qty: 10 }] })).body.error, /거래처를 바꿀 수 없습니다/);
+  const ed = await put([{ id: gl.id, bom_id: glove.id, qty: 120, unit_price: 1500 }, { bom_id: mask.id, qty: 3, unit_price: 500 }]);
+  assert.equal(ed.status, 200, JSON.stringify(ed.body));
+  assert.deepEqual(ed.body.lines.map(l => [l.id === gl.id, l.item, l.qty, l.remaining, l.used ? 1 : 0]), [[true, '니트릴장갑', 120, 40, 1], [false, '마스크', 3, 3, 0]], 'qty raised, unused line removed, item added');
+  assert.equal((await seller('GET', `/api/sales-bills/${b1.body.id}`)).body.lines[0].order_line_id, gl.id, 'bill still points at the kept line');
+  const back = await put([{ id: gl.id, bom_id: glove.id, qty: 100, unit_price: 1500 }, { id: ed.body.lines[1].id, bom_id: mask.id, qty: 10 }]);
+  assert.equal(back.status, 200, JSON.stringify(back.body)); const [, ml2] = back.body.lines; ml.id = ml2.id;
   assert.equal((await seller('POST', `/api/sales-orders/${so.body.id}/status`, { status: 'cancelled' })).status, 400, 'no cancel after a bill');
   assert.equal((await bill([{ source_type: 'order', order_line_id: gl.id, qty: 21 }])).status, 409);
   // 물류: 출하지시 → 출하 처리
