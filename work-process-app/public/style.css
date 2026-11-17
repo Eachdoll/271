@@ -2146,3 +2146,6 @@ button.linklike { border: 0; background: none; padding: 0; color: var(--accent);
 .member-grid .mv-on { color: var(--green, #027a4a); font-weight: 700; } .member-grid .mv-off { color: var(--muted); }
 .member-grid select[data-menu-mode] { min-height: 34px; padding: 4px 8px; }
 .member-new > summary { cursor: pointer; padding: 4px 0; } .member-new form { margin-top: 12px; }
+
+/* 15.176 달력 「+ 전표 추가」 */
+.sc-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .sc-h .sc-add { margin-left: auto; }

@@ -135,6 +135,7 @@ async function pageBillEntry(main) {
     } catch (error) { fail(error); } finally { busy = false; button.disabled = false; }
   };
   let preset = null; try { preset = sessionStorage.getItem('wpa:bill-vendor'); sessionStorage.removeItem('wpa:bill-vendor'); } catch { preset = null; }
+  try { const d = sessionStorage.getItem('wpa:bill-date'); sessionStorage.removeItem('wpa:bill-date'); if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) form.elements.bill_date.value = d; } catch { /* 15.176 달력에서 고른 날짜 */ }
   totals();
   if (preset) { vendorInput.value = preset; await load(true); }
 }
