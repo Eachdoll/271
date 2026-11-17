@@ -2067,3 +2067,19 @@ form.list-filters .result-seg label { flex-direction: row; align-items: center; 
 
 /* 15.167 팝업 자체에 포커스가 갈 때 테두리는 안 보이게(키보드 Tab으로 들어간 칸에만 표시) */
 .modal:focus { outline: none; }
+
+/* ════ 15.168 입력칸이 눈에 들어오게: 입력 영역은 연회청 바탕, 칸은 흰 바탕 + 진한 테두리, 못 고치는 칸은 회색 ════ */
+:root { --field-bg: #ffffff; --field-line: #b8c1cf; --field-hover: #8793a8; --field-off: #eef1f5; --form-panel: #eef1f6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --field-bg: #0f131a; --field-line: #4a5568; --field-hover: #6b7a93; --field-off: #20252f; --form-panel: #1d222c; } }
+:root[data-theme="dark"] { --field-bg: #0f131a; --field-line: #4a5568; --field-hover: #6b7a93; --field-off: #20252f; --form-panel: #1d222c; }
+input, select, textarea { background-color: var(--field-bg); border: 1px solid var(--field-line); }
+input:hover:not(:disabled):not([readonly]), select:hover:not(:disabled), textarea:hover:not(:disabled):not([readonly]) { border-color: var(--field-hover); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 0; }
+input[readonly], input:disabled, select:disabled, textarea:disabled, textarea[readonly] { background-color: var(--field-off); border-color: var(--line); color: var(--muted); }
+input[type=checkbox], input[type=radio], input[type=file], input[type=range], input[type=color] { border: 0; background: none; }
+/* 입력 칸 묶음 바탕(화면·팝업 공통) */
+.form-grid { background: var(--form-panel); padding: 16px 18px; border-radius: 6px !important; }
+.modal .form-grid { padding: 14px 16px; }
+form.list-filters input, form.list-filters select, .rs-page .rs-filter input, .rs-page .rs-filter select { border-color: var(--field-line); background-color: var(--field-bg); }
+/* 표 안 입력칸(전표·견적 줄)도 테두리가 보이게 */
+table input:not([type=checkbox]):not([type=radio]), table select { border-color: var(--field-line); background-color: var(--field-bg); }
