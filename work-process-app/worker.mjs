@@ -5142,7 +5142,7 @@ route('GET', '/api/ship-instructions', async ({ query }) => {
   if (query.customer) { where.push(`${customerKey('i.customer')}=?`); args.push(nameKey(str(query.customer, 100))); }
   if (query.batch === 'none') where.push('sbt.id IS NULL'); // 15.132 아직 출고지시서에 안 묶인 것만
   applyListKeyword(where, args, query.q, ['i.item', 'i.product_code', 'i.customer', 'i.note', 'o.customer_po', 'o.note', 'o.order_no', 'sbt.batch_no']);
-  const rows = await db.prepare(`SELECT i.*, b.bill_no, o.order_no, o.customer_po, s.lot AS shipped_lot, sbt.batch_no, sbt.id AS open_batch_id FROM ship_instructions i JOIN sales_bills b ON b.id=i.bill_id LEFT JOIN ship_batches sbt ON sbt.id=i.batch_id AND sbt.status='open'
+  const rows = await db.prepare(`SELECT i.*, b.bill_no, o.order_no, o.customer_po, s.lot AS shipped_lot, sbt.batch_no, sbt.id AS open_batch_id, sbt.plan_date AS batch_plan_date FROM ship_instructions i JOIN sales_bills b ON b.id=i.bill_id LEFT JOIN ship_batches sbt ON sbt.id=i.batch_id AND sbt.status='open'
     LEFT JOIN sales_order_lines ol ON ol.id=i.order_line_id LEFT JOIN sales_orders o ON o.id=ol.order_id LEFT JOIN shipments s ON s.id=i.shipment_id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.ship_date, i.id LIMIT 1001`).all(...args);
   return { rows: rows.slice(0, 1000), more: rows.length > 1000 };
@@ -5211,13 +5211,35 @@ route('POST', '/api/ship-batches', async ({ user, body }) => {
   const ids = Array.isArray(body.ids) ? [...new Set(body.ids.map(Number))] : [];
   if (!ids.length || ids.length > 50 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw bad('묶을 출하지시를 1~50건 고르세요(한 번에 출하 처리할 수 있는 수).');
   const plan = dateStr(body.plan_date || today(), '출고 예정일');
+  // 15.154 수량 나눠 묶기: qtys[id]가 지시 수량보다 적으면 그 수량만 이 지시서에 묶고, 나머지는 같은 전표의 새 줄 + 새 출하지시(대기)로 남긴다.
+  // 전표 줄도 둘로 나눈다(출하 1건 = 전표 줄 1줄 = 출고일·LOT 1개). 공급가액·세액은 비율로 나누고 나머지를 남는 줄에 몰아 전표 합계는 1원도 안 바뀐다.
+  const qtys = body.qtys && typeof body.qtys === 'object' ? body.qtys : {}, splits = [];
   for (const id of ids) {
     const i = await db.prepare('SELECT i.*, b.batch_no FROM ship_instructions i LEFT JOIN ship_batches b ON b.id=i.batch_id AND b.status=\'open\' WHERE i.id=?').get(id);
     if (!i || i.status !== 'pending') throw new HttpError(409, '이미 출하됐거나 취소된 지시가 있습니다. 새로 불러오세요.');
     if (i.batch_no) throw new HttpError(409, `${i.item}(${i.customer}): 이미 출고지시서 ${i.batch_no}에 묶여 있습니다.`);
+    const raw = qtys[id]; if (raw === undefined || raw === null || raw === '') continue;
+    const q = stockRound(Number(raw));
+    if (!Number.isFinite(q) || q <= 0) throw bad(`${i.item}(${i.customer}): 묶을 수량을 0보다 크게 넣으세요.`);
+    if (q > Number(i.qty) + 0.000001) throw bad(`${i.item}(${i.customer}): 묶을 수량 ${q}이 지시 수량 ${stockRound(i.qty)}보다 많습니다.`);
+    if (q >= Number(i.qty) - 0.000001) continue;
+    const line = await db.prepare('SELECT * FROM sales_bill_lines WHERE id=?').get(i.bill_line_id), bill = await db.prepare('SELECT * FROM sales_bills WHERE id=?').get(i.bill_id);
+    if (!line || !line.active || !bill || bill.status !== 'confirmed') throw new HttpError(409, `${i.item}: 매출전표가 취소됐거나 바뀌었습니다. 새로 불러오세요.`);
+    if (Math.abs(Number(line.qty) - Number(i.qty)) > 0.000001) throw new HttpError(409, `${i.item}: 전표 수량(${stockRound(line.qty)})과 지시 수량(${stockRound(i.qty)})이 달라 나눌 수 없습니다. 전부 묶거나 전표를 확인하세요.`);
+    if (await salesClosed(bill.customer, bill.bill_date)) throw bad(closedMessage(bill.customer, bill.bill_date, '수량을 나눠 묶으세요'));
+    const rest = stockRound(Number(i.qty) - q), supply = Math.round(Number(line.supply) * q / Number(line.qty)), vat = Math.round(Number(line.vat) * q / Number(line.qty));
+    splits.push({ i, line, bill, q, rest, supply, vat, restSupply: Number(line.supply) - supply, restVat: Number(line.vat) - vat });
   }
   const token = key || 'srv:' + crypto.randomUUID(), prefix = `DO-${plan.slice(2).replace(/-/g, '')}-`, BID = '(SELECT id FROM ship_batches WHERE request_id=?)';
   const cmds = [{ sql: `INSERT INTO ship_batches(batch_no,plan_date,note,request_id,created_by) VALUES(${nextDocNo('ship_batches', 'batch_no')},?,?,?,?)`, args: [prefix, prefix, prefix, plan, str(body.note, 300), token, user.name] }];
+  for (const { i, line, bill, q, rest, supply, vat, restSupply, restVat } of splits) cmds.push(
+    { sql: 'UPDATE sales_bill_lines SET qty=?,supply=?,vat=? WHERE id=? AND active=1 AND qty=? AND supply=? AND vat=?', args: [q, supply, vat, line.id, line.qty, line.supply, line.vat] }, RC_GUARD,
+    { sql: `INSERT INTO sales_bill_lines(bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,qty,unit_price,supply,vat,note,order_line_id)
+      SELECT bill_id,item_category,source_type,source_id,item,spec,unit,product_code,lot,ship_date,?,unit_price,?,?,note,order_line_id FROM sales_bill_lines WHERE id=?`, args: [rest, restSupply, restVat, line.id] },
+    { sql: "UPDATE ship_instructions SET qty=? WHERE id=? AND status='pending' AND qty=?", args: [q, i.id, i.qty] }, RC_GUARD,
+    { sql: `INSERT INTO ship_instructions(bill_id,bill_line_id,order_line_id,customer,bom_id,product_code,item,spec,unit,qty,ship_date,note,created_by,held,hold_note,held_by,held_at)
+      SELECT bill_id,(SELECT MAX(id) FROM sales_bill_lines WHERE bill_id=?),order_line_id,customer,bom_id,product_code,item,spec,unit,?,ship_date,note,created_by,held,hold_note,held_by,held_at FROM ship_instructions WHERE id=?`, args: [bill.id, rest, i.id] },
+    docChange('sales_bill', bill.id, `출고지시서 묶음으로 줄 나눔: ${i.item} ${stockRound(i.qty)} → ${q}(묶음) + ${rest}(출하 대기)`, user));
   for (const id of ids) cmds.push({ sql: `UPDATE ship_instructions SET batch_id=${BID} WHERE id=? AND status='pending' AND (batch_id IS NULL OR batch_id IN (SELECT id FROM ship_batches WHERE status='cancelled'))`, args: [token, id] }, RC_GUARD);
   try { await db.batch(cmds); }
   catch (error) { if (isGuardError(error) || /UNIQUE/i.test(String(error?.message))) throw new HttpError(409, '그 사이 다른 출고지시서에 묶였거나 출하된 지시가 있습니다. 새로 불러오세요.'); throw error; }

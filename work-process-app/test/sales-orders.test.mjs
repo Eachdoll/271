@@ -264,3 +264,33 @@ test('15.132 Ship batches: bundle pending instructions, no double bundle, remove
   assert.equal((await staff('POST', '/api/ship-batches', { ids: [ids[1]], request_id: rid() })).status, 200, 'can be bundled again');
   assert.deepEqual((await staff('GET', '/api/ship-batches?state=done')).body.rows.map(x => x.batch_no), [bt.body.batch_no]);
 });
+
+test('15.154 Ship batches: bundle part of an instruction splits the bill line and leaves the rest pending', async () => {
+  await admin('POST', '/api/vendors', { name: '분할상사', is_sales: true });
+  const so = (await seller('POST', '/api/sales-orders', { customer: '분할상사', order_date: today, request_id: rid(), lines: [{ bom_id: glove.id, qty: 10, unit_price: 333 }] })).body;
+  const b = (await seller('POST', '/api/sales-bills', { customer: '분할상사', bill_date: today, request_id: rid(), lines: [{ source_type: 'order', order_line_id: so.lines[0].id, qty: 10 }] })).body;
+  const before = (await seller('GET', `/api/sales-bills/${b.id}`)).body;
+  assert.deepEqual([before.supply_total, before.vat_total], [3330, 333]);
+  const ins = (await staff('GET', '/api/ship-instructions?batch=none')).body.rows.find(r => r.bill_no === b.bill_no);
+  assert.match((await staff('POST', '/api/ship-batches', { ids: [ins.id], qtys: { [ins.id]: 11 }, request_id: rid() })).body.error, /지시 수량 10보다 많습니다/);
+  assert.match((await staff('POST', '/api/ship-batches', { ids: [ins.id], qtys: { [ins.id]: 0 }, request_id: rid() })).body.error, /0보다 크게/);
+  const token = rid();
+  const bt = await staff('POST', '/api/ship-batches', { ids: [ins.id], qtys: { [ins.id]: 3 }, plan_date: today, request_id: token });
+  assert.equal(bt.status, 200, JSON.stringify(bt.body)); assert.equal(bt.body.lines.length, 1); assert.equal(bt.body.lines[0].qty, 3);
+  assert.equal((await staff('POST', '/api/ship-batches', { ids: [ins.id], qtys: { [ins.id]: 3 }, request_id: token })).body.duplicate, true, 'retry does not split twice');
+  const after = (await seller('GET', `/api/sales-bills/${b.id}`)).body;
+  assert.deepEqual(after.lines.map(l => [l.qty, l.supply, l.vat]), [[3, 999, 100], [7, 2331, 233]]);
+  assert.deepEqual([after.supply_total, after.vat_total, after.total], [3330, 333, 3663], 'bill totals unchanged');
+  assert.ok(after.changes.some(c => /줄 나눔/.test(c.summary)));
+  const rest = (await staff('GET', '/api/ship-instructions?batch=none')).body.rows.filter(r => r.bill_no === b.bill_no);
+  assert.deepEqual(rest.map(r => [r.qty, r.status]), [[7, 'pending']]);
+  // 묶은 3 출하 → 전표 첫 줄만 출하에 연결, 나머지 7은 다른 지시서로 묶어 출하
+  await staff('POST', '/api/ship-instructions/ship', { ids: [ins.id], ship_date: today, lots: { [ins.id]: 'L-A' } });
+  const b2 = (await staff('POST', '/api/ship-batches', { ids: [rest[0].id], request_id: rid() })).body;
+  await staff('POST', '/api/ship-instructions/ship', { ids: [rest[0].id], ship_date: today, lots: { [rest[0].id]: 'L-B' } });
+  const fin = (await seller('GET', `/api/sales-bills/${b.id}`)).body;
+  assert.deepEqual(fin.lines.map(l => [l.qty, l.source_type, l.lot]), [[3, 'ship', 'L-A'], [7, 'ship', 'L-B']]);
+  assert.equal((await staff('GET', `/api/ship-batches/${b2.id}`)).body.state, 'done');
+  const order = (await seller('GET', `/api/sales-orders/${so.id}`)).body;
+  assert.equal(order.lines[0].shipped_qty ?? order.lines[0].shipped, 10, JSON.stringify(order.lines[0]));
+});

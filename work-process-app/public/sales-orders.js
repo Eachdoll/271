@@ -204,14 +204,15 @@ async function pageShipInstructions(main) {
     if (mine !== version || !main.isConnected) return;
     rows = data.rows; const pending = status === 'pending', held = status === 'held';
     $('#siBar', main).hidden = !pending || !(canShip || canHold); $('#siShip', main).hidden = !canShip; $('#siDate', main).closest('label').hidden = !canShip;
-    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr>${pending && (canShip || canHold) ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr>
+    $('#siList', main).innerHTML = rows.length ? `<div class="table-wrap"><table class="grid"><thead><tr>${pending && (canShip || canHold) ? '<th><input type="checkbox" id="siAll" aria-label="전체 선택"></th>' : ''}<th>지시일</th><th>거래처</th><th>품목</th><th>규격</th><th class="r">수량</th><th>단위</th><th>${pending ? 'LOT' : 'LOT · 처리'}</th><th>수주 · 전표</th><th>상태</th>${(pending || held) && canHold ? '<th></th>' : ''}</tr></thead><tbody>${rows.map(r => `<tr class="${r.batch_no && pending ? 'si-batched' : ''}">
       ${pending && (canShip || canHold) ? `<td><input type="checkbox" data-si-pick value="${r.id}" aria-label="${esc(r.item)} 선택"></td>` : ''}<td class="nowrap">${esc(r.ship_date)}</td><td>${esc(r.customer)}</td>
       <td data-card-primary><b>${esc(r.item)}</b>${r.product_code ? `<div class="small muted">${esc(r.product_code)}</div>` : ''}${r.note ? `<div class="small muted">${esc(r.note)}</div>` : ''}</td><td>${esc(r.spec || '')}</td>
       <td class="r"><b>${fmtNum(r.qty)}</b></td><td>${esc(r.unit || '')}</td>
       <td>${pending ? (canShip ? `<input data-si-lot="${r.id}" maxlength="100" aria-label="${esc(r.item)} LOT" placeholder="LOT">` : '') : `${esc(r.shipped_lot || '')}<div class="small muted">${esc(r.processed_by || '')} ${esc(String(r.processed_at || '').slice(5, 16))}</div>`}</td>
-      <td class="small">${esc(r.order_no || '')}${r.customer_po ? ` · ${esc(r.customer_po)}` : ''}<div class="muted">${esc(r.bill_no)}</div></td><td>${shipChip(held ? 'held' : r.status)}${r.batch_no ? `<div><button type="button" class="link-btn small" data-si-batch="${r.open_batch_id}" title="출고지시서 보기">${esc(r.batch_no)}</button></div>` : ''}${held && r.hold_note ? `<div class="small muted">${esc(r.hold_note)}</div>` : ''}${held ? `<div class="small muted">${esc(r.held_by || '')} ${esc(String(r.held_at || '').slice(5, 16))}</div>` : ''}</td>${(pending || held) && canHold ? `<td class="nowrap"><button type="button" class="btn small" data-si-hold="${r.id}">${held ? '보류 해제' : '보류'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`
+      <td class="small">${esc(r.order_no || '')}${r.customer_po ? ` · ${esc(r.customer_po)}` : ''}<div class="muted">${esc(r.bill_no)}</div></td><td>${shipChip(held ? 'held' : r.status)}${r.batch_no ? `<div class="si-batch-tag"><span class="chip blue">묶음</span> <button type="button" class="link-btn small" data-si-batch="${r.open_batch_id}" title="출고지시서 보기">${esc(r.batch_no)}</button>${r.batch_plan_date ? `<div class="small muted">${esc(`출고 예정 ${r.batch_plan_date}`)}</div>` : ''}</div>` : ''}${held && r.hold_note ? `<div class="small muted">${esc(r.hold_note)}</div>` : ''}${held ? `<div class="small muted">${esc(r.held_by || '')} ${esc(String(r.held_at || '').slice(5, 16))}</div>` : ''}</td>${(pending || held) && canHold ? `<td class="nowrap"><button type="button" class="btn small" data-si-hold="${r.id}">${held ? '보류 해제' : '보류'}</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${pending ? '내려온 출하지시가 없습니다.' : held ? '보류 중인 출하지시가 없습니다.' : '해당하는 출하지시가 없습니다.'}</div>`;
-    if (rows.length) $('#siList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))]]));
+    const bundled = pending ? rows.filter(r => r.batch_no).length : 0; // 15.154 출고지시서에 묶인 대기 줄 수
+    if (rows.length) $('#siList', main).insertAdjacentHTML('beforeend', sumLine([['합계', esc(`${rows.length}건`)], ...(pending ? [['묶임', esc(`${bundled}건`)], ['안 묶임', esc(`${rows.length - bundled}건`)]] : []), ['수량', esc(unitTotals(rows, r => r.qty, r => r.unit))]]));
     const all = $('#siAll', main); if (all) all.onchange = () => { $$('[data-si-pick]', main).forEach(c => { c.checked = all.checked; }); sync(); };
     lotPickers = new Map($$('[data-si-lot]', main).map(inp => { const r = rows.find(x => x.id === Number(inp.dataset.siLot)); return [r.id, bindLotPicker(inp, () => r.item, () => r.qty)]; }));
     sync();
@@ -224,10 +225,23 @@ async function pageShipInstructions(main) {
     const sel = rows.filter(r => ids.includes(r.id)), dup = sel.find(r => r.batch_no);
     if (dup) return toast(`${dup.item}(${dup.customer})은 이미 ${dup.batch_no}에 묶여 있습니다. 체크를 풀거나 그 지시서에서 빼세요.`, 'err');
     const custs = [...new Set(sel.map(r => r.customer))];
+    // 15.154 줄마다 묶을 수량: 지시 수량보다 적게 넣으면 그만큼만 묶고, 나머지는 같은 전표의 새 줄로 출하 대기에 남는다(전표 합계 그대로).
+    const qtyRows = sel.map(r => `<tr><td>${esc(r.customer)}</td><td><b>${esc(r.item)}</b>${r.spec ? ` <span class="small muted">${esc(r.spec)}</span>` : ''}<div class="small muted">${esc(r.bill_no || '')}</div></td><td class="r nowrap">${fmtNum(r.qty)} ${esc(r.unit || '')}</td>
+      <td class="r"><input type="number" name="q_${r.id}" value="${r.qty}" min="0" max="${r.qty}" step="any" inputmode="decimal" class="sb-qty" aria-label="${esc(`${r.item} 묶을 수량`)}" data-max="${r.qty}"></td><td class="r nowrap small" data-sb-rest="${r.id}"></td></tr>`).join('');
     const v = await promptBox(`출고지시서 묶기 · ${ids.length}줄`, `<p class="small muted">${esc(custs.join(', '))} · ${esc(unitTotals(sel, r => r.qty, r => r.unit))}</p>
-      <label>출고 예정일 *<input type="date" name="plan_date" required value="${esc($('#siDate', main).value || todayStr())}"></label><label>비고 <span class="hint">(차량·기사·배송지 등)</span><input name="note" maxlength="300"></label>`);
+      <div class="table-wrap"><table class="erp-grid sb-split" data-no-sort data-keep-cols><thead><tr><th>거래처</th><th>품목</th><th class="r">지시 수량</th><th class="r">묶을 수량</th><th class="r">남는 수량</th></tr></thead><tbody>${qtyRows}</tbody></table></div>
+      <p class="small muted">수량을 줄이면 그만큼만 이번 지시서에 묶고, 남는 수량은 같은 매출전표의 새 줄로 나뉘어 출하 대기에 남습니다(전표 합계는 그대로, 거래명세서에는 두 줄).</p>
+      <label>출고 예정일 *<input type="date" name="plan_date" required value="${esc($('#siDate', main).value || todayStr())}"></label><label>비고 <span class="hint">(차량·기사·배송지 등)</span><input name="note" maxlength="300"></label>`, { wide: true, onOpen: el => {
+        const sync = inp => { const max = Number(inp.dataset.max), q = Number(inp.value), rest = $(`[data-sb-rest="${inp.name.slice(2)}"]`, el), bad = !(q > 0) || q > max + 0.000001;
+          inp.setCustomValidity(bad ? `0보다 크고 ${fmtNum(max)} 이하로 넣으세요.` : ''); rest.textContent = bad ? '' : q < max ? `${fmtNum(+(max - q).toFixed(6))} 남음` : '-';
+          // 고치면 오류 안내를 바로 지운다(안 지우면 「확인」을 누르는 순간 안내가 사라지며 버튼이 움직여 첫 클릭이 빗나감)
+          if (!bad && inp.dataset.fxError) inp.dispatchEvent(new Event('change', { bubbles: true })); };
+        $$('.sb-qty', el).forEach(inp => { sync(inp); inp.addEventListener('input', () => sync(inp)); });
+      } });
     if (!v) return;
-    try { const r = await api('POST', '/api/ship-batches', { ...v, ids, request_id: crypto.randomUUID() }); toast(`출고지시서 ${r.batch_no}을(를) 만들었습니다.`); await load(); shipBatchSheet(r, () => load()); }
+    const qtys = {}; for (const r of sel) { const q = Number(v[`q_${r.id}`]); if (q > 0 && q < Number(r.qty)) qtys[r.id] = q; delete v[`q_${r.id}`]; }
+    if (Object.keys(qtys).length && !await confirmBox(`${Object.keys(qtys).length}줄을 나눠 묶습니다. 남는 수량은 매출전표의 새 줄 + 출하 대기로 남습니다. 계속할까요?`)) return;
+    try { const r = await api('POST', '/api/ship-batches', { ...v, ids, qtys, request_id: crypto.randomUUID() }); toast(`출고지시서 ${r.batch_no}을(를) 만들었습니다.`); await load(); shipBatchSheet(r, () => load()); }
     catch (error) { fail(error); await load().catch(() => {}); }
   };
   // 15.104 보류: 출하만 미룰 때(전표·수주 잔량은 그대로). 해제하면 다시 출하 대기로.
